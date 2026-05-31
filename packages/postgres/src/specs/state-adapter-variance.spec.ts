@@ -164,6 +164,37 @@ describe("PostgreSQL State Adapter Variance - Custom Table Prefix", () => {
     expect(tableNames).toContain(`${tablePrefix}migration`);
   });
 
+  conformanceIt(
+    "pins autovacuum to a fixed dead-tuple threshold",
+    async ({ pool, stateAdapter: _ }) => {
+      const reloptionsFor = async (table: string): Promise<Record<string, string>> => {
+        const result = await pool.query<{ reloptions: string[] | null }>(
+          `SELECT c.reloptions
+         FROM pg_class c
+         JOIN pg_namespace n ON n.oid = c.relnamespace
+         WHERE n.nspname = $1 AND c.relname = $2`,
+          [schema, table],
+        );
+        const reloptions = result.rows[0]?.reloptions ?? [];
+        return Object.fromEntries(reloptions.map((opt) => opt.split("=") as [string, string]));
+      };
+
+      for (const table of [`${tablePrefix}job`, `${tablePrefix}job_blocker`]) {
+        const options = await reloptionsFor(table);
+        expect(options.autovacuum_vacuum_threshold).toBe("5000");
+        expect(options.autovacuum_vacuum_scale_factor).toBe("0");
+        expect(options.autovacuum_analyze_threshold).toBe("5000");
+        expect(options.autovacuum_analyze_scale_factor).toBe("0");
+        // carried over from the earlier vacuum_tuning migration via reloptions merge
+        expect(options.autovacuum_vacuum_cost_delay).toBe("0");
+      }
+
+      // fillfactor is set only on the job table
+      expect((await reloptionsFor(`${tablePrefix}job`)).fillfactor).toBe("75");
+      expect((await reloptionsFor(`${tablePrefix}job_blocker`)).fillfactor).toBeUndefined();
+    },
+  );
+
   stateAdapterConformanceTestSuite({ it: conformanceIt });
 });
 

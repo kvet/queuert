@@ -1,6 +1,6 @@
 # Job + job_blocker model
 
-> **Baseline for**: [state-snapshot-metrics.md](state-snapshot-metrics.md), [partitioned-pg-adapter.md](partitioned-pg-adapter.md), [autovacuum-tuning.md](autovacuum-tuning.md).
+> **Baseline for**: [state-snapshot-metrics.md](state-snapshot-metrics.md), [partitioned-pg-adapter.md](partitioned-pg-adapter.md).
 
 ## Problem
 

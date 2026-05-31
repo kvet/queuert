@@ -143,7 +143,7 @@ The cleanup job calls `stateAdapter.vacuum()` after all batches are deleted, rec
 
 ### PostgreSQL
 
-The adapter configures aggressive autovacuum on the job tables (2% dead-tuple threshold, no I/O throttle) and sets `fillfactor = 75` on the job table to enable HOT updates. PostgreSQL's autovacuum handles most space reclamation automatically, but the explicit vacuum step ensures timely cleanup after large deletions. See [PostgreSQL Internals](/queuert/advanced/postgres-internals/#vacuum-tuning) for details.
+The adapter tunes autovacuum aggressively on the job tables so PostgreSQL handles most space reclamation automatically; the explicit vacuum step ensures timely cleanup after large deletions. See [PostgreSQL Internals](/queuert/advanced/postgres-internals/#vacuum-tuning) for the exact settings.
 
 ### SQLite
 

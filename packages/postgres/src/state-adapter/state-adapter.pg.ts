@@ -222,6 +222,30 @@ ALTER TABLE {{schema}}.{{table_prefix}}job ALTER COLUMN id DROP DEFAULT`),
       },
     ],
   },
+  {
+    name: "20260531000000_vacuum_threshold_pinning",
+    transactional: true,
+    statements: [
+      {
+        sql: sql(`
+ALTER TABLE {{schema}}.{{table_prefix}}job SET (
+  autovacuum_vacuum_threshold = 5000,
+  autovacuum_vacuum_scale_factor = 0,
+  autovacuum_analyze_threshold = 5000,
+  autovacuum_analyze_scale_factor = 0
+)`),
+      },
+      {
+        sql: sql(`
+ALTER TABLE {{schema}}.{{table_prefix}}job_blocker SET (
+  autovacuum_vacuum_threshold = 5000,
+  autovacuum_vacuum_scale_factor = 0,
+  autovacuum_analyze_threshold = 5000,
+  autovacuum_analyze_scale_factor = 0
+)`),
+      },
+    ],
+  },
 ];
 
 const SQL_IDENTIFIER_PATTERN = /^[a-zA-Z_][a-zA-Z0-9_]*$/;

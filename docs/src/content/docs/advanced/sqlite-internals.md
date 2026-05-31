@@ -190,21 +190,13 @@ For multi-process deployments, an external notify adapter (Redis or NATS) can be
 
 ## Vacuum
 
-SQLite does not reclaim disk space from deleted rows automatically by default. The adapter exposes a `vacuum()` method that runs `PRAGMA incremental_vacuum` to free reclaimable pages without rewriting the entire database:
-
-```typescript
-await stateAdapter.vacuum();
-```
-
-This requires `PRAGMA auto_vacuum = INCREMENTAL` to be set on the database before any tables are created:
+The adapter exposes a `vacuum()` method that runs `PRAGMA incremental_vacuum` to return already-freed pages to the OS without rewriting or defragmenting the database — safe to call frequently (e.g., after each cleanup run). It requires `PRAGMA auto_vacuum = INCREMENTAL` to be set before any tables are created:
 
 ```typescript
 const db = new Database("queue.db");
 db.pragma("auto_vacuum = INCREMENTAL");
 db.pragma("foreign_keys = ON");
 ```
-
-Incremental vacuum frees pages that are already marked as free by prior DELETE operations. It does not rewrite the database or defragment it — it only returns free pages to the OS. This makes it safe to call frequently (e.g., after each cleanup run) without blocking other operations for extended periods.
 
 ## Listing Queries and Locking
 

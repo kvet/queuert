@@ -537,17 +537,21 @@ export const clientQueriesTestSuite = ({ it }: { it: TestAPI<TestSuiteContext> }
         log,
         withTransaction,
       });
-      await startChain("order", { amount: 1 });
-      await startChain("order", { amount: 2 });
+      const first = await startChain("order", { amount: 1 });
+      const second = await startChain("order", { amount: 2 });
+
+      const createdMs = [first.createdAt.getTime(), second.createdAt.getTime()];
+      const earliest = Math.min(...createdMs);
+      const latest = Math.max(...createdMs);
 
       const page = await client.listChains({
-        filter: { from: new Date(Date.now() - 5000), to: new Date() },
+        filter: { from: new Date(earliest - 1000), to: new Date(latest + 1000) },
       });
 
       expect(page.items).toHaveLength(2);
 
       const empty = await client.listChains({
-        filter: { from: new Date(Date.now() + 60_000) },
+        filter: { from: new Date(latest + 60_000) },
       });
       expect(empty.items).toHaveLength(0);
     });
@@ -839,21 +843,25 @@ export const clientQueriesTestSuite = ({ it }: { it: TestAPI<TestSuiteContext> }
         log,
         withTransaction,
       });
-      await startChain("order", { amount: 1 });
-      await startChain("order", { amount: 2 });
+      const first = await startChain("order", { amount: 1 });
+      const second = await startChain("order", { amount: 2 });
+
+      const createdMs = [first.createdAt.getTime(), second.createdAt.getTime()];
+      const earliest = Math.min(...createdMs);
+      const latest = Math.max(...createdMs);
 
       const page = await client.listJobs({
-        filter: { from: new Date(Date.now() - 5000), to: new Date() },
+        filter: { from: new Date(earliest - 1000), to: new Date(latest + 1000) },
       });
       expect(page.items).toHaveLength(2);
 
       const futureOnly = await client.listJobs({
-        filter: { from: new Date(Date.now() + 60_000) },
+        filter: { from: new Date(latest + 60_000) },
       });
       expect(futureOnly.items).toHaveLength(0);
 
       const pastOnly = await client.listJobs({
-        filter: { to: new Date(Date.now() - 60_000) },
+        filter: { to: new Date(earliest - 60_000) },
       });
       expect(pastOnly.items).toHaveLength(0);
     });
