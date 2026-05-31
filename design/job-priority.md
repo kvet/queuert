@@ -143,7 +143,7 @@ WITH acquired_job AS (
   SELECT id
   FROM {{schema}}.{{table_prefix}}job
   WHERE type_name IN (SELECT unnest($1::text[]))
-    AND has_open_blockers = false
+    AND blocked = false
     AND leased_until IS NULL
     AND completed_at IS NULL
     AND scheduled_at <= now()
@@ -224,7 +224,7 @@ The acquisition index defined in [job-model.md](job-model.md) (`job_ready_idx`):
 ```sql
 CREATE INDEX {{table_prefix}}job_ready_idx
 ON {{schema}}.{{table_prefix}}job (type_name, scheduled_at)
-WHERE has_open_blockers = false
+WHERE blocked = false
   AND leased_until IS NULL
   AND completed_at IS NULL
 ```
@@ -235,7 +235,7 @@ Replaced with an **expression index** on the demotion formula (predicate unchang
 CREATE INDEX {{table_prefix}}job_ready_idx
 ON {{schema}}.{{table_prefix}}job
   (type_name, (priority - attempt) DESC, scheduled_at ASC)
-WHERE has_open_blockers = false
+WHERE blocked = false
   AND leased_until IS NULL
   AND completed_at IS NULL
 ```
@@ -258,13 +258,13 @@ The drift risk is the strongest argument for the stored column, but exactly one 
 
 #### Migration impact
 
-Migration runs `DROP INDEX … ; CREATE INDEX …` as two separate statements. The new index is built only over the active subset (the partial predicate inherited from [job-model.md](job-model.md): `has_open_blockers = false AND leased_until IS NULL AND completed_at IS NULL`), so build time is bounded by the active count, not total row count. At 100K active: seconds. At 1M active: tens of seconds, still fast.
+Migration runs `DROP INDEX … ; CREATE INDEX …` as two separate statements. The new index is built only over the active subset (the partial predicate inherited from [job-model.md](job-model.md): `blocked = false AND leased_until IS NULL AND completed_at IS NULL`), so build time is bounded by the active count, not total row count. At 100K active: seconds. At 1M active: tens of seconds, still fast.
 
 Index build takes an `AccessExclusiveLock` on the table for the duration of the rebuild. For v1, accept the brief lock and document it. If zero-downtime becomes a hard requirement later, switch the PG migration to `CREATE INDEX CONCURRENTLY` followed by `DROP INDEX CONCURRENTLY` of the old one — queuert doesn't enforce a transactional boundary around migrations, so `CONCURRENTLY` is available without wrapper-level changes.
 
 #### `getNextJobAvailableInMs` interaction
 
-The new index is `(type_name, effective_priority_expr DESC, scheduled_at ASC)` and the wake-up query wants `(type_name, scheduled_at ASC)` ignoring priority. Postgres will still use the index for the `type_name` filter and then sort the small filtered set by `scheduled_at`; the partial predicate (`has_open_blockers = false AND leased_until IS NULL AND completed_at IS NULL`) keeps the candidate set tiny in practice (typically hundreds, occasionally thousands). At 100K active the wake-up query is still <1 ms. Note: [job-model.md](job-model.md) already defines `job_pending_listing_idx` as `(type_name, scheduled_at)` with the same partial predicate, so the "second partial index" fallback effectively ships by default — no extra cost incurred by this design.
+The new index is `(type_name, effective_priority_expr DESC, scheduled_at ASC)` and the wake-up query wants `(type_name, scheduled_at ASC)` ignoring priority. Postgres will still use the index for the `type_name` filter and then sort the small filtered set by `scheduled_at`; the partial predicate (`blocked = false AND leased_until IS NULL AND completed_at IS NULL`) keeps the candidate set tiny in practice (typically hundreds, occasionally thousands). At 100K active the wake-up query is still <1 ms. Note: [job-model.md](job-model.md) already defines `job_pending_listing_idx` as `(type_name, scheduled_at)` with the same partial predicate, so the "second partial index" fallback effectively ships by default — no extra cost incurred by this design.
 
 #### Worst-case acquisition behavior
 
@@ -297,7 +297,7 @@ Validation: pre-merge benchmark explicitly seeds this pathology and asserts <5 m
 6. `packages/core/src/implementation/continue-with.ts` — accept `priority?: number`, pass through.
 7. `packages/core/src/implementation/create-state-jobs.ts` — pass `priority` through to the adapter call.
 8. `packages/postgres/src/state-adapter/sql.ts`:
-   - Migration: add column + drop/recreate `job_ready_idx` as an expression index. Predicate unchanged from [job-model.md](job-model.md) (`has_open_blockers = false AND leased_until IS NULL AND completed_at IS NULL`); only the columns expand to include the demotion expression.
+   - Migration: add column + drop/recreate `job_ready_idx` as an expression index. Predicate unchanged from [job-model.md](job-model.md) (`blocked = false AND leased_until IS NULL AND completed_at IS NULL`); only the columns expand to include the demotion expression.
    - `dbJobColumns` / row mapping: include `priority`.
    - `acquireJobSql`: WHERE clause keeps the structural predicate from job-model.md; `ORDER BY (priority - attempt) DESC, scheduled_at ASC`. Cross-reference the index definition in a comment so future edits keep them in sync.
    - `createJobsSql`: insert `priority` with `COALESCE` over input + parent + 0.
@@ -358,7 +358,7 @@ I.e. `startChain` with a higher priority bumps an existing dedup'd pending job. 
 
 ### Dynamic priority adjustment (`setJobPriority(id, n)`)
 
-Out of scope for v1. Easy to add later if a use case appears: an UPDATE conditioned on the same structural predicate as acquisition (`has_open_blockers = false AND leased_until IS NULL AND completed_at IS NULL`) — running jobs are out of the queue, blocked jobs aren't yet eligible, completed ones are terminal. No schema change needed.
+Out of scope for v1. Easy to add later if a use case appears: an UPDATE conditioned on the same structural predicate as acquisition (`blocked = false AND leased_until IS NULL AND completed_at IS NULL`) — running jobs are out of the queue, blocked jobs aren't yet eligible, completed ones are terminal. No schema change needed.
 
 ### Floating-point priority
 

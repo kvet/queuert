@@ -18,7 +18,7 @@ Both of these are operational concerns, not correctness concerns — the standar
 The core schema in [job-model.md](job-model.md) is structured to make `chain_id` the natural partition key:
 
 - **No row moves.** `chain_id` is immutable from insert onward, so jobs never migrate between partitions. Partitioning on `completed_at` would force a cross-partition row move on every completion (`UPDATE … SET completed_at = …` triggers PG to DELETE from the active partition + INSERT into the completed partition) — every job completion becomes a full tuple move with all index entries rewritten. The dead-tuple math gets _worse_, not better.
-- **Chain-local self-FKs.** `chain_id REFERENCES job(id)` and `succeeded_by_job_id REFERENCES job(id)` always point at rows within the same chain. With chain_id partitioning, every FK lookup is partition-local — no cross-partition FK overhead.
+- **Chain-local self-FKs.** `chain_id REFERENCES job(id)` and `continued_to_job_id REFERENCES job(id)` always point at rows within the same chain. With chain_id partitioning, every FK lookup is partition-local — no cross-partition FK overhead.
 - **Chain-local uniqueness.** `UNIQUE (chain_id, chain_index)` and the open-scope dedup partial (`WHERE deduplication_key IS NOT NULL AND chain_id = id AND completed_at IS NULL`) both operate within a chain. PG only enforces uniqueness within a partition without including the partition key — fine here, because the partition key (chain_id) is the natural scope of both invariants.
 - **UUIDv7 time-ordering.** Range-partitioning by `chain_id` with UUIDv7 IDs effectively partitions by chain birthday (the leading bits encode timestamp). Old chains live in old partitions; new chains in new partitions. Retention becomes "drop the oldest day."
 - **`job_blocker` follows.** The companion `job_blocker` table partitions on the gated job's chain_id, sharing partition boundaries with `job` so the two tables drop together atomically. See [`job_blocker` partitioning](#job_blocker-partitioning) for the design tradeoff.
@@ -116,7 +116,7 @@ What changes per index:
 - **Completed-partition partials** (`job_completed_listing_idx`, `job_continued_listing_idx`): same. Older partitions hold the bulk of these; the active partition's version is small.
 - **Full-table indexes** (`job_listing_idx`, `chain_listing_idx`, `job_chain_position_idx`): partitioned indexes spanning all partitions. PG merges per-partition btrees at scan time for queries that don't partition-prune.
 
-No global unique indexes. The invariants that need DB-level enforcement (`(chain_id, chain_index)` UNIQUE, `(chain_id) WHERE succeeded_by_job_id IS NULL AND completed_at IS NULL` UNIQUE) all operate within a single chain → within a single partition, so per-partition uniqueness is sufficient.
+No global unique indexes. The invariants that need DB-level enforcement (`(chain_id, chain_index)` UNIQUE, `(chain_id) WHERE continued_to_job_id IS NULL AND completed_at IS NULL` UNIQUE) all operate within a single chain → within a single partition, so per-partition uniqueness is sufficient.
 
 ## What this doesn't change
 
