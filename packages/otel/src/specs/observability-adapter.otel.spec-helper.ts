@@ -36,7 +36,7 @@ const methodToMetricName: Record<string, string> = {
   chainCreated: "queuert.chain.created",
   chainCompleted: "queuert.chain.completed",
   chainDeleted: "queuert.chain.deleted",
-  jobTriggered: "queuert.job.triggered",
+  jobRescheduled: "queuert.job.rescheduled",
   jobBlocked: "queuert.job.blocked",
   jobUnblocked: "queuert.job.unblocked",
   notifyAdapterError: "queuert.notify_adapter.error",

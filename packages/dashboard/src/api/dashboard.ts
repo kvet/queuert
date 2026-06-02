@@ -7,7 +7,7 @@ import {
   handleChainDetail,
   handleChainsList,
 } from "./routes/chains.js";
-import { handleJobDetail, handleJobTrigger, handleJobsList } from "./routes/jobs.js";
+import { handleJobDetail, handleJobReschedule, handleJobsList } from "./routes/jobs.js";
 
 type Assets = Record<string, { content: string; contentType: string }>;
 
@@ -72,8 +72,8 @@ export const createDashboard = async <
 
     if (localPath === "/api/chains") return handleChainsList(url, client);
 
-    match = localPath.match(/^\/api\/jobs\/([^/]+)\/trigger$/);
-    if (match && request.method === "POST") return handleJobTrigger(client, match[1]);
+    match = localPath.match(/^\/api\/jobs\/([^/]+)\/reschedule$/);
+    if (match && request.method === "POST") return handleJobReschedule(client, match[1]);
 
     match = localPath.match(/^\/api\/jobs\/([^/]+)$/);
     if (match) return handleJobDetail(url, client, match[1]);

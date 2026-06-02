@@ -1,4 +1,5 @@
 import { type ConformanceGroup } from "./runner.js";
+import { abandonJobGroup } from "./state-adapter-cases/abandon-job.js";
 import { acquireJobGroup } from "./state-adapter-cases/acquire-job.js";
 import { addJobsBlockersTraceContextsGroup } from "./state-adapter-cases/add-jobs-blockers-trace-contexts.js";
 import { addJobsBlockersGroup } from "./state-adapter-cases/add-jobs-blockers.js";
@@ -18,8 +19,7 @@ import { listJobsGroup } from "./state-adapter-cases/list-jobs.js";
 import { readIsolationGroup } from "./state-adapter-cases/read-isolation.js";
 import { reapExpiredJobLeaseGroup } from "./state-adapter-cases/reap-expired-job-lease.js";
 import { renewJobLeaseGroup } from "./state-adapter-cases/renew-job-lease.js";
-import { rescheduleJobGroup } from "./state-adapter-cases/reschedule-job.js";
-import { triggerJobsGroup } from "./state-adapter-cases/trigger-jobs.js";
+import { rescheduleJobsGroup } from "./state-adapter-cases/reschedule-jobs.js";
 import { type StateConformanceFixture } from "./state-adapter-cases/types.js";
 import { unblockJobsGroup } from "./state-adapter-cases/unblock-jobs.js";
 import { withSavepointGroup } from "./state-adapter-cases/with-savepoint.js";
@@ -38,8 +38,8 @@ export const stateAdapterConformanceGroups: ConformanceGroup<StateConformanceFix
   getNextJobAvailableInMsGroup,
   acquireJobGroup,
   renewJobLeaseGroup,
-  rescheduleJobGroup,
-  triggerJobsGroup,
+  abandonJobGroup,
+  rescheduleJobsGroup,
   completeJobGroup,
   reapExpiredJobLeaseGroup,
   deleteChainsGroup,

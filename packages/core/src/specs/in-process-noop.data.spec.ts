@@ -5,6 +5,7 @@ import { blockerChainsTestSuite } from "../suites/blocker-chains.test-suite.js";
 import { chainsTestSuite } from "../suites/chains.test-suite.js";
 import { deduplicationTestSuite } from "../suites/deduplication.test-suite.js";
 import { deletionTestSuite } from "../suites/deletion.test-suite.js";
+import { rescheduleJobTestSuite } from "../suites/reschedule-job.test-suite.js";
 import { schedulingTestSuite } from "../suites/scheduling.test-suite.js";
 import {
   extendWithCommon,
@@ -12,7 +13,6 @@ import {
   extendWithResourceLeakDetection,
 } from "../suites/spec-context.spec-helper.js";
 import { startChainsTestSuite } from "../suites/start-chains.test-suite.js";
-import { triggerJobTestSuite } from "../suites/trigger-job.test-suite.js";
 import { validationTestSuite } from "../suites/validation.test-suite.js";
 import { waitChainCompletionTestSuite } from "../suites/wait-chain-completion.test-suite.js";
 import { workerlessCompletionTestSuite } from "../suites/workerless-completion.test-suite.js";
@@ -57,8 +57,8 @@ describe("Workerless Completion", () => {
   workerlessCompletionTestSuite({ it: inProcessNoopIt });
 });
 
-describe("Trigger Job", () => {
-  triggerJobTestSuite({ it: inProcessNoopIt });
+describe("Reschedule Job", () => {
+  rescheduleJobTestSuite({ it: inProcessNoopIt });
 });
 
 describe("Scheduling", () => {

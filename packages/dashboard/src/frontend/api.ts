@@ -1,9 +1,9 @@
-import { type Job as CoreJob, type Chain as CoreChain } from "queuert";
+import { type Chain, type Job } from "queuert";
 // @ts-expect-error tsgo doesn't resolve export * re-exports from seroval
 import { deserialize } from "seroval";
 
-export type UnknownJob = CoreJob<string, string, string, unknown, unknown>;
-export type UnknownChain = CoreChain<string, string, unknown, unknown>;
+export type UnknownJob = Job<string, string, string, unknown, unknown>;
+export type UnknownChain = Chain<string, string, unknown, unknown>;
 
 const BASE = "./api";
 
@@ -80,8 +80,8 @@ export const getChainDetail = async (
 export const getChainBlocking = async (chainId: string): Promise<{ items: UnknownJob[] }> =>
   fetchSeroval(`/chains/${chainId}/blocking`);
 
-export const triggerJob = async (jobId: string): Promise<UnknownJob> => {
-  const { job } = await fetchSeroval<{ job: UnknownJob }>(`/jobs/${jobId}/trigger`, {
+export const rescheduleJob = async (jobId: string): Promise<UnknownJob> => {
+  const { job } = await fetchSeroval<{ job: UnknownJob }>(`/jobs/${jobId}/reschedule`, {
     method: "POST",
   });
   return job;

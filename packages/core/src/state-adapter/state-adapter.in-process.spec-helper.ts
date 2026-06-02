@@ -86,7 +86,8 @@ export const extendWithStateInProcess = <T>(
           getNextJobAvailableInMs: wrap(stateAdapter.getNextJobAvailableInMs),
           acquireJob: wrap(stateAdapter.acquireJob),
           renewJobLease: wrap(stateAdapter.renewJobLease),
-          rescheduleJob: wrap(stateAdapter.rescheduleJob),
+          rescheduleJobs: wrap(stateAdapter.rescheduleJobs),
+          abandonJob: wrap(stateAdapter.abandonJob),
           completeJob: wrap(stateAdapter.completeJob),
           reapExpiredJobLease: wrap(stateAdapter.reapExpiredJobLease),
           deleteChains: wrap(stateAdapter.deleteChains),
@@ -94,7 +95,6 @@ export const extendWithStateInProcess = <T>(
           listJobs: wrap(stateAdapter.listJobs),
           listChainJobs: wrap(stateAdapter.listChainJobs),
           listBlockedJobs: wrap(stateAdapter.listBlockedJobs),
-          triggerJobs: wrap(stateAdapter.triggerJobs),
           close: stateAdapter.close,
         };
 

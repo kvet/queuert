@@ -195,7 +195,7 @@ await withTransactionHooks(async (transactionHooks) =>
     }),
   ),
 );
-console.log('Created scheduled-report (in 1 hour). Use "Trigger now" in the dashboard!');
+console.log('Created scheduled-report (in 1 hour). Use "Reschedule" in the dashboard!');
 
 // Cleanup
 await stopWorker();

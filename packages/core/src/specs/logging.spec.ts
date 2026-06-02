@@ -221,25 +221,33 @@ describe("Logging", () => {
       await client.awaitChain(job, completionOptions);
     });
 
-    const failedLogs = log.mock.calls
-      .map((call) => call[0])
-      .filter((entry) => entry.type === "job_attempt_failed");
+    const logs = log.mock.calls.map((call) => call[0]);
 
+    const failedLogs = logs.filter((entry) => entry.type === "job_attempt_failed");
     expect(failedLogs).toEqual([
+      expect.objectContaining({ type: "job_attempt_failed", error: expect.anything() }),
+      expect.objectContaining({ type: "job_attempt_failed", error: expect.anything() }),
+      expect.objectContaining({ type: "job_attempt_failed", error: expect.anything() }),
+    ]);
+    expect(failedLogs).not.toContainEqual(
       expect.objectContaining({
-        type: "job_attempt_failed",
-        data: expect.objectContaining({ rescheduledAfterMs: 10 }),
-        error: expect.anything(),
+        data: expect.objectContaining({ scheduleAfterMs: expect.anything() }),
+      }),
+    );
+
+    const rescheduledLogs = logs.filter((entry) => entry.type === "job_rescheduled");
+    expect(rescheduledLogs).toEqual([
+      expect.objectContaining({
+        type: "job_rescheduled",
+        data: expect.objectContaining({ scheduledAt: expect.any(Date) }),
       }),
       expect.objectContaining({
-        type: "job_attempt_failed",
-        data: expect.objectContaining({ rescheduledAfterMs: 20 }),
-        error: expect.anything(),
+        type: "job_rescheduled",
+        data: expect.objectContaining({ scheduledAt: expect.any(Date) }),
       }),
       expect.objectContaining({
-        type: "job_attempt_failed",
-        data: expect.objectContaining({ rescheduledAfterMs: 40 }),
-        error: expect.anything(),
+        type: "job_rescheduled",
+        data: expect.objectContaining({ scheduledAt: expect.any(Date) }),
       }),
     ]);
   });
@@ -1175,12 +1183,12 @@ describe("Logging rollback", () => {
     let handlerFailed = false;
     const erroringStateAdapter: typeof stateAdapter = {
       ...stateAdapter,
-      rescheduleJob: async (args) => {
+      abandonJob: async (args) => {
         if (!rescheduleErrorThrown) {
           rescheduleErrorThrown = true;
-          throw new Error("simulated rescheduleJob failure");
+          throw new Error("simulated abandonJob failure");
         }
-        return stateAdapter.rescheduleJob(args);
+        return stateAdapter.abandonJob(args);
       },
     };
 
@@ -1605,7 +1613,7 @@ describe("Logging rollback", () => {
     ]);
   });
 
-  it("logs job trigger", async ({
+  it("logs job reschedule", async ({
     stateAdapter,
     notifyAdapter,
     withTransaction,
@@ -1639,7 +1647,7 @@ describe("Logging rollback", () => {
 
     await withTransactionHooks(async (transactionHooks) =>
       withTransaction(async (txCtx) =>
-        client.triggerJob({ ...txCtx, transactionHooks, id: chain.id }),
+        client.rescheduleJob({ ...txCtx, transactionHooks, id: chain.id }),
       ),
     );
 
@@ -1647,7 +1655,7 @@ describe("Logging rollback", () => {
       { type: "chain_created", data: { typeName: "test" } },
       { type: "job_created", data: { typeName: "test" } },
       {
-        type: "job_triggered",
+        type: "job_rescheduled",
         data: { id: chain.id, typeName: "test", chainId: chain.id, chainTypeName: "test" },
       },
     ]);

@@ -455,9 +455,11 @@ const scheduled = await client.getJob({ id: reminder.id });
 console.log(`  scheduledAt: ${scheduled!.scheduledAt.toISOString()}`);
 
 // Admin action: run it now
-console.log(`\nTriggering reminder ${reminder.id}...`);
+console.log(`\nRescheduling reminder ${reminder.id} to run now...`);
 await withTransactionHooks(async (transactionHooks) =>
-  sql.begin(async (txSql) => client.triggerJob({ sql: txSql, transactionHooks, id: reminder.id })),
+  sql.begin(async (txSql) =>
+    client.rescheduleJob({ sql: txSql, transactionHooks, id: reminder.id }),
+  ),
 );
 
 await client.awaitChain(reminder, { timeoutMs: 5000 });

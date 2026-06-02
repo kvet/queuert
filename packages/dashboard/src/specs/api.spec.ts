@@ -373,8 +373,8 @@ describe("Dashboard API", () => {
     });
   });
 
-  describe("POST /api/jobs/:jobId/trigger", () => {
-    it("triggers a pending future-scheduled job", async () => {
+  describe("POST /api/jobs/:jobId/reschedule", () => {
+    it("reschedules a pending future-scheduled job to now", async () => {
       const { request, stateAdapter } = await createTestDashboard();
       const [{ job }] = await stateAdapter.withTransaction(async (txCtx) =>
         stateAdapter.createJobs({
@@ -392,7 +392,7 @@ describe("Dashboard API", () => {
         }),
       );
 
-      const res = await request(`/api/jobs/${job.id}/trigger`, { method: "POST" });
+      const res = await request(`/api/jobs/${job.id}/reschedule`, { method: "POST" });
       const body = await parseBody(res);
 
       expect(res.status).toBe(200);
@@ -401,7 +401,7 @@ describe("Dashboard API", () => {
 
     it("returns 404 for missing job", async () => {
       const { request } = await createTestDashboard();
-      const res = await request("/api/jobs/nonexistent/trigger", { method: "POST" });
+      const res = await request("/api/jobs/nonexistent/reschedule", { method: "POST" });
       expect(res.status).toBe(404);
     });
 
@@ -413,7 +413,7 @@ describe("Dashboard API", () => {
         stateAdapter.acquireJob({ txCtx, typeNames: ["test-type"] }),
       );
 
-      const res = await request(`/api/jobs/${job.id}/trigger`, { method: "POST" });
+      const res = await request(`/api/jobs/${job.id}/reschedule`, { method: "POST" });
       const body = await parseBody(res);
 
       expect(res.status).toBe(409);

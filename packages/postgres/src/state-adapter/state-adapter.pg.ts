@@ -488,7 +488,7 @@ SELECT chain_id FROM connected
         }
       }),
 
-    getChains: (async ({
+    getChains: async ({
       txCtx,
       chainIds,
       lock,
@@ -538,7 +538,8 @@ WHERE j.id = ANY($1::{{id_type}}[])${lockClause ? "\nORDER BY j.id" : ""}
         params: [chainIds as string[]],
       });
       return classifyChainRows(chainIds, rows);
-    }) as StateAdapter<TTxContext, TIdType>["getChains"],
+    },
+
     getJobs: (async ({
       txCtx,
       jobIds,
@@ -957,6 +958,7 @@ SELECT
         blockerTraceContexts: result.blocker_trace_contexts,
       };
     },
+
     getJobBlockers: async ({ txCtx, jobId }) => {
       const chains = await executeTypedSql({
         txCtx,
@@ -1025,6 +1027,7 @@ FOR UPDATE SKIP LOCKED
       });
       return result ? result.available_in_ms : null;
     },
+
     acquireJob: async ({ txCtx, typeNames }) => {
       const [result] = await executeTypedSql({
         txCtx,
@@ -1097,41 +1100,73 @@ RETURNING *
 
       return mapDbJobToStateJob(job);
     },
-    rescheduleJob: async ({ txCtx, jobId, schedule, error }) => {
-      const [job] = await executeTypedSql({
+
+    rescheduleJobs: async ({ txCtx, jobIds, schedule }) => {
+      if (jobIds.length === 0) return [];
+      const rows = await executeTypedSql({
         txCtx,
-        sql: templateCache.getOrCompute("rescheduleJob", () =>
+        sql: templateCache.getOrCompute("rescheduleJobs", () =>
           applyTemplate(
             sql(
               `
 UPDATE {{schema}}.{{table_prefix}}job
-SET scheduled_at = GREATEST(COALESCE($2::timestamptz, now() + ($3::bigint || ' milliseconds')::interval, now()), now()),
-  last_attempt_at = now(),
-  last_attempt_error = $4::jsonb,
-  leased_by = NULL,
-  leased_until = NULL,
-  status = 'pending'
-WHERE id = $1
+SET scheduled_at = GREATEST(COALESCE($2::timestamptz, now() + ($3::bigint || ' milliseconds')::interval, now()), now())
+WHERE id = ANY($1::{{id_type}}[])
+  AND status = 'pending'
 RETURNING *
 `,
               {
-                id: "rescheduleJob",
-                params: [idDataType, t["date?"](), t["number?"](), t.string()],
+                id: "rescheduleJobs",
+                params: [t.array(), t["date?"](), t["number?"]()],
                 columns: { ...dbJobColumns },
               },
             ),
           ),
         ),
         params: [
-          jobId,
-          schedule.at?.toISOString() ?? null,
-          schedule.afterMs ?? null,
-          JSON.stringify(error),
+          jobIds as string[],
+          schedule?.at?.toISOString() ?? null,
+          schedule?.afterMs ?? null,
         ],
+      });
+      const orderById = new Map(jobIds.map((id, i) => [id as string, i]));
+      return rows
+        .slice()
+        .sort((a, b) => orderById.get(a.id)! - orderById.get(b.id)!)
+        .map(mapDbJobToStateJob);
+    },
+
+    abandonJob: async ({ txCtx, jobId, error }) => {
+      const [job] = await executeTypedSql({
+        txCtx,
+        sql: templateCache.getOrCompute("abandonJob", () =>
+          applyTemplate(
+            sql(
+              `
+UPDATE {{schema}}.{{table_prefix}}job
+SET last_attempt_at = now(),
+  last_attempt_error = $2::jsonb,
+  leased_by = NULL,
+  leased_until = NULL,
+  status = 'pending'
+WHERE id = $1
+  AND status = 'running'
+RETURNING *
+`,
+              {
+                id: "abandonJob",
+                params: [idDataType, t.string()],
+                columns: { ...dbJobColumns },
+              },
+            ),
+          ),
+        ),
+        params: [jobId, JSON.stringify(error)],
       });
 
       return mapDbJobToStateJob(job);
     },
+
     completeJob: async ({ txCtx, jobId, output, workerId }) => {
       const [job] = await executeTypedSql({
         txCtx,
@@ -1163,6 +1198,7 @@ RETURNING *
 
       return mapDbJobToStateJob(job);
     },
+
     reapExpiredJobLease: async ({ txCtx, typeNames, ignoredJobIds }) => {
       const [job] = await executeTypedSql({
         txCtx,
@@ -1202,6 +1238,7 @@ RETURNING job.*
       });
       return job ? mapDbJobToStateJob(job) : undefined;
     },
+
     deleteChains: async ({ txCtx, chainIds, cascade }) => {
       const effectiveChainIds = cascade ? await expandChainIds(txCtx, chainIds) : chainIds;
       if (effectiveChainIds.length === 0) return { deleted: [], blockerRefs: [] };
@@ -1280,6 +1317,7 @@ SELECT
         })),
       };
     },
+
     listChains: async ({ txCtx, filter, orderDirection, page }) => {
       const cursor = page.cursor ? decodeCreatedAtCursor(page.cursor) : null;
       const conditions: string[] = ["root_job.chain_index = 0"];
@@ -1527,41 +1565,6 @@ SELECT
       return { items, nextCursor };
     },
 
-    triggerJobs: async ({ txCtx, jobIds }) => {
-      if (jobIds.length === 0) return [];
-      const rows = await executeTypedSql({
-        txCtx,
-        sql: templateCache.getOrCompute("triggerJobs", () =>
-          applyTemplate(
-            sql(
-              `
-UPDATE {{schema}}.{{table_prefix}}job
-SET scheduled_at = now()
-WHERE id = ANY($1::{{id_type}}[])
-  AND status = 'pending'
-RETURNING *
-`,
-              {
-                id: "triggerJobs",
-                params: [t.array()],
-                columns: { ...dbJobColumns },
-              },
-            ),
-          ),
-        ),
-        params: [jobIds as string[]],
-      });
-      const orderById = new Map(jobIds.map((id, i) => [id as string, i]));
-      return rows
-        .slice()
-        .sort((a, b) => orderById.get(a.id)! - orderById.get(b.id)!)
-        .map(mapDbJobToStateJob);
-    },
-
-    close: async () => {
-      await stateProvider.close?.();
-    },
-
     listBlockedJobs: async ({ txCtx, chainId, orderDirection, page }) => {
       const cursor = page.cursor ? decodeCreatedAtCursor(page.cursor) : null;
       const conditions: string[] = [
@@ -1614,6 +1617,7 @@ RETURNING *
 
       return { items, nextCursor };
     },
+
     migrateToLatest: async () => {
       return executeMigrations<TTxContext>({
         migrations,
@@ -1667,6 +1671,7 @@ CREATE TABLE IF NOT EXISTS {{schema}}.{{table_prefix}}migration (
         },
       });
     },
+
     vacuum: async () => {
       await executeTypedSql({
         sql: applyTemplate(sql(`VACUUM ${schema}.${tablePrefix}job`, { params: [], columns: {} })),
@@ -1677,6 +1682,7 @@ CREATE TABLE IF NOT EXISTS {{schema}}.{{table_prefix}}migration (
         ),
       });
     },
+
     truncate: async () => {
       await executeTypedSql({
         sql: applyTemplate(
@@ -1686,6 +1692,10 @@ CREATE TABLE IF NOT EXISTS {{schema}}.{{table_prefix}}migration (
           }),
         ),
       });
+    },
+
+    close: async () => {
+      await stateProvider.close?.();
     },
   };
 };

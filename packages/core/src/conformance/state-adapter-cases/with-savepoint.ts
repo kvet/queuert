@@ -162,10 +162,9 @@ export const withSavepointGroup: ConformanceGroup<StateConformanceFixture> = {
 
             await stateAdapter
               .withSavepoint(spTxCtx, async (sp2TxCtx) => {
-                await stateAdapter.rescheduleJob({
+                await stateAdapter.abandonJob({
                   txCtx: sp2TxCtx,
                   jobId,
-                  schedule: { afterMs: 1000 },
                   error: "inner failure",
                 });
                 throw new Error("inner savepoint failure");

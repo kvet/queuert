@@ -196,13 +196,20 @@ export type StateAdapter<TTxContext extends BaseTxContext, TJobId extends string
     leaseDurationMs: number;
   }) => Promise<StateJob>;
 
-  /** Reschedules a job for later processing. */
-  rescheduleJob: (params: {
+  /**
+   * Client-initiated reschedule: sets `scheduled_at` from `schedule` (omitted =
+   * now, past times clamped to now) on the given `pending` jobs, leaving status
+   * and attempt bookkeeping untouched. Skips non-`pending` and missing ids.
+   * Returns the updated rows in input order.
+   */
+  rescheduleJobs: (params: {
     txCtx?: TTxContext;
-    jobId: TJobId;
-    schedule: ScheduleOptions;
-    error: string;
-  }) => Promise<StateJob>;
+    jobIds: TJobId[];
+    schedule?: ScheduleOptions;
+  }) => Promise<StateJob[]>;
+
+  /** Releases a failed attempt back to `pending`: transitions the running job `running → pending`, records the attempt error, and clears the lease. Does not touch `scheduled_at` — pair with {@link StateAdapter.rescheduleJobs | rescheduleJobs} in the same transaction to set the next run time. */
+  abandonJob: (params: { txCtx?: TTxContext; jobId: TJobId; error: string }) => Promise<StateJob>;
 
   /** Completes a job with the given output. */
   completeJob: (params: {
@@ -288,12 +295,6 @@ export type StateAdapter<TTxContext extends BaseTxContext, TJobId extends string
     orderDirection: OrderDirection;
     page: PageParams;
   }) => Promise<Page<StateJob>>;
-
-  /**
-   * Sets `scheduled_at = now()` on the given jobs and returns the updated
-   * rows in input order.
-   */
-  triggerJobs: (params: { txCtx?: TTxContext; jobIds: TJobId[] }) => Promise<StateJob[]>;
 
   /**
    * Releases internal resources (in-memory indexes, shared caches) and cascades

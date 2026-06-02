@@ -845,20 +845,37 @@ export const createInProcessStateAdapter = async ({
         return updatedJob;
       }),
 
-    rescheduleJob: async ({ txCtx, jobId, schedule, error }) =>
+    rescheduleJobs: async ({ txCtx, jobIds, schedule }) =>
+      withWriteLock(txCtx, () => {
+        if (jobIds.length === 0) return [];
+        const journal = txCtx?.journal;
+        const now = new Date();
+        const requestedScheduledAt =
+          schedule?.at ?? (schedule?.afterMs ? new Date(now.getTime() + schedule.afterMs) : now);
+        const resolvedScheduledAt = clampToFloor(requestedScheduledAt, now);
+        const rescheduled: StateJob[] = [];
+        const seen = new Set<string>();
+        for (const jobId of jobIds) {
+          if (seen.has(jobId)) continue;
+          seen.add(jobId);
+          const job = jobs.get(jobId);
+          if (!job || job.status !== "pending") continue;
+          const updatedJob: StateJob = { ...job, scheduledAt: resolvedScheduledAt };
+          writeJob(journal, job, updatedJob);
+          rescheduled.push(updatedJob);
+        }
+        return rescheduled;
+      }),
+
+    abandonJob: async ({ txCtx, jobId, error }) =>
       withWriteLock(txCtx, () => {
         const journal = txCtx?.journal;
         const job = jobs.get(jobId);
-        if (!job) throw new Error("Job not found");
+        if (!job || job.status !== "running") throw new Error("Job not found or not running");
 
-        const now = new Date();
-        const requestedScheduledAt =
-          schedule.at ?? (schedule.afterMs ? new Date(now.getTime() + schedule.afterMs) : now);
-        const resolvedScheduledAt = clampToFloor(requestedScheduledAt, now);
         const updatedJob: StateJob = {
           ...job,
-          scheduledAt: resolvedScheduledAt,
-          lastAttemptAt: now,
+          lastAttemptAt: new Date(),
           lastAttemptError: error,
           leasedBy: null,
           leasedUntil: null,
@@ -1019,25 +1036,6 @@ export const createInProcessStateAdapter = async ({
         const chainMap = jobsByChain.get(chainId);
         const matched: StateJob[] = chainMap ? Array.from(chainMap.values()) : [];
         return paginateByChainIndex(matched, page, orderDirection);
-      }),
-
-    triggerJobs: async ({ txCtx, jobIds }) =>
-      withWriteLock(txCtx, () => {
-        if (jobIds.length === 0) return [];
-        const journal = txCtx?.journal;
-        const now = new Date();
-        const triggered: StateJob[] = [];
-        const seen = new Set<string>();
-        for (const jobId of jobIds) {
-          if (seen.has(jobId)) continue;
-          seen.add(jobId);
-          const job = jobs.get(jobId);
-          if (!job || job.status !== "pending") continue;
-          const updatedJob: StateJob = { ...job, scheduledAt: now };
-          writeJob(journal, job, updatedJob);
-          triggered.push(updatedJob);
-        }
-        return triggered;
       }),
 
     listBlockedJobs: async ({ txCtx, chainId, orderDirection, page }) =>

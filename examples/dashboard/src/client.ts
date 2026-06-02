@@ -61,7 +61,7 @@ export const jobTypes = defineJobTypes<{
 
   /*
    * Scenario 5 - Scheduled Job:
-   *   scheduled-report (scheduled 1 hour in the future — use "Trigger now" in the dashboard)
+   *   scheduled-report (scheduled 1 hour in the future — use "Reschedule" in the dashboard)
    */
   "scheduled-report": {
     entry: true;

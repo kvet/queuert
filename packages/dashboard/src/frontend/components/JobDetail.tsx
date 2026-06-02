@@ -1,7 +1,7 @@
 import { A, useParams } from "@solidjs/router";
 import { For, Show, createResource, createSignal } from "solid-js";
 
-import { getJobDetail, triggerJob } from "../api.js";
+import { getJobDetail, rescheduleJob } from "../api.js";
 import { JsonView } from "./JsonView.js";
 import { StatusBadge } from "./StatusBadge.js";
 import { TimeAgo } from "./TimeAgo.js";
@@ -16,15 +16,15 @@ const fmtDate = (d: Date) => dtf.format(d);
 export function JobDetail() {
   const params = useParams<{ id: string }>();
   const [detail, { mutate }] = createResource(() => params.id, getJobDetail);
-  const [triggering, setTriggering] = createSignal(false);
+  const [rescheduling, setRescheduling] = createSignal(false);
 
-  const handleTrigger = async (jobId: string) => {
-    setTriggering(true);
+  const handleReschedule = async (jobId: string) => {
+    setRescheduling(true);
     try {
-      const updated = await triggerJob(jobId);
+      const updated = await rescheduleJob(jobId);
       mutate((prev) => (prev ? { ...prev, job: updated } : prev));
     } finally {
-      setTriggering(false);
+      setRescheduling(false);
     }
   };
 
@@ -68,11 +68,11 @@ export function JobDetail() {
                     <Show when={job.status === "pending" && job.scheduledAt > new Date()}>
                       {" "}
                       <button
-                        class="trigger-btn"
-                        disabled={triggering()}
-                        onClick={() => void handleTrigger(job.id)}
+                        class="reschedule-btn"
+                        disabled={rescheduling()}
+                        onClick={() => void handleReschedule(job.id)}
                       >
-                        {triggering() ? "Triggering..." : "Trigger now"}
+                        {rescheduling() ? "Rescheduling..." : "Reschedule"}
                       </button>
                     </Show>
                   </dd>

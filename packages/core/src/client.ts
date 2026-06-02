@@ -27,10 +27,10 @@ import {
   ChainNotFoundError,
   JobAlreadyCompletedError,
   JobNotFoundError,
-  JobNotTriggerableError,
+  JobNotReschedulableError,
   JobTypeMismatchError,
   JobsNotFoundError,
-  JobsNotTriggerableError,
+  JobsNotReschedulableError,
   TransactionContextRequiredError,
   WaitChainTimeoutError,
 } from "./errors.js";
@@ -179,7 +179,7 @@ type StartChainsResult<
  * The public API for managing chains. Created via {@link createClient}.
  *
  * Methods are split into two categories:
- * - **Mutating** — `startChain`, `startChains`, `completeChain`, `deleteChain`, `deleteChains`, `triggerJob`, `triggerJobs`. Require `transactionHooks` and a transaction context.
+ * - **Mutating** — `startChain`, `startChains`, `completeChain`, `deleteChain`, `deleteChains`, `rescheduleJob`, `rescheduleJobs`. Require `transactionHooks` and a transaction context.
  * - **Read-only** — `getChain`, `getJob`, `listChains`, `listJobs`, `listChainJobs`, `getJobBlockers`, `listBlockedJobs`, `awaitChain`. Accept an optional transaction context.
  */
 export type Client<
@@ -232,22 +232,24 @@ export type Client<
     } & GetStateAdapterTxContext<TStateAdapter>,
   ) => Promise<ResolvedChain<TJobId, TJobTypeDefinitions, TEntryName>[]>;
 
-  /** Trigger a pending job immediately by setting its scheduledAt to now. Throws {@link JobNotFoundError} if the job does not exist, {@link JobNotTriggerableError} if the job is not pending, {@link TransactionContextRequiredError} if called without a transaction context. */
-  triggerJob: <
+  /** Reschedule a pending job by setting its `scheduledAt` from the optional `schedule` (`{ at }` | `{ afterMs }`); omitting `schedule` reschedules to now. Past times clamp to now. Throws {@link JobNotFoundError} if the job does not exist, {@link JobNotReschedulableError} if the job is not pending, {@link TransactionContextRequiredError} if called without a transaction context. */
+  rescheduleJob: <
     TJobTypeName extends JobTypeNames<TJobTypeDefinitions> = JobTypeNames<TJobTypeDefinitions>,
   >(
     options: {
       id: TJobId;
+      schedule?: ScheduleOptions;
       transactionHooks: TransactionHooks;
     } & GetStateAdapterTxContext<TStateAdapter>,
   ) => Promise<ResolvedJob<TJobId, TJobTypeDefinitions, TJobTypeName>>;
 
-  /** Trigger multiple pending jobs immediately. Validation is atomic: throws {@link JobsNotFoundError} or {@link JobsNotTriggerableError} (batch variants listing every offending id) if any input is missing or not pending — no job is triggered on failure. Also throws {@link TransactionContextRequiredError} if called without a transaction context. Returns jobs in input order. Empty `ids` returns `[]`. */
-  triggerJobs: <
+  /** Reschedule multiple pending jobs, setting each `scheduledAt` from the optional `schedule` (omitted = now, past times clamped to now). Validation is atomic: throws {@link JobsNotFoundError} or {@link JobsNotReschedulableError} (batch variants listing every offending id) if any input is missing or not pending — no job is rescheduled on failure. Also throws {@link TransactionContextRequiredError} if called without a transaction context. Returns jobs in input order. Empty `ids` returns `[]`. */
+  rescheduleJobs: <
     TJobTypeName extends JobTypeNames<TJobTypeDefinitions> = JobTypeNames<TJobTypeDefinitions>,
   >(
     options: {
       ids: TJobId[];
+      schedule?: ScheduleOptions;
       transactionHooks: TransactionHooks;
     } & GetStateAdapterTxContext<TStateAdapter>,
   ) => Promise<ResolvedJob<TJobId, TJobTypeDefinitions, TJobTypeName>[]>;
@@ -560,18 +562,20 @@ export const createClient = async <
       return deletedChains;
     },
 
-    triggerJob: async <
+    rescheduleJob: async <
       TJobTypeName extends JobTypeNames<TJobTypeDefinitions> = JobTypeNames<TJobTypeDefinitions>,
     >(
       options: {
         id: TJobId;
+        schedule?: ScheduleOptions;
         transactionHooks: TransactionHooks;
       } & GetStateAdapterTxContext<TStateAdapter>,
     ): Promise<ResolvedJob<TJobId, TJobTypeDefinitions, TJobTypeName>> => {
-      const { id, transactionHooks, ...rest } = options;
+      const { id, schedule, transactionHooks, ...rest } = options;
       try {
-        const [job] = await client.triggerJobs<TJobTypeName>({
+        const [job] = await client.rescheduleJobs<TJobTypeName>({
           ids: [id],
+          schedule,
           transactionHooks,
           ...(rest as GetStateAdapterTxContext<TStateAdapter>),
         });
@@ -583,9 +587,9 @@ export const createClient = async <
             cause: error,
           });
         }
-        if (error instanceof JobsNotTriggerableError) {
-          throw new JobNotTriggerableError(
-            `Cannot trigger job ${String(id)}: job is not "pending"`,
+        if (error instanceof JobsNotReschedulableError) {
+          throw new JobNotReschedulableError(
+            `Cannot reschedule job ${String(id)}: job is not "pending"`,
             { jobId: id as string, cause: error },
           );
         }
@@ -593,15 +597,16 @@ export const createClient = async <
       }
     },
 
-    triggerJobs: async <
+    rescheduleJobs: async <
       TJobTypeName extends JobTypeNames<TJobTypeDefinitions> = JobTypeNames<TJobTypeDefinitions>,
     >(
       options: {
         ids: TJobId[];
+        schedule?: ScheduleOptions;
         transactionHooks: TransactionHooks;
       } & GetStateAdapterTxContext<TStateAdapter>,
     ): Promise<ResolvedJob<TJobId, TJobTypeDefinitions, TJobTypeName>[]> => {
-      const { ids, transactionHooks, ...rest } = options;
+      const { ids, schedule, transactionHooks, ...rest } = options;
       const txCtx = requireTxCtx(rest);
 
       if (ids.length === 0) return [];
@@ -612,34 +617,38 @@ export const createClient = async <
       });
 
       const notFound: TJobId[] = [];
-      const notTriggerable: { jobId: TJobId; status: StateJob["status"] }[] = [];
+      const notReschedulable: { jobId: TJobId; status: StateJob["status"] }[] = [];
       classified.forEach((entry, index) => {
         if (entry === undefined) {
           notFound.push(ids[index]);
         } else if (entry.status !== "pending") {
-          notTriggerable.push({ jobId: entry.id as TJobId, status: entry.status });
+          notReschedulable.push({ jobId: entry.id as TJobId, status: entry.status });
         }
       });
       if (notFound.length > 0) {
         throw new JobsNotFoundError(`Jobs not found: ${notFound.join(", ")}`, { jobIds: notFound });
       }
-      if (notTriggerable.length > 0) {
-        throw new JobsNotTriggerableError(
-          `Cannot trigger jobs whose status is not "pending": ${notTriggerable
+      if (notReschedulable.length > 0) {
+        throw new JobsNotReschedulableError(
+          `Cannot reschedule jobs whose status is not "pending": ${notReschedulable
             .map((j) => `${j.jobId} (${j.status})`)
             .join(", ")}`,
-          { jobIds: notTriggerable.map((j) => j.jobId) },
+          { jobIds: notReschedulable.map((j) => j.jobId) },
         );
       }
 
-      const triggered = await helpers.stateAdapter.triggerJobs({ txCtx, jobIds: ids });
-      for (const job of triggered) {
+      const rescheduled = await helpers.stateAdapter.rescheduleJobs({
+        txCtx,
+        jobIds: ids,
+        schedule,
+      });
+      for (const job of rescheduled) {
         bufferNotifyJobScheduled(transactionHooks, helpers.notifyAdapter, job);
         bufferObservabilityEvent(transactionHooks, () => {
-          helpers.observabilityHelper.jobTriggered(job);
+          helpers.observabilityHelper.jobRescheduled(job);
         });
       }
-      return triggered.map(
+      return rescheduled.map(
         (job) => mapStateJobToJob(job) as ResolvedJob<TJobId, TJobTypeDefinitions, TJobTypeName>,
       );
     },

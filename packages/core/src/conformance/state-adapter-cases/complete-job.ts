@@ -75,10 +75,9 @@ export const completeJobGroup: ConformanceGroup<StateConformanceFixture> = {
         );
 
         const rescheduled = await stateAdapter.withTransaction(async (txCtx) =>
-          stateAdapter.rescheduleJob({
+          stateAdapter.abandonJob({
             txCtx,
             jobId: created.id,
-            schedule: { afterMs: 0 },
             error: "first attempt failed",
           }),
         );

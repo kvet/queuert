@@ -174,11 +174,14 @@ describe("Metrics", () => {
       { method: "jobCreated" },
       { method: "workerStarted" },
       { method: "jobAttemptStarted" },
-      { method: "jobAttemptFailed", args: { rescheduledAfterMs: 10 } },
+      { method: "jobAttemptFailed" },
+      { method: "jobRescheduled" },
       { method: "jobAttemptStarted" },
-      { method: "jobAttemptFailed", args: { rescheduledAfterMs: 20 } },
+      { method: "jobAttemptFailed" },
+      { method: "jobRescheduled" },
       { method: "jobAttemptStarted" },
-      { method: "jobAttemptFailed", args: { rescheduledAfterMs: 40 } },
+      { method: "jobAttemptFailed" },
+      { method: "jobRescheduled" },
       { method: "jobAttemptStarted" },
       { method: "jobAttemptCompleted" },
       { method: "jobCompleted" },
@@ -864,7 +867,7 @@ describe("Metrics", () => {
     ]);
   });
 
-  it("tracks metrics for job trigger", async ({
+  it("tracks metrics for job reschedule", async ({
     stateAdapter,
     notifyAdapter,
     withTransaction,
@@ -898,14 +901,14 @@ describe("Metrics", () => {
 
     await withTransactionHooks(async (transactionHooks) =>
       withTransaction(async (txCtx) =>
-        client.triggerJob({ ...txCtx, transactionHooks, id: chain.id }),
+        client.rescheduleJob({ ...txCtx, transactionHooks, id: chain.id }),
       ),
     );
 
     await expectMetrics([
       { method: "chainCreated", args: { typeName: "test" } },
       { method: "jobCreated", args: { typeName: "test" } },
-      { method: "jobTriggered", args: { typeName: "test" } },
+      { method: "jobRescheduled", args: { typeName: "test" } },
     ]);
   });
 });
@@ -2097,6 +2100,7 @@ describe("Rollback", () => {
       { method: "jobAttemptStarted" },
       { method: "stateAdapterError" },
       { method: "jobAttemptFailed" },
+      { method: "jobRescheduled" },
       { method: "jobAttemptStarted" },
       { method: "jobAttemptCompleted" },
       { method: "jobCompleted" },
@@ -2123,12 +2127,12 @@ describe("Rollback", () => {
     let handlerFailed = false;
     const erroringStateAdapter: typeof stateAdapter = {
       ...stateAdapter,
-      rescheduleJob: async (args) => {
+      abandonJob: async (args) => {
         if (!rescheduleErrorThrown) {
           rescheduleErrorThrown = true;
-          throw new Error("simulated rescheduleJob failure");
+          throw new Error("simulated abandonJob failure");
         }
-        return stateAdapter.rescheduleJob(args);
+        return stateAdapter.abandonJob(args);
       },
     };
 
@@ -2267,6 +2271,7 @@ describe("Rollback", () => {
       { method: "workerStarted" },
       { method: "jobAttemptStarted" },
       { method: "jobAttemptFailed" },
+      { method: "jobRescheduled" },
       { method: "jobAttemptStarted" },
       { method: "jobCreated" },
       { method: "jobAttemptCompleted" },
@@ -2352,6 +2357,7 @@ describe("Rollback", () => {
       { method: "jobAttemptStarted" },
       { method: "stateAdapterError" },
       { method: "jobAttemptFailed" },
+      { method: "jobRescheduled" },
       { method: "jobAttemptStarted" },
       { method: "jobAttemptCompleted" },
       { method: "jobCompleted" },
@@ -2525,6 +2531,7 @@ describe("Rollback", () => {
       { method: "jobAttemptStarted" },
       { method: "stateAdapterError" },
       { method: "jobAttemptFailed" },
+      { method: "jobRescheduled" },
       { method: "jobAttemptStarted" },
       { method: "jobCreated" },
       { method: "jobAttemptCompleted" },

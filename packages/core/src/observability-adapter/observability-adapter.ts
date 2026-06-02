@@ -128,8 +128,7 @@ export type ObservabilityAdapter = {
     data: JobBasicData & {
       input: unknown;
       blockers: ChainData[];
-      scheduledAt?: Date;
-      scheduleAfterMs?: number;
+      scheduledAt: Date;
     },
   ) => void;
   jobAttemptStarted: (data: JobProcessingData & { workerId: string }) => void;
@@ -148,8 +147,6 @@ export type ObservabilityAdapter = {
   jobAttemptFailed: (
     data: JobProcessingData & {
       workerId: string;
-      rescheduledAt?: Date;
-      rescheduledAfterMs?: number;
       error: unknown;
     },
   ) => void;
@@ -176,8 +173,8 @@ export type ObservabilityAdapter = {
   chainCompleted: (data: ChainData & { output: unknown }) => void;
   chainDeleted: (data: ChainData) => void;
 
-  // trigger
-  jobTriggered: (data: JobBasicData) => void;
+  // reschedule
+  jobRescheduled: (data: JobBasicData & { scheduledAt: Date }) => void;
 
   // blockers
   jobBlocked: (data: JobBasicData & { blockedByChains: ChainData[] }) => void;

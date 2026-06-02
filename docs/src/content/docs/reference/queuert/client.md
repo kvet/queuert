@@ -91,11 +91,12 @@ Returns `Chain[]`.
 
 Deletes the specified chains. Missing IDs are silently skipped (use `deleteChain` for strict lookup). When **cascade** is `true`, transitive dependencies are included (default: `false`). Throws `BlockerReferenceError` if external jobs depend on the targeted chains.
 
-### triggerJob
+### rescheduleJob
 
 ```typescript
-const job = await client.triggerJob({
+const job = await client.rescheduleJob({
   id: jobId,
+  schedule: { afterMs: 60_000 }, // optional; omit to run now
   transactionHooks,
   tx,
 });
@@ -103,13 +104,14 @@ const job = await client.triggerJob({
 
 Returns `Job`.
 
-Triggers a pending job immediately by setting its `scheduledAt` to now. Throws `JobNotFoundError` if the job does not exist, or `JobNotTriggerableError` if the job is not pending.
+Reschedules a pending job by setting its `scheduledAt` from the optional `schedule` (`{ at }` | `{ afterMs }`). Omitting `schedule` reschedules to now; past times clamp to now. Throws `JobNotFoundError` if the job does not exist, or `JobNotReschedulableError` if the job is not pending.
 
-### triggerJobs
+### rescheduleJobs
 
 ```typescript
-const jobs = await client.triggerJobs({
+const jobs = await client.rescheduleJobs({
   ids: [jobId1, jobId2],
+  schedule: { at: new Date("2025-01-01T00:00:00Z") }, // optional; omit to run now
   transactionHooks,
   tx,
 });
@@ -117,7 +119,7 @@ const jobs = await client.triggerJobs({
 
 Returns `Job[]` in input order.
 
-Triggers multiple pending jobs in one call. Validation is atomic — if any job is missing or not pending, the entire call fails with `JobsNotFoundError` or `JobsNotTriggerableError` (the plural batch variants, listing every offending id) before any job is triggered. Empty `ids` returns `[]`.
+Reschedules multiple pending jobs in one call, applying the same optional `schedule` to each (omitted = now). Validation is atomic — if any job is missing or not pending, the entire call fails with `JobsNotFoundError` or `JobsNotReschedulableError` (the plural batch variants, listing every offending id) before any job is rescheduled. Empty `ids` returns `[]`.
 
 ### completeChain
 

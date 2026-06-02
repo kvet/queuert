@@ -4,9 +4,9 @@ import { createClient } from "../client.js";
 import { defineJobTypes } from "../entities/define-job-types.js";
 import {
   JobNotFoundError,
-  JobNotTriggerableError,
+  JobNotReschedulableError,
   JobsNotFoundError,
-  JobsNotTriggerableError,
+  JobsNotReschedulableError,
   TransactionContextRequiredError,
 } from "../errors.js";
 import { createInProcessWorker } from "../in-process-worker.js";
@@ -14,8 +14,8 @@ import { withTransactionHooks } from "../transaction-hooks.js";
 import { createProcessors } from "../worker/create-processors.js";
 import { type TestSuiteContext } from "./spec-context.spec-helper.js";
 
-export const triggerJobTestSuite = ({ it }: { it: TestAPI<TestSuiteContext> }): void => {
-  it("triggers a future-scheduled pending job to run now", async ({
+export const rescheduleJobTestSuite = ({ it }: { it: TestAPI<TestSuiteContext> }): void => {
+  it("reschedules a future-scheduled pending job to run now", async ({
     stateAdapter,
     notifyAdapter,
     withTransaction,
@@ -51,25 +51,111 @@ export const triggerJobTestSuite = ({ it }: { it: TestAPI<TestSuiteContext> }): 
       ),
     );
 
-    const beforeTrigger = await client.getJob({ id: chain.id });
-    expect(beforeTrigger!.status).toBe("pending");
-    expect(beforeTrigger!.scheduledAt.getTime()).toBeGreaterThan(Date.now() + 30_000);
+    const beforeReschedule = await client.getJob({ id: chain.id });
+    expect(beforeReschedule!.status).toBe("pending");
+    expect(beforeReschedule!.scheduledAt.getTime()).toBeGreaterThan(Date.now() + 30_000);
 
     const before = Date.now();
-    const triggered = await withTransactionHooks(async (transactionHooks) =>
+    const rescheduled = await withTransactionHooks(async (transactionHooks) =>
       withTransaction(async (txCtx) =>
-        client.triggerJob({ ...txCtx, transactionHooks, id: chain.id }),
+        client.rescheduleJob({ ...txCtx, transactionHooks, id: chain.id }),
       ),
     );
 
-    expect(triggered.status).toBe("pending");
-    expect(triggered.scheduledAt.getTime()).toBeGreaterThanOrEqual(before - 1000);
-    expect(triggered.scheduledAt.getTime()).toBeLessThanOrEqual(Date.now() + 1000);
-    expect(triggered.typeName).toBe("report");
-    expect(triggered.input).toEqual({ type: "daily" });
+    expect(rescheduled.status).toBe("pending");
+    expect(rescheduled.scheduledAt.getTime()).toBeGreaterThanOrEqual(before - 1000);
+    expect(rescheduled.scheduledAt.getTime()).toBeLessThanOrEqual(Date.now() + 1000);
+    expect(rescheduled.typeName).toBe("report");
+    expect(rescheduled.input).toEqual({ type: "daily" });
   });
 
-  it("triggered job is picked up by worker", async ({
+  it("reschedules a pending job to a future absolute date", async ({
+    stateAdapter,
+    notifyAdapter,
+    withTransaction,
+    observabilityAdapter,
+    log,
+    expect,
+  }) => {
+    const jobTypes = defineJobTypes<{
+      task: { entry: true; input: null; output: null };
+    }>();
+
+    const client = await createClient({
+      stateAdapter,
+      notifyAdapter,
+      observabilityAdapter,
+      log,
+      jobTypes,
+    });
+
+    const chain = await withTransactionHooks(async (transactionHooks) =>
+      withTransaction(async (txCtx) =>
+        client.startChain({ ...txCtx, transactionHooks, typeName: "task", input: null }),
+      ),
+    );
+
+    const futureDate = new Date(Date.now() + 60 * 60 * 1000);
+    const rescheduled = await withTransactionHooks(async (transactionHooks) =>
+      withTransaction(async (txCtx) =>
+        client.rescheduleJob({
+          ...txCtx,
+          transactionHooks,
+          id: chain.id,
+          schedule: { at: futureDate },
+        }),
+      ),
+    );
+
+    expect(rescheduled.status).toBe("pending");
+    expect(Math.abs(rescheduled.scheduledAt.getTime() - futureDate.getTime())).toBeLessThan(1000);
+  });
+
+  it("reschedules a pending job into the future with afterMs", async ({
+    stateAdapter,
+    notifyAdapter,
+    withTransaction,
+    observabilityAdapter,
+    log,
+    expect,
+  }) => {
+    const jobTypes = defineJobTypes<{
+      task: { entry: true; input: null; output: null };
+    }>();
+
+    const client = await createClient({
+      stateAdapter,
+      notifyAdapter,
+      observabilityAdapter,
+      log,
+      jobTypes,
+    });
+
+    const chain = await withTransactionHooks(async (transactionHooks) =>
+      withTransaction(async (txCtx) =>
+        client.startChain({ ...txCtx, transactionHooks, typeName: "task", input: null }),
+      ),
+    );
+
+    const before = Date.now();
+    const rescheduled = await withTransactionHooks(async (transactionHooks) =>
+      withTransaction(async (txCtx) =>
+        client.rescheduleJob({
+          ...txCtx,
+          transactionHooks,
+          id: chain.id,
+          schedule: { afterMs: 60 * 60 * 1000 },
+        }),
+      ),
+    );
+
+    expect(rescheduled.status).toBe("pending");
+    expect(rescheduled.scheduledAt.getTime()).toBeGreaterThanOrEqual(
+      before + 60 * 60 * 1000 - 1000,
+    );
+  });
+
+  it("rescheduled job is picked up by worker", async ({
     stateAdapter,
     notifyAdapter,
     withTransaction,
@@ -123,7 +209,7 @@ export const triggerJobTestSuite = ({ it }: { it: TestAPI<TestSuiteContext> }): 
 
     await withTransactionHooks(async (transactionHooks) =>
       withTransaction(async (txCtx) =>
-        client.triggerJob({ ...txCtx, transactionHooks, id: chain.id }),
+        client.rescheduleJob({ ...txCtx, transactionHooks, id: chain.id }),
       ),
     );
 
@@ -173,13 +259,13 @@ export const triggerJobTestSuite = ({ it }: { it: TestAPI<TestSuiteContext> }): 
     await expect(
       withTransactionHooks(async (transactionHooks) =>
         withTransaction(async (txCtx) =>
-          client.triggerJob({ ...txCtx, transactionHooks, id: chain.id }),
+          client.rescheduleJob({ ...txCtx, transactionHooks, id: chain.id }),
         ),
       ),
     ).rejects.toThrow(JobNotFoundError);
   });
 
-  it("throws JobNotTriggerableError for completed job", async ({
+  it("throws JobNotReschedulableError for completed job", async ({
     stateAdapter,
     notifyAdapter,
     withTransaction,
@@ -227,10 +313,10 @@ export const triggerJobTestSuite = ({ it }: { it: TestAPI<TestSuiteContext> }): 
     await expect(
       withTransactionHooks(async (transactionHooks) =>
         withTransaction(async (txCtx) =>
-          client.triggerJob({ ...txCtx, transactionHooks, id: chain.id }),
+          client.rescheduleJob({ ...txCtx, transactionHooks, id: chain.id }),
         ),
       ),
-    ).rejects.toThrow(JobNotTriggerableError);
+    ).rejects.toThrow(JobNotReschedulableError);
   });
 
   it("throws when called without transaction context", async ({
@@ -272,12 +358,12 @@ export const triggerJobTestSuite = ({ it }: { it: TestAPI<TestSuiteContext> }): 
     await expect(
       withTransactionHooks(async (transactionHooks) =>
         // @ts-expect-error missing txCtx
-        client.triggerJob({ transactionHooks, id: chain.id }),
+        client.rescheduleJob({ transactionHooks, id: chain.id }),
       ),
     ).rejects.toThrow(TransactionContextRequiredError);
   });
 
-  it("throws JobNotTriggerableError for blocked job", async ({
+  it("throws JobNotReschedulableError for blocked job", async ({
     stateAdapter,
     notifyAdapter,
     withTransaction,
@@ -327,13 +413,13 @@ export const triggerJobTestSuite = ({ it }: { it: TestAPI<TestSuiteContext> }): 
     await expect(
       withTransactionHooks(async (transactionHooks) =>
         withTransaction(async (txCtx) =>
-          client.triggerJob({ ...txCtx, transactionHooks, id: blockedChain.id }),
+          client.rescheduleJob({ ...txCtx, transactionHooks, id: blockedChain.id }),
         ),
       ),
-    ).rejects.toThrow(JobNotTriggerableError);
+    ).rejects.toThrow(JobNotReschedulableError);
   });
 
-  it("triggerJobs triggers multiple pending jobs in input order", async ({
+  it("rescheduleJobs reschedules multiple pending jobs in input order", async ({
     stateAdapter,
     notifyAdapter,
     withTransaction,
@@ -369,20 +455,67 @@ export const triggerJobTestSuite = ({ it }: { it: TestAPI<TestSuiteContext> }): 
 
     const before = Date.now();
     const ids = chains.map((c) => c.id);
-    const triggered = await withTransactionHooks(async (transactionHooks) =>
-      withTransaction(async (txCtx) => client.triggerJobs({ ...txCtx, transactionHooks, ids })),
+    const rescheduled = await withTransactionHooks(async (transactionHooks) =>
+      withTransaction(async (txCtx) => client.rescheduleJobs({ ...txCtx, transactionHooks, ids })),
     );
 
-    expect(triggered).toHaveLength(3);
-    for (let i = 0; i < triggered.length; i++) {
-      expect(triggered[i].id).toBe(ids[i]);
-      expect(triggered[i].status).toBe("pending");
-      expect(triggered[i].scheduledAt.getTime()).toBeGreaterThanOrEqual(before - 1000);
-      expect(triggered[i].scheduledAt.getTime()).toBeLessThanOrEqual(Date.now() + 1000);
+    expect(rescheduled).toHaveLength(3);
+    for (let i = 0; i < rescheduled.length; i++) {
+      expect(rescheduled[i].id).toBe(ids[i]);
+      expect(rescheduled[i].status).toBe("pending");
+      expect(rescheduled[i].scheduledAt.getTime()).toBeGreaterThanOrEqual(before - 1000);
+      expect(rescheduled[i].scheduledAt.getTime()).toBeLessThanOrEqual(Date.now() + 1000);
     }
   });
 
-  it("triggerJobs with empty ids returns empty array", async ({
+  it("rescheduleJobs applies a future schedule to all jobs", async ({
+    stateAdapter,
+    notifyAdapter,
+    withTransaction,
+    observabilityAdapter,
+    log,
+    expect,
+  }) => {
+    const jobTypes = defineJobTypes<{
+      task: { entry: true; input: { value: number }; output: null };
+    }>();
+
+    const client = await createClient({
+      stateAdapter,
+      notifyAdapter,
+      observabilityAdapter,
+      log,
+      jobTypes,
+    });
+
+    const chains = await withTransactionHooks(async (transactionHooks) =>
+      withTransaction(async (txCtx) =>
+        client.startChains({
+          ...txCtx,
+          transactionHooks,
+          items: [
+            { typeName: "task", input: { value: 1 } },
+            { typeName: "task", input: { value: 2 } },
+          ],
+        }),
+      ),
+    );
+
+    const ids = chains.map((c) => c.id);
+    const futureDate = new Date(Date.now() + 60 * 60 * 1000);
+    const rescheduled = await withTransactionHooks(async (transactionHooks) =>
+      withTransaction(async (txCtx) =>
+        client.rescheduleJobs({ ...txCtx, transactionHooks, ids, schedule: { at: futureDate } }),
+      ),
+    );
+
+    expect(rescheduled).toHaveLength(2);
+    for (const job of rescheduled) {
+      expect(Math.abs(job.scheduledAt.getTime() - futureDate.getTime())).toBeLessThan(1000);
+    }
+  });
+
+  it("rescheduleJobs with empty ids returns empty array", async ({
     stateAdapter,
     notifyAdapter,
     withTransaction,
@@ -402,14 +535,16 @@ export const triggerJobTestSuite = ({ it }: { it: TestAPI<TestSuiteContext> }): 
       jobTypes,
     });
 
-    const triggered = await withTransactionHooks(async (transactionHooks) =>
-      withTransaction(async (txCtx) => client.triggerJobs({ ...txCtx, transactionHooks, ids: [] })),
+    const rescheduled = await withTransactionHooks(async (transactionHooks) =>
+      withTransaction(async (txCtx) =>
+        client.rescheduleJobs({ ...txCtx, transactionHooks, ids: [] }),
+      ),
     );
 
-    expect(triggered).toEqual([]);
+    expect(rescheduled).toEqual([]);
   });
 
-  it("triggerJobs fails atomically when any job is missing", async ({
+  it("rescheduleJobs fails atomically when any job is missing", async ({
     stateAdapter,
     notifyAdapter,
     withTransaction,
@@ -451,7 +586,7 @@ export const triggerJobTestSuite = ({ it }: { it: TestAPI<TestSuiteContext> }): 
     await expect(
       withTransactionHooks(async (transactionHooks) =>
         withTransaction(async (txCtx) =>
-          client.triggerJobs({
+          client.rescheduleJobs({
             ...txCtx,
             transactionHooks,
             ids: [chainA.id, chainB.id],
@@ -464,7 +599,7 @@ export const triggerJobTestSuite = ({ it }: { it: TestAPI<TestSuiteContext> }): 
     expect(chainAJob!.scheduledAt.getTime()).toBeGreaterThan(Date.now() + 30_000);
   });
 
-  it("triggerJobs fails atomically when any job is not pending", async ({
+  it("rescheduleJobs fails atomically when any job is not pending", async ({
     stateAdapter,
     notifyAdapter,
     withTransaction,
@@ -529,20 +664,20 @@ export const triggerJobTestSuite = ({ it }: { it: TestAPI<TestSuiteContext> }): 
     await expect(
       withTransactionHooks(async (transactionHooks) =>
         withTransaction(async (txCtx) =>
-          client.triggerJobs({
+          client.rescheduleJobs({
             ...txCtx,
             transactionHooks,
             ids: [pendingChain.id, completedChain.id],
           }),
         ),
       ),
-    ).rejects.toThrow(JobsNotTriggerableError);
+    ).rejects.toThrow(JobsNotReschedulableError);
 
     const pendingJob = await client.getJob({ id: pendingChain.id });
     expect(pendingJob!.scheduledAt.getTime()).toBeGreaterThan(Date.now() + 30_000);
   });
 
-  it("triggerJobs throws when called without transaction context", async ({
+  it("rescheduleJobs throws when called without transaction context", async ({
     stateAdapter,
     notifyAdapter,
     withTransaction,
@@ -577,7 +712,7 @@ export const triggerJobTestSuite = ({ it }: { it: TestAPI<TestSuiteContext> }): 
     await expect(
       withTransactionHooks(async (transactionHooks) =>
         // @ts-expect-error missing txCtx
-        client.triggerJobs({ transactionHooks, ids: [chain.id] }),
+        client.rescheduleJobs({ transactionHooks, ids: [chain.id] }),
       ),
     ).rejects.toThrow(TransactionContextRequiredError);
   });

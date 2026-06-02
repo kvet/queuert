@@ -1,7 +1,7 @@
 import {
   type Client,
   JobNotFoundError,
-  JobNotTriggerableError,
+  JobNotReschedulableError,
   withTransactionHooks,
 } from "queuert";
 import { encodeCursor, helpersSymbol } from "queuert/internal";
@@ -67,7 +67,7 @@ export const handleJobDetail = async (
   });
 };
 
-export const handleJobTrigger = async (
+export const handleJobReschedule = async (
   client: Client<any, any>,
   jobId: string,
 ): Promise<Response> => {
@@ -75,7 +75,7 @@ export const handleJobTrigger = async (
     const { stateAdapter } = client[helpersSymbol];
     const job = await stateAdapter.withTransaction(async (txCtx) =>
       withTransactionHooks(async (transactionHooks) =>
-        client.triggerJob({ id: jobId, transactionHooks, ...txCtx }),
+        client.rescheduleJob({ id: jobId, transactionHooks, ...txCtx }),
       ),
     );
     return serovalResponse({ job });
@@ -83,7 +83,7 @@ export const handleJobTrigger = async (
     if (err instanceof JobNotFoundError) {
       return serovalResponse({ error: "Job not found" }, 404);
     }
-    if (err instanceof JobNotTriggerableError) {
+    if (err instanceof JobNotReschedulableError) {
       return serovalResponse({ error: err.message }, 409);
     }
     throw err;

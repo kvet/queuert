@@ -55,26 +55,26 @@ All entries are strongly typed — the `type` field determines the exact shape o
 
 ### Job Lifecycle
 
-| Type            | Level  | Message                          | Data                                                                                                       |
-| --------------- | ------ | -------------------------------- | ---------------------------------------------------------------------------------------------------------- |
-| `job_created`   | `info` | Job created                      | `id`, `typeName`, `chainId`, `chainTypeName`, `input`, `blockers`, `scheduledAt?`, `scheduleAfterMs?`      |
-| `job_completed` | `info` | Job completed                    | `id`, `typeName`, `chainId`, `chainTypeName`, `status`, `attempt`, `output?`, `continuedWith?`, `workerId` |
-| `job_reaped`    | `info` | Reaped expired job lease         | `id`, `typeName`, `chainId`, `chainTypeName`, `leasedBy`, `leasedUntil`, `workerId`                        |
-| `job_blocked`   | `info` | Job blocked by incomplete chains | `id`, `typeName`, `chainId`, `chainTypeName`, `blockedByChains`                                            |
-| `job_triggered` | `info` | Job triggered                    | `id`, `typeName`, `chainId`, `chainTypeName`                                                               |
-| `job_unblocked` | `info` | Job unblocked                    | `id`, `typeName`, `chainId`, `chainTypeName`, `unblockedByChain`                                           |
+| Type              | Level  | Message                          | Data                                                                                                       |
+| ----------------- | ------ | -------------------------------- | ---------------------------------------------------------------------------------------------------------- |
+| `job_created`     | `info` | Job created                      | `id`, `typeName`, `chainId`, `chainTypeName`, `input`, `blockers`, `scheduledAt`                           |
+| `job_completed`   | `info` | Job completed                    | `id`, `typeName`, `chainId`, `chainTypeName`, `status`, `attempt`, `output?`, `continuedWith?`, `workerId` |
+| `job_reaped`      | `info` | Reaped expired job lease         | `id`, `typeName`, `chainId`, `chainTypeName`, `leasedBy`, `leasedUntil`, `workerId`                        |
+| `job_blocked`     | `info` | Job blocked by incomplete chains | `id`, `typeName`, `chainId`, `chainTypeName`, `blockedByChains`                                            |
+| `job_rescheduled` | `info` | Job rescheduled                  | `id`, `typeName`, `chainId`, `chainTypeName`, `scheduledAt`                                                |
+| `job_unblocked`   | `info` | Job unblocked                    | `id`, `typeName`, `chainId`, `chainTypeName`, `unblockedByChain`                                           |
 
 ### Attempt Lifecycle
 
-| Type                                  | Level   | Message                                 | Data                                                                                                                            |
-| ------------------------------------- | ------- | --------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------- |
-| `job_attempt_started`                 | `info`  | Job attempt started                     | `id`, `typeName`, `chainId`, `chainTypeName`, `status`, `attempt`, `workerId`                                                   |
-| `job_attempt_completed`               | `info`  | Job attempt completed                   | `id`, `typeName`, `chainId`, `chainTypeName`, `status`, `attempt`, `output?`, `continuedWith?`, `workerId`                      |
-| `job_attempt_failed`                  | `error` | Job attempt failed                      | `id`, `typeName`, `chainId`, `chainTypeName`, `status`, `attempt`, `rescheduledAfterMs?`, `rescheduledAt?`, `workerId`, `error` |
-| `job_attempt_taken_by_another_worker` | `warn`  | Job taken by another worker             | `id`, `typeName`, `chainId`, `chainTypeName`, `status`, `attempt`, `leasedBy`, `leasedUntil`, `workerId`                        |
-| `job_attempt_already_completed`       | `warn`  | Job already completed by another worker | `id`, `typeName`, `chainId`, `chainTypeName`, `status`, `attempt`, `completedBy`, `workerId`                                    |
-| `job_attempt_lease_expired`           | `warn`  | Job lease expired                       | `id`, `typeName`, `chainId`, `chainTypeName`, `status`, `attempt`, `leasedBy`, `leasedUntil`, `workerId`                        |
-| `job_attempt_lease_renewed`           | `info`  | Job lease renewed                       | `id`, `typeName`, `chainId`, `chainTypeName`, `status`, `attempt`, `leasedBy`, `leasedUntil`, `workerId`                        |
+| Type                                  | Level   | Message                                 | Data                                                                                                       |
+| ------------------------------------- | ------- | --------------------------------------- | ---------------------------------------------------------------------------------------------------------- |
+| `job_attempt_started`                 | `info`  | Job attempt started                     | `id`, `typeName`, `chainId`, `chainTypeName`, `status`, `attempt`, `workerId`                              |
+| `job_attempt_completed`               | `info`  | Job attempt completed                   | `id`, `typeName`, `chainId`, `chainTypeName`, `status`, `attempt`, `output?`, `continuedWith?`, `workerId` |
+| `job_attempt_failed`                  | `error` | Job attempt failed                      | `id`, `typeName`, `chainId`, `chainTypeName`, `status`, `attempt`, `workerId`, `error`                     |
+| `job_attempt_taken_by_another_worker` | `warn`  | Job taken by another worker             | `id`, `typeName`, `chainId`, `chainTypeName`, `status`, `attempt`, `leasedBy`, `leasedUntil`, `workerId`   |
+| `job_attempt_already_completed`       | `warn`  | Job already completed by another worker | `id`, `typeName`, `chainId`, `chainTypeName`, `status`, `attempt`, `completedBy`, `workerId`               |
+| `job_attempt_lease_expired`           | `warn`  | Job lease expired                       | `id`, `typeName`, `chainId`, `chainTypeName`, `status`, `attempt`, `leasedBy`, `leasedUntil`, `workerId`   |
+| `job_attempt_lease_renewed`           | `info`  | Job lease renewed                       | `id`, `typeName`, `chainId`, `chainTypeName`, `status`, `attempt`, `leasedBy`, `leasedUntil`, `workerId`   |
 
 ### Chain Lifecycle
 

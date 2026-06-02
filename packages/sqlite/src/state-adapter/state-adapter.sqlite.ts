@@ -1318,12 +1318,13 @@ RETURNING *
 
       return mapDbJobToStateJob(job);
     },
-    rescheduleJob: async ({ txCtx, jobId, schedule, error }) => {
-      const scheduledAtIso = schedule.at?.toISOString().replace("T", " ").replace("Z", "") ?? null;
-      const scheduleAfterMsOrNull = schedule.afterMs ?? null;
-      const [job] = await executeTypedSql({
+    rescheduleJobs: async ({ txCtx, jobIds, schedule }) => {
+      if (jobIds.length === 0) return [];
+      const scheduledAtIso = schedule?.at?.toISOString().replace("T", " ").replace("Z", "") ?? null;
+      const scheduleAfterMsOrNull = schedule?.afterMs ?? null;
+      const rows = await executeTypedSql({
         txCtx,
-        sql: templateCache.getOrCompute("rescheduleJob", () =>
+        sql: templateCache.getOrCompute("rescheduleJobs", () =>
           applyTemplate(
             sql(
               `
@@ -1332,18 +1333,14 @@ SET scheduled_at = MAX(
     COALESCE(?,
       CASE WHEN ? IS NOT NULL THEN datetime('now', 'subsec', '+' || (? / 1000.0) || ' seconds') ELSE NULL END,
       datetime('now', 'subsec')),
-    datetime('now', 'subsec')),
-  last_attempt_at = datetime('now', 'subsec'),
-  last_attempt_error = ?,
-  leased_by = NULL,
-  leased_until = NULL,
-  status = 'pending'
-WHERE id = ?
+    datetime('now', 'subsec'))
+WHERE id IN (SELECT value FROM json_each(?))
+  AND status = 'pending'
 RETURNING *
 `,
               {
-                id: "rescheduleJob",
-                params: [t["string?"](), t["number?"](), t["number?"](), t.string(), idDataType],
+                id: "rescheduleJobs",
+                params: [t["string?"](), t["number?"](), t["number?"](), t.string()],
                 columns: { ...dbJobColumns },
               },
             ),
@@ -1353,9 +1350,41 @@ RETURNING *
           scheduledAtIso,
           scheduleAfterMsOrNull,
           scheduleAfterMsOrNull,
-          JSON.stringify(error),
-          jobId,
+          JSON.stringify(jobIds),
         ],
+      });
+      const orderById = new Map(jobIds.map((id, i) => [id as string, i]));
+      return rows
+        .slice()
+        .sort((a, b) => orderById.get(a.id)! - orderById.get(b.id)!)
+        .map(mapDbJobToStateJob);
+    },
+    abandonJob: async ({ txCtx, jobId, error }) => {
+      const [job] = await executeTypedSql({
+        txCtx,
+        sql: templateCache.getOrCompute("abandonJob", () =>
+          applyTemplate(
+            sql(
+              `
+UPDATE {{table_prefix}}job
+SET last_attempt_at = datetime('now', 'subsec'),
+  last_attempt_error = ?,
+  leased_by = NULL,
+  leased_until = NULL,
+  status = 'pending'
+WHERE id = ?
+  AND status = 'running'
+RETURNING *
+`,
+              {
+                id: "abandonJob",
+                params: [t.string(), idDataType],
+                columns: { ...dbJobColumns },
+              },
+            ),
+          ),
+        ),
+        params: [JSON.stringify(error), jobId],
       });
 
       return mapDbJobToStateJob(job);
@@ -1751,41 +1780,6 @@ WHERE chain_id IN (SELECT value FROM json_each(?))
       return { items, nextCursor };
     },
 
-    triggerJobs: async ({ txCtx, jobIds }) => {
-      if (jobIds.length === 0) return [];
-      const rows = await executeTypedSql({
-        txCtx,
-        sql: templateCache.getOrCompute("triggerJobs", () =>
-          applyTemplate(
-            sql(
-              `
-UPDATE {{table_prefix}}job
-SET scheduled_at = datetime('now', 'subsec')
-WHERE id IN (SELECT value FROM json_each(?))
-  AND status = 'pending'
-RETURNING *
-`,
-              {
-                id: "triggerJobs",
-                params: [t.string()],
-                columns: { ...dbJobColumns },
-              },
-            ),
-          ),
-        ),
-        params: [JSON.stringify(jobIds)],
-      });
-      const orderById = new Map(jobIds.map((id, i) => [id as string, i]));
-      return rows
-        .slice()
-        .sort((a, b) => orderById.get(a.id)! - orderById.get(b.id)!)
-        .map(mapDbJobToStateJob);
-    },
-
-    close: async () => {
-      await stateProvider.close?.();
-    },
-
     listBlockedJobs: async ({ txCtx, chainId, orderDirection, page }) => {
       const cursor = page.cursor ? decodeCreatedAtCursor(page.cursor) : null;
       const conditions: string[] = [
@@ -1838,6 +1832,7 @@ RETURNING *
 
       return { items, nextCursor };
     },
+
     migrateToLatest: async () => {
       if (checkForeignKeys) {
         await stateProvider.withTransaction(async (txCtx) => {
@@ -1937,11 +1932,13 @@ CREATE TABLE IF NOT EXISTS {{table_prefix}}migration (
         },
       });
     },
+
     vacuum: async () => {
       await executeTypedSql({
         sql: applyTemplate(sql("PRAGMA incremental_vacuum", { params: [], columns: {} })),
       });
     },
+
     truncate: async () => {
       await executeTypedSql({
         sql: applyTemplate(
@@ -1951,6 +1948,10 @@ CREATE TABLE IF NOT EXISTS {{table_prefix}}migration (
       await executeTypedSql({
         sql: applyTemplate(sql(`DELETE FROM ${tablePrefix}job`, { params: [], columns: {} })),
       });
+    },
+
+    close: async () => {
+      await stateProvider.close?.();
     },
   };
 };

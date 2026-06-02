@@ -10,7 +10,7 @@ import {
   schedulingTestSuite,
   startChainsTestSuite,
   stateResilienceTestSuite,
-  triggerJobTestSuite,
+  rescheduleJobTestSuite,
   waitChainCompletionTestSuite,
   workerlessCompletionTestSuite,
 } from "queuert/testing";
@@ -60,8 +60,8 @@ describe("Workerless Completion", () => {
   workerlessCompletionTestSuite({ it: postgresNoopIt });
 });
 
-describe("Trigger Job", () => {
-  triggerJobTestSuite({ it: postgresNoopIt });
+describe("Reschedule Job", () => {
+  rescheduleJobTestSuite({ it: postgresNoopIt });
 });
 
 describe("Scheduling", () => {

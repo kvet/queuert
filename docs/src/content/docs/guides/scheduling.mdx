@@ -56,22 +56,32 @@ return complete(async ({ continueWith }) =>
   [Deduplication](../deduplication/).
 </Aside>
 
-## Triggering Scheduled Jobs Early
+## Rescheduling Pending Jobs
 
-A scheduled job is just a pending job with a future `scheduledAt`. Use `triggerJob` (or `triggerJobs` for a batch) to override the schedule and run it immediately — useful for admin "run now" actions or manually advancing a queued reminder.
+A scheduled job is just a pending job with a future `scheduledAt`. Use `rescheduleJob` (or `rescheduleJobs` for a batch) to change when it runs. Omit `schedule` to run it immediately — useful for admin "run now" actions or manually advancing a queued reminder — or pass `schedule: { at }` / `{ afterMs }` to push it to a different time. Past times clamp to now, matching `startChain`.
 
 ```ts
+// Run now
 await withTransactionHooks(async (transactionHooks) =>
-  client.triggerJob({
+  client.rescheduleJob({
     transactionHooks,
     id: jobId,
   }),
 );
+
+// Push 30 minutes out
+await withTransactionHooks(async (transactionHooks) =>
+  client.rescheduleJob({
+    transactionHooks,
+    id: jobId,
+    schedule: { afterMs: 30 * 60 * 1000 },
+  }),
+);
 ```
 
-`triggerJob` throws `JobNotFoundError` if the job does not exist and `JobNotTriggerableError` if it is not `pending` (e.g. already running, completed, or blocked).
+`rescheduleJob` throws `JobNotFoundError` if the job does not exist and `JobNotReschedulableError` if it is not `pending` (e.g. already running, completed, or blocked).
 
-`triggerJobs` validates atomically — if any id in the batch is missing or not pending, the entire call fails and no job is triggered. Both methods are mutating and require `transactionHooks` + a transaction context.
+`rescheduleJobs` validates atomically — if any id in the batch is missing or not pending, the entire call fails and no job is rescheduled. Both methods are mutating and require `transactionHooks` + a transaction context.
 
 ## Recurring Jobs
 

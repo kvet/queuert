@@ -38,14 +38,14 @@ Attribute names follow OpenTelemetry semantic conventions (lowercase, dotted) an
 
 ### Job Lifecycle
 
-| Metric                  | Attributes                                                                             | Description                                                              |
-| ----------------------- | -------------------------------------------------------------------------------------- | ------------------------------------------------------------------------ |
-| `queuert.job.created`   | `queuert.job.type`, `queuert.chain.type`                                               | Job created                                                              |
-| `queuert.job.completed` | `queuert.job.type`, `queuert.chain.type`, `queuert.worker.id`, `queuert.job.continued` | Job completed. `queuert.worker.id` is omitted for workerless completion. |
-| `queuert.job.reaped`    | `queuert.job.type`, `queuert.chain.type`, `queuert.worker.id`                          | Stale job reclaimed by reaper                                            |
-| `queuert.job.blocked`   | `queuert.job.type`, `queuert.chain.type`                                               | Job blocked by pending blocker chains                                    |
-| `queuert.job.triggered` | `queuert.job.type`, `queuert.chain.type`                                               | Pending job triggered to run immediately                                 |
-| `queuert.job.unblocked` | `queuert.job.type`, `queuert.chain.type`                                               | Job unblocked after blocker chain completed                              |
+| Metric                    | Attributes                                                                             | Description                                                              |
+| ------------------------- | -------------------------------------------------------------------------------------- | ------------------------------------------------------------------------ |
+| `queuert.job.created`     | `queuert.job.type`, `queuert.chain.type`                                               | Job created                                                              |
+| `queuert.job.completed`   | `queuert.job.type`, `queuert.chain.type`, `queuert.worker.id`, `queuert.job.continued` | Job completed. `queuert.worker.id` is omitted for workerless completion. |
+| `queuert.job.reaped`      | `queuert.job.type`, `queuert.chain.type`, `queuert.worker.id`                          | Stale job reclaimed by reaper                                            |
+| `queuert.job.blocked`     | `queuert.job.type`, `queuert.chain.type`                                               | Job blocked by pending blocker chains                                    |
+| `queuert.job.rescheduled` | `queuert.job.type`, `queuert.chain.type`                                               | Pending job rescheduled by a client                                      |
+| `queuert.job.unblocked`   | `queuert.job.type`, `queuert.chain.type`                                               | Job unblocked after blocker chain completed                              |
 
 ### Attempt Lifecycle
 

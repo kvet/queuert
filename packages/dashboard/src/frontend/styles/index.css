@@ -288,7 +288,7 @@ a:hover {
   color: var(--text-muted);
 }
 
-.trigger-btn {
+.reschedule-btn {
   margin-left: 8px;
   padding: 2px 8px;
   font-size: 12px;
@@ -299,11 +299,11 @@ a:hover {
   cursor: pointer;
 }
 
-.trigger-btn:hover {
+.reschedule-btn:hover {
   background: var(--border);
 }
 
-.trigger-btn:disabled {
+.reschedule-btn:disabled {
   opacity: 0.5;
   cursor: not-allowed;
 }

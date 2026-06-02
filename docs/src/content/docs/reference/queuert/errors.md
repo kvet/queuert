@@ -25,7 +25,7 @@ class JobsNotFoundError extends Error {
 }
 ```
 
-Batch variant of `JobNotFoundError`. Thrown by `triggerJobs` when one or more input IDs have no matching job. `jobIds` lists every input id that was not found.
+Batch variant of `JobNotFoundError`. Thrown by `rescheduleJobs` when one or more input IDs have no matching job. `jobIds` lists every input id that was not found.
 
 ## ChainNotFoundError
 
@@ -47,25 +47,25 @@ class JobAlreadyCompletedError extends Error {
 
 Thrown when attempting to complete a job that is already completed.
 
-## JobNotTriggerableError
+## JobNotReschedulableError
 
 ```typescript
-class JobNotTriggerableError extends Error {
+class JobNotReschedulableError extends Error {
   readonly jobId: string;
 }
 ```
 
-Thrown by `triggerJob` when the target job is not in a triggerable state. Only `pending` jobs can be triggered. The observed status is included in the error message.
+Thrown by `rescheduleJob` when the target job is not in a reschedulable state. Only `pending` jobs can be rescheduled. The observed status is included in the error message.
 
-## JobsNotTriggerableError
+## JobsNotReschedulableError
 
 ```typescript
-class JobsNotTriggerableError extends Error {
+class JobsNotReschedulableError extends Error {
   readonly jobIds: readonly string[];
 }
 ```
 
-Batch variant of `JobNotTriggerableError`. Thrown by `triggerJobs` when any input job is not `pending`. The validation is atomic — no job is triggered when this is thrown. `jobIds` lists every offending id; the observed statuses are included in the error message.
+Batch variant of `JobNotReschedulableError`. Thrown by `rescheduleJobs` when any input job is not `pending`. The validation is atomic — no job is rescheduled when this is thrown. `jobIds` lists every offending id; the observed statuses are included in the error message.
 
 ## JobTakenByAnotherWorkerError
 
@@ -189,7 +189,7 @@ Thrown when a transaction hook is accessed before being registered.
 class TransactionContextRequiredError extends Error {}
 ```
 
-Thrown when a mutating client method (e.g. `startChain`, `triggerJob`, `triggerJobs`, `deleteChain`, `deleteChains`) is called without a transaction context provided by `withTransaction`. Mutations must run inside a transaction so the transactional outbox pattern holds.
+Thrown when a mutating client method (e.g. `startChain`, `rescheduleJob`, `rescheduleJobs`, `deleteChain`, `deleteChains`) is called without a transaction context provided by `withTransaction`. Mutations must run inside a transaction so the transactional outbox pattern holds.
 
 ## InvalidJobIdError
 

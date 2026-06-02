@@ -1,6 +1,5 @@
 import { type Chain } from "../entities/chain.js";
 import { type Job } from "../entities/job.js";
-import { type ScheduleOptions } from "../entities/schedule.js";
 import { type JobTypeValidationError } from "../errors.js";
 import { type NotifyAdapter } from "../notify-adapter/notify-adapter.js";
 import { type StateAdapter, type StateJob } from "../state-adapter/state-adapter.js";
@@ -65,7 +64,6 @@ export type ObservabilityHelper = {
     options: {
       input: unknown;
       blockers: Chain<any, any, any, any>[];
-      schedule?: ScheduleOptions;
     },
   ) => void;
   jobAttemptStarted: (job: StateJob, options: { workerId: string }) => void;
@@ -73,10 +71,7 @@ export type ObservabilityHelper = {
   jobAttemptAlreadyCompleted: (job: StateJob, options: { workerId: string }) => void;
   jobAttemptLeaseExpired: (job: StateJob, options: { workerId: string }) => void;
   jobAttemptLeaseRenewed: (job: StateJob, options: { workerId: string }) => void;
-  jobAttemptFailed: (
-    job: StateJob,
-    options: { workerId: string; rescheduledSchedule: ScheduleOptions; error: unknown },
-  ) => void;
+  jobAttemptFailed: (job: StateJob, options: { workerId: string; error: unknown }) => void;
   jobAttemptCompleted: (
     job: StateJob,
     options: { output: unknown; continuedWith?: Job<any, any, any, any, any>; workerId: string },
@@ -94,8 +89,8 @@ export type ObservabilityHelper = {
   chainCreated: (job: StateJob, options: { input: unknown }) => void;
   chainCompleted: (chainStartJob: StateJob, options: { output: unknown }) => void;
   chainDeleted: (job: StateJob) => void;
-  // trigger
-  jobTriggered: (job: StateJob) => void;
+  // reschedule
+  jobRescheduled: (job: StateJob) => void;
   // blockers
   jobBlocked: (job: StateJob, options: { blockedByChains: Chain<any, any, any, any>[] }) => void;
   jobUnblocked: (job: StateJob, options: { unblockedByChain: StateJob }) => void;
@@ -176,30 +171,20 @@ export const createObservabilityHelper = ({
 
   // job
   jobCreated(job, options) {
-    const jobData = mapStateJobToJobBasicData(job);
-    const blockersData = options.blockers.map(mapChainToData);
-    const scheduledAt = options.schedule?.at;
-    const scheduleAfterMs = options.schedule?.afterMs;
+    const data = {
+      ...mapStateJobToJobBasicData(job),
+      input: options.input,
+      blockers: options.blockers.map(mapChainToData),
+      scheduledAt: job.scheduledAt,
+    };
 
     log({
       type: "job_created",
       level: "info",
       message: "Job created",
-      data: {
-        ...jobData,
-        input: options.input,
-        blockers: blockersData,
-        ...(scheduledAt && { scheduledAt }),
-        ...(scheduleAfterMs && { scheduleAfterMs }),
-      },
+      data,
     });
-    adapter.jobCreated({
-      ...jobData,
-      input: options.input,
-      blockers: blockersData,
-      ...(scheduledAt && { scheduledAt }),
-      ...(scheduleAfterMs && { scheduleAfterMs }),
-    });
+    adapter.jobCreated(data);
   },
 
   jobAttemptStarted(job, options) {
@@ -293,13 +278,9 @@ export const createObservabilityHelper = ({
   },
 
   jobAttemptFailed(job, options) {
-    const rescheduledAt = options.rescheduledSchedule.at;
-    const rescheduledAfterMs = options.rescheduledSchedule.afterMs;
     const data = {
       ...mapStateJobToJobProcessingData(job),
       workerId: options.workerId,
-      ...(rescheduledAt && { rescheduledAt }),
-      ...(rescheduledAfterMs && { rescheduledAfterMs }),
     };
     log({
       type: "job_attempt_failed",
@@ -383,16 +364,19 @@ export const createObservabilityHelper = ({
     adapter.chainDeleted(data);
   },
 
-  // trigger
-  jobTriggered(job) {
-    const data = mapStateJobToJobBasicData(job);
+  // reschedule
+  jobRescheduled(job) {
+    const data = {
+      ...mapStateJobToJobBasicData(job),
+      scheduledAt: job.scheduledAt,
+    };
     log({
-      type: "job_triggered",
+      type: "job_rescheduled",
       level: "info",
-      message: "Job triggered",
+      message: "Job rescheduled",
       data,
     });
-    adapter.jobTriggered(data);
+    adapter.jobRescheduled(data);
   },
 
   // blockers

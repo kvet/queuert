@@ -25,7 +25,7 @@ The dashboard accepts a Queuert `Client` instance and returns a `{ fetch }` obje
 
 ## API Endpoints
 
-All API endpoints are read-only except `POST /api/jobs/{jobId}/trigger` and `DELETE /api/chains/{chainId}`. They query the state adapter through the Queuert client.
+All API endpoints are read-only except `POST /api/jobs/{jobId}/reschedule` and `DELETE /api/chains/{chainId}`. They query the state adapter through the Queuert client.
 
 ### Chain Endpoints
 
@@ -65,7 +65,7 @@ Returns the root job, last job, all jobs in the chain ordered by chain index, an
 
 **`GET /api/jobs/{jobId}`** — Get job detail with continuation and blockers.
 
-**`POST /api/jobs/{jobId}/trigger`** — Trigger a pending job scheduled for the future. Sets `scheduled_at` to now and notifies the notify adapter. Only works for jobs with status `pending`.
+**`POST /api/jobs/{jobId}/reschedule`** — Reschedule a pending job to run now (sets `scheduled_at` to now) and notifies the notify adapter. Only works for jobs with status `pending`.
 
 ### Chain Mutation Endpoints
 

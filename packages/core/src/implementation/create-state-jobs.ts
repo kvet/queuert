@@ -193,7 +193,6 @@ export const createStateJobs = async (
         helpers.observabilityHelper.jobCreated(job, {
           input: jobInput.input,
           blockers: blockerChains,
-          schedule: jobInput.schedule,
         });
       });
 

@@ -40,7 +40,8 @@ export const wrapStateAdapterWithLogging = <
     getNextJobAvailableInMs: wrap("getNextJobAvailableInMs", stateAdapter.getNextJobAvailableInMs),
     acquireJob: wrap("acquireJob", stateAdapter.acquireJob),
     renewJobLease: wrap("renewJobLease", stateAdapter.renewJobLease),
-    rescheduleJob: wrap("rescheduleJob", stateAdapter.rescheduleJob),
+    rescheduleJobs: wrap("rescheduleJobs", stateAdapter.rescheduleJobs),
+    abandonJob: wrap("abandonJob", stateAdapter.abandonJob),
     completeJob: wrap("completeJob", stateAdapter.completeJob),
     reapExpiredJobLease: wrap("reapExpiredJobLease", stateAdapter.reapExpiredJobLease),
     deleteChains: wrap("deleteChains", stateAdapter.deleteChains),
@@ -48,7 +49,6 @@ export const wrapStateAdapterWithLogging = <
     listJobs: wrap("listJobs", stateAdapter.listJobs),
     listChainJobs: wrap("listChainJobs", stateAdapter.listChainJobs),
     listBlockedJobs: wrap("listBlockedJobs", stateAdapter.listBlockedJobs),
-    triggerJobs: wrap("triggerJobs", stateAdapter.triggerJobs),
 
     close: stateAdapter.close,
   };

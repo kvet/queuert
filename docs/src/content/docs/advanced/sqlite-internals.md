@@ -101,7 +101,7 @@ BEGIN;
 COMMIT;
 ```
 
-Under `BEGIN DEFERRED`, no lock is taken until the first write. Operations that need write-intent on a row before reading it (worker lease refetches, chain extension in `triggerJobs`) pass `lock: "exclusive"` to `getJob` / `getChain`. The SQLite adapter implements this with a no-op `UPDATE ... SET id = id RETURNING *`, which promotes the transaction to `RESERVED` and blocks other writers until commit. This mirrors the role `FOR UPDATE` plays in the Postgres adapter.
+Under `BEGIN DEFERRED`, no lock is taken until the first write. Operations that need write-intent on a row before reading it (worker lease refetches, the pending-job revalidation in `rescheduleJobs`) pass `lock: "exclusive"` to `getJob` / `getChain`. The SQLite adapter implements this with a no-op `UPDATE ... SET id = id RETURNING *`, which promotes the transaction to `RESERVED` and blocks other writers until commit. This mirrors the role `FOR UPDATE` plays in the Postgres adapter.
 
 `BEGIN IMMEDIATE` is _not_ used by the bundled providers — it would force every transaction to take `RESERVED` upfront, including read-only ones. With WAL + a connection pool, that defeats the point of allowing concurrent readers.
 

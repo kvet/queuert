@@ -59,8 +59,7 @@ type JobCreatedLogEntry = LogEntry<
   {
     input: unknown;
     blockers: ChainData[];
-    scheduledAt?: Date;
-    scheduleAfterMs?: number;
+    scheduledAt: Date;
   } & JobBasicData
 >;
 type JobAttemptStartedLogEntry = LogEntry<
@@ -103,7 +102,7 @@ type JobAttemptFailedLogEntry = LogEntry<
   "job_attempt_failed",
   "error",
   "Job attempt failed",
-  { rescheduledAfterMs?: number; rescheduledAt?: Date } & JobProcessingData & WorkerBasicData,
+  JobProcessingData & WorkerBasicData,
   unknown
 >;
 type JobAttemptCompletedLogEntry = LogEntry<
@@ -138,7 +137,12 @@ type ChainCompletedLogEntry = LogEntry<
 >;
 type ChainDeletedLogEntry = LogEntry<"chain_deleted", "info", "Chain deleted", ChainData>;
 
-type JobTriggeredLogEntry = LogEntry<"job_triggered", "info", "Job triggered", JobBasicData>;
+type JobRescheduledLogEntry = LogEntry<
+  "job_rescheduled",
+  "info",
+  "Job rescheduled",
+  JobBasicData & { scheduledAt: Date }
+>;
 
 type JobBlockedLogEntry = LogEntry<
   "job_blocked",
@@ -199,7 +203,7 @@ type TypedLogEntry =
   | ChainCompletedLogEntry
   | ChainDeletedLogEntry
   // trigger
-  | JobTriggeredLogEntry
+  | JobRescheduledLogEntry
   // blockers
   | JobBlockedLogEntry
   | JobUnblockedLogEntry

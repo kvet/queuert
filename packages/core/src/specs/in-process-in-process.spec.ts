@@ -9,6 +9,7 @@ import { processErrorHandlingTestSuite } from "../suites/process-error-handling.
 import { processModesTestSuite } from "../suites/process-modes.test-suite.js";
 import { processTestSuite } from "../suites/process.test-suite.js";
 import { reaperTestSuite } from "../suites/reaper.test-suite.js";
+import { rescheduleJobTestSuite } from "../suites/reschedule-job.test-suite.js";
 import { schedulingTestSuite } from "../suites/scheduling.test-suite.js";
 import {
   extendWithCommon,
@@ -16,7 +17,6 @@ import {
   extendWithResourceLeakDetection,
 } from "../suites/spec-context.spec-helper.js";
 import { startChainsTestSuite } from "../suites/start-chains.test-suite.js";
-import { triggerJobTestSuite } from "../suites/trigger-job.test-suite.js";
 import { waitChainCompletionTestSuite } from "../suites/wait-chain-completion.test-suite.js";
 import { workerTestSuite } from "../suites/worker.test-suite.js";
 import { workerlessCompletionTestSuite } from "../suites/workerless-completion.test-suite.js";
@@ -77,8 +77,8 @@ describe("Workerless Completion", () => {
   workerlessCompletionTestSuite({ it: inProcessInProcessIt });
 });
 
-describe("Trigger Job", () => {
-  triggerJobTestSuite({ it: inProcessInProcessIt });
+describe("Reschedule Job", () => {
+  rescheduleJobTestSuite({ it: inProcessInProcessIt });
 });
 
 describe("Scheduling", () => {
