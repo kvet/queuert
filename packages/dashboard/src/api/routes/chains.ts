@@ -32,6 +32,32 @@ export const handleChainsList = async (url: URL, client: Client<any, any>): Prom
   });
 };
 
+const listChainJobsWithBlockers = async (
+  client: Client<any, any>,
+  chainId: string,
+  options: { cursor?: string; limit: number },
+) => {
+  const jobs = await client.listChainJobs({
+    chainId,
+    orderDirection: "asc",
+    cursor: options.cursor,
+    limit: options.limit,
+  });
+
+  const jobBlockers = await Promise.all(
+    jobs.items.map(async (job) => {
+      const blockers = await client.getJobBlockers({ jobId: job.id });
+      return [job.id, blockers] as const;
+    }),
+  );
+
+  return {
+    jobs: jobs.items,
+    jobBlockers: Object.fromEntries(jobBlockers),
+    nextCursor: jobs.nextCursor,
+  };
+};
+
 export const handleChainDetail = async (
   url: URL,
   client: Client<any, any>,
@@ -42,24 +68,22 @@ export const handleChainDetail = async (
     return serovalResponse({ error: "Chain not found" }, 404);
   }
 
-  const jobs = await client.listChainJobs({
-    chainId,
-    orderDirection: "asc",
-    limit: 1000,
-  });
+  const limit = parseLimit(url.searchParams.get("limit") ?? undefined);
+  const page = await listChainJobsWithBlockers(client, chainId, { limit });
 
-  const jobBlockers = await Promise.all(
-    jobs.items.map(async (job) => {
-      const blockers = await client.getJobBlockers({ jobId: job.id });
-      return [job.id, blockers] as const;
-    }),
-  );
+  return serovalResponse({ chain, ...page });
+};
 
-  return serovalResponse({
-    chain,
-    jobs: jobs.items,
-    jobBlockers: Object.fromEntries(jobBlockers),
-  });
+export const handleChainJobs = async (
+  url: URL,
+  client: Client<any, any>,
+  chainId: string,
+): Promise<Response> => {
+  const cursor = parseCursor(url.searchParams.get("cursor") ?? undefined);
+  const limit = parseLimit(url.searchParams.get("limit") ?? undefined);
+  const page = await listChainJobsWithBlockers(client, chainId, { cursor, limit });
+
+  return serovalResponse(page);
 };
 
 export const handleChainDelete = async (
@@ -97,15 +121,18 @@ export const handleChainDelete = async (
 };
 
 export const handleChainBlocking = async (
-  _url: URL,
+  url: URL,
   client: Client<any, any>,
   chainId: string,
 ): Promise<Response> => {
+  const cursor = parseCursor(url.searchParams.get("cursor") ?? undefined);
+  const limit = parseLimit(url.searchParams.get("limit") ?? undefined);
   const result = await client.listBlockedJobs({
     chainId,
     orderDirection: "desc",
-    limit: 1000,
+    cursor,
+    limit,
   });
 
-  return serovalResponse({ items: result.items });
+  return serovalResponse({ items: result.items, nextCursor: result.nextCursor });
 };

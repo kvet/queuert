@@ -7,6 +7,8 @@ export type UnknownChain = Chain<string, string, unknown, unknown>;
 
 const BASE = "./api";
 
+export const PAGE_SIZE = 100;
+
 const fetchSeroval = async <T>(path: string, init?: RequestInit): Promise<T> => {
   const response = await fetch(`${BASE}${path}`, init);
   const body = deserialize<T & { error?: string }>(await response.text());
@@ -69,16 +71,40 @@ export const listJobs = async (
   });
 };
 
-export const getChainDetail = async (
-  chainId: string,
-): Promise<{
-  chain: UnknownChain;
+type ChainJobsPage = {
   jobs: UnknownJob[];
   jobBlockers: Record<string, UnknownChain[]>;
-}> => fetchSeroval(`/chains/${chainId}`);
+  nextCursor: string | null;
+};
 
-export const getChainBlocking = async (chainId: string): Promise<{ items: UnknownJob[] }> =>
-  fetchSeroval(`/chains/${chainId}/blocking`);
+export const getChainDetail = async (
+  chainId: string,
+): Promise<{ chain: UnknownChain } & ChainJobsPage> =>
+  fetchSeroval(`/chains/${chainId}?limit=${PAGE_SIZE}`);
+
+export const getChainJobs = async (
+  chainId: string,
+  params: { cursor?: string; limit?: number; signal?: AbortSignal } = {},
+): Promise<ChainJobsPage> => {
+  const searchParams = new URLSearchParams();
+  if (params.cursor) searchParams.set("cursor", params.cursor);
+  searchParams.set("limit", String(params.limit ?? PAGE_SIZE));
+  return fetchSeroval(`/chains/${chainId}/jobs?${searchParams.toString()}`, {
+    signal: params.signal,
+  });
+};
+
+export const getChainBlocking = async (
+  chainId: string,
+  params: { cursor?: string; limit?: number; signal?: AbortSignal } = {},
+): Promise<PageResult<UnknownJob>> => {
+  const searchParams = new URLSearchParams();
+  if (params.cursor) searchParams.set("cursor", params.cursor);
+  searchParams.set("limit", String(params.limit ?? PAGE_SIZE));
+  return fetchSeroval(`/chains/${chainId}/blocking?${searchParams.toString()}`, {
+    signal: params.signal,
+  });
+};
 
 export const rescheduleJob = async (jobId: string): Promise<UnknownJob> => {
   const { job } = await fetchSeroval<{ job: UnknownJob }>(`/jobs/${jobId}/reschedule`, {

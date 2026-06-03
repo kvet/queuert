@@ -9,8 +9,6 @@
 - [?,REF] Make deduplication `scope` explicit in the recurring-jobs example in `docs/src/content/docs/guides/scheduling.mdx` (currently relies on the implicit `incomplete` default, which is why `excludeChainIds` is needed)
 - [?,REF] Rename `startChain` to `createChain` (and `startChains` → `createChains`) for better symmetry with the rest of the API and to avoid confusion about what "start" means in the context of continued jobs
 - [?,REF] Resolve the `rescheduleJob` naming overlap — the exported throw-helper `rescheduleJob({ afterMs })` reschedules the currently-executing job from inside a handler, while `client.rescheduleJob({ id, schedule })` reschedules an arbitrary pending job from outside. Same verb, different subject/mechanism. Either rename one (e.g. the helper → `retryAfter`/`rescheduleSelf`) or at minimum document the distinction in the reference/guide docs
-- [?,REF] Dashboard: add auto load more
-- [?,REF] Dashboard: add job/chain link into cards to be able to open it in the new window by right click
 
 # Short term
 

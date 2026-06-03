@@ -1,12 +1,12 @@
-import { A, useNavigate, useSearchParams } from "@solidjs/router";
+import { A, useSearchParams } from "@solidjs/router";
 import { For, Show, createResource, createSignal } from "solid-js";
 
-import { type UnknownJob, listJobs } from "../api.js";
+import { PAGE_SIZE, type UnknownJob, listJobs } from "../api.js";
+import { createAutoLoadMore } from "./createAutoLoadMore.js";
 import { StatusBadge } from "./StatusBadge.js";
 import { TimeAgo } from "./TimeAgo.js";
 
 export function JobList() {
-  const navigate = useNavigate();
   const [searchParams, setSearchParams] = useSearchParams();
 
   const status = () => (searchParams.status ?? "") as string;
@@ -28,7 +28,7 @@ export function JobList() {
     async (params) => {
       loadMoreController?.abort();
       loadMoreController = null;
-      const result = await listJobs({ ...params, limit: 25 });
+      const result = await listJobs({ ...params, limit: PAGE_SIZE });
       setItems(result.items);
       setCursor(result.nextCursor);
       return result;
@@ -38,7 +38,6 @@ export function JobList() {
   const loadMore = async () => {
     const c = cursor();
     if (!c) return;
-    loadMoreController?.abort();
     const controller = new AbortController();
     loadMoreController = controller;
     let result: Awaited<ReturnType<typeof listJobs>>;
@@ -49,7 +48,7 @@ export function JobList() {
         id: id(),
         chainId: chainId(),
         cursor: c,
-        limit: 25,
+        limit: PAGE_SIZE,
         signal: controller.signal,
       });
     } catch (e) {
@@ -60,6 +59,8 @@ export function JobList() {
     setItems((prev) => [...prev, ...result.items]);
     setCursor(result.nextCursor);
   };
+
+  const autoLoadMore = createAutoLoadMore(loadMore);
 
   const inputPreview = (data: unknown): string => {
     if (data == null) return "";
@@ -114,13 +115,8 @@ export function JobList() {
 
       <For each={items()}>
         {(job) => (
-          <div
-            class="card"
-            onClick={(e) => {
-              if ((e.target as HTMLElement).closest("a, button")) return;
-              navigate(`/jobs/${job.id}`);
-            }}
-          >
+          <div class="card">
+            <A class="card-link" href={`/jobs/${job.id}`} aria-label={`Open job ${job.id}`} />
             <div class="card-header">
               <span class="card-type">
                 {job.typeName}
@@ -166,8 +162,15 @@ export function JobList() {
       </For>
 
       <Show when={cursor()}>
-        <button class="load-more" onClick={() => void loadMore()}>
-          Load more
+        <button
+          class="load-more"
+          ref={autoLoadMore.ref}
+          disabled={autoLoadMore.loading()}
+          onClick={() => {
+            autoLoadMore.trigger();
+          }}
+        >
+          {autoLoadMore.loading() ? "Loading…" : autoLoadMore.failed() ? "Retry" : "Load more"}
         </button>
       </Show>
     </div>

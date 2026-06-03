@@ -125,12 +125,37 @@ describe("Dashboard API", () => {
       expect(res.status).toBe(200);
       expect(body.chain.id).toBe(root.id);
       expect(body.jobs).toHaveLength(2);
+      expect(body.nextCursor).toBeNull();
     });
 
     it("returns 404 for missing chain", async () => {
       const { request } = await createTestDashboard();
       const res = await request("/api/chains/nonexistent");
       expect(res.status).toBe(404);
+    });
+  });
+
+  describe("GET /api/chains/:chainId/jobs", () => {
+    it("paginates the chain job sequence with a cursor", async () => {
+      const { request, stateAdapter } = await createTestDashboard();
+      const root = await createJob(stateAdapter, "chain-type", { step: 1 });
+      await createContinuation(stateAdapter, "chain-step2", root.chainId, "chain-type", 1, {
+        step: 2,
+      });
+
+      const first = await parseBody(await request(`/api/chains/${root.chainId}/jobs?limit=1`));
+      expect(first.jobs).toHaveLength(1);
+      expect(first.jobs[0].id).toBe(root.id);
+      expect(first.nextCursor).not.toBeNull();
+
+      const second = await parseBody(
+        await request(
+          `/api/chains/${root.chainId}/jobs?limit=1&cursor=${encodeURIComponent(first.nextCursor)}`,
+        ),
+      );
+      expect(second.jobs).toHaveLength(1);
+      expect(second.jobs[0].id).not.toBe(root.id);
+      expect(second.nextCursor).toBeNull();
     });
   });
 
@@ -152,6 +177,38 @@ describe("Dashboard API", () => {
 
       expect(body.items).toHaveLength(1);
       expect(body.items[0].id).toBe(blockedJob.id);
+      expect(body.nextCursor).toBeNull();
+    });
+
+    it("paginates blocked jobs with a cursor", async () => {
+      const { request, stateAdapter } = await createTestDashboard();
+      const blockerChain = await createJob(stateAdapter, "blocker-type", null);
+      const blocked1 = await createJob(stateAdapter, "blocked-type", null);
+      const blocked2 = await createJob(stateAdapter, "blocked-type", null);
+
+      await stateAdapter.withTransaction(async (txCtx) =>
+        stateAdapter.addJobsBlockers({
+          txCtx,
+          jobBlockers: [
+            { jobId: blocked1.id, blockedByChainIds: [blockerChain.chainId] },
+            { jobId: blocked2.id, blockedByChainIds: [blockerChain.chainId] },
+          ],
+        }),
+      );
+
+      const first = await parseBody(
+        await request(`/api/chains/${blockerChain.chainId}/blocking?limit=1`),
+      );
+      expect(first.items).toHaveLength(1);
+      expect(first.nextCursor).not.toBeNull();
+
+      const second = await parseBody(
+        await request(
+          `/api/chains/${blockerChain.chainId}/blocking?limit=1&cursor=${encodeURIComponent(first.nextCursor)}`,
+        ),
+      );
+      expect(second.items).toHaveLength(1);
+      expect(second.items[0].id).not.toBe(first.items[0].id);
     });
   });
 

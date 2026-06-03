@@ -43,11 +43,13 @@ All API endpoints are read-only except `POST /api/jobs/{jobId}/reschedule` and `
 
 Returns an array of `[rootJob, lastJob]` pairs and a `nextCursor` for pagination.
 
-**`GET /api/chains/{chainId}`** — Get chain detail with full job sequence.
+**`GET /api/chains/{chainId}`** — Get chain detail with the first page of its job sequence.
 
-Returns the root job, last job, all jobs in the chain ordered by chain index, and a map of job blockers.
+Returns the chain, the first page of jobs ordered by chain index, a map of job blockers for those jobs, and a `nextCursor` for paging through the rest. Accepts a `limit` query parameter.
 
-**`GET /api/chains/{chainId}/blocking`** — List jobs from other chains that depend on this chain as a blocker.
+**`GET /api/chains/{chainId}/jobs`** — List a page of jobs in the chain (ordered by chain index), with a map of job blockers for that page. Accepts `cursor` and `limit` query parameters; returns `jobs`, `jobBlockers`, and `nextCursor`. Backs the chain detail view's scroll-driven job pagination.
+
+**`GET /api/chains/{chainId}/blocking`** — List jobs from other chains that depend on this chain as a blocker. Accepts `cursor` and `limit` query parameters and returns `items` plus a `nextCursor` for pagination.
 
 ### Job Endpoints
 
@@ -87,11 +89,11 @@ The frontend is a SolidJS single-page application built with Vite.
 
 ### Views
 
-**Chain List** (`/`) — Default view showing all chains ordered by creation time (newest first). Each chain displays as a card with type name, chain ID, status badge, last job type, attempt count, and input preview. Supports filtering by chain ID, job ID, type name, and status. Includes cursor-based "Load more" pagination.
+**Chain List** (`/`) — Default view showing all chains ordered by creation time (newest first). Each chain displays as a card with type name, chain ID, status badge, last job type, attempt count, and input preview. Supports filtering by chain ID, job ID, type name, and status.
 
-**Chain Detail** (`/chains/:id`) — Full job sequence within a chain. Shows each job as a card with input/output JSON, blocker dependencies with links to blocker chains, and a "Blocking" section listing jobs from other chains that depend on this chain.
+**Chain Detail** (`/chains/:id`) — The job sequence within a chain, loaded a page at a time as you scroll. Shows each job as a card with input/output JSON, blocker dependencies with links to blocker chains, and a "Blocking" section listing jobs from other chains that depend on this chain.
 
-**Job List** (`/jobs`) — Cross-chain view of individual jobs with the same filtering and pagination patterns as the chain list.
+**Job List** (`/jobs`) — Cross-chain view of individual jobs with the same filtering and scroll-driven pagination patterns as the chain list.
 
 **Job Detail** (`/jobs/:id`) — Detailed job view with status, timing information, worker/lease details, blockers, input/output data, continuation link, and error details. Shows a "Trigger" button for pending jobs scheduled in the future.
 

@@ -5,6 +5,7 @@ import {
   handleChainBlocking,
   handleChainDelete,
   handleChainDetail,
+  handleChainJobs,
   handleChainsList,
 } from "./routes/chains.js";
 import { handleJobDetail, handleJobReschedule, handleJobsList } from "./routes/jobs.js";
@@ -62,6 +63,9 @@ export const createDashboard = async <
     // API routes
     match = localPath.match(/^\/api\/chains\/([^/]+)\/blocking$/);
     if (match) return handleChainBlocking(url, client, match[1]);
+
+    match = localPath.match(/^\/api\/chains\/([^/]+)\/jobs$/);
+    if (match) return handleChainJobs(url, client, match[1]);
 
     match = localPath.match(/^\/api\/chains\/([^/]+)$/);
     if (match && request.method === "DELETE")

@@ -1,5 +1,5 @@
 import { createSqliteStateAdapter } from "@queuert/sqlite";
-import { createClient, defineJobTypes, createInProcessNotifyAdapter } from "queuert";
+import { createClient, createInProcessNotifyAdapter, defineJobTypes } from "queuert";
 
 import { createDatabase, createStateProvider } from "./db.js";
 
@@ -67,6 +67,35 @@ export const jobTypes = defineJobTypes<{
     entry: true;
     input: { reportType: string };
     output: { generatedAt: string };
+  };
+
+  /*
+   * Scenario 6 - Long chain (pagination volume):
+   *   count-step continues to itself until it reaches `total`, producing a single
+   *   chain with many jobs — exercises the chain-detail job-list pagination.
+   */
+  "count-step": {
+    entry: true;
+    input: { n: number; total: number };
+    output: { total: number };
+    continueWith: { typeName: "count-step" };
+  };
+
+  /*
+   * Scenario 7 - Blocker fan-in (pagination volume):
+   *   one `signal` chain (left pending) blocks many `blocked-task` chains —
+   *   exercises the chain-detail "Blocking" pagination.
+   */
+  signal: {
+    entry: true;
+    input: { name: string };
+    output: { fired: true };
+  };
+  "blocked-task": {
+    entry: true;
+    input: { index: number };
+    output: { index: number; done: true };
+    blockers: [{ typeName: "signal" }];
   };
 }>();
 

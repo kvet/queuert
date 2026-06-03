@@ -134,6 +134,7 @@ a:hover {
 }
 
 .card {
+  position: relative;
   background: var(--bg-card);
   border: 1px solid var(--border);
   border-radius: var(--radius);
@@ -145,6 +146,27 @@ a:hover {
 
 .card:hover {
   background: var(--bg-hover);
+}
+
+/* Stretched link: covers the whole card so it behaves as a real anchor
+   (right-click "open in new tab", middle-click, ⌘-click), while the nested
+   filter buttons and chain links sit above it and keep their own clicks. */
+.card-link {
+  position: absolute;
+  inset: 0;
+  z-index: 0;
+  border-radius: inherit;
+}
+
+.card-link:focus-visible {
+  outline: 2px solid var(--accent);
+  outline-offset: 2px;
+}
+
+.card .filter-btn,
+.card .chain-link {
+  position: relative;
+  z-index: 1;
 }
 
 .card-header {

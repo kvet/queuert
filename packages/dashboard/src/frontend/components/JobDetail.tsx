@@ -2,6 +2,7 @@ import { A, useParams } from "@solidjs/router";
 import { For, Show, createResource, createSignal } from "solid-js";
 
 import { getJobDetail, rescheduleJob } from "../api.js";
+import { BackLink } from "./BackLink.js";
 import { JsonView } from "./JsonView.js";
 import { StatusBadge } from "./StatusBadge.js";
 import { TimeAgo } from "./TimeAgo.js";
@@ -30,9 +31,7 @@ export function JobDetail() {
 
   return (
     <div>
-      <A href="/jobs" class="back-link">
-        &larr; Back to jobs
-      </A>
+      <BackLink fallback="/jobs" />
 
       <Show when={detail()} keyed fallback={<div class="empty">Loading...</div>}>
         {(d) => {

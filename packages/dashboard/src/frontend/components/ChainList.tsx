@@ -1,12 +1,12 @@
-import { useNavigate, useSearchParams } from "@solidjs/router";
+import { A, useSearchParams } from "@solidjs/router";
 import { For, Show, createResource, createSignal } from "solid-js";
 
-import { type UnknownChain, listChains } from "../api.js";
+import { PAGE_SIZE, type UnknownChain, listChains } from "../api.js";
+import { createAutoLoadMore } from "./createAutoLoadMore.js";
 import { StatusBadge } from "./StatusBadge.js";
 import { TimeAgo } from "./TimeAgo.js";
 
 export function ChainList() {
-  const navigate = useNavigate();
   const [searchParams, setSearchParams] = useSearchParams();
 
   const typeName = () => (searchParams.typeName ?? "") as string;
@@ -30,7 +30,7 @@ export function ChainList() {
     async (params) => {
       loadMoreController?.abort();
       loadMoreController = null;
-      const result = await listChains({ ...params, limit: 25 });
+      const result = await listChains({ ...params, limit: PAGE_SIZE });
       setItems(result.items);
       setCursor(result.nextCursor);
       return result;
@@ -40,7 +40,6 @@ export function ChainList() {
   const loadMore = async () => {
     const c = cursor();
     if (!c) return;
-    loadMoreController?.abort();
     const controller = new AbortController();
     loadMoreController = controller;
     let result: Awaited<ReturnType<typeof listChains>>;
@@ -52,7 +51,7 @@ export function ChainList() {
         jobId: jobId(),
         root: root(),
         cursor: c,
-        limit: 25,
+        limit: PAGE_SIZE,
         signal: controller.signal,
       });
     } catch (e) {
@@ -63,6 +62,8 @@ export function ChainList() {
     setItems((prev) => [...prev, ...result.items]);
     setCursor(result.nextCursor);
   };
+
+  const autoLoadMore = createAutoLoadMore(loadMore);
 
   const inputPreview = (data: unknown): string => {
     if (data == null) return "";
@@ -138,13 +139,12 @@ export function ChainList() {
 
       <For each={items()}>
         {(chain) => (
-          <div
-            class="card"
-            onClick={(e) => {
-              if ((e.target as HTMLElement).closest("button")) return;
-              navigate(`/chains/${chain.id}`);
-            }}
-          >
+          <div class="card">
+            <A
+              class="card-link"
+              href={`/chains/${chain.id}`}
+              aria-label={`Open chain ${chain.id}`}
+            />
             <div class="card-header">
               <span class="card-type">
                 {chain.typeName}
@@ -181,8 +181,15 @@ export function ChainList() {
       </For>
 
       <Show when={cursor()}>
-        <button class="load-more" onClick={() => void loadMore()}>
-          Load more
+        <button
+          class="load-more"
+          ref={autoLoadMore.ref}
+          disabled={autoLoadMore.loading()}
+          onClick={() => {
+            autoLoadMore.trigger();
+          }}
+        >
+          {autoLoadMore.loading() ? "Loading…" : autoLoadMore.failed() ? "Retry" : "Load more"}
         </button>
       </Show>
     </div>
