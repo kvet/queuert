@@ -318,7 +318,10 @@ const mapDbJobToStateJob = (dbJob: DbJob): StateJob => {
   };
 };
 
-/** Create a state adapter backed by PostgreSQL. Returns the adapter with a `migrateToLatest()` method for schema migrations. */
+/**
+ * Create a state adapter backed by PostgreSQL. Returns the adapter with a
+ * `migrateToLatest()` method for schema migrations.
+ */
 export const createPgStateAdapter = async <
   TTxContext extends BaseTxContext,
   TIdType extends string = UUID,
@@ -338,9 +341,17 @@ export const createPgStateAdapter = async <
   tablePrefix?: string;
   /** SQL type for the primary key column. @defaultValue `"uuid"` */
   idType?: string;
-  /** Function to generate new job IDs. IDs are generated in JS and bound as a query parameter; the column has no SQL `DEFAULT`. @defaultValue `() => crypto.randomUUID()` */
+  /**
+   * Function to generate new job IDs. IDs are generated in JS and bound as a
+   * query parameter; the column has no SQL `DEFAULT`.
+   *
+   * @defaultValue `() => crypto.randomUUID()`
+   */
   generateId?: () => TIdType;
-  /** Predicate returning `true` if the ID is acceptable. Runs on both generated and caller-supplied IDs; failures throw `InvalidJobIdError`. */
+  /**
+   * Predicate returning `true` if the ID is acceptable. Runs on both generated
+   * and caller-supplied IDs; failures throw `InvalidJobIdError`.
+   */
   validateId?: (id: TIdType) => boolean;
   /** Phantom property for generic type inference of the ID type. Not used at runtime. */
   $idType?: TIdType;
@@ -1700,7 +1711,11 @@ CREATE TABLE IF NOT EXISTS {{schema}}.{{table_prefix}}migration (
   };
 };
 
-/** PostgreSQL state adapter type. Includes `migrateToLatest` for schema migrations, `vacuum` for on-demand dead tuple reclamation, and `truncate` for clearing all job data. */
+/**
+ * PostgreSQL state adapter type. Includes `migrateToLatest` for schema
+ * migrations, `vacuum` for on-demand dead tuple reclamation, and `truncate` for
+ * clearing all job data.
+ */
 export type PgStateAdapter<
   TTxContext extends BaseTxContext,
   TJobId extends string = UUID,

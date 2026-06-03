@@ -4,7 +4,10 @@ import { type ScheduleOptions } from "./entities/schedule.js";
 export class InvalidJobIdError extends Error {
   /** The ID that failed validation. */
   readonly id: string;
-  /** Where the ID came from: `"generator"` if produced by the adapter's `generateId`, `"caller"` if supplied by the caller. */
+  /**
+   * Where the ID came from: `"generator"` if produced by the adapter's
+   * `generateId`, `"caller"` if supplied by the caller.
+   */
   readonly source: "generator" | "caller";
 
   constructor(
@@ -51,7 +54,11 @@ export class JobNotFoundError extends Error {
   }
 }
 
-/** Batch variant of {@link JobNotFoundError} — thrown by the plural {@link Client.rescheduleJobs | rescheduleJobs} listing every input id with no matching job. */
+/**
+ * Batch variant of {@link JobNotFoundError} — thrown by the plural
+ * {@link Client.rescheduleJobs | rescheduleJobs} listing every input id with no
+ * matching job.
+ */
 export class JobsNotFoundError extends Error {
   /** The input ids that had no matching job. */
   readonly jobIds: readonly string[];
@@ -99,7 +106,11 @@ export class JobNotReschedulableError extends Error {
   }
 }
 
-/** Batch variant of {@link JobNotReschedulableError} — thrown by the plural {@link Client.rescheduleJobs | rescheduleJobs} listing every input id whose status is not `pending`. */
+/**
+ * Batch variant of {@link JobNotReschedulableError} — thrown by the plural
+ * {@link Client.rescheduleJobs | rescheduleJobs} listing every input id whose
+ * status is not `pending`.
+ */
 export class JobsNotReschedulableError extends Error {
   /** The input ids whose status is not `pending`. */
   readonly jobIds: readonly string[];
@@ -162,6 +173,31 @@ export class BlockerReferenceError extends Error {
     super(message, options.cause !== undefined ? { cause: options.cause } : undefined);
     this.name = "BlockerReferenceError";
     this.references = options.references;
+  }
+}
+
+/**
+ * Thrown when a job declares more blocker chains than the hard per-job limit
+ * allows. The cap is intentional: the `job_blocker` model is not designed to
+ * scale to an unbounded number of blockers per job.
+ */
+export class BlockerLimitExceededError extends Error {
+  /** The job type that declared too many blockers. */
+  readonly typeName: string;
+  /** The number of blocker chains the job declared. */
+  readonly count: number;
+  /** The maximum number of blocker chains allowed per job. */
+  readonly limit: number;
+
+  constructor(
+    message: string,
+    options: { typeName: string; count: number; limit: number; cause?: unknown },
+  ) {
+    super(message, options.cause !== undefined ? { cause: options.cause } : undefined);
+    this.name = "BlockerLimitExceededError";
+    this.typeName = options.typeName;
+    this.count = options.count;
+    this.limit = options.limit;
   }
 }
 

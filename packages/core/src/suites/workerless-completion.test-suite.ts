@@ -2,7 +2,11 @@ import { type TestAPI, expectTypeOf, vi } from "vitest";
 
 import { createClient } from "../client.js";
 import { defineJobTypes } from "../entities/define-job-types.js";
-import { JobTypeMismatchError, TransactionContextRequiredError } from "../errors.js";
+import {
+  BlockerLimitExceededError,
+  JobTypeMismatchError,
+  TransactionContextRequiredError,
+} from "../errors.js";
 import { sleep } from "../helpers/sleep.js";
 import { createInProcessWorker } from "../in-process-worker.js";
 import { withTransactionHooks } from "../transaction-hooks.js";
@@ -226,6 +230,95 @@ export const workerlessCompletionTestSuite = ({ it }: { it: TestAPI<TestSuiteCon
         }),
       ),
     );
+  });
+
+  it("rejects continueWith declaring more blockers than the limit in completeChain", async ({
+    stateAdapter,
+    notifyAdapter,
+    withTransaction,
+    observabilityAdapter,
+    log,
+    expect,
+  }) => {
+    const jobTypes = defineJobTypes<{
+      blocker: {
+        entry: true;
+        input: null;
+        output: null;
+      };
+      starter: {
+        entry: true;
+        input: null;
+        output: null;
+        continueWith: { typeName: "next" };
+      };
+      next: {
+        input: null;
+        output: null;
+        blockers: [{ typeName: "blocker" }];
+      };
+    }>();
+
+    const client = await createClient({
+      stateAdapter,
+      notifyAdapter,
+      observabilityAdapter,
+      log,
+      jobTypes,
+    });
+
+    const blockerChain = await withTransactionHooks(async (transactionHooks) =>
+      withTransaction(async (txCtx) =>
+        client.startChain({
+          ...txCtx,
+          transactionHooks,
+          typeName: "blocker",
+          input: null,
+        }),
+      ),
+    );
+
+    const starterChain = await withTransactionHooks(async (transactionHooks) =>
+      withTransaction(async (txCtx) =>
+        client.startChain({
+          ...txCtx,
+          transactionHooks,
+          typeName: "starter",
+          input: null,
+        }),
+      ),
+    );
+
+    try {
+      await withTransactionHooks(async (transactionHooks) =>
+        withTransaction(async (txCtx) =>
+          client.completeChain({
+            ...txCtx,
+            transactionHooks,
+            ...starterChain,
+            complete: async ({ job, complete }) => {
+              if (job.typeName === "starter") {
+                return complete(job, async ({ continueWith }) =>
+                  continueWith({
+                    typeName: "next",
+                    input: null,
+                    blockers: Array.from({ length: 101 }, () => blockerChain) as [
+                      typeof blockerChain,
+                    ],
+                  }),
+                );
+              }
+            },
+          }),
+        ),
+      );
+      expect.fail("Expected continueWith to throw an error due to exceeding blocker limit");
+    } catch (error) {
+      expect(error).toBeInstanceOf(BlockerLimitExceededError);
+      expect((error as BlockerLimitExceededError).count).toBe(101);
+      expect((error as BlockerLimitExceededError).limit).toBe(100);
+      expect((error as BlockerLimitExceededError).typeName).toBe("next");
+    }
   });
 
   it("partially completes a complex chain without worker", async ({

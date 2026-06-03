@@ -6,7 +6,12 @@ import {
   processorsDefinitionsSymbol,
 } from "./processors.js";
 
-/** Collect definitions from a tuple of processor slices as a UNION (4-at-a-time to avoid TS2589). @internal */
+/**
+ * Collect definitions from a tuple of processor slices as a UNION (4-at-a-time
+ * to avoid TS2589).
+ *
+ * @internal
+ */
 export type MergedProcessorDefinitions<T extends readonly Processors[]> = T extends readonly [
   infer A extends Processors,
   infer B extends Processors,

@@ -353,11 +353,24 @@ export const createSqliteStateAdapter = async <
   idType?: string;
   /** Function to generate new job IDs. @defaultValue `() => crypto.randomUUID()` */
   generateId?: () => TIdType;
-  /** Predicate returning `true` if the ID is acceptable. Runs on both generated and caller-supplied IDs; failures throw `InvalidJobIdError`. */
+  /**
+   * Predicate returning `true` if the ID is acceptable. Runs on both generated
+   * and caller-supplied IDs; failures throw `InvalidJobIdError`.
+   */
   validateId?: (id: TIdType) => boolean;
-  /** Whether `migrateToLatest()` verifies that `PRAGMA foreign_keys = ON` is set. Disable only if foreign keys are managed externally. @defaultValue `true` */
+  /**
+   * Whether `migrateToLatest()` verifies that `PRAGMA foreign_keys = ON` is set.
+   * Disable only if foreign keys are managed externally.
+   *
+   * @defaultValue `true`
+   */
   checkForeignKeys?: boolean;
-  /** Whether `migrateToLatest()` verifies that `PRAGMA auto_vacuum = INCREMENTAL` is set. Required for `vacuum()` to reclaim disk space. @defaultValue `true` */
+  /**
+   * Whether `migrateToLatest()` verifies that `PRAGMA auto_vacuum = INCREMENTAL`
+   * is set. Required for `vacuum()` to reclaim disk space.
+   *
+   * @defaultValue `true`
+   */
   checkAutoVacuum?: boolean;
 }): Promise<
   StateAdapter<TTxContext, TIdType> & {

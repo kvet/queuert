@@ -34,6 +34,7 @@ export { type Job, type JobStatus } from "./entities/job.js";
 export { type JobTypesDefinitions } from "./entities/merge-job-types.js";
 export { type ScheduleOptions } from "./entities/schedule.js";
 export {
+  BlockerLimitExceededError,
   BlockerReferenceError,
   ChainNotFoundError,
   DuplicateJobTypeError,

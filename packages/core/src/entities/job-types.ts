@@ -26,7 +26,10 @@ export const noopRegistries: WeakSet<JobTypes<any>> = new WeakSet<JobTypes<any>>
  * Functions should throw on validation failure (any error type).
  */
 export type JobTypesOptions = {
-  /** Returns the known job type names. Used for runtime duplicate detection when {@link createClient} merges slices. */
+  /**
+   * Returns the known job type names. Used for runtime duplicate detection when
+   * {@link createClient} merges slices.
+   */
   getTypeNames: () => readonly string[];
   /** Validate that a job type can start a chain. Throw on failure. */
   validateEntry: (typeName: string) => void;
@@ -34,7 +37,10 @@ export type JobTypesOptions = {
   parseInput: (typeName: string, input: unknown) => unknown;
   /** Parse and validate output. Return transformed value or throw on failure. */
   parseOutput: (typeName: string, output: unknown) => unknown;
-  /** Validate continuation target. Receives { typeName, input } for nominal/structural validation. Throw on failure. */
+  /**
+   * Validate continuation target. Receives { typeName, input } for
+   * nominal/structural validation. Throw on failure.
+   */
   validateContinueWith: (typeName: string, target: ResolvedJobTypeReference) => void;
   /** Validate blocker references. Receives array of { typeName, input } objects. Throw on failure. */
   validateBlockers: (typeName: string, blockers: readonly ResolvedJobTypeReference[]) => void;
@@ -51,7 +57,10 @@ export type JobTypes<
   TJobTypeDefinitions = unknown,
   TExternalJobTypeDefinitions = Record<never, never>,
 > = {
-  /** Validate that a job type can start a chain (is an entry point). Throws JobTypeValidationError on failure. */
+  /**
+   * Validate that a job type can start a chain (is an entry point). Throws
+   * JobTypeValidationError on failure.
+   */
   validateEntry: (typeName: string) => void;
 
   /** Parse and validate input. Returns transformed value. Throws JobTypeValidationError on failure. */

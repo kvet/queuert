@@ -122,7 +122,10 @@ type InvalidJobTypeKeys<
   [K in keyof T & string]: [T[K]] extends [ValidateJobType<T[K], T, T | TExternal>] ? never : K;
 }[keyof T & string];
 
-/** Descriptive error type produced when job type definitions fail validation. Lists the invalid type names. */
+/**
+ * Descriptive error type produced when job type definitions fail validation.
+ * Lists the invalid type names.
+ */
 export type JobTypeDefinitionErrors<
   T extends BaseJobTypeDefinitions,
   TExternal extends BaseJobTypeDefinitions = Record<never, never>,

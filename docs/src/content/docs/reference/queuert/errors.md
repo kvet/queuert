@@ -149,6 +149,18 @@ type BlockerReference = {
 
 Thrown by `deleteChains` when external chains depend on the deletion targets as blockers. **references** lists each dependency, pairing the blocker **chainId** with the **referencedByJobId** that depends on it.
 
+## BlockerLimitExceededError
+
+```typescript
+class BlockerLimitExceededError extends Error {
+  readonly typeName: string;
+  readonly count: number;
+  readonly limit: number;
+}
+```
+
+Thrown by `startChain`, `startChains`, and `continueWith` when a job declares more blocker chains than the per-job limit (**100**). The cap is intentional and not raised to an uncapped value. **typeName** is the offending job type, **count** the number of blockers declared, and **limit** the maximum allowed.
+
 ## DuplicateJobTypeError
 
 ```typescript

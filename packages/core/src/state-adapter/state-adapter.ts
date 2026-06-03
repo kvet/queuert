@@ -138,7 +138,12 @@ export type StateAdapter<TTxContext extends BaseTxContext, TJobId extends string
     }[];
   }) => Promise<{ job: StateJob; deduplicated: boolean }[]>;
 
-  /** Adds blocker dependencies to jobs. Returns results in the same order as input. */
+  /**
+   * Adds blocker dependencies to jobs. Returns results in the same order as input.
+   *
+   * The per-job blocker-count cap is enforced by core before this method is
+   * called (see `createStateJobs`); adapters do not re-validate it.
+   */
   addJobsBlockers: (params: {
     txCtx?: TTxContext;
     jobBlockers: {
@@ -208,7 +213,13 @@ export type StateAdapter<TTxContext extends BaseTxContext, TJobId extends string
     schedule?: ScheduleOptions;
   }) => Promise<StateJob[]>;
 
-  /** Releases a failed attempt back to `pending`: transitions the running job `running → pending`, records the attempt error, and clears the lease. Does not touch `scheduled_at` — pair with {@link StateAdapter.rescheduleJobs | rescheduleJobs} in the same transaction to set the next run time. */
+  /**
+   * Releases a failed attempt back to `pending`: transitions the running job
+   * `running → pending`, records the attempt error, and clears the lease. Does
+   * not touch `scheduled_at` — pair with
+   * {@link StateAdapter.rescheduleJobs | rescheduleJobs} in the same transaction
+   * to set the next run time.
+   */
   abandonJob: (params: { txCtx?: TTxContext; jobId: TJobId; error: string }) => Promise<StateJob>;
 
   /** Completes a job with the given output. */

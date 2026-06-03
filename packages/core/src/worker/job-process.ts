@@ -108,7 +108,11 @@ export type AttemptCompleteCallback<
   >,
 ) => Promise<TResult>;
 
-/** Typed completion function provided to the {@link AttemptHandler | attemptHandler}. Call it to finalize the job — either return the output to complete the chain, or call `continueWith` to extend it. */
+/**
+ * Typed completion function provided to the
+ * {@link AttemptHandler | attemptHandler}. Call it to finalize the job — either
+ * return the output to complete the chain, or call `continueWith` to extend it.
+ */
 export type AttemptComplete<
   TStateAdapter extends StateAdapter<BaseTxContext, any>,
   TJobTypeDefinitions extends BaseJobTypeDefinitions,
@@ -169,7 +173,11 @@ export type AttemptPrepareCallback<
   prepareCallbackOptions: GetStateAdapterTxContext<TStateAdapter> & TPrepareCtx,
 ) => T | Promise<T>;
 
-/** Typed prepare function provided to the {@link AttemptHandler | attemptHandler}. Controls the processing mode and optionally runs a callback within the prepare transaction. */
+/**
+ * Typed prepare function provided to the
+ * {@link AttemptHandler | attemptHandler}. Controls the processing mode and
+ * optionally runs a callback within the prepare transaction.
+ */
 export type AttemptPrepare<
   TStateAdapter extends StateAdapter<BaseTxContext, any>,
   TPrepareCtx extends Record<string, unknown> = Record<string, unknown>,

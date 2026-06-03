@@ -11,6 +11,10 @@ export type DeduplicationOptions<TJobId> = {
   scope?: "incomplete" | "any";
   /** Time window in milliseconds — only chains created within this window are matched. */
   windowMs?: number;
-  /** Chain IDs to exclude from deduplication matching. Useful for recurring jobs that self-schedule within a completion callback where the current chain is still incomplete. */
+  /**
+   * Chain IDs to exclude from deduplication matching. Useful for recurring jobs
+   * that self-schedule within a completion callback where the current chain is
+   * still incomplete.
+   */
   excludeChainIds?: TJobId[];
 };

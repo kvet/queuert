@@ -11,7 +11,10 @@ export type NotifyConformanceFixture = {
   notifyAdapter: NotifyAdapter;
   /** Called before each conformance case. Consumed by the runner — cases ignore it. */
   reset?: () => Promise<void>;
-  /** Called once after all cases finish (pass or fail) to release resources. Consumed by the runner — cases ignore it. */
+  /**
+   * Called once after all cases finish (pass or fail) to release resources.
+   * Consumed by the runner — cases ignore it.
+   */
   dispose?: () => Promise<void>;
 };
 

@@ -1,6 +1,7 @@
 import { type Chain } from "../entities/chain.js";
 import { type DeduplicationOptions } from "../entities/deduplication.js";
 import { type ScheduleOptions } from "../entities/schedule.js";
+import { BlockerLimitExceededError } from "../errors.js";
 import { bufferNotifyJobScheduled } from "../helpers/notify-hooks.js";
 import {
   bufferObservabilityEvent,
@@ -9,6 +10,13 @@ import {
 import { type Helpers } from "../setup-helpers.js";
 import { type BaseTxContext, type StateJob } from "../state-adapter/state-adapter.js";
 import { type TransactionHooks } from "../transaction-hooks.js";
+
+/**
+ * Hard cap on the number of blocker chains a single job may declare. Intentional
+ * and not raised to an uncapped value — the `job_blocker` model can't scale to
+ * millions of blockers per job without a different denormalization.
+ */
+const MAX_BLOCKERS_PER_JOB = 100;
 
 export const createStateJobs = async (
   helpers: Helpers,
@@ -36,6 +44,16 @@ export const createStateJobs = async (
   },
 ): Promise<{ job: StateJob; deduplicated: boolean }[]> => {
   if (jobInputs.length === 0) return [];
+
+  for (const jobInput of jobInputs) {
+    const blockerCount = jobInput.blockers?.length ?? 0;
+    if (blockerCount > MAX_BLOCKERS_PER_JOB) {
+      throw new BlockerLimitExceededError(
+        `Job "${jobInput.typeName}" declares ${blockerCount} blockers, exceeding the limit of ${MAX_BLOCKERS_PER_JOB}`,
+        { typeName: jobInput.typeName, count: blockerCount, limit: MAX_BLOCKERS_PER_JOB },
+      );
+    }
+  }
 
   const parsed = jobInputs.map((jobInput) => {
     const parsedInput = helpers.jobTypes.parseInput(jobInput.typeName, jobInput.input);

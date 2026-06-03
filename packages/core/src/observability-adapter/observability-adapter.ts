@@ -115,7 +115,11 @@ export type CompleteBlockerSpanData = {
   blockerChainTypeName: string;
 };
 
-/** Adapter for structured logging, metrics, and distributed tracing. All methods are synchronous — side effects are buffered via transaction hooks and flushed after commit. */
+/**
+ * Adapter for structured logging, metrics, and distributed tracing. All methods
+ * are synchronous — side effects are buffered via transaction hooks and flushed
+ * after commit.
+ */
 export type ObservabilityAdapter = {
   // worker
   workerStarted: (data: { workerId: string; jobTypeNames: string[] }) => void;
