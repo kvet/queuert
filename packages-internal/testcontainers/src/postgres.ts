@@ -8,6 +8,8 @@ import { withContainerLock } from "./with-container-lock.js";
 
 export type AcquiredPostgres = {
   connectionString: string;
+  // --disable-triggers lets the dump reload regardless of row order despite self-referential FKs
+  dumpData: (tables: string[]) => Promise<string>;
 } & AsyncDisposable;
 
 const containerNameFromImage = (image: string): string =>
@@ -64,6 +66,28 @@ export const acquirePostgres = async (
 
   return {
     connectionString: baseUri.replace("base_database_for_tests", normalizedId),
+    dumpData: async (tables: string[]): Promise<string> => {
+      const result = await container.exec(
+        [
+          "pg_dump",
+          "-h",
+          "127.0.0.1",
+          "-U",
+          username,
+          "-d",
+          normalizedId,
+          "--data-only",
+          "--inserts",
+          "--disable-triggers",
+          ...tables.flatMap((t) => ["-t", t]),
+        ],
+        { env: { PGPASSWORD: container.getPassword() } },
+      );
+      if (result.exitCode !== 0) {
+        throw new Error(`pg_dump exited ${result.exitCode}: ${result.stderr}`);
+      }
+      return result.stdout;
+    },
     [Symbol.asyncDispose]: async () => {
       await withAdminClient(async (client) => {
         await client.query(`DROP DATABASE IF EXISTS "${normalizedId}" WITH (FORCE);`);

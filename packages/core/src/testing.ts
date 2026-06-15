@@ -1,21 +1,22 @@
 // Test Suites
-export { startChainsTestSuite } from "./suites/start-chains.test-suite.js";
 export { blockerChainsTestSuite } from "./suites/blocker-chains.test-suite.js";
+export { chainsTestSuite } from "./suites/chains.test-suite.js";
 export { clientQueriesTestSuite } from "./suites/client-queries.test-suite.js";
 export { deduplicationTestSuite } from "./suites/deduplication.test-suite.js";
 export { deletionTestSuite } from "./suites/deletion.test-suite.js";
+export {
+  notifyAdapterConformanceTestSuite,
+  type NotifyConformanceFixture,
+} from "./suites/notify-adapter-conformance.test-suite.js";
 export { notifyResilienceTestSuite } from "./suites/notify-resilience.test-suite.js";
 export { notifyTestSuite } from "./suites/notify.test-suite.js";
 export { processErrorHandlingTestSuite } from "./suites/process-error-handling.test-suite.js";
 export { processModesTestSuite } from "./suites/process-modes.test-suite.js";
 export { processTestSuite } from "./suites/process.test-suite.js";
 export { reaperTestSuite } from "./suites/reaper.test-suite.js";
+export { rescheduleJobTestSuite } from "./suites/reschedule-job.test-suite.js";
 export { schedulingTestSuite } from "./suites/scheduling.test-suite.js";
-export { chainsTestSuite } from "./suites/chains.test-suite.js";
-export {
-  notifyAdapterConformanceTestSuite,
-  type NotifyConformanceFixture,
-} from "./suites/notify-adapter-conformance.test-suite.js";
+export { startChainsTestSuite } from "./suites/start-chains.test-suite.js";
 export {
   stateAdapterConformanceTestSuite,
   type StateConformanceFixture,
@@ -23,7 +24,6 @@ export {
 export { stateResilienceTestSuite } from "./suites/state-resilience.test-suite.js";
 export { waitChainCompletionTestSuite } from "./suites/wait-chain-completion.test-suite.js";
 export { workerTestSuite } from "./suites/worker.test-suite.js";
-export { rescheduleJobTestSuite } from "./suites/reschedule-job.test-suite.js";
 export { workerlessCompletionTestSuite } from "./suites/workerless-completion.test-suite.js";
 
 // Test Context Helpers
@@ -50,3 +50,6 @@ export {
 
 // Worker Test Helper
 export { withWorkers } from "./helpers/with-workers.js";
+
+// Migration fixture seeding
+export { seedAllStates, type SeedSentinels } from "./helpers/seed-all-states.js";

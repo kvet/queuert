@@ -1,0 +1,22 @@
+{
+  "totalJobs": 9801,
+  "totalBlockers": 3000,
+  "byStatus": {
+    "pending": 5002,
+    "completed": 1299,
+    "running": 500,
+    "blocked": 3000
+  },
+  "sentinels": {
+    "pendingJobId": "54439597-70c1-47ec-be62-723dc741404f",
+    "scheduledJobId": "3d4d6f6c-09fe-40a8-b1b9-af7e685c7a7c",
+    "runningJobId": "8e8682ae-1a8a-4926-8836-103d857b19c1",
+    "completedJobId": "7ad53080-7161-4759-87f3-21b8fcdec0f0",
+    "retriedJobId": "fbbbe5ef-7b1c-4075-84ea-4b0375771cf7",
+    "blockedJobId": "ed1cb307-8fd3-4954-9bea-0af7318742ac",
+    "fanInBlockerId": "87220881-aa51-4fa7-b829-8cce43d2385f",
+    "fanInBlockedCount": 3000,
+    "chainId": "f8b90415-10ef-416d-84a6-66efa842fae9",
+    "chainLength": 100
+  }
+}

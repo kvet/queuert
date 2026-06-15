@@ -6,10 +6,12 @@ import {
   type InferParams,
   type Migration,
   type MigrationResult,
+  type MigrationStore,
+  type TemplateApplier,
   type TypedSql,
+  createMigrator,
   createTemplateApplier,
   createTemplateCache,
-  executeMigrations,
   extractColumnTypes,
   extractParamTypes,
   sql,
@@ -55,7 +57,8 @@ type DbJob = {
   trace_context: string | null;
 };
 
-const migrations: Migration[] = [
+/** @internal */
+export const migrations: Migration[] = [
   {
     name: "20240101000000_initial_schema",
     transactional: true,
@@ -247,6 +250,68 @@ ALTER TABLE {{schema}}.{{table_prefix}}job_blocker SET (
     ],
   },
 ];
+
+/** @internal */
+export const createMigrationStore = <TTxContext extends BaseTxContext>(
+  stateProvider: PgStateProvider<TTxContext>,
+  applyTemplate: TemplateApplier,
+): MigrationStore<TTxContext> => {
+  const exec = async (
+    txCtx: TTxContext | undefined,
+    typedSql: TypedSql,
+    params: unknown[] = [],
+  ): Promise<Record<string, unknown>[]> =>
+    stateProvider.executeSql({
+      txCtx,
+      id: typedSql.id,
+      sql: typedSql.sql,
+      params,
+      paramTypes: extractParamTypes(typedSql.params),
+      columnTypes: extractColumnTypes(typedSql.columns),
+      readOnly: typedSql.readOnly,
+    }) as Promise<Record<string, unknown>[]>;
+  const createMigrationTableSql = applyTemplate(
+    sql(
+      `
+CREATE TABLE IF NOT EXISTS {{schema}}.{{table_prefix}}migration (
+  name TEXT PRIMARY KEY,
+  applied_at TIMESTAMPTZ NOT NULL DEFAULT now()
+)`,
+      { id: "createMigrationTable", params: [], columns: {} },
+    ),
+  );
+  const getAppliedMigrationsSql = applyTemplate(
+    sql(`SELECT name FROM {{schema}}.{{table_prefix}}migration ORDER BY name`, {
+      id: "getAppliedMigrations",
+      params: [],
+      columns: { name: t.string() },
+      readOnly: true,
+    }),
+  );
+  const recordMigrationSql = applyTemplate(
+    sql(
+      `INSERT INTO {{schema}}.{{table_prefix}}migration (name) VALUES ($1) ON CONFLICT (name) DO NOTHING`,
+      { id: "recordMigration", params: [t.string()], columns: {} },
+    ),
+  );
+
+  return {
+    runInTransaction: stateProvider.withTransaction,
+    getAppliedMigrationNames: async (txCtx) => {
+      await exec(txCtx, createMigrationTableSql);
+      const applied = (await exec(txCtx, getAppliedMigrationsSql)) as { name: string }[];
+      return applied.map((m) => m.name);
+    },
+    executeMigrationStatements: async (txCtx, migration) => {
+      for (const stmt of migration.statements) {
+        await exec(txCtx, applyTemplate(stmt.sql));
+      }
+    },
+    recordMigration: async (txCtx, name) => {
+      await exec(txCtx, recordMigrationSql, [name]);
+    },
+  };
+};
 
 const SQL_IDENTIFIER_PATTERN = /^[a-zA-Z_][a-zA-Z0-9_]*$/;
 
@@ -1630,57 +1695,10 @@ SELECT
     },
 
     migrateToLatest: async () => {
-      return executeMigrations<TTxContext>({
+      return createMigrator<TTxContext>({
         migrations,
-        runInTransaction: stateProvider.withTransaction,
-        getAppliedMigrationNames: async (txCtx) => {
-          await executeTypedSql({
-            txCtx,
-            sql: applyTemplate(
-              sql(
-                `
-CREATE TABLE IF NOT EXISTS {{schema}}.{{table_prefix}}migration (
-  name TEXT PRIMARY KEY,
-  applied_at TIMESTAMPTZ NOT NULL DEFAULT now()
-)`,
-                { id: "createMigrationTable", params: [], columns: {} },
-              ),
-            ),
-          });
-          const applied = await executeTypedSql({
-            txCtx,
-            sql: applyTemplate(
-              sql(
-                `SELECT name, applied_at FROM {{schema}}.{{table_prefix}}migration ORDER BY name`,
-                {
-                  id: "getAppliedMigrations",
-                  params: [],
-                  columns: { name: t.string(), applied_at: t.string() },
-                  readOnly: true,
-                },
-              ),
-            ),
-          });
-          return applied.map((m) => m.name);
-        },
-        executeMigrationStatements: async (txCtx, migration) => {
-          for (const stmt of migration.statements) {
-            await executeTypedSql({ txCtx, sql: applyTemplate(stmt.sql), params: [] });
-          }
-        },
-        recordMigration: async (txCtx, name) => {
-          await executeTypedSql({
-            txCtx,
-            sql: applyTemplate(
-              sql(
-                `INSERT INTO {{schema}}.{{table_prefix}}migration (name) VALUES ($1) ON CONFLICT (name) DO NOTHING`,
-                { id: "recordMigration", params: [t.string()], columns: {} },
-              ),
-            ),
-            params: [name],
-          });
-        },
-      });
+        store: createMigrationStore(stateProvider, applyTemplate),
+      }).migrateToLatest();
     },
 
     vacuum: async () => {
