@@ -66,17 +66,18 @@ const countPlaceholders = (sqlText: string): number => {
   return (stripped.match(/\?/g) ?? []).length;
 };
 
-const validateAgainstDb = (
+type SqlArgs = {
+  sql: string;
+  paramTypes: Record<number, RuntimeType>;
+  columnTypes: Record<string, RuntimeType>;
+  readOnly: boolean;
+};
+
+const validateBeforeExecute = (
   db: Database.Database,
-  args: {
-    sql: string;
-    paramTypes: Record<number, RuntimeType>;
-    columnTypes: Record<string, RuntimeType>;
-    readOnly: boolean;
-  },
-  rows: unknown[],
-): void => {
-  const { sql, paramTypes, columnTypes, readOnly } = args;
+  args: SqlArgs,
+): Database.Statement | undefined => {
+  const { sql, paramTypes, readOnly } = args;
   const ctx = `\n  SQL: ${sql.slice(0, 160).replace(/\s+/g, " ")}${sql.length > 160 ? "..." : ""}`;
 
   const declaredParamCount = Object.keys(paramTypes).length;
@@ -93,13 +94,15 @@ const validateAgainstDb = (
     `stmt.readonly is ${stmt.readonly}, declared readOnly is ${readOnly}${ctx}`,
   ).toBe(readOnly);
 
-  const declaredColumnNames = Object.keys(columnTypes);
-  if (declaredColumnNames.length === 0) return;
+  return Object.keys(args.columnTypes).length > 0 ? stmt : undefined;
+};
 
+const validateAfterExecute = (stmt: Database.Statement, args: SqlArgs, rows: unknown[]): void => {
+  const ctx = `\n  SQL: ${args.sql.slice(0, 160).replace(/\s+/g, " ")}${args.sql.length > 160 ? "..." : ""}`;
   const stmtColumns = stmt.columns();
   const actualNames = stmtColumns.map((c) => c.name);
   expect([...actualNames].sort(), `column names mismatch${ctx}`).toEqual(
-    [...declaredColumnNames].sort(),
+    Object.keys(args.columnTypes).sort(),
   );
   expect(
     new Set(actualNames).size,
@@ -108,7 +111,7 @@ const validateAgainstDb = (
 
   const sampleRow = rows.length > 0 ? (rows[0] as Record<string, unknown>) : undefined;
   const declaredTypeByName = new Map(stmtColumns.map((c) => [c.name, c.type]));
-  for (const [name, runtime] of Object.entries(columnTypes)) {
+  for (const [name, runtime] of Object.entries(args.columnTypes)) {
     const sqliteType = declaredTypeByName.get(name);
     if (sqliteType != null) {
       expect(
@@ -117,7 +120,6 @@ const validateAgainstDb = (
       ).toBe(true);
       continue;
     }
-    // Expression-derived columns report null type; fall back to a real row when we have one.
     if (sampleRow && name in sampleRow) {
       const value = sampleRow[name];
       expect(
@@ -136,8 +138,9 @@ const createValidatingProvider = (
     transactionConcurrency: inner.transactionConcurrency,
     withTransaction: inner.withTransaction,
     executeSql: async (args) => {
+      const stmt = validateBeforeExecute(db, args);
       const rows = await inner.executeSql(args);
-      validateAgainstDb(db, args, rows);
+      if (stmt) validateAfterExecute(stmt, args, rows);
       return rows;
     },
     close: inner.close,

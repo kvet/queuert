@@ -249,6 +249,18 @@ ALTER TABLE {{schema}}.{{table_prefix}}job_blocker SET (
       },
     ],
   },
+  {
+    name: "20260617000000_blocker_composite_pk",
+    transactional: true,
+    statements: [
+      {
+        sql: sql(`
+ALTER TABLE {{schema}}.{{table_prefix}}job_blocker
+  DROP CONSTRAINT {{table_prefix}}job_blocker_pkey,
+  ADD PRIMARY KEY (job_id, blocked_by_chain_id, "index")`),
+      },
+    ],
+  },
 ];
 
 /** @internal */
@@ -967,6 +979,34 @@ ORDER BY fj.id
     },
 
     unblockJobs: async ({ txCtx, blockedByChainId }) => {
+      await executeTypedSql({
+        txCtx,
+        sql: templateCache.getOrCompute("lockBlockedJobs", () =>
+          applyTemplate(
+            sql(
+              `
+SELECT j.id
+FROM {{schema}}.{{table_prefix}}job j
+WHERE j.id IN (
+  SELECT DISTINCT jb.job_id
+  FROM {{schema}}.{{table_prefix}}job_blocker jb
+  WHERE jb.blocked_by_chain_id = $1
+)
+AND j.status = 'blocked'
+ORDER BY j.id
+FOR UPDATE
+`,
+              {
+                id: "lockBlockedJobs",
+                params: [idDataType],
+                columns: { id: idDataType },
+              },
+            ),
+          ),
+        ),
+        params: [blockedByChainId],
+      });
+
       const [result] = await executeTypedSql({
         txCtx,
         sql: templateCache.getOrCompute("unblockJobs", () =>

@@ -20,7 +20,7 @@ export const createSeededRandom = (seed: number): (() => number) => {
 export const createFlakyBatchGenerator = ({
   seed = 12345,
   errorBatchSize = { min: 1, max: 20 },
-  successBatchSize = { min: 4, max: 15 },
+  successBatchSize = { min: 5, max: 15 },
 }: {
   seed?: number;
   errorBatchSize?: { min: number; max: number };

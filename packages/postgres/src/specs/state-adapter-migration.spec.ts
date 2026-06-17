@@ -248,6 +248,20 @@ const migrationContracts: Record<string, MigrationContract> = {
       }
     },
   },
+
+  "20260617000000_blocker_composite_pk": {
+    schema: async (provider) => {
+      const rows = await query(
+        provider,
+        `SELECT a.attname
+         FROM pg_index i
+         JOIN pg_attribute a ON a.attrelid = i.indrelid AND a.attnum = ANY(i.indkey)
+         WHERE i.indrelid = 'queuert_job_blocker'::regclass AND i.indisprimary
+         ORDER BY array_position(i.indkey, a.attnum)`,
+      );
+      expect(rows.map((r) => r.attname)).toEqual(["job_id", "blocked_by_chain_id", "index"]);
+    },
+  },
 };
 
 // ---------------------------------------------------------------------------
@@ -255,6 +269,14 @@ const migrationContracts: Record<string, MigrationContract> = {
 // ---------------------------------------------------------------------------
 
 describe.skipIf(GENERATING)("migration upgrade path", () => {
+  it("has a contract for every non-initial migration", () => {
+    const missing = migrations
+      .slice(1)
+      .filter((m) => !(m.name in migrationContracts))
+      .map((m) => m.name);
+    expect(missing).toEqual([]);
+  });
+
   it(
     "reconciles each migration's data contract, asserts its schema effect, then is idempotent",
     { timeout: 60_000 },

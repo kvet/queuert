@@ -10,7 +10,6 @@
 - [?,REF] Rename `startChain` to `createChain` (and `startChains` → `createChains`) for better symmetry with the rest of the API and to avoid confusion about what "start" means in the context of continued jobs
 - [?,REF] Resolve the `rescheduleJob` naming overlap — the exported throw-helper `rescheduleJob({ afterMs })` reschedules the currently-executing job from inside a handler, while `client.rescheduleJob({ id, schedule })` reschedules an arbitrary pending job from outside. Same verb, different subject/mechanism. Either rename one (e.g. the helper → `retryAfter`/`rescheduleSelf`) or at minimum document the distinction in the reference/guide docs
 - [?,REF] Consider lifting the per-job blocker cap (currently hard-capped at 100 in core) to support unbounded/millions of blockers — needs a different `job_blocker` denormalization (e.g. row-deletion-on-resolution); counter-style denormalization on `job` is ruled out (MVCC dead-tuple cost). Tracked in more depth as the "Uncap job blockers" idea under Long term.
-- [?,REF] Consider rejecting (or silently deduplicating) identical blocker chain ids on a single job — `addJobsBlockers`/the public `blockers` boundary currently accepts the same chain id repeated. Not a bug (the `job_blocker` PK `(job_id, blocked_by_chain_id)` collapses duplicates to one row), but the declared count and the stored count can then diverge, and it interacts with the blocker cap. Decide whether to dedup upfront or raise a typed error.
 
 # Short term
 

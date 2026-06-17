@@ -155,6 +155,10 @@ export const concurrencyGroup: ConformanceGroup<StateConformanceFixture> = {
     {
       name: "starting a chain blocked by a concurrently-completing chain does not strand it as blocked",
       run: async ({ stateAdapter }, expect) => {
+        if (stateAdapter.transactionConcurrency === "serialized") {
+          expect.skip("requires concurrent transactions");
+          return;
+        }
         const count = 20;
 
         const blockerJobs = await Promise.all(
@@ -221,6 +225,100 @@ export const concurrencyGroup: ConformanceGroup<StateConformanceFixture> = {
 
         const finalStates = await Promise.all(
           mainJobIds.map(async (jobId) => stateAdapter.getJobs({ jobIds: [jobId] })),
+        );
+
+        const stranded = finalStates.filter(([job]) => job?.status === "blocked");
+        expect(stranded).toHaveLength(0);
+      },
+    },
+    {
+      name: "concurrent blocker chain completions unblock all jobs sharing those blockers",
+      run: async ({ stateAdapter }, expect) => {
+        if (stateAdapter.transactionConcurrency === "serialized") {
+          expect.skip("requires concurrent transactions");
+          return;
+        }
+
+        const blockerCount = 5;
+        const mainCount = 5;
+
+        const blockerJobs = await Promise.all(
+          Array.from({ length: blockerCount }, async (_, index) => {
+            const [{ job }] = await stateAdapter.withTransaction(async (txCtx) =>
+              stateAdapter.createJobs({
+                txCtx,
+                jobs: [
+                  {
+                    typeName: "shared-blocker",
+                    chainId: undefined,
+                    chainIndex: 0,
+                    chainTypeName: "shared-blocker",
+                    input: { index },
+                  },
+                ],
+              }),
+            );
+            return job;
+          }),
+        );
+
+        const mainJobs = await Promise.all(
+          Array.from({ length: mainCount }, async (_, index) => {
+            const [{ job }] = await stateAdapter.withTransaction(async (txCtx) =>
+              stateAdapter.createJobs({
+                txCtx,
+                jobs: [
+                  {
+                    typeName: "shared-main",
+                    chainId: undefined,
+                    chainIndex: 0,
+                    chainTypeName: "shared-main",
+                    input: { index },
+                  },
+                ],
+              }),
+            );
+            return job;
+          }),
+        );
+
+        await stateAdapter.withTransaction(async (txCtx) =>
+          stateAdapter.addJobsBlockers({
+            txCtx,
+            jobBlockers: mainJobs.map((main) => ({
+              jobId: main.id,
+              blockedByChainIds: blockerJobs.map((b) => b.chainId),
+            })),
+          }),
+        );
+
+        let readyCount = 0;
+        const allReady = Promise.withResolvers<void>();
+        const release = Promise.withResolvers<void>();
+
+        const allDone = Promise.all(
+          blockerJobs.map(async (blocker) =>
+            stateAdapter.withTransaction(async (txCtx) => {
+              readyCount++;
+              if (readyCount === blockerCount) allReady.resolve();
+              await release.promise;
+              await stateAdapter.completeJob({
+                txCtx,
+                jobId: blocker.id,
+                output: null,
+                workerId: "race-test",
+              });
+              await stateAdapter.unblockJobs({ txCtx, blockedByChainId: blocker.chainId });
+            }),
+          ),
+        );
+
+        await allReady.promise;
+        release.resolve();
+        await allDone;
+
+        const finalStates = await Promise.all(
+          mainJobs.map(async (main) => stateAdapter.getJobs({ jobIds: [main.id] })),
         );
 
         const stranded = finalStates.filter(([job]) => job?.status === "blocked");

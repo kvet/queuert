@@ -239,7 +239,7 @@ export const blockerChainsTestSuite = ({ it }: { it: TestAPI<TestSuiteContext> }
         entry: true;
         input: null;
         output: null;
-        blockers: [{ typeName: "blocker" }];
+        blockers: { typeName: "blocker" }[];
       };
     }>();
 
@@ -270,7 +270,7 @@ export const blockerChainsTestSuite = ({ it }: { it: TestAPI<TestSuiteContext> }
             transactionHooks,
             typeName: "main",
             input: null,
-            blockers: Array.from({ length: 101 }, () => blockerChain) as [typeof blockerChain],
+            blockers: Array.from({ length: 101 }, () => blockerChain),
           }),
         ),
       );
@@ -307,7 +307,7 @@ export const blockerChainsTestSuite = ({ it }: { it: TestAPI<TestSuiteContext> }
       next: {
         input: null;
         output: null;
-        blockers: [{ typeName: "blocker" }];
+        blockers: { typeName: "blocker" }[];
       };
     }>();
 
@@ -348,9 +348,7 @@ export const blockerChainsTestSuite = ({ it }: { it: TestAPI<TestSuiteContext> }
                   continueWith({
                     typeName: "next",
                     input: null,
-                    blockers: Array.from({ length: 101 }, () => blockerChain) as [
-                      typeof blockerChain,
-                    ],
+                    blockers: Array.from({ length: 101 }, () => blockerChain),
                   }),
                 );
               }
@@ -605,7 +603,7 @@ export const blockerChainsTestSuite = ({ it }: { it: TestAPI<TestSuiteContext> }
         entry: true;
         input: null;
         output: { finalResult: number[] };
-        blockers: [{ typeName: "blocker" }, ...{ typeName: "blocker" }[]];
+        blockers: { typeName: "blocker" }[];
       };
     }>();
 
@@ -654,11 +652,7 @@ export const blockerChainsTestSuite = ({ it }: { it: TestAPI<TestSuiteContext> }
           transactionHooks,
           typeName: "main",
           input: null,
-          // Assert non-empty tuple type - length 5 is guaranteed by Array.from
-          blockers: blockerChains as [
-            (typeof blockerChains)[number],
-            ...(typeof blockerChains)[number][],
-          ],
+          blockers: blockerChains,
         });
       }),
     );
@@ -959,6 +953,196 @@ export const blockerChainsTestSuite = ({ it }: { it: TestAPI<TestSuiteContext> }
 
       expect(resultA.output).toEqual({ finalResult: 99 });
       expect(resultB.output).toEqual({ finalResult: 99 });
+    });
+  });
+
+  it("unblocks all jobs when multiple shared blocker chains complete concurrently", async ({
+    stateAdapter,
+    notifyAdapter,
+    withTransaction,
+    withWorkers,
+    observabilityAdapter,
+    log,
+    expect,
+    skip,
+  }) => {
+    if (stateAdapter.transactionConcurrency === "serialized") return skip();
+    const blockerCount = 5;
+    const mainCount = 5;
+
+    const jobTypes = defineJobTypes<{
+      blocker: {
+        entry: true;
+        input: null;
+        output: null;
+      };
+      main: {
+        entry: true;
+        input: { index: number };
+        output: { result: number };
+        blockers: { typeName: "blocker" }[];
+      };
+    }>();
+
+    const client = await createClient({
+      stateAdapter,
+      notifyAdapter,
+      observabilityAdapter,
+      log,
+      jobTypes,
+    });
+
+    let readyBlockers = 0;
+    const allBlockersReady = Promise.withResolvers<void>();
+    const releaseBlockers = Promise.withResolvers<void>();
+
+    const worker = await createInProcessWorker({
+      client,
+      concurrency: blockerCount + mainCount,
+      processors: createProcessors({
+        client,
+        jobTypes,
+        processors: {
+          blocker: {
+            attemptHandler: async ({ complete }) => {
+              return complete(async () => {
+                readyBlockers++;
+                if (readyBlockers === blockerCount) allBlockersReady.resolve();
+                await releaseBlockers.promise;
+                return null;
+              });
+            },
+          },
+          main: {
+            attemptHandler: async ({ job, complete }) => {
+              return complete(async () => ({ result: job.input.index }));
+            },
+          },
+        },
+      }),
+    });
+
+    const blockerChains = await withTransactionHooks(async (transactionHooks) =>
+      withTransaction(async (txCtx) =>
+        client.startChains({
+          ...txCtx,
+          transactionHooks,
+          items: Array.from({ length: blockerCount }, () => ({
+            typeName: "blocker",
+            input: null,
+          })),
+        }),
+      ),
+    );
+
+    const mainChains = await withTransactionHooks(async (transactionHooks) =>
+      withTransaction(async (txCtx) =>
+        client.startChains({
+          ...txCtx,
+          transactionHooks,
+          items: Array.from({ length: mainCount }, (_, i) => ({
+            typeName: "main",
+            input: { index: i },
+            blockers: blockerChains,
+          })),
+        }),
+      ),
+    );
+
+    for (const chain of mainChains) {
+      expect(chain.status).toBe("blocked");
+    }
+
+    await withWorkers([await worker.start()], async () => {
+      await allBlockersReady.promise;
+      releaseBlockers.resolve();
+
+      const results = await Promise.all(
+        mainChains.map(async (chain) => client.awaitChain(chain, completionOptions)),
+      );
+
+      for (let i = 0; i < results.length; i++) {
+        expect(results[i].output).toEqual({ result: i });
+      }
+    });
+  });
+
+  it("handles duplicate blocker chain ids without breaking unblock", async ({
+    stateAdapter,
+    notifyAdapter,
+    withTransaction,
+    withWorkers,
+    observabilityAdapter,
+    log,
+    expect,
+  }) => {
+    const jobTypes = defineJobTypes<{
+      blocker: {
+        entry: true;
+        input: null;
+        output: null;
+      };
+      main: {
+        entry: true;
+        input: null;
+        output: { done: true };
+        blockers: { typeName: "blocker" }[];
+      };
+    }>();
+
+    const client = await createClient({
+      stateAdapter,
+      notifyAdapter,
+      observabilityAdapter,
+      log,
+      jobTypes,
+    });
+
+    const worker = await createInProcessWorker({
+      client,
+      concurrency: 2,
+      processors: createProcessors({
+        client,
+        jobTypes,
+        processors: {
+          blocker: {
+            attemptHandler: async ({ complete }) => complete(async () => null),
+          },
+          main: {
+            attemptHandler: async ({ complete }) => complete(async () => ({ done: true as const })),
+          },
+        },
+      }),
+    });
+
+    const blockerChain = await withTransactionHooks(async (transactionHooks) =>
+      withTransaction(async (txCtx) =>
+        client.startChain({
+          ...txCtx,
+          transactionHooks,
+          typeName: "blocker",
+          input: null,
+        }),
+      ),
+    );
+
+    const mainChain = await withTransactionHooks(async (transactionHooks) =>
+      withTransaction(async (txCtx) =>
+        client.startChain({
+          ...txCtx,
+          transactionHooks,
+          typeName: "main",
+          input: null,
+          blockers: [blockerChain, blockerChain, blockerChain],
+        }),
+      ),
+    );
+
+    expect(mainChain.status).toBe("blocked");
+
+    await withWorkers([await worker.start()], async () => {
+      const result = await client.awaitChain(mainChain, completionOptions);
+      expect(result.output).toEqual({ done: true });
     });
   });
 

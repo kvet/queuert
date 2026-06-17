@@ -169,6 +169,16 @@ const migrationContracts: Record<string, MigrationContract> = {
       expect(indexes).not.toContain("queuert_job_chain_listing_idx");
     },
   },
+
+  "20260617000000_blocker_composite_pk": {
+    schema: async (provider) => {
+      const rows = await query(
+        provider,
+        "SELECT name FROM pragma_table_info('queuert_job_blocker') WHERE pk > 0 ORDER BY pk",
+      );
+      expect(rows.map((r) => r.name)).toEqual(["job_id", "blocked_by_chain_id", "index"]);
+    },
+  },
 };
 
 // ---------------------------------------------------------------------------
@@ -176,6 +186,14 @@ const migrationContracts: Record<string, MigrationContract> = {
 // ---------------------------------------------------------------------------
 
 describe.skipIf(GENERATING)("migration upgrade path", () => {
+  it("has a contract for every non-initial migration", () => {
+    const missing = migrations
+      .slice(1)
+      .filter((m) => !(m.name in migrationContracts))
+      .map((m) => m.name);
+    expect(missing).toEqual([]);
+  });
+
   it(
     "reconciles each migration's data contract, asserts its schema effect, then is idempotent",
     { timeout: 60_000 },

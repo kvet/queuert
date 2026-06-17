@@ -227,6 +227,40 @@ ON {{table_prefix}}job (type_name, created_at DESC) WHERE chain_index = 0`),
       },
     ],
   },
+  {
+    name: "20260617000000_blocker_composite_pk",
+    transactional: true,
+    statements: [
+      {
+        sql: sql(`
+CREATE TABLE {{table_prefix}}job_blocker_new (
+  job_id                        {{id_type}} NOT NULL REFERENCES {{table_prefix}}job(id),
+  blocked_by_chain_id           {{id_type}} NOT NULL REFERENCES {{table_prefix}}job(id),
+  "index"                       INTEGER NOT NULL,
+  trace_context                 TEXT,
+  PRIMARY KEY (job_id, blocked_by_chain_id, "index")
+)`),
+      },
+      {
+        sql: sql(`
+INSERT INTO {{table_prefix}}job_blocker_new (job_id, blocked_by_chain_id, "index", trace_context)
+SELECT job_id, blocked_by_chain_id, "index", trace_context FROM {{table_prefix}}job_blocker`),
+      },
+      {
+        sql: sql(`DROP TABLE {{table_prefix}}job_blocker`),
+      },
+      {
+        sql: sql(
+          `ALTER TABLE {{table_prefix}}job_blocker_new RENAME TO {{table_prefix}}job_blocker`,
+        ),
+      },
+      {
+        sql: sql(`
+CREATE INDEX IF NOT EXISTS {{table_prefix}}job_blocker_chain_idx
+ON {{table_prefix}}job_blocker (blocked_by_chain_id)`),
+      },
+    ],
+  },
 ];
 
 /** @internal */

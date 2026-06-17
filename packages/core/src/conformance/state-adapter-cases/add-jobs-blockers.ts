@@ -259,5 +259,55 @@ export const addJobsBlockersGroup: ConformanceGroup<StateConformanceFixture> = {
         expect(results[1].incompleteBlockerChainIds).toContain(incompleteBlocker.chainId);
       },
     },
+    {
+      name: "duplicate blocker chain ids do not break addJobsBlockers",
+      run: async ({ stateAdapter }, expect) => {
+        const [{ job: blockerJob }] = await stateAdapter.withTransaction(async (txCtx) =>
+          stateAdapter.createJobs({
+            txCtx,
+            jobs: [
+              {
+                typeName: "blocker",
+                chainId: undefined,
+                chainIndex: 0,
+                chainTypeName: "blocker",
+                input: null,
+              },
+            ],
+          }),
+        );
+
+        const [{ job: mainJob }] = await stateAdapter.withTransaction(async (txCtx) =>
+          stateAdapter.createJobs({
+            txCtx,
+            jobs: [
+              {
+                typeName: "main",
+                chainId: undefined,
+                chainIndex: 0,
+                chainTypeName: "main",
+                input: null,
+              },
+            ],
+          }),
+        );
+
+        const [{ job: updatedMain, incompleteBlockerChainIds }] =
+          await stateAdapter.withTransaction(async (txCtx) =>
+            stateAdapter.addJobsBlockers({
+              txCtx,
+              jobBlockers: [
+                {
+                  jobId: mainJob.id,
+                  blockedByChainIds: [blockerJob.chainId, blockerJob.chainId, blockerJob.chainId],
+                },
+              ],
+            }),
+          );
+
+        expect(updatedMain.status).toBe("blocked");
+        expect(incompleteBlockerChainIds).toContain(blockerJob.chainId);
+      },
+    },
   ],
 };
