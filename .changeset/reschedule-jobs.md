@@ -1,9 +1,9 @@
 ---
-"queuert": major
-"@queuert/postgres": major
-"@queuert/sqlite": major
-"@queuert/dashboard": major
-"@queuert/otel": major
+"queuert": minor
+"@queuert/postgres": minor
+"@queuert/sqlite": minor
+"@queuert/dashboard": minor
+"@queuert/otel": minor
 ---
 
 Rename the client `triggerJob` / `triggerJobs` methods to `rescheduleJob` / `rescheduleJobs` and give them an optional `schedule` so a pending job can be moved to any time, not just brought forward to now. No DB migration.
