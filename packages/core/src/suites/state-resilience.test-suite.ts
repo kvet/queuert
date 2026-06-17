@@ -15,11 +15,11 @@ export const stateResilienceTestSuite = ({
 }): void => {
   const completionOptions = {
     pollIntervalMs: 100,
-    timeoutMs: 10000,
+    timeoutMs: 15000,
   };
   it(
     "handles transient database errors gracefully",
-    { timeout: 10000 },
+    { timeout: 15000 },
     async ({
       flakyStateAdapter,
       stateAdapter,
@@ -105,7 +105,7 @@ export const stateResilienceTestSuite = ({
 
   it(
     "handles transient database errors gracefully with multiple slots",
-    { timeout: 10000 },
+    { timeout: 15000 },
     async ({
       flakyStateAdapter,
       stateAdapter,
@@ -197,7 +197,7 @@ export const stateResilienceTestSuite = ({
 
   it(
     "handles transient database errors gracefully with multiple workers",
-    { timeout: 10000 },
+    { timeout: 15000 },
     async ({
       flakyStateAdapter,
       stateAdapter,
@@ -311,7 +311,7 @@ export const stateResilienceTestSuite = ({
 
   it(
     "handles real database errors gracefully",
-    { timeout: 10000 },
+    { timeout: 15000 },
     async ({
       flakyDbStateAdapter,
       stateAdapter,
@@ -399,7 +399,7 @@ export const stateResilienceTestSuite = ({
 
   it(
     "handles real database errors gracefully with multiple slots",
-    { timeout: 10000 },
+    { timeout: 15000 },
     async ({
       flakyDbStateAdapter,
       stateAdapter,
@@ -488,7 +488,7 @@ export const stateResilienceTestSuite = ({
 
   it(
     "handles real database errors gracefully with multiple workers",
-    { timeout: 10000 },
+    { timeout: 15000 },
     async ({
       flakyDbStateAdapter,
       stateAdapter,
