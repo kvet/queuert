@@ -8,6 +8,7 @@ import { mergeJobTypes } from "./entities/merge-job-types.js";
 import { DuplicateJobTypeError } from "./errors.js";
 import { createInProcessWorker } from "./in-process-worker.js";
 import { createInProcessStateAdapter } from "./state-adapter/state-adapter.in-process.js";
+import { withTransactionHooks } from "./transaction-hooks.js";
 import { createProcessors } from "./worker/create-processors.js";
 import { mergeProcessors } from "./worker/merge-processors.js";
 import { type ProcessorDefinitions, processorsDefinitionsSymbol } from "./worker/processors.js";
@@ -302,11 +303,11 @@ describe("cross-slice blocker type resolution", () => {
     >();
 
     const mergedJobTypes = mergeJobTypes([notifJobTypes, orderJobTypes]);
-    const sa = await createInProcessStateAdapter();
-    const c = await createClient({ stateAdapter: sa, jobTypes: mergedJobTypes });
+    const stateAdapter = await createInProcessStateAdapter();
+    const client = await createClient({ stateAdapter, jobTypes: mergedJobTypes });
 
     const notifProcessors = createProcessors({
-      client: c,
+      client,
       jobTypes: notifJobTypes,
       processors: {
         "notif.send": {
@@ -316,7 +317,7 @@ describe("cross-slice blocker type resolution", () => {
     });
 
     const orderProcessors = createProcessors({
-      client: c,
+      client,
       jobTypes: orderJobTypes,
       processors: {
         "orders.place": {
@@ -370,11 +371,11 @@ describe("cross-slice blocker type resolution", () => {
     >();
 
     const mergedJobTypes = mergeJobTypes([notifJobTypes, orderJobTypes]);
-    const sa = await createInProcessStateAdapter();
-    const c = await createClient({ stateAdapter: sa, jobTypes: mergedJobTypes });
+    const stateAdapter = await createInProcessStateAdapter();
+    const client = await createClient({ stateAdapter, jobTypes: mergedJobTypes });
 
     createProcessors({
-      client: c,
+      client,
       jobTypes: orderJobTypes,
       processors: {
         "orders.place": {
@@ -395,6 +396,258 @@ describe("cross-slice blocker type resolution", () => {
         },
       },
     });
+  });
+
+  it("resolves blocker output type from multi-slice external (tuple blockers)", async () => {
+    const extAJobTypes = defineJobTypes<{
+      "ext-a.task": {
+        entry: true;
+        input: { aId: string };
+        output: { aResult: string };
+      };
+    }>();
+
+    const extBJobTypes = defineJobTypes<{
+      "ext-b.task": {
+        entry: true;
+        input: { bId: string };
+        output: { bResult: number };
+      };
+    }>();
+
+    const localJobTypes = defineJobTypes<
+      {
+        "local.start": {
+          entry: true;
+          input: { id: string };
+          continueWith: { typeName: "local.finish" };
+        };
+        "local.finish": {
+          input: { id: string };
+          output: { done: boolean };
+          blockers: [{ typeName: "ext-a.task" }];
+        };
+      },
+      JobTypeDefinitions<typeof extAJobTypes> | JobTypeDefinitions<typeof extBJobTypes>
+    >();
+
+    const mergedJobTypes = mergeJobTypes([extAJobTypes, extBJobTypes, localJobTypes]);
+    const stateAdapter = await createInProcessStateAdapter();
+    const client = await createClient({ stateAdapter, jobTypes: mergedJobTypes });
+
+    createProcessors({
+      client,
+      jobTypes: localJobTypes,
+      processors: {
+        "local.finish": {
+          attemptHandler: async ({ job, complete }) => {
+            expectTypeOf(job.blockers[0].output).toEqualTypeOf<{ aResult: string }>();
+            return complete(async () => ({ done: true }));
+          },
+        },
+      },
+    });
+  });
+
+  it("resolves blocker output type from multi-slice external (array blockers)", async () => {
+    const extAJobTypes = defineJobTypes<{
+      "ext-a.task": {
+        entry: true;
+        input: { aId: string };
+        output: { aResult: string };
+      };
+    }>();
+
+    const extBJobTypes = defineJobTypes<{
+      "ext-b.task": {
+        entry: true;
+        input: { bId: string };
+        output: { bResult: number };
+      };
+    }>();
+
+    const localJobTypes = defineJobTypes<
+      {
+        "local.start": {
+          entry: true;
+          input: { id: string };
+          continueWith: { typeName: "local.finish" };
+        };
+        "local.finish": {
+          input: { id: string };
+          output: { done: boolean };
+          blockers: { typeName: "ext-a.task" }[];
+        };
+      },
+      JobTypeDefinitions<typeof extAJobTypes> | JobTypeDefinitions<typeof extBJobTypes>
+    >();
+
+    const mergedJobTypes = mergeJobTypes([extAJobTypes, extBJobTypes, localJobTypes]);
+    const stateAdapter = await createInProcessStateAdapter();
+    const client = await createClient({ stateAdapter, jobTypes: mergedJobTypes });
+
+    createProcessors({
+      client,
+      jobTypes: localJobTypes,
+      processors: {
+        "local.finish": {
+          attemptHandler: async ({ job, complete }) => {
+            expectTypeOf(job.blockers[0].output).toEqualTypeOf<{ aResult: string }>();
+            return complete(async () => ({ done: true }));
+          },
+        },
+      },
+    });
+  });
+
+  it("resolves blocker output types referencing different external slices", async () => {
+    const extAJobTypes = defineJobTypes<{
+      "ext-a.task": {
+        entry: true;
+        input: { aId: string };
+        output: { aResult: string };
+      };
+    }>();
+
+    const extBJobTypes = defineJobTypes<{
+      "ext-b.task": {
+        entry: true;
+        input: { bId: string };
+        output: { bResult: number };
+      };
+    }>();
+
+    const localJobTypes = defineJobTypes<
+      {
+        "local.start-a": {
+          entry: true;
+          input: { id: string };
+          continueWith: { typeName: "local.finish-a" };
+        };
+        "local.finish-a": {
+          input: { id: string };
+          output: { resultA: string };
+          blockers: [{ typeName: "ext-a.task" }];
+        };
+        "local.start-b": {
+          entry: true;
+          input: { id: string };
+          continueWith: { typeName: "local.finish-b" };
+        };
+        "local.finish-b": {
+          input: { id: string };
+          output: { resultB: string };
+          blockers: [{ typeName: "ext-b.task" }];
+        };
+      },
+      JobTypeDefinitions<typeof extAJobTypes> | JobTypeDefinitions<typeof extBJobTypes>
+    >();
+
+    const mergedJobTypes = mergeJobTypes([extAJobTypes, extBJobTypes, localJobTypes]);
+    const stateAdapter = await createInProcessStateAdapter();
+    const client = await createClient({ stateAdapter, jobTypes: mergedJobTypes });
+
+    createProcessors({
+      client,
+      jobTypes: localJobTypes,
+      processors: {
+        "local.finish-a": {
+          attemptHandler: async ({ job, complete }) => {
+            expectTypeOf(job.blockers[0].output).toEqualTypeOf<{ aResult: string }>();
+            return complete(async () => ({ resultA: "pass" }));
+          },
+        },
+        "local.finish-b": {
+          attemptHandler: async ({ job, complete }) => {
+            expectTypeOf(job.blockers[0].output).toEqualTypeOf<{ bResult: number }>();
+            return complete(async () => ({ resultB: "pass" }));
+          },
+        },
+      },
+    });
+  });
+});
+
+describe("cross-slice blocker type resolution in workerless completion", () => {
+  it("resolves blocker types with multiple external slices", async () => {
+    const extAJobTypes = defineJobTypes<{
+      "ext-a.task": {
+        entry: true;
+        input: { aId: string };
+        output: { aResult: string };
+      };
+    }>();
+
+    const extBJobTypes = defineJobTypes<{
+      "ext-b.task": {
+        entry: true;
+        input: { bId: string };
+        output: { bResult: number };
+      };
+    }>();
+
+    const localJobTypes = defineJobTypes<
+      {
+        "local.start": {
+          entry: true;
+          input: { id: string };
+          continueWith: { typeName: "local.finish" };
+        };
+        "local.finish": {
+          input: { id: string };
+          output: { done: boolean };
+          blockers: [{ typeName: "ext-a.task" }];
+        };
+      },
+      JobTypeDefinitions<typeof extAJobTypes> | JobTypeDefinitions<typeof extBJobTypes>
+    >();
+
+    const mergedJobTypes = mergeJobTypes([extAJobTypes, extBJobTypes, localJobTypes]);
+    const stateAdapter = await createInProcessStateAdapter();
+    const client = await createClient({ stateAdapter, jobTypes: mergedJobTypes });
+
+    const blockerChain = await withTransactionHooks(async (transactionHooks) =>
+      stateAdapter.withTransaction(async (txCtx) =>
+        client.startChain({
+          ...txCtx,
+          transactionHooks,
+          typeName: "ext-a.task",
+          input: { aId: "a-1" },
+        }),
+      ),
+    );
+
+    const chain = await withTransactionHooks(async (transactionHooks) =>
+      stateAdapter.withTransaction(async (txCtx) =>
+        client.startChain({
+          ...txCtx,
+          transactionHooks,
+          typeName: "local.start",
+          input: { id: "1" },
+        }),
+      ),
+    );
+
+    await withTransactionHooks(async (transactionHooks) =>
+      stateAdapter.withTransaction(async (txCtx) =>
+        client.completeChain({
+          ...txCtx,
+          transactionHooks,
+          ...chain,
+          complete: async ({ job, complete }) => {
+            if (job.typeName === "local.start") {
+              return complete(job, async ({ continueWith }) =>
+                continueWith({
+                  typeName: "local.finish",
+                  input: { id: "1" },
+                  blockers: [blockerChain],
+                }),
+              );
+            }
+          },
+        }),
+      ),
+    );
   });
 });
 

@@ -1,6 +1,7 @@
 import { type Client } from "../client.js";
 import { type BaseJobTypeDefinitions } from "../entities/job-type.js";
 import { type JobTypes } from "../entities/job-types.js";
+import { type JobTypeNames } from "../entities/job-types.resolvers.js";
 import { type BackoffConfig } from "../helpers/backoff.js";
 import { type StateAdapter } from "../state-adapter/state-adapter.js";
 import {
@@ -22,7 +23,7 @@ import {
 type MergedDefs<
   TJobTypeDefinitions extends BaseJobTypeDefinitions,
   TExternalJobTypeDefinitions extends BaseJobTypeDefinitions,
-> = [keyof TExternalJobTypeDefinitions & string] extends [never]
+> = [JobTypeNames<TExternalJobTypeDefinitions>] extends [never]
   ? TJobTypeDefinitions
   : TJobTypeDefinitions | TExternalJobTypeDefinitions;
 
