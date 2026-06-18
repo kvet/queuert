@@ -4,7 +4,7 @@ import { createClient } from "../client.js";
 import { defineJobTypes } from "../entities/define-job-types.js";
 import {
   BlockerLimitExceededError,
-  JobTypeMismatchError,
+  ChainTypeMismatchError,
   TransactionContextRequiredError,
 } from "../errors.js";
 import { sleep } from "../helpers/sleep.js";
@@ -766,43 +766,6 @@ export const workerlessCompletionTestSuite = ({ it }: { it: TestAPI<TestSuiteCon
           }),
         ),
       ),
-    ).rejects.toThrow(JobTypeMismatchError);
-  });
-
-  it("awaitChain throws on typeName mismatch", async ({
-    stateAdapter,
-    notifyAdapter,
-    withTransaction,
-    observabilityAdapter,
-    log,
-    expect,
-  }) => {
-    const jobTypes = defineJobTypes<{
-      order: { entry: true; input: { amount: number }; output: { receipt: string } };
-      notification: { entry: true; input: { message: string }; output: { sent: boolean } };
-    }>();
-
-    const client = await createClient({
-      stateAdapter,
-      notifyAdapter,
-      observabilityAdapter,
-      log,
-      jobTypes,
-    });
-
-    const chain = await withTransactionHooks(async (transactionHooks) =>
-      withTransaction(async (txCtx) =>
-        client.startChain({
-          ...txCtx,
-          transactionHooks,
-          typeName: "order",
-          input: { amount: 42 },
-        }),
-      ),
-    );
-
-    await expect(
-      client.awaitChain({ typeName: "notification", id: chain.id }, { timeoutMs: 1000 }),
-    ).rejects.toThrow(JobTypeMismatchError);
+    ).rejects.toThrow(ChainTypeMismatchError);
   });
 };

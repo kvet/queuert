@@ -2,11 +2,11 @@ import { type TestAPI } from "vitest";
 
 import { createClient } from "../client.js";
 import { defineJobTypes } from "../entities/define-job-types.js";
-import { WaitChainTimeoutError } from "../errors.js";
+import { ChainTypeMismatchError, WaitChainTimeoutError } from "../errors.js";
 import { withTransactionHooks } from "../transaction-hooks.js";
 import { type TestSuiteContext } from "./spec-context.spec-helper.js";
 
-export const waitChainCompletionTestSuite = ({ it }: { it: TestAPI<TestSuiteContext> }): void => {
+export const awaitChainTestSuite = ({ it }: { it: TestAPI<TestSuiteContext> }): void => {
   // check completion scenario with workers completing jobs
 
   it("handles already completed chains", async ({
@@ -228,5 +228,42 @@ export const waitChainCompletionTestSuite = ({ it }: { it: TestAPI<TestSuiteCont
     await expect(
       client.awaitChain({ typeName: "test", id: nonExistentId }, { timeoutMs: 5000 }),
     ).rejects.toThrow(`Chain with id ${nonExistentId} not found`);
+  });
+
+  it("throws on typeName mismatch", async ({
+    stateAdapter,
+    notifyAdapter,
+    withTransaction,
+    observabilityAdapter,
+    log,
+    expect,
+  }) => {
+    const jobTypes = defineJobTypes<{
+      order: { entry: true; input: { amount: number }; output: { receipt: string } };
+      notification: { entry: true; input: { message: string }; output: { sent: boolean } };
+    }>();
+
+    const client = await createClient({
+      stateAdapter,
+      notifyAdapter,
+      observabilityAdapter,
+      log,
+      jobTypes,
+    });
+
+    const chain = await withTransactionHooks(async (transactionHooks) =>
+      withTransaction(async (txCtx) =>
+        client.startChain({
+          ...txCtx,
+          transactionHooks,
+          typeName: "order",
+          input: { amount: 42 },
+        }),
+      ),
+    );
+
+    await expect(
+      client.awaitChain({ typeName: "notification", id: chain.id }, { timeoutMs: 1000 }),
+    ).rejects.toThrow(ChainTypeMismatchError);
   });
 };

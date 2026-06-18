@@ -26,6 +26,7 @@ import {
   BlockerReferenceError,
   ChainNotFoundError,
   JobAlreadyCompletedError,
+  ChainTypeMismatchError,
   JobNotFoundError,
   JobNotReschedulableError,
   JobTypeMismatchError,
@@ -309,7 +310,7 @@ export type Client<
    * the current job and a `complete` function to the caller.
    *
    * @throws {@link ChainNotFoundError} if the chain does not exist.
-   * @throws {@link JobTypeMismatchError} if the chain's type does not match `typeName`.
+   * @throws {@link ChainTypeMismatchError} if the chain's type does not match `typeName`.
    * @throws {@link TransactionContextRequiredError} if called without a transaction context.
    * @throws {@link JobAlreadyCompletedError} from the inner `complete` callback if the job is already completed.
    * @throws {@link BlockerLimitExceededError} from the inner `complete` callback if a `continueWith` declares more blockers than the per-job limit.
@@ -342,7 +343,7 @@ export type Client<
    *
    * @throws {@link WaitChainTimeoutError} on timeout or abort.
    * @throws {@link ChainNotFoundError} if the chain disappears or never existed.
-   * @throws {@link JobTypeMismatchError} if `typeName` is provided and does not match.
+   * @throws {@link ChainTypeMismatchError} if `typeName` is provided and does not match.
    */
   awaitChain: <
     TChainTypeName extends JobTypeEntryNames<TJobTypeDefinitions> =
@@ -366,7 +367,7 @@ export type Client<
   /**
    * Get a single chain by ID. Pass `typeName` for type narrowing.
    *
-   * @throws {@link JobTypeMismatchError} if `typeName` is provided and does not match.
+   * @throws {@link ChainTypeMismatchError} if `typeName` is provided and does not match.
    */
   getChain: <
     TChainTypeName extends JobTypeEntryNames<TJobTypeDefinitions> =
@@ -377,6 +378,24 @@ export type Client<
       id: TJobId;
     } & Partial<GetStateAdapterTxContext<TStateAdapter>>,
   ) => Promise<ResolvedChain<TJobId, TJobTypeDefinitions, TChainTypeName> | undefined>;
+
+  /**
+   * Get multiple chains by ID. Returns a positional array aligned with the
+   * input `ids` — `undefined` for any ID that does not exist. Pass `typeName`
+   * to narrow the return type; all found chains must match or
+   * {@link ChainTypeMismatchError} is thrown.
+   *
+   * @throws {@link ChainTypeMismatchError} if `typeName` is provided and any found chain does not match.
+   */
+  getChains: <
+    TChainTypeName extends JobTypeEntryNames<TJobTypeDefinitions> =
+      JobTypeEntryNames<TJobTypeDefinitions>,
+  >(
+    options: {
+      typeName?: TChainTypeName;
+      ids: TJobId[];
+    } & Partial<GetStateAdapterTxContext<TStateAdapter>>,
+  ) => Promise<(ResolvedChain<TJobId, TJobTypeDefinitions, TChainTypeName> | undefined)[]>;
 
   /**
    * Get a single job by ID. Pass `typeName` for type narrowing.
@@ -391,6 +410,23 @@ export type Client<
       id: TJobId;
     } & Partial<GetStateAdapterTxContext<TStateAdapter>>,
   ) => Promise<ResolvedJob<TJobId, TJobTypeDefinitions, TJobTypeName> | undefined>;
+
+  /**
+   * Get multiple jobs by ID. Returns a positional array aligned with the
+   * input `ids` — `undefined` for any ID that does not exist. Pass `typeName`
+   * to narrow the return type; all found jobs must match or
+   * {@link JobTypeMismatchError} is thrown.
+   *
+   * @throws {@link JobTypeMismatchError} if `typeName` is provided and any found job does not match.
+   */
+  getJobs: <
+    TJobTypeName extends JobTypeNames<TJobTypeDefinitions> = JobTypeNames<TJobTypeDefinitions>,
+  >(
+    options: {
+      typeName?: TJobTypeName;
+      ids: TJobId[];
+    } & Partial<GetStateAdapterTxContext<TStateAdapter>>,
+  ) => Promise<(ResolvedJob<TJobId, TJobTypeDefinitions, TJobTypeName> | undefined)[]>;
 
   /**
    * List chains with filtering and cursor-based pagination. Defaults to newest first.
@@ -442,7 +478,7 @@ export type Client<
    * List jobs within a specific chain, ordered by `chainIndex`. Defaults to
    * ascending order. Pass `typeName` for type narrowing.
    *
-   * @throws {@link JobTypeMismatchError} if `typeName` is provided and does not match.
+   * @throws {@link ChainTypeMismatchError} if `typeName` is provided and does not match.
    */
   listChainJobs: <
     TChainTypeName extends JobTypeEntryNames<TJobTypeDefinitions> =
@@ -478,7 +514,7 @@ export type Client<
    * understanding downstream impact before deletion. Pass `typeName` for type
    * narrowing.
    *
-   * @throws {@link JobTypeMismatchError} if `typeName` is provided and does not match.
+   * @throws {@link ChainTypeMismatchError} if `typeName` is provided and does not match.
    */
   listBlockedJobs: <
     TChainTypeName extends JobTypeEntryNames<TJobTypeDefinitions> =
@@ -794,7 +830,7 @@ export const createClient = async <
       const currentJob = lastJob ?? rootJob;
 
       if (currentJob.chainTypeName !== typeName) {
-        throw new JobTypeMismatchError(
+        throw new ChainTypeMismatchError(
           `Expected chain ${String(id)} to have type "${typeName}" but found "${currentJob.chainTypeName}"`,
           {
             expectedTypeName: typeName,
@@ -936,7 +972,7 @@ export const createClient = async <
 
         if (!typeValidated) {
           if (chainPair[0].chainTypeName !== typeName) {
-            throw new JobTypeMismatchError(
+            throw new ChainTypeMismatchError(
               `Expected chain ${String(id)} to have type "${typeName}" but found "${chainPair[0].chainTypeName}"`,
               {
                 expectedTypeName: typeName!,
@@ -1021,29 +1057,53 @@ export const createClient = async <
       } & Partial<GetStateAdapterTxContext<TStateAdapter>>,
     ): Promise<ResolvedChain<TJobId, TJobTypeDefinitions, TChainTypeName> | undefined> => {
       const { id, typeName, ...rest } = options;
-      const txCtx = normalizeTxCtx(rest);
-      const [chainPair] = await helpers.stateAdapter.getChains({
-        txCtx,
-        chainIds: [id],
+      const [chain] = await client.getChains<TChainTypeName>({
+        typeName,
+        ids: [id],
+        ...(rest as Partial<GetStateAdapterTxContext<TStateAdapter>>),
       });
+      return chain;
+    },
 
-      if (!chainPair) return undefined;
+    getChains: async <
+      TChainTypeName extends JobTypeEntryNames<TJobTypeDefinitions> =
+        JobTypeEntryNames<TJobTypeDefinitions>,
+    >(
+      options: {
+        typeName?: TChainTypeName;
+        ids: TJobId[];
+      } & Partial<GetStateAdapterTxContext<TStateAdapter>>,
+    ): Promise<(ResolvedChain<TJobId, TJobTypeDefinitions, TChainTypeName> | undefined)[]> => {
+      const { ids, typeName, ...rest } = options;
+      const txCtx = normalizeTxCtx(rest);
 
-      if (typeName && chainPair[0].chainTypeName !== typeName) {
-        throw new JobTypeMismatchError(
-          `Expected chain ${String(id)} to have type "${typeName}" but found "${chainPair[0].chainTypeName}"`,
-          {
-            expectedTypeName: typeName,
-            actualTypeName: chainPair[0].chainTypeName,
-          },
-        );
+      if (ids.length === 0) return [];
+
+      const chainPairs = await helpers.stateAdapter.getChains({ txCtx, chainIds: ids });
+
+      if (typeName) {
+        const mismatch = chainPairs.find((p) => p && p[0].chainTypeName !== typeName);
+        if (mismatch) {
+          const idx = chainPairs.indexOf(mismatch);
+          throw new ChainTypeMismatchError(
+            `Expected chain ${String(ids[idx])} to have type "${typeName}" but found "${mismatch[0].chainTypeName}"`,
+            {
+              expectedTypeName: typeName,
+              actualTypeName: mismatch[0].chainTypeName,
+            },
+          );
+        }
       }
 
-      return mapStatePairToChain(chainPair) as ResolvedChain<
-        TJobId,
-        TJobTypeDefinitions,
-        TChainTypeName
-      >;
+      return chainPairs.map((chainPair) => {
+        if (!chainPair) return undefined;
+
+        return mapStatePairToChain(chainPair) as ResolvedChain<
+          TJobId,
+          TJobTypeDefinitions,
+          TChainTypeName
+        >;
+      });
     },
 
     getJob: async <
@@ -1055,19 +1115,45 @@ export const createClient = async <
       } & Partial<GetStateAdapterTxContext<TStateAdapter>>,
     ): Promise<ResolvedJob<TJobId, TJobTypeDefinitions, TJobTypeName> | undefined> => {
       const { id, typeName, ...rest } = options;
+      const [job] = await client.getJobs<TJobTypeName>({
+        typeName,
+        ids: [id],
+        ...(rest as Partial<GetStateAdapterTxContext<TStateAdapter>>),
+      });
+      return job;
+    },
+
+    getJobs: async <
+      TJobTypeName extends JobTypeNames<TJobTypeDefinitions> = JobTypeNames<TJobTypeDefinitions>,
+    >(
+      options: {
+        typeName?: TJobTypeName;
+        ids: TJobId[];
+      } & Partial<GetStateAdapterTxContext<TStateAdapter>>,
+    ): Promise<(ResolvedJob<TJobId, TJobTypeDefinitions, TJobTypeName> | undefined)[]> => {
+      const { ids, typeName, ...rest } = options;
       const txCtx = normalizeTxCtx(rest);
-      const [job] = await helpers.stateAdapter.getJobs({ txCtx, jobIds: [id] });
 
-      if (!job) return undefined;
+      if (ids.length === 0) return [];
 
-      if (typeName && job.typeName !== typeName) {
-        throw new JobTypeMismatchError(
-          `Expected job ${String(id)} to have type "${typeName}" but found "${job.typeName}"`,
-          { expectedTypeName: typeName, actualTypeName: job.typeName },
-        );
+      const jobs = await helpers.stateAdapter.getJobs({ txCtx, jobIds: ids });
+
+      if (typeName) {
+        const mismatch = jobs.find((j) => j && j.typeName !== typeName);
+        if (mismatch) {
+          const idx = jobs.indexOf(mismatch);
+          throw new JobTypeMismatchError(
+            `Expected job ${String(ids[idx])} to have type "${typeName}" but found "${mismatch.typeName}"`,
+            { expectedTypeName: typeName, actualTypeName: mismatch.typeName },
+          );
+        }
       }
 
-      return mapStateJobToJob(job) as ResolvedJob<TJobId, TJobTypeDefinitions, TJobTypeName>;
+      return jobs.map((job) => {
+        if (!job) return undefined;
+
+        return mapStateJobToJob(job) as ResolvedJob<TJobId, TJobTypeDefinitions, TJobTypeName>;
+      });
     },
 
     listChains: async <TChainTypeName extends JobTypeEntryNames<TJobTypeDefinitions>>(
@@ -1172,7 +1258,7 @@ export const createClient = async <
           chainIds: [chainId],
         });
         if (chainPair && chainPair[0].chainTypeName !== typeName) {
-          throw new JobTypeMismatchError(
+          throw new ChainTypeMismatchError(
             `Expected chain ${String(chainId)} to have type "${typeName}" but found "${chainPair[0].chainTypeName}"`,
             {
               expectedTypeName: typeName,
@@ -1259,7 +1345,7 @@ export const createClient = async <
           chainIds: [chainId],
         });
         if (chainPair && chainPair[0].chainTypeName !== typeName) {
-          throw new JobTypeMismatchError(
+          throw new ChainTypeMismatchError(
             `Expected chain ${String(chainId)} to have type "${typeName}" but found "${chainPair[0].chainTypeName}"`,
             {
               expectedTypeName: typeName,

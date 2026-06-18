@@ -22,7 +22,7 @@ export {
   type StateConformanceFixture,
 } from "./suites/state-adapter-conformance.test-suite.js";
 export { stateResilienceTestSuite } from "./suites/state-resilience.test-suite.js";
-export { waitChainCompletionTestSuite } from "./suites/wait-chain-completion.test-suite.js";
+export { awaitChainTestSuite } from "./suites/await-chain.test-suite.js";
 export { workerTestSuite } from "./suites/worker.test-suite.js";
 export { workerlessCompletionTestSuite } from "./suites/workerless-completion.test-suite.js";
 

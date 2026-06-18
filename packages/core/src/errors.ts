@@ -137,7 +137,7 @@ export class WaitChainTimeoutError extends Error {
   }
 }
 
-/** Thrown when a job or chain's actual type does not match the expected `typeName`. */
+/** Thrown when a job's actual type does not match the expected `typeName`. */
 export class JobTypeMismatchError extends Error {
   /** The type name that was expected. */
   readonly expectedTypeName: string;
@@ -150,6 +150,23 @@ export class JobTypeMismatchError extends Error {
   ) {
     super(message, options.cause !== undefined ? { cause: options.cause } : undefined);
     this.name = "JobTypeMismatchError";
+    this.expectedTypeName = options.expectedTypeName;
+    this.actualTypeName = options.actualTypeName;
+  }
+}
+
+export class ChainTypeMismatchError extends Error {
+  /** The type name that was expected. */
+  readonly expectedTypeName: string;
+  /** The type name that was found. */
+  readonly actualTypeName: string;
+
+  constructor(
+    message: string,
+    options: { expectedTypeName: string; actualTypeName: string; cause?: unknown },
+  ) {
+    super(message, options.cause !== undefined ? { cause: options.cause } : undefined);
+    this.name = "ChainTypeMismatchError";
     this.expectedTypeName = options.expectedTypeName;
     this.actualTypeName = options.actualTypeName;
   }

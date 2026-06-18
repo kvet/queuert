@@ -44,7 +44,7 @@ The four possible job states. Used in list filters and discriminated union narro
 type ResolvedJob<TJobId, TJobTypeDefinitions, TJobTypeName, TChainTypeName>;
 ```
 
-A `Job` whose generic parameters have been resolved against job type definitions — typed input, output, and chain type name derived from the declared job types. Returned by client read methods like `getJob` and `listJobs` when narrowed by `typeName`.
+A `Job` whose generic parameters have been resolved against job type definitions — typed input, output, and chain type name derived from the declared job types. Returned by client read methods like `getJob`, `getJobs`, and `listJobs` when narrowed by `typeName`.
 
 ## ResolvedJobWithBlockers
 
@@ -103,7 +103,7 @@ type CompletedChain<TChain extends Chain<any, any, any, any>> = TChain & {
 type ResolvedChain<TJobId, TJobTypeDefinitions, TJobTypeName>;
 ```
 
-A `Chain` whose generic parameters have been resolved against job type definitions — typed input, output, and type name derived from the declared job types. Returned by client read methods like `getChain` and `listChains` when narrowed by `typeName`.
+A `Chain` whose generic parameters have been resolved against job type definitions — typed input, output, and type name derived from the declared job types. Returned by client read methods like `getChain`, `getChains`, and `listChains` when narrowed by `typeName`.
 
 ## See Also
 

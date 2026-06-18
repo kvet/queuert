@@ -5,9 +5,10 @@
  *
  * Scenarios:
  * 1. Single Lookups: Get a chain or job by ID with type narrowing
- * 2. Paginated Lists: Filter and paginate chains and jobs
- * 3. Chain Jobs: List jobs within a chain ordered by chain index
- * 4. Blocker Queries: Inspect blocker relationships from both directions
+ * 2. Batch Lookups: Fetch multiple chains or jobs in one round trip
+ * 3. Paginated Lists: Filter and paginate chains and jobs
+ * 4. Chain Jobs: List jobs within a chain ordered by chain index
+ * 5. Blocker Queries: Inspect blocker relationships from both directions
  */
 
 import assert from "node:assert/strict";
@@ -193,8 +194,32 @@ const missing = await client.getChain({ id: "00000000-0000-0000-0000-00000000000
 console.log("Missing chain:", missing);
 assert.equal(missing, undefined);
 
-// Scenario 2: Paginated lists with filters
-console.log("\n--- Scenario 2: Paginated Lists ---\n");
+// Scenario 2: Batch lookups
+console.log("\n--- Scenario 2: Batch Lookups ---\n");
+
+const batchChains = await client.getChains({
+  ids: [orderChain.id, notifyChains[0].id, "00000000-0000-0000-0000-000000000000" as any],
+});
+console.log(`Batch chains: ${batchChains.length} entries`);
+assert.equal(batchChains.length, 3);
+assert.ok(batchChains[0] !== undefined);
+assert.ok(batchChains[1] !== undefined);
+assert.equal(batchChains[2], undefined);
+for (const c of batchChains) {
+  if (c) console.log(`  Found: ${c.typeName} (${c.status})`);
+  else console.log("  Not found");
+}
+
+// Entry jobs share the chain's ID, so chain IDs double as job IDs here
+const batchJobs = await client.getJobs({ ids: [orderChain.id, notifyChains[0].id] });
+console.log(`Batch jobs: ${batchJobs.length} entries`);
+assert.equal(batchJobs.length, 2);
+for (const j of batchJobs) {
+  if (j) console.log(`  Found: ${j.typeName} (${j.status})`);
+}
+
+// Scenario 3: Paginated lists with filters
+console.log("\n--- Scenario 3: Paginated Lists ---\n");
 
 const completedChains = await client.listChains({
   filter: { status: ["completed"] },
@@ -227,8 +252,8 @@ for (const j of notifyJobs.items) {
 }
 assert.equal(notifyJobs.items.length, 2);
 
-// Scenario 3: List jobs within a chain
-console.log("\n--- Scenario 3: Chain Jobs ---\n");
+// Scenario 4: List jobs within a chain
+console.log("\n--- Scenario 4: Chain Jobs ---\n");
 
 const chainJobs = await client.listChainJobs({
   chainId: orderChain.id,
@@ -239,8 +264,8 @@ for (const j of chainJobs.items) {
   console.log(`  [${j.chainIndex}] ${j.typeName} — ${j.status}`);
 }
 
-// Scenario 4: Blocker relationships
-console.log("\n--- Scenario 4: Blocker Queries ---\n");
+// Scenario 5: Blocker relationships
+console.log("\n--- Scenario 5: Blocker Queries ---\n");
 
 const blockers = await client.getJobBlockers({
   jobId: orderChain.id,

@@ -12,7 +12,7 @@ import {
   startChainsTestSuite,
   stateResilienceTestSuite,
   rescheduleJobTestSuite,
-  waitChainCompletionTestSuite,
+  awaitChainTestSuite,
   workerlessCompletionTestSuite,
 } from "queuert/testing";
 import { describe, it } from "vitest";
@@ -48,8 +48,8 @@ describe("Deletion", () => {
   deletionTestSuite({ it: postgresPostgresIt });
 });
 
-describe("Wait Chain Completion", () => {
-  waitChainCompletionTestSuite({ it: postgresPostgresIt });
+describe("Await Chain", () => {
+  awaitChainTestSuite({ it: postgresPostgresIt });
 });
 
 describe("State Resilience", () => {

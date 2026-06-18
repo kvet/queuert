@@ -2,7 +2,7 @@ import { type TestAPI, describe, expectTypeOf } from "vitest";
 
 import { createClient } from "../client.js";
 import { defineJobTypes } from "../entities/define-job-types.js";
-import { JobTypeMismatchError } from "../errors.js";
+import { ChainTypeMismatchError, JobTypeMismatchError } from "../errors.js";
 import { sleep } from "../helpers/sleep.js";
 import { createInProcessWorker } from "../in-process-worker.js";
 import { withTransactionHooks } from "../transaction-hooks.js";
@@ -206,8 +206,177 @@ export const clientQueriesTestSuite = ({ it }: { it: TestAPI<TestSuiteContext> }
       const created = await startChain("order", { amount: 42 });
 
       await expect(client.getChain({ typeName: "notification", id: created.id })).rejects.toThrow(
-        JobTypeMismatchError,
+        ChainTypeMismatchError,
       );
+    });
+  });
+
+  describe("getChains", () => {
+    it("getChains returns empty array for empty ids", async ({
+      stateAdapter,
+      notifyAdapter,
+      observabilityAdapter,
+      log,
+      withTransaction,
+      expect,
+    }) => {
+      const { client } = await createContext({
+        stateAdapter,
+        notifyAdapter,
+        observabilityAdapter,
+        log,
+        withTransaction,
+      });
+
+      const chains = await client.getChains({ ids: [] });
+
+      expect(chains).toEqual([]);
+    });
+
+    it("getChains returns undefined for nonexistent ids", async ({
+      stateAdapter,
+      notifyAdapter,
+      observabilityAdapter,
+      log,
+      withTransaction,
+      expect,
+    }) => {
+      const { client } = await createContext({
+        stateAdapter,
+        notifyAdapter,
+        observabilityAdapter,
+        log,
+        withTransaction,
+      });
+
+      const chains = await client.getChains({
+        ids: ["00000000-0000-0000-0000-000000000000"],
+      });
+
+      expect(chains).toEqual([undefined]);
+    });
+
+    it("getChains returns chains in input order", async ({
+      stateAdapter,
+      notifyAdapter,
+      observabilityAdapter,
+      log,
+      withTransaction,
+      expect,
+    }) => {
+      const { client, startChain } = await createContext({
+        stateAdapter,
+        notifyAdapter,
+        observabilityAdapter,
+        log,
+        withTransaction,
+      });
+      const order = await startChain("order", { amount: 42 });
+      const notification = await startChain("notification", { message: "hello" });
+
+      const chains = await client.getChains({ ids: [notification.id, order.id] });
+
+      expect(chains).toHaveLength(2);
+      expect(chains[0]!.id).toBe(notification.id);
+      expect(chains[1]!.id).toBe(order.id);
+    });
+
+    it("getChains returns mix of found and undefined", async ({
+      stateAdapter,
+      notifyAdapter,
+      observabilityAdapter,
+      log,
+      withTransaction,
+      expect,
+    }) => {
+      const { client, startChain } = await createContext({
+        stateAdapter,
+        notifyAdapter,
+        observabilityAdapter,
+        log,
+        withTransaction,
+      });
+      const created = await startChain("order", { amount: 42 });
+
+      const chains = await client.getChains({
+        ids: ["00000000-0000-0000-0000-000000000000", created.id],
+      });
+
+      expect(chains).toHaveLength(2);
+      expect(chains[0]).toBeUndefined();
+      expect(chains[1]!.id).toBe(created.id);
+    });
+
+    it("getChains narrows return type by typeName", async ({
+      stateAdapter,
+      notifyAdapter,
+      observabilityAdapter,
+      log,
+      withTransaction,
+      expect,
+    }) => {
+      const { client, startChain } = await createContext({
+        stateAdapter,
+        notifyAdapter,
+        observabilityAdapter,
+        log,
+        withTransaction,
+      });
+      const created = await startChain("notification", { message: "hello" });
+
+      const chains = await client.getChains({
+        typeName: "notification",
+        ids: [created.id],
+      });
+
+      expect(chains).toHaveLength(1);
+      expectTypeOf(chains[0]!.typeName).toEqualTypeOf<"notification">();
+    });
+
+    it("getChains throws on typeName mismatch", async ({
+      stateAdapter,
+      notifyAdapter,
+      observabilityAdapter,
+      log,
+      withTransaction,
+      expect,
+    }) => {
+      const { client, startChain } = await createContext({
+        stateAdapter,
+        notifyAdapter,
+        observabilityAdapter,
+        log,
+        withTransaction,
+      });
+      const created = await startChain("order", { amount: 42 });
+
+      await expect(
+        client.getChains({ typeName: "notification", ids: [created.id] }),
+      ).rejects.toThrow(ChainTypeMismatchError);
+    });
+
+    it("getChains skips typeName check for undefined entries", async ({
+      stateAdapter,
+      notifyAdapter,
+      observabilityAdapter,
+      log,
+      withTransaction,
+      expect,
+    }) => {
+      const { client } = await createContext({
+        stateAdapter,
+        notifyAdapter,
+        observabilityAdapter,
+        log,
+        withTransaction,
+      });
+
+      const chains = await client.getChains({
+        typeName: "order",
+        ids: ["00000000-0000-0000-0000-000000000000"],
+      });
+
+      expect(chains).toEqual([undefined]);
     });
   });
 
@@ -305,6 +474,175 @@ export const clientQueriesTestSuite = ({ it }: { it: TestAPI<TestSuiteContext> }
       await expect(client.getJob({ typeName: "order", id: chain.id })).rejects.toThrow(
         JobTypeMismatchError,
       );
+    });
+  });
+
+  describe("getJobs", () => {
+    it("getJobs returns empty array for empty ids", async ({
+      stateAdapter,
+      notifyAdapter,
+      observabilityAdapter,
+      log,
+      withTransaction,
+      expect,
+    }) => {
+      const { client } = await createContext({
+        stateAdapter,
+        notifyAdapter,
+        observabilityAdapter,
+        log,
+        withTransaction,
+      });
+
+      const jobs = await client.getJobs({ ids: [] });
+
+      expect(jobs).toEqual([]);
+    });
+
+    it("getJobs returns undefined for nonexistent ids", async ({
+      stateAdapter,
+      notifyAdapter,
+      observabilityAdapter,
+      log,
+      withTransaction,
+      expect,
+    }) => {
+      const { client } = await createContext({
+        stateAdapter,
+        notifyAdapter,
+        observabilityAdapter,
+        log,
+        withTransaction,
+      });
+
+      const jobs = await client.getJobs({
+        ids: ["00000000-0000-0000-0000-000000000000"],
+      });
+
+      expect(jobs).toEqual([undefined]);
+    });
+
+    it("getJobs returns jobs in input order", async ({
+      stateAdapter,
+      notifyAdapter,
+      observabilityAdapter,
+      log,
+      withTransaction,
+      expect,
+    }) => {
+      const { client, startChain } = await createContext({
+        stateAdapter,
+        notifyAdapter,
+        observabilityAdapter,
+        log,
+        withTransaction,
+      });
+      const order = await startChain("order", { amount: 42 });
+      const notification = await startChain("notification", { message: "hello" });
+
+      const jobs = await client.getJobs({ ids: [notification.id, order.id] });
+
+      expect(jobs).toHaveLength(2);
+      expect(jobs[0]!.id).toBe(notification.id);
+      expect(jobs[1]!.id).toBe(order.id);
+    });
+
+    it("getJobs returns mix of found and undefined", async ({
+      stateAdapter,
+      notifyAdapter,
+      observabilityAdapter,
+      log,
+      withTransaction,
+      expect,
+    }) => {
+      const { client, startChain } = await createContext({
+        stateAdapter,
+        notifyAdapter,
+        observabilityAdapter,
+        log,
+        withTransaction,
+      });
+      const created = await startChain("notification", { message: "hello" });
+
+      const jobs = await client.getJobs({
+        ids: ["00000000-0000-0000-0000-000000000000", created.id],
+      });
+
+      expect(jobs).toHaveLength(2);
+      expect(jobs[0]).toBeUndefined();
+      expect(jobs[1]!.id).toBe(created.id);
+    });
+
+    it("getJobs narrows return type by typeName", async ({
+      stateAdapter,
+      notifyAdapter,
+      observabilityAdapter,
+      log,
+      withTransaction,
+      expect,
+    }) => {
+      const { client, startChain } = await createContext({
+        stateAdapter,
+        notifyAdapter,
+        observabilityAdapter,
+        log,
+        withTransaction,
+      });
+      const created = await startChain("notification", { message: "hello" });
+
+      const jobs = await client.getJobs({
+        typeName: "notification",
+        ids: [created.id],
+      });
+
+      expect(jobs).toHaveLength(1);
+      expectTypeOf(jobs[0]!.typeName).toEqualTypeOf<"notification">();
+    });
+
+    it("getJobs throws on typeName mismatch", async ({
+      stateAdapter,
+      notifyAdapter,
+      observabilityAdapter,
+      log,
+      withTransaction,
+      expect,
+    }) => {
+      const { client, startChain } = await createContext({
+        stateAdapter,
+        notifyAdapter,
+        observabilityAdapter,
+        log,
+        withTransaction,
+      });
+      const created = await startChain("notification", { message: "hello" });
+
+      await expect(client.getJobs({ typeName: "order", ids: [created.id] })).rejects.toThrow(
+        JobTypeMismatchError,
+      );
+    });
+
+    it("getJobs skips typeName check for undefined entries", async ({
+      stateAdapter,
+      notifyAdapter,
+      observabilityAdapter,
+      log,
+      withTransaction,
+      expect,
+    }) => {
+      const { client } = await createContext({
+        stateAdapter,
+        notifyAdapter,
+        observabilityAdapter,
+        log,
+        withTransaction,
+      });
+
+      const jobs = await client.getJobs({
+        typeName: "order",
+        ids: ["00000000-0000-0000-0000-000000000000"],
+      });
+
+      expect(jobs).toEqual([undefined]);
     });
   });
 
@@ -1196,7 +1534,7 @@ export const clientQueriesTestSuite = ({ it }: { it: TestAPI<TestSuiteContext> }
 
       await expect(
         client.listChainJobs({ chainId: chain.id, typeName: "notification" }),
-      ).rejects.toThrow(JobTypeMismatchError);
+      ).rejects.toThrow(ChainTypeMismatchError);
     });
   });
 
@@ -1515,7 +1853,7 @@ export const clientQueriesTestSuite = ({ it }: { it: TestAPI<TestSuiteContext> }
 
       await expect(
         client.listBlockedJobs({ chainId: order.id, typeName: "notification" }),
-      ).rejects.toThrow(JobTypeMismatchError);
+      ).rejects.toThrow(ChainTypeMismatchError);
     });
 
     it("listBlockedJobs orders ascending", async ({

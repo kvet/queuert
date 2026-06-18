@@ -79,6 +79,17 @@ class JobTakenByAnotherWorkerError extends Error {
 
 Thrown during job processing when another worker has acquired the job's lease.
 
+## ChainTypeMismatchError
+
+```typescript
+class ChainTypeMismatchError extends Error {
+  readonly expectedTypeName: string;
+  readonly actualTypeName: string;
+}
+```
+
+Thrown when a **typeName** parameter doesn't match the actual type of a chain. Used by `getChain`, `getChains`, `completeChain`, `awaitChain`, `listChainJobs`, and `listBlockedJobs`.
+
 ## JobTypeMismatchError
 
 ```typescript
@@ -88,7 +99,7 @@ class JobTypeMismatchError extends Error {
 }
 ```
 
-Thrown when a **typeName** parameter doesn't match the actual type of a job or chain.
+Thrown when a **typeName** parameter doesn't match the actual type of a job. Used by `getJob`, `getJobs`, and `getJobBlockers`.
 
 ## JobTypeValidationError
 

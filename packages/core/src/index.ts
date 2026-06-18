@@ -37,6 +37,7 @@ export {
   BlockerLimitExceededError,
   BlockerReferenceError,
   ChainNotFoundError,
+  ChainTypeMismatchError,
   DuplicateJobTypeError,
   HookNotRegisteredError,
   InvalidJobIdError,

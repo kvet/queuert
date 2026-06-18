@@ -141,7 +141,7 @@ Returns `CompletedChain` when the chain is completed, or `Chain` when continued 
 
 The **complete** callback receives the current (latest) job in the chain. Call `complete(job, callback)` to finalize the job. Inside the callback, return an output value to finish the chain, or call `continueWith({ typeName, input })` to schedule the next job in the chain.
 
-Throws `ChainNotFoundError`, `JobTypeMismatchError`, or `JobAlreadyCompletedError`.
+Throws `ChainNotFoundError`, `ChainTypeMismatchError`, or `JobAlreadyCompletedError`.
 
 ## Client — Read-Only Methods
 
@@ -158,7 +158,20 @@ const chain = await client.getChain({
 
 Returns `Chain | undefined`.
 
-When **typeName** is provided, the return type is narrowed to that job type. Throws `JobTypeMismatchError` if the chain exists but has a different type.
+When **typeName** is provided, the return type is narrowed to that chain type. Throws `ChainTypeMismatchError` if the chain exists but has a different type.
+
+### getChains
+
+```typescript
+const chains = await client.getChains({
+  ids: [chainId1, chainId2],
+  typeName?: "send-email",
+});
+```
+
+Returns `(Chain | undefined)[]` — a positional array aligned with `ids`. Missing IDs produce `undefined`.
+
+When **typeName** is provided, all found chains must match or `ChainTypeMismatchError` is thrown.
 
 ### getJob
 
@@ -172,6 +185,19 @@ const job = await client.getJob({
 Returns `Job | undefined`.
 
 When **typeName** is provided, the return type is narrowed to that job type.
+
+### getJobs
+
+```typescript
+const jobs = await client.getJobs({
+  ids: [jobId1, jobId2],
+  typeName?: "send-email",
+});
+```
+
+Returns `(Job | undefined)[]` — a positional array aligned with `ids`. Missing IDs produce `undefined`.
+
+When **typeName** is provided, all found jobs must match or `JobTypeMismatchError` is thrown.
 
 ### awaitChain
 
@@ -194,7 +220,7 @@ Waits for the specified chain to complete.
 - **pollIntervalMs** — polling fallback interval (default: `15_000`)
 - **signal** — optional `AbortSignal` for external cancellation
 
-Throws `WaitChainTimeoutError` on timeout or abort, `ChainNotFoundError`, or `JobTypeMismatchError`.
+Throws `WaitChainTimeoutError` on timeout or abort, `ChainNotFoundError`, or `ChainTypeMismatchError`.
 
 ### listChains
 

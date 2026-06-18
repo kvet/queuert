@@ -12,7 +12,7 @@ import {
   startChainsTestSuite,
   stateResilienceTestSuite,
   rescheduleJobTestSuite,
-  waitChainCompletionTestSuite,
+  awaitChainTestSuite,
   workerlessCompletionTestSuite,
 } from "queuert/testing";
 import { describe, it } from "vitest";
@@ -46,8 +46,8 @@ describe("Deletion", () => {
   deletionTestSuite({ it: sqliteInProcessIt });
 });
 
-describe("Wait Chain Completion", () => {
-  waitChainCompletionTestSuite({ it: sqliteInProcessIt });
+describe("Await Chain", () => {
+  awaitChainTestSuite({ it: sqliteInProcessIt });
 });
 
 describe("State Resilience", () => {
