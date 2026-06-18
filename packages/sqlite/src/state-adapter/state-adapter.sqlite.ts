@@ -896,7 +896,11 @@ WHERE ? IS NOT NULL
   AND chain_type_name = ?
   AND (
     ? IS NULL
-    OR (? = 'incomplete' AND status != 'completed')
+    OR (? = 'incomplete' AND (
+      SELECT j2.status FROM {{table_prefix}}job j2
+      WHERE j2.chain_id = {{table_prefix}}job.chain_id
+      ORDER BY j2.chain_index DESC LIMIT 1
+    ) != 'completed')
     OR (? = 'any')
   )
   AND (

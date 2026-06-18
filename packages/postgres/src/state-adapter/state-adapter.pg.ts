@@ -739,7 +739,11 @@ existing_deduplicated AS (
     AND j.chain_type_name = id2.chain_type_name
     AND (
       id2.dedup_scope IS NULL
-      OR (id2.dedup_scope = 'incomplete' AND j.status != 'completed')
+      OR (id2.dedup_scope = 'incomplete' AND (
+        SELECT j2.status FROM {{schema}}.{{table_prefix}}job j2
+        WHERE j2.chain_id = j.chain_id
+        ORDER BY j2.chain_index DESC LIMIT 1
+      ) != 'completed')
       OR (id2.dedup_scope = 'any')
     )
     AND (

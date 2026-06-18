@@ -390,7 +390,10 @@ export const createInProcessStateAdapter = async ({
     let bestMatch: StateJob | undefined;
     for (const job of set) {
       if (exclude?.has(job.chainId)) continue;
-      if (scope === "incomplete" && job.status === "completed") continue;
+      if (scope === "incomplete") {
+        const tail = lastByChain.get(job.chainId);
+        if (tail && tail.status === "completed") continue;
+      }
       if (windowStart !== undefined && job.createdAt.getTime() < windowStart) continue;
       if (!bestMatch || job.createdAt > bestMatch.createdAt) bestMatch = job;
     }

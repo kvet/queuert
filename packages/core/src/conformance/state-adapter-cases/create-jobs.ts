@@ -508,6 +508,96 @@ export const createJobsGroup: ConformanceGroup<StateConformanceFixture> = {
       },
     },
     {
+      name: "deduplication scope 'incomplete' matches multi-step chains still running",
+      run: async ({ stateAdapter }, expect) => {
+        const [{ job: root }] = await stateAdapter.withTransaction(async (txCtx) =>
+          stateAdapter.createJobs({
+            txCtx,
+            jobs: [
+              {
+                typeName: "ms-test",
+                chainId: undefined,
+                chainIndex: 0,
+                chainTypeName: "ms-test",
+                input: null,
+                deduplication: { key: "ms-key", scope: "incomplete" },
+              },
+            ],
+          }),
+        );
+
+        await stateAdapter.withTransaction(async (txCtx) =>
+          stateAdapter.completeJob({
+            txCtx,
+            jobId: root.id,
+            output: null,
+            workerId: null,
+          }),
+        );
+
+        const [{ job: step2 }] = await stateAdapter.withTransaction(async (txCtx) =>
+          stateAdapter.createJobs({
+            txCtx,
+            jobs: [
+              {
+                typeName: "ms-step2",
+                chainId: root.chainId,
+                chainIndex: 1,
+                chainTypeName: "ms-test",
+                input: null,
+              },
+            ],
+          }),
+        );
+
+        const [{ deduplicated: stillRunning }] = await stateAdapter.withTransaction(async (txCtx) =>
+          stateAdapter.createJobs({
+            txCtx,
+            jobs: [
+              {
+                typeName: "ms-test",
+                chainId: undefined,
+                chainIndex: 0,
+                chainTypeName: "ms-test",
+                input: null,
+                deduplication: { key: "ms-key", scope: "incomplete" },
+              },
+            ],
+          }),
+        );
+
+        expect(stillRunning).toBe(true);
+
+        await stateAdapter.withTransaction(async (txCtx) =>
+          stateAdapter.completeJob({
+            txCtx,
+            jobId: step2.id,
+            output: null,
+            workerId: null,
+          }),
+        );
+
+        const [{ deduplicated: afterComplete }] = await stateAdapter.withTransaction(
+          async (txCtx) =>
+            stateAdapter.createJobs({
+              txCtx,
+              jobs: [
+                {
+                  typeName: "ms-test",
+                  chainId: undefined,
+                  chainIndex: 0,
+                  chainTypeName: "ms-test",
+                  input: null,
+                  deduplication: { key: "ms-key", scope: "incomplete" },
+                },
+              ],
+            }),
+        );
+
+        expect(afterComplete).toBe(false);
+      },
+    },
+    {
       name: "excludeChainIds skips specified chains during deduplication",
       run: async ({ stateAdapter }, expect) => {
         const [{ job: first }] = await stateAdapter.withTransaction(async (txCtx) =>

@@ -99,6 +99,111 @@ export const deduplicationTestSuite = ({ it }: { it: TestAPI<TestSuiteContext> }
     expect("output" in fetched2! && fetched2.output).toEqual({ result: 1 });
   });
 
+  it("scope 'incomplete' deduplicates against multi-step chains that have continued", async ({
+    stateAdapter,
+    notifyAdapter,
+    withTransaction,
+    log,
+    observabilityAdapter,
+    expect,
+  }) => {
+    const jobTypes = defineJobTypes<{
+      step1: {
+        entry: true;
+        input: { value: number };
+        continueWith: { typeName: "step2" };
+      };
+      step2: {
+        input: { continued: boolean };
+        output: { result: number };
+      };
+    }>();
+
+    const client = await createClient({
+      stateAdapter,
+      notifyAdapter,
+      observabilityAdapter,
+      log,
+      jobTypes,
+    });
+
+    const chain1 = await withTransactionHooks(async (transactionHooks) =>
+      withTransaction(async (txCtx) =>
+        client.startChain({
+          ...txCtx,
+          transactionHooks,
+          typeName: "step1",
+          input: { value: 1 },
+          deduplication: { key: "multi-step-key", scope: "incomplete" },
+        }),
+      ),
+    );
+
+    expect(chain1.deduplicated).toBe(false);
+
+    await withTransactionHooks(async (transactionHooks) =>
+      withTransaction(async (txCtx) =>
+        client.completeChain({
+          ...txCtx,
+          transactionHooks,
+          ...chain1,
+          complete: async ({ job, complete }) => {
+            if (job.typeName === "step1") {
+              job = await complete(job, async ({ continueWith }) =>
+                continueWith({ typeName: "step2", input: { continued: true } }),
+              );
+            }
+          },
+        }),
+      ),
+    );
+
+    const chain2 = await withTransactionHooks(async (transactionHooks) =>
+      withTransaction(async (txCtx) =>
+        client.startChain({
+          ...txCtx,
+          transactionHooks,
+          typeName: "step1",
+          input: { value: 2 },
+          deduplication: { key: "multi-step-key", scope: "incomplete" },
+        }),
+      ),
+    );
+
+    expect(chain2.deduplicated).toBe(true);
+    expect(chain2.id).toBe(chain1.id);
+
+    await withTransactionHooks(async (transactionHooks) =>
+      withTransaction(async (txCtx) =>
+        client.completeChain({
+          ...txCtx,
+          transactionHooks,
+          ...chain1,
+          complete: async ({ job, complete }) => {
+            if (job.typeName === "step2") {
+              return complete(job, async () => ({ result: 42 }));
+            }
+          },
+        }),
+      ),
+    );
+
+    const chain3 = await withTransactionHooks(async (transactionHooks) =>
+      withTransaction(async (txCtx) =>
+        client.startChain({
+          ...txCtx,
+          transactionHooks,
+          typeName: "step1",
+          input: { value: 3 },
+          deduplication: { key: "multi-step-key", scope: "incomplete" },
+        }),
+      ),
+    );
+
+    expect(chain3.deduplicated).toBe(false);
+    expect(chain3.id).not.toBe(chain1.id);
+  });
+
   it("deduplication scopes: 'any' vs 'incomplete'", async ({
     stateAdapter,
     notifyAdapter,
