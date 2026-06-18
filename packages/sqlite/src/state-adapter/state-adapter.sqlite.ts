@@ -483,6 +483,8 @@ export const createSqliteStateAdapter = async <
   validateSqlIdentifier(tablePrefix, "tablePrefix");
   validateSqlIdentifier(idType, "idType");
 
+  let closed = false;
+
   const { validateId, generateId } = createIdValidator<TIdType>({
     generateIdOption,
     validateIdOption,
@@ -2013,6 +2015,8 @@ WHERE chain_id IN (SELECT value FROM json_each(?))
     },
 
     close: async () => {
+      if (closed) return;
+      closed = true;
       await stateProvider.close?.();
     },
   };

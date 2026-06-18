@@ -2,6 +2,7 @@ import { type NotifyAdapter } from "./notify-adapter.js";
 
 const HINT_TTL_MS = 60_000;
 
+/** Creates an in-memory notify adapter for single-process deployments. Uses in-process callbacks for notification delivery and an in-memory hint counter with a 60-second TTL for thundering herd prevention. */
 export const createInProcessNotifyAdapter = async (): Promise<NotifyAdapter> => {
   const hintCounts = new Map<string, number>();
   const hintTimers = new Map<string, ReturnType<typeof setTimeout>>();

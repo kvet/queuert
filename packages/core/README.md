@@ -25,7 +25,7 @@ You also need a **state adapter** to store jobs:
 
 Optional adapters:
 
-- [`@queuert/redis`](https://github.com/kvet/queuert/tree/main/packages/redis) — Redis notify adapter (recommended for production)
+- [`@queuert/redis`](https://github.com/kvet/queuert/tree/main/packages/redis) — Redis notify adapter
 - [`@queuert/nats`](https://github.com/kvet/queuert/tree/main/packages/nats) — NATS notify adapter _(experimental)_
 - `createInProcessNotifyAdapter` (built-in) — in-memory, single-process
 - [`@queuert/otel`](https://github.com/kvet/queuert/tree/main/packages/otel) — OpenTelemetry observability (metrics and tracing)

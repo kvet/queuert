@@ -104,7 +104,7 @@ The NATS adapter uses the same shared listener pattern as Redis — a single NAT
 NATS uses a single connection (`NatsConnection`) for both publishing and subscribing — unlike Redis, there is no need for separate connections. The adapter accepts the connection directly:
 
 ```typescript
-createNatsNotifyAdapter({
+const notifyAdapter = await createNatsNotifyAdapter({
   nc, // NatsConnection
   kv, // Optional: JetStream KV bucket
   subjectPrefix, // Optional: default "queuert"

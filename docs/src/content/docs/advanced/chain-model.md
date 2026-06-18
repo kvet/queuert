@@ -83,9 +83,9 @@ Having the first job BE the chain (rather than a separate entity) provides:
 
 ### Simplicity
 
-- One table, one type, one set of operations
-- No separate `chain` table to manage
-- No joins, no synchronization issues
+- No separate `chain` table — chains are a view over the `job` table (plus a `job_blocker` junction table for dependencies)
+- One primary type, one set of operations
+- No synchronization issues
 
 ### Flexibility
 

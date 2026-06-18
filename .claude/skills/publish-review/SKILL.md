@@ -344,7 +344,6 @@ The following items have been reviewed and accepted as intentional design decisi
 - **`createAsyncRwLock` re-exported from `@queuert/sqlite` via `queuert/internal`**: SQLite users need this for transaction serialization. Accepted.
 - **`createClient` is async but performs no I/O**: Reserves the right to add async initialization later. Accepted.
 - **`createInProcessWorker` is async but performs no I/O**: Reserves the right to add async initialization later. Accepted.
-- **`$idType` phantom property on `createPgStateAdapter` options**: Intentional pattern for generic type inference. Accepted.
 - **`HookNotRegisteredError` does not accept `cause`**: This error is never caused by another error. Accepted.
 - **Notify adapter channel prefix uses different separators**: Each adapter uses its transport's idiomatic separator (`:` for Redis, `_` for PG, `.` for NATS). Accepted.
 - **`testing` export declared in `publishConfig` but files excluded**: Testing utilities are workspace-only, not shipped to npm. The `publishConfig.exports` entry is overridden by the `files` exclusion. Accepted.

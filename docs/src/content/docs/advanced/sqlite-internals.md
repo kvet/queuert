@@ -64,7 +64,7 @@ The `{tablePrefix}job_blocker` table is structurally identical to PostgreSQL:
 | `index`               | `INTEGER`          | Position in blockers array       |
 | `trace_context`       | `TEXT`             | PRODUCER span context            |
 
-Primary key: `(job_id, blocked_by_chain_id)`.
+Primary key: `(job_id, blocked_by_chain_id, index)`.
 
 ### Migration Table
 
@@ -152,11 +152,13 @@ This is safe because SQLite's exclusive locking ensures only one writer executes
 The adapter supports nested operations via SQLite savepoints:
 
 ```sql
-SAVEPOINT queuert_sp;
+SAVEPOINT queuert_sp_{uuid};
 -- nested operation
-RELEASE SAVEPOINT queuert_sp;
--- or on error: ROLLBACK TO SAVEPOINT queuert_sp;
+RELEASE SAVEPOINT queuert_sp_{uuid};
+-- or on error: ROLLBACK TO SAVEPOINT queuert_sp_{uuid};
 ```
+
+Each savepoint gets a unique name (`queuert_sp_` followed by a random UUID) to avoid collisions with nested savepoints.
 
 Used for partial rollback within transactions — if a user callback or observability event fails, the savepoint rolls back without aborting the outer transaction.
 
@@ -166,7 +168,7 @@ SQLite does not support writeable CTEs with RETURNING in the same way as Postgre
 
 - **`addJobBlockers`**: Separate INSERT for blockers, then UPDATE for job status
 - **`deleteChains`**: Separate SELECT to find connected chains, DELETE blockers, DELETE jobs
-- **`unblockJobs`**: Separate DELETE for resolved blockers, SELECT to check remaining, UPDATE for unblocked jobs
+- **`unblockJobs`**: SELECT to check blocker statuses, UPDATE to transition unblocked jobs from blocked to pending (blocker rows are retained for trace context propagation)
 
 This results in more round-trips per operation, but is safe under SQLite's exclusive locking model. See [Adapter Architecture](../adapters/) for the design rationale.
 

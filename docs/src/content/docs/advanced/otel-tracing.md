@@ -156,6 +156,10 @@ PRODUCER: create chain.multi-step ───────────────�
 
 This uses the `completeJobSpan` adapter method rather than `startAttemptSpan`, reflecting that no attempt processing occurred.
 
+## Chain Completion Link
+
+The `complete chain.{type}` CONSUMER span includes a link to the chain's PRODUCER span context (`chainTraceContext`), connecting the chain's creation and completion across processes and time.
+
 ## Chain Duration Measurement
 
 With `create chain` at start and `complete chain` at end, total chain duration is calculated as:

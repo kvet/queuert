@@ -1,5 +1,6 @@
 import { HookNotRegisteredError } from "./errors.js";
 
+/** Defines a named hook with mutable state, a flush callback for commit, an optional discard callback for rollback, and an optional checkpoint callback for savepoint support. */
 export type HookDefinition<T> = {
   state: T;
   flush: (state: T) => void | Promise<void>;

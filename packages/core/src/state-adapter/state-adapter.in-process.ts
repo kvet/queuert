@@ -18,6 +18,7 @@ type JournalEntry =
       next: BlockerEntry | undefined;
     };
 
+/** Transaction context for the in-process state adapter. */
 export type InProcessContext = { inTransaction?: boolean; journal?: JournalEntry[] };
 
 type Comparator<T> = (a: T, b: T) => number;
@@ -117,8 +118,10 @@ const matchesDateRange = (createdAt: Date, from?: Date, to?: Date): boolean => {
 const clampToFloor = (requested: Date, now: Date): Date =>
   requested.getTime() > now.getTime() ? requested : now;
 
+/** State adapter backed by in-memory data structures. Suitable for testing and single-process deployments without persistence. */
 export type InProcessStateAdapter = StateAdapter<InProcessContext, string>;
 
+/** Creates an in-memory state adapter that stores all job state in process memory. No database required — suitable for testing, prototyping, and ephemeral single-process deployments. */
 export const createInProcessStateAdapter = async ({
   generateId: generateIdOption = () => crypto.randomUUID(),
   validateId: validateIdOption,

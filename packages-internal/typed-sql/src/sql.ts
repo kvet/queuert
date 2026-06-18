@@ -1,3 +1,4 @@
+/** Runtime type tag used by state providers to marshal query parameters and result columns between JavaScript and the database. */
 export type RuntimeType =
   | "string"
   | "number"

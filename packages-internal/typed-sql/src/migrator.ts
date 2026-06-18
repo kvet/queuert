@@ -10,6 +10,7 @@ export type Migration = {
   transactional: boolean;
 };
 
+/** Result of running `migrateToLatest`, reporting which migrations were skipped (already applied), applied, and unrecognized (present in the database but not in the code). */
 export type MigrationResult = {
   skipped: string[];
   applied: string[];

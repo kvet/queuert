@@ -179,6 +179,7 @@ export type JobTypeHasBlockers<
           : false
     : false;
 
+/** Resolves a {@link Job} with concrete input/output types for a given job type name. */
 export type ResolvedJob<
   TJobId,
   TJobTypeDefinitions extends BaseJobTypeDefinitions,
@@ -220,6 +221,7 @@ export type ContinuationJobs<
       }[TContinuation]
     : never;
 
+/** Resolves a {@link Chain} with concrete input/output types for a given entry type name. */
 export type ResolvedChain<
   TJobId,
   TJobTypeDefinitions extends BaseJobTypeDefinitions,
@@ -236,6 +238,7 @@ export type ResolvedChain<
       }[TChainTypeNames]
     : never;
 
+/** Union of all resolved {@link Job} types reachable within a chain starting from the given entry type. */
 export type ResolvedChainJobs<
   TJobId,
   TJobTypeDefinitions extends BaseJobTypeDefinitions,
@@ -270,6 +273,7 @@ type MapBlockersToChains<
     : never;
 };
 
+/** Resolves the blocker chains tuple for a job type, mapping each blocker reference to its resolved {@link Chain} type. */
 export type BlockerChains<
   TJobId,
   TJobTypeDefinitions extends BaseJobTypeDefinitions,

@@ -430,8 +430,6 @@ export const createPgStateAdapter = async <
    * and caller-supplied IDs; failures throw `InvalidJobIdError`.
    */
   validateId?: (id: TIdType) => boolean;
-  /** Phantom property for generic type inference of the ID type. Not used at runtime. */
-  $idType?: TIdType;
 }): Promise<
   StateAdapter<TTxContext, TIdType> & {
     migrateToLatest: () => Promise<MigrationResult>;
@@ -442,6 +440,8 @@ export const createPgStateAdapter = async <
   validateSqlIdentifier(schema, "schema");
   validateSqlIdentifier(tablePrefix, "tablePrefix");
   validateSqlIdentifier(idType, "idType");
+
+  let closed = false;
 
   const { validateId, generateId } = createIdValidator<TIdType>({
     generateIdOption,
@@ -1764,6 +1764,8 @@ SELECT
     },
 
     close: async () => {
+      if (closed) return;
+      closed = true;
       await stateProvider.close?.();
     },
   };

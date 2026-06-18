@@ -11,12 +11,14 @@ import { createEffect, createSignal, onCleanup } from "solid-js";
  * than retrying it in a tight storm against the API; the fallback button then acts as a
  * manual retry, which re-arms again once it succeeds.
  */
-export function createAutoLoadMore(load: () => Promise<void>): {
+export const createAutoLoadMore = (
+  load: () => Promise<void>,
+): {
   ref: (el: HTMLElement) => void;
   loading: () => boolean;
   failed: () => boolean;
   trigger: () => void;
-} {
+} => {
   const [target, setTarget] = createSignal<HTMLElement>();
   const [loading, setLoading] = createSignal(false);
   const [failed, setFailed] = createSignal(false);
@@ -55,4 +57,4 @@ export function createAutoLoadMore(load: () => Promise<void>): {
   });
 
   return { ref: setTarget, loading, failed, trigger };
-}
+};

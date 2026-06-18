@@ -10,6 +10,8 @@
 - [?,REF] Rename `startChain` to `createChain` (and `startChains` → `createChains`) for better symmetry with the rest of the API and to avoid confusion about what "start" means in the context of continued jobs
 - [?,REF] Resolve the `rescheduleJob` naming overlap — the exported throw-helper `rescheduleJob({ afterMs })` reschedules the currently-executing job from inside a handler, while `client.rescheduleJob({ id, schedule })` reschedules an arbitrary pending job from outside. Same verb, different subject/mechanism. Either rename one (e.g. the helper → `retryAfter`/`rescheduleSelf`) or at minimum document the distinction in the reference/guide docs
 - [?,REF] Consider lifting the per-job blocker cap (currently hard-capped at 100 in core) to support unbounded/millions of blockers — needs a different `job_blocker` denormalization (e.g. row-deletion-on-resolution); counter-style denormalization on `job` is ruled out (MVCC dead-tuple cost). Tracked in more depth as the "Uncap job blockers" idea under Long term.
+- [?,REF] Validate `LeaseConfig` at runtime — assert `renewIntervalMs < leaseMs` to prevent misconfiguration where leases expire between renewals
+- [?,REF] `acquireJob` (PG) `has_more` EXISTS check re-scans the pending index without `SKIP LOCKED` — under high concurrency it may return `true` for rows already locked by other workers, causing unnecessary poll cycles
 
 # Short term
 

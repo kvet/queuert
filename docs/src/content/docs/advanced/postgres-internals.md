@@ -16,10 +16,10 @@ The adapter creates its schema via `migrateToLatest()`. All objects live under a
 ### Custom Enum
 
 ```sql
-CREATE TYPE job_status AS ENUM ('blocked', 'pending', 'running', 'completed');
+CREATE TYPE {table_prefix}job_status AS ENUM ('blocked', 'pending', 'running', 'completed');
 ```
 
-PostgreSQL enums provide type safety at the database level — invalid status values are rejected by the engine rather than relying on application-level checks.
+The enum name is prefixed with the configured `tablePrefix` (default: `queuert_`), e.g. `queuert_job_status`. PostgreSQL enums provide type safety at the database level — invalid status values are rejected by the engine rather than relying on application-level checks.
 
 ### Job Table
 
@@ -34,7 +34,7 @@ The `job` table stores all job state:
 | `chain_index`         | `integer`                      | Position in chain (0 for root, incrementing for continuations)                     |
 | `input`               | `jsonb`                        | Job input data                                                                     |
 | `output`              | `jsonb`                        | Completion output (null until completed)                                           |
-| `status`              | `job_status`                   | Current state: blocked, pending, running, or completed                             |
+| `status`              | `{table_prefix}job_status`     | Current state: blocked, pending, running, or completed                             |
 | `created_at`          | `timestamptz`                  | When the job was created                                                           |
 | `scheduled_at`        | `timestamptz`                  | Earliest time the job can be acquired                                              |
 | `completed_at`        | `timestamptz`                  | When the job completed (null until completed)                                      |
@@ -61,7 +61,7 @@ The `job_blocker` table tracks dependencies between jobs and chains:
 | `index`               | `integer`                | Position in the blockers array               |
 | `trace_context`       | `text`                   | PRODUCER span context for blocker resolution |
 
-Primary key: `(job_id, blocked_by_chain_id)` — each job–blocker pair is unique.
+Primary key: `(job_id, blocked_by_chain_id, index)` — each blocker slot is unique.
 
 ### Migration Table
 
@@ -193,11 +193,13 @@ Ordering by `ctid` ensures all concurrent deletions acquire locks in the same ph
 The adapter uses explicit `BEGIN`/`COMMIT`/`ROLLBACK` with savepoints for nested operations:
 
 ```sql
-SAVEPOINT queuert_sp
+SAVEPOINT queuert_sp_{uuid}
 -- user callback executes here
-RELEASE SAVEPOINT queuert_sp
--- or on error: ROLLBACK TO SAVEPOINT queuert_sp
+RELEASE SAVEPOINT queuert_sp_{uuid}
+-- or on error: ROLLBACK TO SAVEPOINT queuert_sp_{uuid}
 ```
+
+Each savepoint gets a unique name (`queuert_sp_` followed by a random UUID) to avoid collisions with nested savepoints.
 
 Savepoints enable partial rollback within a transaction — if a user callback fails, the savepoint rolls back its effects without aborting the entire transaction.
 
@@ -241,7 +243,7 @@ The adapter uses CTEs (Common Table Expressions) extensively to perform multi-st
 - **Blocker management**: INSERT blockers + UPDATE job status from pending to blocked
 - **Unblocking**: UPDATE jobs from blocked to pending when all their blockers have completed (blocker rows are retained to propagate trace context into the unblocked job)
 - **Chain deletion**: Recursive CTE to find connected chains + cascading DELETE
-- **Connected chain discovery**: Recursive CTE traversing blocker relationships in both directions
+- **Connected chain discovery**: Recursive CTE traversing blocker relationships forward (from a chain to its blockers)
 
 All writeable CTEs use `RETURNING` to propagate results between steps without additional round-trips.
 
