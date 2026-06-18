@@ -1,5 +1,15 @@
 # @queuert/nats
 
+## 0.15.0
+
+### Patch Changes
+
+- Updated dependencies [f5b7f9d]
+- Updated dependencies [af22109]
+- Updated dependencies [082650f]
+- Updated dependencies [02b2167]
+  - queuert@0.15.0
+
 ## 0.14.1
 
 ### Patch Changes
