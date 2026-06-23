@@ -1,6 +1,5 @@
 # Triage
 
-- [?,REF] Expose `JobAbortReason` to OTel — include `signal.reason` (e.g. `worker_stopping`, `already_completed`, `taken_by_another_worker`) as a span attribute or event on attempt spans so operators can see why jobs were interrupted
 - [?,REF] Add input and output filtering
 - [?,REF] Change complete job chain to something more empirical?
 - [?,REF] Reset jobs in chains + dashboard

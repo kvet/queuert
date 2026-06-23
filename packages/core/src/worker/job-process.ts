@@ -418,6 +418,24 @@ export const runJobProcess = async ({
       traceContext: job.traceContext,
     });
 
+    let cleanupAbortListener: (() => void) | null = null;
+    if (attemptSpanHandle) {
+      const recordAbort = () => {
+        const reason = abortController.signal.reason;
+        if (reason) {
+          attemptSpanHandle.recordAbort(reason);
+        }
+      };
+      if (abortController.signal.aborted) {
+        recordAbort();
+      } else {
+        abortController.signal.addEventListener("abort", recordAbort, { once: true });
+        cleanupAbortListener = () => {
+          abortController.signal.removeEventListener("abort", recordAbort);
+        };
+      }
+    }
+
     let prepareAccessed = false;
     let prepareCalled = false;
     let prepareRunning = false;
@@ -712,6 +730,8 @@ export const runJobProcess = async ({
 
         attemptSpanHandle?.end({ status: "failed", error });
       }
+    } finally {
+      cleanupAbortListener?.();
     }
   };
 

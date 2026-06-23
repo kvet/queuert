@@ -1071,6 +1071,87 @@ describe("Spans", () => {
     ]);
   });
 
+  it("tracks abort span on worker_stopping", async ({
+    stateAdapter,
+    notifyAdapter,
+    withTransaction,
+    observabilityAdapter,
+    log,
+    expectSpans,
+  }) => {
+    const jobTypes = defineJobTypes<{
+      test: {
+        entry: true;
+        input: null;
+        output: null;
+      };
+    }>();
+
+    const client = await createClient({
+      stateAdapter,
+      notifyAdapter,
+      observabilityAdapter,
+      log,
+      jobTypes,
+    });
+
+    const jobStarted = Promise.withResolvers<void>();
+
+    const worker = await createInProcessWorker({
+      client,
+      concurrency: 1,
+      processors: createProcessors({
+        client,
+        jobTypes,
+        processors: {
+          test: {
+            attemptHandler: async ({ signal, complete }) => {
+              jobStarted.resolve();
+              await sleep(500, { signal }).catch(() => {});
+              return complete(async () => null);
+            },
+          },
+        },
+      }),
+    });
+
+    const chain = await withTransactionHooks(async (transactionHooks) =>
+      withTransaction(async (txCtx) =>
+        client.startChain({
+          ...txCtx,
+          transactionHooks,
+          typeName: "test",
+          input: null,
+        }),
+      ),
+    );
+
+    const stopWorker = await worker.start();
+    await jobStarted.promise;
+    await stopWorker();
+
+    await client.awaitChain(chain, completionOptions);
+
+    await expectSpans([
+      { name: "create chain.test", kind: "PRODUCER" },
+      { name: "create job.test", kind: "PRODUCER", parentName: "create chain.test" },
+      { name: "prepare", kind: "INTERNAL", parentName: "start job-attempt.test" },
+      { name: "complete", kind: "INTERNAL", parentName: "start job-attempt.test" },
+      {
+        name: "complete chain.test",
+        kind: "CONSUMER",
+        parentName: "start job-attempt.test",
+        links: 1,
+      },
+      {
+        name: "start job-attempt.test",
+        kind: "CONSUMER",
+        parentName: "create job.test",
+        events: [{ name: "abort", attributes: { "queuert.abort.reason": "worker_stopping" } }],
+      },
+    ]);
+  });
+
   it("tracks error spans on retry", async ({
     stateAdapter,
     notifyAdapter,

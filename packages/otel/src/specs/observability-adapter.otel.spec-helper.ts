@@ -62,6 +62,11 @@ const spanStatusMap: Record<string, SpanStatusCode> = {
   ERROR: SpanStatusCode.ERROR,
 };
 
+type ExpectedEvent = {
+  name: string;
+  attributes?: Record<string, unknown>;
+};
+
 type ExpectedSpan = {
   name: string;
   kind?: "PRODUCER" | "CONSUMER" | "INTERNAL";
@@ -69,6 +74,7 @@ type ExpectedSpan = {
   status?: "UNSET" | "OK" | "ERROR";
   parentName?: string;
   links?: number;
+  events?: ExpectedEvent[];
 };
 
 export const extendWithObservabilityOtel = <T extends Record<string, unknown>>(
@@ -291,6 +297,7 @@ export const extendWithObservabilityOtel = <T extends Record<string, unknown>>(
               ? (spanIdToName.get(span.parentSpanContext.spanId) ?? null)
               : undefined,
             links: span.links.length,
+            events: span.events.map((e) => ({ name: e.name, attributes: e.attributes })),
           }));
 
           expect(actual).toEqual(
@@ -301,6 +308,12 @@ export const extendWithObservabilityOtel = <T extends Record<string, unknown>>(
               if (entry.status !== undefined) matcher.status = spanStatusMap[entry.status];
               if (entry.parentName !== undefined) matcher.parentName = entry.parentName;
               if (entry.links !== undefined) matcher.links = entry.links;
+              if (entry.events !== undefined)
+                matcher.events = entry.events.map((e) => {
+                  const eventMatcher: Record<string, unknown> = { name: e.name };
+                  if (e.attributes) eventMatcher.attributes = expect.objectContaining(e.attributes);
+                  return expect.objectContaining(eventMatcher);
+                });
               return expect.objectContaining(matcher);
             }),
           );

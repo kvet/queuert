@@ -24,6 +24,7 @@ PRODUCER: create chain.{type}          ← Chain published (ends immediately)
 │   │
 │   ├── CONSUMER: start job-attempt.{type}    ← Worker processes attempt (has duration)
 │   │   ├── INTERNAL: prepare
+│   │   ├── EVENT: abort                      ← Signal aborted (if interrupted)
 │   │   └── INTERNAL: complete
 │   │
 │   └── CONSUMER: start job-attempt.{type}    ← Retry attempt
@@ -51,6 +52,8 @@ Span kinds use OpenTelemetry's PRODUCER/CONSUMER/INTERNAL semantics. The chain h
 | **complete**                 | INTERNAL | `complete()` called              | `complete()` returns    | Transaction time |
 | **complete job.{type}**      | CONSUMER | Workerless completion            | Immediately             | ~0ms             |
 | **complete chain.{type}**    | CONSUMER | Final job completes              | Immediately             | ~0ms             |
+
+The attempt span may also carry an **`abort` event** (recorded at the moment the signal fires) with the `queuert.abort.reason` attribute, giving operators the exact timestamp and reason for the interruption.
 
 ## Blocker Relationships
 
@@ -222,6 +225,12 @@ PRODUCER create chain.process-user [0ms] ─────────────
 | Attribute           | Type   | Description                      |
 | ------------------- | ------ | -------------------------------- |
 | `queuert.worker.id` | string | Worker ID processing the attempt |
+
+### Abort Attributes
+
+| Attribute              | Type   | Description                                                                                                            |
+| ---------------------- | ------ | ---------------------------------------------------------------------------------------------------------------------- |
+| `queuert.abort.reason` | string | Why the signal was aborted: `worker_stopping`, `taken_by_another_worker`, `already_completed`, `not_found`, or `error` |
 
 ### Attempt Result Attributes
 
