@@ -129,6 +129,32 @@ Queuert does not provide built-in soft timeout functionality. This is intentiona
 1. **Userland solution is trivial**: Combine `AbortSignal.timeout()` with the existing `signal` parameter using `AbortSignal.any()`
 2. **Lease mechanism is the hard timeout**: If a job doesn't complete within `leaseMs`, the reaper reclaims it and another worker retries
 
+### Abort Signal and Reasons
+
+Every attempt handler receives a `signal` (`TypedAbortSignal<JobAbortReason>`) that is aborted when the job should stop. The `signal.reason` distinguishes the cause:
+
+| Reason                      | Meaning                                                                          |
+| --------------------------- | -------------------------------------------------------------------------------- |
+| `"taken_by_another_worker"` | Another worker acquired the job (lease expired and was reaped)                   |
+| `"not_found"`               | The job no longer exists in the database                                         |
+| `"already_completed"`       | The job was already completed                                                    |
+| `"error"`                   | An internal error occurred during lease renewal                                  |
+| `"worker_stopping"`         | The worker is shutting down — the job is still valid and the lease is still held |
+
+The first four reasons indicate the job is no longer owned by this worker — handlers should stop immediately. `"worker_stopping"` is different: the job remains valid, but the worker is draining. Handlers can check `signal.reason` to decide whether to finish quickly or abandon:
+
+```typescript
+attemptHandler: async ({ signal, complete }) => {
+  for (const item of items) {
+    if (signal.aborted && signal.reason === "worker_stopping") {
+      break; // finish early, complete with partial results
+    }
+    await processItem(item);
+  }
+  return complete(async () => ({ processed: items.length }));
+},
+```
+
 ### Cooperative Timeouts
 
 Users implement cooperative timeouts by combining `AbortSignal.timeout()` with the existing `signal` parameter using `AbortSignal.any()`.
@@ -147,3 +173,4 @@ For hard timeouts (forceful termination), the lease mechanism already handles th
 - [Client API](/queuert/reference/queuert/client/) — Mutation methods, query methods, awaitChain
 - [In-Process Worker](../in-process-worker/) — Worker lifecycle, leasing, reaper
 - [Adapters](../adapters/) — StateAdapter context architecture
+- [`showcase-signals`](https://github.com/kvet/queuert/tree/main/examples/showcase-signals) — Runnable example: `already_completed` via external `completeChain`, `worker_stopping` via graceful shutdown

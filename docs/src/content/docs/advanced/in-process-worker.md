@@ -85,10 +85,12 @@ On startup, the worker emits a `workerStarted` observability event.
 
 Calling `stop()` triggers graceful shutdown:
 
-1. Signal abort controller
+1. Signal abort controller — in-flight jobs receive `"worker_stopping"` on their `signal`
 2. Stop spawning new slots
 3. Wait for all in-flight jobs to complete (or abandon via lease expiry)
 4. Emit `workerStopping` and `workerStopped` observability events
+
+The `"worker_stopping"` abort reason is cooperative: handlers that check `signal.aborted` and `signal.reason` can distinguish a worker shutdown from a hard abort (e.g. `"taken_by_another_worker"`) and choose to wrap up gracefully instead of abandoning work immediately.
 
 ## Worker Identity
 
@@ -159,3 +161,4 @@ The worker design emphasizes:
 
 - [Job Processing](../job-processing/) — Prepare/complete pattern, abort signals, timeouts
 - [Adapters](../adapters/) — Notification optimization, state provider design
+- [`showcase-signals`](https://github.com/kvet/queuert/tree/main/examples/showcase-signals) — Runnable example: graceful shutdown via `worker_stopping`, external completion via `already_completed`

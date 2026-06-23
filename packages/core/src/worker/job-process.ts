@@ -50,7 +50,8 @@ export type JobAbortReason =
   | "taken_by_another_worker"
   | "error"
   | "not_found"
-  | "already_completed";
+  | "already_completed"
+  | "worker_stopping";
 
 /** Options passed to the completion callback, including `continueWith` and the transaction context. */
 export type AttemptCompleteOptions<
@@ -266,6 +267,7 @@ export const runJobProcess = async ({
   leaseConfig,
   workerId,
   attemptMiddleware,
+  stopSignal,
 }: {
   helpers: Helpers;
   attemptHandler: AttemptHandler<
@@ -284,28 +286,48 @@ export const runJobProcess = async ({
   leaseConfig: LeaseConfig;
   workerId: string;
   attemptMiddleware?: readonly AttemptMiddleware<any, any, any, any, any>[];
+  stopSignal: AbortSignal;
 }): Promise<void> => {
   let completeTransactionContext: TransactionContext<BaseTxContext> | null = null;
 
   const abortController = new AbortController() as TypedAbortController<JobAbortReason>;
-  const refetchJobLocked = async (txCtx: BaseTxContext) => {
-    if (abortController.signal.aborted && abortController.signal.reason) {
-      if (abortController.signal.reason === "already_completed") {
-        throw new JobAlreadyCompletedError("Job already completed (signal aborted)", {
-          jobId: job.id,
-        });
+
+  let cleanupStopListener: (() => void) | null = null;
+  if (stopSignal.aborted) {
+    abortController.abort("worker_stopping");
+  } else {
+    const onStop = () => {
+      if (!abortController.signal.aborted) {
+        abortController.abort("worker_stopping");
       }
-      if (abortController.signal.reason === "not_found") {
-        throw new JobNotFoundError("Job not found (signal aborted)", { jobId: job.id });
-      }
-      if (abortController.signal.reason === "taken_by_another_worker") {
-        throw new JobTakenByAnotherWorkerError("Job taken by another worker (signal aborted)", {
-          jobId: job.id,
-          workerId,
-        });
-      }
-      throw new Error(`Job processing aborted: ${abortController.signal.reason}`);
+    };
+    stopSignal.addEventListener("abort", onStop, { once: true });
+    cleanupStopListener = () => {
+      stopSignal.removeEventListener("abort", onStop);
+    };
+    abortController.signal.addEventListener("abort", () => cleanupStopListener?.(), { once: true });
+  }
+  const throwIfHardAborted = () => {
+    if (!abortController.signal.aborted || !abortController.signal.reason) return;
+    if (abortController.signal.reason === "worker_stopping") return;
+    if (abortController.signal.reason === "already_completed") {
+      throw new JobAlreadyCompletedError("Job already completed (signal aborted)", {
+        jobId: job.id,
+      });
     }
+    if (abortController.signal.reason === "not_found") {
+      throw new JobNotFoundError("Job not found (signal aborted)", { jobId: job.id });
+    }
+    if (abortController.signal.reason === "taken_by_another_worker") {
+      throw new JobTakenByAnotherWorkerError("Job taken by another worker (signal aborted)", {
+        jobId: job.id,
+        workerId,
+      });
+    }
+    throw new Error(`Job processing aborted: ${abortController.signal.reason}`);
+  };
+  const refetchJobLocked = async (txCtx: BaseTxContext) => {
+    throwIfHardAborted();
 
     await refetchJobLockedImpl(helpers, {
       txCtx,
@@ -329,23 +351,7 @@ export const runJobProcess = async ({
   const runInGuardedTransaction = async <T>(
     cb: (txCtx: BaseTxContext, transactionHooks: TransactionHooks) => Promise<T>,
   ): Promise<T> => {
-    if (abortController.signal.aborted && abortController.signal.reason) {
-      if (abortController.signal.reason === "already_completed") {
-        throw new JobAlreadyCompletedError("Job already completed (signal aborted)", {
-          jobId: job.id,
-        });
-      }
-      if (abortController.signal.reason === "not_found") {
-        throw new JobNotFoundError("Job not found (signal aborted)", { jobId: job.id });
-      }
-      if (abortController.signal.reason === "taken_by_another_worker") {
-        throw new JobTakenByAnotherWorkerError("Job taken by another worker (signal aborted)", {
-          jobId: job.id,
-          workerId,
-        });
-      }
-      throw new Error(`Job processing aborted: ${abortController.signal.reason}`);
-    }
+    throwIfHardAborted();
 
     if (prepareTransactionContext.status === "pending") {
       return prepareTransactionContext.run(cb);
@@ -709,11 +715,15 @@ export const runJobProcess = async ({
     }
   };
 
-  await runHandlerMiddlewareChain(
-    attemptMiddleware,
-    { job: runningJob, workerId },
-    async (handlerCtx) => {
-      await runJobAttempt(handlerCtx);
-    },
-  );
+  try {
+    await runHandlerMiddlewareChain(
+      attemptMiddleware,
+      { job: runningJob, workerId },
+      async (handlerCtx) => {
+        await runJobAttempt(handlerCtx);
+      },
+    );
+  } finally {
+    cleanupStopListener?.();
+  }
 };

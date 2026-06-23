@@ -68,6 +68,7 @@ Chain patterns, error handling, scheduling, and other core features.
 | [showcase-workerless](https://github.com/kvet/queuert/tree/main/examples/showcase-workerless)                                 | Running without a worker (polling only)                                   |
 | [showcase-multiworker-prioritization](https://github.com/kvet/queuert/tree/main/examples/showcase-multiworker-prioritization) | Priority tiers via specialized workers; cross-worker chain handoff        |
 | [showcase-middleware](https://github.com/kvet/queuert/tree/main/examples/showcase-middleware)                                 | Attempt middleware: wrapHandler, wrapPrepare, wrapComplete with typed ctx |
+| [showcase-signals](https://github.com/kvet/queuert/tree/main/examples/showcase-signals)                                       | Abort signal patterns                                                     |
 
 ## Logging
 

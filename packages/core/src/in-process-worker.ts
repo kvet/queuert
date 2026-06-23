@@ -112,6 +112,7 @@ const performJob = async ({
   defaultBackoffConfig,
   defaultLeaseConfig,
   workerId,
+  stopSignal,
 }: {
   helpers: Helpers;
   typeNames: string[];
@@ -119,6 +120,7 @@ const performJob = async ({
   defaultBackoffConfig: BackoffConfig;
   defaultLeaseConfig: LeaseConfig;
   workerId: string;
+  stopSignal: AbortSignal;
 }): Promise<
   { job: null; hasMore: false } | { job: StateJob; hasMore: boolean; execute: () => Promise<void> }
 > => {
@@ -166,6 +168,7 @@ const performJob = async ({
           leaseConfig: jobTypeProcessor.leaseConfig ?? defaultLeaseConfig,
           workerId,
           attemptMiddleware: jobTypeProcessor[processorAttemptMiddlewareSymbol],
+          stopSignal,
         });
       } catch (error) {
         await prepareTransactionContext.reject(error);
@@ -395,6 +398,7 @@ export const createInProcessWorker = async <
                 defaultBackoffConfig,
                 defaultLeaseConfig,
                 workerId,
+                stopSignal: stopController.signal,
               });
 
               if (result.job) {

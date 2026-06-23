@@ -8,6 +8,7 @@ import { createInProcessWorker } from "../in-process-worker.js";
 import { withTransactionHooks } from "../transaction-hooks.js";
 import { type AttemptMiddleware } from "../worker/attempt-middleware.js";
 import { createProcessors } from "../worker/create-processors.js";
+import { type JobAbortReason } from "../worker/job-process.js";
 import { type TestSuiteContext } from "./spec-context.spec-helper.js";
 
 export const workerTestSuite = ({ it }: { it: TestAPI<TestSuiteContext> }): void => {
@@ -650,5 +651,79 @@ export const workerTestSuite = ({ it }: { it: TestAPI<TestSuiteContext> }): void
 
     expect(order).toEqual(["execute-wrap-before", "execute-callback", "execute-wrap-after"]);
     expect(observedExecuteCtx).toEqual([{ tag: "execute" }]);
+  });
+
+  it("aborts in-flight job signal with worker_stopping when worker stops", async ({
+    stateAdapter,
+    notifyAdapter,
+    withTransaction,
+    observabilityAdapter,
+    log,
+    expect,
+  }) => {
+    let observedAborted = false;
+    let observedReason: JobAbortReason | undefined;
+    const { promise: handlerStarted, resolve: onHandlerStarted } = Promise.withResolvers<void>();
+
+    const jobTypes = defineJobTypes<{
+      test: { entry: true; input: null; output: null };
+    }>();
+
+    const client = await createClient({
+      stateAdapter,
+      notifyAdapter,
+      observabilityAdapter,
+      log,
+      jobTypes,
+    });
+    const worker = await createInProcessWorker({
+      client,
+      concurrency: 1,
+      processors: createProcessors({
+        client,
+        jobTypes,
+        processors: {
+          test: {
+            attemptHandler: async ({ signal, complete }) => {
+              onHandlerStarted();
+              await new Promise<void>((resolve) => {
+                if (signal.aborted) {
+                  resolve();
+                  return;
+                }
+                signal.addEventListener(
+                  "abort",
+                  () => {
+                    resolve();
+                  },
+                  { once: true },
+                );
+              });
+              observedAborted = signal.aborted;
+              observedReason = signal.reason;
+              return complete(async () => null);
+            },
+          },
+        },
+      }),
+    });
+
+    await withTransactionHooks(async (transactionHooks) =>
+      withTransaction(async (txCtx) =>
+        client.startChain({
+          ...txCtx,
+          transactionHooks,
+          typeName: "test",
+          input: null,
+        }),
+      ),
+    );
+
+    const stop = await worker.start();
+    await handlerStarted;
+    await stop();
+
+    expect(observedAborted).toBe(true);
+    expect(observedReason).toBe("worker_stopping");
   });
 };

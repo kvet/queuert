@@ -1,9 +1,9 @@
 # Triage
 
+- [?,REF] Expose `JobAbortReason` to OTel — include `signal.reason` (e.g. `worker_stopping`, `already_completed`, `taken_by_another_worker`) as a span attribute or event on attempt spans so operators can see why jobs were interrupted
 - [?,REF] Add input and output filtering
 - [?,REF] Change complete job chain to something more empirical?
 - [?,REF] Reset jobs in chains + dashboard
-- [?,REF] Allow worker stopping signal to be risen in attempt handler
 - [?,REF] Allow custom middleware configuration (change timeouts guide and example to use middleware)
 - [?,REF] Make deduplication `scope` explicit in the recurring-jobs example in `docs/src/content/docs/guides/scheduling.mdx` (currently relies on the implicit `incomplete` default, which is why `excludeChainIds` is needed)
 - [?,REF] Rename `startChain` to `createChain` (and `startChains` → `createChains`) for better symmetry with the rest of the API and to avoid confusion about what "start" means in the context of continued jobs
