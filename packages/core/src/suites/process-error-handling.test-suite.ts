@@ -1683,4 +1683,640 @@ export const processErrorHandlingTestSuite = ({ it }: { it: TestAPI<TestSuiteCon
 
     expect(recordedErrors[2]).toBe("string error");
   });
+
+  it("reschedules when execute is called before prepare", async ({
+    stateAdapter,
+    notifyAdapter,
+    withTransaction,
+    withWorkers,
+    observabilityAdapter,
+    log,
+    expect,
+  }) => {
+    const jobTypes = defineJobTypes<{
+      test: {
+        entry: true;
+        input: null;
+        output: null;
+      };
+    }>();
+
+    const client = await createClient({
+      stateAdapter,
+      notifyAdapter,
+      observabilityAdapter,
+      log,
+      jobTypes,
+    });
+    const worker = await createInProcessWorker({
+      client,
+      concurrency: 1,
+      processors: createProcessors({
+        client,
+        jobTypes,
+        processors: {
+          test: {
+            backoffConfig: { initialDelayMs: 1, multiplier: 1, maxDelayMs: 1 },
+            attemptHandler: async ({ job, prepare, execute, complete }) => {
+              if (job.attempt > 1) {
+                expect(job.lastAttemptError).toContain("execute is only valid in staged mode");
+              }
+              if (job.attempt === 1) {
+                await execute(async () => {});
+              }
+              await prepare({ mode: "staged" });
+              return complete(async () => null);
+            },
+          },
+        },
+      }),
+    });
+
+    const chain = await withTransactionHooks(async (transactionHooks) =>
+      withTransaction(async (txCtx) =>
+        client.startChain({
+          ...txCtx,
+          transactionHooks,
+          typeName: "test",
+          input: null,
+        }),
+      ),
+    );
+
+    await withWorkers([await worker.start()], async () => {
+      await client.awaitChain(chain, completionOptions);
+    });
+  });
+
+  it("reschedules when execute is called in atomic mode", async ({
+    stateAdapter,
+    notifyAdapter,
+    withTransaction,
+    withWorkers,
+    observabilityAdapter,
+    log,
+    expect,
+  }) => {
+    const jobTypes = defineJobTypes<{
+      test: {
+        entry: true;
+        input: null;
+        output: null;
+      };
+    }>();
+
+    const client = await createClient({
+      stateAdapter,
+      notifyAdapter,
+      observabilityAdapter,
+      log,
+      jobTypes,
+    });
+    const worker = await createInProcessWorker({
+      client,
+      concurrency: 1,
+      processors: createProcessors({
+        client,
+        jobTypes,
+        processors: {
+          test: {
+            backoffConfig: { initialDelayMs: 1, multiplier: 1, maxDelayMs: 1 },
+            attemptHandler: async ({ job, prepare, execute, complete }) => {
+              if (job.attempt > 1) {
+                expect(job.lastAttemptError).toContain("execute is only valid in staged mode");
+              }
+              await prepare({ mode: "atomic" });
+              if (job.attempt === 1) {
+                await execute(async () => {});
+              }
+              return complete(async () => null);
+            },
+          },
+        },
+      }),
+    });
+
+    const chain = await withTransactionHooks(async (transactionHooks) =>
+      withTransaction(async (txCtx) =>
+        client.startChain({
+          ...txCtx,
+          transactionHooks,
+          typeName: "test",
+          input: null,
+        }),
+      ),
+    );
+
+    await withWorkers([await worker.start()], async () => {
+      await client.awaitChain(chain, completionOptions);
+    });
+  });
+
+  it("reschedules when execute is called after complete", async ({
+    stateAdapter,
+    notifyAdapter,
+    withTransaction,
+    withWorkers,
+    observabilityAdapter,
+    log,
+    expect,
+  }) => {
+    const jobTypes = defineJobTypes<{
+      test: {
+        entry: true;
+        input: null;
+        output: null;
+      };
+    }>();
+
+    const client = await createClient({
+      stateAdapter,
+      notifyAdapter,
+      observabilityAdapter,
+      log,
+      jobTypes,
+    });
+    const worker = await createInProcessWorker({
+      client,
+      concurrency: 1,
+      processors: createProcessors({
+        client,
+        jobTypes,
+        processors: {
+          test: {
+            backoffConfig: { initialDelayMs: 1, multiplier: 1, maxDelayMs: 1 },
+            attemptHandler: async ({ job, prepare, execute, complete }) => {
+              if (job.attempt > 1) {
+                expect(job.lastAttemptError).toContain("execute cannot be called after complete");
+              }
+              await prepare({ mode: "staged" });
+              if (job.attempt === 1) {
+                await complete(async () => null);
+                await execute(async () => {});
+              }
+              return complete(async () => null);
+            },
+          },
+        },
+      }),
+    });
+
+    const chain = await withTransactionHooks(async (transactionHooks) =>
+      withTransaction(async (txCtx) =>
+        client.startChain({
+          ...txCtx,
+          transactionHooks,
+          typeName: "test",
+          input: null,
+        }),
+      ),
+    );
+
+    await withWorkers([await worker.start()], async () => {
+      await client.awaitChain(chain, completionOptions);
+    });
+  });
+
+  it("reschedules when execute callback throws in staged mode", async ({
+    stateAdapter,
+    notifyAdapter,
+    withTransaction,
+    withWorkers,
+    observabilityAdapter,
+    log,
+    expect,
+  }) => {
+    const spyStateAdapter = createSpyStateAdapter(stateAdapter);
+
+    const jobTypes = defineJobTypes<{
+      test: {
+        entry: true;
+        input: { value: number };
+        output: { result: number };
+      };
+    }>();
+
+    const client = await createClient({
+      stateAdapter,
+      notifyAdapter,
+      observabilityAdapter,
+      log,
+      jobTypes,
+    });
+    const workerClient = await createClient({
+      stateAdapter: spyStateAdapter,
+      notifyAdapter,
+      observabilityAdapter,
+      log,
+      jobTypes,
+    });
+    const worker = await createInProcessWorker({
+      client: workerClient,
+      concurrency: 1,
+      processors: createProcessors({
+        client,
+        jobTypes,
+        processors: {
+          test: {
+            backoffConfig: { initialDelayMs: 1, multiplier: 1, maxDelayMs: 1 },
+            attemptHandler: async ({ job, prepare, execute, complete }) => {
+              if (job.attempt > 1) {
+                expect(job.lastAttemptError).toContain("Error: Simulated execute error");
+              }
+              await prepare({ mode: "staged" });
+              if (job.attempt === 1) {
+                await execute(async () => {
+                  throw new Error("Simulated execute error");
+                });
+              }
+              return complete(async () => ({ result: job.input.value * 2 }));
+            },
+          },
+        },
+      }),
+    });
+
+    const chain = await withTransactionHooks(async (transactionHooks) =>
+      withTransaction(async (txCtx) =>
+        client.startChain({
+          ...txCtx,
+          transactionHooks,
+          typeName: "test",
+          input: { value: 10 },
+        }),
+      ),
+    );
+
+    await withWorkers([await worker.start()], async () => {
+      const completed = await client.awaitChain(chain, completionOptions);
+      expect(completed.output).toEqual({ result: 20 });
+    });
+
+    const expected = [
+      expect.objectContaining({
+        name: "withTransaction",
+        status: "committed",
+        children: [
+          expect.objectContaining({ name: "acquireJob" }),
+          expect.objectContaining({ name: "getJobBlockers" }),
+          expect.objectContaining({ name: "renewJobLease" }),
+        ],
+      }),
+      expect.objectContaining({ name: "getNextJobAvailableInMs" }),
+      expect.objectContaining({
+        name: "withTransaction",
+        status: "rolled-back",
+        children: [expect.objectContaining({ name: "getJobs", args: { lock: "exclusive" } })],
+      }),
+      expect.objectContaining({
+        name: "withTransaction",
+        status: "committed",
+        children: [
+          expect.objectContaining({ name: "getJobs", args: { lock: "exclusive" } }),
+          expect.objectContaining({ name: "abandonJob" }),
+          expect.objectContaining({ name: "rescheduleJobs" }),
+        ],
+      }),
+    ];
+    expect(spyStateAdapter.calls.slice(0, expected.length)).toEqual(expected);
+  });
+
+  it("reschedules when execute is called in parallel", async ({
+    stateAdapter,
+    notifyAdapter,
+    withTransaction,
+    withWorkers,
+    observabilityAdapter,
+    log,
+    expect,
+  }) => {
+    const jobTypes = defineJobTypes<{
+      test: {
+        entry: true;
+        input: null;
+        output: null;
+      };
+    }>();
+
+    const client = await createClient({
+      stateAdapter,
+      notifyAdapter,
+      observabilityAdapter,
+      log,
+      jobTypes,
+    });
+    const worker = await createInProcessWorker({
+      client,
+      concurrency: 1,
+      processors: createProcessors({
+        client,
+        jobTypes,
+        processors: {
+          test: {
+            backoffConfig: { initialDelayMs: 1, multiplier: 1, maxDelayMs: 1 },
+            attemptHandler: async ({ job, prepare, execute, complete }) => {
+              if (job.attempt > 1) {
+                expect(job.lastAttemptError).toContain("parallel");
+              }
+              await prepare({ mode: "staged" });
+              if (job.attempt === 1) {
+                await execute(async () => {
+                  await execute(async () => {});
+                });
+              }
+              return complete(async () => null);
+            },
+          },
+        },
+      }),
+    });
+
+    const chain = await withTransactionHooks(async (transactionHooks) =>
+      withTransaction(async (txCtx) =>
+        client.startChain({
+          ...txCtx,
+          transactionHooks,
+          typeName: "test",
+          input: null,
+        }),
+      ),
+    );
+
+    await withWorkers([await worker.start()], async () => {
+      await client.awaitChain(chain, completionOptions);
+    });
+  });
+
+  it("reschedules when execute is called while prepare is running", async ({
+    stateAdapter,
+    notifyAdapter,
+    withTransaction,
+    withWorkers,
+    observabilityAdapter,
+    log,
+    expect,
+  }) => {
+    const jobTypes = defineJobTypes<{
+      test: {
+        entry: true;
+        input: null;
+        output: null;
+      };
+    }>();
+
+    const client = await createClient({
+      stateAdapter,
+      notifyAdapter,
+      observabilityAdapter,
+      log,
+      jobTypes,
+    });
+    const worker = await createInProcessWorker({
+      client,
+      concurrency: 1,
+      processors: createProcessors({
+        client,
+        jobTypes,
+        processors: {
+          test: {
+            backoffConfig: { initialDelayMs: 1, multiplier: 1, maxDelayMs: 1 },
+            attemptHandler: async ({ job, prepare, execute, complete }) => {
+              if (job.attempt > 1) {
+                expect(job.lastAttemptError).toContain("prepare is running");
+              }
+              await prepare({ mode: "staged" }, async () => {
+                if (job.attempt === 1) {
+                  await execute(async () => {});
+                }
+              });
+              return complete(async () => null);
+            },
+          },
+        },
+      }),
+    });
+
+    const chain = await withTransactionHooks(async (transactionHooks) =>
+      withTransaction(async (txCtx) =>
+        client.startChain({
+          ...txCtx,
+          transactionHooks,
+          typeName: "test",
+          input: null,
+        }),
+      ),
+    );
+
+    await withWorkers([await worker.start()], async () => {
+      await client.awaitChain(chain, completionOptions);
+    });
+  });
+
+  it("reschedules when complete is called while execute is running", async ({
+    stateAdapter,
+    notifyAdapter,
+    withTransaction,
+    withWorkers,
+    observabilityAdapter,
+    log,
+    expect,
+  }) => {
+    const jobTypes = defineJobTypes<{
+      test: {
+        entry: true;
+        input: null;
+        output: null;
+      };
+    }>();
+
+    const client = await createClient({
+      stateAdapter,
+      notifyAdapter,
+      observabilityAdapter,
+      log,
+      jobTypes,
+    });
+    const worker = await createInProcessWorker({
+      client,
+      concurrency: 1,
+      processors: createProcessors({
+        client,
+        jobTypes,
+        processors: {
+          test: {
+            backoffConfig: { initialDelayMs: 1, multiplier: 1, maxDelayMs: 1 },
+            attemptHandler: async ({ job, prepare, execute, complete }) => {
+              if (job.attempt > 1) {
+                expect(job.lastAttemptError).toContain("execute is running");
+              }
+              await prepare({ mode: "staged" });
+              if (job.attempt === 1) {
+                await execute(async () => {
+                  await complete(async () => null);
+                });
+              }
+              return complete(async () => null);
+            },
+          },
+        },
+      }),
+    });
+
+    const chain = await withTransactionHooks(async (transactionHooks) =>
+      withTransaction(async (txCtx) =>
+        client.startChain({
+          ...txCtx,
+          transactionHooks,
+          typeName: "test",
+          input: null,
+        }),
+      ),
+    );
+
+    await withWorkers([await worker.start()], async () => {
+      await client.awaitChain(chain, completionOptions);
+    });
+  });
+
+  it("reschedules when complete is called while prepare is running", async ({
+    stateAdapter,
+    notifyAdapter,
+    withTransaction,
+    withWorkers,
+    observabilityAdapter,
+    log,
+    expect,
+  }) => {
+    const jobTypes = defineJobTypes<{
+      test: {
+        entry: true;
+        input: null;
+        output: null;
+      };
+    }>();
+
+    const client = await createClient({
+      stateAdapter,
+      notifyAdapter,
+      observabilityAdapter,
+      log,
+      jobTypes,
+    });
+    const worker = await createInProcessWorker({
+      client,
+      concurrency: 1,
+      processors: createProcessors({
+        client,
+        jobTypes,
+        processors: {
+          test: {
+            backoffConfig: { initialDelayMs: 1, multiplier: 1, maxDelayMs: 1 },
+            attemptHandler: async ({ job, prepare, complete }) => {
+              if (job.attempt > 1) {
+                expect(job.lastAttemptError).toContain("prepare is running");
+              }
+              await prepare({ mode: "atomic" }, async () => {
+                if (job.attempt === 1) {
+                  await complete(async () => null);
+                }
+              });
+              return complete(async () => null);
+            },
+          },
+        },
+      }),
+    });
+
+    const chain = await withTransactionHooks(async (transactionHooks) =>
+      withTransaction(async (txCtx) =>
+        client.startChain({
+          ...txCtx,
+          transactionHooks,
+          typeName: "test",
+          input: null,
+        }),
+      ),
+    );
+
+    await withWorkers([await worker.start()], async () => {
+      await client.awaitChain(chain, completionOptions);
+    });
+  });
+
+  it("recovers when user code poisons transaction in execute callback", async ({
+    stateAdapter,
+    notifyAdapter,
+    withTransaction,
+    poisonTransaction,
+    withWorkers,
+    observabilityAdapter,
+    log,
+    expect,
+    skip,
+  }) => {
+    if (!poisonTransaction) return skip();
+
+    const spyStateAdapter = createSpyStateAdapter(stateAdapter);
+
+    const jobTypes = defineJobTypes<{
+      test: {
+        entry: true;
+        input: { value: number };
+        output: { result: number };
+      };
+    }>();
+
+    const client = await createClient({
+      stateAdapter,
+      notifyAdapter,
+      observabilityAdapter,
+      log,
+      jobTypes,
+    });
+    const workerClient = await createClient({
+      stateAdapter: spyStateAdapter,
+      notifyAdapter,
+      observabilityAdapter,
+      log,
+      jobTypes,
+    });
+    const worker = await createInProcessWorker({
+      client: workerClient,
+      concurrency: 1,
+      processors: createProcessors({
+        client,
+        jobTypes,
+        processors: {
+          test: {
+            backoffConfig: { initialDelayMs: 1, multiplier: 1, maxDelayMs: 1 },
+            attemptHandler: async ({ job, prepare, execute, complete }) => {
+              await prepare({ mode: "staged" });
+              if (job.attempt === 1) {
+                await execute(async (txCtx) => {
+                  await poisonTransaction(txCtx);
+                });
+              }
+              return complete(async () => ({ result: job.input.value * 2 }));
+            },
+          },
+        },
+      }),
+    });
+
+    const chain = await withTransactionHooks(async (transactionHooks) =>
+      withTransaction(async (txCtx) =>
+        client.startChain({
+          ...txCtx,
+          transactionHooks,
+          typeName: "test",
+          input: { value: 10 },
+        }),
+      ),
+    );
+
+    await withWorkers([await worker.start()], async () => {
+      const completed = await client.awaitChain(chain, completionOptions);
+      expect(completed.output).toEqual({ result: 20 });
+    });
+  });
 };

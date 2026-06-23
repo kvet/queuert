@@ -91,6 +91,72 @@ Use staged mode when you need to do work **between** two transactions — typica
 }
 ```
 
+### Intermediate Transactions with `execute`
+
+```d2
+...@../_classes.d2
+
+direction: right
+
+txn1: "transaction" {
+  class: txn
+  prepare: "prepare()" { class: step }
+}
+
+txn2: "transaction" {
+  class: txn
+  execute: "execute() — batch 1" { class: step }
+}
+
+txn3: "transaction" {
+  class: txn
+  execute2: "execute() — batch N" { class: step }
+}
+
+txn4: "transaction" {
+  class: txn
+  complete: "complete()" { class: step }
+}
+
+txn1.prepare -> txn2.execute { class: flow }
+txn2.execute -> txn3.execute2 { class: flow }
+txn3.execute2 -> txn4.complete { class: flow }
+```
+
+Within staged mode, `execute` lets you perform **multiple independent transactions** between `prepare` and `complete` — typically for batched work or checkpointed aggregation:
+
+```ts
+'aggregate-metrics': {
+  attemptHandler: async ({ job, execute, complete }) => {
+    let totalProcessed = 0;
+    let cursor;
+
+    do {
+      const batch = await execute(async ({ sql }) => {
+        const rows = await sql`
+          SELECT id, value FROM raw_events
+          WHERE processed = false
+          ORDER BY id LIMIT 500
+        `;
+        if (rows.length > 0) {
+          await sql`
+            UPDATE raw_events SET processed = true
+            WHERE id = ANY(${rows.map(r => r.id)})
+          `;
+        }
+        return { count: rows.length, nextCursor: rows.at(-1)?.id };
+      });
+      totalProcessed += batch.count;
+      cursor = batch.count === 500 ? batch.nextCursor : undefined;
+    } while (cursor);
+
+    return complete(async () => ({ totalProcessed }));
+  },
+}
+```
+
+Each `execute` call opens a fresh guarded transaction (lease ownership verified), runs the callback, commits, and flushes hooks. If `prepare` hasn't been called, `execute` automatically enters staged mode.
+
 ## When to Use What
 
 ```
@@ -98,7 +164,8 @@ Do you need to call an external API or do long-running
 work between reading and writing?
   ├── No  → Just call complete() directly (auto-setup atomic)
   └── Yes → Use prepare({ mode: "staged" })
-            Read in prepare, do external work, write in complete
+            ├── Single external call → Read in prepare, do external work, write in complete
+            └── Batched transactional work → Use execute() between prepare and complete
 ```
 
 In practice, explicit `prepare` with a fixed mode is rarely needed. `prepare({ mode: "atomic" })` does the same thing as calling `complete` directly but with extra ceremony. The main reason to use explicit `prepare` is when the mode is **dynamic** — determined at runtime based on job input or application state.

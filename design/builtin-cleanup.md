@@ -63,9 +63,9 @@ export function createCleanupProcessors({
     requiredAttemptMiddleware,
     processors: {
       "__queuert/cleanup": {
-        attemptHandler: async ({ job, complete }) => {
+        attemptHandler: async ({ job, execute, complete }) => {
           // cursor-paginate completed chains older than cutoff
-          // delete in batches
+          // delete in batches via execute() — each batch in its own guarded transaction
           // vacuum
           // complete (no self-rescheduling — user controls the schedule)
         },
@@ -75,8 +75,9 @@ export function createCleanupProcessors({
 }
 ```
 
-The handler does not self-reschedule. The user controls the interval at the scheduling call
-site.
+The handler uses `execute` for each deletion batch — each call opens a fresh guarded
+transaction with lease verification, keeping lock scope bounded. The handler does not
+self-reschedule. The user controls the interval at the scheduling call site.
 
 ### User setup
 

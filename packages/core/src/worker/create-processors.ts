@@ -8,6 +8,7 @@ import {
   type AttemptMiddleware,
   type MergedAttemptHandlerCtx,
   type MergedCompleteCtx,
+  type MergedExecuteCtx,
   type MergedPrepareCtx,
 } from "./attempt-middleware.js";
 import { type LeaseConfig } from "./lease.js";
@@ -54,7 +55,8 @@ export const createProcessors = <
   TJobTypeDefinitions extends BaseJobTypeDefinitions,
   TExternalJobTypeDefinitions extends BaseJobTypeDefinitions,
   TProcessors extends keyof TJobTypeDefinitions & string,
-  const TAttemptMiddleware extends readonly AttemptMiddleware<any, any, any, any>[] = readonly [],
+  const TAttemptMiddleware extends readonly AttemptMiddleware<any, any, any, any, any>[] =
+    readonly [],
   TMergedJobTypeDefinitions extends BaseJobTypeDefinitions = MergedDefs<
     TJobTypeDefinitions,
     TExternalJobTypeDefinitions
@@ -74,6 +76,7 @@ export const createProcessors = <
       K,
       MergedAttemptHandlerCtx<TAttemptMiddleware>,
       MergedPrepareCtx<TAttemptMiddleware>,
+      MergedExecuteCtx<TAttemptMiddleware>,
       MergedCompleteCtx<TAttemptMiddleware>
     >;
   } & Record<Exclude<TProcessors, keyof TJobTypeDefinitions & string>, never>;
@@ -81,7 +84,10 @@ export const createProcessors = <
   const middleware = options.attemptMiddleware ?? [];
   const stampedProcessors: Record<string, unknown> = {};
   for (const [typeName, processor] of Object.entries(
-    options.processors as Record<string, InProcessWorkerProcessor<any, any, any, any, any, any>>,
+    options.processors as Record<
+      string,
+      InProcessWorkerProcessor<any, any, any, any, any, any, any>
+    >,
   )) {
     stampedProcessors[typeName] = Object.assign(
       {},

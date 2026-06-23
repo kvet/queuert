@@ -90,6 +90,7 @@ export {
   type AttemptComplete,
   type AttemptCompleteCallback,
   type AttemptCompleteOptions,
+  type AttemptExecute,
   type AttemptHandler,
   type AttemptPrepare,
   type AttemptPrepareCallback,

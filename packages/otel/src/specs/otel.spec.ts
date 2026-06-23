@@ -986,6 +986,91 @@ describe("Spans", () => {
     ]);
   });
 
+  it("tracks execute spans with index attribute", async ({
+    stateAdapter,
+    notifyAdapter,
+    withTransaction,
+    withWorkers,
+    observabilityAdapter,
+    log,
+    expectSpans,
+  }) => {
+    const jobTypes = defineJobTypes<{
+      test: {
+        entry: true;
+        input: null;
+        output: null;
+      };
+    }>();
+
+    const client = await createClient({
+      stateAdapter,
+      notifyAdapter,
+      observabilityAdapter,
+      log,
+      jobTypes,
+    });
+    const worker = await createInProcessWorker({
+      client,
+      concurrency: 1,
+      processors: createProcessors({
+        client,
+        jobTypes,
+        processors: {
+          test: {
+            attemptHandler: async ({ prepare, execute, complete }) => {
+              await prepare({ mode: "staged" });
+              await execute(async () => {});
+              await execute(async () => {});
+              return complete(async () => null);
+            },
+          },
+        },
+      }),
+    });
+
+    const chain = await withTransactionHooks(async (transactionHooks) =>
+      withTransaction(async (txCtx) =>
+        client.startChain({
+          ...txCtx,
+          transactionHooks,
+          typeName: "test",
+          input: null,
+        }),
+      ),
+    );
+
+    await withWorkers([await worker.start()], async () => {
+      await client.awaitChain(chain, completionOptions);
+    });
+
+    await expectSpans([
+      { name: "create chain.test", kind: "PRODUCER" },
+      { name: "create job.test", kind: "PRODUCER", parentName: "create chain.test" },
+      { name: "prepare", kind: "INTERNAL", parentName: "start job-attempt.test" },
+      {
+        name: "execute",
+        kind: "INTERNAL",
+        parentName: "start job-attempt.test",
+        attributes: { "queuert.execute.index": 0 },
+      },
+      {
+        name: "execute",
+        kind: "INTERNAL",
+        parentName: "start job-attempt.test",
+        attributes: { "queuert.execute.index": 1 },
+      },
+      { name: "complete", kind: "INTERNAL", parentName: "start job-attempt.test" },
+      {
+        name: "complete chain.test",
+        kind: "CONSUMER",
+        parentName: "start job-attempt.test",
+        links: 1,
+      },
+      { name: "start job-attempt.test", kind: "CONSUMER", parentName: "create job.test" },
+    ]);
+  });
+
   it("tracks error spans on retry", async ({
     stateAdapter,
     notifyAdapter,

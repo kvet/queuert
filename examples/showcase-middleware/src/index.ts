@@ -1,10 +1,11 @@
 /**
  * Job Attempt Middleware Showcase
  *
- * Demonstrates all three middleware hooks and how typed ctx flows into the handler:
+ * Demonstrates all four middleware hooks and how typed ctx flows into the handler:
  *   1. wrapHandler  — injects a trace id (and logs around the entire attempt)
  *   2. wrapPrepare  — preloads shared data inside the prepare transaction
- *   3. wrapComplete — provides an audit helper the handler can call at completion
+ *   3. wrapExecute  — provides an audit helper inside execute transactions
+ *   4. wrapComplete — provides an audit helper inside the complete transaction
  *
  * Two middlewares are composed as an onion to make the order visible in output.
  */
@@ -70,9 +71,9 @@ const tracingMiddleware: AttemptMiddleware<any, { traceId: string }> = {
 };
 
 // Middleware 2: resource preload + audit helper.
-//   wrapPrepare runs inside the prepare transaction — use txCtx for consistent reads.
-//   wrapComplete runs inside the complete transaction — use it for post-completion
-//   side effects like audit rows or outbox inserts.
+//   wrapPrepare  — runs inside the prepare transaction; use txCtx for consistent reads.
+//   wrapExecute  — provides audit() inside execute transactions.
+//   wrapComplete — provides audit() inside the complete transaction.
 type User = { id: string; email: string };
 const auditLog: { event: string; userId: string; invoiceId?: string }[] = [];
 
@@ -80,14 +81,23 @@ const resourceMiddleware: AttemptMiddleware<
   any,
   Record<string, never>,
   { user: User },
+  { audit: (event: string, extra?: Record<string, unknown>) => void },
   { audit: (event: string, extra?: { invoiceId?: string }) => void }
 > = {
   wrapPrepare: async ({ job, next }) => {
-    // In a real app, query the DB with the surrounding txCtx. Here we synthesize.
     const userId = (job.input as { userId: string }).userId;
     const user: User = { id: userId, email: `${userId}@example.com` };
     console.log(`    · prepare: preloaded ${user.email}`);
     return next({ user });
+  },
+  wrapExecute: async ({ job, next }) => {
+    const userId = (job.input as { userId: string }).userId;
+    return next({
+      audit: (event, extra) => {
+        auditLog.push({ event, userId, ...extra });
+        console.log(`    · execute: audit(${event}${extra ? ` ${JSON.stringify(extra)}` : ""})`);
+      },
+    });
   },
   wrapComplete: async ({ job, next }) => {
     const userId = (job.input as { userId: string }).userId;
@@ -123,18 +133,20 @@ const worker = await createInProcessWorker({
     attemptMiddleware: [tracingMiddleware, resourceMiddleware],
     processors: {
       "send-invoice": {
-        attemptHandler: async ({ traceId, prepare, complete }) => {
-          // traceId injected by tracingMiddleware.wrapHandler
+        attemptHandler: async ({ traceId, prepare, execute, complete }) => {
           console.log(`  · handler: running (traceId=${traceId})`);
 
-          // prepare callback receives typed ctx injected by resourceMiddleware.wrapPrepare
           const user = await prepare({ mode: "staged" }, async ({ user }) => user);
           console.log(`  · handler: preloaded user.email=${user.email}`);
 
+          const invoiceId = await execute(async ({ audit }) => {
+            const id = `inv-${Date.now()}`;
+            audit("invoice-created", { invoiceId: id });
+            return id;
+          });
+
           return complete(async ({ audit }) => {
-            // audit injected by resourceMiddleware.wrapComplete
-            const invoiceId = `inv-${Date.now()}`;
-            audit("invoice-created", { invoiceId });
+            audit("notification-sent", { invoiceId });
             return { invoiceId };
           });
         },
@@ -163,8 +175,9 @@ console.log(`output: ${JSON.stringify(result.output)}`);
 console.log(`audit log: ${JSON.stringify(auditLog, null, 2)}`);
 
 assert.ok(result.output.invoiceId.startsWith("inv-"));
-assert.equal(auditLog.length, 1);
+assert.equal(auditLog.length, 2);
 assert.equal(auditLog[0].event, "invoice-created");
+assert.equal(auditLog[1].event, "notification-sent");
 
 await stopWorker();
 await notifyAdapter.close();

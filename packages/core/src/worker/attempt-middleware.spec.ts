@@ -8,6 +8,7 @@ import {
   type AttemptMiddleware,
   type MergedAttemptHandlerCtx,
   type MergedCompleteCtx,
+  type MergedExecuteCtx,
   type MergedPrepareCtx,
 } from "./attempt-middleware.js";
 import { createProcessors } from "./create-processors.js";
@@ -21,11 +22,12 @@ const stateAdapter = await createInProcessStateAdapter();
 const client = await createClient({ stateAdapter, jobTypes });
 
 type W1<C extends Record<string, unknown>> = AttemptMiddleware<any, C>;
-type W3<
+type W4<
   H extends Record<string, unknown>,
   P extends Record<string, unknown>,
+  E extends Record<string, unknown>,
   C extends Record<string, unknown>,
-> = AttemptMiddleware<any, H, P, C>;
+> = AttemptMiddleware<any, H, P, E, C>;
 
 describe("AttemptMiddleware ctx type inference", () => {
   it("MergedAttemptHandlerCtx distributes across middleware (1, 4, 5, 8)", () => {
@@ -71,13 +73,16 @@ describe("AttemptMiddleware ctx type inference", () => {
     >();
   });
 
-  it("MergedPrepareCtx / MergedCompleteCtx pick only their phase", () => {
-    expectTypeOf<MergedPrepareCtx<readonly [W3<{ h: 1 }, { p: 2 }, { c: 3 }>]>>().toEqualTypeOf<{
-      p: 2;
-    }>();
-    expectTypeOf<MergedCompleteCtx<readonly [W3<{ h: 1 }, { p: 2 }, { c: 3 }>]>>().toEqualTypeOf<{
-      c: 3;
-    }>();
+  it("MergedPrepareCtx / MergedExecuteCtx / MergedCompleteCtx pick only their phase", () => {
+    expectTypeOf<
+      MergedPrepareCtx<readonly [W4<{ h: 1 }, { p: 2 }, { e: 3 }, { c: 4 }>]>
+    >().toEqualTypeOf<{ p: 2 }>();
+    expectTypeOf<
+      MergedExecuteCtx<readonly [W4<{ h: 1 }, { p: 2 }, { e: 3 }, { c: 4 }>]>
+    >().toEqualTypeOf<{ e: 3 }>();
+    expectTypeOf<
+      MergedCompleteCtx<readonly [W4<{ h: 1 }, { p: 2 }, { e: 3 }, { c: 4 }>]>
+    >().toEqualTypeOf<{ c: 4 }>();
   });
 
   it("attemptHandler receives merged handler ctx", () => {
@@ -126,9 +131,37 @@ describe("AttemptMiddleware ctx type inference", () => {
     });
   });
 
+  it("executeCallback options include execute ctx alongside transactionHooks & txCtx", () => {
+    const w: AttemptMiddleware<
+      any,
+      Record<string, never>,
+      Record<string, never>,
+      { meter: (name: string) => void }
+    > = {
+      wrapExecute: async ({ next }) => next({ meter: () => {} }),
+    };
+
+    createProcessors({
+      client,
+      jobTypes,
+      attemptMiddleware: [w],
+      processors: {
+        foo: {
+          attemptHandler: async ({ execute, complete }) => {
+            await execute(async ({ meter, transactionHooks: _t }) => {
+              expectTypeOf(meter).toEqualTypeOf<(name: string) => void>();
+            });
+            return complete(async () => ({ ok: true as const }));
+          },
+        },
+      },
+    });
+  });
+
   it("completeCallback options include complete ctx alongside continueWith & txCtx", () => {
     const w: AttemptMiddleware<
       any,
+      Record<string, never>,
       Record<string, never>,
       Record<string, never>,
       { audit: (evt: string) => void }
@@ -188,12 +221,18 @@ describe("AttemptMiddleware accepts concrete (non-any) state adapters", () => {
     expectTypeOf<AttemptMiddleware<DbStateAdapter, { trace: string }>>().toBeObject();
   });
 
-  it("wrapPrepare/wrapComplete receive the adapter's txCtx fields", () => {
+  it("wrapPrepare/wrapExecute/wrapComplete receive the adapter's txCtx fields", () => {
     type Tx = { db: { query: (sql: string) => Promise<unknown> } };
     type DbStateAdapter = StateAdapter<Tx, string>;
 
     const mwPrepare: AttemptMiddleware<DbStateAdapter> = {
       wrapPrepare: async ({ db, next }) => {
+        expectTypeOf(db).toEqualTypeOf<Tx["db"]>();
+        return next({});
+      },
+    };
+    const mwExecute: AttemptMiddleware<DbStateAdapter> = {
+      wrapExecute: async ({ db, next }) => {
         expectTypeOf(db).toEqualTypeOf<Tx["db"]>();
         return next({});
       },
@@ -205,6 +244,7 @@ describe("AttemptMiddleware accepts concrete (non-any) state adapters", () => {
       },
     };
     void mwPrepare;
+    void mwExecute;
     void mwComplete;
   });
 });

@@ -75,6 +75,7 @@ export type JobAttemptSpanHandle = {
   getChainTraceContext: () => string;
   getTraceContext: () => string;
   startPrepare: () => SpanHandle;
+  startExecute: () => SpanHandle;
   startComplete: () => SpanHandle;
   end: (result: JobAttemptSpanResult) => void;
 };

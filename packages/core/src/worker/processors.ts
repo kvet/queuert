@@ -13,6 +13,7 @@ export type InProcessWorkerProcessor<
   TJobTypeName extends string,
   THandlerCtx extends Record<string, unknown>,
   TPrepareCtx extends Record<string, unknown>,
+  TExecuteCtx extends Record<string, unknown>,
   TCompleteCtx extends Record<string, unknown>,
 > = {
   /** Handler function called for each job attempt */
@@ -23,6 +24,7 @@ export type InProcessWorkerProcessor<
     JobTypeReachingEntry<TJobTypeDefinitions, TJobTypeName>,
     THandlerCtx,
     TPrepareCtx,
+    TExecuteCtx,
     TCompleteCtx
   >;
   /** Per-job-type backoff configuration (overrides registry/worker defaults) */
@@ -72,10 +74,11 @@ export type ProcessorMiddlewareTuple<T extends Processors> = T[typeof processors
  */
 export type Processors<
   TJobTypeDefinitions extends BaseJobTypeDefinitions = BaseJobTypeDefinitions,
-  TAttemptMiddleware extends readonly AttemptMiddleware<any, any, any, any>[] =
-    readonly AttemptMiddleware<any, any, any, any>[],
+  TAttemptMiddleware extends readonly AttemptMiddleware<any, any, any, any, any>[] =
+    readonly AttemptMiddleware<any, any, any, any, any>[],
 > = {
   readonly [K in JobTypeNames<TJobTypeDefinitions>]: InProcessWorkerProcessor<
+    any,
     any,
     any,
     any,

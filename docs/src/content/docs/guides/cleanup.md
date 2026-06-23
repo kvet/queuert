@@ -33,7 +33,7 @@ const cleanupProcessorRegistry = createProcessors({
   jobTypes: cleanupJobTypes,
   processors: {
     "queuert.cleanup": {
-      attemptHandler: async ({ job, complete }) => {
+      attemptHandler: async ({ job, execute, complete }) => {
         const cutoffDate = new Date(Date.now() - CLEANUP_RETENTION_MS);
         let deletedChainCount = 0;
         let cursor: string | undefined;
@@ -51,14 +51,12 @@ const cleanupProcessorRegistry = createProcessors({
           );
 
           if (chainsToDelete.length > 0) {
-            const deleted = await withTransactionHooks(async (transactionHooks) =>
-              stateProvider.withTransaction(async (txCtx) =>
-                client.deleteChains({
-                  ...txCtx,
-                  transactionHooks,
-                  ids: chainsToDelete.map((chain) => chain.id),
-                }),
-              ),
+            const deleted = await execute(async ({ transactionHooks, ...txCtx }) =>
+              client.deleteChains({
+                ...txCtx,
+                transactionHooks,
+                ids: chainsToDelete.map((chain) => chain.id),
+              }),
             );
             deletedChainCount += deleted.length;
           }
@@ -95,6 +93,7 @@ Key patterns used:
 - **Retention cutoff** — `CLEANUP_RETENTION_MS` controls how long completed chains are kept before deletion
 - **Self-exclusion filter** — the cleanup chain filters itself out of the deletion list to avoid deleting its own chain
 - **Cursor pagination** — processes chains in bounded batches using `listChains` cursor, preventing unbounded memory usage
+- **`execute` batching** — each batch of deletions runs in its own guarded transaction via `execute`, so the handler never holds a single long-lived transaction. The lease is verified on each `execute` call, ensuring the worker still owns the job
 - **Vacuum** — reclaims disk space after all deletions complete
 - **`deduplication`** with `scope: "incomplete"` — ensures only one cleanup chain is active at a time
 - **`excludeChainIds`** — prevents the finishing cleanup chain from deduplicating against itself

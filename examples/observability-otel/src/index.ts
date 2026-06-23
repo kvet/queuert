@@ -7,8 +7,9 @@
  * 1. Single Job: Basic chain with one job → one chain span, one job span, one attempt span
  * 2. Continuations: Linear chain of jobs → chain span contains multiple sequential job spans
  * 3. Blockers: Fan-out/fan-in pattern → chain span shows parallel blocker jobs with links
- * 4. Retries: Job fails then succeeds → job span contains multiple attempt spans
- * 5. Workerless Completion: Job completed externally → CONSUMER job span without attempt spans
+ * 4. Execute: Batched transactions → attempt span shows prepare, execute ×2, complete
+ * 5. Retries: Job fails then succeeds → job span contains multiple attempt spans
+ * 6. Workerless Completion: Job completed externally → CONSUMER job span without attempt spans
  */
 
 import {
@@ -97,7 +98,26 @@ const jobTypes = defineJobTypes<{
   };
 
   /*
-   * Scenario 4 - Retries:
+   * Scenario 4 - Execute (batched transactions):
+   *   batch-process → prepare, execute ×2, complete
+   *
+   * Trace structure:
+   *   chain-span
+   *     └─ job-span (batch-process)
+   *          └─ attempt-span #1
+   *               ├─ prepare
+   *               ├─ execute (batch 1)
+   *               ├─ execute (batch 2)
+   *               └─ complete
+   */
+  "batch-process": {
+    entry: true;
+    input: { items: number[] };
+    output: { total: number };
+  };
+
+  /*
+   * Scenario 5 - Retries:
    *   might-fail (attempt #1: fail) → (attempt #2: success)
    *
    * Trace structure:
@@ -109,7 +129,7 @@ const jobTypes = defineJobTypes<{
   "might-fail": { entry: true; input: { shouldFail: boolean }; output: { success: true } };
 
   /*
-   * Scenario 5 - Workerless Completion:
+   * Scenario 6 - Workerless Completion:
    *   awaiting-approval → completed externally via completeChain
    *
    * Trace structure:
@@ -216,7 +236,22 @@ const worker = await createInProcessWorker({
         },
       },
 
-      // Scenario 4: Failing job
+      // Scenario 4: Batched execute transactions
+      "batch-process": {
+        attemptHandler: async ({ job, prepare, execute, complete }) => {
+          await prepare({ mode: "staged" });
+          let total = 0;
+          for (const item of job.input.items) {
+            total += await execute(async () => {
+              await new Promise((r) => setTimeout(r, 30));
+              return item * 2;
+            });
+          }
+          return complete(async () => ({ total }));
+        },
+      },
+
+      // Scenario 5: Failing job
       "might-fail": {
         attemptHandler: async ({ job, complete }) => {
           if (job.input.shouldFail && job.attempt < 2) {
@@ -292,8 +327,26 @@ const blockerChain = await withTransactionHooks(async (transactionHooks) =>
 const blockerResult = await client.awaitChain(blockerChain, { timeoutMs: 10000 });
 console.log("Result:", blockerResult.output);
 
-// Scenario 4: Retries
-console.log("\n--- Scenario 4: Retries ---");
+// Scenario 4: Execute (batched transactions)
+console.log("\n--- Scenario 4: Execute ---");
+console.log(
+  "Staged handler with two execute() calls. Attempt span shows prepare, 2× execute, complete.\n",
+);
+const batchChain = await withTransactionHooks(async (transactionHooks) =>
+  stateAdapter.withTransaction(async (ctx) =>
+    client.startChain({
+      ...ctx,
+      transactionHooks,
+      typeName: "batch-process",
+      input: { items: [10, 20] },
+    }),
+  ),
+);
+const batchResult = await client.awaitChain(batchChain, { timeoutMs: 5000 });
+console.log("Result:", batchResult.output);
+
+// Scenario 5: Retries
+console.log("\n--- Scenario 5: Retries ---");
 console.log("First attempt fails, second succeeds. Job span shows multiple attempt spans.\n");
 const retryChain = await withTransactionHooks(async (transactionHooks) =>
   stateAdapter.withTransaction(async (ctx) =>
@@ -308,8 +361,8 @@ const retryChain = await withTransactionHooks(async (transactionHooks) =>
 const retryResult = await client.awaitChain(retryChain, { timeoutMs: 5000 });
 console.log("Result:", retryResult.output);
 
-// Scenario 5: Workerless Completion
-console.log("\n--- Scenario 5: Workerless Completion ---");
+// Scenario 6: Workerless Completion
+console.log("\n--- Scenario 6: Workerless Completion ---");
 console.log("Job completed externally without a worker. CONSUMER job span, no attempt spans.\n");
 const approvalChain = await withTransactionHooks(async (transactionHooks) =>
   stateAdapter.withTransaction(async (ctx) =>

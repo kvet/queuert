@@ -71,7 +71,7 @@ const cleanupProcessorRegistry = createProcessors({
   jobTypes: cleanupJobTypes,
   processors: {
     "queuert.cleanup": {
-      attemptHandler: async ({ job, complete }) => {
+      attemptHandler: async ({ job, execute, complete }) => {
         const cutoffDate = new Date(Date.now() - CLEANUP_RETENTION_MS);
         let deletedChainCount = 0;
         let cursor: string | undefined;
@@ -89,14 +89,11 @@ const cleanupProcessorRegistry = createProcessors({
           );
 
           if (chainsToDelete.length > 0) {
-            const deleted = await withTransactionHooks(async (transactionHooks) =>
-              sql.begin(async (txSql) => {
-                const result = await client.deleteChains({
-                  sql: txSql,
-                  transactionHooks,
-                  ids: chainsToDelete.map((chain) => chain.id),
-                });
-                return result;
+            const deleted = await execute(async ({ sql, transactionHooks }) =>
+              client.deleteChains({
+                sql,
+                transactionHooks,
+                ids: chainsToDelete.map((chain) => chain.id),
               }),
             );
             deletedChainCount += deleted.length;

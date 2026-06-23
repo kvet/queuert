@@ -395,6 +395,7 @@ export const createOtelObservabilityAdapter = async ({
       );
 
       const attemptCtx = trace.setSpan(context.active(), attemptSpan);
+      let executeCount = 0;
 
       return {
         getChainTraceContext: () => chainTraceContext,
@@ -402,6 +403,23 @@ export const createOtelObservabilityAdapter = async ({
 
         startPrepare() {
           const span = tracer.startSpan("prepare", { kind: SpanKind.INTERNAL }, attemptCtx);
+          return {
+            end: () => {
+              span.end();
+            },
+          };
+        },
+
+        startExecute() {
+          const index = executeCount++;
+          const span = tracer.startSpan(
+            "execute",
+            {
+              kind: SpanKind.INTERNAL,
+              attributes: { "queuert.execute.index": index },
+            },
+            attemptCtx,
+          );
           return {
             end: () => {
               span.end();

@@ -70,6 +70,10 @@ For more control, call `prepare` explicitly:
 - **Atomic mode**: Prepare and complete run in the same transaction. Rarely needed since calling `complete` directly achieves the same result with less ceremony.
 - **Staged mode**: Prepare runs in one transaction, long-running work happens outside, then complete runs in another transaction. The worker automatically renews the job lease between phases. Implement the processing phase idempotently as it may retry if the worker crashes.
 
+### Intermediate Transactions with `execute`
+
+Handlers can call `execute` to perform intermediate transactional work — each call opens a fresh guarded transaction with lease verification. This is useful for batched operations like bulk deletes where holding a single long-lived transaction would be impractical. If `prepare` hasn't been called, `execute` automatically enters staged mode. See [Processing Modes — Execute](../../guides/processing-modes/#intermediate-transactions-with-execute).
+
 ## Error Recovery and Savepoints
 
 Both the `prepare` and `complete` callbacks run inside database savepoints. This is the mechanism that keeps jobs safe when user code throws.

@@ -7,12 +7,13 @@ sidebar:
 
 `AttemptMiddleware` wraps a **job attempt** — the unit of work that includes the prepare phase, the handler, and the complete phase. Middleware lets you add cross-cutting logic (tracing spans, contextual loggers, audit trails, shared resources) without touching each individual handler.
 
-A middleware has three optional hooks, each wrapping a different phase:
+A middleware has four optional hooks, each wrapping a different phase:
 
 | Hook           | Wraps                               | Injects ctx into          |
 | -------------- | ----------------------------------- | ------------------------- |
 | `wrapHandler`  | the whole attempt handler           | `attemptHandler` options  |
 | `wrapPrepare`  | the user-supplied prepare callback  | prepare-callback options  |
+| `wrapExecute`  | each user-supplied execute callback | execute-callback options  |
 | `wrapComplete` | the user-supplied complete callback | complete-callback options |
 
 All three accept a `next(ctx)` call that yields the inner layer. The object passed to `next` is merged into the callback options for that phase, and its type flows into the handler signature.
@@ -73,12 +74,34 @@ attemptHandler: async ({ prepare, complete }) => {
 };
 ```
 
+### `wrapExecute` — wrap intermediate transactions
+
+Use to inject context into each `execute` call — metrics recorders, progress trackers, shared resources that need the transaction context. The middleware runs inside each `execute` transaction.
+
+```ts
+const metrics: AttemptMiddleware<any, {}, {}, { metrics: Metrics }> = {
+  wrapExecute: async ({ job, txCtx, next }) => {
+    const metrics = new Metrics(job.id, txCtx);
+    return next({ metrics });
+  },
+};
+```
+
+Inside the handler, `metrics` is typed on the execute callback:
+
+```ts
+await execute(async ({ metrics }) => {
+  metrics.record("batch-processed", batch.length);
+  // ...
+});
+```
+
 ### `wrapComplete` — inject helpers used during completion
 
 Use to inject helpers that are only meaningful in the complete transaction — audit recorders, outbox inserters, post-commit notifiers.
 
 ```ts
-const audit: AttemptMiddleware<any, {}, {}, { audit: (event: string) => void }> = {
+const audit: AttemptMiddleware<any, {}, {}, {}, { audit: (event: string) => void }> = {
   wrapComplete: async ({ job, txCtx, next }) =>
     next({
       audit: (event) => auditRepo.insert({ event, jobId: job.id, txCtx }),
@@ -147,6 +170,6 @@ Per slice, handler ctx types reflect the actual middleware list for that registr
 
 ## See also
 
-- [Showcase example](https://github.com/kvet/queuert/tree/main/examples/showcase-middleware) — runnable end-to-end demo of all three hooks
+- [Showcase example](https://github.com/kvet/queuert/tree/main/examples/showcase-middleware) — runnable end-to-end demo of middleware hooks
 - [Worker reference](/queuert/reference/queuert/worker/#attemptmiddleware) — full API
 - [Slices guide](/queuert/guides/slices/) — splitting workflows across registries

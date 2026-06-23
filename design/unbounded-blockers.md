@@ -317,10 +317,19 @@ explicit, mutually exclusive accessors:
 
 // Unsealed — streamed, unbounded.
 "aggregate": {
-  attemptHandler: async ({ job, listBlockers, complete }) => {
+  attemptHandler: async ({ job, execute, listBlockers, complete }) => {
     let total = 0;
+    let count = 0;
     for await (const b of listBlockers()) {   // Completed<producer>, paged
       total += b.output.value;
+      count++;
+
+      // Checkpoint via execute — each call opens a fresh guarded transaction
+      if (count % 1000 === 0) {
+        await execute(async ({ sql }) => {
+          await sql`UPDATE aggregation_state SET total = ${total}, count = ${count} WHERE job_id = ${job.id}`;
+        });
+      }
     }
     return complete(async () => ({ sum: total }));
   },
@@ -337,6 +346,10 @@ to an explicit call.
 guaranteed `completed` (the job only runs once sealed and all blockers resolved). Awaiting
 `listBlockers()` is async processing-phase work, so the attempt auto-promotes to staged mode
 and renews the lease while paging. Page size is an internal tuning knob, not user-facing.
+
+Long-running aggregations can use `execute` to checkpoint intermediate state — each call opens
+a fresh guarded transaction with lease verification, so the handler never holds a single
+long-lived transaction across the entire blocker set.
 
 ---
 

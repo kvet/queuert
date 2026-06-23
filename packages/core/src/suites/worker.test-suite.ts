@@ -453,6 +453,7 @@ export const workerTestSuite = ({ it }: { it: TestAPI<TestSuiteContext> }): void
       any,
       Record<string, never>,
       Record<string, never>,
+      Record<string, never>,
       { tag: string }
     > = {
       wrapComplete: async ({ next }) => {
@@ -569,5 +570,85 @@ export const workerTestSuite = ({ it }: { it: TestAPI<TestSuiteContext> }): void
     // The single slot is busy for ~600ms with two jobs waiting. A delay of 0 for work the
     // worker has nowhere to put would re-query on every loop pass for that whole window.
     expect(nextJobAvailableCalls).toBeLessThanOrEqual(10);
+  });
+
+  it("calls wrapExecute around each execute call with typed ctx", async ({
+    stateAdapter,
+    notifyAdapter,
+    withTransaction,
+    withWorkers,
+    observabilityAdapter,
+    log,
+    expect,
+  }) => {
+    const order: string[] = [];
+    const observedExecuteCtx: { tag: string }[] = [];
+
+    const jobTypes = defineJobTypes<{
+      test: { entry: true; input: { value: number }; output: null };
+    }>();
+
+    const client = await createClient({
+      stateAdapter,
+      notifyAdapter,
+      observabilityAdapter,
+      log,
+      jobTypes,
+    });
+
+    const executeMiddleware: AttemptMiddleware<
+      any,
+      Record<string, never>,
+      Record<string, never>,
+      { tag: string }
+    > = {
+      wrapExecute: async ({ next }) => {
+        order.push("execute-wrap-before");
+        const result = await next({ tag: "execute" });
+        order.push("execute-wrap-after");
+        return result;
+      },
+    };
+    const worker = await createInProcessWorker({
+      client,
+      concurrency: 1,
+      processors: createProcessors({
+        client,
+        jobTypes,
+        attemptMiddleware: [executeMiddleware],
+        processors: {
+          test: {
+            attemptHandler: async ({ prepare, execute, complete }) => {
+              await prepare({ mode: "staged" });
+
+              await execute(async ({ tag }) => {
+                order.push("execute-callback");
+                observedExecuteCtx.push({ tag });
+              });
+
+              return complete(async () => null);
+            },
+          },
+        },
+      }),
+    });
+
+    const chain = await withTransactionHooks(async (transactionHooks) =>
+      withTransaction(async (txCtx) =>
+        client.startChain({
+          ...txCtx,
+          transactionHooks,
+          typeName: "test",
+          input: { value: 1 },
+        }),
+      ),
+    );
+
+    await withWorkers([await worker.start()], async () => {
+      await client.awaitChain(chain, completionOptions);
+    });
+
+    expect(order).toEqual(["execute-wrap-before", "execute-callback", "execute-wrap-after"]);
+    expect(observedExecuteCtx).toEqual([{ tag: "execute" }]);
   });
 };

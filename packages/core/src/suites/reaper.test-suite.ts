@@ -354,6 +354,145 @@ export const reaperTestSuite = ({ it }: { it: TestAPI<TestSuiteContext> }): void
     );
   });
 
+  it("reaps abandoned jobs on execute", async ({
+    stateAdapter,
+    notifyAdapter,
+    withTransaction,
+    withWorkers,
+    observabilityAdapter,
+    log,
+    expect,
+  }) => {
+    const jobTypes = defineJobTypes<{
+      test: {
+        entry: true;
+        input: null;
+        output: null;
+      };
+    }>();
+
+    const client = await createClient({
+      stateAdapter,
+      notifyAdapter,
+      observabilityAdapter,
+      log,
+      jobTypes,
+    });
+
+    let failed = false;
+    const jobStarted = Promise.withResolvers<void>();
+    const jobCompleted = Promise.withResolvers<void>();
+    const leaseConfig = { leaseMs: 10, renewIntervalMs: 100 } satisfies LeaseConfig;
+
+    const worker1 = await createInProcessWorker({
+      client,
+      concurrency: 1,
+      pollIntervalMs: leaseConfig.leaseMs,
+      processors: createProcessors({
+        client,
+        jobTypes,
+        leaseConfig,
+        processors: {
+          test: {
+            attemptHandler: async ({ prepare, execute, complete }) => {
+              await prepare({ mode: "staged" });
+
+              if (!failed) {
+                failed = true;
+
+                jobStarted.resolve();
+                await sleep(leaseConfig.renewIntervalMs * 2);
+                await expect(async () => execute(async () => {})).rejects.toSatisfy(
+                  (error) =>
+                    error instanceof
+                    (notifyAdapter ? JobTakenByAnotherWorkerError : JobAlreadyCompletedError),
+                );
+                jobCompleted.resolve();
+              }
+              await sleep(10);
+
+              return complete(async () => null);
+            },
+          },
+        },
+      }),
+    });
+
+    const worker2 = await createInProcessWorker({
+      client,
+      concurrency: 1,
+      pollIntervalMs: leaseConfig.leaseMs,
+      processors: createProcessors({
+        client,
+        jobTypes,
+        leaseConfig,
+        processors: {
+          test: {
+            attemptHandler: async ({ prepare, execute, complete }) => {
+              await prepare({ mode: "staged" });
+
+              if (!failed) {
+                failed = true;
+
+                jobStarted.resolve();
+                await sleep(leaseConfig.renewIntervalMs * 2);
+                await expect(async () => execute(async () => {})).rejects.toSatisfy(
+                  (error) =>
+                    error instanceof
+                    (notifyAdapter ? JobTakenByAnotherWorkerError : JobAlreadyCompletedError),
+                );
+                jobCompleted.resolve();
+              }
+              await sleep(10);
+
+              return complete(async () => null);
+            },
+          },
+        },
+      }),
+    });
+
+    const failChain = await withTransactionHooks(async (transactionHooks) =>
+      withTransaction(async (txCtx) =>
+        client.startChain({
+          ...txCtx,
+          transactionHooks,
+          typeName: "test",
+          input: null,
+        }),
+      ),
+    );
+
+    await withWorkers([await worker1.start(), await worker2.start()], async () => {
+      await jobStarted.promise;
+      await sleep(10);
+
+      const successChain = await withTransactionHooks(async (transactionHooks) =>
+        withTransaction(async (txCtx) =>
+          client.startChain({
+            ...txCtx,
+            transactionHooks,
+            typeName: "test",
+            input: null,
+          }),
+        ),
+      );
+
+      await Promise.all([
+        client.awaitChain(successChain, completionOptions),
+        client.awaitChain(failChain, completionOptions),
+      ]);
+
+      await jobCompleted.promise;
+    });
+
+    expect(log).not.toHaveBeenCalledWith(
+      expect.objectContaining({
+        type: "worker_error",
+      }),
+    );
+  });
+
   it("does not reap its own in-progress jobs with concurrent slots", async ({
     stateAdapter,
     notifyAdapter,

@@ -1,4 +1,4 @@
-import { type CompletedChain, type Chain, mapStatePairToChain } from "../entities/chain.js";
+import { type Chain, type CompletedChain, mapStatePairToChain } from "../entities/chain.js";
 import { type BaseJobTypeDefinitions } from "../entities/job-type.js";
 import {
   type BlockerChains,
@@ -38,8 +38,9 @@ import {
 import { type TransactionHooks, withTransactionHooks } from "../transaction-hooks.js";
 import {
   type AttemptMiddleware,
-  runHandlerMiddlewareChain,
   runCompleteMiddlewareChain,
+  runExecuteMiddlewareChain,
+  runHandlerMiddlewareChain,
   runPrepareMiddlewareChain,
 } from "./attempt-middleware.js";
 import { type LeaseConfig, createLeaseManager } from "./lease.js";
@@ -190,6 +191,21 @@ export type AttemptPrepare<
 };
 
 /**
+ * Typed execute function provided to the
+ * {@link AttemptHandler | attemptHandler}. Opens a fresh guarded transaction
+ * mid-attempt — only valid in staged mode between `prepare` and `complete`.
+ */
+export type AttemptExecute<
+  TStateAdapter extends StateAdapter<BaseTxContext, any>,
+  TExecuteCtx extends Record<string, unknown> = Record<string, unknown>,
+> = <T>(
+  executeCallback: (
+    options: { transactionHooks: TransactionHooks } & GetStateAdapterTxContext<TStateAdapter> &
+      TExecuteCtx,
+  ) => T | Promise<T>,
+) => Promise<Awaited<T>>;
+
+/**
  * Handler function called for each job attempt.
  *
  * Receives `signal` (abort signal), `job` (the running job with blockers), `prepare` (transaction setup), and `complete` (finalization).
@@ -205,6 +221,7 @@ export type AttemptHandler<
   TChainTypeName extends string,
   THandlerCtx extends Record<string, unknown>,
   TPrepareCtx extends Record<string, unknown>,
+  TExecuteCtx extends Record<string, unknown>,
   TCompleteCtx extends Record<string, unknown>,
 > = (
   processOptions: {
@@ -216,6 +233,7 @@ export type AttemptHandler<
       TChainTypeName
     > & { status: "running" };
     prepare: AttemptPrepare<TStateAdapter, TPrepareCtx>;
+    execute: AttemptExecute<TStateAdapter, TExecuteCtx>;
     complete: AttemptComplete<
       TStateAdapter,
       TJobTypeDefinitions,
@@ -257,6 +275,7 @@ export const runJobProcess = async ({
     string,
     Record<string, unknown>,
     Record<string, unknown>,
+    Record<string, unknown>,
     Record<string, unknown>
   >;
   prepareTransactionContext: TransactionContext<BaseTxContext>;
@@ -264,7 +283,7 @@ export const runJobProcess = async ({
   backoffConfig: BackoffConfig;
   leaseConfig: LeaseConfig;
   workerId: string;
-  attemptMiddleware?: readonly AttemptMiddleware<any, any, any, any>[];
+  attemptMiddleware?: readonly AttemptMiddleware<any, any, any, any, any>[];
 }): Promise<void> => {
   let completeTransactionContext: TransactionContext<BaseTxContext> | null = null;
 
@@ -395,6 +414,7 @@ export const runJobProcess = async ({
 
     let prepareAccessed = false;
     let prepareCalled = false;
+    let prepareRunning = false;
     const prepare = (async <T>(
       config: { mode: "atomic" | "staged" },
       prepareCallback?: (options: BaseTxContext) => T | Promise<T>,
@@ -403,6 +423,7 @@ export const runJobProcess = async ({
         throw new Error("Prepare can only be called once");
       }
       prepareCalled = true;
+      prepareRunning = true;
 
       const prepareSpan = attemptSpanHandle?.startPrepare();
       let callbackOutput: T | undefined;
@@ -447,8 +468,50 @@ export const runJobProcess = async ({
         } catch {}
       }
 
+      prepareRunning = false;
       return callbackOutput;
     }) as AttemptPrepare<StateAdapter<BaseTxContext, any>>;
+
+    let executeRunning = false;
+    const execute = async <T>(
+      executeCallback: (
+        options: { transactionHooks: TransactionHooks } & BaseTxContext,
+      ) => T | Promise<T>,
+    ): Promise<Awaited<T>> => {
+      if (executeRunning) {
+        throw new Error("execute cannot be called in parallel");
+      }
+      executeRunning = true;
+      await ensureStagedPrepare();
+      await autoPreparePromise;
+      if (prepareRunning) {
+        throw new Error("execute cannot be called while prepare is running");
+      }
+      if (prepareTransactionContext.status === "pending") {
+        throw new Error("execute is only valid in staged mode");
+      }
+      if (completeCalled) {
+        throw new Error("execute cannot be called after complete");
+      }
+      const executeSpan = attemptSpanHandle?.startExecute();
+      try {
+        return await (runInGuardedTransaction(async (txCtx, transactionHooks) =>
+          runExecuteMiddlewareChain(
+            attemptMiddleware,
+            { job: runningJob, transactionHooks, txCtx },
+            async (executeCtx) =>
+              executeCallback({
+                ...executeCtx,
+                transactionHooks,
+                ...txCtx,
+              } as { transactionHooks: TransactionHooks } & BaseTxContext),
+          ),
+        ) as Promise<Awaited<T>>);
+      } finally {
+        executeSpan?.end();
+        executeRunning = false;
+      }
+    };
 
     let completeCalled = false;
     let completeSavepointContext: SavepointContext<BaseTxContext> | undefined;
@@ -467,13 +530,17 @@ export const runJobProcess = async ({
         } & { transactionHooks: TransactionHooks } & BaseTxContext,
       ) => unknown,
     ) => {
-      if (autoPreparePromise) {
-        await autoPreparePromise;
-      }
       if (completeCalled) {
         throw new Error("Complete can only be called once");
       }
       completeCalled = true;
+      await autoPreparePromise;
+      if (prepareRunning) {
+        throw new Error("complete cannot be called while prepare is running");
+      }
+      if (executeRunning) {
+        throw new Error("complete cannot be called while execute is running");
+      }
       await disposeOwnershipListener?.();
       await leaseManager.stop();
       const completeSpan = attemptSpanHandle?.startComplete();
@@ -569,6 +636,15 @@ export const runJobProcess = async ({
 
     let autoSetupDone = false;
     let autoPreparePromise: Promise<void> | null = null;
+
+    const ensureStagedPrepare = async () => {
+      if (!prepareAccessed && !prepareCalled && !completeCalled) {
+        autoPreparePromise = prepare({ mode: "staged" });
+        await autoPreparePromise;
+        autoSetupDone = true;
+      }
+    };
+
     try {
       const attemptPromise = attemptHandler({
         ...handlerCtx,
@@ -583,15 +659,12 @@ export const runJobProcess = async ({
           }
           return prepare;
         },
+        execute,
         complete,
       });
       attemptPromise.catch(() => {});
 
-      if (!prepareAccessed && !prepareCalled && !completeCalled) {
-        autoPreparePromise = prepare({ mode: "staged" });
-        await autoPreparePromise;
-        autoSetupDone = true;
-      }
+      await ensureStagedPrepare();
 
       await attemptPromise;
 

@@ -84,6 +84,7 @@ type AttemptHandler = (options: {
   signal: TypedAbortSignal<JobAbortReason>;
   job: ResolvedJobWithBlockers & { status: "running" };
   prepare: AttemptPrepare;
+  execute: AttemptExecute;
   complete: AttemptComplete;
 }) => Promise<(ResolvedJobWithBlockers & { status: "completed" }) | ContinuationJobs>;
 ```
@@ -93,6 +94,7 @@ The core function called for each job attempt.
 - **signal** — typed `AbortSignal` whose `reason` is a `JobAbortReason`
 - **job** — the running job with its typed input and resolved blockers
 - **prepare** — controls the processing mode (atomic or staged). See the [Processing Modes guide](/queuert/guides/processing-modes/)
+- **execute** — opens a fresh guarded transaction mid-attempt. Only valid in staged mode between `prepare` and `complete`. See the [Processing Modes guide](/queuert/guides/processing-modes/#intermediate-transactions-with-execute)
 - **complete** — finalizes the job. Return the output to complete the chain, or call `continueWith` to extend it
 
 ### AttemptComplete
@@ -106,6 +108,10 @@ The callback passed to `complete()`. Receives `AttemptCompleteOptions` and retur
 ### AttemptCompleteOptions
 
 Options received by the complete callback: `continueWith` (to extend the chain), `transactionHooks`, and the transaction context.
+
+### AttemptExecute
+
+The typed `execute` function provided to the attempt handler. Opens a fresh guarded transaction mid-attempt — only valid in staged mode between `prepare` and `complete`. Each call verifies lease ownership, runs the callback with `transactionHooks` and the transaction context, commits, and flushes hooks. Returns whatever the callback returns.
 
 ### AttemptPrepare
 
@@ -130,6 +136,7 @@ type AttemptMiddleware<
   TStateAdapter,
   THandlerCtx extends Record<string, unknown> = {},
   TPrepareCtx extends Record<string, unknown> = {},
+  TExecuteCtx extends Record<string, unknown> = {},
   TCompleteCtx extends Record<string, unknown> = {},
 > = {
   wrapHandler?: <T>(opts: {
@@ -140,6 +147,12 @@ type AttemptMiddleware<
   wrapPrepare?: <T>(opts: {
     job: ResolvedJobWithBlockers & { status: "running" };
     next: (ctx: TPrepareCtx) => Promise<T>;
+    // plus state-adapter-specific transaction context fields
+  }) => Promise<T>;
+  wrapExecute?: <T>(opts: {
+    job: ResolvedJobWithBlockers & { status: "running" };
+    transactionHooks: TransactionHooks;
+    next: (ctx: TExecuteCtx) => Promise<T>;
     // plus state-adapter-specific transaction context fields
   }) => Promise<T>;
   wrapComplete?: <T>(opts: {
@@ -155,6 +168,7 @@ Wraps job processing with cross-cutting logic. Each hook is optional — impleme
 
 - **wrapHandler** — wraps the entire attempt handler. Injected ctx merges into `attemptHandler`'s options
 - **wrapPrepare** — wraps the user-supplied `prepare` callback. Injected ctx merges into the callback's options alongside the transaction context
+- **wrapExecute** — wraps each user-supplied `execute` callback. Injected ctx merges into the callback's options alongside `transactionHooks` and the transaction context
 - **wrapComplete** — wraps the user-supplied `complete` callback. Injected ctx merges into the callback's options alongside `continueWith`, `transactionHooks`, and the transaction context
 
 Multiple middleware compose as an onion — the first middleware's "before" runs outermost. See the [Middleware guide](/queuert/guides/middleware/) for usage patterns.
