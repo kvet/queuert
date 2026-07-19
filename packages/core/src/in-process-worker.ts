@@ -17,12 +17,12 @@ import {
   type StateAdapter,
   type StateJob,
 } from "./state-adapter/state-adapter.js";
+import { type AttemptConfig } from "./worker/attempt-heartbeat.js";
 import {
   type AttemptMiddleware,
   type IsAttemptMiddlewareSubsequence,
 } from "./worker/attempt-middleware.js";
 import { runJobProcess } from "./worker/job-process.js";
-import { type LeaseConfig } from "./worker/lease.js";
 import { type MergedProcessorDefinitions, mergeProcessors } from "./worker/merge-processors.js";
 import {
   type InProcessWorkerProcessor,
@@ -85,10 +85,8 @@ const waitForNextJob = async ({
     } catch {}
 
     try {
-      const nextJobAvailableInMs = await stateAdapter.getNextJobAvailableInMs({
-        typeNames,
-      });
-      const pullDelayMs = Math.min(nextJobAvailableInMs ?? pollIntervalMs, pollIntervalMs);
+      const startAttemptDelayMs = await stateAdapter.getStartAttemptDelayMs({ typeNames });
+      const pullDelayMs = Math.min(startAttemptDelayMs ?? pollIntervalMs, pollIntervalMs);
 
       if (signal.aborted) {
         return;
@@ -110,7 +108,7 @@ const performJob = async ({
   typeNames,
   processors,
   defaultBackoffConfig,
-  defaultLeaseConfig,
+  defaultAttemptConfig,
   workerId,
   stopSignal,
 }: {
@@ -118,23 +116,21 @@ const performJob = async ({
   typeNames: string[];
   processors: Record<string, StampedProcessor>;
   defaultBackoffConfig: BackoffConfig;
-  defaultLeaseConfig: LeaseConfig;
+  defaultAttemptConfig: AttemptConfig;
   workerId: string;
   stopSignal: AbortSignal;
-}): Promise<
-  { job: null; hasMore: false } | { job: StateJob; hasMore: boolean; execute: () => Promise<void> }
-> => {
+}): Promise<{ job: null } | { job: StateJob; execute: () => Promise<void> }> => {
   const prepareTransactionContext = await createTransactionContext(
     helpers.stateAdapter.withTransaction,
   );
 
   let job: StateJob | undefined;
-  let hasMore: boolean;
   try {
-    ({ job, hasMore } = await prepareTransactionContext.run(async (txCtx) =>
-      helpers.stateAdapter.acquireJob({
+    ({ job } = await prepareTransactionContext.run(async (txCtx) =>
+      helpers.stateAdapter.startJobAttempt({
         txCtx,
         typeNames,
+        workerId,
       }),
     ));
   } catch (error) {
@@ -144,7 +140,7 @@ const performJob = async ({
 
   if (!job) {
     await prepareTransactionContext.resolve();
-    return { job: null, hasMore: false };
+    return { job: null };
   }
 
   const jobTypeProcessor = processors[job.typeName];
@@ -156,7 +152,6 @@ const performJob = async ({
 
   return {
     job,
-    hasMore,
     execute: async () => {
       try {
         await runJobProcess({
@@ -165,7 +160,7 @@ const performJob = async ({
           job,
           prepareTransactionContext: prepareTransactionContext as TransactionContext<BaseTxContext>,
           backoffConfig: jobTypeProcessor.backoffConfig ?? defaultBackoffConfig,
-          leaseConfig: jobTypeProcessor.leaseConfig ?? defaultLeaseConfig,
+          attemptConfig: jobTypeProcessor.attemptConfig ?? defaultAttemptConfig,
           workerId,
           attemptMiddleware: jobTypeProcessor[processorAttemptMiddlewareSymbol],
           stopSignal,
@@ -260,18 +255,18 @@ export type InProcessWorker = {
 export type InProcessWorkerDefaults = {
   /** Default backoff for failed job attempts. Overridden by per-processor `backoffConfig`. */
   backoffConfig?: BackoffConfig;
-  /** Default lease for job ownership. Overridden by per-processor `leaseConfig`. */
-  leaseConfig?: LeaseConfig;
+  /** Default attempt duration. Overridden by per-processor `attemptConfig`. */
+  attemptConfig?: AttemptConfig;
 };
 
 /**
  * Create an in-process worker for processing jobs.
  *
  * Per-attempt configuration (`attemptMiddleware`, `backoffConfig`,
- * `leaseConfig`) lives on the **processor registry** (see {@link createProcessors}).
+ * `attemptConfig`) lives on the **processor registry** (see {@link createProcessors}).
  * The worker dispatches to whichever processor matches the job's typeName and
  * runs that slice's middleware chain. Worker-level `defaults` provide fallbacks
- * for processors that don't set `backoffConfig` / `leaseConfig` themselves;
+ * for processors that don't set `backoffConfig` / `attemptConfig` themselves;
  * precedence is processor > worker `defaults` > built-in defaults.
  *
  * @param options.client - The Queuert client to process jobs for.
@@ -279,7 +274,7 @@ export type InProcessWorkerDefaults = {
  * @param options.concurrency - Maximum number of jobs to process in parallel. Defaults to 1.
  * @param options.pollIntervalMs - How often to poll for new jobs when no notify adapter wakes the worker. Defaults to 60s.
  * @param options.recoveryBackoffConfig - Backoff configuration for the worker loop itself (not job retries).
- * @param options.defaults - Fallback `backoffConfig` / `leaseConfig` for processors that don't set their own.
+ * @param options.defaults - Fallback `backoffConfig` / `attemptConfig` for processors that don't set their own.
  * @param options.requiredAttemptMiddleware - Middleware instances that every dispatched processor's slice must include as an in-order subsequence. Enforced both at compile time (against the slice middleware tuple inferred by {@link createProcessors}) and at runtime by reference-identity (`===`). The worker does not execute this middleware itself — slices run their own chains.
  * @param options.processors - A single `Processors` from {@link createProcessors}, or an array of slices to merge.
  */
@@ -363,9 +358,9 @@ export const createInProcessWorker = async <
     multiplier: 2.0,
     maxDelayMs: 300_000,
   };
-  const defaultLeaseConfig = defaultsOption?.leaseConfig ?? {
-    leaseMs: 60_000,
-    renewIntervalMs: 30_000,
+  const defaultAttemptConfig = defaultsOption?.attemptConfig ?? {
+    timeoutMs: 60_000,
+    heartbeatMs: 30_000,
   };
   const concurrencyValue = concurrency ?? 1;
   if (workerName !== undefined && !/^[A-Za-z0-9._-]+$/.test(workerName)) {
@@ -396,30 +391,30 @@ export const createInProcessWorker = async <
                 typeNames,
                 processors,
                 defaultBackoffConfig,
-                defaultLeaseConfig,
+                defaultAttemptConfig,
                 workerId,
                 stopSignal: stopController.signal,
               });
 
-              if (result.job) {
-                jobIdsInProgress.add(result.job.id);
-                void executor.add(async () => {
-                  observabilityHelper.jobTypeProcessingChange(1, result.job, workerId);
-                  observabilityHelper.jobTypeIdleChange(-1, workerId, typeNames);
-                  try {
-                    await result.execute();
-                  } catch (error) {
-                    observabilityHelper.workerError({ workerId }, error);
-                  } finally {
-                    jobIdsInProgress.delete(result.job.id);
-                    observabilityHelper.jobTypeIdleChange(1, workerId, typeNames);
-                    observabilityHelper.jobTypeProcessingChange(-1, result.job, workerId);
-                  }
-                });
-              }
-              if (!result.hasMore) {
+              if (!result.job) {
                 break;
               }
+              jobIdsInProgress.add(result.job.id);
+              const execute = result.execute;
+              const acquiredJob = result.job;
+              void executor.add(async () => {
+                observabilityHelper.jobTypeProcessingChange(1, acquiredJob, workerId);
+                observabilityHelper.jobTypeIdleChange(-1, workerId, typeNames);
+                try {
+                  await execute();
+                } catch (error) {
+                  observabilityHelper.workerError({ workerId }, error);
+                } finally {
+                  jobIdsInProgress.delete(acquiredJob.id);
+                  observabilityHelper.jobTypeIdleChange(1, workerId, typeNames);
+                  observabilityHelper.jobTypeProcessingChange(-1, acquiredJob, workerId);
+                }
+              });
             }
 
             if (stopController.signal.aborted) {
@@ -427,19 +422,19 @@ export const createInProcessWorker = async <
             }
 
             if (executor.idleSlots() > 0) {
-              const reaped = await stateAdapter.reapExpiredJobLease({
+              const reclaimed = await stateAdapter.reclaimExpiredJobAttempt({
                 typeNames,
                 ignoredJobIds: Array.from(jobIdsInProgress),
               });
-              if (reaped) {
-                observabilityHelper.jobReaped(reaped, { workerId });
+              if (reclaimed) {
+                observabilityHelper.jobAttemptReclaimed(reclaimed, { workerId });
 
                 try {
-                  await notifyAdapter.provideWakeHint(reaped.typeName, 1);
-                  await notifyAdapter.notifyJobScheduled(reaped.typeName);
+                  await notifyAdapter.provideWakeHint(reclaimed.typeName, 1);
+                  await notifyAdapter.notifyJobScheduled(reclaimed.typeName);
                 } catch {}
                 try {
-                  await notifyAdapter.notifyJobOwnershipLost(reaped.id);
+                  await notifyAdapter.notifyJobAttemptLost(reclaimed.id);
                 } catch {}
               }
 
@@ -447,7 +442,7 @@ export const createInProcessWorker = async <
                 return;
               }
 
-              if (reaped) {
+              if (reclaimed) {
                 continue;
               }
             }

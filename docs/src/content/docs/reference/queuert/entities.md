@@ -8,12 +8,11 @@ sidebar:
 ## Job
 
 ```typescript
-type Job<TJobId, TJobTypeName, TChainTypeName, TInput, TOutput> = {
+type Job<TJobId, TJobTypeName, TChainTypeName, TInput, TOutput, TCanContinue extends boolean> = {
   id: TJobId;
   chainId: TJobId;
   typeName: TJobTypeName;
   chainTypeName: TChainTypeName;
-  chainIndex: number;
   input: TInput;
   createdAt: Date;
   scheduledAt: Date;
@@ -21,22 +20,41 @@ type Job<TJobId, TJobTypeName, TChainTypeName, TInput, TOutput> = {
   lastAttemptAt: Date | null;
   lastAttemptError: string | null;
 } & (
-  | { status: "blocked" }
-  | { status: "pending" }
-  | { status: "running"; leasedBy?: string; leasedUntil?: Date }
-  | { status: "completed"; completedAt: Date; completedBy: string | null; output: TOutput }
+  | { status: "pending"; blocked: boolean }
+  | {
+      status: "running";
+      attemptAt: Date | null;
+      attemptBy: string | null;
+      attemptUntil: Date | null;
+    }
+  | {
+      status: "completed";
+      completedAt: Date;
+      completedBy: string | null;
+      output: TOutput;
+      continuedToId: null;
+    }
+  | (TCanContinue extends true
+      ? {
+          status: "completed";
+          completedAt: Date;
+          completedBy: string | null;
+          output?: never;
+          continuedToId: TJobId;
+        }
+      : never)
 );
 ```
 
-A discriminated union on **status**. All jobs carry their chain identity via **chainId** and **chainTypeName**, and their position via **chainIndex**. The **running** variant includes lease metadata. The **completed** variant includes completion timestamps, the worker identity, and the job's **output**.
+A discriminated union on **status**. All jobs carry their chain identity via **chainId** and **chainTypeName**. The **completed** status splits into two variants: a _terminal_ variant that carries the real **output** (`continuedToId: null`), and a _continued_ variant that points at the next job in the chain via **continuedToId** (no `output` field). This disambiguates "job continued via `continueWith`" from "job terminated with `output: null`". The **running** variant includes attempt metadata.
 
 ## JobStatus
 
 ```typescript
-type JobStatus = "blocked" | "pending" | "running" | "completed";
+type JobStatus = "pending" | "running" | "completed";
 ```
 
-The four possible job states. Used in list filters and discriminated union narrowing.
+The three possible job states. Used in list filters and discriminated union narrowing.
 
 ## ResolvedJob
 
@@ -69,12 +87,7 @@ type Chain<TJobId, TChainTypeName, TInput, TOutput> = {
   typeName: TChainTypeName;
   input: TInput;
   createdAt: Date;
-} & (
-  | { status: "blocked" }
-  | { status: "pending" }
-  | { status: "running" }
-  | { status: "completed"; output: TOutput; completedAt: Date }
-);
+} & ({ status: "running" } | { status: "completed"; output: TOutput; completedAt: Date });
 ```
 
 A discriminated union on **status**. Represents the full lifecycle of a chain from creation to completion. The **completed** variant includes the chain output and completion timestamp.
@@ -82,17 +95,20 @@ A discriminated union on **status**. Represents the full lifecycle of a chain fr
 ## ChainStatus
 
 ```typescript
-type ChainStatus = "blocked" | "pending" | "running" | "completed";
+type ChainStatus = "running" | "completed";
 ```
 
-The four possible chain states. Used in list filters and discriminated union narrowing.
+The two possible chain states: `running` until the chain's tail job completes, then `completed`. Used in list filters and discriminated union narrowing.
 
 ## CompletedChain
 
 ```typescript
-type CompletedChain<TChain extends Chain<any, any, any, any>> = TChain & {
-  status: "completed";
-};
+type CompletedChain<TChain extends AnyChain> = Extract<
+  TChain,
+  {
+    status: "completed";
+  }
+>;
 ```
 
 `Chain` narrowed to `status: "completed"`. Guarantees the presence of **output** and **completedAt** fields.

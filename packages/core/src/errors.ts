@@ -21,24 +21,24 @@ export class InvalidJobIdError extends Error {
   }
 }
 
-/** Thrown when a job's lease is held by another worker. */
+/** Thrown when a job's attempt is held by another worker. */
 export class JobTakenByAnotherWorkerError extends Error {
   /** The job that was contested. */
   readonly jobId: string;
   /** The worker that attempted to acquire the job. */
   readonly workerId: string;
-  /** The worker that currently holds the lease, or `null` if unknown. */
-  readonly leasedBy: string | null;
+  /** The worker that currently holds the attempt, or `null` if unknown. */
+  readonly attemptBy: string | null;
 
   constructor(
     message: string,
-    options: { jobId: string; workerId: string; leasedBy?: string | null; cause?: unknown },
+    options: { jobId: string; workerId: string; attemptBy?: string | null; cause?: unknown },
   ) {
     super(message, options.cause !== undefined ? { cause: options.cause } : undefined);
     this.name = "JobTakenByAnotherWorkerError";
     this.jobId = options.jobId;
     this.workerId = options.workerId;
-    this.leasedBy = options.leasedBy ?? null;
+    this.attemptBy = options.attemptBy ?? null;
   }
 }
 

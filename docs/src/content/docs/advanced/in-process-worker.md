@@ -1,6 +1,6 @@
 ---
 title: In-Process Worker
-description: In-process worker lifecycle, concurrency, and lease management.
+description: In-process worker lifecycle, concurrency, and attempt management.
 sidebar:
   order: 2
 ---
@@ -74,8 +74,8 @@ worker.slot2 -> db: "acquire · complete" { class: flow }
 
 The worker runs a single coordinating loop:
 
-1. **Fill**: Spawn slots up to `concurrency`
-2. **Reap**: Reclaim one expired lease (if any idle slots remain)
+1. **Fill**: Loop `startJobAttempt` until it returns nothing or all slots are busy
+2. **Reclaim expired attempt**: Reclaim one job with an expired attempt (if any idle slots remain)
 3. **Wait**: Listen for notification, poll timeout, or slot completion
 4. **Repeat**
 
@@ -87,33 +87,33 @@ Calling `stop()` triggers graceful shutdown:
 
 1. Signal abort controller — in-flight jobs receive `"worker_stopping"` on their `signal`
 2. Stop spawning new slots
-3. Wait for all in-flight jobs to complete (or abandon via lease expiry)
+3. Wait for all in-flight jobs to complete (or release via attempt expiry)
 4. Emit `workerStopping` and `workerStopped` observability events
 
 The `"worker_stopping"` abort reason is cooperative: handlers that check `signal.aborted` and `signal.reason` can distinguish a worker shutdown from a hard abort (e.g. `"taken_by_another_worker"`) and choose to wrap up gracefully instead of abandoning work immediately.
 
 ## Worker Identity
 
-Each worker has a unique identity stored in `leasedBy`. The worker tracks active jobs internally and routes abort signals by job ID—no per-slot identity is needed.
+Each worker has a unique identity stored in `attemptBy`. The worker tracks active jobs internally and routes abort signals by job ID—no per-slot identity is needed.
 
-## Reaper
+## Expired Attempt Reclamation
 
-The reaper reclaims jobs with expired leases, making them available for retry.
+The worker reclaims jobs with expired attempts, making them available for retry.
 
 When idle slots remain in the main loop:
 
-1. Find oldest `running` job where `leasedUntil < now()` and type matches registered types
-2. Transition job: `running` → `pending`, clear `leasedBy` and `leasedUntil`
-3. Emit `jobReaped` observability event
-4. Notify via `jobScheduled` (workers wake up) and `jobOwnershipLost` (original worker aborts)
+1. Find oldest `running` job where `attemptUntil < now()` and type matches registered types
+2. Transition job: `running` → `pending`, clear `attemptBy` and `attemptUntil`
+3. Emit `jobAttemptReclaimed` observability event
+4. Notify via `jobScheduled` (workers wake up) and `jobAttemptLost` (original worker aborts)
 
 **Design decisions:**
 
 - **Integrated with main loop**: Runs once per iteration, no separate process needed.
-- **One job per iteration**: Reaps at most one job to avoid blocking slot spawning.
-- **Type-scoped**: Only reaps job types the worker is registered to handle.
+- **One job per iteration**: Releases at most one expired attempt to avoid blocking slot spawning.
+- **Type-scoped**: Only releases expired attempts for job types the worker is registered to handle.
 - **Concurrent-safe**: Database locking prevents conflicts between workers.
-- **Self-aware**: When running with multiple slots, the reaper excludes jobs currently being processed by the same worker (via `ignoredJobIds`). This prevents a race condition where a worker could reap its own in-progress job if the lease expires before renewal.
+- **Self-aware**: When running with multiple slots, the worker excludes jobs currently being processed by itself (via `ignoredJobIds`). This prevents a race condition where a worker could release its own in-progress job if the attempt expires before extension.
 
 ## Retry and Backoff
 
@@ -129,7 +129,7 @@ See [Job Processing](../job-processing/) for details on error handling and abort
 
 ## Client-Based Construction
 
-`createInProcessWorker` accepts a `client` instance and extracts infrastructure (`stateAdapter`, `notifyAdapter`, `observabilityAdapter`, `jobTypes`, `log`) from it internally. Worker-specific options (`processors`, `concurrency`, `pollIntervalMs`, `recoveryBackoffConfig`, `defaults`, `requiredAttemptMiddleware`) remain separate parameters. The top-level `recoveryBackoffConfig` controls the worker's own main loop retry behavior (e.g., recovery from database connection errors). Per-attempt configuration — `backoffConfig`, `leaseConfig`, `attemptMiddleware` — lives on the processor registry; the worker-level `defaults.backoffConfig` / `defaults.leaseConfig` provide a fallback for processors that don't set their own (resolution order: processor → registry → worker `defaults` → library default). `requiredAttemptMiddleware` enforces that every slice merged into the worker includes a fixed set of middleware instances as an in-order subsequence — useful for guaranteeing cross-cutting concerns like auth or tracing are present on every slice. The worker only enforces presence; slices continue to run their own middleware chains.
+`createInProcessWorker` accepts a `client` instance and extracts infrastructure (`stateAdapter`, `notifyAdapter`, `observabilityAdapter`, `jobTypes`, `log`) from it internally. Worker-specific options (`processors`, `concurrency`, `pollIntervalMs`, `recoveryBackoffConfig`, `defaults`, `requiredAttemptMiddleware`) remain separate parameters. The top-level `recoveryBackoffConfig` controls the worker's own main loop retry behavior (e.g., recovery from database connection errors). Per-attempt configuration — `backoffConfig`, `attemptConfig`, `attemptMiddleware` — lives on the processor registry; the worker-level `defaults.backoffConfig` / `defaults.attemptConfig` provide a fallback for processors that don't set their own (resolution order: processor → registry → worker `defaults` → library default). `requiredAttemptMiddleware` enforces that every slice merged into the worker includes a fixed set of middleware instances as an in-order subsequence — useful for guaranteeing cross-cutting concerns like auth or tracing are present on every slice. The worker only enforces presence; slices continue to run their own middleware chains.
 
 This is purely a construction convenience — no lifecycle coupling is introduced. The client and worker remain independent after construction.
 
@@ -137,7 +137,7 @@ This is purely a construction convenience — no lifecycle coupling is introduce
 
 ### Multi-Type Workers
 
-A single worker can handle multiple job types. Slots poll all registered types and process whichever is available first. Per-type configuration (lease, retry) overrides worker defaults.
+A single worker can handle multiple job types. Slots poll all registered types and process whichever is available first. Per-type configuration (attempt, retry) overrides worker defaults.
 
 ### Attempt Middlewares
 
@@ -153,7 +153,7 @@ The worker design emphasizes:
 
 1. **Simplicity**: Single main loop coordinating parallel slots
 2. **Efficiency**: Slots are self-contained, main loop just manages concurrency
-3. **Reliability**: Integrated reaper ensures recovery from failures
+3. **Reliability**: Integrated attempt reclamation ensures recovery from failures
 4. **Flexibility**: Per-type configuration, multi-type workers
 5. **Extensibility**: Handler middleware enable cross-cutting concerns
 

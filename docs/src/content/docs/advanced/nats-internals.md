@@ -17,7 +17,7 @@ Three NATS subjects carry notifications (configurable prefix, default `queuert`)
 | ----------------- | ------------------- | -------------- | ----------------------------- |
 | `{prefix}.sched`  | Jobs become pending | `{typeName}`   | Wake idle workers             |
 | `{prefix}.chainc` | Chain completes     | `{chainId}`    | Wake clients awaiting results |
-| `{prefix}.owls`   | Lease reaped        | `{jobId}`      | Notify ownership loss         |
+| `{prefix}.atls`   | Attempt reclaimed   | `{jobId}`      | Notify attempt loss           |
 
 NATS core pub/sub is fire-and-forget — messages are delivered to currently connected subscribers only.
 

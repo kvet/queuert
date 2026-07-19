@@ -9,13 +9,11 @@ export const rescheduleJobsGroup: ConformanceGroup<StateConformanceFixture> = {
       run: async ({ stateAdapter }, expect) => {
         const futureDate = new Date(Date.now() + 60_000);
         const [{ job: created }] = await stateAdapter.withTransaction(async (txCtx) =>
-          stateAdapter.createJobs({
+          stateAdapter.createChains({
             txCtx,
             jobs: [
               {
                 typeName: "trigger-test",
-                chainId: undefined,
-                chainIndex: 0,
                 chainTypeName: "trigger-test",
                 input: null,
                 schedule: { at: futureDate },
@@ -32,7 +30,8 @@ export const rescheduleJobsGroup: ConformanceGroup<StateConformanceFixture> = {
         );
 
         expect(triggered).toHaveLength(1);
-        expect(triggered[0].status).toBe("pending");
+        expect(triggered[0].completedAt).toBeNull();
+        expect(triggered[0].attemptAt).toBeNull();
         expect(triggered[0].scheduledAt.getTime()).toBeGreaterThanOrEqual(before - 1000);
         expect(triggered[0].scheduledAt.getTime()).toBeLessThanOrEqual(Date.now() + 1000);
       },
@@ -42,13 +41,11 @@ export const rescheduleJobsGroup: ConformanceGroup<StateConformanceFixture> = {
       run: async ({ stateAdapter }, expect) => {
         const futureDate = new Date(Date.now() + 60_000);
         const [{ job: created }] = await stateAdapter.withTransaction(async (txCtx) =>
-          stateAdapter.createJobs({
+          stateAdapter.createChains({
             txCtx,
             jobs: [
               {
                 typeName: "trigger-acquire",
-                chainId: undefined,
-                chainIndex: 0,
                 chainTypeName: "trigger-acquire",
                 input: null,
                 schedule: { at: futureDate },
@@ -58,7 +55,11 @@ export const rescheduleJobsGroup: ConformanceGroup<StateConformanceFixture> = {
         );
 
         const beforeTrigger = await stateAdapter.withTransaction(async (txCtx) =>
-          stateAdapter.acquireJob({ txCtx, typeNames: ["trigger-acquire"] }),
+          stateAdapter.startJobAttempt({
+            txCtx,
+            workerId: "worker-1",
+            typeNames: ["trigger-acquire"],
+          }),
         );
         expect(beforeTrigger.job).toBeUndefined();
 
@@ -67,7 +68,11 @@ export const rescheduleJobsGroup: ConformanceGroup<StateConformanceFixture> = {
         );
 
         const afterTrigger = await stateAdapter.withTransaction(async (txCtx) =>
-          stateAdapter.acquireJob({ txCtx, typeNames: ["trigger-acquire"] }),
+          stateAdapter.startJobAttempt({
+            txCtx,
+            workerId: "worker-1",
+            typeNames: ["trigger-acquire"],
+          }),
         );
         expect(afterTrigger.job).toBeDefined();
         expect(afterTrigger.job!.id).toBe(created.id);
@@ -78,13 +83,11 @@ export const rescheduleJobsGroup: ConformanceGroup<StateConformanceFixture> = {
       run: async ({ stateAdapter }, expect) => {
         const futureDate = new Date(Date.now() + 60_000);
         const [{ job: created }] = await stateAdapter.withTransaction(async (txCtx) =>
-          stateAdapter.createJobs({
+          stateAdapter.createChains({
             txCtx,
             jobs: [
               {
                 typeName: "trigger-fields",
-                chainId: undefined,
-                chainIndex: 0,
                 chainTypeName: "trigger-fields",
                 input: { key: "value" },
                 schedule: { at: futureDate },
@@ -109,29 +112,23 @@ export const rescheduleJobsGroup: ConformanceGroup<StateConformanceFixture> = {
       run: async ({ stateAdapter }, expect) => {
         const futureDate = new Date(Date.now() + 60_000);
         const created = await stateAdapter.withTransaction(async (txCtx) =>
-          stateAdapter.createJobs({
+          stateAdapter.createChains({
             txCtx,
             jobs: [
               {
                 typeName: "trigger-batch",
-                chainId: undefined,
-                chainIndex: 0,
                 chainTypeName: "trigger-batch",
                 input: { i: 1 },
                 schedule: { at: futureDate },
               },
               {
                 typeName: "trigger-batch",
-                chainId: undefined,
-                chainIndex: 0,
                 chainTypeName: "trigger-batch",
                 input: { i: 2 },
                 schedule: { at: futureDate },
               },
               {
                 typeName: "trigger-batch",
-                chainId: undefined,
-                chainIndex: 0,
                 chainTypeName: "trigger-batch",
                 input: { i: 3 },
                 schedule: { at: futureDate },
@@ -169,13 +166,11 @@ export const rescheduleJobsGroup: ConformanceGroup<StateConformanceFixture> = {
       run: async ({ stateAdapter }, expect) => {
         const futureDate = new Date(Date.now() + 60_000);
         const [{ job: created }] = await stateAdapter.withTransaction(async (txCtx) =>
-          stateAdapter.createJobs({
+          stateAdapter.createChains({
             txCtx,
             jobs: [
               {
                 typeName: "trigger-missing",
-                chainId: undefined,
-                chainIndex: 0,
                 chainTypeName: "trigger-missing",
                 input: null,
                 schedule: { at: futureDate },
@@ -197,21 +192,17 @@ export const rescheduleJobsGroup: ConformanceGroup<StateConformanceFixture> = {
       run: async ({ stateAdapter }, expect) => {
         const futureDate = new Date(Date.now() + 60_000);
         const created = await stateAdapter.withTransaction(async (txCtx) =>
-          stateAdapter.createJobs({
+          stateAdapter.createChains({
             txCtx,
             jobs: [
               {
                 typeName: "trigger-not-pending",
-                chainId: undefined,
-                chainIndex: 0,
                 chainTypeName: "trigger-not-pending",
                 input: null,
                 schedule: { at: futureDate },
               },
               {
                 typeName: "trigger-not-pending",
-                chainId: undefined,
-                chainIndex: 0,
                 chainTypeName: "trigger-not-pending",
                 input: null,
                 schedule: { at: futureDate },
@@ -222,7 +213,12 @@ export const rescheduleJobsGroup: ConformanceGroup<StateConformanceFixture> = {
         const [pending, toComplete] = created.map((c) => c.job);
 
         await stateAdapter.withTransaction(async (txCtx) =>
-          stateAdapter.completeJob({ txCtx, jobId: toComplete.id, output: null, workerId: null }),
+          stateAdapter.finishJobAttempt({
+            txCtx,
+            jobId: toComplete.id,
+            workerId: null,
+            outcome: { output: null },
+          }),
         );
 
         const triggered = await stateAdapter.withTransaction(async (txCtx) =>
@@ -236,13 +232,11 @@ export const rescheduleJobsGroup: ConformanceGroup<StateConformanceFixture> = {
       name: "reschedules to a future absolute date with schedule.at",
       run: async ({ stateAdapter }, expect) => {
         const [{ job: created }] = await stateAdapter.withTransaction(async (txCtx) =>
-          stateAdapter.createJobs({
+          stateAdapter.createChains({
             txCtx,
             jobs: [
               {
                 typeName: "resched-at",
-                chainId: undefined,
-                chainIndex: 0,
                 chainTypeName: "resched-at",
                 input: null,
               },
@@ -260,7 +254,8 @@ export const rescheduleJobsGroup: ConformanceGroup<StateConformanceFixture> = {
         );
 
         expect(rescheduled).toHaveLength(1);
-        expect(rescheduled[0].status).toBe("pending");
+        expect(rescheduled[0].completedAt).toBeNull();
+        expect(rescheduled[0].attemptAt).toBeNull();
         expect(Math.abs(rescheduled[0].scheduledAt.getTime() - futureDate.getTime())).toBeLessThan(
           1000,
         );
@@ -270,13 +265,11 @@ export const rescheduleJobsGroup: ConformanceGroup<StateConformanceFixture> = {
       name: "reschedules into the future with schedule.afterMs",
       run: async ({ stateAdapter }, expect) => {
         const [{ job: created }] = await stateAdapter.withTransaction(async (txCtx) =>
-          stateAdapter.createJobs({
+          stateAdapter.createChains({
             txCtx,
             jobs: [
               {
                 typeName: "resched-after",
-                chainId: undefined,
-                chainIndex: 0,
                 chainTypeName: "resched-after",
                 input: null,
               },
@@ -300,13 +293,11 @@ export const rescheduleJobsGroup: ConformanceGroup<StateConformanceFixture> = {
       name: "clamps a past schedule.at to now",
       run: async ({ stateAdapter }, expect) => {
         const [{ job: created }] = await stateAdapter.withTransaction(async (txCtx) =>
-          stateAdapter.createJobs({
+          stateAdapter.createChains({
             txCtx,
             jobs: [
               {
                 typeName: "resched-past",
-                chainId: undefined,
-                chainIndex: 0,
                 chainTypeName: "resched-past",
                 input: null,
                 schedule: { at: new Date(Date.now() + 60_000) },
@@ -326,16 +317,65 @@ export const rescheduleJobsGroup: ConformanceGroup<StateConformanceFixture> = {
       },
     },
     {
+      name: "reschedules a blocked job",
+      run: async ({ stateAdapter }, expect) => {
+        const [{ job: blockerJob }, { job: blockedJob }] = await stateAdapter.withTransaction(
+          async (txCtx) =>
+            stateAdapter.createChains({
+              txCtx,
+              jobs: [
+                {
+                  typeName: "resched-blocker",
+                  chainTypeName: "resched-blocker",
+                  input: null,
+                },
+                {
+                  typeName: "resched-blocked",
+                  chainTypeName: "resched-blocked",
+                  input: null,
+                  schedule: { at: new Date(Date.now() + 60_000) },
+                },
+              ],
+            }),
+        );
+
+        await stateAdapter.withTransaction(async (txCtx) =>
+          stateAdapter.addJobsBlockers({
+            txCtx,
+            jobBlockers: [{ jobId: blockedJob.id, blockedByChainIds: [blockerJob.chainId] }],
+          }),
+        );
+
+        const [refreshedBlockedJob] = await stateAdapter.getJobs({
+          jobIds: [blockedJob.id],
+        });
+        expect(refreshedBlockedJob!.blocked).toBe(true);
+
+        const futureDate = new Date(Date.now() + 120_000);
+        const rescheduled = await stateAdapter.withTransaction(async (txCtx) =>
+          stateAdapter.rescheduleJobs({
+            txCtx,
+            jobIds: [blockedJob.id],
+            schedule: { at: futureDate },
+          }),
+        );
+
+        expect(rescheduled).toHaveLength(1);
+        expect(rescheduled[0].blocked).toBe(true);
+        expect(Math.abs(rescheduled[0].scheduledAt.getTime() - futureDate.getTime())).toBeLessThan(
+          1000,
+        );
+      },
+    },
+    {
       name: "omitted schedule reschedules to now",
       run: async ({ stateAdapter }, expect) => {
         const [{ job: created }] = await stateAdapter.withTransaction(async (txCtx) =>
-          stateAdapter.createJobs({
+          stateAdapter.createChains({
             txCtx,
             jobs: [
               {
                 typeName: "resched-now",
-                chainId: undefined,
-                chainIndex: 0,
                 chainTypeName: "resched-now",
                 input: null,
                 schedule: { at: new Date(Date.now() + 60_000) },

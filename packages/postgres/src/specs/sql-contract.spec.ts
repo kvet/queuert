@@ -325,6 +325,8 @@ const it = extendWithResourceLeakDetection(extendWithPostgres(baseIt, import.met
     ],
   });
 
+it("index");
+
 describe("PostgreSQL SQL contract", () => {
   stateAdapterConformanceTestSuite({ it });
 });

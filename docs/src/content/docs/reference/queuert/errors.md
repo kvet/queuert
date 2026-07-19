@@ -73,11 +73,11 @@ Batch variant of `JobNotReschedulableError`. Thrown by `rescheduleJobs` when any
 class JobTakenByAnotherWorkerError extends Error {
   readonly jobId: string | undefined;
   readonly workerId: string | undefined;
-  readonly leasedBy: string | null | undefined;
+  readonly attemptBy: string | null | undefined;
 }
 ```
 
-Thrown during job processing when another worker has acquired the job's lease.
+Thrown during job processing when another worker has acquired the job.
 
 ## ChainTypeMismatchError
 

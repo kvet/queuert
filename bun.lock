@@ -81,6 +81,25 @@
         "@types/pg": "8.20.0",
       },
     },
+    "benchmarks/query-performance": {
+      "name": "benchmark-query-performance",
+      "version": "0.0.1",
+      "dependencies": {
+        "@queuert/postgres": "workspace:*",
+        "@queuert/sqlite": "workspace:*",
+        "better-sqlite3": "12.9.0",
+        "example-state-postgres-pg": "workspace:*",
+        "example-state-sqlite-better-sqlite3": "workspace:*",
+        "pg": "8.20.0",
+        "queuert": "workspace:*",
+      },
+      "devDependencies": {
+        "@queuert/tsconfig": "workspace:*",
+        "@testcontainers/postgresql": "11.14.0",
+        "@types/better-sqlite3": "7.6.13",
+        "@types/pg": "8.20.0",
+      },
+    },
     "benchmarks/type-complexity": {
       "name": "benchmark-type-complexity",
       "version": "0.0.1",
@@ -1640,6 +1659,8 @@
     "benchmark-memory-footprint": ["benchmark-memory-footprint@workspace:benchmarks/memory-footprint"],
 
     "benchmark-processing-capacity": ["benchmark-processing-capacity@workspace:benchmarks/processing-capacity"],
+
+    "benchmark-query-performance": ["benchmark-query-performance@workspace:benchmarks/query-performance"],
 
     "benchmark-type-complexity": ["benchmark-type-complexity@workspace:benchmarks/type-complexity"],
 

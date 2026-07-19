@@ -62,7 +62,7 @@ export const extendWithStatePg = <
         const client = await statePool.connect();
         await client
           .query(
-            `DROP TABLE IF EXISTS queuert_job_blocker, queuert_job, queuert_migration CASCADE; DROP TYPE IF EXISTS queuert_job_status CASCADE;`,
+            `DROP TABLE IF EXISTS queuert_job_blocker, queuert_job, queuert_migration, queuert_migration_lock CASCADE; DROP TYPE IF EXISTS queuert_job_status CASCADE;`,
           )
           .catch(() => {
             // ignore
@@ -185,6 +185,7 @@ export const extendWithStatePg = <
                 readOnly: true,
               });
             }
+
             return originalExecuteSql({ txCtx, sql, params, paramTypes, columnTypes, readOnly });
           },
         };

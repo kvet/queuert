@@ -4,7 +4,7 @@ import { For, Show, createResource, createSignal } from "solid-js";
 import { getJobDetail, rescheduleJob } from "../api.js";
 import { BackLink } from "./BackLink.js";
 import { JsonView } from "./JsonView.js";
-import { StatusBadge } from "./StatusBadge.js";
+import { ChainStatusBadge, JobStatusBadge } from "./StatusBadge.js";
 import { TimeAgo } from "./TimeAgo.js";
 
 const dtf = new Intl.DateTimeFormat(undefined, {
@@ -40,7 +40,7 @@ export function JobDetail() {
             <>
               <div class="detail-header">
                 <h2>
-                  {job.typeName} <StatusBadge status={job.status} />
+                  {job.typeName} <JobStatusBadge job={job} />
                 </h2>
                 <div class="id">job {job.id}</div>
                 <A href={`/chains/${job.chainId}`} class="chain-link">
@@ -53,10 +53,8 @@ export function JobDetail() {
                 <dl class="info-grid">
                   <dt>Status</dt>
                   <dd>
-                    <StatusBadge status={job.status} />
+                    <JobStatusBadge job={job} />
                   </dd>
-                  <dt>Attempt</dt>
-                  <dd>#{job.attempt}</dd>
                   <dt>Created</dt>
                   <dd>
                     {fmtDate(job.createdAt)} (<TimeAgo date={job.createdAt} />)
@@ -75,25 +73,34 @@ export function JobDetail() {
                       </button>
                     </Show>
                   </dd>
-                  <Show when={job.completedAt}>
-                    <dt>Completed</dt>
+                  <dt>Attempt</dt>
+                  <dd>#{job.attempt}</dd>
+                  <Show when={job.lastAttemptAt}>
+                    <dt>Last attempt at</dt>
                     <dd>
-                      {fmtDate(job.completedAt)} (<TimeAgo date={job.completedAt} />)
+                      {fmtDate(job.lastAttemptAt!)} (<TimeAgo date={job.lastAttemptAt!} />)
                     </dd>
                   </Show>
-                  <Show when={job.completedBy}>
-                    <dt>Completed by</dt>
-                    <dd>{job.completedBy}</dd>
-                  </Show>
-                  <Show when={job.leasedBy}>
-                    <dt>Leased by</dt>
-                    <dd>{job.leasedBy}</dd>
-                  </Show>
-                  <Show when={job.leasedUntil}>
-                    <dt>Lease until</dt>
+                  <Show when={job.lastAttemptError}>
+                    <dt>Last attempt error</dt>
                     <dd>
-                      {fmtDate(job.leasedUntil)} (<TimeAgo date={job.leasedUntil} />)
+                      <pre class="error-text">{String(job.lastAttemptError)}</pre>
                     </dd>
+                  </Show>
+                  <Show when={job.status === "completed" ? job : undefined}>
+                    {(completed) => (
+                      <>
+                        <dt>Completed</dt>
+                        <dd>
+                          {fmtDate(completed().completedAt)} (
+                          <TimeAgo date={completed().completedAt} />)
+                        </dd>
+                        <Show when={completed().completedBy}>
+                          <dt>Completed by</dt>
+                          <dd>{completed().completedBy}</dd>
+                        </Show>
+                      </>
+                    )}
                   </Show>
                 </dl>
               </div>
@@ -105,7 +112,7 @@ export function JobDetail() {
                     <For each={d.blockers}>
                       {(blocker) => (
                         <li>
-                          <StatusBadge status={blocker.status} /> {blocker.typeName}{" "}
+                          <ChainStatusBadge chain={blocker} /> {blocker.typeName}{" "}
                           <A href={`/chains/${blocker.id}`} class="chain-link">
                             chain {blocker.id}
                           </A>
@@ -123,11 +130,38 @@ export function JobDetail() {
                 </div>
               </Show>
 
-              <Show when={job.output != null}>
-                <div class="section">
-                  <h3>Output</h3>
-                  <JsonView data={job.output} />
-                </div>
+              <Show when={job.status === "running" ? job : undefined}>
+                {(running) => (
+                  <div class="section">
+                    <h3>Current Attempt</h3>
+                    <dl class="info-grid">
+                      <dt>Worker</dt>
+                      <dd>{running().attemptBy}</dd>
+                      <dt>Started</dt>
+                      <dd>
+                        {fmtDate(running().attemptAt)} (<TimeAgo date={running().attemptAt} />)
+                      </dd>
+                      <Show when={running().attemptUntil}>
+                        <dt>Deadline</dt>
+                        <dd>
+                          {fmtDate(running().attemptUntil!)} (
+                          <TimeAgo date={running().attemptUntil!} />)
+                        </dd>
+                      </Show>
+                    </dl>
+                  </div>
+                )}
+              </Show>
+
+              <Show
+                when={job.status === "completed" && job.continuedToId === null ? job : undefined}
+              >
+                {(terminal) => (
+                  <div class="section">
+                    <h3>Output</h3>
+                    <JsonView data={terminal().output} />
+                  </div>
+                )}
               </Show>
 
               <Show when={d.continuation} keyed>
@@ -135,17 +169,10 @@ export function JobDetail() {
                   <div class="section">
                     <h3>Continuation</h3>
                     <A href={`/jobs/${cont.id}`} class="chain-link">
-                      {cont.typeName} <StatusBadge status={cont.status} />
+                      {cont.typeName} <JobStatusBadge job={cont} />
                     </A>
                   </div>
                 )}
-              </Show>
-
-              <Show when={job.lastAttemptError}>
-                <div class="section">
-                  <h3>Error</h3>
-                  <pre class="error-text">{String(job.lastAttemptError)}</pre>
-                </div>
               </Show>
             </>
           );

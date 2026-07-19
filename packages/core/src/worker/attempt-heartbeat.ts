@@ -1,37 +1,37 @@
 import { sleep } from "../helpers/sleep.js";
 
-/** Configuration for job lease duration and renewal frequency. */
-export type LeaseConfig = {
+/** Configuration for job attempt timeout and heartbeat frequency. */
+export type AttemptConfig = {
   /** How long a worker holds a job before it can be reclaimed */
-  leaseMs: number;
-  /** How often to renew the lease */
-  renewIntervalMs: number;
+  timeoutMs: number;
+  /** How often to extend the attempt deadline */
+  heartbeatMs: number;
 };
 
-export type LeaseManager = {
+export type AttemptHeartbeat = {
   start: () => Promise<void>;
   stop: () => Promise<void>;
 };
 
-export const createLeaseManager = ({
-  commitLease,
+export const createAttemptHeartbeat = ({
+  commitRenewal,
   config,
 }: {
-  commitLease: (leaseMs: number) => Promise<void>;
-  config: LeaseConfig;
-}): LeaseManager => {
+  commitRenewal: (timeoutMs: number) => Promise<void>;
+  config: AttemptConfig;
+}): AttemptHeartbeat => {
   const abortController = new AbortController();
   let loopPromise: Promise<void> | undefined;
 
   const runRenewalLoop = async () => {
     while (!abortController.signal.aborted) {
-      await sleep(config.renewIntervalMs, {
+      await sleep(config.heartbeatMs, {
         signal: abortController.signal,
       });
       if (abortController.signal.aborted) {
         break;
       }
-      await commitLease(config.leaseMs);
+      await commitRenewal(config.timeoutMs);
     }
   };
 

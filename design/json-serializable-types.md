@@ -59,14 +59,14 @@ Rules:
 
 ### End-to-end flow
 
-| Stage                                                                                                         | Operation                                                                                         |
-| ------------------------------------------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------- |
-| `client.startChain`                                                                                           | `validateEntry` → `encodeInputs` → state adapter persist                                          |
-| handler `continueWith`                                                                                        | `validateContinueWith` (runtime) → `encodeInputs` → persist next job                              |
-| handler returns output                                                                                        | `encodeOutputs` → state adapter persist completion                                                |
-| worker pickup                                                                                                 | state adapter `acquireJob` → `decodeInputs` → handler receives runtime form                       |
-| client read (`getJob`, `listJobs`, `listChainJobs`, `listBlockedJobs`, `getChain`, `trigger` returning a job) | state adapter fetch → `decodeInputs` + `decodeOutputs` (one batch per page) → return runtime form |
-| observability hooks                                                                                           | encoded form passed (open question — see below)                                                   |
+| Stage                                                                                                            | Operation                                                                                         |
+| ---------------------------------------------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------- |
+| `client.startChain`                                                                                              | `validateEntry` → `encodeInputs` → state adapter persist                                          |
+| handler `continueWith`                                                                                           | `validateContinueWith` (runtime) → `encodeInputs` → persist next job                              |
+| handler returns output                                                                                           | `encodeOutputs` → state adapter persist completion                                                |
+| worker pickup                                                                                                    | state adapter `startJobAttempt` → `decodeInputs` → handler receives runtime form                  |
+| client read (`getJob`, `listJobs`, `listChainJobs`, `listBlockedJobs`, `getChain`, `reschedule` returning a job) | state adapter fetch → `decodeInputs` + `decodeOutputs` (one batch per page) → return runtime form |
+| observability hooks                                                                                              | encoded form passed (open question — see below)                                                   |
 
 `mapStateJobToJob` becomes async-aware via a batch helper (`mapStateJobsToJobs`) used by every read site. Single-job sites call it with `[job]` and unwrap.
 
@@ -294,10 +294,10 @@ Goal: replace `parseInput`/`parseOutput` with the four batch async codec methods
   3. Maps decoded values back onto each job in original order.
      Single-job sites call it with `[job]` and unwrap.
 - [ ] Update all 8 callers (per inventory):
-  - `packages/core/src/client.ts` — `trigger` (line 629), `getJob` (919), `listJobs` (1004), `listChainJobs` (1045), `listBlockedJobs` (1120). All already async.
+  - `packages/core/src/client.ts` — `reschedule` (line 629), `getJob` (919), `listJobs` (1004), `listChainJobs` (1045), `listBlockedJobs` (1120). All already async.
   - `packages/core/src/implementation/continue-with.ts` (line 62).
   - `packages/core/src/worker/job-process.ts` (lines 368, 531).
-- [ ] Worker pickup specifically: ensure `decodeInputs` is called between `acquireJob` and handler invocation; runtime input is what the handler sees and what continues into `continueWith` flows.
+- [ ] Worker pickup specifically: ensure `decodeInputs` is called between `startJobAttempt` and handler invocation; runtime input is what the handler sees and what continues into `continueWith` flows.
 - [ ] `getChain`/`listChains` paths: if they surface job-shaped data, batch-decode that page too. Audit during implementation.
 - [ ] Tests:
   - List of N jobs of mixed types → exactly one `decodeInputs` call + one `decodeOutputs` call per page.

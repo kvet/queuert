@@ -363,7 +363,7 @@ export const rescheduleJobTestSuite = ({ it }: { it: TestAPI<TestSuiteContext> }
     ).rejects.toThrow(TransactionContextRequiredError);
   });
 
-  it("throws JobNotReschedulableError for blocked job", async ({
+  it("reschedules a blocked job", async ({
     stateAdapter,
     notifyAdapter,
     withTransaction,
@@ -403,20 +403,30 @@ export const rescheduleJobTestSuite = ({ it }: { it: TestAPI<TestSuiteContext> }
           typeName: "blocked",
           input: null,
           blockers: [blockerChain],
+          schedule: { afterMs: 60_000 },
         }),
       ),
     );
 
     const blockedJob = await client.getJob({ id: blockedChain.id });
-    expect(blockedJob!.status).toBe("blocked");
+    expect(blockedJob!.status).toBe("pending");
+    expect(blockedJob!.status === "pending" && blockedJob!.blocked).toBe(true);
 
-    await expect(
-      withTransactionHooks(async (transactionHooks) =>
-        withTransaction(async (txCtx) =>
-          client.rescheduleJob({ ...txCtx, transactionHooks, id: blockedChain.id }),
-        ),
+    const futureDate = new Date(Date.now() + 120_000);
+    const rescheduled = await withTransactionHooks(async (transactionHooks) =>
+      withTransaction(async (txCtx) =>
+        client.rescheduleJob({
+          ...txCtx,
+          transactionHooks,
+          id: blockedChain.id,
+          schedule: { at: futureDate },
+        }),
       ),
-    ).rejects.toThrow(JobNotReschedulableError);
+    );
+
+    expect(rescheduled.status).toBe("pending");
+    expect(rescheduled.status === "pending" && rescheduled.blocked).toBe(true);
+    expect(Math.abs(rescheduled.scheduledAt.getTime() - futureDate.getTime())).toBeLessThan(1000);
   });
 
   it("rescheduleJobs reschedules multiple pending jobs in input order", async ({

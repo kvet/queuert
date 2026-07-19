@@ -5,7 +5,7 @@ import {
   processErrorHandlingTestSuite,
   processModesTestSuite,
   processTestSuite,
-  reaperTestSuite,
+  attemptReclaimerTestSuite,
   workerTestSuite,
 } from "queuert/testing";
 import { describe, it } from "vitest";
@@ -35,6 +35,6 @@ describe("Worker", () => {
   workerTestSuite({ it: sqliteInProcessIt });
 });
 
-describe("Reaper", () => {
-  reaperTestSuite({ it: sqliteInProcessIt });
+describe("Attempt Reclamation", () => {
+  attemptReclaimerTestSuite({ it: sqliteInProcessIt });
 });

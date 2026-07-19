@@ -82,7 +82,7 @@ Defines a processor registry. Handlers are type-checked against the client's ful
 - **processors** — the processor map, typed against the client's definitions
 - **attemptMiddleware** — optional middleware tuple applied to every handler in this registry. Ctx injected via `next(ctx)` is typed into each `attemptHandler`, `prepareCallback`, and `completeCallback` option bag. Runs in onion order (first middleware outermost).
 - **backoffConfig** — default backoff for every processor in this registry. Overridden by the per-processor value. Falls back to the library default when absent (10s initial, 2× multiplier, 5min max).
-- **leaseConfig** — default lease for every processor in this registry. Overridden by the per-processor value. Falls back to the library default when absent (60s lease, 30s renewal).
+- **attemptConfig** — default attempt config for every processor in this registry. Overridden by the per-processor value. Falls back to the library default when absent (60s timeout, 30s heartbeat).
 - **Return type** — a `Processors` carrying the client's definitions via phantom symbols
 
 ## createInProcessStateAdapter

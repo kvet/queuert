@@ -46,11 +46,11 @@ export const handleJobHandlerError = async (
     : { afterMs: calculateBackoffMs(job.attempt, backoffConfig) };
   const errorString = isRescheduled ? serializeError(error.cause) : serializeError(error);
 
-  await helpers.stateAdapter.abandonJob({ txCtx, jobId: job.id, error: errorString });
-  const [rescheduledJob] = await helpers.stateAdapter.rescheduleJobs({
+  const rescheduledJob = await helpers.stateAdapter.finishJobAttempt({
     txCtx,
-    jobIds: [job.id],
-    schedule,
+    jobId: job.id,
+    workerId,
+    outcome: { error: errorString, schedule },
   });
 
   bufferObservabilityEvent(transactionHooks, () => {

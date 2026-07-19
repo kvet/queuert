@@ -354,7 +354,7 @@ The following items have been reviewed and accepted as intentional design decisi
 - **State adapter factory options for ID generation are aligned**: Both adapters use `generateId` (JS fn) and `validateId` (optional predicate). PG drops `idDefault` (SQL DEFAULT) in favor of JS-side generation for symmetry and to support caller-supplied IDs uniformly. Accepted.
 - **`TransactionContextRequiredError` does not accept `cause`**: This error signals API misuse (calling mutating methods without `withTransaction`), never caused by another error. Accepted.
 - **OTEL `workerError` does not record error details**: Counter attributes should remain low-cardinality per OTEL best practices. Error details are captured via the Log adapter. Accepted.
-- **`getNextJobAvailableInMsSql` uses `FOR UPDATE SKIP LOCKED`**: Tracked in TODO.md for future cleanup. Accepted for now.
+- **`getStartAttemptDelayMs` uses `FOR UPDATE SKIP LOCKED`**: Tracked in TODO.md for future cleanup. Accepted for now.
 - **SQLite `checkExternalBlockerRefsSql` lacks row locking**: SQLite serializes writes via exclusive transaction locking, providing equivalent safety. Accepted.
 - **`listJobChains` status filter applies post-join**: Acceptable for dashboard queries with pagination. A denormalized chain status column can be added if performance becomes an issue. Accepted.
 - **SQLite `createJobs` performs per-job queries (O(n) round-trips)**: Documented and accepted SQLite trade-off. Tracked in TODO.md. Accepted.

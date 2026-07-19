@@ -1,30 +1,31 @@
+import { type DeduplicationOptions } from "../entities/deduplication.js";
 import { type ScheduleOptions } from "../entities/schedule.js";
 import { type BlockerReference } from "../errors.js";
 import { type OrderDirection, type Page, type PageParams } from "../pagination.js";
-
-export type StateJobStatus = "blocked" | "pending" | "running" | "completed";
 
 export type StateJob = {
   id: string;
   typeName: string;
   chainId: string;
   chainTypeName: string;
-  chainIndex: number;
-  input: unknown;
-  output: unknown;
 
-  status: StateJobStatus;
+  blocked: boolean;
   createdAt: Date;
+  input: unknown;
   scheduledAt: Date;
+
   completedAt: Date | null;
   completedBy: string | null;
+  continuedToId: string | null;
+  output: unknown;
 
   attempt: number;
   lastAttemptError: string | null;
   lastAttemptAt: Date | null;
 
-  leasedBy: string | null;
-  leasedUntil: Date | null;
+  attemptAt: Date | null;
+  attemptBy: string | null;
+  attemptUntil: Date | null;
 
   deduplicationKey: string | null;
 
@@ -38,52 +39,23 @@ export type BaseTxContext = Record<string, unknown>;
 /**
  * Abstracts database operations for job persistence.
  *
- * Allows different database implementations (PostgreSQL, SQLite, in-memory).
- * Handles job creation, status transitions, leasing, and queries.
- *
- * All operation methods have an optional `txCtx` parameter:
- * - When txCtx is provided (from within `withTransaction`), operations use that transaction
- * - When txCtx is omitted, the adapter acquires its own connection, executes, and releases
- *
- * @typeParam TTxContext - The transaction context type containing database client/session info
- * @typeParam TJobId - The job ID type used for input parameters
+ * @typeParam TTxContext - The transaction context type
+ * @typeParam TJobId - The job ID type
  */
 export type StateAdapter<TTxContext extends BaseTxContext, TJobId extends string> = {
-  /**
-   * Whether two `withTransaction` callbacks can be in flight against the same
-   * store at once. Forwarded from the underlying state provider. Composite
-   * adapters report `"concurrent"` only if every sub-provider is concurrent.
-   */
+  /** Whether two `withTransaction` callbacks can run concurrently. */
   transactionConcurrency: "concurrent" | "serialized";
 
-  /**
-   * Executes a callback within a database transaction.
-   * Acquires a connection, starts a transaction, executes the callback,
-   * commits on success, rolls back on error, and releases the connection.
-   */
+  /** Executes a callback within a transaction. Commits on success, rolls back on error. */
   withTransaction: <T>(fn: (txCtx: TTxContext) => Promise<T>) => Promise<T>;
 
-  /**
-   * Wraps a callback in a savepoint within an existing transaction.
-   * On success, releases the savepoint. On error, rolls back to the savepoint
-   * and re-throws. Used to isolate user callbacks and to roll back completion
-   * side effects when a handler throws after calling complete().
-   */
+  /** Wraps a callback in a savepoint. Rolls back to the savepoint on error and re-throws. */
   withSavepoint: <T>(txCtx: TTxContext, fn: (txCtx: TTxContext) => Promise<T>) => Promise<T>;
 
   /**
-   * Gets chains by their chain IDs. Returns one entry per input id in input
-   * order: a `[rootJob, lastJob]` pair when the chain exists, or `undefined`
-   * when no chain with that id exists.
-   *
-   * Pass `lock: "exclusive"` from inside a transaction to acquire a
-   * write-intent lock on the latest job in each chain — i.e. the row
-   * callers typically extend (rootJob when the chain has no continuation,
-   * otherwise the last continuation). The rootJob is not locked when a
-   * continuation exists, since `chainTypeName` is immutable and no caller
-   * mutates the rootJob via this path. Backends that support row-level
-   * locking (Postgres, MySQL/MariaDB) block concurrent locked reads on the
-   * same row until the transaction ends.
+   * Gets chains by their IDs. Returns `[headJob, tailJob]` per id in input order,
+   * or `undefined` for missing chains. Pass `lock: "exclusive"` to acquire a
+   * write-intent lock on the latest job in each chain.
    */
   getChains: (params: {
     txCtx?: TTxContext;
@@ -92,14 +64,8 @@ export type StateAdapter<TTxContext extends BaseTxContext, TJobId extends string
   }) => Promise<([StateJob, StateJob | undefined] | undefined)[]>;
 
   /**
-   * Gets jobs by their IDs. Returns one entry per input id in input order:
-   * the `StateJob` when it exists, or `undefined` when no job with that id
-   * exists.
-   *
-   * Pass `lock: "exclusive"` from inside a transaction to acquire a
-   * write-intent lock on each row; backends that support row-level locking
-   * (Postgres, MySQL/MariaDB) will block concurrent writers until the
-   * transaction ends.
+   * Gets jobs by their IDs. Returns one entry per id in input order, or `undefined`
+   * for missing jobs. Pass `lock: "exclusive"` to acquire a write-intent lock.
    */
   getJobs: (params: {
     txCtx?: TTxContext;
@@ -108,42 +74,41 @@ export type StateAdapter<TTxContext extends BaseTxContext, TJobId extends string
   }) => Promise<(StateJob | undefined)[]>;
 
   /**
-   * Creates jobs. Returns results in the same order as input.
-   *
-   * Each entry may provide an `id` to assign explicitly; if omitted, the adapter
-   * generates one via its configured `generateId`. Both caller-supplied and
-   * generated IDs are validated via {@link validateId}, throwing `InvalidJobIdError`
-   * before any database write. When `id` is supplied for an entry that turns out to
-   * be deduplicated, the returned job carries the existing row's ID (not the
-   * caller's) and `deduplicated: true`.
+   * Creates each chain's first job. Returns results in input order.
+   * Supports deduplication — matching entries return the existing row with `deduplicated: true`.
    */
-  createJobs: (params: {
+  createChains: (params: {
     txCtx?: TTxContext;
     jobs: {
       typeName: string;
       id?: TJobId;
-      chainId: TJobId | undefined;
-      chainTypeName: string;
-      chainIndex: number;
       input: unknown;
-      deduplication?: {
-        key: string;
-        scope?: "incomplete" | "any";
-        windowMs?: number;
-        excludeChainIds?: TJobId[];
-      };
       schedule?: ScheduleOptions;
       chainTraceContext?: string | null;
       traceContext?: string | null;
+      chainTypeName: string;
+      deduplication?: DeduplicationOptions<TJobId>;
     }[];
   }) => Promise<{ job: StateJob; deduplicated: boolean }[]>;
 
   /**
-   * Adds blocker dependencies to jobs. Returns results in the same order as input.
-   *
-   * The per-job blocker-count cap is enforced by core before this method is
-   * called (see `createStateJobs`); adapters do not re-validate it.
+   * Creates the successor job of `continueFromId` within the same chain.
+   * Idempotent — if a successor already exists, returns it with `deduplicated: true`.
    */
+  createContinuationJob: (params: {
+    txCtx?: TTxContext;
+    job: {
+      typeName: string;
+      id?: TJobId;
+      input: unknown;
+      schedule?: ScheduleOptions;
+      chainTraceContext?: string | null;
+      traceContext?: string | null;
+      continueFromId: TJobId;
+    };
+  }) => Promise<{ job: StateJob; deduplicated: boolean }>;
+
+  /** Adds blocker dependencies to jobs. Returns results in input order. */
   addJobsBlockers: (params: {
     txCtx?: TTxContext;
     jobBlockers: {
@@ -159,54 +124,66 @@ export type StateAdapter<TTxContext extends BaseTxContext, TJobId extends string
     }[]
   >;
 
-  /** Unblocks jobs when a blocker chain completes, transitioning them from blocked to pending. */
-  unblockJobs: (params: {
-    txCtx?: TTxContext;
-    blockedByChainId: TJobId;
-  }) => Promise<{ unblockedJobs: StateJob[]; blockerTraceContexts: (string | null)[] }>;
-
   /** Gets the blocker chains for a job. */
   getJobBlockers: (params: {
     txCtx?: TTxContext;
     jobId: TJobId;
   }) => Promise<[StateJob, StateJob | undefined][]>;
 
-  /** Gets the time in ms until the next job is available, or null if none. */
-  getNextJobAvailableInMs: (params: {
+  /** Unblocks jobs when a blocker chain completes, transitioning them from blocked to pending. */
+  unblockJobs: (params: {
+    txCtx?: TTxContext;
+    blockedByChainId: TJobId;
+  }) => Promise<{ unblockedJobs: StateJob[]; blockerTraceContexts: (string | null)[] }>;
+
+  /**
+   * Atomically selects a pending job and starts an attempt. Two parallel callers
+   * must never receive the same job — locked rows must be skipped, not waited on.
+   */
+  startJobAttempt: (params: {
+    txCtx?: TTxContext;
+    typeNames: string[];
+    workerId: string;
+  }) => Promise<{ job: StateJob | undefined }>;
+
+  /** Extends a running job attempt's deadline. */
+  extendJobAttempt: (params: {
+    txCtx?: TTxContext;
+    jobId: TJobId;
+    workerId: string;
+    timeoutMs: number;
+  }) => Promise<StateJob>;
+
+  /**
+   * Finishes a job attempt. Outcome is discriminated by key:
+   * - `{ output }` — completed with terminal output
+   * - `{ continuedToId }` — completed with successor link
+   * - `{ error, schedule }` — failed, returned to pending
+   */
+  finishJobAttempt: (params: {
+    txCtx?: TTxContext;
+    jobId: TJobId;
+    workerId: string | null;
+    outcome:
+      | { output: unknown; continuedToId?: never; error?: never; schedule?: never }
+      | { continuedToId: TJobId; output?: never; error?: never; schedule?: never }
+      | { error: string; schedule?: ScheduleOptions; output?: never; continuedToId?: never };
+  }) => Promise<StateJob>;
+
+  /** Releases an expired job attempt back to the pending pool. */
+  reclaimExpiredJobAttempt: (params: {
+    txCtx?: TTxContext;
+    typeNames: string[];
+    ignoredJobIds?: TJobId[];
+  }) => Promise<StateJob | undefined>;
+
+  /** Ms until a pending job of these types can be attempted: 0 if due now, null if none. */
+  getStartAttemptDelayMs: (params: {
     txCtx?: TTxContext;
     typeNames: string[];
   }) => Promise<number | null>;
 
-  /**
-   * Acquires a pending job for processing. Returns the job and whether more
-   * jobs are waiting.
-   *
-   * Implicit-lock contract: must atomically select a pending row and flip its
-   * status to `running` (typically a single `FOR UPDATE SKIP LOCKED` + `UPDATE`
-   * on Postgres/MySQL). Two parallel callers must never receive the same job,
-   * and a row already locked by another caller must be *skipped* rather than
-   * waited on — otherwise concurrent workers serialize on contended rows
-   * instead of fanning out across the queue.
-   */
-  acquireJob: (params: {
-    txCtx?: TTxContext;
-    typeNames: string[];
-  }) => Promise<{ job: StateJob | undefined; hasMore: boolean }>;
-
-  /** Renews the lease on a running job. */
-  renewJobLease: (params: {
-    txCtx?: TTxContext;
-    jobId: TJobId;
-    workerId: string;
-    leaseDurationMs: number;
-  }) => Promise<StateJob>;
-
-  /**
-   * Client-initiated reschedule: sets `scheduled_at` from `schedule` (omitted =
-   * now, past times clamped to now) on the given `pending` jobs, leaving status
-   * and attempt bookkeeping untouched. Skips non-`pending` and missing ids.
-   * Returns the updated rows in input order.
-   */
+  /** Reschedules pending jobs. Skips non-pending and missing ids. Returns updated rows in input order. */
   rescheduleJobs: (params: {
     txCtx?: TTxContext;
     jobIds: TJobId[];
@@ -214,84 +191,54 @@ export type StateAdapter<TTxContext extends BaseTxContext, TJobId extends string
   }) => Promise<StateJob[]>;
 
   /**
-   * Releases a failed attempt back to `pending`: transitions the running job
-   * `running → pending`, records the attempt error, and clears the lease. Does
-   * not touch `scheduled_at` — pair with
-   * {@link StateAdapter.rescheduleJobs | rescheduleJobs} in the same transaction
-   * to set the next run time.
-   */
-  abandonJob: (params: { txCtx?: TTxContext; jobId: TJobId; error: string }) => Promise<StateJob>;
-
-  /** Completes a job with the given output. */
-  completeJob: (params: {
-    txCtx?: TTxContext;
-    jobId: TJobId;
-    output: unknown;
-    workerId: string | null;
-  }) => Promise<StateJob>;
-
-  /**
-   * Removes an expired lease and resets the job to pending.
-   *
-   * Implicit-lock contract: same shape as `acquireJob` — atomic select-and-update
-   * on a single row, skipping rows already locked by another caller rather than
-   * waiting on them, so parallel reapers don't bottleneck on the same expired
-   * row.
-   */
-  reapExpiredJobLease: (params: {
-    txCtx?: TTxContext;
-    typeNames: string[];
-    ignoredJobIds?: TJobId[];
-  }) => Promise<StateJob | undefined>;
-
-  /**
-   * Deletes all jobs in the given chains in a single atomic operation.
-   *
-   * All-or-nothing: if any chain in the effective set is referenced as a blocker
-   * by a job outside the set, nothing is deleted and `blockerRefs` lists the
-   * offending references. When deletion proceeds, missing ids are silently
-   * skipped and `blockerRefs` is empty. When `cascade` is true, expands
-   * `chainIds` to include transitive dependencies (downward only) before
-   * checking and deleting.
+   * Deletes all jobs in the given chains atomically. Fails with `blockerRefs` if any
+   * chain is referenced as a blocker by a job outside the set. `cascade` includes
+   * transitive dependencies.
    */
   deleteChains: (params: { txCtx?: TTxContext; chainIds: TJobId[]; cascade?: boolean }) => Promise<{
     deleted: [StateJob, StateJob | undefined][];
     blockerRefs: BlockerReference[];
   }>;
 
-  /** Lists chains with pagination and filtering. */
-  listChains: (params: {
-    txCtx?: TTxContext;
-    filter?: {
+  /** Lists chains with pagination, status-dependent ordering, and filtering. */
+  listChains: (
+    params: {
+      txCtx?: TTxContext;
       typeName?: string[];
-      status?: StateJobStatus[];
-      rootOnly?: boolean;
-      chainId?: string[];
-      jobId?: string[];
+      independent?: boolean;
+      chainId?: TJobId[];
       from?: Date;
       to?: Date;
-    };
-    orderDirection: OrderDirection;
-    page: PageParams;
-  }) => Promise<Page<[StateJob, StateJob | undefined]>>;
+      orderDirection: OrderDirection;
+      page: PageParams;
+    } & (
+      | { status?: undefined; orderBy: "createdAt" }
+      | { status: "running"; orderBy: "createdAt" }
+      | { status: "completed"; orderBy: "createdAt" | "completedAt" }
+    ),
+  ) => Promise<Page<[StateJob, StateJob | undefined]>>;
 
-  /** Lists jobs with pagination and filtering. */
-  listJobs: (params: {
-    txCtx?: TTxContext;
-    filter?: {
-      status?: StateJobStatus[];
+  /** Lists jobs with pagination, status-dependent ordering, and filtering. */
+  listJobs: (
+    params: {
+      txCtx?: TTxContext;
       typeName?: string[];
       chainTypeName?: string[];
-      chainId?: string[];
-      jobId?: string[];
+      chainId?: TJobId[];
+      jobId?: TJobId[];
       from?: Date;
       to?: Date;
-    };
-    orderDirection: OrderDirection;
-    page: PageParams;
-  }) => Promise<Page<StateJob>>;
+      orderDirection: OrderDirection;
+      page: PageParams;
+    } & (
+      | { status?: undefined; orderBy: "createdAt" }
+      | { status: "pending"; blocked?: boolean; orderBy: "createdAt" | "scheduledAt" }
+      | { status: "running"; orderBy: "createdAt" | "attemptAt" | "attemptUntil" }
+      | { status: "completed"; continued?: boolean; orderBy: "createdAt" | "completedAt" }
+    ),
+  ) => Promise<Page<StateJob>>;
 
-  /** Lists jobs within a specific chain, ordered by chain index. */
+  /** Lists jobs within a specific chain, ordered by position in the chain. */
   listChainJobs: (params: {
     txCtx?: TTxContext;
     chainId: TJobId;
@@ -307,11 +254,7 @@ export type StateAdapter<TTxContext extends BaseTxContext, TJobId extends string
     page: PageParams;
   }) => Promise<Page<StateJob>>;
 
-  /**
-   * Releases internal resources (in-memory indexes, shared caches) and cascades
-   * into the underlying provider. Idempotent — the second call is a no-op.
-   * After close, other methods may reject.
-   */
+  /** Releases internal resources. Idempotent. */
   close: () => Promise<void>;
 };
 

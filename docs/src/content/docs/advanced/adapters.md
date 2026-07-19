@@ -54,11 +54,9 @@ All StateAdapter methods must complete in a **single database round-trip**, wher
 
 - **O(1) round trips**: Each method—regardless of how many jobs it affects—executes exactly one database operation
 - **O(n) is incorrect**: If an adapter implementation requires multiple round trips proportional to input size, the implementation is wrong
-- **Batch operations**: Methods accepting arrays (e.g., `deleteChains`, `addJobBlockers`) must use batch SQL (multi-row INSERT, UPDATE with IN clause, CTEs) rather than loops
+- **Batch operations**: Methods accepting arrays (e.g., `deleteChains`, `addJobsBlockers`) must use batch SQL (multi-row INSERT, UPDATE with IN clause, CTEs) rather than loops
 
 This principle ensures predictable performance and proper atomicity. Use batch SQL (multi-row INSERT, UPDATE with IN/ANY clause, CTEs) rather than loops.
-
-**SQLite exception**: SQLite does not support writeable CTEs with RETURNING in the same way as PostgreSQL. Operations like `addJobBlockers` and `deleteChains` use multiple sequential queries within a single transaction instead of a single CTE. This is safe under SQLite's exclusive transaction locking model (which serializes all writes), but results in more round-trips per operation. This is an accepted trade-off for SQLite support.
 
 ### Context Architecture
 
@@ -68,26 +66,12 @@ The context is named `TTxContext` (transaction context) because it's exclusively
 
 ### StateProvider Interface
 
-Users create a `StateProvider` implementation to integrate with their database client. The concrete interfaces live in `@queuert/postgres` and `@queuert/sqlite`; the shape below is an illustrative reduction — see the TSDoc on `PgStateProvider` and `SqliteStateProvider` for the authoritative signatures (including `paramTypes`/`columnTypes` annotations required by the typed-SQL layer).
+Users create a `StateProvider` implementation to integrate with their database client. A state provider supplies three capabilities:
 
-```typescript
-interface PgStateProvider<TTxContext> {
-  // Manages connection and transaction - called for transactional operations
-  withTransaction: <T>(fn: (txCtx: TTxContext) => Promise<T>) => Promise<T>;
-
-  // Execute SQL - when txCtx is provided uses it, when omitted manages own connection
-  executeSql: (options: {
-    txCtx?: TTxContext;
-    sql: string;
-    params?: unknown[];
-    paramTypes: Record<number, RuntimeType>;
-    columnTypes: Record<string, RuntimeType>;
-  }) => Promise<unknown[]>;
-
-  // Optional — only define when the provider owns resources beyond the caller-supplied client/pool
-  close?: () => Promise<void>;
-}
-```
+- **`withTransaction`** — wraps a callback in a database transaction, passing the transaction context (`TTxContext`) to the callback
+- **`executeSql`** — executes a SQL string with optional params. When `txCtx` is provided, uses that transaction; when omitted, acquires and releases its own connection
+- **`withSavepoint`** _(optional)_ — runs a callback inside a savepoint within an existing transaction; when omitted, the adapter falls back to a built-in savepoint implementation
+- **`close`** _(optional)_ — only needed when the provider owns resources beyond the caller-supplied client/pool
 
 ### Optional txCtx Semantics
 
@@ -100,35 +84,17 @@ This enables transactional operations, standalone operations, and DDL operations
 
 ### NotifyProvider Interface
 
-NotifyProvider implementations manage connections internally - no context parameters:
+A notify provider supplies three capabilities — no transaction context, connections are managed internally:
 
-```typescript
-interface PgNotifyProvider {
-  publish: (channel: string, message: string) => Promise<void>;
-  subscribe: (
-    channel: string,
-    onMessage: (message: string) => void,
-  ) => Promise<() => Promise<void>>;
-  // Optional — only define when the provider owns resources (e.g. a dedicated LISTEN client)
-  close?: () => Promise<void>;
-}
-```
-
-The provider maintains a dedicated connection for subscriptions and acquires/releases connections for publish operations automatically.
-
-### Reaper Support
-
-The `reapExpiredJobLease` method supports an `ignoredJobIds` parameter to prevent race conditions when a worker runs with multiple concurrent slots (`concurrency > 1`). Without it, a worker could reap its own in-progress job if the lease expires before renewal, causing corrupted state. Custom adapter implementations must filter out these job IDs when selecting expired leases.
-
-### Internal Type Design
-
-`StateJob` is a non-generic type with `string` for all ID fields. The `StateAdapter` methods accept `TJobId` for input parameters but return plain `StateJob`. This simplifies internal code while allowing adapters to expose typed IDs to consumers via type helpers like `GetStateAdapterJobId<TStateAdapter>`.
+- **`publish`** — sends a message to a channel
+- **`subscribe`** — listens on a channel, calling a callback on each message; returns an unsubscribe function
+- **`close`** _(optional)_ — only needed when the provider owns resources (e.g. a dedicated LISTEN client)
 
 ## NotifyAdapter Design
 
 ### Broadcast Semantics
 
-All notifications use broadcast (pub/sub) semantics with three notify/listen pairs: job scheduling, chain completion, and ownership loss. See the `NotifyAdapter` type TSDoc for method details.
+All notifications use broadcast (pub/sub) semantics with three notify/listen pairs: job scheduling, chain completion, and attempt loss. See the `NotifyAdapter` type TSDoc for method details.
 
 ### Wake-Hint Methods
 
@@ -181,15 +147,6 @@ Flow when scheduling N jobs of `typeName`:
 
 Adapters that don't support hints implement the pair as no-ops (`provideWakeHint: async () => {}`, `consumeWakeHint: async () => true`) — no parameter lies, no thundering-herd protection, but everything else still works.
 
-Implementation varies by adapter:
-
-- **Redis**: Lua scripts. `PROVIDE_WAKE_HINT_SCRIPT` reads the current value and writes `current + count` with a 60s TTL refresh; `CONSUME_WAKE_HINT_SCRIPT` performs the atomic decrement with graceful-degradation on missing keys.
-- **NATS with JetStream KV**: revision-based CAS retry loops for both add and decrement.
-- **PostgreSQL / NATS without KV**: hint methods are no-ops; every listener wakes and the database (FOR UPDATE SKIP LOCKED in `acquireJob`) handles contention.
-- **In-process**: synchronous counter operations on a `Map<typeName, count>`.
-
-Atomicity note: `provideWakeHint` and `notifyJobScheduled` are two separate calls. If `notifyJobScheduled` fails after `provideWakeHint` succeeds, the budget is consumed by the _next_ notification for that typeName (slight over-wake on the next batch, harmless). If `provideWakeHint` fails, the publish doesn't happen (the buffered helper short-circuits on the first throw).
-
 ### Callback Pattern
 
 All `listen*` methods accept a callback and return a dispose function. Subscription is active when the promise resolves, and the callback is called synchronously when notifications arrive (no race condition).
@@ -228,7 +185,7 @@ Observability events emitted inside database transactions are buffered and only 
 
 **Buffered** -- events that represent write claims inside transactions:
 
-- **Creation**: `chainCreated`, `jobCreated`, `jobBlocked`, and PRODUCER span ends from `createStateJobs`
+- **Creation**: `chainCreated`, `jobCreated`, `jobBlocked`, and PRODUCER span ends from `createStateChains` and `continueStateJob`
 - **Completion**: `jobCompleted`, `jobDuration`, `completeJobSpan` (workerless), `chainCompleted`, `chainDuration`, `completeBlockerSpan`, `jobUnblocked` from `finishJob`
 - **Worker complete**: `jobAttemptCompleted` and continuation PRODUCER span ends from the complete transaction in `job-process`
 - **Error handling**: `jobAttemptFailed` from the error-handling transaction in `job-process`
@@ -236,12 +193,12 @@ Observability events emitted inside database transactions are buffered and only 
 **Not buffered** -- events that either need immediate context or occur outside transactions:
 
 - **Span starts**: Need trace context immediately for DB writes that store trace IDs
-- **Events outside transactions**: `jobAttemptStarted`, `jobAttemptDuration`, `jobAttemptLeaseRenewed`, attempt span ends (these occur outside the guarded transaction)
+- **Events outside transactions**: `jobAttemptStarted`, `jobAttemptDuration`, `jobAttemptExtended`, attempt span ends (these occur outside the guarded transaction)
 - **Read-only observations**: `refetchJobLocked` events observe state without making write claims
 
 ### Self-Cleaning
 
-Both `createStateJobs` and `finishJob` use `TransactionHooks` savepoints (via `withSavepoint`) to automatically roll back buffered observability events on throw, ensuring partial events from a failed operation don't accumulate in the buffer. The `checkpoint` callback on each hook definition captures the buffer position, and the savepoint restores it on rollback.
+`createStateChains`, `continueStateJob`, and `finishJob` use `TransactionHooks` savepoints (via `withSavepoint`) to automatically roll back buffered observability events on throw, ensuring partial events from a failed operation don't accumulate in the buffer. The `checkpoint` callback on each hook definition captures the buffer position, and the savepoint restores it on rollback.
 
 ## See Also
 
@@ -249,4 +206,4 @@ Both `createStateJobs` and `finishJob` use `TransactionHooks` savepoints (via `w
 - [OTEL Tracing](../otel-tracing/) — Span hierarchy and messaging conventions
 - [OTEL Internals](../otel-internals/) — Adapter architecture, W3C context propagation, and transactional buffering
 - [Client API](/queuert/reference/queuert/client/) — Mutation and query methods
-- [In-Process Worker](../in-process-worker/) — Worker lifecycle and lease management
+- [In-Process Worker](../in-process-worker/) — Worker lifecycle and attempt management

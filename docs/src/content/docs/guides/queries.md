@@ -18,21 +18,23 @@ const batchJobs = await client.getJobs({ ids: [id1, id2] });
 
 // Paginated lists with filters
 const chains = await client.listChains({
-  filter: { typeName: ["send-email"], status: ["running"] },
+  typeName: ["send-email"],
+  status: "running",
   limit: 20,
 });
 
 const jobs = await client.listJobs({
-  filter: { chainId: [chainId], status: ["completed"] },
+  chainId: [chainId],
+  status: "completed",
 });
 
 // Cursor-based pagination
 const nextPage = await client.listChains({
-  filter: { typeName: ["send-email"] },
+  typeName: ["send-email"],
   cursor: chains.nextCursor,
 });
 
-// Jobs within a specific chain, ordered by chain index
+// Jobs within a specific chain, in chain order
 const chainJobs = await client.listChainJobs({ chainId });
 
 // Blocker relationships
@@ -44,20 +46,6 @@ All lookup methods accept an optional `typeName` for type narrowing -- the retur
 
 See [examples/showcase-queries](https://github.com/kvet/queuert/tree/main/examples/showcase-queries) for a complete working example demonstrating single lookups, paginated lists, chain job listing, and blocker queries. See also [Client API](/queuert/reference/queuert/client/) reference and [Dashboard](/queuert/integrations/dashboard/).
 
-## Performance considerations
+## Ordering
 
-`listChains` joins each root row with the last job in the chain to resolve chain status. Filtering by `status` is not optimized — it applies to the joined last job and cannot use an index. Always provide a `typeName` or date range (`from`/`to`) filter to narrow the scan:
-
-```ts
-// Expensive — status filter alone still scans every root row
-const all = await client.listChains({
-  filter: { status: ["running"] },
-});
-
-// Efficient — typeName narrows the scan via a partial index
-const filtered = await client.listChains({
-  filter: { typeName: ["send-email"], status: ["running"] },
-});
-```
-
-On PostgreSQL, long-running unfiltered scans hold MVCC snapshots that prevent autovacuum from reclaiming dead tuples, causing table bloat over time. See [PostgreSQL Internals](/queuert/advanced/postgres-internals/#listing-queries-and-vacuum) for details.
+`listChains` and `listJobs` route queries to status-specific indexes based on the `status` and `orderBy` combination. Each status has a natural default sort order — for example, completed chains default to `completedAt` descending, pending jobs to `scheduledAt` descending. Pass `orderBy: "createdAt"` to override.

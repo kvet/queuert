@@ -226,54 +226,56 @@ Throws `WaitChainTimeoutError` on timeout or abort, `ChainNotFoundError`, or `Ch
 
 ```typescript
 const page = await client.listChains({
-  filter?: {
-    typeName?: string[],
-    status?: JobStatus[],
-    chainId?: string[],
-    jobId?: string[],
-    root?: boolean,
-    from?: Date,
-    to?: Date,
-  },
+  typeName?: string[],
+  independent?: boolean,
+  chainId?: string[],
+  from?: Date,
+  to?: Date,
   orderDirection?: "asc" | "desc",
   cursor?: string,
   limit?: number,
-});
+} & (
+  | { status?: undefined; orderBy?: "createdAt" }
+  | { status: "running"; orderBy?: "createdAt" }
+  | { status: "completed"; orderBy?: "createdAt" | "completedAt" }
+));
 ```
 
 Returns `Page<Chain>`.
 
-Paginated listing of chains. **root** filters to only root chains (not blockers). Default **orderDirection** is `"desc"`. Default **limit** is `50`.
+Paginated listing of chains. **independent** filters to only independent chains (not blockers). **status** is a single string that routes the query to a status-specific index. **orderBy** is status-dependent and compile-time validated — `"completedAt"` is only available when `status` is `"completed"`. Default **orderDirection** is `"desc"`. Default **limit** is `50`.
 
 ### listJobs
 
 ```typescript
 const page = await client.listJobs({
-  filter?: {
-    typeName?: string[],
-    status?: JobStatus[],
-    jobId?: string[],
-    chainTypeName?: string[],
-    chainId?: string[],
-    from?: Date,
-    to?: Date,
-  },
+  typeName?: string[],
+  chainTypeName?: string[],
+  chainId?: string[],
+  jobId?: string[],
+  from?: Date,
+  to?: Date,
   orderDirection?: "asc" | "desc",
   cursor?: string,
   limit?: number,
-});
+} & (
+  | { status?: undefined; orderBy?: "createdAt" }
+  | { status: "pending"; blocked?: boolean; orderBy?: "createdAt" | "scheduledAt" }
+  | { status: "running"; orderBy?: "createdAt" | "attemptAt" | "attemptUntil" }
+  | { status: "completed"; continued?: boolean; orderBy?: "createdAt" | "completedAt" }
+));
 ```
 
 Returns `Page<Job>`.
 
-Paginated listing of jobs. **chainTypeName** filters to jobs belonging to chains started by the given entry type names. Default **orderDirection** is `"desc"`. Default **limit** is `50`.
+Paginated listing of jobs. **chainTypeName** filters to jobs belonging to chains started by the given entry type names. **status** is a single string that routes the query to a status-specific index. **orderBy** is status-dependent and compile-time validated. Default **orderDirection** is `"desc"`. Default **limit** is `50`.
 
 ### listChainJobs
 
 ```typescript
 const page = await client.listChainJobs({
   chainId: chainId,
-  typeName?: "send-email",
+  chainTypeName?: "send-email",
   orderDirection?: "asc" | "desc",
   cursor?: string,
   limit?: number,
@@ -320,7 +322,7 @@ Lists jobs that are blocked by the specified chain. Default **orderDirection** i
 ```typescript
 type DeduplicationOptions<TJobId> = {
   key: string;
-  scope?: "incomplete" | "any"; // default: "incomplete"
+  scope: "running" | "any";
   windowMs?: number; // required when scope is "any"
   excludeChainIds?: TJobId[];
 };
@@ -329,7 +331,7 @@ type DeduplicationOptions<TJobId> = {
 Chain deduplication configuration passed to `startChain`.
 
 - **key** — identifies the logical operation
-- **scope** — match incomplete chains only (`"incomplete"`, the default) or all chains within the time window (`"any"`)
+- **scope** — required; match running chains only (`"running"`) or all chains within the time window (`"any"`)
 - **windowMs** — required when scope is `"any"`
 - **excludeChainIds** — chain IDs to exclude from deduplication matching; useful for recurring jobs that self-schedule within a completion callback where the current chain is still incomplete
 

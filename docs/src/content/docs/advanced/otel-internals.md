@@ -14,7 +14,7 @@ This document describes the internal implementation of `@queuert/otel` — how t
 The observability system has three layers:
 
 ```
-Core operations (createStateJobs, finishJob, job-process)
+Core operations (createStateChains, continueStateJob, finishJob, job-process)
     ↓ calls
 ObservabilityHelper (maps domain objects to primitive data)
     ↓ calls
@@ -74,7 +74,7 @@ The OTEL adapter serializes `SpanContext` objects to this format for storage and
 
 3. **Continuation** (`continueWith`): Reads origin job's `traceContext`, creates new PRODUCER job span as child. Inherits `chainTraceContext` from origin (chain context stays the same). New job gets its own `traceContext`.
 
-4. **Worker processing**: Reads job's `traceContext` from database, creates CONSUMER attempt span as child. All processing spans (prepare, complete) are children of the attempt span.
+4. **Worker processing**: Reads job's `traceContext` from database, creates CONSUMER attempt span as child. All processing spans (prepare, execute, complete) are children of the attempt span. When a job's abort signal fires, a `recordAbort` event is recorded on the attempt span with the abort reason (e.g., `worker_stopping`, `attempt_timeout`).
 
 5. **Blocker resolution** (`unblockJobs`): Reads PRODUCER span context from `job_blocker` table, creates CONSUMER `resolve chain` span as child of the PRODUCER — linking across processes and time.
 
@@ -109,12 +109,12 @@ Events representing write claims inside transactions:
 Events that need immediate context or occur outside transactions:
 
 - **Span starts**: Must happen before the database write that stores the trace context
-- **Events outside transactions**: `jobAttemptStarted`, `jobAttemptDuration`, `jobAttemptLeaseRenewed`, attempt span ends
+- **Events outside transactions**: `jobAttemptStarted`, `jobAttemptDuration`, `jobAttemptExtended`, `recordAbort`, attempt span ends
 - **Read-only observations**: Events that observe state without claiming writes
 
 ### Self-Cleaning via Savepoints
 
-Both `createStateJobs` and `finishJob` use savepoints to automatically roll back buffered observability events on failure. The `TransactionHooks` system captures a checkpoint of the buffer position before each operation. If the operation throws, the savepoint restores the buffer to its checkpoint — partial events from a failed operation are discarded without affecting events from earlier successful operations in the same transaction.
+`createStateChains`, `continueStateJob`, and `finishJob` use savepoints to automatically roll back buffered observability events on failure. The `TransactionHooks` system captures a checkpoint of the buffer position before each operation. If the operation throws, the savepoint restores the buffer to its checkpoint — partial events from a failed operation are discarded without affecting events from earlier successful operations in the same transaction.
 
 ### TransactionHooks
 
@@ -126,5 +126,5 @@ The buffering mechanism is shared with notification events (`notifyJobScheduled`
 - [OTEL Tracing](../otel-tracing/) — Span hierarchy and attributes
 - [Adapter Architecture](../adapters/) — Transactional buffering design
 - [Chain Model](../chain-model/) — Chain identity and continuation model
-- [Job Processing](../job-processing/) — Prepare/complete pattern
+- [Job Processing](../job-processing/) — Prepare/execute/complete pattern
 - [In-Process Worker](../in-process-worker/) — Worker lifecycle and attempt handling

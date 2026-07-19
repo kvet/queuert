@@ -8,13 +8,11 @@ export const withSavepointGroup: ConformanceGroup<StateConformanceFixture> = {
       name: "commits changes on success",
       run: async ({ stateAdapter }, expect) => {
         const [{ job }] = await stateAdapter.withTransaction(async (txCtx) => {
-          const results = await stateAdapter.createJobs({
+          const results = await stateAdapter.createChains({
             txCtx,
             jobs: [
               {
                 typeName: "sp-test",
-                chainId: undefined,
-                chainIndex: 0,
                 chainTypeName: "sp-test",
                 input: null,
               },
@@ -22,11 +20,11 @@ export const withSavepointGroup: ConformanceGroup<StateConformanceFixture> = {
           });
 
           await stateAdapter.withSavepoint(txCtx, async (spTxCtx) => {
-            await stateAdapter.completeJob({
+            await stateAdapter.finishJobAttempt({
               txCtx: spTxCtx,
               jobId: results[0].job.id,
-              output: { done: true },
               workerId: null,
+              outcome: { output: { done: true } },
             });
           });
 
@@ -34,7 +32,7 @@ export const withSavepointGroup: ConformanceGroup<StateConformanceFixture> = {
         });
 
         const [retrieved] = await stateAdapter.getJobs({ jobIds: [job.id] });
-        expect(retrieved?.status).toBe("completed");
+        expect(retrieved?.completedAt).toBeInstanceOf(Date);
         expect(retrieved?.output).toEqual({ done: true });
       },
     },
@@ -42,13 +40,11 @@ export const withSavepointGroup: ConformanceGroup<StateConformanceFixture> = {
       name: "rolls back changes on error",
       run: async ({ stateAdapter }, expect) => {
         const [{ job }] = await stateAdapter.withTransaction(async (txCtx) => {
-          const results = await stateAdapter.createJobs({
+          const results = await stateAdapter.createChains({
             txCtx,
             jobs: [
               {
                 typeName: "sp-rollback",
-                chainId: undefined,
-                chainIndex: 0,
                 chainTypeName: "sp-rollback",
                 input: null,
               },
@@ -57,11 +53,11 @@ export const withSavepointGroup: ConformanceGroup<StateConformanceFixture> = {
 
           await stateAdapter
             .withSavepoint(txCtx, async (spTxCtx) => {
-              await stateAdapter.completeJob({
+              await stateAdapter.finishJobAttempt({
                 txCtx: spTxCtx,
                 jobId: results[0].job.id,
-                output: { done: true },
                 workerId: null,
+                outcome: { output: { done: true } },
               });
               throw new Error("simulated failure");
             })
@@ -71,7 +67,8 @@ export const withSavepointGroup: ConformanceGroup<StateConformanceFixture> = {
         });
 
         const [retrieved] = await stateAdapter.getJobs({ jobIds: [job.id] });
-        expect(retrieved?.status).toBe("pending");
+        expect(retrieved?.completedAt).toBeNull();
+        expect(retrieved?.attemptAt).toBeNull();
         expect(retrieved?.output).toBeNull();
       },
     },
@@ -79,13 +76,11 @@ export const withSavepointGroup: ConformanceGroup<StateConformanceFixture> = {
       name: "does not affect outer transaction on rollback",
       run: async ({ stateAdapter }, expect) => {
         const jobs = await stateAdapter.withTransaction(async (txCtx) => {
-          const [{ job: job1 }] = await stateAdapter.createJobs({
+          const [{ job: job1 }] = await stateAdapter.createChains({
             txCtx,
             jobs: [
               {
                 typeName: "sp-outer-1",
-                chainId: undefined,
-                chainIndex: 0,
                 chainTypeName: "sp-outer-1",
                 input: { before: true },
               },
@@ -94,13 +89,11 @@ export const withSavepointGroup: ConformanceGroup<StateConformanceFixture> = {
 
           await stateAdapter
             .withSavepoint(txCtx, async (spTxCtx) => {
-              await stateAdapter.createJobs({
+              await stateAdapter.createChains({
                 txCtx: spTxCtx,
                 jobs: [
                   {
                     typeName: "sp-inner",
-                    chainId: undefined,
-                    chainIndex: 0,
                     chainTypeName: "sp-inner",
                     input: { inside: true },
                   },
@@ -110,13 +103,11 @@ export const withSavepointGroup: ConformanceGroup<StateConformanceFixture> = {
             })
             .catch(() => {});
 
-          const [{ job: job2 }] = await stateAdapter.createJobs({
+          const [{ job: job2 }] = await stateAdapter.createChains({
             txCtx,
             jobs: [
               {
                 typeName: "sp-outer-2",
-                chainId: undefined,
-                chainIndex: 0,
                 chainTypeName: "sp-outer-2",
                 input: { after: true },
               },
@@ -138,13 +129,11 @@ export const withSavepointGroup: ConformanceGroup<StateConformanceFixture> = {
       name: "supports nested savepoints",
       run: async ({ stateAdapter }, expect) => {
         const [{ job }] = await stateAdapter.withTransaction(async (txCtx) => {
-          const results = await stateAdapter.createJobs({
+          const results = await stateAdapter.createChains({
             txCtx,
             jobs: [
               {
                 typeName: "sp-nested",
-                chainId: undefined,
-                chainIndex: 0,
                 chainTypeName: "sp-nested",
                 input: { step: 0 },
               },
@@ -153,19 +142,20 @@ export const withSavepointGroup: ConformanceGroup<StateConformanceFixture> = {
           const jobId = results[0].job.id;
 
           await stateAdapter.withSavepoint(txCtx, async (spTxCtx) => {
-            await stateAdapter.completeJob({
+            await stateAdapter.finishJobAttempt({
               txCtx: spTxCtx,
               jobId,
-              output: { step: 1 },
               workerId: null,
+              outcome: { output: { step: 1 } },
             });
 
             await stateAdapter
               .withSavepoint(spTxCtx, async (sp2TxCtx) => {
-                await stateAdapter.abandonJob({
+                await stateAdapter.finishJobAttempt({
                   txCtx: sp2TxCtx,
                   jobId,
-                  error: "inner failure",
+                  workerId: null,
+                  outcome: { error: "inner failure" },
                 });
                 throw new Error("inner savepoint failure");
               })
@@ -176,7 +166,7 @@ export const withSavepointGroup: ConformanceGroup<StateConformanceFixture> = {
         });
 
         const [retrieved] = await stateAdapter.getJobs({ jobIds: [job.id] });
-        expect(retrieved?.status).toBe("completed");
+        expect(retrieved?.completedAt).toBeInstanceOf(Date);
         expect(retrieved?.output).toEqual({ step: 1 });
       },
     },
@@ -205,13 +195,11 @@ export const withSavepointGroup: ConformanceGroup<StateConformanceFixture> = {
 
         const [{ job: jobBefore }, { job: jobAfter }] = await stateAdapter.withTransaction(
           async (txCtx) => {
-            const [{ job: jobBefore }] = await stateAdapter.createJobs({
+            const [{ job: jobBefore }] = await stateAdapter.createChains({
               txCtx,
               jobs: [
                 {
                   typeName: "sp-poison-before",
-                  chainId: undefined,
-                  chainIndex: 0,
                   chainTypeName: "sp-poison-before",
                   input: null,
                 },
@@ -224,13 +212,11 @@ export const withSavepointGroup: ConformanceGroup<StateConformanceFixture> = {
               })
               .catch(() => {});
 
-            const [{ job: jobAfter }] = await stateAdapter.createJobs({
+            const [{ job: jobAfter }] = await stateAdapter.createChains({
               txCtx,
               jobs: [
                 {
                   typeName: "sp-poison-after",
-                  chainId: undefined,
-                  chainIndex: 0,
                   chainTypeName: "sp-poison-after",
                   input: null,
                 },

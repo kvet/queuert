@@ -16,7 +16,7 @@ A middleware has four optional hooks, each wrapping a different phase:
 | `wrapExecute`  | each user-supplied execute callback | execute-callback options  |
 | `wrapComplete` | the user-supplied complete callback | complete-callback options |
 
-All three accept a `next(ctx)` call that yields the inner layer. The object passed to `next` is merged into the callback options for that phase, and its type flows into the handler signature.
+All four accept a `next(ctx)` call that yields the inner layer. The object passed to `next` is merged into the callback options for that phase, and its type flows into the handler signature.
 
 See the [Worker reference](/queuert/reference/queuert/worker/#attemptmiddleware) for the full type definition.
 

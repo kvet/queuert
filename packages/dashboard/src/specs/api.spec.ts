@@ -23,9 +23,9 @@ const createJob = async (
   input: unknown,
 ) => {
   const [{ job }] = await stateAdapter.withTransaction(async (txCtx) =>
-    stateAdapter.createJobs({
+    stateAdapter.createChains({
       txCtx,
-      jobs: [{ typeName, chainId: undefined, chainIndex: 0, chainTypeName: typeName, input }],
+      jobs: [{ typeName, chainTypeName: typeName, input }],
     }),
   );
   return job;
@@ -34,19 +34,37 @@ const createJob = async (
 const createContinuation = async (
   stateAdapter: Awaited<ReturnType<typeof createInProcessStateAdapter>>,
   typeName: string,
-  chainId: string,
-  chainTypeName: string,
-  chainIndex: number,
+  continueFromId: string,
   input: unknown,
 ) => {
-  const [{ job }] = await stateAdapter.withTransaction(async (txCtx) =>
-    stateAdapter.createJobs({
+  const { job } = await stateAdapter.withTransaction(async (txCtx) =>
+    stateAdapter.createContinuationJob({
       txCtx,
-      jobs: [{ typeName, chainId, chainTypeName, chainIndex, input }],
+      job: { typeName, continueFromId, input },
     }),
   );
   return job;
 };
+
+const startAttempt = async (
+  stateAdapter: Awaited<ReturnType<typeof createInProcessStateAdapter>>,
+  typeName: string,
+) =>
+  stateAdapter.withTransaction(async (txCtx) =>
+    stateAdapter.startJobAttempt({ txCtx, workerId: "worker-1", typeNames: [typeName] }),
+  );
+
+const completeJob = async (
+  stateAdapter: Awaited<ReturnType<typeof createInProcessStateAdapter>>,
+  jobId: string,
+  outcome: { output: unknown } | { continuedToId: string },
+) =>
+  stateAdapter.withTransaction(async (txCtx) =>
+    stateAdapter.finishJobAttempt({ txCtx, jobId, workerId: "worker-1", outcome }),
+  );
+
+const encodeRawCursor = (payload: unknown) =>
+  Buffer.from(JSON.stringify(payload)).toString("base64url");
 
 describe("Dashboard API", () => {
   describe("GET /api/chains", () => {
@@ -75,7 +93,7 @@ describe("Dashboard API", () => {
     it("returns chain with continuation", async () => {
       const { request, stateAdapter } = await createTestDashboard();
       const root = await createJob(stateAdapter, "chain-type", { step: 1 });
-      await createContinuation(stateAdapter, "chain-step2", root.chainId, "chain-type", 1, {
+      await createContinuation(stateAdapter, "chain-step2", root.id, {
         step: 2,
       });
 
@@ -84,7 +102,7 @@ describe("Dashboard API", () => {
 
       expect(body.items).toHaveLength(1);
       expect(body.items[0].id).toBe(root.id);
-      expect(body.items[0].status).toBe("pending");
+      expect(body.items[0].status).toBe("running");
     });
 
     it("preserves Date objects via seroval", async () => {
@@ -109,13 +127,58 @@ describe("Dashboard API", () => {
       expect(body.items).toHaveLength(2);
       expect(body.nextCursor).not.toBeNull();
     });
+
+    it("excludes blocker chains unless independent=false", async () => {
+      const { request, stateAdapter } = await createTestDashboard();
+      const blockerChain = await createJob(stateAdapter, "blocker-type", null);
+      const mainChain = await createJob(stateAdapter, "main-type", null);
+
+      await stateAdapter.withTransaction(async (txCtx) =>
+        stateAdapter.addJobsBlockers({
+          txCtx,
+          jobBlockers: [{ jobId: mainChain.id, blockedByChainIds: [blockerChain.chainId] }],
+        }),
+      );
+
+      const independent = await parseBody(await request("/api/chains"));
+      expect(independent.items.map((c: { id: string }) => c.id)).toEqual([mainChain.chainId]);
+
+      const blockers = await parseBody(await request("/api/chains?independent=false"));
+      expect(blockers.items.map((c: { id: string }) => c.id)).toEqual([blockerChain.chainId]);
+    });
+
+    it("filters by chain status", async () => {
+      const { request, stateAdapter } = await createTestDashboard();
+      const running = await createJob(stateAdapter, "running-type", null);
+      const done = await createJob(stateAdapter, "done-type", null);
+
+      await startAttempt(stateAdapter, "done-type");
+      await completeJob(stateAdapter, done.id, { output: null });
+
+      const completed = await parseBody(await request("/api/chains?status=completed"));
+      expect(completed.items.map((c: { id: string }) => c.id)).toEqual([done.chainId]);
+
+      const inProgress = await parseBody(await request("/api/chains?status=running"));
+      expect(inProgress.items.map((c: { id: string }) => c.id)).toEqual([running.chainId]);
+    });
+
+    it("falls back to the default orderBy for unknown or status-incompatible values", async () => {
+      const { request, stateAdapter } = await createTestDashboard();
+      await createJob(stateAdapter, "test-type", null);
+
+      for (const orderBy of ["bogus", "completedAt", "id; DROP TABLE job"]) {
+        const res = await request(`/api/chains?orderBy=${encodeURIComponent(orderBy)}`);
+        expect(res.status).toBe(200);
+        expect((await parseBody(res)).items).toHaveLength(1);
+      }
+    });
   });
 
   describe("GET /api/chains/:chainId", () => {
     it("returns chain detail with jobs", async () => {
       const { request, stateAdapter } = await createTestDashboard();
       const root = await createJob(stateAdapter, "chain-type", { step: 1 });
-      await createContinuation(stateAdapter, "chain-step2", root.chainId, "chain-type", 1, {
+      await createContinuation(stateAdapter, "chain-step2", root.id, {
         step: 2,
       });
 
@@ -139,7 +202,7 @@ describe("Dashboard API", () => {
     it("paginates the chain job sequence with a cursor", async () => {
       const { request, stateAdapter } = await createTestDashboard();
       const root = await createJob(stateAdapter, "chain-type", { step: 1 });
-      await createContinuation(stateAdapter, "chain-step2", root.chainId, "chain-type", 1, {
+      await createContinuation(stateAdapter, "chain-step2", root.id, {
         step: 2,
       });
 
@@ -342,7 +405,7 @@ describe("Dashboard API", () => {
     it("filters by chainTypeName", async () => {
       const { request, stateAdapter } = await createTestDashboard();
       const root = await createJob(stateAdapter, "chain-type", null);
-      await createContinuation(stateAdapter, "chain-step2", root.chainId, "chain-type", 1, null);
+      await createContinuation(stateAdapter, "chain-step2", root.id, null);
       await createJob(stateAdapter, "other-type", null);
 
       const res = await request("/api/jobs?chainTypeName=chain-type");
@@ -357,7 +420,7 @@ describe("Dashboard API", () => {
     it("filters by chainId", async () => {
       const { request, stateAdapter } = await createTestDashboard();
       const root = await createJob(stateAdapter, "chain-type", null);
-      await createContinuation(stateAdapter, "chain-step2", root.chainId, "chain-type", 1, null);
+      await createContinuation(stateAdapter, "chain-step2", root.id, null);
       await createJob(stateAdapter, "other-type", null);
 
       const res = await request(`/api/jobs?chainId=${root.chainId}`);
@@ -366,6 +429,66 @@ describe("Dashboard API", () => {
       expect(body.items).toHaveLength(2);
       for (const job of body.items) {
         expect(job.chainId).toBe(root.chainId);
+      }
+    });
+
+    it("filters by each job status alias", async () => {
+      const { request, stateAdapter } = await createTestDashboard();
+      const pending = await createJob(stateAdapter, "pending-type", null);
+      const blockerChain = await createJob(stateAdapter, "blocker-type", null);
+      const blocked = await createJob(stateAdapter, "blocked-type", null);
+      await stateAdapter.withTransaction(async (txCtx) =>
+        stateAdapter.addJobsBlockers({
+          txCtx,
+          jobBlockers: [{ jobId: blocked.id, blockedByChainIds: [blockerChain.chainId] }],
+        }),
+      );
+
+      const running = await createJob(stateAdapter, "running-type", null);
+      await startAttempt(stateAdapter, "running-type");
+
+      const terminal = await createJob(stateAdapter, "terminal-type", null);
+      await startAttempt(stateAdapter, "terminal-type");
+      await completeJob(stateAdapter, terminal.id, { output: null });
+
+      const continued = await createJob(stateAdapter, "continued-type", null);
+      await startAttempt(stateAdapter, "continued-type");
+      const continuation = await createContinuation(
+        stateAdapter,
+        "continued-next",
+        continued.id,
+        null,
+      );
+      await completeJob(stateAdapter, continued.id, { continuedToId: continuation.id });
+
+      const ids = async (status: string) =>
+        (await parseBody(await request(`/api/jobs?status=${status}`))).items
+          .map((job: { id: string }) => job.id)
+          .sort();
+
+      expect(await ids("blocked")).toEqual([blocked.id]);
+      expect(await ids("pending-unblocked")).toEqual(
+        [pending.id, blockerChain.id, continuation.id].sort(),
+      );
+      expect(await ids("running")).toEqual([running.id]);
+      expect(await ids("completed-terminal")).toEqual([terminal.id]);
+      expect(await ids("completed-continued")).toEqual([continued.id]);
+      expect(await ids("completed")).toEqual([terminal.id, continued.id].sort());
+      expect(await ids("bogus-status")).toHaveLength(7);
+    });
+
+    it("falls back to the default orderBy per status branch", async () => {
+      const { request, stateAdapter } = await createTestDashboard();
+      await createJob(stateAdapter, "test-type", null);
+
+      for (const query of [
+        "status=pending&orderBy=completedAt",
+        "status=running&orderBy=scheduledAt",
+        "status=completed&orderBy=attemptUntil",
+        "orderBy=bogus",
+      ]) {
+        const res = await request(`/api/jobs?${query}`);
+        expect(res.status).toBe(200);
       }
     });
   });
@@ -386,13 +509,14 @@ describe("Dashboard API", () => {
     it("returns continuation for job in chain", async () => {
       const { request, stateAdapter } = await createTestDashboard();
       const root = await createJob(stateAdapter, "chain-type", { step: 1 });
-      const cont = await createContinuation(
-        stateAdapter,
-        "chain-step2",
-        root.chainId,
-        "chain-type",
-        1,
-        { step: 2 },
+      const cont = await createContinuation(stateAdapter, "chain-step2", root.id, { step: 2 });
+      await stateAdapter.withTransaction(async (txCtx) =>
+        stateAdapter.finishJobAttempt({
+          txCtx,
+          jobId: root.id,
+          workerId: "test",
+          outcome: { continuedToId: cont.id },
+        }),
       );
 
       const res = await request(`/api/jobs/${root.id}`);
@@ -401,19 +525,20 @@ describe("Dashboard API", () => {
       expect(res.status).toBe(200);
       expect(body.continuation).not.toBeNull();
       expect(body.continuation.id).toBe(cont.id);
-      expect(body.continuation.chainIndex).toBe(1);
+      expect(body.continuation.chainId).toBe(root.chainId);
     });
 
     it("returns null continuation for last job in chain", async () => {
       const { request, stateAdapter } = await createTestDashboard();
       const root = await createJob(stateAdapter, "chain-type", { step: 1 });
-      const cont = await createContinuation(
-        stateAdapter,
-        "chain-step2",
-        root.chainId,
-        "chain-type",
-        1,
-        { step: 2 },
+      const cont = await createContinuation(stateAdapter, "chain-step2", root.id, { step: 2 });
+      await stateAdapter.withTransaction(async (txCtx) =>
+        stateAdapter.finishJobAttempt({
+          txCtx,
+          jobId: root.id,
+          workerId: "test",
+          outcome: { continuedToId: cont.id },
+        }),
       );
 
       const res = await request(`/api/jobs/${cont.id}`);
@@ -434,13 +559,11 @@ describe("Dashboard API", () => {
     it("reschedules a pending future-scheduled job to now", async () => {
       const { request, stateAdapter } = await createTestDashboard();
       const [{ job }] = await stateAdapter.withTransaction(async (txCtx) =>
-        stateAdapter.createJobs({
+        stateAdapter.createChains({
           txCtx,
           jobs: [
             {
               typeName: "scheduled-type",
-              chainId: undefined,
-              chainIndex: 0,
               chainTypeName: "scheduled-type",
               input: null,
               schedule: { afterMs: 60_000 },
@@ -467,7 +590,7 @@ describe("Dashboard API", () => {
       const job = await createJob(stateAdapter, "test-type", null);
 
       await stateAdapter.withTransaction(async (txCtx) =>
-        stateAdapter.acquireJob({ txCtx, typeNames: ["test-type"] }),
+        stateAdapter.startJobAttempt({ txCtx, workerId: "test-worker", typeNames: ["test-type"] }),
       );
 
       const res = await request(`/api/jobs/${job.id}/reschedule`, { method: "POST" });
@@ -475,6 +598,112 @@ describe("Dashboard API", () => {
 
       expect(res.status).toBe(409);
       expect(body.error).toContain('not "pending"');
+    });
+  });
+
+  describe("cursor validation", () => {
+    const malformed: [string, unknown][] = [
+      [
+        "sort key that disagrees with the resolved orderBy",
+        {
+          type: "timestampWithId",
+          sortKey: "completedAt",
+          value: new Date().toISOString(),
+          id: "some-id",
+        },
+      ],
+      ["timestampWithId cursor missing sortKey and value", { type: "timestampWithId", id: "x" }],
+      ["id cursor where a timestampWithId cursor is expected", { type: "id", id: "x" }],
+      ["unknown cursor type", { type: "chainIndex", id: "x" }],
+      ["non-object payload", "just-a-string"],
+    ];
+
+    it.for(malformed)("drops a cursor with %s", async ([, payload]) => {
+      const { request, stateAdapter } = await createTestDashboard();
+      await createJob(stateAdapter, "test-type", null);
+
+      const res = await request(`/api/chains?cursor=${encodeRawCursor(payload)}`);
+
+      expect(res.status).toBe(200);
+      expect((await parseBody(res)).items).toHaveLength(1);
+    });
+
+    it("drops a cursor that is not valid base64url JSON", async () => {
+      const { request, stateAdapter } = await createTestDashboard();
+      await createJob(stateAdapter, "test-type", null);
+
+      const res = await request("/api/chains?cursor=not-a-cursor");
+
+      expect(res.status).toBe(200);
+      expect((await parseBody(res)).items).toHaveLength(1);
+    });
+
+    it("drops a cursor issued for a different orderBy instead of failing", async () => {
+      const { request, stateAdapter } = await createTestDashboard();
+      const first = await createJob(stateAdapter, "type-a", null);
+      const second = await createJob(stateAdapter, "type-b", null);
+      for (const job of [first, second]) {
+        await startAttempt(stateAdapter, job.typeName);
+        await completeJob(stateAdapter, job.id, { output: null });
+      }
+
+      const page = await parseBody(
+        await request("/api/chains?status=completed&orderBy=completedAt&limit=1"),
+      );
+      expect(page.nextCursor).not.toBeNull();
+
+      const res = await request(
+        `/api/chains?status=completed&orderBy=createdAt&cursor=${encodeURIComponent(page.nextCursor)}`,
+      );
+
+      expect(res.status).toBe(200);
+      expect((await parseBody(res)).items).toHaveLength(2);
+    });
+
+    it("drops a timestampWithId cursor on the chain jobs route", async () => {
+      const { request, stateAdapter } = await createTestDashboard();
+      const root = await createJob(stateAdapter, "chain-type", null);
+      const cursor = encodeRawCursor({
+        type: "timestampWithId",
+        sortKey: "createdAt",
+        value: new Date().toISOString(),
+        id: root.id,
+      });
+
+      const res = await request(`/api/chains/${root.chainId}/jobs?cursor=${cursor}`);
+
+      expect(res.status).toBe(200);
+      expect((await parseBody(res)).jobs).toHaveLength(1);
+    });
+
+    it("drops an id cursor on the blocking route", async () => {
+      const { request, stateAdapter } = await createTestDashboard();
+      const blockerChain = await createJob(stateAdapter, "blocker-type", null);
+      const blockedJob = await createJob(stateAdapter, "blocked-type", null);
+      await stateAdapter.withTransaction(async (txCtx) =>
+        stateAdapter.addJobsBlockers({
+          txCtx,
+          jobBlockers: [{ jobId: blockedJob.id, blockedByChainIds: [blockerChain.chainId] }],
+        }),
+      );
+
+      const res = await request(
+        `/api/chains/${blockerChain.chainId}/blocking?cursor=${encodeRawCursor({ type: "id", id: blockedJob.id })}`,
+      );
+
+      expect(res.status).toBe(200);
+      expect((await parseBody(res)).items).toHaveLength(1);
+    });
+
+    it("drops a malformed cursor on the jobs route", async () => {
+      const { request, stateAdapter } = await createTestDashboard();
+      await createJob(stateAdapter, "test-type", null);
+
+      const res = await request(
+        `/api/jobs?status=running&cursor=${encodeRawCursor({ type: "timestampWithId", sortKey: "createdAt", value: new Date().toISOString(), id: "x" })}`,
+      );
+
+      expect(res.status).toBe(200);
     });
   });
 

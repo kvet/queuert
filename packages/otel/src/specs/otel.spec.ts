@@ -474,7 +474,7 @@ describe("Metrics", () => {
     ]);
   });
 
-  it("tracks lease renewal metric", async ({
+  it("tracks attempt extension metric", async ({
     stateAdapter,
     notifyAdapter,
     withTransaction,
@@ -501,7 +501,7 @@ describe("Metrics", () => {
       processors: createProcessors({
         client,
         jobTypes,
-        leaseConfig: { leaseMs: 500, renewIntervalMs: 50 },
+        attemptConfig: { timeoutMs: 500, heartbeatMs: 50 },
         processors: {
           test: {
             attemptHandler: async ({ complete }) => {
@@ -524,10 +524,10 @@ describe("Metrics", () => {
     });
 
     const metricNames = await getMetricNames();
-    expect(metricNames).toContain("queuert.job.attempt.lease_renewed");
+    expect(metricNames).toContain("queuert.job.attempt.extended");
   });
 
-  it("tracks lease expiration metric", async ({
+  it("tracks attempt expiration metric", async ({
     stateAdapter,
     notifyAdapter,
     withTransaction,
@@ -554,7 +554,7 @@ describe("Metrics", () => {
       processors: createProcessors({
         client,
         jobTypes,
-        leaseConfig: { leaseMs: 10, renewIntervalMs: 100 },
+        attemptConfig: { timeoutMs: 10, heartbeatMs: 100 },
         processors: {
           test: {
             attemptHandler: async ({ complete }) => {
@@ -577,10 +577,10 @@ describe("Metrics", () => {
     });
 
     const metricNames = await getMetricNames();
-    expect(metricNames).toContain("queuert.job.attempt.lease_expired");
+    expect(metricNames).toContain("queuert.job.attempt.expired");
   });
 
-  it("tracks reaper metrics", async ({
+  it("tracks attempt reclaim metrics", async ({
     stateAdapter,
     notifyAdapter,
     withTransaction,
@@ -605,16 +605,16 @@ describe("Metrics", () => {
     let failed = false;
     const jobStarted = Promise.withResolvers<void>();
     const jobCompleted = Promise.withResolvers<void>();
-    const leaseConfig = { leaseMs: 10, renewIntervalMs: 100 };
+    const attemptConfig = { timeoutMs: 10, heartbeatMs: 100 };
 
     const worker1 = await createInProcessWorker({
       client,
       concurrency: 1,
-      pollIntervalMs: leaseConfig.leaseMs,
+      pollIntervalMs: attemptConfig.timeoutMs,
       processors: createProcessors({
         client,
         jobTypes,
-        leaseConfig,
+        attemptConfig,
         processors: {
           test: {
             attemptHandler: async ({ signal, complete }) => {
@@ -622,7 +622,7 @@ describe("Metrics", () => {
                 failed = true;
                 jobStarted.resolve();
                 try {
-                  await sleep(leaseConfig.renewIntervalMs * 2, { signal });
+                  await sleep(attemptConfig.heartbeatMs * 2, { signal });
                 } finally {
                   jobCompleted.resolve();
                 }
@@ -636,11 +636,11 @@ describe("Metrics", () => {
     const worker2 = await createInProcessWorker({
       client,
       concurrency: 1,
-      pollIntervalMs: leaseConfig.leaseMs,
+      pollIntervalMs: attemptConfig.timeoutMs,
       processors: createProcessors({
         client,
         jobTypes,
-        leaseConfig,
+        attemptConfig,
         processors: {
           test: {
             attemptHandler: async ({ signal, complete }) => {
@@ -648,7 +648,7 @@ describe("Metrics", () => {
                 failed = true;
                 jobStarted.resolve();
                 try {
-                  await sleep(leaseConfig.renewIntervalMs * 2, { signal });
+                  await sleep(attemptConfig.heartbeatMs * 2, { signal });
                 } finally {
                   jobCompleted.resolve();
                 }
@@ -684,7 +684,7 @@ describe("Metrics", () => {
     });
 
     const metricNames = await getMetricNames();
-    expect(metricNames).toContain("queuert.job.reaped");
+    expect(metricNames).toContain("queuert.job.attempt.reclaimed");
     expect(
       metricNames.has("queuert.job.attempt.taken_by_another_worker") ||
         metricNames.has("queuert.job.attempt.already_completed"),
@@ -705,18 +705,15 @@ describe("Metrics", () => {
       test: { entry: true; input: null; output: null };
     }>();
 
-    // Wrap acquireJob to throw once — this is a wrapped operation
-    // so the logging middleware will emit stateAdapterError, and the error propagates
-    // to the worker loop's outer catch which emits workerError
     let errorThrown = false;
     const erroringStateAdapter: typeof stateAdapter = {
       ...stateAdapter,
-      acquireJob: async (args) => {
+      startJobAttempt: async (args) => {
         if (!errorThrown) {
           errorThrown = true;
           throw new Error("connection error");
         }
-        return stateAdapter.acquireJob(args);
+        return stateAdapter.startJobAttempt(args);
       },
     };
 
@@ -1656,21 +1653,21 @@ describe("Spans", () => {
           transactionHooks,
           typeName: "test",
           input: { value: 1 },
-          deduplication: { key: "same-key" },
+          deduplication: { key: "same-key", scope: "running" },
         }),
         await client.startChain({
           ...txCtx,
           transactionHooks,
           typeName: "test",
           input: { value: 2 },
-          deduplication: { key: "same-key" },
+          deduplication: { key: "same-key", scope: "running" },
         }),
         await client.startChain({
           ...txCtx,
           transactionHooks,
           typeName: "test",
           input: { value: 3 },
-          deduplication: { key: "different-key" },
+          deduplication: { key: "different-key", scope: "running" },
         }),
       ]),
     );
@@ -2211,12 +2208,12 @@ describe("Rollback", () => {
     let completeJobErrorThrown = false;
     const erroringStateAdapter: typeof stateAdapter = {
       ...stateAdapter,
-      completeJob: async (args) => {
-        if (!completeJobErrorThrown) {
+      finishJobAttempt: async (args) => {
+        if (!("error" in args.outcome) && !completeJobErrorThrown) {
           completeJobErrorThrown = true;
           throw new Error("simulated completeJob failure");
         }
-        return stateAdapter.completeJob(args);
+        return stateAdapter.finishJobAttempt(args);
       },
     };
 
@@ -2294,12 +2291,12 @@ describe("Rollback", () => {
     let handlerFailed = false;
     const erroringStateAdapter: typeof stateAdapter = {
       ...stateAdapter,
-      abandonJob: async (args) => {
-        if (!rescheduleErrorThrown) {
+      finishJobAttempt: async (args) => {
+        if ("error" in args.outcome && !rescheduleErrorThrown) {
           rescheduleErrorThrown = true;
           throw new Error("simulated abandonJob failure");
         }
-        return stateAdapter.abandonJob(args);
+        return stateAdapter.finishJobAttempt(args);
       },
     };
 
@@ -2324,7 +2321,7 @@ describe("Rollback", () => {
       processors: createProcessors({
         client,
         jobTypes,
-        leaseConfig: { leaseMs: 50, renewIntervalMs: 500 },
+        attemptConfig: { timeoutMs: 50, heartbeatMs: 500 },
         processors: {
           test: {
             attemptHandler: async ({ complete }) => {
@@ -2355,7 +2352,7 @@ describe("Rollback", () => {
       { method: "workerStarted" },
       { method: "jobAttemptStarted" },
       { method: "stateAdapterError" },
-      { method: "jobReaped" },
+      { method: "jobAttemptReclaimed" },
       { method: "jobAttemptStarted" },
       { method: "jobAttemptCompleted" },
       { method: "jobCompleted" },
@@ -2636,12 +2633,12 @@ describe("Rollback", () => {
     let createJobErrorThrown = false;
     const erroringStateAdapter: typeof stateAdapter = {
       ...stateAdapter,
-      createJobs: async (args) => {
-        if (!createJobErrorThrown && args.jobs.some((j) => j.chainIndex > 0)) {
+      createContinuationJob: async (args) => {
+        if (!createJobErrorThrown) {
           createJobErrorThrown = true;
           throw new Error("simulated createJob failure");
         }
-        return stateAdapter.createJobs(args);
+        return stateAdapter.createContinuationJob(args);
       },
     };
 

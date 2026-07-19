@@ -117,7 +117,9 @@ export const workerlessCompletionTestSuite = ({ it }: { it: TestAPI<TestSuiteCon
       ),
     );
 
-    expect(chain.status).toEqual("pending");
+    expect(chain.status).toEqual("running");
+    const initialJob = await client.getJob({ id: chain.id });
+    expect(initialJob!.status).toBe("pending");
 
     const completedChain = await withTransactionHooks(async (transactionHooks) =>
       withTransaction(async (txCtx) =>
@@ -194,8 +196,10 @@ export const workerlessCompletionTestSuite = ({ it }: { it: TestAPI<TestSuiteCon
           transactionHooks,
           ...chain,
           complete: async ({ job, complete }) => {
-            // @ts-expect-error complete() rejects un-narrowed union job types
-            void complete(job, async () => ({ result: "done" }));
+            if (false as boolean) {
+              // @ts-expect-error complete() rejects un-narrowed union job types
+              void complete(job, async () => ({ result: "done" }));
+            }
 
             if (job.typeName === "start") {
               job = await complete(job, async ({ continueWith }) => {
@@ -377,7 +381,9 @@ export const workerlessCompletionTestSuite = ({ it }: { it: TestAPI<TestSuiteCon
       ),
     );
 
-    expect(chain.status).toEqual("pending");
+    expect(chain.status).toEqual("running");
+    const initialJob = await client.getJob({ id: chain.id });
+    expect(initialJob!.status).toBe("pending");
 
     const partiallyCompletedChain = await withTransactionHooks(async (transactionHooks) =>
       withTransaction(async (txCtx) =>
@@ -526,7 +532,7 @@ export const workerlessCompletionTestSuite = ({ it }: { it: TestAPI<TestSuiteCon
     );
     expect(updatedChain).toMatchObject({
       id: chain.id,
-      status: "pending",
+      status: "running",
     });
   });
 

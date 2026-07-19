@@ -1,14 +1,16 @@
 import { type StateJob } from "../state-adapter/state-adapter.js";
-import { type Job } from "./job.types.js";
+import { type AnyJob, type JobStatus } from "./job.types.js";
 
 export type * from "./job.types.js";
 
-export const mapStateJobToJob = (stateJob: StateJob): Job<any, any, any, any, any> => {
+export const deriveStatus = (stateJob: Pick<StateJob, "completedAt" | "attemptAt">): JobStatus =>
+  stateJob.completedAt !== null ? "completed" : stateJob.attemptAt !== null ? "running" : "pending";
+
+export const mapStateJobToJob = (stateJob: StateJob): AnyJob => {
   const base = {
     id: stateJob.id,
     chainId: stateJob.chainId,
     chainTypeName: stateJob.chainTypeName,
-    chainIndex: stateJob.chainIndex,
     typeName: stateJob.typeName,
     input: stateJob.input,
     createdAt: stateJob.createdAt,
@@ -18,25 +20,34 @@ export const mapStateJobToJob = (stateJob: StateJob): Job<any, any, any, any, an
     lastAttemptError: stateJob.lastAttemptError,
   };
 
-  switch (stateJob.status) {
+  switch (deriveStatus(stateJob)) {
     case "completed":
+      if (stateJob.continuedToId !== null) {
+        return {
+          ...base,
+          status: "completed",
+          completedAt: stateJob.completedAt!,
+          completedBy: stateJob.completedBy,
+          continuedToId: stateJob.continuedToId,
+        };
+      }
       return {
         ...base,
         status: "completed",
         completedAt: stateJob.completedAt!,
         completedBy: stateJob.completedBy,
         output: stateJob.output,
+        continuedToId: null,
       };
     case "running":
       return {
         ...base,
         status: "running",
-        leasedBy: stateJob.leasedBy ?? undefined,
-        leasedUntil: stateJob.leasedUntil ?? undefined,
+        attemptAt: stateJob.attemptAt!,
+        attemptBy: stateJob.attemptBy!,
+        attemptUntil: stateJob.attemptUntil,
       };
-    case "blocked":
-      return { ...base, status: "blocked" };
     case "pending":
-      return { ...base, status: "pending" };
+      return { ...base, status: "pending", blocked: stateJob.blocked };
   }
 };

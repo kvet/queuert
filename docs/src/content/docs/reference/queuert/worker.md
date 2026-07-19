@@ -23,11 +23,11 @@ const worker = await createInProcessWorker({
 Returns `Promise<InProcessWorker>`.
 
 - **client** — the Queuert client to process jobs for
-- **workerName** — optional human-readable label included in the worker id. Must match `/^[A-Za-z0-9._-]+$/` when provided (letters, digits, `.`, `_`, `-`). The id is always suffixed with a random UUID (`${workerName}-${uuid}` or just `${uuid}` when omitted), so two replicas with the same name still get distinct ids and cannot collide on lease ownership
+- **workerName** — optional human-readable label included in the worker id. Must match `/^[A-Za-z0-9._-]+$/` when provided (letters, digits, `.`, `_`, `-`). The id is always suffixed with a random UUID (`${workerName}-${uuid}` or just `${uuid}` when omitted), so two replicas with the same name still get distinct ids and cannot collide on job attempts
 - **concurrency** — maximum number of jobs to process in parallel (default: 1)
 - **pollIntervalMs** — how often the worker polls for new jobs when no notify adapter wakes it (default: 60s)
 - **recoveryBackoffConfig** — recovery backoff for the worker loop itself (not job retries)
-- **defaults** — fallback `backoffConfig` / `leaseConfig` for processors that don't set their own. Resolution order is: processor → registry → worker `defaults` → library default
+- **defaults** — fallback `backoffConfig` / `attemptConfig` for processors that don't set their own. Resolution order is: processor → registry → worker `defaults` → library default
 - **requiredAttemptMiddleware** — middleware instances that every dispatched processor's slice must include as an in-order subsequence (additional middleware may appear before, between, or after them). Enforced at compile time against the slice middleware tuple inferred by `createProcessors`, and at runtime by reference identity (`===`). The worker does not execute this middleware itself — slices keep running their own chains; this option only enforces presence. Useful for guaranteeing cross-cutting concerns like auth, tracing, or logging are wired into every slice merged into the worker
 - **processors** — a single `Processors` from `createProcessors`, or an array of slices to merge. See [Slices guide](/queuert/guides/slices/). Middleware is declared on the registry; see [Middleware guide](/queuert/guides/middleware/)
 
@@ -36,11 +36,11 @@ Returns `Promise<InProcessWorker>`.
 ```typescript
 type InProcessWorkerDefaults = {
   backoffConfig?: BackoffConfig;
-  leaseConfig?: LeaseConfig;
+  attemptConfig?: AttemptConfig;
 };
 ```
 
-Worker-level fallbacks applied to every processor that doesn't declare its own `backoffConfig` / `leaseConfig` (whether directly on the processor or via the registry default in `createProcessors`).
+Worker-level fallbacks applied to every processor that doesn't declare its own `backoffConfig` / `attemptConfig` (whether directly on the processor or via the registry default in `createProcessors`).
 
 ## InProcessWorker — Methods
 
@@ -71,11 +71,11 @@ The handle returned by `createInProcessWorker`.
 type InProcessWorkerProcessor = {
   attemptHandler: AttemptHandler;
   backoffConfig?: BackoffConfig;
-  leaseConfig?: LeaseConfig;
+  attemptConfig?: AttemptConfig;
 };
 ```
 
-Configuration for processing a single job type. `backoffConfig` and `leaseConfig` override the registry-level defaults — resolution order is: processor → registry → library default.
+Configuration for processing a single job type. `backoffConfig` and `attemptConfig` override the registry-level defaults — resolution order is: processor → registry → library default.
 
 ### AttemptHandler
 
@@ -95,11 +95,11 @@ The core function called for each job attempt.
 - **job** — the running job with its typed input and resolved blockers
 - **prepare** — controls the processing mode (atomic or staged). See the [Processing Modes guide](/queuert/guides/processing-modes/)
 - **execute** — opens a fresh guarded transaction mid-attempt. Only valid in staged mode between `prepare` and `complete`. See the [Processing Modes guide](/queuert/guides/processing-modes/#intermediate-transactions-with-execute)
-- **complete** — finalizes the job. Return the output to complete the chain, or call `continueWith` to extend it
+- **complete** — finalizes the job. Return the output to complete the chain, or call `continueWith` to continue it
 
 ### AttemptComplete
 
-The typed `complete` function provided to the attempt handler. Call it to finalize the job — either return the output to complete the chain, or call `continueWith` to extend it.
+The typed `complete` function provided to the attempt handler. Call it to finalize the job — either return the output to complete the chain, or call `continueWith` to continue it.
 
 ### AttemptCompleteCallback
 
@@ -111,7 +111,7 @@ Options received by the complete callback: `continueWith` (to extend the chain),
 
 ### AttemptExecute
 
-The typed `execute` function provided to the attempt handler. Opens a fresh guarded transaction mid-attempt — only valid in staged mode between `prepare` and `complete`. Each call verifies lease ownership, runs the callback with `transactionHooks` and the transaction context, commits, and flushes hooks. Returns whatever the callback returns.
+The typed `execute` function provided to the attempt handler. Opens a fresh guarded transaction mid-attempt — only valid in staged mode between `prepare` and `complete`. Each call verifies the attempt, runs the callback with `transactionHooks` and the transaction context, commits, and flushes hooks. Returns whatever the callback returns.
 
 ### AttemptPrepare
 
@@ -127,7 +127,7 @@ The callback passed to `prepare(options, callback)`. Receives the transaction co
 type AttemptPrepareOptions = { mode: "atomic" | "staged" };
 ```
 
-`"atomic"` runs prepare and complete in the same transaction. `"staged"` commits prepare first, then runs complete in a new transaction with lease renewal.
+`"atomic"` runs prepare and complete in the same transaction. `"staged"` commits prepare first, then runs complete in a new transaction with attempt extension.
 
 ### AttemptMiddleware
 
@@ -199,19 +199,19 @@ type RetryConfig = BackoffConfig & {
 
 Extends `BackoffConfig` with **maxAttempts**, the maximum number of retry attempts before the operation is abandoned.
 
-### LeaseConfig
+### AttemptConfig
 
 ```typescript
-type LeaseConfig = {
-  leaseMs: number;
-  renewIntervalMs: number;
+type AttemptConfig = {
+  timeoutMs: number;
+  heartbeatMs: number;
 };
 ```
 
-Controls job lease duration and renewal.
+Controls job attempt duration and extension.
 
-- **leaseMs** — total lease time granted to a worker
-- **renewIntervalMs** — how often the worker renews the lease before it expires
+- **timeoutMs** — total attempt time granted to a worker
+- **heartbeatMs** — how often the worker extends the attempt before it expires
 
 ### TypedAbortSignal
 
@@ -226,12 +226,17 @@ An `AbortSignal` with a typed **reason**. Used in worker handlers to communicate
 ### JobAbortReason
 
 ```typescript
-type JobAbortReason = "taken_by_another_worker" | "error" | "not_found" | "already_completed";
+type JobAbortReason =
+  | "taken_by_another_worker"
+  | "error"
+  | "not_found"
+  | "already_completed"
+  | "worker_stopping";
 ```
 
 The possible abort reasons passed through `TypedAbortSignal` in worker job handlers.
 
-- **taken_by_another_worker** — the lease was lost to another worker
+- **taken_by_another_worker** — the attempt was lost to another worker
 - **error** — an internal failure occurred
 - **not_found** — the job no longer exists
 - **already_completed** — the job was already completed

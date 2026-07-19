@@ -1,16 +1,16 @@
-import { type Chain, mapStatePairToChain } from "../entities/chain.js";
+import { type AnyChain, type Chain, mapStatePairToChain } from "../entities/chain.js";
 import { type DeduplicationOptions } from "../entities/deduplication.js";
 import { type ScheduleOptions } from "../entities/schedule.js";
 import { type Helpers } from "../setup-helpers.js";
 import { type BaseTxContext } from "../state-adapter/state-adapter.js";
 import { type TransactionHooks } from "../transaction-hooks.js";
-import { createStateJobs } from "./create-state-jobs.js";
+import { createStateChains } from "./create-state-jobs.js";
 
 type ChainInput = {
   typeName: string;
   id?: string;
   input: unknown;
-  blockers?: Chain<any, any, any, any>[];
+  blockers?: AnyChain[];
   deduplication?: DeduplicationOptions<string>;
   schedule?: ScheduleOptions;
 };
@@ -33,15 +33,13 @@ export const startChains = async (
     helpers.jobTypes.validateEntry(chain.typeName);
   }
 
-  const results = await createStateJobs(helpers, {
-    jobs: chains.map((chain) => ({
+  const results = await createStateChains(helpers, {
+    chains: chains.map((chain) => ({
       typeName: chain.typeName,
       id: chain.id,
       chainTypeName: chain.typeName,
-      chainIndex: 0,
       input: chain.input,
       blockers: chain.blockers,
-      isChainStart: true,
       deduplication: chain.deduplication,
       schedule: chain.schedule,
     })),

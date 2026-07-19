@@ -503,76 +503,6 @@ export const workerTestSuite = ({ it }: { it: TestAPI<TestSuiteContext> }): void
     expect(observedCompleteCtx).toEqual([{ tag: "complete" }]);
   });
 
-  it("does not poll for a next job delay while every slot is busy", async ({
-    stateAdapter,
-    notifyAdapter,
-    withTransaction,
-    withWorkers,
-    observabilityAdapter,
-    log,
-    expect,
-  }) => {
-    const jobTypes = defineJobTypes<{
-      slow: {
-        entry: true;
-        input: null;
-        output: null;
-      };
-    }>();
-
-    let nextJobAvailableCalls = 0;
-    const countingStateAdapter: typeof stateAdapter = {
-      ...stateAdapter,
-      getNextJobAvailableInMs: async (params) => {
-        nextJobAvailableCalls++;
-        return stateAdapter.getNextJobAvailableInMs(params);
-      },
-    };
-
-    const client = await createClient({
-      stateAdapter: countingStateAdapter,
-      notifyAdapter,
-      observabilityAdapter,
-      log,
-      jobTypes,
-    });
-    const worker = await createInProcessWorker({
-      client,
-      concurrency: 1,
-      processors: createProcessors({
-        client,
-        jobTypes,
-        processors: {
-          slow: {
-            attemptHandler: async ({ complete }) =>
-              complete(async () => {
-                await sleep(200);
-                return null;
-              }),
-          },
-        },
-      }),
-    });
-
-    const chains = await withTransactionHooks(async (transactionHooks) =>
-      withTransaction(async (txCtx) =>
-        client.startChains({
-          ...txCtx,
-          transactionHooks,
-          items: Array.from({ length: 3 }, () => ({ typeName: "slow" as const, input: null })),
-        }),
-      ),
-    );
-
-    await withWorkers([await worker.start()], async () => {
-      await Promise.all(chains.map(async (chain) => client.awaitChain(chain, completionOptions)));
-    });
-
-    // The single slot is busy for ~600ms with two jobs waiting. A delay of 0 for work the
-    // worker has nowhere to put would re-query on every loop pass for that whole window.
-    expect(nextJobAvailableCalls).toBeLessThanOrEqual(10);
-  });
-
   it("calls wrapExecute around each execute call with typed ctx", async ({
     stateAdapter,
     notifyAdapter,
@@ -725,5 +655,75 @@ export const workerTestSuite = ({ it }: { it: TestAPI<TestSuiteContext> }): void
 
     expect(observedAborted).toBe(true);
     expect(observedReason).toBe("worker_stopping");
+  });
+
+  it("does not poll for a start delay while every slot is busy", async ({
+    stateAdapter,
+    notifyAdapter,
+    withTransaction,
+    withWorkers,
+    observabilityAdapter,
+    log,
+    expect,
+  }) => {
+    const jobTypes = defineJobTypes<{
+      slow: {
+        entry: true;
+        input: null;
+        output: null;
+      };
+    }>();
+
+    let startAttemptDelayCalls = 0;
+    const countingStateAdapter: typeof stateAdapter = {
+      ...stateAdapter,
+      getStartAttemptDelayMs: async (params) => {
+        startAttemptDelayCalls++;
+        return stateAdapter.getStartAttemptDelayMs(params);
+      },
+    };
+
+    const client = await createClient({
+      stateAdapter: countingStateAdapter,
+      notifyAdapter,
+      observabilityAdapter,
+      log,
+      jobTypes,
+    });
+    const worker = await createInProcessWorker({
+      client,
+      concurrency: 1,
+      processors: createProcessors({
+        client,
+        jobTypes,
+        processors: {
+          slow: {
+            attemptHandler: async ({ complete }) =>
+              complete(async () => {
+                await sleep(200);
+                return null;
+              }),
+          },
+        },
+      }),
+    });
+
+    const chains = await withTransactionHooks(async (transactionHooks) =>
+      withTransaction(async (txCtx) =>
+        client.startChains({
+          ...txCtx,
+          transactionHooks,
+          items: Array.from({ length: 3 }, () => ({ typeName: "slow" as const, input: null })),
+        }),
+      ),
+    );
+
+    await withWorkers([await worker.start()], async () => {
+      await Promise.all(chains.map(async (chain) => client.awaitChain(chain, completionOptions)));
+    });
+
+    // The single slot is busy for ~600ms with two jobs waiting. A delay of 0 for work the
+    // worker has nowhere to put would re-query on every loop pass for that whole window.
+    expect(startAttemptDelayCalls).toBeLessThanOrEqual(10);
   });
 };

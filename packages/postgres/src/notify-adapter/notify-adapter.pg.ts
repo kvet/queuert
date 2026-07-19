@@ -8,8 +8,7 @@ import { type PgNotifyProvider } from "../notify-provider/notify-provider.pg.js"
  *
  * PostgreSQL has no native counter primitive suitable for atomic wake-fan-out
  * gating, so `provideWakeHint`/`consumeWakeHint` are no-ops here — every
- * listener wakes on every notification, and the database (FOR UPDATE SKIP
- * LOCKED in `acquireJob`) handles contention.
+ * listener wakes on every notification, and the database handles contention.
  */
 export const createPgNotifyAdapter = async ({
   notifyProvider,
@@ -20,7 +19,7 @@ export const createPgNotifyAdapter = async ({
 }): Promise<NotifyAdapter> => {
   const jobScheduledChannel = `${channelPrefix}_sched`;
   const chainCompletedChannel = `${channelPrefix}_chainc`;
-  const ownershipLostChannel = `${channelPrefix}_owls`;
+  const attemptLostChannel = `${channelPrefix}_atls`;
 
   const jobScheduledListener = createSharedListener(async (dispatch) =>
     notifyProvider.subscribe(jobScheduledChannel, (payload) => {
@@ -32,8 +31,8 @@ export const createPgNotifyAdapter = async ({
       dispatch(payload, payload);
     }),
   );
-  const ownershipLostListener = createSharedListener(async (dispatch) =>
-    notifyProvider.subscribe(ownershipLostChannel, (payload) => {
+  const attemptLostListener = createSharedListener(async (dispatch) =>
+    notifyProvider.subscribe(attemptLostChannel, (payload) => {
       dispatch(payload, payload);
     }),
   );
@@ -78,14 +77,14 @@ export const createPgNotifyAdapter = async ({
       });
     },
 
-    notifyJobOwnershipLost: async (jobId) => {
+    notifyJobAttemptLost: async (jobId) => {
       assertOpen();
-      await notifyProvider.publish(ownershipLostChannel, jobId);
+      await notifyProvider.publish(attemptLostChannel, jobId);
     },
 
-    listenJobOwnershipLost: async (jobId, onNotification) => {
+    listenJobAttemptLost: async (jobId, onNotification) => {
       assertOpen();
-      return ownershipLostListener.subscribe(jobId, () => {
+      return attemptLostListener.subscribe(jobId, () => {
         onNotification();
       });
     },
@@ -96,7 +95,7 @@ export const createPgNotifyAdapter = async ({
       await Promise.all([
         jobScheduledListener.dispose(),
         chainCompletedListener.dispose(),
-        ownershipLostListener.dispose(),
+        attemptLostListener.dispose(),
       ]);
       await notifyProvider.close?.();
     },

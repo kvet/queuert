@@ -129,7 +129,7 @@ export const notifyAdapterConformanceGroups: ConformanceGroup<NotifyConformanceF
         run: async ({ notifyAdapter }) => {
           await notifyAdapter.notifyJobScheduled("type-a");
           await notifyAdapter.notifyChainCompleted("chain-1");
-          await notifyAdapter.notifyJobOwnershipLost("job-1");
+          await notifyAdapter.notifyJobAttemptLost("job-1");
         },
       },
     ],
@@ -253,17 +253,17 @@ export const notifyAdapterConformanceGroups: ConformanceGroup<NotifyConformanceF
     ],
   },
   {
-    name: "notifyJobOwnershipLost / listenJobOwnershipLost",
+    name: "notifyJobAttemptLost / listenJobAttemptLost",
     cases: [
       {
-        name: "listener receives ownership lost for matching job ID",
+        name: "listener receives attempt lost for matching job ID",
         run: async ({ notifyAdapter }) => {
           const received = Promise.withResolvers<void>();
-          const unsubscribe = await notifyAdapter.listenJobOwnershipLost("job-123", () => {
+          const unsubscribe = await notifyAdapter.listenJobAttemptLost("job-123", () => {
             received.resolve();
           });
 
-          await notifyAdapter.notifyJobOwnershipLost("job-123");
+          await notifyAdapter.notifyJobAttemptLost("job-123");
 
           await waitFor(received.promise, "notification");
 
@@ -271,14 +271,14 @@ export const notifyAdapterConformanceGroups: ConformanceGroup<NotifyConformanceF
         },
       },
       {
-        name: "listener does not receive ownership lost for different job ID",
+        name: "listener does not receive attempt lost for different job ID",
         run: async ({ notifyAdapter }, expect) => {
           let callCount = 0;
-          const unsubscribe = await notifyAdapter.listenJobOwnershipLost("job-123", () => {
+          const unsubscribe = await notifyAdapter.listenJobAttemptLost("job-123", () => {
             callCount++;
           });
 
-          await notifyAdapter.notifyJobOwnershipLost("job-456");
+          await notifyAdapter.notifyJobAttemptLost("job-456");
           await sleep(NEGATIVE_ASSERTION_DELAY_MS);
 
           expect(callCount).toBe(0);
@@ -286,19 +286,19 @@ export const notifyAdapterConformanceGroups: ConformanceGroup<NotifyConformanceF
         },
       },
       {
-        name: "multiple listeners for same job ID both receive ownership lost",
+        name: "multiple listeners for same job ID both receive attempt lost",
         run: async ({ notifyAdapter }) => {
           const received1 = Promise.withResolvers<void>();
           const received2 = Promise.withResolvers<void>();
 
-          const unsubscribe1 = await notifyAdapter.listenJobOwnershipLost("job-multi", () => {
+          const unsubscribe1 = await notifyAdapter.listenJobAttemptLost("job-multi", () => {
             received1.resolve();
           });
-          const unsubscribe2 = await notifyAdapter.listenJobOwnershipLost("job-multi", () => {
+          const unsubscribe2 = await notifyAdapter.listenJobAttemptLost("job-multi", () => {
             received2.resolve();
           });
 
-          await notifyAdapter.notifyJobOwnershipLost("job-multi");
+          await notifyAdapter.notifyJobAttemptLost("job-multi");
 
           await waitFor(Promise.all([received1.promise, received2.promise]), "notifications");
 
@@ -307,15 +307,15 @@ export const notifyAdapterConformanceGroups: ConformanceGroup<NotifyConformanceF
         },
       },
       {
-        name: "unsubscribe stops ownership lost notifications",
+        name: "unsubscribe stops attempt lost notifications",
         run: async ({ notifyAdapter }, expect) => {
           let callCount = 0;
-          const unsubscribe = await notifyAdapter.listenJobOwnershipLost("job-unsubscribe", () => {
+          const unsubscribe = await notifyAdapter.listenJobAttemptLost("job-unsubscribe", () => {
             callCount++;
           });
 
           await unsubscribe();
-          await notifyAdapter.notifyJobOwnershipLost("job-unsubscribe");
+          await notifyAdapter.notifyJobAttemptLost("job-unsubscribe");
           await sleep(NEGATIVE_ASSERTION_DELAY_MS);
 
           expect(callCount).toBe(0);
@@ -370,7 +370,7 @@ export const notifyAdapterConformanceGroups: ConformanceGroup<NotifyConformanceF
         run: async ({ notifyAdapter }, expect) => {
           const unsubscribe1 = await notifyAdapter.listenJobScheduled(["type-a"], () => {});
           const unsubscribe2 = await notifyAdapter.listenChainCompleted("chain-1", () => {});
-          const unsubscribe3 = await notifyAdapter.listenJobOwnershipLost("job-1", () => {});
+          const unsubscribe3 = await notifyAdapter.listenJobAttemptLost("job-1", () => {});
 
           expect(typeof unsubscribe1).toBe("function");
           expect(typeof unsubscribe2).toBe("function");
@@ -470,11 +470,11 @@ export const notifyAdapterConformanceGroups: ConformanceGroup<NotifyConformanceF
           try {
             const u1 = await notifyAdapter.listenJobScheduled(["type-a"], () => {});
             const u2 = await notifyAdapter.listenChainCompleted("chain-1", () => {});
-            const u3 = await notifyAdapter.listenJobOwnershipLost("job-1", () => {});
+            const u3 = await notifyAdapter.listenJobAttemptLost("job-1", () => {});
 
             await notifyAdapter.notifyJobScheduled("type-a");
             await notifyAdapter.notifyChainCompleted("chain-1");
-            await notifyAdapter.notifyJobOwnershipLost("job-1");
+            await notifyAdapter.notifyJobAttemptLost("job-1");
 
             await sleep(NEGATIVE_ASSERTION_DELAY_MS);
 
@@ -509,8 +509,8 @@ export const notifyAdapterConformanceGroups: ConformanceGroup<NotifyConformanceF
           await expect(notifyAdapter.listenJobScheduled(["type-a"], () => {})).rejects.toThrow();
           await expect(notifyAdapter.notifyChainCompleted("chain-1")).rejects.toThrow();
           await expect(notifyAdapter.listenChainCompleted("chain-1", () => {})).rejects.toThrow();
-          await expect(notifyAdapter.notifyJobOwnershipLost("job-1")).rejects.toThrow();
-          await expect(notifyAdapter.listenJobOwnershipLost("job-1", () => {})).rejects.toThrow();
+          await expect(notifyAdapter.notifyJobAttemptLost("job-1")).rejects.toThrow();
+          await expect(notifyAdapter.listenJobAttemptLost("job-1", () => {})).rejects.toThrow();
         },
       },
     ],

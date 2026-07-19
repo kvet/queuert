@@ -78,7 +78,10 @@ const cleanupProcessorRegistry = createProcessors({
 
         do {
           const page = await client.listChains({
-            filter: { root: true, to: cutoffDate },
+            status: "completed",
+            orderBy: "completedAt",
+            independent: true,
+            to: cutoffDate,
             orderDirection: "asc",
             limit: CLEANUP_BATCH_SIZE,
             ...(cursor != null ? { cursor } : {}),
@@ -115,7 +118,7 @@ const cleanupProcessorRegistry = createProcessors({
             schedule: { afterMs: CLEANUP_INTERVAL_MS },
             deduplication: {
               key: "queuert.cleanup",
-              scope: "incomplete",
+              scope: "running",
               excludeChainIds: [job.chainId],
             },
           });
@@ -181,7 +184,7 @@ console.log(`${immediateChains.length} work chains completed, 1 scheduled for la
 
 // Check chain count before cleanup
 const beforeCleanup = await client.listChains({
-  filter: { typeName: ["work.process"] },
+  typeName: ["work.process"],
   limit: 100,
 });
 console.log(`\nChains before cleanup: ${beforeCleanup.items.length}`);
@@ -198,7 +201,7 @@ const scheduleCleanup = async () =>
         transactionHooks,
         typeName: "queuert.cleanup",
         input: null,
-        deduplication: { key: "queuert.cleanup", scope: "incomplete" },
+        deduplication: { key: "queuert.cleanup", scope: "running" },
       });
       return result;
     }),
@@ -222,7 +225,7 @@ console.log("\nCleanup completed!");
 
 // Check chain count after cleanup
 const afterCleanup = await client.listChains({
-  filter: { typeName: ["work.process"] },
+  typeName: ["work.process"],
   limit: 100,
 });
 console.log(`Chains after cleanup: ${afterCleanup.items.length}`);
@@ -230,7 +233,8 @@ assert.equal(afterCleanup.items.length, 1, "only the future-scheduled chain shou
 
 // Check that a next cleanup run was scheduled
 const pendingCleanup = await client.listJobs({
-  filter: { typeName: ["queuert.cleanup"], status: ["pending"] },
+  typeName: ["queuert.cleanup"],
+  status: "pending",
   limit: 10,
 });
 console.log(`\nNext cleanup run scheduled: ${pendingCleanup.items.length > 0 ? "yes" : "no"}`);

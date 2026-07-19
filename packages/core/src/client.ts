@@ -1,4 +1,4 @@
-import { type Chain, mapStatePairToChain } from "./entities/chain.js";
+import { type AnyChain, type Chain, mapStatePairToChain } from "./entities/chain.js";
 import { type DeduplicationOptions } from "./entities/deduplication.js";
 import { type BaseJobTypeDefinitions } from "./entities/job-type.js";
 import { type JobTypes } from "./entities/job-types.js";
@@ -15,7 +15,7 @@ import {
   type ResolvedChainJobs,
   type ResolvedJob,
 } from "./entities/job-types.resolvers.js";
-import { type Job, type JobStatus, mapStateJobToJob } from "./entities/job.js";
+import { type AnyJob, deriveStatus, mapStateJobToJob } from "./entities/job.js";
 import {
   type JobTypesDefinitions,
   type ValidatedSlices,
@@ -25,8 +25,8 @@ import { type ScheduleOptions } from "./entities/schedule.js";
 import {
   BlockerReferenceError,
   ChainNotFoundError,
-  JobAlreadyCompletedError,
   ChainTypeMismatchError,
+  JobAlreadyCompletedError,
   JobNotFoundError,
   JobNotReschedulableError,
   JobTypeMismatchError,
@@ -35,7 +35,7 @@ import {
   TransactionContextRequiredError,
   WaitChainTimeoutError,
 } from "./errors.js";
-import { bufferNotifyJobOwnershipLost, bufferNotifyJobScheduled } from "./helpers/notify-hooks.js";
+import { bufferNotifyJobAttemptLost, bufferNotifyJobScheduled } from "./helpers/notify-hooks.js";
 import { bufferObservabilityEvent } from "./helpers/observability-hooks.js";
 import { raceWithSleep } from "./helpers/sleep.js";
 import { type IsUnion } from "./helpers/typescript.js";
@@ -52,7 +52,6 @@ import {
   type GetStateAdapterJobId,
   type GetStateAdapterTxContext,
   type StateAdapter,
-  type StateJob,
 } from "./state-adapter/state-adapter.js";
 import { type TransactionHooks } from "./transaction-hooks.js";
 import { type AttemptCompleteOptions } from "./worker/job-process.js";
@@ -130,8 +129,7 @@ type CompleteChainResult<
   TCompleteReturn,
 > = [TCompleteReturn] extends [void]
   ? ResolvedChain<GetStateAdapterJobId<TStateAdapter>, TJobTypeDefinitions, TChainTypeName>
-  : TCompleteReturn extends Job<any, any, any, any, any> &
-        ({ status: "pending" } | { status: "blocked" })
+  : TCompleteReturn extends AnyJob & { status: "pending" }
     ? ResolvedChain<GetStateAdapterJobId<TStateAdapter>, TJobTypeDefinitions, TChainTypeName>
     : Chain<
         GetStateAdapterJobId<TStateAdapter>,
@@ -437,19 +435,20 @@ export type Client<
    */
   listChains: <TChainTypeName extends JobTypeEntryNames<TJobTypeDefinitions>>(
     options: {
-      filter?: {
-        typeName?: TChainTypeName[];
-        status?: JobStatus[];
-        chainId?: TJobId[];
-        jobId?: TJobId[];
-        root?: boolean;
-        from?: Date;
-        to?: Date;
-      };
+      typeName?: TChainTypeName[];
+      independent?: boolean;
+      chainId?: TJobId[];
+      from?: Date;
+      to?: Date;
       orderDirection?: OrderDirection;
       cursor?: string;
       limit?: number;
-    } & Partial<GetStateAdapterTxContext<TStateAdapter>>,
+    } & (
+      | { status?: undefined; orderBy?: "createdAt" }
+      | { status: "running"; orderBy?: "createdAt" }
+      | { status: "completed"; orderBy?: "createdAt" | "completedAt" }
+    ) &
+      Partial<GetStateAdapterTxContext<TStateAdapter>>,
   ) => Promise<Page<ResolvedChain<TJobId, TJobTypeDefinitions, TChainTypeName>>>;
 
   /**
@@ -459,26 +458,29 @@ export type Client<
    */
   listJobs: <TJobTypeName extends JobTypeNames<TJobTypeDefinitions>>(
     options: {
-      filter?: {
-        typeName?: TJobTypeName[];
-        status?: JobStatus[];
-        jobId?: TJobId[];
-        chainTypeName?: JobTypeEntryNames<TJobTypeDefinitions>[];
-        chainId?: TJobId[];
-        from?: Date;
-        to?: Date;
-      };
+      typeName?: TJobTypeName[];
+      chainTypeName?: JobTypeEntryNames<TJobTypeDefinitions>[];
+      chainId?: TJobId[];
+      jobId?: TJobId[];
+      from?: Date;
+      to?: Date;
       orderDirection?: OrderDirection;
       cursor?: string;
       limit?: number;
-    } & Partial<GetStateAdapterTxContext<TStateAdapter>>,
+    } & (
+      | { status?: undefined; orderBy?: "createdAt" }
+      | { status: "pending"; blocked?: boolean; orderBy?: "createdAt" | "scheduledAt" }
+      | { status: "running"; orderBy?: "createdAt" | "attemptAt" | "attemptUntil" }
+      | { status: "completed"; continued?: boolean; orderBy?: "createdAt" | "completedAt" }
+    ) &
+      Partial<GetStateAdapterTxContext<TStateAdapter>>,
   ) => Promise<Page<ResolvedJob<TJobId, TJobTypeDefinitions, TJobTypeName>>>;
 
   /**
-   * List jobs within a specific chain, ordered by `chainIndex`. Defaults to
-   * ascending order. Pass `typeName` for type narrowing.
+   * List jobs within a specific chain, in chain order. Defaults to ascending
+   * order. Pass `chainTypeName` for type narrowing.
    *
-   * @throws {@link ChainTypeMismatchError} if `typeName` is provided and does not match.
+   * @throws {@link ChainTypeMismatchError} if `chainTypeName` is provided and does not match.
    */
   listChainJobs: <
     TChainTypeName extends JobTypeEntryNames<TJobTypeDefinitions> =
@@ -486,7 +488,7 @@ export type Client<
   >(
     options: {
       chainId: TJobId;
-      typeName?: TChainTypeName;
+      chainTypeName?: TChainTypeName;
       orderDirection?: OrderDirection;
       cursor?: string;
       limit?: number;
@@ -748,14 +750,14 @@ export const createClient = async <
       });
 
       const notFound: TJobId[] = [];
-      const notReschedulable: { jobId: TJobId; status: StateJob["status"] }[] = [];
+      const notReschedulable: { jobId: TJobId; status: string }[] = [];
       classified.forEach((entry, index) => {
         if (entry === undefined) {
           notFound.push(ids[index]);
-        } else if (entry.status !== "pending") {
+        } else if (entry.completedAt !== null || entry.attemptAt !== null) {
           notReschedulable.push({
             jobId: entry.id as TJobId,
-            status: entry.status,
+            status: deriveStatus(entry),
           });
         }
       });
@@ -826,8 +828,8 @@ export const createClient = async <
         });
       }
 
-      const [rootJob, lastJob] = chainPair;
-      const currentJob = lastJob ?? rootJob;
+      const [headJob, tailJob] = chainPair;
+      const currentJob = tailJob ?? headJob;
 
       if (currentJob.chainTypeName !== typeName) {
         throw new ChainTypeMismatchError(
@@ -840,7 +842,7 @@ export const createClient = async <
       }
 
       const complete = async (
-        job: StateJob,
+        job: AnyJob,
         jobCompleteCallback: (
           options: {
             continueWith: (options: {
@@ -848,7 +850,7 @@ export const createClient = async <
               id?: TJobId;
               input: unknown;
               schedule?: ScheduleOptions;
-              blockers?: Chain<any, any, any, any>[];
+              blockers?: AnyChain[];
             }) => Promise<unknown>;
             transactionHooks: TransactionHooks;
           } & BaseTxContext,
@@ -861,7 +863,16 @@ export const createClient = async <
           );
         }
 
-        let continuedJob: Job<any, any, any, any, any> | null = null;
+        const [stateJob] = await helpers.stateAdapter.getJobs({
+          txCtx,
+          jobIds: [job.id],
+          lock: "exclusive",
+        });
+        if (!stateJob) {
+          throw new JobNotFoundError(`Job ${job.id} not found`, { jobId: job.id });
+        }
+
+        let continuedJob: AnyJob | null = null;
 
         const output = await jobCompleteCallback({
           transactionHooks,
@@ -878,12 +889,7 @@ export const createClient = async <
               transactionHooks,
               schedule,
               blockers: blockers as any,
-              chainId: job.chainId,
-              chainIndex: job.chainIndex + 1,
-              chainTypeName: job.chainTypeName,
-              originChainTraceContext: job.chainTraceContext,
-              originTraceContext: job.traceContext,
-              fromTypeName: job.typeName,
+              fromJob: stateJob,
             });
 
             return continuedJob;
@@ -893,35 +899,23 @@ export const createClient = async <
 
         const wasRunning = job.status === "running";
 
-        await finishJob(
-          helpers,
-          continuedJob
-            ? {
-                job,
-                txCtx,
-                transactionHooks,
-                workerId: null,
-                type: "continueWith",
-                continuedJob,
-              }
-            : {
-                job,
-                txCtx,
-                transactionHooks,
-                workerId: null,
-                type: "completeChain",
-                output,
-              },
-        );
+        await finishJob(helpers, {
+          job: stateJob,
+          txCtx,
+          transactionHooks,
+          workerId: null,
+          output,
+          continuedJob,
+        });
 
         if (wasRunning) {
-          bufferNotifyJobOwnershipLost(transactionHooks, helpers.notifyAdapter, job.id);
+          bufferNotifyJobAttemptLost(transactionHooks, helpers.notifyAdapter, job.id);
         }
 
         return continuedJob ?? output;
       };
 
-      await completeCallback({ job: currentJob, complete });
+      await completeCallback({ job: mapStateJobToJob(currentJob) as any, complete });
 
       const [updatedChain] = await helpers.stateAdapter.getChains({
         txCtx,
@@ -1158,36 +1152,48 @@ export const createClient = async <
 
     listChains: async <TChainTypeName extends JobTypeEntryNames<TJobTypeDefinitions>>(
       options: {
-        filter?: {
-          typeName?: TChainTypeName[];
-          status?: JobStatus[];
-          chainId?: TJobId[];
-          jobId?: TJobId[];
-          root?: boolean;
-          from?: Date;
-          to?: Date;
-        };
+        typeName?: TChainTypeName[];
+        independent?: boolean;
+        chainId?: TJobId[];
+        from?: Date;
+        to?: Date;
         orderDirection?: OrderDirection;
         cursor?: string;
         limit?: number;
-      } & Partial<GetStateAdapterTxContext<TStateAdapter>>,
+      } & (
+        | { status?: undefined; orderBy?: "createdAt" }
+        | { status: "running"; orderBy?: "createdAt" }
+        | { status: "completed"; orderBy?: "createdAt" | "completedAt" }
+      ) &
+        Partial<GetStateAdapterTxContext<TStateAdapter>>,
     ): Promise<Page<ResolvedChain<TJobId, TJobTypeDefinitions, TChainTypeName>>> => {
-      const { filter, orderDirection = "desc", cursor, limit = 50, ...rest } = options;
+      const {
+        typeName,
+        independent,
+        chainId,
+        from,
+        to,
+        status,
+        orderBy,
+        orderDirection = "desc",
+        cursor,
+        limit = 50,
+        ...rest
+      } = options as typeof options & { status?: string; orderBy?: string };
       const txCtx = normalizeTxCtx(rest);
+
       const result = await helpers.stateAdapter.listChains({
         txCtx,
-        filter: {
-          typeName: filter?.typeName,
-          status: filter?.status,
-          rootOnly: filter?.root,
-          chainId: filter?.chainId,
-          jobId: filter?.jobId,
-          from: filter?.from,
-          to: filter?.to,
-        },
+        typeName,
+        independent,
+        chainId,
+        from,
+        to,
+        status,
+        orderBy: orderBy ?? (status === "completed" ? "completedAt" : "createdAt"),
         orderDirection,
         page: { cursor, limit },
-      });
+      } as Parameters<typeof helpers.stateAdapter.listChains>[0]);
       return {
         items: result.items.map(
           (pair) =>
@@ -1199,36 +1205,68 @@ export const createClient = async <
 
     listJobs: async <TJobTypeName extends JobTypeNames<TJobTypeDefinitions>>(
       options: {
-        filter?: {
-          typeName?: TJobTypeName[];
-          status?: JobStatus[];
-          jobId?: TJobId[];
-          chainTypeName?: JobTypeEntryNames<TJobTypeDefinitions>[];
-          chainId?: TJobId[];
-          from?: Date;
-          to?: Date;
-        };
+        typeName?: TJobTypeName[];
+        chainTypeName?: JobTypeEntryNames<TJobTypeDefinitions>[];
+        chainId?: TJobId[];
+        jobId?: TJobId[];
+        from?: Date;
+        to?: Date;
         orderDirection?: OrderDirection;
         cursor?: string;
         limit?: number;
-      } & Partial<GetStateAdapterTxContext<TStateAdapter>>,
+      } & (
+        | { status?: undefined; orderBy?: "createdAt" }
+        | { status: "pending"; blocked?: boolean; orderBy?: "createdAt" | "scheduledAt" }
+        | { status: "running"; orderBy?: "createdAt" | "attemptAt" | "attemptUntil" }
+        | { status: "completed"; continued?: boolean; orderBy?: "createdAt" | "completedAt" }
+      ) &
+        Partial<GetStateAdapterTxContext<TStateAdapter>>,
     ): Promise<Page<ResolvedJob<TJobId, TJobTypeDefinitions, TJobTypeName>>> => {
-      const { filter, orderDirection = "desc", cursor, limit = 50, ...rest } = options;
+      const {
+        typeName,
+        chainTypeName,
+        chainId,
+        jobId,
+        from,
+        to,
+        status,
+        orderBy,
+        blocked,
+        continued,
+        orderDirection = "desc",
+        cursor,
+        limit = 50,
+        ...rest
+      } = options as typeof options & {
+        status?: string;
+        orderBy?: string;
+        blocked?: boolean;
+        continued?: boolean;
+      };
       const txCtx = normalizeTxCtx(rest);
+
+      const defaultOrderBy: Record<string, string> = {
+        pending: "scheduledAt",
+        running: "attemptAt",
+        completed: "completedAt",
+      };
+      const resolvedOrderBy = orderBy ?? (status ? defaultOrderBy[status] : "createdAt");
+
       const result = await helpers.stateAdapter.listJobs({
         txCtx,
-        filter: {
-          typeName: filter?.typeName,
-          chainTypeName: filter?.chainTypeName,
-          jobId: filter?.jobId,
-          chainId: filter?.chainId,
-          status: filter?.status,
-          from: filter?.from,
-          to: filter?.to,
-        },
+        typeName,
+        chainTypeName,
+        chainId,
+        jobId,
+        from,
+        to,
+        status,
+        orderBy: resolvedOrderBy,
         orderDirection,
         page: { cursor, limit },
-      });
+        ...(blocked !== undefined ? { blocked } : {}),
+        ...(continued !== undefined ? { continued } : {}),
+      } as Parameters<typeof helpers.stateAdapter.listJobs>[0]);
       return {
         items: result.items.map(
           (job) => mapStateJobToJob(job) as ResolvedJob<TJobId, TJobTypeDefinitions, TJobTypeName>,
@@ -1243,25 +1281,32 @@ export const createClient = async <
     >(
       options: {
         chainId: TJobId;
-        typeName?: TChainTypeName;
+        chainTypeName?: TChainTypeName;
         orderDirection?: OrderDirection;
         cursor?: string;
         limit?: number;
       } & Partial<GetStateAdapterTxContext<TStateAdapter>>,
     ): Promise<Page<ResolvedChainJobs<TJobId, TJobTypeDefinitions, TChainTypeName>>> => {
-      const { chainId, typeName, orderDirection = "asc", cursor, limit = 50, ...rest } = options;
+      const {
+        chainId,
+        chainTypeName,
+        orderDirection = "asc",
+        cursor,
+        limit = 50,
+        ...rest
+      } = options;
       const txCtx = normalizeTxCtx(rest);
 
-      if (typeName) {
+      if (chainTypeName) {
         const [chainPair] = await helpers.stateAdapter.getChains({
           txCtx,
           chainIds: [chainId],
         });
-        if (chainPair && chainPair[0].chainTypeName !== typeName) {
+        if (chainPair && chainPair[0].chainTypeName !== chainTypeName) {
           throw new ChainTypeMismatchError(
-            `Expected chain ${String(chainId)} to have type "${typeName}" but found "${chainPair[0].chainTypeName}"`,
+            `Expected chain ${String(chainId)} to have type "${chainTypeName}" but found "${chainPair[0].chainTypeName}"`,
             {
-              expectedTypeName: typeName,
+              expectedTypeName: chainTypeName,
               actualTypeName: chainPair[0].chainTypeName,
             },
           );

@@ -76,7 +76,7 @@ export function createCleanupProcessors({
 ```
 
 The handler uses `execute` for each deletion batch — each call opens a fresh guarded
-transaction with lease verification, keeping lock scope bounded. The handler does not
+transaction with attempt verification, keeping lock scope bounded. The handler does not
 self-reschedule. The user controls the interval at the scheduling call site.
 
 ### User setup

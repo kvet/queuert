@@ -1,7 +1,14 @@
 import { type NotifyAdapter } from "../notify-adapter/notify-adapter.js";
 import { type StateAdapter } from "../state-adapter/state-adapter.js";
 import { type JobAbortReason } from "../worker/job-process.js";
-import { type JobBasicData, type ChainData, type JobProcessingData } from "./log.js";
+import {
+  type JobAttemptData,
+  type JobBasicData,
+  type ChainData,
+  type JobCompletionData,
+  type JobProcessingData,
+  type WorkerBasicData,
+} from "./log.js";
 
 /** Input data for creating a job span. */
 export type JobSpanInputData = {
@@ -56,7 +63,7 @@ export type JobAttemptSpanInputData = {
 export type JobAttemptSpanResult =
   | {
       status: "completed";
-      continued?: { jobId: string; jobTypeName: string };
+      continuedWith?: { jobId: string; jobTypeName: string };
       chainCompleted?: { output: unknown };
     }
   | {
@@ -90,7 +97,7 @@ export type CompleteJobSpanInputData = {
   chainTypeName: string;
   jobId: string;
   jobTypeName: string;
-  continued?: { jobId: string; jobTypeName: string };
+  continuedWith?: { jobId: string; jobTypeName: string };
   chainCompleted: boolean;
 };
 
@@ -125,10 +132,10 @@ export type CompleteBlockerSpanData = {
  */
 export type ObservabilityAdapter = {
   // worker
-  workerStarted: (data: { workerId: string; jobTypeNames: string[] }) => void;
-  workerError: (data: { workerId: string; error: unknown }) => void;
-  workerStopping: (data: { workerId: string }) => void;
-  workerStopped: (data: { workerId: string }) => void;
+  workerStarted: (data: WorkerBasicData & { jobTypeNames: string[] }) => void;
+  workerError: (data: WorkerBasicData & { error: unknown }) => void;
+  workerStopping: (data: WorkerBasicData) => void;
+  workerStopped: (data: WorkerBasicData) => void;
 
   // job
   jobCreated: (
@@ -138,42 +145,17 @@ export type ObservabilityAdapter = {
       scheduledAt: Date;
     },
   ) => void;
-  jobAttemptStarted: (data: JobProcessingData & { workerId: string }) => void;
-  jobAttemptTakenByAnotherWorker: (
-    data: JobProcessingData & { workerId: string; leasedBy: string; leasedUntil: Date },
-  ) => void;
+  jobAttemptStarted: (data: JobProcessingData & WorkerBasicData) => void;
+  jobAttemptTakenByAnotherWorker: (data: JobAttemptData & WorkerBasicData) => void;
   jobAttemptAlreadyCompleted: (
-    data: JobProcessingData & { workerId: string; completedBy: string | null },
+    data: JobProcessingData & WorkerBasicData & { completedBy: string | null },
   ) => void;
-  jobAttemptLeaseExpired: (
-    data: JobProcessingData & { workerId: string; leasedBy: string; leasedUntil: Date },
-  ) => void;
-  jobAttemptLeaseRenewed: (
-    data: JobProcessingData & { workerId: string; leasedBy: string; leasedUntil: Date },
-  ) => void;
-  jobAttemptFailed: (
-    data: JobProcessingData & {
-      workerId: string;
-      error: unknown;
-    },
-  ) => void;
-  jobAttemptCompleted: (
-    data: JobProcessingData & {
-      output: unknown;
-      continuedWith?: JobBasicData;
-      workerId: string;
-    },
-  ) => void;
-  jobCompleted: (
-    data: JobProcessingData & {
-      output: unknown;
-      continuedWith?: JobBasicData;
-      workerId: string | null;
-    },
-  ) => void;
-  jobReaped: (
-    data: JobBasicData & { leasedBy: string; leasedUntil: Date; workerId: string },
-  ) => void;
+  jobAttemptExpired: (data: JobAttemptData & WorkerBasicData) => void;
+  jobAttemptExtended: (data: JobAttemptData & WorkerBasicData) => void;
+  jobAttemptFailed: (data: JobProcessingData & WorkerBasicData & { error: unknown }) => void;
+  jobAttemptCompleted: (data: JobCompletionData & WorkerBasicData) => void;
+  jobCompleted: (data: JobCompletionData & { workerId: string | null }) => void;
+  jobAttemptReclaimed: (data: JobAttemptData & WorkerBasicData) => void;
 
   // chain
   chainCreated: (data: ChainData & { input: unknown }) => void;
@@ -196,11 +178,11 @@ export type ObservabilityAdapter = {
   // histograms
   chainDuration: (data: ChainData & { durationMs: number }) => void;
   jobDuration: (data: JobProcessingData & { durationMs: number }) => void;
-  jobAttemptDuration: (data: JobProcessingData & { durationMs: number; workerId: string }) => void;
+  jobAttemptDuration: (data: JobProcessingData & WorkerBasicData & { durationMs: number }) => void;
 
   // gauges (UpDownCounters)
-  jobTypeIdleChange: (data: { delta: number; typeName: string; workerId: string }) => void;
-  jobTypeProcessingChange: (data: { delta: number; typeName: string; workerId: string }) => void;
+  jobTypeIdleChange: (data: WorkerBasicData & { delta: number; typeName: string }) => void;
+  jobTypeProcessingChange: (data: WorkerBasicData & { delta: number; typeName: string }) => void;
 
   // tracing
   startJobSpan: (data: JobSpanInputData) => JobSpanHandle | undefined;

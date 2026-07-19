@@ -69,9 +69,9 @@ export const stateResilienceTestSuite = ({
             multiplier: 1,
             maxDelayMs: 1,
           },
-          leaseConfig: {
-            leaseMs: 10,
-            renewIntervalMs: 5,
+          attemptConfig: {
+            timeoutMs: 10,
+            heartbeatMs: 5,
           },
           processors: {
             test: {
@@ -144,9 +144,9 @@ export const stateResilienceTestSuite = ({
         concurrency: 5,
         // Short poll interval so the worker retries promptly after a transient error.
         // When the complete phase hits a flaky-adapter error and the error handler's
-        // withTransaction also fails, the job stays "acquired" with a short lease.
-        // The worker must re-poll before the reaper reclaims it, so pollIntervalMs
-        // needs to be low enough to beat the lease expiry window.
+        // withTransaction also fails, the job stays "acquired" with a short attempt.
+        // The worker must re-poll before the expired attempt is reclaimed, so pollIntervalMs
+        // needs to be low enough to beat the attempt expiry window.
         pollIntervalMs: 250,
         recoveryBackoffConfig: {
           initialDelayMs: 1,
@@ -161,9 +161,9 @@ export const stateResilienceTestSuite = ({
             multiplier: 1,
             maxDelayMs: 1,
           },
-          leaseConfig: {
-            leaseMs: 10,
-            renewIntervalMs: 5,
+          attemptConfig: {
+            timeoutMs: 10,
+            heartbeatMs: 5,
           },
           processors: {
             test: {
@@ -241,15 +241,15 @@ export const stateResilienceTestSuite = ({
         },
         // Short poll interval so the worker retries promptly after a transient error.
         // When the complete phase hits a flaky-adapter error and the error handler's
-        // withTransaction also fails, the job stays "acquired" with a short lease.
-        // The worker must re-poll before the reaper reclaims it, so pollIntervalMs
-        // needs to be low enough to beat the lease expiry window.
+        // withTransaction also fails, the job stays "acquired" with a short attempt.
+        // The worker must re-poll before the expired attempt is reclaimed, so pollIntervalMs
+        // needs to be low enough to beat the attempt expiry window.
         pollIntervalMs: 100,
       };
       const registryConfig = {
-        leaseConfig: {
-          leaseMs: 10,
-          renewIntervalMs: 5,
+        attemptConfig: {
+          timeoutMs: 10,
+          heartbeatMs: 5,
         },
         backoffConfig: {
           initialDelayMs: 1,
@@ -363,9 +363,9 @@ export const stateResilienceTestSuite = ({
             multiplier: 1,
             maxDelayMs: 1,
           },
-          leaseConfig: {
-            leaseMs: 10,
-            renewIntervalMs: 5,
+          attemptConfig: {
+            timeoutMs: 10,
+            heartbeatMs: 5,
           },
           processors: {
             test: {
@@ -452,9 +452,9 @@ export const stateResilienceTestSuite = ({
             multiplier: 1,
             maxDelayMs: 1,
           },
-          leaseConfig: {
-            leaseMs: 10,
-            renewIntervalMs: 5,
+          attemptConfig: {
+            timeoutMs: 10,
+            heartbeatMs: 5,
           },
           processors: {
             test: {
@@ -535,9 +535,9 @@ export const stateResilienceTestSuite = ({
         },
       };
       const registryConfig = {
-        leaseConfig: {
-          leaseMs: 10,
-          renewIntervalMs: 5,
+        attemptConfig: {
+          timeoutMs: 10,
+          heartbeatMs: 5,
         },
         backoffConfig: {
           initialDelayMs: 1,

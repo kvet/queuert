@@ -2,7 +2,7 @@ import { type Chain, type Job } from "queuert";
 // @ts-expect-error tsgo doesn't resolve export * re-exports from seroval
 import { deserialize } from "seroval";
 
-export type UnknownJob = Job<string, string, string, unknown, unknown>;
+export type UnknownJob = Job<string, string, string, unknown, unknown, true>;
 export type UnknownChain = Chain<string, string, unknown, unknown>;
 
 const BASE = "./api";
@@ -25,9 +25,10 @@ export const listChains = async (
   params: {
     typeName?: string;
     status?: string;
-    root?: boolean;
+    independent?: boolean;
     id?: string;
-    jobId?: string;
+    orderBy?: string;
+    orderDirection?: string;
     cursor?: string;
     limit?: number;
     signal?: AbortSignal;
@@ -36,9 +37,10 @@ export const listChains = async (
   const searchParams = new URLSearchParams();
   if (params.typeName) searchParams.set("typeName", params.typeName);
   if (params.status) searchParams.set("status", params.status);
-  if (params.root === false) searchParams.set("root", "false");
+  if (params.independent === false) searchParams.set("independent", "false");
   if (params.id) searchParams.set("id", params.id);
-  if (params.jobId) searchParams.set("jobId", params.jobId);
+  if (params.orderBy) searchParams.set("orderBy", params.orderBy);
+  if (params.orderDirection) searchParams.set("orderDirection", params.orderDirection);
   if (params.cursor) searchParams.set("cursor", params.cursor);
   if (params.limit) searchParams.set("limit", String(params.limit));
   const queryString = searchParams.toString();
@@ -51,8 +53,11 @@ export const listJobs = async (
   params: {
     status?: string;
     typeName?: string;
+    chainTypeName?: string;
     chainId?: string;
     id?: string;
+    orderBy?: string;
+    orderDirection?: string;
     cursor?: string;
     limit?: number;
     signal?: AbortSignal;
@@ -61,8 +66,11 @@ export const listJobs = async (
   const searchParams = new URLSearchParams();
   if (params.status) searchParams.set("status", params.status);
   if (params.typeName) searchParams.set("typeName", params.typeName);
+  if (params.chainTypeName) searchParams.set("chainTypeName", params.chainTypeName);
   if (params.chainId) searchParams.set("chainId", params.chainId);
   if (params.id) searchParams.set("id", params.id);
+  if (params.orderBy) searchParams.set("orderBy", params.orderBy);
+  if (params.orderDirection) searchParams.set("orderDirection", params.orderDirection);
   if (params.cursor) searchParams.set("cursor", params.cursor);
   if (params.limit) searchParams.set("limit", String(params.limit));
   const queryString = searchParams.toString();

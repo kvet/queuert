@@ -1,10 +1,10 @@
 import { describe, it } from "vitest";
 
 import { extendWithStateInProcess } from "../state-adapter/state-adapter.in-process.spec-helper.js";
+import { attemptReclaimerTestSuite } from "../suites/attempt-reclaimer.test-suite.js";
 import { processErrorHandlingTestSuite } from "../suites/process-error-handling.test-suite.js";
 import { processModesTestSuite } from "../suites/process-modes.test-suite.js";
 import { processTestSuite } from "../suites/process.test-suite.js";
-import { reaperTestSuite } from "../suites/reaper.test-suite.js";
 import {
   extendWithCommon,
   extendWithNotifyNoop,
@@ -35,6 +35,6 @@ describe("Worker", () => {
   workerTestSuite({ it: inProcessNoopIt });
 });
 
-describe("Reaper", () => {
-  reaperTestSuite({ it: inProcessNoopIt });
+describe("Attempt Reclamation", () => {
+  attemptReclaimerTestSuite({ it: inProcessNoopIt });
 });

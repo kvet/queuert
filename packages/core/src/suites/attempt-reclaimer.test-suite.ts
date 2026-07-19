@@ -6,17 +6,17 @@ import { JobAlreadyCompletedError, JobTakenByAnotherWorkerError } from "../error
 import { sleep } from "../helpers/sleep.js";
 import { createInProcessWorker } from "../in-process-worker.js";
 import { withTransactionHooks } from "../transaction-hooks.js";
+import { type AttemptConfig } from "../worker/attempt-heartbeat.js";
 import { createProcessors } from "../worker/create-processors.js";
-import { type LeaseConfig } from "../worker/lease.js";
 import { type TestSuiteContext } from "./spec-context.spec-helper.js";
 
-export const reaperTestSuite = ({ it }: { it: TestAPI<TestSuiteContext> }): void => {
+export const attemptReclaimerTestSuite = ({ it }: { it: TestAPI<TestSuiteContext> }): void => {
   const completionOptions = {
     pollIntervalMs: 100,
     timeoutMs: 5000,
   };
 
-  it("allows to extend job lease after lease expiration if wasn't grabbed by another worker", async ({
+  it("allows to extend job attempt after expiration if wasn't grabbed by another worker", async ({
     stateAdapter,
     notifyAdapter,
     withTransaction,
@@ -46,7 +46,7 @@ export const reaperTestSuite = ({ it }: { it: TestAPI<TestSuiteContext> }): void
       processors: createProcessors({
         client,
         jobTypes,
-        leaseConfig: { leaseMs: 10, renewIntervalMs: 100 },
+        attemptConfig: { timeoutMs: 10, heartbeatMs: 100 },
         processors: {
           test: {
             attemptHandler: async ({ complete }) => {
@@ -82,7 +82,7 @@ export const reaperTestSuite = ({ it }: { it: TestAPI<TestSuiteContext> }): void
     );
   });
 
-  it("reaps abandoned jobs on lease renewal", async ({
+  it("reclaims expired attempts on extend", async ({
     stateAdapter,
     notifyAdapter,
     withTransaction,
@@ -110,16 +110,16 @@ export const reaperTestSuite = ({ it }: { it: TestAPI<TestSuiteContext> }): void
     let failed = false;
     const jobStarted = Promise.withResolvers<void>();
     const jobCompleted = Promise.withResolvers<void>();
-    const leaseConfig = { leaseMs: 10, renewIntervalMs: 100 } satisfies LeaseConfig;
+    const attemptConfig = { timeoutMs: 10, heartbeatMs: 100 } satisfies AttemptConfig;
 
     const worker1 = await createInProcessWorker({
       client,
       concurrency: 1,
-      pollIntervalMs: leaseConfig.leaseMs,
+      pollIntervalMs: attemptConfig.timeoutMs,
       processors: createProcessors({
         client,
         jobTypes,
-        leaseConfig,
+        attemptConfig,
         processors: {
           test: {
             attemptHandler: async ({ signal, complete }) => {
@@ -128,7 +128,7 @@ export const reaperTestSuite = ({ it }: { it: TestAPI<TestSuiteContext> }): void
 
                 jobStarted.resolve();
                 try {
-                  await sleep(leaseConfig.renewIntervalMs * 2, { signal });
+                  await sleep(attemptConfig.heartbeatMs * 2, { signal });
                 } finally {
                   expect(signal.aborted).toBe(true);
                   expect(signal.reason).toBeOneOf(["already_completed", "taken_by_another_worker"]);
@@ -146,11 +146,11 @@ export const reaperTestSuite = ({ it }: { it: TestAPI<TestSuiteContext> }): void
     const worker2 = await createInProcessWorker({
       client,
       concurrency: 1,
-      pollIntervalMs: leaseConfig.leaseMs,
+      pollIntervalMs: attemptConfig.timeoutMs,
       processors: createProcessors({
         client,
         jobTypes,
-        leaseConfig,
+        attemptConfig,
         processors: {
           test: {
             attemptHandler: async ({ signal, complete }) => {
@@ -159,7 +159,7 @@ export const reaperTestSuite = ({ it }: { it: TestAPI<TestSuiteContext> }): void
 
                 jobStarted.resolve();
                 try {
-                  await sleep(leaseConfig.renewIntervalMs * 2, { signal });
+                  await sleep(attemptConfig.heartbeatMs * 2, { signal });
                 } finally {
                   expect(signal.aborted).toBe(true);
                   expect(signal.reason).toBeOneOf(["already_completed", "taken_by_another_worker"]);
@@ -215,7 +215,7 @@ export const reaperTestSuite = ({ it }: { it: TestAPI<TestSuiteContext> }): void
     );
   });
 
-  it("reaps abandoned jobs on complete", async ({
+  it("reclaims expired attempts on complete", async ({
     stateAdapter,
     notifyAdapter,
     withTransaction,
@@ -243,16 +243,16 @@ export const reaperTestSuite = ({ it }: { it: TestAPI<TestSuiteContext> }): void
     let failed = false;
     const jobStarted = Promise.withResolvers<void>();
     const jobCompleted = Promise.withResolvers<void>();
-    const leaseConfig = { leaseMs: 10, renewIntervalMs: 100 } satisfies LeaseConfig;
+    const attemptConfig = { timeoutMs: 10, heartbeatMs: 100 } satisfies AttemptConfig;
 
     const worker1 = await createInProcessWorker({
       client,
       concurrency: 1,
-      pollIntervalMs: leaseConfig.leaseMs,
+      pollIntervalMs: attemptConfig.timeoutMs,
       processors: createProcessors({
         client,
         jobTypes,
-        leaseConfig,
+        attemptConfig,
         processors: {
           test: {
             attemptHandler: async ({ prepare, complete }) => {
@@ -262,7 +262,7 @@ export const reaperTestSuite = ({ it }: { it: TestAPI<TestSuiteContext> }): void
                 failed = true;
 
                 jobStarted.resolve();
-                await sleep(leaseConfig.renewIntervalMs * 2);
+                await sleep(attemptConfig.heartbeatMs * 2);
                 await expect(async () => complete(async () => null)).rejects.toSatisfy(
                   (error) =>
                     error instanceof
@@ -282,11 +282,11 @@ export const reaperTestSuite = ({ it }: { it: TestAPI<TestSuiteContext> }): void
     const worker2 = await createInProcessWorker({
       client,
       concurrency: 1,
-      pollIntervalMs: leaseConfig.leaseMs,
+      pollIntervalMs: attemptConfig.timeoutMs,
       processors: createProcessors({
         client,
         jobTypes,
-        leaseConfig,
+        attemptConfig,
         processors: {
           test: {
             attemptHandler: async ({ prepare, complete }) => {
@@ -296,7 +296,7 @@ export const reaperTestSuite = ({ it }: { it: TestAPI<TestSuiteContext> }): void
                 failed = true;
 
                 jobStarted.resolve();
-                await sleep(leaseConfig.renewIntervalMs * 2);
+                await sleep(attemptConfig.heartbeatMs * 2);
                 await expect(async () => complete(async () => null)).rejects.toSatisfy(
                   (error) =>
                     error instanceof
@@ -354,7 +354,7 @@ export const reaperTestSuite = ({ it }: { it: TestAPI<TestSuiteContext> }): void
     );
   });
 
-  it("reaps abandoned jobs on execute", async ({
+  it("reclaims expired attempts on execute", async ({
     stateAdapter,
     notifyAdapter,
     withTransaction,
@@ -382,16 +382,16 @@ export const reaperTestSuite = ({ it }: { it: TestAPI<TestSuiteContext> }): void
     let failed = false;
     const jobStarted = Promise.withResolvers<void>();
     const jobCompleted = Promise.withResolvers<void>();
-    const leaseConfig = { leaseMs: 10, renewIntervalMs: 100 } satisfies LeaseConfig;
+    const attemptConfig = { timeoutMs: 10, heartbeatMs: 100 } satisfies AttemptConfig;
 
     const worker1 = await createInProcessWorker({
       client,
       concurrency: 1,
-      pollIntervalMs: leaseConfig.leaseMs,
+      pollIntervalMs: attemptConfig.timeoutMs,
       processors: createProcessors({
         client,
         jobTypes,
-        leaseConfig,
+        attemptConfig,
         processors: {
           test: {
             attemptHandler: async ({ prepare, execute, complete }) => {
@@ -401,7 +401,7 @@ export const reaperTestSuite = ({ it }: { it: TestAPI<TestSuiteContext> }): void
                 failed = true;
 
                 jobStarted.resolve();
-                await sleep(leaseConfig.renewIntervalMs * 2);
+                await sleep(attemptConfig.heartbeatMs * 2);
                 await expect(async () => execute(async () => {})).rejects.toSatisfy(
                   (error) =>
                     error instanceof
@@ -421,11 +421,11 @@ export const reaperTestSuite = ({ it }: { it: TestAPI<TestSuiteContext> }): void
     const worker2 = await createInProcessWorker({
       client,
       concurrency: 1,
-      pollIntervalMs: leaseConfig.leaseMs,
+      pollIntervalMs: attemptConfig.timeoutMs,
       processors: createProcessors({
         client,
         jobTypes,
-        leaseConfig,
+        attemptConfig,
         processors: {
           test: {
             attemptHandler: async ({ prepare, execute, complete }) => {
@@ -435,7 +435,7 @@ export const reaperTestSuite = ({ it }: { it: TestAPI<TestSuiteContext> }): void
                 failed = true;
 
                 jobStarted.resolve();
-                await sleep(leaseConfig.renewIntervalMs * 2);
+                await sleep(attemptConfig.heartbeatMs * 2);
                 await expect(async () => execute(async () => {})).rejects.toSatisfy(
                   (error) =>
                     error instanceof
@@ -493,7 +493,7 @@ export const reaperTestSuite = ({ it }: { it: TestAPI<TestSuiteContext> }): void
     );
   });
 
-  it("does not reap its own in-progress jobs with concurrent slots", async ({
+  it("does not reclaim its own in-progress attempts with concurrent slots", async ({
     stateAdapter,
     notifyAdapter,
     withTransaction,
@@ -521,7 +521,7 @@ export const reaperTestSuite = ({ it }: { it: TestAPI<TestSuiteContext> }): void
     const jobsStarted = Promise.withResolvers<void>();
     const jobsCanComplete = Promise.withResolvers<void>();
     const processedJobs: number[] = [];
-    const leaseConfig = { leaseMs: 10, renewIntervalMs: 1000 } satisfies LeaseConfig;
+    const attemptConfig = { timeoutMs: 10, heartbeatMs: 1000 } satisfies AttemptConfig;
 
     const worker = await createInProcessWorker({
       client,
@@ -530,7 +530,7 @@ export const reaperTestSuite = ({ it }: { it: TestAPI<TestSuiteContext> }): void
       processors: createProcessors({
         client,
         jobTypes,
-        leaseConfig,
+        attemptConfig,
         processors: {
           test: {
             attemptHandler: async ({ job, complete }) => {
@@ -562,7 +562,7 @@ export const reaperTestSuite = ({ it }: { it: TestAPI<TestSuiteContext> }): void
     await withWorkers([await worker.start()], async () => {
       await jobsStarted.promise;
 
-      await sleep(leaseConfig.leaseMs * 5);
+      await sleep(attemptConfig.timeoutMs * 5);
 
       const chain2 = await withTransactionHooks(async (transactionHooks) =>
         withTransaction(async (txCtx) =>
@@ -587,7 +587,7 @@ export const reaperTestSuite = ({ it }: { it: TestAPI<TestSuiteContext> }): void
 
     expect(log).not.toHaveBeenCalledWith(
       expect.objectContaining({
-        type: "job_reaped",
+        type: "job_attempt_reclaimed",
       }),
     );
 

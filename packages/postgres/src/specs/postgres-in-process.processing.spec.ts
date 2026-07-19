@@ -6,7 +6,7 @@ import {
   processErrorHandlingTestSuite,
   processModesTestSuite,
   processTestSuite,
-  reaperTestSuite,
+  attemptReclaimerTestSuite,
   workerTestSuite,
 } from "queuert/testing";
 import { describe, it } from "vitest";
@@ -39,6 +39,6 @@ describe("Worker", () => {
   workerTestSuite({ it: postgresInProcessIt });
 });
 
-describe("Reaper", () => {
-  reaperTestSuite({ it: postgresInProcessIt });
+describe("Attempt Reclamation", () => {
+  attemptReclaimerTestSuite({ it: postgresInProcessIt });
 });

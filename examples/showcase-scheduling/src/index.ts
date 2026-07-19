@@ -194,6 +194,7 @@ const worker = await createInProcessWorker({
                 schedule: { afterMs: HEALTH_CHECK_INTERVAL_MS },
                 deduplication: {
                   key: `health:${job.input.serviceId}`,
+                  scope: "running",
                   excludeChainIds: [job.chainId],
                 },
               });
@@ -304,7 +305,7 @@ const healthChain1 = await withTransactionHooks(async (transactionHooks) =>
       input: { serviceId: "api-server", checkNumber: 1 },
       deduplication: {
         key: "health:api-server",
-        scope: "incomplete", // Only one active instance at a time
+        scope: "running", // Only one active instance at a time
       },
     }),
   ),
@@ -323,7 +324,7 @@ const healthChain2 = await withTransactionHooks(async (transactionHooks) =>
       input: { serviceId: "api-server", checkNumber: 1 },
       deduplication: {
         key: "health:api-server",
-        scope: "incomplete",
+        scope: "running",
       },
     }),
   ),

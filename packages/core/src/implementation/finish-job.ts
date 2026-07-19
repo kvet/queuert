@@ -1,4 +1,4 @@
-import { type Job } from "../entities/job.js";
+import { type AnyJob } from "../entities/job.js";
 import { ChainNotFoundError } from "../errors.js";
 import { bufferNotifyChainCompletion, bufferNotifyJobScheduled } from "../helpers/notify-hooks.js";
 import { bufferObservabilityEvent } from "../helpers/observability-hooks.js";
@@ -13,35 +13,31 @@ export const finishJob = async (
     txCtx,
     transactionHooks,
     workerId,
-    ...rest
+    output: terminalOutput,
+    continuedJob,
   }: {
     job: StateJob;
     txCtx: BaseTxContext;
     transactionHooks: TransactionHooks;
     workerId: string | null;
-  } & (
-    | { type: "completeChain"; output: unknown }
-    | { type: "continueWith"; continuedJob: Job<any, any, any, any, any> }
-  ),
+    output?: unknown;
+    continuedJob?: AnyJob | null;
+  },
 ): Promise<StateJob> => {
-  const hasContinuedJob = rest.type === "continueWith";
-  let output = hasContinuedJob ? null : rest.output;
+  const hasContinuedJob = continuedJob != null;
+  const output = continuedJob ? null : helpers.jobTypes.parseOutput(job.typeName, terminalOutput);
 
-  if (!hasContinuedJob) {
-    output = helpers.jobTypes.parseOutput(job.typeName, output);
-  }
-
-  job = await helpers.stateAdapter.completeJob({
+  job = await helpers.stateAdapter.finishJobAttempt({
     txCtx,
     jobId: job.id,
-    output,
     workerId,
+    outcome: continuedJob ? { continuedToId: continuedJob.id } : { output },
   });
 
   bufferObservabilityEvent(transactionHooks, () => {
     helpers.observabilityHelper.jobCompleted(job, {
       output,
-      continuedWith: hasContinuedJob ? rest.continuedJob : undefined,
+      continuedWith: continuedJob ?? undefined,
       workerId,
     });
     helpers.observabilityHelper.jobDuration(job);
@@ -50,7 +46,7 @@ export const finishJob = async (
   if (workerId === null) {
     bufferObservabilityEvent(transactionHooks, () => {
       helpers.observabilityHelper.completeJobSpan(job, {
-        continued: hasContinuedJob ? rest.continuedJob : undefined,
+        continuedWith: continuedJob ?? undefined,
         chainCompleted: !hasContinuedJob,
       });
     });

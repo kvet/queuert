@@ -56,12 +56,12 @@ describe("middleware ctx cannot shadow built-in handler/prepare/complete keys", 
       client,
       processors: registry,
     });
-    const stop = await worker.start();
     const chain = await withTransactionHooks(async (transactionHooks) =>
       stateAdapter.withTransaction(async (txCtx) =>
         client.startChain({ ...txCtx, transactionHooks, typeName: "foo", input: { v: 1 } }),
       ),
     );
+    const stop = await worker.start();
     await client.awaitChain(chain, { timeoutMs: 5000, pollIntervalMs: 50 });
     await stop();
 
@@ -71,11 +71,6 @@ describe("middleware ctx cannot shadow built-in handler/prepare/complete keys", 
   });
 
   it("prepare callback's txCtx keys win over middleware-injected ctx", async () => {
-    // The in-process txCtx is empty, so a middleware-injected key would never
-    // collide with a real txCtx field. To exercise the spread-order fix, wrap
-    // the adapter so its withTransaction / withSavepoint inject a known marker
-    // key into txCtx, and have the middleware inject the same key with a
-    // tampered value. The prepare callback must observe the real value.
     const realMarker = { real: true };
     const tamperedMarker = { tampered: true };
     const MARKER_KEY = "__shadowMarker";
@@ -125,7 +120,6 @@ describe("middleware ctx cannot shadow built-in handler/prepare/complete keys", 
       client: wrappedClient,
       processors: registry,
     });
-    const stop = await worker.start();
     const chain = await withTransactionHooks(async (transactionHooks) =>
       wrappedAdapter.withTransaction(async (txCtx) =>
         wrappedClient.startChain({
@@ -136,6 +130,7 @@ describe("middleware ctx cannot shadow built-in handler/prepare/complete keys", 
         } as Parameters<typeof wrappedClient.startChain>[0]),
       ),
     );
+    const stop = await worker.start();
     await wrappedClient.awaitChain(chain, { timeoutMs: 5000, pollIntervalMs: 50 });
     await stop();
 
@@ -143,8 +138,6 @@ describe("middleware ctx cannot shadow built-in handler/prepare/complete keys", 
   });
 
   it("complete callback's txCtx keys win over middleware-injected ctx", async () => {
-    // Mirror of the prepare test, exercising the spread order at the complete
-    // call site (txCtx spread is the last entry in completeCallback options).
     const realMarker = { real: true };
     const tamperedMarker = { tampered: true };
     const MARKER_KEY = "__shadowMarker";
@@ -193,7 +186,6 @@ describe("middleware ctx cannot shadow built-in handler/prepare/complete keys", 
       client: wrappedClient,
       processors: registry,
     });
-    const stop = await worker.start();
     const chain = await withTransactionHooks(async (transactionHooks) =>
       wrappedAdapter.withTransaction(async (txCtx) =>
         wrappedClient.startChain({
@@ -204,6 +196,7 @@ describe("middleware ctx cannot shadow built-in handler/prepare/complete keys", 
         } as Parameters<typeof wrappedClient.startChain>[0]),
       ),
     );
+    const stop = await worker.start();
     await wrappedClient.awaitChain(chain, { timeoutMs: 5000, pollIntervalMs: 50 });
     await stop();
 
@@ -244,12 +237,12 @@ describe("middleware ctx cannot shadow built-in handler/prepare/complete keys", 
       client,
       processors: registry,
     });
-    const stop = await worker.start();
     const chain = await withTransactionHooks(async (transactionHooks) =>
       stateAdapter.withTransaction(async (txCtx) =>
         client.startChain({ ...txCtx, transactionHooks, typeName: "foo", input: { v: 1 } }),
       ),
     );
+    const stop = await worker.start();
     await client.awaitChain(chain, { timeoutMs: 5000, pollIntervalMs: 50 });
     await stop();
 
@@ -307,7 +300,6 @@ describe("registry-level attemptMiddleware — runtime per-slice isolation", () 
       client: abClient,
       processors: [aProcessors, bProcessors],
     });
-    const stop = await worker.start();
 
     const chainA = await withTransactionHooks(async (transactionHooks) =>
       sa.withTransaction(async (txCtx) =>
@@ -319,6 +311,7 @@ describe("registry-level attemptMiddleware — runtime per-slice isolation", () 
         abClient.startChain({ ...txCtx, transactionHooks, typeName: "b", input: {} }),
       ),
     );
+    const stop = await worker.start();
     await abClient.awaitChain(chainA, { timeoutMs: 5000, pollIntervalMs: 100 });
     await abClient.awaitChain(chainB, { timeoutMs: 5000, pollIntervalMs: 100 });
     await stop();

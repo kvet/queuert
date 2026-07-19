@@ -56,7 +56,7 @@ The dashboard provides:
 - **Chain list** -- Browse chains with status badges, type filtering, and ID search
 - **Chain detail** -- Full job sequence, blocker relationships, and blocking chains
 - **Job list** -- Cross-chain job view with status/type filtering
-- **Job detail** -- Input/output data, error messages, lease info, continuation links
+- **Job detail** -- Input/output data, error messages, attempt info, continuation links
 
 Supports a small set of mutations (triggering a blocked job, deleting a chain) in addition to read queries. Add authentication middleware before the dashboard handler to restrict access.
 
@@ -82,7 +82,7 @@ Clicking a row navigates to the chain detail view.
 
 Shows a specific chain with its full job sequence and blocker relationships.
 
-- **Jobs section**: All jobs in the chain, ordered by creation. Each job is a clickable card. Completed jobs show input and output. Running jobs show lease info and the worker processing them. Failed attempts show the error.
+- **Jobs section**: All jobs in the chain, ordered by creation. Each job is a clickable card. Completed jobs show input and output. Running jobs show attempt info and the worker processing them. Failed attempts show the error.
 - **Blockers**: Shown per-job -- only jobs that have blockers display a blockers subsection with chain links and status.
 - **Blocking section**: Lists jobs from other chains that depend on this chain as a blocker.
 
@@ -98,7 +98,7 @@ A cross-chain job view with the same layout as the chain list, but each row repr
 
 Full job inspection. Shown as a dedicated view when navigating from the job list, or inline-expanded in the chain detail view. Sections appear conditionally based on job state:
 
-- **Info** -- Status, attempt count, created/scheduled/completed timestamps, worker ID, and lease expiry.
+- **Info** -- Status, attempt count, created/scheduled/completed timestamps, worker ID, and attempt expiry.
 - **Blockers** -- Only when the job has blockers. Shows each blocker chain with its status.
 - **Input** -- The job's input data as JSON.
 - **Output** or **Continued with** (mutually exclusive) -- Output shows the result JSON for terminal jobs. Continued with shows a link to the next job in the chain with its status.

@@ -42,7 +42,6 @@ Attribute names follow OpenTelemetry semantic conventions (lowercase, dotted) an
 | ------------------------- | -------------------------------------------------------------------------------------- | ------------------------------------------------------------------------ |
 | `queuert.job.created`     | `queuert.job.type`, `queuert.chain.type`                                               | Job created                                                              |
 | `queuert.job.completed`   | `queuert.job.type`, `queuert.chain.type`, `queuert.worker.id`, `queuert.job.continued` | Job completed. `queuert.worker.id` is omitted for workerless completion. |
-| `queuert.job.reaped`      | `queuert.job.type`, `queuert.chain.type`, `queuert.worker.id`                          | Stale job reclaimed by reaper                                            |
 | `queuert.job.blocked`     | `queuert.job.type`, `queuert.chain.type`                                               | Job blocked by pending blocker chains                                    |
 | `queuert.job.rescheduled` | `queuert.job.type`, `queuert.chain.type`                                               | Pending job rescheduled by a client                                      |
 | `queuert.job.unblocked`   | `queuert.job.type`, `queuert.chain.type`                                               | Job unblocked after blocker chain completed                              |
@@ -54,10 +53,13 @@ Attribute names follow OpenTelemetry semantic conventions (lowercase, dotted) an
 | `queuert.job.attempt.started`                 | `queuert.job.type`, `queuert.chain.type`, `queuert.worker.id` | Worker began processing an attempt                    |
 | `queuert.job.attempt.completed`               | `queuert.job.type`, `queuert.chain.type`, `queuert.worker.id` | Attempt completed successfully                        |
 | `queuert.job.attempt.failed`                  | `queuert.job.type`, `queuert.chain.type`, `queuert.worker.id` | Attempt failed (may retry)                            |
-| `queuert.job.attempt.taken_by_another_worker` | `queuert.job.type`, `queuert.chain.type`, `queuert.worker.id` | Job already leased by another worker                  |
+| `queuert.job.attempt.taken_by_another_worker` | `queuert.job.type`, `queuert.chain.type`, `queuert.worker.id` | Job already claimed by another worker                 |
 | `queuert.job.attempt.already_completed`       | `queuert.job.type`, `queuert.chain.type`, `queuert.worker.id` | Job already completed when worker tried to process it |
-| `queuert.job.attempt.lease_expired`           | `queuert.job.type`, `queuert.chain.type`, `queuert.worker.id` | Lease expired before attempt finished                 |
-| `queuert.job.attempt.lease_renewed`           | `queuert.job.type`, `queuert.chain.type`, `queuert.worker.id` | Lease successfully renewed during processing          |
+| `queuert.job.attempt.expired`                 | `queuert.job.type`, `queuert.chain.type`, `queuert.worker.id` | Attempt expired before processing finished            |
+| `queuert.job.attempt.reclaimed`               | `queuert.job.type`, `queuert.chain.type`, `queuert.worker.id` | Expired attempt reclaimed for retry                   |
+| `queuert.job.attempt.extended`                | `queuert.job.type`, `queuert.chain.type`, `queuert.worker.id` | Attempt successfully extended during processing       |
+
+Abort reasons are not a counter — they are recorded as an `abort` event on the attempt span; see [Span Events](../otel-tracing/#span-events) in the tracing reference.
 
 ### Chain Lifecycle
 
@@ -88,7 +90,7 @@ These form a hierarchy — chain duration encompasses job durations (plus wait t
 
 ```
 queuert.chain.duration
-├── queuert.job.duration (first job)
+├── queuert.job.duration (head job)
 │   ├── queuert.job.attempt.duration (attempt 1)
 │   └── queuert.job.attempt.duration (attempt 2, retry)
 ├── queuert.job.duration (continuation)

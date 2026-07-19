@@ -7,8 +7,8 @@
 export type DeduplicationOptions<TJobId> = {
   /** Unique key for deduplication matching. */
   key: string;
-  /** Which existing chains to match against. Defaults to `"incomplete"`. */
-  scope?: "incomplete" | "any";
+  /** Which existing chains to match against. */
+  scope: "running" | "any";
   /** Time window in milliseconds — only chains created within this window are matched. */
   windowMs?: number;
   /**

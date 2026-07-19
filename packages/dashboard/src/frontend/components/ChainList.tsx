@@ -1,9 +1,9 @@
 import { A, useSearchParams } from "@solidjs/router";
-import { For, Show, createResource, createSignal } from "solid-js";
+import { For, Show, createMemo, createResource, createSignal } from "solid-js";
 
 import { PAGE_SIZE, type UnknownChain, listChains } from "../api.js";
 import { createAutoLoadMore } from "./createAutoLoadMore.js";
-import { StatusBadge } from "./StatusBadge.js";
+import { ChainStatusBadge } from "./StatusBadge.js";
 import { TimeAgo } from "./TimeAgo.js";
 
 export function ChainList() {
@@ -12,8 +12,31 @@ export function ChainList() {
   const typeName = () => (searchParams.typeName ?? "") as string;
   const status = () => (searchParams.status ?? "") as string;
   const id = () => (searchParams.id ?? "") as string;
-  const jobId = () => (searchParams.jobId ?? "") as string;
-  const root = () => searchParams.root !== "false";
+  const independent = () => searchParams.independent !== "false";
+  const orderBy = () => (searchParams.orderBy ?? "") as string;
+  const orderDirection = () => (searchParams.orderDirection ?? "desc") as string;
+
+  const orderByOptions = createMemo(() => {
+    const s = status();
+    if (s === "completed")
+      return [
+        { value: "completedAt", label: "Completed" },
+        { value: "createdAt", label: "Created" },
+      ] as const;
+    return [{ value: "createdAt", label: "Created" }] as const;
+  });
+
+  const effectiveOrderBy = createMemo(() => {
+    const v = orderBy();
+    const opts = orderByOptions();
+    return v && opts.some((o) => o.value === v) ? v : opts[0].value;
+  });
+
+  const cardDate = (chain: UnknownChain): Date => {
+    if (effectiveOrderBy() === "completedAt" && chain.status === "completed")
+      return chain.completedAt;
+    return chain.createdAt;
+  };
 
   const [items, setItems] = createSignal<UnknownChain[]>([]);
   const [cursor, setCursor] = createSignal<string | null>(null);
@@ -24,13 +47,18 @@ export function ChainList() {
       typeName: typeName(),
       status: status(),
       id: id(),
-      jobId: jobId(),
-      root: root(),
+      independent: independent(),
+      orderBy: orderBy() || undefined,
+      orderDirection: orderDirection() || undefined,
     }),
     async (params) => {
       loadMoreController?.abort();
       loadMoreController = null;
-      const result = await listChains({ ...params, limit: PAGE_SIZE });
+      const result = await listChains({
+        ...params,
+        independent: params.independent,
+        limit: PAGE_SIZE,
+      });
       setItems(result.items);
       setCursor(result.nextCursor);
       return result;
@@ -48,8 +76,9 @@ export function ChainList() {
         typeName: typeName(),
         status: status(),
         id: id(),
-        jobId: jobId(),
-        root: root(),
+        independent: independent(),
+        orderBy: orderBy() || undefined,
+        orderDirection: orderDirection() || undefined,
         cursor: c,
         limit: PAGE_SIZE,
         signal: controller.signal,
@@ -84,52 +113,50 @@ export function ChainList() {
         />
         <input
           type="text"
-          placeholder="Job ID"
-          value={jobId()}
-          onChange={(e) => {
-            setSearchParams({ jobId: e.target.value.trim() || undefined });
-          }}
-        />
-        <input
-          type="text"
           placeholder="Type name"
           value={typeName()}
           onChange={(e) => {
             setSearchParams({ typeName: e.target.value.trim() || undefined });
           }}
         />
-        <span class="select-with-warning">
-          <select
-            value={status()}
-            onChange={(e) => {
-              setSearchParams({ status: e.target.value || undefined });
-            }}
-          >
-            <option value="">All statuses</option>
-            <option value="pending">Pending</option>
-            <option value="running">Running</option>
-            <option value="completed">Completed</option>
-            <option value="blocked">Blocked</option>
-          </select>
-          <a
-            class="filter-warning-inline"
-            href="https://kvet.github.io/queuert/guides/queries/#performance-considerations"
-            target="_blank"
-            rel="noopener noreferrer"
-            title="Filtering chains by status alone is not optimized. Combine with a type name filter."
-          >
-            ⚠
-          </a>
-        </span>
+        <select
+          value={status()}
+          onChange={(e) => {
+            setSearchParams({ status: e.target.value || undefined, orderBy: undefined });
+          }}
+        >
+          <option value="">All statuses</option>
+          <option value="running">Running</option>
+          <option value="completed">Completed</option>
+        </select>
+        <select
+          value={orderBy() || orderByOptions()[0].value}
+          onChange={(e) => {
+            setSearchParams({ orderBy: e.target.value || undefined });
+          }}
+        >
+          <For each={orderByOptions()}>
+            {(opt) => <option value={opt.value}>{opt.label}</option>}
+          </For>
+        </select>
+        <button
+          class="order-direction-btn"
+          title={orderDirection() === "asc" ? "Ascending" : "Descending"}
+          onClick={() => {
+            setSearchParams({ orderDirection: orderDirection() === "asc" ? "desc" : "asc" });
+          }}
+        >
+          {orderDirection() === "asc" ? "↑" : "↓"}
+        </button>
         <label class="checkbox-label">
           <input
             type="checkbox"
-            checked={root()}
+            checked={independent()}
             onChange={(e) => {
-              setSearchParams({ root: e.target.checked ? undefined : "false" });
+              setSearchParams({ independent: e.target.checked ? undefined : "false" });
             }}
           />
-          Hide blockers
+          Independent only
         </label>
       </div>
 
@@ -167,11 +194,11 @@ export function ChainList() {
                 />
               </span>
               <span class="card-time">
-                <TimeAgo date={chain.createdAt} />
+                <TimeAgo date={cardDate(chain)} />
               </span>
             </div>
             <div class="card-meta">
-              <StatusBadge status={chain.status} />
+              <ChainStatusBadge chain={chain} />
             </div>
             <Show when={chain.input != null}>
               <div class="card-input">{inputPreview(chain.input)}</div>

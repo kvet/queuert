@@ -40,3 +40,6 @@ docs/public/d2/
 
 # ide
 .idea/
+
+# claude
+.claude/scheduled_tasks.lock

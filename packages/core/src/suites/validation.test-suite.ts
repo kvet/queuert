@@ -160,7 +160,9 @@ export const validationTestSuite = ({ it }: { it: TestAPI<TestSuiteContext> }): 
       ),
     );
 
-    expect(chain.status).toBe("pending");
+    expect(chain.status).toBe("running");
+    const startedJob = await client.getJob({ id: chain.id });
+    expect(startedJob!.status).toBe("pending");
     expect(chain.input).toEqual({ value: 42 });
   });
 
@@ -618,7 +620,13 @@ export const validationTestSuite = ({ it }: { it: TestAPI<TestSuiteContext> }): 
       ),
     );
 
-    expect(partialChain.status).toBe("pending");
+    expect(partialChain.status).toBe("running");
+    const partialTail = await client.listChainJobs({
+      chainId: partialChain.id,
+      orderDirection: "desc",
+      limit: 1,
+    });
+    expect(partialTail.items[0].status).toBe("pending");
 
     await withWorkers([await worker.start()], async () => {
       const completed = await client.awaitChain(partialChain, completionOptions);

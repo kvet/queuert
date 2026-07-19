@@ -1,0 +1,26 @@
+{
+  "name": "benchmark-query-performance",
+  "version": "0.0.1",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "start": "node --import=tsx src/postgres.ts && node --import=tsx src/sqlite.ts",
+    "start:postgres": "node --import=tsx src/postgres.ts",
+    "start:sqlite": "node --import=tsx src/sqlite.ts"
+  },
+  "dependencies": {
+    "@queuert/postgres": "workspace:*",
+    "@queuert/sqlite": "workspace:*",
+    "better-sqlite3": "12.9.0",
+    "example-state-postgres-pg": "workspace:*",
+    "example-state-sqlite-better-sqlite3": "workspace:*",
+    "pg": "8.20.0",
+    "queuert": "workspace:*"
+  },
+  "devDependencies": {
+    "@queuert/tsconfig": "workspace:*",
+    "@testcontainers/postgresql": "11.14.0",
+    "@types/better-sqlite3": "7.6.13",
+    "@types/pg": "8.20.0"
+  }
+}

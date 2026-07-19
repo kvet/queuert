@@ -8,13 +8,11 @@ export const withTransactionGroup: ConformanceGroup<StateConformanceFixture> = {
       name: "maintains transaction isolation",
       run: async ({ stateAdapter }, expect) => {
         const [{ job }] = await stateAdapter.withTransaction(async (txCtx) =>
-          stateAdapter.createJobs({
+          stateAdapter.createChains({
             txCtx,
             jobs: [
               {
                 typeName: "isolation-test",
-                chainId: undefined,
-                chainIndex: 0,
                 chainTypeName: "isolation-test",
                 input: { value: "original" },
               },
@@ -25,13 +23,11 @@ export const withTransactionGroup: ConformanceGroup<StateConformanceFixture> = {
         let rolledBackJobId: string | undefined;
         try {
           await stateAdapter.withTransaction(async (txCtx) => {
-            const [{ job: innerJob }] = await stateAdapter.createJobs({
+            const [{ job: innerJob }] = await stateAdapter.createChains({
               txCtx,
               jobs: [
                 {
                   typeName: "rollback-test",
-                  chainId: undefined,
-                  chainIndex: 0,
                   chainTypeName: "rollback-test",
                   input: { value: "should-rollback" },
                 },
@@ -56,13 +52,11 @@ export const withTransactionGroup: ConformanceGroup<StateConformanceFixture> = {
       name: "restores updated job state when rolled back",
       run: async ({ stateAdapter }, expect) => {
         const [{ job }] = await stateAdapter.withTransaction(async (txCtx) =>
-          stateAdapter.createJobs({
+          stateAdapter.createChains({
             txCtx,
             jobs: [
               {
                 typeName: "update-rollback",
-                chainId: undefined,
-                chainIndex: 0,
                 chainTypeName: "update-rollback",
                 input: null,
               },
@@ -72,7 +66,11 @@ export const withTransactionGroup: ConformanceGroup<StateConformanceFixture> = {
 
         try {
           await stateAdapter.withTransaction(async (txCtx) => {
-            await stateAdapter.acquireJob({ txCtx, typeNames: ["update-rollback"] });
+            await stateAdapter.startJobAttempt({
+              txCtx,
+              workerId: "worker-1",
+              typeNames: ["update-rollback"],
+            });
             throw new Error("rollback after acquire");
           });
         } catch {
@@ -80,11 +78,16 @@ export const withTransactionGroup: ConformanceGroup<StateConformanceFixture> = {
         }
 
         const [after] = await stateAdapter.getJobs({ jobIds: [job.id] });
-        expect(after?.status).toBe("pending");
+        expect(after?.completedAt).toBeNull();
+        expect(after?.attemptAt).toBeNull();
         expect(after?.attempt).toBe(0);
 
         const reacquired = await stateAdapter.withTransaction(async (txCtx) =>
-          stateAdapter.acquireJob({ txCtx, typeNames: ["update-rollback"] }),
+          stateAdapter.startJobAttempt({
+            txCtx,
+            workerId: "worker-1",
+            typeNames: ["update-rollback"],
+          }),
         );
         expect(reacquired.job?.id).toBe(job.id);
         expect(reacquired.job?.attempt).toBe(1);
@@ -94,13 +97,11 @@ export const withTransactionGroup: ConformanceGroup<StateConformanceFixture> = {
       name: "revives deleted chains when rolled back",
       run: async ({ stateAdapter }, expect) => {
         const [{ job }] = await stateAdapter.withTransaction(async (txCtx) =>
-          stateAdapter.createJobs({
+          stateAdapter.createChains({
             txCtx,
             jobs: [
               {
                 typeName: "delete-rollback",
-                chainId: undefined,
-                chainIndex: 0,
                 chainTypeName: "delete-rollback",
                 input: null,
               },
@@ -121,7 +122,11 @@ export const withTransactionGroup: ConformanceGroup<StateConformanceFixture> = {
         expect(after?.id).toBe(job.id);
 
         const reacquired = await stateAdapter.withTransaction(async (txCtx) =>
-          stateAdapter.acquireJob({ txCtx, typeNames: ["delete-rollback"] }),
+          stateAdapter.startJobAttempt({
+            txCtx,
+            workerId: "worker-1",
+            typeNames: ["delete-rollback"],
+          }),
         );
         expect(reacquired.job?.id).toBe(job.id);
       },
@@ -130,13 +135,11 @@ export const withTransactionGroup: ConformanceGroup<StateConformanceFixture> = {
       name: "restores blocker state when rolled back",
       run: async ({ stateAdapter }, expect) => {
         const [{ job: blocker }] = await stateAdapter.withTransaction(async (txCtx) =>
-          stateAdapter.createJobs({
+          stateAdapter.createChains({
             txCtx,
             jobs: [
               {
                 typeName: "blocker-rollback-a",
-                chainId: undefined,
-                chainIndex: 0,
                 chainTypeName: "blocker-rollback-a",
                 input: null,
               },
@@ -144,13 +147,11 @@ export const withTransactionGroup: ConformanceGroup<StateConformanceFixture> = {
           }),
         );
         const [{ job: target }] = await stateAdapter.withTransaction(async (txCtx) =>
-          stateAdapter.createJobs({
+          stateAdapter.createChains({
             txCtx,
             jobs: [
               {
                 typeName: "blocker-rollback-b",
-                chainId: undefined,
-                chainIndex: 0,
                 chainTypeName: "blocker-rollback-b",
                 input: null,
               },
@@ -171,7 +172,8 @@ export const withTransactionGroup: ConformanceGroup<StateConformanceFixture> = {
         }
 
         const [after] = await stateAdapter.getJobs({ jobIds: [target.id] });
-        expect(after?.status).toBe("pending");
+        expect(after?.completedAt).toBeNull();
+        expect(after?.attemptAt).toBeNull();
 
         const blockers = await stateAdapter.getJobBlockers({ jobId: target.id });
         expect(blockers).toHaveLength(0);
@@ -199,13 +201,11 @@ export const withTransactionGroup: ConformanceGroup<StateConformanceFixture> = {
 
         const txPromise = stateAdapter
           .withTransaction(async (txCtx) => {
-            await stateAdapter.createJobs({
+            await stateAdapter.createChains({
               txCtx,
               jobs: [
                 {
                   typeName: "nontx-vs-tx",
-                  chainId: undefined,
-                  chainIndex: 0,
                   chainTypeName: "nontx-vs-tx",
                   input: { side: "tx" },
                 },
@@ -219,12 +219,10 @@ export const withTransactionGroup: ConformanceGroup<StateConformanceFixture> = {
 
         await txReady;
 
-        const nonTxPromise = stateAdapter.createJobs({
+        const nonTxPromise = stateAdapter.createChains({
           jobs: [
             {
               typeName: "nontx-vs-tx",
-              chainId: undefined,
-              chainIndex: 0,
               chainTypeName: "nontx-vs-tx",
               input: { side: "non-tx" },
             },
@@ -244,13 +242,11 @@ export const withTransactionGroup: ConformanceGroup<StateConformanceFixture> = {
       name: "rolls back mixed mutations atomically with consistent indexes",
       run: async ({ stateAdapter }, expect) => {
         const [{ job: a }] = await stateAdapter.withTransaction(async (txCtx) =>
-          stateAdapter.createJobs({
+          stateAdapter.createChains({
             txCtx,
             jobs: [
               {
                 typeName: "mixed-rollback",
-                chainId: undefined,
-                chainIndex: 0,
                 chainTypeName: "mixed-rollback",
                 input: null,
               },
@@ -258,13 +254,11 @@ export const withTransactionGroup: ConformanceGroup<StateConformanceFixture> = {
           }),
         );
         const [{ job: b }] = await stateAdapter.withTransaction(async (txCtx) =>
-          stateAdapter.createJobs({
+          stateAdapter.createChains({
             txCtx,
             jobs: [
               {
                 typeName: "mixed-rollback",
-                chainId: undefined,
-                chainIndex: 0,
                 chainTypeName: "mixed-rollback",
                 input: null,
               },
@@ -274,12 +268,16 @@ export const withTransactionGroup: ConformanceGroup<StateConformanceFixture> = {
 
         try {
           await stateAdapter.withTransaction(async (txCtx) => {
-            await stateAdapter.acquireJob({ txCtx, typeNames: ["mixed-rollback"] });
-            await stateAdapter.completeJob({
+            await stateAdapter.startJobAttempt({
+              txCtx,
+              workerId: "worker-1",
+              typeNames: ["mixed-rollback"],
+            });
+            await stateAdapter.finishJobAttempt({
               txCtx,
               jobId: a.id,
-              output: { ok: true },
-              workerId: "w1",
+              workerId: "worker-1",
+              outcome: { output: { ok: true } },
             });
             await stateAdapter.deleteChains({ txCtx, chainIds: [b.chainId] });
             throw new Error("rollback after mixed mutations");
@@ -290,14 +288,100 @@ export const withTransactionGroup: ConformanceGroup<StateConformanceFixture> = {
 
         const [aAfter] = await stateAdapter.getJobs({ jobIds: [a.id] });
         const [bAfter] = await stateAdapter.getJobs({ jobIds: [b.id] });
-        expect(aAfter?.status).toBe("pending");
         expect(aAfter?.completedAt).toBeNull();
-        expect(bAfter?.status).toBe("pending");
+        expect(aAfter?.attemptAt).toBeNull();
+        expect(aAfter?.completedAt).toBeNull();
+        expect(bAfter?.completedAt).toBeNull();
+        expect(bAfter?.attemptAt).toBeNull();
 
-        const next = await stateAdapter.getNextJobAvailableInMs({
-          typeNames: ["mixed-rollback"],
-        });
-        expect(next).toBe(0);
+        const { job: reacquired } = await stateAdapter.withTransaction(async (txCtx) =>
+          stateAdapter.startJobAttempt({
+            txCtx,
+            typeNames: ["mixed-rollback"],
+            workerId: "rollback-probe",
+          }),
+        );
+        expect(reacquired).toBeDefined();
+      },
+    },
+    {
+      name: "parallel withTransaction calls all commit successfully",
+      run: async ({ stateAdapter }, expect) => {
+        if (stateAdapter.transactionConcurrency === "serialized") {
+          expect.skip("requires concurrent transactions");
+          return;
+        }
+        const count = 5;
+        const results = await Promise.all(
+          Array.from({ length: count }, async (_, i) =>
+            stateAdapter.withTransaction(async (txCtx) =>
+              stateAdapter.createChains({
+                txCtx,
+                jobs: [
+                  {
+                    typeName: "parallel-tx",
+                    chainTypeName: "parallel-tx",
+                    input: { index: i },
+                  },
+                ],
+              }),
+            ),
+          ),
+        );
+
+        const ids = new Set(results.map(([r]) => r.job.id));
+        expect(ids.size).toBe(count);
+
+        for (const [{ job }] of results) {
+          const [fetched] = await stateAdapter.getJobs({ jobIds: [job.id] });
+          expect(fetched).toBeDefined();
+        }
+      },
+    },
+    {
+      name: "parallel withTransaction and non-transactional reads do not deadlock",
+      run: async ({ stateAdapter }, expect) => {
+        if (stateAdapter.transactionConcurrency === "serialized") {
+          expect.skip("requires concurrent transactions");
+          return;
+        }
+        const [{ job: seedJob }] = await stateAdapter.withTransaction(async (txCtx) =>
+          stateAdapter.createChains({
+            txCtx,
+            jobs: [
+              {
+                typeName: "mixed-concurrency",
+                chainTypeName: "mixed-concurrency",
+                input: null,
+              },
+            ],
+          }),
+        );
+
+        const txWork = Promise.all(
+          Array.from({ length: 3 }, async (_, i) =>
+            stateAdapter.withTransaction(async (txCtx) =>
+              stateAdapter.createChains({
+                txCtx,
+                jobs: [
+                  {
+                    typeName: "mixed-tx",
+                    chainTypeName: "mixed-tx",
+                    input: { index: i },
+                  },
+                ],
+              }),
+            ),
+          ),
+        );
+
+        const readWork = Promise.all(
+          Array.from({ length: 5 }, async () => stateAdapter.getJobs({ jobIds: [seedJob.id] })),
+        );
+
+        const [txResults, readResults] = await Promise.all([txWork, readWork]);
+        expect(txResults).toHaveLength(3);
+        expect(readResults.every(([job]) => job?.id === seedJob.id)).toBe(true);
       },
     },
   ],

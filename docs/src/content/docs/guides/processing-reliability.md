@@ -48,7 +48,7 @@ In **atomic mode**, the prepare savepoint rolls back within the same transaction
 
 ## Error in Complete Callback
 
-The `complete` callback also runs inside a savepoint. If it throws, the savepoint rolls back — undoing any SQL the callback executed, the `completeJob` call, and any continuation jobs created via `continueWith` — and the job is rescheduled with backoff.
+The `complete` callback also runs inside a savepoint. If it throws, the savepoint rolls back — undoing any SQL the callback executed, the job completion, and any continuation jobs created via `continueWith` — and the job is rescheduled with backoff.
 
 ```ts
 'transfer-funds': {
@@ -66,7 +66,7 @@ The `complete` callback also runs inside a savepoint. If it throws, the savepoin
 }
 ```
 
-> **Tip:** The outer transaction — which holds the job lease — commits successfully with the reschedule, even though the savepoint rolled back. The job returns to pending status and retries after backoff.
+> **Tip:** The outer transaction — which holds the job attempt — commits successfully with the reschedule, even though the savepoint rolled back. The job returns to pending status and retries after backoff.
 
 ## Error Between Prepare and Complete
 
@@ -95,7 +95,7 @@ In **atomic mode**, prepare and complete share the same transaction, so any erro
 
 ## Error After Complete
 
-The `complete` savepoint is only released when the handler returns successfully. If you `await complete()` and then throw, the completion — including `completeJob`, `unblockJobs`, continuation jobs, and any SQL you ran inside the callback — is atomically rolled back. The job is rescheduled as if `complete` never happened.
+The `complete` savepoint is only released when the handler returns successfully. If you `await complete()` and then throw, the completion — including blocked-job resolution, continuation jobs, and any SQL you ran inside the callback — is atomically rolled back. The job is rescheduled as if `complete` never happened.
 
 > **Note:** In **staged mode**, prepare's committed work persists across retries. Design your staged handlers so that prepare's side-effects are safe to keep when the complete phase retries.
 

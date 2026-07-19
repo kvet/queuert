@@ -8,13 +8,11 @@ export const deleteChainsGroup: ConformanceGroup<StateConformanceFixture> = {
       name: "deletes all jobs in the given chains",
       run: async ({ stateAdapter }, expect) => {
         const [{ job }] = await stateAdapter.withTransaction(async (txCtx) =>
-          stateAdapter.createJobs({
+          stateAdapter.createChains({
             txCtx,
             jobs: [
               {
                 typeName: "delete-test",
-                chainId: undefined,
-                chainIndex: 0,
                 chainTypeName: "delete-test",
                 input: null,
               },
@@ -39,13 +37,11 @@ export const deleteChainsGroup: ConformanceGroup<StateConformanceFixture> = {
       name: "does not delete jobs from other chains",
       run: async ({ stateAdapter }, expect) => {
         const [{ job: jobA }] = await stateAdapter.withTransaction(async (txCtx) =>
-          stateAdapter.createJobs({
+          stateAdapter.createChains({
             txCtx,
             jobs: [
               {
                 typeName: "chain-a",
-                chainId: undefined,
-                chainIndex: 0,
                 chainTypeName: "chain-a",
                 input: null,
               },
@@ -54,13 +50,11 @@ export const deleteChainsGroup: ConformanceGroup<StateConformanceFixture> = {
         );
 
         const [{ job: jobB }] = await stateAdapter.withTransaction(async (txCtx) =>
-          stateAdapter.createJobs({
+          stateAdapter.createChains({
             txCtx,
             jobs: [
               {
                 typeName: "chain-b",
-                chainId: undefined,
-                chainIndex: 0,
                 chainTypeName: "chain-b",
                 input: null,
               },
@@ -84,13 +78,11 @@ export const deleteChainsGroup: ConformanceGroup<StateConformanceFixture> = {
       name: "returns empty deleted + blockerRefs when a chain is referenced as blocker",
       run: async ({ stateAdapter }, expect) => {
         const [{ job: blockerJob }] = await stateAdapter.withTransaction(async (txCtx) =>
-          stateAdapter.createJobs({
+          stateAdapter.createChains({
             txCtx,
             jobs: [
               {
                 typeName: "blocker",
-                chainId: undefined,
-                chainIndex: 0,
                 chainTypeName: "blocker",
                 input: null,
               },
@@ -99,13 +91,11 @@ export const deleteChainsGroup: ConformanceGroup<StateConformanceFixture> = {
         );
 
         const [{ job: mainJob }] = await stateAdapter.withTransaction(async (txCtx) =>
-          stateAdapter.createJobs({
+          stateAdapter.createChains({
             txCtx,
             jobs: [
               {
                 typeName: "main",
-                chainId: undefined,
-                chainIndex: 0,
                 chainTypeName: "main",
                 input: null,
               },
@@ -150,13 +140,11 @@ export const deleteChainsGroup: ConformanceGroup<StateConformanceFixture> = {
       name: "cascade deletes chain and its dependencies",
       run: async ({ stateAdapter }, expect) => {
         const [{ job: blockerJob }] = await stateAdapter.withTransaction(async (txCtx) =>
-          stateAdapter.createJobs({
+          stateAdapter.createChains({
             txCtx,
             jobs: [
               {
                 typeName: "blocker",
-                chainId: undefined,
-                chainIndex: 0,
                 chainTypeName: "blocker",
                 input: null,
               },
@@ -165,13 +153,11 @@ export const deleteChainsGroup: ConformanceGroup<StateConformanceFixture> = {
         );
 
         const [{ job: mainJob }] = await stateAdapter.withTransaction(async (txCtx) =>
-          stateAdapter.createJobs({
+          stateAdapter.createChains({
             txCtx,
             jobs: [
               {
                 typeName: "main",
-                chainId: undefined,
-                chainIndex: 0,
                 chainTypeName: "main",
                 input: null,
               },
@@ -203,13 +189,11 @@ export const deleteChainsGroup: ConformanceGroup<StateConformanceFixture> = {
       name: "cascade returns empty deleted + blockerRefs when deleting chain referenced as blocker",
       run: async ({ stateAdapter }, expect) => {
         const [{ job: blockerJob }] = await stateAdapter.withTransaction(async (txCtx) =>
-          stateAdapter.createJobs({
+          stateAdapter.createChains({
             txCtx,
             jobs: [
               {
                 typeName: "blocker",
-                chainId: undefined,
-                chainIndex: 0,
                 chainTypeName: "blocker",
                 input: null,
               },
@@ -218,13 +202,11 @@ export const deleteChainsGroup: ConformanceGroup<StateConformanceFixture> = {
         );
 
         const [{ job: mainJob }] = await stateAdapter.withTransaction(async (txCtx) =>
-          stateAdapter.createJobs({
+          stateAdapter.createChains({
             txCtx,
             jobs: [
               {
                 typeName: "main",
-                chainId: undefined,
-                chainIndex: 0,
                 chainTypeName: "main",
                 input: null,
               },
@@ -257,13 +239,11 @@ export const deleteChainsGroup: ConformanceGroup<StateConformanceFixture> = {
       run: async ({ stateAdapter }, expect) => {
         // A ← B ← C (C depends on B, B depends on A)
         const [{ job: jobA }] = await stateAdapter.withTransaction(async (txCtx) =>
-          stateAdapter.createJobs({
+          stateAdapter.createChains({
             txCtx,
             jobs: [
               {
                 typeName: "chain-a",
-                chainId: undefined,
-                chainIndex: 0,
                 chainTypeName: "chain-a",
                 input: null,
               },
@@ -272,13 +252,11 @@ export const deleteChainsGroup: ConformanceGroup<StateConformanceFixture> = {
         );
 
         const [{ job: jobB }] = await stateAdapter.withTransaction(async (txCtx) =>
-          stateAdapter.createJobs({
+          stateAdapter.createChains({
             txCtx,
             jobs: [
               {
                 typeName: "chain-b",
-                chainId: undefined,
-                chainIndex: 0,
                 chainTypeName: "chain-b",
                 input: null,
               },
@@ -287,13 +265,11 @@ export const deleteChainsGroup: ConformanceGroup<StateConformanceFixture> = {
         );
 
         const [{ job: jobC }] = await stateAdapter.withTransaction(async (txCtx) =>
-          stateAdapter.createJobs({
+          stateAdapter.createChains({
             txCtx,
             jobs: [
               {
                 typeName: "chain-c",
-                chainId: undefined,
-                chainIndex: 0,
                 chainTypeName: "chain-c",
                 input: null,
               },
@@ -339,13 +315,11 @@ export const deleteChainsGroup: ConformanceGroup<StateConformanceFixture> = {
         //    \ /
         //     A
         const [{ job: jobA }] = await stateAdapter.withTransaction(async (txCtx) =>
-          stateAdapter.createJobs({
+          stateAdapter.createChains({
             txCtx,
             jobs: [
               {
                 typeName: "diamond-a",
-                chainId: undefined,
-                chainIndex: 0,
                 chainTypeName: "diamond-a",
                 input: null,
               },
@@ -354,13 +328,11 @@ export const deleteChainsGroup: ConformanceGroup<StateConformanceFixture> = {
         );
 
         const [{ job: jobB }] = await stateAdapter.withTransaction(async (txCtx) =>
-          stateAdapter.createJobs({
+          stateAdapter.createChains({
             txCtx,
             jobs: [
               {
                 typeName: "diamond-b",
-                chainId: undefined,
-                chainIndex: 0,
                 chainTypeName: "diamond-b",
                 input: null,
               },
@@ -369,13 +341,11 @@ export const deleteChainsGroup: ConformanceGroup<StateConformanceFixture> = {
         );
 
         const [{ job: jobC }] = await stateAdapter.withTransaction(async (txCtx) =>
-          stateAdapter.createJobs({
+          stateAdapter.createChains({
             txCtx,
             jobs: [
               {
                 typeName: "diamond-c",
-                chainId: undefined,
-                chainIndex: 0,
                 chainTypeName: "diamond-c",
                 input: null,
               },
@@ -384,13 +354,11 @@ export const deleteChainsGroup: ConformanceGroup<StateConformanceFixture> = {
         );
 
         const [{ job: jobD }] = await stateAdapter.withTransaction(async (txCtx) =>
-          stateAdapter.createJobs({
+          stateAdapter.createChains({
             txCtx,
             jobs: [
               {
                 typeName: "diamond-d",
-                chainId: undefined,
-                chainIndex: 0,
                 chainTypeName: "diamond-d",
                 input: null,
               },
@@ -438,13 +406,11 @@ export const deleteChainsGroup: ConformanceGroup<StateConformanceFixture> = {
       name: "cascade with no blocker relationships deletes only specified chains",
       run: async ({ stateAdapter }, expect) => {
         const [{ job: jobA }] = await stateAdapter.withTransaction(async (txCtx) =>
-          stateAdapter.createJobs({
+          stateAdapter.createChains({
             txCtx,
             jobs: [
               {
                 typeName: "standalone-a",
-                chainId: undefined,
-                chainIndex: 0,
                 chainTypeName: "standalone-a",
                 input: null,
               },
@@ -453,13 +419,11 @@ export const deleteChainsGroup: ConformanceGroup<StateConformanceFixture> = {
         );
 
         const [{ job: jobB }] = await stateAdapter.withTransaction(async (txCtx) =>
-          stateAdapter.createJobs({
+          stateAdapter.createChains({
             txCtx,
             jobs: [
               {
                 typeName: "standalone-b",
-                chainId: undefined,
-                chainIndex: 0,
                 chainTypeName: "standalone-b",
                 input: null,
               },

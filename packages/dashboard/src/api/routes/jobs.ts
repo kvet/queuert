@@ -4,32 +4,73 @@ import {
   JobNotReschedulableError,
   withTransactionHooks,
 } from "queuert";
-import { encodeCursor, helpersSymbol } from "queuert/internal";
+import { helpersSymbol } from "queuert/internal";
 
 import { serovalResponse } from "../response.js";
-import { parseCursor, parseLimit, parseStatusFilter, parseTypeNameFilter } from "./params.js";
+import {
+  parseCursor,
+  parseJobStatusFilter,
+  parseLimit,
+  parseOrderBy,
+  parseOrderDirection,
+  parseTypeNameFilter,
+} from "./params.js";
 
 export const handleJobsList = async (url: URL, client: Client<any, any>): Promise<Response> => {
-  const status = parseStatusFilter(url.searchParams.get("status") ?? undefined);
+  const { status, blocked, continued } = parseJobStatusFilter(
+    url.searchParams.get("status") ?? undefined,
+  );
   const typeName = parseTypeNameFilter(url.searchParams.get("typeName") ?? undefined);
   const chainTypeName = parseTypeNameFilter(url.searchParams.get("chainTypeName") ?? undefined);
   const chainId = url.searchParams.get("chainId") ?? undefined;
   const id = url.searchParams.get("id") ?? undefined;
-  const cursor = parseCursor(url.searchParams.get("cursor") ?? undefined);
+  const rawOrderBy = url.searchParams.get("orderBy") ?? undefined;
+  const orderDirection = parseOrderDirection(url.searchParams.get("orderDirection") ?? undefined);
   const limit = parseLimit(url.searchParams.get("limit") ?? undefined);
 
-  const result = await client.listJobs({
-    filter: {
-      status,
-      typeName,
-      chainTypeName,
-      chainId: chainId ? [chainId] : undefined,
-      jobId: id ? [id] : undefined,
-    },
-    orderDirection: "desc",
-    cursor,
+  const listing =
+    status === "pending"
+      ? ({ status, orderBy: parseOrderBy(rawOrderBy, ["scheduledAt", "createdAt"]) } as const)
+      : status === "running"
+        ? ({
+            status,
+            orderBy: parseOrderBy(rawOrderBy, ["attemptAt", "attemptUntil", "createdAt"]),
+          } as const)
+        : status === "completed"
+          ? ({ status, orderBy: parseOrderBy(rawOrderBy, ["completedAt", "createdAt"]) } as const)
+          : ({ status: undefined, orderBy: parseOrderBy(rawOrderBy, ["createdAt"]) } as const);
+
+  const common = {
+    typeName,
+    chainTypeName,
+    chainId: chainId ? [chainId] : undefined,
+    jobId: id ? [id] : undefined,
+    orderDirection,
+    cursor: parseCursor(url.searchParams.get("cursor") ?? undefined, {
+      type: "timestampWithId",
+      sortKey: listing.orderBy,
+    }),
     limit,
-  });
+  };
+
+  const result =
+    listing.status === "pending"
+      ? await client.listJobs({
+          ...common,
+          status: listing.status,
+          blocked,
+          orderBy: listing.orderBy,
+        })
+      : listing.status === "running"
+        ? await client.listJobs({ ...common, status: listing.status, orderBy: listing.orderBy })
+        : listing.status === "completed"
+          ? await client.listJobs({
+              ...common,
+              status: listing.status,
+              continued,
+              orderBy: listing.orderBy,
+            })
+          : await client.listJobs({ ...common, orderBy: listing.orderBy });
 
   return serovalResponse({
     items: result.items,
@@ -47,22 +88,17 @@ export const handleJobDetail = async (
     return serovalResponse({ error: "Job not found" }, 404);
   }
 
-  const cursor = encodeCursor({ type: "chainIndex", id: job.id, chainIndex: job.chainIndex });
-  const [blockers, continuationPage] = await Promise.all([
-    client.getJobBlockers({ jobId: job.id }),
-    client.listChainJobs({
-      chainId: job.chainId,
-      orderDirection: "asc",
-      cursor,
-      limit: 1,
-    }),
-  ]);
+  const continuationId =
+    job.status === "completed" && job.continuedToId !== null ? job.continuedToId : null;
 
-  const continuation = continuationPage.items[0] ?? null;
+  const [blockers, continuation] = await Promise.all([
+    client.getJobBlockers({ jobId: job.id }),
+    continuationId ? client.getJob({ id: continuationId }) : Promise.resolve(null),
+  ]);
 
   return serovalResponse({
     job,
-    continuation,
+    continuation: continuation ?? null,
     blockers,
   });
 };

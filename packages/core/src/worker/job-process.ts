@@ -1,4 +1,4 @@
-import { type Chain, type CompletedChain, mapStatePairToChain } from "../entities/chain.js";
+import { type AnyChain, type CompletedChain, mapStatePairToChain } from "../entities/chain.js";
 import { type BaseJobTypeDefinitions } from "../entities/job-type.js";
 import {
   type BlockerChains,
@@ -8,7 +8,7 @@ import {
   type JobTypeProperty,
   type ResolvedJobWithBlockers,
 } from "../entities/job-types.resolvers.js";
-import { type Job, mapStateJobToJob } from "../entities/job.js";
+import { type AnyJob, mapStateJobToJob } from "../entities/job.js";
 import { type ScheduleOptions } from "../entities/schedule.js";
 import {
   JobAlreadyCompletedError,
@@ -36,6 +36,7 @@ import {
   type StateJob,
 } from "../state-adapter/state-adapter.js";
 import { type TransactionHooks, withTransactionHooks } from "../transaction-hooks.js";
+import { type AttemptConfig, createAttemptHeartbeat } from "./attempt-heartbeat.js";
 import {
   type AttemptMiddleware,
   runCompleteMiddlewareChain,
@@ -43,7 +44,6 @@ import {
   runHandlerMiddlewareChain,
   runPrepareMiddlewareChain,
 } from "./attempt-middleware.js";
-import { type LeaseConfig, createLeaseManager } from "./lease.js";
 
 /** Reasons a job attempt's signal can be aborted. */
 export type JobAbortReason =
@@ -162,7 +162,7 @@ export type AttemptComplete<
  * Configuration for the prepare phase.
  *
  * - `"atomic"` — prepare and complete run in the same transaction.
- * - `"staged"` — prepare commits first, then complete runs in a new transaction with lease renewal.
+ * - `"staged"` — prepare commits first, then complete runs in a new transaction with attempt extension.
  */
 export type AttemptPrepareOptions = { mode: "atomic" | "staged" };
 
@@ -264,7 +264,7 @@ export const runJobProcess = async ({
   prepareTransactionContext,
   job,
   backoffConfig,
-  leaseConfig,
+  attemptConfig,
   workerId,
   attemptMiddleware,
   stopSignal,
@@ -283,7 +283,7 @@ export const runJobProcess = async ({
   prepareTransactionContext: TransactionContext<BaseTxContext>;
   job: StateJob;
   backoffConfig: BackoffConfig;
-  leaseConfig: LeaseConfig;
+  attemptConfig: AttemptConfig;
   workerId: string;
   attemptMiddleware?: readonly AttemptMiddleware<any, any, any, any, any>[];
   stopSignal: AbortSignal;
@@ -367,18 +367,18 @@ export const runJobProcess = async ({
       }),
     );
   };
-  const leaseManager = createLeaseManager({
-    commitLease: async (leaseMs: number) => {
+  const attemptHeartbeat = createAttemptHeartbeat({
+    commitRenewal: async (timeoutMs: number) => {
       try {
-        await runInGuardedTransaction(async (txCtx) => {
-          await helpers.stateAdapter.renewJobLease({
+        await runInGuardedTransaction(async (txCtx) =>
+          helpers.stateAdapter.extendJobAttempt({
             txCtx,
             jobId: job.id,
             workerId,
-            leaseDurationMs: leaseMs,
-          });
-        });
-        helpers.observabilityHelper.jobAttemptLeaseRenewed(job, { workerId });
+            timeoutMs,
+          }),
+        );
+        helpers.observabilityHelper.jobAttemptExtended(job, { workerId });
       } catch (error) {
         if (
           error instanceof JobTakenByAnotherWorkerError ||
@@ -391,16 +391,16 @@ export const runJobProcess = async ({
         throw error;
       }
     },
-    config: leaseConfig,
+    config: attemptConfig,
   });
-  let disposeOwnershipListener: (() => Promise<void>) | null = null;
+  let disposeAttemptLostListener: (() => Promise<void>) | null = null;
 
   const blockerPairs = await prepareTransactionContext.run(async (txCtx) =>
     helpers.stateAdapter.getJobBlockers({ txCtx, jobId: job.id }),
   );
   const runningJob = {
     ...mapStateJobToJob(job),
-    blockers: blockerPairs.map(mapStatePairToChain) as CompletedChain<Chain<any, any, any, any>>[],
+    blockers: blockerPairs.map(mapStatePairToChain) as CompletedChain<AnyChain>[],
   } as ResolvedJobWithBlockers<any, any, any, any> & { status: "running" };
 
   const runJobAttempt = async (handlerCtx: Record<string, unknown>) => {
@@ -470,18 +470,18 @@ export const runJobProcess = async ({
 
       if (config.mode === "staged") {
         await prepareTransactionContext.run(async (txCtx) =>
-          helpers.stateAdapter.renewJobLease({
+          helpers.stateAdapter.extendJobAttempt({
             txCtx,
             jobId: job.id,
             workerId,
-            leaseDurationMs: leaseConfig.leaseMs,
+            timeoutMs: attemptConfig.timeoutMs,
           }),
         );
         await prepareTransactionContext.resolve();
 
-        await leaseManager.start();
+        await attemptHeartbeat.start();
         try {
-          disposeOwnershipListener = await helpers.notifyAdapter.listenJobOwnershipLost(
+          disposeAttemptLostListener = await helpers.notifyAdapter.listenJobAttemptLost(
             job.id,
             () => {
               if (!abortController.signal.aborted) {
@@ -548,7 +548,7 @@ export const runJobProcess = async ({
               id?: string;
               input: unknown;
               schedule?: ScheduleOptions;
-              blockers?: Chain<any, any, any, any>[];
+              blockers?: AnyChain[];
             } & BaseTxContext,
           ) => Promise<unknown>;
         } & { transactionHooks: TransactionHooks } & BaseTxContext,
@@ -565,8 +565,8 @@ export const runJobProcess = async ({
       if (executeRunning) {
         throw new Error("complete cannot be called while execute is running");
       }
-      await disposeOwnershipListener?.();
-      await leaseManager.stop();
+      await disposeAttemptLostListener?.();
+      await attemptHeartbeat.stop();
       const completeSpan = attemptSpanHandle?.startComplete();
       if (prepareTransactionContext.status !== "pending") {
         completeTransactionContext = await createTransactionContext(
@@ -583,7 +583,7 @@ export const runJobProcess = async ({
       );
 
       const result = await completeSavepointContext.run(async (txCtx, transactionHooks) => {
-        let continuedJob: Job<any, any, any, any, any> | null = null;
+        let continuedJob: AnyJob | null = null;
         const output = await runCompleteMiddlewareChain(
           attemptMiddleware,
           { job: runningJob, transactionHooks, txCtx },
@@ -602,13 +602,12 @@ export const runJobProcess = async ({
                   transactionHooks,
                   schedule,
                   blockers: blockers as any,
-                  chainId: job.chainId,
-                  chainIndex: job.chainIndex + 1,
-                  chainTypeName: job.chainTypeName,
-                  originChainTraceContext:
-                    attemptSpanHandle?.getChainTraceContext() ?? job.chainTraceContext,
-                  originTraceContext: attemptSpanHandle?.getTraceContext() ?? job.traceContext,
-                  fromTypeName: job.typeName,
+                  fromJob: {
+                    ...job,
+                    chainTraceContext:
+                      attemptSpanHandle?.getChainTraceContext() ?? job.chainTraceContext,
+                    traceContext: attemptSpanHandle?.getTraceContext() ?? job.traceContext,
+                  },
                 });
                 return continuedJob;
               },
@@ -623,20 +622,22 @@ export const runJobProcess = async ({
             workerId,
           });
         });
-        const completedStateJob = await finishJob(
-          helpers,
-          continuedJob
-            ? { job, txCtx, transactionHooks, workerId, type: "continueWith", continuedJob }
-            : { job, txCtx, transactionHooks, workerId, type: "completeChain", output },
-        );
+        const completedStateJob = await finishJob(helpers, {
+          job,
+          txCtx,
+          transactionHooks,
+          workerId,
+          output,
+          continuedJob,
+        });
         const jobResult = continuedJob ?? {
           ...mapStateJobToJob(completedStateJob),
           blockers: runningJob.blockers,
         };
-        const continued = continuedJob
+        const continuedWith = continuedJob
           ? {
-              jobId: (continuedJob as Job<any, any, any, any, any>).id,
-              jobTypeName: (continuedJob as Job<any, any, any, any, any>).typeName,
+              jobId: (continuedJob as AnyJob).id,
+              jobTypeName: (continuedJob as AnyJob).typeName,
             }
           : undefined;
         const chainCompleted = !continuedJob ? { output } : undefined;
@@ -647,7 +648,7 @@ export const runJobProcess = async ({
           });
           attemptSpanHandle?.end({
             status: "completed",
-            continued,
+            continuedWith,
             chainCompleted,
           });
         });
@@ -696,8 +697,8 @@ export const runJobProcess = async ({
       await prepareTransactionContext.resolve();
       await completeTransactionContext?.resolve();
     } catch (error) {
-      await disposeOwnershipListener?.();
-      await leaseManager.stop();
+      await disposeAttemptLostListener?.();
+      await attemptHeartbeat.stop();
 
       await completeSavepointContext?.reject(error);
 

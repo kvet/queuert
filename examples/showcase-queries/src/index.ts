@@ -187,7 +187,7 @@ if (chain) {
 const job = await client.getJob({ id: orderChain.id });
 if (job) {
   console.log(`Job: ${job.typeName} (${job.status})`);
-  console.log(`  Chain index: ${job.chainIndex}`);
+  console.log(`  Id: ${job.id}`);
 }
 
 const missing = await client.getChain({ id: "00000000-0000-0000-0000-000000000000" as any });
@@ -222,7 +222,7 @@ for (const j of batchJobs) {
 console.log("\n--- Scenario 3: Paginated Lists ---\n");
 
 const completedChains = await client.listChains({
-  filter: { status: ["completed"] },
+  status: "completed",
   limit: 3,
 });
 console.log(`Completed chains (page 1, limit 3): ${completedChains.items.length} items`);
@@ -233,7 +233,7 @@ for (const c of completedChains.items) {
 
 if (completedChains.nextCursor) {
   const page2 = await client.listChains({
-    filter: { status: ["completed"] },
+    status: "completed",
     cursor: completedChains.nextCursor,
     limit: 3,
   });
@@ -244,7 +244,7 @@ if (completedChains.nextCursor) {
 }
 
 const notifyJobs = await client.listJobs({
-  filter: { typeName: ["send-notification"] },
+  typeName: ["send-notification"],
 });
 console.log(`\nNotification jobs: ${notifyJobs.items.length}`);
 for (const j of notifyJobs.items) {
@@ -257,11 +257,11 @@ console.log("\n--- Scenario 4: Chain Jobs ---\n");
 
 const chainJobs = await client.listChainJobs({
   chainId: orderChain.id,
-  typeName: "process-order",
+  chainTypeName: "process-order",
 });
 console.log(`Jobs in order chain (${orderChain.id}):`);
 for (const j of chainJobs.items) {
-  console.log(`  [${j.chainIndex}] ${j.typeName} — ${j.status}`);
+  console.log(`  ${j.typeName} — ${j.status}`);
 }
 
 // Scenario 5: Blocker relationships

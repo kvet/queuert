@@ -61,7 +61,7 @@ export const deletionTestSuite = ({ it }: { it: TestAPI<TestSuiteContext> }): vo
       id: chain.id,
       typeName: "test",
       input: { value: 1 },
-      status: "pending",
+      status: "running",
     });
 
     await withTransaction(async (txCtx) => {
@@ -144,7 +144,7 @@ export const deletionTestSuite = ({ it }: { it: TestAPI<TestSuiteContext> }): vo
       id: chain.id,
       typeName: "step1",
       input: { value: 1 },
-      status: "pending",
+      status: "running",
     });
   });
 
@@ -194,7 +194,7 @@ export const deletionTestSuite = ({ it }: { it: TestAPI<TestSuiteContext> }): vo
 
               throw new Error();
             },
-            leaseConfig: { leaseMs: 1000, renewIntervalMs: 100 },
+            attemptConfig: { timeoutMs: 1000, heartbeatMs: 100 },
           },
         },
       }),
@@ -285,7 +285,9 @@ export const deletionTestSuite = ({ it }: { it: TestAPI<TestSuiteContext> }): vo
       }),
     );
 
-    expect(mainChain.status).toBe("blocked");
+    expect(mainChain.status).toBe("running");
+    const mainJob = await client.getJob({ id: mainChain.id });
+    expect(mainJob!.status === "pending" && mainJob!.blocked).toBe(true);
 
     // Deleting blocker chain alone should fail — main chain depends on it
     await expect(
@@ -317,13 +319,13 @@ export const deletionTestSuite = ({ it }: { it: TestAPI<TestSuiteContext> }): vo
       id: blockerChain!.id,
       typeName: "blocker",
       input: { value: 1 },
-      status: "pending",
+      status: "running",
     });
     expect(deletedByType.main).toMatchObject({
       id: mainChain.id,
       typeName: "main",
       input: null,
-      status: "blocked",
+      status: "running",
     });
 
     await withTransaction(async (txCtx) => {
@@ -814,7 +816,7 @@ export const deletionTestSuite = ({ it }: { it: TestAPI<TestSuiteContext> }): vo
                 throw error;
               }
             },
-            leaseConfig: { leaseMs: 100, renewIntervalMs: 10 },
+            attemptConfig: { timeoutMs: 100, heartbeatMs: 10 },
           },
         },
       }),
@@ -977,8 +979,12 @@ export const deletionTestSuite = ({ it }: { it: TestAPI<TestSuiteContext> }): vo
       ),
     );
 
-    expect(mainA.status).toBe("blocked");
-    expect(mainB.status).toBe("blocked");
+    expect(mainA.status).toBe("running");
+    expect(mainB.status).toBe("running");
+    const jobA = await client.getJob({ id: mainA.id });
+    const jobB = await client.getJob({ id: mainB.id });
+    expect(jobA!.status === "pending" && jobA!.blocked).toBe(true);
+    expect(jobB!.status === "pending" && jobB!.blocked).toBe(true);
 
     await expect(
       withTransactionHooks(async (transactionHooks) =>
@@ -1089,7 +1095,7 @@ export const deletionTestSuite = ({ it }: { it: TestAPI<TestSuiteContext> }): vo
       id: chain.id,
       typeName: "test",
       input: { value: 42 },
-      status: "pending",
+      status: "running",
     });
 
     const fetched = await client.getChain({ id: chain.id });

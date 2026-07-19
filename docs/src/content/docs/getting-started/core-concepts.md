@@ -7,11 +7,11 @@ sidebar:
 
 ### Job
 
-An individual unit of work. Jobs have a lifecycle: `blocked` → `pending` → `running` → `completed`. Each job belongs to a Job Type and contains typed input/output. Jobs start as `blocked` when they depend on other chains (see [Job Blockers](/queuert/guides/job-blockers/)); otherwise they start as `pending`.
+An individual unit of work. Jobs have a lifecycle: `pending` → `running` → `completed`. Each job belongs to a Job Type and contains typed input/output. Jobs that depend on other chains start as `pending` with `blocked: true` and become `blocked: false` when their blockers complete (see [Job Blockers](/queuert/guides/job-blockers/)).
 
 ### Chain
 
-A chain of linked jobs where each job can `continueWith` to the next - just like a Promise chain. In fact, a chain IS its first job, the same way a Promise chain IS the first promise. When you call `startChain`, the returned `chain.id` is the first job's ID. Continuation jobs share this `chainId` but have their own unique `id`. The chain completes when its final job completes without continuing.
+A chain of linked jobs where each job can `continueWith` to the next - just like a Promise chain. In fact, a chain IS its head job, the same way a Promise chain IS the first promise. When you call `startChain`, the returned `chain.id` is the head job's ID. Continuation jobs share this `chainId` but have their own unique `id`. The chain completes when its final job completes without continuing.
 
 ### Job Type
 
@@ -19,7 +19,7 @@ Defines a named job type with its input/output types and attempt handler functio
 
 ### State Adapter
 
-Abstracts database operations for job persistence. Queuert provides adapters for PostgreSQL and SQLite. The adapter handles job creation, status transitions, leasing, and queries.
+Abstracts database operations for job persistence. Queuert provides adapters for PostgreSQL and SQLite. The adapter handles job creation, status transitions, attempt tracking, and queries.
 
 **Available adapters:**
 
@@ -57,7 +57,7 @@ Bridges your pub/sub client (Redis, PostgreSQL, etc.) with the notify adapter. S
 
 ### Worker
 
-Processes jobs by polling for available work. Workers automatically renew leases during long-running operations and handle retries with configurable backoff. See [In-Process Worker](/queuert/advanced/in-process-worker/) and [Job Processing](/queuert/advanced/job-processing/).
+Processes jobs by polling for available work. Workers automatically extend attempts during long-running operations and handle retries with configurable backoff. See [In-Process Worker](/queuert/advanced/in-process-worker/) and [Job Processing](/queuert/advanced/job-processing/).
 
 ### Logging
 

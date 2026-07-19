@@ -64,7 +64,7 @@ txn2: "transaction" {
 
 txn1.prepare -> external { class: flow }
 external     -> txn2.complete { class: flow }
-external     -> external: "lease auto-renews\nworker keeps ownership" { class: wake }
+external     -> external: "attempt auto-extends\nworker keeps the attempt" { class: wake }
 ```
 
 Use staged mode when you need to do work **between** two transactions — typically external API calls that shouldn't hold a database transaction open:
@@ -77,7 +77,7 @@ Use staged mode when you need to do work **between** two transactions — typica
       const [row] = await sql`SELECT * FROM orders WHERE id = ${job.input.id}`;
       return row;
     });
-    // Transaction closed, lease renewal active
+    // Transaction closed, heartbeat active
 
     // Phase 2: External API call (no transaction)
     const { paymentId } = await paymentAPI.charge(order.amount);
@@ -155,7 +155,7 @@ Within staged mode, `execute` lets you perform **multiple independent transactio
 }
 ```
 
-Each `execute` call opens a fresh guarded transaction (lease ownership verified), runs the callback, commits, and flushes hooks. If `prepare` hasn't been called, `execute` automatically enters staged mode.
+Each `execute` call opens a fresh guarded transaction (attempt verified), runs the callback, commits, and flushes hooks. If `prepare` hasn't been called, `execute` automatically enters staged mode.
 
 ## When to Use What
 
@@ -174,10 +174,10 @@ In practice, explicit `prepare` with a fixed mode is rarely needed. `prepare({ m
 
 When you skip `prepare`, Queuert infers the mode from how you call `complete`:
 
-| Pattern                                 | Mode   | What happens                                       |
-| --------------------------------------- | ------ | -------------------------------------------------- |
-| `return complete(...)` (synchronous)    | Atomic | Single transaction wraps everything                |
-| `await something; return complete(...)` | Staged | Lease renewal runs between async work and complete |
+| Pattern                                 | Mode   | What happens                                   |
+| --------------------------------------- | ------ | ---------------------------------------------- |
+| `return complete(...)` (synchronous)    | Atomic | Single transaction wraps everything            |
+| `await something; return complete(...)` | Staged | Heartbeat runs between async work and complete |
 
 This means even without `prepare`, you can get staged behavior by doing async work before calling `complete`:
 

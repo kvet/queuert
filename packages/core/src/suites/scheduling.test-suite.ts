@@ -440,6 +440,7 @@ export const schedulingTestSuite = ({ it }: { it: TestAPI<TestSuiteContext> }): 
                     input: null,
                     deduplication: {
                       key: "recurring",
+                      scope: "running",
                       excludeChainIds: [job.chainId],
                     },
                   });
@@ -461,7 +462,7 @@ export const schedulingTestSuite = ({ it }: { it: TestAPI<TestSuiteContext> }): 
           transactionHooks,
           typeName: "recurring",
           input: null,
-          deduplication: { key: "recurring" },
+          deduplication: { key: "recurring", scope: "running" },
         }),
       ),
     );
@@ -470,7 +471,7 @@ export const schedulingTestSuite = ({ it }: { it: TestAPI<TestSuiteContext> }): 
       await allDone.promise;
 
       const { items: chains } = await client.listChains({
-        filter: { typeName: ["recurring"] },
+        typeName: ["recurring"],
         limit: 10,
       });
       expect(chains).toHaveLength(3);
@@ -601,9 +602,9 @@ export const schedulingTestSuite = ({ it }: { it: TestAPI<TestSuiteContext> }): 
       ),
     );
 
-    const rootJob = await client.getJob({ id: chain.id });
-    expect(rootJob).toBeDefined();
-    expect(rootJob!.scheduledAt.getTime() - past.getTime()).toBeGreaterThan(30 * 60 * 1000);
+    const headJob = await client.getJob({ id: chain.id });
+    expect(headJob).toBeDefined();
+    expect(headJob!.scheduledAt.getTime() - past.getTime()).toBeGreaterThan(30 * 60 * 1000);
 
     await withWorkers([await worker.start()], async () => {
       await client.awaitChain(chain, { timeoutMs: 2000, pollIntervalMs: 50 });
@@ -672,9 +673,9 @@ export const schedulingTestSuite = ({ it }: { it: TestAPI<TestSuiteContext> }): 
       orderDirection: "asc",
       page: { limit: 10 },
     });
-    const continuation = chainJobs.items.find((j) => j.chainIndex === 1);
+    const continuation = chainJobs.items[1];
     expect(continuation).toBeDefined();
-    expect(continuation!.scheduledAt.getTime() - past.getTime()).toBeGreaterThan(30 * 60 * 1000);
+    expect(continuation.scheduledAt.getTime() - past.getTime()).toBeGreaterThan(30 * 60 * 1000);
   });
 
   it("rescheduleJob with past schedule.at clamps scheduledAt to now", async ({

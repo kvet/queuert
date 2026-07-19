@@ -13,7 +13,7 @@ import { BackLink } from "./BackLink.js";
 import { ConfirmDeleteDialog } from "./ConfirmDeleteDialog.js";
 import { createAutoLoadMore } from "./createAutoLoadMore.js";
 import { JsonView } from "./JsonView.js";
-import { StatusBadge } from "./StatusBadge.js";
+import { ChainStatusBadge, JobStatusBadge } from "./StatusBadge.js";
 import { TimeAgo } from "./TimeAgo.js";
 
 export function ChainDetail() {
@@ -123,7 +123,7 @@ export function ChainDetail() {
             <>
               <div class="detail-header">
                 <h2>
-                  {d.chain.typeName} <StatusBadge status={d.chain.status} />
+                  {d.chain.typeName} <ChainStatusBadge chain={d.chain} />
                 </h2>
                 <div class="id">chain {d.chain.id}</div>
                 <div style={{ "font-size": "13px", color: "var(--text-secondary)" }}>
@@ -162,7 +162,7 @@ export function ChainDetail() {
                     <For each={blockingItems()}>
                       {(job) => (
                         <li>
-                          <StatusBadge status={job.status} /> {job.typeName}{" "}
+                          <JobStatusBadge job={job} /> {job.typeName}{" "}
                           <A href={`/chains/${job.chainId}`} class="chain-link">
                             chain {job.chainId}
                           </A>
@@ -185,7 +185,10 @@ export function ChainDetail() {
               </Show>
 
               <div class="section">
-                <h3>Jobs ({jobs().length})</h3>
+                <h3>
+                  Jobs ({jobs().length}
+                  {jobsCursor() ? "+" : ""})
+                </h3>
                 <For each={jobs()}>
                   {(job, i) => (
                     <div class="card">
@@ -198,18 +201,13 @@ export function ChainDetail() {
                         <span class="card-type">
                           {i() + 1}. {job.typeName}
                         </span>
-                        <StatusBadge status={job.status} />
-                      </div>
-                      <div class="card-meta">
-                        <Show when={job.attempt > 0}>
-                          <span>attempt #{job.attempt}</span>
-                        </Show>
-                        <Show when={job.leasedBy}>
-                          <span>{job.leasedBy}</span>
-                        </Show>
-                        <span>
+                        <span class="card-id">{job.id}</span>
+                        <span class="card-time">
                           <TimeAgo date={job.createdAt} />
                         </span>
+                      </div>
+                      <div class="card-meta">
+                        <JobStatusBadge job={job} />
                       </div>
                       <Show when={job.input != null}>
                         <div class="section" style={{ "margin-top": "8px", "margin-bottom": "0" }}>
@@ -235,7 +233,7 @@ export function ChainDetail() {
                             <For each={jobBlockers()[job.id]}>
                               {(blocker) => (
                                 <li>
-                                  <StatusBadge status={blocker.status} /> {blocker.typeName}{" "}
+                                  <ChainStatusBadge chain={blocker} /> {blocker.typeName}{" "}
                                   <A href={`/chains/${blocker.id}`} class="chain-link">
                                     chain {blocker.id}
                                   </A>

@@ -581,7 +581,7 @@ describe("Logging", () => {
     ]);
   });
 
-  it("logs lease renewal", async ({
+  it("logs attempt extension", async ({
     stateAdapter,
     notifyAdapter,
     withTransaction,
@@ -607,7 +607,7 @@ describe("Logging", () => {
       processors: createProcessors({
         client,
         jobTypes,
-        leaseConfig: { leaseMs: 500, renewIntervalMs: 50 },
+        attemptConfig: { timeoutMs: 500, heartbeatMs: 50 },
         processors: {
           test: {
             attemptHandler: async ({ complete }) => {
@@ -631,18 +631,18 @@ describe("Logging", () => {
 
     const renewalLogs = log.mock.calls
       .map((call) => call[0])
-      .filter((entry) => entry.type === "job_attempt_lease_renewed");
+      .filter((entry) => entry.type === "job_attempt_extended");
 
     expect(renewalLogs.length).toBeGreaterThanOrEqual(1);
     expect(renewalLogs[0]).toEqual(
       expect.objectContaining({
-        type: "job_attempt_lease_renewed",
+        type: "job_attempt_extended",
         data: expect.objectContaining({ typeName: "test" }),
       }),
     );
   });
 
-  it("logs lease expiration", async ({
+  it("logs attempt expiration", async ({
     stateAdapter,
     notifyAdapter,
     withTransaction,
@@ -668,7 +668,7 @@ describe("Logging", () => {
       processors: createProcessors({
         client,
         jobTypes,
-        leaseConfig: { leaseMs: 10, renewIntervalMs: 100 },
+        attemptConfig: { timeoutMs: 10, heartbeatMs: 100 },
         processors: {
           test: {
             attemptHandler: async ({ complete }) => {
@@ -692,19 +692,19 @@ describe("Logging", () => {
 
     const expiredLogs = log.mock.calls
       .map((call) => call[0])
-      .filter((entry) => entry.type === "job_attempt_lease_expired");
+      .filter((entry) => entry.type === "job_attempt_expired");
 
     expect(expiredLogs.length).toBeGreaterThanOrEqual(1);
     expect(expiredLogs[0]).toEqual(
       expect.objectContaining({
-        type: "job_attempt_lease_expired",
+        type: "job_attempt_expired",
         level: "warn",
         data: expect.objectContaining({ typeName: "test" }),
       }),
     );
   });
 
-  it("logs reaper events", async ({
+  it("logs attempt reclaim events", async ({
     stateAdapter,
     notifyAdapter,
     withTransaction,
@@ -728,16 +728,16 @@ describe("Logging", () => {
     let failed = false;
     const jobStarted = Promise.withResolvers<void>();
     const jobCompleted = Promise.withResolvers<void>();
-    const leaseConfig = { leaseMs: 10, renewIntervalMs: 100 };
+    const attemptConfig = { timeoutMs: 10, heartbeatMs: 100 };
 
     const worker1 = await createInProcessWorker({
       client,
       concurrency: 1,
-      pollIntervalMs: leaseConfig.leaseMs,
+      pollIntervalMs: attemptConfig.timeoutMs,
       processors: createProcessors({
         client,
         jobTypes,
-        leaseConfig,
+        attemptConfig,
         processors: {
           test: {
             attemptHandler: async ({ signal, complete }) => {
@@ -745,7 +745,7 @@ describe("Logging", () => {
                 failed = true;
                 jobStarted.resolve();
                 try {
-                  await sleep(leaseConfig.renewIntervalMs * 2, { signal });
+                  await sleep(attemptConfig.heartbeatMs * 2, { signal });
                 } finally {
                   jobCompleted.resolve();
                 }
@@ -759,11 +759,11 @@ describe("Logging", () => {
     const worker2 = await createInProcessWorker({
       client,
       concurrency: 1,
-      pollIntervalMs: leaseConfig.leaseMs,
+      pollIntervalMs: attemptConfig.timeoutMs,
       processors: createProcessors({
         client,
         jobTypes,
-        leaseConfig,
+        attemptConfig,
         processors: {
           test: {
             attemptHandler: async ({ signal, complete }) => {
@@ -771,7 +771,7 @@ describe("Logging", () => {
                 failed = true;
                 jobStarted.resolve();
                 try {
-                  await sleep(leaseConfig.renewIntervalMs * 2, { signal });
+                  await sleep(attemptConfig.heartbeatMs * 2, { signal });
                 } finally {
                   jobCompleted.resolve();
                 }
@@ -807,7 +807,7 @@ describe("Logging", () => {
     });
 
     const logTypes = new Set(log.mock.calls.map((call) => call[0].type));
-    expect(logTypes).toContain("job_reaped");
+    expect(logTypes).toContain("job_attempt_reclaimed");
     expect(
       logTypes.has("job_attempt_taken_by_another_worker") ||
         logTypes.has("job_attempt_already_completed"),
@@ -827,17 +827,17 @@ describe("Logging", () => {
       test: { entry: true; input: null; output: null };
     }>();
 
-    // Wrap acquireJob to throw once — triggers both
+    // Wrap startJobAttempt to throw once — triggers both
     // state_adapter_error (from logging middleware) and worker_error (from worker loop catch)
     let errorThrown = false;
     const erroringStateAdapter: typeof stateAdapter = {
       ...stateAdapter,
-      acquireJob: async (args) => {
+      startJobAttempt: async (args) => {
         if (!errorThrown) {
           errorThrown = true;
           throw new Error("connection error");
         }
-        return stateAdapter.acquireJob(args);
+        return stateAdapter.startJobAttempt(args);
       },
     };
 
@@ -1106,12 +1106,12 @@ describe("Logging rollback", () => {
     let completeJobErrorThrown = false;
     const erroringStateAdapter: typeof stateAdapter = {
       ...stateAdapter,
-      completeJob: async (args) => {
-        if (!completeJobErrorThrown) {
+      finishJobAttempt: async (args) => {
+        if (!("error" in args.outcome) && !completeJobErrorThrown) {
           completeJobErrorThrown = true;
           throw new Error("simulated completeJob failure");
         }
-        return stateAdapter.completeJob(args);
+        return stateAdapter.finishJobAttempt(args);
       },
     };
 
@@ -1184,12 +1184,12 @@ describe("Logging rollback", () => {
     let handlerFailed = false;
     const erroringStateAdapter: typeof stateAdapter = {
       ...stateAdapter,
-      abandonJob: async (args) => {
-        if (!rescheduleErrorThrown) {
+      finishJobAttempt: async (args) => {
+        if ("error" in args.outcome && !rescheduleErrorThrown) {
           rescheduleErrorThrown = true;
           throw new Error("simulated abandonJob failure");
         }
-        return stateAdapter.abandonJob(args);
+        return stateAdapter.finishJobAttempt(args);
       },
     };
 
@@ -1214,7 +1214,7 @@ describe("Logging rollback", () => {
       processors: createProcessors({
         client,
         jobTypes,
-        leaseConfig: { leaseMs: 50, renewIntervalMs: 500 },
+        attemptConfig: { timeoutMs: 50, heartbeatMs: 500 },
         processors: {
           test: {
             attemptHandler: async ({ complete }) => {
@@ -1510,12 +1510,12 @@ describe("Logging rollback", () => {
     let createJobErrorThrown = false;
     const erroringStateAdapter: typeof stateAdapter = {
       ...stateAdapter,
-      createJobs: async (args) => {
-        if (!createJobErrorThrown && args.jobs.some((j) => j.chainIndex > 0)) {
+      createContinuationJob: async (args) => {
+        if (!createJobErrorThrown) {
           createJobErrorThrown = true;
           throw new Error("simulated createJob failure");
         }
-        return stateAdapter.createJobs(args);
+        return stateAdapter.createContinuationJob(args);
       },
     };
 

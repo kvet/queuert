@@ -2,29 +2,49 @@ import { BlockerReferenceError, type Client, withTransactionHooks } from "queuer
 import { helpersSymbol } from "queuert/internal";
 
 import { serovalResponse } from "../response.js";
-import { parseCursor, parseLimit, parseStatusFilter, parseTypeNameFilter } from "./params.js";
+import {
+  parseChainStatusFilter,
+  parseCursor,
+  parseLimit,
+  parseOrderBy,
+  parseOrderDirection,
+  parseTypeNameFilter,
+} from "./params.js";
 
 export const handleChainsList = async (url: URL, client: Client<any, any>): Promise<Response> => {
   const typeName = parseTypeNameFilter(url.searchParams.get("typeName") ?? undefined);
-  const status = parseStatusFilter(url.searchParams.get("status") ?? undefined);
-  const root = url.searchParams.get("root") !== "false";
+  const status = parseChainStatusFilter(url.searchParams.get("status") ?? undefined);
+  const independent = url.searchParams.get("independent") !== "false";
   const id = url.searchParams.get("id") ?? undefined;
-  const jobId = url.searchParams.get("jobId") ?? undefined;
-  const cursor = parseCursor(url.searchParams.get("cursor") ?? undefined);
+  const rawOrderBy = url.searchParams.get("orderBy") ?? undefined;
+  const orderDirection = parseOrderDirection(url.searchParams.get("orderDirection") ?? undefined);
   const limit = parseLimit(url.searchParams.get("limit") ?? undefined);
 
-  const result = await client.listChains({
-    filter: {
-      typeName,
-      status,
-      root,
-      chainId: id ? [id] : undefined,
-      jobId: jobId ? [jobId] : undefined,
-    },
-    orderDirection: "desc",
-    cursor,
+  const listing =
+    status === "completed"
+      ? ({ status, orderBy: parseOrderBy(rawOrderBy, ["completedAt", "createdAt"]) } as const)
+      : status === "running"
+        ? ({ status, orderBy: parseOrderBy(rawOrderBy, ["createdAt"]) } as const)
+        : ({ status: undefined, orderBy: parseOrderBy(rawOrderBy, ["createdAt"]) } as const);
+
+  const common = {
+    typeName,
+    independent,
+    chainId: id ? [id] : undefined,
+    orderDirection,
+    cursor: parseCursor(url.searchParams.get("cursor") ?? undefined, {
+      type: "timestampWithId",
+      sortKey: listing.orderBy,
+    }),
     limit,
-  });
+  };
+
+  const result =
+    listing.status === "completed"
+      ? await client.listChains({ ...common, status: listing.status, orderBy: listing.orderBy })
+      : listing.status === "running"
+        ? await client.listChains({ ...common, status: listing.status, orderBy: listing.orderBy })
+        : await client.listChains({ ...common, orderBy: listing.orderBy });
 
   return serovalResponse({
     items: result.items,
@@ -79,7 +99,7 @@ export const handleChainJobs = async (
   client: Client<any, any>,
   chainId: string,
 ): Promise<Response> => {
-  const cursor = parseCursor(url.searchParams.get("cursor") ?? undefined);
+  const cursor = parseCursor(url.searchParams.get("cursor") ?? undefined, { type: "id" });
   const limit = parseLimit(url.searchParams.get("limit") ?? undefined);
   const page = await listChainJobsWithBlockers(client, chainId, { cursor, limit });
 
@@ -125,7 +145,10 @@ export const handleChainBlocking = async (
   client: Client<any, any>,
   chainId: string,
 ): Promise<Response> => {
-  const cursor = parseCursor(url.searchParams.get("cursor") ?? undefined);
+  const cursor = parseCursor(url.searchParams.get("cursor") ?? undefined, {
+    type: "timestampWithId",
+    sortKey: "createdAt",
+  });
   const limit = parseLimit(url.searchParams.get("limit") ?? undefined);
   const result = await client.listBlockedJobs({
     chainId,

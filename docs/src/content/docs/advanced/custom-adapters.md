@@ -9,7 +9,7 @@ Queuert's adapter system is designed to be extended. You can implement the `Stat
 
 ## Custom NotifyAdapter
 
-Implement the `NotifyAdapter` type exported from `queuert`. The interface has three notification channels (job scheduled, chain completed, ownership lost), each with a publish and a subscribe method, plus a `provideWakeHint`/`consumeWakeHint` pair that gates how many listeners actually wake on a job-scheduled notification (no-op for adapters without a counter primitive — see [Adapter Architecture](/queuert/advanced/adapters/#wake-hint-methods)) and a `close()` for releasing internal resources:
+Implement the `NotifyAdapter` type exported from `queuert`. The interface has three notification channels (job scheduled, chain completed, attempt lost), each with a publish and a subscribe method, plus a `provideWakeHint`/`consumeWakeHint` pair that gates how many listeners actually wake on a job-scheduled notification (no-op for adapters without a counter primitive — see [Adapter Architecture](/queuert/advanced/adapters/#wake-hint-methods)) and a `close()` for releasing internal resources:
 
 ```ts
 import { runNotifyAdapterConformance } from "queuert/conformance";
@@ -34,7 +34,7 @@ See the [Notify adapter examples](/queuert/examples/#notify-adapters) for end-to
 
 ## Custom StateAdapter
 
-Implement the `StateAdapter` type exported from `queuert`. This is a larger interface covering job creation, status transitions, leasing, querying, and migrations. See the [Adapter Architecture](/queuert/advanced/adapters/) doc for the full contract and the [Conformance reference](/queuert/reference/queuert/conformance/) for what the suite tests.
+Implement the `StateAdapter` type exported from `queuert`. This is a larger interface covering job creation, status transitions, attempt tracking, querying, and migrations. See the [Adapter Architecture](/queuert/advanced/adapters/) doc for the full contract and the [Conformance reference](/queuert/reference/queuert/conformance/) for what the suite tests.
 
 ```ts
 import { runStateAdapterConformance } from "queuert/conformance";
@@ -153,10 +153,10 @@ On any case failure the runner throws a `ConformanceError` whose message summari
 
 ```
 ConformanceError: 2/132 conformance cases failed (130 passed, 0 skipped)
-  x createJobs > preserves provided chainId
+  x createContinuationJob > inherits chainId from the parent and assigns a new job id
     expected 'chain-abc' to be 'chain-xyz'
   x addJobsBlockers > marks job blocked when incomplete blockers present
-    expected 'pending' to be 'blocked'
+    expected false to be true
 ```
 
 `err.cause` is an `AggregateError` holding the original thrown errors with full stacks, so IDEs and CI viewers can jump to the failing case source line inside `queuert/conformance`.

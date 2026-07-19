@@ -1,5 +1,6 @@
+import { type JobStatus } from "../entities/job.js";
 import { type NotifyAdapter } from "../notify-adapter/notify-adapter.js";
-import { type StateAdapter, type StateJob } from "../state-adapter/state-adapter.js";
+import { type StateAdapter } from "../state-adapter/state-adapter.js";
 
 type LogLevel = "info" | "warn" | "error";
 type LogEntry<
@@ -16,7 +17,7 @@ type LogEntry<
   data: TData;
 } & ([TError] extends [never] ? unknown : { error: TError });
 
-type WorkerBasicData = { workerId: string | null };
+export type WorkerBasicData = { workerId: string };
 type WorkerStartedLogEntry = LogEntry<
   "worker_started",
   "info",
@@ -50,8 +51,12 @@ export type JobBasicData = {
   chainId: string;
   chainTypeName: string;
 };
-/** Job data with processing status, included in attempt-related log entries. */
-export type JobProcessingData = JobBasicData & { status: StateJob["status"]; attempt: number };
+export type JobProcessingData = JobBasicData & { status: JobStatus; attempt: number };
+export type JobAttemptData = JobProcessingData & {
+  attemptAt: Date;
+  attemptBy: string;
+  attemptUntil: Date;
+};
 type JobCreatedLogEntry = LogEntry<
   "job_created",
   "info",
@@ -72,7 +77,7 @@ type JobAttemptTakenByAnotherWorkerLogEntry = LogEntry<
   "job_attempt_taken_by_another_worker",
   "warn",
   "Job taken by another worker",
-  { leasedBy: string; leasedUntil: Date } & JobProcessingData & WorkerBasicData
+  JobAttemptData & WorkerBasicData
 >;
 type JobAttemptAlreadyCompletedLogEntry = LogEntry<
   "job_attempt_already_completed",
@@ -80,23 +85,23 @@ type JobAttemptAlreadyCompletedLogEntry = LogEntry<
   "Job already completed by another worker",
   { completedBy: string | null } & JobProcessingData & WorkerBasicData
 >;
-type JobAttemptLeaseExpiredLogEntry = LogEntry<
-  "job_attempt_lease_expired",
+type JobAttemptExpiredLogEntry = LogEntry<
+  "job_attempt_expired",
   "warn",
-  "Job lease expired",
-  { leasedBy: string; leasedUntil: Date } & JobProcessingData & WorkerBasicData
+  "Job attempt expired",
+  JobAttemptData & WorkerBasicData
 >;
-type JobAttemptLeaseRenewedLogEntry = LogEntry<
-  "job_attempt_lease_renewed",
+type JobAttemptExtendedLogEntry = LogEntry<
+  "job_attempt_extended",
   "info",
-  "Job lease renewed",
-  { leasedBy: string; leasedUntil: Date } & JobProcessingData & WorkerBasicData
+  "Job attempt extended",
+  JobAttemptData & WorkerBasicData
 >;
-type JobReapedLogEntry = LogEntry<
-  "job_reaped",
+type JobAttemptReclaimedLogEntry = LogEntry<
+  "job_attempt_reclaimed",
   "info",
-  "Reaped expired job lease",
-  { leasedBy: string; leasedUntil: Date } & JobBasicData & WorkerBasicData
+  "Reclaimed expired job attempt",
+  JobAttemptData & WorkerBasicData
 >;
 type JobAttemptFailedLogEntry = LogEntry<
   "job_attempt_failed",
@@ -105,17 +110,21 @@ type JobAttemptFailedLogEntry = LogEntry<
   JobProcessingData & WorkerBasicData,
   unknown
 >;
+export type JobCompletionData = JobProcessingData & {
+  output?: unknown;
+  continuedWith?: JobBasicData;
+};
 type JobAttemptCompletedLogEntry = LogEntry<
   "job_attempt_completed",
   "info",
   "Job attempt completed",
-  { output?: unknown; continuedWith?: JobBasicData } & JobProcessingData & WorkerBasicData
+  JobCompletionData & WorkerBasicData
 >;
 type JobCompletedLogEntry = LogEntry<
   "job_completed",
   "info",
   "Job completed",
-  { output?: unknown; continuedWith?: JobBasicData } & JobProcessingData & WorkerBasicData
+  JobCompletionData & { workerId: string | null }
 >;
 
 /** Chain identification data included in log entries. */
@@ -192,9 +201,9 @@ type TypedLogEntry =
   | JobAttemptStartedLogEntry
   | JobAttemptTakenByAnotherWorkerLogEntry
   | JobAttemptAlreadyCompletedLogEntry
-  | JobAttemptLeaseExpiredLogEntry
-  | JobAttemptLeaseRenewedLogEntry
-  | JobReapedLogEntry
+  | JobAttemptExpiredLogEntry
+  | JobAttemptExtendedLogEntry
+  | JobAttemptReclaimedLogEntry
   | JobAttemptFailedLogEntry
   | JobAttemptCompletedLogEntry
   | JobCompletedLogEntry

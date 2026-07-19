@@ -4,7 +4,7 @@ import { type TransactionHooks } from "../transaction-hooks.js";
 
 const notifyJobScheduledKey = Symbol("queuert.notifyJobScheduled");
 const notifyChainCompletedKey = Symbol("queuert.notifyChainCompleted");
-const notifyJobOwnershipLostKey = Symbol("queuert.notifyJobOwnershipLost");
+const notifyJobAttemptLostKey = Symbol("queuert.notifyJobAttemptLost");
 
 export const bufferNotifyJobScheduled = (
   transactionHooks: TransactionHooks,
@@ -62,19 +62,19 @@ export const bufferNotifyChainCompletion = (
     .add(job.chainId);
 };
 
-export const bufferNotifyJobOwnershipLost = (
+export const bufferNotifyJobAttemptLost = (
   transactionHooks: TransactionHooks,
   notifyAdapter: NotifyAdapter,
   jobId: string,
 ): void => {
   transactionHooks
-    .getOrInsert(notifyJobOwnershipLostKey, () => ({
+    .getOrInsert(notifyJobAttemptLostKey, () => ({
       state: new Set<string>(),
       flush: async (state) => {
         await Promise.all(
           Array.from(state).map(async (jobId) => {
             try {
-              await notifyAdapter.notifyJobOwnershipLost(jobId);
+              await notifyAdapter.notifyJobAttemptLost(jobId);
             } catch {}
           }),
         );

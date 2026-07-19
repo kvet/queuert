@@ -1,6 +1,6 @@
 # Attempt Middleware Showcase
 
-Composes two `AttemptMiddleware` instances to demonstrate all three hooks (`wrapHandler`, `wrapPrepare`, `wrapComplete`) and how typed ctx flows into the handler.
+Composes two `AttemptMiddleware` instances to demonstrate all four hooks (`wrapHandler`, `wrapPrepare`, `wrapExecute`, `wrapComplete`) and how typed ctx flows into the handler.
 
 ## Running
 

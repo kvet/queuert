@@ -30,24 +30,24 @@ export const refetchJobLocked = async (
     });
   }
 
-  if (fetchedJob.status === "completed") {
+  if (fetchedJob.completedAt !== null) {
     helpers.observabilityHelper.jobAttemptAlreadyCompleted(fetchedJob, { workerId });
     throw new JobAlreadyCompletedError("Job is already completed", {
       jobId: fetchedJob.id,
     });
   }
 
-  if (fetchedJob.leasedBy !== workerId) {
+  if (fetchedJob.attemptBy !== workerId) {
     helpers.observabilityHelper.jobAttemptTakenByAnotherWorker(fetchedJob, { workerId });
     throw new JobTakenByAnotherWorkerError(`Job taken by another worker`, {
       jobId: fetchedJob.id,
       workerId,
-      leasedBy: fetchedJob.leasedBy,
+      attemptBy: fetchedJob.attemptBy,
     });
   }
 
-  if (fetchedJob.leasedUntil && fetchedJob.leasedUntil.getTime() < Date.now()) {
-    helpers.observabilityHelper.jobAttemptLeaseExpired(fetchedJob, { workerId });
+  if (fetchedJob.attemptUntil && fetchedJob.attemptUntil.getTime() < Date.now()) {
+    helpers.observabilityHelper.jobAttemptExpired(fetchedJob, { workerId });
   }
 
   return fetchedJob;

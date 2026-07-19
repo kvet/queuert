@@ -55,7 +55,7 @@ export const extendWithStatePostgresJs = <
     _dbMigrateToLatest: [
       async ({ sql }, use) => {
         await sql.unsafe(
-          `DROP TABLE IF EXISTS queuert_job_blocker, queuert_job, queuert_migration CASCADE; DROP TYPE IF EXISTS queuert_job_status CASCADE;`,
+          `DROP TABLE IF EXISTS queuert_job_blocker, queuert_job, queuert_migration, queuert_migration_lock CASCADE; DROP TYPE IF EXISTS queuert_job_status CASCADE;`,
         );
 
         const stateProvider = createPostgresJsProvider({ sql });
@@ -166,6 +166,7 @@ export const extendWithStatePostgresJs = <
                 readOnly: true,
               });
             }
+
             return originalExecuteSql({ txCtx, sql, params, paramTypes, columnTypes, readOnly });
           },
         };

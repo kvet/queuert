@@ -1,4 +1,6 @@
 // Test Suites
+export { attemptReclaimerTestSuite } from "./suites/attempt-reclaimer.test-suite.js";
+export { awaitChainTestSuite } from "./suites/await-chain.test-suite.js";
 export { blockerChainsTestSuite } from "./suites/blocker-chains.test-suite.js";
 export { chainsTestSuite } from "./suites/chains.test-suite.js";
 export { clientQueriesTestSuite } from "./suites/client-queries.test-suite.js";
@@ -13,7 +15,6 @@ export { notifyTestSuite } from "./suites/notify.test-suite.js";
 export { processErrorHandlingTestSuite } from "./suites/process-error-handling.test-suite.js";
 export { processModesTestSuite } from "./suites/process-modes.test-suite.js";
 export { processTestSuite } from "./suites/process.test-suite.js";
-export { reaperTestSuite } from "./suites/reaper.test-suite.js";
 export { rescheduleJobTestSuite } from "./suites/reschedule-job.test-suite.js";
 export { schedulingTestSuite } from "./suites/scheduling.test-suite.js";
 export { startChainsTestSuite } from "./suites/start-chains.test-suite.js";
@@ -22,7 +23,6 @@ export {
   type StateConformanceFixture,
 } from "./suites/state-adapter-conformance.test-suite.js";
 export { stateResilienceTestSuite } from "./suites/state-resilience.test-suite.js";
-export { awaitChainTestSuite } from "./suites/await-chain.test-suite.js";
 export { workerTestSuite } from "./suites/worker.test-suite.js";
 export { workerlessCompletionTestSuite } from "./suites/workerless-completion.test-suite.js";
 
@@ -52,4 +52,15 @@ export {
 export { withWorkers } from "./helpers/with-workers.js";
 
 // Migration fixture seeding
-export { seedAllStates, type SeedSentinels } from "./helpers/seed-all-states.js";
+export { seedAllStatesV1, type SeedSentinelsV1 } from "./conformance/seed-all-states-v1.js";
+export {
+  seedAllStatesV2,
+  seedConfigV2,
+  type SeedSentinelsV2,
+} from "./conformance/seed-all-states-v2.js";
+
+// Index coverage
+export {
+  observabilityCoverageGroups,
+  operationalCoverageGroups,
+} from "./suites/index-coverage-cases.js";

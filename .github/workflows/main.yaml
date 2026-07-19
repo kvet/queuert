@@ -2,16 +2,16 @@ name: CI
 
 on:
   push:
-    branches: [main, dev]
+    branches: [main, dev, next]
   pull_request:
-    branches: [main, dev]
+    branches: [main, dev, next]
 
 jobs:
-  combined-checks:
-    name: Checks
+  check:
+    name: Check
     runs-on: ubuntu-latest
 
-    timeout-minutes: 15
+    timeout-minutes: 5
 
     steps:
       - uses: actions/checkout@v4
@@ -32,11 +32,41 @@ jobs:
       - name: Typecheck
         run: bun run typecheck
 
+  test:
+    needs: [check]
+
+    name: Test
+    runs-on: ubuntu-latest
+
+    timeout-minutes: 15
+
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - uses: ./.github/actions/setup-repo
+
       - name: Test
         run: bun run test:ci
 
       - name: Examples
         run: bun run examples
+
+  benchmarks:
+    needs: [check]
+
+    name: Benchmarks
+    runs-on: ubuntu-latest
+
+    timeout-minutes: 15
+
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - uses: ./.github/actions/setup-repo
 
       - name: Benchmarks
         run: bun run benchmarks
@@ -44,7 +74,7 @@ jobs:
   # PR CHECKS
 
   required-collector-job:
-    needs: [combined-checks]
+    needs: [check, test, benchmarks]
     if: github.event_name == 'pull_request' && always()
 
     name: Required Checks

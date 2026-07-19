@@ -19,7 +19,7 @@ Three channels carry notifications between processes (configurable prefix, defau
 | ----------------- | ------------------- | -------------- | ----------------------------- |
 | `{prefix}:sched`  | Jobs become pending | `{typeName}`   | Wake idle workers             |
 | `{prefix}:chainc` | Chain completes     | `{chainId}`    | Wake clients awaiting results |
-| `{prefix}:owls`   | Lease reaped        | `{jobId}`      | Notify ownership loss         |
+| `{prefix}:atls`   | Attempt reclaimed   | `{jobId}`      | Notify attempt loss           |
 
 Channels use Redis Pub/Sub — messages are fire-and-forget with no persistence. If no subscriber is listening when a message is published, it is lost. This is acceptable because workers fall back to polling when notifications are missed.
 

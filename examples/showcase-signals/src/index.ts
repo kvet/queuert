@@ -59,7 +59,7 @@ const processors = createProcessors({
   jobTypes,
   processors: {
     "poll-external-api": {
-      leaseConfig: { leaseMs: 5000, renewIntervalMs: 1000 },
+      attemptConfig: { timeoutMs: 5000, heartbeatMs: 1000 },
       attemptHandler: async ({ signal, job, complete }) => {
         console.log(`[poll-external-api] Polling for result (task ${job.input.taskId})`);
         onExternalResultStarted();
@@ -85,7 +85,7 @@ const processors = createProcessors({
     },
 
     "process-batch": {
-      leaseConfig: { leaseMs: 5000, renewIntervalMs: 1000 },
+      attemptConfig: { timeoutMs: 5000, heartbeatMs: 1000 },
       attemptHandler: async ({ signal, job, complete }) => {
         console.log(`[process-batch] Starting batch ${job.input.batchId}`);
         onBatchStarted();

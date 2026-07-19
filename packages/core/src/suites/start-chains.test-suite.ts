@@ -48,7 +48,9 @@ export const startChainsTestSuite = ({ it }: { it: TestAPI<TestSuiteContext> }):
 
       expect(chain.typeName).toBe("test");
       expect(chain.input).toEqual({ value: 42 });
-      expect(chain.status).toBe("pending");
+      expect(chain.status).toBe("running");
+      const initialJob = await client.getJob({ id: chain.id });
+      expect(initialJob!.status).toBe("pending");
       expect(chain.deduplicated).toBe(false);
     });
 
@@ -79,7 +81,7 @@ export const startChainsTestSuite = ({ it }: { it: TestAPI<TestSuiteContext> }):
             transactionHooks,
             typeName: "test",
             input: { value: 1 },
-            deduplication: { key: "dup-key" },
+            deduplication: { key: "dup-key", scope: "running" },
           }),
         ),
       );
@@ -91,7 +93,7 @@ export const startChainsTestSuite = ({ it }: { it: TestAPI<TestSuiteContext> }):
             transactionHooks,
             typeName: "test",
             input: { value: 2 },
-            deduplication: { key: "dup-key" },
+            deduplication: { key: "dup-key", scope: "running" },
           }),
         ),
       );
@@ -150,7 +152,10 @@ export const startChainsTestSuite = ({ it }: { it: TestAPI<TestSuiteContext> }):
         ),
       );
 
-      expect(main.status).toBe("blocked");
+      expect(main.status).toBe("running");
+
+      const mainJob = await client.getJob({ id: main.id });
+      expect(mainJob!.status === "pending" && mainJob!.blocked).toBe(true);
     });
 
     it("creates a chain with scheduling", async ({
@@ -185,7 +190,9 @@ export const startChainsTestSuite = ({ it }: { it: TestAPI<TestSuiteContext> }):
         ),
       );
 
-      expect(chain.status).toBe("pending");
+      expect(chain.status).toBe("running");
+      const scheduledJob = await client.getJob({ id: chain.id });
+      expect(scheduledJob!.status).toBe("pending");
     });
 
     it("throws when called without transaction context", async ({
@@ -395,7 +402,9 @@ export const startChainsTestSuite = ({ it }: { it: TestAPI<TestSuiteContext> }):
       for (let i = 0; i < 3; i++) {
         expect(chains[i].typeName).toBe("test");
         expect(chains[i].input).toEqual({ value: i + 1 });
-        expect(chains[i].status).toBe("pending");
+        expect(chains[i].status).toBe("running");
+        const initialJob = await client.getJob({ id: chains[i].id });
+        expect(initialJob!.status).toBe("pending");
         expect(chains[i].deduplicated).toBe(false);
       }
 
@@ -463,7 +472,7 @@ export const startChainsTestSuite = ({ it }: { it: TestAPI<TestSuiteContext> }):
             transactionHooks,
             typeName: "test",
             input: { value: 100 },
-            deduplication: { key: "existing-key" },
+            deduplication: { key: "existing-key", scope: "running" },
           }),
         ),
       );
@@ -477,12 +486,12 @@ export const startChainsTestSuite = ({ it }: { it: TestAPI<TestSuiteContext> }):
               {
                 typeName: "test",
                 input: { value: 1 },
-                deduplication: { key: "existing-key" },
+                deduplication: { key: "existing-key", scope: "running" },
               },
               {
                 typeName: "test",
                 input: { value: 2 },
-                deduplication: { key: "new-key" },
+                deduplication: { key: "new-key", scope: "running" },
               },
             ],
           }),
@@ -555,8 +564,13 @@ export const startChainsTestSuite = ({ it }: { it: TestAPI<TestSuiteContext> }):
       );
 
       expect(chains).toHaveLength(2);
-      expect(chains[0].status).toBe("blocked");
-      expect(chains[1].status).toBe("blocked");
+      expect(chains[0].status).toBe("running");
+      expect(chains[1].status).toBe("running");
+
+      const job0 = await client.getJob({ id: chains[0].id });
+      const job1 = await client.getJob({ id: chains[1].id });
+      expect(job0!.status === "pending" && job0!.blocked).toBe(true);
+      expect(job1!.status === "pending" && job1!.blocked).toBe(true);
     });
 
     it("handles batch with scheduling", async ({
@@ -596,7 +610,9 @@ export const startChainsTestSuite = ({ it }: { it: TestAPI<TestSuiteContext> }):
 
       expect(chains).toHaveLength(3);
       for (const jc of chains) {
-        expect(jc.status).toBe("pending");
+        expect(jc.status).toBe("running");
+        const job = await client.getJob({ id: jc.id });
+        expect(job!.status).toBe("pending");
       }
     });
 
@@ -692,8 +708,13 @@ export const startChainsTestSuite = ({ it }: { it: TestAPI<TestSuiteContext> }):
         ),
       );
 
-      expect(blockedChain.status).toBe("blocked");
-      expect(unblockedChain.status).toBe("pending");
+      expect(blockedChain.status).toBe("running");
+      expect(unblockedChain.status).toBe("running");
+
+      const blockedJob = await client.getJob({ id: blockedChain.id });
+      const unblockedJob = await client.getJob({ id: unblockedChain.id });
+      expect(blockedJob!.status === "pending" && blockedJob!.blocked).toBe(true);
+      expect(unblockedJob!.status === "pending" && unblockedJob!.blocked).toBe(false);
     });
 
     it("workers unblock and process batch-created blocked chains", async ({
@@ -753,7 +774,9 @@ export const startChainsTestSuite = ({ it }: { it: TestAPI<TestSuiteContext> }):
       );
 
       for (const chain of chains) {
-        expect(chain.status).toBe("blocked");
+        expect(chain.status).toBe("running");
+        const job = await client.getJob({ id: chain.id });
+        expect(job!.status === "pending" && job!.blocked).toBe(true);
       }
 
       const worker = await createInProcessWorker({

@@ -88,4 +88,4 @@ Main --depends on--+-- Blocker X
 
 Cascade delete starting from `Main` resolves to: `Main`, `Blocker X`, `Blocker Y`, and `Blocker Z`. The traversal direction is downward only -- from a chain to its blockers, recursively. The blocker safety check still applies to the expanded set: if any chain in the resolved set is referenced by an external chain, the operation throws `BlockerReferenceError`.
 
-Blocker graphs are DAGs by construction (blockers must exist at chain creation time), so cycles are impossible. Running jobs in the resolved set are handled by the existing lease-renewal signal mechanism.
+Blocker graphs are DAGs by construction (blockers must exist at chain creation time), so cycles are impossible. Running jobs in the resolved set are handled by the existing attempt-expiry signal mechanism.

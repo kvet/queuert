@@ -4,8 +4,8 @@
  * Demonstrates timeout patterns for job processing.
  *
  * Scenarios:
- * 1. Cooperative Timeout: Using AbortSignal.timeout() with the job signal
- * 2. Hard Timeout: Using leaseConfig for automatic job reclamation
+ * 1. Cooperative Timeout: Using AbortController with the job signal
+ * 2. Hard Timeout: Using attemptConfig for automatic job reclamation
  */
 
 import assert from "node:assert/strict";
@@ -31,7 +31,7 @@ const jobTypes = defineJobTypes<{
     output: { data: string } | { timedOut: true };
   };
 
-  // Job demonstrating hard timeout via lease
+  // Job demonstrating hard timeout via attempt config
   "long-running-job": {
     entry: true;
     input: { taskId: string; durationMs: number };
@@ -82,8 +82,11 @@ const worker = await createInProcessWorker({
             `[fetch-with-timeout] Fetching ${job.input.url} (timeout: ${job.input.timeoutMs}ms)`,
           );
 
-          const timeout = AbortSignal.timeout(job.input.timeoutMs);
-          const combined = AbortSignal.any([signal, timeout]);
+          const ac = new AbortController();
+          const timer = setTimeout(() => {
+            ac.abort();
+          }, job.input.timeoutMs);
+          const combined = AbortSignal.any([signal, ac.signal]);
 
           try {
             const data = await simulatedFetch(job.input.url, combined, 300);
@@ -92,16 +95,18 @@ const worker = await createInProcessWorker({
           } catch (error) {
             if (error instanceof DOMException && error.name === "AbortError") {
               console.log(`  Fetch TIMED OUT`);
-              return complete(async () => ({ timedOut: true }));
+              return await complete(async () => ({ timedOut: true }));
             }
             throw error;
+          } finally {
+            clearTimeout(timer);
           }
         },
       },
 
       "long-running-job": {
-        // Configure shorter lease for demo (normally you'd use longer values)
-        leaseConfig: { leaseMs: 500, renewIntervalMs: 200 },
+        // Configure shorter attempt timeout for demo (normally you'd use longer values)
+        attemptConfig: { timeoutMs: 500, heartbeatMs: 200 },
         attemptHandler: async ({ job, complete }) => {
           const attempt = job.attempt;
           console.log(
@@ -156,9 +161,9 @@ const result2 = await client.awaitChain(fetch2, { timeoutMs: 5000 });
 console.log(`Result: ${JSON.stringify(result2.output)}`);
 assert.ok("timedOut" in result2.output);
 
-// Scenario 2: Hard timeout via lease (completes in time)
-console.log("\n--- Scenario 2: Hard Timeout via Lease ---");
-console.log("Job with leaseConfig completes within lease period.\n");
+// Scenario 2: Hard timeout via attempt config (completes in time)
+console.log("\n--- Scenario 2: Hard Timeout via Attempt Config ---");
+console.log("Job with attemptConfig completes within attempt period.\n");
 
 const longChain = await withTransactionHooks(async (transactionHooks) =>
   sql.begin(async (txSql) =>
@@ -166,7 +171,7 @@ const longChain = await withTransactionHooks(async (transactionHooks) =>
       sql: txSql,
       transactionHooks,
       typeName: "long-running-job",
-      input: { taskId: "task-001", durationMs: 200 }, // 200ms work, 500ms lease
+      input: { taskId: "task-001", durationMs: 200 }, // 200ms work, 500ms attempt
     }),
   ),
 );

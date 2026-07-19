@@ -942,8 +942,13 @@ export const blockerChainsTestSuite = ({ it }: { it: TestAPI<TestSuiteContext> }
       ),
     );
 
-    expect(mainA.status).toBe("blocked");
-    expect(mainB.status).toBe("blocked");
+    expect(mainA.status).toBe("running");
+    expect(mainB.status).toBe("running");
+
+    const jobA = await client.getJob({ id: mainA.id });
+    const jobB = await client.getJob({ id: mainB.id });
+    expect(jobA!.status === "pending" && jobA!.blocked).toBe(true);
+    expect(jobB!.status === "pending" && jobB!.blocked).toBe(true);
 
     await withWorkers([await worker.start()], async () => {
       const [resultA, resultB] = await Promise.all([
@@ -1050,7 +1055,10 @@ export const blockerChainsTestSuite = ({ it }: { it: TestAPI<TestSuiteContext> }
     );
 
     for (const chain of mainChains) {
-      expect(chain.status).toBe("blocked");
+      const job = await client.getJob({ id: chain.id });
+      expect(job).toBeDefined();
+      expect(job!.status).toBe("pending");
+      if (job!.status === "pending") expect(job!.blocked).toBe(true);
     }
 
     await withWorkers([await worker.start()], async () => {
@@ -1138,7 +1146,10 @@ export const blockerChainsTestSuite = ({ it }: { it: TestAPI<TestSuiteContext> }
       ),
     );
 
-    expect(mainChain.status).toBe("blocked");
+    const mainJob = await client.getJob({ id: mainChain.id });
+    expect(mainJob).toBeDefined();
+    expect(mainJob!.status).toBe("pending");
+    if (mainJob!.status === "pending") expect(mainJob!.blocked).toBe(true);
 
     await withWorkers([await worker.start()], async () => {
       const result = await client.awaitChain(mainChain, completionOptions);

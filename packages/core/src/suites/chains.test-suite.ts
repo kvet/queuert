@@ -71,9 +71,9 @@ export const chainsTestSuite = ({ it }: { it: TestAPI<TestSuiteContext> }): void
                   input: { valueNext: job.input.value + 1 },
                 });
                 expectTypeOf(continuedJob.typeName).toEqualTypeOf<"linear_next">();
-                expectTypeOf(continuedJob.status).toEqualTypeOf<"pending" | "blocked">();
+                expectTypeOf(continuedJob.status).toEqualTypeOf<"pending">();
                 expect(continuedJob.typeName).toBe("linear_next");
-                expect(continuedJob.status).toBeOneOf(["pending", "blocked"]);
+                expect(continuedJob.status).toBe("pending");
                 expect(continuedJob.chainId).toEqual(chain.id);
                 return continuedJob;
               });
@@ -94,7 +94,7 @@ export const chainsTestSuite = ({ it }: { it: TestAPI<TestSuiteContext> }): void
                   input: { valueNextNext: job.input.valueNext + 1 },
                 });
                 expectTypeOf(continuedJob.typeName).toEqualTypeOf<"linear_next_next">();
-                expectTypeOf(continuedJob.status).toEqualTypeOf<"pending" | "blocked">();
+                expectTypeOf(continuedJob.status).toEqualTypeOf<"pending">();
                 return continuedJob;
               });
             },

@@ -7,8 +7,8 @@ import { type TestAPI, expect } from "vitest";
 
 import { createSqliteStateAdapter } from "../state-adapter/state-adapter.sqlite.js";
 import {
-  type BetterSqlite3Provider,
   type BetterSqlite3Context,
+  type BetterSqlite3Provider,
   createBetterSqlite3Provider,
 } from "../state-provider/state-provider.better-sqlite3.js";
 
@@ -168,6 +168,7 @@ export const extendWithStateSqlite = <T>(
                 readOnly: true,
               });
             }
+
             return originalExecuteSql({ txCtx, sql, params, paramTypes, columnTypes, readOnly });
           },
         };

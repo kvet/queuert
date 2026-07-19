@@ -46,13 +46,13 @@ createProcessors({
 ## Execution model
 
 ```
-acquireJobs({ "send-email": 50, "send-sms": 20 })  ── 1 statement, returns N of one type
+startJobAttempts({ "send-email": 50, "send-sms": 20 })  ── 1 statement, returns N of one type
 getJobsBlockers(jobIds)                            ── 1 statement
 prepareTx open
   user prepare callback (savepoint)
 prepareTx commit (or kept open if atomic)
 
-[staged] renewJobLeases + listenJobOwnershipLost × N + leaseManager.start()
+[staged] extendJobAttempts + listenJobAttemptLost × N + heartbeatManager.start()
 
 user work (sendBatch, etc.)
 
@@ -60,7 +60,7 @@ completeTx open (or reuse prepareTx if atomic)
   getJobsForUpdate(jobIds)
   user complete callback
   for each job: SAVEPOINT
-    ok    → finishJob (completeJobs, unblockJobs bulk, [createJobs for continueWith])
+    ok    → finishJob (finishJobAttempts, unblockJobs bulk, [createChains for continueWith])
     error → handleJobHandlerError (rescheduleJobs)
   RELEASE / ROLLBACK TO
 completeTx commit
@@ -70,7 +70,7 @@ Per-job savepoints inside `completeTx` give per-slot rollback. Bulk finishJob op
 
 ## Decisions
 
-**Same-type with per-type limits.** `acquireJobs({ limitsByTypeName })` takes `{ "send-email": 50, "send-sms": 20 }` (built from each batched processor's `batchLimit`). Adapter picks a `typeName` (oldest pending wins) and returns up to that type's limit. All returned jobs share one `typeName`. PG single-round-trip:
+**Same-type with per-type limits.** `startJobAttempts({ limitsByTypeName })` takes `{ "send-email": 50, "send-sms": 20 }` (built from each batched processor's `batchLimit`). Adapter picks a `typeName` (oldest pending wins) and returns up to that type's limit. All returned jobs share one `typeName`. PG single-round-trip:
 
 ```sql
 WITH limits AS (SELECT * FROM unnest($1::text[], $2::int[]) AS t(type_name, lim)),
@@ -91,18 +91,18 @@ FOR UPDATE SKIP LOCKED
 
 **Prepare writes.** `txCtx` is exposed. Reads are the common case. Writes are allowed but shared across the batch (committed/rolled back with `prepareTx`). PG has no per-savepoint read-only mode, so DB-level enforcement isn't possible — contract only.
 
-**Group semantics — batch is the unit.** Lease, complete, and reap apply to the batch as a whole, not per job:
+**Group semantics — batch is the unit.** Attempt, complete, and expired release apply to the batch as a whole, not per job:
 
-- One `leaseManager` per batch calling `renewJobLeases({ jobIds, … })`.
+- One `attemptManager` per batch calling `extendJobAttempts({ jobIds, … })`.
 - One commit decision (`completeTx` succeeds or fails together).
-- If `getJobsForUpdate` finds any job in a bad state mid-batch (already-completed / taken-by-another), abort the whole batch — the surviving jobs go back via lease expiry.
-- Reaping must reclaim batched jobs as a group. **Open** — see Open Questions.
+- If `getJobsForUpdate` finds any job in a bad state mid-batch (already-completed / taken-by-another), abort the whole batch — the surviving jobs go back via attempt expiry.
+- Expired attempts for batched jobs must be reclaimed as a group. **Open** — see Open Questions.
 
 **Errors.**
 
 - Per-job application error → savepoint runs `handleJobHandlerError` for that slot only; rest of batch commits.
 - Handler throws → all N jobs go through `handleJobHandlerError` in a fresh tx, each in its own savepoint.
-- Adapter throws (commit failure) → leases expire, reaper recovers.
+- Adapter throws (commit failure) → attempts expire, reclamation recovers.
 
 ## OTel
 
@@ -141,20 +141,20 @@ startBatchAttemptSpan(data: {
 The bulk methods replace their singular counterparts — the contract is array-only, not "array alongside singular." Singular usage becomes an array of length 1.
 
 ```typescript
-acquireJobs(params: { txCtx?; limitsByTypeName: Record<string, number> })
+startJobAttempts(params: { txCtx?; limitsByTypeName: Record<string, number> })
   → { jobs: StateJob[]; hasMore: boolean }
 getJobsBlockers(params: { txCtx?; jobIds })
   → Map<TJobId, [StateJob, StateJob | undefined][]>
-renewJobLeases(params: { txCtx?; jobIds; workerId; leaseDurationMs }) → StateJob[]
+extendJobAttempts(params: { txCtx?; jobIds; workerId; attemptDurationMs }) → StateJob[]
 getJobsForUpdate(params: { txCtx?; jobIds }) → StateJob[]
-completeJobs(params: { txCtx?; items: { jobId; output }[]; workerId }) → StateJob[]
+finishJobAttempts(params: { txCtx?; items: { jobId; output }[]; workerId }) → StateJob[]
 rescheduleJobs(params: { txCtx?; items: { jobId; schedule; error }[] }) → StateJob[]
 unblockJobsByChainIds(params: { txCtx?; blockedByChainIds })
   → { unblockedJobs; blockerTraceContexts }
-reapExpiredJobLeases(params: …) → …  // see Open Questions: group reap
+reclaimExpiredJobAttempts(params: …) → …  // see Open Questions: group reclamation
 ```
 
-Removed: `acquireJob`, `getJobBlockers`, `renewJobLease`, `getJobById`, `completeJob`, `rescheduleJob`, `unblockJobs`, `reapExpiredJobLease`. `createJobs` and `addJobsBlockers` are already array-shaped.
+Removed: `startJobAttempt`, `getJobBlockers`, `extendJobAttempt`, `getJobById`, `finishJobAttempt`, `rescheduleJob`, `unblockJobs`, `reclaimExpiredJobAttempt`. `createChains` and `addJobsBlockers` are already array-shaped.
 
 PG: `... = ANY($1)` rewrites + `LIMIT N`. SQLite: `IN (?, ...)`. In-process: trivial loops.
 
@@ -162,7 +162,7 @@ PG: `... = ANY($1)` rewrites + `LIMIT N`. SQLite: `IN (?, ...)`. In-process: tri
 
 - At construction, partition processors into batched (`batchLimit > 1`) and non-batched.
 - Build `limitsByTypeName` from batched processors' `batchLimit`. Non-batched processors contribute their typeNames with limit `1`.
-- For each free slot: `acquireJobs({ limitsByTypeName })` → dispatch to `runJobBatch` if `batchLimit > 1`, else the single-job path.
+- For each free slot: `startJobAttempts({ limitsByTypeName })` → dispatch to `runJobBatch` if `batchLimit > 1`, else the single-job path.
 - "Single-job" is just batched-of-1 internally — same code path with `jobs.length === 1`.
 
 ## Middleware
@@ -190,7 +190,7 @@ wrapHandler?: <T>(opts: {
 
    The discriminated-union sketch in earlier drafts came from option (2). Pick before implementation. Symmetry with the single-job processor matters — whatever shape we pick should map cleanly to `batchLimit: 1`.
 
-3. **Group reaping.** Reaping currently picks one expired job at a time. For batched jobs, the entire batch shares a fate (lease, completion, abort). The reaper needs to reclaim them as a group. Possible approaches: a batch ID on each job written at acquire time; reaping by `(leasedBy, leasedUntil)` tuple; a `batch` join table. None decided. Until this is solved, batched processing has weaker recovery guarantees than per-job.
+3. **Group reclamation.** Expired attempt reclamation currently picks one expired job at a time. For batched jobs, the entire batch shares a fate (attempt, completion, abort). The release loop needs to reclaim them as a group. Possible approaches: a batch ID on each job written at acquire time; releasing by `(attemptBy, attemptUntil)` tuple; a `batch` join table. None decided. Until this is solved, batched processing has weaker recovery guarantees than per-job.
 
 4. **OTel.** Whole section needs review.
 
@@ -200,10 +200,10 @@ wrapHandler?: <T>(opts: {
 2. PG adapter SQL.
 3. SQLite adapter SQL.
 4. Resolve open questions (2), (3), (4).
-5. `runJobBatch` in `worker/`. Reuses `lease.ts`, savepoint/transaction context. Unify single-job path on top of it.
+5. `runJobBatch` in `worker/`. Reuses `attempt-heartbeat.ts`, savepoint/transaction context. Unify single-job path on top of it.
 6. Wire `batchLimit` through `processors.ts` and `in-process-worker.ts`.
 7. Migrate middleware to always-array shape.
 8. Batched OTel adapter changes.
-9. Tests: per-job error mixing, prepare-write semantics, lease renewal, ownership-lost mid-batch, abort propagation, atomic & staged, `continueWith` inside batches, group reap.
+9. Tests: per-job error mixing, prepare-write semantics, attempt extension, attempt-lost mid-batch, abort propagation, atomic & staged, `continueWith` inside batches, group reclamation.
 10. Benchmark: extend `processing-capacity` with a batched mode; verify PG atomic moves from ~600/s into the thousands.
 11. Docs.

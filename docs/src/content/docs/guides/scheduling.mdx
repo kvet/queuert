@@ -79,7 +79,7 @@ await withTransactionHooks(async (transactionHooks) =>
 );
 ```
 
-`rescheduleJob` throws `JobNotFoundError` if the job does not exist and `JobNotReschedulableError` if it is not `pending` (e.g. already running, completed, or blocked).
+`rescheduleJob` throws `JobNotFoundError` if the job does not exist and `JobNotReschedulableError` if it is not `pending` (e.g. already running or completed).
 
 `rescheduleJobs` validates atomically — if any id in the batch is missing or not pending, the entire call fails and no job is rescheduled. Both methods are mutating and require `transactionHooks` + a transaction context.
 
@@ -111,7 +111,8 @@ const jobTypes = defineJobTypes<{
           schedule: { afterMs: 24 * 60 * 60 * 1000 }, // Run again tomorrow
           deduplication: {
             key: `digest:${job.input.userId}`,
-            excludeChainIds: [job.chainId], // Skip the completing chain
+            scope: 'running',
+            excludeChainIds: [job.chainId],
           },
         });
       }

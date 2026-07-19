@@ -2,9 +2,9 @@ import { type BaseJobTypeDefinitions } from "../entities/job-type.js";
 import { type JobTypeNames, type JobTypeReachingEntry } from "../entities/job-types.resolvers.js";
 import { type BackoffConfig } from "../helpers/backoff.js";
 import { type StateAdapter } from "../state-adapter/state-adapter.js";
+import { type AttemptConfig } from "./attempt-heartbeat.js";
 import { type AttemptMiddleware } from "./attempt-middleware.js";
 import { type AttemptHandler } from "./job-process.js";
-import { type LeaseConfig } from "./lease.js";
 
 /** Configuration for processing a single job type. */
 export type InProcessWorkerProcessor<
@@ -29,8 +29,8 @@ export type InProcessWorkerProcessor<
   >;
   /** Per-job-type backoff configuration (overrides registry/worker defaults) */
   backoffConfig?: BackoffConfig;
-  /** Per-job-type lease configuration (overrides registry/worker defaults) */
-  leaseConfig?: LeaseConfig;
+  /** Per-job-type attempt configuration (overrides registry/worker defaults) */
+  attemptConfig?: AttemptConfig;
 };
 
 /**

@@ -190,7 +190,8 @@ export type ResolvedJob<
   TJobTypeName,
   TChainTypeName,
   JobTypeProperty<TJobTypeDefinitions, TJobTypeName, "input">,
-  JobTypeProperty<TJobTypeDefinitions, TJobTypeName, "output">
+  JobTypeProperty<TJobTypeDefinitions, TJobTypeName, "output">,
+  [JobTypeContinuation<TJobTypeDefinitions, TJobTypeName>] extends [never] ? false : true
 >;
 
 export type ResolvedJobWithBlockers<
@@ -210,14 +211,17 @@ export type ContinuationJobs<
 > =
   JobTypeContinuation<TJobTypeDefinitions, TJobTypeName> extends infer TContinuation extends string
     ? {
-        [K in TContinuation]: Job<
-          TJobId,
-          K,
-          TChainTypeName,
-          JobTypeProperty<TJobTypeDefinitions, K, "input">,
-          JobTypeProperty<TJobTypeDefinitions, K, "output">
-        > &
-          ({ status: "pending" } | { status: "blocked" });
+        [K in TContinuation]: Extract<
+          Job<
+            TJobId,
+            K,
+            TChainTypeName,
+            JobTypeProperty<TJobTypeDefinitions, K, "input">,
+            JobTypeProperty<TJobTypeDefinitions, K, "output">,
+            [JobTypeContinuation<TJobTypeDefinitions, K>] extends [never] ? false : true
+          >,
+          { status: "pending" }
+        >;
       }[TContinuation]
     : never;
 
@@ -252,7 +256,8 @@ export type ResolvedChainJobs<
           K,
           TChainTypeName,
           JobTypeProperty<TJobTypeDefinitions, K, "input">,
-          JobTypeProperty<TJobTypeDefinitions, K, "output">
+          JobTypeProperty<TJobTypeDefinitions, K, "output">,
+          [JobTypeContinuation<TJobTypeDefinitions, K>] extends [never] ? false : true
         >;
       }[TChainTypeNames]
     : never;

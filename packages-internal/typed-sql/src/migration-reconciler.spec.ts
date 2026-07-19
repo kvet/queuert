@@ -8,17 +8,10 @@ import {
 
 const keyById = (row: ReconcilerRow): string => String(row.id);
 
-/** A small fixture mirroring the shapes the real migrations touch. */
 const initial: ReconcilerRow[] = [
-  { id: "1", status: "pending", leased_until: null, chain_id: "1", chain_index: 0 },
-  { id: "2", status: "blocked", leased_until: null, chain_id: "1", chain_index: 1 },
-  {
-    id: "3",
-    status: "running",
-    leased_until: new Date("2020-01-01T00:00:00Z"),
-    chain_id: "3",
-    chain_index: 0,
-  },
+  { id: "1", col_a: "x", col_b: null, group_id: "1", seq: 0 },
+  { id: "2", col_a: "y", col_b: null, group_id: "1", seq: 1 },
+  { id: "3", col_a: "z", col_b: new Date("2020-01-01T00:00:00Z"), group_id: "3", seq: 0 },
 ];
 
 /** Echoes the projection back unchanged — the identity-migration live read. */
@@ -26,106 +19,95 @@ const unchanged = (): ReconcilerRow[] => initial.map((row) => ({ ...row }));
 
 describe("createMigrationReconciler", () => {
   it("passes an identity (index-only) migration that changes no cell", () => {
-    const r = createMigrationReconciler("job", initial, keyById);
+    const r = createMigrationReconciler("item", initial, keyById);
     expect(() => {
       r.reconcile("idx", {}, unchanged());
     }).not.toThrow();
   });
 
   it("fails a stray cell change, naming the column and key", () => {
-    const r = createMigrationReconciler("job", initial, keyById);
+    const r = createMigrationReconciler("item", initial, keyById);
     const live = unchanged();
-    live[1].chain_index = 99; // a botched UPDATE
+    live[1].seq = 99;
     expect(() => {
       r.reconcile("stray", {}, live);
-    }).toThrow(/job\.chain_index@2 — cell-changed/);
+    }).toThrow(/item\.seq@2 — cell-changed/);
   });
 
   it("accepts a declared add whose backfill satisfies its predicate, then tracks it", () => {
-    const r = createMigrationReconciler("job", initial, keyById);
+    const r = createMigrationReconciler("item", initial, keyById);
     const contract: ColumnContract = {
-      add: [
-        { column: "blocked", derive: (after, before) => after === (before.status === "blocked") },
-      ],
+      add: [{ column: "flag", derive: (after, before) => after === (before.col_a === "y") }],
     };
-    const live = unchanged().map((row) => ({ ...row, blocked: row.status === "blocked" }));
+    const live = unchanged().map((row) => ({ ...row, flag: row.col_a === "y" }));
     expect(() => {
-      r.reconcile("add_blocked", contract, live);
+      r.reconcile("add_flag", contract, live);
     }).not.toThrow();
-    expect(r.projection().get("2")?.blocked).toBe(true);
+    expect(r.projection().get("2")?.flag).toBe(true);
   });
 
   it("fails a declared add whose backfill is wrong", () => {
-    const r = createMigrationReconciler("job", initial, keyById);
+    const r = createMigrationReconciler("item", initial, keyById);
     const contract: ColumnContract = {
-      add: [
-        { column: "blocked", derive: (after, before) => after === (before.status === "blocked") },
-      ],
+      add: [{ column: "flag", derive: (after, before) => after === (before.col_a === "y") }],
     };
-    const live = unchanged().map((row) => ({ ...row, blocked: false })); // never set true
+    const live = unchanged().map((row) => ({ ...row, flag: false }));
     expect(() => {
-      r.reconcile("add_blocked", contract, live);
-    }).toThrow(/blocked@2 — predicate-failed/);
+      r.reconcile("add_flag", contract, live);
+    }).toThrow(/flag@2 — predicate-failed/);
   });
 
   it("verifies a rename carried its data; fails when the rename loses it", () => {
-    const ok = createMigrationReconciler("job", initial, keyById);
-    const renamed = unchanged().map(({ leased_until, ...rest }) => ({
+    const ok = createMigrationReconciler("item", initial, keyById);
+    const renamed = unchanged().map(({ col_b, ...rest }) => ({
       ...rest,
-      attempt_until: leased_until,
+      col_b_renamed: col_b,
     }));
     expect(() => {
-      ok.reconcile("rename", { rename: [{ from: "leased_until", to: "attempt_until" }] }, renamed);
+      ok.reconcile("rename", { rename: [{ from: "col_b", to: "col_b_renamed" }] }, renamed);
     }).not.toThrow();
-    expect(ok.projection().get("3")?.attempt_until).toEqual(new Date("2020-01-01T00:00:00Z"));
+    expect(ok.projection().get("3")?.col_b_renamed).toEqual(new Date("2020-01-01T00:00:00Z"));
 
-    const lost = createMigrationReconciler("job", initial, keyById);
-    const dropped = unchanged().map(({ leased_until: _drop, ...rest }) => ({
+    const lost = createMigrationReconciler("item", initial, keyById);
+    const dropped = unchanged().map(({ col_b: _drop, ...rest }) => ({
       ...rest,
-      attempt_until: null, // rename that silently dropped its values
+      col_b_renamed: null,
     }));
     expect(() => {
-      lost.reconcile(
-        "rename",
-        { rename: [{ from: "leased_until", to: "attempt_until" }] },
-        dropped,
-      );
-    }).toThrow(/attempt_until@3 — cell-changed/);
+      lost.reconcile("rename", { rename: [{ from: "col_b", to: "col_b_renamed" }] }, dropped);
+    }).toThrow(/col_b_renamed@3 — cell-changed/);
   });
 
   it("accepts a declared drop but fails an undeclared disappearance", () => {
-    const ok = createMigrationReconciler("job", initial, keyById);
-    const withoutStatus = unchanged().map(({ status: _s, ...rest }) => rest);
+    const ok = createMigrationReconciler("item", initial, keyById);
+    const withoutColA = unchanged().map(({ col_a: _s, ...rest }) => rest);
     expect(() => {
-      ok.reconcile("drop_status", { drop: ["status"] }, withoutStatus);
+      ok.reconcile("drop_col_a", { drop: ["col_a"] }, withoutColA);
     }).not.toThrow();
 
-    const undeclared = createMigrationReconciler("job", initial, keyById);
+    const undeclared = createMigrationReconciler("item", initial, keyById);
     expect(() => {
-      undeclared.reconcile("oops", {}, withoutStatus);
-    }).toThrow(/status@\d+ — undeclared-drop/);
+      undeclared.reconcile("oops", {}, withoutColA);
+    }).toThrow(/col_a@\d+ — undeclared-drop/);
   });
 
   it("flags an undeclared new column appearing in the live read", () => {
-    const r = createMigrationReconciler("job", initial, keyById);
+    const r = createMigrationReconciler("item", initial, keyById);
     const live = unchanged().map((row) => ({ ...row, surprise: 1 }));
     expect(() => {
       r.reconcile("oops", {}, live);
     }).toThrow(/surprise@\d+ — undeclared-add/);
   });
 
-  it("handles a cross-row in-place backfill (continued_to_id from chain position)", () => {
-    const r = createMigrationReconciler("job", initial, keyById);
-    // continued_to_id = id of the same-chain row at chain_index + 1, else null.
+  it("handles a cross-row backfill using the snapshot", () => {
+    const r = createMigrationReconciler("item", initial, keyById);
     const contract: ColumnContract = {
       add: [
         {
-          column: "continued_to_id",
+          column: "next_id",
           derive: (after, before, snapshot) => {
             const successor = [...snapshot.values()].find(
-              (r2) =>
-                r2.chain_id === before.chain_id &&
-                Number(r2.chain_index) === Number(before.chain_index) + 1,
+              (r2) => r2.group_id === before.group_id && Number(r2.seq) === Number(before.seq) + 1,
             );
             return after === (successor ? successor.id : null);
           },
@@ -133,27 +115,25 @@ describe("createMigrationReconciler", () => {
       ],
     };
     const successorOf = (row: ReconcilerRow): unknown =>
-      initial.find(
-        (r2) =>
-          r2.chain_id === row.chain_id && Number(r2.chain_index) === Number(row.chain_index) + 1,
-      )?.id ?? null;
-    const live = unchanged().map((row) => ({ ...row, continued_to_id: successorOf(row) }));
+      initial.find((r2) => r2.group_id === row.group_id && Number(r2.seq) === Number(row.seq) + 1)
+        ?.id ?? null;
+    const live = unchanged().map((row) => ({ ...row, next_id: successorOf(row) }));
     expect(() => {
-      r.reconcile("backfill_continued", contract, live);
+      r.reconcile("backfill_next", contract, live);
     }).not.toThrow();
-    expect(r.projection().get("1")?.continued_to_id).toBe("2"); // chain 1, index 0 → index 1
-    expect(r.projection().get("3")?.continued_to_id).toBe(null); // chain 3 has one row
+    expect(r.projection().get("1")?.next_id).toBe("2");
+    expect(r.projection().get("3")?.next_id).toBe(null);
   });
 
   it("handles a nondeterministic COALESCE(col, now()) envelope predicate", () => {
     const start = new Date("2021-06-01T00:00:00Z");
-    const r = createMigrationReconciler("job", initial, keyById);
+    const r = createMigrationReconciler("item", initial, keyById);
     const contract: ColumnContract = {
       add: [
         {
-          column: "leased_at",
+          column: "ts",
           derive: (after, before) => {
-            const prior = before.leased_until;
+            const prior = before.col_b;
             if (prior !== null) return equalDate(after, prior);
             return after instanceof Date && after.getTime() >= start.getTime();
           },
@@ -162,50 +142,48 @@ describe("createMigrationReconciler", () => {
     };
     const live = unchanged().map((row) => ({
       ...row,
-      leased_at: row.leased_until ?? new Date("2021-06-01T00:00:05Z"),
+      ts: row.col_b ?? new Date("2021-06-01T00:00:05Z"),
     }));
     expect(() => {
-      r.reconcile("backfill_leased_at", contract, live);
+      r.reconcile("backfill_ts", contract, live);
     }).not.toThrow();
   });
 
   it("reports a removed row", () => {
-    const r = createMigrationReconciler("job", initial, keyById);
+    const r = createMigrationReconciler("item", initial, keyById);
     const live = unchanged().filter((row) => row.id !== "2");
     expect(() => {
       r.reconcile("oops", {}, live);
-    }).toThrow(/job@2 — row-removed/);
+    }).toThrow(/item@2 — row-removed/);
   });
 
   it("threads the projection so a later migration compares against the adopted baseline", () => {
-    const r = createMigrationReconciler("job", initial, keyById);
-    // 1) add blocked
+    const r = createMigrationReconciler("item", initial, keyById);
     const afterAdd: ReconcilerRow[] = unchanged().map((row) => ({
       ...row,
-      blocked: row.status === "blocked",
+      flag: row.col_a === "y",
     }));
-    r.reconcile("add_blocked", { add: [{ column: "blocked", derive: () => true }] }, afterAdd);
-    // 2) drop status — projection now carries `blocked`, must still match
-    const afterDrop = afterAdd.map(({ status: _s, ...rest }) => rest);
+    r.reconcile("add_flag", { add: [{ column: "flag", derive: () => true }] }, afterAdd);
+    const afterDrop = afterAdd.map(({ col_a: _s, ...rest }) => rest);
     expect(() => {
-      r.reconcile("drop_status", { drop: ["status"] }, afterDrop);
+      r.reconcile("drop_col_a", { drop: ["col_a"] }, afterDrop);
     }).not.toThrow();
     expect(r.projection().get("2")).toEqual({
       id: "2",
-      blocked: true,
-      leased_until: null,
-      chain_id: "1",
-      chain_index: 1,
+      flag: true,
+      col_b: null,
+      group_id: "1",
+      seq: 1,
     });
   });
 
   it("supports a constant-value predicate for a deterministic default add", () => {
-    const r = createMigrationReconciler("job", initial, keyById);
-    const live = unchanged().map((row) => ({ ...row, blocked: false }));
+    const r = createMigrationReconciler("item", initial, keyById);
+    const live = unchanged().map((row) => ({ ...row, flag: false }));
     expect(() => {
       r.reconcile(
-        "add_blocked",
-        { add: [{ column: "blocked", derive: (after) => after === false }] },
+        "add_flag",
+        { add: [{ column: "flag", derive: (after) => after === false }] },
         live,
       );
     }).not.toThrow();

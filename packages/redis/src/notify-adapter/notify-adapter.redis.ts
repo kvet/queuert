@@ -14,7 +14,7 @@ export const createRedisNotifyAdapter = async ({
 }): Promise<NotifyAdapter> => {
   const jobScheduledChannel = `${channelPrefix}:sched`;
   const chainCompletedChannel = `${channelPrefix}:chainc`;
-  const ownershipLostChannel = `${channelPrefix}:owls`;
+  const attemptLostChannel = `${channelPrefix}:atls`;
   const hintKeyPrefix = `${channelPrefix}:hint:`;
 
   const jobScheduledListener = createSharedListener(async (dispatch) =>
@@ -27,8 +27,8 @@ export const createRedisNotifyAdapter = async ({
       dispatch(payload, payload);
     }),
   );
-  const ownershipLostListener = createSharedListener(async (dispatch) =>
-    notifyProvider.subscribe(ownershipLostChannel, (payload) => {
+  const attemptLostListener = createSharedListener(async (dispatch) =>
+    notifyProvider.subscribe(attemptLostChannel, (payload) => {
       dispatch(payload, payload);
     }),
   );
@@ -89,14 +89,14 @@ export const createRedisNotifyAdapter = async ({
       });
     },
 
-    notifyJobOwnershipLost: async (jobId) => {
+    notifyJobAttemptLost: async (jobId) => {
       assertOpen();
-      await notifyProvider.publish(ownershipLostChannel, jobId);
+      await notifyProvider.publish(attemptLostChannel, jobId);
     },
 
-    listenJobOwnershipLost: async (jobId, onNotification) => {
+    listenJobAttemptLost: async (jobId, onNotification) => {
       assertOpen();
-      return ownershipLostListener.subscribe(jobId, () => {
+      return attemptLostListener.subscribe(jobId, () => {
         onNotification();
       });
     },
@@ -107,7 +107,7 @@ export const createRedisNotifyAdapter = async ({
       await Promise.all([
         jobScheduledListener.dispose(),
         chainCompletedListener.dispose(),
-        ownershipLostListener.dispose(),
+        attemptLostListener.dispose(),
       ]);
       await notifyProvider.close?.();
     },

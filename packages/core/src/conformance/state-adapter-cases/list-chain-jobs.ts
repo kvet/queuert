@@ -17,48 +17,38 @@ export const listChainJobsGroup: ConformanceGroup<StateConformanceFixture> = {
       },
     },
     {
-      name: "returns jobs ordered by chainIndex asc by default",
+      name: "returns jobs in chain order asc by default",
       run: async ({ stateAdapter }, expect) => {
         const [{ job: root }] = await stateAdapter.withTransaction(async (txCtx) =>
-          stateAdapter.createJobs({
+          stateAdapter.createChains({
             txCtx,
             jobs: [
               {
                 typeName: "step-1",
-                chainId: undefined,
                 chainTypeName: "chain-type",
                 input: null,
-                chainIndex: 0,
               },
             ],
           }),
         );
-        await stateAdapter.withTransaction(async (txCtx) =>
-          stateAdapter.createJobs({
+        const { job: step2 } = await stateAdapter.withTransaction(async (txCtx) =>
+          stateAdapter.createContinuationJob({
             txCtx,
-            jobs: [
-              {
-                typeName: "step-2",
-                chainId: root.chainId,
-                chainTypeName: "chain-type",
-                input: null,
-                chainIndex: 1,
-              },
-            ],
+            job: {
+              typeName: "step-2",
+              continueFromId: root.id,
+              input: null,
+            },
           }),
         );
         await stateAdapter.withTransaction(async (txCtx) =>
-          stateAdapter.createJobs({
+          stateAdapter.createContinuationJob({
             txCtx,
-            jobs: [
-              {
-                typeName: "step-3",
-                chainId: root.chainId,
-                chainTypeName: "chain-type",
-                input: null,
-                chainIndex: 2,
-              },
-            ],
+            job: {
+              typeName: "step-3",
+              continueFromId: step2.id,
+              input: null,
+            },
           }),
         );
 
@@ -68,40 +58,34 @@ export const listChainJobsGroup: ConformanceGroup<StateConformanceFixture> = {
           page: { limit: 10 },
         });
         expect(result.items).toHaveLength(3);
-        expect(result.items[0].chainIndex).toBe(0);
-        expect(result.items[1].chainIndex).toBe(1);
-        expect(result.items[2].chainIndex).toBe(2);
+        expect(result.items[0].typeName).toBe("step-1");
+        expect(result.items[1].typeName).toBe("step-2");
+        expect(result.items[2].typeName).toBe("step-3");
       },
     },
     {
       name: "respects orderDirection desc",
       run: async ({ stateAdapter }, expect) => {
         const [{ job: root }] = await stateAdapter.withTransaction(async (txCtx) =>
-          stateAdapter.createJobs({
+          stateAdapter.createChains({
             txCtx,
             jobs: [
               {
                 typeName: "step-1",
-                chainId: undefined,
                 chainTypeName: "chain-type",
                 input: null,
-                chainIndex: 0,
               },
             ],
           }),
         );
         await stateAdapter.withTransaction(async (txCtx) =>
-          stateAdapter.createJobs({
+          stateAdapter.createContinuationJob({
             txCtx,
-            jobs: [
-              {
-                typeName: "step-2",
-                chainId: root.chainId,
-                chainTypeName: "chain-type",
-                input: null,
-                chainIndex: 1,
-              },
-            ],
+            job: {
+              typeName: "step-2",
+              continueFromId: root.id,
+              input: null,
+            },
           }),
         );
 
@@ -111,42 +95,38 @@ export const listChainJobsGroup: ConformanceGroup<StateConformanceFixture> = {
           page: { limit: 10 },
         });
         expect(result.items).toHaveLength(2);
-        expect(result.items[0].chainIndex).toBe(1);
-        expect(result.items[1].chainIndex).toBe(0);
+        expect(result.items[0].typeName).toBe("step-2");
+        expect(result.items[1].typeName).toBe("step-1");
       },
     },
     {
       name: "paginates with cursor",
       run: async ({ stateAdapter }, expect) => {
         const [{ job: root }] = await stateAdapter.withTransaction(async (txCtx) =>
-          stateAdapter.createJobs({
+          stateAdapter.createChains({
             txCtx,
             jobs: [
               {
                 typeName: "step-0",
-                chainId: undefined,
                 chainTypeName: "chain-type",
                 input: null,
-                chainIndex: 0,
               },
             ],
           }),
         );
+        let prevId = root.id;
         for (let i = 1; i < 5; i++) {
-          await stateAdapter.withTransaction(async (txCtx) =>
-            stateAdapter.createJobs({
+          const { job: next } = await stateAdapter.withTransaction(async (txCtx) =>
+            stateAdapter.createContinuationJob({
               txCtx,
-              jobs: [
-                {
-                  typeName: `step-${i}`,
-                  chainId: root.chainId,
-                  chainTypeName: "chain-type",
-                  input: null,
-                  chainIndex: i,
-                },
-              ],
+              job: {
+                typeName: `step-${i}`,
+                continueFromId: prevId,
+                input: null,
+              },
             }),
           );
+          prevId = next.id;
         }
 
         const page1 = await stateAdapter.listChainJobs({
@@ -156,8 +136,8 @@ export const listChainJobsGroup: ConformanceGroup<StateConformanceFixture> = {
         });
         expect(page1.items).toHaveLength(2);
         expect(page1.nextCursor).not.toBeNull();
-        expect(page1.items[0].chainIndex).toBe(0);
-        expect(page1.items[1].chainIndex).toBe(1);
+        expect(page1.items[0].typeName).toBe("step-0");
+        expect(page1.items[1].typeName).toBe("step-1");
 
         const page2 = await stateAdapter.listChainJobs({
           chainId: root.chainId,
@@ -166,8 +146,8 @@ export const listChainJobsGroup: ConformanceGroup<StateConformanceFixture> = {
         });
         expect(page2.items).toHaveLength(2);
         expect(page2.nextCursor).not.toBeNull();
-        expect(page2.items[0].chainIndex).toBe(2);
-        expect(page2.items[1].chainIndex).toBe(3);
+        expect(page2.items[0].typeName).toBe("step-2");
+        expect(page2.items[1].typeName).toBe("step-3");
 
         const page3 = await stateAdapter.listChainJobs({
           chainId: root.chainId,
@@ -179,32 +159,88 @@ export const listChainJobsGroup: ConformanceGroup<StateConformanceFixture> = {
       },
     },
     {
+      name: "paginates with cursor in desc order",
+      run: async ({ stateAdapter }, expect) => {
+        const [{ job: root }] = await stateAdapter.withTransaction(async (txCtx) =>
+          stateAdapter.createChains({
+            txCtx,
+            jobs: [
+              {
+                typeName: "step-0",
+                chainTypeName: "chain-type",
+                input: null,
+              },
+            ],
+          }),
+        );
+        let prevId = root.id;
+        for (let i = 1; i < 5; i++) {
+          const { job: next } = await stateAdapter.withTransaction(async (txCtx) =>
+            stateAdapter.createContinuationJob({
+              txCtx,
+              job: {
+                typeName: `step-${i}`,
+                continueFromId: prevId,
+                input: null,
+              },
+            }),
+          );
+          prevId = next.id;
+        }
+
+        const page1 = await stateAdapter.listChainJobs({
+          chainId: root.chainId,
+          orderDirection: "desc",
+          page: { limit: 2 },
+        });
+        expect(page1.items).toHaveLength(2);
+        expect(page1.nextCursor).not.toBeNull();
+        expect(page1.items[0].typeName).toBe("step-4");
+        expect(page1.items[1].typeName).toBe("step-3");
+
+        const page2 = await stateAdapter.listChainJobs({
+          chainId: root.chainId,
+          orderDirection: "desc",
+          page: { limit: 2, cursor: page1.nextCursor! },
+        });
+        expect(page2.items).toHaveLength(2);
+        expect(page2.nextCursor).not.toBeNull();
+        expect(page2.items[0].typeName).toBe("step-2");
+        expect(page2.items[1].typeName).toBe("step-1");
+
+        const page3 = await stateAdapter.listChainJobs({
+          chainId: root.chainId,
+          orderDirection: "desc",
+          page: { limit: 2, cursor: page2.nextCursor! },
+        });
+        expect(page3.items).toHaveLength(1);
+        expect(page3.items[0].typeName).toBe("step-0");
+        expect(page3.nextCursor).toBeNull();
+      },
+    },
+    {
       name: "only returns jobs from specified chain",
       run: async ({ stateAdapter }, expect) => {
         const [{ job: chain1Root }] = await stateAdapter.withTransaction(async (txCtx) =>
-          stateAdapter.createJobs({
+          stateAdapter.createChains({
             txCtx,
             jobs: [
               {
                 typeName: "step-1",
-                chainId: undefined,
                 chainTypeName: "chain-type",
                 input: null,
-                chainIndex: 0,
               },
             ],
           }),
         );
         await stateAdapter.withTransaction(async (txCtx) =>
-          stateAdapter.createJobs({
+          stateAdapter.createChains({
             txCtx,
             jobs: [
               {
                 typeName: "other-type",
-                chainId: undefined,
                 chainTypeName: "other-type",
                 input: null,
-                chainIndex: 0,
               },
             ],
           }),
@@ -217,6 +253,65 @@ export const listChainJobsGroup: ConformanceGroup<StateConformanceFixture> = {
         });
         expect(result.items).toHaveLength(1);
         expect(result.items[0].id).toBe(chain1Root.id);
+      },
+    },
+    {
+      name: "non-transactional listChainJobs does not observe an uncommitted continuation",
+      run: async ({ stateAdapter }, expect) => {
+        if (stateAdapter.transactionConcurrency === "serialized") {
+          expect.skip("requires concurrent transactions");
+          return;
+        }
+        const [{ job: seed }] = await stateAdapter.withTransaction(async (txCtx) =>
+          stateAdapter.createChains({
+            txCtx,
+            jobs: [
+              {
+                typeName: "iso-chain-jobs-root",
+                chainTypeName: "iso-chain-jobs",
+                input: null,
+              },
+            ],
+          }),
+        );
+
+        let release: (() => void) | undefined;
+        const gate = new Promise<void>((r) => {
+          release = r;
+        });
+        let signalTxReady: (() => void) | undefined;
+        const txReady = new Promise<void>((r) => {
+          signalTxReady = r;
+        });
+
+        const txPromise = stateAdapter
+          .withTransaction(async (txCtx) => {
+            await stateAdapter.createContinuationJob({
+              txCtx,
+              job: {
+                typeName: "iso-chain-jobs-cont",
+                continueFromId: seed.id,
+                input: null,
+              },
+            });
+            signalTxReady!();
+            await gate;
+            throw new Error("rollback");
+          })
+          .catch(() => {});
+
+        await txReady;
+        const listPromise = stateAdapter.listChainJobs({
+          chainId: seed.chainId,
+          orderDirection: "asc",
+          page: { limit: 10 },
+        });
+        release!();
+        await txPromise;
+
+        const { items } = await listPromise;
+        expect(items).toHaveLength(1);
+        expect(items[0]?.id).toBe(seed.id);
       },
     },
   ],

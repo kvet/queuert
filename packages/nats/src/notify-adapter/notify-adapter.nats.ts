@@ -83,12 +83,12 @@ export const createNatsNotifyAdapter = async ({
 }): Promise<NotifyAdapter> => {
   const jobScheduledSubject = `${subjectPrefix}.sched`;
   const chainCompletedSubject = `${subjectPrefix}.chainc`;
-  const ownershipLostSubject = `${subjectPrefix}.owls`;
+  const attemptLostSubject = `${subjectPrefix}.atls`;
   const hintKeyPrefix = `${subjectPrefix}_hint_`;
 
   const jobScheduledListener = createSharedListener(natsSubjectOpen(nc, jobScheduledSubject));
   const chainCompletedListener = createSharedListener(natsSubjectOpen(nc, chainCompletedSubject));
-  const ownershipLostListener = createSharedListener(natsSubjectOpen(nc, ownershipLostSubject));
+  const attemptLostListener = createSharedListener(natsSubjectOpen(nc, attemptLostSubject));
 
   let closed = false;
   const assertOpen = (): void => {
@@ -141,15 +141,15 @@ export const createNatsNotifyAdapter = async ({
       });
     },
 
-    notifyJobOwnershipLost: async (jobId) => {
+    notifyJobAttemptLost: async (jobId) => {
       assertOpen();
-      nc.publish(ownershipLostSubject, encoder.encode(jobId));
+      nc.publish(attemptLostSubject, encoder.encode(jobId));
       await nc.flush();
     },
 
-    listenJobOwnershipLost: async (jobId, onNotification) => {
+    listenJobAttemptLost: async (jobId, onNotification) => {
       assertOpen();
-      return ownershipLostListener.subscribe(jobId, () => {
+      return attemptLostListener.subscribe(jobId, () => {
         onNotification();
       });
     },
@@ -160,7 +160,7 @@ export const createNatsNotifyAdapter = async ({
       await Promise.all([
         jobScheduledListener.dispose(),
         chainCompletedListener.dispose(),
-        ownershipLostListener.dispose(),
+        attemptLostListener.dispose(),
       ]);
     },
   };

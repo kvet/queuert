@@ -1,11 +1,12 @@
-import { type Chain } from "../entities/chain.js";
+import { type AnyChain } from "../entities/chain.js";
 import { type BaseJobTypeDefinitions } from "../entities/job-type.js";
 import { type ResolvedJob } from "../entities/job-types.resolvers.js";
 import { mapStateJobToJob } from "../entities/job.js";
 import { type ScheduleOptions } from "../entities/schedule.js";
 import { type Helpers } from "../setup-helpers.js";
+import { type StateJob } from "../state-adapter/state-adapter.js";
 import { type TransactionHooks } from "../transaction-hooks.js";
-import { createStateJobs } from "./create-state-jobs.js";
+import { continueStateJob } from "./create-state-jobs.js";
 
 // oxlint-disable-next-line typescript/no-unnecessary-type-parameters -- TInput preserves type inference at call sites
 export const continueWith = async <TJobTypeName extends string, TInput>(
@@ -18,12 +19,7 @@ export const continueWith = async <TJobTypeName extends string, TInput>(
     transactionHooks,
     schedule,
     blockers,
-    chainId,
-    chainIndex,
-    chainTypeName,
-    originChainTraceContext,
-    originTraceContext,
-    fromTypeName,
+    fromJob,
   }: {
     typeName: TJobTypeName;
     id?: string;
@@ -31,33 +27,21 @@ export const continueWith = async <TJobTypeName extends string, TInput>(
     txCtx: any;
     transactionHooks: TransactionHooks;
     schedule?: ScheduleOptions;
-    blockers?: Chain<any, any, any, any>[];
-    chainId: string;
-    chainIndex: number;
-    chainTypeName: string;
-    originChainTraceContext: string | null;
-    originTraceContext: string | null;
-    fromTypeName: string;
+    blockers?: AnyChain[];
+    fromJob: StateJob;
   },
 ): Promise<ResolvedJob<string, BaseJobTypeDefinitions, TJobTypeName, string>> => {
-  helpers.jobTypes.validateContinueWith(fromTypeName, { typeName, input });
+  helpers.jobTypes.validateContinueWith(fromJob.typeName, { typeName, input });
 
-  const [{ job }] = await createStateJobs(helpers, {
-    jobs: [
-      {
-        typeName,
-        id,
-        chainTypeName,
-        chainIndex,
-        input,
-        blockers,
-        chainId,
-        isChainStart: false,
-        originChainTraceContext,
-        originTraceContext,
-        schedule,
-      },
-    ],
+  const { job } = await continueStateJob(helpers, {
+    job: {
+      typeName,
+      id,
+      input,
+      blockers,
+      schedule,
+    },
+    fromJob,
     txCtx,
     transactionHooks,
   });

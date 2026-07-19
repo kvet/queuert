@@ -97,7 +97,7 @@ export {
   type AttemptPrepareOptions,
   type JobAbortReason,
 } from "./worker/job-process.js";
-export { type LeaseConfig } from "./worker/lease.js";
+export { type AttemptConfig } from "./worker/attempt-heartbeat.js";
 export {
   type InProcessWorkerProcessor,
   type ProcessorDefinitions,

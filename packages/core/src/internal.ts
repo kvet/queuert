@@ -10,11 +10,11 @@ export { sleep } from "./helpers/sleep.js";
 
 export { type OrderDirection } from "./pagination.js";
 export {
-  decodeChainIndexCursor,
-  decodeCreatedAtCursor,
+  decodeTimestampWithIdCursor,
+  decodeIdCursor,
   encodeCursor,
-  type ChainIndexCursor,
-  type CreatedAtCursor,
+  type TimestampWithIdCursor,
+  type IdCursor,
 } from "./state-adapter/cursor.js";
-export { type StateJob, type StateJobStatus } from "./state-adapter/state-adapter.js";
+export { type StateJob } from "./state-adapter/state-adapter.js";
 export { createIdValidator, type IdValidator } from "./state-adapter/id-validator.js";

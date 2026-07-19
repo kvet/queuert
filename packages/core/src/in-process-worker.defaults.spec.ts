@@ -38,12 +38,12 @@ describe("createInProcessWorker defaults", () => {
       }),
     });
 
-    const stop = await worker.start();
     const chain = await withTransactionHooks(async (transactionHooks) =>
       stateAdapter.withTransaction(async (txCtx) =>
         client.startChain({ ...txCtx, transactionHooks, typeName: "foo", input: null }),
       ),
     );
+    const stop = await worker.start();
     await client.awaitChain(chain, { timeoutMs: 5000, pollIntervalMs: 10 });
     await stop();
 
@@ -81,12 +81,12 @@ describe("createInProcessWorker defaults", () => {
       }),
     });
 
-    const stop = await worker.start();
     const chain = await withTransactionHooks(async (transactionHooks) =>
       stateAdapter.withTransaction(async (txCtx) =>
         client.startChain({ ...txCtx, transactionHooks, typeName: "foo", input: null }),
       ),
     );
+    const stop = await worker.start();
     await client.awaitChain(chain, { timeoutMs: 5000, pollIntervalMs: 10 });
     await stop();
 

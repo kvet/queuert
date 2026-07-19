@@ -9,7 +9,7 @@ export const createInProcessNotifyAdapter = async (): Promise<NotifyAdapter> => 
 
   const jobScheduledListeners = new Map<string, Set<(typeName: string) => void>>();
   const chainCompletedListeners = new Map<string, Set<() => void>>();
-  const jobOwnershipLostListeners = new Map<string, Set<() => void>>();
+  const jobAttemptLostListeners = new Map<string, Set<() => void>>();
 
   let closed = false;
   const assertOpen = (): void => {
@@ -115,24 +115,24 @@ export const createInProcessNotifyAdapter = async (): Promise<NotifyAdapter> => 
       };
     },
 
-    notifyJobOwnershipLost: async (jobId: string) => {
+    notifyJobAttemptLost: async (jobId: string) => {
       assertOpen();
-      const listeners = jobOwnershipLostListeners.get(jobId);
+      const listeners = jobAttemptLostListeners.get(jobId);
       if (!listeners) return;
       for (const listener of Array.from(listeners)) {
         safeInvoke(listener);
       }
     },
 
-    listenJobOwnershipLost: async (targetJobId, onNotification) => {
+    listenJobAttemptLost: async (targetJobId, onNotification) => {
       assertOpen();
       const listener = (): void => {
         onNotification();
       };
-      addListener(jobOwnershipLostListeners, targetJobId, listener);
+      addListener(jobAttemptLostListeners, targetJobId, listener);
 
       return async () => {
-        removeListener(jobOwnershipLostListeners, targetJobId, listener);
+        removeListener(jobAttemptLostListeners, targetJobId, listener);
       };
     },
 
@@ -141,7 +141,7 @@ export const createInProcessNotifyAdapter = async (): Promise<NotifyAdapter> => 
       closed = true;
       jobScheduledListeners.clear();
       chainCompletedListeners.clear();
-      jobOwnershipLostListeners.clear();
+      jobAttemptLostListeners.clear();
       hintCounts.clear();
       for (const timer of hintTimers.values()) clearTimeout(timer);
       hintTimers.clear();

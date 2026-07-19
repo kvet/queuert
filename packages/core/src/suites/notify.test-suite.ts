@@ -405,7 +405,7 @@ export const notifyTestSuite = ({ it }: { it: TestAPI<TestSuiteContext> }): void
     });
   });
 
-  it('notifies workers when reaper deletes "zombie" jobs', async ({
+  it("notifies workers when expired attempts are reclaimed", async ({
     stateAdapter,
     notifyAdapter,
     observabilityAdapter,
@@ -461,7 +461,7 @@ export const notifyTestSuite = ({ it }: { it: TestAPI<TestSuiteContext> }): void
 
                 throw new Error();
               },
-              leaseConfig: { leaseMs: 10, renewIntervalMs: 1000 },
+              attemptConfig: { timeoutMs: 10, heartbeatMs: 1000 },
             },
           },
         }),

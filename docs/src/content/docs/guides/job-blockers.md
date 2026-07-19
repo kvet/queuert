@@ -5,7 +5,7 @@ sidebar:
   order: 6
 ---
 
-Jobs can depend on other chains to complete before they start. A job with incomplete blockers starts as `blocked` and transitions to `pending` when all blockers complete.
+Jobs can depend on other chains to complete before they start. A job with incomplete blockers starts as `pending` with `blocked: true` and transitions to `blocked: false` when all blockers complete.
 
 ```d2
 ...@../_classes.d2
@@ -16,7 +16,7 @@ fd1: "fetch-data #1\ndone" { class: job-done; width: 200; height: 80 }
 fd2: "fetch-data #2\ndone" { class: job-done; width: 200; height: 80 }
 fd3: "fetch-data #3\ndone" { class: job-done; width: 200; height: 80 }
 
-target: "process-all\nblocked → pending" { class: job-accent; width: 240; height: 90 }
+target: "process-all\npending (blocked → unblocked)" { class: job-accent; width: 240; height: 90 }
 
 fd1 -> target { class: flow-green }
 fd2 -> target { class: flow-green }

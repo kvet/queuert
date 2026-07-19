@@ -10,14 +10,12 @@ export const getChainsGroup: ConformanceGroup<StateConformanceFixture> = {
     {
       name: "handles chain relationships correctly",
       run: async ({ stateAdapter }, expect) => {
-        const [{ job: rootJob }] = await stateAdapter.withTransaction(async (txCtx) =>
-          stateAdapter.createJobs({
+        const [{ job: headJob }] = await stateAdapter.withTransaction(async (txCtx) =>
+          stateAdapter.createChains({
             txCtx,
             jobs: [
               {
                 typeName: "chain-root",
-                chainId: undefined,
-                chainIndex: 0,
                 chainTypeName: "chain-root",
                 input: { step: 1 },
               },
@@ -25,24 +23,22 @@ export const getChainsGroup: ConformanceGroup<StateConformanceFixture> = {
           }),
         );
 
-        const [chain] = await stateAdapter.getChains({ chainIds: [rootJob.id] });
+        const [chain] = await stateAdapter.getChains({ chainIds: [headJob.id] });
 
         expect(chain).toBeDefined();
-        expect(chain![0].id).toBe(rootJob.id);
-        expect(chain![0].chainId).toBe(rootJob.id);
+        expect(chain![0].id).toBe(headJob.id);
+        expect(chain![0].chainId).toBe(headJob.id);
       },
     },
     {
-      name: "returns [rootJob, lastJob] for multi-chain",
+      name: "returns [headJob, tailJob] for multi-chain",
       run: async ({ stateAdapter }, expect) => {
-        const [{ job: rootJob }] = await stateAdapter.withTransaction(async (txCtx) =>
-          stateAdapter.createJobs({
+        const [{ job: headJob }] = await stateAdapter.withTransaction(async (txCtx) =>
+          stateAdapter.createChains({
             txCtx,
             jobs: [
               {
                 typeName: "chain-root",
-                chainId: undefined,
-                chainIndex: 0,
                 chainTypeName: "chain-root",
                 input: null,
               },
@@ -50,39 +46,33 @@ export const getChainsGroup: ConformanceGroup<StateConformanceFixture> = {
           }),
         );
 
-        const [{ job: continuation }] = await stateAdapter.withTransaction(async (txCtx) =>
-          stateAdapter.createJobs({
+        const { job: continuation } = await stateAdapter.withTransaction(async (txCtx) =>
+          stateAdapter.createContinuationJob({
             txCtx,
-            jobs: [
-              {
-                typeName: "chain-step2",
-                chainId: rootJob.chainId,
-                chainIndex: 1,
-                chainTypeName: "chain-root",
-                input: null,
-              },
-            ],
+            job: {
+              typeName: "chain-step2",
+              continueFromId: headJob.id,
+              input: null,
+            },
           }),
         );
 
-        const [chain] = await stateAdapter.getChains({ chainIds: [rootJob.id] });
+        const [chain] = await stateAdapter.getChains({ chainIds: [headJob.id] });
         expect(chain).toBeDefined();
-        expect(chain![0].id).toBe(rootJob.id);
+        expect(chain![0].id).toBe(headJob.id);
         expect(chain![1]).toBeDefined();
         expect(chain![1]!.id).toBe(continuation.id);
       },
     },
     {
-      name: "returns [rootJob, undefined] for a single-root chain",
+      name: "returns [headJob, undefined] for a single-root chain",
       run: async ({ stateAdapter }, expect) => {
-        const [{ job: rootJob }] = await stateAdapter.withTransaction(async (txCtx) =>
-          stateAdapter.createJobs({
+        const [{ job: headJob }] = await stateAdapter.withTransaction(async (txCtx) =>
+          stateAdapter.createChains({
             txCtx,
             jobs: [
               {
                 typeName: "single-root",
-                chainId: undefined,
-                chainIndex: 0,
                 chainTypeName: "single-root",
                 input: null,
               },
@@ -90,24 +80,22 @@ export const getChainsGroup: ConformanceGroup<StateConformanceFixture> = {
           }),
         );
 
-        const [chain] = await stateAdapter.getChains({ chainIds: [rootJob.id] });
+        const [chain] = await stateAdapter.getChains({ chainIds: [headJob.id] });
 
         expect(chain).toBeDefined();
-        expect(chain![0].id).toBe(rootJob.id);
+        expect(chain![0].id).toBe(headJob.id);
         expect(chain![1]).toBeUndefined();
       },
     },
     {
-      name: "returns [rootJob, undefined] for a single-root chain with lock: exclusive",
+      name: "returns [headJob, undefined] for a single-root chain with lock: exclusive",
       run: async ({ stateAdapter }, expect) => {
-        const [{ job: rootJob }] = await stateAdapter.withTransaction(async (txCtx) =>
-          stateAdapter.createJobs({
+        const [{ job: headJob }] = await stateAdapter.withTransaction(async (txCtx) =>
+          stateAdapter.createChains({
             txCtx,
             jobs: [
               {
                 typeName: "single-root-locked",
-                chainId: undefined,
-                chainIndex: 0,
                 chainTypeName: "single-root-locked",
                 input: null,
               },
@@ -116,11 +104,11 @@ export const getChainsGroup: ConformanceGroup<StateConformanceFixture> = {
         );
 
         const [chain] = await stateAdapter.withTransaction(async (txCtx) =>
-          stateAdapter.getChains({ txCtx, chainIds: [rootJob.id], lock: "exclusive" }),
+          stateAdapter.getChains({ txCtx, chainIds: [headJob.id], lock: "exclusive" }),
         );
 
         expect(chain).toBeDefined();
-        expect(chain![0].id).toBe(rootJob.id);
+        expect(chain![0].id).toBe(headJob.id);
         expect(chain![1]).toBeUndefined();
       },
     },
@@ -128,13 +116,11 @@ export const getChainsGroup: ConformanceGroup<StateConformanceFixture> = {
       name: "returns undefined for nonexistent chain ID",
       run: async ({ stateAdapter }, expect) => {
         const [{ job: real }] = await stateAdapter.withTransaction(async (txCtx) =>
-          stateAdapter.createJobs({
+          stateAdapter.createChains({
             txCtx,
             jobs: [
               {
                 typeName: "chain-lookup-test",
-                chainId: undefined,
-                chainIndex: 0,
                 chainTypeName: "chain-lookup-test",
                 input: null,
               },
@@ -149,14 +135,12 @@ export const getChainsGroup: ConformanceGroup<StateConformanceFixture> = {
     {
       name: "lock: exclusive blocks a concurrent locked read until the holding tx commits",
       run: async ({ stateAdapter }, expect) => {
-        const [{ job: rootJob }] = await stateAdapter.withTransaction(async (txCtx) =>
-          stateAdapter.createJobs({
+        const [{ job: headJob }] = await stateAdapter.withTransaction(async (txCtx) =>
+          stateAdapter.createChains({
             txCtx,
             jobs: [
               {
                 typeName: "chain-locked",
-                chainId: undefined,
-                chainIndex: 0,
                 chainTypeName: "chain-locked",
                 input: null,
               },
@@ -164,18 +148,14 @@ export const getChainsGroup: ConformanceGroup<StateConformanceFixture> = {
           }),
         );
 
-        const [{ job: continuation }] = await stateAdapter.withTransaction(async (txCtx) =>
-          stateAdapter.createJobs({
+        const { job: continuation } = await stateAdapter.withTransaction(async (txCtx) =>
+          stateAdapter.createContinuationJob({
             txCtx,
-            jobs: [
-              {
-                typeName: "chain-locked-step2",
-                chainId: rootJob.chainId,
-                chainIndex: 1,
-                chainTypeName: "chain-locked",
-                input: null,
-              },
-            ],
+            job: {
+              typeName: "chain-locked-step2",
+              continueFromId: headJob.id,
+              input: null,
+            },
           }),
         );
 
@@ -191,7 +171,7 @@ export const getChainsGroup: ConformanceGroup<StateConformanceFixture> = {
         const holderTx = stateAdapter.withTransaction(async (txCtx) => {
           await stateAdapter.getChains({
             txCtx,
-            chainIds: [rootJob.chainId],
+            chainIds: [headJob.chainId],
             lock: "exclusive",
           });
           signalLockHeld!();
@@ -203,7 +183,7 @@ export const getChainsGroup: ConformanceGroup<StateConformanceFixture> = {
         let waiterResolved = false;
         const waiterTx = stateAdapter
           .withTransaction(async (txCtx) =>
-            stateAdapter.getChains({ txCtx, chainIds: [rootJob.chainId], lock: "exclusive" }),
+            stateAdapter.getChains({ txCtx, chainIds: [headJob.chainId], lock: "exclusive" }),
           )
           .then((chain) => {
             waiterResolved = true;
@@ -218,9 +198,114 @@ export const getChainsGroup: ConformanceGroup<StateConformanceFixture> = {
 
         const [observed] = await waiterTx;
         expect(observed).toBeDefined();
-        expect(observed![0].id).toBe(rootJob.id);
+        expect(observed![0].id).toBe(headJob.id);
         expect(observed![1]).toBeDefined();
         expect(observed![1]!.id).toBe(continuation.id);
+      },
+    },
+    {
+      name: "non-transactional getChain does not observe an uncommitted chain creation",
+      run: async ({ stateAdapter }, expect) => {
+        if (stateAdapter.transactionConcurrency === "serialized") {
+          expect.skip("requires concurrent transactions");
+          return;
+        }
+        let release: (() => void) | undefined;
+        const gate = new Promise<void>((r) => {
+          release = r;
+        });
+        let signalTxReady: (() => void) | undefined;
+        const txReady = new Promise<void>((r) => {
+          signalTxReady = r;
+        });
+        let newChainId: string | undefined;
+
+        const txPromise = stateAdapter
+          .withTransaction(async (txCtx) => {
+            const [{ job }] = await stateAdapter.createChains({
+              txCtx,
+              jobs: [
+                {
+                  typeName: "iso-chain-create",
+                  chainTypeName: "iso-chain-create",
+                  input: null,
+                },
+              ],
+            });
+            newChainId = job.chainId;
+            signalTxReady!();
+            await gate;
+            throw new Error("rollback");
+          })
+          .catch(() => {});
+
+        await txReady;
+        const readPromise = stateAdapter.getChains({ chainIds: [newChainId!] });
+        release!();
+        await txPromise;
+
+        expect(await readPromise).toEqual([undefined]);
+      },
+    },
+    {
+      name: "non-transactional locked getChain does not observe an uncommitted continuation",
+      run: async ({ stateAdapter }, expect) => {
+        if (stateAdapter.transactionConcurrency === "serialized") {
+          expect.skip("requires concurrent transactions");
+          return;
+        }
+        const [{ job: seed }] = await stateAdapter.withTransaction(async (txCtx) =>
+          stateAdapter.createChains({
+            txCtx,
+            jobs: [
+              {
+                typeName: "iso-latest-root",
+                chainTypeName: "iso-latest",
+                input: null,
+              },
+            ],
+          }),
+        );
+
+        let release: (() => void) | undefined;
+        const gate = new Promise<void>((r) => {
+          release = r;
+        });
+        let signalTxReady: (() => void) | undefined;
+        const txReady = new Promise<void>((r) => {
+          signalTxReady = r;
+        });
+
+        const txPromise = stateAdapter
+          .withTransaction(async (txCtx) => {
+            await stateAdapter.createContinuationJob({
+              txCtx,
+              job: {
+                typeName: "iso-latest-cont",
+                continueFromId: seed.id,
+                input: null,
+              },
+            });
+            signalTxReady!();
+            await gate;
+            throw new Error("rollback");
+          })
+          .catch(() => {});
+
+        await txReady;
+        const readPromise = stateAdapter.getChains({
+          chainIds: [seed.chainId],
+          lock: "exclusive",
+        });
+        release!();
+        await txPromise;
+
+        const [observed] = await readPromise;
+        expect(observed).toBeDefined();
+        const [headJob, tailJob] = observed!;
+        expect(headJob.id).toBe(seed.id);
+        expect(headJob.id).toBe(headJob.chainId);
+        expect(tailJob).toBeUndefined();
       },
     },
   ],

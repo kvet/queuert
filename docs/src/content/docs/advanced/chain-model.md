@@ -16,7 +16,7 @@ This document describes Queuert's unified job model and the Promise-inspired cha
 A **Job** is an individual unit of work with a lifecycle:
 
 ```
-blocked/pending → running → completed
+pending → running → completed
 ```
 
 Each job:
@@ -46,17 +46,17 @@ const chain = fetch(url)           // chain === this promise
   .then(processResponse)           // continuation
   .then(formatResult);             // continuation
 
-// Queuert: A Chain IS its first job
-const chain = startChain(...)   // chain.id === firstJob.id
+// Queuert: A Chain IS its head job
+const chain = startChain(...)   // chain.id === headJob.id
   .continueWith(processStep)       // continuation
   .continueWith(formatStep);       // continuation
 ```
 
-The fundamental insight: **the first job IS the chain**. Chains work like Promises but persist across process restarts and distribute across workers.
+The fundamental insight: **the head job IS the chain**. Chains work like Promises but persist across process restarts and distribute across workers.
 
 ## Identity Model
 
-For the first job in a chain: `job.id === job.chainId`
+For the head job in a chain: `job.id === job.chainId`
 
 This isn't redundant—it's a meaningful signal that identifies the chain starter. Continuation jobs have `job.id !== job.chainId` but share the same `chainId` as all other jobs in the chain.
 
@@ -68,7 +68,7 @@ direction: right
 chain: "chain (id = X)" {
   class: process
 
-  first: "first job\n\nid = X\nchainId = X\n\nid === chainId" { class: job-accent; width: 240; height: 160 }
+  first: "head job\n\nid = X\nchainId = X\n\nid === chainId" { class: job-accent; width: 240; height: 160 }
   cont:  "continuation\n\nid = Y\nchainId = X\n\nown id, shared chainId" { class: job; width: 240; height: 160 }
   term:  "terminal\n\nid = Z\nchainId = X\n\nown id, shared chainId" { class: job; width: 240; height: 160 }
 
@@ -79,7 +79,7 @@ chain: "chain (id = X)" {
 
 ## Unified Model Benefits
 
-Having the first job BE the chain (rather than a separate entity) provides:
+Having the head job BE the chain (rather than a separate entity) provides:
 
 ### Simplicity
 
@@ -89,7 +89,7 @@ Having the first job BE the chain (rather than a separate entity) provides:
 
 ### Flexibility
 
-The first job can be:
+The head job can be:
 
 - A lightweight "alias" that immediately continues to real work
 - A full job that processes and completes the chain in one step
@@ -144,14 +144,14 @@ Chains can depend on other chains to complete before starting:
 └──────────────┘
 ```
 
-Blockers are declared at the type level and provided via the `blockers` array when creating a chain. The main job starts as `blocked` and transitions to `pending` when all blockers complete.
+Blockers are declared at the type level and provided via the `blockers` array when creating a chain. The main job starts as `pending` with `blocked: true` and transitions to `blocked: false` when all blockers complete.
 
 ## Consistent Terminology
 
 Parallel entities use consistent lifecycle terminology to reduce cognitive load:
 
-- Job: `blocked`/`pending` → `running` → `completed`
-- Chain: `blocked`/`pending` → `running` → `completed` (reflects status of current job in chain)
+- Job: `pending` → `running` → `completed`
+- Chain: `running` → `completed`
 
 Avoid asymmetric naming (e.g., `started`/`finished` vs `created`/`completed`) even if individual terms seem natural. Consistency across the API produces fewer questions and faster comprehension.
 
@@ -160,7 +160,7 @@ Avoid asymmetric naming (e.g., `started`/`finished` vs `created`/`completed`) ev
 The Chain model:
 
 1. **Mirrors Promises**: Familiar mental model for JavaScript developers
-2. **Unified identity**: The first job IS the chain—no separate entity
+2. **Unified identity**: The head job IS the chain—no separate entity
 3. **Single table**: Jobs and chains share storage; `chainId` links them
 4. **Flexible patterns**: Linear, branched, looped, or jumping execution
 5. **Distributed**: Unlike Promises, chains persist and distribute across workers

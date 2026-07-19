@@ -16,14 +16,17 @@ const worker = await createInProcessWorker({
     processors: {
       "fetch-data": {
         attemptHandler: async ({ signal, job, complete }) => {
-          const timeout = AbortSignal.timeout(30_000); // 30 seconds
-          const combined = AbortSignal.any([signal, timeout]);
+          const ac = new AbortController();
+          const timer = setTimeout(() => ac.abort(), 30_000);
+          const combined = AbortSignal.any([signal, ac.signal]);
 
-          // Use combined signal for cancellable operations
-          const response = await fetch(job.input.url, { signal: combined });
-          const data = await response.json();
-
-          return complete(() => ({ data }));
+          try {
+            const response = await fetch(job.input.url, { signal: combined });
+            const data = await response.json();
+            return complete(() => ({ data }));
+          } finally {
+            clearTimeout(timer);
+          }
         },
       },
     },
@@ -33,7 +36,7 @@ const worker = await createInProcessWorker({
 const stop = await worker.start();
 ```
 
-For hard timeouts, configure `leaseConfig` in the job type processor -- if a job doesn't complete or renew its lease in time, the reaper reclaims it for retry:
+For hard timeouts, configure `attemptConfig` in the job type processor -- if a job doesn't complete or extend the attempt in time, the attempt expires and is released for retry:
 
 ```ts
 const worker = await createInProcessWorker({
@@ -43,7 +46,7 @@ const worker = await createInProcessWorker({
     jobTypes,
     processors: {
       "long-running-job": {
-        leaseConfig: { leaseMs: 300_000, renewIntervalMs: 60_000 }, // 5 min lease
+        attemptConfig: { timeoutMs: 300_000, heartbeatMs: 60_000 }, // 5 min timeout
         attemptHandler: async ({ job, complete }) => { ... },
       },
     },
@@ -51,4 +54,4 @@ const worker = await createInProcessWorker({
 });
 ```
 
-See [examples/showcase-timeouts](https://github.com/kvet/queuert/tree/main/examples/showcase-timeouts) for a complete working example demonstrating cooperative timeouts and hard timeouts via lease. See also [Error Handling](../error-handling/) and [In-Process Worker](/queuert/advanced/in-process-worker/) reference.
+See [examples/showcase-timeouts](https://github.com/kvet/queuert/tree/main/examples/showcase-timeouts) for a complete working example demonstrating cooperative timeouts and hard timeouts via attempt expiry. See also [Error Handling](../error-handling/) and [In-Process Worker](/queuert/advanced/in-process-worker/) reference.

@@ -94,11 +94,10 @@ export const processErrorHandlingTestSuite = ({ it }: { it: TestAPI<TestSuiteCon
         name: "withTransaction",
         status: "committed",
         children: [
-          expect.objectContaining({ name: "acquireJob" }),
+          expect.objectContaining({ name: "startJobAttempt" }),
           expect.objectContaining({ name: "getJobBlockers" }),
           expect.objectContaining({ name: "withSavepoint", status: "rolled-back" }),
-          expect.objectContaining({ name: "abandonJob" }),
-          expect.objectContaining({ name: "rescheduleJobs" }),
+          expect.objectContaining({ name: "finishJobAttempt" }),
         ],
       }),
     ];
@@ -184,11 +183,10 @@ export const processErrorHandlingTestSuite = ({ it }: { it: TestAPI<TestSuiteCon
         name: "withTransaction",
         status: "committed",
         children: [
-          expect.objectContaining({ name: "acquireJob" }),
+          expect.objectContaining({ name: "startJobAttempt" }),
           expect.objectContaining({ name: "getJobBlockers" }),
           expect.objectContaining({ name: "withSavepoint", status: "rolled-back" }),
-          expect.objectContaining({ name: "abandonJob" }),
-          expect.objectContaining({ name: "rescheduleJobs" }),
+          expect.objectContaining({ name: "finishJobAttempt" }),
         ],
       }),
     ];
@@ -273,10 +271,9 @@ export const processErrorHandlingTestSuite = ({ it }: { it: TestAPI<TestSuiteCon
         name: "withTransaction",
         status: "committed",
         children: [
-          expect.objectContaining({ name: "acquireJob" }),
+          expect.objectContaining({ name: "startJobAttempt" }),
           expect.objectContaining({ name: "getJobBlockers" }),
-          expect.objectContaining({ name: "abandonJob" }),
-          expect.objectContaining({ name: "rescheduleJobs" }),
+          expect.objectContaining({ name: "finishJobAttempt" }),
         ],
       }),
     ];
@@ -362,9 +359,9 @@ export const processErrorHandlingTestSuite = ({ it }: { it: TestAPI<TestSuiteCon
         name: "withTransaction",
         status: "committed",
         children: [
-          expect.objectContaining({ name: "acquireJob" }),
+          expect.objectContaining({ name: "startJobAttempt" }),
           expect.objectContaining({ name: "getJobBlockers" }),
-          expect.objectContaining({ name: "renewJobLease" }),
+          expect.objectContaining({ name: "extendJobAttempt" }),
         ],
       }),
       expect.objectContaining({
@@ -372,8 +369,7 @@ export const processErrorHandlingTestSuite = ({ it }: { it: TestAPI<TestSuiteCon
         status: "committed",
         children: [
           expect.objectContaining({ name: "getJobs", args: { lock: "exclusive" } }),
-          expect.objectContaining({ name: "abandonJob" }),
-          expect.objectContaining({ name: "rescheduleJobs" }),
+          expect.objectContaining({ name: "finishJobAttempt" }),
         ],
       }),
     ];
@@ -460,11 +456,10 @@ export const processErrorHandlingTestSuite = ({ it }: { it: TestAPI<TestSuiteCon
         name: "withTransaction",
         status: "committed",
         children: [
-          expect.objectContaining({ name: "acquireJob" }),
+          expect.objectContaining({ name: "startJobAttempt" }),
           expect.objectContaining({ name: "getJobBlockers" }),
           expect.objectContaining({ name: "withSavepoint", status: "rolled-back" }),
-          expect.objectContaining({ name: "abandonJob" }),
-          expect.objectContaining({ name: "rescheduleJobs" }),
+          expect.objectContaining({ name: "finishJobAttempt" }),
         ],
       }),
     ];
@@ -552,9 +547,9 @@ export const processErrorHandlingTestSuite = ({ it }: { it: TestAPI<TestSuiteCon
         name: "withTransaction",
         status: "committed",
         children: [
-          expect.objectContaining({ name: "acquireJob" }),
+          expect.objectContaining({ name: "startJobAttempt" }),
           expect.objectContaining({ name: "getJobBlockers" }),
-          expect.objectContaining({ name: "renewJobLease" }),
+          expect.objectContaining({ name: "extendJobAttempt" }),
         ],
       }),
       expect.objectContaining({
@@ -563,8 +558,7 @@ export const processErrorHandlingTestSuite = ({ it }: { it: TestAPI<TestSuiteCon
         children: [
           expect.objectContaining({ name: "getJobs", args: { lock: "exclusive" } }),
           expect.objectContaining({ name: "withSavepoint", status: "rolled-back" }),
-          expect.objectContaining({ name: "abandonJob" }),
-          expect.objectContaining({ name: "rescheduleJobs" }),
+          expect.objectContaining({ name: "finishJobAttempt" }),
         ],
       }),
     ];
@@ -654,19 +648,18 @@ export const processErrorHandlingTestSuite = ({ it }: { it: TestAPI<TestSuiteCon
         name: "withTransaction",
         status: "committed",
         children: [
-          expect.objectContaining({ name: "acquireJob" }),
+          expect.objectContaining({ name: "startJobAttempt" }),
           expect.objectContaining({ name: "getJobBlockers" }),
           expect.objectContaining({
             name: "withSavepoint",
             status: "rolled-back",
             children: [
-              expect.objectContaining({ name: "completeJob" }),
+              expect.objectContaining({ name: "finishJobAttempt" }),
               expect.objectContaining({ name: "getJobs" }),
               expect.objectContaining({ name: "unblockJobs" }),
             ],
           }),
-          expect.objectContaining({ name: "abandonJob" }),
-          expect.objectContaining({ name: "rescheduleJobs" }),
+          expect.objectContaining({ name: "finishJobAttempt" }),
         ],
       }),
     ];
@@ -757,9 +750,9 @@ export const processErrorHandlingTestSuite = ({ it }: { it: TestAPI<TestSuiteCon
         name: "withTransaction",
         status: "committed",
         children: [
-          expect.objectContaining({ name: "acquireJob" }),
+          expect.objectContaining({ name: "startJobAttempt" }),
           expect.objectContaining({ name: "getJobBlockers" }),
-          expect.objectContaining({ name: "renewJobLease" }),
+          expect.objectContaining({ name: "extendJobAttempt" }),
         ],
       }),
       expect.objectContaining({
@@ -771,13 +764,12 @@ export const processErrorHandlingTestSuite = ({ it }: { it: TestAPI<TestSuiteCon
             name: "withSavepoint",
             status: "rolled-back",
             children: [
-              expect.objectContaining({ name: "completeJob" }),
+              expect.objectContaining({ name: "finishJobAttempt" }),
               expect.objectContaining({ name: "getJobs" }),
               expect.objectContaining({ name: "unblockJobs" }),
             ],
           }),
-          expect.objectContaining({ name: "abandonJob" }),
-          expect.objectContaining({ name: "rescheduleJobs" }),
+          expect.objectContaining({ name: "finishJobAttempt" }),
         ],
       }),
     ];
@@ -865,15 +857,14 @@ export const processErrorHandlingTestSuite = ({ it }: { it: TestAPI<TestSuiteCon
         name: "withTransaction",
         status: "committed",
         children: [
-          expect.objectContaining({ name: "acquireJob" }),
+          expect.objectContaining({ name: "startJobAttempt" }),
           expect.objectContaining({ name: "getJobBlockers" }),
           expect.objectContaining({
             name: "withSavepoint",
             status: "rolled-back",
             children: [expect.objectContaining({ name: "user-preparation" })],
           }),
-          expect.objectContaining({ name: "abandonJob" }),
-          expect.objectContaining({ name: "rescheduleJobs" }),
+          expect.objectContaining({ name: "finishJobAttempt" }),
         ],
       }),
     ];
@@ -961,15 +952,14 @@ export const processErrorHandlingTestSuite = ({ it }: { it: TestAPI<TestSuiteCon
         name: "withTransaction",
         status: "committed",
         children: [
-          expect.objectContaining({ name: "acquireJob" }),
+          expect.objectContaining({ name: "startJobAttempt" }),
           expect.objectContaining({ name: "getJobBlockers" }),
           expect.objectContaining({
             name: "withSavepoint",
             status: "rolled-back",
             children: [expect.objectContaining({ name: "user-preparation" })],
           }),
-          expect.objectContaining({ name: "abandonJob" }),
-          expect.objectContaining({ name: "rescheduleJobs" }),
+          expect.objectContaining({ name: "finishJobAttempt" }),
         ],
       }),
     ];
@@ -1058,15 +1048,14 @@ export const processErrorHandlingTestSuite = ({ it }: { it: TestAPI<TestSuiteCon
         name: "withTransaction",
         status: "committed",
         children: [
-          expect.objectContaining({ name: "acquireJob" }),
+          expect.objectContaining({ name: "startJobAttempt" }),
           expect.objectContaining({ name: "getJobBlockers" }),
           expect.objectContaining({
             name: "withSavepoint",
             status: "rolled-back",
             children: [expect.objectContaining({ name: "user-completion" })],
           }),
-          expect.objectContaining({ name: "abandonJob" }),
-          expect.objectContaining({ name: "rescheduleJobs" }),
+          expect.objectContaining({ name: "finishJobAttempt" }),
         ],
       }),
     ];
@@ -1156,9 +1145,9 @@ export const processErrorHandlingTestSuite = ({ it }: { it: TestAPI<TestSuiteCon
         name: "withTransaction",
         status: "committed",
         children: [
-          expect.objectContaining({ name: "acquireJob" }),
+          expect.objectContaining({ name: "startJobAttempt" }),
           expect.objectContaining({ name: "getJobBlockers" }),
-          expect.objectContaining({ name: "renewJobLease" }),
+          expect.objectContaining({ name: "extendJobAttempt" }),
         ],
       }),
       expect.objectContaining({
@@ -1171,8 +1160,7 @@ export const processErrorHandlingTestSuite = ({ it }: { it: TestAPI<TestSuiteCon
             status: "rolled-back",
             children: [expect.objectContaining({ name: "user-completion" })],
           }),
-          expect.objectContaining({ name: "abandonJob" }),
-          expect.objectContaining({ name: "rescheduleJobs" }),
+          expect.objectContaining({ name: "finishJobAttempt" }),
         ],
       }),
     ];
@@ -1273,18 +1261,17 @@ export const processErrorHandlingTestSuite = ({ it }: { it: TestAPI<TestSuiteCon
         name: "withTransaction",
         status: "committed",
         children: [
-          expect.objectContaining({ name: "acquireJob" }),
+          expect.objectContaining({ name: "startJobAttempt" }),
           expect.objectContaining({ name: "getJobBlockers" }),
           expect.objectContaining({
             name: "withSavepoint",
             status: "rolled-back",
             children: [
-              expect.objectContaining({ name: "createJobs" }),
-              expect.objectContaining({ name: "completeJob" }),
+              expect.objectContaining({ name: "createContinuationJob" }),
+              expect.objectContaining({ name: "finishJobAttempt" }),
             ],
           }),
-          expect.objectContaining({ name: "abandonJob" }),
-          expect.objectContaining({ name: "rescheduleJobs" }),
+          expect.objectContaining({ name: "finishJobAttempt" }),
         ],
       }),
     ];
@@ -1386,9 +1373,9 @@ export const processErrorHandlingTestSuite = ({ it }: { it: TestAPI<TestSuiteCon
         name: "withTransaction",
         status: "committed",
         children: [
-          expect.objectContaining({ name: "acquireJob" }),
+          expect.objectContaining({ name: "startJobAttempt" }),
           expect.objectContaining({ name: "getJobBlockers" }),
-          expect.objectContaining({ name: "renewJobLease" }),
+          expect.objectContaining({ name: "extendJobAttempt" }),
         ],
       }),
       expect.objectContaining({
@@ -1400,12 +1387,11 @@ export const processErrorHandlingTestSuite = ({ it }: { it: TestAPI<TestSuiteCon
             name: "withSavepoint",
             status: "rolled-back",
             children: [
-              expect.objectContaining({ name: "createJobs" }),
-              expect.objectContaining({ name: "completeJob" }),
+              expect.objectContaining({ name: "createContinuationJob" }),
+              expect.objectContaining({ name: "finishJobAttempt" }),
             ],
           }),
-          expect.objectContaining({ name: "abandonJob" }),
-          expect.objectContaining({ name: "rescheduleJobs" }),
+          expect.objectContaining({ name: "finishJobAttempt" }),
         ],
       }),
     ];
@@ -1957,12 +1943,11 @@ export const processErrorHandlingTestSuite = ({ it }: { it: TestAPI<TestSuiteCon
         name: "withTransaction",
         status: "committed",
         children: [
-          expect.objectContaining({ name: "acquireJob" }),
+          expect.objectContaining({ name: "startJobAttempt" }),
           expect.objectContaining({ name: "getJobBlockers" }),
-          expect.objectContaining({ name: "renewJobLease" }),
+          expect.objectContaining({ name: "extendJobAttempt" }),
         ],
       }),
-      expect.objectContaining({ name: "getNextJobAvailableInMs" }),
       expect.objectContaining({
         name: "withTransaction",
         status: "rolled-back",
@@ -1973,8 +1958,7 @@ export const processErrorHandlingTestSuite = ({ it }: { it: TestAPI<TestSuiteCon
         status: "committed",
         children: [
           expect.objectContaining({ name: "getJobs", args: { lock: "exclusive" } }),
-          expect.objectContaining({ name: "abandonJob" }),
-          expect.objectContaining({ name: "rescheduleJobs" }),
+          expect.objectContaining({ name: "finishJobAttempt" }),
         ],
       }),
     ];

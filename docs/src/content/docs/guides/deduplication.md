@@ -37,7 +37,7 @@ const chain1 = await withTransactionHooks(async (transactionHooks) =>
     transactionHooks,
     typeName: "sync-user",
     input: { userId: "123" },
-    deduplication: { key: "sync:user:123" },
+    deduplication: { key: "sync:user:123", scope: "running" },
   }),
 );
 
@@ -47,7 +47,7 @@ const chain2 = await withTransactionHooks(async (transactionHooks) =>
     transactionHooks,
     typeName: "sync-user",
     input: { userId: "123" },
-    deduplication: { key: "sync:user:123" },
+    deduplication: { key: "sync:user:123", scope: "running" },
   }),
 );
 
@@ -59,7 +59,7 @@ chain2.id === chain1.id; // true
 
 The `scope` option controls what jobs to check for duplicates:
 
-- **`incomplete`** (default) -- Only dedup against incomplete chains (allows new chain after previous completes)
+- **`running`** -- Only dedup against running chains (allows new chain after previous completes)
 - **`any`** -- Dedup against any existing chain with this key
 
 ```ts
@@ -71,7 +71,7 @@ await withTransactionHooks(async (transactionHooks) =>
     input: { serviceId: "api-server" },
     deduplication: {
       key: "health:api-server",
-      scope: "incomplete",
+      scope: "running",
     },
   }),
 );
@@ -112,6 +112,7 @@ return complete(async ({ sql, transactionHooks }) => {
     schedule: { afterMs: 5 * 60 * 1000 },
     deduplication: {
       key: `health:${job.input.serviceId}`,
+      scope: "running",
       excludeChainIds: [job.chainId],
     },
   });

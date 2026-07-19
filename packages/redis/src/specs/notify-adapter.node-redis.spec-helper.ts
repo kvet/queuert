@@ -79,13 +79,13 @@ export const extendWithNotifyRedis = <
             maybeThrow();
             return notifyAdapter.listenChainCompleted(chainId, onNotification);
           },
-          notifyJobOwnershipLost: async (jobId) => {
+          notifyJobAttemptLost: async (jobId) => {
             maybeThrow();
-            return notifyAdapter.notifyJobOwnershipLost(jobId);
+            return notifyAdapter.notifyJobAttemptLost(jobId);
           },
-          listenJobOwnershipLost: async (jobId, onNotification) => {
+          listenJobAttemptLost: async (jobId, onNotification) => {
             maybeThrow();
-            return notifyAdapter.listenJobOwnershipLost(jobId, onNotification);
+            return notifyAdapter.listenJobAttemptLost(jobId, onNotification);
           },
           close: notifyAdapter.close,
         };

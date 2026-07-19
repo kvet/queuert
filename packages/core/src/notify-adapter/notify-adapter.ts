@@ -35,13 +35,10 @@ export type NotifyAdapter = {
     chainId: string,
     onNotification: () => void,
   ) => Promise<() => Promise<void>>;
-  /** Notify that a job's ownership has been lost (e.g. lease expired or workerless completion). */
-  notifyJobOwnershipLost: (jobId: string) => Promise<void>;
-  /** Listen for ownership loss on a specific job. Returns a dispose function. */
-  listenJobOwnershipLost: (
-    jobId: string,
-    onNotification: () => void,
-  ) => Promise<() => Promise<void>>;
+  /** Notify that a job's attempt has been lost (e.g. attempt expired or workerless completion). */
+  notifyJobAttemptLost: (jobId: string) => Promise<void>;
+  /** Listen for attempt loss on a specific job. Returns a dispose function. */
+  listenJobAttemptLost: (jobId: string, onNotification: () => void) => Promise<() => Promise<void>>;
   /**
    * Releases internal resources (shared subscriptions, listener registries) and
    * cascades into the underlying provider. Idempotent — the second call is a

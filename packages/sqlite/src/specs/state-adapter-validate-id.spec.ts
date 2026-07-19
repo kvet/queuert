@@ -37,11 +37,9 @@ describe("validateId", () => {
     id?: string,
   ) =>
     adapter.withTransaction(async (txCtx) =>
-      adapter.createJobs({
+      adapter.createChains({
         txCtx,
-        jobs: [
-          { typeName: "t", id, chainId: undefined, chainIndex: 0, chainTypeName: "t", input: null },
-        ],
+        jobs: [{ typeName: "t", id, chainTypeName: "t", input: null }],
       }),
     );
 

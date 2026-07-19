@@ -59,7 +59,7 @@ Evaluate how well the schema supports future changes without breaking migrations
 
 - Are SELECT FOR UPDATE patterns used correctly?
 - Could any queries cause deadlocks under concurrent worker access?
-- Are race conditions possible between job acquisition, lease renewal, and reaper?
+- Are race conditions possible between job acquisition, attempt extension, and expired attempt reclamation?
 - Is the locking granularity appropriate (row-level vs table-level)?
 
 ### 7. Data Integrity

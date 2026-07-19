@@ -139,7 +139,7 @@ export const clientQueriesTestSuite = ({ it }: { it: TestAPI<TestSuiteContext> }
       expect(chain!.id).toBe(created.id);
       expect(chain!.typeName).toBe("order");
       expect(chain!.input).toEqual({ amount: 42 });
-      expect(chain!.status).toBe("pending");
+      expect(chain!.status).toBe("running");
     });
 
     it("getChain narrows return type by typeName", async ({
@@ -714,7 +714,7 @@ export const clientQueriesTestSuite = ({ it }: { it: TestAPI<TestSuiteContext> }
       const notif = await startChain("notification", { message: "hi" });
 
       const page = await client.listChains({
-        filter: { typeName: ["notification"] },
+        typeName: ["notification"],
       });
 
       expect(page.items).toHaveLength(1);
@@ -741,7 +741,7 @@ export const clientQueriesTestSuite = ({ it }: { it: TestAPI<TestSuiteContext> }
       await startChain("notification", { message: "hi" });
 
       const page = await client.listChains({
-        filter: { chainId: [chain1.id] },
+        chainId: [chain1.id],
       });
 
       expect(page.items).toHaveLength(1);
@@ -767,7 +767,7 @@ export const clientQueriesTestSuite = ({ it }: { it: TestAPI<TestSuiteContext> }
       await startChain("report", { type: "summary" }, [order]);
 
       const allChains = await client.listChains({});
-      const rootChains = await client.listChains({ filter: { root: true } });
+      const rootChains = await client.listChains({ independent: true });
 
       expect(allChains.items).toHaveLength(2);
       expect(rootChains.items).toHaveLength(1);
@@ -793,12 +793,9 @@ export const clientQueriesTestSuite = ({ it }: { it: TestAPI<TestSuiteContext> }
       await startChain("notification", { message: "hi" });
       await startChain("report", { type: "summary" }, [order]);
 
-      const blocked = await client.listChains({ filter: { status: ["blocked"] } });
-      const pending = await client.listChains({ filter: { status: ["pending"] } });
+      const running = await client.listChains({ status: "running" });
 
-      expect(blocked.items).toHaveLength(1);
-      expect(blocked.items[0].typeName).toBe("report");
-      expect(pending.items).toHaveLength(2);
+      expect(running.items).toHaveLength(3);
     });
 
     it("listChains orders ascending", async ({
@@ -883,41 +880,102 @@ export const clientQueriesTestSuite = ({ it }: { it: TestAPI<TestSuiteContext> }
       const latest = Math.max(...createdMs);
 
       const page = await client.listChains({
-        filter: { from: new Date(earliest - 1000), to: new Date(latest + 1000) },
+        from: new Date(earliest - 1000),
+        to: new Date(latest + 1000),
       });
 
       expect(page.items).toHaveLength(2);
 
       const empty = await client.listChains({
-        filter: { from: new Date(latest + 60_000) },
+        from: new Date(latest + 60_000),
       });
       expect(empty.items).toHaveLength(0);
     });
 
-    it("listChains filters by jobId", async ({
+    it("listChains sorts completed chains by completedAt when orderBy is completedAt", async ({
       stateAdapter,
       notifyAdapter,
+      withTransaction,
+      withWorkers,
       observabilityAdapter,
       log,
-      withTransaction,
       expect,
     }) => {
-      const { client, startChain } = await createContext({
+      const jobTypes = defineJobTypes<{
+        task_a: {
+          entry: true;
+          input: null;
+          output: null;
+        };
+        task_b: {
+          entry: true;
+          input: null;
+          output: null;
+        };
+      }>();
+
+      const client = await createClient({
         stateAdapter,
         notifyAdapter,
         observabilityAdapter,
         log,
-        withTransaction,
-      });
-      const chain1 = await startChain("order", { amount: 100 });
-      await startChain("notification", { message: "hi" });
-
-      const page = await client.listChains({
-        filter: { jobId: [chain1.id] },
+        jobTypes,
       });
 
-      expect(page.items).toHaveLength(1);
-      expect(page.items[0].id).toBe(chain1.id);
+      const worker = await createInProcessWorker({
+        client,
+        concurrency: 1,
+        processors: createProcessors({
+          client,
+          jobTypes,
+          processors: {
+            task_a: {
+              attemptHandler: async ({ complete }) => complete(async () => null),
+            },
+            task_b: {
+              attemptHandler: async ({ complete }) => complete(async () => null),
+            },
+          },
+        }),
+      });
+
+      const chainA = await withTransactionHooks(async (transactionHooks) =>
+        withTransaction(async (txCtx) =>
+          client.startChain({ ...txCtx, transactionHooks, typeName: "task_a", input: null }),
+        ),
+      );
+      await sleep(5);
+      const chainB = await withTransactionHooks(async (transactionHooks) =>
+        withTransaction(async (txCtx) =>
+          client.startChain({ ...txCtx, transactionHooks, typeName: "task_b", input: null }),
+        ),
+      );
+
+      await withWorkers([await worker.start()], async () => {
+        await client.awaitChain(chainA, completionOptions);
+        await client.awaitChain(chainB, completionOptions);
+      });
+
+      const byCreatedAt = await client.listChains({
+        status: "completed",
+        orderBy: "createdAt",
+        orderDirection: "asc",
+      });
+      expect(byCreatedAt.items[0].id).toBe(chainA.id);
+      expect(byCreatedAt.items[1].id).toBe(chainB.id);
+
+      const byCompletedAt = await client.listChains({
+        status: "completed",
+        orderBy: "completedAt",
+        orderDirection: "desc",
+      });
+      expect(byCompletedAt.items).toHaveLength(2);
+      const [first, second] = byCompletedAt.items;
+      expect(first.status).toBe("completed");
+      expect(second.status).toBe("completed");
+      if (first.status === "completed" && second.status === "completed") {
+        expect(first.completedAt.getTime()).toBeGreaterThanOrEqual(second.completedAt.getTime());
+      }
     });
 
     it("listChains returns correct chain shape", async ({
@@ -938,14 +996,16 @@ export const clientQueriesTestSuite = ({ it }: { it: TestAPI<TestSuiteContext> }
       const chain = await startChain("order", { amount: 42 });
 
       const page = await client.listChains({
-        filter: { typeName: ["order"] },
+        typeName: ["order"],
       });
 
       const result = page.items[0];
       expect(result.id).toBe(chain.id);
       expect(result.typeName).toBe("order");
       expect(result.input).toEqual({ amount: 42 });
-      expect(result.status).toBe("pending");
+      expect(result.status).toBe("running");
+      const resultJob = await client.getJob({ id: chain.id });
+      expect(resultJob!.status).toBe("pending");
       expect(result.createdAt).toBeInstanceOf(Date);
     });
   });
@@ -1015,7 +1075,7 @@ export const clientQueriesTestSuite = ({ it }: { it: TestAPI<TestSuiteContext> }
       await startChain("notification", { message: "hi" });
 
       const page = await client.listJobs({
-        filter: { typeName: ["notification"] },
+        typeName: ["notification"],
       });
 
       expect(page.items).toHaveLength(1);
@@ -1041,7 +1101,7 @@ export const clientQueriesTestSuite = ({ it }: { it: TestAPI<TestSuiteContext> }
       await startChain("notification", { message: "hi" });
 
       const page = await client.listJobs({
-        filter: { chainTypeName: ["order"] },
+        chainTypeName: ["order"],
       });
 
       expect(page.items).toHaveLength(1);
@@ -1050,8 +1110,6 @@ export const clientQueriesTestSuite = ({ it }: { it: TestAPI<TestSuiteContext> }
       // Type-level: chainTypeName only accepts entry job type names
       expectTypeOf(client.listJobs)
         .parameter(0)
-        .toHaveProperty("filter")
-        .exclude<undefined>()
         .toHaveProperty("chainTypeName")
         .exclude<undefined>()
         .items.toEqualTypeOf<"order" | "notification" | "report">();
@@ -1076,7 +1134,7 @@ export const clientQueriesTestSuite = ({ it }: { it: TestAPI<TestSuiteContext> }
       await startChain("notification", { message: "hi" });
 
       const page = await client.listJobs({
-        filter: { chainId: [chain.id] },
+        chainId: [chain.id],
       });
 
       expect(page.items).toHaveLength(1);
@@ -1102,12 +1160,20 @@ export const clientQueriesTestSuite = ({ it }: { it: TestAPI<TestSuiteContext> }
       await startChain("notification", { message: "hi" });
       await startChain("report", { type: "summary" }, [order]);
 
-      const blocked = await client.listJobs({ filter: { status: ["blocked"] } });
-      const pending = await client.listJobs({ filter: { status: ["pending"] } });
+      const pending = await client.listJobs({ status: "pending" });
+      const blocked = await client.listJobs({ status: "pending", blocked: true });
+      const runnable = await client.listJobs({ status: "pending", blocked: false });
+
+      expect(pending.items).toHaveLength(3);
+      const report = pending.items.find((j) => j.typeName === "report");
+      expect(report?.status === "pending" && report.blocked).toBe(true);
 
       expect(blocked.items).toHaveLength(1);
       expect(blocked.items[0].typeName).toBe("report");
-      expect(pending.items).toHaveLength(2);
+      expect(blocked.items[0].status === "pending" && blocked.items[0].blocked).toBe(true);
+
+      expect(runnable.items).toHaveLength(2);
+      expect(runnable.items.map((j) => j.typeName).sort()).toEqual(["notification", "order"]);
     });
 
     it("listJobs orders ascending", async ({
@@ -1189,19 +1255,136 @@ export const clientQueriesTestSuite = ({ it }: { it: TestAPI<TestSuiteContext> }
       const latest = Math.max(...createdMs);
 
       const page = await client.listJobs({
-        filter: { from: new Date(earliest - 1000), to: new Date(latest + 1000) },
+        from: new Date(earliest - 1000),
+        to: new Date(latest + 1000),
       });
       expect(page.items).toHaveLength(2);
 
       const futureOnly = await client.listJobs({
-        filter: { from: new Date(latest + 60_000) },
+        from: new Date(latest + 60_000),
       });
       expect(futureOnly.items).toHaveLength(0);
 
       const pastOnly = await client.listJobs({
-        filter: { to: new Date(earliest - 60_000) },
+        to: new Date(earliest - 60_000),
       });
       expect(pastOnly.items).toHaveLength(0);
+    });
+
+    it("listJobs sorts completed jobs by completedAt when orderBy is completedAt", async ({
+      stateAdapter,
+      notifyAdapter,
+      withTransaction,
+      withWorkers,
+      observabilityAdapter,
+      log,
+      expect,
+    }) => {
+      const jobTypes = defineJobTypes<{
+        job_a: {
+          entry: true;
+          input: null;
+          output: null;
+        };
+        job_b: {
+          entry: true;
+          input: null;
+          output: null;
+        };
+      }>();
+
+      const client = await createClient({
+        stateAdapter,
+        notifyAdapter,
+        observabilityAdapter,
+        log,
+        jobTypes,
+      });
+
+      const worker = await createInProcessWorker({
+        client,
+        concurrency: 1,
+        processors: createProcessors({
+          client,
+          jobTypes,
+          processors: {
+            job_a: {
+              attemptHandler: async ({ complete }) => complete(async () => null),
+            },
+            job_b: {
+              attemptHandler: async ({ complete }) => complete(async () => null),
+            },
+          },
+        }),
+      });
+
+      const chainA = await withTransactionHooks(async (transactionHooks) =>
+        withTransaction(async (txCtx) =>
+          client.startChain({ ...txCtx, transactionHooks, typeName: "job_a", input: null }),
+        ),
+      );
+      await sleep(5);
+      const chainB = await withTransactionHooks(async (transactionHooks) =>
+        withTransaction(async (txCtx) =>
+          client.startChain({ ...txCtx, transactionHooks, typeName: "job_b", input: null }),
+        ),
+      );
+
+      await withWorkers([await worker.start()], async () => {
+        await client.awaitChain(chainA, completionOptions);
+        await client.awaitChain(chainB, completionOptions);
+      });
+
+      const byCreatedAt = await client.listJobs({
+        status: "completed",
+        orderBy: "createdAt",
+        orderDirection: "asc",
+      });
+      expect(byCreatedAt.items[0].id).toBe(chainA.id);
+      expect(byCreatedAt.items[1].id).toBe(chainB.id);
+
+      const byCompletedAt = await client.listJobs({
+        status: "completed",
+        orderBy: "completedAt",
+        orderDirection: "desc",
+      });
+      expect(byCompletedAt.items).toHaveLength(2);
+      const [first, second] = byCompletedAt.items;
+      expect(first.status).toBe("completed");
+      expect(second.status).toBe("completed");
+      if (first.status === "completed" && second.status === "completed") {
+        expect(first.completedAt.getTime()).toBeGreaterThanOrEqual(second.completedAt.getTime());
+      }
+    });
+
+    it("listJobs sorts pending jobs by scheduledAt when orderBy is scheduledAt", async ({
+      stateAdapter,
+      notifyAdapter,
+      observabilityAdapter,
+      log,
+      withTransaction,
+      expect,
+    }) => {
+      const { client, startChain } = await createContext({
+        stateAdapter,
+        notifyAdapter,
+        observabilityAdapter,
+        log,
+        withTransaction,
+      });
+      await startChain("order", { amount: 1 });
+      await sleep(5);
+      await startChain("notification", { message: "hi" });
+
+      const byScheduledAt = await client.listJobs({
+        status: "pending",
+        orderBy: "scheduledAt",
+        orderDirection: "asc",
+      });
+      expect(byScheduledAt.items).toHaveLength(2);
+      expect(byScheduledAt.items[0].scheduledAt.getTime()).toBeLessThanOrEqual(
+        byScheduledAt.items[1].scheduledAt.getTime(),
+      );
     });
 
     it("listJobs returns correct job shape", async ({
@@ -1221,7 +1404,7 @@ export const clientQueriesTestSuite = ({ it }: { it: TestAPI<TestSuiteContext> }
       });
       await startChain("notification", { message: "test" });
 
-      const page = await client.listJobs({ filter: { typeName: ["notification"] } });
+      const page = await client.listJobs({ typeName: ["notification"] });
       const job = page.items[0];
 
       expect(job.typeName).toBe("notification");
@@ -1229,7 +1412,7 @@ export const clientQueriesTestSuite = ({ it }: { it: TestAPI<TestSuiteContext> }
       expect(job.status).toBe("pending");
       expect(job.createdAt).toBeInstanceOf(Date);
       expect(job.scheduledAt).toBeInstanceOf(Date);
-      expect(job.chainIndex).toBe(0);
+      expect(job.id).toBe(job.chainId);
       expect(job.attempt).toBe(0);
     });
   });
@@ -1258,7 +1441,7 @@ export const clientQueriesTestSuite = ({ it }: { it: TestAPI<TestSuiteContext> }
       expect(page.items).toEqual([]);
     });
 
-    it("listChainJobs returns jobs in chain ordered by chainIndex", async ({
+    it("listChainJobs returns jobs in chain in continuedToId order", async ({
       stateAdapter,
       notifyAdapter,
       withTransaction,
@@ -1316,16 +1499,21 @@ export const clientQueriesTestSuite = ({ it }: { it: TestAPI<TestSuiteContext> }
       const page = await client.listChainJobs({ chainId: chain.id });
 
       expect(page.items.length).toBe(3);
-      expect(page.items[0].chainIndex).toBe(0);
-      expect(page.items[1].chainIndex).toBe(1);
-      expect(page.items[2].chainIndex).toBe(2);
-      expect(page.items[0].input).toEqual({ n: 0 });
-      expect(page.items[1].input).toEqual({ n: 1 });
-      expect(page.items[2].input).toEqual({ n: 2 });
+      const [first, second, third] = page.items;
+      expect(first.input).toEqual({ n: 0 });
+      expect(second.input).toEqual({ n: 1 });
+      expect(third.input).toEqual({ n: 2 });
+      expect(first.id).toBe(chain.id);
       for (const job of page.items) {
         expect(job.chainId).toBe(chain.id);
         expect(job.status).toBe("completed");
       }
+      expect(first).toMatchObject({ status: "completed", continuedToId: second.id });
+      expect(second).toMatchObject({ status: "completed", continuedToId: third.id });
+      expect(third).toMatchObject({ status: "completed", continuedToId: null });
+      expect("output" in first).toBe(false);
+      expect("output" in second).toBe(false);
+      expect(third).toMatchObject({ output: { done: true } });
     });
 
     it("listChainJobs orders descending", async ({
@@ -1389,10 +1577,10 @@ export const clientQueriesTestSuite = ({ it }: { it: TestAPI<TestSuiteContext> }
         orderDirection: "desc",
       });
 
-      expect(asc.items[0].chainIndex).toBe(0);
-      expect(asc.items[1].chainIndex).toBe(1);
-      expect(desc.items[0].chainIndex).toBe(1);
-      expect(desc.items[1].chainIndex).toBe(0);
+      expect(asc.items[0].id).toBe(chain.id);
+      expect(asc.items[1].id).not.toBe(chain.id);
+      expect(desc.items[0].id).not.toBe(chain.id);
+      expect(desc.items[1].id).toBe(chain.id);
     });
 
     it("listChainJobs paginates", async ({
@@ -1453,8 +1641,7 @@ export const clientQueriesTestSuite = ({ it }: { it: TestAPI<TestSuiteContext> }
       const page1 = await client.listChainJobs({ chainId: chain.id, limit: 2 });
       expect(page1.items).toHaveLength(2);
       expect(page1.nextCursor).not.toBeNull();
-      expect(page1.items[0].chainIndex).toBe(0);
-      expect(page1.items[1].chainIndex).toBe(1);
+      expect(page1.items[0].id).toBe(chain.id);
 
       const page2 = await client.listChainJobs({
         chainId: chain.id,
@@ -1463,7 +1650,7 @@ export const clientQueriesTestSuite = ({ it }: { it: TestAPI<TestSuiteContext> }
       });
       expect(page2.items).toHaveLength(1);
       expect(page2.nextCursor).toBeNull();
-      expect(page2.items[0].chainIndex).toBe(2);
+      expect(page2.items[0].input).toEqual({ n: 2 });
     });
 
     it("listChainJobs only returns jobs from the specified chain", async ({
@@ -1507,7 +1694,7 @@ export const clientQueriesTestSuite = ({ it }: { it: TestAPI<TestSuiteContext> }
       });
       const chain = await startChain("order", { amount: 42 });
 
-      const page = await client.listChainJobs({ chainId: chain.id, typeName: "order" });
+      const page = await client.listChainJobs({ chainId: chain.id, chainTypeName: "order" });
 
       expect(page.items).toHaveLength(1);
       expect(page.items[0].typeName).toBe("order");
@@ -1533,7 +1720,7 @@ export const clientQueriesTestSuite = ({ it }: { it: TestAPI<TestSuiteContext> }
       const chain = await startChain("order", { amount: 42 });
 
       await expect(
-        client.listChainJobs({ chainId: chain.id, typeName: "notification" }),
+        client.listChainJobs({ chainId: chain.id, chainTypeName: "notification" }),
       ).rejects.toThrow(ChainTypeMismatchError);
     });
   });
@@ -1766,7 +1953,9 @@ export const clientQueriesTestSuite = ({ it }: { it: TestAPI<TestSuiteContext> }
       expect(page.items).toHaveLength(1);
       expect(page.items[0].id).toBe(report.id);
       expect(page.items[0].typeName).toBe("report");
-      expect(page.items[0].status).toBe("blocked");
+      expect(page.items[0].status).toBe("pending");
+      const blockedItem = page.items[0];
+      expect(blockedItem.status === "pending" && blockedItem.blocked).toBe(true);
     });
 
     it("listBlockedJobs paginates", async ({
@@ -1948,17 +2137,17 @@ export const clientQueriesTestSuite = ({ it }: { it: TestAPI<TestSuiteContext> }
         await client.awaitChain(chain, completionOptions);
       });
 
-      const rootJob = await client.getJob({ id: chain.id });
-      expect(rootJob).not.toBeNull();
-      expect(rootJob!.status).toBe("completed");
+      const headJob = await client.getJob({ id: chain.id });
+      expect(headJob).not.toBeNull();
+      expect(headJob!.status).toBe("completed");
 
-      const chains = await client.listChains({ filter: { typeName: ["task"] } });
+      const chains = await client.listChains({ typeName: ["task"] });
       expect(chains.items).toHaveLength(1);
       const completedChain = chains.items[0];
       expect(completedChain.status).toBe("completed");
       expect((completedChain as { output: unknown }).output).toEqual({ final: 20 });
 
-      const jobs = await client.listJobs({ filter: { chainId: [chain.id] } });
+      const jobs = await client.listJobs({ chainId: [chain.id] });
       expect(jobs.items).toHaveLength(2);
       expect(jobs.items.every((j) => j.status === "completed")).toBe(true);
 
@@ -2036,7 +2225,8 @@ export const clientQueriesTestSuite = ({ it }: { it: TestAPI<TestSuiteContext> }
       );
 
       const mainJob = await client.getJob({ id: mainChain.id });
-      expect(mainJob!.status).toBe("blocked");
+      expect(mainJob!.status).toBe("pending");
+      expect(mainJob!.status === "pending" && mainJob!.blocked).toBe(true);
 
       const blocked = await client.listBlockedJobs({ chainId: depChain.id });
       expect(blocked.items).toHaveLength(1);

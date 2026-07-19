@@ -1,6 +1,7 @@
 import { describe, it } from "vitest";
 
 import { extendWithStateInProcess } from "../state-adapter/state-adapter.in-process.spec-helper.js";
+import { attemptReclaimerTestSuite } from "../suites/attempt-reclaimer.test-suite.js";
 import { awaitChainTestSuite } from "../suites/await-chain.test-suite.js";
 import { blockerChainsTestSuite } from "../suites/blocker-chains.test-suite.js";
 import { chainsTestSuite } from "../suites/chains.test-suite.js";
@@ -9,7 +10,6 @@ import { notifyTestSuite } from "../suites/notify.test-suite.js";
 import { processErrorHandlingTestSuite } from "../suites/process-error-handling.test-suite.js";
 import { processModesTestSuite } from "../suites/process-modes.test-suite.js";
 import { processTestSuite } from "../suites/process.test-suite.js";
-import { reaperTestSuite } from "../suites/reaper.test-suite.js";
 import { rescheduleJobTestSuite } from "../suites/reschedule-job.test-suite.js";
 import { schedulingTestSuite } from "../suites/scheduling.test-suite.js";
 import {
@@ -45,8 +45,8 @@ describe("Worker", () => {
   workerTestSuite({ it: inProcessInProcessIt });
 });
 
-describe("Reaper", () => {
-  reaperTestSuite({ it: inProcessInProcessIt });
+describe("Attempt Reclamation", () => {
+  attemptReclaimerTestSuite({ it: inProcessInProcessIt });
 });
 
 describe("Chains", () => {

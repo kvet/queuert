@@ -7,7 +7,7 @@ sidebar:
 
 import { Tabs, TabItem, Badge } from "@astrojs/starlight/components";
 
-State adapters abstract database operations for job persistence. They handle job creation, status transitions, leasing, and queries. Queuert ships three options: PostgreSQL for production workloads, SQLite for lightweight or embedded use cases, and an in-process adapter for single-process apps that don't need persistence.
+State adapters abstract database operations for job persistence. They handle job creation, status transitions, attempt tracking, and queries. Queuert ships three options: PostgreSQL for production workloads, SQLite for lightweight or embedded use cases, and an in-process adapter for single-process apps that don't need persistence.
 
 <Tabs>
   <TabItem label="PostgreSQL">

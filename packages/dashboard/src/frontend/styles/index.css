@@ -13,6 +13,7 @@
   --status-running: #3b82f6;
   --status-completed: #22c55e;
   --status-blocked: #a855f7;
+  --status-continued: #14b8a6;
 
   --font-mono: ui-monospace, SFMono-Regular, "SF Mono", Menlo, monospace;
   --font-sans: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
@@ -171,8 +172,8 @@ a:hover {
 
 .card-header {
   display: flex;
-  justify-content: space-between;
   align-items: center;
+  gap: 12px;
   margin-bottom: 4px;
 }
 
@@ -223,15 +224,21 @@ a:hover {
 }
 
 .card-time {
+  margin-left: auto;
   font-size: 12px;
   color: var(--text-muted);
 }
 
 .card-meta {
   display: flex;
+  align-items: center;
   gap: 12px;
   font-size: 12px;
   color: var(--text-secondary);
+}
+
+.card-meta .status-badge {
+  margin-left: auto;
 }
 
 .card-input {
@@ -266,9 +273,13 @@ a:hover {
   color: var(--status-completed);
   background: color-mix(in srgb, var(--status-completed) 15%, transparent);
 }
-.status-badge[data-status="blocked"] {
+.status-badge[data-blocked] {
   color: var(--status-blocked);
   background: color-mix(in srgb, var(--status-blocked) 15%, transparent);
+}
+.status-badge[data-continued] {
+  color: var(--status-continued);
+  background: color-mix(in srgb, var(--status-continued) 15%, transparent);
 }
 
 .load-more {

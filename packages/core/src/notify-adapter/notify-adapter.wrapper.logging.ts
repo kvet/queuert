@@ -28,8 +28,8 @@ export const wrapNotifyAdapterWithLogging = ({
     consumeWakeHint: wrap("consumeWakeHint", notifyAdapter.consumeWakeHint),
     notifyChainCompleted: wrap("notifyChainCompleted", notifyAdapter.notifyChainCompleted),
     listenChainCompleted: wrap("listenChainCompleted", notifyAdapter.listenChainCompleted),
-    notifyJobOwnershipLost: wrap("notifyJobOwnershipLost", notifyAdapter.notifyJobOwnershipLost),
-    listenJobOwnershipLost: wrap("listenJobOwnershipLost", notifyAdapter.listenJobOwnershipLost),
+    notifyJobAttemptLost: wrap("notifyJobAttemptLost", notifyAdapter.notifyJobAttemptLost),
+    listenJobAttemptLost: wrap("listenJobAttemptLost", notifyAdapter.listenJobAttemptLost),
     close: notifyAdapter.close,
   };
 };

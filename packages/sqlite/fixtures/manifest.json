@@ -1,4 +1,5 @@
 {
+  "migration": "20240101000000_initial_schema",
   "totalJobs": 9801,
   "totalBlockers": 3000,
   "byStatus": {

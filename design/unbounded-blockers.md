@@ -95,7 +95,7 @@ partial index check.
 For sealed blockers the row count is bounded by `MAX_BLOCKERS_PER_JOB = 100`, so the
 performance difference is negligible — but the code path is unified.
 
-`design/job-model.md:339` deliberately omitted a `job_blocker.open` denormalization because
+The job model deliberately omitted a `job_blocker.open` denormalization because
 `unblockJobs` "already operates on a bounded set." Unsealed blockers break that assumption,
 justifying the column. The denormalization lives on `job_blocker` (write-once-flip-once, no
 contention) rather than `job` (hot acquisition path, MVCC cost), so the original concern about
@@ -345,10 +345,10 @@ to an explicit call.
 `listBlockers({ cursor, limit }) → { items, nextCursor }` escape hatch. Every item is
 guaranteed `completed` (the job only runs once sealed and all blockers resolved). Awaiting
 `listBlockers()` is async processing-phase work, so the attempt auto-promotes to staged mode
-and renews the lease while paging. Page size is an internal tuning knob, not user-facing.
+and extends the attempt while paging. Page size is an internal tuning knob, not user-facing.
 
 Long-running aggregations can use `execute` to checkpoint intermediate state — each call opens
-a fresh guarded transaction with lease verification, so the handler never holds a single
+a fresh guarded transaction with attempt verification, so the handler never holds a single
 long-lived transaction across the entire blocker set.
 
 ---

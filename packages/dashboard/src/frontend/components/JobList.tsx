@@ -1,9 +1,9 @@
 import { A, useSearchParams } from "@solidjs/router";
-import { For, Show, createResource, createSignal } from "solid-js";
+import { For, Show, createMemo, createResource, createSignal } from "solid-js";
 
 import { PAGE_SIZE, type UnknownJob, listJobs } from "../api.js";
 import { createAutoLoadMore } from "./createAutoLoadMore.js";
-import { StatusBadge } from "./StatusBadge.js";
+import { JobStatusBadge } from "./StatusBadge.js";
 import { TimeAgo } from "./TimeAgo.js";
 
 export function JobList() {
@@ -12,7 +12,52 @@ export function JobList() {
   const status = () => (searchParams.status ?? "") as string;
   const typeName = () => (searchParams.typeName ?? "") as string;
   const id = () => (searchParams.id ?? "") as string;
-  const chainId = () => (searchParams.chainId ?? "") as string;
+
+  const orderBy = () => (searchParams.orderBy ?? "") as string;
+  const orderDirection = () => (searchParams.orderDirection ?? "desc") as string;
+
+  const effectiveStatus = createMemo(() => {
+    const s = status();
+    if (s === "blocked" || s === "pending-unblocked") return "pending";
+    if (s === "completed-terminal" || s === "completed-continued") return "completed";
+    return s;
+  });
+
+  const orderByOptions = createMemo(() => {
+    const s = effectiveStatus();
+    if (s === "pending")
+      return [
+        { value: "scheduledAt", label: "Scheduled" },
+        { value: "createdAt", label: "Created" },
+      ] as const;
+    if (s === "running")
+      return [
+        { value: "attemptAt", label: "Started" },
+        { value: "attemptUntil", label: "Deadline" },
+        { value: "createdAt", label: "Created" },
+      ] as const;
+    if (s === "completed")
+      return [
+        { value: "completedAt", label: "Completed" },
+        { value: "createdAt", label: "Created" },
+      ] as const;
+    return [{ value: "createdAt", label: "Created" }] as const;
+  });
+
+  const effectiveOrderBy = createMemo(() => {
+    const v = orderBy();
+    const opts = orderByOptions();
+    return v && opts.some((o) => o.value === v) ? v : opts[0].value;
+  });
+
+  const cardDate = (job: UnknownJob): Date => {
+    const key = effectiveOrderBy();
+    if (key === "scheduledAt") return job.scheduledAt;
+    if (key === "attemptAt" && job.status === "running") return job.attemptAt;
+    if (key === "attemptUntil" && job.status === "running") return job.attemptUntil!;
+    if (key === "completedAt" && job.status === "completed") return job.completedAt;
+    return job.createdAt;
+  };
 
   const [items, setItems] = createSignal<UnknownJob[]>([]);
   const [cursor, setCursor] = createSignal<string | null>(null);
@@ -23,7 +68,8 @@ export function JobList() {
       status: status(),
       typeName: typeName(),
       id: id(),
-      chainId: chainId(),
+      orderBy: orderBy() || undefined,
+      orderDirection: orderDirection() || undefined,
     }),
     async (params) => {
       loadMoreController?.abort();
@@ -46,7 +92,8 @@ export function JobList() {
         status: status(),
         typeName: typeName(),
         id: id(),
-        chainId: chainId(),
+        orderBy: orderBy() || undefined,
+        orderDirection: orderDirection() || undefined,
         cursor: c,
         limit: PAGE_SIZE,
         signal: controller.signal,
@@ -81,14 +128,6 @@ export function JobList() {
         />
         <input
           type="text"
-          placeholder="Chain ID"
-          value={chainId()}
-          onChange={(e) => {
-            setSearchParams({ chainId: e.target.value.trim() || undefined });
-          }}
-        />
-        <input
-          type="text"
           placeholder="Type name"
           value={typeName()}
           onChange={(e) => {
@@ -98,15 +137,37 @@ export function JobList() {
         <select
           value={status()}
           onChange={(e) => {
-            setSearchParams({ status: e.target.value || undefined });
+            setSearchParams({ status: e.target.value || undefined, orderBy: undefined });
           }}
         >
           <option value="">All statuses</option>
           <option value="pending">Pending</option>
+          <option value="pending-unblocked">Pending (unblocked)</option>
+          <option value="blocked">Pending (blocked)</option>
           <option value="running">Running</option>
           <option value="completed">Completed</option>
-          <option value="blocked">Blocked</option>
+          <option value="completed-terminal">Completed (terminal)</option>
+          <option value="completed-continued">Completed (continued)</option>
         </select>
+        <select
+          value={orderBy() || orderByOptions()[0].value}
+          onChange={(e) => {
+            setSearchParams({ orderBy: e.target.value || undefined });
+          }}
+        >
+          <For each={orderByOptions()}>
+            {(opt) => <option value={opt.value}>{opt.label}</option>}
+          </For>
+        </select>
+        <button
+          class="order-direction-btn"
+          title={orderDirection() === "asc" ? "Ascending" : "Descending"}
+          onClick={() => {
+            setSearchParams({ orderDirection: orderDirection() === "asc" ? "desc" : "asc" });
+          }}
+        >
+          {orderDirection() === "asc" ? "↑" : "↓"}
+        </button>
       </div>
 
       <Show when={!page.loading && items().length === 0}>
@@ -139,20 +200,14 @@ export function JobList() {
                 />
               </span>
               <span class="card-time">
-                <TimeAgo date={job.createdAt} />
+                <TimeAgo date={cardDate(job)} />
               </span>
             </div>
             <div class="card-meta">
-              <StatusBadge status={job.status} />
-              <Show when={job.status === "blocked" && job.attempt > 0}>
-                <span>attempt #{job.attempt}</span>
-              </Show>
-              <Show when={job.status === "running" ? job.leasedBy : undefined}>
-                {(leasedBy) => <span>{leasedBy()}</span>}
-              </Show>
               <A href={`/chains/${job.chainId}`} class="chain-link">
                 chain {job.chainId}
               </A>
+              <JobStatusBadge job={job} />
             </div>
             <Show when={job.input != null}>
               <div class="card-input">{inputPreview(job.input)}</div>

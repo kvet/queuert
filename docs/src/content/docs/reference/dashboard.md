@@ -41,7 +41,7 @@ const dashboard = await createDashboard({
 
 ## Performance
 
-Chain listing joins each root row with the last job in the chain. Filtering by `status` is not optimized — always pass `typeName` to narrow the scan. See [Performance considerations](/queuert/guides/queries/#performance-considerations).
+Chain listing joins each head row with the tail job in the chain. Filtering by `status` is not optimized — always pass `typeName` to narrow the scan. See [Query Performance](/queuert/benchmarks/#query-performance).
 
 ## See Also
 

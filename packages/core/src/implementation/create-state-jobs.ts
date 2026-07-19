@@ -1,4 +1,4 @@
-import { type Chain } from "../entities/chain.js";
+import { type AnyChain } from "../entities/chain.js";
 import { type DeduplicationOptions } from "../entities/deduplication.js";
 import { type ScheduleOptions } from "../entities/schedule.js";
 import { BlockerLimitExceededError } from "../errors.js";
@@ -7,92 +7,57 @@ import {
   bufferObservabilityEvent,
   bufferObservabilityRollback,
 } from "../helpers/observability-hooks.js";
+import { type ObservabilityHelper } from "../observability-adapter/observability-helper.js";
 import { type Helpers } from "../setup-helpers.js";
 import { type BaseTxContext, type StateJob } from "../state-adapter/state-adapter.js";
 import { type TransactionHooks } from "../transaction-hooks.js";
 
-/**
- * Hard cap on the number of blocker chains a single job may declare. Intentional
- * and not raised to an uncapped value — the `job_blocker` model can't scale to
- * millions of blockers per job without a different denormalization.
- */
 const MAX_BLOCKERS_PER_JOB = 100;
 
-export const createStateJobs = async (
+type CommonInput = {
+  id?: string;
+  typeName: string;
+  input: unknown;
+  blockers?: AnyChain[];
+  schedule?: ScheduleOptions;
+};
+
+type ParsedEntry = {
+  typeName: string;
+  input: unknown;
+  blockers?: AnyChain[];
+  parsedInput: unknown;
+};
+
+type JobSpanHandle = ReturnType<ObservabilityHelper["startJobSpan"]>;
+
+const assertBlockerLimit = (typeName: string, blockerCount: number): void => {
+  if (blockerCount > MAX_BLOCKERS_PER_JOB) {
+    throw new BlockerLimitExceededError(
+      `Job "${typeName}" declares ${blockerCount} blockers, exceeding the limit of ${MAX_BLOCKERS_PER_JOB}`,
+      { typeName, count: blockerCount, limit: MAX_BLOCKERS_PER_JOB },
+    );
+  }
+};
+
+const finalizeCreatedJobs = async (
   helpers: Helpers,
   {
-    jobs: jobInputs,
+    parsed,
+    spanHandles,
+    createResults,
+    isChainStart,
     txCtx,
     transactionHooks,
   }: {
-    jobs: {
-      typeName: string;
-      id?: string;
-      chainTypeName: string;
-      chainIndex: number;
-      input: unknown;
-      blockers?: Chain<any, any, any, any>[];
-      chainId?: string;
-      isChainStart: boolean;
-      originChainTraceContext?: string | null;
-      originTraceContext?: string | null;
-      deduplication?: DeduplicationOptions<string>;
-      schedule?: ScheduleOptions;
-    }[];
+    parsed: ParsedEntry[];
+    spanHandles: JobSpanHandle[];
+    createResults: { job: StateJob; deduplicated: boolean }[];
+    isChainStart: boolean;
     txCtx: BaseTxContext;
     transactionHooks: TransactionHooks;
   },
 ): Promise<{ job: StateJob; deduplicated: boolean }[]> => {
-  if (jobInputs.length === 0) return [];
-
-  for (const jobInput of jobInputs) {
-    const blockerCount = jobInput.blockers?.length ?? 0;
-    if (blockerCount > MAX_BLOCKERS_PER_JOB) {
-      throw new BlockerLimitExceededError(
-        `Job "${jobInput.typeName}" declares ${blockerCount} blockers, exceeding the limit of ${MAX_BLOCKERS_PER_JOB}`,
-        { typeName: jobInput.typeName, count: blockerCount, limit: MAX_BLOCKERS_PER_JOB },
-      );
-    }
-  }
-
-  const parsed = jobInputs.map((jobInput) => {
-    const parsedInput = helpers.jobTypes.parseInput(jobInput.typeName, jobInput.input);
-    return { ...jobInput, parsedInput };
-  });
-
-  const spanHandles = parsed.map((jobInput) =>
-    helpers.observabilityHelper.startJobSpan({
-      chainTypeName: jobInput.chainTypeName,
-      jobTypeName: jobInput.typeName,
-      isChainStart: jobInput.isChainStart,
-      originChainTraceContext: jobInput.isChainStart ? undefined : jobInput.originChainTraceContext,
-      originTraceContext: jobInput.isChainStart ? undefined : jobInput.originTraceContext,
-    }),
-  );
-
-  const createJobParams = parsed.map((jobInput, i) => ({
-    typeName: jobInput.typeName,
-    id: jobInput.id,
-    chainTypeName: jobInput.chainTypeName,
-    chainIndex: jobInput.chainIndex,
-    input: jobInput.parsedInput,
-    chainId: jobInput.chainId,
-    deduplication: jobInput.deduplication,
-    schedule: jobInput.schedule,
-    chainTraceContext: spanHandles[i]?.getChainTraceContext() ?? null,
-    traceContext: spanHandles[i]?.getTraceContext() ?? null,
-  }));
-
-  let createResults: { job: StateJob; deduplicated: boolean }[];
-  try {
-    createResults = await helpers.stateAdapter.createJobs({ txCtx, jobs: createJobParams });
-  } catch (error) {
-    for (const spanHandle of spanHandles) {
-      spanHandle?.end({ status: "error", error });
-    }
-    throw error;
-  }
-
   try {
     const jobs: StateJob[] = createResults.map((r) => r.job);
     const perJobIncompleteBlockerChainIds: string[][] = parsed.map(() => []);
@@ -124,7 +89,7 @@ export const createStateJobs = async (
           ? blockers.map((blocker, bi) =>
               helpers.observabilityHelper.startBlockerSpan({
                 chainId: jobs[i].chainId,
-                chainTypeName: parsed[i].chainTypeName,
+                chainTypeName: jobs[i].chainTypeName,
                 jobId: jobs[i].id,
                 jobTypeName: parsed[i].typeName,
                 jobTraceContext: spanHandles[i]!.getTraceContext(),
@@ -201,7 +166,7 @@ export const createStateJobs = async (
         });
       }
 
-      if (jobInput.isChainStart) {
+      if (isChainStart) {
         bufferObservabilityEvent(transactionHooks, () => {
           helpers.observabilityHelper.chainCreated(job, { input: jobInput.input });
         });
@@ -234,10 +199,143 @@ export const createStateJobs = async (
     }));
   } catch (error) {
     for (let i = 0; i < spanHandles.length; i++) {
-      if (!createResults![i]?.deduplicated) {
+      if (!createResults[i]?.deduplicated) {
         spanHandles[i]?.end({ status: "error", error });
       }
     }
     throw error;
   }
+};
+
+const prepareJobs = <TEntry extends CommonInput>(
+  helpers: Helpers,
+  entries: TEntry[],
+  startSpan: (entry: TEntry, index: number) => JobSpanHandle,
+): { parsed: ParsedEntry[]; spanHandles: JobSpanHandle[] } => {
+  for (const entry of entries) {
+    assertBlockerLimit(entry.typeName, entry.blockers?.length ?? 0);
+  }
+
+  const parsed: ParsedEntry[] = entries.map((entry) => ({
+    typeName: entry.typeName,
+    input: entry.input,
+    blockers: entry.blockers,
+    parsedInput: helpers.jobTypes.parseInput(entry.typeName, entry.input),
+  }));
+
+  const spanHandles = entries.map(startSpan);
+
+  return { parsed, spanHandles };
+};
+
+const runCreate = async <T>(spanHandles: JobSpanHandle[], create: () => Promise<T>): Promise<T> => {
+  try {
+    return await create();
+  } catch (error) {
+    for (const spanHandle of spanHandles) {
+      spanHandle?.end({ status: "error", error });
+    }
+    throw error;
+  }
+};
+
+export const createStateChains = async (
+  helpers: Helpers,
+  {
+    chains,
+    txCtx,
+    transactionHooks,
+  }: {
+    chains: (CommonInput & {
+      chainTypeName: string;
+      deduplication?: DeduplicationOptions<string>;
+    })[];
+    txCtx: BaseTxContext;
+    transactionHooks: TransactionHooks;
+  },
+): Promise<{ job: StateJob; deduplicated: boolean }[]> => {
+  if (chains.length === 0) return [];
+
+  const { parsed, spanHandles } = prepareJobs(helpers, chains, (entry) =>
+    helpers.observabilityHelper.startJobSpan({
+      chainTypeName: entry.chainTypeName,
+      jobTypeName: entry.typeName,
+      isChainStart: true,
+    }),
+  );
+
+  const createJobParams = chains.map((chain, i) => ({
+    id: chain.id,
+    typeName: chain.typeName,
+    input: parsed[i].parsedInput,
+    schedule: chain.schedule,
+    chainTraceContext: spanHandles[i]?.getChainTraceContext() ?? null,
+    traceContext: spanHandles[i]?.getTraceContext() ?? null,
+    chainTypeName: chain.chainTypeName,
+    deduplication: chain.deduplication,
+  }));
+
+  const createResults = await runCreate(spanHandles, async () =>
+    helpers.stateAdapter.createChains({ txCtx, jobs: createJobParams }),
+  );
+
+  return finalizeCreatedJobs(helpers, {
+    parsed,
+    spanHandles,
+    createResults,
+    isChainStart: true,
+    txCtx,
+    transactionHooks,
+  });
+};
+
+export const continueStateJob = async (
+  helpers: Helpers,
+  {
+    job,
+    fromJob,
+    txCtx,
+    transactionHooks,
+  }: {
+    job: CommonInput;
+    fromJob: StateJob;
+    txCtx: BaseTxContext;
+    transactionHooks: TransactionHooks;
+  },
+): Promise<{ job: StateJob; deduplicated: boolean }> => {
+  const { parsed, spanHandles } = prepareJobs(helpers, [job], () =>
+    helpers.observabilityHelper.startJobSpan({
+      chainTypeName: fromJob.chainTypeName,
+      jobTypeName: job.typeName,
+      isChainStart: false,
+      originChainTraceContext: fromJob.chainTraceContext,
+      originTraceContext: fromJob.traceContext,
+    }),
+  );
+  const [spanHandle] = spanHandles;
+
+  const createResult = await runCreate(spanHandles, async () =>
+    helpers.stateAdapter.createContinuationJob({
+      txCtx,
+      job: {
+        id: job.id,
+        typeName: job.typeName,
+        input: parsed[0].parsedInput,
+        schedule: job.schedule,
+        chainTraceContext: spanHandle?.getChainTraceContext() ?? null,
+        traceContext: spanHandle?.getTraceContext() ?? null,
+        continueFromId: fromJob.id,
+      },
+    }),
+  );
+
+  const [result] = await finalizeCreatedJobs(helpers, {
+    parsed,
+    spanHandles,
+    createResults: [createResult],
+    isChainStart: false,
+    txCtx,
+    transactionHooks,
+  });
+  return result;
 };

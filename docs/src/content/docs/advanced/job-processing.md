@@ -58,7 +58,7 @@ Attempt handlers split processing into distinct phases to support both atomic (s
 Most jobs don't need `prepare`. Call `complete` directly and auto-setup infers the mode:
 
 - **Synchronous `complete`** (called immediately, no prior `await`): atomic mode — single transaction wraps everything
-- **Async work before `complete`**: staged mode — lease renewal active between async work and complete
+- **Async work before `complete`**: staged mode -- heartbeat active between async work and complete
 - Accessing `prepare` after auto-setup throws: "Prepare cannot be accessed after auto-setup"
 
 See [Processing Modes](../../guides/processing-modes/) for examples and a decision flowchart.
@@ -68,11 +68,11 @@ See [Processing Modes](../../guides/processing-modes/) for examples and a decisi
 For more control, call `prepare` explicitly:
 
 - **Atomic mode**: Prepare and complete run in the same transaction. Rarely needed since calling `complete` directly achieves the same result with less ceremony.
-- **Staged mode**: Prepare runs in one transaction, long-running work happens outside, then complete runs in another transaction. The worker automatically renews the job lease between phases. Implement the processing phase idempotently as it may retry if the worker crashes.
+- **Staged mode**: Prepare runs in one transaction, long-running work happens outside, then complete runs in another transaction. The worker automatically extends the attempt between phases. Implement the processing phase idempotently as it may retry if the worker crashes.
 
 ### Intermediate Transactions with `execute`
 
-Handlers can call `execute` to perform intermediate transactional work — each call opens a fresh guarded transaction with lease verification. This is useful for batched operations like bulk deletes where holding a single long-lived transaction would be impractical. If `prepare` hasn't been called, `execute` automatically enters staged mode. See [Processing Modes — Execute](../../guides/processing-modes/#intermediate-transactions-with-execute).
+Handlers can call `execute` to perform intermediate transactional work — each call opens a fresh guarded transaction with attempt verification. This is useful for batched operations like bulk deletes where holding a single long-lived transaction would be impractical. If `prepare` hasn't been called, `execute` automatically enters staged mode. See [Processing Modes — Execute](../../guides/processing-modes/#intermediate-transactions-with-execute).
 
 ## Error Recovery and Savepoints
 
@@ -100,14 +100,14 @@ acquire_txn: "Transaction (acquires job)" {
   }
 }
 
-async_work: "… async work (staged mode only) …\nlease auto-renews between transactions" { class: job-muted; width: 420; height: 80 }
+async_work: "… async work (staged mode only) …\nattempt auto-extends between transactions" { class: job-muted; width: 420; height: 80 }
 
 complete_txn: "Transaction (completes job)" {
   class: txn
 
   complete: "Savepoint — complete callback" {
     class: savepoint
-    body: "User SQL…\ncompleteJob / continueWith\nthrows? rollback to savepoint" { class: step; width: 320; height: 100 }
+    body: "User SQL…\nfinishJobAttempt / continueWith\nthrows? rollback to savepoint" { class: step; width: 320; height: 100 }
   }
 }
 
@@ -127,19 +127,19 @@ See [Job Processing Reliability](../../guides/processing-reliability/) for per-p
 Queuert does not provide built-in soft timeout functionality. This is intentional:
 
 1. **Userland solution is trivial**: Combine `AbortSignal.timeout()` with the existing `signal` parameter using `AbortSignal.any()`
-2. **Lease mechanism is the hard timeout**: If a job doesn't complete within `leaseMs`, the reaper reclaims it and another worker retries
+2. **Attempt mechanism is the hard timeout**: If a job doesn't complete within `timeoutMs`, the attempt expires and is released, and another worker retries
 
 ### Abort Signal and Reasons
 
 Every attempt handler receives a `signal` (`TypedAbortSignal<JobAbortReason>`) that is aborted when the job should stop. The `signal.reason` distinguishes the cause:
 
-| Reason                      | Meaning                                                                          |
-| --------------------------- | -------------------------------------------------------------------------------- |
-| `"taken_by_another_worker"` | Another worker acquired the job (lease expired and was reaped)                   |
-| `"not_found"`               | The job no longer exists in the database                                         |
-| `"already_completed"`       | The job was already completed                                                    |
-| `"error"`                   | An internal error occurred during lease renewal                                  |
-| `"worker_stopping"`         | The worker is shutting down — the job is still valid and the lease is still held |
+| Reason                      | Meaning                                                                            |
+| --------------------------- | ---------------------------------------------------------------------------------- |
+| `"taken_by_another_worker"` | Another worker acquired the job (attempt expired and was released)                 |
+| `"not_found"`               | The job no longer exists in the database                                           |
+| `"already_completed"`       | The job was already completed                                                      |
+| `"error"`                   | An internal error occurred during attempt extension                                |
+| `"worker_stopping"`         | The worker is shutting down — the job is still valid and the attempt is still held |
 
 The first four reasons indicate the job is no longer owned by this worker — handlers should stop immediately. `"worker_stopping"` is different: the job remains valid, but the worker is draining. Handlers can check `signal.reason` to decide whether to finish quickly or abandon:
 
@@ -161,16 +161,16 @@ Users implement cooperative timeouts by combining `AbortSignal.timeout()` with t
 
 ### Hard Timeouts
 
-For hard timeouts (forceful termination), the lease mechanism already handles this:
+For hard timeouts (forceful termination), the attempt mechanism already handles this:
 
-- Configure `leaseMs` appropriately for the job type
-- If the job doesn't complete or renew its lease in time, the reaper reclaims it
+- Configure `timeoutMs` appropriately for the job type
+- If the job doesn't complete or extend the attempt in time, the attempt expires and is released
 - Another worker can then retry the job
 
 ## See Also
 
 - [Job Processing Reliability](../../guides/processing-reliability/) — Savepoint protection, automatic rollback
 - [Client API](/queuert/reference/queuert/client/) — Mutation methods, query methods, awaitChain
-- [In-Process Worker](../in-process-worker/) — Worker lifecycle, leasing, reaper
+- [In-Process Worker](../in-process-worker/) — Worker lifecycle, attempt management, expired attempt reclamation
 - [Adapters](../adapters/) — StateAdapter context architecture
 - [`showcase-signals`](https://github.com/kvet/queuert/tree/main/examples/showcase-signals) — Runnable example: `already_completed` via external `completeChain`, `worker_stopping` via graceful shutdown

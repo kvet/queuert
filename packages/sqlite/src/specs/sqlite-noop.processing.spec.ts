@@ -5,7 +5,7 @@ import {
   processErrorHandlingTestSuite,
   processModesTestSuite,
   processTestSuite,
-  reaperTestSuite,
+  attemptReclaimerTestSuite,
   workerTestSuite,
 } from "queuert/testing";
 import { describe, it } from "vitest";
@@ -35,6 +35,6 @@ describe("Worker", () => {
   workerTestSuite({ it: sqliteNoopIt });
 });
 
-describe("Reaper", () => {
-  reaperTestSuite({ it: sqliteNoopIt });
+describe("Attempt Reclamation", () => {
+  attemptReclaimerTestSuite({ it: sqliteNoopIt });
 });

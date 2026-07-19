@@ -53,9 +53,9 @@ export const notifyResilienceTestSuite = ({
           multiplier: 1,
           maxDelayMs: 1,
         },
-        leaseConfig: {
-          leaseMs: 10,
-          renewIntervalMs: 5,
+        attemptConfig: {
+          timeoutMs: 10,
+          heartbeatMs: 5,
         },
         processors: {
           test: {

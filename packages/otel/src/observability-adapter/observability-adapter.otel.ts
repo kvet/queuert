@@ -58,15 +58,15 @@ export const createOtelObservabilityAdapter = async ({
   const jobAttemptTakenByAnotherWorkerCounter = meter?.createCounter(
     "queuert.job.attempt.taken_by_another_worker",
   );
-  const jobAttemptLeaseExpiredCounter = meter?.createCounter("queuert.job.attempt.lease_expired");
-  const jobAttemptLeaseRenewedCounter = meter?.createCounter("queuert.job.attempt.lease_renewed");
+  const jobAttemptExpiredCounter = meter?.createCounter("queuert.job.attempt.expired");
+  const jobAttemptExtendedCounter = meter?.createCounter("queuert.job.attempt.extended");
   const jobAttemptFailedCounter = meter?.createCounter("queuert.job.attempt.failed");
   const jobAttemptCompletedCounter = meter?.createCounter("queuert.job.attempt.completed");
   const jobAttemptAlreadyCompletedCounter = meter?.createCounter(
     "queuert.job.attempt.already_completed",
   );
   const jobCompletedCounter = meter?.createCounter("queuert.job.completed");
-  const jobReapedCounter = meter?.createCounter("queuert.job.reaped");
+  const jobAttemptReclaimedCounter = meter?.createCounter("queuert.job.attempt.reclaimed");
 
   const chainCreatedCounter = meter?.createCounter("queuert.chain.created");
   const chainCompletedCounter = meter?.createCounter("queuert.chain.completed");
@@ -166,22 +166,22 @@ export const createOtelObservabilityAdapter = async ({
         "queuert.worker.id": workerId,
       });
     },
-    jobAttemptLeaseExpired: ({ typeName, chainTypeName, workerId }) => {
-      jobAttemptLeaseExpiredCounter?.add(1, {
+    jobAttemptExpired: ({ typeName, chainTypeName, workerId }) => {
+      jobAttemptExpiredCounter?.add(1, {
         "queuert.job.type": typeName,
         "queuert.chain.type": chainTypeName,
         "queuert.worker.id": workerId,
       });
     },
-    jobAttemptLeaseRenewed: ({ typeName, chainTypeName, workerId }) => {
-      jobAttemptLeaseRenewedCounter?.add(1, {
+    jobAttemptExtended: ({ typeName, chainTypeName, workerId }) => {
+      jobAttemptExtendedCounter?.add(1, {
         "queuert.job.type": typeName,
         "queuert.chain.type": chainTypeName,
         "queuert.worker.id": workerId,
       });
     },
-    jobReaped: ({ typeName, chainTypeName, workerId }) => {
-      jobReapedCounter?.add(1, {
+    jobAttemptReclaimed: ({ typeName, chainTypeName, workerId }) => {
+      jobAttemptReclaimedCounter?.add(1, {
         "queuert.job.type": typeName,
         "queuert.chain.type": chainTypeName,
         "queuert.worker.id": workerId,
@@ -458,11 +458,11 @@ export const createOtelObservabilityAdapter = async ({
             attemptSpan.setStatus({ code: SpanStatusCode.OK });
             attemptSpan.setAttribute("queuert.attempt.result", "completed");
 
-            if (result.continued) {
-              attemptSpan.setAttribute("queuert.continued_with.job_id", result.continued.jobId);
+            if (result.continuedWith) {
+              attemptSpan.setAttribute("queuert.continued_with.job_id", result.continuedWith.jobId);
               attemptSpan.setAttribute(
                 "queuert.continued_with.job_type",
-                result.continued.jobTypeName,
+                result.continuedWith.jobTypeName,
               );
             }
 
@@ -567,9 +567,9 @@ export const createOtelObservabilityAdapter = async ({
         jobParentCtx,
       );
 
-      if (data.continued) {
-        jobSpan.setAttribute("queuert.continued_with.job_id", data.continued.jobId);
-        jobSpan.setAttribute("queuert.continued_with.job_type", data.continued.jobTypeName);
+      if (data.continuedWith) {
+        jobSpan.setAttribute("queuert.continued_with.job_id", data.continuedWith.jobId);
+        jobSpan.setAttribute("queuert.continued_with.job_type", data.continuedWith.jobTypeName);
       }
 
       const jobConsumerCtx = trace.setSpan(context.active(), jobSpan);

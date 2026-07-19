@@ -38,21 +38,21 @@ export const deduplicationTestSuite = ({ it }: { it: TestAPI<TestSuiteContext> }
           transactionHooks,
           typeName: "test",
           input: { value: 1 },
-          deduplication: { key: "same-key" },
+          deduplication: { key: "same-key", scope: "running" },
         }),
         await client.startChain({
           ...txCtx,
           transactionHooks,
           typeName: "test",
           input: { value: 2 },
-          deduplication: { key: "same-key" },
+          deduplication: { key: "same-key", scope: "running" },
         }),
         await client.startChain({
           ...txCtx,
           transactionHooks,
           typeName: "test",
           input: { value: 3 },
-          deduplication: { key: "different-key" },
+          deduplication: { key: "different-key", scope: "running" },
         }),
       ]),
     );
@@ -99,7 +99,7 @@ export const deduplicationTestSuite = ({ it }: { it: TestAPI<TestSuiteContext> }
     expect("output" in fetched2! && fetched2.output).toEqual({ result: 1 });
   });
 
-  it("scope 'incomplete' deduplicates against multi-step chains that have continued", async ({
+  it("scope 'running' deduplicates against multi-step chains that have continued", async ({
     stateAdapter,
     notifyAdapter,
     withTransaction,
@@ -134,7 +134,7 @@ export const deduplicationTestSuite = ({ it }: { it: TestAPI<TestSuiteContext> }
           transactionHooks,
           typeName: "step1",
           input: { value: 1 },
-          deduplication: { key: "multi-step-key", scope: "incomplete" },
+          deduplication: { key: "multi-step-key", scope: "running" },
         }),
       ),
     );
@@ -165,7 +165,7 @@ export const deduplicationTestSuite = ({ it }: { it: TestAPI<TestSuiteContext> }
           transactionHooks,
           typeName: "step1",
           input: { value: 2 },
-          deduplication: { key: "multi-step-key", scope: "incomplete" },
+          deduplication: { key: "multi-step-key", scope: "running" },
         }),
       ),
     );
@@ -195,7 +195,7 @@ export const deduplicationTestSuite = ({ it }: { it: TestAPI<TestSuiteContext> }
           transactionHooks,
           typeName: "step1",
           input: { value: 3 },
-          deduplication: { key: "multi-step-key", scope: "incomplete" },
+          deduplication: { key: "multi-step-key", scope: "running" },
         }),
       ),
     );
@@ -204,7 +204,87 @@ export const deduplicationTestSuite = ({ it }: { it: TestAPI<TestSuiteContext> }
     expect(chain3.id).not.toBe(chain1.id);
   });
 
-  it("deduplication scopes: 'any' vs 'incomplete'", async ({
+  it("scope 'running' picks running chain when completed chain exists with same key", async ({
+    stateAdapter,
+    notifyAdapter,
+    withTransaction,
+    log,
+    observabilityAdapter,
+    expect,
+  }) => {
+    const jobTypes = defineJobTypes<{
+      test: {
+        entry: true;
+        input: { value: number };
+        output: { result: number };
+      };
+    }>();
+
+    const client = await createClient({
+      stateAdapter,
+      notifyAdapter,
+      observabilityAdapter,
+      log,
+      jobTypes,
+    });
+
+    const chain1 = await withTransactionHooks(async (transactionHooks) =>
+      withTransaction(async (txCtx) =>
+        client.startChain({
+          ...txCtx,
+          transactionHooks,
+          typeName: "test",
+          input: { value: 1 },
+          deduplication: { key: "coexist-key", scope: "running" },
+        }),
+      ),
+    );
+
+    await withTransactionHooks(async (transactionHooks) =>
+      withTransaction(async (txCtx) =>
+        client.completeChain({
+          ...txCtx,
+          transactionHooks,
+          ...chain1,
+          complete: async ({ job, complete }) => {
+            return complete(job, async () => ({ result: 1 }));
+          },
+        }),
+      ),
+    );
+
+    const chain2 = await withTransactionHooks(async (transactionHooks) =>
+      withTransaction(async (txCtx) =>
+        client.startChain({
+          ...txCtx,
+          transactionHooks,
+          typeName: "test",
+          input: { value: 2 },
+          deduplication: { key: "coexist-key", scope: "running" },
+        }),
+      ),
+    );
+
+    expect(chain2.deduplicated).toBe(false);
+    expect(chain2.id).not.toBe(chain1.id);
+
+    const chain3 = await withTransactionHooks(async (transactionHooks) =>
+      withTransaction(async (txCtx) =>
+        client.startChain({
+          ...txCtx,
+          transactionHooks,
+          typeName: "test",
+          input: { value: 3 },
+          deduplication: { key: "coexist-key", scope: "running" },
+        }),
+      ),
+    );
+
+    expect(chain3.deduplicated).toBe(true);
+    expect(chain3.id).toBe(chain2.id);
+  });
+
+  it("deduplication scopes: 'any' vs 'running'", async ({
     stateAdapter,
     notifyAdapter,
     withTransaction,
@@ -269,7 +349,7 @@ export const deduplicationTestSuite = ({ it }: { it: TestAPI<TestSuiteContext> }
     expect(allChain2.deduplicated).toBe(true);
     expect(allChain2.id).toBe(allChain1.id);
 
-    // Test 'incomplete' scope - does NOT deduplicate against completed jobs
+    // Test 'running' scope - does NOT deduplicate against completed jobs
     const completedChain1 = await withTransactionHooks(async (transactionHooks) =>
       withTransaction(async (txCtx) =>
         client.startChain({
@@ -277,7 +357,7 @@ export const deduplicationTestSuite = ({ it }: { it: TestAPI<TestSuiteContext> }
           transactionHooks,
           typeName: "test",
           input: { value: 3 },
-          deduplication: { key: "completed-key", scope: "incomplete" },
+          deduplication: { key: "completed-key", scope: "running" },
         }),
       ),
     );
@@ -302,7 +382,7 @@ export const deduplicationTestSuite = ({ it }: { it: TestAPI<TestSuiteContext> }
           transactionHooks,
           typeName: "test",
           input: { value: 4 },
-          deduplication: { key: "completed-key", scope: "incomplete" },
+          deduplication: { key: "completed-key", scope: "running" },
         }),
       ),
     );
@@ -381,7 +461,7 @@ export const deduplicationTestSuite = ({ it }: { it: TestAPI<TestSuiteContext> }
     expect(allChain2.deduplicated).toBe(false);
     expect(allChain2.id).not.toBe(allChain1.id);
 
-    // Test 'incomplete' scope with windowMs
+    // Test 'running' scope with windowMs
     const completedChain1 = await withTransactionHooks(async (transactionHooks) =>
       withTransaction(async (txCtx) =>
         client.startChain({
@@ -389,7 +469,7 @@ export const deduplicationTestSuite = ({ it }: { it: TestAPI<TestSuiteContext> }
           transactionHooks,
           typeName: "test",
           input: { value: 3 },
-          deduplication: { key: "completed-key", scope: "incomplete", windowMs: 50 },
+          deduplication: { key: "completed-key", scope: "running", windowMs: 50 },
         }),
       ),
     );
@@ -416,7 +496,7 @@ export const deduplicationTestSuite = ({ it }: { it: TestAPI<TestSuiteContext> }
           transactionHooks,
           typeName: "test",
           input: { value: 4 },
-          deduplication: { key: "completed-key", scope: "incomplete", windowMs: 50 },
+          deduplication: { key: "completed-key", scope: "running", windowMs: 50 },
         }),
       ),
     );
@@ -461,14 +541,14 @@ export const deduplicationTestSuite = ({ it }: { it: TestAPI<TestSuiteContext> }
           transactionHooks,
           typeName: "typeA",
           input: { value: 1 },
-          deduplication: { key: "shared-key" },
+          deduplication: { key: "shared-key", scope: "running" },
         }),
         await client.startChain({
           ...txCtx,
           transactionHooks,
           typeName: "typeB",
           input: { value: 2 },
-          deduplication: { key: "shared-key" },
+          deduplication: { key: "shared-key", scope: "running" },
         }),
       ]),
     );
@@ -508,9 +588,21 @@ export const deduplicationTestSuite = ({ it }: { it: TestAPI<TestSuiteContext> }
           ...txCtx,
           transactionHooks,
           items: [
-            { typeName: "test", input: { value: 1 }, deduplication: { key: "same-key" } },
-            { typeName: "test", input: { value: 2 }, deduplication: { key: "same-key" } },
-            { typeName: "test", input: { value: 3 }, deduplication: { key: "different-key" } },
+            {
+              typeName: "test",
+              input: { value: 1 },
+              deduplication: { key: "same-key", scope: "running" },
+            },
+            {
+              typeName: "test",
+              input: { value: 2 },
+              deduplication: { key: "same-key", scope: "running" },
+            },
+            {
+              typeName: "test",
+              input: { value: 3 },
+              deduplication: { key: "different-key", scope: "running" },
+            },
           ],
         }),
       ),
@@ -554,7 +646,7 @@ export const deduplicationTestSuite = ({ it }: { it: TestAPI<TestSuiteContext> }
           transactionHooks,
           typeName: "test",
           input: { value: 100 },
-          deduplication: { key: "existing-key" },
+          deduplication: { key: "existing-key", scope: "running" },
         }),
       ),
     );
@@ -565,8 +657,16 @@ export const deduplicationTestSuite = ({ it }: { it: TestAPI<TestSuiteContext> }
           ...txCtx,
           transactionHooks,
           items: [
-            { typeName: "test", input: { value: 1 }, deduplication: { key: "existing-key" } },
-            { typeName: "test", input: { value: 2 }, deduplication: { key: "fresh-key" } },
+            {
+              typeName: "test",
+              input: { value: 1 },
+              deduplication: { key: "existing-key", scope: "running" },
+            },
+            {
+              typeName: "test",
+              input: { value: 2 },
+              deduplication: { key: "fresh-key", scope: "running" },
+            },
           ],
         }),
       ),
@@ -578,7 +678,7 @@ export const deduplicationTestSuite = ({ it }: { it: TestAPI<TestSuiteContext> }
     expect(chain2.id).not.toBe(existing.id);
   });
 
-  it("deduplication scopes: 'any' vs 'incomplete'", async ({
+  it("deduplication scopes: 'any' vs 'running'", async ({
     stateAdapter,
     notifyAdapter,
     withTransaction,
@@ -628,7 +728,7 @@ export const deduplicationTestSuite = ({ it }: { it: TestAPI<TestSuiteContext> }
       ),
     );
 
-    // Create and complete a chain with 'incomplete' scope key
+    // Create and complete a chain with 'running' scope key
     const incompleteChain = await withTransactionHooks(async (transactionHooks) =>
       withTransaction(async (txCtx) =>
         client.startChain({
@@ -636,7 +736,7 @@ export const deduplicationTestSuite = ({ it }: { it: TestAPI<TestSuiteContext> }
           transactionHooks,
           typeName: "test",
           input: { value: 2 },
-          deduplication: { key: "incomplete-key", scope: "incomplete" },
+          deduplication: { key: "incomplete-key", scope: "running" },
         }),
       ),
     );
@@ -654,7 +754,7 @@ export const deduplicationTestSuite = ({ it }: { it: TestAPI<TestSuiteContext> }
       ),
     );
 
-    // Batch: 'any' should dedup against completed, 'incomplete' should not
+    // Batch: 'any' should dedup against completed, 'running' should not
     const [anyResult, incompleteResult] = await withTransactionHooks(async (transactionHooks) =>
       withTransaction(async (txCtx) =>
         client.startChains({
@@ -669,7 +769,7 @@ export const deduplicationTestSuite = ({ it }: { it: TestAPI<TestSuiteContext> }
             {
               typeName: "test",
               input: { value: 4 },
-              deduplication: { key: "incomplete-key", scope: "incomplete" },
+              deduplication: { key: "incomplete-key", scope: "running" },
             },
           ],
         }),
@@ -779,7 +879,7 @@ export const deduplicationTestSuite = ({ it }: { it: TestAPI<TestSuiteContext> }
           transactionHooks,
           typeName: "test",
           input: { value: 1 },
-          deduplication: { key: "exclude-key" },
+          deduplication: { key: "exclude-key", scope: "running" },
         }),
       ),
     );
@@ -794,7 +894,7 @@ export const deduplicationTestSuite = ({ it }: { it: TestAPI<TestSuiteContext> }
           transactionHooks,
           typeName: "test",
           input: { value: 2 },
-          deduplication: { key: "exclude-key" },
+          deduplication: { key: "exclude-key", scope: "running" },
         }),
       ),
     );
@@ -810,7 +910,7 @@ export const deduplicationTestSuite = ({ it }: { it: TestAPI<TestSuiteContext> }
           transactionHooks,
           typeName: "test",
           input: { value: 3 },
-          deduplication: { key: "exclude-key", excludeChainIds: [chain1.id] },
+          deduplication: { key: "exclude-key", scope: "running", excludeChainIds: [chain1.id] },
         }),
       ),
     );
@@ -854,8 +954,16 @@ export const deduplicationTestSuite = ({ it }: { it: TestAPI<TestSuiteContext> }
           ...txCtx,
           transactionHooks,
           items: [
-            { typeName: "typeA", input: { value: 1 }, deduplication: { key: "shared-key" } },
-            { typeName: "typeB", input: { value: 2 }, deduplication: { key: "shared-key" } },
+            {
+              typeName: "typeA",
+              input: { value: 1 },
+              deduplication: { key: "shared-key", scope: "running" },
+            },
+            {
+              typeName: "typeB",
+              input: { value: 2 },
+              deduplication: { key: "shared-key", scope: "running" },
+            },
           ],
         }),
       ),

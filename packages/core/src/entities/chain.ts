@@ -1,11 +1,16 @@
 import { type StateJob } from "../state-adapter/state-adapter.js";
-import { type Chain } from "./chain.types.js";
+import { type AnyChain, type ChainStatus } from "./chain.types.js";
 
 export type * from "./chain.types.js";
 
-export const mapStatePairToChain = (
-  stateJobPair: [StateJob, StateJob | undefined],
-): Chain<any, any, any, any> => {
+export const deriveStatus = (
+  effectiveJob: Pick<StateJob, "completedAt" | "continuedToId">,
+): ChainStatus =>
+  effectiveJob.completedAt !== null && effectiveJob.continuedToId === null
+    ? "completed"
+    : "running";
+
+export const mapStatePairToChain = (stateJobPair: [StateJob, StateJob | undefined]): AnyChain => {
   const [initialJob, currentJob] = stateJobPair;
   const effectiveJob = currentJob ?? initialJob;
 
@@ -16,19 +21,13 @@ export const mapStatePairToChain = (
     createdAt: initialJob.createdAt,
   };
 
-  switch (effectiveJob.status) {
-    case "completed":
-      return {
-        ...base,
-        status: "completed",
-        output: effectiveJob.output,
-        completedAt: effectiveJob.completedAt!,
-      };
-    case "running":
-      return { ...base, status: "running" };
-    case "blocked":
-      return { ...base, status: "blocked" };
-    case "pending":
-      return { ...base, status: "pending" };
+  if (deriveStatus(effectiveJob) === "completed") {
+    return {
+      ...base,
+      status: "completed",
+      output: effectiveJob.output,
+      completedAt: effectiveJob.completedAt!,
+    };
   }
+  return { ...base, status: "running" };
 };

@@ -73,11 +73,24 @@ type SqlArgs = {
   readOnly: boolean;
 };
 
+const isPreparableQuery = (sqlText: string): boolean => {
+  const first = sqlText.trim().split(/\s+/)[0]?.toUpperCase();
+  return (
+    first === "SELECT" ||
+    first === "INSERT" ||
+    first === "UPDATE" ||
+    first === "DELETE" ||
+    first === "WITH" ||
+    first === "VALUES"
+  );
+};
+
 const validateBeforeExecute = (
   db: Database.Database,
   args: SqlArgs,
 ): Database.Statement | undefined => {
   const { sql, paramTypes, readOnly } = args;
+  if (!isPreparableQuery(sql)) return undefined;
   const ctx = `\n  SQL: ${sql.slice(0, 160).replace(/\s+/g, " ")}${sql.length > 160 ? "..." : ""}`;
 
   const declaredParamCount = Object.keys(paramTypes).length;

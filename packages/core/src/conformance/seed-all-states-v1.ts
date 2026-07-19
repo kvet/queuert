@@ -4,7 +4,7 @@ import {
   type StateJob,
 } from "../state-adapter/state-adapter.js";
 
-export type SeedSentinels = {
+export type SeedSentinelsV1 = {
   pendingJobId: string;
   scheduledJobId: string;
   runningJobId: string;
@@ -28,7 +28,7 @@ const COUNTS = {
 } as const;
 
 const WORKER_ID = "seed-worker";
-const LEASE_MS = 60 * 60 * 1000;
+const ATTEMPT_MS = 60 * 60 * 1000;
 const FUTURE_MS = 24 * 60 * 60 * 1000;
 const CREATE_CHUNK = 1000;
 const PROCESS_CHUNK = 200;
@@ -41,14 +41,12 @@ const chunkIndexes = (total: number, size: number): number[][] => {
   return chunks;
 };
 
-export const seedAllStates = async <TTxContext extends BaseTxContext>(
+export const seedAllStatesV1 = async <TTxContext extends BaseTxContext>(
   stateAdapter: StateAdapter<TTxContext, string>,
-): Promise<SeedSentinels> => {
-  const rootJob = (typeName: string, index: number, schedule?: { afterMs: number }) => ({
+): Promise<SeedSentinelsV1> => {
+  const headJob = (typeName: string, index: number, schedule?: { afterMs: number }) => ({
     typeName,
-    chainId: undefined,
     chainTypeName: typeName,
-    chainIndex: 0,
     input: { index },
     ...(schedule ? { schedule } : {}),
   });
@@ -61,9 +59,9 @@ export const seedAllStates = async <TTxContext extends BaseTxContext>(
     const created: StateJob[] = [];
     for (const indexes of chunkIndexes(total, CREATE_CHUNK)) {
       const results = await stateAdapter.withTransaction(async (txCtx) =>
-        stateAdapter.createJobs({
+        stateAdapter.createChains({
           txCtx,
-          jobs: indexes.map((i) => rootJob(typeName, i, schedule)),
+          jobs: indexes.map((i) => headJob(typeName, i, schedule)),
         }),
       );
       created.push(...results.map((r) => r.job));
@@ -79,41 +77,45 @@ export const seedAllStates = async <TTxContext extends BaseTxContext>(
     const processed: StateJob[] = [];
     for (const indexes of chunkIndexes(total, PROCESS_CHUNK)) {
       const batch = await stateAdapter.withTransaction(async (txCtx) => {
-        await stateAdapter.createJobs({ txCtx, jobs: indexes.map((i) => rootJob(typeName, i)) });
+        await stateAdapter.createChains({
+          txCtx,
+          jobs: indexes.map((i) => headJob(typeName, i)),
+        });
         const jobs: StateJob[] = [];
         for (let k = 0; k < indexes.length; k++) {
-          const { job } = await stateAdapter.acquireJob({ txCtx, typeNames: [typeName] });
+          const { job } = await stateAdapter.startJobAttempt({
+            txCtx,
+            typeNames: [typeName],
+            workerId: WORKER_ID,
+          });
           if (!job) break;
           if (mode === "running") {
             jobs.push(
-              await stateAdapter.renewJobLease({
+              await stateAdapter.extendJobAttempt({
                 txCtx,
                 jobId: job.id,
                 workerId: WORKER_ID,
-                leaseDurationMs: LEASE_MS,
+                timeoutMs: ATTEMPT_MS,
               }),
             );
           } else if (mode === "completed") {
             jobs.push(
-              await stateAdapter.completeJob({
+              await stateAdapter.finishJobAttempt({
                 txCtx,
                 jobId: job.id,
-                output: { ok: true, index: (job.input as { index: number }).index },
                 workerId: WORKER_ID,
+                outcome: { output: { ok: true, index: (job.input as { index: number }).index } },
               }),
             );
           } else {
-            await stateAdapter.abandonJob({
-              txCtx,
-              jobId: job.id,
-              error: "seeded transient failure",
-            });
-            const [rescheduled] = await stateAdapter.rescheduleJobs({
-              txCtx,
-              jobIds: [job.id],
-              schedule: { afterMs: FUTURE_MS },
-            });
-            jobs.push(rescheduled);
+            jobs.push(
+              await stateAdapter.finishJobAttempt({
+                txCtx,
+                jobId: job.id,
+                workerId: WORKER_ID,
+                outcome: { error: "seeded transient failure", schedule: { afterMs: FUTURE_MS } },
+              }),
+            );
           }
         }
         return jobs;
@@ -132,17 +134,17 @@ export const seedAllStates = async <TTxContext extends BaseTxContext>(
   const retried = await createProcessed("seed:retried", COUNTS.retried, "retried");
 
   const [{ job: blocker }] = await stateAdapter.withTransaction(async (txCtx) =>
-    stateAdapter.createJobs({
+    stateAdapter.createChains({
       txCtx,
-      jobs: [rootJob("seed:blocker", 0, { afterMs: FUTURE_MS })],
+      jobs: [headJob("seed:blocker", 0, { afterMs: FUTURE_MS })],
     }),
   );
   const blocked: StateJob[] = [];
   for (const indexes of chunkIndexes(COUNTS.blocked, CREATE_CHUNK / 2)) {
     const batch = await stateAdapter.withTransaction(async (txCtx) => {
-      const created = await stateAdapter.createJobs({
+      const created = await stateAdapter.createChains({
         txCtx,
-        jobs: indexes.map((i) => rootJob("seed:blocked", i)),
+        jobs: indexes.map((i) => headJob("seed:blocked", i)),
       });
       await stateAdapter.addJobsBlockers({
         txCtx,
@@ -158,40 +160,32 @@ export const seedAllStates = async <TTxContext extends BaseTxContext>(
 
   const chainLength = COUNTS.chain;
   const [{ job: chainRoot }] = await stateAdapter.withTransaction(async (txCtx) =>
-    stateAdapter.createJobs({
+    stateAdapter.createChains({
       txCtx,
-      jobs: [
-        {
-          typeName: "seed:chain",
-          chainId: undefined,
-          chainTypeName: "seed:chain",
-          chainIndex: 0,
-          input: { n: 0 },
-        },
-      ],
+      jobs: [{ typeName: "seed:chain", chainTypeName: "seed:chain", input: { n: 0 } }],
     }),
   );
   for (let step = 1; step < chainLength; step++) {
     await stateAdapter.withTransaction(async (txCtx) => {
-      const { job } = await stateAdapter.acquireJob({ txCtx, typeNames: ["seed:chain"] });
-      if (!job) return;
-      await stateAdapter.completeJob({
+      const { job } = await stateAdapter.startJobAttempt({
         txCtx,
-        jobId: job.id,
-        output: { n: step },
+        typeNames: ["seed:chain"],
         workerId: WORKER_ID,
       });
-      await stateAdapter.createJobs({
+      if (!job) return;
+      const { job: continuation } = await stateAdapter.createContinuationJob({
         txCtx,
-        jobs: [
-          {
-            typeName: "seed:chain",
-            chainId: chainRoot.chainId,
-            chainTypeName: "seed:chain",
-            chainIndex: step,
-            input: { n: step },
-          },
-        ],
+        job: {
+          typeName: "seed:chain",
+          input: { n: step },
+          continueFromId: job.id,
+        },
+      });
+      await stateAdapter.finishJobAttempt({
+        txCtx,
+        jobId: job.id,
+        workerId: WORKER_ID,
+        outcome: { continuedToId: continuation.id },
       });
     });
   }

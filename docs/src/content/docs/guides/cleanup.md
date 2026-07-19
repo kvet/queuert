@@ -40,7 +40,10 @@ const cleanupProcessorRegistry = createProcessors({
 
         do {
           const page = await client.listChains({
-            filter: { root: true, to: cutoffDate },
+            status: "completed",
+            orderBy: "completedAt",
+            independent: true,
+            to: cutoffDate,
             orderDirection: "asc",
             limit: CLEANUP_BATCH_SIZE,
             ...(cursor != null ? { cursor } : {}),
@@ -75,7 +78,7 @@ const cleanupProcessorRegistry = createProcessors({
             schedule: { afterMs: CLEANUP_INTERVAL_MS },
             deduplication: {
               key: "queuert.cleanup",
-              scope: "incomplete",
+              scope: "running",
               excludeChainIds: [job.chainId],
             },
           });
@@ -91,11 +94,11 @@ const cleanupProcessorRegistry = createProcessors({
 Key patterns used:
 
 - **Retention cutoff** — `CLEANUP_RETENTION_MS` controls how long completed chains are kept before deletion
-- **Self-exclusion filter** — the cleanup chain filters itself out of the deletion list to avoid deleting its own chain
+- **Status-filtered listing** — `status: "completed"` with `orderBy: "completedAt"` pushes filtering to the database and orders by completion time, so the oldest-completed chains are deleted first
 - **Cursor pagination** — processes chains in bounded batches using `listChains` cursor, preventing unbounded memory usage
-- **`execute` batching** — each batch of deletions runs in its own guarded transaction via `execute`, so the handler never holds a single long-lived transaction. The lease is verified on each `execute` call, ensuring the worker still owns the job
+- **`execute` batching** — each batch of deletions runs in its own guarded transaction via `execute`, so the handler never holds a single long-lived transaction. The attempt is verified on each `execute` call, ensuring the worker still owns the job
 - **Vacuum** — reclaims disk space after all deletions complete
-- **`deduplication`** with `scope: "incomplete"` — ensures only one cleanup chain is active at a time
+- **`deduplication`** with `scope: "running"` — ensures only one cleanup chain is active at a time
 - **`excludeChainIds`** — prevents the finishing cleanup chain from deduplicating against itself
 - **`schedule`** — defers the next run by `CLEANUP_INTERVAL_MS`
 
@@ -128,7 +131,7 @@ await withTransactionHooks(async (transactionHooks) =>
       transactionHooks,
       typeName: "queuert.cleanup",
       input: null,
-      deduplication: { key: "queuert.cleanup", scope: "incomplete" },
+      deduplication: { key: "queuert.cleanup", scope: "running" },
     }),
   ),
 );

@@ -24,13 +24,13 @@ Higher numbers run first; negative numbers run after default. No floor, no ceili
 
 Three coupled API surfaces gain an optional `priority?: number`:
 
-1. `startChain` / `startChains` — root job's priority.
+1. `startChain` / `startChains` — head job's priority.
 2. `continueWith` (worker handler) — successor job's priority. **Defaults to the parent's priority** so chains run as a unit unless the user overrides.
 3. The `addJobBlocker` chain start (when that ships) inherits from its own startChain entry — no special handling.
 
 The library does not export named-priority constants. Users adopt their own convention (`-10`/`0`/`10` is fine; so is `1`/`0`).
 
-`triggerJob` and `triggerJobs` do **not** accept priority — they reset `scheduled_at` to now without otherwise mutating the job. Changing priority via trigger would conflate two operations.
+`rescheduleJob` and `rescheduleJobs` do **not** accept priority — they reset `scheduled_at` to now without otherwise mutating the job. Changing priority via reschedule would conflate two operations.
 
 The two starvation modes get different answers:
 
@@ -101,7 +101,7 @@ When `createStateJobs` finds an existing job with the same dedup key, today it r
 
 **No, and the doc is explicit about it.** Three reasons:
 
-1. **Race surface.** Upgrade requires a conditional UPDATE on the existing row. If the row was just acquired (`leased_until IS NOT NULL`), the UPDATE either no-ops (priority change useless) or has to roll back acquisition — neither is clean.
+1. **Race surface.** Upgrade requires a conditional UPDATE on the existing row. If the row was just acquired (`attempt_at IS NOT NULL`), the UPDATE either no-ops (priority change useless) or has to roll back acquisition — neither is clean.
 2. **Idempotency contract.** Today, dedup is "the work already exists, return the existing handle." Mutation-on-deduplication is a different, surprising contract — a user who calls `startChain({ priority: 0, ... })` twice and once with `priority: 10` would see persistent state changes from a call that was supposed to be a no-op.
 3. **Workaround is trivial.** A user who actually needs "upgrade priority of the pending instance" can read the dedup-result job, then call a future explicit `setJobPriority` API. We don't ship that API in v1 — wait for the request.
 
@@ -144,7 +144,7 @@ WITH acquired_job AS (
   FROM {{schema}}.{{table_prefix}}job
   WHERE type_name IN (SELECT unnest($1::text[]))
     AND blocked = false
-    AND leased_until IS NULL
+    AND attempt_until IS NULL
     AND completed_at IS NULL
     AND scheduled_at <= now()
   ORDER BY (priority - attempt) DESC, scheduled_at ASC
@@ -154,17 +154,17 @@ WITH acquired_job AS (
 UPDATE ...
 ```
 
-The WHERE predicate matches the partial index defined below; acquisition writes the lease in the same statement (per [job-model.md](job-model.md), "running" is `leased_until IS NOT NULL`, so there's no separate status flip).
+The WHERE predicate matches the partial index defined below; acquisition writes the attempt in the same statement (per the job model, "running" is `attempt_at IS NOT NULL`, so there's no separate status flip).
 
 The `EXISTS(... LIMIT 1)` clause that produces `has_more` doesn't need ORDER BY changes — it's just a presence check.
 
 SQLite mirrors the change at [sql.ts](../packages/sqlite/src/state-adapter/sql.ts).
 
-The expression must match the index expression character-for-character (after PG's normalization). A code comment ties the two together at the index definition and the acquireJob SQL — drift would silently fall back to a sort plan, which the pre-merge `EXPLAIN` check would catch.
+The expression must match the index expression character-for-character (after PG's normalization). A code comment ties the two together at the index definition and the startJobAttempt SQL — drift would silently fall back to a sort plan, which the pre-merge `EXPLAIN` check would catch.
 
 Pure integer subtraction — `priority` and `attempt` are both stored `INTEGER` columns. No floating-point, no math functions, no portability concerns across DBs. `IMMUTABLE` everywhere.
 
-### `getNextJobAvailableInMs` does NOT change
+### `getStartAttemptDelayMs` does NOT change
 
 This method answers "when's the earliest moment I'd want to wake the worker?" The earliest wake-up is `min(scheduled_at)` regardless of priority — at that moment the worker can acquire whichever job has highest priority among the ready ones, but the wake-up is gated on availability, not selection. Keep `ORDER BY scheduled_at ASC` here.
 
@@ -172,12 +172,12 @@ This is a real correctness issue, not a perf nit: if the worker waited for "next
 
 ### In-process adapter
 
-The pending-jobs SortedSet today is keyed on `cmp.scheduledAt` ([state-adapter.in-process.ts:81-88](../packages/core/src/state-adapter/state-adapter.in-process.ts#L81)). With priority + demotion added, `acquireJob` wants `(effective_priority DESC, scheduled_at ASC)` ordering where `effective_priority = priority - attempt` — computed in JS, not stored on the record. `getNextJobAvailableInMs` still wants `min(scheduled_at)`.
+The pending-jobs SortedSet today is keyed on `cmp.scheduledAt` ([state-adapter.in-process.ts:81-88](../packages/core/src/state-adapter/state-adapter.in-process.ts#L81)). With priority + demotion added, `startJobAttempt` wants `(effective_priority DESC, scheduled_at ASC)` ordering where `effective_priority = priority - attempt` — computed in JS, not stored on the record. `getStartAttemptDelayMs` still wants `min(scheduled_at)`.
 
 Two clean options:
 
 1. **Maintain two SortedSets per type.** `pendingByType` keyed `(effective_priority DESC, scheduled_at ASC)` for acquisition; `pendingScheduledByType` keyed `scheduled_at ASC` for wake-up. Both updated on every status transition that touches pending. Symmetric and O(log n).
-2. **Single set keyed by acquisition order; scan for wake-up.** `getNextJobAvailableInMs` iterates the set to find min(scheduledAt). Cheap when the typical pending count is small but degrades on large pending backlogs.
+2. **Single set keyed by acquisition order; scan for wake-up.** `getStartAttemptDelayMs` iterates the set to find min(scheduledAt). Cheap when the typical pending count is small but degrades on large pending backlogs.
 
 Going with option 1. The wake-up path runs frequently (every worker tick) and a scan is the wrong asymptotic. The cost is one additional SortedSet write per `createJobs` / `unblockJobs` / `rescheduleJob` — negligible relative to the existing journaling work.
 
@@ -198,8 +198,8 @@ A subtle point: when `attempt` changes (acquire increments it), the SortedSet po
 
 Per-job input gains `priority?: number`. Default in the SQL is `COALESCE($priority, 0)` for chain starts. For continueWith jobs, the default is "inherit from parent" — implemented by:
 
-- **PG**: `COALESCE($priority, parent.priority, 0)` in the input CTE, similar to how `chain_id` and `chain_type_name` are already inherited (see [job-model.md](job-model.md) for the parent-derived-fields pattern).
-- **SQLite**: `COALESCE($priority, (SELECT priority FROM job WHERE id = $continueFromJobId), 0)`.
+- **PG**: `COALESCE($priority, parent.priority, 0)` in the input CTE, similar to how `chain_id` and `chain_type_name` are already inherited (see the job model for the parent-derived-fields pattern).
+- **SQLite**: `COALESCE($priority, (SELECT priority FROM job WHERE id = $continueFromId), 0)`.
 - **In-process**: `priority ?? parent?.priority ?? 0` at the JS layer.
 
 The worker call site at [client.ts:705-723](../packages/core/src/client.ts#L705) threads the optional `priority` from the `continueWith` handler arg through to `createStateJobs`. When undefined, the SQL/JS picks up the parent's value. When defined, it overrides — including to a _lower_ priority (a chain that starts high-priority but runs a low-priority cleanup tail).
@@ -219,13 +219,13 @@ Backward-compatible: existing rows get `0`, which is the new default semantic fo
 
 ### Expression index swap
 
-The acquisition index defined in [job-model.md](job-model.md) (`job_ready_idx`):
+The acquisition index defined in the job model (`job_ready_idx`):
 
 ```sql
 CREATE INDEX {{table_prefix}}job_ready_idx
 ON {{schema}}.{{table_prefix}}job (type_name, scheduled_at)
 WHERE blocked = false
-  AND leased_until IS NULL
+  AND attempt_until IS NULL
   AND completed_at IS NULL
 ```
 
@@ -236,7 +236,7 @@ CREATE INDEX {{table_prefix}}job_ready_idx
 ON {{schema}}.{{table_prefix}}job
   (type_name, (priority - attempt) DESC, scheduled_at ASC)
 WHERE blocked = false
-  AND leased_until IS NULL
+  AND attempt_until IS NULL
   AND completed_at IS NULL
 ```
 
@@ -254,17 +254,17 @@ Considered `effective_priority INTEGER GENERATED ALWAYS AS (...) STORED` with a 
 | MariaDB <10.5         | Needs VIRTUAL generated column workaround when adapter ships | Native support                                                   |
 | Drift risk            | ORDER BY must match index expression character-for-character | None                                                             |
 
-The drift risk is the strongest argument for the stored column, but exactly one acquisition site references the expression. A code comment at the index definition and the `acquireJobSql` cross-references the two; conformance tests validate ordering. Acceptable.
+The drift risk is the strongest argument for the stored column, but exactly one acquisition site references the expression. A code comment at the index definition and the `startJobAttemptSql` cross-references the two; conformance tests validate ordering. Acceptable.
 
 #### Migration impact
 
-Migration runs `DROP INDEX … ; CREATE INDEX …` as two separate statements. The new index is built only over the active subset (the partial predicate inherited from [job-model.md](job-model.md): `blocked = false AND leased_until IS NULL AND completed_at IS NULL`), so build time is bounded by the active count, not total row count. At 100K active: seconds. At 1M active: tens of seconds, still fast.
+Migration runs `DROP INDEX … ; CREATE INDEX …` as two separate statements. The new index is built only over the active subset (the partial predicate inherited from the job model: `blocked = false AND attempt_until IS NULL AND completed_at IS NULL`), so build time is bounded by the active count, not total row count. At 100K active: seconds. At 1M active: tens of seconds, still fast.
 
 Index build takes an `AccessExclusiveLock` on the table for the duration of the rebuild. For v1, accept the brief lock and document it. If zero-downtime becomes a hard requirement later, switch the PG migration to `CREATE INDEX CONCURRENTLY` followed by `DROP INDEX CONCURRENTLY` of the old one — queuert doesn't enforce a transactional boundary around migrations, so `CONCURRENTLY` is available without wrapper-level changes.
 
-#### `getNextJobAvailableInMs` interaction
+#### `getStartAttemptDelayMs` interaction
 
-The new index is `(type_name, effective_priority_expr DESC, scheduled_at ASC)` and the wake-up query wants `(type_name, scheduled_at ASC)` ignoring priority. Postgres will still use the index for the `type_name` filter and then sort the small filtered set by `scheduled_at`; the partial predicate (`blocked = false AND leased_until IS NULL AND completed_at IS NULL`) keeps the candidate set tiny in practice (typically hundreds, occasionally thousands). At 100K active the wake-up query is still <1 ms. Note: [job-model.md](job-model.md) already defines `job_pending_listing_idx` as `(type_name, scheduled_at)` with the same partial predicate, so the "second partial index" fallback effectively ships by default — no extra cost incurred by this design.
+The new index is `(type_name, effective_priority_expr DESC, scheduled_at ASC)` and the wake-up query wants `(type_name, scheduled_at ASC)` ignoring priority. Postgres will still use the index for the `type_name` filter and then sort the small filtered set by `scheduled_at`; the partial predicate (`blocked = false AND attempt_until IS NULL AND completed_at IS NULL`) keeps the candidate set tiny in practice (typically hundreds, occasionally thousands). At 100K active the wake-up query is still <1 ms. Note: the job model already defines `job_pending_listing_idx` as `(type_name, scheduled_at)` with the same partial predicate, so the "second partial index" fallback effectively ships by default — no extra cost incurred by this design.
 
 #### Worst-case acquisition behavior
 
@@ -297,9 +297,9 @@ Validation: pre-merge benchmark explicitly seeds this pathology and asserts <5 m
 6. `packages/core/src/implementation/continue-with.ts` — accept `priority?: number`, pass through.
 7. `packages/core/src/implementation/create-state-jobs.ts` — pass `priority` through to the adapter call.
 8. `packages/postgres/src/state-adapter/sql.ts`:
-   - Migration: add column + drop/recreate `job_ready_idx` as an expression index. Predicate unchanged from [job-model.md](job-model.md) (`blocked = false AND leased_until IS NULL AND completed_at IS NULL`); only the columns expand to include the demotion expression.
+   - Migration: add column + drop/recreate `job_ready_idx` as an expression index. Predicate unchanged from the job model (`blocked = false AND attempt_until IS NULL AND completed_at IS NULL`); only the columns expand to include the demotion expression.
    - `dbJobColumns` / row mapping: include `priority`.
-   - `acquireJobSql`: WHERE clause keeps the structural predicate from job-model.md; `ORDER BY (priority - attempt) DESC, scheduled_at ASC`. Cross-reference the index definition in a comment so future edits keep them in sync.
+   - `startJobAttemptSql`: WHERE clause keeps the structural predicate from the job model; `ORDER BY (priority - attempt) DESC, scheduled_at ASC`. Cross-reference the index definition in a comment so future edits keep them in sync.
    - `createJobsSql`: insert `priority` with `COALESCE` over input + parent + 0.
    - All SELECTs returning `StateJob` already use `*` or `dbJobColumns`; verify.
 9. `packages/sqlite/src/state-adapter/sql.ts` — same changes as PG.
@@ -316,7 +316,7 @@ Validation: pre-merge benchmark explicitly seeds this pathology and asserts <5 m
     - `continueWith` without explicit priority inherits parent's.
     - `continueWith` with explicit priority overrides parent's (including to lower).
     - Dedup of an existing pending job with new higher priority returns the existing job at its existing priority.
-    - `getNextJobAvailableInMs` returns the earliest `scheduled_at` regardless of priority and regardless of attempt count.
+    - `getStartAttemptDelayMs` returns the earliest `scheduled_at` regardless of priority and regardless of attempt count.
 12. `packages/core/src/suites/client-queries.test-suite.ts` — add a priority-ordering case alongside the existing chain tests.
 13. `packages/dashboard/src/api/routes/jobs.ts` + UI — surface `priority` in the job detail panel; add a `priority` column to job lists (sortable in v2; v1 is read-only display).
 14. `packages/dashboard/src/specs/api.spec.ts` — extend a fixture chain to include a non-default priority and assert it round-trips.
@@ -348,7 +348,7 @@ Linear gives users a tunable knob: pick a priority gap larger than the expected 
 
 I.e. configure on `defineJobType({ priority: 10 })` instead of per-job. Rejected — the user's whole reason for wanting priority is that the _same_ job type runs at different priorities depending on enqueue context. Per-type would just be a worse version of "use separate type names," which already works.
 
-### Priority in `getNextJobAvailableInMs`
+### Priority in `getStartAttemptDelayMs`
 
 Wake-up considers only the highest-priority pending job. Rejected — see "this method does NOT change" section. Causes idle workers when low-priority work is ready and high-priority work is scheduled future.
 
@@ -358,7 +358,7 @@ I.e. `startChain` with a higher priority bumps an existing dedup'd pending job. 
 
 ### Dynamic priority adjustment (`setJobPriority(id, n)`)
 
-Out of scope for v1. Easy to add later if a use case appears: an UPDATE conditioned on the same structural predicate as acquisition (`blocked = false AND leased_until IS NULL AND completed_at IS NULL`) — running jobs are out of the queue, blocked jobs aren't yet eligible, completed ones are terminal. No schema change needed.
+Out of scope for v1. Easy to add later if a use case appears: an UPDATE conditioned on the same structural predicate as acquisition (`blocked = false AND attempt_until IS NULL AND completed_at IS NULL`) — running jobs are out of the queue, blocked jobs aren't yet eligible, completed ones are terminal. No schema change needed.
 
 ### Floating-point priority
 
@@ -370,8 +370,8 @@ I.e. priority _is_ the schedule. Rejected — they're orthogonal. `scheduled_at`
 
 ## Pre-merge validation
 
-- `EXPLAIN (ANALYZE, BUFFERS)` on `acquireJobSql` against a seeded DB (~100K pending jobs across multiple type names with varying priorities) confirming the new expression partial index is used and no sort-after-fetch / seqscan appears in the plan. The expression in EXPLAIN's `Index Cond` and `Order By` should match `acquireJobSql`'s ORDER BY character-for-character.
-- `EXPLAIN` on `getNextJobAvailableInMsSql` against the same DB — confirm performance hasn't regressed past 1 ms; if it has, ship the second partial index.
+- `EXPLAIN (ANALYZE, BUFFERS)` on `startJobAttemptSql` against a seeded DB (~100K pending jobs across multiple type names with varying priorities) confirming the new expression partial index is used and no sort-after-fetch / seqscan appears in the plan. The expression in EXPLAIN's `Index Cond` and `Order By` should match `startJobAttemptSql`'s ORDER BY character-for-character.
+- `EXPLAIN` on `getStartAttemptDelayMsSql` against the same DB — confirm performance hasn't regressed past 1 ms; if it has, ship the second partial index.
 - Conformance suite: all eight new cases listed in [Touchpoints](#touchpoints) item 11 pass on PG, SQLite, and in-process.
 - Race test: 50 concurrent workers acquiring against a pool of 1000 mixed-priority pending jobs — confirm strict-priority-with-demotion order is preserved across acquisitions (effective-priority-highest all picked up before any lower-effective drains).
 - **Pathological-acquisition benchmark**: seed 50K priority-10 jobs all `scheduled_at = now() + 5min`, 1K priority-0 jobs ready. Measure acquisition latency. Target: <5 ms p99. Verifies the future-scheduled-top-tier scan extension stays bounded.
@@ -382,7 +382,7 @@ I.e. priority _is_ the schedule. Rejected — they're orthogonal. `scheduled_at`
 
 - **No `setJobPriority` mutation API.** Out of scope; add later if asked.
 - **No wall-clock aging.** Log-scale demotion handles failure-driven yielding; sustained-arrival starvation is a documented v1 footgun, deferred to v2.
-- **No priority on `triggerJob`.** Trigger is a `scheduled_at` reset, not a priority bump.
+- **No priority on `rescheduleJob`.** Reschedule is a `scheduled_at` reset, not a priority bump.
 - **No priority on blockers.** A blocker chain has its own root-job priority from its own `startChain` call.
 - **No `priority` filter in `listJobs` / `listChains`.** Add when a use case appears (likely never — users filter by type/status, then sort by priority is a UI concern, not a query concern).
 - **No backpressure / fairness across type names.** Priority is per-type-pool. A high-priority job of type A doesn't preempt or rank against a low-priority job of type B; the worker's `typeNames` filter and per-type acquisition handle that orthogonally.
