@@ -583,6 +583,103 @@ export const workerTestSuite = ({ it }: { it: TestAPI<TestSuiteContext> }): void
     expect(observedExecuteCtx).toEqual([{ tag: "execute" }]);
   });
 
+  it("surfaces callback failures to wrapPrepare/wrapExecute/wrapComplete but not to wrapHandler", async ({
+    stateAdapter,
+    notifyAdapter,
+    withTransaction,
+    withWorkers,
+    observabilityAdapter,
+    log,
+    expect,
+  }) => {
+    const order: string[] = [];
+
+    const jobTypes = defineJobTypes<{
+      test: { entry: true; input: { value: number }; output: null };
+    }>();
+
+    const client = await createClient({
+      stateAdapter,
+      notifyAdapter,
+      observabilityAdapter,
+      log,
+      jobTypes,
+    });
+
+    const recordFailure = (phase: string) => async (error: unknown) => {
+      order.push(`${phase}-caught:${(error as Error).message}`);
+      throw error;
+    };
+    const failureMiddleware: AttemptMiddleware<any> = {
+      wrapHandler: async ({ next }) => {
+        try {
+          const result = await next({});
+          order.push("handler-resolved");
+          return result;
+        } catch (error) {
+          order.push(`handler-caught:${(error as Error).message}`);
+          throw error;
+        }
+      },
+      wrapPrepare: async ({ next }) => next({}).catch(recordFailure("prepare")),
+      wrapExecute: async ({ next }) => next({}).catch(recordFailure("execute")),
+      wrapComplete: async ({ next }) => next({}).catch(recordFailure("complete")),
+    };
+    const worker = await createInProcessWorker({
+      client,
+      concurrency: 1,
+      processors: createProcessors({
+        client,
+        jobTypes,
+        attemptMiddleware: [failureMiddleware],
+        processors: {
+          test: {
+            backoffConfig: { initialDelayMs: 1, multiplier: 1, maxDelayMs: 1 },
+            attemptHandler: async ({ job, prepare, execute, complete }) => {
+              await prepare({ mode: "staged" }, async () => {
+                if (job.attempt === 1) throw new Error("prepare-failure");
+              });
+
+              await execute(async () => {
+                if (job.attempt === 2) throw new Error("execute-failure");
+              });
+
+              return complete(async () => {
+                if (job.attempt === 3) throw new Error("complete-failure");
+                return null;
+              });
+            },
+          },
+        },
+      }),
+    });
+
+    const chain = await withTransactionHooks(async (transactionHooks) =>
+      withTransaction(async (txCtx) =>
+        client.createChain({
+          ...txCtx,
+          transactionHooks,
+          typeName: "test",
+          input: { value: 1 },
+        }),
+      ),
+    );
+
+    await withWorkers([await worker.start()], async () => {
+      await client.awaitChain(chain, completionOptions);
+    });
+
+    expect(order).toEqual([
+      "prepare-caught:prepare-failure",
+      "handler-resolved",
+      "execute-caught:execute-failure",
+      "handler-resolved",
+      "complete-caught:complete-failure",
+      "handler-resolved",
+      "handler-resolved",
+    ]);
+  });
+
   it("aborts in-flight job signal with worker_stopping when worker stops", async ({
     stateAdapter,
     notifyAdapter,
