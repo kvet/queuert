@@ -37,6 +37,23 @@ export type StateJob = {
 export type BaseTxContext = Record<string, unknown>;
 
 /**
+ * Read-only methods take an optional `txCtx` — omitting it lets the adapter run on
+ * its own connection. Mutating methods require one: they must be committed or rolled
+ * back together with the caller's other writes.
+ */
+type ReadTxContextParam<TTxContext extends BaseTxContext> = { txCtx?: TTxContext };
+
+/**
+ * A write-intent lock only lasts as long as the transaction that took it, so `lock`
+ * requires a `txCtx`. With one, any `lock` value passes — no narrowing needed.
+ */
+type LockTxContextParam<TTxContext extends BaseTxContext> =
+  | { lock?: "exclusive"; txCtx: TTxContext }
+  | { lock?: undefined; txCtx?: TTxContext };
+
+type WriteTxContextParam<TTxContext extends BaseTxContext> = { txCtx: TTxContext };
+
+/**
  * Abstracts database operations for job persistence.
  *
  * @typeParam TTxContext - The transaction context type
@@ -57,28 +74,24 @@ export type StateAdapter<TTxContext extends BaseTxContext, TJobId extends string
    * or `undefined` for missing chains. Pass `lock: "exclusive"` to acquire a
    * write-intent lock on the latest job in each chain.
    */
-  getChains: (params: {
-    txCtx?: TTxContext;
-    chainIds: TJobId[];
-    lock?: "exclusive";
-  }) => Promise<([StateJob, StateJob | undefined] | undefined)[]>;
+  getChains: (
+    params: { chainIds: TJobId[] } & LockTxContextParam<TTxContext>,
+  ) => Promise<([StateJob, StateJob | undefined] | undefined)[]>;
 
   /**
    * Gets jobs by their IDs. Returns one entry per id in input order, or `undefined`
    * for missing jobs. Pass `lock: "exclusive"` to acquire a write-intent lock.
    */
-  getJobs: (params: {
-    txCtx?: TTxContext;
-    jobIds: TJobId[];
-    lock?: "exclusive";
-  }) => Promise<(StateJob | undefined)[]>;
+  getJobs: (
+    params: { jobIds: TJobId[] } & LockTxContextParam<TTxContext>,
+  ) => Promise<(StateJob | undefined)[]>;
 
   /**
    * Creates each chain's first job. Returns results in input order.
    * Supports deduplication — matching entries return the existing row with `deduplicated: true`.
    */
   createChains: (params: {
-    txCtx?: TTxContext;
+    txCtx: TTxContext;
     jobs: {
       typeName: string;
       id?: TJobId;
@@ -96,7 +109,7 @@ export type StateAdapter<TTxContext extends BaseTxContext, TJobId extends string
    * Idempotent — if a successor already exists, returns it with `deduplicated: true`.
    */
   createContinuationJob: (params: {
-    txCtx?: TTxContext;
+    txCtx: TTxContext;
     job: {
       typeName: string;
       id?: TJobId;
@@ -110,7 +123,7 @@ export type StateAdapter<TTxContext extends BaseTxContext, TJobId extends string
 
   /** Adds blocker dependencies to jobs. Returns results in input order. */
   addJobsBlockers: (params: {
-    txCtx?: TTxContext;
+    txCtx: TTxContext;
     jobBlockers: {
       jobId: TJobId;
       blockedByChainIds: TJobId[];
@@ -125,34 +138,31 @@ export type StateAdapter<TTxContext extends BaseTxContext, TJobId extends string
   >;
 
   /** Gets the blocker chains for a job. */
-  getJobBlockers: (params: {
-    txCtx?: TTxContext;
-    jobId: TJobId;
-  }) => Promise<[StateJob, StateJob | undefined][]>;
+  getJobBlockers: (
+    params: { jobId: TJobId } & ReadTxContextParam<TTxContext>,
+  ) => Promise<[StateJob, StateJob | undefined][]>;
 
   /** Unblocks jobs when a blocker chain completes, transitioning them from blocked to pending. */
-  unblockJobs: (params: {
-    txCtx?: TTxContext;
-    blockedByChainId: TJobId;
-  }) => Promise<{ unblockedJobs: StateJob[]; blockerTraceContexts: (string | null)[] }>;
+  unblockJobs: (
+    params: { blockedByChainId: TJobId } & WriteTxContextParam<TTxContext>,
+  ) => Promise<{ unblockedJobs: StateJob[]; blockerTraceContexts: (string | null)[] }>;
 
   /**
    * Atomically selects a pending job and starts an attempt. Two parallel callers
    * must never receive the same job — locked rows must be skipped, not waited on.
    */
-  startJobAttempt: (params: {
-    txCtx?: TTxContext;
-    typeNames: string[];
-    workerId: string;
-  }) => Promise<{ job: StateJob | undefined }>;
+  startJobAttempt: (
+    params: { typeNames: string[]; workerId: string } & WriteTxContextParam<TTxContext>,
+  ) => Promise<{ job: StateJob | undefined }>;
 
   /** Extends a running job attempt's deadline. */
-  extendJobAttempt: (params: {
-    txCtx?: TTxContext;
-    jobId: TJobId;
-    workerId: string;
-    timeoutMs: number;
-  }) => Promise<StateJob>;
+  extendJobAttempt: (
+    params: {
+      jobId: TJobId;
+      workerId: string;
+      timeoutMs: number;
+    } & WriteTxContextParam<TTxContext>,
+  ) => Promise<StateJob>;
 
   /**
    * Finishes a job attempt. Outcome is discriminated by key:
@@ -160,50 +170,53 @@ export type StateAdapter<TTxContext extends BaseTxContext, TJobId extends string
    * - `{ continuedToId }` — completed with successor link
    * - `{ error, schedule }` — failed, returned to pending
    */
-  finishJobAttempt: (params: {
-    txCtx?: TTxContext;
-    jobId: TJobId;
-    workerId: string | null;
-    outcome:
-      | { output: unknown; continuedToId?: never; error?: never; schedule?: never }
-      | { continuedToId: TJobId; output?: never; error?: never; schedule?: never }
-      | { error: string; schedule?: ScheduleOptions; output?: never; continuedToId?: never };
-  }) => Promise<StateJob>;
+  finishJobAttempt: (
+    params: {
+      jobId: TJobId;
+      workerId: string | null;
+      outcome:
+        | { output: unknown; continuedToId?: never; error?: never; schedule?: never }
+        | { continuedToId: TJobId; output?: never; error?: never; schedule?: never }
+        | { error: string; schedule?: ScheduleOptions; output?: never; continuedToId?: never };
+    } & WriteTxContextParam<TTxContext>,
+  ) => Promise<StateJob>;
 
   /** Releases an expired job attempt back to the pending pool. */
-  reclaimExpiredJobAttempt: (params: {
-    txCtx?: TTxContext;
-    typeNames: string[];
-    ignoredJobIds?: TJobId[];
-  }) => Promise<StateJob | undefined>;
+  reclaimExpiredJobAttempt: (
+    params: {
+      typeNames: string[];
+      ignoredJobIds?: TJobId[];
+    } & WriteTxContextParam<TTxContext>,
+  ) => Promise<StateJob | undefined>;
 
   /** Ms until a pending job of these types can be attempted: 0 if due now, null if none. */
-  getStartAttemptDelayMs: (params: {
-    txCtx?: TTxContext;
-    typeNames: string[];
-  }) => Promise<number | null>;
+  getStartAttemptDelayMs: (
+    params: { typeNames: string[] } & ReadTxContextParam<TTxContext>,
+  ) => Promise<number | null>;
 
   /** Reschedules pending jobs. Skips non-pending and missing ids. Returns updated rows in input order. */
-  rescheduleJobs: (params: {
-    txCtx?: TTxContext;
-    jobIds: TJobId[];
-    schedule?: ScheduleOptions;
-  }) => Promise<StateJob[]>;
+  rescheduleJobs: (
+    params: {
+      jobIds: TJobId[];
+      schedule?: ScheduleOptions;
+    } & WriteTxContextParam<TTxContext>,
+  ) => Promise<StateJob[]>;
 
   /**
    * Deletes all jobs in the given chains atomically. Fails with `blockerRefs` if any
    * chain is referenced as a blocker by a job outside the set. `cascade` includes
    * transitive dependencies.
    */
-  deleteChains: (params: { txCtx?: TTxContext; chainIds: TJobId[]; cascade?: boolean }) => Promise<{
+  deleteChains: (
+    params: { chainIds: TJobId[]; cascade?: boolean } & WriteTxContextParam<TTxContext>,
+  ) => Promise<{
     deleted: [StateJob, StateJob | undefined][];
     blockerRefs: BlockerReference[];
   }>;
 
   /** Lists chains with pagination, status-dependent ordering, and filtering. */
   listChains: (
-    params: {
-      txCtx?: TTxContext;
+    params: ReadTxContextParam<TTxContext> & {
       typeName?: string[];
       independent?: boolean;
       chainId?: TJobId[];
@@ -212,16 +225,15 @@ export type StateAdapter<TTxContext extends BaseTxContext, TJobId extends string
       orderDirection: OrderDirection;
       page: PageParams;
     } & (
-      | { status?: undefined; orderBy: "createdAt" }
-      | { status: "running"; orderBy: "createdAt" }
-      | { status: "completed"; orderBy: "createdAt" | "completedAt" }
-    ),
+        | { status?: undefined; orderBy: "createdAt" }
+        | { status: "running"; orderBy: "createdAt" }
+        | { status: "completed"; orderBy: "createdAt" | "completedAt" }
+      ),
   ) => Promise<Page<[StateJob, StateJob | undefined]>>;
 
   /** Lists jobs with pagination, status-dependent ordering, and filtering. */
   listJobs: (
-    params: {
-      txCtx?: TTxContext;
+    params: ReadTxContextParam<TTxContext> & {
       typeName?: string[];
       chainTypeName?: string[];
       chainId?: TJobId[];
@@ -231,28 +243,30 @@ export type StateAdapter<TTxContext extends BaseTxContext, TJobId extends string
       orderDirection: OrderDirection;
       page: PageParams;
     } & (
-      | { status?: undefined; orderBy: "createdAt" }
-      | { status: "pending"; blocked?: boolean; orderBy: "createdAt" | "scheduledAt" }
-      | { status: "running"; orderBy: "createdAt" | "attemptAt" | "attemptUntil" }
-      | { status: "completed"; continued?: boolean; orderBy: "createdAt" | "completedAt" }
-    ),
+        | { status?: undefined; orderBy: "createdAt" }
+        | { status: "pending"; blocked?: boolean; orderBy: "createdAt" | "scheduledAt" }
+        | { status: "running"; orderBy: "createdAt" | "attemptAt" | "attemptUntil" }
+        | { status: "completed"; continued?: boolean; orderBy: "createdAt" | "completedAt" }
+      ),
   ) => Promise<Page<StateJob>>;
 
   /** Lists jobs within a specific chain, ordered by position in the chain. */
-  listChainJobs: (params: {
-    txCtx?: TTxContext;
-    chainId: TJobId;
-    orderDirection: OrderDirection;
-    page: PageParams;
-  }) => Promise<Page<StateJob>>;
+  listChainJobs: (
+    params: {
+      chainId: TJobId;
+      orderDirection: OrderDirection;
+      page: PageParams;
+    } & ReadTxContextParam<TTxContext>,
+  ) => Promise<Page<StateJob>>;
 
   /** Lists jobs that depend on the given chain as a blocker. */
-  listBlockedJobs: (params: {
-    txCtx?: TTxContext;
-    chainId: TJobId;
-    orderDirection: OrderDirection;
-    page: PageParams;
-  }) => Promise<Page<StateJob>>;
+  listBlockedJobs: (
+    params: {
+      chainId: TJobId;
+      orderDirection: OrderDirection;
+      page: PageParams;
+    } & ReadTxContextParam<TTxContext>,
+  ) => Promise<Page<StateJob>>;
 
   /** Releases internal resources. Idempotent. */
   close: () => Promise<void>;

@@ -1,7 +1,6 @@
 # Triage
 
 - [?,REF] Expose generateId on state adapter and make id required in StateAdapter methods
-- [?,REF] required txCtx in state adapter methods are read-only and don't need a transaction context, but the interface requires one. Consider making `txCtx` optional for read-only methods, or splitting the interface into read-only vs read-write adapters
 
 # Short term
 

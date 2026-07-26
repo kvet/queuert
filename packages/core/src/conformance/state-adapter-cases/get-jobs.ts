@@ -259,7 +259,7 @@ export const getJobsGroup: ConformanceGroup<StateConformanceFixture> = {
       },
     },
     {
-      name: "non-transactional locked getJob does not observe an uncommitted status update",
+      name: "locked getJob in a separate transaction does not observe an uncommitted status update",
       run: async ({ stateAdapter }, expect) => {
         if (stateAdapter.transactionConcurrency === "serialized") {
           expect.skip("requires concurrent transactions");
@@ -301,7 +301,9 @@ export const getJobsGroup: ConformanceGroup<StateConformanceFixture> = {
           .catch(() => {});
 
         await txReady;
-        const readPromise = stateAdapter.getJobs({ jobIds: [seed.id], lock: "exclusive" });
+        const readPromise = stateAdapter.withTransaction(async (readTxCtx) =>
+          stateAdapter.getJobs({ txCtx: readTxCtx, jobIds: [seed.id], lock: "exclusive" }),
+        );
         release!();
         await txPromise;
 

@@ -248,7 +248,7 @@ export const getChainsGroup: ConformanceGroup<StateConformanceFixture> = {
       },
     },
     {
-      name: "non-transactional locked getChain does not observe an uncommitted continuation",
+      name: "locked getChain in a separate transaction does not observe an uncommitted continuation",
       run: async ({ stateAdapter }, expect) => {
         if (stateAdapter.transactionConcurrency === "serialized") {
           expect.skip("requires concurrent transactions");
@@ -293,10 +293,13 @@ export const getChainsGroup: ConformanceGroup<StateConformanceFixture> = {
           .catch(() => {});
 
         await txReady;
-        const readPromise = stateAdapter.getChains({
-          chainIds: [seed.chainId],
-          lock: "exclusive",
-        });
+        const readPromise = stateAdapter.withTransaction(async (readTxCtx) =>
+          stateAdapter.getChains({
+            txCtx: readTxCtx,
+            chainIds: [seed.chainId],
+            lock: "exclusive",
+          }),
+        );
         release!();
         await txPromise;
 

@@ -187,8 +187,13 @@ export const withTransactionGroup: ConformanceGroup<StateConformanceFixture> = {
       },
     },
     {
-      name: "non-transactional writes are not swept into a concurrent transaction's rollback",
+      name: "an independent transaction's writes are not swept into a concurrent transaction's rollback",
       run: async ({ stateAdapter }, expect) => {
+        if (stateAdapter.transactionConcurrency === "serialized") {
+          expect.skip("requires concurrent transactions");
+          return;
+        }
+
         let release: (() => void) | undefined;
         const gate = new Promise<void>((r) => {
           release = r;
@@ -205,8 +210,8 @@ export const withTransactionGroup: ConformanceGroup<StateConformanceFixture> = {
               txCtx,
               jobs: [
                 {
-                  typeName: "nontx-vs-tx",
-                  chainTypeName: "nontx-vs-tx",
+                  typeName: "independent-vs-tx",
+                  chainTypeName: "independent-vs-tx",
                   input: { side: "tx" },
                 },
               ],
@@ -219,23 +224,26 @@ export const withTransactionGroup: ConformanceGroup<StateConformanceFixture> = {
 
         await txReady;
 
-        const nonTxPromise = stateAdapter.createChains({
-          jobs: [
-            {
-              typeName: "nontx-vs-tx",
-              chainTypeName: "nontx-vs-tx",
-              input: { side: "non-tx" },
-            },
-          ],
-        });
+        const outsidePromise = stateAdapter.withTransaction(async (outsideTxCtx) =>
+          stateAdapter.createChains({
+            txCtx: outsideTxCtx,
+            jobs: [
+              {
+                typeName: "independent-vs-tx",
+                chainTypeName: "independent-vs-tx",
+                input: { side: "outside" },
+              },
+            ],
+          }),
+        );
 
         release!();
         await txPromise;
-        const [{ job: outside }] = await nonTxPromise;
+        const [{ job: outside }] = await outsidePromise;
 
         const [survived] = await stateAdapter.getJobs({ jobIds: [outside.id] });
         expect(survived?.id).toBe(outside.id);
-        expect(survived?.input).toEqual({ side: "non-tx" });
+        expect(survived?.input).toEqual({ side: "outside" });
       },
     },
     {

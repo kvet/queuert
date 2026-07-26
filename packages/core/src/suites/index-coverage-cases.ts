@@ -1074,25 +1074,31 @@ export const operationalCoverageGroups: IndexCoverageGroup[] = [
         key: "createChains/default",
         label: "default",
         run: async () => async (stateAdapter) => {
-          await stateAdapter.createChains({
-            jobs: [{ typeName: "idx:test", chainTypeName: "idx:test", input: {} }],
-          });
+          await stateAdapter.withTransaction(async (txCtx) =>
+            stateAdapter.createChains({
+              txCtx,
+              jobs: [{ typeName: "idx:test", chainTypeName: "idx:test", input: {} }],
+            }),
+          );
         },
       },
       {
         key: "createChains/deduplication",
         label: "+ deduplication",
         run: async () => async (stateAdapter) => {
-          await stateAdapter.createChains({
-            jobs: [
-              {
-                typeName: "idx:dedup",
-                chainTypeName: "idx:dedup",
-                input: {},
-                deduplication: { key: "idx-dedup-key", scope: "running" },
-              },
-            ],
-          });
+          await stateAdapter.withTransaction(async (txCtx) =>
+            stateAdapter.createChains({
+              txCtx,
+              jobs: [
+                {
+                  typeName: "idx:dedup",
+                  chainTypeName: "idx:dedup",
+                  input: {},
+                  deduplication: { key: "idx-dedup-key", scope: "running" },
+                },
+              ],
+            }),
+          );
         },
       },
     ],
@@ -1133,15 +1139,18 @@ export const operationalCoverageGroups: IndexCoverageGroup[] = [
         key: "addJobsBlockers/default",
         label: "default",
         run: async (stateAdapter, sentinels) => {
-          const [{ job }] = await stateAdapter.createChains({
-            jobs: [
-              {
-                typeName: "idx:blocker-target",
-                chainTypeName: "idx:blocker-target",
-                input: {},
-              },
-            ],
-          });
+          const [{ job }] = await stateAdapter.withTransaction(async (txCtx) =>
+            stateAdapter.createChains({
+              txCtx,
+              jobs: [
+                {
+                  typeName: "idx:blocker-target",
+                  chainTypeName: "idx:blocker-target",
+                  input: {},
+                },
+              ],
+            }),
+          );
           return async (stateAdapter) => {
             await stateAdapter.withTransaction(async (txCtx) =>
               stateAdapter.addJobsBlockers({
@@ -1213,11 +1222,14 @@ export const operationalCoverageGroups: IndexCoverageGroup[] = [
         key: "extendJobAttempt/default",
         label: "default",
         run: async () => async (stateAdapter, sentinels) => {
-          await stateAdapter.extendJobAttempt({
-            jobId: sentinels.running.jobId,
-            workerId: "seed-worker",
-            timeoutMs: 60_000,
-          });
+          await stateAdapter.withTransaction(async (txCtx) =>
+            stateAdapter.extendJobAttempt({
+              txCtx,
+              jobId: sentinels.running.jobId,
+              workerId: "seed-worker",
+              timeoutMs: 60_000,
+            }),
+          );
         },
       },
     ],
@@ -1239,11 +1251,14 @@ export const operationalCoverageGroups: IndexCoverageGroup[] = [
           );
           if (!job) return async () => {};
           return async (stateAdapter) => {
-            await stateAdapter.finishJobAttempt({
-              jobId: job.id,
-              workerId: "w-fail",
-              outcome: { error: "test", schedule: { afterMs: 60_000 } },
-            });
+            await stateAdapter.withTransaction(async (txCtx) =>
+              stateAdapter.finishJobAttempt({
+                txCtx,
+                jobId: job.id,
+                workerId: "w-fail",
+                outcome: { error: "test", schedule: { afterMs: 60_000 } },
+              }),
+            );
           };
         },
       },
@@ -1260,11 +1275,14 @@ export const operationalCoverageGroups: IndexCoverageGroup[] = [
           );
           if (!job) return async () => {};
           return async (stateAdapter) => {
-            await stateAdapter.finishJobAttempt({
-              jobId: job.id,
-              workerId: "w-ok",
-              outcome: { output: { ok: true } },
-            });
+            await stateAdapter.withTransaction(async (txCtx) =>
+              stateAdapter.finishJobAttempt({
+                txCtx,
+                jobId: job.id,
+                workerId: "w-ok",
+                outcome: { output: { ok: true } },
+              }),
+            );
           };
         },
       },
@@ -1315,10 +1333,13 @@ export const operationalCoverageGroups: IndexCoverageGroup[] = [
         key: "rescheduleJobs/default",
         label: "default",
         run: async () => async (stateAdapter, sentinels) => {
-          await stateAdapter.rescheduleJobs({
-            jobIds: [sentinels.pending.jobId],
-            schedule: { afterMs: 1000 },
-          });
+          await stateAdapter.withTransaction(async (txCtx) =>
+            stateAdapter.rescheduleJobs({
+              txCtx,
+              jobIds: [sentinels.pending.jobId],
+              schedule: { afterMs: 1000 },
+            }),
+          );
         },
       },
     ],
@@ -1334,7 +1355,9 @@ export const operationalCoverageGroups: IndexCoverageGroup[] = [
           const chainId = sentinels.throwaway.chainIds.shift();
           if (!chainId) return async () => {};
           return async (stateAdapter) => {
-            await stateAdapter.deleteChains({ chainIds: [chainId] });
+            await stateAdapter.withTransaction(async (txCtx) =>
+              stateAdapter.deleteChains({ txCtx, chainIds: [chainId] }),
+            );
           };
         },
       },
@@ -1345,7 +1368,9 @@ export const operationalCoverageGroups: IndexCoverageGroup[] = [
           const chainId = sentinels.throwaway.cascadeChainIds.shift();
           if (!chainId) return async () => {};
           return async (stateAdapter) => {
-            await stateAdapter.deleteChains({ chainIds: [chainId], cascade: true });
+            await stateAdapter.withTransaction(async (txCtx) =>
+              stateAdapter.deleteChains({ txCtx, chainIds: [chainId], cascade: true }),
+            );
           };
         },
       },

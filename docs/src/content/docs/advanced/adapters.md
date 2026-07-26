@@ -73,14 +73,17 @@ Users create a `StateProvider` implementation to integrate with their database c
 - **`withSavepoint`** _(optional)_ — runs a callback inside a savepoint within an existing transaction; when omitted, the adapter falls back to a built-in savepoint implementation
 - **`close`** _(optional)_ — only needed when the provider owns resources beyond the caller-supplied client/pool
 
-### Optional txCtx Semantics
+### txCtx Semantics
 
-All `StateAdapter` operation methods accept an optional `txCtx` parameter:
+Whether `txCtx` is optional depends on what the method does:
 
-- **With txCtx**: Uses the provided transaction connection (must come from a `withTransaction` callback)
-- **Without txCtx**: Acquires its own connection from the pool, executes, and releases
+- **Mutating methods require it** (`createChains`, `createContinuationJob`, `addJobsBlockers`, `unblockJobs`, `startJobAttempt`, `extendJobAttempt`, `finishJobAttempt`, `reclaimExpiredJobAttempt`, `rescheduleJobs`, `deleteChains`). A write is never standalone in practice — it has to commit or roll back together with the caller's other writes, including the notify and observability side effects buffered on `transactionHooks`. The type enforces this, so a missing `txCtx` is a compile error rather than a silently auto-committed write.
+- **Read-only methods leave it optional** (`getChains`, `getJobs`, `getJobBlockers`, `getStartAttemptDelayMs`, `listChains`, `listJobs`, `listChainJobs`, `listBlockedJobs`). With a `txCtx` the read joins the caller's transaction and sees its uncommitted writes; without one the adapter acquires its own connection, executes, and releases.
+- **`lock: "exclusive"` requires it.** `getChains` and `getJobs` don't mutate rows, but a write-intent lock only lasts as long as the transaction that took it, so the parameter type pairs `lock` with a mandatory `txCtx`.
 
-This enables transactional operations, standalone operations, and DDL operations (like `CREATE INDEX CONCURRENTLY`) that cannot run inside transactions.
+At the provider layer, `executeSql` keeps an unconditionally optional `txCtx` — that's what lets the adapter run reads on their own connection, and DDL operations (like `CREATE INDEX CONCURRENTLY`) that cannot run inside a transaction at all.
+
+Enforcement is type-level only. `Client` additionally throws `TransactionContextRequiredError` at runtime when one of its mutating methods is called without a transaction context.
 
 ### NotifyProvider Interface
 

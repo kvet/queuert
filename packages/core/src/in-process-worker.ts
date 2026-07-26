@@ -422,10 +422,13 @@ export const createInProcessWorker = async <
             }
 
             if (executor.idleSlots() > 0) {
-              const reclaimed = await stateAdapter.reclaimExpiredJobAttempt({
-                typeNames,
-                ignoredJobIds: Array.from(jobIdsInProgress),
-              });
+              const reclaimed = await stateAdapter.withTransaction(async (txCtx) =>
+                stateAdapter.reclaimExpiredJobAttempt({
+                  txCtx,
+                  typeNames,
+                  ignoredJobIds: Array.from(jobIdsInProgress),
+                }),
+              );
               if (reclaimed) {
                 observabilityHelper.jobAttemptReclaimed(reclaimed, { workerId });
 
