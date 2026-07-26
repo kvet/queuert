@@ -30,7 +30,7 @@ db.run(`
 const jobTypes = defineJobTypes<{
   send_welcome_email: {
     entry: true;
-    input: { userId: number; email: string; name: string };
+    input: { userId: number };
     output: { sentAt: string };
   };
 }>();
@@ -56,8 +56,19 @@ const worker = await createInProcessWorker({
     jobTypes,
     processors: {
       send_welcome_email: {
-        attemptHandler: async ({ job, complete }) => {
-          console.log(`Sending welcome email to ${job.input.email} for ${job.input.name}`);
+        attemptHandler: async ({ job, prepare, complete }) => {
+          // Load the user with bun:sqlite inside the job transaction
+          const user = await prepare({ mode: "staged" }, ({ db }) => {
+            const row = db
+              .query<{ id: number; name: string; email: string }, [number]>(
+                "SELECT id, name, email FROM users WHERE id = ?",
+              )
+              .get(job.input.userId);
+            if (!row) throw new Error(`User ${job.input.userId} not found`);
+            return row;
+          });
+
+          console.log(`Sending welcome email to ${user.email} for ${user.name}`);
 
           return complete(async () => ({
             sentAt: new Date().toISOString(),
@@ -76,8 +87,8 @@ const chain = await withTransactionHooks(async (transactionHooks) => {
   db.run("BEGIN");
   try {
     const user = db
-      .query<{ id: number; name: string; email: string }, [string, string]>(
-        "INSERT INTO users (name, email) VALUES (?, ?) RETURNING *",
+      .query<{ id: number }, [string, string]>(
+        "INSERT INTO users (name, email) VALUES (?, ?) RETURNING id",
       )
       .get("Alice", "alice@example.com");
     if (!user) throw new Error("Failed to insert user");
@@ -86,7 +97,7 @@ const chain = await withTransactionHooks(async (transactionHooks) => {
       db,
       transactionHooks,
       typeName: "send_welcome_email",
-      input: { userId: user.id, email: user.email, name: user.name },
+      input: { userId: user.id },
     });
 
     db.run("COMMIT");

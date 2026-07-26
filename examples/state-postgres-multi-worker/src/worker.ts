@@ -7,7 +7,7 @@ import { createClient, createInProcessWorker, createProcessors, defineJobTypes }
 const jobTypes = defineJobTypes<{
   process_order: {
     entry: true;
-    input: { orderId: string; items: string[]; total: number };
+    input: { orderId: string };
     output: { processedAt: string; workerName: string };
   };
 }>();
@@ -34,12 +34,23 @@ const worker = await createInProcessWorker({
     jobTypes,
     processors: {
       process_order: {
-        attemptHandler: async ({ job, complete }) => {
+        attemptHandler: async ({ job, prepare, complete }) => {
+          // Load the order inside the job transaction
+          const order = await prepare({ mode: "staged" }, async ({ poolClient }) => {
+            const { rows } = await poolClient.query<{ items: string[]; total: number }>(
+              "SELECT items, total FROM orders WHERE id = $1",
+              [job.input.orderId],
+            );
+            const row = rows[0];
+            if (!row) throw new Error(`Order ${job.input.orderId} not found`);
+            return row;
+          });
+
           process.send!({
             type: "processing",
             orderId: job.input.orderId,
-            items: job.input.items.length,
-            total: job.input.total,
+            items: order.items.length,
+            total: order.total,
           });
 
           await new Promise((resolve) => setTimeout(resolve, 100 + Math.random() * 200));

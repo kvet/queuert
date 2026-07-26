@@ -1,29 +1,38 @@
-import { DatabaseSync } from "node:sqlite";
-
-import { createAsyncRwLock, createSqliteStateAdapter } from "@queuert/sqlite";
+import { createSqliteStateAdapter } from "@queuert/sqlite";
+import type Database from "better-sqlite3";
+import knexFactory from "knex";
 import {
   createClient,
+  createInProcessNotifyAdapter,
   createInProcessWorker,
   createProcessors,
   defineJobTypes,
   withTransactionHooks,
-  createInProcessNotifyAdapter,
 } from "queuert";
 
-import { createNodeSqliteStateProvider } from "./provider.js";
+import { createKnexSqliteStateProvider } from "./provider.js";
 
-// 1. Create in-memory SQLite database
-const db = new DatabaseSync(":memory:");
-db.exec("PRAGMA auto_vacuum = INCREMENTAL");
-db.exec("PRAGMA foreign_keys = ON");
+// 1. Create in-memory SQLite database and configure pragmas per connection
+const knex = knexFactory({
+  client: "better-sqlite3",
+  connection: { filename: ":memory:" },
+  useNullAsDefault: true,
+  pool: {
+    afterCreate: (conn: Database.Database, done: (err: Error | null) => void) => {
+      conn.pragma("auto_vacuum = INCREMENTAL");
+      conn.pragma("foreign_keys = ON");
+      done(null);
+    },
+  },
+});
 
 // 2. Create application schema
-db.exec(`
+await knex.raw(`
   CREATE TABLE IF NOT EXISTS users (
     id INTEGER PRIMARY KEY AUTOINCREMENT,
     name TEXT NOT NULL,
     email TEXT NOT NULL
-  );
+  )
 `);
 
 // 3. Define job types
@@ -35,12 +44,13 @@ const jobTypes = defineJobTypes<{
   };
 }>();
 
-// 4. Create state provider for node:sqlite
-const lock = createAsyncRwLock();
-const stateProvider = createNodeSqliteStateProvider({ db, lock });
+// 4. Create state provider for Knex
+const stateProvider = createKnexSqliteStateProvider({ knex });
 
 // 5. Create adapters and queuert client/worker
-const stateAdapter = await createSqliteStateAdapter({ stateProvider });
+const stateAdapter = await createSqliteStateAdapter({
+  stateProvider,
+});
 await stateAdapter.migrateToLatest();
 
 const notifyAdapter = await createInProcessNotifyAdapter();
@@ -51,7 +61,7 @@ const client = await createClient({
   jobTypes,
 });
 
-// 6. Create and start worker
+// 6. Create worker with job type processors
 const worker = await createInProcessWorker({
   client,
   processors: createProcessors({
@@ -60,14 +70,13 @@ const worker = await createInProcessWorker({
     processors: {
       send_welcome_email: {
         attemptHandler: async ({ job, prepare, complete }) => {
-          // Load the user with node:sqlite inside the job transaction
-          const user = await prepare({ mode: "staged" }, ({ db }) => {
-            const row = db
-              .prepare("SELECT id, name, email FROM users WHERE id = ?")
-              .get(job.input.userId) as { id: number; name: string; email: string } | undefined;
-            if (!row) throw new Error(`User ${job.input.userId} not found`);
-            return row;
-          });
+          // Load the user with Knex inside the job transaction
+          const user = await prepare({ mode: "staged" }, async ({ trx }) =>
+            trx<{ id: number; name: string; email: string }>("users")
+              .where({ id: job.input.userId })
+              .first(),
+          );
+          if (!user) throw new Error(`User ${job.input.userId} not found`);
 
           // Simulate sending email (in real app, call email service here)
           console.log(`Sending welcome email to ${user.email} for ${user.name}`);
@@ -84,34 +93,21 @@ const worker = await createInProcessWorker({
 const stopWorker = await worker.start();
 
 // 7. Register a new user and queue welcome email atomically
-const chain = await withTransactionHooks(async (transactionHooks) => {
-  using _h = await lock.acquireWrite();
-  db.exec("BEGIN");
-  try {
-    const insertStmt = db.prepare("INSERT INTO users (name, email) VALUES (?, ?) RETURNING id");
-    const user = insertStmt.get("Alice", "alice@example.com") as { id: number };
+const chain = await withTransactionHooks(async (transactionHooks) =>
+  knex.transaction(async (trx) => {
+    const [user] = await trx<{ id: number; name: string; email: string }>("users")
+      .insert({ name: "Alice", email: "alice@example.com" })
+      .returning(["id"]);
 
     // Queue welcome email - if user creation fails, no email job is created
-    const result = await client.startChain({
-      db,
+    return client.startChain({
+      trx,
       transactionHooks,
       typeName: "send_welcome_email",
       input: { userId: user.id },
     });
-
-    db.exec("COMMIT");
-    return result;
-  } catch (error) {
-    if (db.isTransaction) {
-      try {
-        db.exec("ROLLBACK");
-      } catch {
-        // ignore rollback errors
-      }
-    }
-    throw error;
-  }
-});
+  }),
+);
 
 // 8. Wait for the chain to complete
 const result = await client.awaitChain(chain, { timeoutMs: 5000 });
@@ -121,4 +117,4 @@ console.log(`Welcome email sent at: ${result.output.sentAt}`);
 await stopWorker();
 await notifyAdapter.close();
 await stateAdapter.close();
-db.close();
+await knex.destroy();

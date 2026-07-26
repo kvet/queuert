@@ -1,0 +1,29 @@
+{
+  "name": "example-state-sqlite-knex",
+  "version": "0.0.1",
+  "private": true,
+  "description": "An example demonstrating the SQLite state adapter with Knex.",
+  "license": "MIT",
+  "author": "kvet",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/kvet/queuert.git"
+  },
+  "type": "module",
+  "exports": {
+    "./provider": "./src/provider.ts"
+  },
+  "scripts": {
+    "start": "tsx src/index.ts",
+    "test": "vitest --run",
+    "typecheck": "tsgo --noEmit"
+  },
+  "devDependencies": {
+    "@queuert/sqlite": "workspace:*",
+    "@queuert/tsconfig": "workspace:*",
+    "@types/better-sqlite3": "7.6.13",
+    "better-sqlite3": "12.9.0",
+    "knex": "3.3.0",
+    "queuert": "workspace:*"
+  }
+}

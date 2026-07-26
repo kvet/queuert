@@ -1,6 +1,6 @@
 import { createPgStateAdapter } from "@queuert/postgres";
 import { acquirePostgres } from "@queuert/testcontainers";
-import { sql } from "drizzle-orm";
+import { eq, sql } from "drizzle-orm";
 import { drizzle } from "drizzle-orm/node-postgres";
 import { pgTable, serial, text } from "drizzle-orm/pg-core";
 import { Pool } from "pg";
@@ -47,7 +47,7 @@ await db.execute(sql`
 const jobTypes = defineJobTypes<{
   send_welcome_email: {
     entry: true;
-    input: { userId: number; email: string; name: string };
+    input: { userId: number };
     output: { sentAt: string };
   };
 }>();
@@ -75,9 +75,15 @@ const worker = await createInProcessWorker({
     jobTypes,
     processors: {
       send_welcome_email: {
-        attemptHandler: async ({ job, complete }) => {
+        attemptHandler: async ({ job, prepare, complete }) => {
+          // Load the user with Drizzle inside the job transaction
+          const [user] = await prepare({ mode: "staged" }, async ({ tx }) =>
+            tx.select().from(users).where(eq(users.id, job.input.userId)),
+          );
+          if (!user) throw new Error(`User ${job.input.userId} not found`);
+
           // Simulate sending email (in real app, call email service here)
-          console.log(`Sending welcome email to ${job.input.email} for ${job.input.name}`);
+          console.log(`Sending welcome email to ${user.email} for ${user.name}`);
 
           return complete(async () => ({
             sentAt: new Date().toISOString(),
@@ -97,14 +103,14 @@ const chain = await withTransactionHooks(async (transactionHooks) =>
     const [user] = await tx
       .insert(users)
       .values({ name: "Alice", email: "alice@example.com" })
-      .returning();
+      .returning({ id: users.id });
 
     // Queue welcome email - if user creation fails, no email job is created
     return client.startChain({
       tx,
       transactionHooks,
       typeName: "send_welcome_email",
-      input: { userId: user.id, email: user.email, name: user.name },
+      input: { userId: user.id },
     });
   }),
 );

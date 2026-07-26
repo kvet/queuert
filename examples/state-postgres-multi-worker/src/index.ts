@@ -46,7 +46,7 @@ const JOBS_TO_PROCESS = 12;
 const jobTypes = defineJobTypes<{
   process_order: {
     entry: true;
-    input: { orderId: string; items: string[]; total: number };
+    input: { orderId: string };
     output: { processedAt: string; workerName: string };
   };
 }>();
@@ -55,6 +55,14 @@ console.log("Starting PostgreSQL container...");
 await using pg = await acquirePostgres("postgres:18", import.meta.url);
 
 const pool = new Pool({ connectionString: pg.connectionString, max: 10 });
+
+await pool.query(`
+  CREATE TABLE IF NOT EXISTS orders (
+    id TEXT PRIMARY KEY,
+    items TEXT[] NOT NULL,
+    total INTEGER NOT NULL
+  );
+`);
 
 const stateProvider = createPgPoolStateProvider({ pool });
 const stateAdapter = await createPgStateAdapter({ stateProvider });
@@ -112,25 +120,39 @@ await Promise.all(readyPromises);
 console.log(`\nQueueing ${JOBS_TO_PROCESS} orders...\n`);
 
 const products = ["Widget", "Gadget", "Gizmo", "Doohickey", "Thingamajig", "Contraption"];
+const orders = Array.from({ length: JOBS_TO_PROCESS }, (_, i) => {
+  const itemCount = 1 + Math.floor(Math.random() * 3);
+  return {
+    id: `ORD-${String(i + 1).padStart(3, "0")}`,
+    items: Array.from(
+      { length: itemCount },
+      () => products[Math.floor(Math.random() * products.length)],
+    ),
+    total: Math.floor(Math.random() * 200) + 20,
+  };
+});
+
+// Orders and their jobs are created in one transaction — workers only ever see
+// orders that were committed
 const chains = await withTransactionHooks(async (transactionHooks) =>
-  stateAdapter.withTransaction(async (ctx) =>
-    client.startChains({
+  stateAdapter.withTransaction(async (ctx) => {
+    for (const order of orders) {
+      await ctx.poolClient.query("INSERT INTO orders (id, items, total) VALUES ($1, $2, $3)", [
+        order.id,
+        order.items,
+        order.total,
+      ]);
+    }
+
+    return client.startChains({
       ...ctx,
       transactionHooks,
-      items: Array.from({ length: JOBS_TO_PROCESS }, (_, i) => {
-        const itemCount = 1 + Math.floor(Math.random() * 3);
-        const items = Array.from(
-          { length: itemCount },
-          () => products[Math.floor(Math.random() * products.length)],
-        );
-        const total = Math.floor(Math.random() * 200) + 20;
-        return {
-          typeName: "process_order" as const,
-          input: { orderId: `ORD-${String(i + 1).padStart(3, "0")}`, items, total },
-        };
-      }),
-    }),
-  ),
+      items: orders.map((order) => ({
+        typeName: "process_order" as const,
+        input: { orderId: order.id },
+      })),
+    });
+  }),
 );
 
 await Promise.all(chains.map(async (chain) => client.awaitChain(chain, { timeoutMs: 30000 })));

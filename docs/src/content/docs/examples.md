@@ -16,6 +16,7 @@ How to connect Queuert to your database using different ORMs and drivers.
 | Example                                                                                                       | ORM / Driver                          |
 | ------------------------------------------------------------------------------------------------------------- | ------------------------------------- |
 | [state-postgres-kysely](https://github.com/kvet/queuert/tree/main/examples/state-postgres-kysely)             | Kysely                                |
+| [state-postgres-knex](https://github.com/kvet/queuert/tree/main/examples/state-postgres-knex)                 | Knex                                  |
 | [state-postgres-drizzle](https://github.com/kvet/queuert/tree/main/examples/state-postgres-drizzle)           | Drizzle ORM                           |
 | [state-postgres-prisma](https://github.com/kvet/queuert/tree/main/examples/state-postgres-prisma)             | Prisma                                |
 | [state-postgres-pg](https://github.com/kvet/queuert/tree/main/examples/state-postgres-pg)                     | pg (node-postgres)                    |
@@ -30,6 +31,7 @@ How to connect Queuert to your database using different ORMs and drivers.
 | [state-sqlite-bun](https://github.com/kvet/queuert/tree/main/examples/state-sqlite-bun)                       | bun:sqlite     |
 | [state-sqlite-better-sqlite3](https://github.com/kvet/queuert/tree/main/examples/state-sqlite-better-sqlite3) | better-sqlite3 |
 | [state-sqlite-kysely](https://github.com/kvet/queuert/tree/main/examples/state-sqlite-kysely)                 | Kysely         |
+| [state-sqlite-knex](https://github.com/kvet/queuert/tree/main/examples/state-sqlite-knex)                     | Knex           |
 | [state-sqlite-drizzle](https://github.com/kvet/queuert/tree/main/examples/state-sqlite-drizzle)               | Drizzle ORM    |
 | [state-sqlite-prisma](https://github.com/kvet/queuert/tree/main/examples/state-sqlite-prisma)                 | Prisma         |
 

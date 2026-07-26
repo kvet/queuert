@@ -33,7 +33,7 @@ await db.query(`
 const jobTypes = defineJobTypes<{
   send_welcome_email: {
     entry: true;
-    input: { userId: number; email: string; name: string };
+    input: { userId: number };
     output: { sentAt: string };
   };
 }>();
@@ -63,9 +63,20 @@ const worker = await createInProcessWorker({
     jobTypes,
     processors: {
       send_welcome_email: {
-        attemptHandler: async ({ job, complete }) => {
+        attemptHandler: async ({ job, prepare, complete }) => {
+          // Load the user with pg inside the job transaction
+          const user = await prepare({ mode: "staged" }, async ({ poolClient }) => {
+            const { rows } = await poolClient.query<{ id: number; name: string; email: string }>(
+              "SELECT id, name, email FROM users WHERE id = $1",
+              [job.input.userId],
+            );
+            const row = rows[0];
+            if (!row) throw new Error(`User ${job.input.userId} not found`);
+            return row;
+          });
+
           // Simulate sending email (in real app, call email service here)
-          console.log(`Sending welcome email to ${job.input.email} for ${job.input.name}`);
+          console.log(`Sending welcome email to ${user.email} for ${user.name}`);
 
           return complete(async () => ({
             sentAt: new Date().toISOString(),
@@ -84,8 +95,8 @@ const chain = await withTransactionHooks(async (transactionHooks) => {
   try {
     await poolClient.query("BEGIN");
 
-    const userResult = await poolClient.query<{ id: number; name: string; email: string }>(
-      "INSERT INTO users (name, email) VALUES ($1, $2) RETURNING *",
+    const userResult = await poolClient.query<{ id: number }>(
+      "INSERT INTO users (name, email) VALUES ($1, $2) RETURNING id",
       ["Alice", "alice@example.com"],
     );
     const user = userResult.rows[0];
@@ -95,7 +106,7 @@ const chain = await withTransactionHooks(async (transactionHooks) => {
       poolClient,
       transactionHooks,
       typeName: "send_welcome_email",
-      input: { userId: user.id, email: user.email, name: user.name },
+      input: { userId: user.id },
     });
 
     await poolClient.query("COMMIT");
