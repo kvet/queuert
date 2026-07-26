@@ -7,121 +7,47 @@ sidebar:
 
 ## Overview
 
-Without cleanup, the job table grows unboundedly as completed chains accumulate. This guide shows how to implement cleanup as a regular Queuert job — listing completed chains older than a cutoff date, deleting them in batches using cursor pagination, reclaiming disk space with vacuum, and scheduling the next run.
+Without cleanup, the job table grows unboundedly as completed chains accumulate. Queuert ships a built-in cleanup job — a job type and a processor you mount alongside your own — that deletes completed chains older than a retention cutoff in batches and reschedules itself. You schedule the first run and choose the retention and interval; everything else is handled for you.
 
-## Define a Cleanup Job Type
+## Mount the Built-In
 
-```ts
-const cleanupJobTypes = defineJobTypes<{
-  "queuert.cleanup": {
-    entry: true;
-    input: null;
-    output: null;
-  };
-}>();
-```
-
-## Write the Processor
+`createCleanupJobTypes()` and `createCleanupProcessors()` return regular slices, so they compose with your own via the array merge pattern:
 
 ```ts
-const CLEANUP_RETENTION_MS = 7 * 24 * 60 * 60 * 1000; // 7 days
-const CLEANUP_BATCH_SIZE = 100;
-const CLEANUP_INTERVAL_MS = 60 * 60 * 1000; // 1 hour
+import {
+  createCleanupJobTypes,
+  createCleanupProcessors,
+  createClient,
+  createInProcessWorker,
+} from "queuert";
 
-const cleanupProcessorRegistry = createProcessors({
-  client,
-  jobTypes: cleanupJobTypes,
-  processors: {
-    "queuert.cleanup": {
-      attemptHandler: async ({ job, execute, complete }) => {
-        const cutoffDate = new Date(Date.now() - CLEANUP_RETENTION_MS);
-        let deletedChainCount = 0;
-        let cursor: string | undefined;
-
-        do {
-          const page = await client.listChains({
-            status: "completed",
-            orderBy: "completedAt",
-            independent: true,
-            to: cutoffDate,
-            orderDirection: "asc",
-            limit: CLEANUP_BATCH_SIZE,
-            ...(cursor != null ? { cursor } : {}),
-          });
-
-          const chainsToDelete = page.items.filter(
-            (chain) => chain.id !== job.chainId && chain.status === "completed",
-          );
-
-          if (chainsToDelete.length > 0) {
-            const deleted = await execute(async ({ transactionHooks, ...txCtx }) =>
-              client.deleteChains({
-                ...txCtx,
-                transactionHooks,
-                ids: chainsToDelete.map((chain) => chain.id),
-              }),
-            );
-            deletedChainCount += deleted.length;
-          }
-
-          cursor = page.nextCursor ?? undefined;
-        } while (cursor);
-
-        await stateAdapter.vacuum();
-
-        return complete(async ({ transactionHooks, ...txCtx }) => {
-          await client.createChain({
-            ...txCtx,
-            transactionHooks,
-            typeName: "queuert.cleanup",
-            input: null,
-            schedule: { afterMs: CLEANUP_INTERVAL_MS },
-            deduplication: {
-              key: "queuert.cleanup",
-              scope: "running",
-              excludeChainIds: [job.chainId],
-            },
-          });
-
-          return null;
-        });
-      },
-    },
-  },
-});
-```
-
-Key patterns used:
-
-- **Retention cutoff** — `CLEANUP_RETENTION_MS` controls how long completed chains are kept before deletion
-- **Status-filtered listing** — `status: "completed"` with `orderBy: "completedAt"` pushes filtering to the database and orders by completion time, so the oldest-completed chains are deleted first
-- **Cursor pagination** — processes chains in bounded batches using `listChains` cursor, preventing unbounded memory usage
-- **`execute` batching** — each batch of deletions runs in its own guarded transaction via `execute`, so the handler never holds a single long-lived transaction. The attempt is verified on each `execute` call, ensuring the worker still owns the job
-- **Vacuum** — reclaims disk space after all deletions complete
-- **`deduplication`** with `scope: "running"` — ensures only one cleanup chain is active at a time
-- **`excludeChainIds`** — prevents the finishing cleanup chain from deduplicating against itself
-- **`schedule`** — defers the next run by `CLEANUP_INTERVAL_MS`
-
-## Merge and Start
-
-Compose the cleanup slice with your application slices by passing arrays to `createClient` and `createInProcessWorker`:
-
-```ts
 const client = await createClient({
   stateAdapter,
   notifyAdapter,
-  jobTypes: [cleanupJobTypes, yourJobTypes],
+  jobTypes: [createCleanupJobTypes(), yourJobTypes],
 });
 
 const worker = await createInProcessWorker({
   client,
-  processors: [cleanupProcessorRegistry, yourProcessorRegistry],
+  processors: [createCleanupProcessors({ client }), yourProcessorRegistry],
 });
 ```
 
+The job type is named `__queuert/cleanup`. Its input carries both knobs:
+
+- **`retentionMs`** — completed chains that finished longer ago than this are deleted
+- **`intervalMs`** — how long to wait before the next run
+
+`createCleanupProcessors` also accepts:
+
+- **`batchSize`** — chains listed and deleted per batch (defaults to 100)
+- **`attemptMiddleware`** — the middleware chain for this slice. Pass the same instances here that you pass to the worker's `requiredAttemptMiddleware`, which matches by reference identity.
+
+Since the built-in is just another slice, you can mount it on a dedicated worker to keep deletion off your hot processing path.
+
 ## Schedule the First Run
 
-Schedule the initial cleanup at application startup. Deduplication makes this idempotent — calling it multiple times returns the same chain:
+Schedule the initial cleanup at application startup. Deduplication makes this idempotent — calling it on every boot returns the same chain:
 
 ```ts
 await withTransactionHooks(async (transactionHooks) =>
@@ -129,38 +55,55 @@ await withTransactionHooks(async (transactionHooks) =>
     client.createChain({
       ...txCtx,
       transactionHooks,
-      typeName: "queuert.cleanup",
-      input: null,
-      deduplication: { key: "queuert.cleanup", scope: "running" },
+      typeName: "__queuert/cleanup",
+      input: {
+        retentionMs: 7 * 24 * 60 * 60 * 1000, // keep completed chains for 7 days
+        intervalMs: 60 * 60 * 1000, // run hourly
+      },
+      deduplication: { key: "__queuert/cleanup", scope: "running" },
     }),
   ),
 );
 ```
 
-After the first run completes, the cleanup job automatically schedules its next run.
+Each run starts the next one as a new independent chain, forwarding the same input, so retention and interval persist without further involvement from you. To change either, let the current chain finish and schedule a new one with the new input, or delete the pending chain and re-create it.
+
+## What the Handler Does
+
+- **Retention cutoff** — lists completed chains whose `completedAt` predates `now - retentionMs`
+- **Status-filtered listing** — `status: "completed"` with `orderBy: "completedAt"` pushes filtering to the database and deletes oldest-completed first
+- **Cursor pagination** — processes chains in bounded batches, so memory stays flat regardless of backlog size
+- **`execute` batching** — each batch of deletions runs in its own guarded transaction, so the handler never holds a single long-lived transaction, and the attempt is verified on every batch
+- **Self-exclusion** — the running cleanup chain is never deleted by its own run
+- **Cooperative shutdown** — the scan drops out between batches when the worker is stopping; deletion is idempotent and the next run resumes from the oldest remaining chain
+- **Rescheduling** — a new cleanup chain is created inside the completion transaction, deduplicated on `scope: "running"` with the current chain excluded
 
 ## Reclaiming Disk Space
 
-The cleanup job calls `stateAdapter.vacuum()` after all batches are deleted, reclaiming disk space as part of the cleanup run.
+Deleting rows does not necessarily return disk to the operating system. The built-in handler does not vacuum, because `vacuum()` lives on the concrete state adapters rather than the shared `StateAdapter` interface. Call it yourself on whatever cadence suits your deployment:
+
+```ts
+await stateAdapter.vacuum();
+```
 
 ### PostgreSQL
 
-The adapter tunes autovacuum aggressively on the job tables so PostgreSQL handles most space reclamation automatically; the explicit vacuum step ensures timely cleanup after large deletions. See [PostgreSQL Internals](/queuert/advanced/postgres-internals/#vacuum-tuning) for the exact settings.
+The adapter tunes autovacuum aggressively on the job tables so PostgreSQL handles most space reclamation automatically; an explicit vacuum ensures timely cleanup after large deletions. See [PostgreSQL Internals](/queuert/advanced/postgres-internals/#vacuum-tuning) for the exact settings.
 
 ### SQLite
 
-SQLite does not reclaim space automatically. The vacuum step frees reclaimable pages via incremental vacuum. This requires `PRAGMA auto_vacuum = INCREMENTAL` to be set on the database before table creation. See [SQLite Internals](/queuert/advanced/sqlite-internals/#vacuum) for details.
+SQLite does not reclaim space automatically. `vacuum()` frees reclaimable pages via incremental vacuum. This requires `PRAGMA auto_vacuum = INCREMENTAL` to be set on the database before table creation. See [SQLite Internals](/queuert/advanced/sqlite-internals/#vacuum) for details.
 
-## Customization Ideas
+## Writing Your Own
 
-Since this is your own job type, you can adapt the logic freely:
+The built-in deletes _all_ completed chains past the cutoff — there is no per-type filter. If you need more, write your own job type and processor with the same shape; the built-in's behavior above is the specification to start from:
 
-- **Per-type retention** — filter by `typeName` and apply different cutoff dates
+- **Per-type retention** — filter `listChains` by `typeName` and apply different cutoff dates
 - **Archive instead of delete** — copy chain data to an archive table before deleting
-- **Metrics** — emit the `deletedChainCount` to your observability system
-- **Alerting** — fail the cleanup job if deletion count exceeds a threshold
+- **Metrics** — emit the deleted-chain count to your observability system
+- **Alerting** — fail the cleanup job if the deletion count exceeds a threshold
 
-See [examples/showcase-cleanup](https://github.com/kvet/queuert/tree/main/examples/showcase-cleanup) for a complete working example demonstrating automatic cleanup of completed chains.
+See [examples/showcase-cleanup](https://github.com/kvet/queuert/tree/main/examples/showcase-cleanup) for a complete working example.
 
 ## See Also
 

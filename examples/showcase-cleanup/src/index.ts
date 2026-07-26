@@ -1,12 +1,12 @@
 /**
  * Cleanup Showcase
  *
- * Demonstrates how to implement automatic cleanup of completed chains
- * as a custom job type using standard Queuert primitives.
+ * Demonstrates the built-in cleanup job type and processor.
  *
  * Scenarios:
  * 1. Basic cleanup: Completed chains older than retention are deleted
  * 2. Idempotent scheduling: Multiple schedule calls create only one cleanup chain
+ * 3. Self-rescheduling: The finished run schedules the next one
  */
 
 import assert from "node:assert/strict";
@@ -17,6 +17,8 @@ import { createPostgresJsNotifyProvider } from "example-notify-postgres-postgres
 import { createPostgresJsStateProvider } from "example-state-postgres-postgres-js/provider";
 import postgres from "postgres";
 import {
+  createCleanupJobTypes,
+  createCleanupProcessors,
   createClient,
   createInProcessWorker,
   createProcessors,
@@ -26,20 +28,10 @@ import {
 
 // Set to e.g. 7 * 24 * 60 * 60 * 1000 for 7-day retention
 const CLEANUP_RETENTION_MS = 0;
-// Set to e.g. 1000
-const CLEANUP_BATCH_SIZE = 3;
 // Set to e.g. 60 * 60 * 1000 for 1-hour interval
 const CLEANUP_INTERVAL_MS = 1000;
-
-// --- Define a custom cleanup job type alongside user job types ---
-
-const cleanupJobTypes = defineJobTypes<{
-  "queuert.cleanup": {
-    entry: true;
-    input: null;
-    output: null;
-  };
-}>();
+// Set to e.g. 1000
+const CLEANUP_BATCH_SIZE = 3;
 
 const userJobTypes = defineJobTypes<{
   "work.process": {
@@ -58,82 +50,18 @@ await stateAdapter.migrateToLatest();
 const notifyProvider = createPostgresJsNotifyProvider({ sql });
 const notifyAdapter = await createPgNotifyAdapter({ notifyProvider });
 
+// --- Mount the built-in cleanup slice alongside the application slice ---
+
 const client = await createClient({
   stateAdapter,
   notifyAdapter,
-  jobTypes: [cleanupJobTypes, userJobTypes],
-});
-
-// --- Define the cleanup processor ---
-
-const cleanupProcessorRegistry = createProcessors({
-  client,
-  jobTypes: cleanupJobTypes,
-  processors: {
-    "queuert.cleanup": {
-      attemptHandler: async ({ job, execute, complete }) => {
-        const cutoffDate = new Date(Date.now() - CLEANUP_RETENTION_MS);
-        let deletedChainCount = 0;
-        let cursor: string | undefined;
-
-        do {
-          const page = await client.listChains({
-            status: "completed",
-            orderBy: "completedAt",
-            independent: true,
-            to: cutoffDate,
-            orderDirection: "asc",
-            limit: CLEANUP_BATCH_SIZE,
-            ...(cursor != null ? { cursor } : {}),
-          });
-
-          const chainsToDelete = page.items.filter(
-            (chain) => chain.id !== job.chainId && chain.status === "completed",
-          );
-
-          if (chainsToDelete.length > 0) {
-            const deleted = await execute(async ({ sql, transactionHooks }) =>
-              client.deleteChains({
-                sql,
-                transactionHooks,
-                ids: chainsToDelete.map((chain) => chain.id),
-              }),
-            );
-            deletedChainCount += deleted.length;
-          }
-
-          cursor = page.nextCursor ?? undefined;
-        } while (cursor);
-
-        console.log(`[queuert.cleanup] Deleted ${deletedChainCount} chain(s)`);
-
-        await stateAdapter.vacuum();
-
-        return complete(async ({ sql, transactionHooks }) => {
-          await client.createChain({
-            sql,
-            transactionHooks,
-            typeName: "queuert.cleanup",
-            input: null,
-            schedule: { afterMs: CLEANUP_INTERVAL_MS },
-            deduplication: {
-              key: "queuert.cleanup",
-              scope: "running",
-              excludeChainIds: [job.chainId],
-            },
-          });
-
-          return null;
-        });
-      },
-    },
-  },
+  jobTypes: [createCleanupJobTypes(), userJobTypes],
 });
 
 const worker = await createInProcessWorker({
   client,
   processors: [
-    cleanupProcessorRegistry,
+    createCleanupProcessors({ client, batchSize: CLEANUP_BATCH_SIZE }),
     createProcessors({
       client,
       jobTypes: userJobTypes,
@@ -182,7 +110,6 @@ await Promise.all(
 );
 console.log(`${immediateChains.length} work chains completed, 1 scheduled for later`);
 
-// Check chain count before cleanup
 const beforeCleanup = await client.listChains({
   typeName: ["work.process"],
   limit: 100,
@@ -190,7 +117,7 @@ const beforeCleanup = await client.listChains({
 console.log(`\nChains before cleanup: ${beforeCleanup.items.length}`);
 assert.equal(beforeCleanup.items.length, 6);
 
-// --- Scenario 2: Run cleanup ---
+// --- Scenario 2: Schedule cleanup ---
 console.log("\n--- Scenario 2: Schedule cleanup ---\n");
 
 const scheduleCleanup = async () =>
@@ -199,9 +126,9 @@ const scheduleCleanup = async () =>
       const result = await client.createChain({
         sql: txSql,
         transactionHooks,
-        typeName: "queuert.cleanup",
-        input: null,
-        deduplication: { key: "queuert.cleanup", scope: "running" },
+        typeName: "__queuert/cleanup",
+        input: { retentionMs: CLEANUP_RETENTION_MS, intervalMs: CLEANUP_INTERVAL_MS },
+        deduplication: { key: "__queuert/cleanup", scope: "running" },
       });
       return result;
     }),
@@ -212,18 +139,15 @@ console.log(`Cleanup chain created: ${cleanupChain.id}`);
 console.log(`Deduplicated: ${cleanupChain.deduplicated}`);
 assert.equal(cleanupChain.deduplicated, false);
 
-// --- Idempotent scheduling ---
 const duplicate = await scheduleCleanup();
 console.log(`\nSecond schedule attempt: ${duplicate.id}`);
 console.log(`Deduplicated: ${duplicate.deduplicated} (same chain returned)`);
 assert.equal(duplicate.deduplicated, true);
 assert.equal(duplicate.id, cleanupChain.id);
 
-// Wait for cleanup to finish
 await client.awaitChain(cleanupChain, { timeoutMs: 10000 });
 console.log("\nCleanup completed!");
 
-// Check chain count after cleanup
 const afterCleanup = await client.listChains({
   typeName: ["work.process"],
   limit: 100,
@@ -231,15 +155,20 @@ const afterCleanup = await client.listChains({
 console.log(`Chains after cleanup: ${afterCleanup.items.length}`);
 assert.equal(afterCleanup.items.length, 1, "only the future-scheduled chain should remain");
 
-// Check that a next cleanup run was scheduled
+// --- Scenario 3: The finished run scheduled the next one ---
+console.log("\n--- Scenario 3: Next run ---\n");
+
 const pendingCleanup = await client.listJobs({
-  typeName: ["queuert.cleanup"],
+  typeName: ["__queuert/cleanup"],
   status: "pending",
   limit: 10,
 });
-console.log(`\nNext cleanup run scheduled: ${pendingCleanup.items.length > 0 ? "yes" : "no"}`);
 assert.equal(pendingCleanup.items.length, 1, "next cleanup run should be scheduled");
-console.log(`Scheduled at: ${pendingCleanup.items[0].scheduledAt.toISOString()}`);
+console.log(`Next cleanup run scheduled at: ${pendingCleanup.items[0].scheduledAt.toISOString()}`);
+
+// Deleting rows does not return disk to the OS — vacuum is on the state adapter
+await stateAdapter.vacuum();
+console.log("Vacuumed");
 
 console.log("\n" + "-".repeat(40));
 console.log("SHOWCASE COMPLETED");

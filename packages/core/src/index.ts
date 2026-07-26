@@ -1,4 +1,11 @@
 export { createClient, type Client } from "./client.js";
+export {
+  type CleanupJobInput,
+  type CleanupJobTypeDefinitions,
+  cleanupJobTypeName,
+  createCleanupJobTypes,
+} from "./cleanup/cleanup-job-types.js";
+export { createCleanupProcessors } from "./cleanup/cleanup-processors.js";
 export { type Chain, type ChainStatus, type CompletedChain } from "./entities/chain.js";
 export { type DeduplicationOptions } from "./entities/deduplication.js";
 export { defineJobTypes } from "./entities/define-job-types.js";
