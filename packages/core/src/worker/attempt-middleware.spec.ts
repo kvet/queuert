@@ -1,6 +1,6 @@
 import { describe, expectTypeOf, it } from "vitest";
 
-import { createClient } from "../client.js";
+import { type Client, createClient } from "../client.js";
 import { defineJobTypes } from "../entities/define-job-types.js";
 import { createInProcessStateAdapter } from "../state-adapter/state-adapter.in-process.js";
 import { type StateAdapter } from "../state-adapter/state-adapter.js";
@@ -246,6 +246,145 @@ describe("AttemptMiddleware accepts concrete (non-any) state adapters", () => {
     void mwPrepare;
     void mwExecute;
     void mwComplete;
+  });
+
+  /*
+   * Typed against `DbStateAdapter`, not `typeof stateAdapter`: the in-process
+   * adapter's txCtx has only optional properties, so it stays assignable to a
+   * bare-`any` wildcard and cannot reproduce the ctx collapse this guards.
+   * `createProcessors` now requires the middleware adapter to match the
+   * client's, so the client is retyped to the same alias — the call only stamps
+   * objects, so the in-process instance backing it is never touched.
+   */
+  it("merges ctx across a multi-element tuple of concrete-adapter middleware", () => {
+    type Tx = { db: { query: (sql: string) => Promise<unknown> } };
+    type DbStateAdapter = StateAdapter<Tx, string>;
+    const dbClient = client as unknown as Client<Defs, DbStateAdapter>;
+
+    const traceMw: AttemptMiddleware<DbStateAdapter, { traceId: string }> = {
+      wrapHandler: async ({ next }) => next({ traceId: "t" }),
+    };
+    const prepareMw: AttemptMiddleware<
+      DbStateAdapter,
+      Record<string, never>,
+      { tenant: string }
+    > = {
+      wrapPrepare: async ({ db, next }) => {
+        expectTypeOf(db).toEqualTypeOf<Tx["db"]>();
+        return next({ tenant: "acme" });
+      },
+    };
+    const outboxMw: AttemptMiddleware<
+      DbStateAdapter,
+      Record<string, never>,
+      Record<string, never>,
+      { emit: (evt: string) => void },
+      { emit: (evt: string) => void }
+    > = {
+      wrapExecute: async ({ db, next }) => {
+        expectTypeOf(db).toEqualTypeOf<Tx["db"]>();
+        return next({ emit: () => {} });
+      },
+      wrapComplete: async ({ db, next }) => {
+        expectTypeOf(db).toEqualTypeOf<Tx["db"]>();
+        return next({ emit: () => {} });
+      },
+    };
+
+    createProcessors({
+      client: dbClient,
+      jobTypes,
+      attemptMiddleware: [traceMw, prepareMw, outboxMw],
+      processors: {
+        foo: {
+          attemptHandler: async ({ traceId, prepare, execute, complete }) => {
+            expectTypeOf(traceId).toEqualTypeOf<string>();
+            await prepare({ mode: "staged" }, async ({ tenant }) => {
+              expectTypeOf(tenant).toEqualTypeOf<string>();
+            });
+            await execute(async ({ emit }) => {
+              expectTypeOf(emit).toEqualTypeOf<(evt: string) => void>();
+            });
+            return complete(async ({ emit }) => {
+              expectTypeOf(emit).toEqualTypeOf<(evt: string) => void>();
+              return { ok: true as const };
+            });
+          },
+        },
+      },
+    });
+  });
+
+  it("merges ctx across a tuple mixing any- and concrete-adapter middleware", () => {
+    type DbStateAdapter = StateAdapter<
+      { db: { query: (sql: string) => Promise<unknown> } },
+      string
+    >;
+
+    const agnosticMw: AttemptMiddleware<any, { traceId: string }> = {
+      wrapHandler: async ({ next }) => next({ traceId: "t" }),
+    };
+    const concreteMw: AttemptMiddleware<DbStateAdapter, { log: (msg: string) => void }> = {
+      wrapHandler: async ({ next }) => next({ log: () => {} }),
+    };
+
+    createProcessors({
+      client,
+      jobTypes,
+      attemptMiddleware: [agnosticMw, concreteMw],
+      processors: {
+        foo: {
+          attemptHandler: async ({ traceId, log, complete }) => {
+            expectTypeOf(traceId).toEqualTypeOf<string>();
+            expectTypeOf(log).toEqualTypeOf<(msg: string) => void>();
+            return complete(async () => ({ ok: true as const }));
+          },
+        },
+      },
+    });
+  });
+});
+
+describe("middleware must match the client's state adapter", () => {
+  it("rejects middleware typed against a foreign adapter", () => {
+    type PgAdapter = StateAdapter<{ sql: (q: string) => Promise<void> }, string>;
+    const foreignMw: AttemptMiddleware<PgAdapter, Record<string, never>, { tenant: string }> = {
+      wrapPrepare: async ({ sql, next }) => {
+        void sql;
+        return next({ tenant: "acme" });
+      },
+    };
+
+    createProcessors({
+      client,
+      jobTypes,
+      // @ts-expect-error — middleware is typed for a Postgres-shaped adapter but
+      // the client is in-process; its hooks would destructure an undefined `sql`
+      attemptMiddleware: [foreignMw],
+      processors: {
+        foo: { attemptHandler: async ({ complete }) => complete(async () => ({ ok: true })) },
+      },
+    });
+  });
+
+  it("accepts adapter-agnostic middleware against any client", () => {
+    const agnosticMw: AttemptMiddleware<any, { traceId: string }> = {
+      wrapHandler: async ({ next }) => next({ traceId: "t" }),
+    };
+
+    createProcessors({
+      client,
+      jobTypes,
+      attemptMiddleware: [agnosticMw],
+      processors: {
+        foo: {
+          attemptHandler: async ({ traceId, complete }) => {
+            expectTypeOf(traceId).toEqualTypeOf<string>();
+            return complete(async () => ({ ok: true as const }));
+          },
+        },
+      },
+    });
   });
 });
 

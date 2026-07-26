@@ -7,7 +7,6 @@ import {
   type InProcessStateAdapter,
   createInProcessStateAdapter,
 } from "./state-adapter/state-adapter.in-process.js";
-import { type StateAdapter } from "./state-adapter/state-adapter.js";
 import { type AttemptMiddleware } from "./worker/attempt-middleware.js";
 import { createProcessors } from "./worker/create-processors.js";
 
@@ -210,8 +209,7 @@ describe("createInProcessWorker requiredAttemptMiddleware", () => {
   });
 
   it("accepts a slice typed against a user-supplied StateAdapter alias", async () => {
-    type MyStateAdapter = StateAdapter<{ db: string }, `job.${string}`>;
-    const mw: AttemptMiddleware<MyStateAdapter> = {
+    const mw: AttemptMiddleware<InProcessStateAdapter> = {
       wrapHandler: async ({ next }) => next({}),
     };
 
@@ -237,11 +235,10 @@ describe("createInProcessWorker requiredAttemptMiddleware", () => {
   });
 
   it("still rejects a mismatched slice when required mw is typed against a StateAdapter alias", async () => {
-    type MyStateAdapter = StateAdapter<{ db: string }, `job.${string}`>;
-    const required: AttemptMiddleware<MyStateAdapter, { userId: string }> = {
+    const required: AttemptMiddleware<InProcessStateAdapter, { userId: string }> = {
       wrapHandler: async ({ next }) => next({ userId: "u-1" }),
     };
-    const other: AttemptMiddleware<MyStateAdapter, { traceId: string }> = {
+    const other: AttemptMiddleware<InProcessStateAdapter, { traceId: string }> = {
       wrapHandler: async ({ next }) => next({ traceId: "t-1" }),
     };
 

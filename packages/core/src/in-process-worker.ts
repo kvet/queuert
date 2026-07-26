@@ -19,6 +19,7 @@ import {
 } from "./state-adapter/state-adapter.js";
 import { type AttemptConfig } from "./worker/attempt-heartbeat.js";
 import {
+  type AnyAttemptMiddleware,
   type AttemptMiddleware,
   type IsAttemptMiddlewareSubsequence,
 } from "./worker/attempt-middleware.js";
@@ -32,13 +33,7 @@ import {
 
 /** Per-processor runtime stamp carrying the middleware tuple of the originating slice. @internal */
 type StampedProcessor = InProcessWorkerProcessor<any, any, any, any, any, any, any> & {
-  readonly [processorAttemptMiddlewareSymbol]: readonly AttemptMiddleware<
-    any,
-    any,
-    any,
-    any,
-    any
-  >[];
+  readonly [processorAttemptMiddlewareSymbol]: readonly AnyAttemptMiddleware[];
 };
 
 const waitForNextJob = async ({
@@ -197,9 +192,7 @@ type ExtraProcessorTypeNames<TProcessorDefs, TClientDefs> = [string] extends [
 
 /** Extract slice middleware tuple from a Processors instance (defaults to empty). @internal */
 type SliceMiddleware<T> =
-  T extends Processors<any, infer M extends readonly AttemptMiddleware<any, any, any, any, any>[]>
-    ? M
-    : readonly [];
+  T extends Processors<any, infer M extends readonly AnyAttemptMiddleware[]> ? M : readonly [];
 
 /**
  * For each slice in the array, check whether its middleware tuple contains
@@ -210,7 +203,7 @@ type SliceMiddleware<T> =
  */
 type ValidateRequiredMiddlewareForSlices<
   TSlices extends readonly unknown[],
-  TReq extends readonly AttemptMiddleware<any, any, any, any, any>[],
+  TReq extends readonly AnyAttemptMiddleware[],
 > = {
   [K in keyof TSlices]: IsAttemptMiddlewareSubsequence<
     TReq,
@@ -227,10 +220,9 @@ type ValidateRequiredMiddlewareForSlices<
  * (array-of-slices form).
  * @internal
  */
-type ValidateRequiredMiddleware<
-  TProcessorsInput,
-  TReq extends readonly AttemptMiddleware<any, any, any, any, any>[],
-> = [TReq] extends [readonly []]
+type ValidateRequiredMiddleware<TProcessorsInput, TReq extends readonly AnyAttemptMiddleware[]> = [
+  TReq,
+] extends [readonly []]
   ? TProcessorsInput
   : TProcessorsInput extends readonly unknown[]
     ? ValidateRequiredMiddlewareForSlices<TProcessorsInput, TReq>
@@ -282,8 +274,7 @@ export const createInProcessWorker = async <
   TJobTypeDefinitions extends BaseJobTypeDefinitions,
   TStateAdapter extends StateAdapter<any, any>,
   const TProcessorsInput extends Processors | readonly Processors[] = Processors,
-  const TRequiredAttemptMiddleware extends readonly AttemptMiddleware<any, any, any, any, any>[] =
-    readonly [],
+  const TRequiredAttemptMiddleware extends readonly AnyAttemptMiddleware[] = readonly [],
 >({
   client,
   workerName,
@@ -300,7 +291,9 @@ export const createInProcessWorker = async <
   pollIntervalMs?: number;
   recoveryBackoffConfig?: BackoffConfig;
   defaults?: InProcessWorkerDefaults;
-  requiredAttemptMiddleware?: TRequiredAttemptMiddleware;
+  /* Same adapter guard as `createProcessors`'s `attemptMiddleware`. */
+  requiredAttemptMiddleware?: TRequiredAttemptMiddleware &
+    readonly AttemptMiddleware<TStateAdapter, any, any, any, any>[];
   processors: [
     ExtraProcessorTypeNames<WorkerProcessorDefs<TProcessorsInput>, TJobTypeDefinitions>,
   ] extends [never]
@@ -319,7 +312,7 @@ export const createInProcessWorker = async <
   const typeNames = Object.keys(processors);
 
   const requiredAttemptMiddleware = (requiredAttemptMiddlewareOption ??
-    []) as readonly AttemptMiddleware<any, any, any, any, any>[];
+    []) as readonly AnyAttemptMiddleware[];
   if (requiredAttemptMiddleware.length > 0) {
     const violations: string[] = [];
     for (const typeName of typeNames) {

@@ -38,7 +38,7 @@ import {
 import { type TransactionHooks, withTransactionHooks } from "../transaction-hooks.js";
 import { type AttemptConfig, createAttemptHeartbeat } from "./attempt-heartbeat.js";
 import {
-  type AttemptMiddleware,
+  type AnyAttemptMiddleware,
   runCompleteMiddlewareChain,
   runExecuteMiddlewareChain,
   runHandlerMiddlewareChain,
@@ -59,7 +59,7 @@ export type AttemptCompleteOptions<
   TJobTypeDefinitions extends BaseJobTypeDefinitions,
   TJobTypeName extends string,
   TChainTypeName extends string,
-  TCompleteCtx extends Record<string, unknown> = Record<string, unknown>,
+  TCompleteCtx = Record<string, unknown>,
 > = {
   continueWith: <
     // oxlint-disable-next-line typescript/no-unnecessary-type-parameters -- TContinueJobTypeNames drives conditional type inference
@@ -99,7 +99,7 @@ export type AttemptCompleteCallback<
   TJobTypeName extends string,
   TChainTypeName extends string,
   TResult,
-  TCompleteCtx extends Record<string, unknown> = Record<string, unknown>,
+  TCompleteCtx = Record<string, unknown>,
 > = (
   completeOptions: AttemptCompleteOptions<
     TStateAdapter,
@@ -120,7 +120,7 @@ export type AttemptComplete<
   TJobTypeDefinitions extends BaseJobTypeDefinitions,
   TJobTypeName extends string,
   TChainTypeName extends string,
-  TCompleteCtx extends Record<string, unknown> = Record<string, unknown>,
+  TCompleteCtx = Record<string, unknown>,
 > = <
   TReturn extends
     | JobTypeProperty<TJobTypeDefinitions, TJobTypeName, "output">
@@ -170,7 +170,7 @@ export type AttemptPrepareOptions = { mode: "atomic" | "staged" };
 export type AttemptPrepareCallback<
   TStateAdapter extends StateAdapter<BaseTxContext, any>,
   T,
-  TPrepareCtx extends Record<string, unknown> = Record<string, unknown>,
+  TPrepareCtx = Record<string, unknown>,
 > = (
   prepareCallbackOptions: GetStateAdapterTxContext<TStateAdapter> & TPrepareCtx,
 ) => T | Promise<T>;
@@ -182,7 +182,7 @@ export type AttemptPrepareCallback<
  */
 export type AttemptPrepare<
   TStateAdapter extends StateAdapter<BaseTxContext, any>,
-  TPrepareCtx extends Record<string, unknown> = Record<string, unknown>,
+  TPrepareCtx = Record<string, unknown>,
 > = {
   (config: AttemptPrepareOptions): Promise<void>;
   <T>(
@@ -198,7 +198,7 @@ export type AttemptPrepare<
  */
 export type AttemptExecute<
   TStateAdapter extends StateAdapter<BaseTxContext, any>,
-  TExecuteCtx extends Record<string, unknown> = Record<string, unknown>,
+  TExecuteCtx = Record<string, unknown>,
 > = <T>(
   executeCallback: (
     options: { transactionHooks: TransactionHooks } & GetStateAdapterTxContext<TStateAdapter> &
@@ -220,10 +220,10 @@ export type AttemptHandler<
   TJobTypeDefinitions extends BaseJobTypeDefinitions,
   TJobTypeName extends string,
   TChainTypeName extends string,
-  THandlerCtx extends Record<string, unknown>,
-  TPrepareCtx extends Record<string, unknown>,
-  TExecuteCtx extends Record<string, unknown>,
-  TCompleteCtx extends Record<string, unknown>,
+  THandlerCtx,
+  TPrepareCtx,
+  TExecuteCtx,
+  TCompleteCtx,
 > = (
   processOptions: {
     signal: TypedAbortSignal<JobAbortReason>;
@@ -285,7 +285,7 @@ export const runJobProcess = async ({
   backoffConfig: BackoffConfig;
   attemptConfig: AttemptConfig;
   workerId: string;
-  attemptMiddleware?: readonly AttemptMiddleware<any, any, any, any, any>[];
+  attemptMiddleware?: readonly AnyAttemptMiddleware[];
   stopSignal: AbortSignal;
 }): Promise<void> => {
   let completeTransactionContext: TransactionContext<BaseTxContext> | null = null;

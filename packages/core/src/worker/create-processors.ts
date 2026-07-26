@@ -6,6 +6,7 @@ import { type BackoffConfig } from "../helpers/backoff.js";
 import { type StateAdapter } from "../state-adapter/state-adapter.js";
 import { type AttemptConfig } from "./attempt-heartbeat.js";
 import {
+  type AnyAttemptMiddleware,
   type AttemptMiddleware,
   type MergedAttemptHandlerCtx,
   type MergedCompleteCtx,
@@ -55,8 +56,7 @@ export const createProcessors = <
   TJobTypeDefinitions extends BaseJobTypeDefinitions,
   TExternalJobTypeDefinitions extends BaseJobTypeDefinitions,
   TProcessors extends keyof TJobTypeDefinitions & string,
-  const TAttemptMiddleware extends readonly AttemptMiddleware<any, any, any, any, any>[] =
-    readonly [],
+  const TAttemptMiddleware extends readonly AnyAttemptMiddleware[] = readonly [],
   TMergedJobTypeDefinitions extends BaseJobTypeDefinitions = MergedDefs<
     TJobTypeDefinitions,
     TExternalJobTypeDefinitions
@@ -66,7 +66,8 @@ export const createProcessors = <
     ? Client<TClientJobTypeDefinitions, TStateAdapter>
     : `Error: client is missing required job types: ${Exclude<keyof TJobTypeDefinitions & string, keyof TClientJobTypeDefinitions & string>}`;
   jobTypes: JobTypes<TJobTypeDefinitions, TExternalJobTypeDefinitions>;
-  attemptMiddleware?: TAttemptMiddleware;
+  attemptMiddleware?: TAttemptMiddleware &
+    readonly AttemptMiddleware<TStateAdapter, any, any, any, any>[];
   backoffConfig?: BackoffConfig;
   attemptConfig?: AttemptConfig;
   processors: {

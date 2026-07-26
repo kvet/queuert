@@ -69,37 +69,48 @@ export type AttemptMiddleware<
   ) => Promise<T>;
 };
 
-type AnyJobAttemptMiddleware = AttemptMiddleware<any, any, any, any, any>;
+/**
+ * Wildcard {@link AttemptMiddleware} used wherever a middleware tuple is
+ * constrained.
+ *
+ * The state adapter slot is `StateAdapter<any, any>` rather than `any`: with a
+ * bare `any`, `GetStateAdapterJobId` / `GetStateAdapterTxContext` resolve to
+ * their branch union (`string` / `never`) instead of `any`, which makes
+ * middleware typed with a *concrete* adapter fail assignability to the wildcard
+ * — silently collapsing the merged ctx of multi-element tuples to `unknown`.
+ * @internal
+ */
+export type AnyAttemptMiddleware = AttemptMiddleware<StateAdapter<any, any>, any, any, any, any>;
 
 /** Merge handler-phase ctx from a tuple of {@link AttemptMiddleware}s. */
-export type MergedAttemptHandlerCtx<T extends readonly AnyJobAttemptMiddleware[]> =
+export type MergedAttemptHandlerCtx<T extends readonly AnyAttemptMiddleware[]> =
   T extends readonly [
     AttemptMiddleware<any, infer H, any, any, any>,
-    ...infer Rest extends readonly AnyJobAttemptMiddleware[],
+    ...infer Rest extends readonly AnyAttemptMiddleware[],
   ]
     ? H & MergedAttemptHandlerCtx<Rest>
     : unknown;
 
 /** Merge prepare-phase ctx from a tuple of {@link AttemptMiddleware}s. */
-export type MergedPrepareCtx<T extends readonly AnyJobAttemptMiddleware[]> = T extends readonly [
+export type MergedPrepareCtx<T extends readonly AnyAttemptMiddleware[]> = T extends readonly [
   AttemptMiddleware<any, any, infer P, any, any>,
-  ...infer Rest extends readonly AnyJobAttemptMiddleware[],
+  ...infer Rest extends readonly AnyAttemptMiddleware[],
 ]
   ? P & MergedPrepareCtx<Rest>
   : unknown;
 
 /** Merge execute-phase ctx from a tuple of {@link AttemptMiddleware}s. */
-export type MergedExecuteCtx<T extends readonly AnyJobAttemptMiddleware[]> = T extends readonly [
+export type MergedExecuteCtx<T extends readonly AnyAttemptMiddleware[]> = T extends readonly [
   AttemptMiddleware<any, any, any, infer E, any>,
-  ...infer Rest extends readonly AnyJobAttemptMiddleware[],
+  ...infer Rest extends readonly AnyAttemptMiddleware[],
 ]
   ? E & MergedExecuteCtx<Rest>
   : unknown;
 
 /** Merge complete-phase ctx from a tuple of {@link AttemptMiddleware}s. */
-export type MergedCompleteCtx<T extends readonly AnyJobAttemptMiddleware[]> = T extends readonly [
+export type MergedCompleteCtx<T extends readonly AnyAttemptMiddleware[]> = T extends readonly [
   AttemptMiddleware<any, any, any, any, infer C>,
-  ...infer Rest extends readonly AnyJobAttemptMiddleware[],
+  ...infer Rest extends readonly AnyAttemptMiddleware[],
 ]
   ? C & MergedCompleteCtx<Rest>
   : unknown;
@@ -118,26 +129,26 @@ type TypesEqual<A, B> = [A] extends [B] ? ([B] extends [A] ? true : false) : fal
  * @internal
  */
 export type IsAttemptMiddlewareSubsequence<
-  TReq extends readonly AnyJobAttemptMiddleware[],
-  TMW extends readonly AnyJobAttemptMiddleware[],
+  TReq extends readonly AnyAttemptMiddleware[],
+  TMW extends readonly AnyAttemptMiddleware[],
 > = TReq extends readonly []
   ? true
   : TMW extends readonly [infer H, ...infer Rest]
     ? TReq extends readonly [infer R, ...infer ReqRest]
       ? TypesEqual<H, R> extends true
-        ? ReqRest extends readonly AnyJobAttemptMiddleware[]
-          ? Rest extends readonly AnyJobAttemptMiddleware[]
+        ? ReqRest extends readonly AnyAttemptMiddleware[]
+          ? Rest extends readonly AnyAttemptMiddleware[]
             ? IsAttemptMiddlewareSubsequence<ReqRest, Rest>
             : false
           : false
-        : Rest extends readonly AnyJobAttemptMiddleware[]
+        : Rest extends readonly AnyAttemptMiddleware[]
           ? IsAttemptMiddlewareSubsequence<TReq, Rest>
           : false
       : true
     : false;
 
 export const runHandlerMiddlewareChain = async <T>(
-  attemptMiddleware: readonly AnyJobAttemptMiddleware[] | undefined,
+  attemptMiddleware: readonly AnyAttemptMiddleware[] | undefined,
   baseOpts: { job: unknown; workerId: string },
   innerCallback: (ctx: Record<string, unknown>) => Promise<T>,
 ): Promise<T> => {
@@ -152,14 +163,14 @@ export const runHandlerMiddlewareChain = async <T>(
       wrap({
         job: baseOpts.job as any,
         workerId: baseOpts.workerId,
-        next: async (addedCtx) => next({ ...outerCtx, ...(addedCtx as Record<string, unknown>) }),
+        next: async (addedCtx: Record<string, unknown>) => next({ ...outerCtx, ...addedCtx }),
       });
   }
   return chain({});
 };
 
 export const runPrepareMiddlewareChain = async <T>(
-  attemptMiddleware: readonly AnyJobAttemptMiddleware[] | undefined,
+  attemptMiddleware: readonly AnyAttemptMiddleware[] | undefined,
   baseOpts: { job: unknown; txCtx: BaseTxContext },
   innerCallback: (ctx: Record<string, unknown>) => Promise<T>,
 ): Promise<T> => {
@@ -174,14 +185,14 @@ export const runPrepareMiddlewareChain = async <T>(
       wrap({
         job: baseOpts.job as any,
         ...(baseOpts.txCtx as any),
-        next: async (addedCtx) => next({ ...outerCtx, ...(addedCtx as Record<string, unknown>) }),
+        next: async (addedCtx: Record<string, unknown>) => next({ ...outerCtx, ...addedCtx }),
       });
   }
   return chain({});
 };
 
 export const runExecuteMiddlewareChain = async <T>(
-  attemptMiddleware: readonly AnyJobAttemptMiddleware[] | undefined,
+  attemptMiddleware: readonly AnyAttemptMiddleware[] | undefined,
   baseOpts: { job: unknown; transactionHooks: TransactionHooks; txCtx: BaseTxContext },
   innerCallback: (ctx: Record<string, unknown>) => Promise<T>,
 ): Promise<T> => {
@@ -197,14 +208,14 @@ export const runExecuteMiddlewareChain = async <T>(
         job: baseOpts.job as any,
         transactionHooks: baseOpts.transactionHooks,
         ...(baseOpts.txCtx as any),
-        next: async (addedCtx) => next({ ...outerCtx, ...(addedCtx as Record<string, unknown>) }),
+        next: async (addedCtx: Record<string, unknown>) => next({ ...outerCtx, ...addedCtx }),
       });
   }
   return chain({});
 };
 
 export const runCompleteMiddlewareChain = async <T>(
-  attemptMiddleware: readonly AnyJobAttemptMiddleware[] | undefined,
+  attemptMiddleware: readonly AnyAttemptMiddleware[] | undefined,
   baseOpts: { job: unknown; transactionHooks: TransactionHooks; txCtx: BaseTxContext },
   innerCallback: (ctx: Record<string, unknown>) => Promise<T>,
 ): Promise<T> => {
@@ -220,7 +231,7 @@ export const runCompleteMiddlewareChain = async <T>(
         job: baseOpts.job as any,
         transactionHooks: baseOpts.transactionHooks,
         ...(baseOpts.txCtx as any),
-        next: async (addedCtx) => next({ ...outerCtx, ...(addedCtx as Record<string, unknown>) }),
+        next: async (addedCtx: Record<string, unknown>) => next({ ...outerCtx, ...addedCtx }),
       });
   }
   return chain({});

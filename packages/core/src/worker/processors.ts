@@ -3,7 +3,7 @@ import { type JobTypeNames, type JobTypeReachingEntry } from "../entities/job-ty
 import { type BackoffConfig } from "../helpers/backoff.js";
 import { type StateAdapter } from "../state-adapter/state-adapter.js";
 import { type AttemptConfig } from "./attempt-heartbeat.js";
-import { type AttemptMiddleware } from "./attempt-middleware.js";
+import { type AnyAttemptMiddleware } from "./attempt-middleware.js";
 import { type AttemptHandler } from "./job-process.js";
 
 /** Configuration for processing a single job type. */
@@ -11,10 +11,10 @@ export type InProcessWorkerProcessor<
   TStateAdapter extends StateAdapter<any, any>,
   TJobTypeDefinitions extends BaseJobTypeDefinitions,
   TJobTypeName extends string,
-  THandlerCtx extends Record<string, unknown>,
-  TPrepareCtx extends Record<string, unknown>,
-  TExecuteCtx extends Record<string, unknown>,
-  TCompleteCtx extends Record<string, unknown>,
+  THandlerCtx,
+  TPrepareCtx,
+  TExecuteCtx,
+  TCompleteCtx,
 > = {
   /** Handler function called for each job attempt */
   attemptHandler: AttemptHandler<
@@ -74,8 +74,7 @@ export type ProcessorMiddlewareTuple<T extends Processors> = T[typeof processors
  */
 export type Processors<
   TJobTypeDefinitions extends BaseJobTypeDefinitions = BaseJobTypeDefinitions,
-  TAttemptMiddleware extends readonly AttemptMiddleware<any, any, any, any, any>[] =
-    readonly AttemptMiddleware<any, any, any, any, any>[],
+  TAttemptMiddleware extends readonly AnyAttemptMiddleware[] = readonly AnyAttemptMiddleware[],
 > = {
   readonly [K in JobTypeNames<TJobTypeDefinitions>]: InProcessWorkerProcessor<
     any,

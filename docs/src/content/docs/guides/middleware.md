@@ -40,6 +40,8 @@ const tracing: AttemptMiddleware<any, { traceId: string }> = {
 };
 ```
 
+A failing attempt does not propagate through `next()` — the engine catches the error, reschedules the job, and returns normally. Use `try`/`finally` to bracket an attempt; a `catch` block here never runs.
+
 Inside the handler, `traceId` is typed:
 
 ```ts
@@ -55,9 +57,9 @@ attemptHandler: async ({ traceId, complete }) => {
 Use when you want to load a resource once per attempt and make it available to the handler. The middleware runs inside the prepare transaction (so DB reads are consistent with the rest of the attempt).
 
 ```ts
-const loadUser: AttemptMiddleware<any, {}, { user: User }> = {
-  wrapPrepare: async ({ job, txCtx, next }) => {
-    const user = await userRepo.findById(job.input.userId, { txCtx });
+const loadUser: AttemptMiddleware<typeof stateAdapter, {}, { user: User }> = {
+  wrapPrepare: async ({ job, sql, next }) => {
+    const [user] = await sql`SELECT * FROM users WHERE id = ${job.input.userId}`;
     return next({ user });
   },
 };
@@ -79,9 +81,9 @@ attemptHandler: async ({ prepare, complete }) => {
 Use to inject context into each `execute` call — metrics recorders, progress trackers, shared resources that need the transaction context. The middleware runs inside each `execute` transaction.
 
 ```ts
-const metrics: AttemptMiddleware<any, {}, {}, { metrics: Metrics }> = {
-  wrapExecute: async ({ job, txCtx, next }) => {
-    const metrics = new Metrics(job.id, txCtx);
+const metrics: AttemptMiddleware<typeof stateAdapter, {}, {}, { metrics: Metrics }> = {
+  wrapExecute: async ({ job, sql, next }) => {
+    const metrics = new Metrics(job.id, sql);
     return next({ metrics });
   },
 };
@@ -98,16 +100,25 @@ await execute(async ({ metrics }) => {
 
 ### `wrapComplete` — inject helpers used during completion
 
-Use to inject helpers that are only meaningful in the complete transaction — audit recorders, outbox inserters, post-commit notifiers.
+Use to inject helpers that are only meaningful in the complete transaction — audit recorders, usage meters, post-commit notifiers.
 
 ```ts
-const audit: AttemptMiddleware<any, {}, {}, {}, { audit: (event: string) => void }> = {
-  wrapComplete: async ({ job, txCtx, next }) =>
+const audit: AttemptMiddleware<
+  typeof stateAdapter,
+  {},
+  {},
+  {},
+  { audit: (event: string) => Promise<void> }
+> = {
+  wrapComplete: async ({ job, sql, next }) =>
     next({
-      audit: (event) => auditRepo.insert({ event, jobId: job.id, txCtx }),
+      audit: async (event) =>
+        void (await sql`INSERT INTO audit (job_id, event) VALUES (${job.id}, ${event})`),
     }),
 };
 ```
+
+Because the helper writes through the complete transaction, its rows commit with the job — and roll back with the attempt if the handler throws.
 
 ```ts
 return complete(async ({ audit }) => {
