@@ -1,7 +1,5 @@
 # Triage
 
-- [?,REF] Expose generateId on state adapter and make id required in StateAdapter methods
-
 # Short term
 
 - [TASK] Resolve the `rescheduleJob` naming overlap — the exported throw-helper `rescheduleJob({ afterMs })` reschedules the currently-executing job from inside a handler, while `client.rescheduleJob({ id, schedule })` reschedules an arbitrary pending job from outside. Same verb, different subject/mechanism. Either rename one (e.g. the helper → `retryAfter`/`rescheduleSelf`) or at minimum document the distinction in the reference/guide docs
