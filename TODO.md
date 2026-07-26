@@ -2,8 +2,6 @@
 
 - [?,REF] Expose generateId on state adapter and make id required in StateAdapter methods
 - [?,REF] required txCtx in state adapter methods are read-only and don't need a transaction context, but the interface requires one. Consider making `txCtx` optional for read-only methods, or splitting the interface into read-only vs read-write adapters
-- [?,REF] Align `entry` and `head`/`tail` vocabulary — the first job of a chain is currently called two things: `entry` at the type level (`entry: true`, `JobTypeEntryNames`, `validateEntry`, "entry point" in docs) and `head` at the instance level (`[headJob, tailJob]` from `getChains`, `isChainHead`, "the head job IS the chain" in `chain-model.md`). Both are defensible — a type can be an entry, a row is a head — but nothing states the split, so docs and code drift between them. Decide whether the two-word split is intentional (and document it in `code-style.md` next to the `chain`/`jobChain` rule) or collapse to one word. Note `tail` has no type-level counterpart at all
-- [?,REF] Sharpen the `create*` prefix — `create` currently spans three unrelated things: pure sync declarations (`createJobTypes`, `createProcessors`), async resource-owning constructors (`createClient`, `createInProcessWorker`), and a transactional DB write (`client.createChain`). Consider `define*` for the pure declarative pair, leaving `create*` to mean "brings something into existence". The split lands exactly on the sync/async line and has precedent (`defineConfig`, `defineComponent`). Weigh against migration cost: `createJobTypes`/`createProcessors` are the two most-typed names in user code, so this only makes sense bundled into a major that users are already migrating for
 
 # Short term
 
