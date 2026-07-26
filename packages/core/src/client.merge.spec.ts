@@ -3,8 +3,9 @@ import { describe, expect, expectTypeOf, it, vi } from "vitest";
 import { defineJobTypes } from "./entities/define-job-types.js";
 import { type BaseJobTypeDefinitions } from "./entities/job-type.js";
 import {
-  type JobTypesOptions,
   type JobTypeDefinitions,
+  type JobTypesOptions,
+  type ResolvedJobTypeValue,
   createJobTypes,
 } from "./entities/job-types.js";
 import {
@@ -17,19 +18,18 @@ import { DuplicateJobTypeError, JobTypeValidationError, UnknownJobTypeError } fr
 
 const createValidatedRegistry = <T extends BaseJobTypeDefinitions>(typeNames: string[]) => {
   const knownTypes = new Set(typeNames);
+  const checkAll = (items: readonly { typeName: string; value: unknown }[]) =>
+    items.map((i) => {
+      if (!knownTypes.has(i.typeName)) throw new Error(`Unknown type: ${i.typeName}`);
+      return i.value;
+    });
   return createJobTypes<T>({
     getTypeNames: () => typeNames,
     validateEntry: (typeName) => {
       if (!knownTypes.has(typeName)) throw new Error(`Unknown type: ${typeName}`);
     },
-    parseInput: (typeName, input) => {
-      if (!knownTypes.has(typeName)) throw new Error(`Unknown type: ${typeName}`);
-      return input;
-    },
-    parseOutput: (typeName, output) => {
-      if (!knownTypes.has(typeName)) throw new Error(`Unknown type: ${typeName}`);
-      return output;
-    },
+    encode: async (items) => checkAll(items),
+    decode: async (items) => checkAll(items),
     validateContinueWith: (typeName) => {
       if (!knownTypes.has(typeName)) throw new Error(`Unknown type: ${typeName}`);
     },
@@ -41,7 +41,7 @@ const createValidatedRegistry = <T extends BaseJobTypeDefinitions>(typeNames: st
 
 describe("mergeJobTypes", () => {
   describe("noop registries", () => {
-    it("merges two noop registries", () => {
+    it("merges two noop registries", async () => {
       const a = defineJobTypes<{
         "job-a": { entry: true; input: { id: string }; output: string };
       }>();
@@ -53,8 +53,16 @@ describe("mergeJobTypes", () => {
 
       mergedJobTypes.validateEntry("job-a");
       mergedJobTypes.validateEntry("job-b");
-      expect(mergedJobTypes.parseInput("job-a", { id: "test" })).toEqual({ id: "test" });
-      expect(mergedJobTypes.parseInput("job-b", { count: 42 })).toEqual({ count: 42 });
+      expect(
+        await mergedJobTypes.encode([
+          { typeName: "job-a", direction: "input", value: { id: "test" } },
+        ]),
+      ).toEqual([{ id: "test" }]);
+      expect(
+        await mergedJobTypes.encode([
+          { typeName: "job-b", direction: "input", value: { count: 42 } },
+        ]),
+      ).toEqual([{ count: 42 }]);
     });
 
     it("merges three noop registries", () => {
@@ -75,7 +83,7 @@ describe("mergeJobTypes", () => {
       mergedJobTypes.validateEntry("job-c");
     });
 
-    it("returns passthrough behavior", () => {
+    it("returns passthrough behavior", async () => {
       const a = defineJobTypes<{
         "job-a": { entry: true; input: { id: string }; output: string };
       }>();
@@ -86,8 +94,12 @@ describe("mergeJobTypes", () => {
       const mergedJobTypes = mergeJobTypes([a, b]);
       const input = { id: "test" };
 
-      expect(mergedJobTypes.parseInput("job-a", input)).toBe(input);
-      expect(mergedJobTypes.parseOutput("job-a", "result")).toBe("result");
+      expect(
+        await mergedJobTypes.encode([{ typeName: "job-a", direction: "input", value: input }]),
+      ).toEqual([input]);
+      expect(
+        await mergedJobTypes.encode([{ typeName: "job-a", direction: "output", value: "result" }]),
+      ).toEqual(["result"]);
       expect(() => {
         mergedJobTypes.validateContinueWith("job-a", { typeName: "job-b", input: {} });
       }).not.toThrow();
@@ -123,7 +135,7 @@ describe("mergeJobTypes", () => {
       mergeJobTypes([a, b, c]);
     });
 
-    it("merges a registry with no types alongside a typed registry", () => {
+    it("merges a registry with no types alongside a typed registry", async () => {
       const empty = defineJobTypes<Record<never, never>>();
       const typed = defineJobTypes<{
         "job-a": { entry: true; input: string; output: string };
@@ -132,7 +144,9 @@ describe("mergeJobTypes", () => {
       const mergedJobTypes = mergeJobTypes([empty, typed]);
 
       mergedJobTypes.validateEntry("job-a");
-      expect(mergedJobTypes.parseInput("job-a", "hello")).toBe("hello");
+      expect(
+        await mergedJobTypes.encode([{ typeName: "job-a", direction: "input", value: "hello" }]),
+      ).toEqual(["hello"]);
     });
 
     it("preserves phantom type information", () => {
@@ -191,7 +205,7 @@ describe("mergeJobTypes", () => {
   });
 
   describe("validated registries", () => {
-    it("delegates to the correct source registry", () => {
+    it("delegates to the correct source registry", async () => {
       type TypesA = { "job-a": { entry: true; input: string; output: string } };
       type TypesB = { "job-b": { entry: true; input: number; output: number } };
 
@@ -202,11 +216,15 @@ describe("mergeJobTypes", () => {
 
       mergedJobTypes.validateEntry("job-a");
       mergedJobTypes.validateEntry("job-b");
-      expect(mergedJobTypes.parseInput("job-a", "hello")).toBe("hello");
-      expect(mergedJobTypes.parseInput("job-b", 42)).toBe(42);
+      expect(
+        await mergedJobTypes.encode([{ typeName: "job-a", direction: "input", value: "hello" }]),
+      ).toEqual(["hello"]);
+      expect(
+        await mergedJobTypes.encode([{ typeName: "job-b", direction: "input", value: 42 }]),
+      ).toEqual([42]);
     });
 
-    it("delegates parseOutput to the correct source registry", () => {
+    it("delegates encode (output) to the correct source registry", async () => {
       type TypesA = { "job-a": { entry: true; input: string; output: string } };
       type TypesB = { "job-b": { entry: true; input: number; output: number } };
 
@@ -215,8 +233,29 @@ describe("mergeJobTypes", () => {
 
       const mergedJobTypes = mergeJobTypes([a, b]);
 
-      expect(mergedJobTypes.parseOutput("job-a", "result")).toBe("result");
-      expect(mergedJobTypes.parseOutput("job-b", 99)).toBe(99);
+      expect(
+        await mergedJobTypes.encode([{ typeName: "job-a", direction: "output", value: "result" }]),
+      ).toEqual(["result"]);
+      expect(
+        await mergedJobTypes.encode([{ typeName: "job-b", direction: "output", value: 99 }]),
+      ).toEqual([99]);
+    });
+
+    it("groups heterogeneous batch by owning slice", async () => {
+      type TypesA = { "job-a": { entry: true; input: string; output: string } };
+      type TypesB = { "job-b": { entry: true; input: number; output: number } };
+
+      const a = createValidatedRegistry<TypesA>(["job-a"]);
+      const b = createValidatedRegistry<TypesB>(["job-b"]);
+
+      const mergedJobTypes = mergeJobTypes([a, b]);
+
+      const result = await mergedJobTypes.encode([
+        { typeName: "job-a", direction: "input", value: "x" },
+        { typeName: "job-b", direction: "input", value: 7 },
+        { typeName: "job-a", direction: "input", value: "y" },
+      ]);
+      expect(result).toEqual(["x", 7, "y"]);
     });
 
     it("returns type names from all validated registries", () => {
@@ -259,7 +298,7 @@ describe("mergeJobTypes", () => {
       }).toThrow(UnknownJobTypeError);
     });
 
-    it("UnknownJobTypeError carries the type name and registered names", () => {
+    it("UnknownJobTypeError carries the type name and registered names", async () => {
       expect.assertions(3);
       type TypesA = { "job-a": { entry: true; input: string; output: string } };
       type TypesB = { "job-b": { entry: true; input: number; output: number } };
@@ -270,7 +309,9 @@ describe("mergeJobTypes", () => {
       const mergedJobTypes = mergeJobTypes([a, b]);
 
       try {
-        mergedJobTypes.parseInput("job-unknown", { x: 1 });
+        await mergedJobTypes.encode([
+          { typeName: "job-unknown", direction: "input", value: { x: 1 } },
+        ]);
       } catch (error) {
         expect(error).toBeInstanceOf(UnknownJobTypeError);
         const unknownError = error as UnknownJobTypeError;
@@ -279,7 +320,7 @@ describe("mergeJobTypes", () => {
       }
     });
 
-    it("UnknownJobTypeError fires across every routed method", () => {
+    it("UnknownJobTypeError fires across every routed method", async () => {
       type TypesA = { "job-a": { entry: true; input: string; output: string } };
       type TypesB = { "job-b": { entry: true; input: number; output: number } };
       const a = createValidatedRegistry<TypesA>(["job-a"]);
@@ -291,8 +332,12 @@ describe("mergeJobTypes", () => {
       expect(() => {
         mergedJobTypes.validateEntry("missing");
       }).toThrow(UnknownJobTypeError);
-      expect(() => mergedJobTypes.parseInput("missing", {})).toThrow(UnknownJobTypeError);
-      expect(() => mergedJobTypes.parseOutput("missing", {})).toThrow(UnknownJobTypeError);
+      await expect(
+        mergedJobTypes.encode([{ typeName: "missing", direction: "input", value: {} }]),
+      ).rejects.toThrow(UnknownJobTypeError);
+      await expect(
+        mergedJobTypes.decode([{ typeName: "missing", direction: "output", value: {} }]),
+      ).rejects.toThrow(UnknownJobTypeError);
       expect(() => {
         mergedJobTypes.validateContinueWith("missing", target);
       }).toThrow(UnknownJobTypeError);
@@ -305,8 +350,8 @@ describe("mergeJobTypes", () => {
       const configA: JobTypesOptions = {
         getTypeNames: () => ["job-a"],
         validateEntry: vi.fn(),
-        parseInput: vi.fn((_, input) => input),
-        parseOutput: vi.fn((_, output) => output),
+        encode: vi.fn(async (items: readonly ResolvedJobTypeValue[]) => items.map((i) => i.value)),
+        decode: vi.fn(async (items: readonly ResolvedJobTypeValue[]) => items.map((i) => i.value)),
         validateContinueWith: vi.fn((typeName) => {
           if (typeName !== "job-a") throw new Error("unknown");
         }),
@@ -382,20 +427,21 @@ describe("mergeJobTypes", () => {
       }).toThrow(DuplicateJobTypeError);
     });
 
-    it("propagates validation errors without swallowing them", () => {
+    it("propagates validation errors without swallowing them", async () => {
       type TypesA = { "job-a": { entry: true; input: { id: string }; output: string } };
       type TypesB = { "job-b": { entry: true; input: number; output: number } };
 
       const a = createJobTypes<TypesA>({
         getTypeNames: () => ["job-a"],
         validateEntry: () => {},
-        parseInput: (typeName, input) => {
-          if (typeName === "job-a" && typeof (input as any).id !== "string") {
-            throw new Error("id must be a string");
-          }
-          return input;
-        },
-        parseOutput: (_, output) => output,
+        encode: async (items) =>
+          items.map((i) => {
+            if (i.typeName === "job-a" && typeof (i.value as any).id !== "string") {
+              throw new Error("id must be a string");
+            }
+            return i.value;
+          }),
+        decode: async (items) => items.map((i) => i.value),
         validateContinueWith: () => {},
         validateBlockers: () => {},
       });
@@ -403,9 +449,9 @@ describe("mergeJobTypes", () => {
 
       const mergedJobTypes = mergeJobTypes([a, b]);
 
-      expect(() => {
-        mergedJobTypes.parseInput("job-a", { id: 123 });
-      }).toThrow(JobTypeValidationError);
+      await expect(
+        mergedJobTypes.encode([{ typeName: "job-a", direction: "input", value: { id: 123 } }]),
+      ).rejects.toThrow(JobTypeValidationError);
     });
   });
 
@@ -447,12 +493,17 @@ describe("mergeJobTypes", () => {
   });
 
   describe("mixed noop + validated registries", () => {
-    it("validates types from validated registry, passes through noop types", () => {
+    it("validates types from validated registry, passes through noop types", async () => {
       const noop = defineJobTypes<{
         "noop-job": { entry: true; input: { id: string }; output: string };
       }>();
 
       let validateEntryCalled = false;
+      const checkOnly = (items: readonly { typeName: string; value: unknown }[]): unknown[] =>
+        items.map((i) => {
+          if (i.typeName !== "validated-job") throw new Error(`Unknown: ${i.typeName}`);
+          return i.value;
+        });
       const validated = createJobTypes<{
         "validated-job": { entry: true; input: { name: string }; output: number };
       }>({
@@ -461,14 +512,8 @@ describe("mergeJobTypes", () => {
           if (typeName !== "validated-job") throw new Error(`Unknown: ${typeName}`);
           validateEntryCalled = true;
         },
-        parseInput: (typeName, input) => {
-          if (typeName !== "validated-job") throw new Error(`Unknown: ${typeName}`);
-          return input;
-        },
-        parseOutput: (typeName, output) => {
-          if (typeName !== "validated-job") throw new Error(`Unknown: ${typeName}`);
-          return output;
-        },
+        encode: async (items) => checkOnly(items),
+        decode: async (items) => checkOnly(items),
         validateContinueWith: (typeName) => {
           if (typeName !== "validated-job") throw new Error(`Unknown: ${typeName}`);
         },
@@ -483,7 +528,11 @@ describe("mergeJobTypes", () => {
       expect(validateEntryCalled).toBe(true);
 
       mergedJobTypes.validateEntry("noop-job");
-      expect(mergedJobTypes.parseInput("noop-job", { id: "test" })).toEqual({ id: "test" });
+      expect(
+        await mergedJobTypes.encode([
+          { typeName: "noop-job", direction: "input", value: { id: "test" } },
+        ]),
+      ).toEqual([{ id: "test" }]);
     });
 
     it("returns only validated registry type names from getTypeNames", () => {
@@ -499,7 +548,7 @@ describe("mergeJobTypes", () => {
       expect(mergedJobTypes.getTypeNames()).toEqual(["validated-job"]);
     });
 
-    it("passes through parseInput for noop types in mixed mode", () => {
+    it("passes through encodeInputs for noop types in mixed mode", async () => {
       const noop = defineJobTypes<{
         "noop-job": { entry: true; input: { id: string }; output: string };
       }>();
@@ -510,8 +559,29 @@ describe("mergeJobTypes", () => {
       const mergedJobTypes = mergeJobTypes([noop, validated]);
       const input = { id: "test" };
 
-      expect(mergedJobTypes.parseInput("noop-job", input)).toBe(input);
-      expect(mergedJobTypes.parseInput("validated-job", 42)).toBe(42);
+      expect(
+        await mergedJobTypes.encode([{ typeName: "noop-job", direction: "input", value: input }]),
+      ).toEqual([input]);
+      expect(
+        await mergedJobTypes.encode([{ typeName: "validated-job", direction: "input", value: 42 }]),
+      ).toEqual([42]);
+    });
+
+    it("noop fallback in mixed mode still enforces JsonSerializable", async () => {
+      const noop = defineJobTypes<{
+        "noop-job": { entry: true; input: { id: string }; output: string };
+      }>();
+      const validated = createValidatedRegistry<{
+        "validated-job": { entry: true; input: number; output: number };
+      }>(["validated-job"]);
+
+      const mergedJobTypes = mergeJobTypes([noop, validated]);
+
+      await expect(
+        mergedJobTypes.encode([
+          { typeName: "noop-job", direction: "input", value: { when: new Date() } },
+        ]),
+      ).rejects.toThrow(JobTypeValidationError);
     });
   });
 

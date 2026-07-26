@@ -1,7 +1,8 @@
 import { describe, expect, it } from "vitest";
 
 import { type StateJob } from "../state-adapter/state-adapter.js";
-import { deriveStatus, mapStatePairToChain } from "./chain.js";
+import { deriveStatus, mapStatePairsToChains } from "./chain.js";
+import { createNoopJobTypes } from "./job-types.js";
 
 const completedHead = {
   id: "job-1",
@@ -39,9 +40,9 @@ describe("deriveStatus", () => {
   });
 });
 
-describe("mapStatePairToChain", () => {
-  it("does not fabricate an output for a chain whose head has continued", () => {
-    const chain = mapStatePairToChain([continuedHead, undefined]);
+describe("mapStatePairsToChains", () => {
+  it("does not fabricate an output for a chain whose head has continued", async () => {
+    const [chain] = await mapStatePairsToChains([[continuedHead, undefined]], createNoopJobTypes());
 
     expect(chain.status).toBe("running");
     expect("output" in chain).toBe(false);

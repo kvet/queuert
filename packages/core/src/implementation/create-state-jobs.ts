@@ -207,20 +207,28 @@ const finalizeCreatedJobs = async (
   }
 };
 
-const prepareJobs = <TEntry extends CommonInput>(
+const prepareJobs = async <TEntry extends CommonInput>(
   helpers: Helpers,
   entries: TEntry[],
   startSpan: (entry: TEntry, index: number) => JobSpanHandle,
-): { parsed: ParsedEntry[]; spanHandles: JobSpanHandle[] } => {
+): Promise<{ parsed: ParsedEntry[]; spanHandles: JobSpanHandle[] }> => {
   for (const entry of entries) {
     assertBlockerLimit(entry.typeName, entry.blockers?.length ?? 0);
   }
 
-  const parsed: ParsedEntry[] = entries.map((entry) => ({
+  const encodedInputs = await helpers.jobTypes.encode(
+    entries.map((entry) => ({
+      typeName: entry.typeName,
+      direction: "input" as const,
+      value: entry.input,
+    })),
+  );
+
+  const parsed: ParsedEntry[] = entries.map((entry, i) => ({
     typeName: entry.typeName,
     input: entry.input,
     blockers: entry.blockers,
-    parsedInput: helpers.jobTypes.parseInput(entry.typeName, entry.input),
+    parsedInput: encodedInputs[i],
   }));
 
   const spanHandles = entries.map(startSpan);
@@ -256,7 +264,7 @@ export const createStateChains = async (
 ): Promise<{ job: StateJob; deduplicated: boolean }[]> => {
   if (chains.length === 0) return [];
 
-  const { parsed, spanHandles } = prepareJobs(helpers, chains, (entry) =>
+  const { parsed, spanHandles } = await prepareJobs(helpers, chains, (entry) =>
     helpers.observabilityHelper.startJobSpan({
       chainTypeName: entry.chainTypeName,
       jobTypeName: entry.typeName,
@@ -303,7 +311,7 @@ export const continueStateJob = async (
     transactionHooks: TransactionHooks;
   },
 ): Promise<{ job: StateJob; deduplicated: boolean }> => {
-  const { parsed, spanHandles } = prepareJobs(helpers, [job], () =>
+  const { parsed, spanHandles } = await prepareJobs(helpers, [job], () =>
     helpers.observabilityHelper.startJobSpan({
       chainTypeName: fromJob.chainTypeName,
       jobTypeName: job.typeName,

@@ -1,8 +1,8 @@
-import { type AnyChain, type Chain, mapStatePairToChain } from "../entities/chain.js";
+import { type AnyChain, type Chain, mapStatePairsToChains } from "../entities/chain.js";
 import { type DeduplicationOptions } from "../entities/deduplication.js";
 import { type ScheduleOptions } from "../entities/schedule.js";
 import { type Helpers } from "../setup-helpers.js";
-import { type BaseTxContext } from "../state-adapter/state-adapter.js";
+import { type BaseTxContext, type StateJob } from "../state-adapter/state-adapter.js";
 import { type TransactionHooks } from "../transaction-hooks.js";
 import { createStateChains } from "./create-state-jobs.js";
 
@@ -47,8 +47,7 @@ export const createChains = async (
     transactionHooks,
   });
 
-  return results.map((r) => ({
-    ...mapStatePairToChain([r.job, undefined]),
-    deduplicated: r.deduplicated,
-  }));
+  const pairs: [StateJob, StateJob | undefined][] = results.map((r) => [r.job, undefined]);
+  const chainsOut = await mapStatePairsToChains(pairs, helpers.jobTypes);
+  return chainsOut.map((chain, i) => ({ ...chain, deduplicated: results[i].deduplicated }));
 };

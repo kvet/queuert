@@ -25,7 +25,12 @@ export const finishJob = async (
   },
 ): Promise<StateJob> => {
   const hasContinuedJob = continuedJob != null;
-  const output = continuedJob ? null : helpers.jobTypes.parseOutput(job.typeName, terminalOutput);
+  let output: unknown = null;
+  if (!hasContinuedJob) {
+    [output] = await helpers.jobTypes.encode([
+      { typeName: job.typeName, direction: "output", value: terminalOutput },
+    ]);
+  }
 
   job = await helpers.stateAdapter.finishJobAttempt({
     txCtx,

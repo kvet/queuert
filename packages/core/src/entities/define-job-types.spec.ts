@@ -980,10 +980,10 @@ describe("structural references", () => {
       router: {
         entry: true;
         input: { path: string };
-        continueWith: { input: { payload: unknown } };
+        continueWith: { input: { payload: string } };
       };
       handler: {
-        input: { payload: unknown };
+        input: { payload: string };
         output: { result: string };
       };
     }>();
@@ -998,14 +998,14 @@ describe("structural references", () => {
       router: {
         entry: true;
         input: { path: string };
-        continueWith: { input: { payload: unknown } };
+        continueWith: { input: { payload: string } };
       };
       handlerA: {
-        input: { payload: unknown };
+        input: { payload: string };
         output: { result: string };
       };
       handlerB: {
-        input: { payload: unknown };
+        input: { payload: string };
         output: { result: number };
       };
     }>();
@@ -1024,7 +1024,7 @@ describe("structural references", () => {
         continueWith: { input: { nonexistent: boolean } };
       };
       handler: {
-        input: { payload: unknown };
+        input: { payload: string };
         output: { result: string };
       };
     }>();
@@ -1035,14 +1035,14 @@ describe("structural references", () => {
       router: {
         entry: true;
         input: { path: string };
-        continueWith: { typeName: "handlerA" } | { input: { payload: unknown } };
+        continueWith: { typeName: "handlerA" } | { input: { payload: string } };
       };
       handlerA: {
         input: { id: string };
         output: { result: string };
       };
       handlerB: {
-        input: { payload: unknown };
+        input: { payload: string };
         output: { result: number };
       };
     }>();
@@ -1100,7 +1100,7 @@ describe("rest/variadic blocker slots", () => {
   it("allows rest blocker slots with spread syntax", () => {
     const defs = defineJobTypes<{
       auth: { entry: true; input: { token: string }; output: { userId: string } };
-      validator: { entry: true; input: { data: unknown }; output: { valid: boolean } };
+      validator: { entry: true; input: { data: string }; output: { valid: boolean } };
       main: {
         entry: true;
         input: { data: string };
@@ -1117,7 +1117,7 @@ describe("rest/variadic blocker slots", () => {
 
   it("allows rest-only blocker slots", () => {
     const defs = defineJobTypes<{
-      processor: { entry: true; input: { item: unknown }; output: { processed: boolean } };
+      processor: { entry: true; input: { item: string }; output: { processed: boolean } };
       aggregator: {
         entry: true;
         input: { data: string };
@@ -1136,7 +1136,7 @@ describe("rest/variadic blocker slots", () => {
     const defs = defineJobTypes<{
       auth: { entry: true; input: { token: string }; output: { userId: string } };
       config: { entry: true; input: { key: string }; output: { value: string } };
-      processor: { entry: true; input: { item: unknown }; output: { processed: boolean } };
+      processor: { entry: true; input: { item: string }; output: { processed: boolean } };
       main: {
         entry: true;
         input: { data: string };
@@ -1153,13 +1153,13 @@ describe("rest/variadic blocker slots", () => {
 
   it("allows structural reference in rest blocker slots", () => {
     const defs = defineJobTypes<{
-      processorA: { entry: true; input: { item: unknown }; output: { processed: boolean } };
-      processorB: { entry: true; input: { item: unknown }; output: { processed: boolean } };
+      processorA: { entry: true; input: { item: string }; output: { processed: boolean } };
+      processorB: { entry: true; input: { item: string }; output: { processed: boolean } };
       aggregator: {
         entry: true;
         input: { data: string };
         output: { done: boolean };
-        blockers: { input: { item: unknown } }[];
+        blockers: { input: { item: string } }[];
       };
     }>();
 
@@ -1237,7 +1237,7 @@ describe("rest/variadic blocker slots", () => {
         continueWith: { typeName: "finish" };
       };
       finish: {
-        input: { data: unknown };
+        input: { data: string };
         output: { result: number };
       };
     };

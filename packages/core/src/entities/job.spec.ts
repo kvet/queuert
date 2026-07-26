@@ -1,7 +1,8 @@
 import { describe, expect, expectTypeOf, it } from "vitest";
 
 import { type StateJob } from "../state-adapter/state-adapter.js";
-import { type AnyJob, deriveStatus, mapStateJobToJob } from "./job.js";
+import { createNoopJobTypes } from "./job-types.js";
+import { type AnyJob, deriveStatus, mapStateJobsToJobs } from "./job.js";
 
 const pendingStateJob = {
   id: "job-1",
@@ -44,9 +45,9 @@ describe("deriveStatus", () => {
   });
 });
 
-describe("mapStateJobToJob", () => {
-  it("carries the attempt triplet through on a running job", () => {
-    const job = mapStateJobToJob(runningStateJob);
+describe("mapStateJobsToJobs", () => {
+  it("carries the attempt triplet through on a running job", async () => {
+    const [job] = await mapStateJobsToJobs([runningStateJob], createNoopJobTypes());
 
     expect(job.status).toBe("running");
     if (job.status !== "running") throw new Error("expected a running job");

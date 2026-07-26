@@ -1,4 +1,4 @@
-import { type AnyChain, type CompletedChain, mapStatePairToChain } from "../entities/chain.js";
+import { type AnyChain, type CompletedChain, mapStatePairsToChains } from "../entities/chain.js";
 import { type BaseJobTypeDefinitions } from "../entities/job-type.js";
 import {
   type BlockerChains,
@@ -8,7 +8,7 @@ import {
   type JobTypeProperty,
   type ResolvedJobWithBlockers,
 } from "../entities/job-types.resolvers.js";
-import { type AnyJob, mapStateJobToJob } from "../entities/job.js";
+import { type AnyJob, mapStateJobsToJobs } from "../entities/job.js";
 import { type ScheduleOptions } from "../entities/schedule.js";
 import {
   JobAlreadyCompletedError,
@@ -398,9 +398,13 @@ export const runJobProcess = async ({
   const blockerPairs = await prepareTransactionContext.run(async (txCtx) =>
     helpers.stateAdapter.getJobBlockers({ txCtx, jobId: job.id }),
   );
+  const [[mappedJob], decodedBlockers] = await Promise.all([
+    mapStateJobsToJobs([job], helpers.jobTypes),
+    mapStatePairsToChains(blockerPairs, helpers.jobTypes),
+  ]);
   const runningJob = {
-    ...mapStateJobToJob(job),
-    blockers: blockerPairs.map(mapStatePairToChain) as CompletedChain<AnyChain>[],
+    ...mappedJob,
+    blockers: decodedBlockers as CompletedChain<AnyChain>[],
   } as ResolvedJobWithBlockers<any, any, any, any> & { status: "running" };
 
   const runJobAttempt = async (handlerCtx: Record<string, unknown>) => {
@@ -630,10 +634,13 @@ export const runJobProcess = async ({
           output,
           continuedJob,
         });
-        const jobResult = continuedJob ?? {
-          ...mapStateJobToJob(completedStateJob),
-          blockers: runningJob.blockers,
-        };
+        let jobResult: unknown;
+        if (continuedJob) {
+          jobResult = continuedJob;
+        } else {
+          const [mappedCompleted] = await mapStateJobsToJobs([completedStateJob], helpers.jobTypes);
+          jobResult = Object.assign(mappedCompleted, { blockers: runningJob.blockers });
+        }
         const continuedWith = continuedJob
           ? {
               jobId: (continuedJob as AnyJob).id,
