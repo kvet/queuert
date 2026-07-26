@@ -1,11 +1,11 @@
 # Processing Capacity Benchmark
 
-Job throughput along two independent axes: state adapter (with the in-process notify default) and notify adapter (with the in-process state default). Measures two phases — start (chains/s) and process (jobs/s) — and runs each adapter twice across orthogonal modes:
+Job throughput along two independent axes: state adapter (with the in-process notify default) and notify adapter (with the in-process state default). Measures two phases — create (chains/s) and process (jobs/s) — and runs each adapter twice across orthogonal modes:
 
-- **Atomic run** — starts chains via `startChains` (batched, size 100), processes them atomically.
-- **Staged run** — starts chains via `startChain` (single), processes them in staged mode.
+- **Atomic run** — creates chains via `createChains` (batched, size 100), processes them atomically.
+- **Staged run** — creates chains via `createChain` (single), processes them in staged mode.
 
-The pairing is layout-only — start mode and process mode are independent in production. Folding them into one run per pair avoids doubling wall-clock while exposing all four numbers (single/batched start, atomic/staged process). Each run executes in a separate child process for isolation.
+The pairing is layout-only — create mode and process mode are independent in production. Folding them into one run per pair avoids doubling wall-clock while exposing all four numbers (single/batched create, atomic/staged process). Each run executes in a separate child process for isolation.
 
 ## Running
 
@@ -31,7 +31,7 @@ bun run start:notify-nats-nats               # NATS notify via nats
 
 bun run start --state-sqlite-better-sqlite3 --concurrency=20            # custom concurrency
 bun run start --state-sqlite-better-sqlite3 --process-mode=atomic       # single process mode
-bun run start --state-sqlite-better-sqlite3 --start-mode=single         # override pairing
+bun run start --state-sqlite-better-sqlite3 --create-mode=single        # override pairing
 ```
 
-Default per run: 5,000 jobs, concurrency 10, batch size 100. Both modes run by default → 10,000 chains started total per adapter. Container-based runs require Docker.
+Default per run: 5,000 jobs, concurrency 10, batch size 100. Both modes run by default → 10,000 chains created total per adapter. Container-based runs require Docker.

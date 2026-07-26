@@ -148,7 +148,7 @@ const worker = await createInProcessWorker({
 
             if (shouldContinue) {
               console.log(`  Scheduling next digest in ${DIGEST_INTERVAL_MS}ms...`);
-              await client.startChain({
+              await client.createChain({
                 sql: txSql,
                 transactionHooks,
                 typeName: "daily-digest",
@@ -183,7 +183,7 @@ const worker = await createInProcessWorker({
 
             if (shouldContinue) {
               console.log(`  Scheduling next check in ${HEALTH_CHECK_INTERVAL_MS}ms...`);
-              await client.startChain({
+              await client.createChain({
                 sql: txSql,
                 transactionHooks,
                 typeName: "health-check",
@@ -257,13 +257,13 @@ const waitForRows = async (
 
 // Scenario 1: Recurring Daily Digest
 console.log("\n--- Scenario 1: Recurring Daily Digest ---");
-console.log("Each execution starts a new independent chain - no cron needed!\n");
+console.log("Each execution creates a new independent chain - no cron needed!\n");
 
 userSubscribed = true;
 
 await withTransactionHooks(async (transactionHooks) =>
   sql.begin(async (txSql) =>
-    client.startChain({
+    client.createChain({
       sql: txSql,
       transactionHooks,
       typeName: "daily-digest",
@@ -298,7 +298,7 @@ serviceRunning = true;
 // Start first health check with deduplication
 const healthChain1 = await withTransactionHooks(async (transactionHooks) =>
   sql.begin(async (txSql) =>
-    client.startChain({
+    client.createChain({
       sql: txSql,
       transactionHooks,
       typeName: "health-check",
@@ -310,14 +310,14 @@ const healthChain1 = await withTransactionHooks(async (transactionHooks) =>
     }),
   ),
 );
-console.log(`Started health check chain: ${healthChain1.id}`);
+console.log(`Created health check chain: ${healthChain1.id}`);
 console.log(`Deduplicated: ${healthChain1.deduplicated}`);
 assert.equal(healthChain1.deduplicated, false);
 
 // Try to start another health check - should be deduplicated
 const healthChain2 = await withTransactionHooks(async (transactionHooks) =>
   sql.begin(async (txSql) =>
-    client.startChain({
+    client.createChain({
       sql: txSql,
       transactionHooks,
       typeName: "health-check",
@@ -358,7 +358,7 @@ console.log(`Rate-limiting syncs with ${SYNC_WINDOW_MS}ms window.\n`);
 // First sync - should succeed
 const sync1 = await withTransactionHooks(async (transactionHooks) =>
   sql.begin(async (txSql) =>
-    client.startChain({
+    client.createChain({
       sql: txSql,
       transactionHooks,
       typeName: "sync-data",
@@ -371,7 +371,7 @@ const sync1 = await withTransactionHooks(async (transactionHooks) =>
     }),
   ),
 );
-console.log(`First sync started: ${sync1.id}`);
+console.log(`First sync created: ${sync1.id}`);
 console.log(`Deduplicated: ${sync1.deduplicated}`);
 assert.equal(sync1.deduplicated, false);
 
@@ -380,7 +380,7 @@ await client.awaitChain(sync1, { timeoutMs: 5000 });
 // Second sync immediately after - should be deduplicated (within window)
 const sync2 = await withTransactionHooks(async (transactionHooks) =>
   sql.begin(async (txSql) =>
-    client.startChain({
+    client.createChain({
       sql: txSql,
       transactionHooks,
       typeName: "sync-data",
@@ -404,7 +404,7 @@ await new Promise((r) => setTimeout(r, SYNC_WINDOW_MS + 100));
 // Third sync after window - should succeed
 const sync3 = await withTransactionHooks(async (transactionHooks) =>
   sql.begin(async (txSql) =>
-    client.startChain({
+    client.createChain({
       sql: txSql,
       transactionHooks,
       typeName: "sync-data",
@@ -441,7 +441,7 @@ const ONE_HOUR_MS = 60 * 60 * 1000;
 
 const reminder = await withTransactionHooks(async (transactionHooks) =>
   sql.begin(async (txSql) =>
-    client.startChain({
+    client.createChain({
       sql: txSql,
       transactionHooks,
       typeName: "reminder",

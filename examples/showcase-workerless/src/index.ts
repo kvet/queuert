@@ -117,7 +117,7 @@ console.log("Job is completed externally before worker timeout.\n");
 
 const approval1 = await withTransactionHooks(async (transactionHooks) =>
   sql.begin(async (txSql) =>
-    client.startChain({
+    client.createChain({
       sql: txSql,
       transactionHooks,
       typeName: "await-approval",
@@ -158,7 +158,7 @@ console.log("Job is rejected externally.\n");
 
 const approval2 = await withTransactionHooks(async (transactionHooks) =>
   sql.begin(async (txSql) =>
-    client.startChain({
+    client.createChain({
       sql: txSql,
       transactionHooks,
       typeName: "await-approval",
@@ -195,7 +195,7 @@ console.log("Job scheduled to expire, but completed early.\n");
 
 const action = await withTransactionHooks(async (transactionHooks) =>
   sql.begin(async (txSql) =>
-    client.startChain({
+    client.createChain({
       sql: txSql,
       transactionHooks,
       typeName: "pending-action",

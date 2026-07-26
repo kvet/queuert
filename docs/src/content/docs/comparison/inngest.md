@@ -46,7 +46,7 @@ These are what a _managed event-driven workflow platform_ should be good at.
 ## What Queuert is good at
 
 - **Chained execution of typed jobs.** Multi-step work as a typed sequence; inputs, outputs, continuations, and blockers infer end-to-end via `defineJobTypes`. Renames are compiler-checked.
-- **Transactional consistency, by design.** `startChain` enqueues inside your DB transaction; handler completion + next-step `continueWith` commit in the same transaction as your domain writes. For DB-bound work, no outbox at enqueue and no idempotency-key ritual at processing — both halves are structural, not application discipline.
+- **Transactional consistency, by design.** `createChain` enqueues inside your DB transaction; handler completion + next-step `continueWith` commit in the same transaction as your domain writes. For DB-bound work, no outbox at enqueue and no idempotency-key ritual at processing — both halves are structural, not application discipline.
 - **Operational simplicity.** No platform to depend on, no service to operate. Your existing Postgres (or SQLite) is the entire backing store.
 - **Database as the system of record.** Chain state lives next to your domain data. Same DB, same backups, same observability.
 - **Plain in-process workers.** Handlers run in your Node process; closures over outer scope work normally; no per-step HTTP roundtrip cost.
@@ -57,7 +57,7 @@ These are what a _job-chain library_ should be good at.
 
 A few practical differences:
 
-- **Trigger model.** Inngest is event-first: you `inngest.send({ name, data })` and matching functions run. Queuert is transaction-first: you `client.startChain({ typeName, input })` inside a DB transaction.
+- **Trigger model.** Inngest is event-first: you `inngest.send({ name, data })` and matching functions run. Queuert is transaction-first: you `client.createChain({ typeName, input })` inside a DB transaction.
 - **Where execution happens.** Inngest functions run in your HTTP handlers, invoked by the Inngest server. Queuert handlers run in your worker process, pulled from the DB.
 - **Where state lives.** Inngest server (managed or self-hosted) owns step state and event histories. Queuert keeps everything in your application's DB.
 - **Per-step cost.** Each Inngest `step.run` is an HTTP roundtrip to the Inngest server (sync checkpointing). Queuert does one DB transaction per attempt; a chain of 5 jobs is 5 DB transactions, no platform RTT.

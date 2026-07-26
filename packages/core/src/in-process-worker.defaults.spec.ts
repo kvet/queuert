@@ -40,7 +40,7 @@ describe("createInProcessWorker defaults", () => {
 
     const chain = await withTransactionHooks(async (transactionHooks) =>
       stateAdapter.withTransaction(async (txCtx) =>
-        client.startChain({ ...txCtx, transactionHooks, typeName: "foo", input: null }),
+        client.createChain({ ...txCtx, transactionHooks, typeName: "foo", input: null }),
       ),
     );
     const stop = await worker.start();
@@ -83,7 +83,7 @@ describe("createInProcessWorker defaults", () => {
 
     const chain = await withTransactionHooks(async (transactionHooks) =>
       stateAdapter.withTransaction(async (txCtx) =>
-        client.startChain({ ...txCtx, transactionHooks, typeName: "foo", input: null }),
+        client.createChain({ ...txCtx, transactionHooks, typeName: "foo", input: null }),
       ),
     );
     const stop = await worker.start();

@@ -276,7 +276,7 @@ console.log("--- Scenario 1: Single Job ---");
 console.log("One chain, one job, one attempt. Simplest trace structure.\n");
 const greetChain = await withTransactionHooks(async (transactionHooks) =>
   stateAdapter.withTransaction(async (ctx) =>
-    client.startChain({ ...ctx, transactionHooks, typeName: "greet", input: { name: "World" } }),
+    client.createChain({ ...ctx, transactionHooks, typeName: "greet", input: { name: "World" } }),
   ),
 );
 const greetResult = await client.awaitChain(greetChain, { timeoutMs: 5000 });
@@ -287,7 +287,7 @@ console.log("\n--- Scenario 2: Continuations ---");
 console.log("validate → process → complete. Chain span contains 3 sequential job spans.\n");
 const orderChain = await withTransactionHooks(async (transactionHooks) =>
   stateAdapter.withTransaction(async (ctx) =>
-    client.startChain({
+    client.createChain({
       ...ctx,
       transactionHooks,
       typeName: "order:validate",
@@ -303,19 +303,19 @@ console.log("\n--- Scenario 3: Blockers ---");
 console.log("Two blockers run in parallel, main job waits. Traces linked across chains.\n");
 const blockerChain = await withTransactionHooks(async (transactionHooks) =>
   stateAdapter.withTransaction(async (ctx) => {
-    const userBlocker = await client.startChain({
+    const userBlocker = await client.createChain({
       ...ctx,
       transactionHooks,
       typeName: "fetch-user",
       input: { userId: "user-1" },
     });
-    const permBlocker = await client.startChain({
+    const permBlocker = await client.createChain({
       ...ctx,
       transactionHooks,
       typeName: "fetch-permissions",
       input: { userId: "user-1" },
     });
-    return client.startChain({
+    return client.createChain({
       ...ctx,
       transactionHooks,
       typeName: "process-with-blockers",
@@ -334,7 +334,7 @@ console.log(
 );
 const batchChain = await withTransactionHooks(async (transactionHooks) =>
   stateAdapter.withTransaction(async (ctx) =>
-    client.startChain({
+    client.createChain({
       ...ctx,
       transactionHooks,
       typeName: "batch-process",
@@ -350,7 +350,7 @@ console.log("\n--- Scenario 5: Retries ---");
 console.log("First attempt fails, second succeeds. Job span shows multiple attempt spans.\n");
 const retryChain = await withTransactionHooks(async (transactionHooks) =>
   stateAdapter.withTransaction(async (ctx) =>
-    client.startChain({
+    client.createChain({
       ...ctx,
       transactionHooks,
       typeName: "might-fail",
@@ -366,7 +366,7 @@ console.log("\n--- Scenario 6: Workerless Completion ---");
 console.log("Job completed externally without a worker. CONSUMER job span, no attempt spans.\n");
 const approvalChain = await withTransactionHooks(async (transactionHooks) =>
   stateAdapter.withTransaction(async (ctx) =>
-    client.startChain({
+    client.createChain({
       ...ctx,
       transactionHooks,
       typeName: "awaiting-approval",

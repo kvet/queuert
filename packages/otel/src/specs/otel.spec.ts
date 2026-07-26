@@ -72,7 +72,7 @@ describe("Metrics", () => {
 
     const chain = await withTransactionHooks(async (transactionHooks) =>
       withTransaction(async (txCtx) =>
-        client.startChain({
+        client.createChain({
           ...txCtx,
           transactionHooks,
           typeName: "test",
@@ -156,7 +156,7 @@ describe("Metrics", () => {
 
     const job = await withTransactionHooks(async (transactionHooks) =>
       withTransaction(async (txCtx) =>
-        client.startChain({
+        client.createChain({
           ...txCtx,
           transactionHooks,
           typeName: "test",
@@ -261,7 +261,7 @@ describe("Metrics", () => {
 
     const chain = await withTransactionHooks(async (transactionHooks) =>
       withTransaction(async (txCtx) =>
-        client.startChain({
+        client.createChain({
           ...txCtx,
           transactionHooks,
           typeName: "linear",
@@ -372,14 +372,14 @@ describe("Metrics", () => {
 
     const chain = await withTransactionHooks(async (transactionHooks) =>
       withTransaction(async (txCtx) => {
-        const dependencyChain = await client.startChain({
+        const dependencyChain = await client.createChain({
           ...txCtx,
           transactionHooks,
           typeName: "blocker",
           input: { value: 0 },
         });
 
-        return client.startChain({
+        return client.createChain({
           ...txCtx,
           transactionHooks,
           typeName: "main",
@@ -444,7 +444,7 @@ describe("Metrics", () => {
 
     const chain = await withTransactionHooks(async (transactionHooks) =>
       withTransaction(async (txCtx) =>
-        client.startChain({
+        client.createChain({
           ...txCtx,
           transactionHooks,
           typeName: "test",
@@ -515,7 +515,7 @@ describe("Metrics", () => {
 
     const chain = await withTransactionHooks(async (transactionHooks) =>
       withTransaction(async (txCtx) =>
-        client.startChain({ ...txCtx, transactionHooks, typeName: "test", input: null }),
+        client.createChain({ ...txCtx, transactionHooks, typeName: "test", input: null }),
       ),
     );
 
@@ -568,7 +568,7 @@ describe("Metrics", () => {
 
     const chain = await withTransactionHooks(async (transactionHooks) =>
       withTransaction(async (txCtx) =>
-        client.startChain({ ...txCtx, transactionHooks, typeName: "test", input: null }),
+        client.createChain({ ...txCtx, transactionHooks, typeName: "test", input: null }),
       ),
     );
 
@@ -662,7 +662,7 @@ describe("Metrics", () => {
 
     const chain = await withTransactionHooks(async (transactionHooks) =>
       withTransaction(async (txCtx) =>
-        client.startChain({ ...txCtx, transactionHooks, typeName: "test", input: null }),
+        client.createChain({ ...txCtx, transactionHooks, typeName: "test", input: null }),
       ),
     );
 
@@ -672,7 +672,7 @@ describe("Metrics", () => {
 
       const successChain = await withTransactionHooks(async (transactionHooks) =>
         withTransaction(async (txCtx) =>
-          client.startChain({ ...txCtx, transactionHooks, typeName: "test", input: null }),
+          client.createChain({ ...txCtx, transactionHooks, typeName: "test", input: null }),
         ),
       );
 
@@ -751,7 +751,7 @@ describe("Metrics", () => {
 
     const chain = await withTransactionHooks(async (transactionHooks) =>
       withTransaction(async (txCtx) =>
-        client.startChain({ ...txCtx, transactionHooks, typeName: "test", input: null }),
+        client.createChain({ ...txCtx, transactionHooks, typeName: "test", input: null }),
       ),
     );
 
@@ -811,7 +811,7 @@ describe("Metrics", () => {
 
     const chain = await withTransactionHooks(async (transactionHooks) =>
       withTransaction(async (txCtx) =>
-        client.startChain({ ...txCtx, transactionHooks, typeName: "test", input: null }),
+        client.createChain({ ...txCtx, transactionHooks, typeName: "test", input: null }),
       ),
     );
 
@@ -848,7 +848,7 @@ describe("Metrics", () => {
 
     const chain = await withTransactionHooks(async (transactionHooks) =>
       withTransaction(async (txCtx) =>
-        client.startChain({ ...txCtx, transactionHooks, typeName: "test", input: null }),
+        client.createChain({ ...txCtx, transactionHooks, typeName: "test", input: null }),
       ),
     );
 
@@ -887,7 +887,7 @@ describe("Metrics", () => {
 
     const chain = await withTransactionHooks(async (transactionHooks) =>
       withTransaction(async (txCtx) =>
-        client.startChain({
+        client.createChain({
           ...txCtx,
           transactionHooks,
           typeName: "test",
@@ -955,7 +955,7 @@ describe("Spans", () => {
 
     const chain = await withTransactionHooks(async (transactionHooks) =>
       withTransaction(async (txCtx) =>
-        client.startChain({
+        client.createChain({
           ...txCtx,
           transactionHooks,
           typeName: "test",
@@ -1028,7 +1028,7 @@ describe("Spans", () => {
 
     const chain = await withTransactionHooks(async (transactionHooks) =>
       withTransaction(async (txCtx) =>
-        client.startChain({
+        client.createChain({
           ...txCtx,
           transactionHooks,
           typeName: "test",
@@ -1114,7 +1114,7 @@ describe("Spans", () => {
 
     const chain = await withTransactionHooks(async (transactionHooks) =>
       withTransaction(async (txCtx) =>
-        client.startChain({
+        client.createChain({
           ...txCtx,
           transactionHooks,
           typeName: "test",
@@ -1199,7 +1199,7 @@ describe("Spans", () => {
 
     const job = await withTransactionHooks(async (transactionHooks) =>
       withTransaction(async (txCtx) =>
-        client.startChain({
+        client.createChain({
           ...txCtx,
           transactionHooks,
           typeName: "test",
@@ -1323,7 +1323,7 @@ describe("Spans", () => {
 
     const chain = await withTransactionHooks(async (transactionHooks) =>
       withTransaction(async (txCtx) =>
-        client.startChain({
+        client.createChain({
           ...txCtx,
           transactionHooks,
           typeName: "linear",
@@ -1444,14 +1444,14 @@ describe("Spans", () => {
 
     const chain = await withTransactionHooks(async (transactionHooks) =>
       withTransaction(async (txCtx) => {
-        const dependencyChain = await client.startChain({
+        const dependencyChain = await client.createChain({
           ...txCtx,
           transactionHooks,
           typeName: "blocker",
           input: { value: 0 },
         });
 
-        return client.startChain({
+        return client.createChain({
           ...txCtx,
           transactionHooks,
           typeName: "main",
@@ -1563,7 +1563,7 @@ describe("Spans", () => {
     // Create and complete the blocker chain first
     const dependencyChain = await withTransactionHooks(async (transactionHooks) =>
       withTransaction(async (txCtx) =>
-        client.startChain({
+        client.createChain({
           ...txCtx,
           transactionHooks,
           typeName: "blocker",
@@ -1579,7 +1579,7 @@ describe("Spans", () => {
     // Now create main chain with already-completed blocker
     const chain = await withTransactionHooks(async (transactionHooks) =>
       withTransaction(async (txCtx) =>
-        client.startChain({
+        client.createChain({
           ...txCtx,
           transactionHooks,
           typeName: "main",
@@ -1648,21 +1648,21 @@ describe("Spans", () => {
 
     await withTransactionHooks(async (transactionHooks) =>
       withTransaction(async (txCtx) => [
-        await client.startChain({
+        await client.createChain({
           ...txCtx,
           transactionHooks,
           typeName: "test",
           input: { value: 1 },
           deduplication: { key: "same-key", scope: "running" },
         }),
-        await client.startChain({
+        await client.createChain({
           ...txCtx,
           transactionHooks,
           typeName: "test",
           input: { value: 2 },
           deduplication: { key: "same-key", scope: "running" },
         }),
-        await client.startChain({
+        await client.createChain({
           ...txCtx,
           transactionHooks,
           typeName: "test",
@@ -1719,7 +1719,7 @@ describe("Spans", () => {
 
     const chain = await withTransactionHooks(async (transactionHooks) =>
       withTransaction(async (txCtx) =>
-        client.startChain({
+        client.createChain({
           ...txCtx,
           transactionHooks,
           typeName: "test",
@@ -1780,7 +1780,7 @@ describe("Spans", () => {
 
     const chain = await withTransactionHooks(async (transactionHooks) =>
       withTransaction(async (txCtx) =>
-        client.startChain({
+        client.createChain({
           ...txCtx,
           transactionHooks,
           typeName: "awaiting-approval",
@@ -1888,7 +1888,7 @@ describe("Gauges", () => {
 
     const chain = await withTransactionHooks(async (transactionHooks) =>
       withTransaction(async (txCtx) =>
-        client.startChain({
+        client.createChain({
           ...txCtx,
           transactionHooks,
           typeName: "test",
@@ -1973,7 +1973,7 @@ describe("Gauges", () => {
 
     const emailChain = await withTransactionHooks(async (transactionHooks) =>
       withTransaction(async (txCtx) =>
-        client.startChain({
+        client.createChain({
           ...txCtx,
           transactionHooks,
           typeName: "email",
@@ -1983,7 +1983,7 @@ describe("Gauges", () => {
     );
     const smsChain = await withTransactionHooks(async (transactionHooks) =>
       withTransaction(async (txCtx) =>
-        client.startChain({
+        client.createChain({
           ...txCtx,
           transactionHooks,
           typeName: "sms",
@@ -2060,7 +2060,7 @@ describe("Rollback", () => {
 
     await withTransactionHooks(async (transactionHooks) =>
       withTransaction(async (txCtx) => {
-        await client.startChain({ ...txCtx, transactionHooks, typeName: "test", input: null });
+        await client.createChain({ ...txCtx, transactionHooks, typeName: "test", input: null });
         throw new Error("simulated rollback");
       }),
     ).catch(() => {});
@@ -2108,13 +2108,13 @@ describe("Rollback", () => {
 
     await withTransactionHooks(async (transactionHooks) =>
       withTransaction(async (txCtx) => {
-        const blocker = await client.startChain({
+        const blocker = await client.createChain({
           ...txCtx,
           transactionHooks,
           typeName: "blocker",
           input: null,
         });
-        await client.startChain({
+        await client.createChain({
           ...txCtx,
           transactionHooks,
           typeName: "main",
@@ -2168,7 +2168,7 @@ describe("Rollback", () => {
 
     const chain = await withTransactionHooks(async (transactionHooks) =>
       withTransaction(async (txCtx) =>
-        client.startChain({ ...txCtx, transactionHooks, typeName: "test", input: null }),
+        client.createChain({ ...txCtx, transactionHooks, typeName: "test", input: null }),
       ),
     );
 
@@ -2249,7 +2249,7 @@ describe("Rollback", () => {
 
     const chain = await withTransactionHooks(async (transactionHooks) =>
       withTransaction(async (txCtx) =>
-        client.startChain({ ...txCtx, transactionHooks, typeName: "test", input: null }),
+        client.createChain({ ...txCtx, transactionHooks, typeName: "test", input: null }),
       ),
     );
 
@@ -2338,7 +2338,7 @@ describe("Rollback", () => {
 
     const chain = await withTransactionHooks(async (transactionHooks) =>
       withTransaction(async (txCtx) =>
-        client.startChain({ ...txCtx, transactionHooks, typeName: "test", input: null }),
+        client.createChain({ ...txCtx, transactionHooks, typeName: "test", input: null }),
       ),
     );
 
@@ -2421,7 +2421,7 @@ describe("Rollback", () => {
 
     const chain = await withTransactionHooks(async (transactionHooks) =>
       withTransaction(async (txCtx) =>
-        client.startChain({ ...txCtx, transactionHooks, typeName: "linear", input: null }),
+        client.createChain({ ...txCtx, transactionHooks, typeName: "linear", input: null }),
       ),
     );
 
@@ -2506,7 +2506,7 @@ describe("Rollback", () => {
 
     const chain = await withTransactionHooks(async (transactionHooks) =>
       withTransaction(async (txCtx) =>
-        client.startChain({ ...txCtx, transactionHooks, typeName: "test", input: null }),
+        client.createChain({ ...txCtx, transactionHooks, typeName: "test", input: null }),
       ),
     );
 
@@ -2572,7 +2572,7 @@ describe("Rollback", () => {
 
     const chain = await withTransactionHooks(async (transactionHooks) =>
       withTransaction(async (txCtx) =>
-        client.startChain({ ...txCtx, transactionHooks, typeName: "test", input: null }),
+        client.createChain({ ...txCtx, transactionHooks, typeName: "test", input: null }),
       ),
     );
 
@@ -2680,7 +2680,7 @@ describe("Rollback", () => {
 
     const chain = await withTransactionHooks(async (transactionHooks) =>
       withTransaction(async (txCtx) =>
-        client.startChain({ ...txCtx, transactionHooks, typeName: "linear", input: null }),
+        client.createChain({ ...txCtx, transactionHooks, typeName: "linear", input: null }),
       ),
     );
 
@@ -2731,7 +2731,7 @@ describe("Rollback", () => {
 
     await withTransactionHooks(async (transactionHooks) =>
       withTransaction(async (txCtx) => {
-        await client.startChain({ ...txCtx, transactionHooks, typeName: "test", input: null });
+        await client.createChain({ ...txCtx, transactionHooks, typeName: "test", input: null });
         throw new Error("simulated rollback");
       }),
     ).catch(() => {});
@@ -2810,7 +2810,7 @@ describe("Rollback", () => {
 
     const chain = await withTransactionHooks(async (transactionHooks) =>
       withTransaction(async (txCtx) =>
-        client.startChain({ ...txCtx, transactionHooks, typeName: "linear", input: null }),
+        client.createChain({ ...txCtx, transactionHooks, typeName: "linear", input: null }),
       ),
     );
 
@@ -2869,7 +2869,7 @@ describe("Rollback", () => {
     ]);
   });
 
-  it("ends rolled-back startChain spans when handler throws after complete returns", async ({
+  it("ends rolled-back createChain spans when handler throws after complete returns", async ({
     stateAdapter,
     notifyAdapter,
     withTransaction,
@@ -2905,7 +2905,7 @@ describe("Rollback", () => {
             attemptHandler: async ({ complete }) => {
               const result = await complete(
                 async ({ continueWith: _, transactionHooks, ...txCtx }) => {
-                  await client.startChain({
+                  await client.createChain({
                     ...txCtx,
                     transactionHooks,
                     typeName: "other",
@@ -2927,7 +2927,7 @@ describe("Rollback", () => {
 
     const chain = await withTransactionHooks(async (transactionHooks) =>
       withTransaction(async (txCtx) =>
-        client.startChain({ ...txCtx, transactionHooks, typeName: "test", input: null }),
+        client.createChain({ ...txCtx, transactionHooks, typeName: "test", input: null }),
       ),
     );
 
@@ -2935,7 +2935,7 @@ describe("Rollback", () => {
       await client.awaitChain(chain, completionOptions);
     });
 
-    // startChain inside complete creates chain + job spans eagerly.
+    // createChain inside complete creates chain + job spans eagerly.
     // When the handler throws after complete returns,
     // completeSavepointContext.reject() rolls back hooks — discarding the
     // buffered span end() calls and orphaning both spans.
@@ -2944,7 +2944,7 @@ describe("Rollback", () => {
       { name: "create job.test", kind: "PRODUCER", parentName: "create chain.test" },
       // First attempt: complete span ends before savepoint rollback ends the other spans
       { name: "complete", kind: "INTERNAL", parentName: "start job-attempt.test" },
-      // Rolled-back startChain spans are ended with ERROR
+      // Rolled-back createChain spans are ended with ERROR
       { name: "create chain.other", kind: "PRODUCER", status: "ERROR" },
       {
         name: "create job.other",

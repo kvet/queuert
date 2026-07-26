@@ -204,7 +204,7 @@ console.log(
 
 const transfer = await withTransactionHooks(async (transactionHooks) =>
   sql.begin(async (txSql) => {
-    const result = await client.startChain({
+    const result = await client.createChain({
       sql: txSql,
       transactionHooks,
       typeName: "transfer-funds",
@@ -234,7 +234,7 @@ console.log("Credit $50 to Alice. Handler crashes after complete(), completion i
 
 const credit = await withTransactionHooks(async (transactionHooks) =>
   sql.begin(async (txSql) => {
-    const result = await client.startChain({
+    const result = await client.createChain({
       sql: txSql,
       transactionHooks,
       typeName: "credit-account",
@@ -258,7 +258,7 @@ console.log("External API fails between phases. Prepare committed, job retries.\
 externalApiShouldFail = true;
 const externalTransfer = await withTransactionHooks(async (transactionHooks) =>
   sql.begin(async (txSql) => {
-    const result = await client.startChain({
+    const result = await client.createChain({
       sql: txSql,
       transactionHooks,
       typeName: "external-transfer",
@@ -281,7 +281,7 @@ console.log("Job throws different error types, inspects lastAttemptError on retr
 
 const flakyChain = await withTransactionHooks(async (transactionHooks) =>
   sql.begin(async (txSql) => {
-    const result = await client.startChain({
+    const result = await client.createChain({
       sql: txSql,
       transactionHooks,
       typeName: "flaky-job",

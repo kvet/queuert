@@ -40,8 +40,8 @@ import { bufferObservabilityEvent } from "./helpers/observability-hooks.js";
 import { raceWithSleep } from "./helpers/sleep.js";
 import { type IsUnion } from "./helpers/typescript.js";
 import { continueWith } from "./implementation/continue-with.js";
+import { createChains } from "./implementation/create-chains.js";
 import { finishJob } from "./implementation/finish-job.js";
-import { startChains } from "./implementation/start-chains.js";
 import { type NotifyAdapter } from "./notify-adapter/notify-adapter.js";
 import { type Log } from "./observability-adapter/log.js";
 import { type ObservabilityAdapter } from "./observability-adapter/observability-adapter.js";
@@ -147,7 +147,7 @@ type CompleteChainResultFromComplete<
   ? CompleteChainResult<TStateAdapter, TJobTypeDefinitions, TChainTypeName, TCompleteReturn>
   : never;
 
-type StartChainEntry<
+type CreateChainEntry<
   TJobId,
   TJobTypeDefinitions extends BaseJobTypeDefinitions,
   TTypeName extends JobTypeEntryNames<TJobTypeDefinitions>,
@@ -161,11 +161,11 @@ type StartChainEntry<
   ? { blockers: BlockerChains<TJobId, TJobTypeDefinitions, TTypeName> }
   : { blockers?: never });
 
-type AnyStartChainEntry<TJobId, TJobTypeDefinitions extends BaseJobTypeDefinitions> = {
-  [TN in JobTypeEntryNames<TJobTypeDefinitions>]: StartChainEntry<TJobId, TJobTypeDefinitions, TN>;
+type AnyCreateChainEntry<TJobId, TJobTypeDefinitions extends BaseJobTypeDefinitions> = {
+  [TN in JobTypeEntryNames<TJobTypeDefinitions>]: CreateChainEntry<TJobId, TJobTypeDefinitions, TN>;
 }[JobTypeEntryNames<TJobTypeDefinitions>];
 
-type StartChainsResult<
+type CreateChainsResult<
   TJobId,
   TJobTypeDefinitions extends BaseJobTypeDefinitions,
   TChains extends readonly unknown[],
@@ -181,7 +181,7 @@ type StartChainsResult<
  * The public API for managing chains. Created via {@link createClient}.
  *
  * Methods are split into two categories:
- * - **Mutating** — `startChain`, `startChains`, `completeChain`, `deleteChain`, `deleteChains`, `rescheduleJob`, `rescheduleJobs`. Require `transactionHooks` and a transaction context.
+ * - **Mutating** — `createChain`, `createChains`, `completeChain`, `deleteChain`, `deleteChains`, `rescheduleJob`, `rescheduleJobs`. Require `transactionHooks` and a transaction context.
  * - **Read-only** — `getChain`, `getJob`, `listChains`, `listJobs`, `listChainJobs`, `getJobBlockers`, `listBlockedJobs`, `awaitChain`. Accept an optional transaction context.
  */
 export type Client<
@@ -201,8 +201,8 @@ export type Client<
    * @throws {@link BlockerLimitExceededError} if the root job declares more blockers than the per-job limit.
    * @throws {@link TransactionContextRequiredError} if called without a transaction context.
    */
-  startChain: <TChainTypeName extends JobTypeEntryNames<TJobTypeDefinitions>>(
-    options: StartChainEntry<TJobId, TJobTypeDefinitions, TChainTypeName> & {
+  createChain: <TChainTypeName extends JobTypeEntryNames<TJobTypeDefinitions>>(
+    options: CreateChainEntry<TJobId, TJobTypeDefinitions, TChainTypeName> & {
       transactionHooks: TransactionHooks;
     } & GetStateAdapterTxContext<TStateAdapter>,
   ) => Promise<
@@ -220,12 +220,12 @@ export type Client<
    * @throws {@link BlockerLimitExceededError} if any root job declares more blockers than the per-job limit.
    * @throws {@link TransactionContextRequiredError} if called without a transaction context.
    */
-  startChains: <const TChains extends readonly AnyStartChainEntry<TJobId, TJobTypeDefinitions>[]>(
+  createChains: <const TChains extends readonly AnyCreateChainEntry<TJobId, TJobTypeDefinitions>[]>(
     options: {
       items: TChains;
       transactionHooks: TransactionHooks;
     } & GetStateAdapterTxContext<TStateAdapter>,
-  ) => Promise<StartChainsResult<TJobId, TJobTypeDefinitions, TChains>>;
+  ) => Promise<CreateChainsResult<TJobId, TJobTypeDefinitions, TChains>>;
 
   /**
    * Delete a single chain by ID. Returns the deleted chain, or `undefined` if no
@@ -585,7 +585,7 @@ export const createClient = async <
   const client: Client<TJobTypeDefinitions, TStateAdapter> = {
     [helpersSymbol]: helpers,
 
-    startChain: async <TChainTypeName extends JobTypeEntryNames<TJobTypeDefinitions>>(
+    createChain: async <TChainTypeName extends JobTypeEntryNames<TJobTypeDefinitions>>(
       options: {
         typeName: TChainTypeName;
         id?: TJobId;
@@ -607,7 +607,7 @@ export const createClient = async <
       const { input, id, typeName, deduplication, schedule, blockers, transactionHooks, ...rest } =
         options;
       const txCtx = requireTxCtx(rest);
-      const [result] = await startChains(helpers, {
+      const [result] = await createChains(helpers, {
         chains: [{ typeName, id, input, deduplication, schedule, blockers }],
         txCtx,
         transactionHooks,
@@ -617,21 +617,21 @@ export const createClient = async <
       };
     },
 
-    startChains: async <
-      const TChains extends readonly AnyStartChainEntry<TJobId, TJobTypeDefinitions>[],
+    createChains: async <
+      const TChains extends readonly AnyCreateChainEntry<TJobId, TJobTypeDefinitions>[],
     >(
       options: {
         items: TChains;
         transactionHooks: TransactionHooks;
       } & GetStateAdapterTxContext<TStateAdapter>,
-    ): Promise<StartChainsResult<TJobId, TJobTypeDefinitions, TChains>> => {
+    ): Promise<CreateChainsResult<TJobId, TJobTypeDefinitions, TChains>> => {
       const { items, transactionHooks, ...rest } = options;
       const txCtx = requireTxCtx(rest);
-      return (await startChains(helpers, {
+      return (await createChains(helpers, {
         chains: items,
         txCtx,
         transactionHooks,
-      })) as StartChainsResult<TJobId, TJobTypeDefinitions, TChains>;
+      })) as CreateChainsResult<TJobId, TJobTypeDefinitions, TChains>;
     },
 
     deleteChain: async <

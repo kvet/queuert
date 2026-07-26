@@ -69,7 +69,7 @@ export const processModesTestSuite = ({ it }: { it: TestAPI<TestSuiteContext> })
 
     const chain = await withTransactionHooks(async (transactionHooks) =>
       withTransaction(async (txCtx) =>
-        client.startChain({
+        client.createChain({
           ...txCtx,
           transactionHooks,
           typeName: "atomic-complete",
@@ -161,7 +161,7 @@ export const processModesTestSuite = ({ it }: { it: TestAPI<TestSuiteContext> })
 
     const chain = await withTransactionHooks(async (transactionHooks) =>
       withTransaction(async (txCtx) =>
-        client.startChain({
+        client.createChain({
           ...txCtx,
           transactionHooks,
           typeName: "staged-complete",
@@ -264,7 +264,7 @@ export const processModesTestSuite = ({ it }: { it: TestAPI<TestSuiteContext> })
 
     const chain = await withTransactionHooks(async (transactionHooks) =>
       withTransaction(async (txCtx) =>
-        client.startChain({
+        client.createChain({
           ...txCtx,
           transactionHooks,
           typeName: "staged-with-callback",
@@ -369,7 +369,7 @@ export const processModesTestSuite = ({ it }: { it: TestAPI<TestSuiteContext> })
 
     const chain = await withTransactionHooks(async (transactionHooks) =>
       withTransaction(async (txCtx) =>
-        client.startChain({
+        client.createChain({
           ...txCtx,
           transactionHooks,
           typeName: "staged-without-callback",
@@ -472,7 +472,7 @@ export const processModesTestSuite = ({ it }: { it: TestAPI<TestSuiteContext> })
 
     const chain = await withTransactionHooks(async (transactionHooks) =>
       withTransaction(async (txCtx) =>
-        client.startChain({
+        client.createChain({
           ...txCtx,
           transactionHooks,
           typeName: "atomic-with-callback",
@@ -569,7 +569,7 @@ export const processModesTestSuite = ({ it }: { it: TestAPI<TestSuiteContext> })
 
     const chain = await withTransactionHooks(async (transactionHooks) =>
       withTransaction(async (txCtx) =>
-        client.startChain({
+        client.createChain({
           ...txCtx,
           transactionHooks,
           typeName: "atomic-without-callback",
@@ -666,7 +666,7 @@ export const processModesTestSuite = ({ it }: { it: TestAPI<TestSuiteContext> })
 
     const chain = await withTransactionHooks(async (transactionHooks) =>
       withTransaction(async (txCtx) =>
-        client.startChain({
+        client.createChain({
           ...txCtx,
           transactionHooks,
           typeName: "execute-basic",
@@ -766,7 +766,7 @@ export const processModesTestSuite = ({ it }: { it: TestAPI<TestSuiteContext> })
 
     const chain = await withTransactionHooks(async (transactionHooks) =>
       withTransaction(async (txCtx) =>
-        client.startChain({
+        client.createChain({
           ...txCtx,
           transactionHooks,
           typeName: "execute-return",
@@ -841,7 +841,7 @@ export const processModesTestSuite = ({ it }: { it: TestAPI<TestSuiteContext> })
 
     const chain = await withTransactionHooks(async (transactionHooks) =>
       withTransaction(async (txCtx) =>
-        client.startChain({
+        client.createChain({
           ...txCtx,
           transactionHooks,
           typeName: "execute-multi",
@@ -933,7 +933,7 @@ export const processModesTestSuite = ({ it }: { it: TestAPI<TestSuiteContext> })
 
     const chain = await withTransactionHooks(async (transactionHooks) =>
       withTransaction(async (txCtx) =>
-        client.startChain({
+        client.createChain({
           ...txCtx,
           transactionHooks,
           typeName: "execute-hooks",
@@ -1008,7 +1008,7 @@ export const processModesTestSuite = ({ it }: { it: TestAPI<TestSuiteContext> })
 
     const chain = await withTransactionHooks(async (transactionHooks) =>
       withTransaction(async (txCtx) =>
-        client.startChain({
+        client.createChain({
           ...txCtx,
           transactionHooks,
           typeName: "execute-race",
@@ -1120,7 +1120,7 @@ export const processModesTestSuite = ({ it }: { it: TestAPI<TestSuiteContext> })
 
     const chain = await withTransactionHooks(async (transactionHooks) =>
       withTransaction(async (txCtx) =>
-        client.startChain({
+        client.createChain({
           ...txCtx,
           transactionHooks,
           typeName: "execute-auto",

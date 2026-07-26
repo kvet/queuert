@@ -608,7 +608,7 @@ describe("cross-slice blocker type resolution in workerless completion", () => {
 
     const blockerChain = await withTransactionHooks(async (transactionHooks) =>
       stateAdapter.withTransaction(async (txCtx) =>
-        client.startChain({
+        client.createChain({
           ...txCtx,
           transactionHooks,
           typeName: "ext-a.task",
@@ -619,7 +619,7 @@ describe("cross-slice blocker type resolution in workerless completion", () => {
 
     const chain = await withTransactionHooks(async (transactionHooks) =>
       stateAdapter.withTransaction(async (txCtx) =>
-        client.startChain({
+        client.createChain({
           ...txCtx,
           transactionHooks,
           typeName: "local.start",

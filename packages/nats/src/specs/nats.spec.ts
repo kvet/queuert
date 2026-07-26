@@ -61,7 +61,7 @@ it("should work end-to-end with NATS notify adapter", async ({ natsConnectionOpt
 
   const chain = await withTransactionHooks(async (transactionHooks) =>
     stateAdapter.withTransaction(async (txCtx) =>
-      client.startChain({
+      client.createChain({
         ...txCtx,
         transactionHooks,
         typeName: "test",
@@ -119,7 +119,7 @@ it("should work end-to-end without JetStream KV", async ({ natsConnectionOptions
 
   const chain = await withTransactionHooks(async (transactionHooks) =>
     stateAdapter.withTransaction(async (txCtx) =>
-      client.startChain({
+      client.createChain({
         ...txCtx,
         transactionHooks,
         typeName: "test",

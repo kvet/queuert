@@ -285,7 +285,7 @@ export const createOtelObservabilityAdapter = async ({
       let chainSpanContext: SpanContext;
       let chainTraceContext: string;
 
-      if (data.isChainStart) {
+      if (data.isChainHead) {
         // Create chain PRODUCER span (kept open until end() to set chain ID)
         chainSpan = tracer.startSpan(`create chain.${data.chainTypeName}`, {
           kind: SpanKind.PRODUCER,

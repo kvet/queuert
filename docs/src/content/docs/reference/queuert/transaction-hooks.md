@@ -10,7 +10,7 @@ sidebar:
 ```typescript
 await withTransactionHooks(async (transactionHooks) => {
   await db.transaction(async (tx) => {
-    await client.startChain({ tx, transactionHooks, ... });
+    await client.createChain({ tx, transactionHooks, ... });
   });
 });
 ```
@@ -23,7 +23,7 @@ The recommended approach. Automatically flushes buffered side effects on success
 const { transactionHooks, flush, discard } = createTransactionHooks();
 try {
   await db.transaction(async (tx) => {
-    await client.startChain({ tx, transactionHooks, ... });
+    await client.createChain({ tx, transactionHooks, ... });
   });
   await flush();
 } catch {

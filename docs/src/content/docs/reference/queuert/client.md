@@ -29,10 +29,10 @@ Returns `Promise<Client>`.
 
 All mutating methods require `transactionHooks` and a transaction context (`tx`). Side effects are buffered via hooks and flushed after commit.
 
-### startChain
+### createChain
 
 ```typescript
-const chain = await client.startChain({
+const chain = await client.createChain({
   typeName: "send-email",
   input: { to: "alice@..." },
   transactionHooks,
@@ -46,10 +46,10 @@ const chain = await client.startChain({
 
 Returns `Chain & { deduplicated: boolean }`.
 
-### startChains
+### createChains
 
 ```typescript
-const chains = await client.startChains({
+const chains = await client.createChains({
   items: [
     { typeName: "send-email", input: { to: "alice@..." } },
     { typeName: "send-email", id: "explicit-id", input: { to: "bob@..." } },
@@ -328,7 +328,7 @@ type DeduplicationOptions<TJobId> = {
 };
 ```
 
-Chain deduplication configuration passed to `startChain`.
+Chain deduplication configuration passed to `createChain`.
 
 - **key** — identifies the logical operation
 - **scope** — required; match running chains only (`"running"`) or all chains within the time window (`"any"`)

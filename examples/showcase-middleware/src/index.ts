@@ -160,7 +160,7 @@ const stopWorker = await worker.start();
 console.log("--- processing send-invoice job ---");
 const chain = await withTransactionHooks(async (transactionHooks) =>
   sql.begin(async (txSql) =>
-    client.startChain({
+    client.createChain({
       sql: txSql,
       transactionHooks,
       typeName: "send-invoice",

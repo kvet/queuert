@@ -45,7 +45,7 @@ export const workerlessCompletionTestSuite = ({ it }: { it: TestAPI<TestSuiteCon
 
     const chain = await withTransactionHooks(async (transactionHooks) =>
       withTransaction(async (txCtx) =>
-        client.startChain({
+        client.createChain({
           ...txCtx,
           transactionHooks,
           typeName: "test",
@@ -108,7 +108,7 @@ export const workerlessCompletionTestSuite = ({ it }: { it: TestAPI<TestSuiteCon
 
     const chain = await withTransactionHooks(async (transactionHooks) =>
       withTransaction(async (txCtx) =>
-        client.startChain({
+        client.createChain({
           ...txCtx,
           transactionHooks,
           typeName: "awaiting-approval",
@@ -180,7 +180,7 @@ export const workerlessCompletionTestSuite = ({ it }: { it: TestAPI<TestSuiteCon
 
     const chain = await withTransactionHooks(async (transactionHooks) =>
       withTransaction(async (txCtx) =>
-        client.startChain({
+        client.createChain({
           ...txCtx,
           transactionHooks,
           typeName: "start",
@@ -273,7 +273,7 @@ export const workerlessCompletionTestSuite = ({ it }: { it: TestAPI<TestSuiteCon
 
     const blockerChain = await withTransactionHooks(async (transactionHooks) =>
       withTransaction(async (txCtx) =>
-        client.startChain({
+        client.createChain({
           ...txCtx,
           transactionHooks,
           typeName: "blocker",
@@ -284,7 +284,7 @@ export const workerlessCompletionTestSuite = ({ it }: { it: TestAPI<TestSuiteCon
 
     const starterChain = await withTransactionHooks(async (transactionHooks) =>
       withTransaction(async (txCtx) =>
-        client.startChain({
+        client.createChain({
           ...txCtx,
           transactionHooks,
           typeName: "starter",
@@ -372,7 +372,7 @@ export const workerlessCompletionTestSuite = ({ it }: { it: TestAPI<TestSuiteCon
 
     const chain = await withTransactionHooks(async (transactionHooks) =>
       withTransaction(async (txCtx) =>
-        client.startChain({
+        client.createChain({
           ...txCtx,
           transactionHooks,
           typeName: "awaiting-approval",
@@ -440,7 +440,7 @@ export const workerlessCompletionTestSuite = ({ it }: { it: TestAPI<TestSuiteCon
 
     const chain = await withTransactionHooks(async (transactionHooks) =>
       withTransaction(async (txCtx) =>
-        client.startChain({
+        client.createChain({
           ...txCtx,
           transactionHooks,
           typeName: "test",
@@ -504,7 +504,7 @@ export const workerlessCompletionTestSuite = ({ it }: { it: TestAPI<TestSuiteCon
 
     const chain = await withTransactionHooks(async (transactionHooks) =>
       withTransaction(async (txCtx) =>
-        client.startChain({
+        client.createChain({
           ...txCtx,
           transactionHooks,
           typeName: "test",
@@ -595,7 +595,7 @@ export const workerlessCompletionTestSuite = ({ it }: { it: TestAPI<TestSuiteCon
 
     const chain = await withTransactionHooks(async (transactionHooks) =>
       withTransaction(async (txCtx) =>
-        client.startChain({
+        client.createChain({
           ...txCtx,
           transactionHooks,
           typeName: "test",
@@ -650,7 +650,7 @@ export const workerlessCompletionTestSuite = ({ it }: { it: TestAPI<TestSuiteCon
 
     const chain = await withTransactionHooks(async (transactionHooks) =>
       withTransaction(async (txCtx) =>
-        client.startChain({ ...txCtx, transactionHooks, typeName: "entryA", input: null }),
+        client.createChain({ ...txCtx, transactionHooks, typeName: "entryA", input: null }),
       ),
     );
 
@@ -706,7 +706,7 @@ export const workerlessCompletionTestSuite = ({ it }: { it: TestAPI<TestSuiteCon
 
     const chain = await withTransactionHooks(async (transactionHooks) =>
       withTransaction(async (txCtx) =>
-        client.startChain({
+        client.createChain({
           ...txCtx,
           transactionHooks,
           typeName: "test",
@@ -751,7 +751,7 @@ export const workerlessCompletionTestSuite = ({ it }: { it: TestAPI<TestSuiteCon
 
     const chain = await withTransactionHooks(async (transactionHooks) =>
       withTransaction(async (txCtx) =>
-        client.startChain({
+        client.createChain({
           ...txCtx,
           transactionHooks,
           typeName: "order",

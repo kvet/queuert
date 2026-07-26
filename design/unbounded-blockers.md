@@ -20,7 +20,7 @@ completing job's path.
 
 ### Fan-in: one job waits for many
 
-Blockers are a creation-time property today. Every path (`startChain`, `startChains`,
+Blockers are a creation-time property today. Every path (`createChain`, `createChains`,
 `continueWith`) funnels into `createStateJobs`, which inserts all `job_blocker` rows atomically
 and enforces `MAX_BLOCKERS_PER_JOB = 100`. There is no post-creation mutation path. This serves
 bounded, heterogeneous fan-in well — `[validate-user, load-config]` tuples solve a real pain
@@ -246,7 +246,7 @@ ALTER TABLE job ADD COLUMN unsealed_blockers boolean NOT NULL DEFAULT false;
 ```ts
 // 1. Create the collector — born unsealed, therefore blocked.
 //    Passing `blockers` here is a compile error for an unsealed type.
-const collector = await client.startChain({
+const collector = await client.createChain({
   sql: txSql,
   transactionHooks,
   typeName: "aggregate",
@@ -264,7 +264,7 @@ await client.addJobBlockers({
 await client.sealJobBlockers({ sql: txSql, jobId: collector.id });
 ```
 
-- `startChain` for an unsealed type: rejects `blockers` (compile error), creates the job with
+- `createChain` for an unsealed type: rejects `blockers` (compile error), creates the job with
   `unsealed_blockers = true`, `blocked = true`.
 - `addJobBlockers`: validates `unsealed_blockers = true` on the target, inserts `job_blocker`
   rows with `blocked` set based on the blocker chain's `completed_at`. No `job.blocked` flip —

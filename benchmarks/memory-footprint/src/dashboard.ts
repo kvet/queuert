@@ -60,7 +60,7 @@ await runDoubleRunBenchmark<Record<string, never>>({
       for (let i = 0; i < 100; i++) {
         const chain = await withTransactionHooks(async (transactionHooks) =>
           stateAdapter.withTransaction(async (ctx) =>
-            client.startChain({
+            client.createChain({
               ...ctx,
               transactionHooks,
               typeName: "test-job",

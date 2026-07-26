@@ -40,7 +40,7 @@ import { createQueuertClient, createQueuertInProcessWorker, QueuertClient } from
 
 ### Use `chain`, not `jobChain`
 
-In variable names, type names, method names, and documentation, use `chain` (not `jobChain`). The library's only nouns are `Job` and `Chain`; the qualifier `Job` adds no information. This applies to the entire public surface — `Chain`, `getChain`, `startChain`, `client.listChainJobs`, etc. Internal references on entities (`Job.chainId`, `StateAdapter.chainId`) follow the same rule.
+In variable names, type names, method names, and documentation, use `chain` (not `jobChain`). The library's only nouns are `Job` and `Chain`; the qualifier `Job` adds no information. This applies to the entire public surface — `Chain`, `getChain`, `createChain`, `client.listChainJobs`, etc. Internal references on entities (`Job.chainId`, `StateAdapter.chainId`) follow the same rule.
 
 ```typescript
 // Good

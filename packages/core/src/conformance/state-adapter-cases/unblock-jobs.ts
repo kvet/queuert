@@ -524,7 +524,7 @@ export const unblockJobsGroup: ConformanceGroup<StateConformanceFixture> = {
           )
           .then((results) => results.map((r) => r.job));
 
-        const startChainBlockedBy = async (
+        const createChainBlockedBy = async (
           blockerChainId: string,
           index: number,
         ): Promise<string> =>
@@ -559,7 +559,7 @@ export const unblockJobsGroup: ConformanceGroup<StateConformanceFixture> = {
 
         const mainJobIds = await Promise.all(
           blockerJobs.flatMap((blockerJob, i) => [
-            startChainBlockedBy(blockerJob.chainId, i),
+            createChainBlockedBy(blockerJob.chainId, i),
             completeBlockerChain(blockerJob.id, blockerJob.chainId).then(() => undefined),
           ]),
         ).then((results) => results.filter((id): id is string => id !== undefined));

@@ -124,7 +124,7 @@ export const processTestSuite = ({ it }: { it: TestAPI<TestSuiteContext> }): voi
     const [prepareChain, completeChain, prepareAfterAutoSetupChain, continueWithChain] =
       await withTransactionHooks(async (transactionHooks) =>
         withTransaction(async (txCtx) =>
-          client.startChains({
+          client.createChains({
             ...txCtx,
             transactionHooks,
             items: [
@@ -217,7 +217,7 @@ export const processTestSuite = ({ it }: { it: TestAPI<TestSuiteContext> }): voi
 
     const chain = await withTransactionHooks(async (transactionHooks) =>
       withTransaction(async (txCtx) =>
-        client.startChain({
+        client.createChain({
           ...txCtx,
           transactionHooks,
           typeName: "test",
@@ -283,7 +283,7 @@ export const processTestSuite = ({ it }: { it: TestAPI<TestSuiteContext> }): voi
 
     const chain = await withTransactionHooks(async (transactionHooks) =>
       withTransaction(async (txCtx) =>
-        client.startChain({
+        client.createChain({
           ...txCtx,
           transactionHooks,
           typeName: "test",
@@ -357,7 +357,7 @@ export const processTestSuite = ({ it }: { it: TestAPI<TestSuiteContext> }): voi
 
     const job = await withTransactionHooks(async (transactionHooks) =>
       withTransaction(async (txCtx) =>
-        client.startChain({
+        client.createChain({
           ...txCtx,
           transactionHooks,
           typeName: "test",
@@ -453,7 +453,7 @@ export const processTestSuite = ({ it }: { it: TestAPI<TestSuiteContext> }): voi
 
     const chain = await withTransactionHooks(async (transactionHooks) =>
       withTransaction(async (txCtx) =>
-        client.startChain({
+        client.createChain({
           ...txCtx,
           transactionHooks,
           typeName: "test",

@@ -6,6 +6,7 @@ import { awaitChainTestSuite } from "../suites/await-chain.test-suite.js";
 import { blockerChainsTestSuite } from "../suites/blocker-chains.test-suite.js";
 import { chainsTestSuite } from "../suites/chains.test-suite.js";
 import { clientQueriesTestSuite } from "../suites/client-queries.test-suite.js";
+import { createChainsTestSuite } from "../suites/create-chains.test-suite.js";
 import { notifyTestSuite } from "../suites/notify.test-suite.js";
 import { processErrorHandlingTestSuite } from "../suites/process-error-handling.test-suite.js";
 import { processModesTestSuite } from "../suites/process-modes.test-suite.js";
@@ -17,7 +18,6 @@ import {
   extendWithNotifyInProcess,
   extendWithResourceLeakDetection,
 } from "../suites/spec-context.spec-helper.js";
-import { startChainsTestSuite } from "../suites/start-chains.test-suite.js";
 import { workerTestSuite } from "../suites/worker.test-suite.js";
 import { workerlessCompletionTestSuite } from "../suites/workerless-completion.test-suite.js";
 import { notifyResilienceTestSuite, stateResilienceTestSuite } from "../testing.js";
@@ -53,8 +53,8 @@ describe("Chains", () => {
   chainsTestSuite({ it: inProcessInProcessIt });
 });
 
-describe("Start Chains", () => {
-  startChainsTestSuite({ it: inProcessInProcessIt });
+describe("Create Chains", () => {
+  createChainsTestSuite({ it: inProcessInProcessIt });
 });
 
 describe("Blocker Chains", () => {

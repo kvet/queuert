@@ -23,7 +23,7 @@ const jobTypes = defineJobTypes<{
 
 // Start a job that auto-rejects in 2 hours if not handled
 const chain = await withTransactionHooks(async (transactionHooks) =>
-  client.startChain({
+  client.createChain({
     transactionHooks,
     typeName: "await-approval",
     input: { requestId: "123" },

@@ -5,32 +5,32 @@ description: Processing capacity, memory footprint, query performance, and type 
 
 ## Processing Capacity
 
-Job throughput measured in two phases: starting chains (chains/s) and processing them to completion (jobs/s). Each adapter is exercised across four orthogonal modes — single vs. batched start (`startChain` one at a time vs. `startChains` in batches of 100), and atomic vs. staged processing (see [Job Processing Modes](./guides/processing-modes/)). To avoid doubling the wall-clock, the four numbers are folded into two runs per adapter: atomic-process pairs with batched-start, staged-process pairs with single-start. The pairing is layout-only — start mode and process mode are independent in production. Each run uses 5,000 chains × concurrency 10, in its own child process for isolation (Node.js v22, Apple M1 Pro). State and notify are measured along separate axes — when one is varied, the other is held at the in-process default. PostgreSQL, Redis, and NATS run as Dockerized containers on macOS (Docker Desktop), so per-RTT latency includes the VM bridge — numbers reflect that environment rather than a host-native or production deployment.
+Job throughput measured in two phases: creating chains (chains/s) and processing them to completion (jobs/s). Each adapter is exercised across four orthogonal modes — single vs. batched creation (`createChain` one at a time vs. `createChains` in batches of 100), and atomic vs. staged processing (see [Job Processing Modes](./guides/processing-modes/)). To avoid doubling the wall-clock, the four numbers are folded into two runs per adapter: atomic-process pairs with batched-create, staged-process pairs with single-create. The pairing is layout-only — create mode and process mode are independent in production. Each run uses 5,000 chains × concurrency 10, in its own child process for isolation (Node.js v22, Apple M1 Pro). State and notify are measured along separate axes — when one is varied, the other is held at the in-process default. PostgreSQL, Redis, and NATS run as Dockerized containers on macOS (Docker Desktop), so per-RTT latency includes the VM bridge — numbers reflect that environment rather than a host-native or production deployment.
 
-The Start columns measure two ends of the realistic range: **single** is a tight `await client.startChain(...)` loop, dominated by per-call RTT (HTTP-handler-shaped traffic); **batched** is `client.startChains({ items: [...100] })`, amortizing transaction and notify overhead across the batch (bulk-enqueue / migration / replay traffic). Real workloads sit between the two depending on call shape and concurrency.
+The Create columns measure two ends of the realistic range: **single** is a tight `await client.createChain(...)` loop, dominated by per-call RTT (HTTP-handler-shaped traffic); **batched** is `client.createChains({ items: [...100] })`, amortizing transaction and notify overhead across the batch (bulk-enqueue / migration / replay traffic). Real workloads sit between the two depending on call shape and concurrency.
 
-The Process columns measure how fast a single worker drains the queue once it's full. Atomic mode wraps each attempt in one transaction; staged mode adds an empty `prepare({ mode: "staged" })` round-trip before `complete`, isolating the pure cost of the second transaction without confounding with handler work. Steady-state deployment throughput is bounded by `min(start, process)`.
+The Process columns measure how fast a single worker drains the queue once it's full. Atomic mode wraps each attempt in one transaction; staged mode adds an empty `prepare({ mode: "staged" })` round-trip before `complete`, isolating the pure cost of the second transaction without confounding with handler work. Steady-state deployment throughput is bounded by `min(create, process)`.
 
 ### State adapter (no notify)
 
-| State adapter            | Start single (chains/s) | Start batched (chains/s) | Process atomic (jobs/s) | Process staged (jobs/s) |
-| ------------------------ | ----------------------: | -----------------------: | ----------------------: | ----------------------: |
-| In-process               |                 ~68,646 |                 ~193,754 |                 ~17,881 |                 ~12,569 |
-| SQLite (better-sqlite3)  |                 ~23,336 |                  ~63,425 |                  ~9,529 |                  ~6,410 |
-| SQLite (node:sqlite)     |                 ~21,845 |                  ~58,265 |                  ~8,645 |                  ~5,612 |
-| PostgreSQL (postgres-js) |                    ~795 |                  ~18,916 |                  ~1,188 |                    ~962 |
-| PostgreSQL (pg)          |                    ~791 |                  ~21,304 |                  ~1,230 |                    ~900 |
+| State adapter            | Create single (chains/s) | Create batched (chains/s) | Process atomic (jobs/s) | Process staged (jobs/s) |
+| ------------------------ | -----------------------: | ------------------------: | ----------------------: | ----------------------: |
+| In-process               |                  ~68,646 |                  ~193,754 |                 ~17,881 |                 ~12,569 |
+| SQLite (better-sqlite3)  |                  ~23,336 |                   ~63,425 |                  ~9,529 |                  ~6,410 |
+| SQLite (node:sqlite)     |                  ~21,845 |                   ~58,265 |                  ~8,645 |                  ~5,612 |
+| PostgreSQL (postgres-js) |                     ~795 |                   ~18,916 |                  ~1,188 |                    ~962 |
+| PostgreSQL (pg)          |                     ~791 |                   ~21,304 |                  ~1,230 |                    ~900 |
 
 ### Notify adapter (in-process state)
 
-| Notify adapter           | Start single (chains/s) | Start batched (chains/s) | Process atomic (jobs/s) | Process staged (jobs/s) |
-| ------------------------ | ----------------------: | -----------------------: | ----------------------: | ----------------------: |
-| In-process               |                 ~61,850 |                 ~187,567 |                 ~16,992 |                 ~12,388 |
-| Redis (redis)            |                  ~2,516 |                  ~89,277 |                  ~9,825 |                  ~6,266 |
-| Redis (ioredis)          |                  ~2,524 |                  ~78,775 |                 ~11,462 |                  ~7,889 |
-| PostgreSQL (pg)          |                  ~3,893 |                  ~71,690 |                  ~7,833 |                  ~5,684 |
-| PostgreSQL (postgres-js) |                  ~4,232 |                  ~88,970 |                  ~7,964 |                  ~4,608 |
-| NATS                     |                  ~4,152 |                 ~117,277 |                 ~10,787 |                  ~6,470 |
+| Notify adapter           | Create single (chains/s) | Create batched (chains/s) | Process atomic (jobs/s) | Process staged (jobs/s) |
+| ------------------------ | -----------------------: | ------------------------: | ----------------------: | ----------------------: |
+| In-process               |                  ~61,850 |                  ~187,567 |                 ~16,992 |                 ~12,388 |
+| Redis (redis)            |                   ~2,516 |                   ~89,277 |                  ~9,825 |                  ~6,266 |
+| Redis (ioredis)          |                   ~2,524 |                   ~78,775 |                 ~11,462 |                  ~7,889 |
+| PostgreSQL (pg)          |                   ~3,893 |                   ~71,690 |                  ~7,833 |                  ~5,684 |
+| PostgreSQL (postgres-js) |                   ~4,232 |                   ~88,970 |                  ~7,964 |                  ~4,608 |
+| NATS                     |                   ~4,152 |                  ~117,277 |                 ~10,787 |                  ~6,470 |
 
 See [processing-capacity](https://github.com/kvet/queuert/tree/main/benchmarks/processing-capacity) for the full benchmark tool.
 

@@ -152,7 +152,7 @@ console.log("\n=== Dashboard Job Populator ===\n");
 console.log("--- Scenario 1: Single Job ---");
 const greetChain = await withTransactionHooks(async (transactionHooks) =>
   stateAdapter.withTransaction(async (ctx) =>
-    client.startChain({ ...ctx, transactionHooks, typeName: "greet", input: { name: "World" } }),
+    client.createChain({ ...ctx, transactionHooks, typeName: "greet", input: { name: "World" } }),
   ),
 );
 const greetResult = await client.awaitChain(greetChain, { timeoutMs: 5000 });
@@ -162,7 +162,7 @@ console.log("Result:", greetResult.output);
 console.log("\n--- Scenario 2: Continuations ---");
 const orderChain = await withTransactionHooks(async (transactionHooks) =>
   stateAdapter.withTransaction(async (ctx) =>
-    client.startChain({
+    client.createChain({
       ...ctx,
       transactionHooks,
       typeName: "order:validate",
@@ -177,19 +177,19 @@ console.log("Result:", orderResult.output);
 console.log("\n--- Scenario 3: Blockers ---");
 const blockerChain = await withTransactionHooks(async (transactionHooks) =>
   stateAdapter.withTransaction(async (ctx) => {
-    const userBlocker = await client.startChain({
+    const userBlocker = await client.createChain({
       ...ctx,
       transactionHooks,
       typeName: "fetch-user",
       input: { userId: "user-1" },
     });
-    const permBlocker = await client.startChain({
+    const permBlocker = await client.createChain({
       ...ctx,
       transactionHooks,
       typeName: "fetch-permissions",
       input: { userId: "user-1" },
     });
-    return client.startChain({
+    return client.createChain({
       ...ctx,
       transactionHooks,
       typeName: "process-with-blockers",
@@ -205,7 +205,7 @@ console.log("Result:", blockerResult.output);
 console.log("\n--- Scenario 4: Retries ---");
 const retryChain = await withTransactionHooks(async (transactionHooks) =>
   stateAdapter.withTransaction(async (ctx) =>
-    client.startChain({
+    client.createChain({
       ...ctx,
       transactionHooks,
       typeName: "might-fail",
@@ -220,7 +220,7 @@ console.log("Result:", retryResult.output);
 console.log("\n--- Scenario 5: Scheduled Job ---");
 await withTransactionHooks(async (transactionHooks) =>
   stateAdapter.withTransaction(async (ctx) =>
-    client.startChain({
+    client.createChain({
       ...ctx,
       transactionHooks,
       typeName: "scheduled-report",
@@ -235,7 +235,7 @@ console.log('Created scheduled-report (in 1 hour). Use "Reschedule" in the dashb
 console.log("\n--- Scenario 6: Long chain ---");
 const longChain = await withTransactionHooks(async (transactionHooks) =>
   stateAdapter.withTransaction(async (ctx) =>
-    client.startChain({
+    client.createChain({
       ...ctx,
       transactionHooks,
       typeName: "count-step",
@@ -250,7 +250,7 @@ console.log(`Built a ${stepCount}-job chain (id ${longChain.id}).`);
 console.log("\n--- Scenario 7: Blocker fan-in ---");
 const hub = await withTransactionHooks(async (transactionHooks) =>
   stateAdapter.withTransaction(async (ctx) =>
-    client.startChain({
+    client.createChain({
       ...ctx,
       transactionHooks,
       typeName: "signal",
@@ -262,7 +262,7 @@ const hub = await withTransactionHooks(async (transactionHooks) =>
 );
 await withTransactionHooks(async (transactionHooks) =>
   stateAdapter.withTransaction(async (ctx) =>
-    client.startChains({
+    client.createChains({
       ...ctx,
       transactionHooks,
       items: Array.from({ length: blockedCount }, (_, index) => ({
@@ -279,7 +279,7 @@ console.log(`Created ${blockedCount} jobs blocked by chain ${hub.id}.`);
 console.log("\n--- Scenario 8: Bulk volume ---");
 await withTransactionHooks(async (transactionHooks) =>
   stateAdapter.withTransaction(async (ctx) =>
-    client.startChains({
+    client.createChains({
       ...ctx,
       transactionHooks,
       items: Array.from({ length: greetCount }, (_, index) => ({
@@ -291,7 +291,7 @@ await withTransactionHooks(async (transactionHooks) =>
 );
 await withTransactionHooks(async (transactionHooks) =>
   stateAdapter.withTransaction(async (ctx) =>
-    client.startChains({
+    client.createChains({
       ...ctx,
       transactionHooks,
       items: Array.from({ length: orderCount }, (_, index) => ({

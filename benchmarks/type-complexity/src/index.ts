@@ -93,7 +93,7 @@ ${hVoid}${prepareCall}        return ${completeBody};
           const blockerName = blockerNameMatch?.[1] ?? "unknown";
           const blockerDef = defs.find((d) => d.name === blockerName);
           const blockerInput = blockerDef ? typeToValue(blockerDef.input) : `{ id: "" }`;
-          return `${clientVar}.startChain({ ...txCtx, typeName: "${blockerName}", input: ${blockerInput} })`;
+          return `${clientVar}.createChain({ ...txCtx, typeName: "${blockerName}", input: ${blockerInput} })`;
         });
         const blockerAwaits = blockerStartCalls
           .map((call, i) => `            const blocker${i} = await ${call};`)
@@ -164,7 +164,7 @@ const generateCompleteChainCall = (defs: JobTypeDef[], entryDef: JobTypeDef): st
       const bName = bMatch?.[1] ?? "unknown";
       const bDef = defs.find((d) => d.name === bName);
       const bInput = bDef ? typeToValue(bDef.input) : `{ id: "" }`;
-      return `const b${i} = await client.startChain({ ...txCtx, typeName: "${bName}", input: ${bInput}, transactionHooks });`;
+      return `const b${i} = await client.createChain({ ...txCtx, typeName: "${bName}", input: ${bInput}, transactionHooks });`;
     });
     const blockerArray = targetDef.blockers.map((_, i) => `b${i}`).join(", ");
 
@@ -203,7 +203,7 @@ const generateClientCalls = (defs: JobTypeDef[]): string => {
 
   return `
 const { transactionHooks } = createTransactionHooks();
-const chain = await client.startChain({ typeName: "${typeName}", input: ${input}, transactionHooks });
+const chain = await client.createChain({ typeName: "${typeName}", input: ${input}, transactionHooks });
 const fetchedChain = await client.getChain({ typeName: "${typeName}", id: chain.id });
 const job = await client.getJob({ typeName: "${typeName}", id: chain.id });
 const chains = await client.listChains({ typeName: ["${typeName}"] });

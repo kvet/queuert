@@ -144,7 +144,7 @@ const chains = await withTransactionHooks(async (transactionHooks) =>
       ]);
     }
 
-    return client.startChains({
+    return client.createChains({
       ...ctx,
       transactionHooks,
       items: orders.map((order) => ({

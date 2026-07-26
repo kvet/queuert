@@ -83,7 +83,7 @@ await runDoubleRunBenchmark<Infra>({
       for (let i = 0; i < 100; i++) {
         const chain = await withTransactionHooks(async (transactionHooks) =>
           stateProvider.withTransaction(async (ctx) =>
-            setup.client.startChain({
+            setup.client.createChain({
               ...ctx,
               transactionHooks,
               typeName: "test-job",

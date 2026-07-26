@@ -72,7 +72,7 @@ export const notifyResilienceTestSuite = ({
       // at least one notify pushes worker to process jobs
       const chains = await withTransactionHooks(async (transactionHooks) =>
         withTransaction(async (txCtx) =>
-          client.startChains({
+          client.createChains({
             ...txCtx,
             transactionHooks,
             items: Array.from({ length: 20 }, (_, i) => ({

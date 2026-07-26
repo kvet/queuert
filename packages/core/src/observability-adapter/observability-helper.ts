@@ -106,7 +106,7 @@ export type ObservabilityHelper = {
   jobAttemptReclaimed: (job: StateJob, options: { workerId: string }) => void;
   // chain
   chainCreated: (job: StateJob, options: { input: unknown }) => void;
-  chainCompleted: (chainStartJob: StateJob, options: { output: unknown }) => void;
+  chainCompleted: (headJob: StateJob, options: { output: unknown }) => void;
   chainDeleted: (job: StateJob) => void;
   // reschedule
   jobRescheduled: (job: StateJob) => void;
@@ -343,8 +343,8 @@ export const createObservabilityHelper = ({
     adapter.chainCreated(data);
   },
 
-  chainCompleted(chainStartJob, options) {
-    const data = { ...mapStateJobToChainData(chainStartJob), output: options.output };
+  chainCompleted(headJob, options) {
+    const data = { ...mapStateJobToChainData(headJob), output: options.output };
     log({
       type: "chain_completed",
       level: "info",

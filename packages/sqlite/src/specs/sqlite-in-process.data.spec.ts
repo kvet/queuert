@@ -9,7 +9,7 @@ import {
   extendWithResourceLeakDetection,
   notifyTestSuite,
   schedulingTestSuite,
-  startChainsTestSuite,
+  createChainsTestSuite,
   stateResilienceTestSuite,
   rescheduleJobTestSuite,
   awaitChainTestSuite,
@@ -30,8 +30,8 @@ describe("Chains", () => {
   chainsTestSuite({ it: sqliteInProcessIt });
 });
 
-describe("Start Chains", () => {
-  startChainsTestSuite({ it: sqliteInProcessIt });
+describe("Create Chains", () => {
+  createChainsTestSuite({ it: sqliteInProcessIt });
 });
 
 describe("Blocker Chains", () => {

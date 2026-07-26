@@ -46,7 +46,7 @@ These are what a _Redis queue_ should be good at, and BullMQ invests heavily in 
 
 - **Chained execution of typed jobs.** A chain is a typed sequence: `"send-email"` continues with `"log-sent"` continues with `"update-user-status"`. Each step's input/output type is inferred from the previous step's `continueWith`. Renames are compiler-checked.
 - **Fan-in via blockers.** "Wait for these N independent chains to finish, then run X" is a typed primitive backed by a `job_blocker` table — not glue code.
-- **Transactional consistency, by design.** `startChain` enqueues inside your DB transaction; handler completion + next-step `continueWith` commit in the same transaction as your domain writes. For DB-bound work, no outbox at enqueue and no idempotency-key ritual at processing — both halves are structural, not application discipline.
+- **Transactional consistency, by design.** `createChain` enqueues inside your DB transaction; handler completion + next-step `continueWith` commit in the same transaction as your domain writes. For DB-bound work, no outbox at enqueue and no idempotency-key ritual at processing — both halves are structural, not application discipline.
 - **Database as the system of record.** Workflow state lives in the same DB as your domain data. No separate store, no separate consistency model, no separate operational target.
 - **Pluggable transports.** State (Postgres / SQLite / in-process) and notify (LISTEN/NOTIFY / Redis / NATS / polling) are independent.
 

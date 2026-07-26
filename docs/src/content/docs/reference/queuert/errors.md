@@ -170,7 +170,7 @@ class BlockerLimitExceededError extends Error {
 }
 ```
 
-Thrown by `startChain`, `startChains`, and `continueWith` when a job declares more blocker chains than the per-job limit (**100**). The cap is intentional and not raised to an uncapped value. **typeName** is the offending job type, **count** the number of blockers declared, and **limit** the maximum allowed.
+Thrown by `createChain`, `createChains`, and `continueWith` when a job declares more blocker chains than the per-job limit (**100**). The cap is intentional and not raised to an uncapped value. **typeName** is the offending job type, **count** the number of blockers declared, and **limit** the maximum allowed.
 
 ## DuplicateJobTypeError
 
@@ -212,7 +212,7 @@ Thrown when a transaction hook is accessed before being registered.
 class TransactionContextRequiredError extends Error {}
 ```
 
-Thrown when a mutating client method (e.g. `startChain`, `rescheduleJob`, `rescheduleJobs`, `deleteChain`, `deleteChains`) is called without a transaction context provided by `withTransaction`. Mutations must run inside a transaction so the transactional outbox pattern holds.
+Thrown when a mutating client method (e.g. `createChain`, `rescheduleJob`, `rescheduleJobs`, `deleteChain`, `deleteChains`) is called without a transaction context provided by `withTransaction`. Mutations must run inside a transaction so the transactional outbox pattern holds.
 
 ## InvalidJobIdError
 
@@ -223,7 +223,7 @@ class InvalidJobIdError extends Error {
 }
 ```
 
-Thrown when a job ID fails the state adapter's `validateId` predicate. `source` is `"generator"` when the adapter's `generateId` produced the invalid value and `"caller"` when the caller supplied it (via `startChain({ id })`, `continueWith({ id })`, etc.).
+Thrown when a job ID fails the state adapter's `validateId` predicate. `source` is `"generator"` when the adapter's `generateId` produced the invalid value and `"caller"` when the caller supplied it (via `createChain({ id })`, `continueWith({ id })`, etc.).
 
 ## See Also
 

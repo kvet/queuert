@@ -50,7 +50,7 @@ const runBenchmarkInChildProcess = async (name: string, extraArgs: string[]): Pr
 
 const main = async (): Promise<void> => {
   const passthrough = args.filter(
-    (a) => a.startsWith("--concurrency=") || a.startsWith("--start-mode="),
+    (a) => a.startsWith("--concurrency=") || a.startsWith("--create-mode="),
   );
 
   const processModeFlag = args.find((a) => a.startsWith("--process-mode="));

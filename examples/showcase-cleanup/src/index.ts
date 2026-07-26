@@ -110,7 +110,7 @@ const cleanupProcessorRegistry = createProcessors({
         await stateAdapter.vacuum();
 
         return complete(async ({ sql, transactionHooks }) => {
-          await client.startChain({
+          await client.createChain({
             sql,
             transactionHooks,
             typeName: "queuert.cleanup",
@@ -156,7 +156,7 @@ console.log("\n--- Scenario 1: Create work chains ---\n");
 
 const chains = await withTransactionHooks(async (transactionHooks) =>
   sql.begin(async (txSql) => {
-    const result = await client.startChains({
+    const result = await client.createChains({
       sql: txSql,
       transactionHooks,
       items: [
@@ -196,7 +196,7 @@ console.log("\n--- Scenario 2: Schedule cleanup ---\n");
 const scheduleCleanup = async () =>
   withTransactionHooks(async (transactionHooks) =>
     sql.begin(async (txSql) => {
-      const result = await client.startChain({
+      const result = await client.createChain({
         sql: txSql,
         transactionHooks,
         typeName: "queuert.cleanup",
@@ -208,7 +208,7 @@ const scheduleCleanup = async () =>
   );
 
 const cleanupChain = await scheduleCleanup();
-console.log(`Cleanup chain started: ${cleanupChain.id}`);
+console.log(`Cleanup chain created: ${cleanupChain.id}`);
 console.log(`Deduplicated: ${cleanupChain.deduplicated}`);
 assert.equal(cleanupChain.deduplicated, false);
 

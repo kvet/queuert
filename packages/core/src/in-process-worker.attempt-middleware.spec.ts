@@ -58,7 +58,7 @@ describe("middleware ctx cannot shadow built-in handler/prepare/complete keys", 
     });
     const chain = await withTransactionHooks(async (transactionHooks) =>
       stateAdapter.withTransaction(async (txCtx) =>
-        client.startChain({ ...txCtx, transactionHooks, typeName: "foo", input: { v: 1 } }),
+        client.createChain({ ...txCtx, transactionHooks, typeName: "foo", input: { v: 1 } }),
       ),
     );
     const stop = await worker.start();
@@ -122,12 +122,12 @@ describe("middleware ctx cannot shadow built-in handler/prepare/complete keys", 
     });
     const chain = await withTransactionHooks(async (transactionHooks) =>
       wrappedAdapter.withTransaction(async (txCtx) =>
-        wrappedClient.startChain({
+        wrappedClient.createChain({
           ...(txCtx as unknown as object),
           transactionHooks,
           typeName: "foo",
           input: { v: 1 },
-        } as Parameters<typeof wrappedClient.startChain>[0]),
+        } as Parameters<typeof wrappedClient.createChain>[0]),
       ),
     );
     const stop = await worker.start();
@@ -188,12 +188,12 @@ describe("middleware ctx cannot shadow built-in handler/prepare/complete keys", 
     });
     const chain = await withTransactionHooks(async (transactionHooks) =>
       wrappedAdapter.withTransaction(async (txCtx) =>
-        wrappedClient.startChain({
+        wrappedClient.createChain({
           ...(txCtx as unknown as object),
           transactionHooks,
           typeName: "foo",
           input: { v: 1 },
-        } as Parameters<typeof wrappedClient.startChain>[0]),
+        } as Parameters<typeof wrappedClient.createChain>[0]),
       ),
     );
     const stop = await worker.start();
@@ -239,7 +239,7 @@ describe("middleware ctx cannot shadow built-in handler/prepare/complete keys", 
     });
     const chain = await withTransactionHooks(async (transactionHooks) =>
       stateAdapter.withTransaction(async (txCtx) =>
-        client.startChain({ ...txCtx, transactionHooks, typeName: "foo", input: { v: 1 } }),
+        client.createChain({ ...txCtx, transactionHooks, typeName: "foo", input: { v: 1 } }),
       ),
     );
     const stop = await worker.start();
@@ -303,12 +303,12 @@ describe("registry-level attemptMiddleware — runtime per-slice isolation", () 
 
     const chainA = await withTransactionHooks(async (transactionHooks) =>
       sa.withTransaction(async (txCtx) =>
-        abClient.startChain({ ...txCtx, transactionHooks, typeName: "a", input: {} }),
+        abClient.createChain({ ...txCtx, transactionHooks, typeName: "a", input: {} }),
       ),
     );
     const chainB = await withTransactionHooks(async (transactionHooks) =>
       sa.withTransaction(async (txCtx) =>
-        abClient.startChain({ ...txCtx, transactionHooks, typeName: "b", input: {} }),
+        abClient.createChain({ ...txCtx, transactionHooks, typeName: "b", input: {} }),
       ),
     );
     const stop = await worker.start();

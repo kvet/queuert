@@ -183,7 +183,7 @@ console.log(
 
 const marketingChains = await withTransactionHooks(async (transactionHooks) =>
   sql.begin(async (txSql) =>
-    client.startChains({
+    client.createChains({
       sql: txSql,
       transactionHooks,
       items: Array.from({ length: 10 }, (_, index) => ({
@@ -198,7 +198,7 @@ await new Promise((resolve) => setTimeout(resolve, 50));
 
 const transactionalChains = await withTransactionHooks(async (transactionHooks) =>
   sql.begin(async (txSql) =>
-    client.startChains({
+    client.createChains({
       sql: txSql,
       transactionHooks,
       items: [
@@ -256,7 +256,7 @@ console.log(
 
 const alertChain = await withTransactionHooks(async (transactionHooks) =>
   sql.begin(async (txSql) =>
-    client.startChain({
+    client.createChain({
       sql: txSql,
       transactionHooks,
       typeName: "alert.dispatch",

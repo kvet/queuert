@@ -86,7 +86,7 @@ export const stateResilienceTestSuite = ({
 
       const chains = await withTransactionHooks(async (transactionHooks) =>
         withTransaction(async (txCtx) =>
-          client.startChains({
+          client.createChains({
             ...txCtx,
             transactionHooks,
             items: Array.from({ length: 20 }, (_, i) => ({
@@ -178,7 +178,7 @@ export const stateResilienceTestSuite = ({
 
       const chains = await withTransactionHooks(async (transactionHooks) =>
         withTransaction(async (txCtx) =>
-          client.startChains({
+          client.createChains({
             ...txCtx,
             transactionHooks,
             items: Array.from({ length: 20 }, (_, i) => ({
@@ -292,7 +292,7 @@ export const stateResilienceTestSuite = ({
 
       const chains = await withTransactionHooks(async (transactionHooks) =>
         withTransaction(async (txCtx) =>
-          client.startChains({
+          client.createChains({
             ...txCtx,
             transactionHooks,
             items: Array.from({ length: 20 }, (_, i) => ({
@@ -380,7 +380,7 @@ export const stateResilienceTestSuite = ({
 
       const chains = await withTransactionHooks(async (transactionHooks) =>
         withTransaction(async (txCtx) =>
-          client.startChains({
+          client.createChains({
             ...txCtx,
             transactionHooks,
             items: Array.from({ length: 20 }, (_, i) => ({
@@ -469,7 +469,7 @@ export const stateResilienceTestSuite = ({
 
       const chains = await withTransactionHooks(async (transactionHooks) =>
         withTransaction(async (txCtx) =>
-          client.startChains({
+          client.createChains({
             ...txCtx,
             transactionHooks,
             items: Array.from({ length: 20 }, (_, i) => ({
@@ -580,7 +580,7 @@ export const stateResilienceTestSuite = ({
 
       const chains = await withTransactionHooks(async (transactionHooks) =>
         withTransaction(async (txCtx) =>
-          client.startChains({
+          client.createChains({
             ...txCtx,
             transactionHooks,
             items: Array.from({ length: 20 }, (_, i) => ({

@@ -7,7 +7,7 @@ import {
   extendWithNotifyNoop,
   extendWithResourceLeakDetection,
   schedulingTestSuite,
-  startChainsTestSuite,
+  createChainsTestSuite,
   stateResilienceTestSuite,
   rescheduleJobTestSuite,
   awaitChainTestSuite,
@@ -28,8 +28,8 @@ describe("Chains", () => {
   chainsTestSuite({ it: sqliteNoopIt });
 });
 
-describe("Start Chains", () => {
-  startChainsTestSuite({ it: sqliteNoopIt });
+describe("Create Chains", () => {
+  createChainsTestSuite({ it: sqliteNoopIt });
 });
 
 describe("Blocker Chains", () => {

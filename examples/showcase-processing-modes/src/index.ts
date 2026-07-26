@@ -188,7 +188,7 @@ const chain = await withTransactionHooks(async (transactionHooks) =>
     >`INSERT INTO orders (product_id, quantity, status) VALUES (1, 2, 'pending') RETURNING id`;
     console.log(`Created order #${order.id} for 2x Widget Pro`);
 
-    const result = await client.startChain({
+    const result = await client.createChain({
       sql: txSql,
       transactionHooks,
       typeName: "reserve-inventory",

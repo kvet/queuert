@@ -15,7 +15,7 @@ export const orderProcessors = createProcessors({
         );
 
         return complete(async ({ continueWith, sql, transactionHooks }) => {
-          await client.startChain({
+          await client.createChain({
             sql,
             transactionHooks,
             typeName: "notifications.send-notification",
@@ -55,7 +55,7 @@ export const orderProcessors = createProcessors({
         );
 
         return complete(async ({ continueWith, sql, transactionHooks }) => {
-          const notifyChain = await client.startChain({
+          const notifyChain = await client.createChain({
             sql,
             transactionHooks,
             typeName: "notifications.send-notification",

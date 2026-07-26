@@ -113,7 +113,7 @@ typeInferenceIt("infers custom ID types through the full stack", async ({ db }) 
 
   const chain = await withTransactionHooks(async (transactionHooks) =>
     withTransaction(async (db) =>
-      client.startChain({
+      client.createChain({
         db,
         transactionHooks,
         typeName: "test",

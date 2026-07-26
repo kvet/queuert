@@ -4,6 +4,7 @@ export { awaitChainTestSuite } from "./suites/await-chain.test-suite.js";
 export { blockerChainsTestSuite } from "./suites/blocker-chains.test-suite.js";
 export { chainsTestSuite } from "./suites/chains.test-suite.js";
 export { clientQueriesTestSuite } from "./suites/client-queries.test-suite.js";
+export { createChainsTestSuite } from "./suites/create-chains.test-suite.js";
 export { deduplicationTestSuite } from "./suites/deduplication.test-suite.js";
 export { deletionTestSuite } from "./suites/deletion.test-suite.js";
 export {
@@ -17,7 +18,6 @@ export { processModesTestSuite } from "./suites/process-modes.test-suite.js";
 export { processTestSuite } from "./suites/process.test-suite.js";
 export { rescheduleJobTestSuite } from "./suites/reschedule-job.test-suite.js";
 export { schedulingTestSuite } from "./suites/scheduling.test-suite.js";
-export { startChainsTestSuite } from "./suites/start-chains.test-suite.js";
 export {
   stateAdapterConformanceTestSuite,
   type StateConformanceFixture,

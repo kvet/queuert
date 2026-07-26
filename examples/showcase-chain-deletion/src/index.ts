@@ -126,7 +126,7 @@ console.log("Delete a completed standalone chain.\n");
 
 const standalone = await withTransactionHooks(async (transactionHooks) =>
   sql.begin(async (txSql) =>
-    client.startChain({
+    client.createChain({
       sql: txSql,
       transactionHooks,
       typeName: "standalone-task",
@@ -158,7 +158,7 @@ console.log("Deleting a blocker chain that is still referenced is rejected.\n");
 
 const [fetchChains, reportChain] = await withTransactionHooks(async (transactionHooks) =>
   sql.begin(async (txSql) => {
-    const fetches = await client.startChains({
+    const fetches = await client.createChains({
       sql: txSql,
       transactionHooks,
       items: [
@@ -166,7 +166,7 @@ const [fetchChains, reportChain] = await withTransactionHooks(async (transaction
         { typeName: "fetch-data", input: { sourceId: "orders" } },
       ],
     });
-    const report = await client.startChain({
+    const report = await client.createChain({
       sql: txSql,
       transactionHooks,
       typeName: "generate-report",
@@ -224,7 +224,7 @@ console.log("Cascade resolves transitive dependencies automatically.\n");
 
 const [_fetchChains2, reportChain2] = await withTransactionHooks(async (transactionHooks) =>
   sql.begin(async (txSql) => {
-    const fetches = await client.startChains({
+    const fetches = await client.createChains({
       sql: txSql,
       transactionHooks,
       items: [
@@ -233,7 +233,7 @@ const [_fetchChains2, reportChain2] = await withTransactionHooks(async (transact
         { typeName: "fetch-data", input: { sourceId: "pricing" } },
       ],
     });
-    const report = await client.startChain({
+    const report = await client.createChain({
       sql: txSql,
       transactionHooks,
       typeName: "generate-report",

@@ -83,7 +83,7 @@ const stopWorker = await worker.start();
 console.log("Requesting sales report...");
 const chain = await withTransactionHooks(async (transactionHooks) =>
   stateAdapter.withTransaction(async (ctx) =>
-    client.startChain({
+    client.createChain({
       ...ctx,
       transactionHooks,
       typeName: "generate_report",

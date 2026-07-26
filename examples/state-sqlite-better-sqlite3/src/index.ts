@@ -86,7 +86,7 @@ const chain = await withTransactionHooks(async (transactionHooks) => {
     const insertStmt = db.prepare("INSERT INTO users (name, email) VALUES (?, ?) RETURNING id");
     const user = insertStmt.get("Alice", "alice@example.com") as { id: number };
 
-    const result = await client.startChain({
+    const result = await client.createChain({
       db,
       transactionHooks,
       typeName: "send_welcome_email",

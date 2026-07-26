@@ -17,7 +17,7 @@ import { Tabs, TabItem, Aside } from "@astrojs/starlight/components";
     ```ts
     await withTransactionHooks(async (transactionHooks) =>
       sql.begin(async (sql) => {
-        await client.startChain({ sql, transactionHooks, typeName: "send-email", input });
+        await client.createChain({ sql, transactionHooks, typeName: "send-email", input });
         // If the transaction rolls back, no notifications are sent
       }),
     );
@@ -38,7 +38,7 @@ import { Tabs, TabItem, Aside } from "@astrojs/starlight/components";
     const connection = await db.connect();
     try {
       await connection.query("BEGIN");
-      const result = await client.startChain({
+      const result = await client.createChain({
         connection,
         transactionHooks,
         typeName: "send-email",
@@ -70,7 +70,7 @@ txn: "transaction" {
   class: txn
 
   begin: "BEGIN" { class: step }
-  work: "client.startChain(...)\nhook state mutates\n(e.g. notify event queued)" { class: step; width: 280; height: 90 }
+  work: "client.createChain(...)\nhook state mutates\n(e.g. notify event queued)" { class: step; width: 280; height: 90 }
   end:  "COMMIT / ROLLBACK" { class: step; width: 200; height: 50 }
 
   begin -> work { class: flow }

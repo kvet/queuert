@@ -70,7 +70,7 @@ const cleanupProcessorRegistry = createProcessors({
         await stateAdapter.vacuum();
 
         return complete(async ({ transactionHooks, ...txCtx }) => {
-          await client.startChain({
+          await client.createChain({
             ...txCtx,
             transactionHooks,
             typeName: "queuert.cleanup",
@@ -126,7 +126,7 @@ Schedule the initial cleanup at application startup. Deduplication makes this id
 ```ts
 await withTransactionHooks(async (transactionHooks) =>
   stateProvider.withTransaction(async (txCtx) =>
-    client.startChain({
+    client.createChain({
       ...txCtx,
       transactionHooks,
       typeName: "queuert.cleanup",

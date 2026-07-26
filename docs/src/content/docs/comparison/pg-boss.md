@@ -47,7 +47,7 @@ These are what a _queue_ should be good at, and pg-boss invests heavily in them.
 
 - **Chained execution of typed jobs.** A chain is a typed sequence: `"send-email"` continues with `"log-sent"` continues with `"update-user-status"`. Each step's input/output type is inferred from the previous step's `continueWith`. Renames are compiler-checked.
 - **Fan-in via blockers.** "Wait for these N independent chains to finish, then run X" is a typed primitive backed by a `job_blocker` table — not glue code.
-- **Transactional consistency, by design.** `startChain` enqueues inside your DB transaction; handler completion + next-step `continueWith` commit in the same transaction as your domain writes. For DB-bound work, no outbox at enqueue and no idempotency-key ritual at processing — both halves are structural, not application discipline.
+- **Transactional consistency, by design.** `createChain` enqueues inside your DB transaction; handler completion + next-step `continueWith` commit in the same transaction as your domain writes. For DB-bound work, no outbox at enqueue and no idempotency-key ritual at processing — both halves are structural, not application discipline.
 - **Sub-second wakeup latency.** `LISTEN/NOTIFY` (or Redis pub/sub, or NATS) wakes workers when a row commits — no polling-interval floor.
 - **Pluggable transports.** State (Postgres / SQLite / in-process) and notify (LISTEN/NOTIFY / Redis / NATS / polling) are independent.
 - **Database as the system of record.** Chain state lives in the same DB as your domain data. No separate store, no separate consistency model.
@@ -79,13 +79,13 @@ await prisma.$transaction(async (tx) => {
 
 It works, but it's per-call discipline: the adapter set is fixed (raw `pg` users have to write their own `IDatabase` shim), and most pg-boss code in the wild predates v12.17 and uses pg-boss's own pool — meaning dual-write is the default unless every call site remembers to pass `{ db }`.
 
-Queuert's `startChain` writes into your DB transaction structurally — there is no enqueue path that bypasses it:
+Queuert's `createChain` writes into your DB transaction structurally — there is no enqueue path that bypasses it:
 
 ```ts
 await withTransactionHooks(async (transactionHooks) =>
   db.transaction(async (tx) => {
     await tx.users.create({ ... });
-    await client.startChain({
+    await client.createChain({
       tx,
       transactionHooks,
       typeName: "send-welcome-email",

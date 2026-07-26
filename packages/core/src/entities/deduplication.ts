@@ -1,7 +1,7 @@
 /**
  * Options for chain deduplication.
  *
- * When provided to `startChain`, the system checks for existing chains with the same key
+ * When provided to `createChain`, the system checks for existing chains with the same key
  * and returns them instead of creating a new one.
  */
 export type DeduplicationOptions<TJobId> = {

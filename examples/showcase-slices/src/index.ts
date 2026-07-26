@@ -35,7 +35,7 @@ console.log("\n--- Pattern 1: Independent Slices ---\n");
 
 const orderChain = await withTransactionHooks(async (transactionHooks) =>
   sql.begin(async (txSql) =>
-    client.startChain({
+    client.createChain({
       sql: txSql,
       transactionHooks,
       typeName: "orders.create-order",
@@ -63,7 +63,7 @@ console.log("\n--- Pattern 2: Fire-and-forget ---\n");
 
 const orderChain2 = await withTransactionHooks(async (transactionHooks) =>
   sql.begin(async (txSql) =>
-    client.startChain({
+    client.createChain({
       sql: txSql,
       transactionHooks,
       typeName: "orders.create-order",
@@ -100,7 +100,7 @@ console.log("\n--- Pattern 3: Cross-slice Blockers ---\n");
 
 const placeOrderChain = await withTransactionHooks(async (transactionHooks) =>
   sql.begin(async (txSql) =>
-    client.startChain({
+    client.createChain({
       sql: txSql,
       transactionHooks,
       typeName: "orders.place-order",

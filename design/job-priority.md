@@ -24,9 +24,9 @@ Higher numbers run first; negative numbers run after default. No floor, no ceili
 
 Three coupled API surfaces gain an optional `priority?: number`:
 
-1. `startChain` / `startChains` — head job's priority.
+1. `createChain` / `createChains` — head job's priority.
 2. `continueWith` (worker handler) — successor job's priority. **Defaults to the parent's priority** so chains run as a unit unless the user overrides.
-3. The `addJobBlocker` chain start (when that ships) inherits from its own startChain entry — no special handling.
+3. The `addJobBlocker` chain start (when that ships) inherits from its own createChain entry — no special handling.
 
 The library does not export named-priority constants. Users adopt their own convention (`-10`/`0`/`10` is fine; so is `1`/`0`).
 
@@ -102,7 +102,7 @@ When `createStateJobs` finds an existing job with the same dedup key, today it r
 **No, and the doc is explicit about it.** Three reasons:
 
 1. **Race surface.** Upgrade requires a conditional UPDATE on the existing row. If the row was just acquired (`attempt_at IS NOT NULL`), the UPDATE either no-ops (priority change useless) or has to roll back acquisition — neither is clean.
-2. **Idempotency contract.** Today, dedup is "the work already exists, return the existing handle." Mutation-on-deduplication is a different, surprising contract — a user who calls `startChain({ priority: 0, ... })` twice and once with `priority: 10` would see persistent state changes from a call that was supposed to be a no-op.
+2. **Idempotency contract.** Today, dedup is "the work already exists, return the existing handle." Mutation-on-deduplication is a different, surprising contract — a user who calls `createChain({ priority: 0, ... })` twice and once with `priority: 10` would see persistent state changes from a call that was supposed to be a no-op.
 3. **Workaround is trivial.** A user who actually needs "upgrade priority of the pending instance" can read the dedup-result job, then call a future explicit `setJobPriority` API. We don't ship that API in v1 — wait for the request.
 
 Documented behavior: priority is set at INSERT only. Re-enqueueing with a higher priority on the same dedup key returns the existing job at its existing priority and the new priority is silently dropped. The `deduplicated: true` flag already signals "this isn't a fresh insert" so an attentive caller can see the discrepancy if they care.
@@ -113,11 +113,11 @@ Documented behavior: priority is set at INSERT only. Re-enqueueing with a higher
 
 - `StateJob.priority: number` — new field on the flat state-adapter shape. Always populated; defaults to 0 from the column default.
 - `Job.priority: number` — projected through `mapStateJobToJob` unchanged. Lives on the base Job type, not gated by status.
-- `StartChainEntry` (in [client.ts:146-157](../packages/core/src/client.ts#L146)) gains `priority?: number`. Optional, defaults to 0.
+- `CreateChainEntry` (in [client.ts:146-157](../packages/core/src/client.ts#L146)) gains `priority?: number`. Optional, defaults to 0.
 - The worker handler's `continueWith({ typeName, input, schedule, blockers })` (in [client.ts:684-689](../packages/core/src/client.ts#L684)) gains `priority?: number`. **Default is the parent job's priority**, not 0.
 
 ```ts
-const result = await client.startChain({
+const result = await client.createChain({
   typeName: "runTest",
   input: { suiteId },
   priority: 10,   // foreground
@@ -289,11 +289,11 @@ Validation: pre-merge benchmark explicitly seeds this pathology and asserts <5 m
 2. `packages/core/src/entities/job.types.ts` — add `priority: number` to `Job` base.
 3. `packages/core/src/entities/job.ts` (`mapStateJobToJob`) — project `priority`.
 4. `packages/core/src/client.ts`:
-   - `StartChainEntry` gains `priority?: number`.
-   - `startChains` / `startChain` impls thread `priority` through to `createStateJobs`.
+   - `CreateChainEntry` gains `priority?: number`.
+   - `createChains` / `createChain` impls thread `priority` through to `createStateJobs`.
    - `continueWith` handler signature gains `priority?: number`.
    - The wrapper at lines 705-723 threads `priority` (defaulting to undefined, letting the SQL/JS resolve to parent).
-5. `packages/core/src/implementation/start-chains.ts` — pass `priority` through to `createStateJobs`.
+5. `packages/core/src/implementation/create-chains.ts` — pass `priority` through to `createStateJobs`.
 6. `packages/core/src/implementation/continue-with.ts` — accept `priority?: number`, pass through.
 7. `packages/core/src/implementation/create-state-jobs.ts` — pass `priority` through to the adapter call.
 8. `packages/postgres/src/state-adapter/sql.ts`:
@@ -354,7 +354,7 @@ Wake-up considers only the highest-priority pending job. Rejected — see "this 
 
 ### Dedup upgrade-on-re-enqueue
 
-I.e. `startChain` with a higher priority bumps an existing dedup'd pending job. Rejected — see "Why dedup keeps existing-job priority." Adds a hidden mutation to a no-op call. Users who need this can read-then-set via a future explicit API.
+I.e. `createChain` with a higher priority bumps an existing dedup'd pending job. Rejected — see "Why dedup keeps existing-job priority." Adds a hidden mutation to a no-op call. Users who need this can read-then-set via a future explicit API.
 
 ### Dynamic priority adjustment (`setJobPriority(id, n)`)
 
@@ -383,7 +383,7 @@ I.e. priority _is_ the schedule. Rejected — they're orthogonal. `scheduled_at`
 - **No `setJobPriority` mutation API.** Out of scope; add later if asked.
 - **No wall-clock aging.** Log-scale demotion handles failure-driven yielding; sustained-arrival starvation is a documented v1 footgun, deferred to v2.
 - **No priority on `rescheduleJob`.** Reschedule is a `scheduled_at` reset, not a priority bump.
-- **No priority on blockers.** A blocker chain has its own root-job priority from its own `startChain` call.
+- **No priority on blockers.** A blocker chain has its own root-job priority from its own `createChain` call.
 - **No `priority` filter in `listJobs` / `listChains`.** Add when a use case appears (likely never — users filter by type/status, then sort by priority is a UI concern, not a query concern).
 - **No backpressure / fairness across type names.** Priority is per-type-pool. A high-priority job of type A doesn't preempt or rank against a low-priority job of type B; the worker's `typeNames` filter and per-type acquisition handle that orthogonally.
 - **No way to disable demotion.** It's part of the acquisition formula, not opt-in. A user who really wants "this priority +10 job runs first regardless of how many times it's failed" picks a wider priority gap — `+1000` survives 1000 retries before equating to default.

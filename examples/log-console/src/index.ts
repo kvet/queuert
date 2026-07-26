@@ -73,7 +73,7 @@ const stopWorker = await worker.start();
 console.log("\n--- Running successful job ---\n");
 const successChain = await withTransactionHooks(async (transactionHooks) =>
   stateAdapter.withTransaction(async (ctx) =>
-    client.startChain({
+    client.createChain({
       ...ctx,
       transactionHooks,
       typeName: "greet",
@@ -91,7 +91,7 @@ console.log(`\n[app] Successful job output: ${JSON.stringify(successCompleted.ou
 console.log("\n--- Running job that fails first attempt ---\n");
 const failThenSucceedChain = await withTransactionHooks(async (transactionHooks) =>
   stateAdapter.withTransaction(async (ctx) =>
-    client.startChain({
+    client.createChain({
       ...ctx,
       transactionHooks,
       typeName: "might-fail",

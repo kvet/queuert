@@ -46,14 +46,14 @@ const finalizeCreatedJobs = async (
     parsed,
     spanHandles,
     createResults,
-    isChainStart,
+    isChainHead,
     txCtx,
     transactionHooks,
   }: {
     parsed: ParsedEntry[];
     spanHandles: JobSpanHandle[];
     createResults: { job: StateJob; deduplicated: boolean }[];
-    isChainStart: boolean;
+    isChainHead: boolean;
     txCtx: BaseTxContext;
     transactionHooks: TransactionHooks;
   },
@@ -166,7 +166,7 @@ const finalizeCreatedJobs = async (
         });
       }
 
-      if (isChainStart) {
+      if (isChainHead) {
         bufferObservabilityEvent(transactionHooks, () => {
           helpers.observabilityHelper.chainCreated(job, { input: jobInput.input });
         });
@@ -260,7 +260,7 @@ export const createStateChains = async (
     helpers.observabilityHelper.startJobSpan({
       chainTypeName: entry.chainTypeName,
       jobTypeName: entry.typeName,
-      isChainStart: true,
+      isChainHead: true,
     }),
   );
 
@@ -283,7 +283,7 @@ export const createStateChains = async (
     parsed,
     spanHandles,
     createResults,
-    isChainStart: true,
+    isChainHead: true,
     txCtx,
     transactionHooks,
   });
@@ -307,7 +307,7 @@ export const continueStateJob = async (
     helpers.observabilityHelper.startJobSpan({
       chainTypeName: fromJob.chainTypeName,
       jobTypeName: job.typeName,
-      isChainStart: false,
+      isChainHead: false,
       originChainTraceContext: fromJob.chainTraceContext,
       originTraceContext: fromJob.traceContext,
     }),
@@ -333,7 +333,7 @@ export const continueStateJob = async (
     parsed,
     spanHandles,
     createResults: [createResult],
-    isChainStart: false,
+    isChainHead: false,
     txCtx,
     transactionHooks,
   });

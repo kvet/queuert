@@ -23,9 +23,9 @@ export const jobTypes = defineJobTypes<{
 export type BenchmarkStateAdapter = StateAdapter<any, any>;
 
 export type ProcessMode = "atomic" | "staged";
-export type StartMode = "single" | "batched";
+export type CreateMode = "single" | "batched";
 
-export const defaultStartModeFor = (processMode: ProcessMode): StartMode =>
+export const defaultCreateModeFor = (processMode: ProcessMode): CreateMode =>
   processMode === "atomic" ? "batched" : "single";
 
 const parseConcurrency = (defaultValue = 10): number => {
@@ -43,12 +43,12 @@ const parseProcessMode = (defaultValue: ProcessMode = "atomic"): ProcessMode => 
   return value;
 };
 
-const parseStartMode = (processMode: ProcessMode): StartMode => {
-  const flag = process.argv.find((a) => a.startsWith("--start-mode="));
-  if (!flag) return defaultStartModeFor(processMode);
+const parseCreateMode = (processMode: ProcessMode): CreateMode => {
+  const flag = process.argv.find((a) => a.startsWith("--create-mode="));
+  if (!flag) return defaultCreateModeFor(processMode);
   const value = flag.split("=")[1];
   if (value !== "single" && value !== "batched") {
-    throw new Error(`Invalid --start-mode=${value}, expected "single" or "batched"`);
+    throw new Error(`Invalid --create-mode=${value}, expected "single" or "batched"`);
   }
   return value;
 };
@@ -79,7 +79,7 @@ export const runBenchmark = async ({
   const withTransaction = stateAdapter.withTransaction;
   const concurrency = parseConcurrency();
   const processMode = parseProcessMode();
-  const startMode = parseStartMode(processMode);
+  const createMode = parseCreateMode(processMode);
 
   const client: Client<any, any> = await createClient({
     stateAdapter,
@@ -127,31 +127,31 @@ export const runBenchmark = async ({
     }),
   });
 
-  const startLabel =
-    startMode === "single" ? "single" : `batched (size ${formatNumber(BATCH_SIZE)})`;
+  const createLabel =
+    createMode === "single" ? "single" : `batched (size ${formatNumber(BATCH_SIZE)})`;
   console.log(
-    `\nConfiguration: ${formatNumber(JOB_COUNT)} jobs, concurrency ${concurrency}, process ${processMode}, start ${startLabel}`,
+    `\nConfiguration: ${formatNumber(JOB_COUNT)} jobs, concurrency ${concurrency}, process ${processMode}, create ${createLabel}`,
   );
 
-  console.log(`\nPhase 1: Starting ${formatNumber(JOB_COUNT)} chains (${startLabel})...`);
-  const startBegin = performance.now();
-  let lastStartMilestone = 0;
-  const reportStartProgress = (count: number) => {
-    if (count - lastStartMilestone >= PROGRESS_STEP || count === JOB_COUNT) {
-      lastStartMilestone = count;
-      const elapsed = performance.now() - startBegin;
+  console.log(`\nPhase 1: Creating ${formatNumber(JOB_COUNT)} chains (${createLabel})...`);
+  const createBegin = performance.now();
+  let lastCreateMilestone = 0;
+  const reportCreateProgress = (count: number) => {
+    if (count - lastCreateMilestone >= PROGRESS_STEP || count === JOB_COUNT) {
+      lastCreateMilestone = count;
+      const elapsed = performance.now() - createBegin;
       const rate = count / (elapsed / 1_000);
       console.log(
-        `  ${formatNumber(count).padStart(7)} started — ${formatDuration(elapsed)} — ${formatNumber(Math.round(rate))} chains/s`,
+        `  ${formatNumber(count).padStart(7)} created — ${formatDuration(elapsed)} — ${formatNumber(Math.round(rate))} chains/s`,
       );
     }
   };
 
-  if (startMode === "single") {
+  if (createMode === "single") {
     for (let i = 0; i < JOB_COUNT; i++) {
       await withTransactionHooks(async (transactionHooks) =>
         withTransaction(async (txCtx) =>
-          client.startChain({
+          client.createChain({
             ...txCtx,
             transactionHooks,
             typeName: "test-job",
@@ -159,7 +159,7 @@ export const runBenchmark = async ({
           }),
         ),
       );
-      reportStartProgress(i + 1);
+      reportCreateProgress(i + 1);
     }
   } else {
     for (let i = 0; i < JOB_COUNT; i += BATCH_SIZE) {
@@ -170,21 +170,21 @@ export const runBenchmark = async ({
       }
       await withTransactionHooks(async (transactionHooks) =>
         withTransaction(async (txCtx) =>
-          client.startChains({
+          client.createChains({
             ...txCtx,
             transactionHooks,
             items,
           }),
         ),
       );
-      reportStartProgress(batchEnd);
+      reportCreateProgress(batchEnd);
     }
   }
 
-  const startDuration = performance.now() - startBegin;
-  const startRate = JOB_COUNT / (startDuration / 1_000);
+  const createDuration = performance.now() - createBegin;
+  const createRate = JOB_COUNT / (createDuration / 1_000);
   console.log(
-    `\n  Start complete: ${formatDuration(startDuration)} — ${formatNumber(Math.round(startRate))} chains/s`,
+    `\n  Create complete: ${formatDuration(createDuration)} — ${formatNumber(Math.round(createRate))} chains/s`,
   );
 
   console.log(`\nPhase 2: Processing ${formatNumber(JOB_COUNT)} jobs...`);
@@ -208,9 +208,9 @@ export const runBenchmark = async ({
   console.log(`  Total jobs:        ${formatNumber(JOB_COUNT)}`);
   console.log(`  Concurrency:       ${concurrency}`);
   console.log(`  Process mode:      ${processMode}`);
-  console.log(`  Start mode:        ${startLabel}`);
+  console.log(`  Create mode:       ${createLabel}`);
   console.log(
-    `  Start phase:       ${formatDuration(startDuration).padStart(10)}  (${formatNumber(Math.round(startRate))} chains/s)`,
+    `  Create phase:      ${formatDuration(createDuration).padStart(10)}  (${formatNumber(Math.round(createRate))} chains/s)`,
   );
   console.log(
     `  Process phase:     ${formatDuration(processDuration).padStart(10)}  (${formatNumber(Math.round(processRate))} jobs/s)`,

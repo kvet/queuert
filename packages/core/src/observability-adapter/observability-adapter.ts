@@ -14,7 +14,7 @@ import {
 export type JobSpanInputData = {
   chainTypeName: string;
   jobTypeName: string;
-  isChainStart: boolean;
+  isChainHead: boolean;
 
   /** For continuation jobs: chain trace context of the origin job */
   originChainTraceContext?: string | null;

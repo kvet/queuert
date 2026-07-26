@@ -68,7 +68,7 @@ The OTEL adapter serializes `SpanContext` objects to this format for storage and
 
 ### Context Flow
 
-1. **Chain creation** (`startChain`): Creates PRODUCER chain span → serializes to `chainTraceContext`. Creates PRODUCER job span as child → serializes to `traceContext`. Both stored with the job in the database.
+1. **Chain creation** (`createChain`): Creates PRODUCER chain span → serializes to `chainTraceContext`. Creates PRODUCER job span as child → serializes to `traceContext`. Both stored with the job in the database.
 
 2. **Blockers**: For each blocker dependency, creates a PRODUCER `await chain` span as child of the job span → serializes to `trace_context` in the `job_blocker` table.
 

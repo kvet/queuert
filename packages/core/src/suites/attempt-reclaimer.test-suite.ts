@@ -61,7 +61,7 @@ export const attemptReclaimerTestSuite = ({ it }: { it: TestAPI<TestSuiteContext
 
     const chain = await withTransactionHooks(async (transactionHooks) =>
       withTransaction(async (txCtx) =>
-        client.startChain({
+        client.createChain({
           ...txCtx,
           transactionHooks,
           typeName: "test",
@@ -176,7 +176,7 @@ export const attemptReclaimerTestSuite = ({ it }: { it: TestAPI<TestSuiteContext
 
     const failChain = await withTransactionHooks(async (transactionHooks) =>
       withTransaction(async (txCtx) =>
-        client.startChain({
+        client.createChain({
           ...txCtx,
           transactionHooks,
           typeName: "test",
@@ -191,7 +191,7 @@ export const attemptReclaimerTestSuite = ({ it }: { it: TestAPI<TestSuiteContext
 
       const successChain = await withTransactionHooks(async (transactionHooks) =>
         withTransaction(async (txCtx) =>
-          client.startChain({
+          client.createChain({
             ...txCtx,
             transactionHooks,
             typeName: "test",
@@ -315,7 +315,7 @@ export const attemptReclaimerTestSuite = ({ it }: { it: TestAPI<TestSuiteContext
 
     const failChain = await withTransactionHooks(async (transactionHooks) =>
       withTransaction(async (txCtx) =>
-        client.startChain({
+        client.createChain({
           ...txCtx,
           transactionHooks,
           typeName: "test",
@@ -330,7 +330,7 @@ export const attemptReclaimerTestSuite = ({ it }: { it: TestAPI<TestSuiteContext
 
       const successChain = await withTransactionHooks(async (transactionHooks) =>
         withTransaction(async (txCtx) =>
-          client.startChain({
+          client.createChain({
             ...txCtx,
             transactionHooks,
             typeName: "test",
@@ -454,7 +454,7 @@ export const attemptReclaimerTestSuite = ({ it }: { it: TestAPI<TestSuiteContext
 
     const failChain = await withTransactionHooks(async (transactionHooks) =>
       withTransaction(async (txCtx) =>
-        client.startChain({
+        client.createChain({
           ...txCtx,
           transactionHooks,
           typeName: "test",
@@ -469,7 +469,7 @@ export const attemptReclaimerTestSuite = ({ it }: { it: TestAPI<TestSuiteContext
 
       const successChain = await withTransactionHooks(async (transactionHooks) =>
         withTransaction(async (txCtx) =>
-          client.startChain({
+          client.createChain({
             ...txCtx,
             transactionHooks,
             typeName: "test",
@@ -550,7 +550,7 @@ export const attemptReclaimerTestSuite = ({ it }: { it: TestAPI<TestSuiteContext
 
     const chain1 = await withTransactionHooks(async (transactionHooks) =>
       withTransaction(async (txCtx) =>
-        client.startChain({
+        client.createChain({
           ...txCtx,
           transactionHooks,
           typeName: "test",
@@ -566,7 +566,7 @@ export const attemptReclaimerTestSuite = ({ it }: { it: TestAPI<TestSuiteContext
 
       const chain2 = await withTransactionHooks(async (transactionHooks) =>
         withTransaction(async (txCtx) =>
-          client.startChain({
+          client.createChain({
             ...txCtx,
             transactionHooks,
             typeName: "test",

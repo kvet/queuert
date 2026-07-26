@@ -91,11 +91,13 @@ export const blockerChainsTestSuite = ({ it }: { it: TestAPI<TestSuiteContext> }
       }),
     });
 
-    expectTypeOf<Parameters<typeof client.startChain<"main">>[0]["blockers"]>().not.toBeUndefined();
+    expectTypeOf<
+      Parameters<typeof client.createChain<"main">>[0]["blockers"]
+    >().not.toBeUndefined();
 
     const chain = await withTransactionHooks(async (transactionHooks) =>
       withTransaction(async (txCtx) => {
-        const dependencyChain = await client.startChain({
+        const dependencyChain = await client.createChain({
           ...txCtx,
           transactionHooks,
           typeName: "blocker",
@@ -103,7 +105,7 @@ export const blockerChainsTestSuite = ({ it }: { it: TestAPI<TestSuiteContext> }
         });
         blockerChainId = dependencyChain.id;
 
-        const chain = await client.startChain({
+        const chain = await client.createChain({
           ...txCtx,
           transactionHooks,
           typeName: "main",
@@ -179,7 +181,7 @@ export const blockerChainsTestSuite = ({ it }: { it: TestAPI<TestSuiteContext> }
 
     const blockerChain = await withTransactionHooks(async (transactionHooks) =>
       withTransaction(async (txCtx) =>
-        client.startChain({
+        client.createChain({
           ...txCtx,
           transactionHooks,
           typeName: "blocker",
@@ -202,7 +204,7 @@ export const blockerChainsTestSuite = ({ it }: { it: TestAPI<TestSuiteContext> }
 
     const chain = await withTransactionHooks(async (transactionHooks) =>
       withTransaction(async (txCtx) =>
-        client.startChain({
+        client.createChain({
           ...txCtx,
           transactionHooks,
           typeName: "main",
@@ -221,7 +223,7 @@ export const blockerChainsTestSuite = ({ it }: { it: TestAPI<TestSuiteContext> }
     });
   });
 
-  it("rejects startChain declaring more blockers than the limit", async ({
+  it("rejects createChain declaring more blockers than the limit", async ({
     stateAdapter,
     notifyAdapter,
     withTransaction,
@@ -253,7 +255,7 @@ export const blockerChainsTestSuite = ({ it }: { it: TestAPI<TestSuiteContext> }
 
     const blockerChain = await withTransactionHooks(async (transactionHooks) =>
       withTransaction(async (txCtx) =>
-        client.startChain({
+        client.createChain({
           ...txCtx,
           transactionHooks,
           typeName: "blocker",
@@ -265,7 +267,7 @@ export const blockerChainsTestSuite = ({ it }: { it: TestAPI<TestSuiteContext> }
     try {
       await withTransactionHooks(async (transactionHooks) =>
         withTransaction(async (txCtx) =>
-          client.startChain({
+          client.createChain({
             ...txCtx,
             transactionHooks,
             typeName: "main",
@@ -274,7 +276,7 @@ export const blockerChainsTestSuite = ({ it }: { it: TestAPI<TestSuiteContext> }
           }),
         ),
       );
-      expect.fail("Expected startChain to throw an error due to exceeding blocker limit");
+      expect.fail("Expected createChain to throw an error due to exceeding blocker limit");
     } catch (error) {
       expect(error).toBeInstanceOf(BlockerLimitExceededError);
       expect((error as BlockerLimitExceededError).count).toBe(101);
@@ -321,7 +323,7 @@ export const blockerChainsTestSuite = ({ it }: { it: TestAPI<TestSuiteContext> }
 
     const blockerChain = await withTransactionHooks(async (transactionHooks) =>
       withTransaction(async (txCtx) =>
-        client.startChain({
+        client.createChain({
           ...txCtx,
           transactionHooks,
           typeName: "blocker",
@@ -367,7 +369,7 @@ export const blockerChainsTestSuite = ({ it }: { it: TestAPI<TestSuiteContext> }
 
     const chain = await withTransactionHooks(async (transactionHooks) =>
       withTransaction(async (txCtx) =>
-        client.startChain({
+        client.createChain({
           ...txCtx,
           transactionHooks,
           typeName: "starter",
@@ -431,7 +433,7 @@ export const blockerChainsTestSuite = ({ it }: { it: TestAPI<TestSuiteContext> }
               await prepare({ mode: "staged" }, async (txCtx) => {
                 childChains.push(
                   await withTransactionHooks(async (transactionHooks) =>
-                    client.startChain({
+                    client.createChain({
                       ...txCtx,
                       transactionHooks,
                       typeName: "inner",
@@ -444,7 +446,7 @@ export const blockerChainsTestSuite = ({ it }: { it: TestAPI<TestSuiteContext> }
               childChains.push(
                 await withTransactionHooks(async (transactionHooks) =>
                   withTransaction(async (txCtx) =>
-                    client.startChain({
+                    client.createChain({
                       ...txCtx,
                       transactionHooks,
                       typeName: "inner",
@@ -457,7 +459,7 @@ export const blockerChainsTestSuite = ({ it }: { it: TestAPI<TestSuiteContext> }
               return complete(async (txCtx) => {
                 childChains.push(
                   await withTransactionHooks(async (transactionHooks) =>
-                    client.startChain({
+                    client.createChain({
                       ...txCtx,
                       transactionHooks,
                       typeName: "inner",
@@ -476,7 +478,7 @@ export const blockerChainsTestSuite = ({ it }: { it: TestAPI<TestSuiteContext> }
 
     const chain = await withTransactionHooks(async (transactionHooks) =>
       withTransaction(async (txCtx) =>
-        client.startChain({
+        client.createChain({
           ...txCtx,
           transactionHooks,
           typeName: "outer",
@@ -568,7 +570,7 @@ export const blockerChainsTestSuite = ({ it }: { it: TestAPI<TestSuiteContext> }
 
     const chain = await withTransactionHooks(async (transactionHooks) =>
       withTransaction(async (txCtx) =>
-        client.startChain({
+        client.createChain({
           ...txCtx,
           transactionHooks,
           typeName: "test",
@@ -639,7 +641,7 @@ export const blockerChainsTestSuite = ({ it }: { it: TestAPI<TestSuiteContext> }
 
     const chain = await withTransactionHooks(async (transactionHooks) =>
       withTransaction(async (txCtx) => {
-        const blockerChains = await client.startChains({
+        const blockerChains = await client.createChains({
           ...txCtx,
           transactionHooks,
           items: Array.from({ length: 5 }, (_, i) => ({
@@ -647,7 +649,7 @@ export const blockerChainsTestSuite = ({ it }: { it: TestAPI<TestSuiteContext> }
             input: { value: i + 1 },
           })),
         });
-        return client.startChain({
+        return client.createChain({
           ...txCtx,
           transactionHooks,
           typeName: "main",
@@ -717,7 +719,7 @@ export const blockerChainsTestSuite = ({ it }: { it: TestAPI<TestSuiteContext> }
             attemptHandler: async ({ job, prepare, complete }) => {
               await prepare({ mode: "atomic" });
               return complete(async ({ continueWith, ...txCtx }) => {
-                const blockerChain = await client.startChain({
+                const blockerChain = await client.createChain({
                   ...txCtx,
                   typeName: "blocker",
                   input: { value: 5 },
@@ -749,7 +751,7 @@ export const blockerChainsTestSuite = ({ it }: { it: TestAPI<TestSuiteContext> }
 
     const chain = await withTransactionHooks(async (transactionHooks) =>
       withTransaction(async (txCtx) =>
-        client.startChain({
+        client.createChain({
           ...txCtx,
           transactionHooks,
           typeName: "first",
@@ -820,7 +822,7 @@ export const blockerChainsTestSuite = ({ it }: { it: TestAPI<TestSuiteContext> }
 
     const chain = await withTransactionHooks(async (transactionHooks) =>
       withTransaction(async (txCtx) => {
-        const blockerChains = await client.startChains({
+        const blockerChains = await client.createChains({
           ...txCtx,
           transactionHooks,
           items: [
@@ -846,7 +848,7 @@ export const blockerChainsTestSuite = ({ it }: { it: TestAPI<TestSuiteContext> }
             },
           ],
         });
-        return client.startChain({
+        return client.createChain({
           ...txCtx,
           transactionHooks,
           typeName: "main",
@@ -920,7 +922,7 @@ export const blockerChainsTestSuite = ({ it }: { it: TestAPI<TestSuiteContext> }
 
     const blocker = await withTransactionHooks(async (transactionHooks) =>
       withTransaction(async (txCtx) =>
-        client.startChain({
+        client.createChain({
           ...txCtx,
           transactionHooks,
           typeName: "blocker",
@@ -931,7 +933,7 @@ export const blockerChainsTestSuite = ({ it }: { it: TestAPI<TestSuiteContext> }
 
     const [mainA, mainB] = await withTransactionHooks(async (transactionHooks) =>
       withTransaction(async (txCtx) =>
-        client.startChains({
+        client.createChains({
           ...txCtx,
           transactionHooks,
           items: [
@@ -1029,7 +1031,7 @@ export const blockerChainsTestSuite = ({ it }: { it: TestAPI<TestSuiteContext> }
 
     const blockerChains = await withTransactionHooks(async (transactionHooks) =>
       withTransaction(async (txCtx) =>
-        client.startChains({
+        client.createChains({
           ...txCtx,
           transactionHooks,
           items: Array.from({ length: blockerCount }, () => ({
@@ -1042,7 +1044,7 @@ export const blockerChainsTestSuite = ({ it }: { it: TestAPI<TestSuiteContext> }
 
     const mainChains = await withTransactionHooks(async (transactionHooks) =>
       withTransaction(async (txCtx) =>
-        client.startChains({
+        client.createChains({
           ...txCtx,
           transactionHooks,
           items: Array.from({ length: mainCount }, (_, i) => ({
@@ -1125,7 +1127,7 @@ export const blockerChainsTestSuite = ({ it }: { it: TestAPI<TestSuiteContext> }
 
     const blockerChain = await withTransactionHooks(async (transactionHooks) =>
       withTransaction(async (txCtx) =>
-        client.startChain({
+        client.createChain({
           ...txCtx,
           transactionHooks,
           typeName: "blocker",
@@ -1136,7 +1138,7 @@ export const blockerChainsTestSuite = ({ it }: { it: TestAPI<TestSuiteContext> }
 
     const mainChain = await withTransactionHooks(async (transactionHooks) =>
       withTransaction(async (txCtx) =>
-        client.startChain({
+        client.createChain({
           ...txCtx,
           transactionHooks,
           typeName: "main",
@@ -1193,13 +1195,13 @@ export const blockerChainsTestSuite = ({ it }: { it: TestAPI<TestSuiteContext> }
 
     const mainChain = await withTransactionHooks(async (transactionHooks) =>
       withTransaction(async (txCtx) => {
-        const blockerChain = await client.startChain({
+        const blockerChain = await client.createChain({
           ...txCtx,
           transactionHooks,
           typeName: "blocker",
           input: null,
         });
-        return client.startChain({
+        return client.createChain({
           ...txCtx,
           transactionHooks,
           typeName: "main",

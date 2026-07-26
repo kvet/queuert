@@ -61,7 +61,7 @@ Rules:
 
 | Stage                                                                                                            | Operation                                                                                         |
 | ---------------------------------------------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------- |
-| `client.startChain`                                                                                              | `validateEntry` → `encodeInputs` → state adapter persist                                          |
+| `client.createChain`                                                                                             | `validateEntry` → `encodeInputs` → state adapter persist                                          |
 | handler `continueWith`                                                                                           | `validateContinueWith` (runtime) → `encodeInputs` → persist next job                              |
 | handler returns output                                                                                           | `encodeOutputs` → state adapter persist completion                                                |
 | worker pickup                                                                                                    | state adapter `startJobAttempt` → `decodeInputs` → handler receives runtime form                  |

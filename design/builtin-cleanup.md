@@ -109,7 +109,7 @@ The user schedules cleanup at application startup, controlling retention and int
 ```ts
 await withTransactionHooks(async (transactionHooks) =>
   stateProvider.withTransaction(async (txCtx) =>
-    client.startChain({
+    client.createChain({
       ...txCtx,
       transactionHooks,
       typeName: "__queuert/cleanup",
@@ -121,7 +121,7 @@ await withTransactionHooks(async (transactionHooks) =>
 );
 ```
 
-Recurring scheduling uses the same `complete` → `startChain` with `schedule` + `deduplication`
+Recurring scheduling uses the same `complete` → `createChain` with `schedule` + `deduplication`
 pattern from the existing cleanup guide, but the handler's `complete` callback handles it
 internally — the user only provides the initial schedule.
 

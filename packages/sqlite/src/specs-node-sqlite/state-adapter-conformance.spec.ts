@@ -110,7 +110,7 @@ it("infers custom ID types through the full stack", async () => {
       using _h = await lock.acquireWrite();
       db.exec("BEGIN");
       try {
-        const result = await client.startChain({
+        const result = await client.createChain({
           db,
           transactionHooks,
           typeName: "test",

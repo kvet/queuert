@@ -186,7 +186,7 @@ console.log("Payment results are typed as success | failure.\n");
 
 const payment1 = await withTransactionHooks(async (transactionHooks) =>
   sql.begin(async (txSql) => {
-    const result = await client.startChain({
+    const result = await client.createChain({
       sql: txSql,
       transactionHooks,
       typeName: "process-payment",
@@ -203,7 +203,7 @@ assert.equal(result1.output.success, true);
 
 const payment2 = await withTransactionHooks(async (transactionHooks) =>
   sql.begin(async (txSql) => {
-    const result = await client.startChain({
+    const result = await client.createChain({
       sql: txSql,
       transactionHooks,
       typeName: "process-payment",
@@ -225,7 +225,7 @@ console.log("Charge -> Ship succeeds.\n");
 shipmentShouldFail = false;
 const order1 = await withTransactionHooks(async (transactionHooks) =>
   sql.begin(async (txSql) => {
-    const result = await client.startChain({
+    const result = await client.createChain({
       sql: txSql,
       transactionHooks,
       typeName: "charge-card",
@@ -245,7 +245,7 @@ console.log("Charge -> Ship fails -> Refund.\n");
 shipmentShouldFail = true;
 const order2 = await withTransactionHooks(async (transactionHooks) =>
   sql.begin(async (txSql) => {
-    const result = await client.startChain({
+    const result = await client.createChain({
       sql: txSql,
       transactionHooks,
       typeName: "charge-card",
@@ -265,7 +265,7 @@ console.log("API is rate-limited, job reschedules itself.\n");
 apiRateLimited = true;
 const apiCall = await withTransactionHooks(async (transactionHooks) =>
   sql.begin(async (txSql) => {
-    const result = await client.startChain({
+    const result = await client.createChain({
       sql: txSql,
       transactionHooks,
       typeName: "call-rate-limited-api",

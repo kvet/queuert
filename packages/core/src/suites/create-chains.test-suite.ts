@@ -8,13 +8,13 @@ import { withTransactionHooks } from "../transaction-hooks.js";
 import { createProcessors } from "../worker/create-processors.js";
 import { type TestSuiteContext } from "./spec-context.spec-helper.js";
 
-export const startChainsTestSuite = ({ it }: { it: TestAPI<TestSuiteContext> }): void => {
+export const createChainsTestSuite = ({ it }: { it: TestAPI<TestSuiteContext> }): void => {
   const completionOptions = {
     pollIntervalMs: 100,
     timeoutMs: 5000,
   };
 
-  describe("startChain", () => {
+  describe("createChain", () => {
     it("creates a single chain", async ({
       stateAdapter,
       notifyAdapter,
@@ -37,7 +37,7 @@ export const startChainsTestSuite = ({ it }: { it: TestAPI<TestSuiteContext> }):
 
       const chain = await withTransactionHooks(async (transactionHooks) =>
         withTransaction(async (txCtx) =>
-          client.startChain({
+          client.createChain({
             ...txCtx,
             transactionHooks,
             typeName: "test",
@@ -76,7 +76,7 @@ export const startChainsTestSuite = ({ it }: { it: TestAPI<TestSuiteContext> }):
 
       const first = await withTransactionHooks(async (transactionHooks) =>
         withTransaction(async (txCtx) =>
-          client.startChain({
+          client.createChain({
             ...txCtx,
             transactionHooks,
             typeName: "test",
@@ -88,7 +88,7 @@ export const startChainsTestSuite = ({ it }: { it: TestAPI<TestSuiteContext> }):
 
       const second = await withTransactionHooks(async (transactionHooks) =>
         withTransaction(async (txCtx) =>
-          client.startChain({
+          client.createChain({
             ...txCtx,
             transactionHooks,
             typeName: "test",
@@ -131,7 +131,7 @@ export const startChainsTestSuite = ({ it }: { it: TestAPI<TestSuiteContext> }):
 
       const dep = await withTransactionHooks(async (transactionHooks) =>
         withTransaction(async (txCtx) =>
-          client.startChain({
+          client.createChain({
             ...txCtx,
             transactionHooks,
             typeName: "dependency",
@@ -142,7 +142,7 @@ export const startChainsTestSuite = ({ it }: { it: TestAPI<TestSuiteContext> }):
 
       const main = await withTransactionHooks(async (transactionHooks) =>
         withTransaction(async (txCtx) =>
-          client.startChain({
+          client.createChain({
             ...txCtx,
             transactionHooks,
             typeName: "main",
@@ -180,7 +180,7 @@ export const startChainsTestSuite = ({ it }: { it: TestAPI<TestSuiteContext> }):
 
       const chain = await withTransactionHooks(async (transactionHooks) =>
         withTransaction(async (txCtx) =>
-          client.startChain({
+          client.createChain({
             ...txCtx,
             transactionHooks,
             typeName: "test",
@@ -217,7 +217,7 @@ export const startChainsTestSuite = ({ it }: { it: TestAPI<TestSuiteContext> }):
       await expect(
         withTransactionHooks(async (transactionHooks) =>
           // @ts-expect-error missing txCtx
-          client.startChain({ transactionHooks, typeName: "test", input: { value: 1 } }),
+          client.createChain({ transactionHooks, typeName: "test", input: { value: 1 } }),
         ),
       ).rejects.toThrow(TransactionContextRequiredError);
     });
@@ -243,7 +243,7 @@ export const startChainsTestSuite = ({ it }: { it: TestAPI<TestSuiteContext> }):
 
       void withTransactionHooks(async (transactionHooks) =>
         withTransaction(async (txCtx) =>
-          client.startChain({
+          client.createChain({
             ...txCtx,
             transactionHooks,
             typeName: "test",
@@ -275,7 +275,7 @@ export const startChainsTestSuite = ({ it }: { it: TestAPI<TestSuiteContext> }):
 
       void withTransactionHooks(async (transactionHooks) =>
         withTransaction(async (txCtx) =>
-          client.startChain({
+          client.createChain({
             ...txCtx,
             transactionHooks,
             // @ts-expect-error non-existent type
@@ -314,7 +314,7 @@ export const startChainsTestSuite = ({ it }: { it: TestAPI<TestSuiteContext> }):
       void withTransactionHooks(async (transactionHooks) =>
         withTransaction(async (txCtx) =>
           // @ts-expect-error missing required blockers
-          client.startChain({
+          client.createChain({
             ...txCtx,
             transactionHooks,
             typeName: "withBlocker",
@@ -348,7 +348,7 @@ export const startChainsTestSuite = ({ it }: { it: TestAPI<TestSuiteContext> }):
       const userId = generateId();
       const chain = await withTransactionHooks(async (transactionHooks) =>
         withTransaction(async (txCtx) =>
-          client.startChain({
+          client.createChain({
             ...txCtx,
             transactionHooks,
             typeName: "test",
@@ -363,7 +363,7 @@ export const startChainsTestSuite = ({ it }: { it: TestAPI<TestSuiteContext> }):
     });
   });
 
-  describe("startChains", () => {
+  describe("createChains", () => {
     it("creates multiple chains in a single batch", async ({
       stateAdapter,
       notifyAdapter,
@@ -386,7 +386,7 @@ export const startChainsTestSuite = ({ it }: { it: TestAPI<TestSuiteContext> }):
 
       const chains = await withTransactionHooks(async (transactionHooks) =>
         withTransaction(async (txCtx) =>
-          client.startChains({
+          client.createChains({
             ...txCtx,
             transactionHooks,
             items: [
@@ -434,7 +434,7 @@ export const startChainsTestSuite = ({ it }: { it: TestAPI<TestSuiteContext> }):
 
       const chains = await withTransactionHooks(async (transactionHooks) =>
         withTransaction(async (txCtx) =>
-          client.startChains({
+          client.createChains({
             ...txCtx,
             transactionHooks,
             items: [],
@@ -467,7 +467,7 @@ export const startChainsTestSuite = ({ it }: { it: TestAPI<TestSuiteContext> }):
 
       const existingChain = await withTransactionHooks(async (transactionHooks) =>
         withTransaction(async (txCtx) =>
-          client.startChain({
+          client.createChain({
             ...txCtx,
             transactionHooks,
             typeName: "test",
@@ -479,7 +479,7 @@ export const startChainsTestSuite = ({ it }: { it: TestAPI<TestSuiteContext> }):
 
       const chains = await withTransactionHooks(async (transactionHooks) =>
         withTransaction(async (txCtx) =>
-          client.startChains({
+          client.createChains({
             ...txCtx,
             transactionHooks,
             items: [
@@ -533,7 +533,7 @@ export const startChainsTestSuite = ({ it }: { it: TestAPI<TestSuiteContext> }):
 
       const depChain = await withTransactionHooks(async (transactionHooks) =>
         withTransaction(async (txCtx) =>
-          client.startChain({
+          client.createChain({
             ...txCtx,
             transactionHooks,
             typeName: "dependency",
@@ -544,7 +544,7 @@ export const startChainsTestSuite = ({ it }: { it: TestAPI<TestSuiteContext> }):
 
       const chains = await withTransactionHooks(async (transactionHooks) =>
         withTransaction(async (txCtx) =>
-          client.startChains({
+          client.createChains({
             ...txCtx,
             transactionHooks,
             items: [
@@ -596,7 +596,7 @@ export const startChainsTestSuite = ({ it }: { it: TestAPI<TestSuiteContext> }):
       const futureDate = new Date(Date.now() + 60_000);
       const chains = await withTransactionHooks(async (transactionHooks) =>
         withTransaction(async (txCtx) =>
-          client.startChains({
+          client.createChains({
             ...txCtx,
             transactionHooks,
             items: [
@@ -639,7 +639,7 @@ export const startChainsTestSuite = ({ it }: { it: TestAPI<TestSuiteContext> }):
 
       const [chainA, chainB] = await withTransactionHooks(async (transactionHooks) =>
         withTransaction(async (txCtx) =>
-          client.startChains({
+          client.createChains({
             ...txCtx,
             transactionHooks,
             items: [
@@ -686,7 +686,7 @@ export const startChainsTestSuite = ({ it }: { it: TestAPI<TestSuiteContext> }):
 
       const dep = await withTransactionHooks(async (transactionHooks) =>
         withTransaction(async (txCtx) =>
-          client.startChain({
+          client.createChain({
             ...txCtx,
             transactionHooks,
             typeName: "dependency",
@@ -697,7 +697,7 @@ export const startChainsTestSuite = ({ it }: { it: TestAPI<TestSuiteContext> }):
 
       const [blockedChain, unblockedChain] = await withTransactionHooks(async (transactionHooks) =>
         withTransaction(async (txCtx) =>
-          client.startChains({
+          client.createChains({
             ...txCtx,
             transactionHooks,
             items: [
@@ -750,7 +750,7 @@ export const startChainsTestSuite = ({ it }: { it: TestAPI<TestSuiteContext> }):
 
       const blocker = await withTransactionHooks(async (transactionHooks) =>
         withTransaction(async (txCtx) =>
-          client.startChain({
+          client.createChain({
             ...txCtx,
             transactionHooks,
             typeName: "blocker",
@@ -761,7 +761,7 @@ export const startChainsTestSuite = ({ it }: { it: TestAPI<TestSuiteContext> }):
 
       const chains = await withTransactionHooks(async (transactionHooks) =>
         withTransaction(async (txCtx) =>
-          client.startChains({
+          client.createChains({
             ...txCtx,
             transactionHooks,
             items: [
@@ -836,7 +836,7 @@ export const startChainsTestSuite = ({ it }: { it: TestAPI<TestSuiteContext> }):
 
       const chains = await withTransactionHooks(async (transactionHooks) =>
         withTransaction(async (txCtx) =>
-          client.startChains({
+          client.createChains({
             ...txCtx,
             transactionHooks,
             items: [
@@ -897,7 +897,7 @@ export const startChainsTestSuite = ({ it }: { it: TestAPI<TestSuiteContext> }):
       await expect(
         withTransactionHooks(async (transactionHooks) =>
           // @ts-expect-error missing txCtx
-          client.startChains({
+          client.createChains({
             transactionHooks,
             items: [{ typeName: "test", input: { value: 1 } }],
           }),
@@ -926,7 +926,7 @@ export const startChainsTestSuite = ({ it }: { it: TestAPI<TestSuiteContext> }):
 
       void withTransactionHooks(async (transactionHooks) =>
         withTransaction(async (txCtx) =>
-          client.startChains({
+          client.createChains({
             ...txCtx,
             transactionHooks,
             items: [
@@ -959,7 +959,7 @@ export const startChainsTestSuite = ({ it }: { it: TestAPI<TestSuiteContext> }):
 
       void withTransactionHooks(async (transactionHooks) =>
         withTransaction(async (txCtx) =>
-          client.startChains({
+          client.createChains({
             ...txCtx,
             transactionHooks,
             items: [
@@ -998,7 +998,7 @@ export const startChainsTestSuite = ({ it }: { it: TestAPI<TestSuiteContext> }):
 
       void withTransactionHooks(async (transactionHooks) =>
         withTransaction(async (txCtx) =>
-          client.startChains({
+          client.createChains({
             ...txCtx,
             transactionHooks,
             items: [
@@ -1035,7 +1035,7 @@ export const startChainsTestSuite = ({ it }: { it: TestAPI<TestSuiteContext> }):
       const idB = generateId();
       const chains = await withTransactionHooks(async (transactionHooks) =>
         withTransaction(async (txCtx) =>
-          client.startChains({
+          client.createChains({
             ...txCtx,
             transactionHooks,
             items: [

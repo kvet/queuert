@@ -116,11 +116,11 @@ const stopWorker = await worker.start();
 
 // Scenario 1: Basic awaiting
 console.log("\n--- Scenario 1: Basic Awaiting ---");
-console.log("Start a price lookup chain and await its result.\n");
+console.log("Create a price lookup chain and await its result.\n");
 
 const priceChain = await withTransactionHooks(async (transactionHooks) =>
   sql.begin(async (txSql) =>
-    client.startChain({
+    client.createChain({
       sql: txSql,
       transactionHooks,
       typeName: "fetch-price",
@@ -141,7 +141,7 @@ console.log("Await multiple chains concurrently with Promise.all.\n");
 
 const chains = await withTransactionHooks(async (transactionHooks) =>
   sql.begin(async (txSql) =>
-    client.startChains({
+    client.createChains({
       sql: txSql,
       transactionHooks,
       items: [
@@ -170,7 +170,7 @@ console.log("Await a slow chain with a short timeout.\n");
 
 const slowChain = await withTransactionHooks(async (transactionHooks) =>
   sql.begin(async (txSql) =>
-    client.startChain({
+    client.createChain({
       sql: txSql,
       transactionHooks,
       typeName: "long-running",
@@ -194,7 +194,7 @@ console.log("Cancel awaiting with an AbortSignal.\n");
 
 const abortChain = await withTransactionHooks(async (transactionHooks) =>
   sql.begin(async (txSql) =>
-    client.startChain({
+    client.createChain({
       sql: txSql,
       transactionHooks,
       typeName: "long-running",

@@ -75,7 +75,7 @@ export const processErrorHandlingTestSuite = ({ it }: { it: TestAPI<TestSuiteCon
 
     const chain = await withTransactionHooks(async (transactionHooks) =>
       withTransaction(async (txCtx) =>
-        client.startChain({
+        client.createChain({
           ...txCtx,
           transactionHooks,
           typeName: "test",
@@ -164,7 +164,7 @@ export const processErrorHandlingTestSuite = ({ it }: { it: TestAPI<TestSuiteCon
 
     const chain = await withTransactionHooks(async (transactionHooks) =>
       withTransaction(async (txCtx) =>
-        client.startChain({
+        client.createChain({
           ...txCtx,
           transactionHooks,
           typeName: "test",
@@ -252,7 +252,7 @@ export const processErrorHandlingTestSuite = ({ it }: { it: TestAPI<TestSuiteCon
 
     const chain = await withTransactionHooks(async (transactionHooks) =>
       withTransaction(async (txCtx) =>
-        client.startChain({
+        client.createChain({
           ...txCtx,
           transactionHooks,
           typeName: "test",
@@ -340,7 +340,7 @@ export const processErrorHandlingTestSuite = ({ it }: { it: TestAPI<TestSuiteCon
 
     const chain = await withTransactionHooks(async (transactionHooks) =>
       withTransaction(async (txCtx) =>
-        client.startChain({
+        client.createChain({
           ...txCtx,
           transactionHooks,
           typeName: "test",
@@ -437,7 +437,7 @@ export const processErrorHandlingTestSuite = ({ it }: { it: TestAPI<TestSuiteCon
 
     const chain = await withTransactionHooks(async (transactionHooks) =>
       withTransaction(async (txCtx) =>
-        client.startChain({
+        client.createChain({
           ...txCtx,
           transactionHooks,
           typeName: "test",
@@ -528,7 +528,7 @@ export const processErrorHandlingTestSuite = ({ it }: { it: TestAPI<TestSuiteCon
 
     const chain = await withTransactionHooks(async (transactionHooks) =>
       withTransaction(async (txCtx) =>
-        client.startChain({
+        client.createChain({
           ...txCtx,
           transactionHooks,
           typeName: "test",
@@ -627,7 +627,7 @@ export const processErrorHandlingTestSuite = ({ it }: { it: TestAPI<TestSuiteCon
 
     const chain = await withTransactionHooks(async (transactionHooks) =>
       withTransaction(async (txCtx) =>
-        client.startChain({
+        client.createChain({
           ...txCtx,
           transactionHooks,
           typeName: "test",
@@ -729,7 +729,7 @@ export const processErrorHandlingTestSuite = ({ it }: { it: TestAPI<TestSuiteCon
 
     const chain = await withTransactionHooks(async (transactionHooks) =>
       withTransaction(async (txCtx) =>
-        client.startChain({
+        client.createChain({
           ...txCtx,
           transactionHooks,
           typeName: "test",
@@ -838,7 +838,7 @@ export const processErrorHandlingTestSuite = ({ it }: { it: TestAPI<TestSuiteCon
 
     const chain = await withTransactionHooks(async (transactionHooks) =>
       withTransaction(async (txCtx) =>
-        client.startChain({
+        client.createChain({
           ...txCtx,
           transactionHooks,
           typeName: "test",
@@ -933,7 +933,7 @@ export const processErrorHandlingTestSuite = ({ it }: { it: TestAPI<TestSuiteCon
 
     const chain = await withTransactionHooks(async (transactionHooks) =>
       withTransaction(async (txCtx) =>
-        client.startChain({
+        client.createChain({
           ...txCtx,
           transactionHooks,
           typeName: "test",
@@ -1029,7 +1029,7 @@ export const processErrorHandlingTestSuite = ({ it }: { it: TestAPI<TestSuiteCon
 
     const chain = await withTransactionHooks(async (transactionHooks) =>
       withTransaction(async (txCtx) =>
-        client.startChain({
+        client.createChain({
           ...txCtx,
           transactionHooks,
           typeName: "test",
@@ -1126,7 +1126,7 @@ export const processErrorHandlingTestSuite = ({ it }: { it: TestAPI<TestSuiteCon
 
     const chain = await withTransactionHooks(async (transactionHooks) =>
       withTransaction(async (txCtx) =>
-        client.startChain({
+        client.createChain({
           ...txCtx,
           transactionHooks,
           typeName: "test",
@@ -1237,7 +1237,7 @@ export const processErrorHandlingTestSuite = ({ it }: { it: TestAPI<TestSuiteCon
 
     const chain = await withTransactionHooks(async (transactionHooks) =>
       withTransaction(async (txCtx) =>
-        client.startChain({
+        client.createChain({
           ...txCtx,
           transactionHooks,
           typeName: "step1",
@@ -1349,7 +1349,7 @@ export const processErrorHandlingTestSuite = ({ it }: { it: TestAPI<TestSuiteCon
 
     const chain = await withTransactionHooks(async (transactionHooks) =>
       withTransaction(async (txCtx) =>
-        client.startChain({
+        client.createChain({
           ...txCtx,
           transactionHooks,
           typeName: "step1",
@@ -1462,7 +1462,7 @@ export const processErrorHandlingTestSuite = ({ it }: { it: TestAPI<TestSuiteCon
 
     const blockerChain = await withTransactionHooks(async (transactionHooks) =>
       withTransaction(async (txCtx) =>
-        client.startChain({
+        client.createChain({
           ...txCtx,
           transactionHooks,
           typeName: "blocker",
@@ -1472,7 +1472,7 @@ export const processErrorHandlingTestSuite = ({ it }: { it: TestAPI<TestSuiteCon
     );
     const dependentChain = await withTransactionHooks(async (transactionHooks) =>
       withTransaction(async (txCtx) =>
-        client.startChain({
+        client.createChain({
           ...txCtx,
           transactionHooks,
           typeName: "dependent",
@@ -1555,7 +1555,7 @@ export const processErrorHandlingTestSuite = ({ it }: { it: TestAPI<TestSuiteCon
 
     const blockerChain = await withTransactionHooks(async (transactionHooks) =>
       withTransaction(async (txCtx) =>
-        client.startChain({
+        client.createChain({
           ...txCtx,
           transactionHooks,
           typeName: "blocker",
@@ -1565,7 +1565,7 @@ export const processErrorHandlingTestSuite = ({ it }: { it: TestAPI<TestSuiteCon
     );
     const dependentChain = await withTransactionHooks(async (transactionHooks) =>
       withTransaction(async (txCtx) =>
-        client.startChain({
+        client.createChain({
           ...txCtx,
           transactionHooks,
           typeName: "dependent",
@@ -1644,7 +1644,7 @@ export const processErrorHandlingTestSuite = ({ it }: { it: TestAPI<TestSuiteCon
 
     const chain = await withTransactionHooks(async (transactionHooks) =>
       withTransaction(async (txCtx) =>
-        client.startChain({
+        client.createChain({
           ...txCtx,
           transactionHooks,
           typeName: "test",
@@ -1720,7 +1720,7 @@ export const processErrorHandlingTestSuite = ({ it }: { it: TestAPI<TestSuiteCon
 
     const chain = await withTransactionHooks(async (transactionHooks) =>
       withTransaction(async (txCtx) =>
-        client.startChain({
+        client.createChain({
           ...txCtx,
           transactionHooks,
           typeName: "test",
@@ -1784,7 +1784,7 @@ export const processErrorHandlingTestSuite = ({ it }: { it: TestAPI<TestSuiteCon
 
     const chain = await withTransactionHooks(async (transactionHooks) =>
       withTransaction(async (txCtx) =>
-        client.startChain({
+        client.createChain({
           ...txCtx,
           transactionHooks,
           typeName: "test",
@@ -1849,7 +1849,7 @@ export const processErrorHandlingTestSuite = ({ it }: { it: TestAPI<TestSuiteCon
 
     const chain = await withTransactionHooks(async (transactionHooks) =>
       withTransaction(async (txCtx) =>
-        client.startChain({
+        client.createChain({
           ...txCtx,
           transactionHooks,
           typeName: "test",
@@ -1924,7 +1924,7 @@ export const processErrorHandlingTestSuite = ({ it }: { it: TestAPI<TestSuiteCon
 
     const chain = await withTransactionHooks(async (transactionHooks) =>
       withTransaction(async (txCtx) =>
-        client.startChain({
+        client.createChain({
           ...txCtx,
           transactionHooks,
           typeName: "test",
@@ -2017,7 +2017,7 @@ export const processErrorHandlingTestSuite = ({ it }: { it: TestAPI<TestSuiteCon
 
     const chain = await withTransactionHooks(async (transactionHooks) =>
       withTransaction(async (txCtx) =>
-        client.startChain({
+        client.createChain({
           ...txCtx,
           transactionHooks,
           typeName: "test",
@@ -2082,7 +2082,7 @@ export const processErrorHandlingTestSuite = ({ it }: { it: TestAPI<TestSuiteCon
 
     const chain = await withTransactionHooks(async (transactionHooks) =>
       withTransaction(async (txCtx) =>
-        client.startChain({
+        client.createChain({
           ...txCtx,
           transactionHooks,
           typeName: "test",
@@ -2148,7 +2148,7 @@ export const processErrorHandlingTestSuite = ({ it }: { it: TestAPI<TestSuiteCon
 
     const chain = await withTransactionHooks(async (transactionHooks) =>
       withTransaction(async (txCtx) =>
-        client.startChain({
+        client.createChain({
           ...txCtx,
           transactionHooks,
           typeName: "test",
@@ -2213,7 +2213,7 @@ export const processErrorHandlingTestSuite = ({ it }: { it: TestAPI<TestSuiteCon
 
     const chain = await withTransactionHooks(async (transactionHooks) =>
       withTransaction(async (txCtx) =>
-        client.startChain({
+        client.createChain({
           ...txCtx,
           transactionHooks,
           typeName: "test",
@@ -2289,7 +2289,7 @@ export const processErrorHandlingTestSuite = ({ it }: { it: TestAPI<TestSuiteCon
 
     const chain = await withTransactionHooks(async (transactionHooks) =>
       withTransaction(async (txCtx) =>
-        client.startChain({
+        client.createChain({
           ...txCtx,
           transactionHooks,
           typeName: "test",

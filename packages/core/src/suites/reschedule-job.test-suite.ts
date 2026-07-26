@@ -41,7 +41,7 @@ export const rescheduleJobTestSuite = ({ it }: { it: TestAPI<TestSuiteContext> }
 
     const chain = await withTransactionHooks(async (transactionHooks) =>
       withTransaction(async (txCtx) =>
-        client.startChain({
+        client.createChain({
           ...txCtx,
           transactionHooks,
           typeName: "report",
@@ -91,7 +91,7 @@ export const rescheduleJobTestSuite = ({ it }: { it: TestAPI<TestSuiteContext> }
 
     const chain = await withTransactionHooks(async (transactionHooks) =>
       withTransaction(async (txCtx) =>
-        client.startChain({ ...txCtx, transactionHooks, typeName: "task", input: null }),
+        client.createChain({ ...txCtx, transactionHooks, typeName: "task", input: null }),
       ),
     );
 
@@ -133,7 +133,7 @@ export const rescheduleJobTestSuite = ({ it }: { it: TestAPI<TestSuiteContext> }
 
     const chain = await withTransactionHooks(async (transactionHooks) =>
       withTransaction(async (txCtx) =>
-        client.startChain({ ...txCtx, transactionHooks, typeName: "task", input: null }),
+        client.createChain({ ...txCtx, transactionHooks, typeName: "task", input: null }),
       ),
     );
 
@@ -197,7 +197,7 @@ export const rescheduleJobTestSuite = ({ it }: { it: TestAPI<TestSuiteContext> }
 
     const chain = await withTransactionHooks(async (transactionHooks) =>
       withTransaction(async (txCtx) =>
-        client.startChain({
+        client.createChain({
           ...txCtx,
           transactionHooks,
           typeName: "task",
@@ -246,7 +246,7 @@ export const rescheduleJobTestSuite = ({ it }: { it: TestAPI<TestSuiteContext> }
 
     const chain = await withTransactionHooks(async (transactionHooks) =>
       withTransaction(async (txCtx) =>
-        client.startChain({ ...txCtx, transactionHooks, typeName: "task", input: null }),
+        client.createChain({ ...txCtx, transactionHooks, typeName: "task", input: null }),
       ),
     );
 
@@ -302,7 +302,7 @@ export const rescheduleJobTestSuite = ({ it }: { it: TestAPI<TestSuiteContext> }
 
     const chain = await withTransactionHooks(async (transactionHooks) =>
       withTransaction(async (txCtx) =>
-        client.startChain({ ...txCtx, transactionHooks, typeName: "task", input: null }),
+        client.createChain({ ...txCtx, transactionHooks, typeName: "task", input: null }),
       ),
     );
 
@@ -345,7 +345,7 @@ export const rescheduleJobTestSuite = ({ it }: { it: TestAPI<TestSuiteContext> }
 
     const chain = await withTransactionHooks(async (transactionHooks) =>
       withTransaction(async (txCtx) =>
-        client.startChain({
+        client.createChain({
           ...txCtx,
           transactionHooks,
           typeName: "report",
@@ -391,13 +391,13 @@ export const rescheduleJobTestSuite = ({ it }: { it: TestAPI<TestSuiteContext> }
 
     const blockerChain = await withTransactionHooks(async (transactionHooks) =>
       withTransaction(async (txCtx) =>
-        client.startChain({ ...txCtx, transactionHooks, typeName: "blocker", input: null }),
+        client.createChain({ ...txCtx, transactionHooks, typeName: "blocker", input: null }),
       ),
     );
 
     const blockedChain = await withTransactionHooks(async (transactionHooks) =>
       withTransaction(async (txCtx) =>
-        client.startChain({
+        client.createChain({
           ...txCtx,
           transactionHooks,
           typeName: "blocked",
@@ -451,7 +451,7 @@ export const rescheduleJobTestSuite = ({ it }: { it: TestAPI<TestSuiteContext> }
 
     const chains = await withTransactionHooks(async (transactionHooks) =>
       withTransaction(async (txCtx) =>
-        client.startChains({
+        client.createChains({
           ...txCtx,
           transactionHooks,
           items: [
@@ -500,7 +500,7 @@ export const rescheduleJobTestSuite = ({ it }: { it: TestAPI<TestSuiteContext> }
 
     const chains = await withTransactionHooks(async (transactionHooks) =>
       withTransaction(async (txCtx) =>
-        client.startChains({
+        client.createChains({
           ...txCtx,
           transactionHooks,
           items: [
@@ -576,7 +576,7 @@ export const rescheduleJobTestSuite = ({ it }: { it: TestAPI<TestSuiteContext> }
 
     const [chainA, chainB] = await withTransactionHooks(async (transactionHooks) =>
       withTransaction(async (txCtx) =>
-        client.startChains({
+        client.createChains({
           ...txCtx,
           transactionHooks,
           items: [
@@ -646,7 +646,7 @@ export const rescheduleJobTestSuite = ({ it }: { it: TestAPI<TestSuiteContext> }
 
     const completedChain = await withTransactionHooks(async (transactionHooks) =>
       withTransaction(async (txCtx) =>
-        client.startChain({
+        client.createChain({
           ...txCtx,
           transactionHooks,
           typeName: "task",
@@ -661,7 +661,7 @@ export const rescheduleJobTestSuite = ({ it }: { it: TestAPI<TestSuiteContext> }
 
     const pendingChain = await withTransactionHooks(async (transactionHooks) =>
       withTransaction(async (txCtx) =>
-        client.startChain({
+        client.createChain({
           ...txCtx,
           transactionHooks,
           typeName: "task",
@@ -709,7 +709,7 @@ export const rescheduleJobTestSuite = ({ it }: { it: TestAPI<TestSuiteContext> }
 
     const chain = await withTransactionHooks(async (transactionHooks) =>
       withTransaction(async (txCtx) =>
-        client.startChain({
+        client.createChain({
           ...txCtx,
           transactionHooks,
           typeName: "task",

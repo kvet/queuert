@@ -21,7 +21,7 @@ await withTransactionHooks(async (transactionHooks) =>
 
     // Job creation in the same transaction
     // The transaction context property name matches your StateProvider
-    await client.startChain({
+    await client.createChain({
       tx,
       transactionHooks,
       typeName: "process-image",

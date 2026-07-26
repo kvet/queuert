@@ -47,7 +47,7 @@ const chain = fetch(url)           // chain === this promise
   .then(formatResult);             // continuation
 
 // Queuert: A Chain IS its head job
-const chain = startChain(...)   // chain.id === headJob.id
+const chain = createChain(...)     // chain.id === headJob.id
   .continueWith(processStep)       // continuation
   .continueWith(formatStep);       // continuation
 ```

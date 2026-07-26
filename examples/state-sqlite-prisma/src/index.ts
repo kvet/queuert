@@ -106,7 +106,7 @@ const chain = await withTransactionHooks(async (transactionHooks) => {
     });
 
     // Queue welcome email - if user creation fails, no email job is created
-    return client.startChain({
+    return client.createChain({
       prisma,
       transactionHooks,
       typeName: "send_welcome_email",

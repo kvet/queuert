@@ -45,7 +45,7 @@ These are what a _distributed durable-execution platform_ should be good at.
 ## What Queuert is good at
 
 - **Chained execution of typed jobs.** Multi-step work as a typed sequence; inputs, outputs, continuations, and blockers infer end-to-end via `defineJobTypes`. Renames are compiler-checked.
-- **Transactional consistency, by design.** `startChain` enqueues inside your DB transaction; handler completion + next-step `continueWith` commit in the same transaction as your domain writes. For DB-bound work, no outbox at enqueue and no idempotency-key ritual at processing — both halves are structural, not application discipline.
+- **Transactional consistency, by design.** `createChain` enqueues inside your DB transaction; handler completion + next-step `continueWith` commit in the same transaction as your domain writes. For DB-bound work, no outbox at enqueue and no idempotency-key ritual at processing — both halves are structural, not application discipline.
 - **Plain TypeScript handlers.** No determinism constraint, no separate workflow bundle, no "you can't call `Date.now()` here." Job handlers are normal Node code that does normal Node things.
 - **Operational simplicity.** No cluster to run, no separate persistence tier, no bundling step. Your application's Postgres is the entire backing store.
 - **Database as the system of record.** Chain state lives next to your domain data. Joins, foreign keys, transactional consistency — all available.

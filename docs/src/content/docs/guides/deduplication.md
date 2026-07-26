@@ -12,9 +12,9 @@ Deduplication prevents duplicate chains from being created. When you start a cha
 
 direction: right
 
-call1: "startChain\nkey: 'sync:123'" { class: client; width: 180; height: 70 }
-call2: "startChain\nkey: 'sync:123'" { class: client; width: 180; height: 70 }
-call3: "startChain\nkey: 'sync:123'" { class: client; width: 180; height: 70 }
+call1: "createChain\nkey: 'sync:123'" { class: client; width: 180; height: 70 }
+call2: "createChain\nkey: 'sync:123'" { class: client; width: 180; height: 70 }
+call3: "createChain\nkey: 'sync:123'" { class: client; width: 180; height: 70 }
 
 chain: "chain abc-123\n(existing)" { class: job-accent; width: 180; height: 70 }
 
@@ -33,7 +33,7 @@ chain -> dup2
 ```ts
 // First call creates the chain
 const chain1 = await withTransactionHooks(async (transactionHooks) =>
-  client.startChain({
+  client.createChain({
     transactionHooks,
     typeName: "sync-user",
     input: { userId: "123" },
@@ -43,7 +43,7 @@ const chain1 = await withTransactionHooks(async (transactionHooks) =>
 
 // Second call with same key returns existing chain
 const chain2 = await withTransactionHooks(async (transactionHooks) =>
-  client.startChain({
+  client.createChain({
     transactionHooks,
     typeName: "sync-user",
     input: { userId: "123" },
@@ -65,7 +65,7 @@ The `scope` option controls what jobs to check for duplicates:
 ```ts
 // Only one active health check at a time, but can start new after completion
 await withTransactionHooks(async (transactionHooks) =>
-  client.startChain({
+  client.createChain({
     transactionHooks,
     typeName: "health-check",
     input: { serviceId: "api-server" },
@@ -84,7 +84,7 @@ Use `windowMs` to rate-limit job creation. Duplicates are prevented only within 
 ```ts
 // No duplicate syncs within 1 hour
 await withTransactionHooks(async (transactionHooks) =>
-  client.startChain({
+  client.createChain({
     transactionHooks,
     typeName: "sync-data",
     input: { sourceId: "db-primary" },
@@ -104,7 +104,7 @@ Use `excludeChainIds` to skip specific chains during deduplication matching. Thi
 ```ts
 // Inside a processor's completion callback
 return complete(async ({ sql, transactionHooks }) => {
-  await client.startChain({
+  await client.createChain({
     sql,
     transactionHooks,
     typeName: "health-check",

@@ -9,7 +9,7 @@ import {
   notifyResilienceTestSuite,
   notifyTestSuite,
   schedulingTestSuite,
-  startChainsTestSuite,
+  createChainsTestSuite,
   stateResilienceTestSuite,
   rescheduleJobTestSuite,
   awaitChainTestSuite,
@@ -32,8 +32,8 @@ describe("Chains", () => {
   chainsTestSuite({ it: postgresPostgresIt });
 });
 
-describe("Start Chains", () => {
-  startChainsTestSuite({ it: postgresPostgresIt });
+describe("Create Chains", () => {
+  createChainsTestSuite({ it: postgresPostgresIt });
 });
 
 describe("Blocker Chains", () => {

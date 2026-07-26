@@ -102,7 +102,7 @@ const chain = await withTransactionHooks(async (transactionHooks) => {
     const user = userResult.rows[0];
 
     // Queue welcome email - if user creation fails, no email job is created
-    const result = await client.startChain({
+    const result = await client.createChain({
       poolClient,
       transactionHooks,
       typeName: "send_welcome_email",

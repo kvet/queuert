@@ -293,7 +293,7 @@ userConverts = true;
 
 const chain1 = await withTransactionHooks(async (transactionHooks) =>
   sql.begin(async (txSql) =>
-    client.startChain({
+    client.createChain({
       sql: txSql,
       transactionHooks,
       typeName: "create-subscription",
@@ -330,7 +330,7 @@ userConverts = false;
 
 const chain2 = await withTransactionHooks(async (transactionHooks) =>
   sql.begin(async (txSql) =>
-    client.startChain({
+    client.createChain({
       sql: txSql,
       transactionHooks,
       typeName: "create-subscription",

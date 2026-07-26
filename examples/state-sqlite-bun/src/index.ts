@@ -93,7 +93,7 @@ const chain = await withTransactionHooks(async (transactionHooks) => {
       .get("Alice", "alice@example.com");
     if (!user) throw new Error("Failed to insert user");
 
-    const result = await client.startChain({
+    const result = await client.createChain({
       db,
       transactionHooks,
       typeName: "send_welcome_email",

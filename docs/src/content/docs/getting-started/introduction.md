@@ -43,7 +43,7 @@ await withTransactionHooks(async (transactionHooks) =>
   db.transaction(async (tx) => {
     const user = await tx.users.create({ name: "Alice", email: "alice@example.com" });
 
-    await client.startChain({
+    await client.createChain({
       tx,
       transactionHooks,
       typeName: "provision-account",

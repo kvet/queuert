@@ -57,7 +57,7 @@ export const clientQueriesTestSuite = ({ it }: { it: TestAPI<TestSuiteContext> }
       jobTypes,
     });
 
-    const startChain = async (
+    const createChain = async (
       typeName: "order" | "notification" | "report",
       input: { amount: number } | { message: string } | { type: string },
       blockers?: [{ id: string }],
@@ -66,7 +66,7 @@ export const clientQueriesTestSuite = ({ it }: { it: TestAPI<TestSuiteContext> }
         withTransaction(async (txCtx) => {
           const base = { ...txCtx, transactionHooks };
           if (typeName === "report") {
-            return client.startChain({
+            return client.createChain({
               ...base,
               typeName,
               input: input as { type: string },
@@ -74,13 +74,13 @@ export const clientQueriesTestSuite = ({ it }: { it: TestAPI<TestSuiteContext> }
             });
           }
           if (typeName === "order") {
-            return client.startChain({
+            return client.createChain({
               ...base,
               typeName,
               input: input as { amount: number },
             });
           }
-          return client.startChain({
+          return client.createChain({
             ...base,
             typeName: typeName as "notification",
             input: input as { message: string },
@@ -88,7 +88,7 @@ export const clientQueriesTestSuite = ({ it }: { it: TestAPI<TestSuiteContext> }
         }),
       );
 
-    return { client, startChain };
+    return { client, createChain };
   };
 
   describe("getChain", () => {
@@ -124,14 +124,14 @@ export const clientQueriesTestSuite = ({ it }: { it: TestAPI<TestSuiteContext> }
       withTransaction,
       expect,
     }) => {
-      const { client, startChain } = await createContext({
+      const { client, createChain } = await createContext({
         stateAdapter,
         notifyAdapter,
         observabilityAdapter,
         log,
         withTransaction,
       });
-      const created = await startChain("order", { amount: 42 });
+      const created = await createChain("order", { amount: 42 });
 
       const chain = await client.getChain({ id: created.id });
 
@@ -150,14 +150,14 @@ export const clientQueriesTestSuite = ({ it }: { it: TestAPI<TestSuiteContext> }
       withTransaction,
       expect,
     }) => {
-      const { client, startChain } = await createContext({
+      const { client, createChain } = await createContext({
         stateAdapter,
         notifyAdapter,
         observabilityAdapter,
         log,
         withTransaction,
       });
-      const created = await startChain("notification", { message: "hello" });
+      const created = await createChain("notification", { message: "hello" });
 
       const chain = await client.getChain({ typeName: "notification", id: created.id });
 
@@ -173,14 +173,14 @@ export const clientQueriesTestSuite = ({ it }: { it: TestAPI<TestSuiteContext> }
       withTransaction,
       expect,
     }) => {
-      const { client, startChain } = await createContext({
+      const { client, createChain } = await createContext({
         stateAdapter,
         notifyAdapter,
         observabilityAdapter,
         log,
         withTransaction,
       });
-      const created = await startChain("order", { amount: 42 });
+      const created = await createChain("order", { amount: 42 });
 
       const chain = await client.getChain({ id: created.id });
 
@@ -196,14 +196,14 @@ export const clientQueriesTestSuite = ({ it }: { it: TestAPI<TestSuiteContext> }
       withTransaction,
       expect,
     }) => {
-      const { client, startChain } = await createContext({
+      const { client, createChain } = await createContext({
         stateAdapter,
         notifyAdapter,
         observabilityAdapter,
         log,
         withTransaction,
       });
-      const created = await startChain("order", { amount: 42 });
+      const created = await createChain("order", { amount: 42 });
 
       await expect(client.getChain({ typeName: "notification", id: created.id })).rejects.toThrow(
         ChainTypeMismatchError,
@@ -264,15 +264,15 @@ export const clientQueriesTestSuite = ({ it }: { it: TestAPI<TestSuiteContext> }
       withTransaction,
       expect,
     }) => {
-      const { client, startChain } = await createContext({
+      const { client, createChain } = await createContext({
         stateAdapter,
         notifyAdapter,
         observabilityAdapter,
         log,
         withTransaction,
       });
-      const order = await startChain("order", { amount: 42 });
-      const notification = await startChain("notification", { message: "hello" });
+      const order = await createChain("order", { amount: 42 });
+      const notification = await createChain("notification", { message: "hello" });
 
       const chains = await client.getChains({ ids: [notification.id, order.id] });
 
@@ -289,14 +289,14 @@ export const clientQueriesTestSuite = ({ it }: { it: TestAPI<TestSuiteContext> }
       withTransaction,
       expect,
     }) => {
-      const { client, startChain } = await createContext({
+      const { client, createChain } = await createContext({
         stateAdapter,
         notifyAdapter,
         observabilityAdapter,
         log,
         withTransaction,
       });
-      const created = await startChain("order", { amount: 42 });
+      const created = await createChain("order", { amount: 42 });
 
       const chains = await client.getChains({
         ids: ["00000000-0000-0000-0000-000000000000", created.id],
@@ -315,14 +315,14 @@ export const clientQueriesTestSuite = ({ it }: { it: TestAPI<TestSuiteContext> }
       withTransaction,
       expect,
     }) => {
-      const { client, startChain } = await createContext({
+      const { client, createChain } = await createContext({
         stateAdapter,
         notifyAdapter,
         observabilityAdapter,
         log,
         withTransaction,
       });
-      const created = await startChain("notification", { message: "hello" });
+      const created = await createChain("notification", { message: "hello" });
 
       const chains = await client.getChains({
         typeName: "notification",
@@ -341,14 +341,14 @@ export const clientQueriesTestSuite = ({ it }: { it: TestAPI<TestSuiteContext> }
       withTransaction,
       expect,
     }) => {
-      const { client, startChain } = await createContext({
+      const { client, createChain } = await createContext({
         stateAdapter,
         notifyAdapter,
         observabilityAdapter,
         log,
         withTransaction,
       });
-      const created = await startChain("order", { amount: 42 });
+      const created = await createChain("order", { amount: 42 });
 
       await expect(
         client.getChains({ typeName: "notification", ids: [created.id] }),
@@ -413,14 +413,14 @@ export const clientQueriesTestSuite = ({ it }: { it: TestAPI<TestSuiteContext> }
       withTransaction,
       expect,
     }) => {
-      const { client, startChain } = await createContext({
+      const { client, createChain } = await createContext({
         stateAdapter,
         notifyAdapter,
         observabilityAdapter,
         log,
         withTransaction,
       });
-      const chain = await startChain("notification", { message: "hello" });
+      const chain = await createChain("notification", { message: "hello" });
 
       const job = await client.getJob({ id: chain.id });
 
@@ -439,14 +439,14 @@ export const clientQueriesTestSuite = ({ it }: { it: TestAPI<TestSuiteContext> }
       withTransaction,
       expect,
     }) => {
-      const { client, startChain } = await createContext({
+      const { client, createChain } = await createContext({
         stateAdapter,
         notifyAdapter,
         observabilityAdapter,
         log,
         withTransaction,
       });
-      const chain = await startChain("notification", { message: "hello" });
+      const chain = await createChain("notification", { message: "hello" });
 
       const job = await client.getJob({ id: chain.id });
 
@@ -462,14 +462,14 @@ export const clientQueriesTestSuite = ({ it }: { it: TestAPI<TestSuiteContext> }
       withTransaction,
       expect,
     }) => {
-      const { client, startChain } = await createContext({
+      const { client, createChain } = await createContext({
         stateAdapter,
         notifyAdapter,
         observabilityAdapter,
         log,
         withTransaction,
       });
-      const chain = await startChain("notification", { message: "hello" });
+      const chain = await createChain("notification", { message: "hello" });
 
       await expect(client.getJob({ typeName: "order", id: chain.id })).rejects.toThrow(
         JobTypeMismatchError,
@@ -530,15 +530,15 @@ export const clientQueriesTestSuite = ({ it }: { it: TestAPI<TestSuiteContext> }
       withTransaction,
       expect,
     }) => {
-      const { client, startChain } = await createContext({
+      const { client, createChain } = await createContext({
         stateAdapter,
         notifyAdapter,
         observabilityAdapter,
         log,
         withTransaction,
       });
-      const order = await startChain("order", { amount: 42 });
-      const notification = await startChain("notification", { message: "hello" });
+      const order = await createChain("order", { amount: 42 });
+      const notification = await createChain("notification", { message: "hello" });
 
       const jobs = await client.getJobs({ ids: [notification.id, order.id] });
 
@@ -555,14 +555,14 @@ export const clientQueriesTestSuite = ({ it }: { it: TestAPI<TestSuiteContext> }
       withTransaction,
       expect,
     }) => {
-      const { client, startChain } = await createContext({
+      const { client, createChain } = await createContext({
         stateAdapter,
         notifyAdapter,
         observabilityAdapter,
         log,
         withTransaction,
       });
-      const created = await startChain("notification", { message: "hello" });
+      const created = await createChain("notification", { message: "hello" });
 
       const jobs = await client.getJobs({
         ids: ["00000000-0000-0000-0000-000000000000", created.id],
@@ -581,14 +581,14 @@ export const clientQueriesTestSuite = ({ it }: { it: TestAPI<TestSuiteContext> }
       withTransaction,
       expect,
     }) => {
-      const { client, startChain } = await createContext({
+      const { client, createChain } = await createContext({
         stateAdapter,
         notifyAdapter,
         observabilityAdapter,
         log,
         withTransaction,
       });
-      const created = await startChain("notification", { message: "hello" });
+      const created = await createChain("notification", { message: "hello" });
 
       const jobs = await client.getJobs({
         typeName: "notification",
@@ -607,14 +607,14 @@ export const clientQueriesTestSuite = ({ it }: { it: TestAPI<TestSuiteContext> }
       withTransaction,
       expect,
     }) => {
-      const { client, startChain } = await createContext({
+      const { client, createChain } = await createContext({
         stateAdapter,
         notifyAdapter,
         observabilityAdapter,
         log,
         withTransaction,
       });
-      const created = await startChain("notification", { message: "hello" });
+      const created = await createChain("notification", { message: "hello" });
 
       await expect(client.getJobs({ typeName: "order", ids: [created.id] })).rejects.toThrow(
         JobTypeMismatchError,
@@ -677,15 +677,15 @@ export const clientQueriesTestSuite = ({ it }: { it: TestAPI<TestSuiteContext> }
       withTransaction,
       expect,
     }) => {
-      const { client, startChain } = await createContext({
+      const { client, createChain } = await createContext({
         stateAdapter,
         notifyAdapter,
         observabilityAdapter,
         log,
         withTransaction,
       });
-      const chain1 = await startChain("order", { amount: 100 });
-      const chain2 = await startChain("notification", { message: "hi" });
+      const chain1 = await createChain("order", { amount: 100 });
+      const chain2 = await createChain("notification", { message: "hi" });
 
       const page = await client.listChains({});
 
@@ -703,15 +703,15 @@ export const clientQueriesTestSuite = ({ it }: { it: TestAPI<TestSuiteContext> }
       withTransaction,
       expect,
     }) => {
-      const { client, startChain } = await createContext({
+      const { client, createChain } = await createContext({
         stateAdapter,
         notifyAdapter,
         observabilityAdapter,
         log,
         withTransaction,
       });
-      await startChain("order", { amount: 100 });
-      const notif = await startChain("notification", { message: "hi" });
+      await createChain("order", { amount: 100 });
+      const notif = await createChain("notification", { message: "hi" });
 
       const page = await client.listChains({
         typeName: ["notification"],
@@ -730,15 +730,15 @@ export const clientQueriesTestSuite = ({ it }: { it: TestAPI<TestSuiteContext> }
       withTransaction,
       expect,
     }) => {
-      const { client, startChain } = await createContext({
+      const { client, createChain } = await createContext({
         stateAdapter,
         notifyAdapter,
         observabilityAdapter,
         log,
         withTransaction,
       });
-      const chain1 = await startChain("order", { amount: 100 });
-      await startChain("notification", { message: "hi" });
+      const chain1 = await createChain("order", { amount: 100 });
+      await createChain("notification", { message: "hi" });
 
       const page = await client.listChains({
         chainId: [chain1.id],
@@ -756,15 +756,15 @@ export const clientQueriesTestSuite = ({ it }: { it: TestAPI<TestSuiteContext> }
       withTransaction,
       expect,
     }) => {
-      const { client, startChain } = await createContext({
+      const { client, createChain } = await createContext({
         stateAdapter,
         notifyAdapter,
         observabilityAdapter,
         log,
         withTransaction,
       });
-      const order = await startChain("order", { amount: 50 });
-      await startChain("report", { type: "summary" }, [order]);
+      const order = await createChain("order", { amount: 50 });
+      await createChain("report", { type: "summary" }, [order]);
 
       const allChains = await client.listChains({});
       const rootChains = await client.listChains({ independent: true });
@@ -782,16 +782,16 @@ export const clientQueriesTestSuite = ({ it }: { it: TestAPI<TestSuiteContext> }
       withTransaction,
       expect,
     }) => {
-      const { client, startChain } = await createContext({
+      const { client, createChain } = await createContext({
         stateAdapter,
         notifyAdapter,
         observabilityAdapter,
         log,
         withTransaction,
       });
-      const order = await startChain("order", { amount: 50 });
-      await startChain("notification", { message: "hi" });
-      await startChain("report", { type: "summary" }, [order]);
+      const order = await createChain("order", { amount: 50 });
+      await createChain("notification", { message: "hi" });
+      await createChain("report", { type: "summary" }, [order]);
 
       const running = await client.listChains({ status: "running" });
 
@@ -806,16 +806,16 @@ export const clientQueriesTestSuite = ({ it }: { it: TestAPI<TestSuiteContext> }
       withTransaction,
       expect,
     }) => {
-      const { client, startChain } = await createContext({
+      const { client, createChain } = await createContext({
         stateAdapter,
         notifyAdapter,
         observabilityAdapter,
         log,
         withTransaction,
       });
-      await startChain("order", { amount: 1 });
+      await createChain("order", { amount: 1 });
       await sleep(5);
-      await startChain("order", { amount: 2 });
+      await createChain("order", { amount: 2 });
 
       const desc = await client.listChains({});
       const asc = await client.listChains({ orderDirection: "asc" });
@@ -834,16 +834,16 @@ export const clientQueriesTestSuite = ({ it }: { it: TestAPI<TestSuiteContext> }
       withTransaction,
       expect,
     }) => {
-      const { client, startChain } = await createContext({
+      const { client, createChain } = await createContext({
         stateAdapter,
         notifyAdapter,
         observabilityAdapter,
         log,
         withTransaction,
       });
-      await startChain("order", { amount: 1 });
-      await startChain("order", { amount: 2 });
-      await startChain("order", { amount: 3 });
+      await createChain("order", { amount: 1 });
+      await createChain("order", { amount: 2 });
+      await createChain("order", { amount: 3 });
 
       const page1 = await client.listChains({ limit: 2 });
       expect(page1.items).toHaveLength(2);
@@ -865,15 +865,15 @@ export const clientQueriesTestSuite = ({ it }: { it: TestAPI<TestSuiteContext> }
       withTransaction,
       expect,
     }) => {
-      const { client, startChain } = await createContext({
+      const { client, createChain } = await createContext({
         stateAdapter,
         notifyAdapter,
         observabilityAdapter,
         log,
         withTransaction,
       });
-      const first = await startChain("order", { amount: 1 });
-      const second = await startChain("order", { amount: 2 });
+      const first = await createChain("order", { amount: 1 });
+      const second = await createChain("order", { amount: 2 });
 
       const createdMs = [first.createdAt.getTime(), second.createdAt.getTime()];
       const earliest = Math.min(...createdMs);
@@ -941,13 +941,13 @@ export const clientQueriesTestSuite = ({ it }: { it: TestAPI<TestSuiteContext> }
 
       const chainA = await withTransactionHooks(async (transactionHooks) =>
         withTransaction(async (txCtx) =>
-          client.startChain({ ...txCtx, transactionHooks, typeName: "task_a", input: null }),
+          client.createChain({ ...txCtx, transactionHooks, typeName: "task_a", input: null }),
         ),
       );
       await sleep(5);
       const chainB = await withTransactionHooks(async (transactionHooks) =>
         withTransaction(async (txCtx) =>
-          client.startChain({ ...txCtx, transactionHooks, typeName: "task_b", input: null }),
+          client.createChain({ ...txCtx, transactionHooks, typeName: "task_b", input: null }),
         ),
       );
 
@@ -986,14 +986,14 @@ export const clientQueriesTestSuite = ({ it }: { it: TestAPI<TestSuiteContext> }
       withTransaction,
       expect,
     }) => {
-      const { client, startChain } = await createContext({
+      const { client, createChain } = await createContext({
         stateAdapter,
         notifyAdapter,
         observabilityAdapter,
         log,
         withTransaction,
       });
-      const chain = await startChain("order", { amount: 42 });
+      const chain = await createChain("order", { amount: 42 });
 
       const page = await client.listChains({
         typeName: ["order"],
@@ -1041,15 +1041,15 @@ export const clientQueriesTestSuite = ({ it }: { it: TestAPI<TestSuiteContext> }
       withTransaction,
       expect,
     }) => {
-      const { client, startChain } = await createContext({
+      const { client, createChain } = await createContext({
         stateAdapter,
         notifyAdapter,
         observabilityAdapter,
         log,
         withTransaction,
       });
-      await startChain("order", { amount: 100 });
-      await startChain("notification", { message: "hi" });
+      await createChain("order", { amount: 100 });
+      await createChain("notification", { message: "hi" });
 
       const page = await client.listJobs({});
 
@@ -1064,15 +1064,15 @@ export const clientQueriesTestSuite = ({ it }: { it: TestAPI<TestSuiteContext> }
       withTransaction,
       expect,
     }) => {
-      const { client, startChain } = await createContext({
+      const { client, createChain } = await createContext({
         stateAdapter,
         notifyAdapter,
         observabilityAdapter,
         log,
         withTransaction,
       });
-      await startChain("order", { amount: 100 });
-      await startChain("notification", { message: "hi" });
+      await createChain("order", { amount: 100 });
+      await createChain("notification", { message: "hi" });
 
       const page = await client.listJobs({
         typeName: ["notification"],
@@ -1090,15 +1090,15 @@ export const clientQueriesTestSuite = ({ it }: { it: TestAPI<TestSuiteContext> }
       withTransaction,
       expect,
     }) => {
-      const { client, startChain } = await createContext({
+      const { client, createChain } = await createContext({
         stateAdapter,
         notifyAdapter,
         observabilityAdapter,
         log,
         withTransaction,
       });
-      await startChain("order", { amount: 100 });
-      await startChain("notification", { message: "hi" });
+      await createChain("order", { amount: 100 });
+      await createChain("notification", { message: "hi" });
 
       const page = await client.listJobs({
         chainTypeName: ["order"],
@@ -1123,15 +1123,15 @@ export const clientQueriesTestSuite = ({ it }: { it: TestAPI<TestSuiteContext> }
       withTransaction,
       expect,
     }) => {
-      const { client, startChain } = await createContext({
+      const { client, createChain } = await createContext({
         stateAdapter,
         notifyAdapter,
         observabilityAdapter,
         log,
         withTransaction,
       });
-      const chain = await startChain("order", { amount: 100 });
-      await startChain("notification", { message: "hi" });
+      const chain = await createChain("order", { amount: 100 });
+      await createChain("notification", { message: "hi" });
 
       const page = await client.listJobs({
         chainId: [chain.id],
@@ -1149,16 +1149,16 @@ export const clientQueriesTestSuite = ({ it }: { it: TestAPI<TestSuiteContext> }
       withTransaction,
       expect,
     }) => {
-      const { client, startChain } = await createContext({
+      const { client, createChain } = await createContext({
         stateAdapter,
         notifyAdapter,
         observabilityAdapter,
         log,
         withTransaction,
       });
-      const order = await startChain("order", { amount: 50 });
-      await startChain("notification", { message: "hi" });
-      await startChain("report", { type: "summary" }, [order]);
+      const order = await createChain("order", { amount: 50 });
+      await createChain("notification", { message: "hi" });
+      await createChain("report", { type: "summary" }, [order]);
 
       const pending = await client.listJobs({ status: "pending" });
       const blocked = await client.listJobs({ status: "pending", blocked: true });
@@ -1184,16 +1184,16 @@ export const clientQueriesTestSuite = ({ it }: { it: TestAPI<TestSuiteContext> }
       withTransaction,
       expect,
     }) => {
-      const { client, startChain } = await createContext({
+      const { client, createChain } = await createContext({
         stateAdapter,
         notifyAdapter,
         observabilityAdapter,
         log,
         withTransaction,
       });
-      await startChain("order", { amount: 1 });
+      await createChain("order", { amount: 1 });
       await sleep(5);
-      await startChain("order", { amount: 2 });
+      await createChain("order", { amount: 2 });
 
       const desc = await client.listJobs({});
       const asc = await client.listJobs({ orderDirection: "asc" });
@@ -1212,16 +1212,16 @@ export const clientQueriesTestSuite = ({ it }: { it: TestAPI<TestSuiteContext> }
       withTransaction,
       expect,
     }) => {
-      const { client, startChain } = await createContext({
+      const { client, createChain } = await createContext({
         stateAdapter,
         notifyAdapter,
         observabilityAdapter,
         log,
         withTransaction,
       });
-      await startChain("order", { amount: 1 });
-      await startChain("order", { amount: 2 });
-      await startChain("order", { amount: 3 });
+      await createChain("order", { amount: 1 });
+      await createChain("order", { amount: 2 });
+      await createChain("order", { amount: 3 });
 
       const page1 = await client.listJobs({ limit: 2 });
       expect(page1.items).toHaveLength(2);
@@ -1240,15 +1240,15 @@ export const clientQueriesTestSuite = ({ it }: { it: TestAPI<TestSuiteContext> }
       withTransaction,
       expect,
     }) => {
-      const { client, startChain } = await createContext({
+      const { client, createChain } = await createContext({
         stateAdapter,
         notifyAdapter,
         observabilityAdapter,
         log,
         withTransaction,
       });
-      const first = await startChain("order", { amount: 1 });
-      const second = await startChain("order", { amount: 2 });
+      const first = await createChain("order", { amount: 1 });
+      const second = await createChain("order", { amount: 2 });
 
       const createdMs = [first.createdAt.getTime(), second.createdAt.getTime()];
       const earliest = Math.min(...createdMs);
@@ -1320,13 +1320,13 @@ export const clientQueriesTestSuite = ({ it }: { it: TestAPI<TestSuiteContext> }
 
       const chainA = await withTransactionHooks(async (transactionHooks) =>
         withTransaction(async (txCtx) =>
-          client.startChain({ ...txCtx, transactionHooks, typeName: "job_a", input: null }),
+          client.createChain({ ...txCtx, transactionHooks, typeName: "job_a", input: null }),
         ),
       );
       await sleep(5);
       const chainB = await withTransactionHooks(async (transactionHooks) =>
         withTransaction(async (txCtx) =>
-          client.startChain({ ...txCtx, transactionHooks, typeName: "job_b", input: null }),
+          client.createChain({ ...txCtx, transactionHooks, typeName: "job_b", input: null }),
         ),
       );
 
@@ -1365,16 +1365,16 @@ export const clientQueriesTestSuite = ({ it }: { it: TestAPI<TestSuiteContext> }
       withTransaction,
       expect,
     }) => {
-      const { client, startChain } = await createContext({
+      const { client, createChain } = await createContext({
         stateAdapter,
         notifyAdapter,
         observabilityAdapter,
         log,
         withTransaction,
       });
-      await startChain("order", { amount: 1 });
+      await createChain("order", { amount: 1 });
       await sleep(5);
-      await startChain("notification", { message: "hi" });
+      await createChain("notification", { message: "hi" });
 
       const byScheduledAt = await client.listJobs({
         status: "pending",
@@ -1395,14 +1395,14 @@ export const clientQueriesTestSuite = ({ it }: { it: TestAPI<TestSuiteContext> }
       withTransaction,
       expect,
     }) => {
-      const { client, startChain } = await createContext({
+      const { client, createChain } = await createContext({
         stateAdapter,
         notifyAdapter,
         observabilityAdapter,
         log,
         withTransaction,
       });
-      await startChain("notification", { message: "test" });
+      await createChain("notification", { message: "test" });
 
       const page = await client.listJobs({ typeName: ["notification"] });
       const job = page.items[0];
@@ -1488,7 +1488,7 @@ export const clientQueriesTestSuite = ({ it }: { it: TestAPI<TestSuiteContext> }
 
       const chain = await withTransactionHooks(async (transactionHooks) =>
         withTransaction(async (txCtx) =>
-          client.startChain({ ...txCtx, transactionHooks, typeName: "step", input: { n: 0 } }),
+          client.createChain({ ...txCtx, transactionHooks, typeName: "step", input: { n: 0 } }),
         ),
       );
 
@@ -1563,7 +1563,7 @@ export const clientQueriesTestSuite = ({ it }: { it: TestAPI<TestSuiteContext> }
 
       const chain = await withTransactionHooks(async (transactionHooks) =>
         withTransaction(async (txCtx) =>
-          client.startChain({ ...txCtx, transactionHooks, typeName: "step", input: { n: 0 } }),
+          client.createChain({ ...txCtx, transactionHooks, typeName: "step", input: { n: 0 } }),
         ),
       );
 
@@ -1630,7 +1630,7 @@ export const clientQueriesTestSuite = ({ it }: { it: TestAPI<TestSuiteContext> }
 
       const chain = await withTransactionHooks(async (transactionHooks) =>
         withTransaction(async (txCtx) =>
-          client.startChain({ ...txCtx, transactionHooks, typeName: "step", input: { n: 0 } }),
+          client.createChain({ ...txCtx, transactionHooks, typeName: "step", input: { n: 0 } }),
         ),
       );
 
@@ -1661,15 +1661,15 @@ export const clientQueriesTestSuite = ({ it }: { it: TestAPI<TestSuiteContext> }
       withTransaction,
       expect,
     }) => {
-      const { client, startChain } = await createContext({
+      const { client, createChain } = await createContext({
         stateAdapter,
         notifyAdapter,
         observabilityAdapter,
         log,
         withTransaction,
       });
-      const chain1 = await startChain("order", { amount: 1 });
-      await startChain("notification", { message: "hi" });
+      const chain1 = await createChain("order", { amount: 1 });
+      await createChain("notification", { message: "hi" });
 
       const page = await client.listChainJobs({ chainId: chain1.id });
 
@@ -1685,14 +1685,14 @@ export const clientQueriesTestSuite = ({ it }: { it: TestAPI<TestSuiteContext> }
       withTransaction,
       expect,
     }) => {
-      const { client, startChain } = await createContext({
+      const { client, createChain } = await createContext({
         stateAdapter,
         notifyAdapter,
         observabilityAdapter,
         log,
         withTransaction,
       });
-      const chain = await startChain("order", { amount: 42 });
+      const chain = await createChain("order", { amount: 42 });
 
       const page = await client.listChainJobs({ chainId: chain.id, chainTypeName: "order" });
 
@@ -1710,14 +1710,14 @@ export const clientQueriesTestSuite = ({ it }: { it: TestAPI<TestSuiteContext> }
       withTransaction,
       expect,
     }) => {
-      const { client, startChain } = await createContext({
+      const { client, createChain } = await createContext({
         stateAdapter,
         notifyAdapter,
         observabilityAdapter,
         log,
         withTransaction,
       });
-      const chain = await startChain("order", { amount: 42 });
+      const chain = await createChain("order", { amount: 42 });
 
       await expect(
         client.listChainJobs({ chainId: chain.id, chainTypeName: "notification" }),
@@ -1734,14 +1734,14 @@ export const clientQueriesTestSuite = ({ it }: { it: TestAPI<TestSuiteContext> }
       withTransaction,
       expect,
     }) => {
-      const { client, startChain } = await createContext({
+      const { client, createChain } = await createContext({
         stateAdapter,
         notifyAdapter,
         observabilityAdapter,
         log,
         withTransaction,
       });
-      const chain = await startChain("order", { amount: 100 });
+      const chain = await createChain("order", { amount: 100 });
 
       const blockers = await client.getJobBlockers({ jobId: chain.id });
 
@@ -1756,15 +1756,15 @@ export const clientQueriesTestSuite = ({ it }: { it: TestAPI<TestSuiteContext> }
       withTransaction,
       expect,
     }) => {
-      const { client, startChain } = await createContext({
+      const { client, createChain } = await createContext({
         stateAdapter,
         notifyAdapter,
         observabilityAdapter,
         log,
         withTransaction,
       });
-      const order = await startChain("order", { amount: 50 });
-      const report = await startChain("report", { type: "summary" }, [order]);
+      const order = await createChain("order", { amount: 50 });
+      const report = await createChain("report", { type: "summary" }, [order]);
 
       const blockers = await client.getJobBlockers({ jobId: report.id });
 
@@ -1782,15 +1782,15 @@ export const clientQueriesTestSuite = ({ it }: { it: TestAPI<TestSuiteContext> }
       withTransaction,
       expect,
     }) => {
-      const { client, startChain } = await createContext({
+      const { client, createChain } = await createContext({
         stateAdapter,
         notifyAdapter,
         observabilityAdapter,
         log,
         withTransaction,
       });
-      const order = await startChain("order", { amount: 50 });
-      const report = await startChain("report", { type: "summary" }, [order]);
+      const order = await createChain("order", { amount: 50 });
+      const report = await createChain("report", { type: "summary" }, [order]);
 
       const blockers = await client.getJobBlockers({
         jobId: report.id,
@@ -1812,15 +1812,15 @@ export const clientQueriesTestSuite = ({ it }: { it: TestAPI<TestSuiteContext> }
       withTransaction,
       expect,
     }) => {
-      const { client, startChain } = await createContext({
+      const { client, createChain } = await createContext({
         stateAdapter,
         notifyAdapter,
         observabilityAdapter,
         log,
         withTransaction,
       });
-      const order = await startChain("order", { amount: 50 });
-      const report = await startChain("report", { type: "summary" }, [order]);
+      const order = await createChain("order", { amount: 50 });
+      const report = await createChain("report", { type: "summary" }, [order]);
 
       await expect(client.getJobBlockers({ jobId: report.id, typeName: "order" })).rejects.toThrow(
         JobTypeMismatchError,
@@ -1877,13 +1877,13 @@ export const clientQueriesTestSuite = ({ it }: { it: TestAPI<TestSuiteContext> }
 
       const { mainChain } = await withTransactionHooks(async (transactionHooks) =>
         withTransaction(async (txCtx) => {
-          const depChain = await client.startChain({
+          const depChain = await client.createChain({
             ...txCtx,
             transactionHooks,
             typeName: "dep",
             input: { v: 1 },
           });
-          const mainChain = await client.startChain({
+          const mainChain = await client.createChain({
             ...txCtx,
             transactionHooks,
             typeName: "main",
@@ -1915,14 +1915,14 @@ export const clientQueriesTestSuite = ({ it }: { it: TestAPI<TestSuiteContext> }
       withTransaction,
       expect,
     }) => {
-      const { client, startChain } = await createContext({
+      const { client, createChain } = await createContext({
         stateAdapter,
         notifyAdapter,
         observabilityAdapter,
         log,
         withTransaction,
       });
-      const chain = await startChain("order", { amount: 100 });
+      const chain = await createChain("order", { amount: 100 });
 
       const page = await client.listBlockedJobs({ chainId: chain.id });
 
@@ -1938,15 +1938,15 @@ export const clientQueriesTestSuite = ({ it }: { it: TestAPI<TestSuiteContext> }
       withTransaction,
       expect,
     }) => {
-      const { client, startChain } = await createContext({
+      const { client, createChain } = await createContext({
         stateAdapter,
         notifyAdapter,
         observabilityAdapter,
         log,
         withTransaction,
       });
-      const order = await startChain("order", { amount: 50 });
-      const report = await startChain("report", { type: "summary" }, [order]);
+      const order = await createChain("order", { amount: 50 });
+      const report = await createChain("report", { type: "summary" }, [order]);
 
       const page = await client.listBlockedJobs({ chainId: order.id });
 
@@ -1966,17 +1966,17 @@ export const clientQueriesTestSuite = ({ it }: { it: TestAPI<TestSuiteContext> }
       withTransaction,
       expect,
     }) => {
-      const { client, startChain } = await createContext({
+      const { client, createChain } = await createContext({
         stateAdapter,
         notifyAdapter,
         observabilityAdapter,
         log,
         withTransaction,
       });
-      const order = await startChain("order", { amount: 50 });
-      await startChain("report", { type: "a" }, [order]);
-      await startChain("report", { type: "b" }, [order]);
-      await startChain("report", { type: "c" }, [order]);
+      const order = await createChain("order", { amount: 50 });
+      await createChain("report", { type: "a" }, [order]);
+      await createChain("report", { type: "b" }, [order]);
+      await createChain("report", { type: "c" }, [order]);
 
       const page1 = await client.listBlockedJobs({ chainId: order.id, limit: 2 });
       expect(page1.items).toHaveLength(2);
@@ -1999,15 +1999,15 @@ export const clientQueriesTestSuite = ({ it }: { it: TestAPI<TestSuiteContext> }
       withTransaction,
       expect,
     }) => {
-      const { client, startChain } = await createContext({
+      const { client, createChain } = await createContext({
         stateAdapter,
         notifyAdapter,
         observabilityAdapter,
         log,
         withTransaction,
       });
-      const order = await startChain("order", { amount: 50 });
-      const report = await startChain("report", { type: "summary" }, [order]);
+      const order = await createChain("order", { amount: 50 });
+      const report = await createChain("report", { type: "summary" }, [order]);
 
       const page = await client.listBlockedJobs({
         chainId: order.id,
@@ -2030,15 +2030,15 @@ export const clientQueriesTestSuite = ({ it }: { it: TestAPI<TestSuiteContext> }
       withTransaction,
       expect,
     }) => {
-      const { client, startChain } = await createContext({
+      const { client, createChain } = await createContext({
         stateAdapter,
         notifyAdapter,
         observabilityAdapter,
         log,
         withTransaction,
       });
-      const order = await startChain("order", { amount: 50 });
-      await startChain("report", { type: "summary" }, [order]);
+      const order = await createChain("order", { amount: 50 });
+      await createChain("report", { type: "summary" }, [order]);
 
       await expect(
         client.listBlockedJobs({ chainId: order.id, typeName: "notification" }),
@@ -2053,17 +2053,17 @@ export const clientQueriesTestSuite = ({ it }: { it: TestAPI<TestSuiteContext> }
       withTransaction,
       expect,
     }) => {
-      const { client, startChain } = await createContext({
+      const { client, createChain } = await createContext({
         stateAdapter,
         notifyAdapter,
         observabilityAdapter,
         log,
         withTransaction,
       });
-      const order = await startChain("order", { amount: 50 });
-      await startChain("report", { type: "a" }, [order]);
+      const order = await createChain("order", { amount: 50 });
+      await createChain("report", { type: "a" }, [order]);
       await sleep(5);
-      await startChain("report", { type: "b" }, [order]);
+      await createChain("report", { type: "b" }, [order]);
 
       const desc = await client.listBlockedJobs({ chainId: order.id });
       const asc = await client.listBlockedJobs({ chainId: order.id, orderDirection: "asc" });
@@ -2129,7 +2129,7 @@ export const clientQueriesTestSuite = ({ it }: { it: TestAPI<TestSuiteContext> }
 
       const chain = await withTransactionHooks(async (transactionHooks) =>
         withTransaction(async (txCtx) =>
-          client.startChain({ ...txCtx, transactionHooks, typeName: "task", input: { n: 1 } }),
+          client.createChain({ ...txCtx, transactionHooks, typeName: "task", input: { n: 1 } }),
         ),
       );
 
@@ -2207,13 +2207,13 @@ export const clientQueriesTestSuite = ({ it }: { it: TestAPI<TestSuiteContext> }
 
       const { depChain, mainChain } = await withTransactionHooks(async (transactionHooks) =>
         withTransaction(async (txCtx) => {
-          const depChain = await client.startChain({
+          const depChain = await client.createChain({
             ...txCtx,
             transactionHooks,
             typeName: "dep",
             input: { v: 1 },
           });
-          const mainChain = await client.startChain({
+          const mainChain = await client.createChain({
             ...txCtx,
             transactionHooks,
             typeName: "main",
@@ -2255,14 +2255,14 @@ export const clientQueriesTestSuite = ({ it }: { it: TestAPI<TestSuiteContext> }
       withTransaction,
       expect,
     }) => {
-      const { client, startChain } = await createContext({
+      const { client, createChain } = await createContext({
         stateAdapter,
         notifyAdapter,
         observabilityAdapter,
         log,
         withTransaction,
       });
-      await startChain("order", { amount: 1 });
+      await createChain("order", { amount: 1 });
 
       const chains = await client.listChains({});
       const jobs = await client.listJobs({});

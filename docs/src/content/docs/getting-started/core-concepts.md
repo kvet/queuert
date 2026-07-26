@@ -11,7 +11,7 @@ An individual unit of work. Jobs have a lifecycle: `pending` → `running` → `
 
 ### Chain
 
-A chain of linked jobs where each job can `continueWith` to the next - just like a Promise chain. In fact, a chain IS its head job, the same way a Promise chain IS the first promise. When you call `startChain`, the returned `chain.id` is the head job's ID. Continuation jobs share this `chainId` but have their own unique `id`. The chain completes when its final job completes without continuing.
+A chain of linked jobs where each job can `continueWith` to the next - just like a Promise chain. In fact, a chain IS its head job, the same way a Promise chain IS the first promise. When you call `createChain`, the returned `chain.id` is the head job's ID. Continuation jobs share this `chainId` but have their own unique `id`. The chain completes when its final job completes without continuing.
 
 ### Job Type
 

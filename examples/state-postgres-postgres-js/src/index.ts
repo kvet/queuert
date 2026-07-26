@@ -86,7 +86,7 @@ const chain = await withTransactionHooks(async (transactionHooks) =>
       ["Alice", "alice@example.com"],
     )) as { id: number }[];
 
-    return client.startChain({
+    return client.createChain({
       sql: txSql,
       transactionHooks,
       typeName: "send_welcome_email",

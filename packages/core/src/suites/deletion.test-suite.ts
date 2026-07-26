@@ -37,7 +37,7 @@ export const deletionTestSuite = ({ it }: { it: TestAPI<TestSuiteContext> }): vo
 
     const chain = await withTransactionHooks(async (transactionHooks) =>
       withTransaction(async (txCtx) =>
-        client.startChain({
+        client.createChain({
           ...txCtx,
           transactionHooks,
           typeName: "test",
@@ -103,7 +103,7 @@ export const deletionTestSuite = ({ it }: { it: TestAPI<TestSuiteContext> }): vo
 
     const chain = await withTransactionHooks(async (transactionHooks) =>
       withTransaction(async (txCtx) =>
-        client.startChain({
+        client.createChain({
           ...txCtx,
           transactionHooks,
           typeName: "step1",
@@ -202,7 +202,7 @@ export const deletionTestSuite = ({ it }: { it: TestAPI<TestSuiteContext> }): vo
 
     const chain = await withTransactionHooks(async (transactionHooks) =>
       withTransaction(async (txCtx) =>
-        client.startChain({
+        client.createChain({
           ...txCtx,
           transactionHooks,
           typeName: "test",
@@ -269,13 +269,13 @@ export const deletionTestSuite = ({ it }: { it: TestAPI<TestSuiteContext> }): vo
     let blockerChain: Chain<string, "blocker", { value: number }, { result: number }>;
     const mainChain = await withTransactionHooks(async (transactionHooks) =>
       withTransaction(async (txCtx) => {
-        blockerChain = await client.startChain({
+        blockerChain = await client.createChain({
           ...txCtx,
           transactionHooks,
           typeName: "blocker",
           input: { value: 1 },
         });
-        return client.startChain({
+        return client.createChain({
           ...txCtx,
           transactionHooks,
           typeName: "main",
@@ -377,13 +377,13 @@ export const deletionTestSuite = ({ it }: { it: TestAPI<TestSuiteContext> }): vo
     let blockerChain: Chain<string, "blocker", { value: number }, { result: number }>;
     await withTransactionHooks(async (transactionHooks) =>
       withTransaction(async (txCtx) => {
-        blockerChain = await client.startChain({
+        blockerChain = await client.createChain({
           ...txCtx,
           transactionHooks,
           typeName: "blocker",
           input: { value: 1 },
         });
-        return client.startChain({
+        return client.createChain({
           ...txCtx,
           transactionHooks,
           typeName: "main",
@@ -443,13 +443,13 @@ export const deletionTestSuite = ({ it }: { it: TestAPI<TestSuiteContext> }): vo
     let mainChain: Chain<string, "main", null, { finalResult: number }>;
     await withTransactionHooks(async (transactionHooks) =>
       withTransaction(async (txCtx) => {
-        blockerChain = await client.startChain({
+        blockerChain = await client.createChain({
           ...txCtx,
           transactionHooks,
           typeName: "blocker",
           input: { value: 1 },
         });
-        mainChain = await client.startChain({
+        mainChain = await client.createChain({
           ...txCtx,
           transactionHooks,
           typeName: "main",
@@ -509,20 +509,20 @@ export const deletionTestSuite = ({ it }: { it: TestAPI<TestSuiteContext> }): vo
     let chainB: Chain<string, "dependent", { label: string }, null>;
     const chainC = await withTransactionHooks(async (transactionHooks) =>
       withTransaction(async (txCtx) => {
-        chainA = await client.startChain({
+        chainA = await client.createChain({
           ...txCtx,
           transactionHooks,
           typeName: "root",
           input: { label: "A" },
         });
-        chainB = await client.startChain({
+        chainB = await client.createChain({
           ...txCtx,
           transactionHooks,
           typeName: "dependent",
           input: { label: "B" },
           blockers: [chainA],
         });
-        return client.startChain({
+        return client.createChain({
           ...txCtx,
           transactionHooks,
           typeName: "dependent",
@@ -597,27 +597,27 @@ export const deletionTestSuite = ({ it }: { it: TestAPI<TestSuiteContext> }): vo
     let chainC: Chain<string, "mid", { label: string }, null>;
     const chainD = await withTransactionHooks(async (transactionHooks) =>
       withTransaction(async (txCtx) => {
-        chainA = await client.startChain({
+        chainA = await client.createChain({
           ...txCtx,
           transactionHooks,
           typeName: "root",
           input: { label: "A" },
         });
-        chainB = await client.startChain({
+        chainB = await client.createChain({
           ...txCtx,
           transactionHooks,
           typeName: "mid",
           input: { label: "B" },
           blockers: [chainA],
         });
-        chainC = await client.startChain({
+        chainC = await client.createChain({
           ...txCtx,
           transactionHooks,
           typeName: "mid",
           input: { label: "C" },
           blockers: [chainA],
         });
-        return client.startChain({
+        return client.createChain({
           ...txCtx,
           transactionHooks,
           typeName: "top",
@@ -672,7 +672,7 @@ export const deletionTestSuite = ({ it }: { it: TestAPI<TestSuiteContext> }): vo
 
     const chain = await withTransactionHooks(async (transactionHooks) =>
       withTransaction(async (txCtx) =>
-        client.startChain({
+        client.createChain({
           ...txCtx,
           transactionHooks,
           typeName: "test",
@@ -731,20 +731,20 @@ export const deletionTestSuite = ({ it }: { it: TestAPI<TestSuiteContext> }): vo
     let consumerA: Chain<string, "consumer", { label: string }, null>;
     await withTransactionHooks(async (transactionHooks) =>
       withTransaction(async (txCtx) => {
-        sharedChain = await client.startChain({
+        sharedChain = await client.createChain({
           ...txCtx,
           transactionHooks,
           typeName: "shared",
           input: null,
         });
-        consumerA = await client.startChain({
+        consumerA = await client.createChain({
           ...txCtx,
           transactionHooks,
           typeName: "consumer",
           input: { label: "A" },
           blockers: [sharedChain],
         });
-        return client.startChain({
+        return client.createChain({
           ...txCtx,
           transactionHooks,
           typeName: "consumer",
@@ -824,7 +824,7 @@ export const deletionTestSuite = ({ it }: { it: TestAPI<TestSuiteContext> }): vo
 
     const chain = await withTransactionHooks(async (transactionHooks) =>
       withTransaction(async (txCtx) =>
-        client.startChain({
+        client.createChain({
           ...txCtx,
           transactionHooks,
           typeName: "test",
@@ -889,7 +889,7 @@ export const deletionTestSuite = ({ it }: { it: TestAPI<TestSuiteContext> }): vo
 
     const chains = await withTransactionHooks(async (transactionHooks) =>
       withTransaction(async (txCtx) =>
-        client.startChains({
+        client.createChains({
           ...txCtx,
           transactionHooks,
           items: [
@@ -957,7 +957,7 @@ export const deletionTestSuite = ({ it }: { it: TestAPI<TestSuiteContext> }): vo
 
     const blocker = await withTransactionHooks(async (transactionHooks) =>
       withTransaction(async (txCtx) =>
-        client.startChain({
+        client.createChain({
           ...txCtx,
           transactionHooks,
           typeName: "blocker",
@@ -968,7 +968,7 @@ export const deletionTestSuite = ({ it }: { it: TestAPI<TestSuiteContext> }): vo
 
     const [mainA, mainB] = await withTransactionHooks(async (transactionHooks) =>
       withTransaction(async (txCtx) =>
-        client.startChains({
+        client.createChains({
           ...txCtx,
           transactionHooks,
           items: [
@@ -1037,7 +1037,7 @@ export const deletionTestSuite = ({ it }: { it: TestAPI<TestSuiteContext> }): vo
 
     const chain = await withTransactionHooks(async (transactionHooks) =>
       withTransaction(async (txCtx) =>
-        client.startChain({
+        client.createChain({
           ...txCtx,
           transactionHooks,
           typeName: "test",
@@ -1076,7 +1076,7 @@ export const deletionTestSuite = ({ it }: { it: TestAPI<TestSuiteContext> }): vo
 
     const chain = await withTransactionHooks(async (transactionHooks) =>
       withTransaction(async (txCtx) =>
-        client.startChain({
+        client.createChain({
           ...txCtx,
           transactionHooks,
           typeName: "test",
@@ -1164,13 +1164,13 @@ export const deletionTestSuite = ({ it }: { it: TestAPI<TestSuiteContext> }): vo
     let blockerChain: Chain<string, "blocker", { value: number }, null>;
     const mainChain = await withTransactionHooks(async (transactionHooks) =>
       withTransaction(async (txCtx) => {
-        blockerChain = await client.startChain({
+        blockerChain = await client.createChain({
           ...txCtx,
           transactionHooks,
           typeName: "blocker",
           input: { value: 1 },
         });
-        return client.startChain({
+        return client.createChain({
           ...txCtx,
           transactionHooks,
           typeName: "main",
@@ -1226,13 +1226,13 @@ export const deletionTestSuite = ({ it }: { it: TestAPI<TestSuiteContext> }): vo
     let blockerChain: Chain<string, "blocker", null, null>;
     await withTransactionHooks(async (transactionHooks) =>
       withTransaction(async (txCtx) => {
-        blockerChain = await client.startChain({
+        blockerChain = await client.createChain({
           ...txCtx,
           transactionHooks,
           typeName: "blocker",
           input: null,
         });
-        return client.startChain({
+        return client.createChain({
           ...txCtx,
           transactionHooks,
           typeName: "main",
@@ -1273,7 +1273,7 @@ export const deletionTestSuite = ({ it }: { it: TestAPI<TestSuiteContext> }): vo
 
     const chain = await withTransactionHooks(async (transactionHooks) =>
       withTransaction(async (txCtx) =>
-        client.startChain({ ...txCtx, transactionHooks, typeName: "test", input: null }),
+        client.createChain({ ...txCtx, transactionHooks, typeName: "test", input: null }),
       ),
     );
 
@@ -1328,7 +1328,7 @@ export const deletionTestSuite = ({ it }: { it: TestAPI<TestSuiteContext> }): vo
     //     A
     const chainA = await withTransactionHooks(async (transactionHooks) =>
       withTransaction(async (txCtx) =>
-        client.startChain({
+        client.createChain({
           ...txCtx,
           transactionHooks,
           typeName: "root",
@@ -1339,7 +1339,7 @@ export const deletionTestSuite = ({ it }: { it: TestAPI<TestSuiteContext> }): vo
 
     const [chainB, chainC] = await withTransactionHooks(async (transactionHooks) =>
       withTransaction(async (txCtx) =>
-        client.startChains({
+        client.createChains({
           ...txCtx,
           transactionHooks,
           items: [
@@ -1352,7 +1352,7 @@ export const deletionTestSuite = ({ it }: { it: TestAPI<TestSuiteContext> }): vo
 
     const chainD = await withTransactionHooks(async (transactionHooks) =>
       withTransaction(async (txCtx) =>
-        client.startChain({
+        client.createChain({
           ...txCtx,
           transactionHooks,
           typeName: "top",

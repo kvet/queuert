@@ -15,7 +15,7 @@ type ChainInput = {
   schedule?: ScheduleOptions;
 };
 
-export const startChains = async (
+export const createChains = async (
   helpers: Helpers,
   {
     chains,

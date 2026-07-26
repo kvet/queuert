@@ -109,7 +109,7 @@ const chain = await withTransactionHooks(async (transactionHooks) =>
       .executeTakeFirstOrThrow();
 
     // Queue welcome email - if user creation fails, no email job is created
-    return client.startChain({
+    return client.createChain({
       db,
       transactionHooks,
       typeName: "send_welcome_email",

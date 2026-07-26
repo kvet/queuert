@@ -95,7 +95,7 @@ describe("Logging", () => {
 
     const chain = await withTransactionHooks(async (transactionHooks) =>
       withTransaction(async (txCtx) =>
-        client.startChain({
+        client.createChain({
           ...txCtx,
           transactionHooks,
           typeName: "test",
@@ -208,7 +208,7 @@ describe("Logging", () => {
 
     const job = await withTransactionHooks(async (transactionHooks) =>
       withTransaction(async (txCtx) =>
-        client.startChain({
+        client.createChain({
           ...txCtx,
           transactionHooks,
           typeName: "test",
@@ -323,7 +323,7 @@ describe("Logging", () => {
 
     const chain = await withTransactionHooks(async (transactionHooks) =>
       withTransaction(async (txCtx) =>
-        client.startChain({
+        client.createChain({
           ...txCtx,
           transactionHooks,
           typeName: "linear",
@@ -440,7 +440,7 @@ describe("Logging", () => {
 
     const chain = await withTransactionHooks(async (transactionHooks) =>
       withTransaction(async (txCtx) => {
-        const dependencyChain = await client.startChain({
+        const dependencyChain = await client.createChain({
           ...txCtx,
           transactionHooks,
           typeName: "blocker",
@@ -448,7 +448,7 @@ describe("Logging", () => {
         });
         blockerChainId = dependencyChain.id;
 
-        const chain = await client.startChain({
+        const chain = await client.createChain({
           ...txCtx,
           transactionHooks,
           typeName: "main",
@@ -551,7 +551,7 @@ describe("Logging", () => {
 
     const chain = await withTransactionHooks(async (transactionHooks) =>
       withTransaction(async (txCtx) =>
-        client.startChain({
+        client.createChain({
           ...txCtx,
           transactionHooks,
           typeName: "test",
@@ -621,7 +621,7 @@ describe("Logging", () => {
 
     const chain = await withTransactionHooks(async (transactionHooks) =>
       withTransaction(async (txCtx) =>
-        client.startChain({ ...txCtx, transactionHooks, typeName: "test", input: null }),
+        client.createChain({ ...txCtx, transactionHooks, typeName: "test", input: null }),
       ),
     );
 
@@ -682,7 +682,7 @@ describe("Logging", () => {
 
     const chain = await withTransactionHooks(async (transactionHooks) =>
       withTransaction(async (txCtx) =>
-        client.startChain({ ...txCtx, transactionHooks, typeName: "test", input: null }),
+        client.createChain({ ...txCtx, transactionHooks, typeName: "test", input: null }),
       ),
     );
 
@@ -785,7 +785,7 @@ describe("Logging", () => {
 
     const chain = await withTransactionHooks(async (transactionHooks) =>
       withTransaction(async (txCtx) =>
-        client.startChain({ ...txCtx, transactionHooks, typeName: "test", input: null }),
+        client.createChain({ ...txCtx, transactionHooks, typeName: "test", input: null }),
       ),
     );
 
@@ -795,7 +795,7 @@ describe("Logging", () => {
 
       const successChain = await withTransactionHooks(async (transactionHooks) =>
         withTransaction(async (txCtx) =>
-          client.startChain({ ...txCtx, transactionHooks, typeName: "test", input: null }),
+          client.createChain({ ...txCtx, transactionHooks, typeName: "test", input: null }),
         ),
       );
 
@@ -875,7 +875,7 @@ describe("Logging", () => {
 
     const chain = await withTransactionHooks(async (transactionHooks) =>
       withTransaction(async (txCtx) =>
-        client.startChain({ ...txCtx, transactionHooks, typeName: "test", input: null }),
+        client.createChain({ ...txCtx, transactionHooks, typeName: "test", input: null }),
       ),
     );
 
@@ -934,7 +934,7 @@ describe("Logging", () => {
 
     const chain = await withTransactionHooks(async (transactionHooks) =>
       withTransaction(async (txCtx) =>
-        client.startChain({ ...txCtx, transactionHooks, typeName: "test", input: null }),
+        client.createChain({ ...txCtx, transactionHooks, typeName: "test", input: null }),
       ),
     );
 
@@ -984,7 +984,7 @@ describe("Logging rollback", () => {
 
     await withTransactionHooks(async (transactionHooks) =>
       withTransaction(async (txCtx) => {
-        await client.startChain({ ...txCtx, transactionHooks, typeName: "test", input: null });
+        await client.createChain({ ...txCtx, transactionHooks, typeName: "test", input: null });
         throw new Error("simulated rollback");
       }),
     ).catch(() => {});
@@ -1022,13 +1022,13 @@ describe("Logging rollback", () => {
 
     await withTransactionHooks(async (transactionHooks) =>
       withTransaction(async (txCtx) => {
-        const blocker = await client.startChain({
+        const blocker = await client.createChain({
           ...txCtx,
           transactionHooks,
           typeName: "blocker",
           input: null,
         });
-        await client.startChain({
+        await client.createChain({
           ...txCtx,
           transactionHooks,
           typeName: "main",
@@ -1067,7 +1067,7 @@ describe("Logging rollback", () => {
 
     const chain = await withTransactionHooks(async (transactionHooks) =>
       withTransaction(async (txCtx) =>
-        client.startChain({ ...txCtx, transactionHooks, typeName: "test", input: null }),
+        client.createChain({ ...txCtx, transactionHooks, typeName: "test", input: null }),
       ),
     );
 
@@ -1147,7 +1147,7 @@ describe("Logging rollback", () => {
 
     const chain = await withTransactionHooks(async (transactionHooks) =>
       withTransaction(async (txCtx) =>
-        client.startChain({ ...txCtx, transactionHooks, typeName: "test", input: null }),
+        client.createChain({ ...txCtx, transactionHooks, typeName: "test", input: null }),
       ),
     );
 
@@ -1231,7 +1231,7 @@ describe("Logging rollback", () => {
 
     const chain = await withTransactionHooks(async (transactionHooks) =>
       withTransaction(async (txCtx) =>
-        client.startChain({ ...txCtx, transactionHooks, typeName: "test", input: null }),
+        client.createChain({ ...txCtx, transactionHooks, typeName: "test", input: null }),
       ),
     );
 
@@ -1303,7 +1303,7 @@ describe("Logging rollback", () => {
 
     const chain = await withTransactionHooks(async (transactionHooks) =>
       withTransaction(async (txCtx) =>
-        client.startChain({ ...txCtx, transactionHooks, typeName: "linear", input: null }),
+        client.createChain({ ...txCtx, transactionHooks, typeName: "linear", input: null }),
       ),
     );
 
@@ -1382,7 +1382,7 @@ describe("Logging rollback", () => {
 
     const chain = await withTransactionHooks(async (transactionHooks) =>
       withTransaction(async (txCtx) =>
-        client.startChain({ ...txCtx, transactionHooks, typeName: "test", input: null }),
+        client.createChain({ ...txCtx, transactionHooks, typeName: "test", input: null }),
       ),
     );
 
@@ -1445,7 +1445,7 @@ describe("Logging rollback", () => {
 
     const chain = await withTransactionHooks(async (transactionHooks) =>
       withTransaction(async (txCtx) =>
-        client.startChain({ ...txCtx, transactionHooks, typeName: "test", input: null }),
+        client.createChain({ ...txCtx, transactionHooks, typeName: "test", input: null }),
       ),
     );
 
@@ -1557,7 +1557,7 @@ describe("Logging rollback", () => {
 
     const chain = await withTransactionHooks(async (transactionHooks) =>
       withTransaction(async (txCtx) =>
-        client.startChain({ ...txCtx, transactionHooks, typeName: "linear", input: null }),
+        client.createChain({ ...txCtx, transactionHooks, typeName: "linear", input: null }),
       ),
     );
 
@@ -1597,7 +1597,7 @@ describe("Logging rollback", () => {
 
     const chain = await withTransactionHooks(async (transactionHooks) =>
       withTransaction(async (txCtx) =>
-        client.startChain({ ...txCtx, transactionHooks, typeName: "test", input: null }),
+        client.createChain({ ...txCtx, transactionHooks, typeName: "test", input: null }),
       ),
     );
 
@@ -1636,7 +1636,7 @@ describe("Logging rollback", () => {
 
     const chain = await withTransactionHooks(async (transactionHooks) =>
       withTransaction(async (txCtx) =>
-        client.startChain({
+        client.createChain({
           ...txCtx,
           transactionHooks,
           typeName: "test",

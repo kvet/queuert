@@ -145,7 +145,7 @@ it("infers custom ID types through the full stack", async ({ postgresConnectionS
 
     const chain = await withTransactionHooks(async (transactionHooks) =>
       withTransaction(async (poolClient) =>
-        client.startChain({
+        client.createChain({
           poolClient,
           transactionHooks,
           typeName: "test",
