@@ -111,7 +111,7 @@ type ValidationConformanceFixture = {
 
 Each builder constructs a registry of a precise shape using the adapter under test. The exact phantom defs each builder must produce are encoded in the return types — see [`ValidationConformanceFixture`](https://github.com/kvet/queuert/blob/main/packages/core/src/conformance/validation-adapter-cases.ts) for the full annotated definitions.
 
-Conformance verifies the wrapper layer only — the six runtime methods (`getTypeNames`, `validateEntry`, `parseInput`, `parseOutput`, `validateContinueWith`, `validateBlockers`) and how core's `createJobTypes` wraps thrown errors into `JobTypeValidationError`. Compile-time validation rules (like rejecting blockers that reference continuation-only types) live in core's `ValidatedJobTypeDefinitions` and are tested there — the positive type checks above are sufficient to prove the adapter feeds them correctly.
+Conformance verifies the wrapper layer only — the six runtime methods (`getTypeNames`, `validateEntry`, `encode`, `decode`, `validateContinueWith`, `validateBlockers`, each codec method covered in both directions) and how core's `createJobTypes` wraps thrown errors into `JobTypeValidationError`. Compile-time validation rules (like rejecting blockers that reference continuation-only types) live in core's `ValidatedJobTypeDefinitions` and are tested there — the positive type checks above are sufficient to prove the adapter feeds them correctly.
 
 ## StateConformanceFixture
 

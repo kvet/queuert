@@ -1,0 +1,11 @@
+---
+"queuert": major
+---
+
+Replace the job-type registry's `parseInput`/`parseOutput` with a bidirectional codec: `encode` runs on every write and produces the form stored in the database, `decode` runs on every read and produces the form handlers and client reads see. Previously there was no decode step, so a schema that transformed on write handed the transformed value straight to the handler — a `Date` written as an ISO string came back as a string. Both methods are async and take a batch, so creating N chains costs one `encode` call and listing a page of jobs costs one `decode` call covering its inputs and outputs together. Every value `encode` produces is now checked for JSON-serializability before it reaches the state adapter, which turns what used to be silent coercion (a `Date` becoming a string, a `Map` becoming `{}`) into a `JobTypeValidationError` naming the offending path.
+
+- `parseInput`/`parseOutput` are removed from `JobTypesOptions` and `JobTypes`, replaced by `encode(items)` and `decode(items)`. Each item is a `ResolvedJobTypeValue` — `{ typeName, direction: "input" | "output", value }` — and a single batch may mix type names and directions, so adapters dispatch per item.
+- `defineJobTypes` now constrains `input` and `output` to JSON-serializable types. A definition carrying a `Date`, `Map`, `Set`, or `bigint` is a compile error pointing at validator adapters with codecs. `unknown` still passes, so structural job-type references are unaffected.
+- New exports: `JsonSerializable`, `JsonPrimitive`, `EnsureJsonSerializable`, `isJsonSerializable`, and `ResolvedJobTypeValue`. Validator adapters that transform should constrain their _encoded_ type with `EnsureJsonSerializable` and leave the runtime type free.
+- Observability hooks continue to receive the encoded (stored) form; this is now stated in the `ObservabilityAdapter` docs. The hooks are synchronous and `decode` is async, so adapters needing runtime values must decode outside the hook.
+- Validation adapters must be updated. An adapter that only validates ports mechanically — one `encode` and one `decode` that both run the schema for the item's `direction`. See `examples/validation-zod` for that case and the new `examples/codec-zod` for a transforming codec.

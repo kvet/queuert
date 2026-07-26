@@ -20,6 +20,7 @@ export {
   type JobTypeDefinitions,
   type JobTypes,
   type JobTypesOptions,
+  type ResolvedJobTypeValue,
 } from "./entities/job-types.js";
 export {
   type BlockerChains,
@@ -31,6 +32,13 @@ export {
   type ResolvedJob,
 } from "./entities/job-types.resolvers.js";
 export { type Job, type JobStatus } from "./entities/job.js";
+export {
+  isJsonSerializable,
+  type EnsureJsonSerializable,
+  type IsJsonSerializableResult,
+  type JsonPrimitive,
+  type JsonSerializable,
+} from "./entities/json-serializable.js";
 export { type JobTypesDefinitions } from "./entities/merge-job-types.js";
 export { type ScheduleOptions } from "./entities/schedule.js";
 export {

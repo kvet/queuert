@@ -121,6 +121,17 @@
         "starlight-llms-txt": "0.8.0",
       },
     },
+    "examples/codec-zod": {
+      "name": "example-codec-zod",
+      "version": "0.0.1",
+      "dependencies": {
+        "queuert": "workspace:*",
+        "zod": "4.3.6",
+      },
+      "devDependencies": {
+        "@queuert/tsconfig": "workspace:*",
+      },
+    },
     "examples/dashboard": {
       "name": "example-dashboard",
       "version": "0.0.1",
@@ -1945,6 +1956,8 @@
     "events": ["events@3.3.0", "", {}, "sha512-mQw+2fkQbALzQ7V0MY0IqdnXNOeTtP4r0lN9z7AAawCXgqea7bDii20AYrIBrFd/Hx0M2Ocz6S111CaFkUcb0Q=="],
 
     "events-universal": ["events-universal@1.0.1", "", { "dependencies": { "bare-events": "^2.7.0" } }, "sha512-LUd5euvbMLpwOF8m6ivPCbhQeSiYVNb8Vs0fQ8QjXo0JTkEHpz8pxdQf0gStltaPpw0Cca8b39KxvK9cfKRiAw=="],
+
+    "example-codec-zod": ["example-codec-zod@workspace:examples/codec-zod"],
 
     "example-dashboard": ["example-dashboard@workspace:examples/dashboard"],
 

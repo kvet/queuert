@@ -1,0 +1,18 @@
+{
+  "name": "example-codec-zod",
+  "version": "0.0.1",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "start": "tsx src/index.ts",
+    "test": "vitest --run",
+    "typecheck": "tsgo --noEmit"
+  },
+  "dependencies": {
+    "queuert": "workspace:*",
+    "zod": "4.3.6"
+  },
+  "devDependencies": {
+    "@queuert/tsconfig": "workspace:*"
+  }
+}

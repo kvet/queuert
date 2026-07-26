@@ -980,10 +980,10 @@ describe("structural references", () => {
       router: {
         entry: true;
         input: { path: string };
-        continueWith: { input: { payload: string } };
+        continueWith: { input: { payload: unknown } };
       };
       handler: {
-        input: { payload: string };
+        input: { payload: unknown };
         output: { result: string };
       };
     }>();
@@ -998,14 +998,14 @@ describe("structural references", () => {
       router: {
         entry: true;
         input: { path: string };
-        continueWith: { input: { payload: string } };
+        continueWith: { input: { payload: unknown } };
       };
       handlerA: {
-        input: { payload: string };
+        input: { payload: unknown };
         output: { result: string };
       };
       handlerB: {
-        input: { payload: string };
+        input: { payload: unknown };
         output: { result: number };
       };
     }>();
@@ -1024,7 +1024,7 @@ describe("structural references", () => {
         continueWith: { input: { nonexistent: boolean } };
       };
       handler: {
-        input: { payload: string };
+        input: { payload: unknown };
         output: { result: string };
       };
     }>();
@@ -1035,14 +1035,14 @@ describe("structural references", () => {
       router: {
         entry: true;
         input: { path: string };
-        continueWith: { typeName: "handlerA" } | { input: { payload: string } };
+        continueWith: { typeName: "handlerA" } | { input: { payload: unknown } };
       };
       handlerA: {
         input: { id: string };
         output: { result: string };
       };
       handlerB: {
-        input: { payload: string };
+        input: { payload: unknown };
         output: { result: number };
       };
     }>();
@@ -1100,7 +1100,7 @@ describe("rest/variadic blocker slots", () => {
   it("allows rest blocker slots with spread syntax", () => {
     const defs = defineJobTypes<{
       auth: { entry: true; input: { token: string }; output: { userId: string } };
-      validator: { entry: true; input: { data: string }; output: { valid: boolean } };
+      validator: { entry: true; input: { data: unknown }; output: { valid: boolean } };
       main: {
         entry: true;
         input: { data: string };
@@ -1117,7 +1117,7 @@ describe("rest/variadic blocker slots", () => {
 
   it("allows rest-only blocker slots", () => {
     const defs = defineJobTypes<{
-      processor: { entry: true; input: { item: string }; output: { processed: boolean } };
+      processor: { entry: true; input: { item: unknown }; output: { processed: boolean } };
       aggregator: {
         entry: true;
         input: { data: string };
@@ -1136,7 +1136,7 @@ describe("rest/variadic blocker slots", () => {
     const defs = defineJobTypes<{
       auth: { entry: true; input: { token: string }; output: { userId: string } };
       config: { entry: true; input: { key: string }; output: { value: string } };
-      processor: { entry: true; input: { item: string }; output: { processed: boolean } };
+      processor: { entry: true; input: { item: unknown }; output: { processed: boolean } };
       main: {
         entry: true;
         input: { data: string };
@@ -1153,13 +1153,13 @@ describe("rest/variadic blocker slots", () => {
 
   it("allows structural reference in rest blocker slots", () => {
     const defs = defineJobTypes<{
-      processorA: { entry: true; input: { item: string }; output: { processed: boolean } };
-      processorB: { entry: true; input: { item: string }; output: { processed: boolean } };
+      processorA: { entry: true; input: { item: unknown }; output: { processed: boolean } };
+      processorB: { entry: true; input: { item: unknown }; output: { processed: boolean } };
       aggregator: {
         entry: true;
         input: { data: string };
         output: { done: boolean };
-        blockers: { input: { item: string } }[];
+        blockers: { input: { item: unknown } }[];
       };
     }>();
 
@@ -1237,7 +1237,7 @@ describe("rest/variadic blocker slots", () => {
         continueWith: { typeName: "finish" };
       };
       finish: {
-        input: { data: string };
+        input: { data: unknown };
         output: { result: number };
       };
     };
@@ -1316,5 +1316,63 @@ describe("rest/variadic blocker slots", () => {
       expectTypeOf<StepPending["status"]>().toEqualTypeOf<"pending">();
       expectTypeOf<StepRunning["status"]>().toEqualTypeOf<"running">();
     });
+  });
+});
+
+describe("JSON-serializable constraint", () => {
+  it("accepts JSON-safe inputs and outputs", () => {
+    const defs = defineJobTypes<{
+      job: {
+        entry: true;
+        input: { id: string; count: number; tags: string[]; nested: { flag: boolean } };
+        output: { done: true; label?: string };
+      };
+    }>();
+
+    expectTypeOf<JobTypeDefinitions<typeof defs>>().toHaveProperty("job");
+  });
+
+  it("accepts `unknown` placeholders so structural references keep compiling", () => {
+    const defs = defineJobTypes<{
+      router: {
+        entry: true;
+        input: { path: string };
+        continueWith: { input: { payload: unknown } };
+      };
+      handler: {
+        input: { payload: unknown };
+        output: { data: unknown };
+      };
+    }>();
+
+    expectTypeOf<JobTypeDefinitions<typeof defs>>().toHaveProperty("handler");
+  });
+
+  it("rejects a `Date` in input", () => {
+    defineJobTypes<// @ts-expect-error Date is not JSON-serializable
+    {
+      job: { entry: true; input: { sendAt: Date }; output: null };
+    }>();
+  });
+
+  it("rejects a `Date` nested inside an array in input", () => {
+    defineJobTypes<// @ts-expect-error Date is not JSON-serializable
+    {
+      job: { entry: true; input: { slots: { at: Date }[] }; output: null };
+    }>();
+  });
+
+  it("rejects a `Map` in output", () => {
+    defineJobTypes<// @ts-expect-error Map is not JSON-serializable
+    {
+      job: { entry: true; input: null; output: { index: Map<string, number> } };
+    }>();
+  });
+
+  it("rejects a `bigint` in input", () => {
+    defineJobTypes<// @ts-expect-error bigint is not JSON-serializable
+    {
+      job: { entry: true; input: { amount: bigint }; output: null };
+    }>();
   });
 });

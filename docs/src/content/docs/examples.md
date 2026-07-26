@@ -91,6 +91,14 @@ Input/output validation with different schema libraries.
 | [validation-valibot](https://github.com/kvet/queuert/tree/main/examples/validation-valibot) | Valibot |
 | [validation-typebox](https://github.com/kvet/queuert/tree/main/examples/validation-typebox) | TypeBox |
 
+## Codecs
+
+Job types whose runtime form differs from the form stored in the database.
+
+| Example                                                                   | What it demonstrates                                                  |
+| ------------------------------------------------------------------------- | --------------------------------------------------------------------- |
+| [codec-zod](https://github.com/kvet/queuert/tree/main/examples/codec-zod) | Zod codecs carrying a `Date` through a chain, stored as an ISO string |
+
 ## Observability & Dashboard
 
 | Example                                                                                     | What it demonstrates              |

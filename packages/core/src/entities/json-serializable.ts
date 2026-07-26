@@ -26,6 +26,54 @@ export type EnsureJsonSerializable<T> = [T] extends [JsonSerializable]
   ? T
   : "Error: type must be JSON-serializable (no Date, Map, Set, class instances, bigint, functions, NaN, or Infinity)";
 
+/** Built-in runtime types that never survive a JSON round-trip. */
+type NonJsonValue =
+  | Date
+  | RegExp
+  | Error
+  | Map<unknown, unknown>
+  | Set<unknown>
+  | WeakMap<object, unknown>
+  | WeakSet<object>
+  | Promise<unknown>
+  | ArrayBuffer
+  | ArrayBufferView
+  | bigint
+  | symbol
+  // oxlint-disable-next-line typescript/no-unsafe-function-type -- matching any function shape is the point
+  | Function;
+
+/**
+ * Compile-time walk that surfaces the non-JSON-serializable members of `T`, or
+ * `never` when `T` is clean.
+ *
+ * Unlike an assignability check against {@link JsonSerializable}, this rejects
+ * only *known-bad* types. `unknown` and `any` pass, which keeps the widely used
+ * `input: unknown` placeholder (and structural job-type references built on it)
+ * compiling — the always-on runtime {@link isJsonSerializable} check is what
+ * catches a `Date` that slips through those holes.
+ *
+ * Class instances with a plain structural shape are not detected; TypeScript
+ * can't distinguish them from object literals.
+ */
+export type FindNonJsonValue<T> = [T] extends [JsonSerializable] ? never : FindNonJsonValueDeep<T>;
+
+type FindNonJsonValueDeep<T> = [T] extends [never]
+  ? never
+  : 0 extends 1 & T
+    ? never
+    : [unknown] extends [T]
+      ? never
+      : T extends NonJsonValue
+        ? T
+        : T extends readonly (infer TItem)[]
+          ? FindNonJsonValueDeep<TItem>
+          : T extends object
+            ? // `-?` strips the optional modifier so `{ label?: string }` doesn't
+              // leak a bare `undefined` into the result and fail the `never` check.
+              { [K in keyof T]-?: FindNonJsonValueDeep<T[K]> }[keyof T]
+            : never;
+
 /** Result of {@link isJsonSerializable}. `true` on success; a path on failure. */
 export type IsJsonSerializableResult = true | { path: string };
 

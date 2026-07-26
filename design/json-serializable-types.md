@@ -210,7 +210,7 @@ This is a **major** version bump.
 - **Class instances sneak through**: structural shape match — TS can't distinguish.
 - **Error messages on deep nesting**: failures point at the outermost type, not the offending leaf.
 - **Depth limits**: recursive conditional types may hit TS instantiation limits on deep payloads — measure with `benchmarks/type-complexity/`.
-- **`unknown` in structural references**: `BaseJobTypeDefinition` stays `unknown` in core, so the existing `input: unknown` pattern in structural job-type references continues to work.
+- **`unknown` in structural references**: `BaseJobTypeDefinition` stays `unknown` in core, and `FindNonJsonValue` deliberately passes `unknown`/`any`, so the existing `input: unknown` pattern in structural job-type references continues to work. The trade is that an `unknown`-typed field is checked only at runtime.
 
 ## Open questions
 
@@ -254,42 +254,42 @@ Phased so each phase ends with a green `bun run check`. Each phase is a single P
 
 Goal: replace `parseInput`/`parseOutput` with the two batch async codec methods (`encode`/`decode`, with `direction: "input" | "output"` on each item) inside the registry, with no consumers updated yet (compile errors expected outside this phase's files; gate with a temporary `parseInput`/`parseOutput` shim if necessary to keep intermediate commits compiling).
 
-- [ ] Add `packages/core/src/entities/json-serializable.ts`: `JsonSerializable` type, `EnsureJsonSerializable<T>` utility, and `isJsonSerializable(value): true | { path: string }` runtime check (recursive walk; rejects `Date`, `Map`, `Set`, class instances, `NaN`/`Infinity`, `bigint`, functions, symbols). Export from package root. Unit tests cover each rejection class plus deep-nesting paths.
-- [ ] Update `JobTypesOptions` and `JobTypes` in [packages/core/src/entities/job-types.ts](../packages/core/src/entities/job-types.ts): remove `parseInput`/`parseOutput`, add the two batch async codec methods (`encode`/`decode`, with `direction: "input" | "output"` on each item). Wrap each call so that:
+- [x] Add `packages/core/src/entities/json-serializable.ts`: `JsonSerializable` type, `EnsureJsonSerializable<T>` utility, and `isJsonSerializable(value): true | { path: string }` runtime check (recursive walk; rejects `Date`, `Map`, `Set`, class instances, `NaN`/`Infinity`, `bigint`, functions, symbols). Export from package root. Unit tests cover each rejection class plus deep-nesting paths.
+- [x] Update `JobTypesOptions` and `JobTypes` in [packages/core/src/entities/job-types.ts](../packages/core/src/entities/job-types.ts): remove `parseInput`/`parseOutput`, add the two batch async codec methods (`encode`/`decode`, with `direction: "input" | "output"` on each item). Wrap each call so that:
   1. Adapter-thrown errors are wrapped as `JobTypeValidationError` per item (preserve item index, `typeName`, and original cause).
   2. After `encode` returns, every value is checked with `isJsonSerializable`; failures throw `JobTypeValidationError` with the offending path and item's direction.
-- [ ] Update `createNoopJobTypes`: identity codec methods that go through the same wrapper (so `defineJobTypes` users get the runtime check for free).
-- [ ] Update `defineJobTypes` ([packages/core/src/entities/define-job-type-registry.ts](../packages/core/src/entities/define-job-type-registry.ts)) to constrain its `input`/`output` generics to `JsonSerializable` at the type level. Compile-error message points users at validator adapters with codecs.
-- [ ] Update `mergeJobTypes` ([packages/core/src/entities/merge-job-types.ts](../packages/core/src/entities/merge-job-types.ts)) for the four codec methods:
+- [x] Update `createNoopJobTypes`: identity codec methods that go through the same wrapper (so `defineJobTypes` users get the runtime check for free).
+- [x] Update `defineJobTypes` ([packages/core/src/entities/define-job-type-registry.ts](../packages/core/src/entities/define-job-type-registry.ts)) to constrain its `input`/`output` generics to `JsonSerializable` at the type level. Compile-error message points users at validator adapters with codecs.
+- [x] Update `mergeJobTypes` ([packages/core/src/entities/merge-job-types.ts](../packages/core/src/entities/merge-job-types.ts)) for the four codec methods:
   - All-noop mode: unchanged — returns a fresh noop registry.
   - All-validated and mixed modes: group `items` by owning slice (using `typeNameMap`), call each slice's batch method with its subset, stitch results back to original input order.
   - Mixed-mode fallback for unknown types: synthesize one internal `createNoopJobTypes()` instance held by the merge closure; route the fallback subset through it (replaces today's inline `() => input`). This preserves the JsonSerializable check on every encoded value, including unknowns in noop-tolerant merges.
   - All-validated unknown-type behavior unchanged: `UnknownJobTypeError`.
-- [ ] Update `packages/core/src/entities/job-types.spec.ts` for the new contract; add tests for: heterogeneous batches; per-item error wrapping with index/typeName; async error propagation; `isJsonSerializable` enforcement on identity (noop) encoders; `defineJobTypes` type-level rejection of `Date`-bearing definitions.
-- [ ] Update `packages/core/src/client.merge.spec.ts` to cover: mixed-merge unknown-type fallback now JsonSerializable-checked; heterogeneous batch grouping/stitching preserves order across multiple slices.
-- [ ] Update `packages/core/src/conformance/validation-adapter.spec.ts` to drive the four batch methods through every adapter under test.
+- [x] Update `packages/core/src/entities/job-types.spec.ts` for the new contract; add tests for: heterogeneous batches; per-item error wrapping with index/typeName; async error propagation; `isJsonSerializable` enforcement on identity (noop) encoders; `defineJobTypes` type-level rejection of `Date`-bearing definitions.
+- [x] Update `packages/core/src/client.merge.spec.ts` to cover: mixed-merge unknown-type fallback now JsonSerializable-checked; heterogeneous batch grouping/stitching preserves order across multiple slices.
+- [x] Update `packages/core/src/conformance/validation-adapter.spec.ts` to drive the four batch methods through every adapter under test.
 
 ### Phase 2 — Write paths (encode)
 
-- [ ] [packages/core/src/implementation/create-state-jobs.ts](../packages/core/src/implementation/create-state-jobs.ts): collect all to-be-created jobs into a single `encode` call (each item with `direction: "input"`). Preserve order when assigning encoded values back to `createJobParams`.
-- [ ] [packages/core/src/implementation/finish-job.ts](../packages/core/src/implementation/finish-job.ts): call `encode([{typeName, direction: "output", value: output}])`.
-- [ ] [packages/core/src/implementation/continue-with.ts](../packages/core/src/implementation/continue-with.ts): no change to `validateContinueWith` (still runtime form). Encoding happens via the downstream `createStateJobs` call.
-- [ ] Tests: write-side encode happens exactly once per batch; encode failures surface as `JobTypeValidationError`; multi-job creates produce a single `encode` call.
+- [x] [packages/core/src/implementation/create-state-jobs.ts](../packages/core/src/implementation/create-state-jobs.ts): collect all to-be-created jobs into a single `encode` call (each item with `direction: "input"`). Preserve order when assigning encoded values back to `createJobParams`.
+- [x] [packages/core/src/implementation/finish-job.ts](../packages/core/src/implementation/finish-job.ts): call `encode([{typeName, direction: "output", value: output}])`.
+- [x] [packages/core/src/implementation/continue-with.ts](../packages/core/src/implementation/continue-with.ts): no change to `validateContinueWith` (still runtime form). Encoding happens via the downstream `createStateJobs` call.
+- [x] Tests: write-side encode happens exactly once per batch; encode failures surface as `JobTypeValidationError`; multi-job creates produce a single `encode` call.
 
 ### Phase 3 — Read paths (decode)
 
-- [ ] [packages/core/src/entities/job.ts](../packages/core/src/entities/job.ts): replace `mapStateJobToJob` with `mapStateJobsToJobs(stateJobs, jobTypes): Promise<Job[]>`. The helper:
+- [x] [packages/core/src/entities/job.ts](../packages/core/src/entities/job.ts): replace `mapStateJobToJob` with `mapStateJobsToJobs(stateJobs, jobTypes): Promise<Job[]>`. The helper:
   1. Builds a single batch covering every job's input plus every completed job's output (each item carries its `direction`), and issues one `decode` call.
   2. Awaits both.
   3. Maps decoded values back onto each job in original order.
      Single-job sites call it with `[job]` and unwrap.
-- [ ] Update all 8 callers (per inventory):
+- [x] Update all 8 callers (per inventory):
   - `packages/core/src/client.ts` — `trigger` (line 629), `getJob` (919), `listJobs` (1004), `listChainJobs` (1045), `listBlockedJobs` (1120). All already async.
   - `packages/core/src/implementation/continue-with.ts` (line 62).
   - `packages/core/src/worker/job-process.ts` (lines 368, 531).
-- [ ] Worker pickup specifically: ensure `decode` is called between `acquireJob` and handler invocation; runtime input is what the handler sees and what continues into `continueWith` flows.
-- [ ] `getChain`/`listChains` paths: if they surface job-shaped data, batch-decode that page too. Audit during implementation.
-- [ ] Tests:
+- [x] Worker pickup specifically: ensure `decode` is called between `acquireJob` and handler invocation; runtime input is what the handler sees and what continues into `continueWith` flows.
+- [x] `getChain`/`listChains` paths: if they surface job-shaped data, batch-decode that page too. Audit during implementation.
+- [x] Tests:
   - List of N jobs of mixed types → exactly one `decode` call per page (covering both inputs and outputs).
   - Corrupt persisted value → `JobTypeValidationError` with item context.
   - Worker handler receives runtime form, not encoded form.
@@ -297,27 +297,29 @@ Goal: replace `parseInput`/`parseOutput` with the two batch async codec methods 
 
 ### Phase 4 — Observability and structural unknowns
 
-- [ ] Confirm observability hooks receive the **encoded** form (no signature change in [packages/core/src/observability-adapter/observability-adapter.ts](../packages/core/src/observability-adapter/observability-adapter.ts) — clarify in JSDoc).
-- [ ] Verify structural job-type references with `input: unknown` still type-check after the `BaseJobTypeDefinition` semantic clarification. Run the existing spec suite that uses this pattern.
-- [ ] Run `benchmarks/type-complexity/` to confirm no instantiation-depth regressions.
+- [x] Confirm observability hooks receive the **encoded** form (no signature change in [packages/core/src/observability-adapter/observability-adapter.ts](../packages/core/src/observability-adapter/observability-adapter.ts) — clarify in JSDoc).
+- [x] Verify structural job-type references with `input: unknown` still type-check after the `BaseJobTypeDefinition` semantic clarification. Run the existing spec suite that uses this pattern.
+      **Outcome:** an assignability check against `JsonSerializable` rejects `unknown`, which broke this pattern. Replaced with `FindNonJsonValue<T>` — a walk that flags only _known-bad_ types (`Date`, `Map`, `Set`, `bigint`, functions, ...) and lets `unknown`/`any` through. Structural references compile unchanged; the runtime check still catches whatever the holes let past.
+- [x] Run `benchmarks/type-complexity/` to confirm no instantiation-depth regressions.
+      **Outcome:** no depth-limit errors in any scenario. Instantiation counts rose modestly: +1–3% across `linear`, `branched`, `loop`, `merge`, and `middleware`; +11–20% on the `blockers` family (179,312 → 215,800 at `blockers-25`), which is the densest per-type-definition shape. Short-circuiting `FindNonJsonValue` on `[T] extends [JsonSerializable]` halved the overhead outside `blockers`; the remainder is the cost of the constraint and is accepted.
 
 ### Phase 5 — Validator adapters and examples
 
-- [ ] Update `examples/validation-zod` to provide identity codecs (define an inline `perTypeName` helper at the top of the adapter module). Tighten its schemas to primitive-only so `z.input === z.output` is real, not assumed.
-- [ ] New `examples/codec-zod`: end-to-end Zod 4 `z.codec` example with the same inline `perTypeName` helper, at least one `Date` field, a chain that crosses jobs carrying the `Date` through `continueWith`, and a client read that returns the decoded `Date`. Single-purpose, follows examples conventions in [code-style.md](../code-style.md).
-- [ ] Optional `examples/codec-encrypted`: in-process fake KMS wrapping `codec-zod`. Demonstrates a "dashboard without codec sees ciphertext, dashboard with codec sees plaintext" split. Skip if it bloats the example surface — judgment call during implementation.
+- [x] Update `examples/validation-zod` to provide identity codecs. Tighten its schemas so `z.input === z.output` is real, not assumed. (The `perTypeName` helper this bullet originally called for was dropped when the design moved to per-item `direction` dispatch.)
+- [x] New `examples/codec-zod`: end-to-end Zod 4 `z.codec` example with at least one `Date` field, a chain that crosses jobs carrying the `Date` through `continueWith`, and a client read that returns the decoded `Date`. Single-purpose, follows examples conventions in [code-style.md](../code-style.md).
+- [ ] Optional `examples/codec-encrypted`: in-process fake KMS wrapping `codec-zod`. **Skipped.** `codec-zod` already shows the contract end to end; a fake-KMS example repeats the same mechanics behind an encryption facade and adds an example whose value is mostly narrative. Revisit if users ask for the layering pattern.
 
 ### Phase 6 — Reference docs and changeset
 
-- [ ] Update `docs/src/content/docs/advanced/` reference doc(s) covering job-type registries to describe the codec contract, the runtime-vs-encoded split, and the observability-decode open question.
-- [ ] Migration guide section: how to port a `parseInput`/`parseOutput` adapter to the two codec methods (identity case + codec case + per-direction dispatch pattern).
-- [ ] `.changeset/codec-job-types.md` — major bump for `queuert` and any package that re-exports the registry surface; one-paragraph user-facing note + flat bullet list of changes.
+- [x] Update `docs/src/content/docs/advanced/` reference doc(s) covering job-type registries to describe the codec contract, the runtime-vs-encoded split, and the observability-decode open question.
+- [x] Migration guide section: how to port a `parseInput`/`parseOutput` adapter to the two codec methods (identity case + codec case + per-direction dispatch pattern).
+- [x] `.changeset/codec-job-types.md` — major bump for `queuert` and any package that re-exports the registry surface; one-paragraph user-facing note + flat bullet list of changes.
 
 ### Phase 7 — Final validation
 
-- [ ] `bun run fmt`, `bun run check` (redirected to a file per CLAUDE.md).
-- [ ] Cross-check the type-complexity benchmark output against the pre-change baseline.
-- [ ] Smoke-test all examples (covered by `bun run examples` in `bun run check`).
+- [x] `bun run fmt`, `bun run check` (redirected to a file per CLAUDE.md).
+- [x] Cross-check the type-complexity benchmark output against the pre-change baseline. (Numbers recorded under Phase 4.)
+- [x] Smoke-test all examples (covered by `bun run examples` in `bun run check`).
 
 ### Out of scope for this change
 

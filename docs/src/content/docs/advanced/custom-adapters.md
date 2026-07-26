@@ -64,7 +64,7 @@ See the [State adapter examples](/queuert/examples/#state-adapters) for end-to-e
 
 Validation adapters are thin wrappers around schema libraries that produce a `JobTypes` registry. The conformance suite checks that:
 
-- The adapter's six runtime methods (`getTypeNames`, `validateEntry`, `parseInput`, `parseOutput`, `validateContinueWith`, `validateBlockers`) behave correctly.
+- The adapter's six runtime methods (`getTypeNames`, `validateEntry`, `encode`, `decode`, `validateContinueWith`, `validateBlockers`) behave correctly, with `encode` and `decode` exercised in both the `input` and `output` directions.
 - Schema validation failures are wrapped in `JobTypeValidationError` with the right `code`, `typeName`, `cause`, and `details`.
 - The schema-to-shape inference (`z.infer`, `Static<>`, `T["infer"]`, `v.InferOutput`, etc.) threads through to the phantom job type definitions correctly.
 

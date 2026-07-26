@@ -165,7 +165,8 @@ Examples are organized by prefix to indicate their primary focus:
 - `observability-xxx`: OpenTelemetry and metrics
 - `state-xxx`: State adapter examples (PostgreSQL, SQLite, etc.)
 - `notify-xxx`: Notify adapter examples (Redis, NATS, etc.)
-- `validation-xxx`: Runtime validation with schema libraries
+- `validation-xxx`: Runtime validation with schema libraries (identity codecs)
+- `codec-xxx`: Bidirectional codecs where the runtime form differs from the stored form
 - `showcase-xxx`: Feature demonstrations combining multiple concerns
 - `benchmark-xxx`: Performance measurement and benchmarks
 

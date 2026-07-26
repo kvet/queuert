@@ -1,7 +1,7 @@
 import { type BaseJobTypeDefinitions } from "./job-type.js";
 import { type ValidatedJobTypeDefinitions } from "./job-type.validation.js";
 import { type JobTypes, createNoopJobTypes } from "./job-types.js";
-import { type JsonSerializable } from "./json-serializable.js";
+import { type FindNonJsonValue } from "./json-serializable.js";
 
 /**
  * Compile-time check: each job type's `input`/`output` is JSON-serializable.
@@ -12,9 +12,9 @@ import { type JsonSerializable } from "./json-serializable.js";
  * with a codec (e.g. `createZodJobTypes` with `z.codec`) instead.
  */
 type JsonSerializableJobTypeDefinitions<T extends BaseJobTypeDefinitions> = {
-  [K in keyof T]: [T[K]["input"]] extends [JsonSerializable]
+  [K in keyof T]: [FindNonJsonValue<T[K]["input"]>] extends [never]
     ? T[K] extends { output: infer O }
-      ? [O] extends [JsonSerializable | undefined]
+      ? [FindNonJsonValue<O>] extends [never]
         ? T[K]
         : `Error: output of job type "${K & string}" must be JSON-serializable. Use a validator adapter with codec for non-JSON runtime types.`
       : T[K]

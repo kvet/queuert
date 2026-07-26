@@ -38,7 +38,10 @@ const jobTypes = createZodJobTypes({
   // Continuation job
   "process-data": {
     input: z.object({
-      data: z.unknown(),
+      data: z.object({
+        items: z.array(z.number()),
+        source: z.string(),
+      }),
     }),
     output: z.object({
       processed: z.boolean(),
@@ -108,11 +111,10 @@ const worker = await createInProcessWorker({
       "process-data": {
         attemptHandler: async ({ job, complete }) => {
           console.log("Processing data:", job.input.data);
-          const data = job.input.data as { items: number[] };
 
           return complete(async () => ({
             processed: true,
-            itemCount: data.items?.length ?? 0,
+            itemCount: job.input.data.items.length,
           }));
         },
       },

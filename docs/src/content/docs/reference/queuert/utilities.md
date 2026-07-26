@@ -51,16 +51,17 @@ const orderJobTypes = defineJobTypes<
 const registry = createJobTypes<MyJobTypes>({
   getTypeNames: () => Object.keys(schemas),
   validateEntry: (typeName) => { ... },
-  parseInput: (typeName, input) => { ... },
-  parseOutput: (typeName, output) => { ... },
+  encode: async (items) => items.map((item) => { ... }),
+  decode: async (items) => items.map((item) => { ... }),
   validateContinueWith: (typeName, target) => { ... },
   validateBlockers: (typeName, blockers) => { ... },
 });
 ```
 
-Creates a registry with runtime validation for input/output parsing. Each callback is invoked at the appropriate lifecycle point. Use this when you need schema validation (e.g. with Zod) beyond compile-time checks. Accepts an optional `TExternal` type parameter for cross-slice blocker reference validation (compile-time only, same as `defineJobTypes`).
+Creates a registry with runtime validation and a codec. Each callback is invoked at the appropriate lifecycle point. Use this when you need schema validation (e.g. with Zod) beyond compile-time checks, or when the runtime form of an input/output is not directly storable. Accepts an optional `TExternal` type parameter for cross-slice blocker reference validation (compile-time only, same as `defineJobTypes`).
 
 - **getTypeNames** — returns the known job type names; used by `createClient` for runtime duplicate detection and deterministic routing when merging slices
+- **encode** / **decode** — async, batch, and heterogeneous: one call may carry several `typeName`s and both `direction`s. `encode` runs on writes and produces the stored form; `decode` runs on reads and produces the runtime form. Whatever `encode` returns is checked with `isJsonSerializable` before it reaches the state adapter.
 
 ## createProcessors
 
@@ -146,8 +147,8 @@ attemptHandler: async ({ job, complete }) => {
 type JobTypes<TJobTypeDefinitions = unknown, TExternalJobTypeDefinitions = Record<never, never>> = {
   readonly getTypeNames: () => readonly string[];
   validateEntry: (typeName: string) => void;
-  parseInput: (typeName: string, input: unknown) => unknown;
-  parseOutput: (typeName: string, output: unknown) => unknown;
+  encode: (items: readonly ResolvedJobTypeValue[]) => Promise<unknown[]>;
+  decode: (items: readonly ResolvedJobTypeValue[]) => Promise<unknown[]>;
   validateContinueWith: (typeName: string, target: ResolvedJobTypeReference) => void;
   validateBlockers: (typeName: string, blockers: readonly ResolvedJobTypeReference[]) => void;
   readonly [definitionsSymbol]: TJobTypeDefinitions;
@@ -159,16 +160,45 @@ The registry object accepted by `createClient` and `createInProcessWorker`.
 
 - **getTypeNames** — returns the known type names; noop registries return `[]`, validated registries delegate to the config
 - **validateEntry** — throws if the type name is not marked as an entry point
-- **parseInput** / **parseOutput** — parse and return validated data, throwing on invalid shapes
+- **encode** / **decode** — convert a batch of values between the runtime and stored forms, throwing on invalid shapes
 - **validateContinueWith** / **validateBlockers** — verify chain-flow references at runtime
+
+### ResolvedJobTypeValue
+
+```typescript
+type ResolvedJobTypeValue = {
+  readonly typeName: string;
+  readonly direction: "input" | "output";
+  readonly value: unknown;
+};
+```
+
+One item in an `encode` / `decode` batch. `direction` tells the adapter which of the job type's two schemas applies; `value` is the runtime form for `encode` and the stored form for `decode`.
+
+### JsonSerializable
+
+```typescript
+type JsonPrimitive = string | number | boolean | null;
+type JsonSerializable =
+  | JsonPrimitive
+  | readonly JsonSerializable[]
+  | { readonly [key: string]: JsonSerializable | undefined };
+
+type EnsureJsonSerializable<T> = ...; // T, or a descriptive error string
+const isJsonSerializable: (value: unknown) => true | { path: string };
+```
+
+The stored-form contract. `defineJobTypes` applies it to `input` / `output` at compile time; `createJobTypes` applies `isJsonSerializable` to every value `encode` returns, reporting the path of the first offending node. Validator adapters that transform should constrain their _encoded_ type with `EnsureJsonSerializable`, leaving the runtime type unconstrained.
+
+`isJsonSerializable` rejects `Date`, `Map`, `Set`, class instances, `NaN` / `Infinity`, `bigint`, functions, and symbols, and detects cycles.
 
 ### BaseJobTypeDefinition
 
 ```typescript
 type BaseJobTypeDefinition = {
   entry?: boolean; // true for chain entry points
-  input: unknown; // Job input data type
-  output?: unknown; // Job output data type (terminal jobs)
+  input: unknown; // Job input data type (runtime form)
+  output?: unknown; // Job output data type (runtime form, terminal jobs)
   continueWith?: JobTypeReference; // Next job in the chain
   blockers?: readonly JobTypeReference[]; // External chain dependencies
 };

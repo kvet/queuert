@@ -5,7 +5,7 @@ sidebar:
   order: 15
 ---
 
-`defineJobTypes` gives you compile-time type safety with zero runtime cost. When job inputs come from outside your program — HTTP handlers, dashboards, cross-service cron payloads — TypeScript can't reject a malformed value before your handler runs. `createJobTypes` closes that gap: it accepts validation callbacks that run at every boundary the library touches (entry, input, output, continuation, blockers).
+`defineJobTypes` gives you compile-time type safety with zero runtime cost. When job inputs come from outside your program — HTTP handlers, dashboards, cross-service cron payloads — TypeScript can't reject a malformed value before your handler runs. `createJobTypes` closes that gap: it accepts callbacks that run at every boundary the library touches (entry, input, output, continuation, blockers).
 
 ## When to use it
 
@@ -34,6 +34,29 @@ const client = await createClient({ stateAdapter, notifyAdapter, jobTypes });
 
 Handlers keep full type inference — `job.input` is typed from the Zod schema. The adapter itself is ~60 lines; copy it from [examples/validation-zod](https://github.com/kvet/queuert/tree/main/examples/validation-zod) or pick another library from the integration page.
 
+## Values that aren't JSON
+
+Job inputs and outputs are persisted as JSON, so a `Date`, `Map`, or `bigint` cannot be stored as-is. With `defineJobTypes` that is a compile error, because the type you declare is also the type that gets stored.
+
+`createJobTypes` adapters split the two: the declared type is the **runtime** form the handler sees, and `encode` / `decode` convert it to and from the **stored** form on every write and read. A Zod codec does that in one schema:
+
+```ts
+const zDate = z.codec(z.iso.datetime(), z.date(), {
+  decode: (iso) => new Date(iso),
+  encode: (date) => date.toISOString(),
+});
+
+const jobTypes = createZodCodecJobTypes({
+  "send-reminder": {
+    entry: true,
+    input: z.object({ sendAt: zDate }), // Date in the handler, string in the database
+    output: z.object({ sent: z.boolean() }),
+  },
+});
+```
+
+Whatever `encode` produces is checked for JSON-serializability before it reaches the state adapter, so a codec that forgets to lower a value fails on the write instead of silently corrupting the row. See [examples/codec-zod](https://github.com/kvet/queuert/tree/main/examples/codec-zod) for the full chain.
+
 ## How errors surface
 
 A failed validation throws `JobTypeValidationError`. A `code` identifies which boundary rejected the value, and `typeName` identifies the job type:
@@ -56,6 +79,6 @@ Errors thrown by the underlying schema library (`ZodError`, `ValiError`, `TypeBo
 
 ## See also
 
-- [Validation Adapters](/queuert/integrations/validation-adapters/) — the adapter pattern, the six-method contract, and ready-to-copy adapters for Zod, Valibot, TypeBox, and ArkType
+- [Validation Adapters](/queuert/integrations/validation-adapters/) — the adapter pattern, the runtime-vs-stored split, and ready-to-copy adapters for Zod, Valibot, TypeBox, and ArkType
 - [Custom Adapters](/queuert/advanced/custom-adapters/) — building and conformance-testing your own validation adapter
 - [Error Handling](/queuert/guides/error-handling/) — how `JobTypeValidationError` interacts with retries and chain failure
