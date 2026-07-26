@@ -1348,6 +1348,18 @@ describe("JSON-serializable constraint", () => {
     expectTypeOf<JobTypeDefinitions<typeof defs>>().toHaveProperty("handler");
   });
 
+  it("does not mistake an error-shaped payload for a real Error", () => {
+    const defs = defineJobTypes<{
+      "report-failure": {
+        entry: true;
+        input: { name: string; message: string; context: unknown };
+        output: { logged: boolean };
+      };
+    }>();
+
+    expectTypeOf<JobTypeDefinitions<typeof defs>>().toHaveProperty("report-failure");
+  });
+
   it("rejects a `Date` in input", () => {
     defineJobTypes<// @ts-expect-error Date is not JSON-serializable
     {

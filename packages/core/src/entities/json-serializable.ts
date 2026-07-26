@@ -26,11 +26,18 @@ export type EnsureJsonSerializable<T> = [T] extends [JsonSerializable]
   ? T
   : "Error: type must be JSON-serializable (no Date, Map, Set, class instances, bigint, functions, NaN, or Infinity)";
 
-/** Built-in runtime types that never survive a JSON round-trip. */
+/**
+ * Built-in runtime types that never survive a JSON round-trip.
+ *
+ * Every entry here is matched structurally, so it must be shaped distinctly
+ * enough that a plain payload cannot resemble it. `Error` is deliberately
+ * absent: it is only `{ name: string; message: string }`, which an ordinary
+ * job input can match by accident. Real `Error` instances are still rejected
+ * at runtime by the prototype check in {@link isJsonSerializable}.
+ */
 type NonJsonValue =
   | Date
   | RegExp
-  | Error
   | Map<unknown, unknown>
   | Set<unknown>
   | WeakMap<object, unknown>
@@ -55,6 +62,11 @@ type NonJsonValue =
  *
  * Class instances with a plain structural shape are not detected; TypeScript
  * can't distinguish them from object literals.
+ *
+ * A self-referential type that is JSON-safe resolves through the short-circuit
+ * and never reaches the walk. One that is *not* JSON-safe still fails, but
+ * TypeScript reports its own circular-reference error alongside the constraint
+ * error rather than the message below.
  */
 export type FindNonJsonValue<T> = [T] extends [JsonSerializable] ? never : FindNonJsonValueDeep<T>;
 
@@ -71,6 +83,8 @@ type FindNonJsonValueDeep<T> = [T] extends [never]
           : T extends object
             ? // `-?` strips the optional modifier so `{ label?: string }` doesn't
               // leak a bare `undefined` into the result and fail the `never` check.
+              // Indexing `T[keyof T]` instead would be shorter, but an `unknown`
+              // sibling would absorb the whole union and hide its neighbours.
               { [K in keyof T]-?: FindNonJsonValueDeep<T[K]> }[keyof T]
             : never;
 
