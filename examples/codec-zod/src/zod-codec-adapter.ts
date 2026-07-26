@@ -8,7 +8,7 @@
  *
  * Two type-level pieces make the split explicit:
  * - `z.output<schema>` is the runtime form — what handlers and client reads see.
- * - `z.input<schema>` is the stored form — constrained to `JsonSerializable`,
+ * - `z.input<schema>` is the stored form — run through `EnsureJsonSerializable`,
  *   so a schema that would persist a `Date` is a compile error, not a silent
  *   round-trip bug.
  */
@@ -18,8 +18,8 @@ import {
   type JobTypeDefinitionErrors,
   type JobTypeReference,
   type JobTypes,
+  type EnsureJsonSerializable,
   type JobTypesDefinitions,
-  type JsonSerializable,
   type ValidatedJobTypeDefinitions,
   createJobTypes,
 } from "queuert";
@@ -86,9 +86,9 @@ export const createZodCodecJobTypes = <
   schemas: [InferRuntimeJobTypes<T>] extends [
     ValidatedJobTypeDefinitions<InferRuntimeJobTypes<T>, JobTypesDefinitions<TExternal>>,
   ]
-    ? [InferStoredJobTypes<T>] extends [JsonSerializable]
-      ? T
-      : "Error: the encoded form of at least one schema is not JSON-serializable. Add a z.codec that lowers it to a JSON type."
+    ? EnsureJsonSerializable<InferStoredJobTypes<T>> extends string
+      ? "Error: the encoded form of at least one schema is not JSON-serializable. Add a z.codec that lowers it to a JSON type."
+      : T
     : JobTypeDefinitionErrors<InferRuntimeJobTypes<T>, JobTypesDefinitions<TExternal>>,
   _externalDefinitions?: TExternal,
 ) => {

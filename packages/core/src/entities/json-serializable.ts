@@ -19,14 +19,6 @@ export type JsonSerializable =
   | { readonly [key: string]: JsonSerializable | undefined };
 
 /**
- * Compile-time helper: resolves to `T` when `T` is JSON-serializable, otherwise
- * to a descriptive error string that surfaces at the call site of the consumer.
- */
-export type EnsureJsonSerializable<T> = [T] extends [JsonSerializable]
-  ? T
-  : "Error: type must be JSON-serializable (no Date, Map, Set, class instances, bigint, functions, NaN, or Infinity)";
-
-/**
  * Built-in runtime types that never survive a JSON round-trip.
  *
  * Every entry here is matched structurally, so it must be shaped distinctly
@@ -87,6 +79,25 @@ type FindNonJsonValueDeep<T> = [T] extends [never]
               // sibling would absorb the whole union and hide its neighbours.
               { [K in keyof T]-?: FindNonJsonValueDeep<T[K]> }[keyof T]
             : never;
+
+/**
+ * Compile-time helper: resolves to `T` when `T` carries nothing that would be
+ * lost in a JSON round-trip, otherwise to a descriptive error string that
+ * surfaces at the call site of the consumer.
+ *
+ * Validator adapters use this to constrain their **encoded** type — the form
+ * they hand to `encode` — while leaving the runtime type free:
+ *
+ * ```ts
+ * schemas: EnsureJsonSerializable<EncodedFormOf<T>> extends string ? never : T
+ * ```
+ *
+ * It shares {@link FindNonJsonValue}'s rules, so `unknown` and `any` pass here
+ * exactly as they do for `defineJobTypes`.
+ */
+export type EnsureJsonSerializable<T> = [FindNonJsonValue<T>] extends [never]
+  ? T
+  : "Error: type must be JSON-serializable (no Date, Map, Set, bigint, functions, symbols, or class instances)";
 
 /** Result of {@link isJsonSerializable}. `true` on success; a path on failure. */
 export type IsJsonSerializableResult = true | { path: string };
