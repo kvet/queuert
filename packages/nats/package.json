@@ -19,7 +19,8 @@
   "author": "kvet",
   "repository": {
     "type": "git",
-    "url": "git+https://github.com/kvet/queuert.git"
+    "url": "git+https://github.com/kvet/queuert.git",
+    "directory": "packages/nats"
   },
   "files": [
     "dist",
