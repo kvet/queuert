@@ -47,11 +47,11 @@ export default defineConfig({
         },
         {
           label: "Guides",
-          autogenerate: { directory: "guides" },
+          items: [{ autogenerate: { directory: "guides" } }],
         },
         {
           label: "Integrations",
-          autogenerate: { directory: "integrations" },
+          items: [{ autogenerate: { directory: "integrations" } }],
         },
         {
           label: "Examples",
@@ -59,7 +59,7 @@ export default defineConfig({
         },
         {
           label: "Comparison",
-          autogenerate: { directory: "comparison" },
+          items: [{ autogenerate: { directory: "comparison" } }],
         },
         {
           label: "Benchmarks",
@@ -109,7 +109,7 @@ export default defineConfig({
         {
           label: "Advanced",
           collapsed: true,
-          autogenerate: { directory: "advanced" },
+          items: [{ autogenerate: { directory: "advanced" } }],
         },
       ],
       customCss: ["./src/styles/custom.css"],
