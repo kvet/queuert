@@ -1,6 +1,6 @@
 ---
 name: release
-description: Create a release for the Queuert monorepo. Guides through changeset creation, version bumping, committing, merging dev to main, tagging, and creating a GitHub prerelease.
+description: Create a release for the Queuert monorepo. Guides through changeset creation, version bumping, committing, merging dev to main, tagging, and creating a GitHub release.
 ---
 
 # Release
@@ -133,10 +133,12 @@ git checkout dev
 
 ### Step 6: Create GitHub Release
 
-Create a GitHub prerelease. Use the analysis from Step 2 to write thorough release notes with user-facing changes grouped by category. Do not include internal/chore changes.
+Create a GitHub release. Use the analysis from Step 2 to write thorough release notes with user-facing changes grouped by category. Do not include internal/chore changes.
+
+Do not pass `--prerelease`. The docs site renders these release notes as its changelog (via the `github` provider in `docs/src/content.config.ts`), and the plugin skips releases flagged as prereleases.
 
 ```bash
-gh release create v<version> --title "v<version>" --prerelease --notes "$(cat <<'EOF'
+gh release create v<version> --title "v<version>" --notes "$(cat <<'EOF'
 ## What's Changed
 
 ### <Category> (e.g., Bug Fixes, Features, Improvements)
@@ -145,15 +147,7 @@ gh release create v<version> --title "v<version>" --prerelease --notes "$(cat <<
 
 ### Packages
 
-| Package | Version |
-|---------|---------|
-| `queuert` | <version> |
-| `@queuert/postgres` | <version> |
-| `@queuert/sqlite` | <version> |
-| `@queuert/redis` | <version> |
-| `@queuert/nats` | <version> |
-| `@queuert/otel` | <version> |
-| `@queuert/dashboard` | <version> |
+All packages released at `<version>`: `queuert`, `@queuert/postgres`, `@queuert/sqlite`, `@queuert/redis`, `@queuert/nats`, `@queuert/otel`, `@queuert/dashboard`.
 EOF
 )"
 ```

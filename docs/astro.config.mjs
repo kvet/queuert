@@ -1,6 +1,7 @@
 import starlight from "@astrojs/starlight";
 import astroD2 from "astro-d2";
 import { defineConfig } from "astro/config";
+import starlightChangelogs, { makeChangelogsSidebarLinks } from "starlight-changelogs";
 import starlightLlmsTxt from "starlight-llms-txt";
 
 export default defineConfig({
@@ -14,7 +15,7 @@ export default defineConfig({
       theme: { dark: false },
     }),
     starlight({
-      plugins: [starlightLlmsTxt()],
+      plugins: [starlightLlmsTxt(), starlightChangelogs()],
       title: "Queuert",
       description: "Durable, typed job chains that commit with your database transactions",
       social: [
@@ -111,6 +112,7 @@ export default defineConfig({
           collapsed: true,
           items: [{ autogenerate: { directory: "advanced" } }],
         },
+        ...makeChangelogsSidebarLinks([{ type: "all", base: "changelog", label: "Changelog" }]),
       ],
       customCss: ["./src/styles/custom.css"],
     }),

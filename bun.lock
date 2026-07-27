@@ -119,6 +119,7 @@
         "astro": "7.1.4",
         "astro-d2": "^0.13.1",
         "sharp": "0.35.3",
+        "starlight-changelogs": "^0.5.1",
         "starlight-llms-txt": "0.11.0",
       },
     },
@@ -850,6 +851,8 @@
     "@ark/schema": ["@ark/schema@0.56.2", "", { "dependencies": { "@ark/util": "0.56.2" } }, "sha512-Qx4D2JFbBWpntiHZaTv7bGG4H/M2rigiknezKg/WVyDSaLdE4YCcWAOoFB7pjjDqHbbV2OqRfntm1nnXvwMexg=="],
 
     "@ark/util": ["@ark/util@0.56.2", "", {}, "sha512-9kU2sUE38FZEGG7l3hamYMBieLYEJh2L1mrYD2eXpT+78EnQSV1bhjxJhnxGBMSTbtwpBSDNSK+K60WvaI/DTQ=="],
+
+    "@ascorbic/loader-utils": ["@ascorbic/loader-utils@1.0.2", "", { "peerDependencies": { "astro": "^4.14.0 || ^5.0.0-beta.0" } }, "sha512-pg43g83gojVtEsAkXfjWuzJhuXneJp4wM/leBftGkCPV3yxKgB92EWA+nWu735BgbBMph3P7DrVqVc3ikt+dJA=="],
 
     "@astrojs/compiler-binding": ["@astrojs/compiler-binding@0.3.1", "", { "optionalDependencies": { "@astrojs/compiler-binding-darwin-arm64": "0.3.1", "@astrojs/compiler-binding-darwin-x64": "0.3.1", "@astrojs/compiler-binding-linux-arm64-gnu": "0.3.1", "@astrojs/compiler-binding-linux-arm64-musl": "0.3.1", "@astrojs/compiler-binding-linux-x64-gnu": "0.3.1", "@astrojs/compiler-binding-linux-x64-musl": "0.3.1", "@astrojs/compiler-binding-wasm32-wasi": "0.3.1", "@astrojs/compiler-binding-win32-arm64-msvc": "0.3.1", "@astrojs/compiler-binding-win32-x64-msvc": "0.3.1" } }, "sha512-DaAUj29AIBU2XdJ8uwcab8lW5O2pk9pY8AXkcMw0sw77nVa3oeTYRcO+Dvbbpoexf6ThMc0FMWYCQ/wN1/T7oQ=="],
 
@@ -2926,6 +2929,8 @@
     "stackback": ["stackback@0.0.2", "", {}, "sha512-1XMJE5fQo1jGH6Y/7ebnwPOBEkIEnT4QF32d5R1+VXdXveM0IBMJt8zfaxX1P3QhVwrYe+576+jkANtSS2mBbw=="],
 
     "standard-as-callback": ["standard-as-callback@2.1.0", "", {}, "sha512-qoRRSyROncaz1z0mvYqIE4lCd9p2R90i6GxW3uZv5ucSu8tU7B5HXUP1gG8pVZsYNVaXjk8ClXHPttLyxAL48A=="],
+
+    "starlight-changelogs": ["starlight-changelogs@0.5.1", "", { "dependencies": { "@ascorbic/loader-utils": "^1.0.2", "github-slugger": "^2.0.0", "mdast-util-from-markdown": "^2.0.3", "mdast-util-to-markdown": "^2.1.2", "mdast-util-to-string": "^4.0.0", "unist-util-visit": "^5.1.0" }, "peerDependencies": { "@astrojs/starlight": ">=0.38.0" } }, "sha512-xfX02Ls8yWEYCHP+P4LLnOUftkj2kru+eOzTmnAWCDPa5DT1GhYCliIO7+cOKx2FI5TLy8ySmSFjgUvzczPvxw=="],
 
     "starlight-llms-txt": ["starlight-llms-txt@0.11.0", "", { "dependencies": { "@astrojs/mdx": "^7.0.0", "@types/hast": "^3.0.4", "@types/micromatch": "^4.0.10", "github-slugger": "^2.0.0", "hast-util-select": "^6.0.4", "micromatch": "^4.0.8", "rehype-parse": "^9.0.1", "rehype-remark": "^10.0.1", "remark-gfm": "^4.0.1", "remark-stringify": "^11.0.0", "unified": "^11.0.5", "unist-util-remove": "^4.0.0" }, "peerDependencies": { "@astrojs/starlight": ">=0.41.0", "astro": "^7.0.0" } }, "sha512-83TU5zPgJhL9fXIWAOWjQjyQ6EKocshEjJyA4zOJjOqu/oxQsrTpYGYxjHLyfZe4LRD52N9eCuykSkaIYwUyDw=="],
 
