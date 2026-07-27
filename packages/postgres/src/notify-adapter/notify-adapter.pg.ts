@@ -9,12 +9,16 @@ import { type PgNotifyProvider } from "../notify-provider/notify-provider.pg.js"
  * PostgreSQL has no native counter primitive suitable for atomic wake-fan-out
  * gating, so `provideWakeHint`/`consumeWakeHint` are no-ops here — every
  * listener wakes on every notification, and the database handles contention.
+ *
+ * @param options - PostgreSQL notify adapter configuration.
  */
 export const createPgNotifyAdapter = async ({
   notifyProvider,
   channelPrefix = "queuert",
 }: {
+  /** PostgreSQL notify provider wrapping the LISTEN/NOTIFY connection. */
   notifyProvider: PgNotifyProvider;
+  /** Prefix for all LISTEN/NOTIFY channel names. @defaultValue `"queuert"` */
   channelPrefix?: string;
 }): Promise<NotifyAdapter> => {
   const jobScheduledChannel = `${channelPrefix}_sched`;

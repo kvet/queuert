@@ -114,5 +114,5 @@ const notifyAdapter = await createNatsNotifyAdapter({
 ## See Also
 
 - [Adapter Architecture](../adapters/) — Hint-based optimization design
-- [NATS Reference](/queuert/reference/nats/) — API documentation
+- [NATS Reference](/queuert/api/nats/readme/) — API documentation
 - [Redis Internals](../redis-internals/) — Alternative notify adapter with Lua scripts

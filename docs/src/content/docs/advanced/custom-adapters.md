@@ -34,7 +34,7 @@ See the [Notify adapter examples](/queuert/examples/#notify-adapters) for end-to
 
 ## Custom StateAdapter
 
-Implement the `StateAdapter` type exported from `queuert`. This is a larger interface covering job creation, status transitions, attempt tracking, querying, and migrations. See the [Adapter Architecture](/queuert/advanced/adapters/) doc for the full contract and the [Conformance reference](/queuert/reference/queuert/conformance/) for what the suite tests.
+Implement the `StateAdapter` type exported from `queuert`. This is a larger interface covering job creation, status transitions, attempt tracking, querying, and migrations. See the [Adapter Architecture](/queuert/advanced/adapters/) doc for the full contract and the [Conformance reference](/queuert/api/conformance/readme/) for what the suite tests.
 
 ```ts
 import { runStateAdapterConformance } from "queuert/conformance";
@@ -173,7 +173,7 @@ await runNotifyAdapterConformance(factory, {
 
 ## See Also
 
-- [Conformance API Reference](/queuert/reference/queuert/conformance/) — full runner and type signatures
+- [Conformance API Reference](/queuert/api/conformance/readme/) — full runner and type signatures
 - [State Adapters](/queuert/integrations/state-adapters/) — supported drivers and provider interface
 - [Notify Adapters](/queuert/integrations/notify-adapters/) — supported clients and provider interface
 - [Adapter Architecture](/queuert/advanced/adapters/) — design philosophy and factory patterns

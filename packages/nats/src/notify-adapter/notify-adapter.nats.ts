@@ -70,6 +70,7 @@ const tryDecrementHint = async (kv: KV, key: string): Promise<boolean> => {
  * KV bucket for atomic CAS-based wake-fan-out gating. When `kv` is omitted,
  * the hint methods are no-ops and every listener wakes on every notification.
  *
+ * @param options - NATS notify adapter configuration.
  * @experimental
  */
 export const createNatsNotifyAdapter = async ({
@@ -77,8 +78,11 @@ export const createNatsNotifyAdapter = async ({
   kv,
   subjectPrefix = "queuert",
 }: {
+  /** The NATS connection. */
   nc: NatsConnection;
+  /** Optional JetStream KV bucket enabling atomic wake-fan-out gating. */
   kv?: KV;
+  /** Prefix for all NATS subject names. @defaultValue `"queuert"` */
   subjectPrefix?: string;
 }): Promise<NotifyAdapter> => {
   const jobScheduledSubject = `${subjectPrefix}.sched`;

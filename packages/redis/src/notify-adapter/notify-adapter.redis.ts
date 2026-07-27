@@ -4,12 +4,18 @@ import { createSharedListener } from "queuert/internal";
 import { type RedisNotifyProvider } from "../notify-provider/notify-provider.redis.js";
 import { CONSUME_WAKE_HINT_SCRIPT, PROVIDE_WAKE_HINT_SCRIPT } from "./lua.js";
 
-/** Create a notify adapter backed by Redis pub/sub. */
+/**
+ * Create a notify adapter backed by Redis pub/sub.
+ *
+ * @param options - Redis notify adapter configuration.
+ */
 export const createRedisNotifyAdapter = async ({
   notifyProvider,
   channelPrefix = "queuert",
 }: {
+  /** Redis notify provider wrapping the pub/sub client. */
   notifyProvider: RedisNotifyProvider;
+  /** Prefix for all pub/sub channel names. @defaultValue `"queuert"` */
   channelPrefix?: string;
 }): Promise<NotifyAdapter> => {
   const jobScheduledChannel = `${channelPrefix}:sched`;

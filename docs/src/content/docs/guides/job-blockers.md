@@ -83,6 +83,6 @@ The example above uses **nominal references** — `{ typeName: "fetch-data" }`. 
 
 ## Blocker Limit
 
-A single job may declare at most **100** blocker chains. Declaring more throws [`BlockerLimitExceededError`](/queuert/reference/queuert/errors/#blockerlimitexceedederror). The cap is intentional — the blocker model is built for fan-in of a bounded set of dependencies, not millions per job.
+A single job may declare at most **100** blocker chains. Declaring more throws [`BlockerLimitExceededError`](/queuert/api/core/classes/blockerlimitexceedederror/). The cap is intentional — the blocker model is built for fan-in of a bounded set of dependencies, not millions per job.
 
 See [examples/showcase-blockers](https://github.com/kvet/queuert/tree/main/examples/showcase-blockers) for a complete working example demonstrating fan-out/fan-in and fixed blocker slots. See also [Transaction Hooks](../transaction-hooks/) and [Chain Patterns](../chain-patterns/).

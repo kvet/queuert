@@ -38,14 +38,15 @@ const toException = (error: unknown): Error | string =>
  * Users must configure their OTEL SDK with desired exporters (Prometheus, OTLP, Jaeger, etc.)
  * before using this adapter.
  *
- * @param meter - OTEL Meter instance for creating counters, histograms, and gauges. Omit to disable metrics.
- * @param tracer - OTEL Tracer instance for creating spans. Omit to disable tracing.
+ * @param options - OpenTelemetry adapter configuration.
  */
 export const createOtelObservabilityAdapter = async ({
   meter,
   tracer,
 }: {
+  /** OTEL Meter instance for creating counters, histograms, and gauges. Omit to disable metrics. */
   meter?: Meter;
+  /** OTEL Tracer instance for creating spans. Omit to disable tracing. */
   tracer?: Tracer;
 } = {}): Promise<ObservabilityAdapter> => {
   const workerStartedCounter = meter?.createCounter("queuert.worker.started");

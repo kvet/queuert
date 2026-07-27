@@ -98,7 +98,34 @@ Adapter packages use their domain-specific prefixes (not "Queuert"):
 
 ## Reference Documentation
 
-Reference docs in `docs/src/content/docs/advanced/` capture architectural decisions and API contracts as part of the documentation site.
+Architecture and API-contract prose lives in `docs/src/content/docs/advanced/`. The per-symbol **API reference** for every public package is generated from source TSDoc by `starlight-typedoc` (configured in `docs/astro.config.mjs`) — there are no hand-written reference pages, so the TSDoc comment on each exported symbol is the source of truth for its documentation. Keep those comments accurate and complete.
+
+### Documenting options-object parameters
+
+Factory functions that take a single destructured options object (`createClient`, `createInProcessWorker`, the adapter factories, etc.) follow one convention so TypeDoc renders them consistently:
+
+- Add a single bare `@param options - <summary>` tag to the function's doc comment. This is **required**: without it TypeDoc labels the parameter `__namedParameters` and silently drops any per-field descriptions.
+- Document each field with an inline TSDoc comment on the type-literal member (colocated with the type), including `@defaultValue` where relevant.
+- Do **not** use dotted `@param options.<field>` tags — field docs belong on the type members, not in the function comment.
+
+```ts
+/**
+ * Create a new Queuert client.
+ *
+ * @param options - Client configuration.
+ */
+export const createClient = async ({
+  stateAdapter,
+  log,
+}: {
+  /** Database adapter for job persistence. */
+  stateAdapter: TStateAdapter;
+  /** Optional structured log function. @defaultValue no-op */
+  log?: Log;
+}): Promise<Client> => {
+  // ...
+};
+```
 
 ## Testing Patterns
 

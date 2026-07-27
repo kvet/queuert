@@ -604,6 +604,9 @@ export type InProcessContext = { inTransaction?: boolean; journal?: JournalEntry
 /** State adapter backed by in-memory data structures. Suitable for testing and single-process deployments without persistence. */
 export type InProcessStateAdapter = StateAdapter<InProcessContext, string>;
 
+/**
+ * @param options - Optional ID generation and validation overrides.
+ */
 export const createInProcessStateAdapter = async ({
   generateId: generateIdOption = () => crypto.randomUUID(),
   validateId: validateIdOption,

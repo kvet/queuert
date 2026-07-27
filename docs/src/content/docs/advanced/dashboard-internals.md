@@ -98,5 +98,5 @@ The dashboard injects a `<base href="{basePath}/">` tag into the HTML response, 
 
 ## See Also
 
-- [Dashboard Reference](/queuert/reference/dashboard/) — Configuration and API
+- [Dashboard Reference](/queuert/api/dashboard/readme/) — Configuration and API
 - [Adapter Architecture](../adapters/) — State adapter design

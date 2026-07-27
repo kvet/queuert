@@ -126,4 +126,4 @@ The adapter exposes a `vacuum()` method that runs non-blocking `VACUUM` on both 
 ## See Also
 
 - [Adapter Architecture](../adapters/) — Provider/adapter design philosophy
-- [PostgreSQL Reference](/queuert/reference/postgres/) — API documentation
+- [PostgreSQL Reference](/queuert/api/postgres/readme/) — API documentation

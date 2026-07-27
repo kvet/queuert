@@ -36,12 +36,14 @@ const loadAssets = async (): Promise<Assets | null> => {
  * const dashboard = await createDashboard({ client, basePath: '/internal/queuert' });
  * ```
  *
+ * @param options - Dashboard configuration.
  * @experimental
  */
 export const createDashboard = async <
   TJobTypeDefinitions extends BaseJobTypeDefinitions,
   TStateAdapter extends StateAdapter<any, any>,
 >(options: {
+  /** The Queuert client the dashboard reads jobs and chains from. */
   client: Client<TJobTypeDefinitions, TStateAdapter>;
   /** Mount prefix without trailing slash (e.g. `'/internal/queuert'`). Defaults to `''` (root). */
   basePath?: string;

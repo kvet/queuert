@@ -124,4 +124,4 @@ db.pragma("foreign_keys = ON");
 ## See Also
 
 - [Adapter Architecture](../adapters/) — Provider/adapter design philosophy
-- [SQLite Reference](/queuert/reference/sqlite/) — API documentation
+- [SQLite Reference](/queuert/api/sqlite/readme/) — API documentation

@@ -65,4 +65,4 @@ Custom validation adapters can be validated against Queuert's conformance suite 
 - [Runtime Validation Guide](/queuert/guides/runtime-validation/) — When to use runtime validation
 - [Chain Patterns](/queuert/guides/chain-patterns/) — Continuation references and patterns
 - [Custom Adapters](/queuert/advanced/custom-adapters/) — Building and validating a custom validation adapter
-- [Conformance Reference](/queuert/reference/queuert/conformance/) — Runner API and fixture types
+- [Conformance Reference](/queuert/api/conformance/readme/) — Runner API and fixture types

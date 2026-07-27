@@ -34,7 +34,7 @@ Because each `create*` factory produces an adapter with the same contract regard
 
 The suite is exposed as a framework-agnostic runner under the `queuert/conformance` subpath. Users wire it into a single `test()` block from their framework of choice; internal Queuert specs go through the same case list via a thin vitest binding so there's no drift between end-user validation and internal coverage.
 
-See the [Conformance reference](/queuert/reference/queuert/conformance/) for the API and the [Custom Adapters](/queuert/advanced/custom-adapters/) guide for a walkthrough.
+See the [Conformance reference](/queuert/api/conformance/readme/) for the API and the [Custom Adapters](/queuert/advanced/custom-adapters/) guide for a walkthrough.
 
 ## Async Factory Pattern
 
@@ -208,5 +208,5 @@ Observability events emitted inside database transactions are buffered and only 
 - [OTEL Metrics](../otel-metrics/) — Counters, histograms, and gauges
 - [OTEL Tracing](../otel-tracing/) — Span hierarchy and messaging conventions
 - [OTEL Internals](../otel-internals/) — Adapter architecture, W3C context propagation, and transactional buffering
-- [Client API](/queuert/reference/queuert/client/) — Mutation and query methods
+- [Client API](/queuert/api/core/type-aliases/client/) — Mutation and query methods
 - [In-Process Worker](../in-process-worker/) — Worker lifecycle and attempt management

@@ -18,7 +18,7 @@ A middleware has four optional hooks, each wrapping a different phase:
 
 All four accept a `next(ctx)` call that yields the inner layer. The object passed to `next` is merged into the callback options for that phase, and its type flows into the handler signature.
 
-See the [Worker reference](/queuert/reference/queuert/worker/#attemptmiddleware) for the full type definition.
+See the [Worker reference](/queuert/api/core/type-aliases/attemptmiddleware/) for the full type definition.
 
 ## When to use each hook
 
@@ -182,5 +182,5 @@ Per slice, handler ctx types reflect the actual middleware list for that registr
 ## See also
 
 - [Showcase example](https://github.com/kvet/queuert/tree/main/examples/showcase-middleware) — runnable end-to-end demo of middleware hooks
-- [Worker reference](/queuert/reference/queuert/worker/#attemptmiddleware) — full API
+- [Worker reference](/queuert/api/core/type-aliases/attemptmiddleware/) — full API
 - [Slices guide](/queuert/guides/slices/) — splitting workflows across registries

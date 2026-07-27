@@ -496,6 +496,8 @@ const parseDbChainRow = (row: DbChainRow): { headJob: DbJob; tailJob: DbJob | nu
 
 /**
  * Create a state adapter backed by SQLite. Returns the adapter with a `migrateToLatest()` method for schema migrations.
+ *
+ * @param options - SQLite state adapter configuration.
  * @experimental
  */
 export const createSqliteStateAdapter = async <

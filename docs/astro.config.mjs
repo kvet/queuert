@@ -3,6 +3,44 @@ import astroD2 from "astro-d2";
 import { defineConfig } from "astro/config";
 import starlightChangelogs, { makeChangelogsSidebarLinks } from "starlight-changelogs";
 import starlightLlmsTxt from "starlight-llms-txt";
+import { createStarlightTypeDocPlugin } from "starlight-typedoc";
+
+const packages = [
+  { label: "queuert", dir: "core", slug: "core" },
+  {
+    label: "queuert/conformance",
+    dir: "core",
+    slug: "conformance",
+    entryPoints: ["../packages/core/src/conformance.ts"],
+  },
+  { label: "@queuert/postgres", dir: "postgres", slug: "postgres" },
+  { label: "@queuert/sqlite", dir: "sqlite", slug: "sqlite" },
+  { label: "@queuert/redis", dir: "redis", slug: "redis" },
+  { label: "@queuert/nats", dir: "nats", slug: "nats" },
+  { label: "@queuert/otel", dir: "otel", slug: "otel" },
+  { label: "@queuert/dashboard", dir: "dashboard", slug: "dashboard" },
+];
+
+const typeDocPlugins = [];
+const typeDocSidebarGroups = [];
+for (const pkg of packages) {
+  const [plugin, sidebarGroup] = createStarlightTypeDocPlugin();
+  typeDocPlugins.push(
+    plugin({
+      entryPoints: pkg.entryPoints ?? [`../packages/${pkg.dir}/src/index.ts`],
+      tsconfig: `../packages/${pkg.dir}/tsconfig.json`,
+      output: `api/${pkg.slug}`,
+      sidebar: { label: pkg.label, collapsed: true },
+      typeDoc: {
+        readme: "none",
+        excludeInternal: true,
+        gitRevision: "main",
+        skipErrorChecking: true,
+      },
+    }),
+  );
+  typeDocSidebarGroups.push(sidebarGroup);
+}
 
 export default defineConfig({
   site: "https://kvet.github.io",
@@ -15,7 +53,7 @@ export default defineConfig({
       theme: { dark: false },
     }),
     starlight({
-      plugins: [starlightLlmsTxt(), starlightChangelogs()],
+      plugins: [starlightLlmsTxt(), starlightChangelogs(), ...typeDocPlugins],
       title: "Queuert",
       description: "Durable, typed job chains that commit with your database transactions",
       social: [
@@ -68,44 +106,7 @@ export default defineConfig({
         },
         {
           label: "Reference",
-          items: [
-            {
-              label: "queuert",
-              items: [
-                { label: "Client", slug: "reference/queuert/client" },
-                { label: "Worker", slug: "reference/queuert/worker" },
-                { label: "Utilities", slug: "reference/queuert/utilities" },
-                { label: "Entities", slug: "reference/queuert/entities" },
-                { label: "Transaction Hooks", slug: "reference/queuert/transaction-hooks" },
-                { label: "Errors", slug: "reference/queuert/errors" },
-                { label: "Conformance", slug: "reference/queuert/conformance" },
-              ],
-            },
-            {
-              label: "@queuert/postgres",
-              slug: "reference/postgres",
-            },
-            {
-              label: "@queuert/sqlite",
-              slug: "reference/sqlite",
-            },
-            {
-              label: "@queuert/redis",
-              slug: "reference/redis",
-            },
-            {
-              label: "@queuert/nats",
-              slug: "reference/nats",
-            },
-            {
-              label: "@queuert/otel",
-              slug: "reference/otel",
-            },
-            {
-              label: "@queuert/dashboard",
-              slug: "reference/dashboard",
-            },
-          ],
+          items: typeDocSidebarGroups,
         },
         {
           label: "Advanced",

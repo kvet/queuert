@@ -628,6 +628,8 @@ const mapDbJobToStateJob = (dbJob: DbJob): StateJob => {
 /**
  * Create a state adapter backed by PostgreSQL. Returns the adapter with a
  * `migrateToLatest()` method for schema migrations.
+ *
+ * @param options - PostgreSQL state adapter configuration.
  */
 export const createPgStateAdapter = async <
   TTxContext extends BaseTxContext,

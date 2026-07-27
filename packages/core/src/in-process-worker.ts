@@ -261,14 +261,7 @@ export type InProcessWorkerDefaults = {
  * for processors that don't set `backoffConfig` / `attemptConfig` themselves;
  * precedence is processor > worker `defaults` > built-in defaults.
  *
- * @param options.client - The Queuert client to process jobs for.
- * @param options.workerName - Optional human-readable label included in the worker id (which is always suffixed with a random UUID to guarantee uniqueness across replicas). Must match `/^[A-Za-z0-9._-]+$/` when provided.
- * @param options.concurrency - Maximum number of jobs to process in parallel. Defaults to 1.
- * @param options.pollIntervalMs - How often to poll for new jobs when no notify adapter wakes the worker. Defaults to 60s.
- * @param options.recoveryBackoffConfig - Backoff configuration for the worker loop itself (not job retries).
- * @param options.defaults - Fallback `backoffConfig` / `attemptConfig` for processors that don't set their own.
- * @param options.requiredAttemptMiddleware - Middleware instances that every dispatched processor's slice must include as an in-order subsequence. Enforced both at compile time (against the slice middleware tuple inferred by {@link createProcessors}) and at runtime by reference-identity (`===`). The worker does not execute this middleware itself — slices run their own chains.
- * @param options.processors - A single `Processors` from {@link createProcessors}, or an array of slices to merge.
+ * @param options - Worker configuration.
  */
 export const createInProcessWorker = async <
   TJobTypeDefinitions extends BaseJobTypeDefinitions,
@@ -285,15 +278,37 @@ export const createInProcessWorker = async <
   requiredAttemptMiddleware: requiredAttemptMiddlewareOption,
   processors: processorsOption,
 }: {
+  /** The Queuert client to process jobs for. */
   client: Client<TJobTypeDefinitions, TStateAdapter>;
+  /**
+   * Optional human-readable label included in the worker id (which is always
+   * suffixed with a random UUID to guarantee uniqueness across replicas). Must
+   * match `/^[A-Za-z0-9._-]+$/` when provided.
+   */
   workerName?: string;
+  /** Maximum number of jobs to process in parallel. Defaults to 1. */
   concurrency?: number;
+  /**
+   * How often to poll for new jobs when no notify adapter wakes the worker.
+   * Defaults to 60s.
+   */
   pollIntervalMs?: number;
+  /** Backoff configuration for the worker loop itself (not job retries). */
   recoveryBackoffConfig?: BackoffConfig;
+  /** Fallback `backoffConfig` / `attemptConfig` for processors that don't set their own. */
   defaults?: InProcessWorkerDefaults;
-  /* Same adapter guard as `createProcessors`'s `attemptMiddleware`. */
+  /**
+   * Middleware instances that every dispatched processor's slice must include
+   * as an in-order subsequence. Enforced both at compile time (against the
+   * slice middleware tuple inferred by {@link createProcessors}) and at runtime
+   * by reference-identity (`===`). The worker does not execute this middleware
+   * itself — slices run their own chains.
+   *
+   * Same adapter guard as `createProcessors`'s `attemptMiddleware`.
+   */
   requiredAttemptMiddleware?: TRequiredAttemptMiddleware &
     readonly AttemptMiddleware<TStateAdapter, any, any, any, any>[];
+  /** A single `Processors` from {@link createProcessors}, or an array of slices to merge. */
   processors: [
     ExtraProcessorTypeNames<WorkerProcessorDefs<TProcessorsInput>, TJobTypeDefinitions>,
   ] extends [never]

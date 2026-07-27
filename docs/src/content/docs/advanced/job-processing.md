@@ -170,7 +170,7 @@ For hard timeouts (forceful termination), the attempt mechanism already handles 
 ## See Also
 
 - [Job Processing Reliability](../../guides/processing-reliability/) — Savepoint protection, automatic rollback
-- [Client API](/queuert/reference/queuert/client/) — Mutation methods, query methods, awaitChain
+- [Client API](/queuert/api/core/type-aliases/client/) — Mutation methods, query methods, awaitChain
 - [In-Process Worker](../in-process-worker/) — Worker lifecycle, attempt management, expired attempt reclamation
 - [Adapters](../adapters/) — StateAdapter context architecture
 - [`showcase-signals`](https://github.com/kvet/queuert/tree/main/examples/showcase-signals) — Runnable example: `already_completed` via external `completeChain`, `worker_stopping` via graceful shutdown

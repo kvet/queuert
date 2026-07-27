@@ -15,9 +15,21 @@ export type ConformanceGroup<TContext> = {
 
 export type ConformanceResult = {
   name: string;
+  /**
+   * `"skip"` when the case declines to run — for example, a state adapter that
+   * omits `poisonTransaction` for a backend that cannot poison mid-transaction
+   * (SQLite). `skipReason` carries the explanation and `error` is left unset.
+   */
   status: "pass" | "fail" | "skip";
   error?: Error;
+  /**
+   * Populated when the `cleanup` callback throws. If the case body passed, a
+   * cleanup failure flips the result to `"fail"` and is reported in `error`. If
+   * the body already failed, the cleanup failure is preserved here alongside
+   * the original `error` so neither is lost.
+   */
   cleanupError?: Error;
+  /** Explanation for a `"skip"` status. */
   skipReason?: string;
   durationMs: number;
 };

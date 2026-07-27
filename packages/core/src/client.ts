@@ -540,11 +540,7 @@ export type Client<
 /**
  * Create a new Queuert client.
  *
- * @param options.stateAdapter - Database adapter for job persistence.
- * @param options.notifyAdapter - Optional pub/sub adapter for real-time notifications.
- * @param options.observabilityAdapter - Optional adapter for metrics and tracing.
- * @param options.jobTypes - A single JobTypes slice, or an array of slices to merge. Slices are built with {@link defineJobTypes} or {@link createJobTypes}.
- * @param options.log - Optional structured log function.
+ * @param options - Client configuration.
  */
 export const createClient = async <
   const TJobTypes extends JobTypes<any> | readonly [JobTypes<any>, ...JobTypes<any>[]],
@@ -556,12 +552,20 @@ export const createClient = async <
   jobTypes: jobTypesOption,
   log,
 }: {
+  /** Database adapter for job persistence. */
   stateAdapter: TStateAdapter;
+  /** Optional pub/sub adapter for real-time notifications. */
   notifyAdapter?: NotifyAdapter;
+  /** Optional adapter for metrics and tracing. */
   observabilityAdapter?: ObservabilityAdapter;
+  /**
+   * A single JobTypes slice, or an array of slices to merge. Slices are built
+   * with {@link defineJobTypes} or {@link createJobTypes}.
+   */
   jobTypes: TJobTypes extends readonly JobTypes<any>[]
     ? ValidatedSlices<TJobTypes> & TJobTypes
     : TJobTypes;
+  /** Optional structured log function. */
   log?: Log;
 }): Promise<Client<JobTypesDefinitions<TJobTypes>, TStateAdapter>> => {
   type TJobTypeDefinitions = JobTypesDefinitions<TJobTypes>;

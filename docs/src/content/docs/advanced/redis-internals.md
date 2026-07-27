@@ -131,5 +131,5 @@ This avoids creating a separate Redis subscription for each worker or job type.
 ## See Also
 
 - [Adapter Architecture](../adapters/) — Hint-based optimization design
-- [Redis Reference](/queuert/reference/redis/) — API documentation
+- [Redis Reference](/queuert/api/redis/readme/) — API documentation
 - [NATS Internals](../nats-internals/) — Alternative notify adapter
