@@ -659,8 +659,8 @@ const generateScenarioFiles = (): Map<
 
 // --- Runner ---
 
-const tscPath = join(benchmarkDir, "node_modules/.bin/tsc");
-const tsgoPath = join(projectRoot, "node_modules/.bin/tsgo");
+const ts6Path = join(benchmarkDir, "node_modules/typescript-6/bin/tsc");
+const ts7Path = join(benchmarkDir, "node_modules/typescript-7/bin/tsc");
 
 const args = process.argv.slice(2);
 const compilerArg = args.find((a) => !a.startsWith("--"));
@@ -707,17 +707,17 @@ const runTypeCheck = (scenarioDir: string, compilerPath: string): Diagnostics | 
 
 const compilers: { name: string; path: string }[] = [];
 
-if (compilerArg === "tsc") {
-  compilers.push({ name: "tsc", path: tscPath });
-} else if (compilerArg === "tsgo") {
-  compilers.push({ name: "tsgo", path: tsgoPath });
+if (compilerArg === "ts6") {
+  compilers.push({ name: "ts6", path: ts6Path });
+} else if (compilerArg === "ts7") {
+  compilers.push({ name: "ts7", path: ts7Path });
 } else {
-  if (getVersion(tscPath)) compilers.push({ name: "tsc", path: tscPath });
-  if (getVersion(tsgoPath)) compilers.push({ name: "tsgo", path: tsgoPath });
+  if (getVersion(ts6Path)) compilers.push({ name: "ts6", path: ts6Path });
+  if (getVersion(ts7Path)) compilers.push({ name: "ts7", path: ts7Path });
 }
 
 if (compilers.length === 0) {
-  console.error("No TypeScript compiler found. Install typescript or @typescript/native-preview.");
+  console.error("No TypeScript compiler found. Run `bun install` in benchmarks/type-complexity.");
   process.exit(1);
 }
 
@@ -823,40 +823,40 @@ for (const compiler of compilers) {
 
 // Comparison table if both compilers ran
 if (allResults.size > 1) {
-  const tscResults = allResults.get("tsc")!;
-  const tsgoResults = allResults.get("tsgo")!;
+  const ts6Results = allResults.get("ts6")!;
+  const ts7Results = allResults.get("ts7")!;
 
   console.log();
   console.log("=".repeat(80));
-  console.log("Comparison: tsc vs tsgo");
+  console.log("Comparison: TS 6 vs TS 7");
   console.log("=".repeat(80));
   console.log();
   console.log(
-    `${"Scenario".padEnd(25)} ${"tsc time".padStart(10)} ${"tsgo time".padStart(10)} ${"Speedup".padStart(8)} ${"tsc inst".padStart(12)} ${"tsgo inst".padStart(12)}`,
+    `${"Scenario".padEnd(25)} ${"TS6 time".padStart(10)} ${"TS7 time".padStart(10)} ${"Speedup".padStart(8)} ${"TS6 inst".padStart(12)} ${"TS7 inst".padStart(12)}`,
   );
   console.log("-".repeat(80));
 
-  for (let i = 0; i < tscResults.length; i++) {
-    const tsc = tscResults[i];
-    const tsgo = tsgoResults[i];
-    const tscTime = tsc.diagnostics?.timeMs ?? -1;
-    const tsgoTime = tsgo.diagnostics?.timeMs ?? -1;
-    const tscTimeStr = tsc.diagnostics?.errors
-      ? `ERR(${tsc.diagnostics.errors})`
-      : tscTime > 0
-        ? `${tscTime}ms`
+  for (let i = 0; i < ts6Results.length; i++) {
+    const ts6 = ts6Results[i];
+    const ts7 = ts7Results[i];
+    const ts6Time = ts6.diagnostics?.timeMs ?? -1;
+    const ts7Time = ts7.diagnostics?.timeMs ?? -1;
+    const ts6TimeStr = ts6.diagnostics?.errors
+      ? `ERR(${ts6.diagnostics.errors})`
+      : ts6Time > 0
+        ? `${ts6Time}ms`
         : "-";
-    const tsgoTimeStr = tsgo.diagnostics?.errors
-      ? `ERR(${tsgo.diagnostics.errors})`
-      : tsgoTime > 0
-        ? `${tsgoTime}ms`
+    const ts7TimeStr = ts7.diagnostics?.errors
+      ? `ERR(${ts7.diagnostics.errors})`
+      : ts7Time > 0
+        ? `${ts7Time}ms`
         : "-";
-    const speedup = tscTime > 0 && tsgoTime > 0 ? `${(tscTime / tsgoTime).toFixed(1)}x` : "-";
-    const tscInst = fmtNum(tsc.diagnostics?.instantiations ?? null);
-    const tsgoInst = fmtNum(tsgo.diagnostics?.instantiations ?? null);
+    const speedup = ts6Time > 0 && ts7Time > 0 ? `${(ts6Time / ts7Time).toFixed(1)}x` : "-";
+    const ts6Inst = fmtNum(ts6.diagnostics?.instantiations ?? null);
+    const ts7Inst = fmtNum(ts7.diagnostics?.instantiations ?? null);
 
     console.log(
-      `${tsc.description.padEnd(25)} ${tscTimeStr.padStart(10)} ${tsgoTimeStr.padStart(10)} ${speedup.padStart(8)} ${tscInst.padStart(12)} ${tsgoInst.padStart(12)}`,
+      `${ts6.description.padEnd(25)} ${ts6TimeStr.padStart(10)} ${ts7TimeStr.padStart(10)} ${speedup.padStart(8)} ${ts6Inst.padStart(12)} ${ts7Inst.padStart(12)}`,
     );
   }
 }

@@ -17,7 +17,7 @@
     "start": "tsx src/index.ts",
     "test": "vitest --run",
     "postinstall": "prisma generate",
-    "typecheck": "prisma generate && tsgo --noEmit"
+    "typecheck": "prisma generate && tsc --noEmit"
   },
   "devDependencies": {
     "@prisma/adapter-better-sqlite3": "7.9.1",

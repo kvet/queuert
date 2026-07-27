@@ -12,7 +12,7 @@
     "start:notify-nats": "node --expose-gc --import=tsx src/index.ts --notify-nats",
     "start:otel": "node --expose-gc --import=tsx src/index.ts --otel",
     "start:dashboard": "node --expose-gc --import=tsx src/index.ts --dashboard",
-    "typecheck": "tsgo --noEmit"
+    "typecheck": "tsc --noEmit"
   },
   "dependencies": {
     "@opentelemetry/api": "1.9.1",

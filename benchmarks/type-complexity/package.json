@@ -5,13 +5,14 @@
   "type": "module",
   "scripts": {
     "start": "node --import=tsx src/index.ts",
-    "typecheck": "tsgo --noEmit"
+    "typecheck": "tsc --noEmit"
   },
   "dependencies": {
     "queuert": "workspace:*"
   },
   "devDependencies": {
     "@queuert/tsconfig": "workspace:*",
-    "typescript": "6.0.2"
+    "typescript-6": "npm:typescript@6.0.2",
+    "typescript-7": "npm:typescript@7.0.2"
   }
 }

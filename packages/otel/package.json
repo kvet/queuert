@@ -47,7 +47,7 @@
   "scripts": {
     "prepublishOnly": "bun run build",
     "build": "tsdown",
-    "typecheck": "tsgo --noEmit",
+    "typecheck": "tsc --noEmit",
     "test": "vitest --run"
   },
   "devDependencies": {
@@ -58,7 +58,7 @@
     "queuert": "workspace:*"
   },
   "peerDependencies": {
-    "@opentelemetry/api": "^0.14.0",
+    "@opentelemetry/api": "^0.14.0 || ^1.0.0",
     "queuert": "workspace:*"
   },
   "engines": {

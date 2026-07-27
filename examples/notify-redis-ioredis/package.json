@@ -16,7 +16,7 @@
   "scripts": {
     "start": "tsx src/index.ts",
     "test": "vitest --run",
-    "typecheck": "tsgo --noEmit"
+    "typecheck": "tsc --noEmit"
   },
   "devDependencies": {
     "@queuert/redis": "workspace:*",

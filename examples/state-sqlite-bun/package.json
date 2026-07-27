@@ -16,7 +16,7 @@
   "scripts": {
     "start": "bun run --bun src/index.ts",
     "test": "bun test",
-    "typecheck": "tsgo --noEmit"
+    "typecheck": "tsc --noEmit"
   },
   "devDependencies": {
     "@queuert/sqlite": "workspace:*",

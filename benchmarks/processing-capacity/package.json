@@ -16,7 +16,7 @@
     "start:notify-postgres-postgres-js": "node --import=tsx src/index.ts --notify-postgres-postgres-js",
     "start:notify-nats-nats": "node --import=tsx src/index.ts --notify-nats-nats",
     "start:notify-in-process": "node --import=tsx src/index.ts --notify-in-process",
-    "typecheck": "! tsgo --noEmit 2>&1 | grep -v 'TS4023' | grep 'error TS'"
+    "typecheck": "! tsc --noEmit 2>&1 | grep -v 'TS4023' | grep 'error TS'"
   },
   "dependencies": {
     "@queuert/nats": "workspace:*",
