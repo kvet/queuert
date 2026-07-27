@@ -23,7 +23,7 @@
     "@queuert/testcontainers": "workspace:*",
     "@queuert/tsconfig": "workspace:*",
     "knex": "3.3.0",
-    "pg": "8.20.0",
+    "pg": "8.22.0",
     "queuert": "workspace:*"
   }
 }

@@ -11,15 +11,15 @@
   "dependencies": {
     "@queuert/postgres": "workspace:*",
     "@queuert/sqlite": "workspace:*",
-    "better-sqlite3": "12.9.0",
+    "better-sqlite3": "13.0.1",
     "example-state-postgres-pg": "workspace:*",
     "example-state-sqlite-better-sqlite3": "workspace:*",
-    "pg": "8.20.0",
+    "pg": "8.22.0",
     "queuert": "workspace:*"
   },
   "devDependencies": {
     "@queuert/tsconfig": "workspace:*",
-    "@testcontainers/postgresql": "11.14.0",
+    "@testcontainers/postgresql": "12.0.4",
     "@types/better-sqlite3": "7.6.13",
     "@types/pg": "8.20.0"
   }

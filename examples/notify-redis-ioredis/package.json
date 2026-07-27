@@ -22,7 +22,7 @@
     "@queuert/redis": "workspace:*",
     "@queuert/testcontainers": "workspace:*",
     "@queuert/tsconfig": "workspace:*",
-    "ioredis": "5.10.1",
+    "ioredis": "5.11.1",
     "queuert": "workspace:*"
   }
 }

@@ -16,29 +16,29 @@
   },
   "dependencies": {
     "@opentelemetry/api": "1.9.1",
-    "@opentelemetry/sdk-metrics": "2.6.1",
+    "@opentelemetry/sdk-metrics": "2.10.0",
     "@queuert/dashboard": "workspace:*",
     "@queuert/nats": "workspace:*",
     "@queuert/otel": "workspace:*",
     "@queuert/postgres": "workspace:*",
     "@queuert/redis": "workspace:*",
     "@queuert/sqlite": "workspace:*",
-    "better-sqlite3": "12.9.0",
+    "better-sqlite3": "13.0.1",
     "example-notify-postgres-postgres-js": "workspace:*",
     "example-notify-redis-redis": "workspace:*",
     "example-state-postgres-postgres-js": "workspace:*",
     "example-state-sqlite-better-sqlite3": "workspace:*",
     "nats": "2.29.3",
-    "pg": "8.20.0",
+    "pg": "8.22.0",
     "postgres": "3.4.9",
     "queuert": "workspace:*",
-    "redis": "5.11.0"
+    "redis": "6.1.0"
   },
   "devDependencies": {
     "@queuert/tsconfig": "workspace:*",
-    "@testcontainers/nats": "11.14.0",
-    "@testcontainers/postgresql": "11.14.0",
-    "@testcontainers/redis": "11.14.0",
+    "@testcontainers/nats": "12.0.4",
+    "@testcontainers/postgresql": "12.0.4",
+    "@testcontainers/redis": "12.0.4",
     "@types/better-sqlite3": "7.6.13",
     "@types/pg": "8.20.0"
   }

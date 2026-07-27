@@ -9,7 +9,7 @@
     "typecheck": "tsgo --noEmit"
   },
   "dependencies": {
-    "arktype": "2.2.0",
+    "arktype": "2.2.3",
     "queuert": "workspace:*"
   },
   "devDependencies": {

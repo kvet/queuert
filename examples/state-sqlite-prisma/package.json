@@ -20,13 +20,13 @@
     "typecheck": "prisma generate && tsgo --noEmit"
   },
   "devDependencies": {
-    "@prisma/adapter-better-sqlite3": "7.7.0",
-    "@prisma/client": "7.7.0",
+    "@prisma/adapter-better-sqlite3": "7.9.1",
+    "@prisma/client": "7.9.1",
     "@queuert/sqlite": "workspace:*",
     "@queuert/tsconfig": "workspace:*",
     "@types/better-sqlite3": "7.6.13",
-    "better-sqlite3": "12.9.0",
-    "prisma": "7.7.0",
+    "better-sqlite3": "13.0.1",
+    "prisma": "7.9.1",
     "queuert": "workspace:*"
   }
 }

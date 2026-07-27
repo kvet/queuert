@@ -23,8 +23,8 @@
     "@queuert/testcontainers": "workspace:*",
     "@queuert/tsconfig": "workspace:*",
     "@types/pg": "8.20.0",
-    "kysely": "0.28.16",
-    "pg": "8.20.0",
+    "kysely": "0.29.4",
+    "pg": "8.22.0",
     "queuert": "workspace:*"
   }
 }

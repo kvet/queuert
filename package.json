@@ -31,15 +31,15 @@
     "docs:preview": "bun run --filter @queuert/docs preview"
   },
   "devDependencies": {
-    "@changesets/cli": "2.30.0",
+    "@changesets/cli": "2.31.1",
     "@types/node": "22.19.15",
     "@typescript/native-preview": "7.0.0-dev.20260413.1",
     "oxfmt": "0.45.0",
     "oxlint": "1.60.0",
     "oxlint-tsgolint": "0.20.0",
     "tsdown": "0.21.8",
-    "tsx": "4.21.0",
-    "vitest": "4.1.4"
+    "tsx": "4.23.1",
+    "vitest": "4.1.10"
   },
   "engines": {
     "node": ">=22"

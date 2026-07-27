@@ -9,7 +9,7 @@
     "typecheck": "tsgo --noEmit"
   },
   "dependencies": {
-    "@sinclair/typebox": "0.34.49",
+    "@sinclair/typebox": "0.34.52",
     "queuert": "workspace:*"
   },
   "devDependencies": {
