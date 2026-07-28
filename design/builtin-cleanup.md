@@ -1,88 +1,198 @@
-# Built-in cleanup processors
+# Built-in cleanup
 
-Export a ready-made job type and processor factory for chain cleanup so users mount them
-alongside their own registries instead of writing the cursor-paginate-delete-vacuum-reschedule
-loop by hand.
+Ship ready-made cleanup as a slice plus two scheduling helpers, so users delete completed chains
+without hand-writing the cursor-paginate-delete-reschedule loop, and manage recurring cleanup
+schedules — including per-type retention — without touching the raw `createChain` /
+deduplication machinery.
 
 ## Problem
 
 The cleanup guide (`docs/src/content/docs/guides/cleanup.md`) walks users through a ~60-line
-attempt handler that every production deployment needs. The logic is identical across users:
-paginate completed chains, delete in batches, vacuum, schedule the next run. The only meaningful
-knob is retention duration.
+attempt handler that every production deployment needs. The loop is identical across users:
+paginate completed chains, delete in batches, reschedule the next run. The knobs — retention,
+interval, and which types to sweep — are the only things that vary.
 
-Users who need per-type filtering, archival, or custom metrics can extend or replace the
-built-in — but the default case shouldn't require copy-pasting boilerplate.
-
-Additionally, users who use runtime validation (`createJobTypes` / `createZodJobTypes`) would
-have to manually reconcile raw definition objects with their validated registry. Exporting a
-factory that returns a fully constructed job types object avoids that friction.
+An earlier draft exported the slice but left scheduling to the user, who then had to write the
+magic job-type string, hand-roll `deduplication`, and — because retention/interval rode in the
+chain input — perform a `listChains → deleteChain → createChain` dance by hand to change a single
+number. That leaks internals and is easy to get wrong. It also offered no per-type retention: it
+deleted _all_ completed chains past one global cutoff.
 
 ## Solution
 
-The library exports two things:
+Four exports, from a dedicated `queuert/cleanup` entrypoint:
 
-1. **`createCleanupJobTypes()`** — a factory returning a validated job types object the user
-   passes alongside their own via the array merge pattern.
-2. **`createCleanupProcessors({ requiredAttemptMiddleware? })`** — a factory returning a
-   processors object the user passes alongside their own via the array merge pattern.
+1. **`createCleanupJobTypes()`** — job-type registry, mounted on the client via array merge.
+2. **`createCleanupProcessors({ client, batchSize?, attemptMiddleware? })`** — the processor
+   slice, mounted on the worker via array merge. **Policy-free**: execution mechanics only.
+3. **`scheduleCleanup({ ...txCtx, transactionHooks, client, name, typeNames?, retentionMs, intervalMs })`**
+   — upsert a named, recurring cleanup schedule.
+4. **`unscheduleCleanup({ ...txCtx, transactionHooks, client, name })`** — cancel one schedule.
 
-The user owns everything: worker placement, middleware, and scheduling.
+Policy (what to sweep, how long to keep, how often) lives on the **schedule**, addressed by `name`;
+mechanics (batch size, middleware) live on the **processor**. `cleanupJobTypeName`,
+`CleanupJobInput`, and `CleanupJobTypeDefinitions` are **not** exported — the helpers absorb every
+place a user would have needed them.
 
 ### Job types factory
 
 ```ts
 export function createCleanupJobTypes() {
-  return createJobTypes({
-    "__queuert/cleanup": {
-      entry: true,
-      input: { retentionMs: number },
-      output: null,
-    },
+  return createJobTypes<{
+    "__queuert/cleanup": { entry: true; input: CleanupJobInput; output: null };
+  }>({
+    /* validate the input carries a valid name/typeNames/retentionMs/intervalMs */
   });
 }
 ```
 
-No parameters for now — room to accept configuration (e.g. type-name constraints) later.
+`createJobTypes` (not `defineJobTypes`) so the built-in supplies its own runtime validation and
+merges cleanly with both no-op and validated user registries. The input type is internal.
 
-No `typeNames` filter in the input — the built-in deletes all completed chains older than the
-cutoff. Users who need per-type retention write their own handler; the built-in and the guide
-serve as the starting point.
-
-### Processor factory
+### Processor factory — policy-free
 
 ```ts
-export function createCleanupProcessors({
-  requiredAttemptMiddleware?,
-}: {
-  requiredAttemptMiddleware?: AttemptMiddleware[];
-}) {
-  return createProcessors({
-    client,
-    jobTypes: createCleanupJobTypes(),
-    requiredAttemptMiddleware,
-    processors: {
-      "__queuert/cleanup": {
-        attemptHandler: async ({ job, execute, complete }) => {
-          // cursor-paginate completed chains older than cutoff
-          // delete in batches via execute() — each batch in its own guarded transaction
-          // vacuum
-          // complete (no self-rescheduling — user controls the schedule)
-        },
-      },
-    },
+createCleanupProcessors({ client, batchSize?, attemptMiddleware? });
+```
+
+- **`client`** — required; carries the `TStateAdapter` generic the middleware types check against,
+  and is the same superset check that catches a user who mounted the processors but forgot
+  `createCleanupJobTypes()` on the client.
+- **`batchSize`** — chains listed and deleted per batch (default 100).
+- **`attemptMiddleware`** — this slice's middleware chain, so the built-in can satisfy a worker
+  configured with `requiredAttemptMiddleware` (matched by reference identity).
+
+No retention/interval/typeNames here — those are per-schedule, not per-worker.
+
+### Named schedules
+
+A schedule is identified by a required user `name`, realized as a chain with deduplication key
+`__queuert/cleanup:${name}`, `scope: "running"` — at most one alive chain per name. `name` is
+**required**, with no default: it is the identity of a persisted schedule that `scheduleCleanup`
+upserts and `unscheduleCleanup` deletes by, so a silent default would let two unrelated call sites
+(an app boot, a library that also schedules cleanup) address the same schedule and silently
+clobber each other's config. The chain input carries the schedule's config:
+`{ name, typeNames?, retentionMs, intervalMs }`. Multiple names give multiple independent
+schedules, which is how per-type retention is expressed:
+
+```ts
+await scheduleCleanup({
+  ...txCtx,
+  transactionHooks,
+  client,
+  name: "short",
+  typeNames: ["email.send"],
+  retentionMs: DAY,
+  intervalMs: HOUR,
+});
+await scheduleCleanup({
+  ...txCtx,
+  transactionHooks,
+  client,
+  name: "long",
+  typeNames: ["report.build"],
+  retentionMs: 30 * DAY,
+  intervalMs: 6 * HOUR,
+});
+```
+
+`typeNames` is typed `readonly JobTypeEntryNames<TClientDefs>[]` — inferred from the client, so it
+autocompletes to the client's own entry types and rejects anything else at compile time, with no
+runtime registry introspection (which the no-op `defineJobTypes` path could not provide anyway).
+Omitting `typeNames` sweeps all completed chains past the cutoff.
+
+### `scheduleCleanup` is an upsert — read, compare, swap
+
+`scheduleCleanup` runs at every application boot and must be idempotent _without_ resetting the
+recurrence timer — a service redeploying faster than `intervalMs` must not push the next run out
+forever. So it reads before writing, inside the caller's transaction:
+
+```ts
+const existing = await client.getChain({
+  ...txCtx,
+  deduplication: { key: `__queuert/cleanup:${name}`, scope: "running" },
+  lock: true, // reads-with-lock.md
+});
+if (!existing) {
+  await client.createChain({
+    ...txCtx,
+    transactionHooks /* new schedule */,
+    deduplication: { key: `__queuert/cleanup:${name}`, scope: "running" },
   });
+} else if (configDiffers(existing.input, next)) {
+  await client.deleteChain({ ...txCtx, transactionHooks, id: existing.id });
+  await client.createChain({
+    ...txCtx,
+    transactionHooks /* new schedule */,
+    deduplication: { key: `__queuert/cleanup:${name}`, scope: "running" },
+  });
+}
+// config unchanged → no-op: no delete, no timer reset
+```
+
+This leans on both new primitives: `getChain({ deduplication })` to find the alive chain for the
+name ([reads-by-deduplication.md](reads-by-deduplication.md)), and `lock` to serialize the
+compare-and-swap against a concurrent scheduler ([reads-with-lock.md](reads-with-lock.md)). The
+absent-row race (two boots, neither sees a chain, both create) is caught by the dedup unique
+constraint on `createChain` — `lock` alone cannot cover it. Delete and create happen in the
+caller's single transaction, so there is never a window with zero or two alive chains.
+
+### Deleting a running schedule is safe
+
+When `configDiffers` and the alive chain is currently _running_, `deleteChain` removes it
+mid-attempt. The in-flight handler's next `execute`/`complete` fails attempt verification with
+`JobNotFoundError`; the worker logs one `workerError` and drops the job — **no retry, no crash**,
+and crucially the handler never reaches `complete`, so it does **not** self-reschedule. Batches
+already deleted are committed and harmless (cleanup is idempotent; the replacement resumes from
+the oldest remaining chain). The only artifact is a single benign error log, only when config
+actually changes while a run happens to be executing — rare, and worth a docs note. This is also
+what makes `unscheduleCleanup` reliably immediate: deleting the chain kills its self-reschedule
+for free, with no tombstone or completion-time re-check.
+
+### The handler
+
+```ts
+"__queuert/cleanup": {
+  attemptHandler: async ({ signal, job, execute, complete }) => {
+    const { name, typeNames, retentionMs, intervalMs } = job.input;
+    const cutoff = new Date(Date.now() - retentionMs);
+    let cursor;
+    do {
+      const page = await client.listChains({
+        status: "completed", orderBy: "completedAt", orderDirection: "asc",
+        independent: true, to: cutoff, limit: batchSize,
+        ...(typeNames ? { typeName: typeNames } : {}),
+        ...(cursor ? { cursor } : {}),
+      });
+      const ids = page.items.filter((c) => c.id !== job.chainId).map((c) => c.id);
+      if (ids.length) await execute(({ transactionHooks, ...tx }) =>
+        client.deleteChains({ ...tx, transactionHooks, ids }));
+      cursor = page.nextCursor;
+    } while (cursor && !signal.aborted);
+
+    return complete(async ({ transactionHooks, ...tx }) => {
+      await client.createChain({ ...tx, transactionHooks,
+        typeName: "__queuert/cleanup", input: job.input,
+        schedule: { afterMs: intervalMs },
+        deduplication: { key: `__queuert/cleanup:${name}`, scope: "running",
+          excludeChainIds: [job.chainId] } });
+      return null;
+    });
+  },
 }
 ```
 
-The handler uses `execute` for each deletion batch — each call opens a fresh guarded
-transaction with attempt verification, keeping lock scope bounded. The handler does not
-self-reschedule. The user controls the interval at the scheduling call site.
+Each batch deletes in its own `execute` transaction (bounded lock scope, attempt verified per
+batch). The scan drops out between batches on `signal.aborted`; deletion is idempotent, so the
+next run resumes from the oldest remaining chain. `complete` self-reschedules a **new independent
+chain** (not `continueWith`, so history does not grow), forwarding `job.input` unchanged so config
+survives run-to-run, with `excludeChainIds: [job.chainId]` so the still-incomplete current chain
+does not deduplicate the next run against itself.
 
 ### User setup
 
 ```ts
-import { createCleanupJobTypes, createCleanupProcessors } from "@queuert/core";
+import { createCleanupJobTypes, createCleanupProcessors, scheduleCleanup } from "queuert/cleanup";
 
 const client = await createClient({
   stateAdapter,
@@ -92,54 +202,65 @@ const client = await createClient({
 
 const worker = await createInProcessWorker({
   client,
-  processors: [
-    createCleanupProcessors({ requiredAttemptMiddleware: [tracingMiddleware] }),
-    myProcessors,
-  ],
+  processors: [createCleanupProcessors({ client }), myProcessors],
 });
-```
 
-Both use the array merge pattern already supported by `createClient` and
-`createInProcessWorker` — no spreading, no type gymnastics.
-
-### Scheduling
-
-The user schedules cleanup at application startup, controlling retention and interval:
-
-```ts
-await withTransactionHooks(async (transactionHooks) =>
-  stateProvider.withTransaction(async (txCtx) =>
-    client.createChain({
-      ...txCtx,
+await withTransactionHooks((transactionHooks) =>
+  sql.begin((txSql) =>
+    scheduleCleanup({
+      sql: txSql,
       transactionHooks,
-      typeName: "__queuert/cleanup",
-      input: { retentionMs: 7 * 24 * 3600_000 },
-      schedule: { afterMs: 3600_000 },
-      deduplication: { key: "__queuert/cleanup", scope: "incomplete" },
+      client,
+      name: "main",
+      retentionMs: 7 * DAY,
+      intervalMs: HOUR,
     }),
   ),
 );
 ```
 
-Recurring scheduling uses the same `complete` → `createChain` with `schedule` + `deduplication`
-pattern from the existing cleanup guide, but the handler's `complete` callback handles it
-internally — the user only provides the initial schedule.
+Array merge for the two slices, one transactional call to install the schedule. Rolling deploys
+compose: deploy N+1 calls `scheduleCleanup({ name: "b" })` and `unscheduleCleanup({ name: "a" })`.
 
-## Relationship to batched unblock
+### Vacuum
 
-Same export pattern: job types factory + processor factory, both passed via array merge.
-Together they establish the `__queuert/` namespace as a category of library-provided
-processors, not a one-off.
+Deferred, unchanged from the prior design: `vacuum()` lives on the concrete PostgreSQL/SQLite
+adapters, not on the core `StateAdapter` interface, so a core-exported handler cannot call it. The
+guide tells users to vacuum on their own cadence. Resolving it later means an optional
+`vacuum?: () => Promise<void>` hop or hoisting `vacuum` onto the interface.
+
+### Export location
+
+A dedicated `queuert/cleanup` subpath (matching the existing `./conformance`, `./testing`
+precedent) signals an opt-in batteries-included module and keeps the core namespace lean.
+
+## Dependencies
+
+Requires [reads-with-lock.md](reads-with-lock.md) and
+[reads-by-deduplication.md](reads-by-deduplication.md), which compose into
+`getChain({ deduplication, lock: true })`. Those two are independent of each other; land both,
+then this.
 
 ## Docs
 
-The existing cleanup guide becomes: "here's the built-in, here's how to schedule it, here's
-how to customize or replace it if you outgrow it." Shorter and more useful.
+The cleanup guide becomes: mount the slice, `scheduleCleanup` / `unscheduleCleanup`, per-type
+retention via names, and "write your own" for archival/metrics/alerting. The magic string,
+manual deduplication, and the reconfigure dance all disappear from it.
 
 ## Tests
 
-- Completed chains older than retention are deleted across batches.
-- Chains younger than retention are preserved.
-- The cleanup chain does not delete itself.
-- Vacuum runs after deletion.
-- User middleware (e.g. tracing) is invoked around the cleanup handler.
+- Completed chains older than retention are deleted across batches; younger ones preserved.
+- `typeNames` scopes deletion to the given entry types; omitting it sweeps all.
+- The cleanup chain never deletes itself; the handler self-reschedules a new chain, `intervalMs`
+  out, carrying the same input.
+- `scheduleCleanup` is a no-op when config is unchanged (no delete, timer not reset).
+- `scheduleCleanup` with changed config replaces the schedule; concurrent boots converge to one
+  chain (dedup + `lock`).
+- Deleting a running schedule surfaces one benign `workerError` and no reschedule.
+- `unscheduleCleanup` removes a schedule and stops its recurrence.
+- Multiple names run independent schedules with independent retention.
+- Omitting `name` is a type error (it is required, no default).
+- User middleware is invoked around the handler.
+- Invalid input (negative / non-finite `retentionMs` / `intervalMs`) fails validation.
+- Mounting the processors without `createCleanupJobTypes()` on the client is a type error;
+  `typeNames` outside the client's entry types is a type error.
