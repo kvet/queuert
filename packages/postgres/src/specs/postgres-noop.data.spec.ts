@@ -1,17 +1,19 @@
 import { TESTCONTAINERS_RESOURCE_TYPES, extendWithPostgres } from "@queuert/testcontainers";
 import {
+  awaitChainTestSuite,
   blockerChainsTestSuite,
   chainsTestSuite,
+  clientQueriesTestSuite,
+  createChainsTestSuite,
   deduplicationTestSuite,
   deletionTestSuite,
   extendWithCommon,
   extendWithNotifyNoop,
   extendWithResourceLeakDetection,
-  schedulingTestSuite,
-  createChainsTestSuite,
-  stateResilienceTestSuite,
   rescheduleJobTestSuite,
-  awaitChainTestSuite,
+  schedulingTestSuite,
+  stateResilienceTestSuite,
+  validationTestSuite,
   workerlessCompletionTestSuite,
 } from "queuert/testing";
 import { describe, it } from "vitest";
@@ -66,4 +68,12 @@ describe("Reschedule Job", () => {
 
 describe("Scheduling", () => {
   schedulingTestSuite({ it: postgresNoopIt });
+});
+
+describe("Validation", () => {
+  validationTestSuite({ it: postgresNoopIt });
+});
+
+describe("Client Queries", () => {
+  clientQueriesTestSuite({ it: postgresNoopIt });
 });

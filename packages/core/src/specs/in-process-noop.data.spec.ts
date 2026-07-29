@@ -4,6 +4,7 @@ import { extendWithStateInProcess } from "../state-adapter/state-adapter.in-proc
 import { awaitChainTestSuite } from "../suites/await-chain.test-suite.js";
 import { blockerChainsTestSuite } from "../suites/blocker-chains.test-suite.js";
 import { chainsTestSuite } from "../suites/chains.test-suite.js";
+import { clientQueriesTestSuite } from "../suites/client-queries.test-suite.js";
 import { createChainsTestSuite } from "../suites/create-chains.test-suite.js";
 import { deduplicationTestSuite } from "../suites/deduplication.test-suite.js";
 import { deletionTestSuite } from "../suites/deletion.test-suite.js";
@@ -67,4 +68,8 @@ describe("Scheduling", () => {
 
 describe("Validation", () => {
   validationTestSuite({ it: inProcessNoopIt });
+});
+
+describe("Client Queries", () => {
+  clientQueriesTestSuite({ it: inProcessNoopIt });
 });

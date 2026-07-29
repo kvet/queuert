@@ -1,0 +1,7 @@
+[install]
+# Save dependencies with exact versions (no ^ or ~ range prefixes)
+exact = true
+
+# Use isolated node_modules layout instead of hoisting.
+# Each package only sees its declared dependencies, preventing phantom deps.
+linker = "isolated"

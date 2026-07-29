@@ -4,7 +4,6 @@
 
 # Short term
 
-- [TASK] Locked reads — opt-in `lock?` on `getChain`/`getChains`/`getJob`/`getJobs` (`FOR UPDATE`-style, txCtx required) for race-free read-modify-write. Core `StateAdapter` + all adapters. Prereq for built-in cleanup. See `design/reads-with-lock.md`.
 - [TASK] Reads by deduplication — `getChain`/`getChains` resolve by `DeduplicationOptions`, not only `id`/`ids`, matching `createChain`'s dedup. Composes with `lock`. Core `StateAdapter` + adapters. Prereq for built-in cleanup. See `design/reads-by-deduplication.md`.
 - [TASK] Built-in cleanup — `createCleanupJobTypes()`, policy-free `createCleanupProcessors()`, and `scheduleCleanup`/`unscheduleCleanup` (per-name recurring schedules, CAS upsert, `typeNames` scoping) from a `queuert/cleanup` subpath. Depends on the two reads tasks above. See `design/builtin-cleanup.md`.
 - [TASK] Resolve the `rescheduleJob` naming overlap — the exported throw-helper `rescheduleJob({ afterMs })` reschedules the currently-executing job from inside a handler, while `client.rescheduleJob({ id, schedule })` reschedules an arbitrary pending job from outside. Same verb, different subject/mechanism. Either rename one (e.g. the helper → `retryAfter`/`rescheduleSelf`) or at minimum document the distinction in the reference/guide docs

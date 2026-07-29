@@ -1,18 +1,18 @@
 import { TESTCONTAINERS_RESOURCE_TYPES, extendWithPostgres } from "@queuert/testcontainers";
 import {
+  awaitChainTestSuite,
   blockerChainsTestSuite,
   chainsTestSuite,
+  createChainsTestSuite,
   deduplicationTestSuite,
   deletionTestSuite,
   extendWithCommon,
   extendWithResourceLeakDetection,
   notifyResilienceTestSuite,
   notifyTestSuite,
-  schedulingTestSuite,
-  createChainsTestSuite,
-  stateResilienceTestSuite,
   rescheduleJobTestSuite,
-  awaitChainTestSuite,
+  schedulingTestSuite,
+  stateResilienceTestSuite,
   workerlessCompletionTestSuite,
 } from "queuert/testing";
 import { describe, it } from "vitest";

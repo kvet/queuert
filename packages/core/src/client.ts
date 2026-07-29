@@ -68,11 +68,22 @@ const normalizeTxCtx = <T extends Record<string, unknown>>(rest: T): T | undefin
 const requireTxCtx = <T extends Record<string, unknown>>(rest: T): T => {
   if (Object.keys(rest).length === 0) {
     throw new TransactionContextRequiredError(
-      "Mutating client methods require a transaction context from withTransaction",
+      "This client method requires a transaction context from withTransaction",
     );
   }
   return rest;
 };
+
+/**
+ * Transaction-context typing for the lockable read methods. `lock: true`
+ * acquires a write-intent lock on the matched rows for the enclosing
+ * transaction, so it requires a transaction context; without `lock` the context
+ * stays optional. Modelled as a discriminated union so `{ lock: true }` without
+ * a transaction context fails to compile.
+ */
+type LockableReadTxContext<TStateAdapter extends StateAdapter<any, any>> =
+  | ({ lock?: false } & Partial<GetStateAdapterTxContext<TStateAdapter>>)
+  | ({ lock: true } & GetStateAdapterTxContext<TStateAdapter>);
 
 type ChainCompleteOptions<
   TStateAdapter extends StateAdapter<any, any>,
@@ -363,9 +374,13 @@ export type Client<
   >;
 
   /**
-   * Get a single chain by ID. Pass `typeName` for type narrowing.
+   * Get a single chain by ID. Pass `typeName` for type narrowing. Pass
+   * `lock: true` (transaction context required) to hold a write-intent lock on
+   * the matched row until the enclosing transaction ends, for a race-free
+   * read-modify-write. A lookup that matches nothing locks nothing.
    *
    * @throws {@link ChainTypeMismatchError} if `typeName` is provided and does not match.
+   * @throws {@link TransactionContextRequiredError} if `lock: true` is passed without a transaction context.
    */
   getChain: <
     TChainTypeName extends JobTypeEntryNames<TJobTypeDefinitions> =
@@ -374,16 +389,19 @@ export type Client<
     options: {
       typeName?: TChainTypeName;
       id: TJobId;
-    } & Partial<GetStateAdapterTxContext<TStateAdapter>>,
+    } & LockableReadTxContext<TStateAdapter>,
   ) => Promise<ResolvedChain<TJobId, TJobTypeDefinitions, TChainTypeName> | undefined>;
 
   /**
    * Get multiple chains by ID. Returns a positional array aligned with the
    * input `ids` — `undefined` for any ID that does not exist. Pass `typeName`
    * to narrow the return type; all found chains must match or
-   * {@link ChainTypeMismatchError} is thrown.
+   * {@link ChainTypeMismatchError} is thrown. Pass `lock: true` (transaction
+   * context required) to hold a write-intent lock on every matched row until the
+   * enclosing transaction ends. Rows that do not exist lock nothing.
    *
    * @throws {@link ChainTypeMismatchError} if `typeName` is provided and any found chain does not match.
+   * @throws {@link TransactionContextRequiredError} if `lock: true` is passed without a transaction context.
    */
   getChains: <
     TChainTypeName extends JobTypeEntryNames<TJobTypeDefinitions> =
@@ -392,13 +410,17 @@ export type Client<
     options: {
       typeName?: TChainTypeName;
       ids: TJobId[];
-    } & Partial<GetStateAdapterTxContext<TStateAdapter>>,
+    } & LockableReadTxContext<TStateAdapter>,
   ) => Promise<(ResolvedChain<TJobId, TJobTypeDefinitions, TChainTypeName> | undefined)[]>;
 
   /**
-   * Get a single job by ID. Pass `typeName` for type narrowing.
+   * Get a single job by ID. Pass `typeName` for type narrowing. Pass
+   * `lock: true` (transaction context required) to hold a write-intent lock on
+   * the matched row until the enclosing transaction ends, for a race-free
+   * read-modify-write. A lookup that matches nothing locks nothing.
    *
    * @throws {@link JobTypeMismatchError} if `typeName` is provided and does not match.
+   * @throws {@link TransactionContextRequiredError} if `lock: true` is passed without a transaction context.
    */
   getJob: <
     TJobTypeName extends JobTypeNames<TJobTypeDefinitions> = JobTypeNames<TJobTypeDefinitions>,
@@ -406,16 +428,19 @@ export type Client<
     options: {
       typeName?: TJobTypeName;
       id: TJobId;
-    } & Partial<GetStateAdapterTxContext<TStateAdapter>>,
+    } & LockableReadTxContext<TStateAdapter>,
   ) => Promise<ResolvedJob<TJobId, TJobTypeDefinitions, TJobTypeName> | undefined>;
 
   /**
    * Get multiple jobs by ID. Returns a positional array aligned with the
    * input `ids` — `undefined` for any ID that does not exist. Pass `typeName`
    * to narrow the return type; all found jobs must match or
-   * {@link JobTypeMismatchError} is thrown.
+   * {@link JobTypeMismatchError} is thrown. Pass `lock: true` (transaction
+   * context required) to hold a write-intent lock on every matched row until the
+   * enclosing transaction ends. Rows that do not exist lock nothing.
    *
    * @throws {@link JobTypeMismatchError} if `typeName` is provided and any found job does not match.
+   * @throws {@link TransactionContextRequiredError} if `lock: true` is passed without a transaction context.
    */
   getJobs: <
     TJobTypeName extends JobTypeNames<TJobTypeDefinitions> = JobTypeNames<TJobTypeDefinitions>,
@@ -423,7 +448,7 @@ export type Client<
     options: {
       typeName?: TJobTypeName;
       ids: TJobId[];
-    } & Partial<GetStateAdapterTxContext<TStateAdapter>>,
+    } & LockableReadTxContext<TStateAdapter>,
   ) => Promise<(ResolvedJob<TJobId, TJobTypeDefinitions, TJobTypeName> | undefined)[]>;
 
   /**
@@ -1052,13 +1077,14 @@ export const createClient = async <
       options: {
         typeName?: TChainTypeName;
         id: TJobId;
+        lock?: boolean;
       } & Partial<GetStateAdapterTxContext<TStateAdapter>>,
     ): Promise<ResolvedChain<TJobId, TJobTypeDefinitions, TChainTypeName> | undefined> => {
       const { id, typeName, ...rest } = options;
       const [chain] = await client.getChains<TChainTypeName>({
         typeName,
         ids: [id],
-        ...(rest as Partial<GetStateAdapterTxContext<TStateAdapter>>),
+        ...(rest as LockableReadTxContext<TStateAdapter>),
       });
       return chain;
     },
@@ -1070,14 +1096,20 @@ export const createClient = async <
       options: {
         typeName?: TChainTypeName;
         ids: TJobId[];
+        lock?: boolean;
       } & Partial<GetStateAdapterTxContext<TStateAdapter>>,
     ): Promise<(ResolvedChain<TJobId, TJobTypeDefinitions, TChainTypeName> | undefined)[]> => {
-      const { ids, typeName, ...rest } = options;
-      const txCtx = normalizeTxCtx(rest);
+      const { ids, typeName, lock, ...rest } = options;
 
       if (ids.length === 0) return [];
 
-      const chainPairs = await helpers.stateAdapter.getChains({ txCtx, chainIds: ids });
+      const chainPairs = lock
+        ? await helpers.stateAdapter.getChains({
+            txCtx: requireTxCtx(rest),
+            chainIds: ids,
+            lock: "exclusive",
+          })
+        : await helpers.stateAdapter.getChains({ txCtx: normalizeTxCtx(rest), chainIds: ids });
 
       if (typeName) {
         const mismatch = chainPairs.find((p) => p && p[0].chainTypeName !== typeName);
@@ -1110,13 +1142,14 @@ export const createClient = async <
       options: {
         typeName?: TJobTypeName;
         id: TJobId;
+        lock?: boolean;
       } & Partial<GetStateAdapterTxContext<TStateAdapter>>,
     ): Promise<ResolvedJob<TJobId, TJobTypeDefinitions, TJobTypeName> | undefined> => {
       const { id, typeName, ...rest } = options;
       const [job] = await client.getJobs<TJobTypeName>({
         typeName,
         ids: [id],
-        ...(rest as Partial<GetStateAdapterTxContext<TStateAdapter>>),
+        ...(rest as LockableReadTxContext<TStateAdapter>),
       });
       return job;
     },
@@ -1127,14 +1160,20 @@ export const createClient = async <
       options: {
         typeName?: TJobTypeName;
         ids: TJobId[];
+        lock?: boolean;
       } & Partial<GetStateAdapterTxContext<TStateAdapter>>,
     ): Promise<(ResolvedJob<TJobId, TJobTypeDefinitions, TJobTypeName> | undefined)[]> => {
-      const { ids, typeName, ...rest } = options;
-      const txCtx = normalizeTxCtx(rest);
+      const { ids, typeName, lock, ...rest } = options;
 
       if (ids.length === 0) return [];
 
-      const jobs = await helpers.stateAdapter.getJobs({ txCtx, jobIds: ids });
+      const jobs = lock
+        ? await helpers.stateAdapter.getJobs({
+            txCtx: requireTxCtx(rest),
+            jobIds: ids,
+            lock: "exclusive",
+          })
+        : await helpers.stateAdapter.getJobs({ txCtx: normalizeTxCtx(rest), jobIds: ids });
 
       if (typeName) {
         const mismatch = jobs.find((j) => j && j.typeName !== typeName);

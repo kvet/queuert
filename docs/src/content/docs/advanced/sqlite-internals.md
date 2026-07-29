@@ -105,6 +105,8 @@ The adapter adds an application-level `AsyncRwLock` to prevent concurrent write 
 
 Custom `SqliteStateProvider` implementations must use `createAsyncRwLock()` to ensure correct serialization.
 
+A client read passed `lock: true` (`getChain`, `getChains`, `getJob`, `getJobs`) is served from inside its transaction, where the write lock is already held — so the matched rows are already serialized against concurrent writers for the remainder of the transaction. See [Locked reads](/queuert/guides/queries/#locked-reads).
+
 ## Notifications
 
 SQLite has no built-in pub/sub mechanism. The adapter uses the in-process notify adapter (`createInProcessNotifyAdapter`), which provides synchronous event delivery within a single process. This means SQLite deployments are limited to single-process operation for notification delivery.

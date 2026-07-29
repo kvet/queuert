@@ -1,18 +1,17 @@
 import {
+  awaitChainTestSuite,
   blockerChainsTestSuite,
   chainsTestSuite,
-  clientQueriesTestSuite,
+  createChainsTestSuite,
   deduplicationTestSuite,
   deletionTestSuite,
   extendWithCommon,
   extendWithNotifyInProcess,
   extendWithResourceLeakDetection,
   notifyTestSuite,
-  schedulingTestSuite,
-  createChainsTestSuite,
-  stateResilienceTestSuite,
   rescheduleJobTestSuite,
-  awaitChainTestSuite,
+  schedulingTestSuite,
+  stateResilienceTestSuite,
   workerlessCompletionTestSuite,
 } from "queuert/testing";
 import { describe, it } from "vitest";
@@ -68,8 +67,4 @@ describe("Scheduling", () => {
 
 describe("Notify", () => {
   notifyTestSuite({ it: sqliteInProcessIt });
-});
-
-describe("Client Queries", () => {
-  clientQueriesTestSuite({ it: sqliteInProcessIt });
 });

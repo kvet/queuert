@@ -5,7 +5,6 @@ import { attemptReclaimerTestSuite } from "../suites/attempt-reclaimer.test-suit
 import { awaitChainTestSuite } from "../suites/await-chain.test-suite.js";
 import { blockerChainsTestSuite } from "../suites/blocker-chains.test-suite.js";
 import { chainsTestSuite } from "../suites/chains.test-suite.js";
-import { clientQueriesTestSuite } from "../suites/client-queries.test-suite.js";
 import { createChainsTestSuite } from "../suites/create-chains.test-suite.js";
 import { notifyTestSuite } from "../suites/notify.test-suite.js";
 import { processErrorHandlingTestSuite } from "../suites/process-error-handling.test-suite.js";
@@ -87,8 +86,4 @@ describe("Scheduling", () => {
 
 describe("Notify", () => {
   notifyTestSuite({ it: inProcessInProcessIt });
-});
-
-describe("Client Queries", () => {
-  clientQueriesTestSuite({ it: inProcessInProcessIt });
 });

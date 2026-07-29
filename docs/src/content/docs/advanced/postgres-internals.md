@@ -102,6 +102,10 @@ All indexes use partial conditions (WHERE clauses) to minimize size and target s
 | ----------------------- | ----------------------- | ------------------ |
 | `job_blocker_chain_idx` | `(blocked_by_chain_id)` | Blocker resolution |
 
+## Row Locking
+
+Beyond the `FOR UPDATE SKIP LOCKED` used for job acquisition, a client read passed `lock: true` (`getChain`, `getChains`, `getJob`, `getJobs`) issues a plain `SELECT ... FOR UPDATE` on the matched rows. The write-intent lock is held until the enclosing transaction commits or rolls back, so a read-modify-write against those rows is race-free. Rows that do not exist lock nothing. See [Locked reads](/queuert/guides/queries/#locked-reads).
+
 ## Notifications (LISTEN/NOTIFY)
 
 The adapter uses three notification channels (configurable prefix, default `queuert`):

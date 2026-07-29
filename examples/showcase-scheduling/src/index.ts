@@ -7,7 +7,7 @@
  * 1. Recurring Jobs: Independent chains with scheduled delays
  * 2. Deduplication: Prevent duplicate recurring job instances
  * 3. Time-Windowed: Rate-limit job creation with windowMs
- * 4. Trigger Early: Run a future-scheduled job immediately
+ * 4. Trigger Early: Run a future-scheduled job immediately via a locked read-modify-write
  */
 
 import assert from "node:assert/strict";
@@ -452,15 +452,19 @@ const reminder = await withTransactionHooks(async (transactionHooks) =>
 );
 console.log(`Scheduled reminder ${reminder.id} for +1h`);
 
-const scheduled = await client.getJob({ id: reminder.id });
-console.log(`  scheduledAt: ${scheduled!.scheduledAt.toISOString()}`);
-
-// Admin action: run it now
+// Admin action: run it now. A locked read makes this a race-free
+// read-modify-write — the lock holds the row until the transaction ends, so
+// no worker can pick the job up between the read and the reschedule (which
+// would otherwise throw JobNotReschedulableError once it stops being pending).
 console.log(`\nRescheduling reminder ${reminder.id} to run now...`);
 await withTransactionHooks(async (transactionHooks) =>
-  sql.begin(async (txSql) =>
-    client.rescheduleJob({ sql: txSql, transactionHooks, id: reminder.id }),
-  ),
+  sql.begin(async (txSql) => {
+    const job = await client.getJob({ sql: txSql, id: reminder.id, lock: true });
+    console.log(`  scheduledAt before: ${job!.scheduledAt.toISOString()}`);
+    if (job?.status === "pending") {
+      await client.rescheduleJob({ sql: txSql, transactionHooks, id: job.id });
+    }
+  }),
 );
 
 await client.awaitChain(reminder, { timeoutMs: 5000 });

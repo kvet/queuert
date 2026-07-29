@@ -1,16 +1,18 @@
 import {
+  awaitChainTestSuite,
   blockerChainsTestSuite,
   chainsTestSuite,
+  clientQueriesTestSuite,
+  createChainsTestSuite,
   deduplicationTestSuite,
   deletionTestSuite,
   extendWithCommon,
   extendWithNotifyNoop,
   extendWithResourceLeakDetection,
-  schedulingTestSuite,
-  createChainsTestSuite,
-  stateResilienceTestSuite,
   rescheduleJobTestSuite,
-  awaitChainTestSuite,
+  schedulingTestSuite,
+  stateResilienceTestSuite,
+  validationTestSuite,
   workerlessCompletionTestSuite,
 } from "queuert/testing";
 import { describe, it } from "vitest";
@@ -62,4 +64,12 @@ describe("Reschedule Job", () => {
 
 describe("Scheduling", () => {
   schedulingTestSuite({ it: sqliteNoopIt });
+});
+
+describe("Validation", () => {
+  validationTestSuite({ it: sqliteNoopIt });
+});
+
+describe("Client Queries", () => {
+  clientQueriesTestSuite({ it: sqliteNoopIt });
 });
