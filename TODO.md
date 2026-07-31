@@ -3,7 +3,7 @@
 - [TASK] `wrapHandler` cannot observe attempt failures — the middleware chain wraps `runJobAttempt` (the executor), which catches handler/callback errors, reschedules, and returns normally, so a `catch` around `next()` never runs (only `finally` does). `wrapPrepare`/`wrapExecute`/`wrapComplete` do see errors, since they wrap the user callback directly — an undocumented asymmetry. Decide between documenting the current behavior, adding an `onAttemptError` hook, or moving the chain inward to wrap the handler. Any change that makes `catch` live is breaking (dead catch blocks become live, double-reporting against `jobAttemptFailed`). See `design/wrap-handler-error-visibility.md`.
 - [REF] expand the Chain type to have head and tail jobs for easy rescheduleJob knowing the chain id
 - [REF] imperical completeChain that is leverages lock: true and rescheduleJob, new completeJob (maybe even some)
-- [REF] minimize listing queries surface
+- [REF] minimize listing queries surface — make `typeName` a required partition key on `listChains`/`listJobs` (single, index-leading), one sort per status, drop uncoverable filters (`chainTypeName`, `chainId[]`/`jobId[]` on `listJobs`, completed-slice secondary predicates), add loose-scan `listJobTypeNames`/`listChainTypeNames` with open-work counts, and route cross-type work (cleanup) through per-type fan-out. See `design/minimize-listing-surface.md`.
 
 # Short term
 
