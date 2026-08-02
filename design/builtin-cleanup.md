@@ -66,8 +66,8 @@ No retention/interval/typeNames here — those are per-schedule, not per-worker.
 
 ### Named schedules
 
-A schedule is identified by a required user `name`, realized as a chain with deduplication key
-`__queuert/cleanup:${name}`, `scope: "running"` — at most one alive chain per name. `name` is
+A schedule is identified by a required user `name`, realized as a chain with identity key
+`__queuert/cleanup:${name}`, `scope: "running"` — at most one running chain per name. `name` is
 **required**, with no default: it is the identity of a persisted schedule that `scheduleCleanup`
 upserts and `unscheduleCleanup` deletes by, so a silent default would let two unrelated call sites
 (an app boot, a library that also schedules cleanup) address the same schedule and silently
@@ -108,38 +108,28 @@ recurrence timer — a service redeploying faster than `intervalMs` must not pus
 forever. So it reads before writing, inside the caller's transaction:
 
 ```ts
-const existing = await client.getChain({
-  ...txCtx,
-  deduplication: { key: `__queuert/cleanup:${name}`, scope: "running" },
-  lock: true, // reads-with-lock.md
-});
+const identity = { key: `__queuert/cleanup:${name}`, scope: "running" } as const;
+
+const existing = await client.getChain({ ...txCtx, identity, lock: true });
 if (!existing) {
-  await client.createChain({
-    ...txCtx,
-    transactionHooks /* new schedule */,
-    deduplication: { key: `__queuert/cleanup:${name}`, scope: "running" },
-  });
+  await client.createChain({ ...txCtx, transactionHooks, identity /* new schedule */ });
 } else if (configDiffers(existing.input, next)) {
   await client.deleteChain({ ...txCtx, transactionHooks, id: existing.id });
-  await client.createChain({
-    ...txCtx,
-    transactionHooks /* new schedule */,
-    deduplication: { key: `__queuert/cleanup:${name}`, scope: "running" },
-  });
+  await client.createChain({ ...txCtx, transactionHooks, identity /* new schedule */ });
 }
 // config unchanged → no-op: no delete, no timer reset
 ```
 
-This leans on both new primitives: `getChain({ deduplication })` to find the alive chain for the
-name ([reads-by-deduplication.md](reads-by-deduplication.md)), and `lock` to serialize the
-compare-and-swap against a concurrent scheduler ([reads-with-lock.md](reads-with-lock.md)). The
-absent-row race (two boots, neither sees a chain, both create) is caught by the dedup unique
-constraint on `createChain` — `lock` alone cannot cover it. Delete and create happen in the
-caller's single transaction, so there is never a window with zero or two alive chains.
+This leans on both primitives: `getChain({ identity })` to find the running chain for the name
+([chain-identity.md](chain-identity.md)), and `lock` to serialize the compare-and-swap against a
+concurrent scheduler (shipped). The absent-row race (two boots, neither sees a chain, both create)
+is caught by the `running`-scope unique index — `lock` alone cannot cover it. Delete and create
+happen in the caller's single transaction, so there is never a window with zero or two running
+chains.
 
 ### Deleting a running schedule is safe
 
-When `configDiffers` and the alive chain is currently _running_, `deleteChain` removes it
+When `configDiffers` and the running chain is currently _executing_, `deleteChain` removes it
 mid-attempt. The in-flight handler's next `execute`/`complete` fails attempt verification with
 `JobNotFoundError`; the worker logs one `workerError` and drops the job — **no retry, no crash**,
 and crucially the handler never reaches `complete`, so it does **not** self-reschedule. Batches
@@ -170,13 +160,13 @@ for free, with no tombstone or completion-time re-check.
       cursor = page.nextCursor;
     } while (cursor && !signal.aborted);
 
-    return complete(async ({ transactionHooks, ...tx }) => {
+    return finalize(async ({ complete, transactionHooks, ...tx }) => {
+      const terminal = await complete(null);
       await client.createChain({ ...tx, transactionHooks,
         typeName: "__queuert/cleanup", input: job.input,
         schedule: { afterMs: intervalMs },
-        deduplication: { key: `__queuert/cleanup:${name}`, scope: "running",
-          excludeChainIds: [job.chainId] } });
-      return null;
+        identity: { key: `__queuert/cleanup:${name}`, scope: "running" } });
+      return terminal;
     });
   },
 }
@@ -184,10 +174,11 @@ for free, with no tombstone or completion-time re-check.
 
 Each batch deletes in its own `execute` transaction (bounded lock scope, attempt verified per
 batch). The scan drops out between batches on `signal.aborted`; deletion is idempotent, so the
-next run resumes from the oldest remaining chain. `complete` self-reschedules a **new independent
+next run resumes from the oldest remaining chain. The self-reschedule creates a **new independent
 chain** (not `continueWith`, so history does not grow), forwarding `job.input` unchanged so config
-survives run-to-run, with `excludeChainIds: [job.chainId]` so the still-incomplete current chain
-does not deduplicate the next run against itself.
+survives run-to-run. It runs after `complete()` inside `finalize`, so the current chain is already
+complete when the next one is created — otherwise the still-running chain would collide with its own
+`running`-scope identity (see [chain-identity.md](chain-identity.md)).
 
 ### User setup
 
@@ -236,10 +227,9 @@ precedent) signals an opt-in batteries-included module and keeps the core namesp
 
 ## Dependencies
 
-Requires [reads-with-lock.md](reads-with-lock.md) and
-[reads-by-deduplication.md](reads-by-deduplication.md), which compose into
-`getChain({ deduplication, lock: true })`. Those two are independent of each other; land both,
-then this.
+Requires [chain-identity.md](chain-identity.md), which composes with the shipped locked reads into
+`getChain({ identity, lock: true })` and supplies the post-completion scheduling the handler's
+self-reschedule depends on.
 
 ## Docs
 

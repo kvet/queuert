@@ -1,5 +1,10 @@
 # Concurrent deduplication
 
+> **Retired by [chain-identity.md](chain-identity.md).** Persisting `scope` makes the matching
+> predicate static, so two partial unique indexes close
+> [#3](https://github.com/kvet/queuert/issues/3) and none of the lock-based options below are
+> needed. Kept for the analysis of why a unique index could not work under the old semantics.
+
 Make deduplication hold when two transactions create the same key at the same time. Today it holds
 only on the serialized adapters; on PostgreSQL it is a check-then-insert race.
 

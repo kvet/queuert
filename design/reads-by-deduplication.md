@@ -1,5 +1,10 @@
 # Reads by deduplication key
 
+> **Superseded by [chain-identity.md](chain-identity.md).** The by-identity read lands there
+> instead, with a globally unique key and an optional `typeName` rather than a per-type key and a
+> required one, and without the full-`DeduplicationOptions` payload. This design was implemented
+> once and reverted; build the `chain-identity.md` shape instead.
+
 Let `getChain` / `getChains` resolve a chain by its deduplication key, not only by id, so code
 that created a chain with a dedup key can find it again without having persisted the id.
 

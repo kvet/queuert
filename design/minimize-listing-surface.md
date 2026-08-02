@@ -254,8 +254,9 @@ CONCURRENTLY` + recreate on PG, `DROP/CREATE` on SQLite) — needs a changeset. 
 Settle this **before** the two deduplication reads/listing docs land — both add axes to the
 surface we are shrinking:
 
-- [reads-by-deduplication.md](reads-by-deduplication.md) — point lookup on `getChain` /
-  `getChains`; its `job_deduplication_idx` tightening should land in the same index migration.
+- [chain-identity.md](chain-identity.md) — point lookup on `getChain` / `getChains`; it replaces
+  `job_deduplication_idx` with two partial unique indexes, which should land in the same index
+  migration.
 - [list-chains-by-deduplication.md](list-chains-by-deduplication.md) — explicitly states its filter
   "does not compose cleanly" with `listChains`. Author it against the post-minimization surface: a
   dedup-key filter is a type-scoped path backed by `job_deduplication_idx`.

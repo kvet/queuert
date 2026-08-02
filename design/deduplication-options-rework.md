@@ -1,5 +1,9 @@
 # Deduplication options rework
 
+> **Superseded by [chain-identity.md](chain-identity.md).** Its `excludeChainIds` diagnosis and the
+> post-completion scheduling fix are folded in there; `windowMs` is dropped outright. Kept for the
+> reasoning only.
+
 Shrink `DeduplicationOptions` to what deduplication actually is. Two axes carry their weight
 (`key`, `scope`); the other two exist to work around problems elsewhere.
 

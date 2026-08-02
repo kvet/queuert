@@ -69,6 +69,19 @@ existing continuation-race `ON CONFLICT` behavior intact.
 - **Severity of the break.** Code relying on the current silent-return would start throwing.
   Probably `major`; worth confirming nothing internal depends on the swallow.
 
+## Dependencies
+
+Independent of [chain-identity.md](chain-identity.md) in mechanism, but coupled in sequencing. That
+design rewrites the create path around `ON CONFLICT` on the identity index, and a PostgreSQL
+`ON CONFLICT` targets a single constraint — so the `ON CONFLICT (chain_id, chain_index)` clause that
+today silently swallows a colliding `id` goes away. If chain identity lands first, id collisions
+start raising a raw `23505` and aborting the caller's transaction, which is the regression this
+document exists to prevent. Land this with or before that create-path rewrite, and expect the
+PostgreSQL detection below to be re-derived against the new SQL.
+
+The `id` vs `identity` contrast is also documented jointly: an `id` collision is an error, an
+`identity.key` collision returns the existing chain.
+
 ## Surface
 
 - **Core** — new `DuplicateJobIdError`; doc `id` on `CreateChainEntry` / `continueWith` as
