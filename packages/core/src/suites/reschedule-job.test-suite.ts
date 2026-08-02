@@ -7,7 +7,6 @@ import {
   JobNotReschedulableError,
   JobsNotFoundError,
   JobsNotReschedulableError,
-  TransactionContextRequiredError,
 } from "../errors.js";
 import { createInProcessWorker } from "../in-process-worker.js";
 import { withTransactionHooks } from "../transaction-hooks.js";
@@ -360,7 +359,7 @@ export const rescheduleJobTestSuite = ({ it }: { it: TestAPI<TestSuiteContext> }
         // @ts-expect-error missing txCtx
         client.rescheduleJob({ transactionHooks, id: chain.id }),
       ),
-    ).rejects.toThrow(TransactionContextRequiredError);
+    ).rejects.toThrow("requires a transaction context");
   });
 
   it("reschedules a blocked job", async ({
@@ -724,6 +723,6 @@ export const rescheduleJobTestSuite = ({ it }: { it: TestAPI<TestSuiteContext> }
         // @ts-expect-error missing txCtx
         client.rescheduleJobs({ transactionHooks, ids: [chain.id] }),
       ),
-    ).rejects.toThrow(TransactionContextRequiredError);
+    ).rejects.toThrow("requires a transaction context");
   });
 };

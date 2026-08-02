@@ -305,14 +305,6 @@ export type JobTypeValidationErrorCode =
   | "invalid_input"
   | "invalid_output";
 
-/** Thrown when a mutating client method is called without a transaction context from `withTransaction`. */
-export class TransactionContextRequiredError extends Error {
-  constructor(message: string) {
-    super(message);
-    this.name = "TransactionContextRequiredError";
-  }
-}
-
 /** Thrown when runtime job type validation fails (via {@link createJobTypes}). */
 export class JobTypeValidationError extends Error {
   /** The specific validation failure code. */

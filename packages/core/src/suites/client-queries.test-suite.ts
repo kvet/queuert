@@ -2,11 +2,7 @@ import { type TestAPI, describe, expect, expectTypeOf } from "vitest";
 
 import { createClient } from "../client.js";
 import { defineJobTypes } from "../entities/define-job-types.js";
-import {
-  ChainTypeMismatchError,
-  JobTypeMismatchError,
-  TransactionContextRequiredError,
-} from "../errors.js";
+import { ChainTypeMismatchError, JobTypeMismatchError } from "../errors.js";
 import { sleep } from "../helpers/sleep.js";
 import { createInProcessWorker } from "../in-process-worker.js";
 import { withTransactionHooks } from "../transaction-hooks.js";
@@ -219,7 +215,7 @@ export const clientQueriesTestSuite = ({ it: baseIt }: { it: TestAPI<TestSuiteCo
       });
     });
 
-    it("getChain lock: true without a transaction context throws TransactionContextRequiredError", async ({
+    it("getChain lock: true without a transaction context throws", async ({
       createContext,
       expect,
     }) => {
@@ -229,7 +225,7 @@ export const clientQueriesTestSuite = ({ it: baseIt }: { it: TestAPI<TestSuiteCo
       await expect(
         // @ts-expect-error lock: true without a transaction context does not compile.
         client.getChain({ id: created.id, lock: true }),
-      ).rejects.toBeInstanceOf(TransactionContextRequiredError);
+      ).rejects.toThrow("requires a transaction context");
     });
 
     it("getChain lock: true on an absent row returns undefined without blocking", async ({
@@ -369,7 +365,7 @@ export const clientQueriesTestSuite = ({ it: baseIt }: { it: TestAPI<TestSuiteCo
       });
     });
 
-    it("getChains lock: true without a transaction context throws TransactionContextRequiredError", async ({
+    it("getChains lock: true without a transaction context throws", async ({
       createContext,
       expect,
     }) => {
@@ -379,7 +375,7 @@ export const clientQueriesTestSuite = ({ it: baseIt }: { it: TestAPI<TestSuiteCo
       await expect(
         // @ts-expect-error lock: true without a transaction context does not compile.
         client.getChains({ ids: [created.id], lock: true }),
-      ).rejects.toBeInstanceOf(TransactionContextRequiredError);
+      ).rejects.toThrow("requires a transaction context");
     });
 
     it("getChains lock: true on absent rows returns undefined entries without blocking", async ({
@@ -480,7 +476,7 @@ export const clientQueriesTestSuite = ({ it: baseIt }: { it: TestAPI<TestSuiteCo
       });
     });
 
-    it("getJob lock: true without a transaction context throws TransactionContextRequiredError", async ({
+    it("getJob lock: true without a transaction context throws", async ({
       createContext,
       expect,
     }) => {
@@ -490,7 +486,7 @@ export const clientQueriesTestSuite = ({ it: baseIt }: { it: TestAPI<TestSuiteCo
       await expect(
         // @ts-expect-error lock: true without a transaction context does not compile.
         client.getJob({ id: created.id, lock: true }),
-      ).rejects.toBeInstanceOf(TransactionContextRequiredError);
+      ).rejects.toThrow("requires a transaction context");
     });
 
     it("getJob lock: true on an absent row returns undefined without blocking", async ({
@@ -627,7 +623,7 @@ export const clientQueriesTestSuite = ({ it: baseIt }: { it: TestAPI<TestSuiteCo
       });
     });
 
-    it("getJobs lock: true without a transaction context throws TransactionContextRequiredError", async ({
+    it("getJobs lock: true without a transaction context throws", async ({
       createContext,
       expect,
     }) => {
@@ -637,7 +633,7 @@ export const clientQueriesTestSuite = ({ it: baseIt }: { it: TestAPI<TestSuiteCo
       await expect(
         // @ts-expect-error lock: true without a transaction context does not compile.
         client.getJobs({ ids: [created.id], lock: true }),
-      ).rejects.toBeInstanceOf(TransactionContextRequiredError);
+      ).rejects.toThrow("requires a transaction context");
     });
 
     it("getJobs lock: true on absent rows returns undefined entries without blocking", async ({

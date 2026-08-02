@@ -65,7 +65,7 @@ await withTransactionHooks(async (transactionHooks) =>
 );
 ```
 
-Because the lock is scoped to a transaction, `lock: true` **requires** a transaction context — the parameter is a discriminated union, so `{ lock: true }` without one fails to compile, and a `TransactionContextRequiredError` is thrown at runtime as a backstop.
+Because the lock is scoped to a transaction, `lock: true` **requires** a transaction context — the parameter is a discriminated union, so `{ lock: true }` without one fails to compile.
 
 A row lock only covers rows that exist: a lookup that matches nothing locks nothing, so `lock` does not serialize a "create if absent" against a concurrent create. Close that race with `createChain` deduplication instead; the two mechanisms compose.
 

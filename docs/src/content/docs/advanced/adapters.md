@@ -83,8 +83,6 @@ Whether `txCtx` is optional depends on what the method does:
 
 At the provider layer, `executeSql` keeps an unconditionally optional `txCtx` — that's what lets the adapter run reads on their own connection, and DDL operations (like `CREATE INDEX CONCURRENTLY`) that cannot run inside a transaction at all.
 
-Enforcement is type-level only. `Client` additionally throws `TransactionContextRequiredError` at runtime when one of its mutating methods is called without a transaction context.
-
 ### NotifyProvider Interface
 
 A notify provider supplies three capabilities — no transaction context, connections are managed internally:

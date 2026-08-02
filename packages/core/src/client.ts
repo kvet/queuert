@@ -32,7 +32,6 @@ import {
   JobTypeMismatchError,
   JobsNotFoundError,
   JobsNotReschedulableError,
-  TransactionContextRequiredError,
   WaitChainTimeoutError,
 } from "./errors.js";
 import { bufferNotifyJobAttemptLost, bufferNotifyJobScheduled } from "./helpers/notify-hooks.js";
@@ -67,9 +66,7 @@ const normalizeTxCtx = <T extends Record<string, unknown>>(rest: T): T | undefin
 
 const requireTxCtx = <T extends Record<string, unknown>>(rest: T): T => {
   if (Object.keys(rest).length === 0) {
-    throw new TransactionContextRequiredError(
-      "This client method requires a transaction context from withTransaction",
-    );
+    throw new Error("This client method requires a transaction context from withTransaction");
   }
   return rest;
 };
@@ -210,7 +207,6 @@ export type Client<
    *
    * @throws {@link InvalidJobIdError} if `id` fails the state adapter's `validateId` check.
    * @throws {@link BlockerLimitExceededError} if the root job declares more blockers than the per-job limit.
-   * @throws {@link TransactionContextRequiredError} if called without a transaction context.
    */
   createChain: <TChainTypeName extends JobTypeEntryNames<TJobTypeDefinitions>>(
     options: CreateChainEntry<TJobId, TJobTypeDefinitions, TChainTypeName> & {
@@ -229,7 +225,6 @@ export type Client<
    *
    * @throws {@link InvalidJobIdError} if any `id` fails the state adapter's `validateId` check.
    * @throws {@link BlockerLimitExceededError} if any root job declares more blockers than the per-job limit.
-   * @throws {@link TransactionContextRequiredError} if called without a transaction context.
    */
   createChains: <const TChains extends readonly AnyCreateChainEntry<TJobId, TJobTypeDefinitions>[]>(
     options: {
@@ -244,7 +239,6 @@ export type Client<
    * dependencies.
    *
    * @throws {@link BlockerReferenceError} if external jobs depend on it.
-   * @throws {@link TransactionContextRequiredError} if called without a transaction context.
    */
   deleteChain: <
     TEntryName extends JobTypeEntryNames<TJobTypeDefinitions> =
@@ -262,7 +256,6 @@ export type Client<
    * true, includes transitive dependencies.
    *
    * @throws {@link BlockerReferenceError} if external jobs depend on them.
-   * @throws {@link TransactionContextRequiredError} if called without a transaction context.
    */
   deleteChains: <
     TEntryName extends JobTypeEntryNames<TJobTypeDefinitions> =
@@ -282,7 +275,6 @@ export type Client<
    *
    * @throws {@link JobNotFoundError} if the job does not exist.
    * @throws {@link JobNotReschedulableError} if the job is not pending.
-   * @throws {@link TransactionContextRequiredError} if called without a transaction context.
    */
   rescheduleJob: <
     TJobTypeName extends JobTypeNames<TJobTypeDefinitions> = JobTypeNames<TJobTypeDefinitions>,
@@ -302,7 +294,6 @@ export type Client<
    *
    * @throws {@link JobsNotFoundError} (batch variant listing every offending id) if any input is missing.
    * @throws {@link JobsNotReschedulableError} (batch variant listing every offending id) if any input is not pending.
-   * @throws {@link TransactionContextRequiredError} if called without a transaction context.
    */
   rescheduleJobs: <
     TJobTypeName extends JobTypeNames<TJobTypeDefinitions> = JobTypeNames<TJobTypeDefinitions>,
@@ -320,7 +311,6 @@ export type Client<
    *
    * @throws {@link ChainNotFoundError} if the chain does not exist.
    * @throws {@link ChainTypeMismatchError} if the chain's type does not match `typeName`.
-   * @throws {@link TransactionContextRequiredError} if called without a transaction context.
    * @throws {@link JobAlreadyCompletedError} from the inner `complete` callback if the job is already completed.
    * @throws {@link BlockerLimitExceededError} from the inner `complete` callback if a `continueWith` declares more blockers than the per-job limit.
    */
@@ -380,7 +370,6 @@ export type Client<
    * read-modify-write. A lookup that matches nothing locks nothing.
    *
    * @throws {@link ChainTypeMismatchError} if `typeName` is provided and does not match.
-   * @throws {@link TransactionContextRequiredError} if `lock: true` is passed without a transaction context.
    */
   getChain: <
     TChainTypeName extends JobTypeEntryNames<TJobTypeDefinitions> =
@@ -401,7 +390,6 @@ export type Client<
    * enclosing transaction ends. Rows that do not exist lock nothing.
    *
    * @throws {@link ChainTypeMismatchError} if `typeName` is provided and any found chain does not match.
-   * @throws {@link TransactionContextRequiredError} if `lock: true` is passed without a transaction context.
    */
   getChains: <
     TChainTypeName extends JobTypeEntryNames<TJobTypeDefinitions> =
@@ -420,7 +408,6 @@ export type Client<
    * read-modify-write. A lookup that matches nothing locks nothing.
    *
    * @throws {@link JobTypeMismatchError} if `typeName` is provided and does not match.
-   * @throws {@link TransactionContextRequiredError} if `lock: true` is passed without a transaction context.
    */
   getJob: <
     TJobTypeName extends JobTypeNames<TJobTypeDefinitions> = JobTypeNames<TJobTypeDefinitions>,
@@ -440,7 +427,6 @@ export type Client<
    * enclosing transaction ends. Rows that do not exist lock nothing.
    *
    * @throws {@link JobTypeMismatchError} if `typeName` is provided and any found job does not match.
-   * @throws {@link TransactionContextRequiredError} if `lock: true` is passed without a transaction context.
    */
   getJobs: <
     TJobTypeName extends JobTypeNames<TJobTypeDefinitions> = JobTypeNames<TJobTypeDefinitions>,
