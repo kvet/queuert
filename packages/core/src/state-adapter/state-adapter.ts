@@ -79,6 +79,22 @@ export type StateAdapter<TTxContext extends BaseTxContext, TJobId extends string
   ) => Promise<([StateJob, StateJob | undefined] | undefined)[]>;
 
   /**
+   * Gets chains by deduplication options, scoped to a chain type. Each entry resolves to
+   * the single chain a `createChains` of `chainTypeName` with the same options would
+   * deduplicate onto — the newest match in scope.
+   *
+   * Returns `[headJob, tailJob]` per entry in input order, or `undefined` where nothing
+   * matches. Pass `lock: "exclusive"` to acquire a write-intent lock on the latest job in
+   * each resolved chain.
+   */
+  getChainsByDeduplication: (
+    params: {
+      chainTypeName: string;
+      deduplications: DeduplicationOptions<TJobId>[];
+    } & LockTxContextParam<TTxContext>,
+  ) => Promise<([StateJob, StateJob | undefined] | undefined)[]>;
+
+  /**
    * Gets jobs by their IDs. Returns one entry per id in input order, or `undefined`
    * for missing jobs. Pass `lock: "exclusive"` to acquire a write-intent lock.
    */

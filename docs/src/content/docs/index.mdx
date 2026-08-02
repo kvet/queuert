@@ -157,7 +157,8 @@ const stop = await worker.start();
   </Card>
   <Card title="Deduplication" icon="seti:lock">
     Pass a deduplication key on enqueue. Identical keys collapse to a single chain —
-    at-most-once, by construction.
+    at-most-once, by construction. Look the chain up later by the same key — no id to
+    persist.
   </Card>
   <Card title="Lean and battle-tested" icon="seti:plan">
     Zero runtime dependencies in every package — driver libraries are `peerDependencies` you

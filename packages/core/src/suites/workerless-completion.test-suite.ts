@@ -2,11 +2,7 @@ import { type TestAPI, expectTypeOf, vi } from "vitest";
 
 import { createClient } from "../client.js";
 import { defineJobTypes } from "../entities/define-job-types.js";
-import {
-  BlockerLimitExceededError,
-  ChainTypeMismatchError,
-  TransactionContextRequiredError,
-} from "../errors.js";
+import { BlockerLimitExceededError, ChainTypeMismatchError } from "../errors.js";
 import { sleep } from "../helpers/sleep.js";
 import { createInProcessWorker } from "../in-process-worker.js";
 import { withTransactionHooks } from "../transaction-hooks.js";
@@ -725,7 +721,7 @@ export const workerlessCompletionTestSuite = ({ it }: { it: TestAPI<TestSuiteCon
           complete: async ({ job, complete }) => complete(job, async () => ({ result: 84 })),
         }),
       ),
-    ).rejects.toThrow(TransactionContextRequiredError);
+    ).rejects.toThrow("requires a transaction context");
   });
 
   it("completeChain throws on typeName mismatch", async ({

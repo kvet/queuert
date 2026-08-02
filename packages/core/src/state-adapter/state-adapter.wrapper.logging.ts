@@ -32,6 +32,10 @@ export const wrapStateAdapterWithLogging = <
 
     // Operation methods - wrap with error logging
     getChains: wrap("getChains", stateAdapter.getChains),
+    getChainsByDeduplication: wrap(
+      "getChainsByDeduplication",
+      stateAdapter.getChainsByDeduplication,
+    ),
     getJobs: wrap("getJobs", stateAdapter.getJobs),
     createChains: wrap("createChains", stateAdapter.createChains),
     createContinuationJob: wrap("createContinuationJob", stateAdapter.createContinuationJob),

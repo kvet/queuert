@@ -102,7 +102,7 @@ For deeper comparisons, see the [docs site](https://kvet.github.io/queuert/compa
 - **Lives in your database.** Postgres or SQLite. No Redis required, no workflow server, no separate persistence tier to operate.
 - **Sub-second wakeup.** `LISTEN/NOTIFY` (or Redis pub/sub, or NATS) wakes workers when a row commits — not on a polling timer.
 - **Schedule for later.** Delay a chain to a specific time or duration. Schedule retries with backoff. Future work, no extra infrastructure.
-- **Deduplication.** Pass a deduplication key on enqueue. Identical keys collapse to a single chain — at-most-once, by construction.
+- **Deduplication.** Pass a deduplication key on enqueue. Identical keys collapse to a single chain — at-most-once, by construction. Look the chain up later by the same key — no id to persist.
 - **Lean and battle-tested.** Zero runtime dependencies in every package — driver libraries are `peerDependencies` you already own. Thousands of tests across adapters and a shared conformance suite every state and notify adapter must pass.
 
 ## Installation

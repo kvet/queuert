@@ -42,9 +42,9 @@ const blockers = await client.getJobBlockers({ jobId });
 const blockedJobs = await client.listBlockedJobs({ chainId });
 ```
 
-All lookup methods accept an optional `typeName` for type narrowing -- the return type narrows to the specified type. If the entity exists but has a different type, `ChainTypeMismatchError` or `JobTypeMismatchError` is thrown.
+All ID-based lookup methods accept an optional `typeName` for type narrowing -- the return type narrows to the specified type. If the entity exists but has a different type, `ChainTypeMismatchError` or `JobTypeMismatchError` is thrown.
 
-See [examples/showcase-queries](https://github.com/kvet/queuert/tree/main/examples/showcase-queries) for a complete working example demonstrating single lookups, paginated lists, chain job listing, and blocker queries. See also [Client API](/queuert/api/core/type-aliases/client/) reference and [Dashboard](/queuert/integrations/dashboard/).
+`getChain` and `getChains` accept a second, non-ID form: instead of `id` / `ids`, pass a required `typeName` plus `deduplication` / `deduplications` to resolve the chain a `createChain` with those same options would collapse onto. See [Reading a chain back by its key](../deduplication/#reading-a-chain-back-by-its-key).
 
 ## Locked reads
 
@@ -65,9 +65,9 @@ await withTransactionHooks(async (transactionHooks) =>
 );
 ```
 
-Because the lock is scoped to a transaction, `lock: true` **requires** a transaction context — the parameter is a discriminated union, so `{ lock: true }` without one fails to compile, and a `TransactionContextRequiredError` is thrown at runtime as a backstop.
+Because the lock is scoped to a transaction, `lock: true` **requires** a transaction context — the parameter is a discriminated union, so `{ lock: true }` without one fails to compile.
 
-A row lock only covers rows that exist: a lookup that matches nothing locks nothing, so `lock` does not serialize a "create if absent" against a concurrent create. Close that race with `createChain` deduplication instead; the two mechanisms compose.
+A row lock only covers rows that exist: a lookup that matches nothing locks nothing, so `lock` does not serialize a "create if absent" against a concurrent create. Close that race with `createChain` deduplication instead; the two mechanisms compose — including on a [read by deduplication](../deduplication/#reading-a-chain-back-by-its-key), where the lock lands on the resolved chain's latest job just as it does for an id lookup.
 
 See [examples/showcase-scheduling](https://github.com/kvet/queuert/tree/main/examples/showcase-scheduling) for a runnable version of this pattern — a locked read that confirms a job is still pending before rescheduling it to run early.
 

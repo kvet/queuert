@@ -78,6 +78,7 @@ export const extendWithStateInProcess = <T>(
             return stateAdapter.withSavepoint(txCtx, fn);
           },
           getChains: wrap(stateAdapter.getChains),
+          getChainsByDeduplication: wrap(stateAdapter.getChainsByDeduplication),
           getJobs: wrap(stateAdapter.getJobs),
           createChains: wrap(stateAdapter.createChains),
           createContinuationJob: wrap(stateAdapter.createContinuationJob),

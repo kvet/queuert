@@ -75,6 +75,8 @@ export type IndexCoverageCaseKey =
   | "listBlockedJobs/cursor"
   | "getChains/default"
   | "getChains/lock"
+  | "getChainsByDeduplication/default"
+  | "getChainsByDeduplication/lock"
   | "getJobs/default"
   | "getJobs/lock"
   | "createChains/default"
@@ -1040,6 +1042,68 @@ export const operationalCoverageGroups: IndexCoverageGroup[] = [
               lock: "exclusive",
             }),
           );
+        },
+      },
+    ],
+  },
+
+  {
+    name: "getChainsByDeduplication",
+    cases: [
+      {
+        key: "getChainsByDeduplication/default",
+        label: "default",
+        run: async (stateAdapter) => {
+          // Seeded here so the measured lookup resolves a row: the dedup-keyed chain
+          // the createChains group creates does not exist yet when this group runs.
+          await stateAdapter.withTransaction(async (txCtx) =>
+            stateAdapter.createChains({
+              txCtx,
+              jobs: [
+                {
+                  typeName: "idx:dedup-read",
+                  chainTypeName: "idx:dedup-read",
+                  input: {},
+                  deduplication: { key: "idx-dedup-read-key", scope: "running" },
+                },
+              ],
+            }),
+          );
+          return async (stateAdapter) => {
+            await stateAdapter.getChainsByDeduplication({
+              chainTypeName: "idx:dedup-read",
+              deduplications: [{ key: "idx-dedup-read-key", scope: "running" }],
+            });
+          };
+        },
+      },
+      {
+        key: "getChainsByDeduplication/lock",
+        label: "+ lock",
+        run: async (stateAdapter) => {
+          await stateAdapter.withTransaction(async (txCtx) =>
+            stateAdapter.createChains({
+              txCtx,
+              jobs: [
+                {
+                  typeName: "idx:dedup-read-locked",
+                  chainTypeName: "idx:dedup-read-locked",
+                  input: {},
+                  deduplication: { key: "idx-dedup-read-locked-key", scope: "running" },
+                },
+              ],
+            }),
+          );
+          return async (stateAdapter) => {
+            await stateAdapter.withTransaction(async (txCtx) =>
+              stateAdapter.getChainsByDeduplication({
+                txCtx,
+                chainTypeName: "idx:dedup-read-locked",
+                deduplications: [{ key: "idx-dedup-read-locked-key", scope: "running" }],
+                lock: "exclusive",
+              }),
+            );
+          };
         },
       },
     ],

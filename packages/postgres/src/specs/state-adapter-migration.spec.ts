@@ -442,17 +442,18 @@ const migrationContracts: Record<string, MigrationContract> = {
       expect(indexes).not.toContain("queuert_chain_listing_idx");
       expect(indexes).not.toContain("queuert_job_listing_idx");
       expect(indexes).not.toContain("queuert_job_completed_listing_idx");
+      expect(indexes).not.toContain("queuert_job_deduplication_idx");
 
       expect(indexes).toContain("queuert_job_continuation_idx");
       expect(indexes).toContain("queuert_job_ready_idx");
       expect(indexes).toContain("queuert_job_running_idx");
       expect(indexes).toContain("queuert_job_completed_idx");
-      expect(indexes).toContain("queuert_job_deduplication_idx");
       expect(indexes).toContain("queuert_chain_tail_open_idx");
       expect(indexes).toContain("queuert_chain_tail_completed_idx");
       expect(indexes).toContain("queuert_chain_index_idx");
       expect(indexes).toContain("queuert_chain_head_idx");
       expect(indexes).toContain("queuert_job_idx");
+      expect(indexes).toContain("queuert_chain_deduplication_idx");
     },
   },
 };

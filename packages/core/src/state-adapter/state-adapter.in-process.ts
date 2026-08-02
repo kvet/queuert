@@ -678,6 +678,14 @@ export const createInProcessStateAdapter = async ({
         }),
       ),
 
+    getChainsByDeduplication: async ({ txCtx, chainTypeName, deduplications }) =>
+      withReadLock(txCtx, () =>
+        deduplications.map((deduplication) => {
+          const headJob = idx.findDeduplicatedJob(chainTypeName, deduplication);
+          return headJob ? chainPair(headJob) : undefined;
+        }),
+      ),
+
     getJobs: async ({ txCtx, jobIds }) =>
       withReadLock(txCtx, () => jobIds.map((jobId): StateJob | undefined => idx.jobs.get(jobId))),
 

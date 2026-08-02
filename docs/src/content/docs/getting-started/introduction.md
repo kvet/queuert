@@ -102,5 +102,5 @@ For one-on-one comparisons see the [comparison docs](/queuert/comparison/).
 - **Sub-second wakeup latency.** `LISTEN/NOTIFY` (or Redis pub/sub, or NATS) wakes workers when a row commits — not on a polling timer.
 - **Fan-in via blockers.** "Wait for these N independent chains to finish, then run X" is a typed primitive backed by a `job_blocker` table.
 - **Schedule for later.** Delay a chain to a specific time or duration. Schedule retries with backoff. Future work, no extra infrastructure.
-- **Deduplication.** Pass a deduplication key on enqueue. Identical keys collapse to a single chain — at-most-once, by construction.
+- **Deduplication.** Pass a deduplication key on enqueue. Identical keys collapse to a single chain — at-most-once, by construction. Look the chain up later by the same key — no id to persist.
 - **MIT licensed.** No enterprise tier, no vendor lock-in.

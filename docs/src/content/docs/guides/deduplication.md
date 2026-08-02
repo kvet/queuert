@@ -120,4 +120,31 @@ return complete(async ({ sql, transactionHooks }) => {
 });
 ```
 
-See [examples/showcase-scheduling](https://github.com/kvet/queuert/tree/main/examples/showcase-scheduling) for a complete working example demonstrating deduplication with recurring jobs. See also [Scheduling](../scheduling/) and [Transaction Hooks](../transaction-hooks/).
+## Reading a chain back by its key
+
+A key you own is also a lookup handle. `getChain` and `getChains` accept the same deduplication options `createChain` does, and resolve **the single chain a `createChain` with those options would collapse onto** — the newest match in scope — without creating anything. Code that kept the key but not the generated id can still find its chain, and the result is `undefined` exactly when that create would have started a fresh chain instead.
+
+```ts
+// The alive chain for this key, or undefined if none is running
+const alive = await client.getChain({
+  typeName: "health-check",
+  deduplication: { key: `health:${serviceId}`, scope: "running" },
+});
+
+// Batch form — positional array, one resolved chain per entry
+const chains = await client.getChains({
+  typeName: "health-check",
+  deduplications: [
+    { key: "health:api-server", scope: "running" },
+    { key: "health:worker", scope: "any" },
+  ],
+});
+```
+
+`typeName` is **required** on these forms and participates in the lookup, unlike the id-based reads where it merely asserts the resolved chain's type. A key identifies a chain only within its chain type — deduplication never collapses across types — so there is no match to resolve without it.
+
+Every entry carries its own options, and they mean exactly what they mean on `createChain`: `scope: "running"` sees only alive chains and resolves the newest of them, `scope: "any"` also sees completed ones and resolves to the latest occurrence, and `windowMs` / `excludeChainIds` narrow the match the same way.
+
+These reads compose with `lock: true` — resolving the alive chain for a key and locking it in one step is the primitive behind keyed-singleton schedulers. Note that a lock only covers rows that exist, so it does not serialize a "create if absent" against a concurrent create; that race is closed by `createChain` deduplication itself. See [Locked reads](../queries/#locked-reads).
+
+See [examples/showcase-scheduling](https://github.com/kvet/queuert/tree/main/examples/showcase-scheduling) for a complete working example demonstrating deduplication with recurring jobs. See also [Job & Chain Queries](../queries/), [Scheduling](../scheduling/), and [Transaction Hooks](../transaction-hooks/).

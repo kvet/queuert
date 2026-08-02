@@ -17,7 +17,7 @@ import {
   sql,
   t,
 } from "@queuert/typed-sql";
-import { type BaseTxContext, type StateAdapter } from "queuert";
+import { type BaseTxContext, type DeduplicationOptions, type StateAdapter } from "queuert";
 import {
   type StateJob,
   createIdValidator,
@@ -295,6 +295,11 @@ ON {{table_prefix}}job (created_at) WHERE chain_index = 0`),
       sql(/* sql */ `
 CREATE INDEX IF NOT EXISTS {{table_prefix}}job_idx
 ON {{table_prefix}}job (created_at)`),
+      sql(/* sql */ `DROP INDEX IF EXISTS {{table_prefix}}job_deduplication_idx`),
+      sql(/* sql */ `
+CREATE INDEX IF NOT EXISTS {{table_prefix}}chain_deduplication_idx
+ON {{table_prefix}}job (deduplication_key, chain_type_name, created_at DESC)
+WHERE deduplication_key IS NOT NULL AND chain_index = 0`),
     ],
   },
 ];
@@ -492,6 +497,35 @@ const parseDbChainRow = (row: DbChainRow): { headJob: DbJob; tailJob: DbJob | nu
     : null;
 
   return { headJob, tailJob };
+};
+
+const alignJobsToIds = (
+  jobIds: readonly string[],
+  rows: readonly DbJob[],
+): (StateJob | undefined)[] => {
+  const byId = new Map(rows.map((row) => [row.id, row]));
+  return jobIds.map((jobId) => {
+    const row = byId.get(jobId);
+    return row ? mapDbJobToStateJob(row) : undefined;
+  });
+};
+
+const alignChainsToIds = (
+  chainIds: readonly string[],
+  rows: readonly DbChainRow[],
+): ([StateJob, StateJob | undefined] | undefined)[] => {
+  const byId = new Map(
+    rows.map((row) => parseDbChainRow(row)).map((parsed) => [parsed.headJob.id, parsed]),
+  );
+  return chainIds.map((chainId) => {
+    const parsed = byId.get(chainId);
+    if (!parsed) return undefined;
+    const { headJob, tailJob } = parsed;
+    return [
+      mapDbJobToStateJob(headJob),
+      tailJob && tailJob.id !== headJob.id ? mapDbJobToStateJob(tailJob) : undefined,
+    ];
+  });
 };
 
 /**
@@ -712,6 +746,13 @@ WHERE jb.blocked_by_chain_id IN (SELECT value FROM json_each(?))
     }));
   };
 
+  const tailJoin = `
+LEFT JOIN {{table_prefix}}job AS lc
+  ON lc.chain_id = j.id
+  AND lc.chain_index = (
+    SELECT MAX(chain_index) FROM {{table_prefix}}job WHERE chain_id = j.id
+  )`;
+
   return {
     transactionConcurrency: stateProvider.transactionConcurrency,
 
@@ -750,6 +791,115 @@ WHERE jb.blocked_by_chain_id IN (SELECT value FROM json_each(?))
           throw error;
         }
       }),
+
+    getChainsByDeduplication: async ({
+      txCtx,
+      chainTypeName,
+      deduplications,
+      lock,
+    }: {
+      txCtx?: TTxContext;
+      chainTypeName: string;
+      deduplications: DeduplicationOptions<TIdType>[];
+      lock?: "exclusive";
+    }) => {
+      if (deduplications.length === 0) return [];
+      const entriesJson = JSON.stringify(deduplications);
+      const deduplicationResolve = `
+    SELECT d.id
+    FROM {{table_prefix}}job d
+    WHERE d.deduplication_key = json_extract(e.value, '$.key')
+      AND d.chain_index = 0
+      AND d.chain_type_name = ?
+      AND (
+        json_extract(e.value, '$.scope') = 'any'
+        OR (json_extract(e.value, '$.scope') = 'running' AND NOT EXISTS (
+          SELECT 1 FROM {{table_prefix}}job j2
+          WHERE j2.chain_id = d.id AND j2.completed_at IS NOT NULL AND j2.continued_to_id IS NULL
+        ))
+      )
+      AND (
+        json_extract(e.value, '$.windowMs') IS NULL
+        OR d.created_at >= datetime('now', 'subsec', '-' || (json_extract(e.value, '$.windowMs') / 1000.0) || ' seconds')
+      )
+      AND (
+        json_extract(e.value, '$.excludeChainIds') IS NULL
+        OR d.chain_id NOT IN (SELECT value FROM json_each(json_extract(e.value, '$.excludeChainIds')))
+      )
+    ORDER BY d.created_at DESC
+    LIMIT 1`;
+
+      if (lock === "exclusive" && txCtx) {
+        await executeTypedSql({
+          txCtx,
+          sql: templateCache.getOrCompute("getChainsByDeduplicationLocked", () =>
+            applyTemplate(
+              sql(
+                `
+UPDATE {{table_prefix}}job
+SET id = id
+WHERE id IN (
+  SELECT j.id FROM {{table_prefix}}job j
+  WHERE j.chain_id IN (
+    SELECT (${deduplicationResolve}
+    ) FROM json_each(?) e
+  )
+    AND j.chain_index = (
+      SELECT MAX(chain_index) FROM {{table_prefix}}job WHERE chain_id = j.chain_id
+    )
+)
+`,
+                {
+                  id: "getChainsByDeduplicationLocked",
+                  params: [t.string(), t.string()],
+                  columns: {} as Record<string, never>,
+                },
+              ),
+            ),
+          ),
+          params: [chainTypeName, entriesJson],
+        });
+      }
+
+      const rows = await executeTypedSql({
+        txCtx,
+        sql: templateCache.getOrCompute("getChainsByDeduplication", () =>
+          applyTemplate(
+            sql(
+              `
+SELECT
+  e.key AS ord,
+  {{job_columns:j}},
+  {{job_columns_prefixed:lc:lc_}}
+FROM json_each(?) e
+JOIN {{table_prefix}}job AS j
+  ON j.id = (${deduplicationResolve}
+  )${tailJoin}
+ORDER BY e.key
+`,
+              {
+                id: "getChainsByDeduplication",
+                params: [t.string(), t.string()],
+                columns: { ord: t.number(), ...dbChainRowColumns },
+                readOnly: true,
+              },
+            ),
+          ),
+        ),
+        params: [entriesJson, chainTypeName],
+      });
+
+      const byOrdinal = new Map(rows.map((row) => [row.ord, parseDbChainRow(row)]));
+      return deduplications.map((_, index): [StateJob, StateJob | undefined] | undefined => {
+        const parsed = byOrdinal.get(index);
+        if (!parsed) return undefined;
+        const { headJob, tailJob } = parsed;
+        return [
+          mapDbJobToStateJob(headJob),
+          tailJob && tailJob.id !== headJob.id ? mapDbJobToStateJob(tailJob) : undefined,
+        ];
+      });
+    },
 
     getChains: (async ({
       txCtx,
@@ -799,12 +949,7 @@ WHERE id IN (
 SELECT
   {{job_columns:j}},
   {{job_columns_prefixed:lc:lc_}}
-FROM {{table_prefix}}job AS j
-LEFT JOIN {{table_prefix}}job AS lc
-  ON lc.chain_id = j.id
-  AND lc.chain_index = (
-    SELECT MAX(chain_index) FROM {{table_prefix}}job WHERE chain_id = j.id
-  )
+FROM {{table_prefix}}job AS j${tailJoin}
 WHERE j.id IN (SELECT value FROM json_each(?))
 ORDER BY j.id
 `,
@@ -819,20 +964,7 @@ ORDER BY j.id
         ),
         params: [idsJson],
       });
-      const byId = new Map<string, { headJob: DbJob; tailJob: DbJob | null }>();
-      for (const row of rows) {
-        const parsed = parseDbChainRow(row);
-        byId.set(parsed.headJob.id, parsed);
-      }
-      return chainIds.map((chainId): [StateJob, StateJob | undefined] | undefined => {
-        const parsed = byId.get(chainId as string);
-        if (!parsed) return undefined;
-        const { headJob, tailJob } = parsed;
-        return [
-          mapDbJobToStateJob(headJob),
-          tailJob && tailJob.id !== headJob.id ? mapDbJobToStateJob(tailJob) : undefined,
-        ];
-      });
+      return alignChainsToIds(chainIds, rows);
     }) as StateAdapter<TTxContext, TIdType>["getChains"],
     getJobs: (async ({
       txCtx,
@@ -882,11 +1014,7 @@ WHERE id IN (SELECT value FROM json_each(?))
             );
       const idsJson = JSON.stringify(jobIds);
       const rows = await executeTypedSql({ txCtx, sql: lockedSql, params: [idsJson] });
-      const byId = new Map(rows.map((r) => [r.id, r]));
-      return jobIds.map((jobId): StateJob | undefined => {
-        const row = byId.get(jobId as string);
-        return row ? mapDbJobToStateJob(row) : undefined;
-      });
+      return alignJobsToIds(jobIds, rows);
     }) as StateAdapter<TTxContext, TIdType>["getJobs"],
 
     createChains: async ({ txCtx, jobs }) => {
@@ -909,14 +1037,7 @@ WHERE id IN (SELECT value FROM json_each(?))
         const { typeName, id: providedId, input, schedule, chainTraceContext, traceContext } = job;
 
         if (job.deduplication?.key) {
-          const deduplicationKey = job.deduplication.key;
-          const deduplicationScope = job.deduplication.scope;
-          const deduplicationWindowMs = job.deduplication.windowMs ?? null;
-          const deduplicationExcludeChainIds = job.deduplication.excludeChainIds
-            ? JSON.stringify(job.deduplication.excludeChainIds)
-            : null;
-
-          const batchKey = `${deduplicationKey}\0${job.chainTypeName}`;
+          const batchKey = `${job.deduplication.key}\0${job.chainTypeName}`;
           const firstIdx = intraBatchDedup.get(batchKey);
           if (firstIdx !== undefined) {
             deferredDupes.push({ index: i, firstIndex: firstIdx });
@@ -929,7 +1050,7 @@ WHERE id IN (SELECT value FROM json_each(?))
               applyTemplate(
                 sql(
                   `
-SELECT *, 1 AS deduplicated
+SELECT *
 FROM {{table_prefix}}job
 WHERE ? IS NOT NULL
   AND deduplication_key = ?
@@ -968,23 +1089,27 @@ LIMIT 1
                       t["string?"](),
                       t["string?"](),
                     ],
-                    columns: { ...dbJobColumns, deduplicated: t.number() },
+                    columns: { ...dbJobColumns },
                     readOnly: true,
                   },
                 ),
               ),
             ),
             params: [
-              deduplicationKey,
-              deduplicationKey,
+              job.deduplication.key,
+              job.deduplication.key,
               job.chainTypeName,
-              deduplicationScope,
-              deduplicationScope,
-              deduplicationScope,
-              deduplicationWindowMs,
-              deduplicationWindowMs,
-              deduplicationExcludeChainIds,
-              deduplicationExcludeChainIds,
+              job.deduplication.scope,
+              job.deduplication.scope,
+              job.deduplication.scope,
+              job.deduplication.windowMs ?? null,
+              job.deduplication.windowMs ?? null,
+              job.deduplication.excludeChainIds
+                ? JSON.stringify(job.deduplication.excludeChainIds)
+                : null,
+              job.deduplication.excludeChainIds
+                ? JSON.stringify(job.deduplication.excludeChainIds)
+                : null,
             ],
           });
 

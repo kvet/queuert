@@ -50,7 +50,6 @@ export {
   JobsNotFoundError,
   JobsNotReschedulableError,
   RescheduleJobError,
-  TransactionContextRequiredError,
   UnknownJobTypeError,
   WaitChainTimeoutError,
   rescheduleJob,

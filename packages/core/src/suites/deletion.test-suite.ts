@@ -3,7 +3,7 @@ import { type TestAPI } from "vitest";
 import { createClient } from "../client.js";
 import { type Chain } from "../entities/chain.js";
 import { defineJobTypes } from "../entities/define-job-types.js";
-import { BlockerReferenceError, TransactionContextRequiredError } from "../errors.js";
+import { BlockerReferenceError } from "../errors.js";
 import { sleep } from "../helpers/sleep.js";
 import { createInProcessWorker } from "../in-process-worker.js";
 import { withTransactionHooks } from "../transaction-hooks.js";
@@ -1051,7 +1051,7 @@ export const deletionTestSuite = ({ it }: { it: TestAPI<TestSuiteContext> }): vo
         // @ts-expect-error missing txCtx
         client.deleteChains({ transactionHooks, ids: [chain.id] }),
       ),
-    ).rejects.toThrow(TransactionContextRequiredError);
+    ).rejects.toThrow("requires a transaction context");
   });
 
   it("deleteChain deletes a single chain and returns it", async ({
@@ -1282,7 +1282,7 @@ export const deletionTestSuite = ({ it }: { it: TestAPI<TestSuiteContext> }): vo
         // @ts-expect-error missing txCtx
         client.deleteChain({ transactionHooks, id: chain.id }),
       ),
-    ).rejects.toThrow(TransactionContextRequiredError);
+    ).rejects.toThrow("requires a transaction context");
   });
 
   it("cascade deletes batch-created diamond dependencies", async ({

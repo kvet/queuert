@@ -99,6 +99,10 @@ export const createSpyStateAdapter = <TTxContext extends BaseTxContext, TJobId e
       }
     },
     getChains: wrap("getChains", stateAdapter.getChains),
+    getChainsByDeduplication: wrap(
+      "getChainsByDeduplication",
+      stateAdapter.getChainsByDeduplication,
+    ),
     getJobs: wrap("getJobs", stateAdapter.getJobs),
     createChains: wrap("createChains", stateAdapter.createChains),
     createContinuationJob: wrap("createContinuationJob", stateAdapter.createContinuationJob),

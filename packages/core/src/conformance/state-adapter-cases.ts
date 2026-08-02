@@ -6,6 +6,7 @@ import { createContinuationJobGroup } from "./state-adapter-cases/create-continu
 import { deleteChainsGroup } from "./state-adapter-cases/delete-chains.js";
 import { extendJobAttemptGroup } from "./state-adapter-cases/extend-job-attempt.js";
 import { finishJobAttemptGroup } from "./state-adapter-cases/finish-job-attempt.js";
+import { getChainsByDeduplicationGroup } from "./state-adapter-cases/get-chains-by-deduplication.js";
 import { getChainsGroup } from "./state-adapter-cases/get-chains.js";
 import { getJobBlockersGroup } from "./state-adapter-cases/get-job-blockers.js";
 import { getJobsGroup } from "./state-adapter-cases/get-jobs.js";
@@ -28,6 +29,7 @@ export const stateAdapterConformanceGroups: ConformanceGroup<StateConformanceFix
   withTransactionGroup,
   withSavepointGroup,
   getChainsGroup,
+  getChainsByDeduplicationGroup,
   getJobsGroup,
   createChainsGroup,
   createContinuationJobGroup,

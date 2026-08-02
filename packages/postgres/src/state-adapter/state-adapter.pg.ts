@@ -17,7 +17,7 @@ import {
   sql,
   t,
 } from "@queuert/typed-sql";
-import { type BaseTxContext, type StateAdapter } from "queuert";
+import { type BaseTxContext, type DeduplicationOptions, type StateAdapter } from "queuert";
 import {
   type StateJob,
   createIdValidator,
@@ -58,6 +58,8 @@ type DbJob = {
   chain_trace_context: string | null;
   trace_context: string | null;
 };
+
+type DbChainRow = { head_job: DbJob; tail_job: DbJob | null };
 
 const concurrentIndex = (
   name: string,
@@ -347,6 +349,8 @@ DROP INDEX CONCURRENTLY IF EXISTS {{schema}}.{{table_prefix}}chain_listing_type_
 DROP INDEX CONCURRENTLY IF EXISTS {{schema}}.{{table_prefix}}chain_listing_idx`),
       sql(/* sql */ `
 DROP INDEX CONCURRENTLY IF EXISTS {{schema}}.{{table_prefix}}job_listing_idx`),
+      sql(/* sql */ `
+DROP INDEX CONCURRENTLY IF EXISTS {{schema}}.{{table_prefix}}job_deduplication_idx`),
       ...concurrentIndex(
         "{{table_prefix}}job_ready_idx",
         "{{table_prefix}}job",
@@ -397,6 +401,12 @@ DROP INDEX CONCURRENTLY IF EXISTS {{schema}}.{{table_prefix}}job_listing_idx`),
         "chain_index = 0",
       ),
       ...concurrentIndex("{{table_prefix}}job_idx", "{{table_prefix}}job", "created_at"),
+      ...concurrentIndex(
+        "{{table_prefix}}chain_deduplication_idx",
+        "{{table_prefix}}job",
+        "deduplication_key, chain_type_name, created_at DESC",
+        "deduplication_key IS NOT NULL AND chain_index = 0",
+      ),
     ],
   },
 ];
@@ -564,36 +574,6 @@ const validateSqlIdentifier = (value: string, name: string): void => {
   }
 };
 
-type DbChainRow = { head_job: DbJob; tail_job: DbJob | null };
-
-const classifyJobRows = (
-  jobIds: readonly string[],
-  rows: readonly DbJob[],
-): (StateJob | undefined)[] => {
-  const byId = new Map(rows.map((r) => [r.id, r]));
-  return jobIds.map((id): StateJob | undefined => {
-    const row = byId.get(id);
-    return row ? mapDbJobToStateJob(row) : undefined;
-  });
-};
-
-const classifyChainRows = (
-  chainIds: readonly string[],
-  rows: readonly DbChainRow[],
-): ([StateJob, StateJob | undefined] | undefined)[] => {
-  const byId = new Map(rows.map((r) => [r.head_job.id, r]));
-  return chainIds.map((id): [StateJob, StateJob | undefined] | undefined => {
-    const row = byId.get(id);
-    if (!row) return undefined;
-    return [
-      mapDbJobToStateJob(row.head_job),
-      row.tail_job && row.tail_job.id !== row.head_job.id
-        ? mapDbJobToStateJob(row.tail_job)
-        : undefined,
-    ];
-  });
-};
-
 const mapDbJobToStateJob = (dbJob: DbJob): StateJob => {
   return {
     id: dbJob.id,
@@ -623,6 +603,34 @@ const mapDbJobToStateJob = (dbJob: DbJob): StateJob => {
     chainTraceContext: dbJob.chain_trace_context,
     traceContext: dbJob.trace_context,
   };
+};
+
+const alignJobsToIds = (
+  jobIds: readonly string[],
+  rows: readonly DbJob[],
+): (StateJob | undefined)[] => {
+  const byId = new Map(rows.map((row) => [row.id, row]));
+  return jobIds.map((jobId) => {
+    const row = byId.get(jobId);
+    return row ? mapDbJobToStateJob(row) : undefined;
+  });
+};
+
+const alignChainsToIds = (
+  chainIds: readonly string[],
+  rows: readonly DbChainRow[],
+): ([StateJob, StateJob | undefined] | undefined)[] => {
+  const byId = new Map(rows.map((row) => [row.head_job.id, row]));
+  return chainIds.map((chainId) => {
+    const row = byId.get(chainId);
+    if (!row) return undefined;
+    return [
+      mapDbJobToStateJob(row.head_job),
+      row.tail_job && row.tail_job.id !== row.head_job.id
+        ? mapDbJobToStateJob(row.tail_job)
+        : undefined,
+    ];
+  });
 };
 
 /**
@@ -743,6 +751,15 @@ export const createPgStateAdapter = async <
     }) as Promise<InferColumns<TColumns>[]>;
   };
 
+  const tailLateral = (lockClause: string) => `
+LEFT JOIN LATERAL (
+  SELECT *
+  FROM {{schema}}.{{table_prefix}}job
+  WHERE chain_id = j.id
+  ORDER BY chain_index DESC
+  LIMIT 1${lockClause}
+) AS lc ON TRUE`;
+
   const expandChainIds = async (
     txCtx: TTxContext | undefined,
     chainIds: readonly TIdType[],
@@ -832,14 +849,7 @@ SELECT chain_id FROM connected
 SELECT
   row_to_json(j)  AS head_job,
   row_to_json(lc) AS tail_job
-FROM {{schema}}.{{table_prefix}}job AS j
-LEFT JOIN LATERAL (
-  SELECT *
-  FROM {{schema}}.{{table_prefix}}job
-  WHERE chain_id = j.id
-  ORDER BY chain_index DESC
-  LIMIT 1${lockClause}
-) AS lc ON TRUE
+FROM {{schema}}.{{table_prefix}}job AS j${tailLateral(lockClause)}
 WHERE j.id = ANY($1::{{id_type}}[])${lockClause ? "\nORDER BY j.id" : ""}
 `;
       const getChainsSql = templateCache.getOrCompute("getChains", () =>
@@ -866,7 +876,139 @@ WHERE j.id = ANY($1::{{id_type}}[])${lockClause ? "\nORDER BY j.id" : ""}
         sql: lock === "exclusive" ? getChainsLockedSql : getChainsSql,
         params: [chainIds as string[]],
       });
-      return classifyChainRows(chainIds, rows);
+      return alignChainsToIds(chainIds, rows);
+    },
+
+    getChainsByDeduplication: async ({
+      txCtx,
+      chainTypeName,
+      deduplications,
+      lock,
+    }: {
+      txCtx?: TTxContext;
+      chainTypeName: string;
+      deduplications: DeduplicationOptions<TIdType>[];
+      lock?: "exclusive";
+    }) => {
+      if (deduplications.length === 0) return [];
+      const deduplicationsSelect = (locking: boolean) =>
+        `
+WITH input_data AS (
+  SELECT *
+  FROM unnest($2::text[], $3::text[], $4::bigint[], $5::text[])
+    WITH ORDINALITY AS raw(dedup_key, dedup_scope, dedup_window_ms, dedup_exclude_chain_ids, ord)
+),
+resolved AS (
+  SELECT DISTINCT ON (i.ord) i.ord, j.id
+  FROM input_data i
+  JOIN {{schema}}.{{table_prefix}}job j
+    ON j.deduplication_key = i.dedup_key
+    AND j.chain_index = 0
+    AND j.chain_type_name = $1
+    AND (
+      (i.dedup_scope = 'running' AND NOT EXISTS (
+        SELECT 1 FROM {{schema}}.{{table_prefix}}job j2
+        WHERE j2.chain_id = j.id AND j2.completed_at IS NOT NULL AND j2.continued_to_id IS NULL
+      ))
+      OR i.dedup_scope = 'any'
+    )
+    AND (
+      i.dedup_window_ms IS NULL
+      OR j.created_at >= now() - (i.dedup_window_ms || ' milliseconds')::interval
+    )
+    AND (
+      i.dedup_exclude_chain_ids IS NULL
+      OR j.chain_id != ALL(ARRAY(SELECT jsonb_array_elements_text(i.dedup_exclude_chain_ids::jsonb))::{{id_type}}[])
+    )
+  ORDER BY i.ord, j.created_at DESC
+)${
+          locking
+            ? `,
+locked_resolved_latest AS (
+  SELECT j.chain_id
+  FROM {{schema}}.{{table_prefix}}job j
+  WHERE j.chain_id IN (SELECT id FROM resolved)
+    AND NOT EXISTS (
+      SELECT 1 FROM {{schema}}.{{table_prefix}}job j2
+      WHERE j2.chain_id = j.chain_id AND j2.chain_index > j.chain_index
+    )
+  ORDER BY j.id
+  FOR UPDATE
+)`
+            : ""
+        }
+SELECT
+  r.ord::int AS ord,
+  row_to_json(j)  AS head_job,
+  row_to_json(lc) AS tail_job
+FROM resolved r
+JOIN {{schema}}.{{table_prefix}}job AS j ON j.id = r.id${tailLateral(
+          locking ? "\n  FOR UPDATE" : "",
+        )}${
+          locking
+            ? `
+WHERE EXISTS (SELECT 1 FROM locked_resolved_latest l WHERE l.chain_id = r.id)`
+            : ""
+        }
+`;
+      const getChainsByDeduplicationSql = templateCache.getOrCompute(
+        "getChainsByDeduplication",
+        () =>
+          applyTemplate(
+            sql(deduplicationsSelect(false), {
+              id: "getChainsByDeduplication",
+              params: [
+                t.string(),
+                t.array(),
+                t.array(),
+                t.array<number | null>(),
+                t.array<string | null>(),
+              ],
+              columns: { ord: t.number(), ...rowToJsonJobColumns },
+              readOnly: true,
+            }),
+          ),
+      );
+      const getChainsByDeduplicationLockedSql = templateCache.getOrCompute(
+        "getChainsByDeduplicationLocked",
+        () =>
+          applyTemplate(
+            sql(deduplicationsSelect(true), {
+              id: "getChainsByDeduplicationLocked",
+              params: [
+                t.string(),
+                t.array(),
+                t.array(),
+                t.array<number | null>(),
+                t.array<string | null>(),
+              ],
+              columns: { ord: t.number(), ...rowToJsonJobColumns },
+            }),
+          ),
+      );
+      const rows = await executeTypedSql({
+        txCtx,
+        sql: lock === "exclusive" ? getChainsByDeduplicationLockedSql : getChainsByDeduplicationSql,
+        params: [
+          chainTypeName,
+          deduplications.map((deduplication) => deduplication.key),
+          deduplications.map((deduplication) => deduplication.scope),
+          deduplications.map((deduplication) => deduplication.windowMs ?? null),
+          deduplications.map((deduplication) =>
+            deduplication.excludeChainIds ? JSON.stringify(deduplication.excludeChainIds) : null,
+          ),
+        ],
+      });
+      const byOrdinal = new Map(rows.map((row) => [row.ord, row]));
+      return deduplications.map((_, index): [StateJob, StateJob | undefined] | undefined => {
+        const row = byOrdinal.get(index + 1);
+        if (!row) return undefined;
+        const sameRow = row.tail_job?.id === row.head_job.id;
+        return [
+          mapDbJobToStateJob(sameRow ? row.tail_job : row.head_job),
+          sameRow || !row.tail_job ? undefined : mapDbJobToStateJob(row.tail_job),
+        ];
+      });
     },
 
     getJobs: (async ({
@@ -919,7 +1061,7 @@ FOR UPDATE
         sql: lock === "exclusive" ? getJobsLockedSql : getJobsSql,
         params: [jobIds as string[]],
       });
-      return classifyJobRows(jobIds, rows);
+      return alignJobsToIds(jobIds, rows);
     }) as StateAdapter<TTxContext, TIdType>["getJobs"],
 
     createChains: async ({ txCtx, jobs }) => {

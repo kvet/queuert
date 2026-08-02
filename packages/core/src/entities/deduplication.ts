@@ -1,13 +1,10 @@
 /**
  * Options for chain deduplication.
- *
- * When provided to `createChain`, the system checks for existing chains with the same key
- * and returns them instead of creating a new one.
  */
 export type DeduplicationOptions<TJobId> = {
   /** Unique key for deduplication matching. */
   key: string;
-  /** Which existing chains to match against. */
+  /** Which existing chains to match against — `running` skips completed chains. */
   scope: "running" | "any";
   /** Time window in milliseconds — only chains created within this window are matched. */
   windowMs?: number;

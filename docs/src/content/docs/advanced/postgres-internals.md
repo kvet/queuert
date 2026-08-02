@@ -82,19 +82,19 @@ All indexes use partial conditions (WHERE clauses) to minimize size and target s
 
 ### Job Table
 
-| Index                      | Definition                                                                                        | Purpose                     |
-| -------------------------- | ------------------------------------------------------------------------------------------------- | --------------------------- |
-| `job_deduplication_idx`    | `(deduplication_key, created_at DESC) WHERE deduplication_key IS NOT NULL AND chain_index = 0`    | Deduplication lookup        |
-| `job_continuation_idx`     | `UNIQUE (continued_to_id) WHERE continued_to_id IS NOT NULL`                                      | Successor uniqueness        |
-| `chain_index_idx`          | `UNIQUE (chain_id, chain_index)`                                                                  | Chain position uniqueness   |
-| `job_idx`                  | `(created_at)`                                                                                    | All jobs by creation time   |
-| `job_pending_idx`          | `(scheduled_at) WHERE attempt_at IS NULL AND completed_at IS NULL`                                | Pending job listing         |
-| `job_ready_idx`            | `(type_name, scheduled_at) WHERE blocked = false AND attempt_at IS NULL AND completed_at IS NULL` | Job acquisition             |
-| `job_running_idx`          | `(type_name, attempt_until) WHERE attempt_at IS NOT NULL AND completed_at IS NULL`                | Attempt reclamation         |
-| `job_completed_idx`        | `(completed_at) WHERE completed_at IS NOT NULL`                                                   | Completed jobs and chains   |
-| `chain_head_idx`           | `(created_at) WHERE chain_index = 0`                                                              | Chain heads                 |
-| `chain_tail_open_idx`      | `(chain_id) WHERE continued_to_id IS NULL AND completed_at IS NULL`                               | Active chain tail lookup    |
-| `chain_tail_completed_idx` | `(chain_id) WHERE continued_to_id IS NULL AND completed_at IS NOT NULL`                           | Completed chain tail lookup |
+| Index                      | Definition                                                                                                      | Purpose                     |
+| -------------------------- | --------------------------------------------------------------------------------------------------------------- | --------------------------- |
+| `chain_deduplication_idx`  | `(deduplication_key, chain_type_name, created_at DESC) WHERE deduplication_key IS NOT NULL AND chain_index = 0` | Deduplication lookup        |
+| `job_continuation_idx`     | `UNIQUE (continued_to_id) WHERE continued_to_id IS NOT NULL`                                                    | Successor uniqueness        |
+| `chain_index_idx`          | `UNIQUE (chain_id, chain_index)`                                                                                | Chain position uniqueness   |
+| `job_idx`                  | `(created_at)`                                                                                                  | All jobs by creation time   |
+| `job_pending_idx`          | `(scheduled_at) WHERE attempt_at IS NULL AND completed_at IS NULL`                                              | Pending job listing         |
+| `job_ready_idx`            | `(type_name, scheduled_at) WHERE blocked = false AND attempt_at IS NULL AND completed_at IS NULL`               | Job acquisition             |
+| `job_running_idx`          | `(type_name, attempt_until) WHERE attempt_at IS NOT NULL AND completed_at IS NULL`                              | Attempt reclamation         |
+| `job_completed_idx`        | `(completed_at) WHERE completed_at IS NOT NULL`                                                                 | Completed jobs and chains   |
+| `chain_head_idx`           | `(created_at) WHERE chain_index = 0`                                                                            | Chain heads                 |
+| `chain_tail_open_idx`      | `(chain_id) WHERE continued_to_id IS NULL AND completed_at IS NULL`                                             | Active chain tail lookup    |
+| `chain_tail_completed_idx` | `(chain_id) WHERE continued_to_id IS NULL AND completed_at IS NOT NULL`                                         | Completed chain tail lookup |
 
 ### Job Blocker Table
 

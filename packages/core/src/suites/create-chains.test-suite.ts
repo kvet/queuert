@@ -2,7 +2,6 @@ import { type TestAPI, describe } from "vitest";
 
 import { createClient } from "../client.js";
 import { defineJobTypes } from "../entities/define-job-types.js";
-import { TransactionContextRequiredError } from "../errors.js";
 import { createInProcessWorker } from "../in-process-worker.js";
 import { withTransactionHooks } from "../transaction-hooks.js";
 import { createProcessors } from "../worker/create-processors.js";
@@ -219,7 +218,7 @@ export const createChainsTestSuite = ({ it }: { it: TestAPI<TestSuiteContext> })
           // @ts-expect-error missing txCtx
           client.createChain({ transactionHooks, typeName: "test", input: { value: 1 } }),
         ),
-      ).rejects.toThrow(TransactionContextRequiredError);
+      ).rejects.toThrow("requires a transaction context");
     });
 
     it("rejects wrong input type at compile time", async ({
@@ -902,7 +901,7 @@ export const createChainsTestSuite = ({ it }: { it: TestAPI<TestSuiteContext> })
             items: [{ typeName: "test", input: { value: 1 } }],
           }),
         ),
-      ).rejects.toThrow(TransactionContextRequiredError);
+      ).rejects.toThrow("requires a transaction context");
     });
 
     it("rejects non-entry type name in batch at compile time", async ({

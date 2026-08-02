@@ -44,7 +44,7 @@ full `DeduplicationOptions`, but that is the decision this doc exists to make.
 
 - **Client** — `listChains` gains an optional deduplication filter (reduced shape TBD).
 - **`StateAdapter`** — `listChains` gains the corresponding filter parameter.
-- **Adapters** — PostgreSQL, SQLite, in-process implement it, reusing `job_deduplication_idx`.
+- **Adapters** — PostgreSQL, SQLite, in-process implement it, reusing `chain_deduplication_idx`.
 
 ## Dependencies
 

@@ -9,6 +9,7 @@
  * 3. Paginated Lists: Filter and paginate chains and jobs
  * 4. Chain Jobs: List jobs within a chain ordered by chain index
  * 5. Blocker Queries: Inspect blocker relationships from both directions
+ * 6. Deduplication Lookups: Resolve a chain by its deduplication key
  */
 
 import assert from "node:assert/strict";
@@ -160,7 +161,11 @@ const notifyChains = await withTransactionHooks(async (transactionHooks) =>
       sql: txSql,
       transactionHooks,
       items: [
-        { typeName: "send-notification", input: { userId: "alice", message: "Order placed" } },
+        {
+          typeName: "send-notification",
+          input: { userId: "alice", message: "Order placed" },
+          deduplication: { key: "notify:alice", scope: "running" },
+        },
         { typeName: "send-notification", input: { userId: "bob", message: "Welcome aboard" } },
       ],
     }),
@@ -288,6 +293,26 @@ console.log(`\nJobs blocked by validate-input chain:`);
 for (const j of blockedByValidate.items) {
   console.log(`  "${j.typeName}" (${j.id}) — ${j.status}`);
 }
+
+// Scenario 6: Deduplication lookups
+console.log("\n--- Scenario 6: Deduplication Lookups ---\n");
+
+// The alice notification was created with a deduplication key, so the key alone
+// finds it again — the chain a createChain with the same options would collapse onto.
+const byKey = await client.getChain({
+  typeName: "send-notification",
+  deduplication: { key: "notify:alice", scope: "any" },
+});
+console.log(`Chain for key "notify:alice": ${byKey?.id} (${byKey?.status})`);
+assert.equal(byKey?.id, notifyChains[0].id);
+
+// scope: "running" sees only alive chains — this one has completed.
+const stillRunning = await client.getChain({
+  typeName: "send-notification",
+  deduplication: { key: "notify:alice", scope: "running" },
+});
+console.log("Still running under that key:", stillRunning);
+assert.equal(stillRunning, undefined);
 
 await stopWorker();
 await notifyAdapter.close();

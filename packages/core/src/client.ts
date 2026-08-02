@@ -32,7 +32,6 @@ import {
   JobTypeMismatchError,
   JobsNotFoundError,
   JobsNotReschedulableError,
-  TransactionContextRequiredError,
   WaitChainTimeoutError,
 } from "./errors.js";
 import { bufferNotifyJobAttemptLost, bufferNotifyJobScheduled } from "./helpers/notify-hooks.js";
@@ -67,9 +66,7 @@ const normalizeTxCtx = <T extends Record<string, unknown>>(rest: T): T | undefin
 
 const requireTxCtx = <T extends Record<string, unknown>>(rest: T): T => {
   if (Object.keys(rest).length === 0) {
-    throw new TransactionContextRequiredError(
-      "This client method requires a transaction context from withTransaction",
-    );
+    throw new Error("This client method requires a transaction context from withTransaction");
   }
   return rest;
 };
@@ -206,11 +203,11 @@ export type Client<
    * Create a new chain. Returns the created chain with a `deduplicated` flag.
    * Pass `id` to assign a caller-supplied ID for the root job; if the chain is
    * deduplicated, the returned chain carries the existing row's ID, not the
-   * caller's.
+   * caller's. Pass {@link DeduplicationOptions} to reuse the newest matching chain of the
+   * same type instead of creating one.
    *
    * @throws {@link InvalidJobIdError} if `id` fails the state adapter's `validateId` check.
    * @throws {@link BlockerLimitExceededError} if the root job declares more blockers than the per-job limit.
-   * @throws {@link TransactionContextRequiredError} if called without a transaction context.
    */
   createChain: <TChainTypeName extends JobTypeEntryNames<TJobTypeDefinitions>>(
     options: CreateChainEntry<TJobId, TJobTypeDefinitions, TChainTypeName> & {
@@ -223,13 +220,10 @@ export type Client<
   >;
 
   /**
-   * Create multiple chains in a single batch operation. Returns created chains
-   * with `deduplicated` flags, in the same order as input. Each item may carry
-   * an optional `id`; dedup wins over a caller-supplied id when applicable.
+   * Batch {@link Client.createChain}. Returns one entry per input `items`, in order.
    *
    * @throws {@link InvalidJobIdError} if any `id` fails the state adapter's `validateId` check.
    * @throws {@link BlockerLimitExceededError} if any root job declares more blockers than the per-job limit.
-   * @throws {@link TransactionContextRequiredError} if called without a transaction context.
    */
   createChains: <const TChains extends readonly AnyCreateChainEntry<TJobId, TJobTypeDefinitions>[]>(
     options: {
@@ -244,7 +238,6 @@ export type Client<
    * dependencies.
    *
    * @throws {@link BlockerReferenceError} if external jobs depend on it.
-   * @throws {@link TransactionContextRequiredError} if called without a transaction context.
    */
   deleteChain: <
     TEntryName extends JobTypeEntryNames<TJobTypeDefinitions> =
@@ -258,11 +251,10 @@ export type Client<
   ) => Promise<ResolvedChain<TJobId, TJobTypeDefinitions, TEntryName> | undefined>;
 
   /**
-   * Delete chains by ID. Missing IDs are silently skipped. When `cascade` is
-   * true, includes transitive dependencies.
+   * Batch {@link Client.deleteChain}. Returns the deleted chains; missing `ids` are
+   * skipped.
    *
    * @throws {@link BlockerReferenceError} if external jobs depend on them.
-   * @throws {@link TransactionContextRequiredError} if called without a transaction context.
    */
   deleteChains: <
     TEntryName extends JobTypeEntryNames<TJobTypeDefinitions> =
@@ -282,7 +274,6 @@ export type Client<
    *
    * @throws {@link JobNotFoundError} if the job does not exist.
    * @throws {@link JobNotReschedulableError} if the job is not pending.
-   * @throws {@link TransactionContextRequiredError} if called without a transaction context.
    */
   rescheduleJob: <
     TJobTypeName extends JobTypeNames<TJobTypeDefinitions> = JobTypeNames<TJobTypeDefinitions>,
@@ -295,14 +286,11 @@ export type Client<
   ) => Promise<ResolvedJob<TJobId, TJobTypeDefinitions, TJobTypeName>>;
 
   /**
-   * Reschedule multiple pending jobs, setting each `scheduledAt` from the
-   * optional `schedule` (omitted = now, past times clamped to now). Validation
-   * is atomic — no job is rescheduled on failure. Returns jobs in input order.
-   * Empty `ids` returns `[]`.
+   * Batch {@link Client.rescheduleJob}. Returns one entry per input `ids`, in order.
+   * Validation is atomic — no job is rescheduled if any fails.
    *
    * @throws {@link JobsNotFoundError} (batch variant listing every offending id) if any input is missing.
    * @throws {@link JobsNotReschedulableError} (batch variant listing every offending id) if any input is not pending.
-   * @throws {@link TransactionContextRequiredError} if called without a transaction context.
    */
   rescheduleJobs: <
     TJobTypeName extends JobTypeNames<TJobTypeDefinitions> = JobTypeNames<TJobTypeDefinitions>,
@@ -320,7 +308,6 @@ export type Client<
    *
    * @throws {@link ChainNotFoundError} if the chain does not exist.
    * @throws {@link ChainTypeMismatchError} if the chain's type does not match `typeName`.
-   * @throws {@link TransactionContextRequiredError} if called without a transaction context.
    * @throws {@link JobAlreadyCompletedError} from the inner `complete` callback if the job is already completed.
    * @throws {@link BlockerLimitExceededError} from the inner `complete` callback if a `continueWith` declares more blockers than the per-job limit.
    */
@@ -374,53 +361,49 @@ export type Client<
   >;
 
   /**
-   * Get a single chain by ID. Pass `typeName` for type narrowing. Pass
-   * `lock: true` (transaction context required) to hold a write-intent lock on
-   * the matched row until the enclosing transaction ends, for a race-free
-   * read-modify-write. A lookup that matches nothing locks nothing.
+   * Get a single chain by `id`, or by the chain a {@link Client.createChain} of `typeName`
+   * with the same {@link DeduplicationOptions} would deduplicate onto.
+   * Pass `lock: true` to hold a write-intent lock on the matched row until the
+   * transaction ends. Matching nothing locks nothing.
    *
-   * @throws {@link ChainTypeMismatchError} if `typeName` is provided and does not match.
-   * @throws {@link TransactionContextRequiredError} if `lock: true` is passed without a transaction context.
+   * @throws {@link ChainTypeMismatchError} if `typeName` is provided with `id` and does not match.
    */
   getChain: <
     TChainTypeName extends JobTypeEntryNames<TJobTypeDefinitions> =
       JobTypeEntryNames<TJobTypeDefinitions>,
   >(
-    options: {
-      typeName?: TChainTypeName;
-      id: TJobId;
-    } & LockableReadTxContext<TStateAdapter>,
+    options: (
+      | { typeName?: TChainTypeName; id: TJobId; deduplication?: never }
+      | { typeName: TChainTypeName; deduplication: DeduplicationOptions<TJobId>; id?: never }
+    ) &
+      LockableReadTxContext<TStateAdapter>,
   ) => Promise<ResolvedChain<TJobId, TJobTypeDefinitions, TChainTypeName> | undefined>;
 
   /**
-   * Get multiple chains by ID. Returns a positional array aligned with the
-   * input `ids` — `undefined` for any ID that does not exist. Pass `typeName`
-   * to narrow the return type; all found chains must match or
-   * {@link ChainTypeMismatchError} is thrown. Pass `lock: true` (transaction
-   * context required) to hold a write-intent lock on every matched row until the
-   * enclosing transaction ends. Rows that do not exist lock nothing.
+   * Batch {@link Client.getChain}. Returns one entry per input `ids` /
+   * `deduplications`, in order, `undefined` where nothing matched. Pass `lock: true` to
+   * hold a write-intent lock on every matched row until the transaction ends. Matching
+   * nothing locks nothing.
    *
-   * @throws {@link ChainTypeMismatchError} if `typeName` is provided and any found chain does not match.
-   * @throws {@link TransactionContextRequiredError} if `lock: true` is passed without a transaction context.
+   * @throws {@link ChainTypeMismatchError} if `typeName` is provided with `ids` and any found chain does not match.
    */
   getChains: <
     TChainTypeName extends JobTypeEntryNames<TJobTypeDefinitions> =
       JobTypeEntryNames<TJobTypeDefinitions>,
   >(
-    options: {
-      typeName?: TChainTypeName;
-      ids: TJobId[];
-    } & LockableReadTxContext<TStateAdapter>,
+    options: (
+      | { typeName?: TChainTypeName; ids: TJobId[]; deduplications?: never }
+      | { typeName: TChainTypeName; deduplications: DeduplicationOptions<TJobId>[]; ids?: never }
+    ) &
+      LockableReadTxContext<TStateAdapter>,
   ) => Promise<(ResolvedChain<TJobId, TJobTypeDefinitions, TChainTypeName> | undefined)[]>;
 
   /**
-   * Get a single job by ID. Pass `typeName` for type narrowing. Pass
-   * `lock: true` (transaction context required) to hold a write-intent lock on
-   * the matched row until the enclosing transaction ends, for a race-free
-   * read-modify-write. A lookup that matches nothing locks nothing.
+   * Get a single job by `id`. Pass `typeName` to narrow the return type. Pass `lock: true`
+   * to hold a write-intent lock on the matched row until the transaction ends. Matching
+   * nothing locks nothing.
    *
    * @throws {@link JobTypeMismatchError} if `typeName` is provided and does not match.
-   * @throws {@link TransactionContextRequiredError} if `lock: true` is passed without a transaction context.
    */
   getJob: <
     TJobTypeName extends JobTypeNames<TJobTypeDefinitions> = JobTypeNames<TJobTypeDefinitions>,
@@ -432,15 +415,11 @@ export type Client<
   ) => Promise<ResolvedJob<TJobId, TJobTypeDefinitions, TJobTypeName> | undefined>;
 
   /**
-   * Get multiple jobs by ID. Returns a positional array aligned with the
-   * input `ids` — `undefined` for any ID that does not exist. Pass `typeName`
-   * to narrow the return type; all found jobs must match or
-   * {@link JobTypeMismatchError} is thrown. Pass `lock: true` (transaction
-   * context required) to hold a write-intent lock on every matched row until the
-   * enclosing transaction ends. Rows that do not exist lock nothing.
+   * Batch {@link Client.getJob}. Returns one entry per input `ids`, in order, `undefined`
+   * where nothing matched. Pass `lock: true` to hold a write-intent lock on every matched
+   * row until the transaction ends. Matching nothing locks nothing.
    *
    * @throws {@link JobTypeMismatchError} if `typeName` is provided and any found job does not match.
-   * @throws {@link TransactionContextRequiredError} if `lock: true` is passed without a transaction context.
    */
   getJobs: <
     TJobTypeName extends JobTypeNames<TJobTypeDefinitions> = JobTypeNames<TJobTypeDefinitions>,
@@ -503,7 +482,7 @@ export type Client<
 
   /**
    * List jobs within a specific chain, in chain order. Defaults to ascending
-   * order. Pass `chainTypeName` for type narrowing.
+   * order. Pass `chainTypeName` to narrow the return type.
    *
    * @throws {@link ChainTypeMismatchError} if `chainTypeName` is provided and does not match.
    */
@@ -522,7 +501,7 @@ export type Client<
 
   /**
    * Get the blocker chains for a specific job. Not paginated — blockers are
-   * bounded by design. Pass `typeName` for type narrowing.
+   * bounded by design. Pass `typeName` to narrow the return type.
    *
    * @throws {@link JobTypeMismatchError} if `typeName` is provided and does not match.
    */
@@ -538,8 +517,7 @@ export type Client<
 
   /**
    * List jobs from other chains that are blocked by a given chain. Useful for
-   * understanding downstream impact before deletion. Pass `typeName` for type
-   * narrowing.
+   * understanding downstream impact before deletion. Pass `typeName` to narrow the return type.
    *
    * @throws {@link ChainTypeMismatchError} if `typeName` is provided and does not match.
    */
@@ -1076,16 +1054,26 @@ export const createClient = async <
     >(
       options: {
         typeName?: TChainTypeName;
-        id: TJobId;
+        id?: TJobId;
+        deduplication?: DeduplicationOptions<TJobId>;
         lock?: boolean;
       } & Partial<GetStateAdapterTxContext<TStateAdapter>>,
     ): Promise<ResolvedChain<TJobId, TJobTypeDefinitions, TChainTypeName> | undefined> => {
-      const { id, typeName, ...rest } = options;
-      const [chain] = await client.getChains<TChainTypeName>({
-        typeName,
-        ids: [id],
-        ...(rest as LockableReadTxContext<TStateAdapter>),
-      });
+      const { id, deduplication, typeName, ...rest } = options;
+      if (deduplication && id !== undefined) {
+        throw new Error("getChain accepts either id or deduplication, not both");
+      }
+      const [chain] = deduplication
+        ? await client.getChains<TChainTypeName>({
+            typeName: typeName!,
+            deduplications: [deduplication],
+            ...(rest as LockableReadTxContext<TStateAdapter>),
+          })
+        : await client.getChains<TChainTypeName>({
+            typeName,
+            ids: [id!],
+            ...(rest as LockableReadTxContext<TStateAdapter>),
+          });
       return chain;
     },
 
@@ -1095,23 +1083,47 @@ export const createClient = async <
     >(
       options: {
         typeName?: TChainTypeName;
-        ids: TJobId[];
+        ids?: TJobId[];
+        deduplications?: DeduplicationOptions<TJobId>[];
         lock?: boolean;
       } & Partial<GetStateAdapterTxContext<TStateAdapter>>,
     ): Promise<(ResolvedChain<TJobId, TJobTypeDefinitions, TChainTypeName> | undefined)[]> => {
-      const { ids, typeName, lock, ...rest } = options;
+      const { ids, deduplications, typeName, lock, ...rest } = options;
 
-      if (ids.length === 0) return [];
+      if (deduplications && ids) {
+        throw new Error("getChains accepts either ids or deduplications, not both");
+      }
+      if (!deduplications && !ids) {
+        throw new Error("getChains requires either ids or deduplications");
+      }
+      if (deduplications && typeName === undefined) {
+        throw new Error("getChains by deduplication requires a typeName");
+      }
 
-      const chainPairs = lock
-        ? await helpers.stateAdapter.getChains({
-            txCtx: requireTxCtx(rest),
-            chainIds: ids,
-            lock: "exclusive",
-          })
-        : await helpers.stateAdapter.getChains({ txCtx: normalizeTxCtx(rest), chainIds: ids });
+      if (deduplications ? deduplications.length === 0 : ids!.length === 0) return [];
 
-      if (typeName) {
+      const chainPairs = deduplications
+        ? lock
+          ? await helpers.stateAdapter.getChainsByDeduplication({
+              txCtx: requireTxCtx(rest),
+              chainTypeName: typeName!,
+              deduplications,
+              lock: "exclusive",
+            })
+          : await helpers.stateAdapter.getChainsByDeduplication({
+              txCtx: normalizeTxCtx(rest),
+              chainTypeName: typeName!,
+              deduplications,
+            })
+        : lock
+          ? await helpers.stateAdapter.getChains({
+              txCtx: requireTxCtx(rest),
+              chainIds: ids!,
+              lock: "exclusive",
+            })
+          : await helpers.stateAdapter.getChains({ txCtx: normalizeTxCtx(rest), chainIds: ids! });
+
+      if (typeName && ids) {
         const mismatch = chainPairs.find((p) => p && p[0].chainTypeName !== typeName);
         if (mismatch) {
           const idx = chainPairs.indexOf(mismatch);
