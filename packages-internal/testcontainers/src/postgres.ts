@@ -107,6 +107,31 @@ export const extendWithPostgres = <T>(
   const normalizedReuseId = createHash("sha1").update(reuseId).digest("hex");
 
   let container: StartedPostgreSqlContainer;
+  // `it.extend()` gives every derived API its own worker fixture context, so a spec whose suites
+  // extend the API resolve this fixture once per context. Each resolution gets its own database so a
+  // later one never force-drops a database an earlier one still holds connections to. Dropping is
+  // left to the next run's provisioning: a drop on teardown would race the pools closing alongside
+  // it and reintroduce the very termination this avoids.
+  let contextCount = 0;
+
+  const provisionDatabase = async (databaseName: string): Promise<string> => {
+    const client = new Client({
+      connectionString: container.getConnectionUri(),
+    });
+
+    await client.connect();
+
+    try {
+      await client.query(`DROP DATABASE IF EXISTS "${databaseName}" WITH (FORCE);`);
+      await client.query(
+        `CREATE DATABASE "${databaseName}" WITH OWNER "${container.getUsername()}" TEMPLATE template0`,
+      );
+    } finally {
+      await client.end();
+    }
+
+    return container.getConnectionUri().replace("base_database_for_tests", databaseName);
+  };
 
   beforeAll(async () => {
     container = await startContainer("postgres:14");
@@ -118,22 +143,7 @@ export const extendWithPostgres = <T>(
     postgresConnectionString: [
       // eslint-disable-next-line no-empty-pattern
       async ({}, use) => {
-        const client = new Client({
-          connectionString: container.getConnectionUri(),
-        });
-
-        await client.connect();
-
-        await client.query(`DROP DATABASE IF EXISTS "${normalizedReuseId}" WITH (FORCE);`);
-        await client.query(
-          `CREATE DATABASE "${normalizedReuseId}" WITH OWNER "${container.getUsername()}" TEMPLATE template0`,
-        );
-
-        await client.end();
-
-        await use(
-          container.getConnectionUri().replace("base_database_for_tests", normalizedReuseId),
-        );
+        await use(await provisionDatabase(`${normalizedReuseId}_${contextCount++}`));
       },
       { scope: "worker" },
     ],
