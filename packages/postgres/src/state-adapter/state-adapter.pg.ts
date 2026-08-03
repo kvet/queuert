@@ -379,7 +379,7 @@ DROP INDEX CONCURRENTLY IF EXISTS {{schema}}.{{table_prefix}}job_listing_idx`),
         true,
       ),
       ...concurrentIndex(
-        "{{table_prefix}}chain_tail_open_idx",
+        "{{table_prefix}}chain_tail_running_idx",
         "{{table_prefix}}job",
         "chain_id",
         "continued_to_id IS NULL AND completed_at IS NULL",

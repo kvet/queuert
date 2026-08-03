@@ -71,7 +71,7 @@ fall into two indexability classes:
 
 - **`blocked` (pending) and `continued` are plain column predicates** — `blocked boolean` and
   `continued_to_id IS NOT NULL` live on the job row itself. Each is a cheap residual over the
-  already-`type_name`-scoped, already-ordered, backlog-bounded open slice (a column check, no forced
+  already-`type_name`-scoped, already-ordered, backlog-bounded running slice (a column check, no forced
   sort, no cross-table probe) — and could even be promoted to a covered partial index if a hot
   consumer appeared. Coverable; the question is whether anything needs them.
 - **`independent` (running chains) is a cross-table anti-join** — "chains not referenced as a
@@ -100,7 +100,7 @@ fall into two indexability classes:
   `(type_name, completed_at)` entries to fill 20 rows, and a cursor does not rescue it. A `from`/`to`
   window does not bound this unless the window _span_ is also capped (nothing stops
   `from: epoch, to: now`). Do any secondary predicates need to work over completed at all, or are
-  they open-slice-only — and if a completed-slice analysis is genuinely needed, does it belong on an
+  they running-slice-only — and if a completed-slice analysis is genuinely needed, does it belong on an
   explicit best-effort / export path rather than the guaranteed listing surface?
 
 ### Dropped from the list surface
@@ -199,9 +199,9 @@ the otherwise `O(N)` case over the 990M-row pile — bounded instead of infeasib
 
 The cap fits each status:
 
-- **Open-work counts** (pending / running) ride the _partial_ indexes (`completed_at IS NULL`
+- **Running-work counts** (pending / running) ride the _partial_ indexes (`completed_at IS NULL`
   excludes completed rows entirely), so they are already immune to the completed pile; the cap adds
-  a backlog bound on top — a pathological 10M-open backlog stops at the 10000th row.
+  a backlog bound on top — a pathological 10M-row backlog stops at the 10000th row.
 - **Completed counts** have no index trick — a true count is `O(N)`, tens of seconds at 1B rows — so
   the `LIMIT` probe is the only cheap answer.
 
@@ -306,8 +306,8 @@ Chain listing (lead with `chain_type_name`, which is denormalized onto every job
 - `chain_head_idx` → `(chain_type_name, created_at) WHERE chain_index = 0` — no-status chains;
   loose-scan source for `listChainTypeNames`. **This removes the need for the separately proposed
   `chain_type_name_idx`** — the type-led head index already leads with `chain_type_name`.
-- `chain_tail_open_idx` → `(chain_type_name, created_at) WHERE continued_to_id IS NULL AND completed_at IS NULL`
-  — running chains; open-chain-count source. (Repurposed from `(chain_id)`.)
+- `chain_tail_running_idx` → `(chain_type_name, created_at) WHERE continued_to_id IS NULL AND completed_at IS NULL`
+  — running chains; running-chain-count source. (Repurposed from `(chain_id)`.)
 - `chain_tail_completed_idx` → `(chain_type_name, completed_at) WHERE continued_to_id IS NULL AND completed_at IS NOT NULL`
   — completed chains. (Repurposed from `(chain_id)`.)
 - Per-chain tail resolution (the no-status `LEFT JOIN LATERAL … ORDER BY chain_index DESC LIMIT 1`)
@@ -327,7 +327,7 @@ walks the index; no join-and-sort per page.
 Per-type counts (`countByJobTypeName` / `countByChainTypeName`): one capped `LIMIT 10000` probe per
 status, each riding the matching partial index for the caller's single type — pending on
 `job_pending_idx`, running on `job_running_idx`, completed on `job_completed_idx`; chain running on
-`chain_tail_open_idx`, chain completed on `chain_tail_completed_idx`. No new count index, no grouped
+`chain_tail_running_idx`, chain completed on `chain_tail_completed_idx`. No new count index, no grouped
 aggregate, no join against discovery. Discovery (`listJobTypeNames` / `listChainTypeNames`) is a
 pure loose scan returning names only.
 
@@ -341,7 +341,7 @@ pure loose scan returning names only.
   count grows (loose scan).
 - `countByJobTypeName` / `countByChainTypeName` are per-type and capped: each per-status count is a
   `LIMIT 10000` probe clamped to 10000 with a `hasMore` flag, cost bounded by the cap and (for
-  open statuses) flat as the completed pile grows via partial-index immunity.
+  running statuses) flat as the completed pile grows via partial-index immunity.
 - `listBlockedJobs` cursor pages walk `(blocked_by_chain_id, created_at, job_id)` (no join-and-sort),
   and the order is stable/chronological even when `job_id` is caller-supplied.
 - Dropped params (`chainTypeName`, `chainId[]`, `jobId[]` on `listJobs`; multi-`typeName`;

@@ -280,7 +280,7 @@ CREATE UNIQUE INDEX IF NOT EXISTS {{table_prefix}}job_continuation_idx
 ON {{table_prefix}}job (continued_to_id)
 WHERE continued_to_id IS NOT NULL`),
       sql(/* sql */ `
-CREATE INDEX IF NOT EXISTS {{table_prefix}}chain_tail_open_idx
+CREATE INDEX IF NOT EXISTS {{table_prefix}}chain_tail_running_idx
 ON {{table_prefix}}job (chain_id)
 WHERE continued_to_id IS NULL AND completed_at IS NULL`),
       sql(/* sql */ `

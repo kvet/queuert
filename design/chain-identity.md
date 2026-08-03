@@ -278,7 +278,7 @@ abort it — see Open questions.
 ## Tests
 
 - `identity` with `scope: "any"` returns the existing chain forever; with `scope: "running"` returns
-  it while alive and creates fresh once completed.
+  it while running and creates fresh once completed.
 - Two concurrent `createChain` calls with the same `(key, scope)` yield exactly one chain and one
   `created: true` — gated on `transactionConcurrency !== "serialized"`, and failing against
   PostgreSQL before the indexes land.

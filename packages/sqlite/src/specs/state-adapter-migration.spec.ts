@@ -274,7 +274,7 @@ const migrationContracts: Record<string, MigrationContract> = {
       expect(indexes).toContain("queuert_job_running_idx");
       expect(indexes).toContain("queuert_job_completed_idx");
       expect(indexes).toContain("queuert_job_deduplication_idx");
-      expect(indexes).toContain("queuert_chain_tail_open_idx");
+      expect(indexes).toContain("queuert_chain_tail_running_idx");
       expect(indexes).toContain("queuert_chain_tail_completed_idx");
       expect(indexes).toContain("queuert_chain_head_idx");
       expect(indexes).toContain("queuert_job_idx");
