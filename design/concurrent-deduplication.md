@@ -342,4 +342,4 @@ one `deduplicated: true`. It should fail against PostgreSQL today.
 - Independent of [deduplication-options-rework.md](deduplication-options-rework.md), but that doc's
   fate for `excludeChainIds` changes how conditional the matching predicate stays — and the
   conditionality is exactly why a unique index cannot replace the lock.
-- Related failure mode, different cause: [caller-supplied-id-collisions.md](caller-supplied-id-collisions.md).
+- Related failure mode, different cause: [drop-caller-supplied-id.md](drop-caller-supplied-id.md).

@@ -176,15 +176,12 @@ reconfiguration touches only the current pending one.
 A `schedule` table (`name`, `next_run_at`, `interval`, `current_chain_id`) with cron-like
 management remains available later if users ask for it. Nothing here forecloses it.
 
-### `id` versus `identity`
+### `id` goes away
 
-Two nearby words on the same call with opposite collision behavior. The contrast is worth stating
-explicitly in the guide, and it should land alongside
-[caller-supplied-id-collisions.md](caller-supplied-id-collisions.md), whose whole premise is the
-first half of it:
-
-> `id` assigns the chain's row identity — a collision is an error (`DuplicateJobIdError`).
-> `identity.key` is your identity for the work — a collision returns the existing chain.
+Two nearby words on the same call with opposite collision behavior would need disambiguating in the
+guide — except that `identity` covers every reason to supply an `id` in the first place, so the
+caller-supplied `id` is removed rather than documented alongside it. See
+[drop-caller-supplied-id.md](drop-caller-supplied-id.md).
 
 ### `deduplicated` becomes `created`
 
@@ -240,7 +237,7 @@ abort it — see Open questions.
 - **Adapters** — schema above; `createChains` drops the `existing_deduplicated` CTE in favour of
   conflict handling; the deduplication predicate leaves the SQL entirely.
 - **Docs** — `guides/deduplication.md` becomes `guides/chain-identity.md` (the three uses, the two
-  scopes, the read forms, the `id` contrast); `guides/queries.md`, `advanced/adapters.md`, both
+  scopes, the read forms); `guides/queries.md`, `advanced/adapters.md`, both
   internals docs, README / index / introduction feature bullets.
 - **Examples** — `showcase-scheduling`, `showcase-cleanup` (both drop `excludeChainIds` and move to
   post-completion scheduling), `showcase-queries` (identity lookup scenario).
@@ -262,14 +259,15 @@ abort it — see Open questions.
 - **Simplifies** [builtin-cleanup.md](builtin-cleanup.md) — `scheduleCleanup`'s read-compare-swap
   keeps its shape but loses the absent-row race (the unique index catches it), and the handler's
   self-reschedule loses `excludeChainIds`.
-- **Pairs with** [caller-supplied-id-collisions.md](caller-supplied-id-collisions.md), and not only
-  for the `id` vs `identity` documentation. Rewriting the create path around `ON CONFLICT` on the
-  identity index removes the `ON CONFLICT (chain_id, chain_index)` clause that currently swallows a
-  colliding caller-supplied `id` — a PostgreSQL `ON CONFLICT` targets one constraint. Without that
-  item's JS-side detection, an id collision would start raising a raw `23505` and aborting the
-  caller's transaction, which is the exact failure mode it exists to prevent. Land it with or before
-  the create-path rewrite; note its PostgreSQL approach (`(xmax = 0) AS inserted` on the
-  `inserted_jobs` CTE) is written against today's SQL and needs re-deriving against the new shape.
+- **Includes** [drop-caller-supplied-id.md](drop-caller-supplied-id.md) — `identity` covers all
+  three reasons to pass a caller-supplied `id`, so the option is removed as part of this work rather
+  than kept alongside it. That also settles what would otherwise be a hazard here: rewriting the
+  create path around `ON CONFLICT` on the identity index removes the
+  `ON CONFLICT (chain_id, chain_index)` clause that today silently swallows a colliding caller
+  `id` — a PostgreSQL `ON CONFLICT` targets one constraint — which would have started raising a raw
+  `23505` and aborting the caller's transaction. With no caller-supplied `id`, there is nothing left
+  for the rewrite to expose. Generated-id collisions remain possible via a misconfigured
+  `generateId` and are handled by mapping the constraint error, not by pre-checking.
 - **Timing.** The whole of this is breaking (`major`). The current major line is unreleased, so
   landing it before release costs one changeset; landing it after costs another major. That is the
   argument for doing it now rather than shipping the by-deduplication read first and reshaping it
