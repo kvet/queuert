@@ -1,8 +1,8 @@
 # Chain identity
 
 Replace `DeduplicationOptions` with `identity: { key, scope }`, and persist `scope` on the chain
-instead of evaluating it per query. Two fields go away, the read surface stops speaking write-side
-vocabulary, and deduplication becomes enforceable by a unique index rather than by a lock.
+instead of evaluating it per query. `excludeChainIds` goes away, the read surface stops speaking
+write-side vocabulary, and deduplication becomes enforceable by a unique index rather than by a lock.
 
 ## Problem
 
@@ -18,19 +18,19 @@ them:
   Stripe id, not a chain id. This one is **not supported at all today**: the key is persisted on the
   root row but `mapStateJobToJob` drops it, so it never reaches the public entity.
 
-Because it is one type, every surface that touches it receives all four fields. Three consequences:
+Because it is one type, every surface that touches it receives all three fields. Three consequences:
 
 - **The read design inherits write vocabulary.** `reads-by-deduplication.md` gives `getChain` a
-  by-deduplication form taking the full `DeduplicationOptions` — so a _read_ accepts `windowMs` and
-  `excludeChainIds`, neither of which means anything there, and the guide has to explain them
-  anyway. It also needs a required `typeName` that behaves differently from the `typeName` on the
-  by-id form, which needs its own paragraph.
-- **`list-chains-by-deduplication.md` is blocked** on what those two fields mean as listing filters.
-  `windowMs` overlaps `listChains`'s `from`/`to`; `excludeChainIds` has no meaning at all.
+  by-deduplication form taking the full `DeduplicationOptions` — so a _read_ accepts
+  `excludeChainIds`, which means nothing there, and the guide has to explain it anyway. It also
+  needs a required `typeName` that behaves differently from the `typeName` on the by-id form, which
+  needs its own paragraph.
+- **`list-chains-by-deduplication.md` is blocked** on what `excludeChainIds` means as a listing
+  filter — nothing at all.
 - **The matching predicate is conditional**, which is why deduplication cannot be enforced by a
   unique index and why `concurrent-deduplication.md` exists.
 
-And only two of the four fields describe deduplication:
+And only two of the three fields describe deduplication:
 
 - **`key`, `scope`** — the real thing. Keep.
 - **`excludeChainIds`** — a workaround for completion-callback ordering. In `job-process.ts` the
@@ -38,10 +38,6 @@ And only two of the four fields describe deduplication:
   `createChain` issued from the callback sees a snapshot where the current chain's terminal job is
   still incomplete. The chain matches its own `scope: "running"` lookup and the recurrence
   deduplicates onto the chain that is completing. Nothing about this is inherent to deduplication.
-- **`windowMs`** — throttling wearing deduplication's clothes, and lossy throttling at that: the
-  suppressed call reports `deduplicated: true` against a chain that may be long completed with
-  different input, so the caller cannot distinguish "already queued" from "dropped". None of the
-  three needs above wants it.
 
 ## Solution
 
@@ -230,7 +226,7 @@ abort it — see Open questions.
 
 ## Surface
 
-- **Core** — `DeduplicationOptions` → `ChainIdentity` (`windowMs`, `excludeChainIds` dropped);
+- **Core** — `DeduplicationOptions` → `ChainIdentity` (`excludeChainIds` dropped);
   `createChain`/`createChains` take `identity` and return `created`; `getChain`/`getChains` gain an
   `identity`/`identities` form with optional `typeName`; `listChains` gains `identity`;
   `identityKey`/`identityScope` reach the public `Chain`/`Job` entities and the dashboard job
@@ -300,15 +296,11 @@ abort it — see Open questions.
 ## Open questions
 
 - **Backfill of existing duplicates.** A user's live database may already hold two chains that
-  violate either new index (that is [#3](https://github.com/kvet/queuert/issues/3) having fired, or
-  a lapsed `windowMs`). `CREATE UNIQUE INDEX` will abort. Decide between failing the migration with
-  a diagnostic query, keeping the newest and clearing the losers' keys, or shipping a
-  pre-migration check. This is the main migration risk.
+  violate either new index (that is [#3](https://github.com/kvet/queuert/issues/3) having fired).
+  `CREATE UNIQUE INDEX` will abort. Decide between failing the migration with a diagnostic query,
+  keeping the newest and clearing the losers' keys, or shipping a pre-migration check. This is the main migration risk.
 - **Is post-`complete` `execute` acceptable**, or does reusing the completion transaction break the
   guarded-transaction invariants `execute` relies on today?
 - **Does `continueWith`-based recurrence hit the same ordering problem**, or only `createChain`?
 - **`created` vs keeping `deduplicated`** — the rename is right but adds surface to the migration
   guide on top of everything else here.
-- **Migration ergonomics for `windowMs` users.** There is no replacement; the guidance is a
-  caller-side check or an `any`-scoped key plus retention. Confirm no one is relying on it before
-  dropping it outright rather than deprecating.

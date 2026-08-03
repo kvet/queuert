@@ -522,13 +522,10 @@ class JobIndex {
     const set = this.dedupByKey.get(`${chainTypeName}\u0000${deduplication.key}`);
     if (!set || set.size === 0) return undefined;
 
-    const now = Date.now();
     const scope = deduplication.scope;
     const exclude = deduplication.excludeChainIds
       ? new Set(deduplication.excludeChainIds)
       : undefined;
-    const windowStart =
-      deduplication.windowMs !== undefined ? now - deduplication.windowMs : undefined;
 
     let bestMatch: DbJob | undefined;
     for (const job of set) {
@@ -537,7 +534,6 @@ class JobIndex {
         const tail = this.lastByChain.get(job.chainId);
         if (tail && isChainCompleted(tail)) continue;
       }
-      if (windowStart !== undefined && job.createdAt.getTime() < windowStart) continue;
       if (!bestMatch || job.createdAt > bestMatch.createdAt) bestMatch = job;
     }
     return bestMatch;

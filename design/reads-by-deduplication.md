@@ -51,9 +51,9 @@ counterpart of the write-side resolution.
   `getChains({ ids })`. Each entry resolves to at most one chain, just as each id does.
 
 Because the read resolves to the same single chain the write side would, a lookup and the create
-it mirrors can never diverge: `scope` (`"running" | "any"`), `windowMs`, and `excludeChainIds` all
-carry the same meaning they have on `createChain`, and "newest in scope" is exactly
-`createChain`'s own tie-break when several match. Nothing throws — `scope: "any"` over a recurring
+it mirrors can never diverge: `scope` (`"running" | "any"`) and `excludeChainIds` both carry the
+same meaning they have on `createChain`, and "newest in scope" is exactly `createChain`'s own
+tie-break when several match. Nothing throws — `scope: "any"` over a recurring
 key resolves to the latest occurrence, and reading the whole recurrence history is a separate,
 deferred concern (see [list-chains-by-deduplication.md](list-chains-by-deduplication.md)).
 
@@ -155,6 +155,6 @@ on. The unbounded recurrence-history listing is tracked separately in
 - `getChains({ deduplications })` resolves one chain per entry, positional, `undefined` for entries
   with no in-scope match.
 - The same key under a different chain type is not matched (type scoping).
-- `windowMs` and `excludeChainIds` on a read narrow the match exactly as they do on `createChain`.
+- `excludeChainIds` on a read narrows the match exactly as it does on `createChain`.
 - Composed with `lock`: a by-deduplication read locks the resolved row.
   </content>

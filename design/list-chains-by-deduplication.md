@@ -25,8 +25,6 @@ The filter did not compose cleanly with `listChains`'s existing shape. Under
   is running. It no longer overlaps `listChains`'s `status`, and the two compose: `identity:
 { key, scope: "running" }` plus `status: "completed"` is "every completed occurrence of this
   recurrence", which is exactly the useful query.
-- **`windowMs` vs. `from` / `to`.** Resolved by deletion. `windowMs` is gone; `listChains`'s
-  absolute range is the only range filter.
 - **`excludeChainIds`.** Resolved by deletion.
 - **Type scoping.** Resolved. Keys are globally unique rather than per chain type, so `typeName`
   stays an ordinary independent filter with no special interaction.

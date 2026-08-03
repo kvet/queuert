@@ -911,7 +911,6 @@ WHERE id IN (SELECT value FROM json_each(?))
         if (job.deduplication?.key) {
           const deduplicationKey = job.deduplication.key;
           const deduplicationScope = job.deduplication.scope;
-          const deduplicationWindowMs = job.deduplication.windowMs ?? null;
           const deduplicationExcludeChainIds = job.deduplication.excludeChainIds
             ? JSON.stringify(job.deduplication.excludeChainIds)
             : null;
@@ -945,10 +944,6 @@ WHERE ? IS NOT NULL
   )
   AND (
     ? IS NULL
-    OR created_at >= datetime('now', 'subsec', '-' || (? / 1000.0) || ' seconds')
-  )
-  AND (
-    ? IS NULL
     OR chain_id NOT IN (SELECT value FROM json_each(?))
   )
 ORDER BY created_at DESC
@@ -963,8 +958,6 @@ LIMIT 1
                       t["string?"](),
                       t["string?"](),
                       t["string?"](),
-                      t["number?"](),
-                      t["number?"](),
                       t["string?"](),
                       t["string?"](),
                     ],
@@ -981,8 +974,6 @@ LIMIT 1
               deduplicationScope,
               deduplicationScope,
               deduplicationScope,
-              deduplicationWindowMs,
-              deduplicationWindowMs,
               deduplicationExcludeChainIds,
               deduplicationExcludeChainIds,
             ],

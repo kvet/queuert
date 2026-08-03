@@ -1,5 +1,4 @@
 import { InvalidJobIdError } from "../../errors.js";
-import { sleep } from "../../helpers/sleep.js";
 import { type StateJob } from "../../state-adapter/state-adapter.js";
 import { type ConformanceGroup } from "../runner.js";
 import { type StateConformanceFixture } from "./types.js";
@@ -667,108 +666,6 @@ export const createChainsGroup: ConformanceGroup<StateConformanceFixture> = {
         expect(results[0].job.id).toBe(existingJob.id);
         expect(results[1].deduplicated).toBe(false);
         expect(results[1].job.id).not.toBe(existingJob.id);
-      },
-    },
-    {
-      name: "deduplication windowMs matches only within time window",
-      run: async ({ stateAdapter }, expect) => {
-        const [{ job: first }] = await stateAdapter.withTransaction(async (txCtx) =>
-          stateAdapter.createChains({
-            txCtx,
-            jobs: [
-              {
-                typeName: "window-test",
-                chainTypeName: "window-test",
-                input: null,
-                deduplication: { key: "win-key", scope: "any", windowMs: 100 },
-              },
-            ],
-          }),
-        );
-
-        // Immediate duplicate within window — should deduplicate
-        const [{ deduplicated: withinWindow }] = await stateAdapter.withTransaction(async (txCtx) =>
-          stateAdapter.createChains({
-            txCtx,
-            jobs: [
-              {
-                typeName: "window-test",
-                chainTypeName: "window-test",
-                input: null,
-                deduplication: { key: "win-key", scope: "any", windowMs: 100 },
-              },
-            ],
-          }),
-        );
-
-        expect(withinWindow).toBe(true);
-
-        // Wait for window to expire
-        await sleep(150);
-
-        // After window — should NOT deduplicate
-        const [{ job: afterWindow, deduplicated: outsideWindow }] =
-          await stateAdapter.withTransaction(async (txCtx) =>
-            stateAdapter.createChains({
-              txCtx,
-              jobs: [
-                {
-                  typeName: "window-test",
-                  chainTypeName: "window-test",
-                  input: null,
-                  deduplication: { key: "win-key", scope: "any", windowMs: 100 },
-                },
-              ],
-            }),
-          );
-
-        expect(outsideWindow).toBe(false);
-        expect(afterWindow.id).not.toBe(first.id);
-      },
-    },
-    {
-      name: "deduplication windowMs with scope 'running' respects both window and status",
-      run: async ({ stateAdapter }, expect) => {
-        // Create and complete a job
-        const [{ job: completed }] = await stateAdapter.withTransaction(async (txCtx) =>
-          stateAdapter.createChains({
-            txCtx,
-            jobs: [
-              {
-                typeName: "win-scope-test",
-                chainTypeName: "win-scope-test",
-                input: null,
-                deduplication: { key: "ws-key", scope: "running", windowMs: 5000 },
-              },
-            ],
-          }),
-        );
-
-        await stateAdapter.withTransaction(async (txCtx) =>
-          stateAdapter.finishJobAttempt({
-            txCtx,
-            jobId: completed.id,
-            workerId: null,
-            outcome: { output: null },
-          }),
-        );
-
-        // Same key, 'running' scope — completed job should not match even within window
-        const [{ deduplicated }] = await stateAdapter.withTransaction(async (txCtx) =>
-          stateAdapter.createChains({
-            txCtx,
-            jobs: [
-              {
-                typeName: "win-scope-test",
-                chainTypeName: "win-scope-test",
-                input: null,
-                deduplication: { key: "ws-key", scope: "running", windowMs: 5000 },
-              },
-            ],
-          }),
-        );
-
-        expect(deduplicated).toBe(false);
       },
     },
     {

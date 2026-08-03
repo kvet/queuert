@@ -13,8 +13,8 @@ only on the serialized adapters; on PostgreSQL it is a check-then-insert race.
 `createChains` decides deduplication with a plain `SELECT` and then inserts what the `SELECT` did not
 match, in one statement (`state-adapter.pg.ts`):
 
-- `existing_deduplicated` joins `job` on `deduplication_key` / `chain_type_name` with the `scope`,
-  `windowMs` and `excludeChainIds` predicates.
+- `existing_deduplicated` joins `job` on `deduplication_key` / `chain_type_name` with the `scope`
+  and `excludeChainIds` predicates.
 - `to_insert_all` is every input entry that CTE did not match.
 - `inserted_jobs` inserts them.
 
@@ -45,9 +45,9 @@ with no concurrency caveat — an unqualified guarantee the PostgreSQL adapter d
 ## Why a unique index is not the fix
 
 Deduplication is conditional. `scope: "running"` matches only chains with no completed terminal job,
-`windowMs` bounds by age, `excludeChainIds` removes specific chains. Two chains with the same key are
-_legitimately_ allowed to coexist once the first completes or the window lapses. No unique or partial
-unique index expresses that, so the constraint would reject writes the documented semantics permit.
+`excludeChainIds` removes specific chains. Two chains with the same key are _legitimately_ allowed
+to coexist once the first completes. No unique or partial unique index expresses that, so the
+constraint would reject writes the documented semantics permit.
 
 So the fix is mutual exclusion around the existing conditional check — unless the conditional part
 moves off the index and into the conflict _action_, which is option 3.
@@ -219,8 +219,8 @@ RETURNING chain_id, (chain_id = excluded.chain_id) AS created
 ```
 
 `<takeover>` is composed from that call's options — `false` for `scope: "any"`,
-`d.completed_at IS NOT NULL` for `scope: "running"`, `OR d.created_at < now() - $window` for
-`windowMs`, `OR d.chain_id = ANY($ids)` for `excludeChainIds`.
+`d.completed_at IS NOT NULL` for `scope: "running"`, `OR d.chain_id = ANY($ids)` for
+`excludeChainIds`.
 
 - **This is the only option that keeps `scope` per call.** A partial unique index on the chain (or
   root job) row cannot: an index predicate is static, so the scope would have to become a property of
@@ -233,8 +233,8 @@ RETURNING chain_id, (chain_id = excluded.chain_id) AS created
 - **Mixed scopes stay coherent.** The slot always points at the newest chain for the key, so `any`
   (never takes over) returns whatever the key currently resolves to — today's
   `ORDER BY created_at DESC` semantics — while `running` takes over once the slot's chain is complete.
-- **Makes `windowMs` / `excludeChainIds` cheap.** Both collapse to an `OR` in the `CASE`, replacing the
-  jsonb-unnest join in `existing_deduplicated`. Their fate in
+- **Makes `excludeChainIds` cheap.** It collapses to an `OR` in the `CASE`, replacing the
+  jsonb-unnest join in `existing_deduplicated`. Its fate in
   [deduplication-options-rework.md](deduplication-options-rework.md) stops being a correctness input.
 - **Same RR signal and same HOT-update property as option 2** — the primary-key columns never change,
   so takeover and no-op alike are HOT, and a conflict at REPEATABLE READ raises a retryable `40001`.
@@ -340,6 +340,6 @@ one `deduplicated: true`. It should fail against PostgreSQL today.
 - Under options 2 and 3, row growth wants the sweep from [builtin-cleanup.md](builtin-cleanup.md);
   option 1a has nothing to retain.
 - Independent of [deduplication-options-rework.md](deduplication-options-rework.md), but that doc's
-  fate for `windowMs` / `excludeChainIds` changes how conditional the matching predicate stays — and
-  the conditionality is exactly why a unique index cannot replace the lock.
+  fate for `excludeChainIds` changes how conditional the matching predicate stays — and the
+  conditionality is exactly why a unique index cannot replace the lock.
 - Related failure mode, different cause: [caller-supplied-id-collisions.md](caller-supplied-id-collisions.md).

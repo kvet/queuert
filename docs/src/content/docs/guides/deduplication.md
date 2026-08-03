@@ -77,26 +77,6 @@ await withTransactionHooks(async (transactionHooks) =>
 );
 ```
 
-## Time-Windowed Deduplication
-
-Use `windowMs` to rate-limit job creation. Duplicates are prevented only within the time window.
-
-```ts
-// No duplicate syncs within 1 hour
-await withTransactionHooks(async (transactionHooks) =>
-  client.createChain({
-    transactionHooks,
-    typeName: "sync-data",
-    input: { sourceId: "db-primary" },
-    deduplication: {
-      key: "sync:db-primary",
-      scope: "any",
-      windowMs: 60 * 60 * 1000, // 1 hour
-    },
-  }),
-);
-```
-
 ## Excluding Chains
 
 Use `excludeChainIds` to skip specific chains during deduplication matching. This is essential for recurring jobs that self-schedule within a completion callback — the current chain is still incomplete at that point, so without exclusion the new chain would be deduplicated against it.

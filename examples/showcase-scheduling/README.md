@@ -2,7 +2,7 @@
 
 Recurring job patterns without external cron.
 
-Scenarios: loop chains with scheduled delays, idempotent scheduling via deduplication, time-windowed (`windowMs`) rate limiting, triggering a future-scheduled job early with a locked read-modify-write.
+Scenarios: loop chains with scheduled delays, idempotent scheduling via deduplication, triggering a future-scheduled job early with a locked read-modify-write.
 
 ## Running
 

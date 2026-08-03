@@ -947,18 +947,18 @@ input_data AS (
     gi.id                AS chain_id,
     raw.chain_type_name,
     0                    AS chain_index,
-    raw.input, raw.dedup_key, raw.dedup_scope, raw.dedup_window_ms, raw.dedup_exclude_chain_ids,
+    raw.input, raw.dedup_key, raw.dedup_scope, raw.dedup_exclude_chain_ids,
     raw.scheduled_at, raw.schedule_after_ms,
     raw.chain_trace_context, raw.trace_context, raw.ord
   FROM unnest(
     $2::text[], $3::text[],
-    $4::jsonb[], $5::text[], $6::text[], $7::bigint[],
-    $8::text[],
-    $9::timestamptz[], $10::bigint[],
-    $11::text[], $12::text[]
+    $4::jsonb[], $5::text[], $6::text[],
+    $7::text[],
+    $8::timestamptz[], $9::bigint[],
+    $10::text[], $11::text[]
   ) WITH ORDINALITY AS raw(
     type_name, chain_type_name,
-    input, dedup_key, dedup_scope, dedup_window_ms, dedup_exclude_chain_ids,
+    input, dedup_key, dedup_scope, dedup_exclude_chain_ids,
     scheduled_at, schedule_after_ms,
     chain_trace_context, trace_context, ord
   )
@@ -979,10 +979,6 @@ existing_deduplicated AS (
         WHERE j2.chain_id = j.id AND j2.completed_at IS NOT NULL AND j2.continued_to_id IS NULL
       ))
       OR (id2.dedup_scope = 'any')
-    )
-    AND (
-      id2.dedup_window_ms IS NULL
-      OR j.created_at >= now() - (id2.dedup_window_ms || ' milliseconds')::interval
     )
     AND (
       id2.dedup_exclude_chain_ids IS NULL
@@ -1037,7 +1033,6 @@ ORDER BY ord
                   t.jsonArray(),
                   t.array<string | null>(),
                   t.array<string | null>(),
-                  t.array<number | null>(),
                   t.array<string | null>(),
                   t.array<string | null>(),
                   t.array<number | null>(),
@@ -1056,7 +1051,6 @@ ORDER BY ord
           jobs.map((j) => j.input),
           jobs.map((j) => j.deduplication?.key ?? null),
           jobs.map((j) => (j.deduplication ? j.deduplication.scope : null)),
-          jobs.map((j) => j.deduplication?.windowMs ?? null),
           jobs.map((j) =>
             j.deduplication?.excludeChainIds
               ? JSON.stringify(j.deduplication.excludeChainIds)

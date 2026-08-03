@@ -6,8 +6,7 @@
  * Scenarios:
  * 1. Recurring Jobs: Independent chains with scheduled delays
  * 2. Deduplication: Prevent duplicate recurring job instances
- * 3. Time-Windowed: Rate-limit job creation with windowMs
- * 4. Trigger Early: Run a future-scheduled job immediately via a locked read-modify-write
+ * 3. Trigger Early: Run a future-scheduled job immediately via a locked read-modify-write
  */
 
 import assert from "node:assert/strict";
@@ -45,16 +44,6 @@ const jobTypes = defineJobTypes<{
   };
 
   /*
-   * Workflow (sync-data):
-   *   sync-data --> output
-   */
-  "sync-data": {
-    entry: true;
-    input: { sourceId: string };
-    output: { syncedAt: string };
-  };
-
-  /*
    * Workflow (reminder):
    *   reminder --> output  (typically deferred for hours/days; can be triggered early)
    */
@@ -68,7 +57,6 @@ const jobTypes = defineJobTypes<{
 // Using short intervals for demo purposes
 const DIGEST_INTERVAL_MS = 200;
 const HEALTH_CHECK_INTERVAL_MS = 150;
-const SYNC_WINDOW_MS = 2_000;
 
 const MAX_DIGEST_ITERATIONS = 3;
 const MAX_HEALTH_CHECKS = 3;
@@ -101,14 +89,6 @@ await sql.unsafe(`
     service_id TEXT NOT NULL,
     status TEXT NOT NULL,
     checked_at TIMESTAMP DEFAULT NOW()
-  )
-`);
-
-await sql.unsafe(`
-  CREATE TABLE IF NOT EXISTS sync_logs (
-    id SERIAL PRIMARY KEY,
-    source_id TEXT NOT NULL,
-    synced_at TIMESTAMP DEFAULT NOW()
   )
 `);
 
@@ -203,23 +183,6 @@ const worker = await createInProcessWorker({
             }
 
             return { status, checkedAt: new Date().toISOString() };
-          });
-        },
-      },
-
-      "sync-data": {
-        attemptHandler: async ({ job, complete }) => {
-          console.log(`\n[sync-data] Syncing data from ${job.input.sourceId}`);
-
-          await new Promise((r) => setTimeout(r, 100));
-
-          return complete(async ({ sql: txSql }) => {
-            await txSql.unsafe("INSERT INTO sync_logs (source_id) VALUES ($1)", [
-              job.input.sourceId,
-            ]);
-            const syncedAt = new Date().toISOString();
-            console.log(`  Sync completed at ${syncedAt}`);
-            return { syncedAt };
           });
         },
       },
@@ -351,90 +314,8 @@ console.log("-".repeat(40));
 console.log(`Total health checks: ${healthCount.count}`);
 assert.equal(Number(healthCount.count), MAX_HEALTH_CHECKS);
 
-// Scenario 3: Time-Windowed Deduplication
-console.log("\n--- Scenario 3: Time-Windowed Deduplication ---");
-console.log(`Rate-limiting syncs with ${SYNC_WINDOW_MS}ms window.\n`);
-
-// First sync - should succeed
-const sync1 = await withTransactionHooks(async (transactionHooks) =>
-  sql.begin(async (txSql) =>
-    client.createChain({
-      sql: txSql,
-      transactionHooks,
-      typeName: "sync-data",
-      input: { sourceId: "db-primary" },
-      deduplication: {
-        key: "sync:db-primary",
-        scope: "any",
-        windowMs: SYNC_WINDOW_MS,
-      },
-    }),
-  ),
-);
-console.log(`First sync created: ${sync1.id}`);
-console.log(`Deduplicated: ${sync1.deduplicated}`);
-assert.equal(sync1.deduplicated, false);
-
-await client.awaitChain(sync1, { timeoutMs: 5000 });
-
-// Second sync immediately after - should be deduplicated (within window)
-const sync2 = await withTransactionHooks(async (transactionHooks) =>
-  sql.begin(async (txSql) =>
-    client.createChain({
-      sql: txSql,
-      transactionHooks,
-      typeName: "sync-data",
-      input: { sourceId: "db-primary" },
-      deduplication: {
-        key: "sync:db-primary",
-        scope: "any",
-        windowMs: SYNC_WINDOW_MS,
-      },
-    }),
-  ),
-);
-console.log(`\nSecond sync (within window): ${sync2.id}`);
-console.log(`Deduplicated: ${sync2.deduplicated} (rate-limited)`);
-assert.equal(sync2.deduplicated, true);
-
-// Wait for window to expire
-console.log(`\nWaiting ${SYNC_WINDOW_MS}ms for window to expire...`);
-await new Promise((r) => setTimeout(r, SYNC_WINDOW_MS + 100));
-
-// Third sync after window - should succeed
-const sync3 = await withTransactionHooks(async (transactionHooks) =>
-  sql.begin(async (txSql) =>
-    client.createChain({
-      sql: txSql,
-      transactionHooks,
-      typeName: "sync-data",
-      input: { sourceId: "db-primary" },
-      deduplication: {
-        key: "sync:db-primary",
-        scope: "any",
-        windowMs: SYNC_WINDOW_MS,
-      },
-    }),
-  ),
-);
-console.log(`\nThird sync (after window): ${sync3.id}`);
-console.log(`Deduplicated: ${sync3.deduplicated} (new chain created)`);
-assert.equal(sync3.deduplicated, false);
-
-await client.awaitChain(sync3, { timeoutMs: 5000 });
-
-const [syncCount] = await sql.unsafe<{ count: string }[]>(
-  "SELECT COUNT(*) as count FROM sync_logs WHERE source_id = 'db-primary'",
-);
-
-console.log("\n" + "-".repeat(40));
-console.log("SCENARIO 3 COMPLETED");
-console.log("-".repeat(40));
-console.log(`Total syncs executed: ${syncCount.count} (2 out of 3 attempts)`);
-assert.equal(Number(syncCount.count), 2);
-
-// Scenario 4: Trigger a Scheduled Job Early
-console.log("\n--- Scenario 4: Trigger a Scheduled Job Early ---");
+// Scenario 3: Trigger a Scheduled Job Early
+console.log("\n--- Scenario 3: Trigger a Scheduled Job Early ---");
 console.log("Schedule a reminder for an hour from now, then trigger it immediately.\n");
 
 const ONE_HOUR_MS = 60 * 60 * 1000;
@@ -474,7 +355,7 @@ const [reminderCount] = await sql.unsafe<{ count: string }[]>(
 );
 
 console.log("\n" + "-".repeat(40));
-console.log("SCENARIO 4 COMPLETED");
+console.log("SCENARIO 3 COMPLETED");
 console.log("-".repeat(40));
 console.log(`Reminders sent: ${reminderCount.count}`);
 assert.equal(Number(reminderCount.count), 1);

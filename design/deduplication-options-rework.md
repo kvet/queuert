@@ -1,26 +1,23 @@
 # Deduplication options rework
 
 > **Superseded by [chain-identity.md](chain-identity.md).** Its `excludeChainIds` diagnosis and the
-> post-completion scheduling fix are folded in there; `windowMs` is dropped outright. Kept for the
-> reasoning only.
+> post-completion scheduling fix are folded in there. Kept for the reasoning only.
 
 Shrink `DeduplicationOptions` to what deduplication actually is. Two axes carry their weight
-(`key`, `scope`); the other two exist to work around problems elsewhere.
+(`key`, `scope`); the third exists to work around a problem elsewhere.
 
 ## Problem
 
-`DeduplicationOptions` has four fields, and only the first two describe deduplication:
+`DeduplicationOptions` has three fields, and only the first two describe deduplication:
 
 - **`key`, `scope`** — the real thing. Singleton (`running`) and once-ever (`any`) are distinct
   needs, neither expressible via the other. Keep as-is.
 - **`excludeChainIds`** — a workaround for completion-callback ordering, see below.
-- **`windowMs`** — throttling/debouncing wearing deduplication's clothes.
 
-The cost is not just the write path. Both extra fields propagate: `getChain`/`getChains` now accept
+The cost is not just the write path. The extra field propagates: `getChain`/`getChains` now accept
 the full options (see [reads-by-deduplication](../.changeset/reads-by-deduplication.md)), and
 [list-chains-by-deduplication.md](list-chains-by-deduplication.md) is blocked largely on deciding
-what these two mean as read filters — `windowMs` overlaps `listChains`'s `from`/`to`, and
-`excludeChainIds` has no clear meaning in a listing at all.
+what it means as a read filter — `excludeChainIds` has no clear meaning in a listing at all.
 
 ### `excludeChainIds` — caused by callback ordering, not by deduplication
 
@@ -39,13 +36,6 @@ Nothing about this is inherent. If the same `createChain` ran **after** the comp
 be complete, and `scope: "running"` would correctly not match. No exclusion parameter needed.
 
 The blocker is only that no `txCtx` / `transactionHooks` is exposed after `complete()` resolves.
-
-### `windowMs` — a different feature
-
-"Only match chains created in the last N ms" is a throttle: allow a new chain once the previous one
-is older than N. That is a useful thing to want, and today there is no other way to say it — but it
-is not deduplication, its interaction with `scope` is hard to explain, and it duplicates
-`listChains`'s absolute range filter the moment it reaches a read surface.
 
 ## Approach
 
@@ -70,10 +60,6 @@ shapes:
 
 Either way the recurrence stays atomic with the completion — a crash rolls back both.
 
-**`windowMs`** — decide whether it stays on `DeduplicationOptions`, becomes a separate throttle
-concept, or is dropped in favor of caller-side checks. Whatever the outcome, it should not be part
-of read-side filters.
-
 ## Open questions
 
 - Is post-`complete` `execute` acceptable, or does reusing the completion transaction break the
@@ -81,23 +67,22 @@ of read-side filters.
 - Does the same ordering problem affect `continueWith`-based recurrence, or only `createChain`?
 - Removing `excludeChainIds` is breaking (`major`). Is a deprecation window worth it, or does it
   ride along with other breaking dedup work?
-- Does `windowMs` have a real user behind it, or is it speculative surface?
 
 ## Surface
 
-- **Core** — `DeduplicationOptions` loses `excludeChainIds` (and possibly `windowMs`); handler
-  gains post-completion transactional scheduling.
+- **Core** — `DeduplicationOptions` loses `excludeChainIds`; handler gains post-completion
+  transactional scheduling.
 - **Adapters** — PostgreSQL, SQLite, in-process drop the exclusion param and its SQL clause.
 - **Docs / examples** — `showcase-scheduling`, `showcase-cleanup`, deduplication and scheduling
   guides move to the new pattern.
 
 ## Dependencies
 
-Unblocks [list-chains-by-deduplication.md](list-chains-by-deduplication.md) — both of its unresolved
-filter questions are about these two fields.
+Unblocks [list-chains-by-deduplication.md](list-chains-by-deduplication.md) — its unresolved filter
+question is about this field.
 
 Interacts with [concurrent-deduplication.md](concurrent-deduplication.md). The matching predicate
-being conditional — `scope`, and today `windowMs` / `excludeChainIds` — is why a unique index cannot
-enforce deduplication and why that fix has to be a lock. Dropping fields here narrows the predicate
-but does not remove the conditionality (`scope: "running"` alone keeps it), so the two are independent;
+being conditional — `scope`, and today `excludeChainIds` — is why a unique index cannot enforce
+deduplication and why that fix has to be a lock. Dropping the field here narrows the predicate but
+does not remove the conditionality (`scope: "running"` alone keeps it), so the two are independent;
 the ordering only matters for how much of the predicate the lock must cover.
