@@ -705,18 +705,18 @@ describe("Metrics", () => {
       test: { entry: true; input: null; output: null };
     }>();
 
-    // Wrap getNextJobAvailableInMs to throw once — this is a wrapped operation
+    // Wrap acquireJob to throw once — this is a wrapped operation
     // so the logging middleware will emit stateAdapterError, and the error propagates
     // to the worker loop's outer catch which emits workerError
     let errorThrown = false;
     const erroringStateAdapter: typeof stateAdapter = {
       ...stateAdapter,
-      getNextJobAvailableInMs: async (args) => {
+      acquireJob: async (args) => {
         if (!errorThrown) {
           errorThrown = true;
           throw new Error("connection error");
         }
-        return stateAdapter.getNextJobAvailableInMs(args);
+        return stateAdapter.acquireJob(args);
       },
     };
 
@@ -737,6 +737,7 @@ describe("Metrics", () => {
     const worker = await createInProcessWorker({
       client: workerClient,
       concurrency: 1,
+      recoveryBackoffConfig: { initialDelayMs: 10, multiplier: 1, maxDelayMs: 10 },
       processors: createProcessors({
         client,
         jobTypes,

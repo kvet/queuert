@@ -50,10 +50,24 @@ const waitForNextJob = async ({
   executor: ParallelExecutor<any>;
   signal: AbortSignal;
 }): Promise<void> => {
-  const { promise: notified, resolve: onNotification } = Promise.withResolvers<void>();
-  let disposeNotified: () => Promise<void> = async () => {};
+  const { promise: slotAvailable, resolve: onSlotAvailable } = Promise.withResolvers<void>();
+  const disposeSlotAvailable = executor.onIdleSlot(onSlotAvailable);
   try {
-    if (executor.idleSlots() > 0) {
+    if (signal.aborted) {
+      return;
+    }
+
+    if (executor.idleSlots() === 0) {
+      await raceWithSleep(slotAvailable, pollIntervalMs, {
+        jitterMs: pollIntervalMs / 10,
+        signal,
+      });
+      return;
+    }
+
+    const { promise: notified, resolve: onNotification } = Promise.withResolvers<void>();
+    let disposeNotified: () => Promise<void> = async () => {};
+    try {
       disposeNotified = await notifyAdapter.listenJobScheduled(typeNames, (typeName) => {
         notifyAdapter.consumeWakeHint(typeName).then(
           (claimed) => {
@@ -62,28 +76,25 @@ const waitForNextJob = async ({
           () => {},
         );
       });
-    }
-  } catch {}
-  const { promise: slotAvailable, resolve: onSlotAvailable } = Promise.withResolvers<void>();
-  const disposeSlotAvailable = executor.onIdleSlot(onSlotAvailable);
-  try {
-    const nextJobAvailableInMs = await stateAdapter.getNextJobAvailableInMs({
-      typeNames,
-    });
-    const pullDelayMs =
-      nextJobAvailableInMs !== null
-        ? Math.min(Math.max(0, nextJobAvailableInMs), pollIntervalMs)
-        : pollIntervalMs;
+    } catch {}
 
-    if (signal.aborted) {
-      return;
+    try {
+      const nextJobAvailableInMs = await stateAdapter.getNextJobAvailableInMs({
+        typeNames,
+      });
+      const pullDelayMs = Math.min(nextJobAvailableInMs ?? pollIntervalMs, pollIntervalMs);
+
+      if (signal.aborted) {
+        return;
+      }
+      await raceWithSleep(Promise.race([slotAvailable, notified]), pullDelayMs, {
+        jitterMs: pullDelayMs / 10,
+        signal,
+      });
+    } finally {
+      await disposeNotified();
     }
-    await raceWithSleep(Promise.race([slotAvailable, notified]), pullDelayMs, {
-      jitterMs: pullDelayMs / 10,
-      signal,
-    });
   } finally {
-    await disposeNotified();
     disposeSlotAvailable();
   }
 };

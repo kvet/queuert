@@ -1127,13 +1127,44 @@ ORDER BY b.index ASC
           applyTemplate(
             sql(
               `
-SELECT GREATEST(0, FLOOR(EXTRACT(EPOCH FROM (job.scheduled_at - now())) * 1000))::integer AS available_in_ms
-FROM {{schema}}.{{table_prefix}}job as job
-WHERE job.type_name IN (SELECT unnest($1::text[]))
-  AND job.status = 'pending'
-ORDER BY job.scheduled_at ASC
-LIMIT 1
-FOR UPDATE SKIP LOCKED
+WITH due AS (
+  SELECT j.id
+  FROM (SELECT type_name FROM unnest($1::text[]) AS u(type_name) ORDER BY random()) AS t
+  CROSS JOIN LATERAL (
+    SELECT id
+    FROM {{schema}}.{{table_prefix}}job
+    WHERE type_name = t.type_name
+      AND status = 'pending'
+      AND scheduled_at <= now()
+    ORDER BY scheduled_at ASC
+    LIMIT 1
+    FOR UPDATE SKIP LOCKED
+  ) j
+  LIMIT 1
+),
+upcoming AS (
+  SELECT j.scheduled_at
+  FROM unnest($1::text[]) AS t(type_name)
+  CROSS JOIN LATERAL (
+    SELECT scheduled_at
+    FROM {{schema}}.{{table_prefix}}job
+    WHERE type_name = t.type_name
+      AND status = 'pending'
+      AND scheduled_at > now()
+    ORDER BY scheduled_at ASC
+    LIMIT 1
+  ) j
+  ORDER BY j.scheduled_at ASC
+  LIMIT 1
+)
+SELECT available_in_ms
+FROM (
+  SELECT COALESCE(
+    (SELECT 0 FROM due LIMIT 1),
+    (SELECT CEIL(EXTRACT(EPOCH FROM (scheduled_at - now())) * 1000)::integer FROM upcoming)
+  ) AS available_in_ms
+) d
+WHERE available_in_ms IS NOT NULL
 `,
               {
                 id: "getNextJobAvailableInMs",
@@ -1156,14 +1187,19 @@ FOR UPDATE SKIP LOCKED
             sql(
               `
 WITH acquired_job AS (
-  SELECT id
-  FROM {{schema}}.{{table_prefix}}job
-  WHERE type_name IN (SELECT unnest($1::text[]))
-    AND status = 'pending'
-    AND scheduled_at <= now()
-  ORDER BY scheduled_at ASC
+  SELECT j.id
+  FROM (SELECT type_name FROM unnest($1::text[]) AS u(type_name) ORDER BY random()) AS t
+  CROSS JOIN LATERAL (
+    SELECT id
+    FROM {{schema}}.{{table_prefix}}job
+    WHERE type_name = t.type_name
+      AND status = 'pending'
+      AND scheduled_at <= now()
+    ORDER BY scheduled_at ASC
+    LIMIT 1
+    FOR UPDATE SKIP LOCKED
+  ) j
   LIMIT 1
-  FOR UPDATE SKIP LOCKED
 )
 UPDATE {{schema}}.{{table_prefix}}job
 SET status = 'running',
@@ -1171,10 +1207,16 @@ SET status = 'running',
 WHERE id = (SELECT id FROM acquired_job)
 RETURNING *,
   EXISTS(
-    SELECT 1 FROM {{schema}}.{{table_prefix}}job
-    WHERE type_name IN (SELECT unnest($1::text[]))
-      AND status = 'pending'
-      AND scheduled_at <= now()
+    SELECT 1
+    FROM (SELECT type_name FROM unnest($1::text[]) AS u(type_name)) AS t
+    CROSS JOIN LATERAL (
+      SELECT 1
+      FROM {{schema}}.{{table_prefix}}job
+      WHERE type_name = t.type_name
+        AND status = 'pending'
+        AND scheduled_at <= now()
+      LIMIT 1
+    ) more
     LIMIT 1
   ) AS has_more
 `,

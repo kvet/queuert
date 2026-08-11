@@ -15,22 +15,22 @@ The Process columns measure how fast a single worker drains the queue once it's 
 
 | State adapter            | Start single (chains/s) | Start batched (chains/s) | Process atomic (jobs/s) | Process staged (jobs/s) |
 | ------------------------ | ----------------------: | -----------------------: | ----------------------: | ----------------------: |
-| In-process               |                 ~67,459 |                 ~173,791 |                 ~17,753 |                 ~12,191 |
-| SQLite (better-sqlite3)  |                 ~21,757 |                  ~51,653 |                 ~10,214 |                  ~6,837 |
-| SQLite (node:sqlite)     |                 ~20,208 |                  ~51,833 |                  ~8,286 |                  ~5,747 |
-| PostgreSQL (postgres-js) |                    ~504 |                  ~20,317 |                    ~725 |                    ~634 |
-| PostgreSQL (pg)          |                    ~584 |                  ~20,880 |                    ~766 |                    ~647 |
+| In-process               |                 ~68,646 |                 ~193,754 |                 ~17,881 |                 ~12,569 |
+| SQLite (better-sqlite3)  |                 ~23,336 |                  ~63,425 |                  ~9,529 |                  ~6,410 |
+| SQLite (node:sqlite)     |                 ~21,845 |                  ~58,265 |                  ~8,645 |                  ~5,612 |
+| PostgreSQL (postgres-js) |                    ~795 |                  ~18,916 |                  ~1,188 |                    ~962 |
+| PostgreSQL (pg)          |                    ~791 |                  ~21,304 |                  ~1,230 |                    ~900 |
 
 ### Notify adapter (in-process state)
 
 | Notify adapter           | Start single (chains/s) | Start batched (chains/s) | Process atomic (jobs/s) | Process staged (jobs/s) |
 | ------------------------ | ----------------------: | -----------------------: | ----------------------: | ----------------------: |
-| In-process               |                 ~64,051 |                 ~191,963 |                 ~17,829 |                 ~12,322 |
-| Redis (redis)            |                  ~2,478 |                  ~68,248 |                  ~8,932 |                  ~6,364 |
-| Redis (ioredis)          |                  ~2,485 |                  ~72,958 |                 ~10,868 |                  ~7,892 |
-| PostgreSQL (pg)          |                  ~3,871 |                  ~72,343 |                  ~7,863 |                  ~5,590 |
-| PostgreSQL (postgres-js) |                  ~3,864 |                  ~70,733 |                  ~7,675 |                  ~4,787 |
-| NATS                     |                  ~4,275 |                 ~107,948 |                 ~10,286 |                  ~7,129 |
+| In-process               |                 ~61,850 |                 ~187,567 |                 ~16,992 |                 ~12,388 |
+| Redis (redis)            |                  ~2,516 |                  ~89,277 |                  ~9,825 |                  ~6,266 |
+| Redis (ioredis)          |                  ~2,524 |                  ~78,775 |                 ~11,462 |                  ~7,889 |
+| PostgreSQL (pg)          |                  ~3,893 |                  ~71,690 |                  ~7,833 |                  ~5,684 |
+| PostgreSQL (postgres-js) |                  ~4,232 |                  ~88,970 |                  ~7,964 |                  ~4,608 |
+| NATS                     |                  ~4,152 |                 ~117,277 |                 ~10,787 |                  ~6,470 |
 
 See [processing-capacity](https://github.com/kvet/queuert/tree/main/benchmarks/processing-capacity) for the full benchmark tool.
 

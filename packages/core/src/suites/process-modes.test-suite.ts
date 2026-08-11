@@ -102,9 +102,6 @@ export const processModesTestSuite = ({ it }: { it: TestAPI<TestSuiteContext> })
           }),
         ],
       }),
-      expect.objectContaining({
-        name: "getNextJobAvailableInMs",
-      }),
     ];
     expect(spyStateAdapter.calls.slice(0, expected.length)).toEqual(expected);
   });
@@ -187,9 +184,6 @@ export const processModesTestSuite = ({ it }: { it: TestAPI<TestSuiteContext> })
           expect.objectContaining({ name: "getJobBlockers" }),
           expect.objectContaining({ name: "renewJobLease" }),
         ],
-      }),
-      expect.objectContaining({
-        name: "getNextJobAvailableInMs",
       }),
       expect.objectContaining({
         name: "withTransaction",
@@ -300,9 +294,6 @@ export const processModesTestSuite = ({ it }: { it: TestAPI<TestSuiteContext> })
         ],
       }),
       expect.objectContaining({
-        name: "getNextJobAvailableInMs",
-      }),
-      expect.objectContaining({
         name: "withTransaction",
         status: "committed",
         children: [
@@ -401,9 +392,6 @@ export const processModesTestSuite = ({ it }: { it: TestAPI<TestSuiteContext> })
           expect.objectContaining({ name: "getJobBlockers" }),
           expect.objectContaining({ name: "renewJobLease" }),
         ],
-      }),
-      expect.objectContaining({
-        name: "getNextJobAvailableInMs",
       }),
       expect.objectContaining({
         name: "withTransaction",
@@ -522,9 +510,6 @@ export const processModesTestSuite = ({ it }: { it: TestAPI<TestSuiteContext> })
           }),
         ],
       }),
-      expect.objectContaining({
-        name: "getNextJobAvailableInMs",
-      }),
     ];
     expect(spyStateAdapter.calls.slice(0, expected.length)).toEqual(expected);
   });
@@ -616,9 +601,6 @@ export const processModesTestSuite = ({ it }: { it: TestAPI<TestSuiteContext> })
             ],
           }),
         ],
-      }),
-      expect.objectContaining({
-        name: "getNextJobAvailableInMs",
       }),
     ];
     expect(spyStateAdapter.calls.slice(0, expected.length)).toEqual(expected);

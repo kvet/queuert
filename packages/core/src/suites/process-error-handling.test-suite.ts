@@ -101,7 +101,6 @@ export const processErrorHandlingTestSuite = ({ it }: { it: TestAPI<TestSuiteCon
           expect.objectContaining({ name: "rescheduleJobs" }),
         ],
       }),
-      expect.objectContaining({ name: "getNextJobAvailableInMs" }),
     ];
     expect(spyStateAdapter.calls.slice(0, expected.length)).toEqual(expected);
   });
@@ -192,7 +191,6 @@ export const processErrorHandlingTestSuite = ({ it }: { it: TestAPI<TestSuiteCon
           expect.objectContaining({ name: "rescheduleJobs" }),
         ],
       }),
-      expect.objectContaining({ name: "getNextJobAvailableInMs" }),
     ];
     expect(spyStateAdapter.calls.slice(0, expected.length)).toEqual(expected);
   });
@@ -281,7 +279,6 @@ export const processErrorHandlingTestSuite = ({ it }: { it: TestAPI<TestSuiteCon
           expect.objectContaining({ name: "rescheduleJobs" }),
         ],
       }),
-      expect.objectContaining({ name: "getNextJobAvailableInMs" }),
     ];
     expect(spyStateAdapter.calls.slice(0, expected.length)).toEqual(expected);
   });
@@ -370,7 +367,6 @@ export const processErrorHandlingTestSuite = ({ it }: { it: TestAPI<TestSuiteCon
           expect.objectContaining({ name: "renewJobLease" }),
         ],
       }),
-      expect.objectContaining({ name: "getNextJobAvailableInMs" }),
       expect.objectContaining({
         name: "withTransaction",
         status: "committed",
@@ -471,7 +467,6 @@ export const processErrorHandlingTestSuite = ({ it }: { it: TestAPI<TestSuiteCon
           expect.objectContaining({ name: "rescheduleJobs" }),
         ],
       }),
-      expect.objectContaining({ name: "getNextJobAvailableInMs" }),
     ];
     expect(spyStateAdapter.calls.slice(0, expected.length)).toEqual(expected);
   });
@@ -562,7 +557,6 @@ export const processErrorHandlingTestSuite = ({ it }: { it: TestAPI<TestSuiteCon
           expect.objectContaining({ name: "renewJobLease" }),
         ],
       }),
-      expect.objectContaining({ name: "getNextJobAvailableInMs" }),
       expect.objectContaining({
         name: "withTransaction",
         status: "committed",
@@ -675,7 +669,6 @@ export const processErrorHandlingTestSuite = ({ it }: { it: TestAPI<TestSuiteCon
           expect.objectContaining({ name: "rescheduleJobs" }),
         ],
       }),
-      expect.objectContaining({ name: "getNextJobAvailableInMs" }),
     ];
     expect(spyStateAdapter.calls.slice(0, expected.length)).toEqual(expected);
   });
@@ -769,7 +762,6 @@ export const processErrorHandlingTestSuite = ({ it }: { it: TestAPI<TestSuiteCon
           expect.objectContaining({ name: "renewJobLease" }),
         ],
       }),
-      expect.objectContaining({ name: "getNextJobAvailableInMs" }),
       expect.objectContaining({
         name: "withTransaction",
         status: "committed",
@@ -884,7 +876,6 @@ export const processErrorHandlingTestSuite = ({ it }: { it: TestAPI<TestSuiteCon
           expect.objectContaining({ name: "rescheduleJobs" }),
         ],
       }),
-      expect.objectContaining({ name: "getNextJobAvailableInMs" }),
     ];
     expect(spyStateAdapter.calls.slice(0, expected.length)).toEqual(expected);
   });
@@ -981,7 +972,6 @@ export const processErrorHandlingTestSuite = ({ it }: { it: TestAPI<TestSuiteCon
           expect.objectContaining({ name: "rescheduleJobs" }),
         ],
       }),
-      expect.objectContaining({ name: "getNextJobAvailableInMs" }),
     ];
     expect(spyStateAdapter.calls.slice(0, expected.length)).toEqual(expected);
   });
@@ -1079,7 +1069,6 @@ export const processErrorHandlingTestSuite = ({ it }: { it: TestAPI<TestSuiteCon
           expect.objectContaining({ name: "rescheduleJobs" }),
         ],
       }),
-      expect.objectContaining({ name: "getNextJobAvailableInMs" }),
     ];
     expect(spyStateAdapter.calls.slice(0, expected.length)).toEqual(expected);
   });
@@ -1172,7 +1161,6 @@ export const processErrorHandlingTestSuite = ({ it }: { it: TestAPI<TestSuiteCon
           expect.objectContaining({ name: "renewJobLease" }),
         ],
       }),
-      expect.objectContaining({ name: "getNextJobAvailableInMs" }),
       expect.objectContaining({
         name: "withTransaction",
         status: "committed",
@@ -1299,7 +1287,6 @@ export const processErrorHandlingTestSuite = ({ it }: { it: TestAPI<TestSuiteCon
           expect.objectContaining({ name: "rescheduleJobs" }),
         ],
       }),
-      expect.objectContaining({ name: "getNextJobAvailableInMs" }),
     ];
     expect(spyStateAdapter.calls.slice(0, expected.length)).toEqual(expected);
   });
@@ -1404,7 +1391,6 @@ export const processErrorHandlingTestSuite = ({ it }: { it: TestAPI<TestSuiteCon
           expect.objectContaining({ name: "renewJobLease" }),
         ],
       }),
-      expect.objectContaining({ name: "getNextJobAvailableInMs" }),
       expect.objectContaining({
         name: "withTransaction",
         status: "committed",

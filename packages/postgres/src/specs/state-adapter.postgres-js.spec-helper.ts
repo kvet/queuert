@@ -154,8 +154,8 @@ export const extendWithStatePostgresJs = <
           ...stateProvider,
           executeSql: async ({ txCtx, sql, params, paramTypes, columnTypes, readOnly }) => {
             queryCount++;
-            const shouldFail = shouldError();
-            if (enabled && !txCtx && shouldFail) {
+
+            if (enabled && shouldError()) {
               errorCount++;
               return originalExecuteSql({
                 txCtx,
