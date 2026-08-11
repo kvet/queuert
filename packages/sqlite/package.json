@@ -1,6 +1,6 @@
 {
   "name": "@queuert/sqlite",
-  "version": "0.15.0",
+  "version": "0.15.1",
   "description": "SQLite state adapter for Queuert",
   "keywords": [
     "background-jobs",
