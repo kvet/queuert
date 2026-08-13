@@ -415,65 +415,6 @@ export const createChainsGroup: ConformanceGroup<StateConformanceFixture> = {
       },
     },
     {
-      name: "excludeChainIds skips specified chains during deduplication",
-      run: async ({ stateAdapter }, expect) => {
-        const [{ job: first }] = await stateAdapter.withTransaction(async (txCtx) =>
-          stateAdapter.createChains({
-            txCtx,
-            jobs: [
-              {
-                typeName: "exclude-test",
-                chainTypeName: "exclude-test",
-                input: null,
-                deduplication: { key: "exclude-key", scope: "running" },
-              },
-            ],
-          }),
-        );
-
-        // Without exclude — deduplicates
-        const [{ deduplicated: withoutExclude }] = await stateAdapter.withTransaction(
-          async (txCtx) =>
-            stateAdapter.createChains({
-              txCtx,
-              jobs: [
-                {
-                  typeName: "exclude-test",
-                  chainTypeName: "exclude-test",
-                  input: null,
-                  deduplication: { key: "exclude-key", scope: "running" },
-                },
-              ],
-            }),
-        );
-
-        expect(withoutExclude).toBe(true);
-
-        // With exclude — creates new chain
-        const [{ job: second, deduplicated: withExclude }] = await stateAdapter.withTransaction(
-          async (txCtx) =>
-            stateAdapter.createChains({
-              txCtx,
-              jobs: [
-                {
-                  typeName: "exclude-test",
-                  chainTypeName: "exclude-test",
-                  input: null,
-                  deduplication: {
-                    key: "exclude-key",
-                    scope: "running",
-                    excludeChainIds: [first.chainId],
-                  },
-                },
-              ],
-            }),
-        );
-
-        expect(withExclude).toBe(false);
-        expect(second.id).not.toBe(first.id);
-      },
-    },
-    {
       name: "creates job with schedule options",
       run: async ({ stateAdapter }, expect) => {
         const before = Date.now();

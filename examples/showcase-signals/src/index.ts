@@ -77,10 +77,14 @@ const processors = createProcessors({
           await processItem();
         }
 
-        return complete(async () => ({
-          source: "handler",
-          result: "completed-by-handler",
-        }));
+        return complete(async ({ finish }) =>
+          finish({
+            output: {
+              source: "handler",
+              result: "completed-by-handler",
+            },
+          }),
+        );
       },
     },
 
@@ -106,11 +110,15 @@ const processors = createProcessors({
           }
         }
 
-        return complete(async () => ({
-          processed,
-          total: job.input.itemCount,
-          interrupted: processed < job.input.itemCount,
-        }));
+        return complete(async ({ finish }) =>
+          finish({
+            output: {
+              processed,
+              total: job.input.itemCount,
+              interrupted: processed < job.input.itemCount,
+            },
+          }),
+        );
       },
     },
   },
@@ -157,11 +165,15 @@ await withTransactionHooks(async (transactionHooks) =>
       sql: txSql,
       transactionHooks,
       ...externalTask,
-      complete: async ({ job, complete }) => {
-        await complete(job, async () => ({
-          source: "external",
-          result: "completed-via-api",
-        }));
+      handler: async ({ job, completeJob }) => {
+        await completeJob(job, async ({ finish }) =>
+          finish({
+            output: {
+              source: "external",
+              result: "completed-via-api",
+            },
+          }),
+        );
       },
     }),
   ),

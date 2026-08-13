@@ -10,7 +10,7 @@ import {
   type AttemptMiddleware,
   type MergedAttemptHandlerCtx,
   type MergedCompleteCtx,
-  type MergedExecuteCtx,
+  type MergedStepCtx,
   type MergedPrepareCtx,
 } from "./attempt-middleware.js";
 import {
@@ -45,7 +45,8 @@ type MergedDefs<
  *   attemptMiddleware: [tracingMiddleware, loggerMiddleware],
  *   processors: {
  *     "orders.create": {
- *       attemptHandler: async ({ complete, traceId, log }) => complete(async () => ({ orderId: "1" })),
+ *       attemptHandler: async ({ complete, traceId, log }) =>
+ *         complete(async ({ finish }) => finish({ output: { orderId: "1" } })),
  *     },
  *   },
  * });
@@ -77,7 +78,7 @@ export const createProcessors = <
       K,
       MergedAttemptHandlerCtx<TAttemptMiddleware>,
       MergedPrepareCtx<TAttemptMiddleware>,
-      MergedExecuteCtx<TAttemptMiddleware>,
+      MergedStepCtx<TAttemptMiddleware>,
       MergedCompleteCtx<TAttemptMiddleware>
     >;
   } & Record<Exclude<TProcessors, keyof TJobTypeDefinitions & string>, never>;

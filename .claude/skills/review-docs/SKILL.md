@@ -1,5 +1,5 @@
 ---
-name: docs-check
+name: review-docs
 description: Check if documentation is up to date with code changes. Analyzes git changes and identifies documentation that may need updating, comparing code modifications against reference docs and package READMEs.
 ---
 
@@ -11,7 +11,7 @@ Analyze git changes to identify documentation that may need updating. This skill
 
 When this skill is invoked:
 
-1. Read the detailed agent instructions from `.claude/agents/docs-check/instructions.md`
+1. Read the detailed agent instructions from `.claude/agents/review-docs/instructions.md`
 2. Gather the current changes using git diff
 3. Map code changes to relevant documentation
 4. Analyze whether documentation needs updating
@@ -20,10 +20,10 @@ When this skill is invoked:
 ## Usage
 
 ```
-/docs-check              # Check all uncommitted changes
-/docs-check --staged     # Check only staged changes
-/docs-check <commit>     # Check changes in a specific commit
-/docs-check <base>..<head>  # Check changes between commits
+/review-docs              # Check all uncommitted changes
+/review-docs --staged     # Check only staged changes
+/review-docs <commit>     # Check changes in a specific commit
+/review-docs <base>..<head>  # Check changes between commits
 ```
 
 ## Process

@@ -11,11 +11,11 @@
 import { type } from "arktype";
 import {
   createClient,
+  createInProcessNotifyAdapter,
+  createInProcessStateAdapter,
   createInProcessWorker,
   createProcessors,
   withTransactionHooks,
-  createInProcessNotifyAdapter,
-  createInProcessStateAdapter,
 } from "queuert";
 
 import { createArkTypeJobTypes } from "./arktype-adapter.js";
@@ -95,10 +95,12 @@ const worker = await createInProcessWorker({
           console.log(`Fetching data from ${job.input.url}`);
           const data = { items: [1, 2, 3], source: job.input.url };
 
-          return complete(async ({ continueWith }) =>
-            continueWith({
-              typeName: "process-data",
-              input: { data },
+          return complete(async ({ finish }) =>
+            finish({
+              continueWith: {
+                typeName: "process-data",
+                input: { data },
+              },
             }),
           );
         },
@@ -108,10 +110,14 @@ const worker = await createInProcessWorker({
           console.log("Processing data:", job.input.data);
           const data = job.input.data as { items: number[] };
 
-          return complete(async () => ({
-            processed: true,
-            itemCount: data.items?.length ?? 0,
-          }));
+          return complete(async ({ finish }) =>
+            finish({
+              output: {
+                processed: true,
+                itemCount: data.items?.length ?? 0,
+              },
+            }),
+          );
         },
       },
       "batch-process": {
@@ -119,17 +125,19 @@ const worker = await createInProcessWorker({
           console.log(`Processing batch ${job.input.batchId}`);
           console.log("Blockers completed:", job.blockers.length);
 
-          return complete(async () => ({
-            success: true,
-          }));
+          return complete(async ({ finish }) => finish({ output: { success: true } }));
         },
       },
       auth: {
         attemptHandler: async ({ job, complete }) => {
           console.log(`Authenticating with token: ${job.input.token.substring(0, 8)}...`);
-          return complete(async () => ({
-            userId: `user-${job.input.token.substring(0, 4)}`,
-          }));
+          return complete(async ({ finish }) =>
+            finish({
+              output: {
+                userId: `user-${job.input.token.substring(0, 4)}`,
+              },
+            }),
+          );
         },
       },
     },

@@ -13,7 +13,7 @@ A middleware has four optional hooks, each wrapping a different phase:
 | -------------- | ----------------------------------- | ------------------------- |
 | `wrapHandler`  | the whole attempt handler           | `attemptHandler` options  |
 | `wrapPrepare`  | the user-supplied prepare callback  | prepare-callback options  |
-| `wrapExecute`  | each user-supplied execute callback | execute-callback options  |
+| `wrapStep`     | each user-supplied step callback    | step-callback options     |
 | `wrapComplete` | the user-supplied complete callback | complete-callback options |
 
 All four accept a `next(ctx)` call that yields the inner layer. The object passed to `next` is merged into the callback options for that phase, and its type flows into the handler signature.
@@ -46,9 +46,13 @@ Inside the handler, `traceId` is typed:
 
 ```ts
 attemptHandler: async ({ traceId, complete }) => {
-  return complete(async () => ({
-    /* ... */
-  }));
+  return complete(async ({ finish }) =>
+    finish({
+      output: {
+        /* ... */
+      },
+    }),
+  );
 };
 ```
 
@@ -70,35 +74,39 @@ The handler invokes the prepare callback explicitly to receive the injected ctx:
 ```ts
 attemptHandler: async ({ prepare, complete }) => {
   const user = await prepare({ mode: "staged" }, async ({ user }) => user);
-  return complete(async () => ({
-    /* ... */
-  }));
+  return complete(async ({ finish }) =>
+    finish({
+      output: {
+        /* ... */
+      },
+    }),
+  );
 };
 ```
 
-### `wrapExecute` — wrap intermediate transactions
+### `wrapStep` — wrap intermediate transactions
 
-Use to inject context into each `execute` call — metrics recorders, progress trackers, shared resources that need the transaction context. The middleware runs inside each `execute` transaction.
+Use to inject context into each `step` call — metrics recorders, progress trackers, shared resources that need the transaction context. The middleware runs inside each `step` transaction.
 
 ```ts
 const metrics: AttemptMiddleware<typeof stateAdapter, {}, {}, { metrics: Metrics }> = {
-  wrapExecute: async ({ job, sql, next }) => {
+  wrapStep: async ({ job, sql, next }) => {
     const metrics = new Metrics(job.id, sql);
     return next({ metrics });
   },
 };
 ```
 
-Inside the handler, `metrics` is typed on the execute callback:
+Inside the handler, `metrics` is typed on the step callback:
 
 ```ts
-await execute(async ({ metrics }) => {
+await step(async ({ metrics }) => {
   metrics.record("batch-processed", batch.length);
   // ...
 });
 ```
 
-### `wrapComplete` — inject helpers used during completion
+### `wrapComplete` — inject helpers used during complete
 
 Use to inject helpers that are only meaningful in the complete transaction — audit recorders, usage meters, post-commit notifiers.
 
@@ -121,11 +129,13 @@ const audit: AttemptMiddleware<
 Because the helper writes through the complete transaction, its rows commit with the job — and roll back with the attempt if the handler throws.
 
 ```ts
-return complete(async ({ audit }) => {
+return complete(async ({ finish, audit }) => {
   audit("order-placed");
-  return {
-    /* ... */
-  };
+  return finish({
+    output: {
+      /* ... */
+    },
+  });
 });
 ```
 

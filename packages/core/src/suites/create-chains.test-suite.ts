@@ -787,14 +787,20 @@ export const createChainsTestSuite = ({ it }: { it: TestAPI<TestSuiteContext> })
           processors: {
             blocker: {
               attemptHandler: async ({ job, complete }) => {
-                return complete(async () => ({ result: job.input.value }));
+                return complete(async ({ finish }) =>
+                  finish({ output: { result: job.input.value } }),
+                );
               },
             },
             main: {
               attemptHandler: async ({ job, complete }) => {
-                return complete(async () => ({
-                  finalResult: job.blockers[0].output.result,
-                }));
+                return complete(async ({ finish }) =>
+                  finish({
+                    output: {
+                      finalResult: job.blockers[0].output.result,
+                    },
+                  }),
+                );
               },
             },
           },
@@ -856,7 +862,9 @@ export const createChainsTestSuite = ({ it }: { it: TestAPI<TestSuiteContext> })
           processors: {
             test: {
               attemptHandler: async ({ job, complete }) => {
-                return complete(async () => ({ result: job.input.value * 2 }));
+                return complete(async ({ finish }) =>
+                  finish({ output: { result: job.input.value * 2 } }),
+                );
               },
             },
           },

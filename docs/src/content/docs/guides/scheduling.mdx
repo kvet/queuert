@@ -41,11 +41,13 @@ Jobs can be scheduled to start at a future time using the `schedule` option. The
 The same `schedule` option works with `continueWith` for deferred continuations:
 
 ```ts
-return complete(async ({ continueWith }) =>
-  continueWith({
-    typeName: "follow-up",
-    input: { userId: job.input.userId },
-    schedule: { afterMs: 24 * 60 * 60 * 1000 }, // 24 hours later
+return complete(async ({ finish }) =>
+  finish({
+    continueWith: {
+      typeName: "follow-up",
+      input: { userId: job.input.userId },
+      schedule: { afterMs: 24 * 60 * 60 * 1000 }, // 24 hours later
+    },
   }),
 );
 ```
@@ -101,7 +103,9 @@ const jobTypes = defineJobTypes<{
   attemptHandler: async ({ job, complete }) => {
     await sendDigestEmail(job.input.userId);
 
-    return complete(async ({ sql, transactionHooks }) => {
+    return complete(async ({ finish, sql, transactionHooks }) => {
+      const completedJob = await finish({ output: { sentAt: new Date().toISOString() } });
+
       if (userStillSubscribed) {
         await client.createChain({
           sql,
@@ -112,11 +116,10 @@ const jobTypes = defineJobTypes<{
           deduplication: {
             key: `digest:${job.input.userId}`,
             scope: 'running',
-            excludeChainIds: [job.chainId],
           },
         });
       }
-      return { sentAt: new Date().toISOString() };
+      return completedJob;
     });
   },
 }

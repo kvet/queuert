@@ -43,12 +43,12 @@ const jobTypes = defineJobTypes<{
 // In processor
 'create-subscription': {
   attemptHandler: async ({ job, complete }) => {
-    return complete(async ({ sql, continueWith }) => {
+    return complete(async ({ finish, sql }) => {
       const [sub] = await sql`INSERT INTO subscriptions ... RETURNING id`;
-      return continueWith({
+      return finish({ continueWith: {
         typeName: "activate-trial",
         input: { subscriptionId: sub.id, trialDays: 7 },
-      });
+      }});
     });
   },
 },
@@ -81,12 +81,10 @@ Jobs conditionally continue to different types: `trial-decision -> convert-to-pa
 'trial-decision': {
   attemptHandler: async ({ job, complete }) => {
     const shouldConvert = userWantsToConvert;
-    return complete(async ({ continueWith }) => {
-      return continueWith({
-        typeName: shouldConvert ? "convert-to-paid" : "expire-trial",
-        input: { subscriptionId: job.input.subscriptionId },
-      });
-    });
+    return complete(async ({ finish }) => finish({ continueWith: {
+      typeName: shouldConvert ? "convert-to-paid" : "expire-trial",
+      input: { subscriptionId: job.input.subscriptionId },
+    }}));
   },
 },
 ```
@@ -118,14 +116,14 @@ const jobTypes = defineJobTypes<{
 'charge-billing': {
   attemptHandler: async ({ job, complete }) => {
     await chargePayment(job.input.subscriptionId);
-    return complete(async ({ continueWith }) => {
+    return complete(async ({ finish }) => {
       if (job.input.cycle < MAX_CYCLES) {
-        return continueWith({
+        return finish({ continueWith: {
           typeName: "charge-billing",
           input: { subscriptionId: job.input.subscriptionId, cycle: job.input.cycle + 1 },
-        });
+        }});
       }
-      return { finalCycle: job.input.cycle, totalCharged: calculateTotal() };
+      return finish({ output: { finalCycle: job.input.cycle, totalCharged: calculateTotal() } });
     });
   },
 },
@@ -163,17 +161,17 @@ const jobTypes = defineJobTypes<{
 // In processor - jump to cancel when max cycles reached
 'charge-billing': {
   attemptHandler: async ({ job, complete }) => {
-    return complete(async ({ continueWith }) => {
+    return complete(async ({ finish }) => {
       if (job.input.cycle >= MAX_CYCLES) {
-        return continueWith({
+        return finish({ continueWith: {
           typeName: "cancel-subscription",
           input: { subscriptionId: job.input.subscriptionId, reason: "max_billing_cycles_reached" },
-        });
+        }});
       }
-      return continueWith({
+      return finish({ continueWith: {
         typeName: "charge-billing",
         input: { subscriptionId: job.input.subscriptionId, cycle: job.input.cycle + 1 },
-      });
+      }});
     });
   },
 },

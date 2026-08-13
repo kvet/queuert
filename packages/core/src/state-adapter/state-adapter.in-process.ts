@@ -515,7 +515,7 @@ class JobIndex {
 
   findDeduplicatedJob(
     chainTypeName: string,
-    deduplication: DeduplicationOptions<string>,
+    deduplication: DeduplicationOptions,
   ): DbJob | undefined {
     if (!deduplication.key) return undefined;
 
@@ -523,13 +523,9 @@ class JobIndex {
     if (!set || set.size === 0) return undefined;
 
     const scope = deduplication.scope;
-    const exclude = deduplication.excludeChainIds
-      ? new Set(deduplication.excludeChainIds)
-      : undefined;
 
     let bestMatch: DbJob | undefined;
     for (const job of set) {
-      if (exclude?.has(job.chainId)) continue;
       if (scope === "running") {
         const tail = this.lastByChain.get(job.chainId);
         if (tail && isChainCompleted(tail)) continue;

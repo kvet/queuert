@@ -91,10 +91,14 @@ const worker = await createInProcessWorker({
         attemptHandler: async ({ job, complete }) => {
           console.log(`[fetch-source] Fetching ${job.input.sourceId}...`);
           await new Promise((r) => setTimeout(r, 100));
-          return complete(async () => ({
-            sourceId: job.input.sourceId,
-            data: `Data from ${job.input.sourceId}`,
-          }));
+          return complete(async ({ finish }) =>
+            finish({
+              output: {
+                sourceId: job.input.sourceId,
+                data: `Data from ${job.input.sourceId}`,
+              },
+            }),
+          );
         },
       },
 
@@ -106,25 +110,33 @@ const worker = await createInProcessWorker({
             console.log(`  - ${blocker.output.sourceId}: "${blocker.output.data}"`);
           }
 
-          return complete(async () => ({
-            reportId: job.input.reportId,
-            totalSources: job.blockers.length,
-            combinedData: job.blockers.map((b) => b.output.data).join(" | "),
-          }));
+          return complete(async ({ finish }) =>
+            finish({
+              output: {
+                reportId: job.input.reportId,
+                totalSources: job.blockers.length,
+                combinedData: job.blockers.map((b) => b.output.data).join(" | "),
+              },
+            }),
+          );
         },
       },
 
       "validate-user": {
         attemptHandler: async ({ job, complete }) => {
           console.log(`[validate-user] Validating ${job.input.userId}`);
-          return complete(async () => ({ userId: job.input.userId, role: "admin" }));
+          return complete(async ({ finish }) =>
+            finish({ output: { userId: job.input.userId, role: "admin" } }),
+          );
         },
       },
 
       "load-config": {
         attemptHandler: async ({ job, complete }) => {
           console.log(`[load-config] Loading ${job.input.configKey}`);
-          return complete(async () => ({ configKey: job.input.configKey, value: "production" }));
+          return complete(async ({ finish }) =>
+            finish({ output: { configKey: job.input.configKey, value: "production" } }),
+          );
         },
       },
 
@@ -135,10 +147,14 @@ const worker = await createInProcessWorker({
             `[perform-action] User: ${userBlocker.output.role}, Config: ${configBlocker.output.value}`,
           );
 
-          return complete(async () => ({
-            actionId: job.input.actionId,
-            result: `Completed by ${userBlocker.output.role} with ${configBlocker.output.value}`,
-          }));
+          return complete(async ({ finish }) =>
+            finish({
+              output: {
+                actionId: job.input.actionId,
+                result: `Completed by ${userBlocker.output.role} with ${configBlocker.output.value}`,
+              },
+            }),
+          );
         },
       },
     },

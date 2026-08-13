@@ -31,7 +31,7 @@ describe("createInProcessWorker defaults", () => {
             attemptHandler: async ({ job, complete }) => {
               attempts.push(job.attempt);
               if (job.attempt < 3) throw new Error("retry");
-              return complete(async () => null);
+              return complete(async ({ finish }) => finish({ output: null }));
             },
           },
         },
@@ -74,7 +74,7 @@ describe("createInProcessWorker defaults", () => {
               if (lastAt !== null) delaysBetweenAttempts.push(now - lastAt);
               lastAt = now;
               if (job.attempt < 2) throw new Error("retry");
-              return complete(async () => null);
+              return complete(async ({ finish }) => finish({ output: null }));
             },
           },
         },
@@ -107,7 +107,10 @@ describe("createInProcessWorker workerName validation", () => {
         client,
         jobTypes,
         processors: {
-          foo: { attemptHandler: async ({ complete }) => complete(async () => null) },
+          foo: {
+            attemptHandler: async ({ complete }) =>
+              complete(async ({ finish }) => finish({ output: null })),
+          },
         },
       }),
     });

@@ -51,7 +51,8 @@ describe("createInProcessWorker requiredAttemptMiddleware", () => {
         attemptMiddleware: [authMiddleware, traceMiddleware],
         processors: {
           foo: {
-            attemptHandler: async ({ complete }) => complete(async () => null),
+            attemptHandler: async ({ complete }) =>
+              complete(async ({ finish }) => finish({ output: null })),
           },
         },
       }),
@@ -75,7 +76,8 @@ describe("createInProcessWorker requiredAttemptMiddleware", () => {
         attemptMiddleware: [metricsMiddleware, authMiddleware, traceMiddleware],
         processors: {
           foo: {
-            attemptHandler: async ({ complete }) => complete(async () => null),
+            attemptHandler: async ({ complete }) =>
+              complete(async ({ finish }) => finish({ output: null })),
           },
         },
       }),
@@ -102,7 +104,8 @@ describe("createInProcessWorker requiredAttemptMiddleware", () => {
           attemptMiddleware: [authMiddleware],
           processors: {
             foo: {
-              attemptHandler: async ({ complete }) => complete(async () => null),
+              attemptHandler: async ({ complete }) =>
+                complete(async ({ finish }) => finish({ output: null })),
             },
           },
         }),
@@ -127,7 +130,8 @@ describe("createInProcessWorker requiredAttemptMiddleware", () => {
           attemptMiddleware: [traceMiddleware, authMiddleware],
           processors: {
             foo: {
-              attemptHandler: async ({ complete }) => complete(async () => null),
+              attemptHandler: async ({ complete }) =>
+                complete(async ({ finish }) => finish({ output: null })),
             },
           },
         }),
@@ -160,7 +164,8 @@ describe("createInProcessWorker requiredAttemptMiddleware", () => {
           attemptMiddleware: [lookalike],
           processors: {
             foo: {
-              attemptHandler: async ({ complete }) => complete(async () => null),
+              attemptHandler: async ({ complete }) =>
+                complete(async ({ finish }) => finish({ output: null })),
             },
           },
         }),
@@ -183,7 +188,8 @@ describe("createInProcessWorker requiredAttemptMiddleware", () => {
       attemptMiddleware: [authMiddleware],
       processors: {
         foo: {
-          attemptHandler: async ({ complete }) => complete(async () => null),
+          attemptHandler: async ({ complete }) =>
+            complete(async ({ finish }) => finish({ output: null })),
         },
       },
     });
@@ -193,7 +199,8 @@ describe("createInProcessWorker requiredAttemptMiddleware", () => {
       jobTypes: barJobTypes,
       processors: {
         bar: {
-          attemptHandler: async ({ complete }) => complete(async () => null),
+          attemptHandler: async ({ complete }) =>
+            complete(async ({ finish }) => finish({ output: null })),
         },
       },
     });
@@ -225,7 +232,10 @@ describe("createInProcessWorker requiredAttemptMiddleware", () => {
         jobTypes,
         attemptMiddleware: [mw],
         processors: {
-          foo: { attemptHandler: async ({ complete }) => complete(async () => null) },
+          foo: {
+            attemptHandler: async ({ complete }) =>
+              complete(async ({ finish }) => finish({ output: null })),
+          },
         },
       }),
     });
@@ -258,7 +268,10 @@ describe("createInProcessWorker requiredAttemptMiddleware", () => {
           jobTypes,
           attemptMiddleware: [other],
           processors: {
-            foo: { attemptHandler: async ({ complete }) => complete(async () => null) },
+            foo: {
+              attemptHandler: async ({ complete }) =>
+                complete(async ({ finish }) => finish({ output: null })),
+            },
           },
         }),
       }),
@@ -277,7 +290,8 @@ describe("createInProcessWorker requiredAttemptMiddleware", () => {
         jobTypes,
         processors: {
           foo: {
-            attemptHandler: async ({ complete }) => complete(async () => null),
+            attemptHandler: async ({ complete }) =>
+              complete(async ({ finish }) => finish({ output: null })),
           },
         },
       }),

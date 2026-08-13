@@ -118,10 +118,10 @@ export const deletionTestSuite = ({ it }: { it: TestAPI<TestSuiteContext> }): vo
           ...txCtx,
           transactionHooks,
           ...chain,
-          complete: async ({ job, complete }) => {
+          handler: async ({ job, completeJob }) => {
             if (job.typeName === "step1") {
-              await complete(job, async ({ continueWith }) =>
-                continueWith({ typeName: "step2", input: { continued: true } }),
+              await completeJob(job, async ({ finish }) =>
+                finish({ continueWith: { typeName: "step2", input: { continued: true } } }),
               );
             }
           },
@@ -810,7 +810,7 @@ export const deletionTestSuite = ({ it }: { it: TestAPI<TestSuiteContext> }): vo
               await sleep(200);
 
               try {
-                return await complete(async () => null);
+                return await complete(async ({ finish }) => finish({ output: null }));
               } catch (error) {
                 processThrown.resolve();
                 throw error;

@@ -77,13 +77,15 @@ await withTransactionHooks(async (transactionHooks) =>
 );
 ```
 
-## Excluding Chains
+## Self-Scheduling Recurring Chains
 
-Use `excludeChainIds` to skip specific chains during deduplication matching. This is essential for recurring jobs that self-schedule within a completion callback — the current chain is still incomplete at that point, so without exclusion the new chain would be deduplicated against it.
+A recurring chain schedules its next occurrence from its own terminal job. Under `scope: "running"` the ordering matters: commit **first**, then create the next chain. `finish({ output: ... })` commits the completion inside the complete transaction, so by the time `createChain` runs, the chain being finished already reads as completed and cannot match itself.
 
 ```ts
-// Inside a processor's completion callback
-return complete(async ({ sql, transactionHooks }) => {
+// Inside a processor's complete callback
+return complete(async ({ finish, sql, transactionHooks }) => {
+  const completedJob = await finish({ output: { checkedAt: new Date().toISOString() } });
+
   await client.createChain({
     sql,
     transactionHooks,
@@ -93,11 +95,13 @@ return complete(async ({ sql, transactionHooks }) => {
     deduplication: {
       key: `health:${job.input.serviceId}`,
       scope: "running",
-      excludeChainIds: [job.chainId],
     },
   });
-  return { checkedAt: new Date().toISOString() };
+
+  return completedJob;
 });
 ```
+
+Scheduling _before_ committing instead matches the still-running chain and silently suppresses the next occurrence, ending the recurrence. The same applies to scheduling from a mid-chain job: that chain is genuinely still running, so schedule from the terminal job instead.
 
 See [examples/showcase-scheduling](https://github.com/kvet/queuert/tree/main/examples/showcase-scheduling) for a complete working example demonstrating deduplication with recurring jobs. See also [Scheduling](../scheduling/) and [Transaction Hooks](../transaction-hooks/).

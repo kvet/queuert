@@ -33,19 +33,25 @@ const worker = await createInProcessWorker({
       greet: {
         attemptHandler: async ({ job, complete }) => {
           await delay(20);
-          return complete(async () => ({
-            greeting: `Hello, ${job.input.name}!`,
-          }));
+          return complete(async ({ finish }) =>
+            finish({
+              output: {
+                greeting: `Hello, ${job.input.name}!`,
+              },
+            }),
+          );
         },
       },
 
       "order:validate": {
         attemptHandler: async ({ job, complete }) => {
           await delay(50);
-          return complete(async ({ continueWith }) =>
-            continueWith({
-              typeName: "order:process",
-              input: { orderId: job.input.orderId, validated: true },
+          return complete(async ({ finish }) =>
+            finish({
+              continueWith: {
+                typeName: "order:process",
+                input: { orderId: job.input.orderId, validated: true },
+              },
             }),
           );
         },
@@ -53,10 +59,12 @@ const worker = await createInProcessWorker({
       "order:process": {
         attemptHandler: async ({ job, complete }) => {
           await delay(100);
-          return complete(async ({ continueWith }) =>
-            continueWith({
-              typeName: "order:complete",
-              input: { orderId: job.input.orderId, processed: true },
+          return complete(async ({ finish }) =>
+            finish({
+              continueWith: {
+                typeName: "order:complete",
+                input: { orderId: job.input.orderId, processed: true },
+              },
             }),
           );
         },
@@ -64,39 +72,55 @@ const worker = await createInProcessWorker({
       "order:complete": {
         attemptHandler: async ({ job, complete }) => {
           await delay(30);
-          return complete(async () => ({
-            orderId: job.input.orderId,
-            status: "completed",
-          }));
+          return complete(async ({ finish }) =>
+            finish({
+              output: {
+                orderId: job.input.orderId,
+                status: "completed",
+              },
+            }),
+          );
         },
       },
 
       "fetch-user": {
         attemptHandler: async ({ job, complete }) => {
           await delay(80);
-          return complete(async () => ({
-            userId: job.input.userId,
-            name: "Alice",
-          }));
+          return complete(async ({ finish }) =>
+            finish({
+              output: {
+                userId: job.input.userId,
+                name: "Alice",
+              },
+            }),
+          );
         },
       },
       "fetch-permissions": {
         attemptHandler: async ({ job, complete }) => {
           await delay(60);
-          return complete(async () => ({
-            userId: job.input.userId,
-            permissions: ["read", "write"],
-          }));
+          return complete(async ({ finish }) =>
+            finish({
+              output: {
+                userId: job.input.userId,
+                permissions: ["read", "write"],
+              },
+            }),
+          );
         },
       },
       "process-with-blockers": {
         attemptHandler: async ({ job, complete }) => {
           const [userBlocker, permBlocker] = job.blockers;
           await delay(40);
-          return complete(async () => ({
-            taskId: job.input.taskId,
-            result: `${userBlocker.output.name} has ${permBlocker.output.permissions.join(", ")}`,
-          }));
+          return complete(async ({ finish }) =>
+            finish({
+              output: {
+                taskId: job.input.taskId,
+                result: `${userBlocker.output.name} has ${permBlocker.output.permissions.join(", ")}`,
+              },
+            }),
+          );
         },
       },
 
@@ -105,7 +129,7 @@ const worker = await createInProcessWorker({
           if (job.input.shouldFail && job.attempt < 2) {
             throw new Error("Simulated failure");
           }
-          return complete(async () => ({ success: true as const }));
+          return complete(async ({ finish }) => finish({ output: { success: true as const } }));
         },
         backoffConfig: { initialDelayMs: 100, maxDelayMs: 100 },
       },
@@ -113,32 +137,41 @@ const worker = await createInProcessWorker({
       "scheduled-report": {
         attemptHandler: async ({ complete }) => {
           await delay(50);
-          return complete(async () => ({
-            generatedAt: new Date().toISOString(),
-          }));
+          return complete(async ({ finish }) =>
+            finish({
+              output: {
+                generatedAt: new Date().toISOString(),
+              },
+            }),
+          );
         },
       },
 
       "count-step": {
         attemptHandler: async ({ job, complete }) =>
-          complete(async ({ continueWith }) => {
+          complete(async ({ finish }) => {
             if (job.input.n >= job.input.total) {
-              return { total: job.input.total };
+              return finish({ output: { total: job.input.total } });
             }
-            return continueWith({
-              typeName: "count-step",
-              input: { n: job.input.n + 1, total: job.input.total },
+            return finish({
+              continueWith: {
+                typeName: "count-step",
+                input: { n: job.input.n + 1, total: job.input.total },
+              },
             });
           }),
       },
 
       signal: {
-        attemptHandler: async ({ complete }) => complete(async () => ({ fired: true as const })),
+        attemptHandler: async ({ complete }) =>
+          complete(async ({ finish }) => finish({ output: { fired: true as const } })),
       },
 
       "blocked-task": {
         attemptHandler: async ({ job, complete }) =>
-          complete(async () => ({ index: job.input.index, done: true as const })),
+          complete(async ({ finish }) =>
+            finish({ output: { index: job.input.index, done: true as const } }),
+          ),
       },
     },
   }),

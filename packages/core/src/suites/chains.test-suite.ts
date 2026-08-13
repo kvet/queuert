@@ -61,21 +61,28 @@ export const chainsTestSuite = ({ it }: { it: TestAPI<TestSuiteContext> }): void
               expect(job.id).toEqual(chain.id);
               expect(job.chainId).toEqual(chain.id);
 
-              return complete(async ({ continueWith }) => {
+              return complete(async ({ finish }) => {
                 expectTypeOf<
-                  Parameters<typeof continueWith>[0]["typeName"]
+                  Extract<
+                    Parameters<typeof finish>[0],
+                    { continueWith: unknown }
+                  >["continueWith"]["typeName"]
                 >().toEqualTypeOf<"linear_next">();
 
-                const continuedJob = await continueWith({
-                  typeName: "linear_next",
-                  input: { valueNext: job.input.value + 1 },
+                const completedJob = await finish({
+                  continueWith: {
+                    typeName: "linear_next",
+                    input: { valueNext: job.input.value + 1 },
+                  },
                 });
-                expectTypeOf(continuedJob.typeName).toEqualTypeOf<"linear_next">();
-                expectTypeOf(continuedJob.status).toEqualTypeOf<"pending">();
-                expect(continuedJob.typeName).toBe("linear_next");
-                expect(continuedJob.status).toBe("pending");
-                expect(continuedJob.chainId).toEqual(chain.id);
-                return continuedJob;
+                expectTypeOf(completedJob.continuedTo.typeName).toEqualTypeOf<"linear_next">();
+                expectTypeOf(completedJob.continuedTo.status).toEqualTypeOf<"pending">();
+                expect(completedJob.continuedTo.typeName).toBe("linear_next");
+                expect(completedJob.continuedTo.status).toBe("pending");
+                expect(completedJob.continuedTo.chainId).toEqual(chain.id);
+                expect(completedJob.status).toBe("completed");
+                expect(completedJob.continuedToId).toBe(completedJob.continuedTo.id);
+                return completedJob;
               });
             },
           },
@@ -84,18 +91,23 @@ export const chainsTestSuite = ({ it }: { it: TestAPI<TestSuiteContext> }): void
               expect(job.id).not.toEqual(chain.id);
               expect(job.chainId).toEqual(chain.id);
 
-              return complete(async ({ continueWith }) => {
+              return complete(async ({ finish }) => {
                 expectTypeOf<
-                  Parameters<typeof continueWith>[0]["typeName"]
+                  Extract<
+                    Parameters<typeof finish>[0],
+                    { continueWith: unknown }
+                  >["continueWith"]["typeName"]
                 >().toEqualTypeOf<"linear_next_next">();
 
-                const continuedJob = await continueWith({
-                  typeName: "linear_next_next",
-                  input: { valueNextNext: job.input.valueNext + 1 },
+                const completedJob = await finish({
+                  continueWith: {
+                    typeName: "linear_next_next",
+                    input: { valueNextNext: job.input.valueNext + 1 },
+                  },
                 });
-                expectTypeOf(continuedJob.typeName).toEqualTypeOf<"linear_next_next">();
-                expectTypeOf(continuedJob.status).toEqualTypeOf<"pending">();
-                return continuedJob;
+                expectTypeOf(completedJob.continuedTo.typeName).toEqualTypeOf<"linear_next_next">();
+                expectTypeOf(completedJob.continuedTo.status).toEqualTypeOf<"pending">();
+                return completedJob;
               });
             },
           },
@@ -104,9 +116,13 @@ export const chainsTestSuite = ({ it }: { it: TestAPI<TestSuiteContext> }): void
               expect(job.id).not.toEqual(chain.id);
               expect(job.chainId).toEqual(chain.id);
 
-              const result = await complete(async () => ({
-                result: job.input.valueNextNext,
-              }));
+              const result = await complete(async ({ finish }) =>
+                finish({
+                  output: {
+                    result: job.input.valueNextNext,
+                  },
+                }),
+              );
               expectTypeOf(result.typeName).toEqualTypeOf<"linear_next_next">();
               expectTypeOf(result.status).toEqualTypeOf<"completed">();
               return result;
@@ -186,14 +202,19 @@ export const chainsTestSuite = ({ it }: { it: TestAPI<TestSuiteContext> }): void
           main: {
             attemptHandler: async ({ job, prepare, complete }) => {
               await prepare({ mode: "atomic" });
-              return complete(async ({ continueWith }) => {
-                expectTypeOf<Parameters<typeof continueWith>[0]["typeName"]>().toEqualTypeOf<
-                  "branch1" | "branch2"
-                >();
+              return complete(async ({ finish }) => {
+                expectTypeOf<
+                  Extract<
+                    Parameters<typeof finish>[0],
+                    { continueWith: unknown }
+                  >["continueWith"]["typeName"]
+                >().toEqualTypeOf<"branch1" | "branch2">();
 
-                return continueWith({
-                  typeName: job.input.value % 2 === 0 ? "branch1" : "branch2",
-                  input: { valueBranched: job.input.value },
+                return finish({
+                  continueWith: {
+                    typeName: job.input.value % 2 === 0 ? "branch1" : "branch2",
+                    input: { valueBranched: job.input.value },
+                  },
                 });
               });
             },
@@ -201,17 +222,25 @@ export const chainsTestSuite = ({ it }: { it: TestAPI<TestSuiteContext> }): void
           branch1: {
             attemptHandler: async ({ job, prepare, complete }) => {
               await prepare({ mode: "atomic" });
-              return complete(async () => ({
-                result1: job.input.valueBranched,
-              }));
+              return complete(async ({ finish }) =>
+                finish({
+                  output: {
+                    result1: job.input.valueBranched,
+                  },
+                }),
+              );
             },
           },
           branch2: {
             attemptHandler: async ({ job, prepare, complete }) => {
               await prepare({ mode: "atomic" });
-              return complete(async () => ({
-                result2: job.input.valueBranched,
-              }));
+              return complete(async ({ finish }) =>
+                finish({
+                  output: {
+                    result2: job.input.valueBranched,
+                  },
+                }),
+              );
             },
           },
         },
@@ -304,47 +333,59 @@ export const chainsTestSuite = ({ it }: { it: TestAPI<TestSuiteContext> }): void
           main: {
             attemptHandler: async ({ job, prepare, complete }) => {
               await prepare({ mode: "atomic" });
-              return complete(async ({ continueWith }) => {
-                expectTypeOf<Parameters<typeof continueWith>[0]["typeName"]>().toEqualTypeOf<
-                  "branch1" | "branch2"
-                >();
+              return complete(async ({ finish }) => {
+                expectTypeOf<
+                  Extract<
+                    Parameters<typeof finish>[0],
+                    { continueWith: unknown }
+                  >["continueWith"]["typeName"]
+                >().toEqualTypeOf<"branch1" | "branch2">();
 
                 if (false as boolean) {
-                  void continueWith({
-                    typeName: "branch1",
-                    // @ts-expect-error typeName/input mismatch must be rejected
-                    input: { valueBranched2: job.input.value },
-                  });
+                  const badInput = { valueBranched2: job.input.value };
+                  // @ts-expect-error typeName/input mismatch must be rejected
+                  void finish({ continueWith: { typeName: "branch1", input: badInput } });
                 }
 
-                return continueWith(
-                  job.input.value % 2 === 0
-                    ? {
-                        typeName: "branch1",
-                        input: { valueBranched1: job.input.value },
-                      }
-                    : {
-                        typeName: "branch2",
-                        input: { valueBranched2: job.input.value },
-                      },
-                );
+                if (job.input.value % 2 === 0) {
+                  return finish({
+                    continueWith: {
+                      typeName: "branch1",
+                      input: { valueBranched1: job.input.value },
+                    },
+                  });
+                }
+                return finish({
+                  continueWith: {
+                    typeName: "branch2",
+                    input: { valueBranched2: job.input.value },
+                  },
+                });
               });
             },
           },
           branch1: {
             attemptHandler: async ({ job, prepare, complete }) => {
               await prepare({ mode: "atomic" });
-              return complete(async () => ({
-                result: job.input.valueBranched1,
-              }));
+              return complete(async ({ finish }) =>
+                finish({
+                  output: {
+                    result: job.input.valueBranched1,
+                  },
+                }),
+              );
             },
           },
           branch2: {
             attemptHandler: async ({ job, prepare, complete }) => {
               await prepare({ mode: "atomic" });
-              return complete(async () => ({
-                result: job.input.valueBranched2,
-              }));
+              return complete(async ({ finish }) =>
+                finish({
+                  output: {
+                    result: job.input.valueBranched2,
+                  },
+                }),
+              );
             },
           },
         },
@@ -426,17 +467,22 @@ export const chainsTestSuite = ({ it }: { it: TestAPI<TestSuiteContext> }): void
           loop: {
             attemptHandler: async ({ job, prepare, complete }) => {
               await prepare({ mode: "atomic" });
-              return complete(async ({ continueWith }) => {
+              return complete(async ({ finish }) => {
                 expectTypeOf<
-                  Parameters<typeof continueWith>[0]["typeName"]
+                  Extract<
+                    Parameters<typeof finish>[0],
+                    { continueWith: unknown }
+                  >["continueWith"]["typeName"]
                 >().toEqualTypeOf<"loop">();
 
                 return job.input.counter < 3
-                  ? continueWith({
-                      typeName: "loop",
-                      input: { counter: job.input.counter + 1 },
+                  ? finish({
+                      continueWith: {
+                        typeName: "loop",
+                        input: { counter: job.input.counter + 1 },
+                      },
                     })
-                  : { done: true };
+                  : finish({ output: { done: true } });
               });
             },
           },
@@ -503,14 +549,19 @@ export const chainsTestSuite = ({ it }: { it: TestAPI<TestSuiteContext> }): void
           start: {
             attemptHandler: async ({ job, prepare, complete }) => {
               await prepare({ mode: "atomic" });
-              return complete(async ({ continueWith }) => {
+              return complete(async ({ finish }) => {
                 expectTypeOf<
-                  Parameters<typeof continueWith>[0]["typeName"]
+                  Extract<
+                    Parameters<typeof finish>[0],
+                    { continueWith: unknown }
+                  >["continueWith"]["typeName"]
                 >().toEqualTypeOf<"end">();
 
-                return continueWith({
-                  typeName: "end",
-                  input: { result: job.input.value + 1 },
+                return finish({
+                  continueWith: {
+                    typeName: "end",
+                    input: { result: job.input.value + 1 },
+                  },
                 });
               });
             },
@@ -518,18 +569,23 @@ export const chainsTestSuite = ({ it }: { it: TestAPI<TestSuiteContext> }): void
           end: {
             attemptHandler: async ({ job, prepare, complete }) => {
               await prepare({ mode: "atomic" });
-              return complete(async ({ continueWith }) => {
+              return complete(async ({ finish }) => {
                 expectTypeOf<
-                  Parameters<typeof continueWith>[0]["typeName"]
+                  Extract<
+                    Parameters<typeof finish>[0],
+                    { continueWith: unknown }
+                  >["continueWith"]["typeName"]
                 >().toEqualTypeOf<"start">();
 
                 if (job.input.result < 3) {
-                  return continueWith({
-                    typeName: "start",
-                    input: { value: job.input.result },
+                  return finish({
+                    continueWith: {
+                      typeName: "start",
+                      input: { value: job.input.result },
+                    },
                   });
                 } else {
-                  return { finalResult: job.input.result };
+                  return finish({ output: { finalResult: job.input.result } });
                 }
               });
             },
@@ -594,8 +650,8 @@ export const chainsTestSuite = ({ it }: { it: TestAPI<TestSuiteContext> }): void
               // Entry job's chainTypeName should match its own typeName
               expectTypeOf(job.chainTypeName).toEqualTypeOf<"entryA">();
               expect(job.chainTypeName).toBe("entryA");
-              return complete(async ({ continueWith }) =>
-                continueWith({ typeName: "shared", input: { data: 1 } }),
+              return complete(async ({ finish }) =>
+                finish({ continueWith: { typeName: "shared", input: { data: 1 } } }),
               );
             },
           },
@@ -604,8 +660,8 @@ export const chainsTestSuite = ({ it }: { it: TestAPI<TestSuiteContext> }): void
               // Entry job's chainTypeName should match its own typeName
               expectTypeOf(job.chainTypeName).toEqualTypeOf<"entryB">();
               expect(job.chainTypeName).toBe("entryB");
-              return complete(async ({ continueWith }) =>
-                continueWith({ typeName: "shared", input: { data: 2 } }),
+              return complete(async ({ finish }) =>
+                finish({ continueWith: { typeName: "shared", input: { data: 2 } } }),
               );
             },
           },
@@ -614,7 +670,7 @@ export const chainsTestSuite = ({ it }: { it: TestAPI<TestSuiteContext> }): void
               // Shared job's chainTypeName should be union of both entry types
               expectTypeOf(job.chainTypeName).toEqualTypeOf<"entryA" | "entryB">();
               expect(["entryA", "entryB"]).toContain(job.chainTypeName);
-              return complete(async () => ({ done: true }));
+              return complete(async ({ finish }) => finish({ output: { done: true } }));
             },
           },
         },
@@ -706,16 +762,24 @@ export const chainsTestSuite = ({ it }: { it: TestAPI<TestSuiteContext> }): void
 
               independentChainId = independentChain.id;
 
-              return complete(async () => ({
-                childChainId: independentChain.id,
-              }));
+              return complete(async ({ finish }) =>
+                finish({
+                  output: {
+                    childChainId: independentChain.id,
+                  },
+                }),
+              );
             },
           },
           independent: {
             attemptHandler: async ({ job, complete }) => {
-              return complete(async () => ({
-                result: job.input.fromParent * 2,
-              }));
+              return complete(async ({ finish }) =>
+                finish({
+                  output: {
+                    result: job.input.fromParent * 2,
+                  },
+                }),
+              );
             },
           },
         },
@@ -788,14 +852,14 @@ export const chainsTestSuite = ({ it }: { it: TestAPI<TestSuiteContext> }): void
         processors: {
           step1: {
             attemptHandler: async ({ complete }) =>
-              complete(async ({ continueWith }) =>
-                continueWith({ typeName: "step2", id: userId, input: null }),
+              complete(async ({ finish }) =>
+                finish({ continueWith: { typeName: "step2", id: userId, input: null } }),
               ),
           },
           step2: {
             attemptHandler: async ({ job, complete }) => {
               expect(job.id).toBe(userId);
-              return complete(async () => ({ id: job.id }));
+              return complete(async ({ finish }) => finish({ output: { id: job.id } }));
             },
           },
         },
@@ -838,16 +902,21 @@ export const chainsTestSuite = ({ it }: { it: TestAPI<TestSuiteContext> }): void
         processors: {
           step1: {
             attemptHandler: async ({ complete }) =>
-              complete(async ({ continueWith }) => {
+              complete(async ({ finish }) => {
                 try {
-                  return await continueWith({ typeName: "step2", id: "bad-id", input: null });
+                  return await finish({
+                    continueWith: { typeName: "step2", id: "bad-id", input: null },
+                  });
                 } catch (err) {
                   continueWithError = err;
                   throw err;
                 }
               }),
           },
-          step2: { attemptHandler: async ({ complete }) => complete(async () => null) },
+          step2: {
+            attemptHandler: async ({ complete }) =>
+              complete(async ({ finish }) => finish({ output: null })),
+          },
         },
       }),
     });

@@ -12,7 +12,7 @@ import {
   extendWithNotifyInProcess,
   extendWithStateInProcess,
 } from "queuert/testing";
-import { it as baseIt, describe } from "vitest";
+import { it as baseIt, describe, expectTypeOf } from "vitest";
 
 import { extendWithObservabilityOtel } from "./observability-adapter.otel.spec-helper.js";
 
@@ -63,7 +63,7 @@ describe("Metrics", () => {
           test: {
             attemptHandler: async ({ prepare, complete }) => {
               await prepare({ mode: "staged" });
-              return complete(async () => ({ result: true }));
+              return complete(async ({ finish }) => finish({ output: { result: true } }));
             },
           },
         },
@@ -147,7 +147,7 @@ describe("Metrics", () => {
               if (job.attempt < 4) {
                 throw new Error("Unexpected error");
               }
-              return complete(async () => null);
+              return complete(async ({ finish }) => finish({ output: null }));
             },
           },
         },
@@ -233,27 +233,31 @@ describe("Metrics", () => {
         processors: {
           linear: {
             attemptHandler: async ({ job, complete }) =>
-              complete(async ({ continueWith }) =>
-                continueWith({
-                  typeName: "linear_next",
-                  input: { valueNext: job.input.value + 1 },
+              complete(async ({ finish }) =>
+                finish({
+                  continueWith: {
+                    typeName: "linear_next",
+                    input: { valueNext: job.input.value + 1 },
+                  },
                 }),
               ),
           },
           linear_next: {
             attemptHandler: async ({ job, complete }) =>
-              complete(async ({ continueWith }) =>
-                continueWith({
-                  typeName: "linear_next_next",
-                  input: { valueNextNext: job.input.valueNext + 1 },
+              complete(async ({ finish }) =>
+                finish({
+                  continueWith: {
+                    typeName: "linear_next_next",
+                    input: { valueNextNext: job.input.valueNext + 1 },
+                  },
                 }),
               ),
           },
           linear_next_next: {
             attemptHandler: async ({ job, complete }) =>
-              complete(async () => ({
-                result: job.input.valueNextNext,
-              })),
+              complete(async ({ finish }) =>
+                finish({ output: { result: job.input.valueNextNext } }),
+              ),
           },
         },
       }),
@@ -345,13 +349,15 @@ describe("Metrics", () => {
         processors: {
           blocker: {
             attemptHandler: async ({ job, complete }) =>
-              complete(async ({ continueWith }) =>
+              complete(async ({ finish }) =>
                 job.input.value < 1
-                  ? continueWith({
-                      typeName: "blocker",
-                      input: { value: job.input.value + 1 },
+                  ? finish({
+                      continueWith: {
+                        typeName: "blocker",
+                        input: { value: job.input.value + 1 },
+                      },
                     })
-                  : { done: true },
+                  : finish({ output: { done: true } }),
               ),
           },
           main: {
@@ -362,9 +368,13 @@ describe("Metrics", () => {
               },
               complete,
             }) =>
-              complete(async () => ({
-                finalResult: (blocker.output.done ? 1 : 0) + (input.start ? 1 : 0),
-              })),
+              complete(async ({ finish }) =>
+                finish({
+                  output: {
+                    finalResult: (blocker.output.done ? 1 : 0) + (input.start ? 1 : 0),
+                  },
+                }),
+              ),
           },
         },
       }),
@@ -459,8 +469,8 @@ describe("Metrics", () => {
           ...txCtx,
           transactionHooks,
           ...chain,
-          complete: async ({ job, complete }) => {
-            return complete(job, async () => ({ result: 84 }));
+          handler: async ({ job, completeJob }) => {
+            return completeJob(job, async ({ finish }) => finish({ output: { result: 84 } }));
           },
         }),
       ),
@@ -506,7 +516,7 @@ describe("Metrics", () => {
           test: {
             attemptHandler: async ({ complete }) => {
               await sleep(200);
-              return complete(async () => null);
+              return complete(async ({ finish }) => finish({ output: null }));
             },
           },
         },
@@ -559,7 +569,7 @@ describe("Metrics", () => {
           test: {
             attemptHandler: async ({ complete }) => {
               await sleep(100);
-              return complete(async () => null);
+              return complete(async ({ finish }) => finish({ output: null }));
             },
           },
         },
@@ -627,7 +637,7 @@ describe("Metrics", () => {
                   jobCompleted.resolve();
                 }
               }
-              return complete(async () => null);
+              return complete(async ({ finish }) => finish({ output: null }));
             },
           },
         },
@@ -653,7 +663,7 @@ describe("Metrics", () => {
                   jobCompleted.resolve();
                 }
               }
-              return complete(async () => null);
+              return complete(async ({ finish }) => finish({ output: null }));
             },
           },
         },
@@ -742,7 +752,7 @@ describe("Metrics", () => {
         processors: {
           test: {
             attemptHandler: async ({ complete }) => {
-              return complete(async () => null);
+              return complete(async ({ finish }) => finish({ output: null }));
             },
           },
         },
@@ -802,7 +812,7 @@ describe("Metrics", () => {
         processors: {
           test: {
             attemptHandler: async ({ complete }) => {
-              return complete(async () => null);
+              return complete(async ({ finish }) => finish({ output: null }));
             },
           },
         },
@@ -946,7 +956,7 @@ describe("Spans", () => {
           test: {
             attemptHandler: async ({ prepare, complete }) => {
               await prepare({ mode: "staged" });
-              return complete(async () => ({ result: true }));
+              return complete(async ({ finish }) => finish({ output: { result: true } }));
             },
           },
         },
@@ -1015,11 +1025,11 @@ describe("Spans", () => {
         jobTypes,
         processors: {
           test: {
-            attemptHandler: async ({ prepare, execute, complete }) => {
+            attemptHandler: async ({ prepare, step, complete }) => {
               await prepare({ mode: "staged" });
-              await execute(async () => {});
-              await execute(async () => {});
-              return complete(async () => null);
+              await step(async () => {});
+              await step(async () => {});
+              return complete(async ({ finish }) => finish({ output: null }));
             },
           },
         },
@@ -1046,16 +1056,16 @@ describe("Spans", () => {
       { name: "create job.test", kind: "PRODUCER", parentName: "create chain.test" },
       { name: "prepare", kind: "INTERNAL", parentName: "start job-attempt.test" },
       {
-        name: "execute",
+        name: "step",
         kind: "INTERNAL",
         parentName: "start job-attempt.test",
-        attributes: { "queuert.execute.index": 0 },
+        attributes: { "queuert.step.index": 0 },
       },
       {
-        name: "execute",
+        name: "step",
         kind: "INTERNAL",
         parentName: "start job-attempt.test",
-        attributes: { "queuert.execute.index": 1 },
+        attributes: { "queuert.step.index": 1 },
       },
       { name: "complete", kind: "INTERNAL", parentName: "start job-attempt.test" },
       {
@@ -1105,7 +1115,7 @@ describe("Spans", () => {
             attemptHandler: async ({ signal, complete }) => {
               jobStarted.resolve();
               await sleep(500, { signal }).catch(() => {});
-              return complete(async () => null);
+              return complete(async ({ finish }) => finish({ output: null }));
             },
           },
         },
@@ -1190,7 +1200,7 @@ describe("Spans", () => {
               if (job.attempt < 4) {
                 throw new Error("Unexpected error");
               }
-              return complete(async () => null);
+              return complete(async ({ finish }) => finish({ output: null }));
             },
           },
         },
@@ -1237,8 +1247,355 @@ describe("Spans", () => {
         parentName: "create job.test",
         status: "ERROR",
       },
-      // Attempt 4: complete + chain completion (no auto-prepare since complete() called first)
+      // Attempt 4: complete + chain completion (no auto-prepare since finish({ output:  }) called first)
       { name: "complete", kind: "INTERNAL", parentName: "start job-attempt.test" },
+      {
+        name: "complete chain.test",
+        kind: "CONSUMER",
+        parentName: "start job-attempt.test",
+        links: 1,
+      },
+      {
+        name: "start job-attempt.test",
+        kind: "CONSUMER",
+        parentName: "create job.test",
+        status: "OK",
+      },
+    ]);
+  });
+
+  it("tracks error status on prepare span when prepare fails", async ({
+    stateAdapter,
+    notifyAdapter,
+    withTransaction,
+    withWorkers,
+    observabilityAdapter,
+    log,
+    expectSpans,
+  }) => {
+    const jobTypes = defineJobTypes<{
+      test: { entry: true; input: null; output: null };
+    }>();
+
+    const client = await createClient({
+      stateAdapter,
+      notifyAdapter,
+      observabilityAdapter,
+      log,
+      jobTypes,
+    });
+    const worker = await createInProcessWorker({
+      client,
+      concurrency: 1,
+      processors: createProcessors({
+        client,
+        jobTypes,
+        backoffConfig: { initialDelayMs: 10, multiplier: 1, maxDelayMs: 10 },
+        processors: {
+          test: {
+            attemptHandler: async ({ job, prepare, complete }) => {
+              await prepare({ mode: "staged" }, async () => {
+                if (job.attempt < 2) {
+                  throw new Error("prepare failed");
+                }
+              });
+              return complete(async ({ finish }) => finish({ output: null }));
+            },
+          },
+        },
+      }),
+    });
+
+    const chain = await withTransactionHooks(async (transactionHooks) =>
+      withTransaction(async (txCtx) =>
+        client.createChain({ ...txCtx, transactionHooks, typeName: "test", input: null }),
+      ),
+    );
+
+    await withWorkers([await worker.start()], async () => {
+      await client.awaitChain(chain, completionOptions);
+    });
+
+    await expectSpans([
+      { name: "create chain.test", kind: "PRODUCER" },
+      { name: "create job.test", kind: "PRODUCER", parentName: "create chain.test" },
+      // Attempt 1: prepare callback throws
+      {
+        name: "prepare",
+        kind: "INTERNAL",
+        parentName: "start job-attempt.test",
+        status: "ERROR",
+      },
+      {
+        name: "start job-attempt.test",
+        kind: "CONSUMER",
+        parentName: "create job.test",
+        status: "ERROR",
+      },
+      // Attempt 2: succeeds
+      { name: "prepare", kind: "INTERNAL", parentName: "start job-attempt.test", status: "UNSET" },
+      { name: "complete", kind: "INTERNAL", parentName: "start job-attempt.test", status: "UNSET" },
+      {
+        name: "complete chain.test",
+        kind: "CONSUMER",
+        parentName: "start job-attempt.test",
+        links: 1,
+      },
+      {
+        name: "start job-attempt.test",
+        kind: "CONSUMER",
+        parentName: "create job.test",
+        status: "OK",
+      },
+    ]);
+  });
+
+  it("tracks error status on step span when step fails", async ({
+    stateAdapter,
+    notifyAdapter,
+    withTransaction,
+    withWorkers,
+    observabilityAdapter,
+    log,
+    expectSpans,
+  }) => {
+    const jobTypes = defineJobTypes<{
+      test: { entry: true; input: null; output: null };
+    }>();
+
+    const client = await createClient({
+      stateAdapter,
+      notifyAdapter,
+      observabilityAdapter,
+      log,
+      jobTypes,
+    });
+    const worker = await createInProcessWorker({
+      client,
+      concurrency: 1,
+      processors: createProcessors({
+        client,
+        jobTypes,
+        backoffConfig: { initialDelayMs: 10, multiplier: 1, maxDelayMs: 10 },
+        processors: {
+          test: {
+            attemptHandler: async ({ job, prepare, step, complete }) => {
+              await prepare({ mode: "staged" });
+              await step(async () => {
+                if (job.attempt < 2) {
+                  throw new Error("step failed");
+                }
+              });
+              return complete(async ({ finish }) => finish({ output: null }));
+            },
+          },
+        },
+      }),
+    });
+
+    const chain = await withTransactionHooks(async (transactionHooks) =>
+      withTransaction(async (txCtx) =>
+        client.createChain({ ...txCtx, transactionHooks, typeName: "test", input: null }),
+      ),
+    );
+
+    await withWorkers([await worker.start()], async () => {
+      await client.awaitChain(chain, completionOptions);
+    });
+
+    await expectSpans([
+      { name: "create chain.test", kind: "PRODUCER" },
+      { name: "create job.test", kind: "PRODUCER", parentName: "create chain.test" },
+      // Attempt 1: step callback throws
+      { name: "prepare", kind: "INTERNAL", parentName: "start job-attempt.test", status: "UNSET" },
+      {
+        name: "step",
+        kind: "INTERNAL",
+        parentName: "start job-attempt.test",
+        status: "ERROR",
+      },
+      {
+        name: "start job-attempt.test",
+        kind: "CONSUMER",
+        parentName: "create job.test",
+        status: "ERROR",
+      },
+      // Attempt 2: succeeds
+      { name: "prepare", kind: "INTERNAL", parentName: "start job-attempt.test", status: "UNSET" },
+      { name: "step", kind: "INTERNAL", parentName: "start job-attempt.test", status: "UNSET" },
+      { name: "complete", kind: "INTERNAL", parentName: "start job-attempt.test", status: "UNSET" },
+      {
+        name: "complete chain.test",
+        kind: "CONSUMER",
+        parentName: "start job-attempt.test",
+        links: 1,
+      },
+      {
+        name: "start job-attempt.test",
+        kind: "CONSUMER",
+        parentName: "create job.test",
+        status: "OK",
+      },
+    ]);
+  });
+
+  it("tracks error status on step span when step throws undefined", async ({
+    stateAdapter,
+    notifyAdapter,
+    withTransaction,
+    withWorkers,
+    observabilityAdapter,
+    log,
+    expectSpans,
+  }) => {
+    const jobTypes = defineJobTypes<{
+      test: { entry: true; input: null; output: null };
+    }>();
+
+    const client = await createClient({
+      stateAdapter,
+      notifyAdapter,
+      observabilityAdapter,
+      log,
+      jobTypes,
+    });
+    const worker = await createInProcessWorker({
+      client,
+      concurrency: 1,
+      processors: createProcessors({
+        client,
+        jobTypes,
+        backoffConfig: { initialDelayMs: 10, multiplier: 1, maxDelayMs: 10 },
+        processors: {
+          test: {
+            attemptHandler: async ({ job, prepare, step, complete }) => {
+              await prepare({ mode: "staged" });
+              await step(async () => {
+                if (job.attempt < 2) {
+                  // oxlint-disable-next-line only-throw-error -- intentional non-error throw
+                  throw undefined;
+                }
+              });
+              return complete(async ({ finish }) => finish({ output: null }));
+            },
+          },
+        },
+      }),
+    });
+
+    const chain = await withTransactionHooks(async (transactionHooks) =>
+      withTransaction(async (txCtx) =>
+        client.createChain({ ...txCtx, transactionHooks, typeName: "test", input: null }),
+      ),
+    );
+
+    await withWorkers([await worker.start()], async () => {
+      await client.awaitChain(chain, completionOptions);
+    });
+
+    await expectSpans([
+      { name: "create chain.test", kind: "PRODUCER" },
+      { name: "create job.test", kind: "PRODUCER", parentName: "create chain.test" },
+      { name: "prepare", kind: "INTERNAL", parentName: "start job-attempt.test", status: "UNSET" },
+      {
+        name: "step",
+        kind: "INTERNAL",
+        parentName: "start job-attempt.test",
+        status: "ERROR",
+      },
+      {
+        name: "start job-attempt.test",
+        kind: "CONSUMER",
+        parentName: "create job.test",
+        status: "ERROR",
+      },
+      { name: "prepare", kind: "INTERNAL", parentName: "start job-attempt.test", status: "UNSET" },
+      { name: "step", kind: "INTERNAL", parentName: "start job-attempt.test", status: "UNSET" },
+      { name: "complete", kind: "INTERNAL", parentName: "start job-attempt.test", status: "UNSET" },
+      {
+        name: "complete chain.test",
+        kind: "CONSUMER",
+        parentName: "start job-attempt.test",
+        links: 1,
+      },
+      {
+        name: "start job-attempt.test",
+        kind: "CONSUMER",
+        parentName: "create job.test",
+        status: "OK",
+      },
+    ]);
+  });
+
+  it("tracks error status on complete span when complete fails", async ({
+    stateAdapter,
+    notifyAdapter,
+    withTransaction,
+    withWorkers,
+    observabilityAdapter,
+    log,
+    expectSpans,
+  }) => {
+    const jobTypes = defineJobTypes<{
+      test: { entry: true; input: null; output: null };
+    }>();
+
+    const client = await createClient({
+      stateAdapter,
+      notifyAdapter,
+      observabilityAdapter,
+      log,
+      jobTypes,
+    });
+    const worker = await createInProcessWorker({
+      client,
+      concurrency: 1,
+      processors: createProcessors({
+        client,
+        jobTypes,
+        backoffConfig: { initialDelayMs: 10, multiplier: 1, maxDelayMs: 10 },
+        processors: {
+          test: {
+            attemptHandler: async ({ job, complete }) =>
+              complete(async ({ finish }) => {
+                if (job.attempt < 2) {
+                  throw new Error("complete failed");
+                }
+                return finish({ output: null });
+              }),
+          },
+        },
+      }),
+    });
+
+    const chain = await withTransactionHooks(async (transactionHooks) =>
+      withTransaction(async (txCtx) =>
+        client.createChain({ ...txCtx, transactionHooks, typeName: "test", input: null }),
+      ),
+    );
+
+    await withWorkers([await worker.start()], async () => {
+      await client.awaitChain(chain, completionOptions);
+    });
+
+    await expectSpans([
+      { name: "create chain.test", kind: "PRODUCER" },
+      { name: "create job.test", kind: "PRODUCER", parentName: "create chain.test" },
+      // Attempt 1: complete callback throws — span must still be ended, with ERROR
+      {
+        name: "complete",
+        kind: "INTERNAL",
+        parentName: "start job-attempt.test",
+        status: "ERROR",
+      },
+      {
+        name: "start job-attempt.test",
+        kind: "CONSUMER",
+        parentName: "create job.test",
+        status: "ERROR",
+      },
+      // Attempt 2: succeeds
+      { name: "complete", kind: "INTERNAL", parentName: "start job-attempt.test", status: "UNSET" },
       {
         name: "complete chain.test",
         kind: "CONSUMER",
@@ -1295,27 +1652,31 @@ describe("Spans", () => {
         processors: {
           linear: {
             attemptHandler: async ({ job, complete }) =>
-              complete(async ({ continueWith }) =>
-                continueWith({
-                  typeName: "linear_next",
-                  input: { valueNext: job.input.value + 1 },
+              complete(async ({ finish }) =>
+                finish({
+                  continueWith: {
+                    typeName: "linear_next",
+                    input: { valueNext: job.input.value + 1 },
+                  },
                 }),
               ),
           },
           linear_next: {
             attemptHandler: async ({ job, complete }) =>
-              complete(async ({ continueWith }) =>
-                continueWith({
-                  typeName: "linear_next_next",
-                  input: { valueNextNext: job.input.valueNext + 1 },
+              complete(async ({ finish }) =>
+                finish({
+                  continueWith: {
+                    typeName: "linear_next_next",
+                    input: { valueNextNext: job.input.valueNext + 1 },
+                  },
                 }),
               ),
           },
           linear_next_next: {
             attemptHandler: async ({ job, complete }) =>
-              complete(async () => ({
-                result: job.input.valueNextNext,
-              })),
+              complete(async ({ finish }) =>
+                finish({ output: { result: job.input.valueNextNext } }),
+              ),
           },
         },
       }),
@@ -1417,13 +1778,15 @@ describe("Spans", () => {
         processors: {
           blocker: {
             attemptHandler: async ({ job, complete }) =>
-              complete(async ({ continueWith }) =>
+              complete(async ({ finish }) =>
                 job.input.value < 1
-                  ? continueWith({
-                      typeName: "blocker",
-                      input: { value: job.input.value + 1 },
+                  ? finish({
+                      continueWith: {
+                        typeName: "blocker",
+                        input: { value: job.input.value + 1 },
+                      },
                     })
-                  : { done: true },
+                  : finish({ output: { done: true } }),
               ),
           },
           main: {
@@ -1434,9 +1797,13 @@ describe("Spans", () => {
               },
               complete,
             }) =>
-              complete(async () => ({
-                finalResult: (blocker.output.done ? 1 : 0) + (input.start ? 1 : 0),
-              })),
+              complete(async ({ finish }) =>
+                finish({
+                  output: {
+                    finalResult: (blocker.output.done ? 1 : 0) + (input.start ? 1 : 0),
+                  },
+                }),
+              ),
           },
         },
       }),
@@ -1484,7 +1851,7 @@ describe("Spans", () => {
       { name: "start job-attempt.blocker", kind: "CONSUMER", parentName: "create job.blocker" },
       // Processing blocker job 2: chain completes, all flushed after commit
       { name: "complete", kind: "INTERNAL", parentName: "start job-attempt.blocker" },
-      { name: "resolve chain.blocker", kind: "CONSUMER", parentName: "await chain.blocker" },
+      { name: "complete chain.blocker", kind: "CONSUMER", parentName: "await chain.blocker" },
       {
         name: "complete chain.blocker",
         kind: "CONSUMER",
@@ -1542,7 +1909,8 @@ describe("Spans", () => {
         jobTypes,
         processors: {
           blocker: {
-            attemptHandler: async ({ complete }) => complete(async () => ({ done: true })),
+            attemptHandler: async ({ complete }) =>
+              complete(async ({ finish }) => finish({ output: { done: true } })),
           },
           main: {
             attemptHandler: async ({
@@ -1552,9 +1920,13 @@ describe("Spans", () => {
               },
               complete,
             }) =>
-              complete(async () => ({
-                finalResult: (blocker.output.done ? 1 : 0) + (input.start ? 1 : 0),
-              })),
+              complete(async ({ finish }) =>
+                finish({
+                  output: {
+                    finalResult: (blocker.output.done ? 1 : 0) + (input.start ? 1 : 0),
+                  },
+                }),
+              ),
           },
         },
       }),
@@ -1607,7 +1979,7 @@ describe("Spans", () => {
       { name: "start job-attempt.blocker", kind: "CONSUMER", parentName: "create job.blocker" },
       // Phase 2: main chain with already-completed blocker — both PRODUCER and CONSUMER end immediately
       { name: "await chain.blocker", kind: "PRODUCER", parentName: "create job.main", links: 1 },
-      { name: "resolve chain.blocker", kind: "CONSUMER", parentName: "await chain.blocker" },
+      { name: "complete chain.blocker", kind: "CONSUMER", parentName: "await chain.blocker" },
       { name: "create chain.main", kind: "PRODUCER" },
       { name: "create job.main", kind: "PRODUCER", parentName: "create chain.main" },
       // Phase 3: main job processes immediately (no blocking wait)
@@ -1734,8 +2106,8 @@ describe("Spans", () => {
           ...txCtx,
           transactionHooks,
           ...chain,
-          complete: async ({ job, complete }) => {
-            return complete(job, async () => ({ result: 84 }));
+          handler: async ({ job, completeJob }) => {
+            return completeJob(job, async ({ finish }) => finish({ output: { result: 84 } }));
           },
         }),
       ),
@@ -1795,21 +2167,25 @@ describe("Spans", () => {
           ...txCtx,
           transactionHooks,
           ...chain,
-          complete: async ({ job, complete }) => {
+          handler: async ({ job, completeJob }) => {
             if (job.typeName === "awaiting-approval") {
-              job = await complete(job, async ({ continueWith }) => {
-                return continueWith({
-                  typeName: "process-approved",
-                  input: { approved: true },
+              job = await completeJob(job, async ({ finish }) => {
+                return finish({
+                  continueWith: {
+                    typeName: "process-approved",
+                    input: { approved: true },
+                  },
                 });
               });
+              return completeJob(job, async ({ finish }) => finish({ output: { done: true } }));
             }
-            return complete(job, async () => ({ done: true }));
+            return completeJob(job, async ({ finish }) => finish({ output: { done: true } }));
           },
         }),
       ),
     );
 
+    expectTypeOf(completedChain.status).toEqualTypeOf<"completed">();
     expect(completedChain.output).toEqual({ done: true });
 
     await expectSpans([
@@ -1879,7 +2255,7 @@ describe("Gauges", () => {
         processors: {
           test: {
             attemptHandler: async ({ job, complete }) => {
-              return complete(async () => ({ result: job.input.test }));
+              return complete(async ({ finish }) => finish({ output: { result: job.input.test } }));
             },
           },
         },
@@ -1958,13 +2334,13 @@ describe("Gauges", () => {
           email: {
             attemptHandler: async ({ complete }) => {
               processedTypes.push("email");
-              return complete(async () => ({ sent: true }));
+              return complete(async ({ finish }) => finish({ output: { sent: true } }));
             },
           },
           sms: {
             attemptHandler: async ({ complete }) => {
               processedTypes.push("sms");
-              return complete(async () => ({ sent: true }));
+              return complete(async ({ finish }) => finish({ output: { sent: true } }));
             },
           },
         },
@@ -2178,7 +2554,8 @@ describe("Rollback", () => {
           ...txCtx,
           transactionHooks,
           ...chain,
-          complete: async ({ job, complete }) => complete(job, async () => ({ result: 42 })),
+          handler: async ({ job, completeJob }) =>
+            completeJob(job, async ({ finish }) => finish({ output: { result: 42 } })),
         });
         throw new Error("simulated rollback");
       }),
@@ -2241,7 +2618,8 @@ describe("Rollback", () => {
         backoffConfig: { initialDelayMs: 1, multiplier: 1, maxDelayMs: 1 },
         processors: {
           test: {
-            attemptHandler: async ({ complete }) => complete(async () => null),
+            attemptHandler: async ({ complete }) =>
+              complete(async ({ finish }) => finish({ output: null })),
           },
         },
       }),
@@ -2329,7 +2707,7 @@ describe("Rollback", () => {
                 handlerFailed = true;
                 throw new Error("simulated handler failure");
               }
-              return complete(async () => null);
+              return complete(async ({ finish }) => finish({ output: null }));
             },
           },
         },
@@ -2403,8 +2781,10 @@ describe("Rollback", () => {
         processors: {
           linear: {
             attemptHandler: async ({ complete }) =>
-              complete(async ({ continueWith }) => {
-                const result = await continueWith({ typeName: "linear_next", input: null });
+              complete(async ({ finish }) => {
+                const result = await finish({
+                  continueWith: { typeName: "linear_next", input: null },
+                });
                 if (throwOnce) {
                   throwOnce = false;
                   throw new Error("user error after continueWith");
@@ -2413,7 +2793,8 @@ describe("Rollback", () => {
               }),
           },
           linear_next: {
-            attemptHandler: async ({ complete }) => complete(async () => null),
+            attemptHandler: async ({ complete }) =>
+              complete(async ({ finish }) => finish({ output: null })),
           },
         },
       }),
@@ -2498,7 +2879,8 @@ describe("Rollback", () => {
         backoffConfig: { initialDelayMs: 1, multiplier: 1, maxDelayMs: 1 },
         processors: {
           test: {
-            attemptHandler: async ({ complete }) => complete(async () => null),
+            attemptHandler: async ({ complete }) =>
+              complete(async ({ finish }) => finish({ output: null })),
           },
         },
       }),
@@ -2583,7 +2965,8 @@ describe("Rollback", () => {
           ...txCtx,
           transactionHooks,
           ...chain,
-          complete: async ({ job, complete }) => complete(job, async () => ({ result: 42 })),
+          handler: async ({ job, completeJob }) =>
+            completeJob(job, async ({ finish }) => finish({ output: { result: 42 } })),
         }),
       ),
     ).catch(() => {});
@@ -2595,7 +2978,8 @@ describe("Rollback", () => {
           ...txCtx,
           transactionHooks,
           ...chain,
-          complete: async ({ job, complete }) => complete(job, async () => ({ result: 42 })),
+          handler: async ({ job, completeJob }) =>
+            completeJob(job, async ({ finish }) => finish({ output: { result: 42 } })),
         }),
       ),
     );
@@ -2667,12 +3051,13 @@ describe("Rollback", () => {
         processors: {
           linear: {
             attemptHandler: async ({ complete }) =>
-              complete(async ({ continueWith }) =>
-                continueWith({ typeName: "linear_next", input: null }),
+              complete(async ({ finish }) =>
+                finish({ continueWith: { typeName: "linear_next", input: null } }),
               ),
           },
           linear_next: {
-            attemptHandler: async ({ complete }) => complete(async () => null),
+            attemptHandler: async ({ complete }) =>
+              complete(async ({ finish }) => finish({ output: null })),
           },
         },
       }),
@@ -2792,8 +3177,10 @@ describe("Rollback", () => {
         processors: {
           linear: {
             attemptHandler: async ({ complete }) =>
-              complete(async ({ continueWith }) => {
-                const result = await continueWith({ typeName: "linear_next", input: null });
+              complete(async ({ finish }) => {
+                const result = await finish({
+                  continueWith: { typeName: "linear_next", input: null },
+                });
                 if (throwOnce) {
                   throwOnce = false;
                   throw new Error("user error after continueWith");
@@ -2802,7 +3189,8 @@ describe("Rollback", () => {
               }),
           },
           linear_next: {
-            attemptHandler: async ({ complete }) => complete(async () => null),
+            attemptHandler: async ({ complete }) =>
+              complete(async ({ finish }) => finish({ output: null })),
           },
         },
       }),
@@ -2826,6 +3214,12 @@ describe("Rollback", () => {
       { name: "create chain.linear", kind: "PRODUCER" },
       { name: "create job.linear", kind: "PRODUCER", parentName: "create chain.linear" },
       // First attempt: rolled-back continuation span must be properly ended
+      {
+        name: "complete",
+        kind: "INTERNAL",
+        parentName: "start job-attempt.linear",
+        status: "ERROR",
+      },
       {
         name: "create job.linear_next",
         kind: "PRODUCER",
@@ -2903,17 +3297,15 @@ describe("Rollback", () => {
         processors: {
           test: {
             attemptHandler: async ({ complete }) => {
-              const result = await complete(
-                async ({ continueWith: _, transactionHooks, ...txCtx }) => {
-                  await client.createChain({
-                    ...txCtx,
-                    transactionHooks,
-                    typeName: "other",
-                    input: null,
-                  });
-                  return null;
-                },
-              );
+              const result = await complete(async ({ finish, transactionHooks, ...txCtx }) => {
+                await client.createChain({
+                  ...txCtx,
+                  transactionHooks,
+                  typeName: "other",
+                  input: null,
+                });
+                return finish({ output: null });
+              });
               if (throwOnce) {
                 throwOnce = false;
                 throw new Error("user error after complete returns");

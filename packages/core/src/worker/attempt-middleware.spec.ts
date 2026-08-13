@@ -7,8 +7,8 @@ import { type StateAdapter } from "../state-adapter/state-adapter.js";
 import {
   type AttemptMiddleware,
   type MergedAttemptHandlerCtx,
+  type MergedStepCtx,
   type MergedCompleteCtx,
-  type MergedExecuteCtx,
   type MergedPrepareCtx,
 } from "./attempt-middleware.js";
 import { createProcessors } from "./create-processors.js";
@@ -73,12 +73,12 @@ describe("AttemptMiddleware ctx type inference", () => {
     >();
   });
 
-  it("MergedPrepareCtx / MergedExecuteCtx / MergedCompleteCtx pick only their phase", () => {
+  it("MergedPrepareCtx / MergedStepCtx / MergedCompleteCtx pick only their phase", () => {
     expectTypeOf<
       MergedPrepareCtx<readonly [W4<{ h: 1 }, { p: 2 }, { e: 3 }, { c: 4 }>]>
     >().toEqualTypeOf<{ p: 2 }>();
     expectTypeOf<
-      MergedExecuteCtx<readonly [W4<{ h: 1 }, { p: 2 }, { e: 3 }, { c: 4 }>]>
+      MergedStepCtx<readonly [W4<{ h: 1 }, { p: 2 }, { e: 3 }, { c: 4 }>]>
     >().toEqualTypeOf<{ e: 3 }>();
     expectTypeOf<
       MergedCompleteCtx<readonly [W4<{ h: 1 }, { p: 2 }, { e: 3 }, { c: 4 }>]>
@@ -102,7 +102,7 @@ describe("AttemptMiddleware ctx type inference", () => {
           attemptHandler: async ({ traceId, log, complete }) => {
             expectTypeOf(traceId).toEqualTypeOf<string>();
             expectTypeOf(log).toEqualTypeOf<(msg: string) => void>();
-            return complete(async () => ({ ok: true as const }));
+            return complete(async ({ finish }) => finish({ output: { ok: true as const } }));
           },
         },
       },
@@ -124,7 +124,7 @@ describe("AttemptMiddleware ctx type inference", () => {
             await prepare({ mode: "atomic" }, async ({ tag }) => {
               expectTypeOf(tag).toEqualTypeOf<string>();
             });
-            return complete(async () => ({ ok: true as const }));
+            return complete(async ({ finish }) => finish({ output: { ok: true as const } }));
           },
         },
       },
@@ -138,7 +138,7 @@ describe("AttemptMiddleware ctx type inference", () => {
       Record<string, never>,
       { meter: (name: string) => void }
     > = {
-      wrapExecute: async ({ next }) => next({ meter: () => {} }),
+      wrapStep: async ({ next }) => next({ meter: () => {} }),
     };
 
     createProcessors({
@@ -147,11 +147,11 @@ describe("AttemptMiddleware ctx type inference", () => {
       attemptMiddleware: [w],
       processors: {
         foo: {
-          attemptHandler: async ({ execute, complete }) => {
-            await execute(async ({ meter, transactionHooks: _t }) => {
+          attemptHandler: async ({ step, complete }) => {
+            await step(async ({ meter, transactionHooks: _t }) => {
               expectTypeOf(meter).toEqualTypeOf<(name: string) => void>();
             });
-            return complete(async () => ({ ok: true as const }));
+            return complete(async ({ finish }) => finish({ output: { ok: true as const } }));
           },
         },
       },
@@ -176,9 +176,9 @@ describe("AttemptMiddleware ctx type inference", () => {
       processors: {
         foo: {
           attemptHandler: async ({ complete }) =>
-            complete(async ({ audit, continueWith: _continueWith, transactionHooks: _t }) => {
+            complete(async ({ finish, audit }) => {
               expectTypeOf(audit).toEqualTypeOf<(evt: string) => void>();
-              return { ok: true as const };
+              return finish({ output: { ok: true as const } });
             }),
         },
       },
@@ -204,7 +204,7 @@ describe("tuple narrowing without `as const`", () => {
           attemptHandler: async ({ traceId, log, complete }) => {
             expectTypeOf(traceId).toEqualTypeOf<string>();
             expectTypeOf(log).toEqualTypeOf<(msg: string) => void>();
-            return complete(async () => ({ ok: true as const }));
+            return complete(async ({ finish }) => finish({ output: { ok: true as const } }));
           },
         },
       },
@@ -221,7 +221,7 @@ describe("AttemptMiddleware accepts concrete (non-any) state adapters", () => {
     expectTypeOf<AttemptMiddleware<DbStateAdapter, { trace: string }>>().toBeObject();
   });
 
-  it("wrapPrepare/wrapExecute/wrapComplete receive the adapter's txCtx fields", () => {
+  it("wrapPrepare/wrapStep/wrapComplete receive the adapter's txCtx fields", () => {
     type Tx = { db: { query: (sql: string) => Promise<unknown> } };
     type DbStateAdapter = StateAdapter<Tx, string>;
 
@@ -232,7 +232,7 @@ describe("AttemptMiddleware accepts concrete (non-any) state adapters", () => {
       },
     };
     const mwExecute: AttemptMiddleware<DbStateAdapter> = {
-      wrapExecute: async ({ db, next }) => {
+      wrapStep: async ({ db, next }) => {
         expectTypeOf(db).toEqualTypeOf<Tx["db"]>();
         return next({});
       },
@@ -281,7 +281,7 @@ describe("AttemptMiddleware accepts concrete (non-any) state adapters", () => {
       { emit: (evt: string) => void },
       { emit: (evt: string) => void }
     > = {
-      wrapExecute: async ({ db, next }) => {
+      wrapStep: async ({ db, next }) => {
         expectTypeOf(db).toEqualTypeOf<Tx["db"]>();
         return next({ emit: () => {} });
       },
@@ -297,17 +297,17 @@ describe("AttemptMiddleware accepts concrete (non-any) state adapters", () => {
       attemptMiddleware: [traceMw, prepareMw, outboxMw],
       processors: {
         foo: {
-          attemptHandler: async ({ traceId, prepare, execute, complete }) => {
+          attemptHandler: async ({ traceId, prepare, step, complete }) => {
             expectTypeOf(traceId).toEqualTypeOf<string>();
             await prepare({ mode: "staged" }, async ({ tenant }) => {
               expectTypeOf(tenant).toEqualTypeOf<string>();
             });
-            await execute(async ({ emit }) => {
+            await step(async ({ emit }) => {
               expectTypeOf(emit).toEqualTypeOf<(evt: string) => void>();
             });
-            return complete(async ({ emit }) => {
+            return complete(async ({ finish, emit }) => {
               expectTypeOf(emit).toEqualTypeOf<(evt: string) => void>();
-              return { ok: true as const };
+              return finish({ output: { ok: true as const } });
             });
           },
         },
@@ -337,7 +337,7 @@ describe("AttemptMiddleware accepts concrete (non-any) state adapters", () => {
           attemptHandler: async ({ traceId, log, complete }) => {
             expectTypeOf(traceId).toEqualTypeOf<string>();
             expectTypeOf(log).toEqualTypeOf<(msg: string) => void>();
-            return complete(async () => ({ ok: true as const }));
+            return complete(async ({ finish }) => finish({ output: { ok: true as const } }));
           },
         },
       },
@@ -362,7 +362,10 @@ describe("middleware must match the client's state adapter", () => {
       // the client is in-process; its hooks would destructure an undefined `sql`
       attemptMiddleware: [foreignMw],
       processors: {
-        foo: { attemptHandler: async ({ complete }) => complete(async () => ({ ok: true })) },
+        foo: {
+          attemptHandler: async ({ complete }) =>
+            complete(async ({ finish }) => finish({ output: { ok: true } })),
+        },
       },
     });
   });
@@ -380,7 +383,7 @@ describe("middleware must match the client's state adapter", () => {
         foo: {
           attemptHandler: async ({ traceId, complete }) => {
             expectTypeOf(traceId).toEqualTypeOf<string>();
-            return complete(async () => ({ ok: true as const }));
+            return complete(async ({ finish }) => finish({ output: { ok: true as const } }));
           },
         },
       },
@@ -410,7 +413,7 @@ describe("handler ctx compile-time negatives", () => {
           attemptHandler: async ({ traceId, otherKey, complete }) => {
             void traceId;
             void otherKey;
-            return complete(async () => ({ ok: true as const }));
+            return complete(async ({ finish }) => finish({ output: { ok: true as const } }));
           },
         },
       },

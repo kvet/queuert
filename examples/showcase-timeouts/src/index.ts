@@ -91,11 +91,11 @@ const worker = await createInProcessWorker({
           try {
             const data = await simulatedFetch(job.input.url, combined, 300);
             console.log(`  Fetch SUCCESS`);
-            return await complete(async () => ({ data }));
+            return await complete(async ({ finish }) => finish({ output: { data } }));
           } catch (error) {
             if (error instanceof DOMException && error.name === "AbortError") {
               console.log(`  Fetch TIMED OUT`);
-              return await complete(async () => ({ timedOut: true }));
+              return await complete(async ({ finish }) => finish({ output: { timedOut: true } }));
             }
             throw error;
           } finally {
@@ -116,7 +116,7 @@ const worker = await createInProcessWorker({
           await new Promise((r) => setTimeout(r, job.input.durationMs));
 
           console.log(`  Task completed on attempt ${attempt}`);
-          return complete(async () => ({ completed: true, attempt }));
+          return complete(async ({ finish }) => finish({ output: { completed: true, attempt } }));
         },
       },
     },

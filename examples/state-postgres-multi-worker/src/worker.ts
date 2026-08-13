@@ -55,10 +55,14 @@ const worker = await createInProcessWorker({
 
           await new Promise((resolve) => setTimeout(resolve, 100 + Math.random() * 200));
 
-          return complete(async () => ({
-            processedAt: new Date().toISOString(),
-            workerName,
-          }));
+          return complete(async ({ finish }) =>
+            finish({
+              output: {
+                processedAt: new Date().toISOString(),
+                workerName,
+              },
+            }),
+          );
         },
       },
     },

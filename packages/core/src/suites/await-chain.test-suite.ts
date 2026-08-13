@@ -45,8 +45,8 @@ export const awaitChainTestSuite = ({ it }: { it: TestAPI<TestSuiteContext> }): 
           ...txCtx,
           transactionHooks,
           ...chain,
-          complete: async ({ job, complete }) => {
-            return complete(job, async () => ({ result: "done" }));
+          handler: async ({ job, completeJob }) => {
+            return completeJob(job, async ({ finish }) => finish({ output: { result: "done" } }));
           },
         }),
       ),
@@ -111,7 +111,8 @@ export const awaitChainTestSuite = ({ it }: { it: TestAPI<TestSuiteContext> }): 
           ...txCtx,
           transactionHooks,
           ...chain,
-          complete: async ({ job, complete }) => complete(job, async () => ({ result: "done" })),
+          handler: async ({ job, completeJob }) =>
+            completeJob(job, async ({ finish }) => finish({ output: { result: "done" } })),
         }),
       ),
     );

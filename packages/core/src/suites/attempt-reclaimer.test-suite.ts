@@ -52,7 +52,7 @@ export const attemptReclaimerTestSuite = ({ it }: { it: TestAPI<TestSuiteContext
             attemptHandler: async ({ complete }) => {
               await sleep(100);
 
-              return complete(async () => null);
+              return complete(async ({ finish }) => finish({ output: null }));
             },
           },
         },
@@ -136,7 +136,7 @@ export const attemptReclaimerTestSuite = ({ it }: { it: TestAPI<TestSuiteContext
                 }
               }
 
-              return complete(async () => null);
+              return complete(async ({ finish }) => finish({ output: null }));
             },
           },
         },
@@ -167,7 +167,7 @@ export const attemptReclaimerTestSuite = ({ it }: { it: TestAPI<TestSuiteContext
                 }
               }
 
-              return complete(async () => null);
+              return complete(async ({ finish }) => finish({ output: null }));
             },
           },
         },
@@ -263,7 +263,9 @@ export const attemptReclaimerTestSuite = ({ it }: { it: TestAPI<TestSuiteContext
 
                 jobStarted.resolve();
                 await sleep(attemptConfig.heartbeatMs * 2);
-                await expect(async () => complete(async () => null)).rejects.toSatisfy(
+                await expect(async () =>
+                  complete(async ({ finish }) => finish({ output: null })),
+                ).rejects.toSatisfy(
                   (error) =>
                     error instanceof
                     (notifyAdapter ? JobTakenByAnotherWorkerError : JobAlreadyCompletedError),
@@ -272,7 +274,7 @@ export const attemptReclaimerTestSuite = ({ it }: { it: TestAPI<TestSuiteContext
               }
               await sleep(10);
 
-              return complete(async () => null);
+              return complete(async ({ finish }) => finish({ output: null }));
             },
           },
         },
@@ -297,7 +299,9 @@ export const attemptReclaimerTestSuite = ({ it }: { it: TestAPI<TestSuiteContext
 
                 jobStarted.resolve();
                 await sleep(attemptConfig.heartbeatMs * 2);
-                await expect(async () => complete(async () => null)).rejects.toSatisfy(
+                await expect(async () =>
+                  complete(async ({ finish }) => finish({ output: null })),
+                ).rejects.toSatisfy(
                   (error) =>
                     error instanceof
                     (notifyAdapter ? JobTakenByAnotherWorkerError : JobAlreadyCompletedError),
@@ -306,7 +310,7 @@ export const attemptReclaimerTestSuite = ({ it }: { it: TestAPI<TestSuiteContext
               }
               await sleep(10);
 
-              return complete(async () => null);
+              return complete(async ({ finish }) => finish({ output: null }));
             },
           },
         },
@@ -354,7 +358,7 @@ export const attemptReclaimerTestSuite = ({ it }: { it: TestAPI<TestSuiteContext
     );
   });
 
-  it("reclaims expired attempts on execute", async ({
+  it("reclaims expired attempts on step", async ({
     stateAdapter,
     notifyAdapter,
     withTransaction,
@@ -394,7 +398,7 @@ export const attemptReclaimerTestSuite = ({ it }: { it: TestAPI<TestSuiteContext
         attemptConfig,
         processors: {
           test: {
-            attemptHandler: async ({ prepare, execute, complete }) => {
+            attemptHandler: async ({ prepare, step, complete }) => {
               await prepare({ mode: "staged" });
 
               if (!failed) {
@@ -402,7 +406,7 @@ export const attemptReclaimerTestSuite = ({ it }: { it: TestAPI<TestSuiteContext
 
                 jobStarted.resolve();
                 await sleep(attemptConfig.heartbeatMs * 2);
-                await expect(async () => execute(async () => {})).rejects.toSatisfy(
+                await expect(async () => step(async () => {})).rejects.toSatisfy(
                   (error) =>
                     error instanceof
                     (notifyAdapter ? JobTakenByAnotherWorkerError : JobAlreadyCompletedError),
@@ -411,7 +415,7 @@ export const attemptReclaimerTestSuite = ({ it }: { it: TestAPI<TestSuiteContext
               }
               await sleep(10);
 
-              return complete(async () => null);
+              return complete(async ({ finish }) => finish({ output: null }));
             },
           },
         },
@@ -428,7 +432,7 @@ export const attemptReclaimerTestSuite = ({ it }: { it: TestAPI<TestSuiteContext
         attemptConfig,
         processors: {
           test: {
-            attemptHandler: async ({ prepare, execute, complete }) => {
+            attemptHandler: async ({ prepare, step, complete }) => {
               await prepare({ mode: "staged" });
 
               if (!failed) {
@@ -436,7 +440,7 @@ export const attemptReclaimerTestSuite = ({ it }: { it: TestAPI<TestSuiteContext
 
                 jobStarted.resolve();
                 await sleep(attemptConfig.heartbeatMs * 2);
-                await expect(async () => execute(async () => {})).rejects.toSatisfy(
+                await expect(async () => step(async () => {})).rejects.toSatisfy(
                   (error) =>
                     error instanceof
                     (notifyAdapter ? JobTakenByAnotherWorkerError : JobAlreadyCompletedError),
@@ -445,7 +449,7 @@ export const attemptReclaimerTestSuite = ({ it }: { it: TestAPI<TestSuiteContext
               }
               await sleep(10);
 
-              return complete(async () => null);
+              return complete(async ({ finish }) => finish({ output: null }));
             },
           },
         },
@@ -541,7 +545,7 @@ export const attemptReclaimerTestSuite = ({ it }: { it: TestAPI<TestSuiteContext
 
               expect(job.attempt).toBe(1);
 
-              return complete(async () => ({ id: job.input.id }));
+              return complete(async ({ finish }) => finish({ output: { id: job.input.id } }));
             },
           },
         },

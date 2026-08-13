@@ -41,10 +41,12 @@ const orderProcessors = createProcessors({
   jobTypes: orderJobTypes,
   processors: {
     "orders.create": {
-      attemptHandler: async ({ complete }) => complete(async () => ({ orderId: "1" })),
+      attemptHandler: async ({ complete }) =>
+        complete(async ({ finish }) => finish({ output: { orderId: "1" } })),
     },
     "orders.fulfill": {
-      attemptHandler: async ({ complete }) => complete(async () => ({ fulfilled: true })),
+      attemptHandler: async ({ complete }) =>
+        complete(async ({ finish }) => finish({ output: { fulfilled: true } })),
     },
   },
 });
@@ -54,7 +56,8 @@ const notificationProcessors = createProcessors({
   jobTypes: notificationJobTypes,
   processors: {
     "notifications.send": {
-      attemptHandler: async ({ complete }) => complete(async () => ({ sent: true })),
+      attemptHandler: async ({ complete }) =>
+        complete(async ({ finish }) => finish({ output: { sent: true } })),
     },
   },
 });
@@ -66,7 +69,8 @@ describe("createProcessors", () => {
       jobTypes: orderJobTypes,
       processors: {
         "orders.create": {
-          attemptHandler: async ({ complete }) => complete(async () => ({ orderId: "1" })),
+          attemptHandler: async ({ complete }) =>
+            complete(async ({ finish }) => finish({ output: { orderId: "1" } })),
         },
       },
     });
@@ -77,15 +81,23 @@ describe("createProcessors", () => {
       stateAdapter,
       jobTypes: orderJobTypes,
     });
+    const billingProcessors = createProcessors({
+      client,
+      jobTypes: billingJobTypes,
+      processors: {
+        "billing.charge": {
+          attemptHandler: async ({ complete }) =>
+            complete(async ({ finish }) => finish({ output: { charged: true } })),
+        },
+      },
+    });
 
     createProcessors({
       // @ts-expect-error — client is missing "billing.charge" from the slice's job types
       client: orderOnlyClient,
       jobTypes: billingJobTypes,
       processors: {
-        "billing.charge": {
-          attemptHandler: async ({ complete }: any) => complete(async () => ({ charged: true })),
-        },
+        "billing.charge": billingProcessors["billing.charge"],
       },
     });
   });
@@ -96,9 +108,7 @@ describe("createProcessors", () => {
       jobTypes: orderJobTypes,
       processors: {
         // @ts-expect-error — "orders.craete" is not a key of the client's defs
-        "orders.craete": {
-          attemptHandler: async ({ complete }: any) => complete(async () => ({ orderId: "1" })),
-        },
+        "orders.craete": orderProcessors["orders.create"],
       },
     });
   });
@@ -109,12 +119,11 @@ describe("createProcessors", () => {
       jobTypes: orderJobTypes,
       processors: {
         "orders.create": {
-          attemptHandler: async ({ complete }) => complete(async () => ({ orderId: "1" })),
+          attemptHandler: async ({ complete }) =>
+            complete(async ({ finish }) => finish({ output: { orderId: "1" } })),
         },
         // @ts-expect-error — "orders.unknown" is not a key of the client's defs
-        "orders.unknown": {
-          attemptHandler: async ({ complete }: any) => complete(async () => ({})),
-        },
+        "orders.unknown": orderProcessors["orders.create"],
       },
     });
   });
@@ -125,7 +134,8 @@ describe("createProcessors", () => {
       jobTypes: orderJobTypes,
       processors: {
         "orders.create": {
-          attemptHandler: async ({ complete }) => complete(async () => ({ orderId: "1" })),
+          attemptHandler: async ({ complete }) =>
+            complete(async ({ finish }) => finish({ output: { orderId: "1" } })),
         },
       },
     });
@@ -142,7 +152,7 @@ describe("createProcessors", () => {
   });
 
   it("includes processor handlers accessible by key", () => {
-    const handler = async ({ complete }: any) => complete(async () => ({ orderId: "1" }));
+    const handler = orderProcessors["orders.create"].attemptHandler;
     const jobTypes = createProcessors({
       client,
       jobTypes: orderJobTypes,
@@ -156,9 +166,7 @@ describe("createProcessors", () => {
 
   it("does not mutate the input processors object", () => {
     const processors = {
-      "orders.create": {
-        attemptHandler: async ({ complete }: any) => complete(async () => ({ orderId: "1" })),
-      },
+      "orders.create": orderProcessors["orders.create"],
     };
     const keysBefore = Object.keys(processors);
     createProcessors({
@@ -186,7 +194,8 @@ describe("mergeProcessors", () => {
       jobTypes: billingJobTypes,
       processors: {
         "billing.charge": {
-          attemptHandler: async ({ complete }) => complete(async () => ({ charged: true })),
+          attemptHandler: async ({ complete }) =>
+            complete(async ({ finish }) => finish({ output: { charged: true } })),
         },
       },
     });
@@ -224,7 +233,8 @@ describe("mergeProcessors", () => {
       jobTypes: orderJobTypes,
       processors: {
         "orders.create": {
-          attemptHandler: async ({ complete }) => complete(async () => ({ orderId: "alt" })),
+          attemptHandler: async ({ complete }) =>
+            complete(async ({ finish }) => finish({ output: { orderId: "alt" } })),
         },
       },
     });
@@ -241,7 +251,8 @@ describe("mergeProcessors", () => {
       jobTypes: orderJobTypes,
       processors: {
         "orders.create": {
-          attemptHandler: async ({ complete }) => complete(async () => ({ orderId: "1" })),
+          attemptHandler: async ({ complete }) =>
+            complete(async ({ finish }) => finish({ output: { orderId: "1" } })),
         },
       },
     });
@@ -261,7 +272,8 @@ describe("mergeProcessors", () => {
       jobTypes: orderJobTypes,
       processors: {
         "orders.create": {
-          attemptHandler: async ({ complete }) => complete(async () => ({ orderId: "alt" })),
+          attemptHandler: async ({ complete }) =>
+            complete(async ({ finish }) => finish({ output: { orderId: "alt" } })),
         },
       },
     });
@@ -311,7 +323,8 @@ describe("cross-slice blocker type resolution", () => {
       jobTypes: notifJobTypes,
       processors: {
         "notif.send": {
-          attemptHandler: async ({ complete }) => complete(async () => ({ sentAt: "now" })),
+          attemptHandler: async ({ complete }) =>
+            complete(async ({ finish }) => finish({ output: { sentAt: "now" } })),
         },
       },
     });
@@ -322,18 +335,20 @@ describe("cross-slice blocker type resolution", () => {
       processors: {
         "orders.place": {
           attemptHandler: async ({ complete }) =>
-            complete(async ({ continueWith }) =>
-              continueWith({
-                typeName: "orders.confirm",
-                input: { orderId: 1 },
-                blockers: [] as never,
+            complete(async ({ finish }) =>
+              finish({
+                continueWith: {
+                  typeName: "orders.confirm",
+                  input: { orderId: 1 },
+                  blockers: [] as never,
+                },
               }),
             ),
         },
         "orders.confirm": {
           attemptHandler: async ({ job, complete }) => {
             expectTypeOf(job.blockers[0].output).toEqualTypeOf<{ sentAt: string }>();
-            return complete(async () => ({ confirmedAt: "now" }));
+            return complete(async ({ finish }) => finish({ output: { confirmedAt: "now" } }));
           },
         },
       },
@@ -380,18 +395,20 @@ describe("cross-slice blocker type resolution", () => {
       processors: {
         "orders.place": {
           attemptHandler: async ({ complete }) =>
-            complete(async ({ continueWith }) =>
-              continueWith({
-                typeName: "orders.confirm",
-                input: { orderId: 1 },
-                blockers: [] as never,
+            complete(async ({ finish }) =>
+              finish({
+                continueWith: {
+                  typeName: "orders.confirm",
+                  input: { orderId: 1 },
+                  blockers: [] as never,
+                },
               }),
             ),
         },
         "orders.confirm": {
           attemptHandler: async ({ job, complete }) => {
             expectTypeOf(job.blockers[0].output).toEqualTypeOf<{ sentAt: string }>();
-            return complete(async () => ({ confirmedAt: "now" }));
+            return complete(async ({ finish }) => finish({ output: { confirmedAt: "now" } }));
           },
         },
       },
@@ -442,7 +459,7 @@ describe("cross-slice blocker type resolution", () => {
         "local.finish": {
           attemptHandler: async ({ job, complete }) => {
             expectTypeOf(job.blockers[0].output).toEqualTypeOf<{ aResult: string }>();
-            return complete(async () => ({ done: true }));
+            return complete(async ({ finish }) => finish({ output: { done: true } }));
           },
         },
       },
@@ -493,7 +510,7 @@ describe("cross-slice blocker type resolution", () => {
         "local.finish": {
           attemptHandler: async ({ job, complete }) => {
             expectTypeOf(job.blockers[0].output).toEqualTypeOf<{ aResult: string }>();
-            return complete(async () => ({ done: true }));
+            return complete(async ({ finish }) => finish({ output: { done: true } }));
           },
         },
       },
@@ -554,13 +571,13 @@ describe("cross-slice blocker type resolution", () => {
         "local.finish-a": {
           attemptHandler: async ({ job, complete }) => {
             expectTypeOf(job.blockers[0].output).toEqualTypeOf<{ aResult: string }>();
-            return complete(async () => ({ resultA: "pass" }));
+            return complete(async ({ finish }) => finish({ output: { resultA: "pass" } }));
           },
         },
         "local.finish-b": {
           attemptHandler: async ({ job, complete }) => {
             expectTypeOf(job.blockers[0].output).toEqualTypeOf<{ bResult: number }>();
-            return complete(async () => ({ resultB: "pass" }));
+            return complete(async ({ finish }) => finish({ output: { resultB: "pass" } }));
           },
         },
       },
@@ -634,13 +651,15 @@ describe("cross-slice blocker type resolution in workerless completion", () => {
           ...txCtx,
           transactionHooks,
           ...chain,
-          complete: async ({ job, complete }) => {
+          handler: async ({ job, completeJob }) => {
             if (job.typeName === "local.start") {
-              return complete(job, async ({ continueWith }) =>
-                continueWith({
-                  typeName: "local.finish",
-                  input: { id: "1" },
-                  blockers: [blockerChain],
+              return completeJob(job, async ({ finish }) =>
+                finish({
+                  continueWith: {
+                    typeName: "local.finish",
+                    input: { id: "1" },
+                    blockers: [blockerChain],
+                  },
                 }),
               );
             }
@@ -658,7 +677,8 @@ describe("2-level merge (merge of merges)", () => {
       jobTypes: billingJobTypes,
       processors: {
         "billing.charge": {
-          attemptHandler: async ({ complete }) => complete(async () => ({ charged: true })),
+          attemptHandler: async ({ complete }) =>
+            complete(async ({ finish }) => finish({ output: { charged: true } })),
         },
       },
     });
@@ -719,7 +739,8 @@ describe("createInProcessWorker with partial processor registries", () => {
       jobTypes: unrelatedJobTypes,
       processors: {
         "unrelated.task": {
-          attemptHandler: async ({ complete }) => complete(async () => ({ y: 1 })),
+          attemptHandler: async ({ complete }) =>
+            complete(async ({ finish }) => finish({ output: { y: 1 } })),
         },
       },
     });

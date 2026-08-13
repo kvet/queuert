@@ -67,7 +67,7 @@ const worker = await createInProcessWorker({
       "process-all": {
         attemptHandler: async ({ job, complete }) => {
           const results = job.blockers.map((b) => b.output.data);
-          return complete(() => ({ results }));
+          return complete(async ({ finish }) => finish({ output: { results } }));
         },
       },
     },

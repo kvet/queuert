@@ -43,7 +43,9 @@ export const notifyTestSuite = ({ it }: { it: TestAPI<TestSuiteContext> }): void
           test: {
             attemptHandler: async ({ job, complete }) => {
               await sleep(50);
-              return complete(async () => ({ result: job.input.value }));
+              return complete(async ({ finish }) =>
+                finish({ output: { result: job.input.value } }),
+              );
             },
           },
         },
@@ -106,7 +108,9 @@ export const notifyTestSuite = ({ it }: { it: TestAPI<TestSuiteContext> }): void
             test: {
               attemptHandler: async ({ job, complete }) => {
                 await sleep(50);
-                return complete(async () => ({ result: job.input.value }));
+                return complete(async ({ finish }) =>
+                  finish({ output: { result: job.input.value } }),
+                );
               },
             },
           },
@@ -180,7 +184,7 @@ export const notifyTestSuite = ({ it }: { it: TestAPI<TestSuiteContext> }): void
           blocker: {
             attemptHandler: async ({ complete }) => {
               await sleep(25);
-              return complete(async () => ({ allowed: true }));
+              return complete(async ({ finish }) => finish({ output: { allowed: true } }));
             },
           },
         },
@@ -196,7 +200,7 @@ export const notifyTestSuite = ({ it }: { it: TestAPI<TestSuiteContext> }): void
           main: {
             attemptHandler: async ({ complete }) => {
               await sleep(25);
-              return complete(async () => ({ done: true }));
+              return complete(async ({ finish }) => finish({ output: { done: true } }));
             },
           },
         },
@@ -271,10 +275,12 @@ export const notifyTestSuite = ({ it }: { it: TestAPI<TestSuiteContext> }): void
           step1: {
             attemptHandler: async ({ complete }) => {
               await sleep(25);
-              return complete(async ({ continueWith }) =>
-                continueWith({
-                  typeName: "step2",
-                  input: null,
+              return complete(async ({ finish }) =>
+                finish({
+                  continueWith: {
+                    typeName: "step2",
+                    input: null,
+                  },
                 }),
               );
             },
@@ -292,7 +298,7 @@ export const notifyTestSuite = ({ it }: { it: TestAPI<TestSuiteContext> }): void
           step2: {
             attemptHandler: async ({ complete }) => {
               await sleep(25);
-              return complete(async () => ({ finished: true }));
+              return complete(async ({ finish }) => finish({ output: { finished: true } }));
             },
           },
         },
@@ -394,8 +400,10 @@ export const notifyTestSuite = ({ it }: { it: TestAPI<TestSuiteContext> }): void
             ...txCtx,
             transactionHooks,
             ...chain,
-            complete: async ({ job, complete }) => {
-              return complete(job, async () => ({ result: "from-external" }));
+            handler: async ({ job, completeJob }) => {
+              return completeJob(job, async ({ finish }) =>
+                finish({ output: { result: "from-external" } }),
+              );
             },
           }),
         ),
@@ -449,7 +457,9 @@ export const notifyTestSuite = ({ it }: { it: TestAPI<TestSuiteContext> }): void
                   await jobCompleted.promise;
                   await sleep(10);
 
-                  return complete(async () => ({ result: "recovered" }));
+                  return complete(async ({ finish }) =>
+                    finish({ output: { result: "recovered" } }),
+                  );
                 }
 
                 jobStarted.resolve();

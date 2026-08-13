@@ -32,6 +32,16 @@ const isValidTraceparent = (value: unknown): value is string =>
 const toException = (error: unknown): Error | string =>
   error instanceof Error ? error : String(error);
 
+const createSubSpanHandle = (span: Span) => ({
+  end: (failure?: { error: unknown }) => {
+    if (failure) {
+      span.recordException(toException(failure.error));
+      span.setStatus({ code: SpanStatusCode.ERROR });
+    }
+    span.end();
+  },
+});
+
 /**
  * Creates an OpenTelemetry-based ObservabilityAdapter.
  *
@@ -396,45 +406,36 @@ export const createOtelObservabilityAdapter = async ({
       );
 
       const attemptCtx = trace.setSpan(context.active(), attemptSpan);
-      let executeCount = 0;
+      let stepCount = 0;
 
       return {
         getChainTraceContext: () => chainTraceContext,
         getTraceContext: () => traceContext,
 
         startPrepare() {
-          const span = tracer.startSpan("prepare", { kind: SpanKind.INTERNAL }, attemptCtx);
-          return {
-            end: () => {
-              span.end();
-            },
-          };
+          return createSubSpanHandle(
+            tracer.startSpan("prepare", { kind: SpanKind.INTERNAL }, attemptCtx),
+          );
         },
 
-        startExecute() {
-          const index = executeCount++;
-          const span = tracer.startSpan(
-            "execute",
-            {
-              kind: SpanKind.INTERNAL,
-              attributes: { "queuert.execute.index": index },
-            },
-            attemptCtx,
+        startStep() {
+          const index = stepCount++;
+          return createSubSpanHandle(
+            tracer.startSpan(
+              "step",
+              {
+                kind: SpanKind.INTERNAL,
+                attributes: { "queuert.step.index": index },
+              },
+              attemptCtx,
+            ),
           );
-          return {
-            end: () => {
-              span.end();
-            },
-          };
         },
 
         startComplete() {
-          const span = tracer.startSpan("complete", { kind: SpanKind.INTERNAL }, attemptCtx);
-          return {
-            end: () => {
-              span.end();
-            },
-          };
+          return createSubSpanHandle(
+            tracer.startSpan("complete", { kind: SpanKind.INTERNAL }, attemptCtx),
+          );
         },
 
         recordAbort(reason) {
@@ -534,7 +535,7 @@ export const createOtelObservabilityAdapter = async ({
       );
 
       const consumerSpan = tracer.startSpan(
-        `resolve chain.${data.blockerChainTypeName}`,
+        `complete chain.${data.blockerChainTypeName}`,
         {
           kind: SpanKind.CONSUMER,
         },

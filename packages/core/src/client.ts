@@ -1,10 +1,9 @@
-import { type AnyChain, type Chain, mapStatePairToChain } from "./entities/chain.js";
+import { type Chain, mapStatePairToChain } from "./entities/chain.js";
 import { type DeduplicationOptions } from "./entities/deduplication.js";
 import { type BaseJobTypeDefinitions } from "./entities/job-type.js";
 import { type JobTypes } from "./entities/job-types.js";
 import {
   type BlockerChains,
-  type ContinuationJobs,
   type JobTypeBlockedNames,
   type JobTypeChainNames,
   type JobTypeEntryNames,
@@ -15,7 +14,7 @@ import {
   type ResolvedChainJobs,
   type ResolvedJob,
 } from "./entities/job-types.resolvers.js";
-import { type AnyJob, deriveStatus, mapStateJobToJob } from "./entities/job.js";
+import { type AnyJob, type CompletedJob, deriveStatus, mapStateJobToJob } from "./entities/job.js";
 import {
   type JobTypesDefinitions,
   type ValidatedSlices,
@@ -38,9 +37,10 @@ import { bufferNotifyJobAttemptLost, bufferNotifyJobScheduled } from "./helpers/
 import { bufferObservabilityEvent } from "./helpers/observability-hooks.js";
 import { raceWithSleep } from "./helpers/sleep.js";
 import { type IsUnion } from "./helpers/typescript.js";
-import { continueWith } from "./implementation/continue-with.js";
+import { createFinishOnce, mapFinishResult } from "./implementation/attempt-outcome.js";
+import { completeChain } from "./implementation/complete-chain.js";
+import { type AnyContinueWith, continueChain } from "./implementation/continue-chain.js";
 import { createChains } from "./implementation/create-chains.js";
-import { finishJob } from "./implementation/finish-job.js";
 import { type NotifyAdapter } from "./notify-adapter/notify-adapter.js";
 import { type Log } from "./observability-adapter/log.js";
 import { type ObservabilityAdapter } from "./observability-adapter/observability-adapter.js";
@@ -53,13 +53,15 @@ import {
   type StateAdapter,
 } from "./state-adapter/state-adapter.js";
 import { type TransactionHooks } from "./transaction-hooks.js";
-import { type AttemptCompleteOptions } from "./worker/job-process.js";
+import { type AttemptFinishResult, type AttemptOutcome } from "./worker/job-process.types.js";
 
 /**
  * @internal Used by `createInProcessWorker` and `createDashboard` to access
  * client internals. Not part of the public API.
  */
 export const helpersSymbol: unique symbol = Symbol("queuert.helpers");
+
+type AnyWorkerlessOutcome = { output: unknown } | { continueWith: AnyContinueWith };
 
 const normalizeTxCtx = <T extends Record<string, unknown>>(rest: T): T | undefined =>
   Object.keys(rest).length > 0 ? rest : undefined;
@@ -71,13 +73,6 @@ const requireTxCtx = <T extends Record<string, unknown>>(rest: T): T => {
   return rest;
 };
 
-/**
- * Transaction-context typing for the lockable read methods. `lock: true`
- * acquires a write-intent lock on the matched rows for the enclosing
- * transaction, so it requires a transaction context; without `lock` the context
- * stays optional. Modelled as a discriminated union so `{ lock: true }` without
- * a transaction context fails to compile.
- */
 type LockableReadTxContext<TStateAdapter extends StateAdapter<any, any>> =
   | ({ lock?: false } & Partial<GetStateAdapterTxContext<TStateAdapter>>)
   | ({ lock: true } & GetStateAdapterTxContext<TStateAdapter>);
@@ -85,32 +80,35 @@ type LockableReadTxContext<TStateAdapter extends StateAdapter<any, any>> =
 type ChainCompleteOptions<
   TStateAdapter extends StateAdapter<any, any>,
   TJobTypeDefinitions extends BaseJobTypeDefinitions,
+  TJobTypeName extends string,
+  TChainTypeName extends string,
+> = {
+  finish: <TOutcome extends AttemptOutcome<TStateAdapter, TJobTypeDefinitions, TJobTypeName>>(
+    outcome: TOutcome,
+  ) => Promise<
+    AttemptFinishResult<TStateAdapter, TJobTypeDefinitions, TJobTypeName, TChainTypeName, TOutcome>
+  >;
+  transactionHooks: TransactionHooks;
+} & GetStateAdapterTxContext<TStateAdapter>;
+
+type ChainCompleteJobResult<TResult> = TResult extends { continuedTo: undefined }
+  ? TResult
+  : TResult extends { continuedTo: infer TContinuation }
+    ? TContinuation
+    : TResult;
+
+type ChainHandler<
+  TStateAdapter extends StateAdapter<any, any>,
+  TJobTypeDefinitions extends BaseJobTypeDefinitions,
   TChainTypeName extends JobTypeEntryNames<TJobTypeDefinitions>,
-  TCompleteReturn,
 > = (options: {
   job: ResolvedChainJobs<GetStateAdapterJobId<TStateAdapter>, TJobTypeDefinitions, TChainTypeName>;
-  complete: <
+  completeJob: <
     TJobTypeName extends JobTypeChainNames<TJobTypeDefinitions, TChainTypeName> & string,
-    TReturn extends
-      | JobTypeProperty<TJobTypeDefinitions, TJobTypeName, "output">
-      | ContinuationJobs<
-          GetStateAdapterJobId<TStateAdapter>,
-          TJobTypeDefinitions,
-          TJobTypeName,
-          TChainTypeName
-        >
-      | Promise<JobTypeProperty<TJobTypeDefinitions, TJobTypeName, "output">>
-      | Promise<
-          ContinuationJobs<
-            GetStateAdapterJobId<TStateAdapter>,
-            TJobTypeDefinitions,
-            TJobTypeName,
-            TChainTypeName
-          >
-        >,
+    TResult extends CompletedJob<AnyJob>,
   >(
     ...args: true extends IsUnion<TJobTypeName>
-      ? [job: "Error: narrow the job type before calling complete (e.g. check job.typeName)"]
+      ? [job: "Error: narrow the job type before calling completeJob (e.g. check job.typeName)"]
       : [
           job: ResolvedJob<
             GetStateAdapterJobId<TStateAdapter>,
@@ -119,40 +117,40 @@ type ChainCompleteOptions<
             TChainTypeName
           >,
           completeCallback: (
-            completeOptions: AttemptCompleteOptions<
+            completeOptions: ChainCompleteOptions<
               TStateAdapter,
               TJobTypeDefinitions,
               TJobTypeName,
               TChainTypeName
             >,
-          ) => TReturn,
+          ) => Promise<TResult>,
         ]
-  ) => Promise<Awaited<TReturn>>;
-}) => Promise<TCompleteReturn>;
+  ) => Promise<ChainCompleteJobResult<TResult>>;
+}) => Promise<CompletedJob<AnyJob> | void>;
 
 type CompleteChainResult<
-  TStateAdapter extends StateAdapter<any, any>,
+  TJobId,
   TJobTypeDefinitions extends BaseJobTypeDefinitions,
-  TChainTypeName extends JobTypeNames<TJobTypeDefinitions>,
-  TCompleteReturn,
-> = [TCompleteReturn] extends [void]
-  ? ResolvedChain<GetStateAdapterJobId<TStateAdapter>, TJobTypeDefinitions, TChainTypeName>
-  : TCompleteReturn extends AnyJob & { status: "pending" }
-    ? ResolvedChain<GetStateAdapterJobId<TStateAdapter>, TJobTypeDefinitions, TChainTypeName>
-    : Chain<
-        GetStateAdapterJobId<TStateAdapter>,
-        TChainTypeName,
-        JobTypeProperty<TJobTypeDefinitions, TChainTypeName, "input">,
-        TCompleteReturn
-      > & { status: "completed" };
+  TChainTypeName extends JobTypeEntryNames<TJobTypeDefinitions>,
+  TReturn,
+> = TReturn extends { continuedTo: undefined; output: infer TOutput }
+  ? Chain<
+      TJobId,
+      TChainTypeName,
+      JobTypeProperty<TJobTypeDefinitions, TChainTypeName, "input">,
+      TOutput
+    > & { status: "completed" }
+  : TReturn extends { continuedTo: AnyJob }
+    ? ResolvedChain<TJobId, TJobTypeDefinitions, TChainTypeName> & { status: "running" }
+    : ResolvedChain<TJobId, TJobTypeDefinitions, TChainTypeName>;
 
-type CompleteChainResultFromComplete<
-  TStateAdapter extends StateAdapter<any, any>,
+type CompleteChainResultFromHandler<
+  TJobId,
   TJobTypeDefinitions extends BaseJobTypeDefinitions,
-  TChainTypeName extends JobTypeNames<TJobTypeDefinitions>,
-  TComplete,
-> = TComplete extends (...args: any[]) => Promise<infer TCompleteReturn>
-  ? CompleteChainResult<TStateAdapter, TJobTypeDefinitions, TChainTypeName, TCompleteReturn>
+  TChainTypeName extends JobTypeEntryNames<TJobTypeDefinitions>,
+  THandler,
+> = THandler extends (...args: any[]) => Promise<infer TReturn>
+  ? CompleteChainResult<TJobId, TJobTypeDefinitions, TChainTypeName, TReturn>
   : never;
 
 type CreateChainEntry<
@@ -163,7 +161,7 @@ type CreateChainEntry<
   typeName: TTypeName;
   id?: TJobId;
   input: JobTypeProperty<TJobTypeDefinitions, TTypeName, "input">;
-  deduplication?: DeduplicationOptions<TJobId>;
+  deduplication?: DeduplicationOptions;
   schedule?: ScheduleOptions;
 } & (JobTypeHasBlockers<TJobTypeDefinitions, TTypeName> extends true
   ? { blockers: BlockerChains<TJobId, TJobTypeDefinitions, TTypeName> }
@@ -307,33 +305,39 @@ export type Client<
 
   /**
    * Complete a chain from outside a worker. Validates `typeName`, then passes
-   * the current job and a `complete` function to the caller.
+   * the current job and a `completeJob` function to the `handler`. The handler
+   * may decline (return without calling `completeJob`); when it does complete,
+   * the callback passes exactly one outcome — `{ output }` or
+   * `{ continueWith: {...} }` — to `finish`, which writes it before it returns.
+   *
+   * `completeJob` resolves to the continuation when the outcome continued the
+   * chain, so several jobs can be walked in a row:
+   *
+   * ```ts
+   * job = await completeJob(job, async ({ finish }) =>
+   *   finish({ continueWith: { typeName: "step-a", input: { valueA: 42 } } }));
+   * ```
    *
    * @throws {@link ChainNotFoundError} if the chain does not exist.
    * @throws {@link ChainTypeMismatchError} if the chain's type does not match `typeName`.
-   * @throws {@link JobAlreadyCompletedError} from the inner `complete` callback if the job is already completed.
-   * @throws {@link BlockerLimitExceededError} from the inner `complete` callback if a `continueWith` declares more blockers than the per-job limit.
+   * @throws {@link JobAlreadyCompletedError} from the inner `completeJob` if the job is already completed.
+   * @throws {@link BlockerLimitExceededError} from the inner `finish` if a `continueWith` outcome declares more blockers than the per-job limit.
    */
   completeChain: <
     TChainTypeName extends JobTypeEntryNames<TJobTypeDefinitions>,
-    TComplete extends (...args: any[]) => Promise<any> = ChainCompleteOptions<
+    // oxlint-disable-next-line typescript/no-unnecessary-type-parameters -- holds `handler` as a naked type param so a `Client` over a union of job-type definitions stays assignable to a `Client` over one member (client.covariance.spec.ts)
+    THandler extends (...args: any[]) => Promise<any> = ChainHandler<
       TStateAdapter,
       TJobTypeDefinitions,
-      TChainTypeName,
-      any
+      TChainTypeName
     >,
-    TResult = CompleteChainResultFromComplete<
-      TStateAdapter,
-      TJobTypeDefinitions,
-      TChainTypeName,
-      TComplete
-    >,
+    TResult = CompleteChainResultFromHandler<TJobId, TJobTypeDefinitions, TChainTypeName, THandler>,
   >(
     options: {
       typeName: TChainTypeName;
       id: TJobId;
       transactionHooks: TransactionHooks;
-      complete: TComplete;
+      handler: THandler;
     } & GetStateAdapterTxContext<TStateAdapter>,
   ) => Promise<TResult>;
 
@@ -606,7 +610,7 @@ export const createClient = async <
         id?: TJobId;
         input: JobTypeProperty<TJobTypeDefinitions, TChainTypeName, "input">;
         transactionHooks: TransactionHooks;
-        deduplication?: DeduplicationOptions<TJobId>;
+        deduplication?: DeduplicationOptions;
         schedule?: ScheduleOptions;
       } & (JobTypeHasBlockers<TJobTypeDefinitions, TChainTypeName> extends true
         ? {
@@ -808,27 +812,27 @@ export const createClient = async <
 
     completeChain: async <
       TChainTypeName extends JobTypeEntryNames<TJobTypeDefinitions>,
-      TComplete extends (...args: any[]) => Promise<any> = ChainCompleteOptions<
+      // oxlint-disable-next-line typescript/no-unnecessary-type-parameters -- see the `Client` declaration
+      THandler extends (...args: any[]) => Promise<any> = ChainHandler<
         TStateAdapter,
         TJobTypeDefinitions,
-        TChainTypeName,
-        any
+        TChainTypeName
       >,
-      TResult = CompleteChainResultFromComplete<
-        TStateAdapter,
+      TResult = CompleteChainResultFromHandler<
+        TJobId,
         TJobTypeDefinitions,
         TChainTypeName,
-        TComplete
+        THandler
       >,
     >(
       options: {
         typeName: TChainTypeName;
         id: TJobId;
         transactionHooks: TransactionHooks;
-        complete: TComplete;
+        handler: THandler;
       } & GetStateAdapterTxContext<TStateAdapter>,
     ): Promise<TResult> => {
-      const { id, typeName, complete: completeCallback, transactionHooks, ...rest } = options;
+      const { id, typeName, handler, transactionHooks, ...rest } = options;
       const txCtx = requireTxCtx(rest);
       const classified = await helpers.stateAdapter.getChains({
         txCtx,
@@ -856,21 +860,15 @@ export const createClient = async <
         );
       }
 
-      const complete = async (
+      const completeJob = async (
         job: AnyJob,
-        jobCompleteCallback: (
+        completeCallback: (
           options: {
-            continueWith: (options: {
-              typeName: string;
-              id?: TJobId;
-              input: unknown;
-              schedule?: ScheduleOptions;
-              blockers?: AnyChain[];
-            }) => Promise<unknown>;
+            finish: (outcome: AnyWorkerlessOutcome) => Promise<AnyJob & { continuedTo?: AnyJob }>;
             transactionHooks: TransactionHooks;
           } & BaseTxContext,
-        ) => unknown,
-      ): Promise<unknown> => {
+        ) => Promise<AnyJob & { continuedTo?: AnyJob }>,
+      ): Promise<AnyJob & { continuedTo?: AnyJob }> => {
         if (job.status === "completed") {
           throw new JobAlreadyCompletedError(
             `Cannot complete job ${job.id}: job is already completed`,
@@ -887,50 +885,59 @@ export const createClient = async <
           throw new JobNotFoundError(`Job ${job.id} not found`, { jobId: job.id });
         }
 
-        let continuedJob: AnyJob | null = null;
+        const wasRunning = job.status === "running";
+        const finishOnce = createFinishOnce();
+        const finish = async (
+          outcome: AnyWorkerlessOutcome,
+        ): Promise<AnyJob & { continuedTo?: AnyJob }> => {
+          finishOnce.begin();
+          try {
+            const finishResult =
+              "output" in outcome
+                ? await completeChain(helpers, {
+                    job: stateJob,
+                    output: outcome.output,
+                    txCtx,
+                    transactionHooks,
+                    workerId: null,
+                  })
+                : await continueChain(helpers, {
+                    job: stateJob,
+                    fromJob: stateJob,
+                    continueWith: outcome.continueWith,
+                    txCtx,
+                    transactionHooks,
+                    workerId: null,
+                  });
+            finishOnce.succeed(finishResult);
+            return mapFinishResult(finishResult);
+          } catch (error) {
+            finishOnce.fail(error);
+            throw error;
+          }
+        };
 
-        const output = await jobCompleteCallback({
+        const completeResult = await completeCallback({
           transactionHooks,
-          continueWith: async ({ typeName, id, input, schedule, blockers }) => {
-            if (continuedJob) {
-              throw new Error("continueWith can only be called once");
-            }
-
-            continuedJob = await continueWith(helpers, {
-              typeName,
-              id,
-              input,
-              txCtx,
-              transactionHooks,
-              schedule,
-              blockers: blockers as any,
-              fromJob: stateJob,
-            });
-
-            return continuedJob;
-          },
+          finish,
           ...txCtx,
         });
 
-        const wasRunning = job.status === "running";
-
-        await finishJob(helpers, {
-          job: stateJob,
-          txCtx,
-          transactionHooks,
-          workerId: null,
-          output,
-          continuedJob,
+        const finished = finishOnce.requireFinished();
+        bufferObservabilityEvent(transactionHooks, () => {
+          helpers.observabilityHelper.completeJobSpan(finished.job, {
+            continuedWith: finished.continuation ?? undefined,
+            chainCompleted: finished.continuation === null,
+          });
         });
-
         if (wasRunning) {
           bufferNotifyJobAttemptLost(transactionHooks, helpers.notifyAdapter, job.id);
         }
 
-        return continuedJob ?? output;
+        return completeResult.continuedTo ?? completeResult;
       };
 
-      await completeCallback({ job: mapStateJobToJob(currentJob) as any, complete });
+      await handler({ job: mapStateJobToJob(currentJob), completeJob });
 
       const [updatedChain] = await helpers.stateAdapter.getChains({
         txCtx,

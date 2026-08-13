@@ -13,9 +13,9 @@ export const notificationProcessors = createProcessors({
           `[notifications.send-notification] Sending ${job.input.channel} to user ${job.input.userId}: "${job.input.message}"`,
         );
 
-        return complete(async () => ({
-          sentAt: new Date().toISOString(),
-        }));
+        return complete(async ({ finish }) =>
+          finish({ output: { sentAt: new Date().toISOString() } }),
+        );
       },
     },
   },

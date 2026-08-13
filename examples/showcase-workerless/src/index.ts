@@ -88,21 +88,25 @@ const worker = await createInProcessWorker({
           console.log(
             `[await-approval] Timeout reached for ${job.input.requestId} - auto-rejecting`,
           );
-          return complete(async () => ({ rejected: true, reason: "timeout" }));
+          return complete(async ({ finish }) =>
+            finish({ output: { rejected: true, reason: "timeout" } }),
+          );
         },
       },
 
       "process-approved": {
         attemptHandler: async ({ job, complete }) => {
           console.log(`[process-approved] Processing approved request ${job.input.requestId}`);
-          return complete(async () => ({ processed: true, completedAt: new Date().toISOString() }));
+          return complete(async ({ finish }) =>
+            finish({ output: { processed: true, completedAt: new Date().toISOString() } }),
+          );
         },
       },
 
       "pending-action": {
         attemptHandler: async ({ job, complete }) => {
           console.log(`[pending-action] Action ${job.input.actionId} expired`);
-          return complete(async () => ({ expired: true }));
+          return complete(async ({ finish }) => finish({ output: { expired: true } }));
         },
       },
     },
@@ -135,12 +139,14 @@ await withTransactionHooks(async (transactionHooks) =>
       sql: txSql,
       transactionHooks,
       ...approval1,
-      complete: async ({ job, complete }) => {
+      handler: async ({ job, completeJob }) => {
         if (job.typeName !== "await-approval") return;
-        await complete(job, async ({ continueWith }) =>
-          continueWith({
-            typeName: "process-approved",
-            input: { requestId: job.input.requestId },
+        return completeJob(job, async ({ finish }) =>
+          finish({
+            continueWith: {
+              typeName: "process-approved",
+              input: { requestId: job.input.requestId },
+            },
           }),
         );
       },
@@ -170,21 +176,21 @@ const approval2 = await withTransactionHooks(async (transactionHooks) =>
 console.log(`Created approval request: ${approval2.id}`);
 
 console.log(`Rejecting externally...`);
-await withTransactionHooks(async (transactionHooks) =>
+const result2 = await withTransactionHooks(async (transactionHooks) =>
   sql.begin(async (txSql) =>
     client.completeChain({
       sql: txSql,
       transactionHooks,
       ...approval2,
-      complete: async ({ job, complete }) => {
-        if (job.typeName !== "await-approval") return;
-        await complete(job, async () => ({ rejected: true, reason: "manager_denied" }));
+      handler: async ({ job, completeJob }) => {
+        if (job.typeName !== "await-approval") throw new Error(`Unexpected job ${job.typeName}`);
+        return completeJob(job, async ({ finish }) =>
+          finish({ output: { rejected: true, reason: "manager_denied" } }),
+        );
       },
     }),
   ),
 );
-
-const result2 = await client.awaitChain(approval2, { timeoutMs: 10000 });
 console.log(`Result: ${JSON.stringify(result2.output)}`);
 assert.ok("rejected" in result2.output);
 assert.equal(result2.output.reason, "manager_denied");
@@ -207,21 +213,19 @@ const action = await withTransactionHooks(async (transactionHooks) =>
 console.log(`Created pending action: ${action.id} (expires in 5s)`);
 
 console.log(`Completing early...`);
-await withTransactionHooks(async (transactionHooks) =>
+const result3 = await withTransactionHooks(async (transactionHooks) =>
   sql.begin(async (txSql) =>
     client.completeChain({
       sql: txSql,
       transactionHooks,
       ...action,
-      complete: async ({ job, complete }) => {
-        if (job.typeName !== "pending-action") return;
-        await complete(job, async () => ({ completed: true, result: "User clicked confirm" }));
-      },
+      handler: async ({ job, completeJob }) =>
+        completeJob(job, async ({ finish }) =>
+          finish({ output: { completed: true, result: "User clicked confirm" } }),
+        ),
     }),
   ),
 );
-
-const result3 = await client.awaitChain(action, { timeoutMs: 10000 });
 console.log(`Result: ${JSON.stringify(result3.output)}`);
 assert.ok("completed" in result3.output);
 assert.ok(result3.output.result.includes("confirm"));

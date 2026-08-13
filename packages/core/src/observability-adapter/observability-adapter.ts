@@ -2,9 +2,9 @@ import { type NotifyAdapter } from "../notify-adapter/notify-adapter.js";
 import { type StateAdapter } from "../state-adapter/state-adapter.js";
 import { type JobAbortReason } from "../worker/job-process.js";
 import {
+  type ChainData,
   type JobAttemptData,
   type JobBasicData,
-  type ChainData,
   type JobCompletionData,
   type JobProcessingData,
   type WorkerBasicData,
@@ -73,17 +73,20 @@ export type JobAttemptSpanResult =
       rescheduledAfterMs?: number;
     };
 
-/** Handle for ending a span. */
+/**
+ * Handle for ending a span. Pass `{ error }` when the spanned operation threw —
+ * the box distinguishes a thrown `undefined` from a successful completion.
+ */
 export type SpanHandle = {
-  end: () => void;
+  end: (failure?: { error: unknown }) => void;
 };
 
-/** Handle for managing a job attempt span, including prepare/complete sub-spans. */
+/** Handle for managing a job attempt span, including prepare/step/complete sub-spans. */
 export type JobAttemptSpanHandle = {
   getChainTraceContext: () => string;
   getTraceContext: () => string;
   startPrepare: () => SpanHandle;
-  startExecute: () => SpanHandle;
+  startStep: () => SpanHandle;
   startComplete: () => SpanHandle;
   recordAbort: (reason: JobAbortReason) => void;
   end: (result: JobAttemptSpanResult) => void;

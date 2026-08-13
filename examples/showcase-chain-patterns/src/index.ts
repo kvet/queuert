@@ -126,16 +126,18 @@ const worker = await createInProcessWorker({
         attemptHandler: async ({ job, complete }) => {
           console.log(`\n[create-subscription] Creating subscription for user ${job.input.userId}`);
 
-          return complete(async ({ sql, continueWith }) => {
+          return complete(async ({ finish, sql }) => {
             const [sub] = (await sql.unsafe(
               "INSERT INTO subscriptions (user_id, plan_id, status) VALUES ($1, $2, 'pending') RETURNING id",
               [job.input.userId, job.input.planId],
             )) as { id: number }[];
             console.log(`  Created subscription #${sub.id}`);
 
-            return continueWith({
-              typeName: "activate-trial",
-              input: { subscriptionId: sub.id, trialDays: TRIAL_DAYS },
+            return finish({
+              continueWith: {
+                typeName: "activate-trial",
+                input: { subscriptionId: sub.id, trialDays: TRIAL_DAYS },
+              },
             });
           });
         },
@@ -145,7 +147,7 @@ const worker = await createInProcessWorker({
         attemptHandler: async ({ job, complete }) => {
           console.log(`\n[activate-trial] Activating ${job.input.trialDays}-day trial`);
 
-          return complete(async ({ sql, continueWith }) => {
+          return complete(async ({ finish, sql }) => {
             const trialEndsAt = new Date(Date.now() + job.input.trialDays * 24 * 60 * 60 * 1000);
             await sql.unsafe(
               "UPDATE subscriptions SET status = 'trial', trial_ends_at = $1 WHERE id = $2",
@@ -153,9 +155,11 @@ const worker = await createInProcessWorker({
             );
             console.log(`  Trial activated until ${trialEndsAt.toISOString()}`);
 
-            return continueWith({
-              typeName: "trial-decision",
-              input: { subscriptionId: job.input.subscriptionId },
+            return finish({
+              continueWith: {
+                typeName: "trial-decision",
+                input: { subscriptionId: job.input.subscriptionId },
+              },
             });
           });
         },
@@ -170,16 +174,20 @@ const worker = await createInProcessWorker({
           const shouldConvert = userConverts;
           console.log(`  User decision: ${shouldConvert ? "CONVERT to paid" : "LET EXPIRE"}`);
 
-          return complete(async ({ continueWith }) => {
+          return complete(async ({ finish }) => {
             if (shouldConvert) {
-              return continueWith({
-                typeName: "convert-to-paid",
-                input: { subscriptionId: job.input.subscriptionId },
+              return finish({
+                continueWith: {
+                  typeName: "convert-to-paid",
+                  input: { subscriptionId: job.input.subscriptionId },
+                },
               });
             } else {
-              return continueWith({
-                typeName: "expire-trial",
-                input: { subscriptionId: job.input.subscriptionId },
+              return finish({
+                continueWith: {
+                  typeName: "expire-trial",
+                  input: { subscriptionId: job.input.subscriptionId },
+                },
               });
             }
           });
@@ -192,14 +200,14 @@ const worker = await createInProcessWorker({
             `\n[expire-trial] Trial expired for subscription #${job.input.subscriptionId}`,
           );
 
-          return complete(async ({ sql }) => {
+          return complete(async ({ finish, sql }) => {
             await sql.unsafe("UPDATE subscriptions SET status = 'expired' WHERE id = $1", [
               job.input.subscriptionId,
             ]);
             const expiredAt = new Date().toISOString();
             console.log(`  Subscription expired at ${expiredAt}`);
 
-            return { expiredAt };
+            return finish({ output: { expiredAt } });
           });
         },
       },
@@ -210,15 +218,17 @@ const worker = await createInProcessWorker({
             `\n[convert-to-paid] Converting subscription #${job.input.subscriptionId} to paid`,
           );
 
-          return complete(async ({ sql, continueWith }) => {
+          return complete(async ({ finish, sql }) => {
             await sql.unsafe("UPDATE subscriptions SET status = 'active' WHERE id = $1", [
               job.input.subscriptionId,
             ]);
             console.log(`  Subscription is now active!`);
 
-            return continueWith({
-              typeName: "charge-billing",
-              input: { subscriptionId: job.input.subscriptionId, cycle: 1 },
+            return finish({
+              continueWith: {
+                typeName: "charge-billing",
+                input: { subscriptionId: job.input.subscriptionId, cycle: 1 },
+              },
             });
           });
         },
@@ -231,7 +241,7 @@ const worker = await createInProcessWorker({
           await new Promise((r) => setTimeout(r, 100));
           console.log(`  Charged $${PRICE_PER_CYCLE} for cycle ${job.input.cycle}`);
 
-          return complete(async ({ sql, continueWith }) => {
+          return complete(async ({ finish, sql }) => {
             const [sub] = (await sql.unsafe(
               "UPDATE subscriptions SET current_cycle = $1, total_charged = total_charged + $2 WHERE id = $3 RETURNING total_charged",
               [job.input.cycle, PRICE_PER_CYCLE, job.input.subscriptionId],
@@ -242,17 +252,21 @@ const worker = await createInProcessWorker({
 
             if (job.input.cycle < MAX_BILLING_CYCLES) {
               console.log(`  Scheduling next billing cycle...`);
-              return continueWith({
-                typeName: "charge-billing",
-                input: { subscriptionId: job.input.subscriptionId, cycle: job.input.cycle + 1 },
+              return finish({
+                continueWith: {
+                  typeName: "charge-billing",
+                  input: { subscriptionId: job.input.subscriptionId, cycle: job.input.cycle + 1 },
+                },
               });
             } else {
               console.log(`  Max cycles reached, cancelling subscription...`);
-              return continueWith({
-                typeName: "cancel-subscription",
-                input: {
-                  subscriptionId: job.input.subscriptionId,
-                  reason: "max_billing_cycles_reached",
+              return finish({
+                continueWith: {
+                  typeName: "cancel-subscription",
+                  input: {
+                    subscriptionId: job.input.subscriptionId,
+                    reason: "max_billing_cycles_reached",
+                  },
                 },
               });
             }
@@ -267,7 +281,7 @@ const worker = await createInProcessWorker({
           );
           console.log(`  Reason: ${job.input.reason}`);
 
-          return complete(async ({ sql }) => {
+          return complete(async ({ finish, sql }) => {
             const cancelledAt = new Date().toISOString();
             await sql.unsafe(
               "UPDATE subscriptions SET status = 'cancelled', cancelled_at = $1 WHERE id = $2",
@@ -275,7 +289,7 @@ const worker = await createInProcessWorker({
             );
             console.log(`  Subscription cancelled at ${cancelledAt}`);
 
-            return { cancelledAt };
+            return finish({ output: { cancelledAt } });
           });
         },
       },

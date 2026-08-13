@@ -14,7 +14,7 @@ export const processTestSuite = ({ it }: { it: TestAPI<TestSuiteContext> }): voi
     timeoutMs: 5000,
   };
 
-  it("throws error when prepare, complete, or continueWith called incorrectly", async ({
+  it("throws error when prepare, complete, or finish are called incorrectly", async ({
     stateAdapter,
     notifyAdapter,
     withTransaction,
@@ -42,6 +42,19 @@ export const processTestSuite = ({ it }: { it: TestAPI<TestSuiteContext> }): voi
       "test-continueWith-twice": {
         entry: true;
         input: null;
+        output: null;
+        continueWith: { typeName: "test-next" };
+      };
+      "test-continue-after-complete": {
+        entry: true;
+        input: null;
+        output: null;
+        continueWith: { typeName: "test-next" };
+      };
+      "test-finish-concurrently": {
+        entry: true;
+        input: null;
+        output: null;
         continueWith: { typeName: "test-next" };
       };
       "test-next": {
@@ -68,18 +81,17 @@ export const processTestSuite = ({ it }: { it: TestAPI<TestSuiteContext> }): voi
             attemptHandler: async ({ prepare, complete }) => {
               await prepare({ mode: "atomic" });
               await expect(prepare({ mode: "atomic" })).rejects.toThrow(
-                "Prepare can only be called once",
+                "prepare can only be called once",
               );
-              return complete(async () => null);
+              return complete(async ({ finish }) => finish({ output: null }));
             },
           },
           "test-complete-twice": {
-            attemptHandler: async ({ prepare, complete }) => {
-              await prepare({ mode: "atomic" });
-              const result = complete(async () => null);
-              await expect(complete(async () => null)).rejects.toThrow(
-                "Complete can only be called once",
-              );
+            attemptHandler: async ({ complete }) => {
+              const result = complete(async ({ finish }) => finish({ output: null }));
+              await expect(
+                complete(async ({ finish }) => finish({ output: null })),
+              ).rejects.toThrow("complete can only be called once");
               return result;
             },
           },
@@ -89,53 +101,93 @@ export const processTestSuite = ({ it }: { it: TestAPI<TestSuiteContext> }): voi
               // Use 50ms to ensure auto-setup completes before we continue
               await sleep(50);
               // Now try to access prepare after auto-setup
-              expect(() => options.prepare).toThrow("Prepare cannot be accessed after auto-setup");
-              return options.complete(async () => null);
+              expect(() => options.prepare).toThrow("prepare cannot be accessed after auto-setup");
+              return options.complete(async ({ finish }) => finish({ output: null }));
             },
           },
           "test-continueWith-twice": {
-            attemptHandler: async ({ prepare, complete }) => {
-              await prepare({ mode: "atomic" });
-              return complete(async ({ continueWith }) => {
-                const continuation1 = await continueWith({
-                  typeName: "test-next",
-                  input: { value: 1 },
+            attemptHandler: async ({ complete }) => {
+              return complete(async ({ finish }) => {
+                const completedJob = await finish({
+                  continueWith: {
+                    typeName: "test-next",
+                    input: { value: 1 },
+                  },
                 });
                 await expect(
-                  continueWith({
-                    typeName: "test-next",
-                    input: { value: 2 },
+                  finish({
+                    continueWith: {
+                      typeName: "test-next",
+                      input: { value: 2 },
+                    },
                   }),
-                ).rejects.toThrow("continueWith can only be called once");
-                return continuation1;
+                ).rejects.toThrow("finish can only be called once");
+                await expect(finish({ output: null })).rejects.toThrow(
+                  "finish can only be called once",
+                );
+                return completedJob;
+              });
+            },
+          },
+          "test-continue-after-complete": {
+            attemptHandler: async ({ complete }) => {
+              return complete(async ({ finish }) => {
+                const completedJob = await finish({ output: null });
+                await expect(
+                  finish({ continueWith: { typeName: "test-next", input: { value: 1 } } }),
+                ).rejects.toThrow("finish can only be called once");
+                return completedJob;
+              });
+            },
+          },
+          "test-finish-concurrently": {
+            attemptHandler: async ({ complete }) => {
+              return complete(async ({ finish }) => {
+                const first = finish({
+                  continueWith: { typeName: "test-next", input: { value: 10 } },
+                });
+                const second = finish({
+                  continueWith: { typeName: "test-next", input: { value: 20 } },
+                });
+                await expect(second).rejects.toThrow("finish can only be called once");
+                return first;
               });
             },
           },
           "test-next": {
-            attemptHandler: async ({ job, prepare, complete }) => {
-              await prepare({ mode: "atomic" });
-              return complete(async () => ({ result: job.input.value }));
+            attemptHandler: async ({ job, complete }) => {
+              return complete(async ({ finish }) =>
+                finish({ output: { result: job.input.value } }),
+              );
             },
           },
         },
       }),
     });
 
-    const [prepareChain, completeChain, prepareAfterAutoSetupChain, continueWithChain] =
-      await withTransactionHooks(async (transactionHooks) =>
-        withTransaction(async (txCtx) =>
-          client.createChains({
-            ...txCtx,
-            transactionHooks,
-            items: [
-              { typeName: "test-prepare-twice", input: null },
-              { typeName: "test-complete-twice", input: null },
-              { typeName: "test-prepare-after-auto-setup", input: null },
-              { typeName: "test-continueWith-twice", input: null },
-            ],
-          }),
-        ),
-      );
+    const [
+      prepareChain,
+      completeChain,
+      prepareAfterAutoSetupChain,
+      continueWithChain,
+      continueAfterCompleteChain,
+      finishConcurrentlyChain,
+    ] = await withTransactionHooks(async (transactionHooks) =>
+      withTransaction(async (txCtx) =>
+        client.createChains({
+          ...txCtx,
+          transactionHooks,
+          items: [
+            { typeName: "test-prepare-twice", input: null },
+            { typeName: "test-complete-twice", input: null },
+            { typeName: "test-prepare-after-auto-setup", input: null },
+            { typeName: "test-continueWith-twice", input: null },
+            { typeName: "test-continue-after-complete", input: null },
+            { typeName: "test-finish-concurrently", input: null },
+          ],
+        }),
+      ),
+    );
 
     await withWorkers([await worker.start()], async () => {
       await Promise.all([
@@ -143,6 +195,8 @@ export const processTestSuite = ({ it }: { it: TestAPI<TestSuiteContext> }): voi
         client.awaitChain(completeChain, completionOptions),
         client.awaitChain(prepareAfterAutoSetupChain, completionOptions),
         client.awaitChain(continueWithChain, completionOptions),
+        client.awaitChain(continueAfterCompleteChain, completionOptions),
+        client.awaitChain(finishConcurrentlyChain, completionOptions),
       ]);
     });
   });
@@ -186,7 +240,7 @@ export const processTestSuite = ({ it }: { it: TestAPI<TestSuiteContext> }): voi
         },
         processors: {
           test: {
-            attemptHandler: async ({ job, prepare, complete }) => {
+            attemptHandler: async ({ job, complete }) => {
               attempts.push(job.attempt);
 
               expectTypeOf(job.attempt).toEqualTypeOf<number>();
@@ -206,9 +260,7 @@ export const processTestSuite = ({ it }: { it: TestAPI<TestSuiteContext> }): voi
                 throw new Error("Simulated failure");
               }
 
-              await prepare({ mode: "atomic" });
-
-              return complete(async () => null);
+              return complete(async ({ finish }) => finish({ output: null }));
             },
           },
         },
@@ -269,12 +321,11 @@ export const processTestSuite = ({ it }: { it: TestAPI<TestSuiteContext> }): voi
         },
         processors: {
           test: {
-            attemptHandler: async ({ job, prepare, complete }) => {
+            attemptHandler: async ({ job, complete }) => {
               if (job.attempt < 2) {
                 throw new Error("Simulated failure");
               }
-              await prepare({ mode: "atomic" });
-              return complete(async () => null);
+              return complete(async ({ finish }) => finish({ output: null }));
             },
           },
         },
@@ -348,7 +399,7 @@ export const processTestSuite = ({ it }: { it: TestAPI<TestSuiteContext> }): voi
                 throw new Error("Unexpected error");
               }
 
-              return complete(async () => null);
+              return complete(async ({ finish }) => finish({ output: null }));
             },
           },
         },
@@ -428,12 +479,12 @@ export const processTestSuite = ({ it }: { it: TestAPI<TestSuiteContext> }): voi
               expect(result).toEqual("prepare");
 
               const completedJob = await complete(
-                async ({ continueWith: _, transactionHooks, ...txCtx }) => {
+                async ({ finish, transactionHooks, ...txCtx }) => {
                   expectTypeOf(txCtx).toEqualTypeOf<{ $test: true }>();
                   expect(txCtx).toBeDefined();
                   expect(transactionHooks).toBeDefined();
 
-                  return { result: true };
+                  return finish({ output: { result: true } });
                 },
               );
               expectTypeOf(completedJob.typeName).toEqualTypeOf<"test">();
@@ -481,5 +532,94 @@ export const processTestSuite = ({ it }: { it: TestAPI<TestSuiteContext> }): voi
     if (completedJob?.status === "completed") {
       expect(completedJob.completedBy).toMatch(/^worker-[0-9a-f-]{36}$/);
     }
+  });
+
+  it("finish should be visible to reads later in the same callback", async ({
+    stateAdapter,
+    notifyAdapter,
+    withTransaction,
+    withWorkers,
+    observabilityAdapter,
+    log,
+    expect,
+  }) => {
+    const jobTypes = defineJobTypes<{
+      "output-then-read": {
+        entry: true;
+        input: null;
+        output: { done: true };
+      };
+      "continue-then-read": {
+        entry: true;
+        input: null;
+        continueWith: { typeName: "tail" };
+      };
+      tail: {
+        input: null;
+        output: { done: true };
+      };
+    }>();
+
+    const client = await createClient({
+      stateAdapter,
+      notifyAdapter,
+      observabilityAdapter,
+      log,
+      jobTypes,
+    });
+
+    const worker = await createInProcessWorker({
+      client,
+      concurrency: 1,
+      processors: createProcessors({
+        client,
+        jobTypes,
+        processors: {
+          "output-then-read": {
+            attemptHandler: async ({ job, complete }) =>
+              complete(async ({ finish, ...txCtx }) => {
+                const completedJob = await finish({ output: { done: true } });
+                expect((await client.getJob({ ...txCtx, id: job.id }))?.status).toBe("completed");
+                expect((await client.getChain({ ...txCtx, id: job.chainId }))?.status).toBe(
+                  "completed",
+                );
+                return completedJob;
+              }),
+          },
+          "continue-then-read": {
+            attemptHandler: async ({ job, complete }) =>
+              complete(async ({ finish, ...txCtx }) => {
+                const completedJob = await finish({
+                  continueWith: { typeName: "tail", input: null },
+                });
+                expect((await client.getJob({ ...txCtx, id: job.id }))?.status).toBe("completed");
+                return completedJob;
+              }),
+          },
+          tail: {
+            attemptHandler: async ({ complete }) =>
+              complete(async ({ finish }) => finish({ output: { done: true } })),
+          },
+        },
+      }),
+    });
+
+    const [completedChain, continuedChain] = await withTransactionHooks(async (transactionHooks) =>
+      withTransaction(async (txCtx) =>
+        client.createChains({
+          ...txCtx,
+          transactionHooks,
+          items: [
+            { typeName: "output-then-read", input: null },
+            { typeName: "continue-then-read", input: null },
+          ],
+        }),
+      ),
+    );
+
+    await withWorkers([await worker.start()], async () => {
+      await client.awaitChain(completedChain, completionOptions);
+      await client.awaitChain(continuedChain, completionOptions);
+    });
   });
 };

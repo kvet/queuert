@@ -25,11 +25,11 @@ type RunningJob<TStateAdapter extends StateAdapter<any, any>> = ResolvedJobWithB
  *   into `attemptHandler`'s options.
  * - `wrapPrepare` — wraps the user-supplied prepare callback. Injected ctx is
  *   merged into the callback's options alongside the transaction context.
- * - `wrapExecute` — wraps each user-supplied execute callback. Injected ctx is
+ * - `wrapStep` — wraps each user-supplied step callback. Injected ctx is
  *   merged into the callback's options alongside `transactionHooks` and the
  *   transaction context.
  * - `wrapComplete` — wraps the user-supplied complete callback. Injected ctx is
- *   merged into the callback's options alongside `continueWith`,
+ *   merged into the callback's options alongside `finish`,
  *   `transactionHooks`, and the transaction context.
  *
  * Multiple middleware compose as an onion — the first middleware's "before" runs
@@ -39,7 +39,7 @@ export type AttemptMiddleware<
   TStateAdapter extends StateAdapter<any, any>,
   THandlerCtx extends Record<string, unknown> = Record<string, unknown>,
   TPrepareCtx extends Record<string, unknown> = Record<string, unknown>,
-  TExecuteCtx extends Record<string, unknown> = Record<string, unknown>,
+  TStepCtx extends Record<string, unknown> = Record<string, unknown>,
   TCompleteCtx extends Record<string, unknown> = Record<string, unknown>,
 > = {
   wrapHandler?: <T>(opts: {
@@ -53,11 +53,11 @@ export type AttemptMiddleware<
       next: (ctx: TPrepareCtx) => Promise<T>;
     } & GetStateAdapterTxContext<TStateAdapter>,
   ) => Promise<T>;
-  wrapExecute?: <T>(
+  wrapStep?: <T>(
     opts: {
       job: RunningJob<TStateAdapter>;
       transactionHooks: TransactionHooks;
-      next: (ctx: TExecuteCtx) => Promise<T>;
+      next: (ctx: TStepCtx) => Promise<T>;
     } & GetStateAdapterTxContext<TStateAdapter>,
   ) => Promise<T>;
   wrapComplete?: <T>(
@@ -99,12 +99,12 @@ export type MergedPrepareCtx<T extends readonly AnyAttemptMiddleware[]> = T exte
   ? P & MergedPrepareCtx<Rest>
   : unknown;
 
-/** Merge execute-phase ctx from a tuple of {@link AttemptMiddleware}s. */
-export type MergedExecuteCtx<T extends readonly AnyAttemptMiddleware[]> = T extends readonly [
+/** Merge step-phase ctx from a tuple of {@link AttemptMiddleware}s. */
+export type MergedStepCtx<T extends readonly AnyAttemptMiddleware[]> = T extends readonly [
   AttemptMiddleware<any, any, any, infer E, any>,
   ...infer Rest extends readonly AnyAttemptMiddleware[],
 ]
-  ? E & MergedExecuteCtx<Rest>
+  ? E & MergedStepCtx<Rest>
   : unknown;
 
 /** Merge complete-phase ctx from a tuple of {@link AttemptMiddleware}s. */
@@ -191,7 +191,7 @@ export const runPrepareMiddlewareChain = async <T>(
   return chain({});
 };
 
-export const runExecuteMiddlewareChain = async <T>(
+export const runStepMiddlewareChain = async <T>(
   attemptMiddleware: readonly AnyAttemptMiddleware[] | undefined,
   baseOpts: { job: unknown; transactionHooks: TransactionHooks; txCtx: BaseTxContext },
   innerCallback: (ctx: Record<string, unknown>) => Promise<T>,
@@ -200,9 +200,9 @@ export const runExecuteMiddlewareChain = async <T>(
   let chain: (ctx: Record<string, unknown>) => Promise<T> = innerCallback;
   for (let i = attemptMiddleware.length - 1; i >= 0; i--) {
     const middleware = attemptMiddleware[i];
-    if (!middleware.wrapExecute) continue;
+    if (!middleware.wrapStep) continue;
     const next = chain;
-    const wrap = middleware.wrapExecute;
+    const wrap = middleware.wrapStep;
     chain = async (outerCtx) =>
       wrap({
         job: baseOpts.job as any,

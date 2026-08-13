@@ -31,11 +31,11 @@ Most jobs don't need `prepare`. Call `complete` directly and you get atomic mode
 ```ts
 'reserve-inventory': {
   attemptHandler: async ({ job, complete }) => {
-    return complete(async ({ sql }) => {
+    return complete(async ({ finish, sql }) => {
       const [item] = await sql`SELECT stock FROM items WHERE id = ${job.input.id}`;
       if (item.stock < 1) throw new Error("Out of stock");
       await sql`UPDATE items SET stock = stock - 1 WHERE id = ${job.input.id}`;
-      return { reserved: true };
+      return finish({ output: { reserved: true } });
     });
   },
 }
@@ -83,15 +83,15 @@ Use staged mode when you need to do work **between** two transactions — typica
     const { paymentId } = await paymentAPI.charge(order.amount);
 
     // Phase 3: Write results (new transaction)
-    return complete(async ({ sql }) => {
+    return complete(async ({ finish, sql }) => {
       await sql`UPDATE orders SET payment_id = ${paymentId} WHERE id = ${order.id}`;
-      return { paymentId };
+      return finish({ output: { paymentId } });
     });
   },
 }
 ```
 
-### Intermediate Transactions with `execute`
+### Intermediate Transactions with `step`
 
 ```d2
 ...@../_classes.d2
@@ -105,12 +105,12 @@ txn1: "transaction" {
 
 txn2: "transaction" {
   class: txn
-  execute: "execute() — batch 1" { class: step }
+  step: "step() — batch 1" { class: step }
 }
 
 txn3: "transaction" {
   class: txn
-  execute2: "execute() — batch N" { class: step }
+  step2: "step() — batch N" { class: step }
 }
 
 txn4: "transaction" {
@@ -118,21 +118,21 @@ txn4: "transaction" {
   complete: "complete()" { class: step }
 }
 
-txn1.prepare -> txn2.execute { class: flow }
-txn2.execute -> txn3.execute2 { class: flow }
-txn3.execute2 -> txn4.complete { class: flow }
+txn1.prepare -> txn2.step { class: flow }
+txn2.step -> txn3.step2 { class: flow }
+txn3.step2 -> txn4.complete { class: flow }
 ```
 
-Within staged mode, `execute` lets you perform **multiple independent transactions** between `prepare` and `complete` — typically for batched work or checkpointed aggregation:
+Within staged mode, `step` lets you perform **multiple independent transactions** between `prepare` and `complete` — typically for batched work or checkpointed aggregation:
 
 ```ts
 'aggregate-metrics': {
-  attemptHandler: async ({ job, execute, complete }) => {
+  attemptHandler: async ({ job, step, complete }) => {
     let totalProcessed = 0;
     let cursor;
 
     do {
-      const batch = await execute(async ({ sql }) => {
+      const batch = await step(async ({ sql }) => {
         const rows = await sql`
           SELECT id, value FROM raw_events
           WHERE processed = false
@@ -150,12 +150,12 @@ Within staged mode, `execute` lets you perform **multiple independent transactio
       cursor = batch.count === 500 ? batch.nextCursor : undefined;
     } while (cursor);
 
-    return complete(async () => ({ totalProcessed }));
+    return complete(async ({ finish }) => finish({ output: { totalProcessed } }));
   },
 }
 ```
 
-Each `execute` call opens a fresh guarded transaction (attempt verified), runs the callback, commits, and flushes hooks. If `prepare` hasn't been called, `execute` automatically enters staged mode.
+Each `step` call opens a fresh guarded transaction (attempt verified), runs the callback, commits, and flushes hooks. If `prepare` hasn't been called, `step` automatically enters staged mode.
 
 ## When to Use What
 
@@ -165,7 +165,7 @@ work between reading and writing?
   ├── No  → Just call complete() directly (auto-setup atomic)
   └── Yes → Use prepare({ mode: "staged" })
             ├── Single external call → Read in prepare, do external work, write in complete
-            └── Batched transactional work → Use execute() between prepare and complete
+            └── Batched transactional work → Use step() between prepare and complete
 ```
 
 In practice, explicit `prepare` with a fixed mode is rarely needed. `prepare({ mode: "atomic" })` does the same thing as calling `complete` directly but with extra ceremony. The main reason to use explicit `prepare` is when the mode is **dynamic** — determined at runtime based on job input or application state.
@@ -186,9 +186,9 @@ This means even without `prepare`, you can get staged behavior by doing async wo
   attemptHandler: async ({ job, complete }) => {
     await emailService.send(job.input.to, job.input.body);
 
-    return complete(async ({ sql }) => {
+    return complete(async ({ finish, sql }) => {
       await sql`UPDATE notifications SET sent = true WHERE id = ${job.input.id}`;
-      return { sentAt: new Date().toISOString() };
+      return finish({ output: { sentAt: new Date().toISOString() } });
     });
   },
 }
@@ -205,9 +205,9 @@ attemptHandler: async ({ job, prepare, complete }) => {
   const data = await prepare({ mode: "staged" }, async ({ sql }) => {
     return (await sql`SELECT * FROM items WHERE id = ${job.input.id}`)[0];
   });
-  return complete(async ({ sql }) => {
+  return complete(async ({ finish, sql }) => {
     await sql`UPDATE items SET status = 'done' WHERE id = ${data.id}`;
-    return { done: true };
+    return finish({ output: { done: true } });
   });
 };
 ```
@@ -222,9 +222,9 @@ attemptHandler: async ({ job, prepare, complete }) => {
   const item = await prepare({ mode: "atomic" }, async ({ sql }) => {
     return (await sql`SELECT stock FROM items WHERE id = ${job.input.id}`)[0];
   });
-  return complete(async ({ sql }) => {
+  return complete(async ({ finish, sql }) => {
     await sql`UPDATE items SET stock = stock - 1 WHERE id = ${job.input.id}`;
-    return { reserved: true };
+    return finish({ output: { reserved: true } });
   });
 };
 ```

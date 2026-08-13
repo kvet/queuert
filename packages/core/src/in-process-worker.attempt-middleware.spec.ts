@@ -46,7 +46,7 @@ describe("middleware ctx cannot shadow built-in handler/prepare/complete keys", 
             observedSignalIsAbortSignal = typeof signal?.aborted === "boolean";
             observedJobHasId = typeof job?.id === "string";
             observedCompleteIsFn = typeof complete === "function";
-            return complete(async () => ({ ok: true as const }));
+            return complete(async ({ finish }) => finish({ output: { ok: true as const } }));
           },
         },
       },
@@ -110,7 +110,7 @@ describe("middleware ctx cannot shadow built-in handler/prepare/complete keys", 
             await prepare({ mode: "atomic" }, async (txCtx) => {
               observedMarkerIsReal = (txCtx as unknown as MarkerTxCtx)[MARKER_KEY] === realMarker;
             });
-            return complete(async () => ({ ok: true as const }));
+            return complete(async ({ finish }) => finish({ output: { ok: true as const } }));
           },
         },
       },
@@ -174,9 +174,9 @@ describe("middleware ctx cannot shadow built-in handler/prepare/complete keys", 
       processors: {
         foo: {
           attemptHandler: async ({ complete }) =>
-            complete(async (opts) => {
+            complete(async ({ finish, ...opts }) => {
               observedMarkerIsReal = (opts as unknown as MarkerTxCtx)[MARKER_KEY] === realMarker;
-              return { ok: true as const };
+              return finish({ output: { ok: true as const } });
             }),
         },
       },
@@ -203,17 +203,17 @@ describe("middleware ctx cannot shadow built-in handler/prepare/complete keys", 
     expect(observedMarkerIsReal).toBe(true);
   });
 
-  it("complete built-ins (continueWith, transactionHooks) win over middleware-injected ctx", async () => {
+  it("complete built-ins (finish, transactionHooks) win over middleware-injected ctx", async () => {
     const sentinel = { tampered: true };
     const tampering: AttemptMiddleware<InProcessStateAdapter> = {
       wrapComplete: async ({ next }) =>
         next({
-          continueWith: sentinel,
+          finish: sentinel,
           transactionHooks: sentinel,
         } as unknown as Record<string, unknown>),
     };
 
-    let observedContinueWithIsFn = false;
+    let observedFinishIsFn = false;
     let observedTransactionHooksIsObject = false;
 
     const registry = createProcessors({
@@ -223,11 +223,11 @@ describe("middleware ctx cannot shadow built-in handler/prepare/complete keys", 
       processors: {
         foo: {
           attemptHandler: async ({ complete }) =>
-            complete(async ({ continueWith, transactionHooks }) => {
-              observedContinueWithIsFn = typeof continueWith === "function";
+            complete(async ({ finish, transactionHooks }) => {
+              observedFinishIsFn = typeof finish === "function";
               observedTransactionHooksIsObject =
                 transactionHooks !== null && typeof transactionHooks === "object";
-              return { ok: true as const };
+              return finish({ output: { ok: true as const } });
             }),
         },
       },
@@ -246,7 +246,7 @@ describe("middleware ctx cannot shadow built-in handler/prepare/complete keys", 
     await client.awaitChain(chain, { timeoutMs: 5000, pollIntervalMs: 50 });
     await stop();
 
-    expect(observedContinueWithIsFn).toBe(true);
+    expect(observedFinishIsFn).toBe(true);
     expect(observedTransactionHooksIsObject).toBe(true);
   });
 });
@@ -284,7 +284,10 @@ describe("registry-level attemptMiddleware — runtime per-slice isolation", () 
       jobTypes: aReg,
       attemptMiddleware: [wrapA],
       processors: {
-        a: { attemptHandler: async ({ complete }) => complete(async () => null) },
+        a: {
+          attemptHandler: async ({ complete }) =>
+            complete(async ({ finish }) => finish({ output: null })),
+        },
       },
     });
     const bProcessors = createProcessors({
@@ -292,7 +295,10 @@ describe("registry-level attemptMiddleware — runtime per-slice isolation", () 
       jobTypes: bReg,
       attemptMiddleware: [wrapB],
       processors: {
-        b: { attemptHandler: async ({ complete }) => complete(async () => null) },
+        b: {
+          attemptHandler: async ({ complete }) =>
+            complete(async ({ finish }) => finish({ output: null })),
+        },
       },
     });
 

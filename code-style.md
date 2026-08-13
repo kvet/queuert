@@ -11,7 +11,7 @@ This document describes code style conventions, testing patterns, and project or
 - **Multiline doc comments for long or multi-clause descriptions**: Keep single-line `/** ... */` doc comments only for short descriptions that comfortably fit the line width (~100 chars). Once a doc comment runs longer than one line, or enumerates multiple clauses (several `@throws`, `@param`, or a trailing `@defaultValue`/`@internal`), expand it to a multiline block and put each tag on its own line — a crammed one-liner listing every error a method throws is unreadable in both source and editor tooltips. Prefer prose `@throws {@link SomeError} if …` lines over a comma-separated "Throws X, Y, Z" sentence.
 - **Merge similar functionality**: Look for patterns and consolidate before adding new code
 - **Search before implementing**: Check for similar existing implementations before adding new features
-- **Typed error classes**: Use specific error types for all thrown errors (`JobNotFoundError`, `JobAlreadyCompletedError`, etc.) to enable proper error handling by consumers. Generic `Error` should only be used for truly unreachable code paths (assertion-style guards). If a caller could reasonably need to catch and handle an error, it must have a specific type. Throws that are not recoverable — programmer-error invariants, corrupted internal input (e.g., malformed cursors), and configuration mistakes that surface at setup time and require a code change to fix — stay as bare `Error`; a typed class adds API surface without enabling any new caller behavior.
+- **Typed error classes**: Use specific error types for all thrown errors (`JobNotFoundError`, `JobAlreadyCompletedError`, etc.) to enable proper error handling by consumers. Generic `Error` should only be used for truly unreachable code paths (assertion-style guards). If a caller could reasonably need to catch and handle an error, it must have a specific type. Throws that are not recoverable — programmer-error invariants, corrupted internal input (e.g., malformed cursors), and configuration mistakes that surface at setup time and require a code change to fix — stay as bare `Error`; a typed class adds API surface without enabling any new caller behavior. The same goes for caller misuse the type system already rejects: the runtime throw is a backstop for JavaScript callers and for `any` erasing the signature, so it needs a clear message, not a class nobody can meaningfully catch. `requireTxCtx` in `packages/core/src/client.ts` is the reference case — the transaction context is required by the method's type, and the throw only fires when the types were bypassed.
 - **Factory functions over classes**: Expose `createClient()` instead of `new Client()`. Classes can be used internally, but the public API should always be factory functions. This keeps constructors private, allows async initialization, and makes the API consistent.
 - **Nullable conventions**: Use `undefined` for "not found/not present" and `null` for "explicitly set to no value". For example, `getJobById` returns `undefined` when job doesn't exist, while `job.completedAt` is `null` before completion.
 - **Prefer explicit context passing over async context**: Use parameters, callbacks, and handles to pass context rather than relying on `AsyncLocalStorage` or `async_hooks`. The library does not bind or snapshot async context internally — callers (e.g., OTEL adapters) are responsible for propagating their own async context.
@@ -20,8 +20,9 @@ This document describes code style conventions, testing patterns, and project or
 - **Consistent pluralization**: Keep singular/plural consistent across related names — including functions, types, type parameters, variables, and file names. If a function is `defineJobTypes` (plural), related type parameters and variables should also use plural — e.g., `TJobTypeDefinitions` not `TJobTypeDefinition`, `jobTypes` not `jobType` (when referring to the collection).
 - **Arrow functions over function declarations**: Use `export const fn = () => {}` instead of `export function fn() {}`. This applies to all exports — named functions, factories, helpers, etc.
 - **Async factory functions**: Factory functions that perform I/O (database setup, network connections) should be async. Pure configuration factories like `createConsoleLog` or `createJobTypes` should be sync. Note: `createOtelObservabilityAdapter` is async for future-proofing even though current OTEL instrument creation is synchronous.
-- **No barrel files**: Do not create `index.ts` barrel re-export files within subdirectories. The only barrel file is each package's top-level `index.ts` (the package entry point). Internal modules import directly from the source file they need.
+- **No barrel files**: Do not create barrel re-export files within subdirectories. The only barrels are a package's declared entry points — the files listed in its `package.json` `exports`, one per subpath: `index.ts` for the package root, plus subpath entries like `internal.ts` (cross-package internals with no stability guarantee), `testing.ts` (test suites and helpers), and `conformance.ts`. Adding a barrel means adding an `exports` subpath; a re-export file that is not an entry point is the thing to avoid. Internal modules import directly from the source file they need.
 - **No type re-exports from non-owning modules**: A module should only export types it defines. Do not import a type from its source module just to re-export it — consumers should import directly from the module that owns the type. The only exception is each package's top-level `index.ts` entry point.
+- **Justify every lint suppression**: An `oxlint-disable*` comment always carries the rule name and a `--` reason explaining why the rule is wrong here, e.g. `// oxlint-disable-next-line typescript/only-throw-error -- re-throwing caught error`. A bare disable is not acceptable; if the reason is long, point at the file or spec that demonstrates it.
 - **Symbol descriptions prefixed with `queuert.`**: All internal `Symbol()` instances must use a `"queuert."` prefix in their description string, e.g. `Symbol("queuert.helpers")`. This makes symbols identifiable in debugging and avoids collisions.
 
 ## Naming Conventions
@@ -52,6 +53,14 @@ const jobChain = await client.getJobChain({ id });
 const jobChains = await client.listJobChains({ filter });
 ```
 
+### Domain Vocabulary
+
+The library has one vocabulary for job and chain state, and it is the one persisted in the schema and exposed on the public API: a job is `pending`, `running`, or `completed` (and separately `blocked`); a chain is `running` or `completed`. Do not introduce synonyms — no `open`/`closed`, `active`/`done`, `queued`/`finished` — in column names, status values, exported symbols, option fields, error classes, event names, or docs. A design document that reaches for a synonym in prose does not license one in code.
+
+The same holds for the rest of the domain, not just state: once a concept has a word, that word is the only one for it — everywhere, including variable names, comments, docs, error messages, and design documents. A chain's ends are its `head` and `tail` job, never "first"/"last" or "root"/"leaf". Related terms stay in their own vocabulary too: a job has `attempt`s (not "tries" or "runs"), a job is `reschedule`d (not "requeued" or "retried"), and a chain `continueWith`s (not "chains to" or "forwards"). When a concept has no established word yet, pick one, use it consistently, and add it here.
+
+Names on persisted state and the public API are the expensive ones: a column or a status value survives a migration, so pick the established word before it ships rather than renaming after.
+
 ### Concise Error Names
 
 Error class names should be descriptive but not excessively long. Prefer shorter names that still clearly convey the error:
@@ -63,6 +72,30 @@ WaitChainTimeoutError;
 // Bad - unnecessarily verbose
 WaitForJobChainCompletionTimeoutError;
 ```
+
+### Error Class Shape
+
+Every error class follows the same shape, so callers can rely on it:
+
+- Extends `Error`, with a TSDoc summary starting "Thrown when …".
+- Carries its context as `readonly` fields, each with its own TSDoc line — never stuffed into the message alone.
+- Takes `(message: string, options: { …context; cause?: unknown })`. Context is required in `options`; `cause` is optional.
+- Passes `cause` through conditionally and sets `name` explicitly, since subclass names do not survive transpilation:
+
+```typescript
+export class JobNotFoundError extends Error {
+  /** The ID that was looked up. */
+  readonly jobId: string;
+
+  constructor(message: string, options: { jobId: string; cause?: unknown }) {
+    super(message, options.cause !== undefined ? { cause: options.cause } : undefined);
+    this.name = "JobNotFoundError";
+    this.jobId = options.jobId;
+  }
+}
+```
+
+Batch operations get a plural sibling that reports **every** offending input rather than failing on the first — `JobsNotFoundError` alongside `JobNotFoundError`, carrying `jobIds` instead of `jobId`. Where a singular method delegates to the plural one, it catches the batch error and rethrows the singular form with the batch error as `cause`.
 
 ### Core Package Exports
 
@@ -164,7 +197,13 @@ describe("MyFeature", () => {
 
 - `packages/core/src/suites/` - Reusable test suite files, exported via `queuert/testing`
 
+**Spec helpers** (`*.spec-helper.ts`):
+
+- Fixtures and context extensions consumed by suites and specs (`extendWithCommon`, the spy state adapter). Named by suffix so they are excluded from test discovery.
+
 **Spec files** (`*.spec.ts`):
+
+Every test file uses `.spec.ts` — both unit tests colocated next to the module they cover (`helpers/backoff.spec.ts`, `entities/chain.spec.ts`) and adapter-parameterized specs in a `specs/` directory. Do not use `.test.ts`.
 
 - `packages/core/src/specs/` - Running with in-process adapters
 - `packages/postgres/src/specs/` - Running with PostgreSQL adapter

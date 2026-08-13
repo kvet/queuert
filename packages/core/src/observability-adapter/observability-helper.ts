@@ -1,5 +1,5 @@
 import { type AnyChain } from "../entities/chain.js";
-import { deriveStatus, type AnyJob } from "../entities/job.js";
+import { deriveStatus } from "../entities/job.js";
 import { type JobTypeValidationError } from "../errors.js";
 import { type NotifyAdapter } from "../notify-adapter/notify-adapter.js";
 import { type StateAdapter, type StateJob } from "../state-adapter/state-adapter.js";
@@ -44,11 +44,13 @@ const mapStateJobToJobAttemptData = (job: StateJob): JobAttemptData => ({
 
 const mapStateJobToJobCompletionData = (
   job: StateJob,
-  options: { output: unknown; continuedWith?: AnyJob },
+  options: { output: unknown; continuedWith?: StateJob },
 ): JobCompletionData => ({
   ...mapStateJobToJobProcessingData(job),
   output: options.output,
-  continuedWith: options.continuedWith ? mapJobToJobBasicData(options.continuedWith) : undefined,
+  continuedWith: options.continuedWith
+    ? mapStateJobToJobBasicData(options.continuedWith)
+    : undefined,
 });
 
 const mapStateJobToChainData = (job: StateJob): ChainData => ({
@@ -59,13 +61,6 @@ const mapStateJobToChainData = (job: StateJob): ChainData => ({
 const mapChainToData = (chain: AnyChain): ChainData => ({
   id: chain.id,
   typeName: chain.typeName,
-});
-
-const mapJobToJobBasicData = (job: AnyJob): JobBasicData => ({
-  id: job.id,
-  typeName: job.typeName,
-  chainId: job.chainId,
-  chainTypeName: job.chainTypeName,
 });
 
 /**
@@ -97,11 +92,11 @@ export type ObservabilityHelper = {
   jobAttemptFailed: (job: StateJob, options: { workerId: string; error: unknown }) => void;
   jobAttemptCompleted: (
     job: StateJob,
-    options: { output: unknown; continuedWith?: AnyJob; workerId: string },
+    options: { output: unknown; continuedWith?: StateJob; workerId: string },
   ) => void;
   jobCompleted: (
     job: StateJob,
-    options: { output: unknown; continuedWith?: AnyJob; workerId: string | null },
+    options: { output: unknown; continuedWith?: StateJob; workerId: string | null },
   ) => void;
   jobAttemptReclaimed: (job: StateJob, options: { workerId: string }) => void;
   // chain
@@ -131,7 +126,7 @@ export type ObservabilityHelper = {
   startAttemptSpan: (data: JobAttemptSpanInputData) => JobAttemptSpanHandle | undefined;
   completeJobSpan: (
     job: StateJob,
-    options: { continuedWith?: AnyJob; chainCompleted: boolean },
+    options: { continuedWith?: StateJob; chainCompleted: boolean },
   ) => void;
   startBlockerSpan: (data: BlockerSpanInputData) => BlockerSpanHandle | undefined;
   completeBlockerSpan: (data: CompleteBlockerSpanData) => void;

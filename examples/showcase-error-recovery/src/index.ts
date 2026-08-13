@@ -5,7 +5,7 @@
  *
  * Scenarios:
  * 1. Constraint Violation in Complete: CHECK fires, savepoint rolls back, job retries
- * 2. Error After Complete: Handler throws after await complete(), completion is rolled back
+ * 2. Error After Complete: Handler throws after await finish({ output: ... }), completion is rolled back
  * 3. Error Between Prepare and Complete (Staged): External call fails, job retries
  * 4. lastAttemptError Inspection: Previous error available on retry with serialization
  */
@@ -40,7 +40,7 @@ const jobTypes = defineJobTypes<{
   /*
    * Scenario 2: Error after complete
    *   credit-account --> output { credited }
-   *   (Handler throws after await complete(), completion is rolled back)
+   *   (Handler throws after await finish({ output: ... }), completion is rolled back)
    */
   "credit-account": {
     entry: true;
@@ -113,11 +113,11 @@ const worker = await createInProcessWorker({
             `  [transfer-funds] Attempt ${job.attempt}: transferring $${job.input.amount}`,
           );
 
-          return complete(async ({ sql }) => {
+          return complete(async ({ finish, sql }) => {
             await sql`UPDATE accounts SET balance = balance - ${job.input.amount} WHERE id = ${job.input.fromAccountId}`;
             await sql`UPDATE accounts SET balance = balance + ${job.input.amount} WHERE id = ${job.input.toAccountId}`;
             console.log(`  Transfer committed`);
-            return { transferred: true };
+            return finish({ output: { transferred: true } });
           });
         },
       },
@@ -127,10 +127,10 @@ const worker = await createInProcessWorker({
         attemptHandler: async ({ job, complete }) => {
           console.log(`  [credit-account] Attempt ${job.attempt}: crediting $${job.input.amount}`);
 
-          const result = await complete(async ({ sql }) => {
+          const result = await complete(async ({ finish, sql }) => {
             await sql`UPDATE accounts SET balance = balance + ${job.input.amount} WHERE id = ${job.input.accountId}`;
             console.log(`  Credit committed (will be rolled back if handler throws)`);
-            return { credited: true };
+            return finish({ output: { credited: true } });
           });
 
           if (job.attempt === 1) {
@@ -162,10 +162,10 @@ const worker = await createInProcessWorker({
           }
           console.log(`  External API succeeded`);
 
-          return complete(async ({ sql }) => {
+          return complete(async ({ finish, sql }) => {
             await sql`UPDATE accounts SET balance = balance + ${job.input.amount} WHERE id = ${account.id}`;
             console.log(`  Complete: credited $${job.input.amount} to account ${account.id}`);
-            return { confirmed: true };
+            return finish({ output: { confirmed: true } });
           });
         },
       },
@@ -187,7 +187,7 @@ const worker = await createInProcessWorker({
             throw { code: "VALIDATION", detail: "missing field" };
           }
 
-          return complete(async () => ({ attempt: job.attempt }));
+          return complete(async ({ finish }) => finish({ output: { attempt: job.attempt } }));
         },
       },
     },
@@ -230,7 +230,9 @@ assert.equal(Number(bob1.balance), 100);
 
 // Scenario 2: Error after complete
 console.log("\n--- Scenario 2: Error After Complete ---");
-console.log("Credit $50 to Alice. Handler crashes after complete(), completion is rolled back.\n");
+console.log(
+  "Credit $50 to Alice. Handler crashes after finish({ output: ... }), completion is rolled back.\n",
+);
 
 const credit = await withTransactionHooks(async (transactionHooks) =>
   sql.begin(async (txSql) => {

@@ -4,9 +4,9 @@
  * Demonstrates processing modes through an order fulfillment workflow.
  *
  * Scenarios:
- * 1. Auto-Setup Atomic: Just call complete() directly — simplest path
+ * 1. Auto-Setup Atomic: Just call finish({ output: ... }) directly — simplest path
  * 2. Staged Mode: Use prepare() when external API calls happen between transactions
- * 3. Auto-Setup Staged: Async work before complete() without explicit prepare()
+ * 3. Auto-Setup Staged: Async work before finish({ output: ... }) without explicit prepare()
  */
 
 import assert from "node:assert/strict";
@@ -103,7 +103,7 @@ const worker = await createInProcessWorker({
         attemptHandler: async ({ job, complete }) => {
           console.log(`\n[reserve-inventory] AUTO-SETUP ATOMIC mode`);
 
-          return complete(async ({ sql, continueWith }) => {
+          return complete(async ({ finish, sql }) => {
             console.log(`  Reading order, checking stock, and reserving...`);
             const rows = await sql<
               {
@@ -120,9 +120,11 @@ const worker = await createInProcessWorker({
             await sql`UPDATE orders SET status = 'reserved' WHERE id = ${job.input.orderId}`;
             console.log(`  Transaction committed!`);
 
-            return continueWith({
-              typeName: "charge-payment",
-              input: { orderId: job.input.orderId, amount: order.price * order.quantity },
+            return finish({
+              continueWith: {
+                typeName: "charge-payment",
+                input: { orderId: job.input.orderId, amount: order.price * order.quantity },
+              },
             });
           });
         },
@@ -146,14 +148,16 @@ const worker = await createInProcessWorker({
           const { paymentId } = await chargePaymentAPI(job.input.amount);
           console.log(`  Payment complete: ${paymentId}`);
 
-          return complete(async ({ sql, continueWith }) => {
+          return complete(async ({ finish, sql }) => {
             console.log(`  Recording payment...`);
             await sql`UPDATE orders SET status = 'paid', payment_id = ${paymentId} WHERE id = ${orderId}`;
             console.log(`  Transaction committed!`);
 
-            return continueWith({
-              typeName: "send-confirmation",
-              input: { orderId, paymentId },
+            return finish({
+              continueWith: {
+                typeName: "send-confirmation",
+                input: { orderId, paymentId },
+              },
             });
           });
         },
@@ -166,9 +170,9 @@ const worker = await createInProcessWorker({
 
           await new Promise((r) => setTimeout(r, 100));
 
-          return complete(async ({ sql }) => {
+          return complete(async ({ finish, sql }) => {
             await sql`UPDATE orders SET status = 'confirmed' WHERE id = ${job.input.orderId}`;
-            return { confirmedAt: new Date().toISOString() };
+            return finish({ output: { confirmedAt: new Date().toISOString() } });
           });
         },
       },

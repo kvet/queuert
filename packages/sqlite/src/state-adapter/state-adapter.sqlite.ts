@@ -911,9 +911,6 @@ WHERE id IN (SELECT value FROM json_each(?))
         if (job.deduplication?.key) {
           const deduplicationKey = job.deduplication.key;
           const deduplicationScope = job.deduplication.scope;
-          const deduplicationExcludeChainIds = job.deduplication.excludeChainIds
-            ? JSON.stringify(job.deduplication.excludeChainIds)
-            : null;
 
           const batchKey = `${deduplicationKey}\0${job.chainTypeName}`;
           const firstIdx = intraBatchDedup.get(batchKey);
@@ -935,16 +932,11 @@ WHERE ? IS NOT NULL
   AND chain_index = 0
   AND chain_type_name = ?
   AND (
-    ? IS NULL
-    OR (? = 'running' AND NOT EXISTS (
+    (? = 'running' AND NOT EXISTS (
       SELECT 1 FROM {{table_prefix}}job j2
       WHERE j2.chain_id = {{table_prefix}}job.id AND j2.completed_at IS NOT NULL AND j2.continued_to_id IS NULL
     ))
     OR (? = 'any')
-  )
-  AND (
-    ? IS NULL
-    OR chain_id NOT IN (SELECT value FROM json_each(?))
   )
 ORDER BY created_at DESC
 LIMIT 1
@@ -955,9 +947,6 @@ LIMIT 1
                       t["string?"](),
                       t["string?"](),
                       t.string(),
-                      t["string?"](),
-                      t["string?"](),
-                      t["string?"](),
                       t["string?"](),
                       t["string?"](),
                     ],
@@ -973,9 +962,6 @@ LIMIT 1
               job.chainTypeName,
               deduplicationScope,
               deduplicationScope,
-              deduplicationScope,
-              deduplicationExcludeChainIds,
-              deduplicationExcludeChainIds,
             ],
           });
 

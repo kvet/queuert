@@ -141,7 +141,7 @@ A single worker can handle multiple job types. Slots poll all registered types a
 
 ### Attempt Middlewares
 
-Handler middleware hook into one or more job processing phases via `wrapHandler`, `wrapPrepare`, and `wrapComplete`. Each hook can inject typed context into the inner handler/callback through `next(ctx)`. Middleware compose as an onion: the first middleware's "before" runs outermost. Middleware enable cross-cutting concerns like contextual logging, audit trails, tracing spans, and resource injection.
+Handler middleware hook into one or more job processing phases via `wrapHandler`, `wrapPrepare`, `wrapStep`, and `wrapComplete`. Each hook can inject typed context into the inner handler/callback through `next(ctx)`. Middleware compose as an onion: the first middleware's "before" runs outermost. Middleware enable cross-cutting concerns like contextual logging, audit trails, tracing spans, and resource injection.
 
 Middleware are declared on the processor registry via `createProcessors({ attemptMiddleware: [...] })`. Handler signatures inside that registry auto-infer their typed context from the middleware tuple. When multiple slices are passed as an array to `createInProcessWorker`, each processor keeps its slice's middleware chain.
 

@@ -61,7 +61,9 @@ export const notifyResilienceTestSuite = ({
           test: {
             attemptHandler: async ({ job, prepare, complete }) => {
               await prepare({ mode: job.input.atomic ? "atomic" : "staged" });
-              return complete(async () => ({ result: job.input.value * 2 }));
+              return complete(async ({ finish }) =>
+                finish({ output: { result: job.input.value * 2 } }),
+              );
             },
           },
         },

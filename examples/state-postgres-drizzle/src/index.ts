@@ -85,9 +85,9 @@ const worker = await createInProcessWorker({
           // Simulate sending email (in real app, call email service here)
           console.log(`Sending welcome email to ${user.email} for ${user.name}`);
 
-          return complete(async () => ({
-            sentAt: new Date().toISOString(),
-          }));
+          return complete(async ({ finish }) =>
+            finish({ output: { sentAt: new Date().toISOString() } }),
+          );
         },
       },
     },

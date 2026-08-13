@@ -947,18 +947,17 @@ input_data AS (
     gi.id                AS chain_id,
     raw.chain_type_name,
     0                    AS chain_index,
-    raw.input, raw.dedup_key, raw.dedup_scope, raw.dedup_exclude_chain_ids,
+    raw.input, raw.dedup_key, raw.dedup_scope,
     raw.scheduled_at, raw.schedule_after_ms,
     raw.chain_trace_context, raw.trace_context, raw.ord
   FROM unnest(
     $2::text[], $3::text[],
     $4::jsonb[], $5::text[], $6::text[],
-    $7::text[],
-    $8::timestamptz[], $9::bigint[],
-    $10::text[], $11::text[]
+    $7::timestamptz[], $8::bigint[],
+    $9::text[], $10::text[]
   ) WITH ORDINALITY AS raw(
     type_name, chain_type_name,
-    input, dedup_key, dedup_scope, dedup_exclude_chain_ids,
+    input, dedup_key, dedup_scope,
     scheduled_at, schedule_after_ms,
     chain_trace_context, trace_context, ord
   )
@@ -973,16 +972,11 @@ existing_deduplicated AS (
     AND j.chain_index = 0
     AND j.chain_type_name = id2.chain_type_name
     AND (
-      id2.dedup_scope IS NULL
-      OR (id2.dedup_scope = 'running' AND NOT EXISTS (
+      (id2.dedup_scope = 'running' AND NOT EXISTS (
         SELECT 1 FROM {{schema}}.{{table_prefix}}job j2
         WHERE j2.chain_id = j.id AND j2.completed_at IS NOT NULL AND j2.continued_to_id IS NULL
       ))
       OR (id2.dedup_scope = 'any')
-    )
-    AND (
-      id2.dedup_exclude_chain_ids IS NULL
-      OR j.chain_id != ALL(ARRAY(SELECT jsonb_array_elements_text(id2.dedup_exclude_chain_ids::jsonb))::{{id_type}}[])
     )
   ORDER BY id2.ord, j.created_at DESC
 ),
@@ -1034,7 +1028,6 @@ ORDER BY ord
                   t.array<string | null>(),
                   t.array<string | null>(),
                   t.array<string | null>(),
-                  t.array<string | null>(),
                   t.array<number | null>(),
                   t.array<string | null>(),
                   t.array<string | null>(),
@@ -1051,11 +1044,6 @@ ORDER BY ord
           jobs.map((j) => j.input),
           jobs.map((j) => j.deduplication?.key ?? null),
           jobs.map((j) => (j.deduplication ? j.deduplication.scope : null)),
-          jobs.map((j) =>
-            j.deduplication?.excludeChainIds
-              ? JSON.stringify(j.deduplication.excludeChainIds)
-              : null,
-          ),
           jobs.map((j) => j.schedule?.at?.toISOString() ?? null),
           jobs.map((j) => j.schedule?.afterMs ?? null),
           jobs.map((j) => j.chainTraceContext ?? null),

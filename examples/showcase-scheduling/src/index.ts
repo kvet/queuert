@@ -121,7 +121,7 @@ const worker = await createInProcessWorker({
 
           await new Promise((r) => setTimeout(r, 50));
 
-          return complete(async ({ sql: txSql, transactionHooks }) => {
+          return complete(async ({ finish, sql: txSql, transactionHooks }) => {
             await txSql.unsafe("INSERT INTO digest_logs (user_id) VALUES ($1)", [job.input.userId]);
 
             const shouldContinue = userSubscribed && job.input.iteration < MAX_DIGEST_ITERATIONS;
@@ -139,7 +139,7 @@ const worker = await createInProcessWorker({
               console.log(`  User unsubscribed or max iterations reached. Stopping.`);
             }
 
-            return { sentAt: new Date().toISOString() };
+            return finish({ output: { sentAt: new Date().toISOString() } });
           });
         },
       },
@@ -153,11 +153,15 @@ const worker = await createInProcessWorker({
           const status = serviceRunning ? "healthy" : "stopped";
           console.log(`  Status: ${status}`);
 
-          return complete(async ({ sql: txSql, transactionHooks }) => {
+          return complete(async ({ finish, sql: txSql, transactionHooks }) => {
             await txSql.unsafe("INSERT INTO health_logs (service_id, status) VALUES ($1, $2)", [
               job.input.serviceId,
               status,
             ]);
+
+            const completedJob = await finish({
+              output: { status, checkedAt: new Date().toISOString() },
+            });
 
             const shouldContinue = serviceRunning && job.input.checkNumber < MAX_HEALTH_CHECKS;
 
@@ -175,27 +179,26 @@ const worker = await createInProcessWorker({
                 deduplication: {
                   key: `health:${job.input.serviceId}`,
                   scope: "running",
-                  excludeChainIds: [job.chainId],
                 },
               });
             } else {
               console.log(`  Service stopped or max checks reached. Stopping.`);
             }
 
-            return { status, checkedAt: new Date().toISOString() };
+            return completedJob;
           });
         },
       },
 
       reminder: {
         attemptHandler: async ({ job, complete }) =>
-          complete(async ({ sql: txSql }) => {
+          complete(async ({ finish, sql: txSql }) => {
             console.log(`\n[reminder] "${job.input.message}" for ${job.input.userId}`);
             await txSql.unsafe("INSERT INTO reminder_logs (user_id, message) VALUES ($1, $2)", [
               job.input.userId,
               job.input.message,
             ]);
-            return { sentAt: new Date().toISOString() };
+            return finish({ output: { sentAt: new Date().toISOString() } });
           }),
       },
     },

@@ -134,7 +134,7 @@ uniqueness requirement instead, and the mapped error says so when it is violated
   caller-supplied id survived it.
 - **Simplifies** [chain-identity.md](chain-identity.md) — its "`id` versus `identity`" section and
   the corresponding guide paragraph are deleted rather than written.
-- Related failure mode, different cause: [concurrent-deduplication.md](concurrent-deduplication.md).
+- Related failure mode, different cause: concurrent same-key creates ([#3](https://github.com/kvet/queuert/issues/3)), addressed by [chain-identity.md](chain-identity.md).
 
 ## Surface
 

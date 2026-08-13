@@ -1,4 +1,4 @@
-import { type TestAPI } from "vitest";
+import { type TestAPI, assert } from "vitest";
 
 import { createClient } from "../client.js";
 import { defineJobTypes } from "../entities/define-job-types.js";
@@ -68,8 +68,10 @@ export const deduplicationTestSuite = ({ it }: { it: TestAPI<TestSuiteContext> }
           ...txCtx,
           transactionHooks,
           ...chain1,
-          complete: async ({ job, complete }) => {
-            return complete(job, async () => ({ result: job.input.value }));
+          handler: async ({ job, completeJob }) => {
+            return completeJob(job, async ({ finish }) =>
+              finish({ output: { result: job.input.value } }),
+            );
           },
         }),
       ),
@@ -81,13 +83,17 @@ export const deduplicationTestSuite = ({ it }: { it: TestAPI<TestSuiteContext> }
           ...txCtx,
           transactionHooks,
           ...chain3,
-          complete: async ({ job, complete }) => {
-            return complete(job, async () => ({ result: job.input.value }));
+          handler: async ({ job, completeJob }) => {
+            return completeJob(job, async ({ finish }) =>
+              finish({ output: { result: job.input.value } }),
+            );
           },
         }),
       ),
     );
 
+    assert(completed1.status === "completed");
+    assert(completed3.status === "completed");
     expect(completed1.output).toEqual({ result: 1 });
     expect(completed3.output).toEqual({ result: 3 });
 
@@ -146,10 +152,10 @@ export const deduplicationTestSuite = ({ it }: { it: TestAPI<TestSuiteContext> }
           ...txCtx,
           transactionHooks,
           ...chain1,
-          complete: async ({ job, complete }) => {
+          handler: async ({ job, completeJob }) => {
             if (job.typeName === "step1") {
-              job = await complete(job, async ({ continueWith }) =>
-                continueWith({ typeName: "step2", input: { continued: true } }),
+              await completeJob(job, async ({ finish }) =>
+                finish({ continueWith: { typeName: "step2", input: { continued: true } } }),
               );
             }
           },
@@ -178,9 +184,9 @@ export const deduplicationTestSuite = ({ it }: { it: TestAPI<TestSuiteContext> }
           ...txCtx,
           transactionHooks,
           ...chain1,
-          complete: async ({ job, complete }) => {
+          handler: async ({ job, completeJob }) => {
             if (job.typeName === "step2") {
-              return complete(job, async () => ({ result: 42 }));
+              return completeJob(job, async ({ finish }) => finish({ output: { result: 42 } }));
             }
           },
         }),
@@ -245,8 +251,8 @@ export const deduplicationTestSuite = ({ it }: { it: TestAPI<TestSuiteContext> }
           ...txCtx,
           transactionHooks,
           ...chain1,
-          complete: async ({ job, complete }) => {
-            return complete(job, async () => ({ result: 1 }));
+          handler: async ({ job, completeJob }) => {
+            return completeJob(job, async ({ finish }) => finish({ output: { result: 1 } }));
           },
         }),
       ),
@@ -326,8 +332,10 @@ export const deduplicationTestSuite = ({ it }: { it: TestAPI<TestSuiteContext> }
           ...txCtx,
           transactionHooks,
           ...allChain1,
-          complete: async ({ job, complete }) => {
-            await complete(job, async () => ({ result: job.input.value }));
+          handler: async ({ job, completeJob }) => {
+            await completeJob(job, async ({ finish }) =>
+              finish({ output: { result: job.input.value } }),
+            );
           },
         }),
       ),
@@ -367,8 +375,10 @@ export const deduplicationTestSuite = ({ it }: { it: TestAPI<TestSuiteContext> }
           ...txCtx,
           transactionHooks,
           ...completedChain1,
-          complete: async ({ job, complete }) => {
-            await complete(job, async () => ({ result: job.input.value }));
+          handler: async ({ job, completeJob }) => {
+            await completeJob(job, async ({ finish }) =>
+              finish({ output: { result: job.input.value } }),
+            );
           },
         }),
       ),
@@ -395,12 +405,15 @@ export const deduplicationTestSuite = ({ it }: { it: TestAPI<TestSuiteContext> }
           ...txCtx,
           transactionHooks,
           ...completedChain2,
-          complete: async ({ job, complete }) => {
-            return complete(job, async () => ({ result: job.input.value }));
+          handler: async ({ job, completeJob }) => {
+            return completeJob(job, async ({ finish }) =>
+              finish({ output: { result: job.input.value } }),
+            );
           },
         }),
       ),
     );
+    assert(completed2.status === "completed");
     expect(completed2.output).toEqual({ result: 4 });
   });
 
@@ -620,8 +633,10 @@ export const deduplicationTestSuite = ({ it }: { it: TestAPI<TestSuiteContext> }
           ...txCtx,
           transactionHooks,
           ...anyChain,
-          complete: async ({ job, complete }) => {
-            await complete(job, async () => ({ result: job.input.value }));
+          handler: async ({ job, completeJob }) => {
+            await completeJob(job, async ({ finish }) =>
+              finish({ output: { result: job.input.value } }),
+            );
           },
         }),
       ),
@@ -646,8 +661,10 @@ export const deduplicationTestSuite = ({ it }: { it: TestAPI<TestSuiteContext> }
           ...txCtx,
           transactionHooks,
           ...incompleteChain,
-          complete: async ({ job, complete }) => {
-            await complete(job, async () => ({ result: job.input.value }));
+          handler: async ({ job, completeJob }) => {
+            await completeJob(job, async ({ finish }) =>
+              finish({ output: { result: job.input.value } }),
+            );
           },
         }),
       ),
@@ -679,77 +696,6 @@ export const deduplicationTestSuite = ({ it }: { it: TestAPI<TestSuiteContext> }
     expect(anyResult.id).toBe(anyChain.id);
     expect(incompleteResult.deduplicated).toBe(false);
     expect(incompleteResult.id).not.toBe(incompleteChain.id);
-  });
-
-  it("excludeChainIds skips specified chains during deduplication", async ({
-    stateAdapter,
-    notifyAdapter,
-    withTransaction,
-    observabilityAdapter,
-    log,
-    expect,
-  }) => {
-    const jobTypes = defineJobTypes<{
-      test: {
-        entry: true;
-        input: { value: number };
-        output: { result: number };
-      };
-    }>();
-
-    const client = await createClient({
-      stateAdapter,
-      notifyAdapter,
-      observabilityAdapter,
-      log,
-      jobTypes,
-    });
-
-    const chain1 = await withTransactionHooks(async (transactionHooks) =>
-      withTransaction(async (txCtx) =>
-        client.createChain({
-          ...txCtx,
-          transactionHooks,
-          typeName: "test",
-          input: { value: 1 },
-          deduplication: { key: "exclude-key", scope: "running" },
-        }),
-      ),
-    );
-
-    expect(chain1.deduplicated).toBe(false);
-
-    // Without excludeChainIds — deduplicates against chain1
-    const chain2 = await withTransactionHooks(async (transactionHooks) =>
-      withTransaction(async (txCtx) =>
-        client.createChain({
-          ...txCtx,
-          transactionHooks,
-          typeName: "test",
-          input: { value: 2 },
-          deduplication: { key: "exclude-key", scope: "running" },
-        }),
-      ),
-    );
-
-    expect(chain2.deduplicated).toBe(true);
-    expect(chain2.id).toBe(chain1.id);
-
-    // With excludeChainIds — skips chain1, creates new chain
-    const chain3 = await withTransactionHooks(async (transactionHooks) =>
-      withTransaction(async (txCtx) =>
-        client.createChain({
-          ...txCtx,
-          transactionHooks,
-          typeName: "test",
-          input: { value: 3 },
-          deduplication: { key: "exclude-key", scope: "running", excludeChainIds: [chain1.id] },
-        }),
-      ),
-    );
-
-    expect(chain3.deduplicated).toBe(false);
-    expect(chain3.id).not.toBe(chain1.id);
   });
 
   it("does not deduplicate across different chain types with the same key", async ({

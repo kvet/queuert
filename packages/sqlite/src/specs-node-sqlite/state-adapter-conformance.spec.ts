@@ -4,13 +4,12 @@ import { DatabaseSync } from "node:sqlite";
 import {
   type StateAdapter,
   createClient,
+  createInProcessNotifyAdapter,
   createInProcessWorker,
   createProcessors,
   defineJobTypes,
   withTransactionHooks,
-  createInProcessNotifyAdapter,
 } from "queuert";
-import { createAsyncRwLock } from "queuert/internal";
 import { stateAdapterConformanceTestSuite, withWorkers } from "queuert/testing";
 import { describe, expectTypeOf, it, vi } from "vitest";
 
@@ -97,17 +96,14 @@ it("infers custom ID types through the full stack", async () => {
             attemptHandler: async ({ job, complete }) => {
               expectTypeOf(job.id).toEqualTypeOf<`job.${UUID}`>();
 
-              return complete(async () => ({ bar: 42 }));
+              return complete(async ({ finish }) => finish({ output: { bar: 42 } }));
             },
           },
         },
       }),
     });
 
-    const lock = createAsyncRwLock();
-
     const chain = await withTransactionHooks(async (transactionHooks) => {
-      using _h = await lock.acquireWrite();
       db.exec("BEGIN");
       try {
         const result = await client.createChain({

@@ -86,24 +86,26 @@ const worker = await createInProcessWorker({
       "validate-input": {
         attemptHandler: async ({ job, complete }) => {
           console.log(`[validate-input] Validating order ${job.input.orderId}`);
-          return complete(async () => ({ valid: true }));
+          return complete(async ({ finish }) => finish({ output: { valid: true } }));
         },
       },
 
       "check-stock": {
         attemptHandler: async ({ job, complete }) => {
           console.log(`[check-stock] Checking stock for order ${job.input.orderId}`);
-          return complete(async () => ({ available: true }));
+          return complete(async ({ finish }) => finish({ output: { available: true } }));
         },
       },
 
       "process-order": {
         attemptHandler: async ({ job, complete }) => {
           console.log(`[process-order] Processing order ${job.input.orderId}`);
-          return complete(async ({ continueWith }) =>
-            continueWith({
-              typeName: "ship-order",
-              input: { orderId: job.input.orderId, total: 99.99 },
+          return complete(async ({ finish }) =>
+            finish({
+              continueWith: {
+                typeName: "ship-order",
+                input: { orderId: job.input.orderId, total: 99.99 },
+              },
             }),
           );
         },
@@ -112,14 +114,18 @@ const worker = await createInProcessWorker({
       "ship-order": {
         attemptHandler: async ({ job, complete }) => {
           console.log(`[ship-order] Shipping order ${job.input.orderId}`);
-          return complete(async () => ({ trackingId: `TRACK-${job.input.orderId}` }));
+          return complete(async ({ finish }) =>
+            finish({ output: { trackingId: `TRACK-${job.input.orderId}` } }),
+          );
         },
       },
 
       "send-notification": {
         attemptHandler: async ({ job, complete }) => {
           console.log(`[send-notification] Sending to ${job.input.userId}`);
-          return complete(async () => ({ sentAt: new Date().toISOString() }));
+          return complete(async ({ finish }) =>
+            finish({ output: { sentAt: new Date().toISOString() } }),
+          );
         },
       },
     },

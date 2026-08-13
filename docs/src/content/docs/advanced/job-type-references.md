@@ -144,7 +144,9 @@ const processors = createProcessors({
         const [auth, validate] = job.blockers;
         // auth.output is { userId: string }
         // validate.output is { valid: boolean }
-        return complete(() => ({ done: auth.output.userId !== "" && validate.output.valid }));
+        return complete(async ({ finish }) =>
+          finish({ output: { done: auth.output.userId !== "" && validate.output.valid } }),
+        );
       },
     },
   },

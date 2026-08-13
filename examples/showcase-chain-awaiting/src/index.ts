@@ -79,10 +79,12 @@ const worker = await createInProcessWorker({
         attemptHandler: async ({ job, complete }) => {
           const basePrice = PRICES[job.input.productId] ?? 9.99;
           console.log(`[fetch-price] ${job.input.productId}: $${basePrice}`);
-          return complete(async ({ continueWith }) =>
-            continueWith({
-              typeName: "apply-discount",
-              input: { productId: job.input.productId, basePrice },
+          return complete(async ({ finish }) =>
+            finish({
+              continueWith: {
+                typeName: "apply-discount",
+                input: { productId: job.input.productId, basePrice },
+              },
             }),
           );
         },
@@ -94,10 +96,14 @@ const worker = await createInProcessWorker({
           console.log(
             `[apply-discount] ${job.input.productId}: $${job.input.basePrice} → $${finalPrice}`,
           );
-          return complete(async () => ({
-            productId: job.input.productId,
-            finalPrice,
-          }));
+          return complete(async ({ finish }) =>
+            finish({
+              output: {
+                productId: job.input.productId,
+                finalPrice,
+              },
+            }),
+          );
         },
       },
 
@@ -105,7 +111,9 @@ const worker = await createInProcessWorker({
         attemptHandler: async ({ job, complete }) => {
           console.log(`[long-running] Sleeping ${job.input.durationMs}ms...`);
           await new Promise((r) => setTimeout(r, job.input.durationMs));
-          return complete(async () => ({ completedAt: new Date().toISOString() }));
+          return complete(async ({ finish }) =>
+            finish({ output: { completedAt: new Date().toISOString() } }),
+          );
         },
       },
     },

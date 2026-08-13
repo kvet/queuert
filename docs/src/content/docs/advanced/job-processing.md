@@ -51,7 +51,7 @@ Observability events (metrics, span ends, logs) emitted during the prepare and c
 
 ## Prepare/Complete Pattern
 
-Attempt handlers split processing into distinct phases to support both atomic (single-transaction) and staged (long-running) operations. See `AttemptHandler` TSDoc for the full handler signature and `AttemptPrepareOptions` for mode details.
+Attempt handlers split processing into phases: `prepare` reads the data the attempt needs, the handler does its work in between, and `complete` writes exactly one outcome — an output that ends the chain, or a continuation that extends it with a successor job. The split is what lets an attempt run atomically in a single transaction or stage long-running work between two.
 
 ### Auto-Setup (Default)
 
@@ -70,9 +70,9 @@ For more control, call `prepare` explicitly:
 - **Atomic mode**: Prepare and complete run in the same transaction. Rarely needed since calling `complete` directly achieves the same result with less ceremony.
 - **Staged mode**: Prepare runs in one transaction, long-running work happens outside, then complete runs in another transaction. The worker automatically extends the attempt between phases. Implement the processing phase idempotently as it may retry if the worker crashes.
 
-### Intermediate Transactions with `execute`
+### Intermediate Transactions with `step`
 
-Handlers can call `execute` to perform intermediate transactional work — each call opens a fresh guarded transaction with attempt verification. This is useful for batched operations like bulk deletes where holding a single long-lived transaction would be impractical. If `prepare` hasn't been called, `execute` automatically enters staged mode. See [Processing Modes — Execute](../../guides/processing-modes/#intermediate-transactions-with-execute).
+Handlers can call `step` to perform intermediate transactional work — each call opens a fresh guarded transaction with attempt verification. This is useful for batched operations like bulk deletes where holding a single long-lived transaction would be impractical. If `prepare` hasn't been called, `step` automatically enters staged mode. `step` is not reachable once `complete` has started — work that must observe the terminal transition belongs inside the complete transaction. See [Processing Modes — Step](../../guides/processing-modes/#intermediate-transactions-with-step).
 
 ## Error Recovery and Savepoints
 
@@ -107,13 +107,13 @@ complete_txn: "Transaction (completes job)" {
 
   complete: "Savepoint — complete callback" {
     class: savepoint
-    body: "User SQL…\nfinishJobAttempt / continueWith\nthrows? rollback to savepoint" { class: step; width: 320; height: 100 }
+    body: "User SQL…\ncommit: writes the outcome\nthrows? rollback to savepoint" { class: step; width: 320; height: 100 }
   }
 }
 
 result: "On error: reschedule with backoff\nOn success: commit" { class: job-done; width: 400; height: 90 }
 
-acquire_txn  -> async_work   { class: flow }
+acquire_txn  -> async_work    { class: flow }
 async_work   -> complete_txn { class: flow }
 complete_txn -> result       { class: flow }
 ```
@@ -121,13 +121,6 @@ complete_txn -> result       { class: flow }
 On any unhandled error the job is rescheduled with exponential backoff (default: 10 s → 20 s → 40 s → ... capped at 300 s). There is no maximum retry count — jobs retry indefinitely. Use [discriminated unions or compensation patterns](../../guides/error-handling/) to handle permanently failing jobs.
 
 See [Job Processing Reliability](../../guides/processing-reliability/) for per-phase error scenarios with code examples.
-
-## Timeouts
-
-Queuert does not provide built-in soft timeout functionality. This is intentional:
-
-1. **Userland solution is trivial**: Combine `AbortSignal.timeout()` with the existing `signal` parameter using `AbortSignal.any()`
-2. **Attempt mechanism is the hard timeout**: If a job doesn't complete within `timeoutMs`, the attempt expires and is released, and another worker retries
 
 ### Abort Signal and Reasons
 
@@ -141,7 +134,7 @@ Every attempt handler receives a `signal` (`TypedAbortSignal<JobAbortReason>`) t
 | `"error"`                   | An internal error occurred during attempt extension                                |
 | `"worker_stopping"`         | The worker is shutting down — the job is still valid and the attempt is still held |
 
-The first four reasons indicate the job is no longer owned by this worker — handlers should stop immediately. `"worker_stopping"` is different: the job remains valid, but the worker is draining. Handlers can check `signal.reason` to decide whether to finish quickly or abandon:
+The first four reasons indicate the job is no longer owned by this worker — handlers should stop immediately. `"worker_stopping"` is different: the job remains valid, but the worker is draining, so handlers should check `signal.reason` and wrap up quickly. Every attempt must still end in an outcome: call `complete`, or throw so the attempt is rescheduled. A handler that simply returns without completing fails the attempt.
 
 ```typescript
 attemptHandler: async ({ signal, complete }) => {
@@ -151,21 +144,9 @@ attemptHandler: async ({ signal, complete }) => {
     }
     await processItem(item);
   }
-  return complete(async () => ({ processed: items.length }));
+  return complete(async ({ finish }) => finish({ output: { processed: items.length } }));
 },
 ```
-
-### Cooperative Timeouts
-
-Users implement cooperative timeouts by combining `AbortSignal.timeout()` with the existing `signal` parameter using `AbortSignal.any()`.
-
-### Hard Timeouts
-
-For hard timeouts (forceful termination), the attempt mechanism already handles this:
-
-- Configure `timeoutMs` appropriately for the job type
-- If the job doesn't complete or extend the attempt in time, the attempt expires and is released
-- Another worker can then retry the job
 
 ## See Also
 

@@ -71,7 +71,7 @@ const cleanupProcessorRegistry = createProcessors({
   jobTypes: cleanupJobTypes,
   processors: {
     "queuert.cleanup": {
-      attemptHandler: async ({ job, execute, complete }) => {
+      attemptHandler: async ({ job, step, complete }) => {
         const cutoffDate = new Date(Date.now() - CLEANUP_RETENTION_MS);
         let deletedChainCount = 0;
         let cursor: string | undefined;
@@ -92,7 +92,7 @@ const cleanupProcessorRegistry = createProcessors({
           );
 
           if (chainsToDelete.length > 0) {
-            const deleted = await execute(async ({ sql, transactionHooks }) =>
+            const deleted = await step(async ({ sql, transactionHooks }) =>
               client.deleteChains({
                 sql,
                 transactionHooks,
@@ -109,7 +109,9 @@ const cleanupProcessorRegistry = createProcessors({
 
         await stateAdapter.vacuum();
 
-        return complete(async ({ sql, transactionHooks }) => {
+        return complete(async ({ finish, sql, transactionHooks }) => {
+          const completedJob = await finish({ output: null });
+
           await client.createChain({
             sql,
             transactionHooks,
@@ -119,11 +121,10 @@ const cleanupProcessorRegistry = createProcessors({
             deduplication: {
               key: "queuert.cleanup",
               scope: "running",
-              excludeChainIds: [job.chainId],
             },
           });
 
-          return null;
+          return completedJob;
         });
       },
     },
@@ -141,7 +142,9 @@ const worker = await createInProcessWorker({
         "work.process": {
           attemptHandler: async ({ job, complete }) => {
             console.log(`[work.process] Processing task #${job.input.taskId}`);
-            return complete(async () => ({ processedAt: new Date().toISOString() }));
+            return complete(async ({ finish }) =>
+              finish({ output: { processedAt: new Date().toISOString() } }),
+            );
           },
         },
       },

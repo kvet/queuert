@@ -11,7 +11,7 @@ type ChainInput = {
   id?: string;
   input: unknown;
   blockers?: AnyChain[];
-  deduplication?: DeduplicationOptions<string>;
+  deduplication?: DeduplicationOptions;
   schedule?: ScheduleOptions;
 };
 

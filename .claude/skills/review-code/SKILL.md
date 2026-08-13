@@ -1,5 +1,5 @@
 ---
-name: code-review
+name: review-code
 description: Run a comprehensive code review of local changes, analyzing staged and unstaged changes to provide insights, identify issues, and suggest alternative approaches. Use when reviewing code before committing or creating pull requests.
 ---
 
@@ -11,7 +11,7 @@ Run a comprehensive, critical code review of local changes. This skill analyzes 
 
 When this skill is invoked:
 
-1. First, read the detailed agent instructions from `.claude/agents/code-review/instructions.md`
+1. First, read the detailed agent instructions from `.claude/agents/review-code/instructions.md`
 2. Gather the current changes using git diff
 3. Analyze the changes following the review framework
 4. Provide a structured report with findings and alternatives
@@ -19,10 +19,10 @@ When this skill is invoked:
 ## Usage
 
 ```
-/code-review              # Review all uncommitted changes
-/code-review --staged     # Review only staged changes
-/code-review <commit>     # Review changes in a specific commit
-/code-review <base>..<head>  # Review changes between commits
+/review-code              # Review all uncommitted changes
+/review-code --staged     # Review only staged changes
+/review-code <commit>     # Review changes in a specific commit
+/review-code <base>..<head>  # Review changes between commits
 ```
 
 ## Review Process
@@ -46,7 +46,7 @@ For each modified file:
 
 ### Step 3: Analyze Changes
 
-Apply the review framework from `.claude/agents/code-review/instructions.md`:
+Apply the review framework from `.claude/agents/review-code/instructions.md`:
 
 - Correctness analysis
 - Design evaluation

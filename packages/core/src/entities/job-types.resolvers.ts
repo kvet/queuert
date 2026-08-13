@@ -203,6 +203,23 @@ export type ResolvedJobWithBlockers<
   blockers: CompletedBlockerChains<TJobId, TJobTypeDefinitions, TJobTypeName>;
 };
 
+export type ContinuationJob<
+  TJobId,
+  TJobTypeDefinitions extends BaseJobTypeDefinitions,
+  TContinuationTypeName extends string,
+  TChainTypeName extends string,
+> = Extract<
+  Job<
+    TJobId,
+    TContinuationTypeName,
+    TChainTypeName,
+    JobTypeProperty<TJobTypeDefinitions, TContinuationTypeName, "input">,
+    JobTypeProperty<TJobTypeDefinitions, TContinuationTypeName, "output">,
+    [JobTypeContinuation<TJobTypeDefinitions, TContinuationTypeName>] extends [never] ? false : true
+  >,
+  { status: "pending" }
+>;
+
 export type ContinuationJobs<
   TJobId,
   TJobTypeDefinitions extends BaseJobTypeDefinitions,
@@ -210,20 +227,34 @@ export type ContinuationJobs<
   TChainTypeName extends string = JobTypeReachingEntry<TJobTypeDefinitions, TJobTypeName>,
 > =
   JobTypeContinuation<TJobTypeDefinitions, TJobTypeName> extends infer TContinuation extends string
-    ? {
-        [K in TContinuation]: Extract<
-          Job<
-            TJobId,
-            K,
-            TChainTypeName,
-            JobTypeProperty<TJobTypeDefinitions, K, "input">,
-            JobTypeProperty<TJobTypeDefinitions, K, "output">,
-            [JobTypeContinuation<TJobTypeDefinitions, K>] extends [never] ? false : true
-          >,
-          { status: "pending" }
-        >;
-      }[TContinuation]
+    ? ContinuationJob<TJobId, TJobTypeDefinitions, TContinuation, TChainTypeName>
     : never;
+
+export type OutputJob<
+  TJobId,
+  TJobTypeDefinitions extends BaseJobTypeDefinitions,
+  TJobTypeName extends string,
+  TChainTypeName extends string = JobTypeReachingEntry<TJobTypeDefinitions, TJobTypeName>,
+> = Extract<
+  ResolvedJob<TJobId, TJobTypeDefinitions, TJobTypeName, TChainTypeName>,
+  { status: "completed"; continuedToId: null }
+> & { continuedTo: undefined };
+
+export type ContinuedJob<
+  TJobId,
+  TJobTypeDefinitions extends BaseJobTypeDefinitions,
+  TJobTypeName extends string,
+  TChainTypeName extends string = JobTypeReachingEntry<TJobTypeDefinitions, TJobTypeName>,
+  TContinuationTypeName extends string = string,
+> = Exclude<
+  Extract<
+    ResolvedJob<TJobId, TJobTypeDefinitions, TJobTypeName, TChainTypeName>,
+    { status: "completed" }
+  >,
+  { continuedToId: null }
+> & {
+  continuedTo: ContinuationJob<TJobId, TJobTypeDefinitions, TContinuationTypeName, TChainTypeName>;
+};
 
 /** Resolves a {@link Chain} with concrete input/output types for a given entry type name. */
 export type ResolvedChain<

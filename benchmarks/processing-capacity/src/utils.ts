@@ -117,10 +117,11 @@ export const runBenchmark = async ({
         "test-job": {
           attemptHandler:
             processMode === "atomic"
-              ? async ({ complete }) => complete(async () => onCompleted())
+              ? async ({ complete }) =>
+                  complete(async ({ finish }) => finish({ output: onCompleted() }))
               : async ({ prepare, complete }) => {
                   await prepare({ mode: "staged" }, async () => undefined);
-                  return complete(async () => onCompleted());
+                  return complete(async ({ finish }) => finish({ output: onCompleted() }));
                 },
         },
       },

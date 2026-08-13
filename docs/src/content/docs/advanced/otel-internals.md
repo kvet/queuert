@@ -14,7 +14,7 @@ This document describes the internal implementation of `@queuert/otel` — how t
 The observability system has three layers:
 
 ```
-Core operations (createStateChains, continueStateJob, finishJob, job-process)
+Core operations (chain creation, continuation, completion, job processing)
     ↓ calls
 ObservabilityHelper (maps domain objects to primitive data)
     ↓ calls
@@ -74,9 +74,9 @@ The OTEL adapter serializes `SpanContext` objects to this format for storage and
 
 3. **Continuation** (`continueWith`): Reads origin job's `traceContext`, creates new PRODUCER job span as child. Inherits `chainTraceContext` from origin (chain context stays the same). New job gets its own `traceContext`.
 
-4. **Worker processing**: Reads job's `traceContext` from database, creates CONSUMER attempt span as child. All processing spans (prepare, execute, complete) are children of the attempt span. When a job's abort signal fires, a `recordAbort` event is recorded on the attempt span with the abort reason (e.g., `worker_stopping`, `attempt_timeout`).
+4. **Worker processing**: Reads job's `traceContext` from database, creates CONSUMER attempt span as child. All processing spans (prepare, step, complete) are children of the attempt span. When a job's abort signal fires, a `recordAbort` event is recorded on the attempt span with the abort reason (e.g., `worker_stopping`, `taken_by_another_worker`).
 
-5. **Blocker resolution** (`unblockJobs`): Reads PRODUCER span context from `job_blocker` table, creates CONSUMER `resolve chain` span as child of the PRODUCER — linking across processes and time.
+5. **Blocker resolution** (`unblockJobs`): Reads PRODUCER span context from `job_blocker` table, creates CONSUMER `complete chain` span as child of the PRODUCER — linking across processes and time.
 
 6. **Chain completion**: Reads `chainTraceContext`, creates CONSUMER `complete chain` span as child of the PRODUCER chain span.
 
@@ -114,7 +114,7 @@ Events that need immediate context or occur outside transactions:
 
 ### Self-Cleaning via Savepoints
 
-`createStateChains`, `continueStateJob`, and `finishJob` use savepoints to automatically roll back buffered observability events on failure. The `TransactionHooks` system captures a checkpoint of the buffer position before each operation. If the operation throws, the savepoint restores the buffer to its checkpoint — partial events from a failed operation are discarded without affecting events from earlier successful operations in the same transaction.
+Each transactional phase runs inside a savepoint, so buffered observability events roll back automatically when it fails. The `TransactionHooks` system captures a checkpoint of the buffer position before the phase opens. If the phase throws, the savepoint restores the buffer to its checkpoint — partial events from a failed operation are discarded without affecting events from earlier successful operations in the same transaction.
 
 ### TransactionHooks
 
@@ -126,5 +126,5 @@ The buffering mechanism is shared with notification events (`notifyJobScheduled`
 - [OTEL Tracing](../otel-tracing/) — Span hierarchy and attributes
 - [Adapter Architecture](../adapters/) — Transactional buffering design
 - [Chain Model](../chain-model/) — Chain identity and continuation model
-- [Job Processing](../job-processing/) — Prepare/execute/complete pattern
+- [Job Processing](../job-processing/) — Prepare/step/complete pattern
 - [In-Process Worker](../in-process-worker/) — Worker lifecycle and attempt handling

@@ -248,7 +248,7 @@ export const createStateChains = async (
   }: {
     chains: (CommonInput & {
       chainTypeName: string;
-      deduplication?: DeduplicationOptions<string>;
+      deduplication?: DeduplicationOptions;
     })[];
     txCtx: BaseTxContext;
     transactionHooks: TransactionHooks;

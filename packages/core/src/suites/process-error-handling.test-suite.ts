@@ -66,7 +66,9 @@ export const processErrorHandlingTestSuite = ({ it }: { it: TestAPI<TestSuiteCon
                   throw new Error("Simulated prepare error");
                 }
               });
-              return complete(async () => ({ result: job.input.value * 2 }));
+              return complete(async ({ finish }) =>
+                finish({ output: { result: job.input.value * 2 } }),
+              );
             },
           },
         },
@@ -155,7 +157,9 @@ export const processErrorHandlingTestSuite = ({ it }: { it: TestAPI<TestSuiteCon
                   throw new Error("Simulated prepare error");
                 }
               });
-              return complete(async () => ({ result: job.input.value * 2 }));
+              return complete(async ({ finish }) =>
+                finish({ output: { result: job.input.value * 2 } }),
+              );
             },
           },
         },
@@ -243,7 +247,9 @@ export const processErrorHandlingTestSuite = ({ it }: { it: TestAPI<TestSuiteCon
               if (job.attempt === 1) {
                 throw new Error("Simulated process error");
               }
-              return complete(async () => ({ result: job.input.value * 2 }));
+              return complete(async ({ finish }) =>
+                finish({ output: { result: job.input.value * 2 } }),
+              );
             },
           },
         },
@@ -331,7 +337,9 @@ export const processErrorHandlingTestSuite = ({ it }: { it: TestAPI<TestSuiteCon
               if (job.attempt === 1) {
                 throw new Error("Simulated process error");
               }
-              return complete(async () => ({ result: job.input.value * 2 }));
+              return complete(async ({ finish }) =>
+                finish({ output: { result: job.input.value * 2 } }),
+              );
             },
           },
         },
@@ -423,11 +431,11 @@ export const processErrorHandlingTestSuite = ({ it }: { it: TestAPI<TestSuiteCon
                 expect(job.lastAttemptError).toContain("Error: Simulated complete error");
               }
               await prepare({ mode: "atomic" });
-              return complete(async () => {
+              return complete(async ({ finish }) => {
                 if (job.attempt === 1) {
                   throw new Error("Simulated complete error");
                 }
-                return { result: job.input.value * 2 };
+                return finish({ output: { result: job.input.value * 2 } });
               });
             },
           },
@@ -514,11 +522,11 @@ export const processErrorHandlingTestSuite = ({ it }: { it: TestAPI<TestSuiteCon
               }
               await prepare({ mode: "staged" });
               await sleep(1);
-              return complete(async () => {
+              return complete(async ({ finish }) => {
                 if (job.attempt === 1) {
                   throw new Error("Simulated complete error");
                 }
-                return { result: job.input.value * 2 };
+                return finish({ output: { result: job.input.value * 2 } });
               });
             },
           },
@@ -563,6 +571,136 @@ export const processErrorHandlingTestSuite = ({ it }: { it: TestAPI<TestSuiteCon
       }),
     ];
     expect(spyStateAdapter.calls.slice(0, expected.length)).toEqual(expected);
+  });
+
+  it("reschedules when complete callback returns without committing", async ({
+    stateAdapter,
+    notifyAdapter,
+    withTransaction,
+    withWorkers,
+    observabilityAdapter,
+    log,
+    expect,
+  }) => {
+    const jobTypes = defineJobTypes<{
+      test: {
+        entry: true;
+        input: null;
+        output: { done: true };
+      };
+    }>();
+
+    const client = await createClient({
+      stateAdapter,
+      notifyAdapter,
+      observabilityAdapter,
+      log,
+      jobTypes,
+    });
+
+    let retriedAfterError: string | null = null;
+
+    const worker = await createInProcessWorker({
+      client,
+      concurrency: 1,
+      processors: createProcessors({
+        client,
+        jobTypes,
+        backoffConfig: { initialDelayMs: 1, multiplier: 1, maxDelayMs: 1 },
+        processors: {
+          test: {
+            attemptHandler: async ({ job, complete }) => {
+              if (job.attempt > 1) {
+                retriedAfterError = job.lastAttemptError;
+              }
+              return complete(async ({ finish }) => {
+                if (job.attempt === 1) {
+                  return undefined as never;
+                }
+                return finish({ output: { done: true } });
+              });
+            },
+          },
+        },
+      }),
+    });
+
+    const chain = await withTransactionHooks(async (transactionHooks) =>
+      withTransaction(async (txCtx) =>
+        client.createChain({ ...txCtx, transactionHooks, typeName: "test", input: null }),
+      ),
+    );
+
+    await withWorkers([await worker.start()], async () => {
+      await client.awaitChain(chain, completionOptions);
+    });
+
+    expect(retriedAfterError).toContain(
+      "finish must be called before the complete callback returns",
+    );
+  });
+
+  it("reschedules when handler returns without completing the attempt", async ({
+    stateAdapter,
+    notifyAdapter,
+    withTransaction,
+    withWorkers,
+    observabilityAdapter,
+    log,
+    expect,
+  }) => {
+    const jobTypes = defineJobTypes<{
+      test: {
+        entry: true;
+        input: null;
+        output: { done: true };
+      };
+    }>();
+
+    const client = await createClient({
+      stateAdapter,
+      notifyAdapter,
+      observabilityAdapter,
+      log,
+      jobTypes,
+    });
+
+    let retriedAfterError: string | null = null;
+
+    const worker = await createInProcessWorker({
+      client,
+      concurrency: 1,
+      processors: createProcessors({
+        client,
+        jobTypes,
+        backoffConfig: { initialDelayMs: 1, multiplier: 1, maxDelayMs: 1 },
+        processors: {
+          test: {
+            attemptHandler: async ({ job, complete }) => {
+              if (job.attempt === 1) {
+                return undefined as never;
+              }
+              retriedAfterError = job.lastAttemptError;
+              return complete(async ({ finish }) => finish({ output: { done: true } }));
+            },
+          },
+        },
+      }),
+    });
+
+    const chain = await withTransactionHooks(async (transactionHooks) =>
+      withTransaction(async (txCtx) =>
+        client.createChain({ ...txCtx, transactionHooks, typeName: "test", input: null }),
+      ),
+    );
+
+    await withWorkers([await worker.start()], async () => {
+      await client.awaitChain(chain, completionOptions);
+    });
+
+    expect(retriedAfterError).toContain(
+      "complete must be called before the attempt handler returns",
+    );
   });
 
   it("reschedules when handler throws after complete in atomic mode", async ({
@@ -614,7 +752,9 @@ export const processErrorHandlingTestSuite = ({ it }: { it: TestAPI<TestSuiteCon
                 expect(job.lastAttemptError).toContain("Error: Error after complete");
               }
               await prepare({ mode: "atomic" });
-              const result = await complete(async () => ({ result: job.input.value * 2 }));
+              const result = await complete(async ({ finish }) =>
+                finish({ output: { result: job.input.value * 2 } }),
+              );
               if (job.attempt === 1) {
                 throw new Error("Error after complete");
               }
@@ -716,7 +856,9 @@ export const processErrorHandlingTestSuite = ({ it }: { it: TestAPI<TestSuiteCon
               }
               await prepare({ mode: "staged" });
               await sleep(1);
-              const result = await complete(async () => ({ result: job.input.value * 2 }));
+              const result = await complete(async ({ finish }) =>
+                finish({ output: { result: job.input.value * 2 } }),
+              );
               if (job.attempt === 1) {
                 throw new Error("Error after complete");
               }
@@ -829,7 +971,9 @@ export const processErrorHandlingTestSuite = ({ it }: { it: TestAPI<TestSuiteCon
                   await poisonTransaction(prepareCtx);
                 }
               });
-              return complete(async () => ({ result: job.input.value * 2 }));
+              return complete(async ({ finish }) =>
+                finish({ output: { result: job.input.value * 2 } }),
+              );
             },
           },
         },
@@ -924,7 +1068,9 @@ export const processErrorHandlingTestSuite = ({ it }: { it: TestAPI<TestSuiteCon
                   await poisonTransaction(prepareCtx);
                 }
               });
-              return complete(async () => ({ result: job.input.value * 2 }));
+              return complete(async ({ finish }) =>
+                finish({ output: { result: job.input.value * 2 } }),
+              );
             },
           },
         },
@@ -1014,12 +1160,12 @@ export const processErrorHandlingTestSuite = ({ it }: { it: TestAPI<TestSuiteCon
             backoffConfig: { initialDelayMs: 1, multiplier: 1, maxDelayMs: 1 },
             attemptHandler: async ({ job, prepare, complete }) => {
               await prepare({ mode: "atomic" });
-              return complete(async (completeCtx) => {
+              return complete(async ({ finish, ...completeCtx }) => {
                 await spyStateAdapter.record({ name: "user-completion", ...completeCtx });
                 if (job.attempt === 1) {
                   await poisonTransaction(completeCtx);
                 }
-                return { result: job.input.value * 2 };
+                return finish({ output: { result: job.input.value * 2 } });
               });
             },
           },
@@ -1111,12 +1257,12 @@ export const processErrorHandlingTestSuite = ({ it }: { it: TestAPI<TestSuiteCon
             attemptHandler: async ({ job, prepare, complete }) => {
               await prepare({ mode: "staged" });
               await sleep(1);
-              return complete(async (completeCtx) => {
+              return complete(async ({ finish, ...completeCtx }) => {
                 await spyStateAdapter.record({ name: "user-completion", ...completeCtx });
                 if (job.attempt === 1) {
                   await poisonTransaction(completeCtx);
                 }
-                return { result: job.input.value * 2 };
+                return finish({ output: { result: job.input.value * 2 } });
               });
             },
           },
@@ -1217,8 +1363,10 @@ export const processErrorHandlingTestSuite = ({ it }: { it: TestAPI<TestSuiteCon
             attemptHandler: async ({ job, prepare, complete }) => {
               step1Attempts++;
               await prepare({ mode: "atomic" });
-              const result = await complete(async ({ continueWith }) =>
-                continueWith({ typeName: "step2", input: { value: job.input.value * 2 } }),
+              const result = await complete(async ({ finish }) =>
+                finish({
+                  continueWith: { typeName: "step2", input: { value: job.input.value * 2 } },
+                }),
               );
               if (job.attempt === 1) {
                 throw new Error("Error after complete with continueWith");
@@ -1228,7 +1376,9 @@ export const processErrorHandlingTestSuite = ({ it }: { it: TestAPI<TestSuiteCon
           },
           step2: {
             attemptHandler: async ({ job, complete }) => {
-              return complete(async () => ({ result: job.input.value }));
+              return complete(async ({ finish }) =>
+                finish({ output: { result: job.input.value } }),
+              );
             },
           },
         },
@@ -1329,8 +1479,10 @@ export const processErrorHandlingTestSuite = ({ it }: { it: TestAPI<TestSuiteCon
               step1Attempts++;
               await prepare({ mode: "staged" });
               await sleep(1);
-              const result = await complete(async ({ continueWith }) =>
-                continueWith({ typeName: "step2", input: { value: job.input.value * 2 } }),
+              const result = await complete(async ({ finish }) =>
+                finish({
+                  continueWith: { typeName: "step2", input: { value: job.input.value * 2 } },
+                }),
               );
               if (job.attempt === 1) {
                 throw new Error("Error after complete with continueWith");
@@ -1340,7 +1492,9 @@ export const processErrorHandlingTestSuite = ({ it }: { it: TestAPI<TestSuiteCon
           },
           step2: {
             attemptHandler: async ({ job, complete }) => {
-              return complete(async () => ({ result: job.input.value }));
+              return complete(async ({ finish }) =>
+                finish({ output: { result: job.input.value } }),
+              );
             },
           },
         },
@@ -1442,7 +1596,9 @@ export const processErrorHandlingTestSuite = ({ it }: { it: TestAPI<TestSuiteCon
             attemptHandler: async ({ job, prepare, complete }) => {
               blockerAttempts++;
               await prepare({ mode: "atomic" });
-              const result = await complete(async () => ({ done: true as const }));
+              const result = await complete(async ({ finish }) =>
+                finish({ output: { done: true as const } }),
+              );
               if (job.attempt === 1) {
                 throw new Error("Error after blocker complete");
               }
@@ -1453,7 +1609,7 @@ export const processErrorHandlingTestSuite = ({ it }: { it: TestAPI<TestSuiteCon
             attemptHandler: async ({ job, complete }) => {
               const [blocker] = job.blockers;
               expect(blocker.output.done).toBe(true);
-              return complete(async () => ({ result: "ok" }));
+              return complete(async ({ finish }) => finish({ output: { result: "ok" } }));
             },
           },
         },
@@ -1535,7 +1691,9 @@ export const processErrorHandlingTestSuite = ({ it }: { it: TestAPI<TestSuiteCon
               blockerAttempts++;
               await prepare({ mode: "staged" });
               await sleep(1);
-              const result = await complete(async () => ({ done: true as const }));
+              const result = await complete(async ({ finish }) =>
+                finish({ output: { done: true as const } }),
+              );
               if (job.attempt === 1) {
                 throw new Error("Error after blocker complete");
               }
@@ -1546,7 +1704,7 @@ export const processErrorHandlingTestSuite = ({ it }: { it: TestAPI<TestSuiteCon
             attemptHandler: async ({ job, complete }) => {
               const [blocker] = job.blockers;
               expect(blocker.output.done).toBe(true);
-              return complete(async () => ({ result: "ok" }));
+              return complete(async ({ finish }) => finish({ output: { result: "ok" } }));
             },
           },
         },
@@ -1635,7 +1793,7 @@ export const processErrorHandlingTestSuite = ({ it }: { it: TestAPI<TestSuiteCon
                 throw errorToThrow;
               }
 
-              return complete(async () => null);
+              return complete(async ({ finish }) => finish({ output: null }));
             },
           },
         },
@@ -1670,7 +1828,7 @@ export const processErrorHandlingTestSuite = ({ it }: { it: TestAPI<TestSuiteCon
     expect(recordedErrors[2]).toBe("string error");
   });
 
-  it("reschedules when execute is called before prepare", async ({
+  it("reschedules when step is called before prepare", async ({
     stateAdapter,
     notifyAdapter,
     withTransaction,
@@ -1703,15 +1861,15 @@ export const processErrorHandlingTestSuite = ({ it }: { it: TestAPI<TestSuiteCon
         processors: {
           test: {
             backoffConfig: { initialDelayMs: 1, multiplier: 1, maxDelayMs: 1 },
-            attemptHandler: async ({ job, prepare, execute, complete }) => {
+            attemptHandler: async ({ job, prepare, step, complete }) => {
               if (job.attempt > 1) {
-                expect(job.lastAttemptError).toContain("execute is only valid in staged mode");
+                expect(job.lastAttemptError).toContain("step is only valid in staged mode");
               }
               if (job.attempt === 1) {
-                await execute(async () => {});
+                await step(async () => {});
               }
               await prepare({ mode: "staged" });
-              return complete(async () => null);
+              return complete(async ({ finish }) => finish({ output: null }));
             },
           },
         },
@@ -1734,7 +1892,7 @@ export const processErrorHandlingTestSuite = ({ it }: { it: TestAPI<TestSuiteCon
     });
   });
 
-  it("reschedules when execute is called in atomic mode", async ({
+  it("reschedules when step is called in atomic mode", async ({
     stateAdapter,
     notifyAdapter,
     withTransaction,
@@ -1767,15 +1925,15 @@ export const processErrorHandlingTestSuite = ({ it }: { it: TestAPI<TestSuiteCon
         processors: {
           test: {
             backoffConfig: { initialDelayMs: 1, multiplier: 1, maxDelayMs: 1 },
-            attemptHandler: async ({ job, prepare, execute, complete }) => {
+            attemptHandler: async ({ job, prepare, step, complete }) => {
               if (job.attempt > 1) {
-                expect(job.lastAttemptError).toContain("execute is only valid in staged mode");
+                expect(job.lastAttemptError).toContain("step is only valid in staged mode");
               }
               await prepare({ mode: "atomic" });
               if (job.attempt === 1) {
-                await execute(async () => {});
+                await step(async () => {});
               }
-              return complete(async () => null);
+              return complete(async ({ finish }) => finish({ output: null }));
             },
           },
         },
@@ -1798,7 +1956,7 @@ export const processErrorHandlingTestSuite = ({ it }: { it: TestAPI<TestSuiteCon
     });
   });
 
-  it("reschedules when execute is called after complete", async ({
+  it("reschedules when step is called after complete", async ({
     stateAdapter,
     notifyAdapter,
     withTransaction,
@@ -1831,16 +1989,16 @@ export const processErrorHandlingTestSuite = ({ it }: { it: TestAPI<TestSuiteCon
         processors: {
           test: {
             backoffConfig: { initialDelayMs: 1, multiplier: 1, maxDelayMs: 1 },
-            attemptHandler: async ({ job, prepare, execute, complete }) => {
+            attemptHandler: async ({ job, prepare, step, complete }) => {
               if (job.attempt > 1) {
-                expect(job.lastAttemptError).toContain("execute cannot be called after complete");
+                expect(job.lastAttemptError).toContain("step cannot be called after complete");
               }
               await prepare({ mode: "staged" });
               if (job.attempt === 1) {
-                await complete(async () => null);
-                await execute(async () => {});
+                await complete(async ({ finish }) => finish({ output: null }));
+                await step(async () => {});
               }
-              return complete(async () => null);
+              return complete(async ({ finish }) => finish({ output: null }));
             },
           },
         },
@@ -1863,7 +2021,7 @@ export const processErrorHandlingTestSuite = ({ it }: { it: TestAPI<TestSuiteCon
     });
   });
 
-  it("reschedules when execute callback throws in staged mode", async ({
+  it("reschedules when step callback throws in staged mode", async ({
     stateAdapter,
     notifyAdapter,
     withTransaction,
@@ -1905,17 +2063,19 @@ export const processErrorHandlingTestSuite = ({ it }: { it: TestAPI<TestSuiteCon
         processors: {
           test: {
             backoffConfig: { initialDelayMs: 1, multiplier: 1, maxDelayMs: 1 },
-            attemptHandler: async ({ job, prepare, execute, complete }) => {
+            attemptHandler: async ({ job, prepare, step, complete }) => {
               if (job.attempt > 1) {
-                expect(job.lastAttemptError).toContain("Error: Simulated execute error");
+                expect(job.lastAttemptError).toContain("Error: Simulated step error");
               }
               await prepare({ mode: "staged" });
               if (job.attempt === 1) {
-                await execute(async () => {
-                  throw new Error("Simulated execute error");
+                await step(async () => {
+                  throw new Error("Simulated step error");
                 });
               }
-              return complete(async () => ({ result: job.input.value * 2 }));
+              return complete(async ({ finish }) =>
+                finish({ output: { result: job.input.value * 2 } }),
+              );
             },
           },
         },
@@ -1965,7 +2125,7 @@ export const processErrorHandlingTestSuite = ({ it }: { it: TestAPI<TestSuiteCon
     expect(spyStateAdapter.calls.slice(0, expected.length)).toEqual(expected);
   });
 
-  it("reschedules when execute is called in parallel", async ({
+  it("reschedules when step is called in parallel", async ({
     stateAdapter,
     notifyAdapter,
     withTransaction,
@@ -1998,17 +2158,17 @@ export const processErrorHandlingTestSuite = ({ it }: { it: TestAPI<TestSuiteCon
         processors: {
           test: {
             backoffConfig: { initialDelayMs: 1, multiplier: 1, maxDelayMs: 1 },
-            attemptHandler: async ({ job, prepare, execute, complete }) => {
+            attemptHandler: async ({ job, prepare, step, complete }) => {
               if (job.attempt > 1) {
                 expect(job.lastAttemptError).toContain("parallel");
               }
               await prepare({ mode: "staged" });
               if (job.attempt === 1) {
-                await execute(async () => {
-                  await execute(async () => {});
+                await step(async () => {
+                  await step(async () => {});
                 });
               }
-              return complete(async () => null);
+              return complete(async ({ finish }) => finish({ output: null }));
             },
           },
         },
@@ -2031,7 +2191,7 @@ export const processErrorHandlingTestSuite = ({ it }: { it: TestAPI<TestSuiteCon
     });
   });
 
-  it("reschedules when execute is called while prepare is running", async ({
+  it("completes when handler catches a step guard error and then completes", async ({
     stateAdapter,
     notifyAdapter,
     withTransaction,
@@ -2064,16 +2224,139 @@ export const processErrorHandlingTestSuite = ({ it }: { it: TestAPI<TestSuiteCon
         processors: {
           test: {
             backoffConfig: { initialDelayMs: 1, multiplier: 1, maxDelayMs: 1 },
-            attemptHandler: async ({ job, prepare, execute, complete }) => {
+            attemptHandler: async ({ job, prepare, step, complete }) => {
+              expect(job.attempt).toBe(1);
+              await prepare({ mode: "atomic" });
+              await expect(step(async () => {})).rejects.toThrow("only valid in staged mode");
+              return complete(async ({ finish }) => finish({ output: null }));
+            },
+          },
+        },
+      }),
+    });
+
+    const chain = await withTransactionHooks(async (transactionHooks) =>
+      withTransaction(async (txCtx) =>
+        client.createChain({
+          ...txCtx,
+          transactionHooks,
+          typeName: "test",
+          input: null,
+        }),
+      ),
+    );
+
+    await withWorkers([await worker.start()], async () => {
+      await client.awaitChain(chain, completionOptions);
+    });
+  });
+
+  it("completes when handler catches a prepare callback error and then completes", async ({
+    stateAdapter,
+    notifyAdapter,
+    withTransaction,
+    withWorkers,
+    observabilityAdapter,
+    log,
+    expect,
+  }) => {
+    const jobTypes = defineJobTypes<{
+      test: {
+        entry: true;
+        input: null;
+        output: null;
+      };
+    }>();
+
+    const client = await createClient({
+      stateAdapter,
+      notifyAdapter,
+      observabilityAdapter,
+      log,
+      jobTypes,
+    });
+    const worker = await createInProcessWorker({
+      client,
+      concurrency: 1,
+      processors: createProcessors({
+        client,
+        jobTypes,
+        processors: {
+          test: {
+            backoffConfig: { initialDelayMs: 1, multiplier: 1, maxDelayMs: 1 },
+            attemptHandler: async ({ job, prepare, complete }) => {
+              expect(job.attempt).toBe(1);
+              await expect(
+                prepare({ mode: "atomic" }, async () => {
+                  throw new Error("prepare boom");
+                }),
+              ).rejects.toThrow("prepare boom");
+              return complete(async ({ finish }) => finish({ output: null }));
+            },
+          },
+        },
+      }),
+    });
+
+    const chain = await withTransactionHooks(async (transactionHooks) =>
+      withTransaction(async (txCtx) =>
+        client.createChain({
+          ...txCtx,
+          transactionHooks,
+          typeName: "test",
+          input: null,
+        }),
+      ),
+    );
+
+    await withWorkers([await worker.start()], async () => {
+      await client.awaitChain(chain, completionOptions);
+    });
+  });
+
+  it("reschedules when step is called while prepare is running", async ({
+    stateAdapter,
+    notifyAdapter,
+    withTransaction,
+    withWorkers,
+    observabilityAdapter,
+    log,
+    expect,
+  }) => {
+    const jobTypes = defineJobTypes<{
+      test: {
+        entry: true;
+        input: null;
+        output: null;
+      };
+    }>();
+
+    const client = await createClient({
+      stateAdapter,
+      notifyAdapter,
+      observabilityAdapter,
+      log,
+      jobTypes,
+    });
+    const worker = await createInProcessWorker({
+      client,
+      concurrency: 1,
+      processors: createProcessors({
+        client,
+        jobTypes,
+        processors: {
+          test: {
+            backoffConfig: { initialDelayMs: 1, multiplier: 1, maxDelayMs: 1 },
+            attemptHandler: async ({ job, prepare, step, complete }) => {
               if (job.attempt > 1) {
                 expect(job.lastAttemptError).toContain("prepare is running");
               }
               await prepare({ mode: "staged" }, async () => {
                 if (job.attempt === 1) {
-                  await execute(async () => {});
+                  await step(async () => {});
                 }
               });
-              return complete(async () => null);
+              return complete(async ({ finish }) => finish({ output: null }));
             },
           },
         },
@@ -2096,7 +2379,7 @@ export const processErrorHandlingTestSuite = ({ it }: { it: TestAPI<TestSuiteCon
     });
   });
 
-  it("reschedules when complete is called while execute is running", async ({
+  it("reschedules when complete is called while step is running", async ({
     stateAdapter,
     notifyAdapter,
     withTransaction,
@@ -2129,17 +2412,19 @@ export const processErrorHandlingTestSuite = ({ it }: { it: TestAPI<TestSuiteCon
         processors: {
           test: {
             backoffConfig: { initialDelayMs: 1, multiplier: 1, maxDelayMs: 1 },
-            attemptHandler: async ({ job, prepare, execute, complete }) => {
+            attemptHandler: async ({ job, prepare, step, complete }) => {
               if (job.attempt > 1) {
-                expect(job.lastAttemptError).toContain("execute is running");
+                expect(job.lastAttemptError).toContain(
+                  "complete cannot be called while step is running",
+                );
               }
               await prepare({ mode: "staged" });
               if (job.attempt === 1) {
-                await execute(async () => {
-                  await complete(async () => null);
+                await step(async () => {
+                  await complete(async ({ finish }) => finish({ output: null }));
                 });
               }
-              return complete(async () => null);
+              return complete(async ({ finish }) => finish({ output: null }));
             },
           },
         },
@@ -2201,10 +2486,10 @@ export const processErrorHandlingTestSuite = ({ it }: { it: TestAPI<TestSuiteCon
               }
               await prepare({ mode: "atomic" }, async () => {
                 if (job.attempt === 1) {
-                  await complete(async () => null);
+                  await complete(async ({ finish }) => finish({ output: null }));
                 }
               });
-              return complete(async () => null);
+              return complete(async ({ finish }) => finish({ output: null }));
             },
           },
         },
@@ -2273,14 +2558,16 @@ export const processErrorHandlingTestSuite = ({ it }: { it: TestAPI<TestSuiteCon
         processors: {
           test: {
             backoffConfig: { initialDelayMs: 1, multiplier: 1, maxDelayMs: 1 },
-            attemptHandler: async ({ job, prepare, execute, complete }) => {
+            attemptHandler: async ({ job, prepare, step, complete }) => {
               await prepare({ mode: "staged" });
               if (job.attempt === 1) {
-                await execute(async (txCtx) => {
+                await step(async (txCtx) => {
                   await poisonTransaction(txCtx);
                 });
               }
-              return complete(async () => ({ result: job.input.value * 2 }));
+              return complete(async ({ finish }) =>
+                finish({ output: { result: job.input.value * 2 } }),
+              );
             },
           },
         },

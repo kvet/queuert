@@ -8,7 +8,7 @@
  *      worker, job type and attempt number
  *   2. tenantMiddleware  — wrapPrepare: loads the tenant row inside the prepare
  *      transaction, so every handler starts with a consistent snapshot of it
- *   3. meteringMiddleware — wrapExecute + wrapComplete: a `meter()` that records
+ *   3. meteringMiddleware — wrapStep + wrapComplete: a `meter()` that records
  *      billable units in the *same* transaction as the job, never double-bills a
  *      retried attempt, and reports to the metrics backend only after commit
  *
@@ -42,14 +42,14 @@ const jobTypes = defineJobTypes<{
    * Workflow:
    *   issue-invoice --> send-receipt --> output { delivered }
    *
-   * Middleware nesting for one attempt (wrapPrepare / wrapExecute / wrapComplete
-   * bracket the callbacks passed to prepare()/execute()/complete(), not the
+   * Middleware nesting for one attempt (wrapPrepare / wrapStep / wrapComplete
+   * bracket the callbacks passed to prepare()/step()/complete(), not the
    * handler body):
    *
    *   loggingMiddleware.wrapHandler
    *     handler body starts
    *       prepare(...)  --> tenantMiddleware.wrapPrepare  --> callback
-   *       execute(...)  --> meteringMiddleware.wrapExecute  --> callback
+   *       step(...)  --> meteringMiddleware.wrapStep  --> callback
    *       complete(...) --> meteringMiddleware.wrapComplete --> callback
    *     handler body ends
    *   loggingMiddleware.wrapHandler
@@ -193,7 +193,7 @@ const meteringMiddleware: AttemptMiddleware<
   { meter: Meter },
   { meter: Meter }
 > = {
-  wrapExecute: async ({ job, sql, transactionHooks, next }) =>
+  wrapStep: async ({ job, sql, transactionHooks, next }) =>
     next({ meter: createMeter(sql, transactionHooks, job) }),
   wrapComplete: async ({ job, sql, transactionHooks, next }) =>
     next({ meter: createMeter(sql, transactionHooks, job) }),
@@ -219,7 +219,7 @@ const worker = await createInProcessWorker({
           log(`issuing invoice for ${tenant.name}`);
 
           const invoiceId = `inv-${job.id.slice(0, 8)}`;
-          return complete(async ({ sql, meter, continueWith }) => {
+          return complete(async ({ finish, sql, meter }) => {
             await sql`
               INSERT INTO invoice (id, tenant_id, amount_cents)
               VALUES (${invoiceId}, ${tenant.id}, ${job.input.amountCents})
@@ -227,34 +227,36 @@ const worker = await createInProcessWorker({
             `;
             await meter("invoice.issued", 1);
 
-            return continueWith({
-              typeName: "send-receipt",
-              input: { tenantId: tenant.id, invoiceId },
+            return finish({
+              continueWith: {
+                typeName: "send-receipt",
+                input: { tenantId: tenant.id, invoiceId },
+              },
             });
           });
         },
       },
 
       "send-receipt": {
-        attemptHandler: async ({ job, log, prepare, execute, complete }) => {
+        attemptHandler: async ({ job, log, prepare, step, complete }) => {
           const tenant = await prepare({ mode: "staged" }, async ({ tenant }) => tenant);
 
           // Rendering is billed from execute: the work is already done, so its
           // transaction commits immediately and the unit survives a later failure.
           // Delivery is billed from complete — only a delivered receipt is billable.
-          await execute(async ({ meter }) => {
+          await step(async ({ meter }) => {
             await meter("receipt.rendered", 1);
           });
 
           log(`delivering receipt to ${tenant.billingEmail}`);
 
-          return complete(async ({ meter }) => {
+          return complete(async ({ finish, meter }) => {
             await meter("receipt.delivered", 1);
             if (job.attempt === 1) {
               log("smtp gateway unavailable — rolling back and retrying");
               throw new Error("smtp gateway unavailable");
             }
-            return { delivered: true };
+            return finish({ output: { delivered: true } });
           });
         },
       },
@@ -283,7 +285,7 @@ const invoices = await sql<{ id: string }[]>`SELECT id FROM invoice`;
 console.log("\n--- result ---");
 console.log(`output: ${JSON.stringify(result.output)}`);
 console.log(`billed units: ${usage.map((row) => row.unit).join(", ")}`);
-console.log(`reported to metrics after commit: ${reportedUnits.join(", ")}`);
+console.log(`reported to metrics after finish: ${reportedUnits.join(", ")}`);
 
 assert.deepEqual(result.output, { delivered: true });
 assert.equal(invoices.length, 1);

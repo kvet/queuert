@@ -33,7 +33,7 @@ const cleanupProcessorRegistry = createProcessors({
   jobTypes: cleanupJobTypes,
   processors: {
     "queuert.cleanup": {
-      attemptHandler: async ({ job, execute, complete }) => {
+      attemptHandler: async ({ job, step, complete }) => {
         const cutoffDate = new Date(Date.now() - CLEANUP_RETENTION_MS);
         let deletedChainCount = 0;
         let cursor: string | undefined;
@@ -54,7 +54,7 @@ const cleanupProcessorRegistry = createProcessors({
           );
 
           if (chainsToDelete.length > 0) {
-            const deleted = await execute(async ({ transactionHooks, ...txCtx }) =>
+            const deleted = await step(async ({ transactionHooks, ...txCtx }) =>
               client.deleteChains({
                 ...txCtx,
                 transactionHooks,
@@ -69,7 +69,9 @@ const cleanupProcessorRegistry = createProcessors({
 
         await stateAdapter.vacuum();
 
-        return complete(async ({ transactionHooks, ...txCtx }) => {
+        return complete(async ({ finish, transactionHooks, ...txCtx }) => {
+          const completedJob = await finish({ output: null });
+
           await client.createChain({
             ...txCtx,
             transactionHooks,
@@ -79,11 +81,10 @@ const cleanupProcessorRegistry = createProcessors({
             deduplication: {
               key: "queuert.cleanup",
               scope: "running",
-              excludeChainIds: [job.chainId],
             },
           });
 
-          return null;
+          return completedJob;
         });
       },
     },
@@ -96,10 +97,10 @@ Key patterns used:
 - **Retention cutoff** — `CLEANUP_RETENTION_MS` controls how long completed chains are kept before deletion
 - **Status-filtered listing** — `status: "completed"` with `orderBy: "completedAt"` pushes filtering to the database and orders by completion time, so the oldest-completed chains are deleted first
 - **Cursor pagination** — processes chains in bounded batches using `listChains` cursor, preventing unbounded memory usage
-- **`execute` batching** — each batch of deletions runs in its own guarded transaction via `execute`, so the handler never holds a single long-lived transaction. The attempt is verified on each `execute` call, ensuring the worker still owns the job
+- **`step` batching** — each batch of deletions runs in its own guarded transaction via `step`, so the handler never holds a single long-lived transaction. The attempt is verified on each `step` call, ensuring the worker still owns the job
 - **Vacuum** — reclaims disk space after all deletions complete
 - **`deduplication`** with `scope: "running"` — ensures only one cleanup chain is active at a time
-- **`excludeChainIds`** — prevents the finishing cleanup chain from deduplicating against itself
+- **Complete before scheduling** — `finish({ output: null })` applies the completion inside the complete transaction, so the next run is created against an already-completed chain and does not deduplicate against the one finishing
 - **`schedule`** — defers the next run by `CLEANUP_INTERVAL_MS`
 
 ## Merge and Start

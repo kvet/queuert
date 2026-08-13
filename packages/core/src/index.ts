@@ -30,7 +30,7 @@ export {
   type ResolvedChainJobs,
   type ResolvedJob,
 } from "./entities/job-types.resolvers.js";
-export { type Job, type JobStatus } from "./entities/job.js";
+export { type CompletedJob, type Job, type JobStatus } from "./entities/job.js";
 export { type JobTypesDefinitions } from "./entities/merge-job-types.js";
 export { type ScheduleOptions } from "./entities/schedule.js";
 export {
@@ -44,15 +44,15 @@ export {
   JobAlreadyCompletedError,
   JobNotFoundError,
   JobNotReschedulableError,
+  JobsNotFoundError,
+  JobsNotReschedulableError,
   JobTakenByAnotherWorkerError,
   JobTypeMismatchError,
   JobTypeValidationError,
-  JobsNotFoundError,
-  JobsNotReschedulableError,
+  rescheduleJob,
   RescheduleJobError,
   UnknownJobTypeError,
   WaitChainTimeoutError,
-  rescheduleJob,
   type JobTypeValidationErrorCode,
 } from "./errors.js";
 export { type TypedAbortSignal } from "./helpers/abort.js";
@@ -83,20 +83,21 @@ export {
   type TransactionHooksHandle,
   type TransactionHooksSavepoint,
 } from "./transaction-hooks.js";
+export { type AttemptConfig } from "./worker/attempt-heartbeat.js";
 export { type AttemptMiddleware } from "./worker/attempt-middleware.js";
 export { createProcessors } from "./worker/create-processors.js";
 export {
+  type AttemptFinish,
   type AttemptComplete,
   type AttemptCompleteCallback,
   type AttemptCompleteOptions,
-  type AttemptExecute,
   type AttemptHandler,
   type AttemptPrepare,
   type AttemptPrepareCallback,
   type AttemptPrepareOptions,
+  type AttemptStep,
   type JobAbortReason,
 } from "./worker/job-process.js";
-export { type AttemptConfig } from "./worker/attempt-heartbeat.js";
 export {
   type InProcessWorkerProcessor,
   type ProcessorDefinitions,

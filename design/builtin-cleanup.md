@@ -161,12 +161,12 @@ for free, with no tombstone or completion-time re-check.
     } while (cursor && !signal.aborted);
 
     return finalize(async ({ complete, transactionHooks, ...tx }) => {
-      const terminal = await complete(null);
+      const completedJob = await complete(null);
       await client.createChain({ ...tx, transactionHooks,
         typeName: "__queuert/cleanup", input: job.input,
         schedule: { afterMs: intervalMs },
         identity: { key: `__queuert/cleanup:${name}`, scope: "running" } });
-      return terminal;
+      return completedJob;
     });
   },
 }

@@ -35,6 +35,10 @@ Each package has a README documenting:
 - `CLAUDE.md` - Session instructions (workflow requirements, high-level links)
 - `README.md` - Project overview (if exists)
 
+### Which docs a change is expected to touch
+
+Read `CLAUDE.md` and the docs it links; they define the expected mapping.
+
 ## Analysis Framework
 
 ### 1. Identify Change Type

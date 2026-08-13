@@ -125,7 +125,7 @@ const result = await client.createChain({
 });
 
 // in the worker handler, default propagation:
-await complete(job, async ({ continueWith }) => {
+await completeJob(job, async ({ continueWith }) => {
   await continueWith({ typeName: "step2", input: ... });
   // step2 inherits parent's priority — no need to re-pass it
 });

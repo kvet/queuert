@@ -63,11 +63,13 @@ const worker = await createInProcessWorker({
         attemptHandler: async ({ job, complete }) => {
           const accountId = await provisionAccount(job.input.userId);
 
-          return complete(async ({ continueWith }) =>
-            continueWith({
-              typeName: "send-welcome-email",
-              input: { userId: job.input.userId, accountId },
-              //      ↑ missing accountId would be a compile error
+          return complete(async ({ finish }) =>
+            finish({
+              continueWith: {
+                typeName: "send-welcome-email",
+                input: { userId: job.input.userId, accountId },
+                //      ↑ missing accountId would be a compile error
+              },
             }),
           );
         },

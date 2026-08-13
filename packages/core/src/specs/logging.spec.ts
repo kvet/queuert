@@ -86,7 +86,7 @@ describe("Logging", () => {
           test: {
             attemptHandler: async ({ prepare, complete }) => {
               await prepare({ mode: "staged" });
-              return complete(async () => ({ result: true }));
+              return complete(async ({ finish }) => finish({ output: { result: true } }));
             },
           },
         },
@@ -130,16 +130,6 @@ describe("Logging", () => {
         data: { ...jobArgs, status: "running", attempt: 1, ...workerArgs },
       },
       {
-        type: "job_attempt_completed",
-        data: {
-          ...jobArgs,
-          status: "running",
-          attempt: 1,
-          output: { result: true },
-          ...workerArgs,
-        },
-      },
-      {
         type: "job_completed",
         data: {
           ...jobArgs,
@@ -152,6 +142,16 @@ describe("Logging", () => {
       {
         type: "chain_completed",
         data: { ...chainArgs, output: { result: true } },
+      },
+      {
+        type: "job_attempt_completed",
+        data: {
+          ...jobArgs,
+          status: "running",
+          attempt: 1,
+          output: { result: true },
+          ...workerArgs,
+        },
       },
       { type: "worker_stopping", data: { ...workerArgs } },
       { type: "worker_stopped", data: { ...workerArgs } },
@@ -199,7 +199,7 @@ describe("Logging", () => {
               if (job.attempt < 4) {
                 throw new Error("Unexpected error");
               }
-              return complete(async () => null);
+              return complete(async ({ finish }) => finish({ output: null }));
             },
           },
         },
@@ -293,29 +293,33 @@ describe("Logging", () => {
         processors: {
           linear: {
             attemptHandler: async ({ job, complete }) => {
-              return complete(async ({ continueWith }) =>
-                continueWith({
-                  typeName: "linear_next",
-                  input: { valueNext: job.input.value + 1 },
+              return complete(async ({ finish }) =>
+                finish({
+                  continueWith: {
+                    typeName: "linear_next",
+                    input: { valueNext: job.input.value + 1 },
+                  },
                 }),
               );
             },
           },
           linear_next: {
             attemptHandler: async ({ job, complete }) => {
-              return complete(async ({ continueWith }) =>
-                continueWith({
-                  typeName: "linear_next_next",
-                  input: { valueNextNext: job.input.valueNext + 1 },
+              return complete(async ({ finish }) =>
+                finish({
+                  continueWith: {
+                    typeName: "linear_next_next",
+                    input: { valueNextNext: job.input.valueNext + 1 },
+                  },
                 }),
               );
             },
           },
           linear_next_next: {
             attemptHandler: async ({ job, complete }) =>
-              complete(async () => ({
-                result: job.input.valueNextNext,
-              })),
+              complete(async ({ finish }) =>
+                finish({ output: { result: job.input.valueNextNext } }),
+              ),
           },
         },
       }),
@@ -349,8 +353,8 @@ describe("Logging", () => {
           chainTypeName: "linear",
         },
       },
-      { type: "job_attempt_completed", data: { typeName: "linear" } },
       { type: "job_completed", data: { typeName: "linear" } },
+      { type: "job_attempt_completed", data: { typeName: "linear" } },
       { type: "job_attempt_started", data: { typeName: "linear_next" } },
       {
         type: "job_created",
@@ -360,12 +364,12 @@ describe("Logging", () => {
           chainTypeName: "linear",
         },
       },
-      { type: "job_attempt_completed", data: { typeName: "linear_next" } },
       { type: "job_completed", data: { typeName: "linear_next" } },
+      { type: "job_attempt_completed", data: { typeName: "linear_next" } },
       { type: "job_attempt_started", data: { typeName: "linear_next_next" } },
-      { type: "job_attempt_completed", data: { typeName: "linear_next_next" } },
       { type: "job_completed", data: { typeName: "linear_next_next" } },
       { type: "chain_completed", data: { typeName: "linear" } },
+      { type: "job_attempt_completed", data: { typeName: "linear_next_next" } },
       { type: "worker_stopping" },
       { type: "worker_stopped" },
     ]);
@@ -413,13 +417,15 @@ describe("Logging", () => {
         processors: {
           blocker: {
             attemptHandler: async ({ job, complete }) =>
-              complete(async ({ continueWith }) =>
+              complete(async ({ finish }) =>
                 job.input.value < 1
-                  ? continueWith({
-                      typeName: "blocker",
-                      input: { value: job.input.value + 1 },
+                  ? finish({
+                      continueWith: {
+                        typeName: "blocker",
+                        input: { value: job.input.value + 1 },
+                      },
                     })
-                  : { done: true },
+                  : finish({ output: { done: true } }),
               ),
           },
           main: {
@@ -430,9 +436,13 @@ describe("Logging", () => {
               },
               complete,
             }) =>
-              complete(async () => ({
-                finalResult: (blocker.output.done ? 1 : 0) + (input.start ? 1 : 0),
-              })),
+              complete(async ({ finish }) =>
+                finish({
+                  output: {
+                    finalResult: (blocker.output.done ? 1 : 0) + (input.start ? 1 : 0),
+                  },
+                }),
+              ),
           },
         },
       }),
@@ -500,10 +510,9 @@ describe("Logging", () => {
       { type: "worker_started" },
       { type: "job_attempt_started", data: { typeName: "blocker" } },
       { type: "job_created", data: { typeName: "blocker" } },
-      { type: "job_attempt_completed", data: { typeName: "blocker" } },
       { type: "job_completed", data: { typeName: "blocker" } },
-      { type: "job_attempt_started", data: { typeName: "blocker" } },
       { type: "job_attempt_completed", data: { typeName: "blocker" } },
+      { type: "job_attempt_started", data: { typeName: "blocker" } },
       { type: "job_completed", data: { typeName: "blocker" } },
       { type: "chain_completed", data: { typeName: "blocker" } },
       {
@@ -516,10 +525,11 @@ describe("Logging", () => {
           },
         },
       },
+      { type: "job_attempt_completed", data: { typeName: "blocker" } },
       { type: "job_attempt_started", data: { typeName: "main" } },
-      { type: "job_attempt_completed", data: { typeName: "main" } },
       { type: "job_completed", data: { typeName: "main" } },
       { type: "chain_completed", data: { typeName: "main" } },
+      { type: "job_attempt_completed", data: { typeName: "main" } },
       { type: "worker_stopping" },
       { type: "worker_stopped" },
     ]);
@@ -566,8 +576,8 @@ describe("Logging", () => {
           ...txCtx,
           transactionHooks,
           ...chain,
-          complete: async ({ job, complete }) => {
-            return complete(job, async () => ({ result: 84 }));
+          handler: async ({ job, completeJob }) => {
+            return completeJob(job, async ({ finish }) => finish({ output: { result: 84 } }));
           },
         }),
       ),
@@ -612,7 +622,7 @@ describe("Logging", () => {
           test: {
             attemptHandler: async ({ complete }) => {
               await sleep(200);
-              return complete(async () => null);
+              return complete(async ({ finish }) => finish({ output: null }));
             },
           },
         },
@@ -673,7 +683,7 @@ describe("Logging", () => {
           test: {
             attemptHandler: async ({ complete }) => {
               await sleep(100);
-              return complete(async () => null);
+              return complete(async ({ finish }) => finish({ output: null }));
             },
           },
         },
@@ -750,7 +760,7 @@ describe("Logging", () => {
                   jobCompleted.resolve();
                 }
               }
-              return complete(async () => null);
+              return complete(async ({ finish }) => finish({ output: null }));
             },
           },
         },
@@ -776,7 +786,7 @@ describe("Logging", () => {
                   jobCompleted.resolve();
                 }
               }
-              return complete(async () => null);
+              return complete(async ({ finish }) => finish({ output: null }));
             },
           },
         },
@@ -866,7 +876,7 @@ describe("Logging", () => {
         processors: {
           test: {
             attemptHandler: async ({ complete }) => {
-              return complete(async () => null);
+              return complete(async ({ finish }) => finish({ output: null }));
             },
           },
         },
@@ -925,7 +935,7 @@ describe("Logging", () => {
         processors: {
           test: {
             attemptHandler: async ({ complete }) => {
-              return complete(async () => null);
+              return complete(async ({ finish }) => finish({ output: null }));
             },
           },
         },
@@ -1079,7 +1089,8 @@ describe("Logging rollback", () => {
           ...txCtx,
           transactionHooks,
           ...chain,
-          complete: async ({ job, complete }) => complete(job, async () => ({ result: 42 })),
+          handler: async ({ job, completeJob }) =>
+            completeJob(job, async ({ finish }) => finish({ output: { result: 42 } })),
         });
         throw new Error("simulated rollback");
       }),
@@ -1139,7 +1150,8 @@ describe("Logging rollback", () => {
         backoffConfig: { initialDelayMs: 1, multiplier: 1, maxDelayMs: 1 },
         processors: {
           test: {
-            attemptHandler: async ({ complete }) => complete(async () => null),
+            attemptHandler: async ({ complete }) =>
+              complete(async ({ finish }) => finish({ output: null })),
           },
         },
       }),
@@ -1222,7 +1234,7 @@ describe("Logging rollback", () => {
                 handlerFailed = true;
                 throw new Error("simulated handler failure");
               }
-              return complete(async () => null);
+              return complete(async ({ finish }) => finish({ output: null }));
             },
           },
         },
@@ -1285,8 +1297,10 @@ describe("Logging rollback", () => {
         processors: {
           linear: {
             attemptHandler: async ({ complete }) =>
-              complete(async ({ continueWith }) => {
-                const result = await continueWith({ typeName: "linear_next", input: null });
+              complete(async ({ finish }) => {
+                const result = await finish({
+                  continueWith: { typeName: "linear_next", input: null },
+                });
                 if (throwOnce) {
                   throwOnce = false;
                   throw new Error("user error after continueWith");
@@ -1295,7 +1309,8 @@ describe("Logging rollback", () => {
               }),
           },
           linear_next: {
-            attemptHandler: async ({ complete }) => complete(async () => null),
+            attemptHandler: async ({ complete }) =>
+              complete(async ({ finish }) => finish({ output: null })),
           },
         },
       }),
@@ -1374,7 +1389,8 @@ describe("Logging rollback", () => {
         backoffConfig: { initialDelayMs: 1, multiplier: 1, maxDelayMs: 1 },
         processors: {
           test: {
-            attemptHandler: async ({ complete }) => complete(async () => null),
+            attemptHandler: async ({ complete }) =>
+              complete(async ({ finish }) => finish({ output: null })),
           },
         },
       }),
@@ -1458,7 +1474,8 @@ describe("Logging rollback", () => {
           ...txCtx,
           transactionHooks,
           ...chain,
-          complete: async ({ job, complete }) => complete(job, async () => ({ result: 42 })),
+          handler: async ({ job, completeJob }) =>
+            completeJob(job, async ({ finish }) => finish({ output: { result: 42 } })),
         }),
       ),
     ).catch(() => {});
@@ -1474,7 +1491,8 @@ describe("Logging rollback", () => {
           ...txCtx,
           transactionHooks,
           ...chain,
-          complete: async ({ job, complete }) => complete(job, async () => ({ result: 42 })),
+          handler: async ({ job, completeJob }) =>
+            completeJob(job, async ({ finish }) => finish({ output: { result: 42 } })),
         }),
       ),
     );
@@ -1544,12 +1562,13 @@ describe("Logging rollback", () => {
         processors: {
           linear: {
             attemptHandler: async ({ complete }) =>
-              complete(async ({ continueWith }) =>
-                continueWith({ typeName: "linear_next", input: null }),
+              complete(async ({ finish }) =>
+                finish({ continueWith: { typeName: "linear_next", input: null } }),
               ),
           },
           linear_next: {
-            attemptHandler: async ({ complete }) => complete(async () => null),
+            attemptHandler: async ({ complete }) =>
+              complete(async ({ finish }) => finish({ output: null })),
           },
         },
       }),

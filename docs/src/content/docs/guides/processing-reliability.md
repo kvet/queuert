@@ -14,7 +14,7 @@ This guide covers the engine's safety guarantees. For user-level error strategie
 1. Both `prepare` and `complete` callbacks run inside **database savepoints**.
 2. If a callback throws, the savepoint **rolls back** any partial SQL it executed.
 3. The outer transaction stays healthy, so the engine can **reschedule** the job with exponential backoff.
-4. This works regardless of _where_ the error occurs — in `prepare`, between phases, in `complete`, or after `complete` returns.
+4. This works regardless of _where_ the error occurs — in `prepare`, between phases, in `complete`, or after `finish` has already committed its transition.
 
 The rest of this page walks through each scenario with code examples.
 
@@ -36,9 +36,9 @@ The `prepare` callback runs inside a savepoint. If it throws, the savepoint roll
 
     const { paymentId } = await paymentAPI.charge(order.amount);
 
-    return complete(async ({ sql }) => {
+    return complete(async ({ finish, sql }) => {
       await sql`UPDATE orders SET payment_id = ${paymentId} WHERE id = ${order.id}`;
-      return { paymentId };
+      return finish({ output: { paymentId } });
     });
   },
 }
@@ -53,14 +53,14 @@ The `complete` callback also runs inside a savepoint. If it throws, the savepoin
 ```ts
 'transfer-funds': {
   attemptHandler: async ({ job, complete }) => {
-    return complete(async ({ sql }) => {
+    return complete(async ({ finish, sql }) => {
       // If the CHECK constraint fires, the savepoint rolls back
       // and the job is rescheduled — no corrupted state
       await sql`UPDATE accounts SET balance = balance - ${job.input.amount}
                 WHERE id = ${job.input.fromId}`;
       await sql`UPDATE accounts SET balance = balance + ${job.input.amount}
                 WHERE id = ${job.input.toId}`;
-      return { transferred: true };
+      return finish({ output: { transferred: true } });
     });
   },
 }
@@ -83,9 +83,9 @@ In **staged mode**, if an error occurs after `prepare` commits but before `compl
 
     const externalId = await externalAPI.sync(data); // may throw
 
-    return complete(async ({ sql }) => {
+    return complete(async ({ finish, sql }) => {
       await sql`UPDATE items SET external_id = ${externalId} WHERE id = ${data.id}`;
-      return { externalId };
+      return finish({ output: { externalId } });
     });
   },
 }
@@ -93,17 +93,17 @@ In **staged mode**, if an error occurs after `prepare` commits but before `compl
 
 In **atomic mode**, prepare and complete share the same transaction, so any error between them rolls back the entire transaction (including prepare's work) and reschedules.
 
-## Error After Complete
+## Error After Settling
 
-The `complete` savepoint is only released when the handler returns successfully. If you `await complete()` and then throw, the completion — including blocked-job resolution, continuation jobs, and any SQL you ran inside the callback — is atomically rolled back. The job is rescheduled as if `complete` never happened.
+The savepoint wraps the **entire** `complete` callback, not just the part before `finish`. `finish` applies the transition inline — SQL you run after `await finish(...)` already sees the finished job — but the savepoint is released only once the callback returns successfully. So if you throw after `finish`, everything the savepoint wrapped rolls back atomically: the transition itself, blocked-job resolution, continuation jobs, and any SQL you ran. The job is rescheduled as if the commit never happened.
 
 > **Note:** In **staged mode**, prepare's committed work persists across retries. Design your staged handlers so that prepare's side-effects are safe to keep when the complete phase retries.
 
 ## What This Means in Practice
 
-- **Any unhandled error → reschedule with backoff.** Whether the error occurs in `prepare`, between phases, in `complete`, or after `complete` — the job is always rescheduled. Backoff follows the processor's `backoffConfig` or the default (10s → 20s → 40s → ... → 300s cap).
+- **Any unhandled error → reschedule with backoff.** Whether the error occurs in `prepare`, between phases, in `complete`, or after `finish` — the job is always rescheduled. Backoff follows the processor's `backoffConfig` or the default (10s → 20s → 40s → ... → 300s cap).
 - **No corrupted state.** Savepoints ensure that partial SQL work inside callbacks is never committed when an error occurs.
-- **No orphaned continuations.** If `continueWith` was called inside `complete` and the handler throws afterward, both the continuation job and the completion are rolled back.
+- **No orphaned continuations.** If `continueWith` was called inside `complete` and the callback throws afterward, both the continuation job and the transition are rolled back.
 - **Blocked jobs stay blocked.** If a blocker job's completion is rolled back, dependent jobs remain correctly blocked.
 - **No defensive `try/catch` needed.** Let exceptions propagate naturally inside `prepare` and `complete` callbacks — the engine handles them.
 - **Jobs retry indefinitely.** There is no maximum retry count. Use [discriminated unions or compensation patterns](../error-handling/) to handle permanently failing jobs.

@@ -47,12 +47,10 @@ export const orderProcessors = createProcessors({
   processors: {
     "orders.create": {
       attemptHandler: async ({ job, complete }) =>
-        complete(async ({ continueWith }) =>
-          continueWith({ typeName: "orders.fulfill", input: { orderId: "123" } }),
-        ),
+        complete(async ({ finish }) => finish({ continueWith: { typeName: "orders.fulfill", input: { orderId: "123" } } })),
     },
     "orders.fulfill": {
-      attemptHandler: async ({ job, complete }) => complete(async () => ({ fulfilled: true })),
+      attemptHandler: async ({ job, complete }) => complete(async ({ finish }) => finish({ output: { fulfilled: true } })),
     },
   },
 });

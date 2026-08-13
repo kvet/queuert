@@ -94,7 +94,7 @@ const worker = await createInProcessWorker({
           }
 
           const data = await response.json();
-          return complete(() => ({ data }));
+          return complete(async ({ finish }) => finish({ output: { data } }));
         },
       },
     },

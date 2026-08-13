@@ -91,7 +91,7 @@ typeInferenceIt("infers custom ID types through the full stack", async ({ db }) 
           attemptHandler: async ({ job, complete }) => {
             expectTypeOf(job.id).toEqualTypeOf<`job.${UUID}`>();
 
-            return complete(async () => ({ bar: 42 }));
+            return complete(async ({ finish }) => finish({ output: { bar: 42 } }));
           },
         },
       },

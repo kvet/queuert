@@ -837,10 +837,12 @@ export const clientQueriesTestSuite = ({ it: baseIt }: { it: TestAPI<TestSuiteCo
           jobTypes,
           processors: {
             task_a: {
-              attemptHandler: async ({ complete }) => complete(async () => null),
+              attemptHandler: async ({ complete }) =>
+                complete(async ({ finish }) => finish({ output: null })),
             },
             task_b: {
-              attemptHandler: async ({ complete }) => complete(async () => null),
+              attemptHandler: async ({ complete }) =>
+                complete(async ({ finish }) => finish({ output: null })),
             },
           },
         }),
@@ -1086,10 +1088,12 @@ export const clientQueriesTestSuite = ({ it: baseIt }: { it: TestAPI<TestSuiteCo
           jobTypes,
           processors: {
             job_a: {
-              attemptHandler: async ({ complete }) => complete(async () => null),
+              attemptHandler: async ({ complete }) =>
+                complete(async ({ finish }) => finish({ output: null })),
             },
             job_b: {
-              attemptHandler: async ({ complete }) => complete(async () => null),
+              attemptHandler: async ({ complete }) =>
+                complete(async ({ finish }) => finish({ output: null })),
             },
           },
         }),
@@ -1220,10 +1224,10 @@ export const clientQueriesTestSuite = ({ it: baseIt }: { it: TestAPI<TestSuiteCo
           processors: {
             step: {
               attemptHandler: async ({ job, complete }) =>
-                complete(async ({ continueWith }) =>
+                complete(async ({ finish }) =>
                   job.input.n < 2
-                    ? continueWith({ typeName: "step", input: { n: job.input.n + 1 } })
-                    : { done: true },
+                    ? finish({ continueWith: { typeName: "step", input: { n: job.input.n + 1 } } })
+                    : finish({ output: { done: true } }),
                 ),
             },
           },
@@ -1295,10 +1299,10 @@ export const clientQueriesTestSuite = ({ it: baseIt }: { it: TestAPI<TestSuiteCo
           processors: {
             step: {
               attemptHandler: async ({ job, complete }) =>
-                complete(async ({ continueWith }) =>
+                complete(async ({ finish }) =>
                   job.input.n < 1
-                    ? continueWith({ typeName: "step", input: { n: job.input.n + 1 } })
-                    : { done: true },
+                    ? finish({ continueWith: { typeName: "step", input: { n: job.input.n + 1 } } })
+                    : finish({ output: { done: true } }),
                 ),
             },
           },
@@ -1362,10 +1366,10 @@ export const clientQueriesTestSuite = ({ it: baseIt }: { it: TestAPI<TestSuiteCo
           processors: {
             step: {
               attemptHandler: async ({ job, complete }) =>
-                complete(async ({ continueWith }) =>
+                complete(async ({ finish }) =>
                   job.input.n < 2
-                    ? continueWith({ typeName: "step", input: { n: job.input.n + 1 } })
-                    : { done: true },
+                    ? finish({ continueWith: { typeName: "step", input: { n: job.input.n + 1 } } })
+                    : finish({ output: { done: true } }),
                 ),
             },
           },
@@ -1531,10 +1535,12 @@ export const clientQueriesTestSuite = ({ it: baseIt }: { it: TestAPI<TestSuiteCo
           jobTypes,
           processors: {
             dep: {
-              attemptHandler: async ({ complete }) => complete(async () => ({ ok: true })),
+              attemptHandler: async ({ complete }) =>
+                complete(async ({ finish }) => finish({ output: { ok: true } })),
             },
             main: {
-              attemptHandler: async ({ complete }) => complete(async () => ({ result: "done" })),
+              attemptHandler: async ({ complete }) =>
+                complete(async ({ finish }) => finish({ output: { result: "done" } })),
             },
           },
         }),
@@ -1708,13 +1714,15 @@ export const clientQueriesTestSuite = ({ it: baseIt }: { it: TestAPI<TestSuiteCo
           processors: {
             task: {
               attemptHandler: async ({ job, complete }) =>
-                complete(async ({ continueWith }) =>
-                  continueWith({ typeName: "task_next", input: { n: job.input.n + 1 } }),
+                complete(async ({ finish }) =>
+                  finish({
+                    continueWith: { typeName: "task_next", input: { n: job.input.n + 1 } },
+                  }),
                 ),
             },
             task_next: {
               attemptHandler: async ({ job, complete }) =>
-                complete(async () => ({ final: job.input.n * 10 })),
+                complete(async ({ finish }) => finish({ output: { final: job.input.n * 10 } })),
             },
           },
         }),
@@ -1789,10 +1797,12 @@ export const clientQueriesTestSuite = ({ it: baseIt }: { it: TestAPI<TestSuiteCo
           jobTypes,
           processors: {
             dep: {
-              attemptHandler: async ({ complete }) => complete(async () => ({ ok: true })),
+              attemptHandler: async ({ complete }) =>
+                complete(async ({ finish }) => finish({ output: { ok: true } })),
             },
             main: {
-              attemptHandler: async ({ complete }) => complete(async () => ({ result: "done" })),
+              attemptHandler: async ({ complete }) =>
+                complete(async ({ finish }) => finish({ output: { result: "done" } })),
             },
           },
         }),

@@ -5,6 +5,8 @@
   "type": "module",
   "scripts": {
     "start": "node --import=tsx src/index.ts",
+    "start:ts6": "node --import=tsx src/index.ts ts6",
+    "start:ts7": "node --import=tsx src/index.ts ts7",
     "typecheck": "tsc --noEmit"
   },
   "dependencies": {

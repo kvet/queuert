@@ -60,3 +60,11 @@ export type Job<
 );
 
 export type AnyJob = Job<any, any, any, any, any, boolean>;
+
+/** A job narrowed to `"completed"` status. */
+export type CompletedJob<TJob extends AnyJob> = Extract<
+  TJob,
+  {
+    status: "completed";
+  }
+>;

@@ -57,9 +57,9 @@ export const processModesTestSuite = ({ it }: { it: TestAPI<TestSuiteContext> })
         processors: {
           "atomic-complete": {
             attemptHandler: async ({ job, complete }) => {
-              return complete(async ({ continueWith: _, ...txCtx }) => {
+              return complete(async ({ finish, ...txCtx }) => {
                 await spyStateAdapter.record({ name: "user-completion", ...txCtx });
-                return { result: job.input.value * 2 };
+                return finish({ output: { result: job.input.value * 2 } });
               });
             },
           },
@@ -149,9 +149,9 @@ export const processModesTestSuite = ({ it }: { it: TestAPI<TestSuiteContext> })
           "staged-complete": {
             attemptHandler: async ({ job, complete }) => {
               await sleep(1);
-              return complete(async ({ continueWith: _, ...txCtx }) => {
+              return complete(async ({ finish, ...txCtx }) => {
                 await spyStateAdapter.record({ name: "user-completion", ...txCtx });
-                return { result: job.input.value * 3 };
+                return finish({ output: { result: job.input.value * 3 } });
               });
             },
           },
@@ -252,9 +252,9 @@ export const processModesTestSuite = ({ it }: { it: TestAPI<TestSuiteContext> })
                 await spyStateAdapter.record({ name: "user-preparation", ...txCtx });
                 return 4;
               });
-              return complete(async ({ continueWith: _, ...txCtx }) => {
+              return complete(async ({ finish, ...txCtx }) => {
                 await spyStateAdapter.record({ name: "user-completion", ...txCtx });
-                return { result: job.input.value * multiplier };
+                return finish({ output: { result: job.input.value * multiplier } });
               });
             },
           },
@@ -357,9 +357,9 @@ export const processModesTestSuite = ({ it }: { it: TestAPI<TestSuiteContext> })
           "staged-without-callback": {
             attemptHandler: async ({ job, prepare, complete }) => {
               await prepare({ mode: "staged" });
-              return complete(async ({ continueWith: _, ...txCtx }) => {
+              return complete(async ({ finish, ...txCtx }) => {
                 await spyStateAdapter.record({ name: "user-completion", ...txCtx });
-                return { result: job.input.value * 5 };
+                return finish({ output: { result: job.input.value * 5 } });
               });
             },
           },
@@ -460,9 +460,9 @@ export const processModesTestSuite = ({ it }: { it: TestAPI<TestSuiteContext> })
                 await spyStateAdapter.record({ name: "user-preparation", ...txCtx });
                 return 6;
               });
-              return complete(async ({ continueWith: _, ...txCtx }) => {
+              return complete(async ({ finish, ...txCtx }) => {
                 await spyStateAdapter.record({ name: "user-completion", ...txCtx });
-                return { result: job.input.value * multiplier };
+                return finish({ output: { result: job.input.value * multiplier } });
               });
             },
           },
@@ -557,9 +557,9 @@ export const processModesTestSuite = ({ it }: { it: TestAPI<TestSuiteContext> })
           "atomic-without-callback": {
             attemptHandler: async ({ job, prepare, complete }) => {
               await prepare({ mode: "atomic" });
-              return complete(async ({ continueWith: _, ...txCtx }) => {
+              return complete(async ({ finish, ...txCtx }) => {
                 await spyStateAdapter.record({ name: "user-completion", ...txCtx });
-                return { result: job.input.value * 7 };
+                return finish({ output: { result: job.input.value * 7 } });
               });
             },
           },
@@ -647,16 +647,16 @@ export const processModesTestSuite = ({ it }: { it: TestAPI<TestSuiteContext> })
         jobTypes,
         processors: {
           "execute-basic": {
-            attemptHandler: async ({ job, prepare, execute, complete }) => {
+            attemptHandler: async ({ job, prepare, step, complete }) => {
               await prepare({ mode: "staged" });
 
-              await execute(async ({ transactionHooks: _, ...txCtx }) => {
+              await step(async ({ transactionHooks: _, ...txCtx }) => {
                 await spyStateAdapter.record({ name: "user-execute", ...txCtx });
               });
 
-              return complete(async ({ continueWith: _, ...txCtx }) => {
+              return complete(async ({ finish, ...txCtx }) => {
                 await spyStateAdapter.record({ name: "user-completion", ...txCtx });
-                return { result: job.input.value * 2 };
+                return finish({ output: { result: job.input.value * 2 } });
               });
             },
           },
@@ -751,13 +751,13 @@ export const processModesTestSuite = ({ it }: { it: TestAPI<TestSuiteContext> })
         jobTypes,
         processors: {
           "execute-return": {
-            attemptHandler: async ({ prepare, execute, complete }) => {
+            attemptHandler: async ({ prepare, step, complete }) => {
               await prepare({ mode: "staged" });
 
-              const a = await execute(async () => 10);
-              const b = await execute(async () => 20);
+              const a = await step(async () => 10);
+              const b = await step(async () => 20);
 
-              return complete(async () => ({ sum: a + b }));
+              return complete(async ({ finish }) => finish({ output: { sum: a + b } }));
             },
           },
         },
@@ -822,17 +822,17 @@ export const processModesTestSuite = ({ it }: { it: TestAPI<TestSuiteContext> })
         jobTypes,
         processors: {
           "execute-multi": {
-            attemptHandler: async ({ prepare, execute, complete }) => {
+            attemptHandler: async ({ prepare, step, complete }) => {
               await prepare({ mode: "staged" });
 
-              await execute(async (txCtx) => {
+              await step(async (txCtx) => {
                 await spyStateAdapter.record({ name: "execute-1", ...txCtx });
               });
-              await execute(async (txCtx) => {
+              await step(async (txCtx) => {
                 await spyStateAdapter.record({ name: "execute-2", ...txCtx });
               });
 
-              return complete(async () => null);
+              return complete(async ({ finish }) => finish({ output: null }));
             },
           },
         },
@@ -899,10 +899,10 @@ export const processModesTestSuite = ({ it }: { it: TestAPI<TestSuiteContext> })
         jobTypes,
         processors: {
           "execute-hooks": {
-            attemptHandler: async ({ prepare, execute, complete }) => {
+            attemptHandler: async ({ prepare, step, complete }) => {
               await prepare({ mode: "staged" });
 
-              await execute(async ({ transactionHooks }) => {
+              await step(async ({ transactionHooks }) => {
                 transactionHooks.getOrInsert(Symbol(), () => ({
                   state: {},
                   flush: () => {
@@ -913,7 +913,7 @@ export const processModesTestSuite = ({ it }: { it: TestAPI<TestSuiteContext> })
 
               expect(flushOrder).toEqual([1]);
 
-              await execute(async ({ transactionHooks }) => {
+              await step(async ({ transactionHooks }) => {
                 transactionHooks.getOrInsert(Symbol(), () => ({
                   state: {},
                   flush: () => {
@@ -924,7 +924,7 @@ export const processModesTestSuite = ({ it }: { it: TestAPI<TestSuiteContext> })
 
               expect(flushOrder).toEqual([1, 2]);
 
-              return complete(async () => ({ flushOrder }));
+              return complete(async ({ finish }) => finish({ output: { flushOrder } }));
             },
           },
         },
@@ -989,16 +989,16 @@ export const processModesTestSuite = ({ it }: { it: TestAPI<TestSuiteContext> })
         jobTypes,
         processors: {
           "execute-race": {
-            attemptHandler: async ({ job, execute, complete }) => {
+            attemptHandler: async ({ job, step, complete }) => {
               await sleep(1);
 
-              await execute(async ({ transactionHooks: _, ...txCtx }) => {
+              await step(async ({ transactionHooks: _, ...txCtx }) => {
                 await spyStateAdapter.record({ name: "user-execute", ...txCtx });
               });
 
-              return complete(async ({ continueWith: _, ...txCtx }) => {
+              return complete(async ({ finish, ...txCtx }) => {
                 await spyStateAdapter.record({ name: "user-completion", ...txCtx });
-                return { result: job.input.value * 3 };
+                return finish({ output: { result: job.input.value * 3 } });
               });
             },
           },
@@ -1102,15 +1102,15 @@ export const processModesTestSuite = ({ it }: { it: TestAPI<TestSuiteContext> })
         jobTypes,
         processors: {
           "execute-auto": {
-            attemptHandler: async ({ job, execute, complete }) => {
-              const intermediate = await execute(async ({ ...txCtx }) => {
+            attemptHandler: async ({ job, step, complete }) => {
+              const intermediate = await step(async ({ ...txCtx }) => {
                 await spyStateAdapter.record({ name: "user-execute", ...txCtx });
                 return job.input.value * 3;
               });
 
-              return complete(async ({ continueWith: _, ...txCtx }) => {
+              return complete(async ({ finish, ...txCtx }) => {
                 await spyStateAdapter.record({ name: "user-completion", ...txCtx });
-                return { result: intermediate };
+                return finish({ output: { result: intermediate } });
               });
             },
           },

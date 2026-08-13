@@ -73,8 +73,8 @@ const generateProcessors = (defs: JobTypeDef[], clientVar: string, middlewareCou
   const processors = defs.map((def) => {
     if (def.output && !def.continueWith) {
       const completeBody = hasMw
-        ? `complete(async ({${cKeys.replace(/^, /, " ")} }) => {\n${cVoid}          return (${typeToValue(def.output)});\n        })`
-        : `complete(async () => (${typeToValue(def.output)}))`;
+        ? `complete(async ({ finish${cKeys} }) => {\n${cVoid}          return finish({ output: (${typeToValue(def.output)}) });\n        })`
+        : `complete(async ({ finish }) => finish({ output: (${typeToValue(def.output)}) }))`;
       return `    "${def.name}": {
       attemptHandler: async ({ complete${hasMw ? ", prepare" : ""}${hKeys} }) => {
 ${hVoid}${prepareCall}        return ${completeBody};
@@ -100,34 +100,30 @@ ${hVoid}${prepareCall}        return ${completeBody};
           .join("\n");
         const blockerArray = blockerStartCalls.map((_, i) => `blocker${i}`).join(", ");
 
-        const completeArgs = hasMw
-          ? `{ continueWith${cKeys}, ...txCtx }`
-          : `{ continueWith, ...txCtx }`;
+        const completeArgs = `{ finish${hasMw ? cKeys : ""}, ...txCtx }`;
 
         return `    "${def.name}": {
       attemptHandler: async ({ complete${hasMw ? ", prepare" : ""}${hKeys} }) => {
 ${hVoid}${prepareCall}        return complete(async (${completeArgs}) => {
 ${cVoid}${blockerAwaits}
-              return continueWith({ typeName: "${firstTarget}", input: ${typeToValue(targetDef.input)}, blockers: [${blockerArray}] });
+              return finish({ continueWith: { typeName: "${firstTarget}", input: ${typeToValue(targetDef.input)}, blockers: [${blockerArray}] } });
           });
       },
     }`;
       }
 
-      const completeArgs = hasMw ? `{ continueWith${cKeys} }` : `{ continueWith }`;
+      const completeArgs = `{ finish${hasMw ? cKeys : ""} }`;
 
       return `    "${def.name}": {
       attemptHandler: async ({ complete${hasMw ? ", prepare" : ""}${hKeys} }) => {
 ${hVoid}${prepareCall}        return complete(async (${completeArgs}) => {
-${cVoid}          return continueWith({ typeName: "${firstTarget}", input: ${typeToValue(targetDef?.input ?? "{ id: string }")} });
+${cVoid}          return finish({ continueWith: { typeName: "${firstTarget}", input: ${typeToValue(targetDef?.input ?? "{ id: string }")} } });
         });
       },
     }`;
     }
 
-    const completeBody = hasMw
-      ? `complete(async ({${cKeys.replace(/^, /, " ")} }) => {\n${cVoid}        })`
-      : `complete(async () => {})`;
+    const completeBody = `complete(async ({ finish${hasMw ? cKeys : ""} }) => {\n${cVoid}          return finish({ output: null });\n        })`;
     return `    "${def.name}": {
       attemptHandler: async ({ complete${hasMw ? ", prepare" : ""}${hKeys} }) => {
 ${hVoid}${prepareCall}        return ${completeBody};
@@ -146,9 +142,9 @@ const generateCompleteChainCall = (defs: JobTypeDef[], entryDef: JobTypeDef): st
   typeName: "${typeName}",
   id: chain.id,
   transactionHooks,
-  complete: async ({ job: currentJob, complete: completeFn }) => {
-    if (currentJob.typeName !== "${typeName}") throw new Error("unexpected");
-    return completeFn(currentJob, async () => (${typeToValue(entryDef.output ?? "{ result: string }")}));
+  handler: async ({ job, completeJob }) => {
+    if (job.typeName !== "${typeName}") throw new Error("unexpected");
+    return completeJob(job, async ({ finish }) => finish({ output: ${typeToValue(entryDef.output ?? "{ result: string }")} }));
   },
 });`;
   }
@@ -172,11 +168,11 @@ const generateCompleteChainCall = (defs: JobTypeDef[], entryDef: JobTypeDef): st
   typeName: "${typeName}",
   id: chain.id,
   transactionHooks,
-  complete: async ({ job: currentJob, complete: completeFn }) => {
-    if (currentJob.typeName !== "${typeName}") throw new Error("unexpected");
-    return completeFn(currentJob, async ({ continueWith, ...txCtx }) => {
+  handler: async ({ job, completeJob }) => {
+    if (job.typeName !== "${typeName}") throw new Error("unexpected");
+    return completeJob(job, async ({ finish, ...txCtx }) => {
 ${blockerStarts.map((s) => `      ${s}`).join("\n")}
-      return continueWith({ typeName: "${firstTarget}", input: ${targetInput}, blockers: [${blockerArray}] });
+      return finish({ continueWith: { typeName: "${firstTarget}", input: ${targetInput}, blockers: [${blockerArray}] } });
     });
   },
 });`;
@@ -186,10 +182,10 @@ ${blockerStarts.map((s) => `      ${s}`).join("\n")}
   typeName: "${typeName}",
   id: chain.id,
   transactionHooks,
-  complete: async ({ job: currentJob, complete: completeFn }) => {
-    if (currentJob.typeName !== "${typeName}") throw new Error("unexpected");
-    return completeFn(currentJob, async ({ continueWith }) =>
-      continueWith({ typeName: "${firstTarget}", input: ${targetInput} }));
+  handler: async ({ job, completeJob }) => {
+    if (job.typeName !== "${typeName}") throw new Error("unexpected");
+    return completeJob(job, async ({ finish }) =>
+      finish({ continueWith: { typeName: "${firstTarget}", input: ${targetInput} } }));
   },
 });`;
 };

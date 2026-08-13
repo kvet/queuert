@@ -23,7 +23,7 @@ const worker = await createInProcessWorker({
           try {
             const response = await fetch(job.input.url, { signal: combined });
             const data = await response.json();
-            return complete(() => ({ data }));
+            return complete(async ({ finish }) => finish({ output: { data } }));
           } finally {
             clearTimeout(timer);
           }

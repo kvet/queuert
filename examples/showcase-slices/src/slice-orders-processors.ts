@@ -14,7 +14,7 @@ export const orderProcessors = createProcessors({
           `[orders.create-order] User ${job.input.userId} ordered ${job.input.items.length} items ($${totalAmount.toFixed(2)})`,
         );
 
-        return complete(async ({ continueWith, sql, transactionHooks }) => {
+        return complete(async ({ finish, sql, transactionHooks }) => {
           await client.createChain({
             sql,
             transactionHooks,
@@ -26,9 +26,11 @@ export const orderProcessors = createProcessors({
             },
           });
 
-          return continueWith({
-            typeName: "orders.fulfill-order",
-            input: { orderId: 1001, totalAmount },
+          return finish({
+            continueWith: {
+              typeName: "orders.fulfill-order",
+              input: { orderId: 1001, totalAmount },
+            },
           });
         });
       },
@@ -40,10 +42,14 @@ export const orderProcessors = createProcessors({
           `[orders.fulfill-order] Fulfilling order #${job.input.orderId} ($${job.input.totalAmount.toFixed(2)})`,
         );
 
-        return complete(async () => ({
-          orderId: job.input.orderId,
-          fulfilledAt: new Date().toISOString(),
-        }));
+        return complete(async ({ finish }) =>
+          finish({
+            output: {
+              orderId: job.input.orderId,
+              fulfilledAt: new Date().toISOString(),
+            },
+          }),
+        );
       },
     },
 
@@ -54,7 +60,7 @@ export const orderProcessors = createProcessors({
           `[orders.place-order] User ${job.input.userId} placed order ($${totalAmount.toFixed(2)})`,
         );
 
-        return complete(async ({ continueWith, sql, transactionHooks }) => {
+        return complete(async ({ finish, sql, transactionHooks }) => {
           const notifyChain = await client.createChain({
             sql,
             transactionHooks,
@@ -66,10 +72,12 @@ export const orderProcessors = createProcessors({
             },
           });
 
-          return continueWith({
-            typeName: "orders.confirm-order",
-            input: { orderId: 2001, totalAmount },
-            blockers: [notifyChain],
+          return finish({
+            continueWith: {
+              typeName: "orders.confirm-order",
+              input: { orderId: 2001, totalAmount },
+              blockers: [notifyChain],
+            },
           });
         });
       },
@@ -82,10 +90,14 @@ export const orderProcessors = createProcessors({
           `[orders.confirm-order] Notification sent at ${notificationResult.sentAt}, confirming order #${job.input.orderId}`,
         );
 
-        return complete(async () => ({
-          orderId: job.input.orderId,
-          confirmedAt: new Date().toISOString(),
-        }));
+        return complete(async ({ finish }) =>
+          finish({
+            output: {
+              orderId: job.input.orderId,
+              confirmedAt: new Date().toISOString(),
+            },
+          }),
+        );
       },
     },
   },

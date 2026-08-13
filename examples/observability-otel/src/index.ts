@@ -7,7 +7,7 @@
  * 1. Single Job: Basic chain with one job → one chain span, one job span, one attempt span
  * 2. Continuations: Linear chain of jobs → chain span contains multiple sequential job spans
  * 3. Blockers: Fan-out/fan-in pattern → chain span shows parallel blocker jobs with links
- * 4. Execute: Batched transactions → attempt span shows prepare, execute ×2, complete
+ * 4. Execute: Batched transactions → attempt span shows prepare, step ×2, complete
  * 5. Retries: Job fails then succeeds → job span contains multiple attempt spans
  * 6. Workerless Completion: Job completed externally → CONSUMER job span without attempt spans
  */
@@ -75,9 +75,9 @@ const jobTypes = defineJobTypes<{
    *   chain-span (process-with-blockers)
    *     └─ job-span
    *          ├─ PRODUCER: await chain.fetch-user ──link──→ chain fetch-user
-   *          │    └─ CONSUMER: resolve chain.fetch-user
+   *          │    └─ CONSUMER: complete chain.fetch-user
    *          ├─ PRODUCER: await chain.fetch-permissions ──link──→ chain fetch-permissions
-   *          │    └─ CONSUMER: resolve chain.fetch-permissions
+   *          │    └─ CONSUMER: complete chain.fetch-permissions
    *          └─ attempt-span
    */
   "fetch-user": {
@@ -99,15 +99,15 @@ const jobTypes = defineJobTypes<{
 
   /*
    * Scenario 4 - Execute (batched transactions):
-   *   batch-process → prepare, execute ×2, complete
+   *   batch-process → prepare, step ×2, complete
    *
    * Trace structure:
    *   chain-span
    *     └─ job-span (batch-process)
    *          └─ attempt-span #1
    *               ├─ prepare
-   *               ├─ execute (batch 1)
-   *               ├─ execute (batch 2)
+   *               ├─ step (batch 1)
+   *               ├─ step (batch 2)
    *               └─ complete
    */
   "batch-process": {
@@ -167,9 +167,13 @@ const worker = await createInProcessWorker({
       greet: {
         attemptHandler: async ({ job, complete }) => {
           await new Promise((r) => setTimeout(r, 20));
-          return complete(async () => ({
-            greeting: `Hello, ${job.input.name}!`,
-          }));
+          return complete(async ({ finish }) =>
+            finish({
+              output: {
+                greeting: `Hello, ${job.input.name}!`,
+              },
+            }),
+          );
         },
       },
 
@@ -177,10 +181,12 @@ const worker = await createInProcessWorker({
       "order:validate": {
         attemptHandler: async ({ job, complete }) => {
           await new Promise((r) => setTimeout(r, 50));
-          return complete(async ({ continueWith }) =>
-            continueWith({
-              typeName: "order:process",
-              input: { orderId: job.input.orderId, validated: true },
+          return complete(async ({ finish }) =>
+            finish({
+              continueWith: {
+                typeName: "order:process",
+                input: { orderId: job.input.orderId, validated: true },
+              },
             }),
           );
         },
@@ -188,10 +194,12 @@ const worker = await createInProcessWorker({
       "order:process": {
         attemptHandler: async ({ job, complete }) => {
           await new Promise((r) => setTimeout(r, 100));
-          return complete(async ({ continueWith }) =>
-            continueWith({
-              typeName: "order:complete",
-              input: { orderId: job.input.orderId, processed: true },
+          return complete(async ({ finish }) =>
+            finish({
+              continueWith: {
+                typeName: "order:complete",
+                input: { orderId: job.input.orderId, processed: true },
+              },
             }),
           );
         },
@@ -199,10 +207,14 @@ const worker = await createInProcessWorker({
       "order:complete": {
         attemptHandler: async ({ job, complete }) => {
           await new Promise((r) => setTimeout(r, 30));
-          return complete(async () => ({
-            orderId: job.input.orderId,
-            status: "completed",
-          }));
+          return complete(async ({ finish }) =>
+            finish({
+              output: {
+                orderId: job.input.orderId,
+                status: "completed",
+              },
+            }),
+          );
         },
       },
 
@@ -210,44 +222,56 @@ const worker = await createInProcessWorker({
       "fetch-user": {
         attemptHandler: async ({ job, complete }) => {
           await new Promise((r) => setTimeout(r, 80));
-          return complete(async () => ({
-            userId: job.input.userId,
-            name: "Alice",
-          }));
+          return complete(async ({ finish }) =>
+            finish({
+              output: {
+                userId: job.input.userId,
+                name: "Alice",
+              },
+            }),
+          );
         },
       },
       "fetch-permissions": {
         attemptHandler: async ({ job, complete }) => {
           await new Promise((r) => setTimeout(r, 60));
-          return complete(async () => ({
-            userId: job.input.userId,
-            permissions: ["read", "write"],
-          }));
+          return complete(async ({ finish }) =>
+            finish({
+              output: {
+                userId: job.input.userId,
+                permissions: ["read", "write"],
+              },
+            }),
+          );
         },
       },
       "process-with-blockers": {
         attemptHandler: async ({ job, complete }) => {
           const [userBlocker, permBlocker] = job.blockers;
           await new Promise((r) => setTimeout(r, 40));
-          return complete(async () => ({
-            taskId: job.input.taskId,
-            result: `${userBlocker.output.name} has ${permBlocker.output.permissions.join(", ")}`,
-          }));
+          return complete(async ({ finish }) =>
+            finish({
+              output: {
+                taskId: job.input.taskId,
+                result: `${userBlocker.output.name} has ${permBlocker.output.permissions.join(", ")}`,
+              },
+            }),
+          );
         },
       },
 
       // Scenario 4: Batched execute transactions
       "batch-process": {
-        attemptHandler: async ({ job, prepare, execute, complete }) => {
+        attemptHandler: async ({ job, prepare, step, complete }) => {
           await prepare({ mode: "staged" });
           let total = 0;
           for (const item of job.input.items) {
-            total += await execute(async () => {
+            total += await step(async () => {
               await new Promise((r) => setTimeout(r, 30));
               return item * 2;
             });
           }
-          return complete(async () => ({ total }));
+          return complete(async ({ finish }) => finish({ output: { total } }));
         },
       },
 
@@ -257,7 +281,7 @@ const worker = await createInProcessWorker({
           if (job.input.shouldFail && job.attempt < 2) {
             throw new Error("Simulated failure");
           }
-          return complete(async () => ({ success: true as const }));
+          return complete(async ({ finish }) => finish({ output: { success: true as const } }));
         },
         backoffConfig: { initialDelayMs: 100, maxDelayMs: 100 },
       },
@@ -330,7 +354,7 @@ console.log("Result:", blockerResult.output);
 // Scenario 4: Execute (batched transactions)
 console.log("\n--- Scenario 4: Execute ---");
 console.log(
-  "Staged handler with two execute() calls. Attempt span shows prepare, 2× execute, complete.\n",
+  "Staged handler with two execute() calls. Attempt span shows prepare, 2× step, complete.\n",
 );
 const batchChain = await withTransactionHooks(async (transactionHooks) =>
   stateAdapter.withTransaction(async (ctx) =>
@@ -380,15 +404,16 @@ const approvalResult = await withTransactionHooks(async (transactionHooks) =>
       ...ctx,
       transactionHooks,
       ...approvalChain,
-      complete: async ({ job, complete }) =>
-        complete(job, async () => ({
-          approved: true,
-          approvedBy: "admin",
-        })),
+      handler: async ({ job, completeJob }) =>
+        completeJob(job, async ({ finish }) =>
+          finish({ output: { approved: true, approvedBy: "admin" } }),
+        ),
     }),
   ),
 );
-console.log("Result:", approvalResult.output);
+if (approvalResult.status === "completed") {
+  console.log("Result:", approvalResult.output);
+}
 
 // Cleanup
 await stopWorker();

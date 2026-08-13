@@ -22,7 +22,8 @@ describe("registry-level backoffConfig / attemptConfig cascade", () => {
       attemptConfig: { timeoutMs: 1111, heartbeatMs: 500 },
       processors: {
         foo: {
-          attemptHandler: async ({ complete }) => complete(async () => ({ ok: true as const })),
+          attemptHandler: async ({ complete }) =>
+            complete(async ({ finish }) => finish({ output: { ok: true as const } })),
         },
       },
     });
@@ -44,7 +45,8 @@ describe("registry-level backoffConfig / attemptConfig cascade", () => {
       attemptConfig: { timeoutMs: 1111, heartbeatMs: 500 },
       processors: {
         foo: {
-          attemptHandler: async ({ complete }) => complete(async () => ({ ok: true as const })),
+          attemptHandler: async ({ complete }) =>
+            complete(async ({ finish }) => finish({ output: { ok: true as const } })),
           backoffConfig: { initialDelayMs: 999, multiplier: 3, maxDelayMs: 9999 },
           attemptConfig: { timeoutMs: 9999, heartbeatMs: 1000 },
         },
@@ -66,7 +68,8 @@ describe("registry-level backoffConfig / attemptConfig cascade", () => {
       jobTypes,
       processors: {
         foo: {
-          attemptHandler: async ({ complete }) => complete(async () => ({ ok: true as const })),
+          attemptHandler: async ({ complete }) =>
+            complete(async ({ finish }) => finish({ output: { ok: true as const } })),
         },
       },
     });

@@ -81,10 +81,14 @@ const worker = await createInProcessWorker({
       "fetch-data": {
         attemptHandler: async ({ job, complete }) => {
           console.log(`[fetch-data] Fetching ${job.input.sourceId}`);
-          return complete(async () => ({
-            sourceId: job.input.sourceId,
-            data: `Data from ${job.input.sourceId}`,
-          }));
+          return complete(async ({ finish }) =>
+            finish({
+              output: {
+                sourceId: job.input.sourceId,
+                data: `Data from ${job.input.sourceId}`,
+              },
+            }),
+          );
         },
       },
 
@@ -92,10 +96,12 @@ const worker = await createInProcessWorker({
         attemptHandler: async ({ job, complete }) => {
           console.log(`[generate-report] Generating ${job.input.reportId}`);
           const summary = job.blockers.map((b) => b.output.data).join(", ");
-          return complete(async ({ continueWith }) =>
-            continueWith({
-              typeName: "send-report",
-              input: { reportId: job.input.reportId, summary },
+          return complete(async ({ finish }) =>
+            finish({
+              continueWith: {
+                typeName: "send-report",
+                input: { reportId: job.input.reportId, summary },
+              },
             }),
           );
         },
@@ -104,14 +110,18 @@ const worker = await createInProcessWorker({
       "send-report": {
         attemptHandler: async ({ job, complete }) => {
           console.log(`[send-report] Sending report ${job.input.reportId}`);
-          return complete(async () => ({ sentAt: new Date().toISOString() }));
+          return complete(async ({ finish }) =>
+            finish({ output: { sentAt: new Date().toISOString() } }),
+          );
         },
       },
 
       "standalone-task": {
         attemptHandler: async ({ job, complete }) => {
           console.log(`[standalone-task] Running ${job.input.taskId}`);
-          return complete(async () => ({ completedAt: new Date().toISOString() }));
+          return complete(async ({ finish }) =>
+            finish({ output: { completedAt: new Date().toISOString() } }),
+          );
         },
       },
     },

@@ -13,7 +13,7 @@ export type InProcessWorkerProcessor<
   TJobTypeName extends string,
   THandlerCtx,
   TPrepareCtx,
-  TExecuteCtx,
+  TStepCtx,
   TCompleteCtx,
 > = {
   /** Handler function called for each job attempt */
@@ -24,7 +24,7 @@ export type InProcessWorkerProcessor<
     JobTypeReachingEntry<TJobTypeDefinitions, TJobTypeName>,
     THandlerCtx,
     TPrepareCtx,
-    TExecuteCtx,
+    TStepCtx,
     TCompleteCtx
   >;
   /** Per-job-type backoff configuration (overrides registry/worker defaults) */

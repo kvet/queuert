@@ -11,7 +11,7 @@ describe("serializeError", () => {
     const err = new Error("boom");
     const result = serializeError(err);
     expect(result).toContain("boom");
-    expect(result).toContain("serialize-error.test");
+    expect(result).toContain("serialize-error.spec");
   });
 
   it("returns message when stack is unavailable", () => {
@@ -48,7 +48,7 @@ describe("serializeError", () => {
     const err = new DbError("db failed");
     const result = serializeError(err);
     expect(result).toContain("db failed");
-    expect(result).toContain("serialize-error.test");
+    expect(result).toContain("serialize-error.spec");
     expect(result).toContain('"code":"PG_CONN"');
     expect(result).toContain('"detail":"connection refused"');
   });
@@ -68,7 +68,7 @@ describe("serializeError", () => {
     err.ref = err;
     const result = serializeError(err);
     expect(result).toContain("circular props");
-    expect(result).toContain("serialize-error.test");
+    expect(result).toContain("serialize-error.spec");
     expect(result).not.toMatch(/\n\{/);
   });
 

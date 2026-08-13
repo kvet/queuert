@@ -20,10 +20,11 @@ PRODUCER: create chain.{type}          ← Chain published (ends immediately)
 │   │
 │   ├── PRODUCER: await chain.{type}    ← Blocker dependency
 │   │       links: [blocker chain]
-│   │   └── CONSUMER: resolve chain.{type}  ← Blocker resolved
+│   │   └── CONSUMER: complete chain.{type}  ← Blocker resolved
 │   │
 │   ├── CONSUMER: start job-attempt.{type}    ← Worker processes attempt (has duration)
 │   │   ├── INTERNAL: prepare
+│   │   ├── INTERNAL: step                    ← One per step() call (optional, repeatable)
 │   │   ├── EVENT: abort                      ← Signal aborted (if interrupted)
 │   │   └── INTERNAL: complete
 │   │
@@ -41,23 +42,24 @@ PRODUCER: create chain.{type}          ← Chain published (ends immediately)
 
 Span kinds use OpenTelemetry's PRODUCER/CONSUMER/INTERNAL semantics. The chain has both a PRODUCER (creation) and CONSUMER (completion) span for symmetry.
 
-| Span                         | Kind     | Created                           | Ended                   | Duration         |
-| ---------------------------- | -------- | --------------------------------- | ----------------------- | ---------------- |
-| **create chain.{type}**      | PRODUCER | `createChain()`                   | Immediately             | ~0ms             |
-| **create job.{type}**        | PRODUCER | `createChain()`, `continueWith()` | Immediately             | ~0ms             |
-| **await chain.{type}**       | PRODUCER | `createChain()` with blockers     | Immediately             | ~0ms             |
-| **resolve chain.{type}**     | CONSUMER | Blocker chain completes           | Immediately             | ~0ms             |
-| **start job-attempt.{type}** | CONSUMER | Worker claims job                 | Attempt completes/fails | Processing time  |
-| **prepare**                  | INTERNAL | `prepare()` called                | `prepare()` returns     | Transaction time |
-| **complete**                 | INTERNAL | `complete()` called               | `complete()` returns    | Transaction time |
-| **complete job.{type}**      | CONSUMER | Workerless completion             | Immediately             | ~0ms             |
-| **complete chain.{type}**    | CONSUMER | Final job completes               | Immediately             | ~0ms             |
+| Span                         | Kind     | Created                                          | Ended                   | Duration         |
+| ---------------------------- | -------- | ------------------------------------------------ | ----------------------- | ---------------- |
+| **create chain.{type}**      | PRODUCER | `createChain()`                                  | Immediately             | ~0ms             |
+| **create job.{type}**        | PRODUCER | `createChain()`, `finish({ continueWith: ... })` | Immediately             | ~0ms             |
+| **await chain.{type}**       | PRODUCER | `createChain()` with blockers                    | Immediately             | ~0ms             |
+| **complete chain.{type}**    | CONSUMER | Blocker chain completes                          | Immediately             | ~0ms             |
+| **start job-attempt.{type}** | CONSUMER | Worker claims job                                | Attempt completes/fails | Processing time  |
+| **prepare**                  | INTERNAL | `prepare()` called                               | `prepare()` returns     | Transaction time |
+| **step**                     | INTERNAL | `step()` called (repeatable)                     | `step()` returns        | Transaction time |
+| **complete**                 | INTERNAL | `complete()` called                              | `complete()` returns    | Transaction time |
+| **complete job.{type}**      | CONSUMER | Workerless completion                            | Immediately             | ~0ms             |
+| **complete chain.{type}**    | CONSUMER | Final job completes                              | Immediately             | ~0ms             |
 
 The attempt span may also carry an **`abort` event** — see [Span Events](#span-events).
 
 ## Blocker Relationships
 
-When a job has blockers (dependencies on other chains), each blocker gets a PRODUCER/CONSUMER span pair as a child of the blocked job's PRODUCER span. The PRODUCER (`await chain.{type}`) is created at `createChain` time with a link to the blocker chain. The CONSUMER (`resolve chain.{type}`) is created when the blocker chain completes, so the time between them represents the blocking duration.
+When a job has blockers (dependencies on other chains), each blocker gets a PRODUCER/CONSUMER span pair as a child of the blocked job's PRODUCER span. The PRODUCER (`await chain.{type}`) is created at `createChain` time with a link to the blocker chain. The CONSUMER (`complete chain.{type}`) is created when the blocker chain completes, so the time between them represents the blocking duration.
 
 The blocker PRODUCER span's trace context is persisted in the `job_blocker` table so the CONSUMER can be created later by a different process (the one completing the blocker chain).
 
@@ -69,10 +71,10 @@ EXTERNAL span (e.g., HTTP request)
 │   └── PRODUCER: create job.process-order
 │       │
 │       ├── PRODUCER: await chain.fetch-user ──link──→ chain fetch-user
-│       │   └── CONSUMER: resolve chain.fetch-user
+│       │   └── CONSUMER: complete chain.fetch-user
 │       │
 │       ├── PRODUCER: await chain.fetch-inventory ──link──→ chain fetch-inventory
-│       │   └── CONSUMER: resolve chain.fetch-inventory
+│       │   └── CONSUMER: complete chain.fetch-inventory
 │       │
 │       └── CONSUMER: start job-attempt.process-order
 │           │   job.blockers contains resolved blocker outputs
@@ -202,6 +204,14 @@ PRODUCER create chain.process-user [0ms] ─────────────
     links: [chain abc-123]  ← link to existing chain
 ```
 
+## Span Status
+
+The attempt span is set to `OK` when the attempt completes and to `ERROR` (with the exception recorded) when it fails.
+
+Phase spans (`prepare`, `step`, `complete`) follow the same rule independently: if the phase throws, its span records the exception, sets `ERROR`, and still ends. A phase that returns normally leaves its status `UNSET`.
+
+Deduplicated chain creation stays `UNSET` — see [Deduplication](#deduplication).
+
 ## Span Attributes
 
 ### Chain Attributes
@@ -225,6 +235,12 @@ PRODUCER create chain.process-user [0ms] ─────────────
 | Attribute           | Type   | Description                      |
 | ------------------- | ------ | -------------------------------- |
 | `queuert.worker.id` | string | Worker ID processing the attempt |
+
+### Phase Attributes
+
+| Attribute            | Type   | Description                                     |
+| -------------------- | ------ | ----------------------------------------------- |
+| `queuert.step.index` | number | Zero-based index of the step within the attempt |
 
 ### Attempt Result Attributes
 

@@ -70,13 +70,17 @@ const worker = await createInProcessWorker({
       generate_report: {
         attemptHandler: async ({ job, complete }) => {
           console.log(`Generating ${job.input.reportType} report...`);
-          await new Promise((resolve) => setTimeout(resolve, 500));
+          await new Promise((r) => setTimeout(r, 500));
           const rowCount = Math.floor(Math.random() * 1000) + 100;
           console.log(`Report generated with ${rowCount} rows`);
-          return complete(async () => ({
-            reportId: `RPT-${Date.now()}`,
-            rowCount,
-          }));
+          return complete(async ({ finish }) =>
+            finish({
+              output: {
+                reportId: `RPT-${Date.now()}`,
+                rowCount,
+              },
+            }),
+          );
         },
       },
     },

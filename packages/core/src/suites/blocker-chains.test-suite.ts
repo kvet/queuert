@@ -60,13 +60,15 @@ export const blockerChainsTestSuite = ({ it }: { it: TestAPI<TestSuiteContext> }
             attemptHandler: async ({ job, complete }) => {
               expect(job.chainId).toEqual(blockerChainId);
 
-              return complete(async ({ continueWith }) =>
+              return complete(async ({ finish }) =>
                 job.input.value < 1
-                  ? continueWith({
-                      typeName: "blocker",
-                      input: { value: job.input.value + 1 },
+                  ? finish({
+                      continueWith: {
+                        typeName: "blocker",
+                        input: { value: job.input.value + 1 },
+                      },
                     })
-                  : { done: true },
+                  : finish({ output: { done: true } }),
               );
             },
           },
@@ -82,9 +84,13 @@ export const blockerChainsTestSuite = ({ it }: { it: TestAPI<TestSuiteContext> }
                 done: true;
               }>();
 
-              return complete(async () => ({
-                finalResult: (blocker.output.done ? 1 : 0) + (input.start ? 1 : 0),
-              }));
+              return complete(async ({ finish }) =>
+                finish({
+                  output: {
+                    finalResult: (blocker.output.done ? 1 : 0) + (input.start ? 1 : 0),
+                  },
+                }),
+              );
             },
           },
         },
@@ -163,16 +169,22 @@ export const blockerChainsTestSuite = ({ it }: { it: TestAPI<TestSuiteContext> }
         processors: {
           blocker: {
             attemptHandler: async ({ job, complete }) => {
-              return complete(async () => ({ result: job.input.value }));
+              return complete(async ({ finish }) =>
+                finish({ output: { result: job.input.value } }),
+              );
             },
           },
           main: {
             attemptHandler: async ({ job, complete }) => {
               const [blocker] = job.blockers;
 
-              return complete(async () => ({
-                finalResult: blocker.output.result,
-              }));
+              return complete(async ({ finish }) =>
+                finish({
+                  output: {
+                    finalResult: blocker.output.result,
+                  },
+                }),
+              );
             },
           },
         },
@@ -195,8 +207,10 @@ export const blockerChainsTestSuite = ({ it }: { it: TestAPI<TestSuiteContext> }
           ...txCtx,
           transactionHooks,
           ...blockerChain,
-          complete: async ({ job, complete }) => {
-            return complete(job, async () => ({ result: job.input.value }));
+          handler: async ({ job, completeJob }) => {
+            return completeJob(job, async ({ finish }) =>
+              finish({ output: { result: job.input.value } }),
+            );
           },
         }),
       ),
@@ -340,28 +354,32 @@ export const blockerChainsTestSuite = ({ it }: { it: TestAPI<TestSuiteContext> }
         jobTypes,
         processors: {
           blocker: {
-            attemptHandler: async ({ complete }) => complete(async () => null),
+            attemptHandler: async ({ complete }) =>
+              complete(async ({ finish }) => finish({ output: null })),
           },
           starter: {
             backoffConfig: { initialDelayMs: 1, multiplier: 1, maxDelayMs: 1 },
             attemptHandler: async ({ job, complete }) => {
               if (job.attempt === 1) {
-                return complete(async ({ continueWith }) =>
-                  continueWith({
-                    typeName: "next",
-                    input: null,
-                    blockers: Array.from({ length: 101 }, () => blockerChain),
+                return complete(async ({ finish }) =>
+                  finish({
+                    continueWith: {
+                      typeName: "next",
+                      input: null,
+                      blockers: Array.from({ length: 101 }, () => blockerChain),
+                    },
                   }),
                 );
               }
 
               expect(job.lastAttemptError).toContain("BlockerLimitExceededError");
               expect(job.lastAttemptError).toContain("exceeding the limit of 100");
-              return complete(async () => null);
+              return complete(async ({ finish }) => finish({ output: null }));
             },
           },
           next: {
-            attemptHandler: async ({ complete }) => complete(async () => null),
+            attemptHandler: async ({ complete }) =>
+              complete(async ({ finish }) => finish({ output: null })),
           },
         },
       }),
@@ -422,11 +440,8 @@ export const blockerChainsTestSuite = ({ it }: { it: TestAPI<TestSuiteContext> }
         jobTypes,
         processors: {
           inner: {
-            attemptHandler: async ({ complete }) => {
-              return complete(async () => {
-                return null;
-              });
-            },
+            attemptHandler: async ({ complete }) =>
+              complete(async ({ finish }) => finish({ output: null })),
           },
           outer: {
             attemptHandler: async ({ prepare, complete }) => {
@@ -456,7 +471,7 @@ export const blockerChainsTestSuite = ({ it }: { it: TestAPI<TestSuiteContext> }
                 ),
               );
 
-              return complete(async (txCtx) => {
+              return complete(async ({ finish, ...txCtx }) => {
                 childChains.push(
                   await withTransactionHooks(async (transactionHooks) =>
                     client.createChain({
@@ -468,7 +483,7 @@ export const blockerChainsTestSuite = ({ it }: { it: TestAPI<TestSuiteContext> }
                   ),
                 );
 
-                return null;
+                return finish({ output: null });
               });
             },
           },
@@ -537,10 +552,12 @@ export const blockerChainsTestSuite = ({ it }: { it: TestAPI<TestSuiteContext> }
           test: {
             attemptHandler: async ({ job, prepare, complete }) => {
               await prepare({ mode: "atomic" });
-              return complete(async ({ continueWith }) =>
-                continueWith({
-                  typeName: "finish",
-                  input: { valueNext: job.input.value + 1 },
+              return complete(async ({ finish }) =>
+                finish({
+                  continueWith: {
+                    typeName: "finish",
+                    input: { valueNext: job.input.value + 1 },
+                  },
                 }),
               );
             },
@@ -559,9 +576,9 @@ export const blockerChainsTestSuite = ({ it }: { it: TestAPI<TestSuiteContext> }
           finish: {
             attemptHandler: async ({ job, prepare, complete }) => {
               await prepare({ mode: "atomic" });
-              return complete(async () => ({
-                result: job.input.valueNext + 1,
-              }));
+              return complete(async ({ finish }) =>
+                finish({ output: { result: job.input.valueNext + 1 } }),
+              );
             },
           },
         },
@@ -625,14 +642,20 @@ export const blockerChainsTestSuite = ({ it }: { it: TestAPI<TestSuiteContext> }
         processors: {
           blocker: {
             attemptHandler: async ({ job, complete }) => {
-              return complete(async () => ({ result: job.input.value }));
+              return complete(async ({ finish }) =>
+                finish({ output: { result: job.input.value } }),
+              );
             },
           },
           main: {
             attemptHandler: async ({ job, complete }) => {
-              return complete(async () => ({
-                finalResult: job.blockers.map((blocker) => blocker.output.result),
-              }));
+              return complete(async ({ finish }) =>
+                finish({
+                  output: {
+                    finalResult: job.blockers.map((blocker) => blocker.output.result),
+                  },
+                }),
+              );
             },
           },
         },
@@ -712,24 +735,27 @@ export const blockerChainsTestSuite = ({ it }: { it: TestAPI<TestSuiteContext> }
           blocker: {
             attemptHandler: async ({ job, prepare, complete }) => {
               await prepare({ mode: "atomic" });
-              return complete(async () => ({ result: job.input.value * 10 }));
+              return complete(async ({ finish }) =>
+                finish({ output: { result: job.input.value * 10 } }),
+              );
             },
           },
           first: {
             attemptHandler: async ({ job, prepare, complete }) => {
               await prepare({ mode: "atomic" });
-              return complete(async ({ continueWith, ...txCtx }) => {
+              return complete(async ({ finish, ...txCtx }) => {
                 const blockerChain = await client.createChain({
                   ...txCtx,
                   typeName: "blocker",
                   input: { value: 5 },
                 });
-                const continuedJob = await continueWith({
-                  typeName: "second",
-                  input: { fromFirst: job.input.id },
-                  blockers: [blockerChain],
+                return finish({
+                  continueWith: {
+                    typeName: "second",
+                    input: { fromFirst: job.input.id },
+                    blockers: [blockerChain],
+                  },
                 });
-                return continuedJob;
               });
             },
           },
@@ -742,7 +768,9 @@ export const blockerChainsTestSuite = ({ it }: { it: TestAPI<TestSuiteContext> }
               complete,
             }) => {
               await prepare({ mode: "atomic" });
-              return complete(async () => ({ finalResult: blocker.output.result }));
+              return complete(async ({ finish }) =>
+                finish({ output: { finalResult: blocker.output.result } }),
+              );
             },
           },
         },
@@ -806,14 +834,20 @@ export const blockerChainsTestSuite = ({ it }: { it: TestAPI<TestSuiteContext> }
         processors: {
           blocker: {
             attemptHandler: async ({ job, complete }) => {
-              return complete(async () => ({ result: job.input.value }));
+              return complete(async ({ finish }) =>
+                finish({ output: { result: job.input.value } }),
+              );
             },
           },
           main: {
             attemptHandler: async ({ job, complete }) => {
-              return complete(async () => ({
-                finalResult: job.blockers.map((blocker) => blocker.output.result),
-              }));
+              return complete(async ({ finish }) =>
+                finish({
+                  output: {
+                    finalResult: job.blockers.map((blocker) => blocker.output.result),
+                  },
+                }),
+              );
             },
           },
         },
@@ -906,14 +940,20 @@ export const blockerChainsTestSuite = ({ it }: { it: TestAPI<TestSuiteContext> }
         processors: {
           blocker: {
             attemptHandler: async ({ job, complete }) => {
-              return complete(async () => ({ result: job.input.value }));
+              return complete(async ({ finish }) =>
+                finish({ output: { result: job.input.value } }),
+              );
             },
           },
           main: {
             attemptHandler: async ({ job, complete }) => {
-              return complete(async () => ({
-                finalResult: job.blockers[0].output.result,
-              }));
+              return complete(async ({ finish }) =>
+                finish({
+                  output: {
+                    finalResult: job.blockers[0].output.result,
+                  },
+                }),
+              );
             },
           },
         },
@@ -1012,17 +1052,19 @@ export const blockerChainsTestSuite = ({ it }: { it: TestAPI<TestSuiteContext> }
         processors: {
           blocker: {
             attemptHandler: async ({ complete }) => {
-              return complete(async () => {
+              return complete(async ({ finish }) => {
                 readyBlockers++;
                 if (readyBlockers === blockerCount) allBlockersReady.resolve();
                 await releaseBlockers.promise;
-                return null;
+                return finish({ output: null });
               });
             },
           },
           main: {
             attemptHandler: async ({ job, complete }) => {
-              return complete(async () => ({ result: job.input.index }));
+              return complete(async ({ finish }) =>
+                finish({ output: { result: job.input.index } }),
+              );
             },
           },
         },
@@ -1116,10 +1158,12 @@ export const blockerChainsTestSuite = ({ it }: { it: TestAPI<TestSuiteContext> }
         jobTypes,
         processors: {
           blocker: {
-            attemptHandler: async ({ complete }) => complete(async () => null),
+            attemptHandler: async ({ complete }) =>
+              complete(async ({ finish }) => finish({ output: null })),
           },
           main: {
-            attemptHandler: async ({ complete }) => complete(async () => ({ done: true as const })),
+            attemptHandler: async ({ complete }) =>
+              complete(async ({ finish }) => finish({ output: { done: true as const } })),
           },
         },
       }),
@@ -1226,10 +1270,13 @@ export const blockerChainsTestSuite = ({ it }: { it: TestAPI<TestSuiteContext> }
             attemptHandler: async ({ complete }) => {
               blockerHeld.resolve();
               await releaseBlocker.promise;
-              return complete(async () => null);
+              return complete(async ({ finish }) => finish({ output: null }));
             },
           },
-          main: { attemptHandler: async ({ complete }) => complete(async () => null) },
+          main: {
+            attemptHandler: async ({ complete }) =>
+              complete(async ({ finish }) => finish({ output: null })),
+          },
         },
       }),
     });

@@ -43,7 +43,9 @@ export const schedulingTestSuite = ({ it }: { it: TestAPI<TestSuiteContext> }): 
         processors: {
           test: {
             attemptHandler: async ({ job, complete }) => {
-              return complete(async () => ({ result: job.input.value * 2 }));
+              return complete(async ({ finish }) =>
+                finish({ output: { result: job.input.value * 2 } }),
+              );
             },
           },
         },
@@ -108,7 +110,9 @@ export const schedulingTestSuite = ({ it }: { it: TestAPI<TestSuiteContext> }): 
         processors: {
           test: {
             attemptHandler: async ({ job, complete }) => {
-              return complete(async () => ({ result: job.input.value * 2 }));
+              return complete(async ({ finish }) =>
+                finish({ output: { result: job.input.value * 2 } }),
+              );
             },
           },
         },
@@ -181,11 +185,13 @@ export const schedulingTestSuite = ({ it }: { it: TestAPI<TestSuiteContext> }): 
           first: {
             attemptHandler: async ({ complete }) => {
               try {
-                return await complete(async ({ continueWith }) =>
-                  continueWith({
-                    typeName: "second",
-                    input: { continued: true },
-                    schedule: { afterMs: 300 },
+                return await complete(async ({ finish }) =>
+                  finish({
+                    continueWith: {
+                      typeName: "second",
+                      input: { continued: true },
+                      schedule: { afterMs: 300 },
+                    },
                   }),
                 );
               } finally {
@@ -195,7 +201,7 @@ export const schedulingTestSuite = ({ it }: { it: TestAPI<TestSuiteContext> }): 
           },
           second: {
             attemptHandler: async ({ complete }) => {
-              return complete(async () => ({ result: "done" }));
+              return complete(async ({ finish }) => finish({ output: { result: "done" } }));
             },
           },
         },
@@ -269,11 +275,13 @@ export const schedulingTestSuite = ({ it }: { it: TestAPI<TestSuiteContext> }): 
           first: {
             attemptHandler: async ({ complete }) => {
               try {
-                return await complete(async ({ continueWith }) =>
-                  continueWith({
-                    typeName: "second",
-                    input: { continued: true },
-                    schedule: { at: new Date(Date.now() + 300) },
+                return await complete(async ({ finish }) =>
+                  finish({
+                    continueWith: {
+                      typeName: "second",
+                      input: { continued: true },
+                      schedule: { at: new Date(Date.now() + 300) },
+                    },
                   }),
                 );
               } finally {
@@ -283,7 +291,7 @@ export const schedulingTestSuite = ({ it }: { it: TestAPI<TestSuiteContext> }): 
           },
           second: {
             attemptHandler: async ({ complete }) => {
-              return complete(async () => ({ result: "done" }));
+              return complete(async ({ finish }) => finish({ output: { result: "done" } }));
             },
           },
         },
@@ -358,7 +366,9 @@ export const schedulingTestSuite = ({ it }: { it: TestAPI<TestSuiteContext> }): 
                 firstAttemptDone.resolve();
                 rescheduleJob({ afterMs: 300 }, "Rescheduling for later");
               }
-              return complete(async () => ({ result: job.input.value * 2 }));
+              return complete(async ({ finish }) =>
+                finish({ output: { result: job.input.value * 2 } }),
+              );
             },
           },
         },
@@ -392,7 +402,7 @@ export const schedulingTestSuite = ({ it }: { it: TestAPI<TestSuiteContext> }): 
     });
   });
 
-  it("recurring job self-schedules using deduplication with excludeChainIds", async ({
+  it("recurring job self-schedules after complete without matching its own chain", async ({
     stateAdapter,
     notifyAdapter,
     withTransaction,
@@ -429,25 +439,23 @@ export const schedulingTestSuite = ({ it }: { it: TestAPI<TestSuiteContext> }): 
         jobTypes,
         processors: {
           recurring: {
-            attemptHandler: async ({ job, complete }) => {
-              return complete(async ({ transactionHooks, ...txCtx }) => {
+            attemptHandler: async ({ complete }) => {
+              return complete(async ({ finish, transactionHooks, ...txCtx }) => {
                 completionCount++;
+                const completedJob = await finish({ output: null });
                 if (completionCount < 3) {
-                  await client.createChain({
+                  const next = await client.createChain({
                     ...txCtx,
                     transactionHooks,
                     typeName: "recurring",
                     input: null,
-                    deduplication: {
-                      key: "recurring",
-                      scope: "running",
-                      excludeChainIds: [job.chainId],
-                    },
+                    deduplication: { key: "recurring", scope: "running" },
                   });
+                  expect(next.deduplicated).toBe(false);
                 } else {
                   allDone.resolve();
                 }
-                return null;
+                return completedJob;
               });
             },
           },
@@ -522,7 +530,9 @@ export const schedulingTestSuite = ({ it }: { it: TestAPI<TestSuiteContext> }): 
                 firstAttemptDone.resolve();
                 rescheduleJob({ at: new Date(Date.now() + 300) }, "Rescheduling for later");
               }
-              return complete(async () => ({ result: job.input.value * 2 }));
+              return complete(async ({ finish }) =>
+                finish({ output: { result: job.input.value * 2 } }),
+              );
             },
           },
         },
@@ -583,7 +593,10 @@ export const schedulingTestSuite = ({ it }: { it: TestAPI<TestSuiteContext> }): 
         client,
         jobTypes,
         processors: {
-          test: { attemptHandler: async ({ complete }) => complete(async () => null) },
+          test: {
+            attemptHandler: async ({ complete }) =>
+              complete(async ({ finish }) => finish({ output: null })),
+          },
         },
       }),
     });
@@ -644,11 +657,16 @@ export const schedulingTestSuite = ({ it }: { it: TestAPI<TestSuiteContext> }): 
         processors: {
           first: {
             attemptHandler: async ({ complete }) =>
-              complete(async ({ continueWith }) =>
-                continueWith({ typeName: "second", input: null, schedule: { at: past } }),
+              complete(async ({ finish }) =>
+                finish({
+                  continueWith: { typeName: "second", input: null, schedule: { at: past } },
+                }),
               ),
           },
-          second: { attemptHandler: async ({ complete }) => complete(async () => null) },
+          second: {
+            attemptHandler: async ({ complete }) =>
+              complete(async ({ finish }) => finish({ output: null })),
+          },
         },
       }),
     });
@@ -718,7 +736,7 @@ export const schedulingTestSuite = ({ it }: { it: TestAPI<TestSuiteContext> }): 
                 firstAttemptDone.resolve();
                 rescheduleJob({ at: past }, "retry");
               }
-              return complete(async () => null);
+              return complete(async ({ finish }) => finish({ output: null }));
             },
           },
         },

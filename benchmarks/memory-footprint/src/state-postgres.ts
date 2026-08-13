@@ -75,7 +75,8 @@ await runDoubleRunBenchmark<Infra>({
           jobTypes,
           processors: {
             "test-job": {
-              attemptHandler: async ({ complete }) => complete(async () => ({ processed: true })),
+              attemptHandler: async ({ complete }) =>
+                complete(async ({ finish }) => finish({ output: { processed: true } })),
             },
           },
         }),

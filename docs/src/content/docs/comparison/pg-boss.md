@@ -106,9 +106,9 @@ Queuert's complete callback runs inside the state adapter's transaction. Your ha
 ```ts
 "send-welcome-email": {
   attemptHandler: async ({ job, complete }) =>
-    complete(async ({ sql, continueWith }) => {
+    complete(async ({ finish, sql }) => {
       await sql`insert into email_log (user_id) values (${job.input.userId})`;
-      return continueWith({ typeName: "log-sent", input: { ... } });
+      return finish({ continueWith: { typeName: "log-sent", input: { ... } } });
     }),
 },
 ```

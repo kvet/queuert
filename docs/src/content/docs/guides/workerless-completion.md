@@ -39,12 +39,13 @@ const worker = await createInProcessWorker({
     jobTypes,
     processors: {
       "await-approval": {
-        attemptHandler: async ({ complete }) => complete(() => ({ rejected: true })),
+        attemptHandler: async ({ complete }) =>
+          complete(async ({ finish }) => finish({ output: { rejected: true } })),
       },
       "process-request": {
         attemptHandler: async ({ job, complete }) => {
           await doSomethingWith(job.input.requestId);
-          return complete(() => ({ processed: true }));
+          return complete(async ({ finish }) => finish({ output: { processed: true } }));
         },
       },
     },
@@ -58,20 +59,22 @@ await withTransactionHooks(async (transactionHooks) =>
   client.completeChain({
     transactionHooks,
     ...chain,
-    complete: async ({ job, complete }) => {
+    handler: async ({ job, completeJob }) => {
       if (job.typeName !== "await-approval") {
         return; // Already past approval stage
       }
       // If approved, continue to process-request; otherwise just reject
       if (userApproved) {
-        await complete(job, ({ continueWith }) =>
-          continueWith({
-            typeName: "process-request",
-            input: { requestId: job.input.requestId },
+        await completeJob(job, async ({ finish }) =>
+          finish({
+            continueWith: {
+              typeName: "process-request",
+              input: { requestId: job.input.requestId },
+            },
           }),
         );
       } else {
-        await complete(job, () => ({ rejected: true }));
+        await completeJob(job, async ({ finish }) => finish({ output: { rejected: true } }));
       }
     },
   }),
@@ -84,8 +87,10 @@ See [examples/showcase-workerless](https://github.com/kvet/queuert/tree/main/exa
 
 ## How It Works
 
-The `completeChain` method receives the current job and a `complete` function. Inside `complete`, the caller can return an output to finish the chain or call `continueWith` to add the next job -- the same interface as the worker's prepare/complete pattern.
+The `completeChain` method calls your `handler` with the current job and a `completeJob` function. Pass the job to `completeJob`, then call `finish` with the outcome you want: `{ output: ... }` finishes the chain, `{ continueWith: {...} }` adds the next job. These are the same outcome shapes a worker uses.
 
-Internally, `complete` uses `FOR UPDATE` to lock the current job, preventing concurrent completion by a worker or another caller. The completed job has `completedBy: null` (no worker identity), distinguishing it from worker-completed jobs.
+Your handler can also decline: just return without calling `completeJob`. The chain stays untouched. Use this when the chain has already moved past the stage you meant to complete.
+
+Internally, `completeChain` locks the current job at the state adapter level, preventing concurrent completion by a worker or another caller. The completed job has `completedBy: null` (no worker identity), distinguishing it from worker-completed jobs.
 
 If a worker is already processing the job when `completeChain` runs, the worker detects the external completion via `JobAlreadyCompletedError`. The worker's abort signal fires with reason `"already_completed"`, and the worker abandons its attempt gracefully.

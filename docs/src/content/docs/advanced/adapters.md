@@ -186,20 +186,20 @@ Observability events emitted inside database transactions are buffered and only 
 
 **Buffered** -- events that represent write claims inside transactions:
 
-- **Creation**: `chainCreated`, `jobCreated`, `jobBlocked`, and PRODUCER span ends from `createStateChains` and `continueStateJob`
-- **Completion**: `jobCompleted`, `jobDuration`, `completeJobSpan` (workerless), `chainCompleted`, `chainDuration`, `completeBlockerSpan`, `jobUnblocked` from `finishJob`
-- **Worker complete**: `jobAttemptCompleted` and continuation PRODUCER span ends from the complete transaction in `job-process`
-- **Error handling**: `jobAttemptFailed` from the error-handling transaction in `job-process`
+- **Creation**: `chainCreated`, `jobCreated`, `jobBlocked`, and PRODUCER span ends from chain creation and continuation
+- **Completion**: `jobCompleted`, `jobDuration`, `completeJobSpan` (workerless), `chainCompleted`, `chainDuration`, `completeBlockerSpan`, `jobUnblocked`
+- **Worker complete**: `jobAttemptCompleted` and continuation PRODUCER span ends from the complete transaction
+- **Error handling**: `jobAttemptFailed` from the error-handling transaction
 
 **Not buffered** -- events that either need immediate context or occur outside transactions:
 
 - **Span starts**: Need trace context immediately for DB writes that store trace IDs
 - **Events outside transactions**: `jobAttemptStarted`, `jobAttemptDuration`, `jobAttemptExtended`, attempt span ends (these occur outside the guarded transaction)
-- **Read-only observations**: `refetchJobLocked` events observe state without making write claims
+- **Read-only observations**: events that observe state without making write claims
 
 ### Self-Cleaning
 
-`createStateChains`, `continueStateJob`, and `finishJob` use `TransactionHooks` savepoints (via `withSavepoint`) to automatically roll back buffered observability events on throw, ensuring partial events from a failed operation don't accumulate in the buffer. The `checkpoint` callback on each hook definition captures the buffer position, and the savepoint restores it on rollback.
+Each transactional phase runs inside a savepoint, so buffered observability events roll back with the writes when the phase throws -- partial events from a failed operation never accumulate in the buffer. The `checkpoint` callback on each hook definition captures the buffer position, and the savepoint restores it on rollback.
 
 ## See Also
 

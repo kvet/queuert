@@ -110,11 +110,15 @@ const worker = await createInProcessWorker({
 
           if (job.input.amount > 1000) {
             console.log(`  Payment FAILED: Amount exceeds limit`);
-            return complete(async () => ({ success: false, error: "Amount exceeds limit" }));
+            return complete(async ({ finish }) =>
+              finish({ output: { success: false, error: "Amount exceeds limit" } }),
+            );
           }
 
           console.log(`  Payment SUCCESS`);
-          return complete(async () => ({ success: true, transactionId: `txn_${Date.now()}` }));
+          return complete(async ({ finish }) =>
+            finish({ output: { success: true, transactionId: `txn_${Date.now()}` } }),
+          );
         },
       },
 
@@ -124,10 +128,12 @@ const worker = await createInProcessWorker({
           const chargeId = `ch_${Date.now()}`;
           console.log(`  Charge successful: ${chargeId}`);
 
-          return complete(async ({ continueWith }) =>
-            continueWith({
-              typeName: "ship-order",
-              input: { orderId: job.input.orderId, chargeId },
+          return complete(async ({ finish }) =>
+            finish({
+              continueWith: {
+                typeName: "ship-order",
+                input: { orderId: job.input.orderId, chargeId },
+              },
             }),
           );
         },
@@ -139,16 +145,18 @@ const worker = await createInProcessWorker({
 
           if (shipmentShouldFail) {
             console.log(`  Shipping FAILED - continuing to refund`);
-            return complete(async ({ continueWith }) =>
-              continueWith({
-                typeName: "refund-charge",
-                input: { chargeId: job.input.chargeId, reason: "shipping_failed" },
+            return complete(async ({ finish }) =>
+              finish({
+                continueWith: {
+                  typeName: "refund-charge",
+                  input: { chargeId: job.input.chargeId, reason: "shipping_failed" },
+                },
               }),
             );
           }
 
           console.log(`  Shipping SUCCESS`);
-          return complete(async () => ({ shipped: true }));
+          return complete(async ({ finish }) => finish({ output: { shipped: true } }));
         },
       },
 
@@ -157,7 +165,7 @@ const worker = await createInProcessWorker({
           console.log(`[refund-charge] Refunding ${job.input.chargeId} (${job.input.reason})`);
           const refundId = `rf_${Date.now()}`;
           console.log(`  Refund successful: ${refundId}`);
-          return complete(async () => ({ refunded: true, refundId }));
+          return complete(async ({ finish }) => finish({ output: { refunded: true, refundId } }));
         },
       },
 
@@ -171,7 +179,9 @@ const worker = await createInProcessWorker({
           }
 
           console.log(`  API call SUCCESS`);
-          return complete(async () => ({ data: `Response from ${job.input.endpoint}` }));
+          return complete(async ({ finish }) =>
+            finish({ output: { data: `Response from ${job.input.endpoint}` } }),
+          );
         },
       },
     },
