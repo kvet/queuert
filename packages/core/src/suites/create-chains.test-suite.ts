@@ -1056,5 +1056,54 @@ export const createChainsTestSuite = ({ it }: { it: TestAPI<TestSuiteContext> })
       expect(chains[0].id).toBe(idA);
       expect(chains[1].id).toBe(idB);
     });
+
+    it("duplicate caller-supplied id errors", async ({
+      stateAdapter,
+      generateId,
+      notifyAdapter,
+      withTransaction,
+      observabilityAdapter,
+      log,
+      expect,
+    }) => {
+      const jobTypes = defineJobTypes<{
+        test: { entry: true; input: null; output: null };
+      }>();
+
+      const client = await createClient({
+        stateAdapter,
+        notifyAdapter,
+        observabilityAdapter,
+        log,
+        jobTypes,
+      });
+
+      const sharedId = generateId();
+      await withTransactionHooks(async (transactionHooks) =>
+        withTransaction(async (txCtx) =>
+          client.createChain({
+            ...txCtx,
+            transactionHooks,
+            typeName: "test",
+            id: sharedId,
+            input: null,
+          }),
+        ),
+      );
+
+      await expect(
+        withTransactionHooks(async (transactionHooks) =>
+          withTransaction(async (txCtx) =>
+            client.createChain({
+              ...txCtx,
+              transactionHooks,
+              typeName: "test",
+              id: sharedId,
+              input: null,
+            }),
+          ),
+        ),
+      ).rejects.toThrow();
+    });
   });
 };

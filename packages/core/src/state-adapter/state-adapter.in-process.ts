@@ -701,6 +701,11 @@ export const createInProcessStateAdapter = async ({
           }
 
           const id = providedId ?? generateId();
+
+          if (idx.jobs.has(id)) {
+            throw new Error(`Job id "${id}" already exists`);
+          }
+
           const job = buildDbJob({
             id,
             typeName,
@@ -742,6 +747,11 @@ export const createInProcessStateAdapter = async ({
         if (existing) return { job: existing, deduplicated: true };
 
         const id = providedId ?? generateId();
+
+        if (idx.jobs.has(id)) {
+          throw new Error(`Job id "${id}" already exists`);
+        }
+
         const job = buildDbJob({
           id,
           typeName,

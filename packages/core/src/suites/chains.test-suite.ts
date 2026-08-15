@@ -943,5 +943,79 @@ export const chainsTestSuite = ({ it }: { it: TestAPI<TestSuiteContext> }): void
     expect((continueWithError as InvalidJobIdError).id).toBe("bad-id");
   });
 
+  it("continueWith duplicate caller-supplied id errors", async ({
+    stateAdapter,
+    generateId,
+    notifyAdapter,
+    withTransaction,
+    withWorkers,
+    observabilityAdapter,
+    log,
+    expect,
+  }) => {
+    const jobTypes = defineJobTypes<{
+      step1: { entry: true; input: null; continueWith: { typeName: "step2" } };
+      step2: { input: null; output: null };
+    }>();
+
+    const client = await createClient({
+      stateAdapter,
+      notifyAdapter,
+      observabilityAdapter,
+      log,
+      jobTypes,
+    });
+
+    const sharedId = generateId();
+    let collisionOccurred = false;
+
+    const worker = await createInProcessWorker({
+      client,
+      concurrency: 1,
+      processors: createProcessors({
+        client,
+        jobTypes,
+        processors: {
+          step1: {
+            backoffConfig: { initialDelayMs: 1, multiplier: 1, maxDelayMs: 1 },
+            attemptHandler: async ({ job, complete }) =>
+              complete(async ({ finish }) => {
+                if (job.attempt > 1) {
+                  collisionOccurred = true;
+                  return finish({ continueWith: { typeName: "step2", input: null } });
+                }
+                return finish({
+                  continueWith: { typeName: "step2", id: sharedId, input: null },
+                });
+              }),
+          },
+          step2: {
+            attemptHandler: async ({ complete }) =>
+              complete(async ({ finish }) => finish({ output: null })),
+          },
+        },
+      }),
+    });
+
+    const chain1 = await withTransactionHooks(async (transactionHooks) =>
+      withTransaction(async (txCtx) =>
+        client.createChain({ ...txCtx, transactionHooks, typeName: "step1", input: null }),
+      ),
+    );
+
+    const chain2 = await withTransactionHooks(async (transactionHooks) =>
+      withTransaction(async (txCtx) =>
+        client.createChain({ ...txCtx, transactionHooks, typeName: "step1", input: null }),
+      ),
+    );
+
+    await withWorkers([await worker.start()], async () => {
+      await client.awaitChain(chain1, completionOptions);
+      await client.awaitChain(chain2, completionOptions);
+    });
+
+    expect(collisionOccurred).toBe(true);
+  });
+
   // TODO: add a test where a chain is distributed across multiple workers
 };

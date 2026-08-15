@@ -702,5 +702,106 @@ export const createChainsGroup: ConformanceGroup<StateConformanceFixture> = {
         expect(second.id).not.toBe(userId);
       },
     },
+    {
+      name: "caller-supplied id collision on createChains errors",
+      run: async ({ stateAdapter, generateId }, expect) => {
+        const userId = (generateId ?? (() => crypto.randomUUID()))();
+        await stateAdapter.withTransaction(async (txCtx) =>
+          stateAdapter.createChains({
+            txCtx,
+            jobs: [
+              {
+                typeName: "collision-test",
+                id: userId,
+                chainTypeName: "collision-test",
+                input: null,
+              },
+            ],
+          }),
+        );
+
+        await expect(
+          stateAdapter.withTransaction(async (txCtx) =>
+            stateAdapter.createChains({
+              txCtx,
+              jobs: [
+                {
+                  typeName: "collision-test-2",
+                  id: userId,
+                  chainTypeName: "collision-test-2",
+                  input: null,
+                },
+              ],
+            }),
+          ),
+        ).rejects.toThrow();
+      },
+    },
+    {
+      name: "caller-supplied id collision does not affect the existing chain",
+      run: async ({ stateAdapter, generateId }, expect) => {
+        const userId = (generateId ?? (() => crypto.randomUUID()))();
+        const [{ job: original }] = await stateAdapter.withTransaction(async (txCtx) =>
+          stateAdapter.createChains({
+            txCtx,
+            jobs: [
+              {
+                typeName: "original",
+                id: userId,
+                chainTypeName: "original",
+                input: { preserved: true },
+              },
+            ],
+          }),
+        );
+
+        await expect(
+          stateAdapter.withTransaction(async (txCtx) =>
+            stateAdapter.createChains({
+              txCtx,
+              jobs: [
+                {
+                  typeName: "intruder",
+                  id: userId,
+                  chainTypeName: "intruder",
+                  input: { preserved: false },
+                },
+              ],
+            }),
+          ),
+        ).rejects.toThrow();
+
+        const [afterCollision] = await stateAdapter.getJobs({ jobIds: [userId] });
+        expect(afterCollision!.typeName).toBe("original");
+        expect(afterCollision!.input).toEqual({ preserved: true });
+      },
+    },
+    {
+      name: "intra-batch duplicate caller-supplied id errors",
+      run: async ({ stateAdapter, generateId }, expect) => {
+        const userId = (generateId ?? (() => crypto.randomUUID()))();
+        await expect(
+          stateAdapter.withTransaction(async (txCtx) =>
+            stateAdapter.createChains({
+              txCtx,
+              jobs: [
+                {
+                  typeName: "batch-dup-1",
+                  id: userId,
+                  chainTypeName: "batch-dup-1",
+                  input: null,
+                },
+                {
+                  typeName: "batch-dup-2",
+                  id: userId,
+                  chainTypeName: "batch-dup-2",
+                  input: null,
+                },
+              ],
+            }),
+          ),
+        ).rejects.toThrow();
+      },
+    },
   ],
 };

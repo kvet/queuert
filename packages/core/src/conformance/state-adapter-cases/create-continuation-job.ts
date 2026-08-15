@@ -306,5 +306,50 @@ export const createContinuationJobGroup: ConformanceGroup<StateConformanceFixtur
         expect(next.job.chainId).toBe(headJob.chainId);
       },
     },
+    {
+      name: "caller-supplied id collision on createContinuationJob errors",
+      run: async ({ stateAdapter, generateId }, expect) => {
+        const sharedId = (generateId ?? (() => crypto.randomUUID()))();
+
+        const [{ job: head1 }] = await stateAdapter.withTransaction(async (txCtx) =>
+          stateAdapter.createChains({
+            txCtx,
+            jobs: [{ typeName: "root1", chainTypeName: "root1", input: null }],
+          }),
+        );
+        const [{ job: head2 }] = await stateAdapter.withTransaction(async (txCtx) =>
+          stateAdapter.createChains({
+            txCtx,
+            jobs: [{ typeName: "root2", chainTypeName: "root2", input: null }],
+          }),
+        );
+
+        await stateAdapter.withTransaction(async (txCtx) =>
+          stateAdapter.createContinuationJob({
+            txCtx,
+            job: {
+              typeName: "child",
+              id: sharedId,
+              continueFromId: head1.id,
+              input: null,
+            },
+          }),
+        );
+
+        await expect(
+          stateAdapter.withTransaction(async (txCtx) =>
+            stateAdapter.createContinuationJob({
+              txCtx,
+              job: {
+                typeName: "child",
+                id: sharedId,
+                continueFromId: head2.id,
+                input: null,
+              },
+            }),
+          ),
+        ).rejects.toThrow();
+      },
+    },
   ],
 };

@@ -518,7 +518,12 @@ export const createSqliteStateAdapter = async <
   tablePrefix?: string;
   /** SQL type for the primary key column. @defaultValue `"TEXT"` */
   idType?: string;
-  /** Function to generate new job IDs. @defaultValue `() => crypto.randomUUID()` */
+  /**
+   * Function to generate new job IDs. Must return unique values — collisions
+   * are a hard error (the unique constraint rejects duplicates).
+   *
+   * @defaultValue `() => crypto.randomUUID()`
+   */
   generateId?: () => TIdType;
   /**
    * Predicate returning `true` if the ID is acceptable. Runs on both generated
@@ -1036,7 +1041,6 @@ SELECT
   d.trace_context
 FROM input_data d
 ORDER BY d.ord
-ON CONFLICT (chain_id, chain_index) DO UPDATE SET id = {{table_prefix}}job.id
 RETURNING *
 `,
                 {
@@ -1054,7 +1058,7 @@ RETURNING *
           const row = insertedRows[j];
           results[toInsert[j].index] = {
             job: mapDbJobToStateJob(row),
-            deduplicated: row.id !== toInsert[j].id,
+            deduplicated: false,
           };
         }
       }

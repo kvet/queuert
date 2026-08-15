@@ -651,8 +651,8 @@ export const createPgStateAdapter = async <
   /** SQL type for the primary key column. @defaultValue `"uuid"` */
   idType?: string;
   /**
-   * Function to generate new job IDs. IDs are generated in JS and bound as a
-   * query parameter; the column has no SQL `DEFAULT`.
+   * Function to generate new job IDs. Must return unique values — collisions
+   * are a hard error (the unique constraint rejects duplicates).
    *
    * @defaultValue `() => crypto.randomUUID()`
    */
@@ -1002,7 +1002,6 @@ inserted_jobs AS (
     GREATEST(COALESCE(ti.scheduled_at, now() + (ti.schedule_after_ms || ' milliseconds')::interval, now()), now()),
     ti.chain_trace_context, ti.trace_context
   FROM to_insert ti
-  ON CONFLICT (chain_id, chain_index) DO UPDATE SET id = {{schema}}.{{table_prefix}}job.id
   RETURNING *
 )
 SELECT ed.ord, ed.id, ed.type_name, ed.chain_id, ed.chain_type_name, ed.chain_index, ed.continued_to_id, ed.input, ed.output, ed.blocked, ed.created_at, ed.scheduled_at, ed.completed_at, ed.completed_by, ed.attempt, ed.last_attempt_error, ed.last_attempt_at, ed.attempt_at, ed.attempt_by, ed.attempt_until, ed.deduplication_key, ed.chain_trace_context, ed.trace_context, TRUE AS deduplicated
@@ -1014,7 +1013,7 @@ JOIN to_insert ti ON ti.dedup_key = tia.dedup_key AND ti.chain_type_name = tia.c
 JOIN inserted_jobs ij ON ti.chain_id = ij.chain_id AND ti.chain_index = ij.chain_index
 WHERE tia.dedup_key IS NOT NULL AND tia.ord != ti.ord
 UNION ALL
-SELECT ti.ord, ij.id, ij.type_name, ij.chain_id, ij.chain_type_name, ij.chain_index, ij.continued_to_id, ij.input, ij.output, ij.blocked, ij.created_at, ij.scheduled_at, ij.completed_at, ij.completed_by, ij.attempt, ij.last_attempt_error, ij.last_attempt_at, ij.attempt_at, ij.attempt_by, ij.attempt_until, ij.deduplication_key, ij.chain_trace_context, ij.trace_context, (ij.id != ti.id) AS deduplicated
+SELECT ti.ord, ij.id, ij.type_name, ij.chain_id, ij.chain_type_name, ij.chain_index, ij.continued_to_id, ij.input, ij.output, ij.blocked, ij.created_at, ij.scheduled_at, ij.completed_at, ij.completed_by, ij.attempt, ij.last_attempt_error, ij.last_attempt_at, ij.attempt_at, ij.attempt_by, ij.attempt_until, ij.deduplication_key, ij.chain_trace_context, ij.trace_context, FALSE AS deduplicated
 FROM inserted_jobs ij JOIN to_insert ti ON ti.chain_id = ij.chain_id AND ti.chain_index = ij.chain_index
 ORDER BY ord
 `,
