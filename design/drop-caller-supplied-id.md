@@ -1,8 +1,8 @@
-# Drop caller-supplied job IDs
+# Caller-supplied job IDs: keep, but error on collision
 
-Remove the optional `id` from `createChain` / `createChains` / `continueWith`. `identity: { key,
-scope }` covers every reason to pass one, so the collision semantics that `id` never specified stop
-needing to be specified. Part of [chain-identity.md](chain-identity.md).
+Keep the optional `id` on `createChain` / `createChains` / `continueWith` as a caller-owned handle
+(correlation, pre-known FK, external reference). Make collisions a hard error instead of the current
+silent divergence. Deduplication stays exclusively with `identity`.
 
 ## Problem
 
@@ -25,147 +25,202 @@ each do something different, and none of them reports the collision:
   `ON CONFLICT DO UPDATE command cannot affect row a second time`; SQLite applies the no-op update
   and returns a row; in-process overwrites.
 
-The obvious reading is that this needs a typed `DuplicateJobIdError` thrown from each adapter. But
-three adapters diverging silently on a case nobody specified is a symptom: the option has no defined
-job to do. Under [chain-identity.md](chain-identity.md) it has no job left at all.
+The caller-supplied `id` is a useful feature — correlation handles, pre-known FKs, external
+references — but it must not silently swallow or corrupt data on collision. The fix is to make `id`
+an assignment-only option with a hard error on conflict, leaving deduplication to `identity`.
 
-## Why `id` has nothing left to do
+## Why not remove `id` entirely
 
-`chain-identity.md` enumerates three needs that `deduplication` was conflating — idempotent enqueue,
-singleton/recurrence, and correlation lookup. `identity` serves all three, and they are the same
-three reasons anyone reaches for a caller-supplied `id`:
+[chain-identity.md](chain-identity.md) covers most reasons to pass a caller-supplied `id`, but not
+all of them:
 
-- **As an idempotency handle** — this is the conflation the identity design exists to remove. `id`
-  is not a dedup handle; `identity.key` with `scope: "any"` is.
-- **As a correlation handle** ("find the chain for this Stripe id") — `identity.key` again, via
-  `getChain({ identity })`. It is also the better handle: `id` is typed by the adapter's `idType`,
-  `uuid` by default on PostgreSQL, so `stripe:pi_…` does not fit without reconfiguring the column.
-  `identity_key` is always `TEXT`, and it survives deletion and recurrence in a way a row id does
-  not.
-- **To pre-know the row id before inserting an FK into the caller's own table** — the only case
-  identity does not directly replace, and it does not need replacing. `createChain` returns the
-  chain inside the caller's transaction, so the caller's row can be written after the create call.
-  Storing `identity.key` on that row instead is the more durable modelling anyway.
+- **Pre-known FK** — inserting a reference to the chain in the caller's own table, within the same
+  transaction, before `createChain` returns. `createChain` does return the chain, so the caller
+  _could_ write the FK after the create call, but "know the id first, insert in any order" is a
+  legitimate pattern that `identity.key` does not replace (the key is a lookup handle, not a row
+  id).
+- **Correlation with an external system** — the caller wants the row id to be the external system's
+  id (a Stripe payment intent id, an order number). `identity.key` serves the lookup, but some
+  callers want the id itself to be the external handle so that raw database queries and logs are
+  immediately readable without joining through the identity index.
+- **Deterministic test ids** — tests that assert on specific id values are easier to read and debug
+  than tests that capture a generated id and compare. This is minor but real.
 
-Nothing in the batch path needs a forward reference either: `blockers` is `BlockerChains<...>` —
-resolved `Chain` objects from earlier calls, not ids — so no entry in a `createChains` batch can
-refer to another entry's not-yet-assigned id.
-
-The option also carries no weight in practice. No guide documents it, no example passes one (the
-`ORD-001` ids in `state-postgres-multi-worker` are the caller's own order ids, passed as `input`),
-and the only callers are the conformance and test suites.
+The option also carries no weight in _abuse_: no guide documents collision-as-dedup, no example
+passes an id expecting upsert behavior, and the conformance suite explicitly tests that dedup wins
+over a caller-supplied id. The problem is not that callers misuse `id` — it is that the adapters
+handle a misuse in three incompatible ways instead of rejecting it.
 
 ## Solution
 
-Delete `id` from `CreateChainEntry` and from the `continueWith` job shape, and delete the
-state-adapter plumbing behind it. This removes, rather than specifies:
+Keep `id` as an optional assignment field. Make collisions stop being silent. This gives the option
+a clear contract:
 
-- the `DuplicateJobIdError` that the collision would otherwise need;
-- per-adapter collision detection in all three adapters (PostgreSQL `(xmax = 0)` on the
-  `inserted_jobs` CTE, a SQLite pre-`SELECT` inside the write transaction, an in-process
-  `idx.jobs.has` check);
-- intra-batch duplicate-id validation;
-- the `source: "caller"` branch of `InvalidJobIdError`, which narrows to `"generator"`;
-- the conformance cases "dedup wins over caller-supplied id" and "rejects caller-supplied id that
-  fails validateId";
-- the `id` versus `identity` disambiguation in `chain-identity.md` — two nearby words on one call
-  with opposite collision behavior stop being a documentation problem when one of them is gone.
+1. If provided, `id` becomes the row's primary key.
+2. If it collides with an existing row, the create fails — the constraint fires.
+3. If `identity` matches (dedup), the existing chain is returned and `id` is ignored — identity
+   wins, same as today.
+4. If not provided, `generateId()` produces the id — same as today.
 
-It also dissolves the sequencing constraint this document used to impose on the rest of the epic. A
-PostgreSQL `ON CONFLICT` targets one constraint, so pointing it at the identity index drops the
-`ON CONFLICT (chain_id, chain_index)` clause that currently swallows a colliding caller id. With no
-caller-supplied id left, there is nothing for that rewrite to stop swallowing.
+### No typed collision error
 
-The adapter-level `generateId` / `validateId` / `idType` options are unaffected — they configure the
-id column, not the call.
+A caller-supplied id collision is a caller bug; a generated id collision is a broken `generateId`.
+Neither is a runtime scenario worth catching and branching on. Wrapping the raw driver error in a
+typed `DuplicateJobIdError` would require per-adapter constraint mapping — catching `23505` on
+PostgreSQL, `SQLITE_CONSTRAINT_PRIMARYKEY` on SQLite, and a `has` check on in-process — three
+targeted catches that look similar but aren't, each a maintenance surface when driver libraries
+change error shapes. The codebase has no constraint-mapping precedent today; introducing one for a
+caller bug is not worth the cost.
+
+The raw driver error surfaces. That is acceptable:
+
+- **A caller-supplied id collision is a bug in the caller's code.** The caller passed an id they
+  thought was unique but wasn't. The fix is in their code, not in a `catch` block — and the raw
+  error will point them at the constraint that fired, which is more diagnostic than a typed wrapper.
+- **A generated id collision is a misconfigured adapter.** It surfaces on the first call in
+  development. Same reasoning — the raw error from the driver is the most useful thing to see.
+
+What changes is that the adapters **stop silently swallowing** collisions:
+
+### Adapter changes
+
+**PostgreSQL / SQLite:**
+
+The `ON CONFLICT (chain_id, chain_index) DO UPDATE SET id = job.id` clause currently turns a
+collision into a silent no-op return. Remove the `DO UPDATE` fallback — let the constraint reject
+the insert. The `ON CONFLICT` clause will be reworked as part of the identity epic anyway (to target
+the identity index instead of `(chain_id, chain_index)`); once it targets identity, a caller-supplied
+id collision is no longer caught by that clause and falls through to the primary key constraint
+naturally.
+
+**In-process:**
+
+Add a `jobs.has(id)` check before `writeJob`. If the id exists and was not matched by dedup, throw
+an error. This is cheap (single-threaded, no race) and prevents the current silent overwrite.
+
+**Intra-batch (all adapters):**
+
+Before executing the insert, scan the batch for duplicate caller-supplied ids. If two entries in one
+`createChains` call share a caller-supplied id, throw before reaching the database. This is pure
+input validation — no concurrency involved — and avoids PostgreSQL's
+`ON CONFLICT DO UPDATE command cannot affect row a second time` error leaking.
+
+### `InvalidJobIdError` source
+
+`InvalidJobIdError`'s `source` field keeps both values (`"caller"` and `"generator"`). A
+caller-supplied id that fails `validateId` still throws `InvalidJobIdError` with
+`source: "caller"` — no change from today.
 
 ## Generated IDs can still collide
 
-Dropping `id` shrinks the collision surface to one path rather than closing it. `generateId` is a
-public adapter option. The default `randomUUID()` will not collide, but a user can configure a
-counter, an under-provisioned `nanoid`, or — the realistic case — a deterministic
-`generateId: () => hash(input)` written by someone reaching for idempotency. Once the create path
-conflicts on the identity index, a duplicate primary key is not covered by that clause: PostgreSQL
-raises `23505` and SQLite raises `SQLITE_CONSTRAINT_PRIMARYKEY`.
+`generateId` is a public adapter option. The default `randomUUID()` will not collide, but a user can
+configure a counter, an under-provisioned `nanoid`, or a deterministic
+`generateId: () => hash(input)` written by someone reaching for idempotency. A collision from a
+broken generator hits the same constraint as a caller-supplied collision and surfaces the same raw
+driver error. This is fine — it is a misconfiguration, not a runtime scenario, and the driver error
+points directly at the problem.
 
-**Map the driver error; do not pre-check.** Catch the constraint violation on the create path and
-rethrow a typed error naming `generateId` as the culprit, with the driver error as `cause`.
+## Interaction with `identity`
 
-The pre-detection argument does not transfer from caller ids to generated ids. It rested on keeping
-the caller's transaction usable so they could catch the error and continue — but with a broken
-generator there is nothing to continue toward, since the next `createChain` in that transaction
-draws from the same generator. Meanwhile the cost inverts: a pre-`SELECT` costs nothing today when
-no ids are supplied, but covering generated ids means paying it on **every create**, permanently, to
-guard against a misconfiguration that surfaces on the first call in development. Mapping lives in
-the `catch`, so the happy path is free, and it fixes the actual defect — that a raw `23505` is
-off-style against the package's typed error vocabulary, which has no constraint mapping anywhere
-today.
+The precedence is unchanged from today:
 
-Two consequences worth stating rather than hiding:
+1. If `identity` is provided and matches an existing chain, the existing chain is returned with
+   `created: false` (currently `deduplicated: true`). The caller's `id`, if any, is ignored.
+2. If `identity` is provided and does not match, the chain is created with the caller's `id` (or a
+   generated one). The `id` collision check applies normally.
+3. If `identity` is not provided, the chain is created with the caller's `id` (or a generated one).
+   The `id` collision check applies normally.
 
-- **PostgreSQL's transaction stays poisoned.** Once `23505` fires the transaction is aborted
-  regardless of what JS throws afterwards. Keeping it usable would need a `SAVEPOINT` around every
-  insert — per-create overhead for a non-event. Rejected.
-- **Only PostgreSQL has this problem.** SQLite does statement-level rollback on a constraint
-  violation, so its transaction survives; in-process is unaffected. The "must detect in JS"
-  requirement was always PostgreSQL-specific, and specific to collisions worth recovering from.
-
-**Retry with a fresh id** was considered and rejected: it loops forever against a deterministic
-generator, and in PostgreSQL it cannot work without the savepoint above. `generateId` documents a
-uniqueness requirement instead, and the mapped error says so when it is violated.
+`identity` and `id` serve different purposes and do not interact beyond this precedence: `identity`
+is the deduplication/lookup handle, `id` is the row's primary key. A caller who wants both
+idempotency and a specific id passes both; if identity deduplicates, the `id` is silently unused
+(not an error — the chain already exists).
 
 ## Decisions
 
-- **Remove rather than fix.** Specifying collision behavior for `id` would preserve an option that
-  duplicates `identity` and contradicts it (`id` collision errors, `identity.key` collision returns
-  the existing chain).
+- **Keep and harden, not remove.** The option has legitimate uses (pre-known FK, external
+  correlation, deterministic test ids). The problem is undefined collision behavior, not the option
+  itself.
+- **Hard error, not silent swallow.** A collision is a caller bug (passing a non-unique id) or a
+  generator bug (broken `generateId`). Both should fail loudly.
+- **Raw driver error, not typed wrapper.** Per-adapter constraint mapping has no precedent in the
+  codebase, and the raw error is more diagnostic for what is always a bug. The in-process adapter
+  and intra-batch validation throw plain errors since there is no driver involved.
 - **No deprecation period.** The current major line is unreleased and the epic is breaking anyway,
   so this rides the same major at no extra release cost.
-- **`generateId` stays.** Callers who need control over the id _format_ keep it; what goes is
-  control over an individual call's id value.
+- **`generateId` stays.** Callers who need control over the id _format_ keep it; this change only
+  stops collisions from being silent.
 
 ## Dependencies
 
-- **Requires** [chain-identity.md](chain-identity.md) — `identity` is the replacement, so the
-  migration note has somewhere to point. Within the epic the two can land in either order (nothing
-  breaks in the interim: until the create path is rewritten, the existing
-  `ON CONFLICT (chain_id, chain_index)` clause is simply unreachable for caller ids). This no longer
-  has to land _before_ the create-path rewrite — that constraint existed only while a
-  caller-supplied id survived it.
-- **Simplifies** [chain-identity.md](chain-identity.md) — its "`id` versus `identity`" section and
-  the corresponding guide paragraph are deleted rather than written.
-- Related failure mode, different cause: concurrent same-key creates ([#3](https://github.com/kvet/queuert/issues/3)), addressed by [chain-identity.md](chain-identity.md).
+- **Requires** [chain-identity.md](chain-identity.md) — the identity rework changes the
+  `ON CONFLICT` target from `(chain_id, chain_index)` to the identity index; the collision detection
+  for caller-supplied ids lands naturally in that rewrite.
+- **Simplifies** [chain-identity.md](chain-identity.md) — its "`id` versus `identity`" section
+  becomes straightforward: `id` is a primary key assignment, `identity` is a dedup/lookup handle,
+  collisions on the former are errors, collisions on the latter are intentional returns.
+- Related failure mode, different cause: concurrent same-key creates
+  ([#3](https://github.com/kvet/queuert/issues/3)), addressed by
+  [chain-identity.md](chain-identity.md).
 
 ## Surface
 
-- **Core** — `id` removed from `CreateChainEntry` and the `continueWith` job shape;
-  `InvalidJobIdError`'s `source` narrows to `"generator"`; new typed error for a generated-id
-  collision.
-- **`StateAdapter`** — `id` removed from the `createChains` / `createContinuationJob` job inputs;
-  constraint-violation mapping added on the create path.
-- **Adapters** — PostgreSQL and SQLite map their constraint errors; all three stop threading a
-  caller id.
-- **Docs** — `advanced/adapters.md` gains the `generateId` uniqueness requirement and the mapped
-  error, next to the existing `generateId` / `validateId` / `idType` documentation. The
-  `createChain` / `createChains` / `continueWith` reference entries drop `id`.
-- **Migration** — one note: replace a caller-supplied `id` with `identity.key`, or read the id off
-  the `createChain` result.
+- **Core** — `InvalidJobIdError` unchanged; no new error types.
+- **`StateAdapter`** — `id` stays on the `createChains` / `createContinuationJob` job inputs;
+  silent collision swallowing removed.
+- **Adapters** — PostgreSQL and SQLite drop the `DO UPDATE` fallback on the `ON CONFLICT` clause;
+  in-process adds a `has` check; all three validate intra-batch uniqueness of caller-supplied ids.
+- **Docs** — `advanced/adapters.md` gains the `generateId` uniqueness requirement, next to the
+  existing `generateId` / `validateId` / `idType` docs. The `createChain` / `createChains` /
+  `continueWith` reference entries document `id` as assignment-only (collisions are errors, not
+  upserts).
+- **Migration** — one note for callers relying on the silent upsert: the same `id` passed twice now
+  errors instead of silently returning the existing row. Use `identity` for idempotent enqueue.
 
 ## Tests
 
-- Every adapter's create path with no `id` in the input shape (the type-level removal is the main
-  guard; conformance cases that supplied one are deleted, not rewritten).
-- A `generateId` that returns a constant produces the typed collision error, not a raw driver error,
-  on `createChains` and on `createContinuationJob`.
-- SQLite's transaction remains usable after that error; PostgreSQL's is documented as aborted.
-- `InvalidJobIdError` still fires for a generator-produced id that fails `validateId`.
+### Conformance (state adapter)
+
+These run against all three adapters (PostgreSQL, SQLite, in-process):
+
+- **Uses caller-supplied id when provided** — existing case, unchanged. A caller-supplied `id`
+  becomes the row's primary key and `chainId`.
+- **Rejects caller-supplied id that fails `validateId`** — existing case, unchanged. Throws
+  `InvalidJobIdError` with `source: "caller"`.
+- **Identity wins over caller-supplied id** — existing case (currently "dedup wins over
+  caller-supplied id"), renamed to match the identity vocabulary. When both `identity` and `id` are
+  supplied and identity matches, the existing chain is returned with `created: false`; the caller's
+  `id` is not used.
+- **Caller-supplied id collision on `createChains` errors** — create a chain with a caller-supplied
+  `id`, then create another chain with the same `id`. The second call throws (raw driver error on
+  SQL adapters, plain error on in-process). The first chain is unaffected.
+- **Caller-supplied id collision on `createContinuationJob` errors** — same pattern via the
+  continuation path.
+- **Intra-batch duplicate caller-supplied id errors** — a single `createChains` call with two
+  entries sharing a caller-supplied `id` throws before reaching the database. No rows are inserted
+  (the batch is atomic).
+- **Generated id collision errors** — configure `generateId` to return a constant. The first
+  `createChains` call succeeds; the second throws.
+- **`InvalidJobIdError` still fires for generator-produced id** — a `generateId` that returns a
+  value failing `validateId` throws `InvalidJobIdError` with `source: "generator"`.
+
+### Client-level
+
+- **`createChain` with duplicate id errors** — the error propagates through the client without
+  wrapping or swallowing.
+- **`createChains` with intra-batch duplicate id errors** — same.
+- **`continueWith` outcome with duplicate id errors** — a `continueWith` whose continuation job has
+  a caller-supplied `id` that collides with an existing job throws.
+
+### Adapter-specific edge cases
+
+- **In-process: existing row is not overwritten** — after a collision, the original row's
+  `typeName`, `input`, and `schedule` are unchanged. Regression guard for the current
+  `jobs.set(id, job)` behavior.
 
 ## Open questions
 
-- **Name and shape of the collision error.** `JobIdCollisionError` mirroring `InvalidJobIdError`
-  (carrying `id` and `cause`) reads consistently, but it is a distinctly different failure — a
-  misconfigured adapter rather than a bad value — and might belong closer to the adapter's
-  vocabulary than the client's.
-- **Scope of the constraint mapping.** Only the create path raises this, but the package has no
-  constraint mapping at all today; whether to introduce a general driver-error mapping layer or a
-  single targeted `catch` is an implementation call worth making once rather than twice.
+- **Batch atomicity on intra-batch collision.** The current proposal rejects the entire batch. An
+  alternative is to reject only the colliding entry and insert the rest, but partial success on a
+  batch create is a new concept the package does not have today, and the simple "fix your input"
+  error is easier to reason about.

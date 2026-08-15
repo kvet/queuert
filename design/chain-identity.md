@@ -48,7 +48,8 @@ client.listChains({ identity: { key, scope: "running" } });
 - `scope` becomes a persisted column, backed by two static partial unique indexes — one per scope.
 - `createChain` returns `created: boolean` instead of `deduplicated: boolean`.
 - `identityKey` / `identityScope` reach the public `Chain` / `Job` entities.
-- The caller-supplied `id` is removed — see [drop-caller-supplied-id.md](drop-caller-supplied-id.md).
+- The caller-supplied `id` is kept but collisions become a hard `DuplicateJobIdError` — see
+  [drop-caller-supplied-id.md](drop-caller-supplied-id.md).
 
 Reads are point lookups. At most one row matches a `(key, scope)` pair:
 
@@ -109,9 +110,9 @@ before release costs one changeset; landing it after costs another major.
   questions were about fields this removes.
 - **Simplifies** [builtin-cleanup.md](builtin-cleanup.md) — `scheduleCleanup`'s read-compare-swap
   loses the absent-row race; the unique index catches it.
-- **Includes** [drop-caller-supplied-id.md](drop-caller-supplied-id.md) — `identity` covers all three
-  reasons to pass a caller-supplied `id`, and removing it keeps the `ON CONFLICT` rewrite from
-  exposing a raw `23505` to the caller.
+- **Includes** [drop-caller-supplied-id.md](drop-caller-supplied-id.md) — caller-supplied `id` is
+  kept as an assignment-only option but collisions become a hard `DuplicateJobIdError`, so the
+  `ON CONFLICT` rewrite no longer needs to worry about silently swallowing a raw `23505`.
 
 ## Open question
 
