@@ -107,34 +107,36 @@ export const extendWithPostgres = <T>(
   const normalizedReuseId = createHash("sha1").update(reuseId).digest("hex");
 
   let container: StartedPostgreSqlContainer;
-  // `it.extend()` gives every derived API its own worker fixture context, so a spec whose suites
-  // extend the API resolve this fixture once per context. Each resolution gets its own database so a
-  // later one never force-drops a database an earlier one still holds connections to. Dropping is
-  // left to the next run's provisioning: a drop on teardown would race the pools closing alongside
-  // it and reintroduce the very termination this avoids.
   let contextCount = 0;
 
-  const provisionDatabase = async (databaseName: string): Promise<string> => {
-    const client = new Client({
-      connectionString: container.getConnectionUri(),
-    });
-
+  const withClient = async <T>(
+    connectionString: string,
+    fn: (client: Client) => Promise<T>,
+  ): Promise<T> => {
+    const client = new Client({ connectionString });
     await client.connect();
-
     try {
-      await client.query(`DROP DATABASE IF EXISTS "${databaseName}" WITH (FORCE);`);
-      await client.query(
-        `CREATE DATABASE "${databaseName}" WITH OWNER "${container.getUsername()}" TEMPLATE template0`,
-      );
+      return await fn(client);
     } finally {
       await client.end();
     }
-
-    return container.getConnectionUri().replace("base_database_for_tests", databaseName);
   };
 
   beforeAll(async () => {
     container = await startContainer("postgres:14");
+
+    await withClient(container.getConnectionUri(), async (client) => {
+      const names = await client.query(
+        `SELECT datname FROM pg_database WHERE datname LIKE '${normalizedReuseId}_%';`,
+      );
+      for (const { datname } of names.rows) {
+        await client.query(`DROP DATABASE IF EXISTS "${datname}" WITH (FORCE);`);
+      }
+
+      await client.query(
+        `CREATE DATABASE "${normalizedReuseId}_0" WITH OWNER "${container.getUsername()}" TEMPLATE template0`,
+      );
+    });
   }, 60_000);
 
   return api.extend<{
@@ -143,7 +145,17 @@ export const extendWithPostgres = <T>(
     postgresConnectionString: [
       // eslint-disable-next-line no-empty-pattern
       async ({}, use) => {
-        await use(await provisionDatabase(`${normalizedReuseId}_${contextCount++}`));
+        const dbName = `${normalizedReuseId}_${contextCount++}`;
+
+        if (contextCount > 1) {
+          await withClient(container.getConnectionUri(), async (client) => {
+            await client.query(
+              `CREATE DATABASE "${dbName}" WITH OWNER "${container.getUsername()}" TEMPLATE template0`,
+            );
+          });
+        }
+
+        await use(container.getConnectionUri().replace("base_database_for_tests", dbName));
       },
       { scope: "worker" },
     ],
