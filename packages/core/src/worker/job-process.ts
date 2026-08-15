@@ -14,11 +14,7 @@ import {
   type TransactionContext,
   createTransactionContext,
 } from "../helpers/transaction-context.js";
-import {
-  type FinishResult,
-  createFinishOnce,
-  mapFinishResult,
-} from "../implementation/attempt-outcome.js";
+import { createFinishOnce, mapFinishResult } from "../implementation/attempt-outcome.js";
 import { completeChain } from "../implementation/complete-chain.js";
 import { type AnyContinueWith, continueChain } from "../implementation/continue-chain.js";
 import { handleJobHandlerError } from "../implementation/handle-job-handler-error.js";
@@ -205,10 +201,9 @@ export const runJobProcess = async ({
     blockers: blockerPairs.map(mapStatePairToChain) as CompletedChain<AnyChain>[],
   } as ResolvedJobWithBlockers<any, any, any, any> & { status: "running" };
 
-  const runJobAttempt = async (handlerCtx: Record<string, unknown>) => {
+  const runJobAttempt = async () => {
     const attemptStartTime = Date.now();
-    // Boxed: assigned inside the completion callback, read at the attempt boundary.
-    const attempt: { finished: FinishResult | null } = { finished: null };
+    const finishOnce = createFinishOnce();
     const emitAttemptDuration = () => {
       helpers.observabilityHelper.jobAttemptDuration(job, {
         durationMs: Date.now() - attemptStartTime,
@@ -397,7 +392,6 @@ export const runJobProcess = async ({
         );
 
         const result = await completeSavepointContext.run(async (txCtx, transactionHooks) => {
-          const finishOnce = createFinishOnce();
           const finish = async (outcome: AnyWorkerOutcome) => {
             finishOnce.begin();
             try {
@@ -443,7 +437,7 @@ export const runJobProcess = async ({
               }),
           );
 
-          attempt.finished = finishOnce.requireFinished();
+          finishOnce.requireFinished("finish must be called before the complete callback returns");
           return completeResult;
         });
 
@@ -467,31 +461,37 @@ export const runJobProcess = async ({
     };
 
     try {
-      const attemptPromise = attemptHandler({
-        ...handlerCtx,
-        signal: abortController.signal,
-        job: runningJob,
-        get prepare() {
-          if (autoSetupDone) {
-            throw new Error("prepare cannot be accessed after auto-setup");
-          }
-          if (!prepareAccessed) {
-            prepareAccessed = true;
-          }
-          return prepare;
+      await runHandlerMiddlewareChain(
+        attemptMiddleware,
+        { job: runningJob, workerId },
+        async (handlerCtx) => {
+          const attemptPromise = attemptHandler({
+            ...handlerCtx,
+            signal: abortController.signal,
+            job: runningJob,
+            get prepare() {
+              if (autoSetupDone) {
+                throw new Error("prepare cannot be accessed after auto-setup");
+              }
+              if (!prepareAccessed) {
+                prepareAccessed = true;
+              }
+              return prepare;
+            },
+            step,
+            complete,
+          });
+          attemptPromise.catch(() => {});
+
+          await ensureStagedPrepare();
+
+          await attemptPromise;
         },
-        step,
-        complete,
-      });
-      attemptPromise.catch(() => {});
+      );
 
-      await ensureStagedPrepare();
-
-      await attemptPromise;
-
-      if (attempt.finished === null) {
-        throw new Error("complete must be called before the attempt handler returns");
-      }
+      const finished = finishOnce.requireFinished(
+        "complete must be called before the attempt handler returns",
+      );
 
       await completeSavepointContext?.resolve();
       await prepareTransactionContext.resolve();
@@ -500,22 +500,20 @@ export const runJobProcess = async ({
       // Reports the pre-write row: the attempt is described as it ran, not as
       // the completion left it.
       helpers.observabilityHelper.jobAttemptCompleted(job, {
-        output: attempt.finished.job.output,
-        continuedWith: attempt.finished.continuation ?? undefined,
+        output: finished.job.output,
+        continuedWith: finished.continuation ?? undefined,
         workerId,
       });
       emitAttemptDuration();
       attemptSpanHandle?.end({
         status: "completed",
-        continuedWith: attempt.finished.continuation
+        continuedWith: finished.continuation
           ? {
-              jobId: attempt.finished.continuation.id,
-              jobTypeName: attempt.finished.continuation.typeName,
+              jobId: finished.continuation.id,
+              jobTypeName: finished.continuation.typeName,
             }
           : undefined,
-        chainCompleted: attempt.finished.continuation
-          ? undefined
-          : { output: attempt.finished.job.output },
+        chainCompleted: finished.continuation ? undefined : { output: finished.job.output },
       });
     } catch (error) {
       await disposeAttemptLostListener?.();
@@ -560,13 +558,7 @@ export const runJobProcess = async ({
   };
 
   try {
-    await runHandlerMiddlewareChain(
-      attemptMiddleware,
-      { job: runningJob, workerId },
-      async (handlerCtx) => {
-        await runJobAttempt(handlerCtx);
-      },
-    );
+    await runJobAttempt();
   } finally {
     cleanupStopListener?.();
   }

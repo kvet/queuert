@@ -33,6 +33,9 @@ const tracing: AttemptMiddleware<any, { traceId: string }> = {
     console.log(`[${traceId}] start ${job.typeName}`);
     try {
       return await next({ traceId });
+    } catch (error) {
+      console.error(`[${traceId}] attempt failed`, error);
+      throw error;
     } finally {
       console.log(`[${traceId}] end`);
     }
@@ -40,7 +43,7 @@ const tracing: AttemptMiddleware<any, { traceId: string }> = {
 };
 ```
 
-A failing attempt does not propagate through `next()` — the engine catches the error, reschedules the job, and returns normally. Use `try`/`finally` to bracket an attempt; a `catch` block here never runs.
+A failing attempt propagates through `next()` — the middleware can observe, log, or enrich the error. After the middleware chain unwinds, the engine catches the error, reschedules the job, and returns normally. Always re-throw the error so the engine can handle it; swallowing the error without calling `complete` still fails the attempt.
 
 Inside the handler, `traceId` is typed:
 

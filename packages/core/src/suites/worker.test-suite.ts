@@ -583,7 +583,7 @@ export const workerTestSuite = ({ it }: { it: TestAPI<TestSuiteContext> }): void
     expect(observedExecuteCtx).toEqual([{ tag: "execute" }]);
   });
 
-  it("surfaces callback failures to wrapPrepare/wrapStep/wrapComplete but not to wrapHandler", async ({
+  it("surfaces callback failures to wrapHandler, wrapPrepare, wrapStep and wrapComplete", async ({
     stateAdapter,
     notifyAdapter,
     withTransaction,
@@ -671,11 +671,11 @@ export const workerTestSuite = ({ it }: { it: TestAPI<TestSuiteContext> }): void
 
     expect(order).toEqual([
       "prepare-caught:prepare-failure",
-      "handler-resolved",
+      "handler-caught:prepare-failure",
       "execute-caught:execute-failure",
-      "handler-resolved",
+      "handler-caught:execute-failure",
       "complete-caught:complete-failure",
-      "handler-resolved",
+      "handler-caught:complete-failure",
       "handler-resolved",
     ]);
   });

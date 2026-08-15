@@ -741,7 +741,7 @@ export const createChainsGroup: ConformanceGroup<StateConformanceFixture> = {
       name: "caller-supplied id collision does not affect the existing chain",
       run: async ({ stateAdapter, generateId }, expect) => {
         const userId = (generateId ?? (() => crypto.randomUUID()))();
-        const [{ job: original }] = await stateAdapter.withTransaction(async (txCtx) =>
+        await stateAdapter.withTransaction(async (txCtx) =>
           stateAdapter.createChains({
             txCtx,
             jobs: [

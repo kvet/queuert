@@ -923,7 +923,9 @@ export const createClient = async <
           ...txCtx,
         });
 
-        const finished = finishOnce.requireFinished();
+        const finished = finishOnce.requireFinished(
+          "finish must be called before the completeJob callback returns",
+        );
         bufferObservabilityEvent(transactionHooks, () => {
           helpers.observabilityHelper.completeJobSpan(finished.job, {
             continuedWith: finished.continuation ?? undefined,

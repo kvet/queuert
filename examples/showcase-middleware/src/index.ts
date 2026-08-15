@@ -105,11 +105,6 @@ type Tenant = { id: string; name: string; billingEmail: string };
 /** Every job type in this app is tenant-scoped, so middleware can rely on it. */
 const tenantIdOf = (job: { input: unknown }) => (job.input as { tenantId: string }).tenantId;
 
-/*
- * A failing attempt does not propagate through `next()` — the engine catches it,
- * reschedules the job and returns normally — so wrapHandler brackets the attempt
- * with try/finally rather than try/catch.
- */
 const loggingMiddleware: AttemptMiddleware<
   typeof stateAdapter,
   { log: (message: string) => void }
@@ -123,6 +118,9 @@ const loggingMiddleware: AttemptMiddleware<
           console.log(`${prefix} ${message}`);
         },
       });
+    } catch (error) {
+      console.error(`${prefix} attempt failed:`, error);
+      throw error;
     } finally {
       console.log(`${prefix} attempt finished in ${Date.now() - startedAt}ms`);
     }
