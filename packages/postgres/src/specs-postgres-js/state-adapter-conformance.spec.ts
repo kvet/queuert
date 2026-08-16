@@ -63,7 +63,7 @@ describe("PostgreSQL State Adapter Conformance (postgres.js)", () => {
       async ({}, use) => {
         await use(async (txCtx: { $test: true }) => {
           const pgCtx = txCtx as unknown as PostgresJsContext;
-          await pgCtx.sql.unsafe("SELECT 1 FROM nonexistent_table_queuert_poison_xyz");
+          await pgCtx.txSql.unsafe("SELECT 1 FROM nonexistent_table_queuert_poison_xyz");
         });
       },
       { scope: "test" },
@@ -127,7 +127,7 @@ it("infers custom ID types through the full stack", async ({ postgresConnectionS
     const chain = await withTransactionHooks(async (transactionHooks) =>
       sql.begin(async (txSql) =>
         client.createChain({
-          sql: txSql,
+          txSql,
           transactionHooks,
           typeName: "test",
           input: { foo: "hello" },

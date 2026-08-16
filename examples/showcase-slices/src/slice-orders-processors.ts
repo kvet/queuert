@@ -14,9 +14,9 @@ export const orderProcessors = createProcessors({
           `[orders.create-order] User ${job.input.userId} ordered ${job.input.items.length} items ($${totalAmount.toFixed(2)})`,
         );
 
-        return complete(async ({ finish, sql, transactionHooks }) => {
+        return complete(async ({ finish, txSql, transactionHooks }) => {
           await client.createChain({
-            sql,
+            txSql,
             transactionHooks,
             typeName: "notifications.send-notification",
             input: {
@@ -60,9 +60,9 @@ export const orderProcessors = createProcessors({
           `[orders.place-order] User ${job.input.userId} placed order ($${totalAmount.toFixed(2)})`,
         );
 
-        return complete(async ({ finish, sql, transactionHooks }) => {
+        return complete(async ({ finish, txSql, transactionHooks }) => {
           const notifyChain = await client.createChain({
-            sql,
+            txSql,
             transactionHooks,
             typeName: "notifications.send-notification",
             input: {

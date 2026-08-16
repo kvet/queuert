@@ -170,7 +170,7 @@ console.log("Three fetch jobs run in parallel, aggregate waits for all.\n");
 const aggregateChain = await withTransactionHooks(async (transactionHooks) =>
   sql.begin(async (txSql) => {
     const fetchBlockers = await client.createChains({
-      sql: txSql,
+      txSql,
       transactionHooks,
       items: [
         { typeName: "fetch-source", input: { sourceId: "users", url: "/users" } },
@@ -179,7 +179,7 @@ const aggregateChain = await withTransactionHooks(async (transactionHooks) =>
       ],
     });
     return client.createChain({
-      sql: txSql,
+      txSql,
       transactionHooks,
       typeName: "aggregate-data",
       input: { reportId: "report-001" },
@@ -200,7 +200,7 @@ console.log("Action requires exactly: validate-user + load-config.\n");
 const actionChain = await withTransactionHooks(async (transactionHooks) =>
   sql.begin(async (txSql) => {
     const [userBlocker, configBlocker] = await client.createChains({
-      sql: txSql,
+      txSql,
       transactionHooks,
       items: [
         { typeName: "validate-user", input: { userId: "user-123" } },
@@ -208,7 +208,7 @@ const actionChain = await withTransactionHooks(async (transactionHooks) =>
       ],
     });
     return client.createChain({
-      sql: txSql,
+      txSql,
       transactionHooks,
       typeName: "perform-action",
       input: { actionId: "action-001" },

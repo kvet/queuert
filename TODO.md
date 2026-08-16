@@ -1,9 +1,6 @@
 # Triage
 
-- [REF] Levarage assert and extect from vitest import to minimize the number of lines in tests and perform assertions in a clean way
-- [REF] Make worker.stop method that allows to pass workers in codebase. Also, maybe allow to restart workers once stopped?
-- [REF] examples/showcase-timeouts/src/index.ts: add a timeout primitive
-- [REF] showcase examples: something is wrong with 'sql: txSql', we should properly name a it as txSql
+- [REF] Leverage assert and expect from vitest import to minimize the number of lines in tests and perform assertions in a clean way
 - [REF] separate doc with "### Abort Signal and Reasons" section from docs/src/content/docs/advanced/job-processing.md
 - [REF] Clean up `completeJobSpan` — only span helper taking `(job, options)` instead of a flat `*InputData` object, and despite the name it ends nothing (the OTel impl starts a new span). Its `chainCompleted: boolean` silently creates the chain consumer span as a second responsibility. `JobAttemptSpanResult.chainCompleted` is typed `{ output }` but nothing reads the payload — collapse it to `boolean`.
 
@@ -18,6 +15,8 @@
 
 # Medium term
 
+- [REF] Make worker.stop method that allows to pass workers in codebase. Also, maybe allow to restart workers once stopped?
+- [REF] examples/showcase-timeouts/src/index.ts: add a timeout primitive
 - [EPIC] State-snapshot OTel gauges — opt-in `@queuert/otel-state` package emitting `running_jobs/chains{type,status}`, `oldest_ready_job/chain_age_seconds{type}`, `stuck_jobs/chains{type}` from a periodic metrics chain (cleanup-style). Adds one metrics-specific partial index (`job_stuck_idx`) and a `getMetricsSnapshot` adapter method. Open questions: single-runner snapshot distribution (DB-stored vs per-process), the stuck-job signal (job-model no longer carries `attempts_since_user_reschedule` — define stuck off attempt/age instead), default stuck threshold. See `design/state-snapshot-metrics.md`.
 - [EPIC] Unbounded blockers — scale blocker resolution to 1m+ blocked jobs (fan-out) and 1m+ blocker chains per job (fan-in). Shared schema primitive: `job_blocker.blocked` boolean (denormalized chain completion status, replaces the join-per-blocker-row unblock query with `NOT EXISTS` on a partial index). Shared runtime primitive: library-owned system chains (`__queuert/...` namespace, user-mounted via `createBatchedUnblockJobTypes()` + `createBatchedUnblockProcessors()`). **Fan-out**: `unblockJobs` gains `limit` + `hasMore`; when more remain, `finishJob` schedules a system chain that drains in 100-job batches, each in its own transaction. **Fan-in**: opt-in `unsealedBlockers: true` flag; job created without blockers, attached incrementally via `client.addJobBlockers`, finalized with `client.sealJobBlockers`; handler gets `getBlockers()` (sealed, bounded) or `listBlockers()` (unsealed, paginated async iterator). Supersedes the "uncap job blockers" sketches in Triage / Long term. See `design/unbounded-blockers.md`.
 - [EPIC] how to cleanup chains with 1k+ jobs in a single transaction (SQLite WAL, PG lock footprint)? introduce truncateChainJobs?

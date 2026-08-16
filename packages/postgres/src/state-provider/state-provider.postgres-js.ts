@@ -3,7 +3,7 @@ import type postgres from "postgres";
 
 import { type PgStateProvider } from "./state-provider.pg.js";
 
-export type PostgresJsContext = { sql: postgres.TransactionSql };
+export type PostgresJsContext = { txSql: postgres.TransactionSql };
 export type PostgresJsProvider = PgStateProvider<PostgresJsContext>;
 
 const TEXT_OID = 25;
@@ -37,13 +37,13 @@ export const createPostgresJsProvider = ({ sql }: { sql: postgres.Sql }): Postgr
   return {
     transactionConcurrency: "concurrent",
     withTransaction: async (fn) => {
-      return sql.begin(async (txSql) => fn({ sql: txSql }) as any);
+      return sql.begin(async (txSql) => fn({ txSql }) as any);
     },
     withSavepoint: async (txCtx, fn) => {
-      return txCtx.sql.savepoint(async (savepointSql) => fn({ sql: savepointSql }) as any);
+      return txCtx.txSql.savepoint(async (savepointSql) => fn({ txSql: savepointSql }) as any);
     },
     executeSql: async ({ txCtx, id, sql: query, params, paramTypes }) => {
-      const sqlClient = txCtx?.sql ?? sql;
+      const sqlClient = txCtx?.txSql ?? sql;
       const prepare = id !== undefined;
       if (!params || params.length === 0) {
         return sqlClient.unsafe(query, [], { prepare }) as any;

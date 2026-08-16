@@ -132,8 +132,8 @@ const tenantMiddleware: AttemptMiddleware<
   Record<string, never>,
   { tenant: Tenant }
 > = {
-  wrapPrepare: async ({ job, sql, next }) => {
-    const [row] = await sql<{ id: string; name: string; billing_email: string }[]>`
+  wrapPrepare: async ({ job, txSql, next }) => {
+    const [row] = await txSql<{ id: string; name: string; billing_email: string }[]>`
       SELECT id, name, billing_email FROM tenant WHERE id = ${tenantIdOf(job)}
     `;
     if (!row) throw new Error(`Unknown tenant ${tenantIdOf(job)}`);
@@ -152,12 +152,12 @@ type Meter = (unit: string, quantity: number) => Promise<void>;
  * re-metering the same unit a no-op, so the tenant is never billed twice.
  */
 const createMeter = (
-  sql: postgres.TransactionSql,
+  txSql: postgres.TransactionSql,
   transactionHooks: TransactionHooks,
   job: { id: string; input: unknown },
 ): Meter => {
   return async (unit, quantity) => {
-    const inserted = await sql`
+    const inserted = await txSql`
       INSERT INTO usage_record (job_id, tenant_id, unit, quantity)
       VALUES (${job.id}, ${tenantIdOf(job)}, ${unit}, ${quantity})
       ON CONFLICT (job_id, unit) DO NOTHING
@@ -191,10 +191,10 @@ const meteringMiddleware: AttemptMiddleware<
   { meter: Meter },
   { meter: Meter }
 > = {
-  wrapStep: async ({ job, sql, transactionHooks, next }) =>
-    next({ meter: createMeter(sql, transactionHooks, job) }),
-  wrapComplete: async ({ job, sql, transactionHooks, next }) =>
-    next({ meter: createMeter(sql, transactionHooks, job) }),
+  wrapStep: async ({ job, txSql, transactionHooks, next }) =>
+    next({ meter: createMeter(txSql, transactionHooks, job) }),
+  wrapComplete: async ({ job, txSql, transactionHooks, next }) =>
+    next({ meter: createMeter(txSql, transactionHooks, job) }),
 };
 
 const client = await createClient({
@@ -217,8 +217,8 @@ const worker = await createInProcessWorker({
           log(`issuing invoice for ${tenant.name}`);
 
           const invoiceId = `inv-${job.id.slice(0, 8)}`;
-          return complete(async ({ finish, sql, meter }) => {
-            await sql`
+          return complete(async ({ finish, txSql, meter }) => {
+            await txSql`
               INSERT INTO invoice (id, tenant_id, amount_cents)
               VALUES (${invoiceId}, ${tenant.id}, ${job.input.amountCents})
               ON CONFLICT (id) DO NOTHING
@@ -268,7 +268,7 @@ console.log("--- issuing an invoice for tenant acme ---");
 const chain = await withTransactionHooks(async (transactionHooks) =>
   sql.begin(async (txSql) =>
     client.createChain({
-      sql: txSql,
+      txSql,
       transactionHooks,
       typeName: "issue-invoice",
       input: { tenantId: "acme", amountCents: 9900 },

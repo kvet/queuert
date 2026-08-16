@@ -57,7 +57,7 @@ const worker = await createInProcessWorker({
       send_welcome_email: {
         attemptHandler: async ({ job, prepare, complete }) => {
           // Load the user with postgres.js inside the job transaction
-          const user = await prepare({ mode: "staged" }, async ({ sql: txSql }) => {
+          const user = await prepare({ mode: "staged" }, async ({ txSql }) => {
             const [row] = await txSql<{ id: number; name: string; email: string }[]>`
               SELECT id, name, email FROM users WHERE id = ${job.input.userId}
             `;
@@ -87,7 +87,7 @@ const chain = await withTransactionHooks(async (transactionHooks) =>
     )) as { id: number }[];
 
     return client.createChain({
-      sql: txSql,
+      txSql,
       transactionHooks,
       typeName: "send_welcome_email",
       input: { userId: user.id },

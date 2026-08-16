@@ -113,9 +113,9 @@ const worker = await createInProcessWorker({
             `  [transfer-funds] Attempt ${job.attempt}: transferring $${job.input.amount}`,
           );
 
-          return complete(async ({ finish, sql }) => {
-            await sql`UPDATE accounts SET balance = balance - ${job.input.amount} WHERE id = ${job.input.fromAccountId}`;
-            await sql`UPDATE accounts SET balance = balance + ${job.input.amount} WHERE id = ${job.input.toAccountId}`;
+          return complete(async ({ finish, txSql }) => {
+            await txSql`UPDATE accounts SET balance = balance - ${job.input.amount} WHERE id = ${job.input.fromAccountId}`;
+            await txSql`UPDATE accounts SET balance = balance + ${job.input.amount} WHERE id = ${job.input.toAccountId}`;
             console.log(`  Transfer committed`);
             return finish({ output: { transferred: true } });
           });
@@ -127,8 +127,8 @@ const worker = await createInProcessWorker({
         attemptHandler: async ({ job, complete }) => {
           console.log(`  [credit-account] Attempt ${job.attempt}: crediting $${job.input.amount}`);
 
-          const result = await complete(async ({ finish, sql }) => {
-            await sql`UPDATE accounts SET balance = balance + ${job.input.amount} WHERE id = ${job.input.accountId}`;
+          const result = await complete(async ({ finish, txSql }) => {
+            await txSql`UPDATE accounts SET balance = balance + ${job.input.amount} WHERE id = ${job.input.accountId}`;
             console.log(`  Credit committed (will be rolled back if handler throws)`);
             return finish({ output: { credited: true } });
           });
@@ -146,8 +146,8 @@ const worker = await createInProcessWorker({
         attemptHandler: async ({ job, prepare, complete }) => {
           console.log(`  [external-transfer] Attempt ${job.attempt}`);
 
-          const account = await prepare({ mode: "staged" }, async ({ sql }) => {
-            const rows = await sql<
+          const account = await prepare({ mode: "staged" }, async ({ txSql }) => {
+            const rows = await txSql<
               { id: number; balance: number }[]
             >`SELECT id, balance FROM accounts WHERE id = ${job.input.accountId}`;
             const row = rows[0];
@@ -162,8 +162,8 @@ const worker = await createInProcessWorker({
           }
           console.log(`  External API succeeded`);
 
-          return complete(async ({ finish, sql }) => {
-            await sql`UPDATE accounts SET balance = balance + ${job.input.amount} WHERE id = ${account.id}`;
+          return complete(async ({ finish, txSql }) => {
+            await txSql`UPDATE accounts SET balance = balance + ${job.input.amount} WHERE id = ${account.id}`;
             console.log(`  Complete: credited $${job.input.amount} to account ${account.id}`);
             return finish({ output: { confirmed: true } });
           });
@@ -205,7 +205,7 @@ console.log(
 const transfer = await withTransactionHooks(async (transactionHooks) =>
   sql.begin(async (txSql) => {
     const result = await client.createChain({
-      sql: txSql,
+      txSql,
       transactionHooks,
       typeName: "transfer-funds",
       input: { fromAccountId: 2, toAccountId: 1, amount: 200 },
@@ -237,7 +237,7 @@ console.log(
 const credit = await withTransactionHooks(async (transactionHooks) =>
   sql.begin(async (txSql) => {
     const result = await client.createChain({
-      sql: txSql,
+      txSql,
       transactionHooks,
       typeName: "credit-account",
       input: { accountId: 1, amount: 50 },
@@ -261,7 +261,7 @@ externalApiShouldFail = true;
 const externalTransfer = await withTransactionHooks(async (transactionHooks) =>
   sql.begin(async (txSql) => {
     const result = await client.createChain({
-      sql: txSql,
+      txSql,
       transactionHooks,
       typeName: "external-transfer",
       input: { accountId: 2, amount: 25 },
@@ -284,7 +284,7 @@ console.log("Job throws different error types, inspects lastAttemptError on retr
 const flakyChain = await withTransactionHooks(async (transactionHooks) =>
   sql.begin(async (txSql) => {
     const result = await client.createChain({
-      sql: txSql,
+      txSql,
       transactionHooks,
       typeName: "flaky-job",
       input: null,

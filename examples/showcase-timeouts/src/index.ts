@@ -132,7 +132,7 @@ console.log("Fetch completes before timeout.\n");
 const fetch1 = await withTransactionHooks(async (transactionHooks) =>
   sql.begin(async (txSql) =>
     client.createChain({
-      sql: txSql,
+      txSql,
       transactionHooks,
       typeName: "fetch-with-timeout",
       input: { url: "/api/fast", timeoutMs: 500 }, // 500ms timeout, 300ms fetch
@@ -150,7 +150,7 @@ console.log("Fetch times out before completing.\n");
 const fetch2 = await withTransactionHooks(async (transactionHooks) =>
   sql.begin(async (txSql) =>
     client.createChain({
-      sql: txSql,
+      txSql,
       transactionHooks,
       typeName: "fetch-with-timeout",
       input: { url: "/api/slow", timeoutMs: 100 }, // 100ms timeout, 300ms fetch
@@ -168,7 +168,7 @@ console.log("Job with attemptConfig completes within attempt period.\n");
 const longChain = await withTransactionHooks(async (transactionHooks) =>
   sql.begin(async (txSql) =>
     client.createChain({
-      sql: txSql,
+      txSql,
       transactionHooks,
       typeName: "long-running-job",
       input: { taskId: "task-001", durationMs: 200 }, // 200ms work, 500ms attempt

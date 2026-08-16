@@ -138,7 +138,7 @@ const worker = await createInProcessWorker({
 
           await new Promise((r) => setTimeout(r, 50));
 
-          return complete(async ({ finish, sql: txSql, transactionHooks }) => {
+          return complete(async ({ finish, txSql, transactionHooks }) => {
             await txSql.unsafe("INSERT INTO digest_logs (user_id) VALUES ($1)", [job.input.userId]);
 
             const shouldContinue = userSubscribed && job.input.iteration < MAX_DIGEST_ITERATIONS;
@@ -146,7 +146,7 @@ const worker = await createInProcessWorker({
             if (shouldContinue) {
               console.log(`  Scheduling next digest in ${DIGEST_INTERVAL_MS}ms...`);
               await client.createChain({
-                sql: txSql,
+                txSql,
                 transactionHooks,
                 typeName: "daily-digest",
                 input: { userId: job.input.userId, iteration: job.input.iteration + 1 },
@@ -170,7 +170,7 @@ const worker = await createInProcessWorker({
           const status = serviceRunning ? "healthy" : "stopped";
           console.log(`  Status: ${status}`);
 
-          return complete(async ({ finish, sql: txSql, transactionHooks }) => {
+          return complete(async ({ finish, txSql, transactionHooks }) => {
             await txSql.unsafe("INSERT INTO health_logs (service_id, status) VALUES ($1, $2)", [
               job.input.serviceId,
               status,
@@ -185,7 +185,7 @@ const worker = await createInProcessWorker({
             if (shouldContinue) {
               console.log(`  Scheduling next check in ${HEALTH_CHECK_INTERVAL_MS}ms...`);
               await client.createChain({
-                sql: txSql,
+                txSql,
                 transactionHooks,
                 typeName: "health-check",
                 input: {
@@ -209,7 +209,7 @@ const worker = await createInProcessWorker({
 
       reminder: {
         attemptHandler: async ({ job, complete }) =>
-          complete(async ({ finish, sql: txSql }) => {
+          complete(async ({ finish, txSql }) => {
             console.log(`\n[reminder] "${job.input.message}" for ${job.input.userId}`);
             await txSql.unsafe("INSERT INTO reminder_logs (user_id, message) VALUES ($1, $2)", [
               job.input.userId,
@@ -263,7 +263,7 @@ userSubscribed = true;
 await withTransactionHooks(async (transactionHooks) =>
   sql.begin(async (txSql) =>
     client.createChain({
-      sql: txSql,
+      txSql,
       transactionHooks,
       typeName: "daily-digest",
       input: { userId: "user-123", iteration: 1 },
@@ -298,7 +298,7 @@ serviceRunning = true;
 const healthChain1 = await withTransactionHooks(async (transactionHooks) =>
   sql.begin(async (txSql) =>
     client.createChain({
-      sql: txSql,
+      txSql,
       transactionHooks,
       typeName: "health-check",
       input: { serviceId: "api-server", checkNumber: 1 },
@@ -317,7 +317,7 @@ assert.equal(healthChain1.deduplicated, false);
 const healthChain2 = await withTransactionHooks(async (transactionHooks) =>
   sql.begin(async (txSql) =>
     client.createChain({
-      sql: txSql,
+      txSql,
       transactionHooks,
       typeName: "health-check",
       input: { serviceId: "api-server", checkNumber: 1 },
@@ -359,7 +359,7 @@ const ONE_HOUR_MS = 60 * 60 * 1000;
 const reminder = await withTransactionHooks(async (transactionHooks) =>
   sql.begin(async (txSql) =>
     client.createChain({
-      sql: txSql,
+      txSql,
       transactionHooks,
       typeName: "reminder",
       input: { userId: "user-123", message: "Weekly standup starts soon" },
@@ -376,10 +376,10 @@ console.log(`Scheduled reminder ${reminder.id} for +1h`);
 console.log(`\nRescheduling reminder ${reminder.id} to run now...`);
 await withTransactionHooks(async (transactionHooks) =>
   sql.begin(async (txSql) => {
-    const job = await client.getJob({ sql: txSql, id: reminder.id, lock: true });
+    const job = await client.getJob({ txSql, id: reminder.id, lock: true });
     console.log(`  scheduledAt before: ${job!.scheduledAt.toISOString()}`);
     if (job?.status === "pending") {
-      await client.rescheduleJob({ sql: txSql, transactionHooks, id: job.id });
+      await client.rescheduleJob({ txSql, transactionHooks, id: job.id });
     }
   }),
 );
@@ -404,7 +404,7 @@ apiRateLimited = true;
 const apiCall = await withTransactionHooks(async (transactionHooks) =>
   sql.begin(async (txSql) =>
     client.createChain({
-      sql: txSql,
+      txSql,
       transactionHooks,
       typeName: "call-rate-limited-api",
       input: { endpoint: "/api/data" },

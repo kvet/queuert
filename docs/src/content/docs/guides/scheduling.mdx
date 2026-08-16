@@ -136,12 +136,11 @@ const jobTypes = defineJobTypes<{
   attemptHandler: async ({ job, complete }) => {
     await sendDigestEmail(job.input.userId);
 
-    return complete(async ({ finish, sql, transactionHooks }) => {
+    return complete(async ({ finish, transactionHooks }) => {
       const completedJob = await finish({ output: { sentAt: new Date().toISOString() } });
 
       if (userStillSubscribed) {
         await client.createChain({
-          sql,
           transactionHooks,
           typeName: 'daily-digest',
           input: { userId: job.input.userId },

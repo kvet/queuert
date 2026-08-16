@@ -137,7 +137,7 @@ export const extendWithStatePostgresJs = <
       async ({}, use) => {
         await use(async (txCtx: { $test: true }) => {
           const pgCtx = txCtx as unknown as PostgresJsContext;
-          await pgCtx.sql.unsafe("SELECT 1 FROM nonexistent_table_queuert_poison_xyz");
+          await pgCtx.txSql.unsafe("SELECT 1 FROM nonexistent_table_queuert_poison_xyz");
         });
       },
       { scope: "test" },

@@ -137,7 +137,7 @@ console.log("Delete a completed standalone chain.\n");
 const standalone = await withTransactionHooks(async (transactionHooks) =>
   sql.begin(async (txSql) =>
     client.createChain({
-      sql: txSql,
+      txSql,
       transactionHooks,
       typeName: "standalone-task",
       input: { taskId: "task-001" },
@@ -150,7 +150,7 @@ await client.awaitChain(standalone, { timeoutMs: 10000 });
 const deleted = await withTransactionHooks(async (transactionHooks) =>
   sql.begin(async (txSql) =>
     client.deleteChains({
-      sql: txSql,
+      txSql,
       transactionHooks,
       ids: [standalone.id],
     }),
@@ -169,7 +169,7 @@ console.log("Deleting a blocker chain that is still referenced is rejected.\n");
 const [fetchChains, reportChain] = await withTransactionHooks(async (transactionHooks) =>
   sql.begin(async (txSql) => {
     const fetches = await client.createChains({
-      sql: txSql,
+      txSql,
       transactionHooks,
       items: [
         { typeName: "fetch-data", input: { sourceId: "users" } },
@@ -177,7 +177,7 @@ const [fetchChains, reportChain] = await withTransactionHooks(async (transaction
       ],
     });
     const report = await client.createChain({
-      sql: txSql,
+      txSql,
       transactionHooks,
       typeName: "generate-report",
       input: { reportId: "report-001" },
@@ -193,7 +193,7 @@ try {
   await withTransactionHooks(async (transactionHooks) =>
     sql.begin(async (txSql) =>
       client.deleteChains({
-        sql: txSql,
+        txSql,
         transactionHooks,
         ids: [fetchChains[0].id],
       }),
@@ -215,7 +215,7 @@ console.log("Delete the report chain together with its blocker chains.\n");
 const coDeleted = await withTransactionHooks(async (transactionHooks) =>
   sql.begin(async (txSql) =>
     client.deleteChains({
-      sql: txSql,
+      txSql,
       transactionHooks,
       ids: [reportChain.id, fetchChains[0].id, fetchChains[1].id],
     }),
@@ -235,7 +235,7 @@ console.log("Cascade resolves transitive dependencies automatically.\n");
 const [_fetchChains2, reportChain2] = await withTransactionHooks(async (transactionHooks) =>
   sql.begin(async (txSql) => {
     const fetches = await client.createChains({
-      sql: txSql,
+      txSql,
       transactionHooks,
       items: [
         { typeName: "fetch-data", input: { sourceId: "products" } },
@@ -244,7 +244,7 @@ const [_fetchChains2, reportChain2] = await withTransactionHooks(async (transact
       ],
     });
     const report = await client.createChain({
-      sql: txSql,
+      txSql,
       transactionHooks,
       typeName: "generate-report",
       input: { reportId: "report-002" },
@@ -259,7 +259,7 @@ await client.awaitChain(reportChain2, { timeoutMs: 10000 });
 const cascadeDeleted = await withTransactionHooks(async (transactionHooks) =>
   sql.begin(async (txSql) =>
     client.deleteChains({
-      sql: txSql,
+      txSql,
       transactionHooks,
       ids: [reportChain2.id],
       cascade: true,

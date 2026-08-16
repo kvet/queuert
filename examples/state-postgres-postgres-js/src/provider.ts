@@ -2,7 +2,7 @@ import { type PgStateProvider } from "@queuert/postgres";
 import { type RuntimeType } from "@queuert/typed-sql";
 import type postgres from "postgres";
 
-export type PostgresJsContext = { sql: postgres.TransactionSql };
+export type PostgresJsContext = { txSql: postgres.TransactionSql };
 
 const TEXT_OID = 25;
 const UUID_OID = 2950;
@@ -45,11 +45,11 @@ export const createPostgresJsStateProvider = ({
 
   return {
     transactionConcurrency: "concurrent",
-    withTransaction: async (cb) => sql.begin(async (txSql) => cb({ sql: txSql }) as any),
+    withTransaction: async (cb) => sql.begin(async (txSql) => cb({ txSql }) as any),
     withSavepoint: async (txCtx, fn) =>
-      txCtx.sql.savepoint(async (spSql) => fn({ sql: spSql })) as any,
+      txCtx.txSql.savepoint(async (spSql) => fn({ txSql: spSql })) as any,
     executeSql: async ({ txCtx, id, sql: query, params, paramTypes }) => {
-      const client = txCtx?.sql ?? sql;
+      const client = txCtx?.txSql ?? sql;
       const prepare = prepareStatements && id !== undefined;
       if (!params || params.length === 0) {
         return client.unsafe(query, [], { prepare }) as any;

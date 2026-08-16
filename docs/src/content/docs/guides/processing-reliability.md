@@ -26,18 +26,18 @@ The `prepare` callback runs inside a savepoint. If it throws, the savepoint roll
 'charge-payment': {
   backoffConfig: { initialDelayMs: 1000, multiplier: 2, maxDelayMs: 60_000 },
   attemptHandler: async ({ job, prepare, complete }) => {
-    const order = await prepare({ mode: "staged" }, async ({ sql }) => {
+    const order = await prepare({ mode: "staged" }, async ({ txSql }) => {
       // If this throws (constraint violation, missing row, etc.),
       // the savepoint rolls back and the job retries after backoff
-      const [row] = await sql`SELECT * FROM orders WHERE id = ${job.input.orderId}`;
+      const [row] = await txSql`SELECT * FROM orders WHERE id = ${job.input.orderId}`;
       if (!row) throw new Error("Order not found");
       return row;
     });
 
     const { paymentId } = await paymentAPI.charge(order.amount);
 
-    return complete(async ({ finish, sql }) => {
-      await sql`UPDATE orders SET payment_id = ${paymentId} WHERE id = ${order.id}`;
+    return complete(async ({ finish, txSql }) => {
+      await txSql`UPDATE orders SET payment_id = ${paymentId} WHERE id = ${order.id}`;
       return finish({ output: { paymentId } });
     });
   },
@@ -53,12 +53,12 @@ The `complete` callback also runs inside a savepoint. If it throws, the savepoin
 ```ts
 'transfer-funds': {
   attemptHandler: async ({ job, complete }) => {
-    return complete(async ({ finish, sql }) => {
+    return complete(async ({ finish, txSql }) => {
       // If the CHECK constraint fires, the savepoint rolls back
       // and the job is rescheduled — no corrupted state
-      await sql`UPDATE accounts SET balance = balance - ${job.input.amount}
+      await txSql`UPDATE accounts SET balance = balance - ${job.input.amount}
                 WHERE id = ${job.input.fromId}`;
-      await sql`UPDATE accounts SET balance = balance + ${job.input.amount}
+      await txSql`UPDATE accounts SET balance = balance + ${job.input.amount}
                 WHERE id = ${job.input.toId}`;
       return finish({ output: { transferred: true } });
     });
@@ -75,16 +75,16 @@ In **staged mode**, if an error occurs after `prepare` commits but before `compl
 ```ts
 'sync-external': {
   attemptHandler: async ({ job, prepare, complete }) => {
-    const data = await prepare({ mode: "staged" }, async ({ sql }) => {
-      return (await sql`SELECT * FROM items WHERE id = ${job.input.id}`)[0];
+    const data = await prepare({ mode: "staged" }, async ({ txSql }) => {
+      return (await txSql`SELECT * FROM items WHERE id = ${job.input.id}`)[0];
     });
     // Prepare committed. If the API call below throws, the job retries
     // and prepare runs again in a new transaction.
 
     const externalId = await externalAPI.sync(data); // may throw
 
-    return complete(async ({ finish, sql }) => {
-      await sql`UPDATE items SET external_id = ${externalId} WHERE id = ${data.id}`;
+    return complete(async ({ finish, txSql }) => {
+      await txSql`UPDATE items SET external_id = ${externalId} WHERE id = ${data.id}`;
       return finish({ output: { externalId } });
     });
   },

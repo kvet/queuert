@@ -126,8 +126,8 @@ const worker = await createInProcessWorker({
         attemptHandler: async ({ job, complete }) => {
           console.log(`\n[create-subscription] Creating subscription for user ${job.input.userId}`);
 
-          return complete(async ({ finish, sql }) => {
-            const [sub] = (await sql.unsafe(
+          return complete(async ({ finish, txSql }) => {
+            const [sub] = (await txSql.unsafe(
               "INSERT INTO subscriptions (user_id, plan_id, status) VALUES ($1, $2, 'pending') RETURNING id",
               [job.input.userId, job.input.planId],
             )) as { id: number }[];
@@ -147,9 +147,9 @@ const worker = await createInProcessWorker({
         attemptHandler: async ({ job, complete }) => {
           console.log(`\n[activate-trial] Activating ${job.input.trialDays}-day trial`);
 
-          return complete(async ({ finish, sql }) => {
+          return complete(async ({ finish, txSql }) => {
             const trialEndsAt = new Date(Date.now() + job.input.trialDays * 24 * 60 * 60 * 1000);
-            await sql.unsafe(
+            await txSql.unsafe(
               "UPDATE subscriptions SET status = 'trial', trial_ends_at = $1 WHERE id = $2",
               [trialEndsAt.toISOString(), job.input.subscriptionId],
             );
@@ -200,8 +200,8 @@ const worker = await createInProcessWorker({
             `\n[expire-trial] Trial expired for subscription #${job.input.subscriptionId}`,
           );
 
-          return complete(async ({ finish, sql }) => {
-            await sql.unsafe("UPDATE subscriptions SET status = 'expired' WHERE id = $1", [
+          return complete(async ({ finish, txSql }) => {
+            await txSql.unsafe("UPDATE subscriptions SET status = 'expired' WHERE id = $1", [
               job.input.subscriptionId,
             ]);
             const expiredAt = new Date().toISOString();
@@ -218,8 +218,8 @@ const worker = await createInProcessWorker({
             `\n[convert-to-paid] Converting subscription #${job.input.subscriptionId} to paid`,
           );
 
-          return complete(async ({ finish, sql }) => {
-            await sql.unsafe("UPDATE subscriptions SET status = 'active' WHERE id = $1", [
+          return complete(async ({ finish, txSql }) => {
+            await txSql.unsafe("UPDATE subscriptions SET status = 'active' WHERE id = $1", [
               job.input.subscriptionId,
             ]);
             console.log(`  Subscription is now active!`);
@@ -241,8 +241,8 @@ const worker = await createInProcessWorker({
           await new Promise((r) => setTimeout(r, 100));
           console.log(`  Charged $${PRICE_PER_CYCLE} for cycle ${job.input.cycle}`);
 
-          return complete(async ({ finish, sql }) => {
-            const [sub] = (await sql.unsafe(
+          return complete(async ({ finish, txSql }) => {
+            const [sub] = (await txSql.unsafe(
               "UPDATE subscriptions SET current_cycle = $1, total_charged = total_charged + $2 WHERE id = $3 RETURNING total_charged",
               [job.input.cycle, PRICE_PER_CYCLE, job.input.subscriptionId],
             )) as { total_charged: string }[];
@@ -281,9 +281,9 @@ const worker = await createInProcessWorker({
           );
           console.log(`  Reason: ${job.input.reason}`);
 
-          return complete(async ({ finish, sql }) => {
+          return complete(async ({ finish, txSql }) => {
             const cancelledAt = new Date().toISOString();
-            await sql.unsafe(
+            await txSql.unsafe(
               "UPDATE subscriptions SET status = 'cancelled', cancelled_at = $1 WHERE id = $2",
               [cancelledAt, job.input.subscriptionId],
             );
@@ -308,7 +308,7 @@ userConverts = true;
 const chain1 = await withTransactionHooks(async (transactionHooks) =>
   sql.begin(async (txSql) =>
     client.createChain({
-      sql: txSql,
+      txSql,
       transactionHooks,
       typeName: "create-subscription",
       input: { userId: "user-123", planId: "pro-monthly" },
@@ -345,7 +345,7 @@ userConverts = false;
 const chain2 = await withTransactionHooks(async (transactionHooks) =>
   sql.begin(async (txSql) =>
     client.createChain({
-      sql: txSql,
+      txSql,
       transactionHooks,
       typeName: "create-subscription",
       input: { userId: "user-456", planId: "pro-monthly" },

@@ -83,11 +83,10 @@ A recurring chain schedules its next occurrence from its own terminal job. Under
 
 ```ts
 // Inside a processor's complete callback
-return complete(async ({ finish, sql, transactionHooks }) => {
+return complete(async ({ finish, transactionHooks }) => {
   const completedJob = await finish({ output: { checkedAt: new Date().toISOString() } });
 
   await client.createChain({
-    sql,
     transactionHooks,
     typeName: "health-check",
     input: { serviceId: job.input.serviceId },

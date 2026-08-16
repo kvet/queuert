@@ -92,9 +92,9 @@ const cleanupProcessorRegistry = createProcessors({
           );
 
           if (chainsToDelete.length > 0) {
-            const deleted = await step(async ({ sql, transactionHooks }) =>
+            const deleted = await step(async ({ txSql, transactionHooks }) =>
               client.deleteChains({
-                sql,
+                txSql,
                 transactionHooks,
                 ids: chainsToDelete.map((chain) => chain.id),
               }),
@@ -109,11 +109,11 @@ const cleanupProcessorRegistry = createProcessors({
 
         await stateAdapter.vacuum();
 
-        return complete(async ({ finish, sql, transactionHooks }) => {
+        return complete(async ({ finish, txSql, transactionHooks }) => {
           const completedJob = await finish({ output: null });
 
           await client.createChain({
-            sql,
+            txSql,
             transactionHooks,
             typeName: "queuert.cleanup",
             input: null,
@@ -160,7 +160,7 @@ console.log("\n--- Scenario 1: Create work chains ---\n");
 const chains = await withTransactionHooks(async (transactionHooks) =>
   sql.begin(async (txSql) => {
     const result = await client.createChains({
-      sql: txSql,
+      txSql,
       transactionHooks,
       items: [
         { typeName: "work.process", input: { taskId: 1 } },
@@ -200,7 +200,7 @@ const scheduleCleanup = async () =>
   withTransactionHooks(async (transactionHooks) =>
     sql.begin(async (txSql) => {
       const result = await client.createChain({
-        sql: txSql,
+        txSql,
         transactionHooks,
         typeName: "queuert.cleanup",
         input: null,

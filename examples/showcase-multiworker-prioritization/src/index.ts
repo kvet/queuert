@@ -186,7 +186,7 @@ console.log(
 const marketingChains = await withTransactionHooks(async (transactionHooks) =>
   sql.begin(async (txSql) =>
     client.createChains({
-      sql: txSql,
+      txSql,
       transactionHooks,
       items: Array.from({ length: 10 }, (_, index) => ({
         typeName: "email.marketing" as const,
@@ -201,7 +201,7 @@ await new Promise((resolve) => setTimeout(resolve, 50));
 const transactionalChains = await withTransactionHooks(async (transactionHooks) =>
   sql.begin(async (txSql) =>
     client.createChains({
-      sql: txSql,
+      txSql,
       transactionHooks,
       items: [
         {
@@ -259,7 +259,7 @@ console.log(
 const alertChain = await withTransactionHooks(async (transactionHooks) =>
   sql.begin(async (txSql) =>
     client.createChain({
-      sql: txSql,
+      txSql,
       transactionHooks,
       typeName: "alert.dispatch",
       input: { to: "oncall@example.com", alertId: "ALT-42" },

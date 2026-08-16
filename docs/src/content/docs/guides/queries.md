@@ -50,21 +50,6 @@ See [examples/showcase-queries](https://github.com/kvet/queuert/tree/main/exampl
 
 `getChain`, `getChains`, `getJob`, and `getJobs` accept an opt-in `lock: true` that holds a write-intent lock on every matched row until the enclosing transaction ends (PostgreSQL `SELECT ... FOR UPDATE`; SQLite promotes to the write lock; the in-process adapter serializes the transaction). Use it for a race-free read-modify-write: read the row, decide, then write, with no other transaction able to update or delete it in between.
 
-```ts
-await withTransactionHooks(async (transactionHooks) =>
-  sql.begin(async (sql) => {
-    const job = await client.getJob({ sql, id: jobId, lock: true });
-    // The lock holds the row until the transaction ends: no worker can pick the
-    // job up between the read and the reschedule, so it stays pending and
-    // rescheduleJob can't throw JobNotReschedulableError. Omitting `schedule`
-    // reschedules to now — an admin "run it now" action.
-    if (job?.status === "pending") {
-      await client.rescheduleJob({ sql, transactionHooks, id: job.id });
-    }
-  }),
-);
-```
-
 Because the lock is scoped to a transaction, `lock: true` **requires** a transaction context — the parameter is a discriminated union, so `{ lock: true }` without one fails to compile.
 
 A row lock only covers rows that exist: a lookup that matches nothing locks nothing, so `lock` does not serialize a "create if absent" against a concurrent create. Close that race with `createChain` deduplication instead; the two mechanisms compose.

@@ -103,9 +103,9 @@ const worker = await createInProcessWorker({
         attemptHandler: async ({ job, complete }) => {
           console.log(`\n[reserve-inventory] AUTO-SETUP ATOMIC mode`);
 
-          return complete(async ({ finish, sql }) => {
+          return complete(async ({ finish, txSql }) => {
             console.log(`  Reading order, checking stock, and reserving...`);
-            const rows = await sql<
+            const rows = await txSql<
               {
                 quantity: number;
                 stock: number;
@@ -116,8 +116,8 @@ const worker = await createInProcessWorker({
             if (order.stock < order.quantity) {
               throw new Error(`Insufficient stock: ${order.stock} < ${order.quantity}`);
             }
-            await sql`UPDATE products SET stock = stock - ${order.quantity} WHERE id = (SELECT product_id FROM orders WHERE id = ${job.input.orderId})`;
-            await sql`UPDATE orders SET status = 'reserved' WHERE id = ${job.input.orderId}`;
+            await txSql`UPDATE products SET stock = stock - ${order.quantity} WHERE id = (SELECT product_id FROM orders WHERE id = ${job.input.orderId})`;
+            await txSql`UPDATE orders SET status = 'reserved' WHERE id = ${job.input.orderId}`;
             console.log(`  Transaction committed!`);
 
             return finish({
@@ -134,9 +134,9 @@ const worker = await createInProcessWorker({
         attemptHandler: async ({ job, prepare, complete }) => {
           console.log(`\n[charge-payment] STAGED mode`);
 
-          const orderId = await prepare({ mode: "staged" }, async ({ sql }) => {
+          const orderId = await prepare({ mode: "staged" }, async ({ txSql }) => {
             console.log(`  Loading order...`);
-            const rows = await sql<
+            const rows = await txSql<
               { id: number; status: string }[]
             >`SELECT id, status FROM orders WHERE id = ${job.input.orderId}`;
             const row = rows[0];
@@ -148,9 +148,9 @@ const worker = await createInProcessWorker({
           const { paymentId } = await chargePaymentAPI(job.input.amount);
           console.log(`  Payment complete: ${paymentId}`);
 
-          return complete(async ({ finish, sql }) => {
+          return complete(async ({ finish, txSql }) => {
             console.log(`  Recording payment...`);
-            await sql`UPDATE orders SET status = 'paid', payment_id = ${paymentId} WHERE id = ${orderId}`;
+            await txSql`UPDATE orders SET status = 'paid', payment_id = ${paymentId} WHERE id = ${orderId}`;
             console.log(`  Transaction committed!`);
 
             return finish({
@@ -170,8 +170,8 @@ const worker = await createInProcessWorker({
 
           await new Promise((r) => setTimeout(r, 100));
 
-          return complete(async ({ finish, sql }) => {
-            await sql`UPDATE orders SET status = 'confirmed' WHERE id = ${job.input.orderId}`;
+          return complete(async ({ finish, txSql }) => {
+            await txSql`UPDATE orders SET status = 'confirmed' WHERE id = ${job.input.orderId}`;
             return finish({ output: { confirmedAt: new Date().toISOString() } });
           });
         },
@@ -193,7 +193,7 @@ const chain = await withTransactionHooks(async (transactionHooks) =>
     console.log(`Created order #${order.id} for 2x Widget Pro`);
 
     const result = await client.createChain({
-      sql: txSql,
+      txSql,
       transactionHooks,
       typeName: "reserve-inventory",
       input: { orderId: order.id },

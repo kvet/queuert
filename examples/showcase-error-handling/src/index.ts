@@ -197,7 +197,7 @@ console.log("Payment results are typed as success | failure.\n");
 const payment1 = await withTransactionHooks(async (transactionHooks) =>
   sql.begin(async (txSql) => {
     const result = await client.createChain({
-      sql: txSql,
+      txSql,
       transactionHooks,
       typeName: "process-payment",
       input: { orderId: "order-1", amount: 500 },
@@ -214,7 +214,7 @@ assert.equal(result1.output.success, true);
 const payment2 = await withTransactionHooks(async (transactionHooks) =>
   sql.begin(async (txSql) => {
     const result = await client.createChain({
-      sql: txSql,
+      txSql,
       transactionHooks,
       typeName: "process-payment",
       input: { orderId: "order-2", amount: 1500 },
@@ -236,7 +236,7 @@ shipmentShouldFail = false;
 const order1 = await withTransactionHooks(async (transactionHooks) =>
   sql.begin(async (txSql) => {
     const result = await client.createChain({
-      sql: txSql,
+      txSql,
       transactionHooks,
       typeName: "charge-card",
       input: { orderId: "order-3", amount: 100 },
@@ -256,7 +256,7 @@ shipmentShouldFail = true;
 const order2 = await withTransactionHooks(async (transactionHooks) =>
   sql.begin(async (txSql) => {
     const result = await client.createChain({
-      sql: txSql,
+      txSql,
       transactionHooks,
       typeName: "charge-card",
       input: { orderId: "order-4", amount: 100 },
@@ -277,7 +277,7 @@ console.log(
 const apiCall = await withTransactionHooks(async (transactionHooks) =>
   sql.begin(async (txSql) => {
     const result = await client.createChain({
-      sql: txSql,
+      txSql,
       transactionHooks,
       typeName: "call-flaky-api",
       input: { endpoint: "/api/data" },

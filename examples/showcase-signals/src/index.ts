@@ -143,7 +143,7 @@ console.log("Handler is waiting when completeChain is called externally.\n");
 const externalTask = await withTransactionHooks(async (transactionHooks) =>
   sql.begin(async (txSql) =>
     client.createChain({
-      sql: txSql,
+      txSql,
       transactionHooks,
       typeName: "poll-external-api",
       input: { taskId: "task-001", maxPolls: 100 },
@@ -162,7 +162,7 @@ console.log(`Completing chain externally...`);
 await withTransactionHooks(async (transactionHooks) =>
   sql.begin(async (txSql) =>
     client.completeChain({
-      sql: txSql,
+      txSql,
       transactionHooks,
       ...externalTask,
       handler: async ({ job, completeJob }) => {
@@ -192,7 +192,7 @@ console.log("Worker stops while batch job is running. Handler wraps up gracefull
 const batch = await withTransactionHooks(async (transactionHooks) =>
   sql.begin(async (txSql) =>
     client.createChain({
-      sql: txSql,
+      txSql,
       transactionHooks,
       typeName: "process-batch",
       input: { batchId: "batch-001", itemCount: 100 },

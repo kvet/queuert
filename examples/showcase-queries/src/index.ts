@@ -139,7 +139,7 @@ const [validateChain, _stockChain, orderChain] = await withTransactionHooks(
   async (transactionHooks) =>
     sql.begin(async (txSql) => {
       const [validate, stock] = await client.createChains({
-        sql: txSql,
+        txSql,
         transactionHooks,
         items: [
           {
@@ -150,7 +150,7 @@ const [validateChain, _stockChain, orderChain] = await withTransactionHooks(
         ],
       });
       const order = await client.createChain({
-        sql: txSql,
+        txSql,
         transactionHooks,
         typeName: "process-order",
         input: { orderId: "ORD-001" },
@@ -163,7 +163,7 @@ const [validateChain, _stockChain, orderChain] = await withTransactionHooks(
 const notifyChains = await withTransactionHooks(async (transactionHooks) =>
   sql.begin(async (txSql) =>
     client.createChains({
-      sql: txSql,
+      txSql,
       transactionHooks,
       items: [
         { typeName: "send-notification", input: { userId: "alice", message: "Order placed" } },

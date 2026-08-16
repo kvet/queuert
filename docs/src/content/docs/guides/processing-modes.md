@@ -31,10 +31,10 @@ Most jobs don't need `prepare`. Call `complete` directly and you get atomic mode
 ```ts
 'reserve-inventory': {
   attemptHandler: async ({ job, complete }) => {
-    return complete(async ({ finish, sql }) => {
-      const [item] = await sql`SELECT stock FROM items WHERE id = ${job.input.id}`;
+    return complete(async ({ finish, txSql }) => {
+      const [item] = await txSql`SELECT stock FROM items WHERE id = ${job.input.id}`;
       if (item.stock < 1) throw new Error("Out of stock");
-      await sql`UPDATE items SET stock = stock - 1 WHERE id = ${job.input.id}`;
+      await txSql`UPDATE items SET stock = stock - 1 WHERE id = ${job.input.id}`;
       return finish({ output: { reserved: true } });
     });
   },
@@ -73,8 +73,8 @@ Use staged mode when you need to do work **between** two transactions — typica
 'charge-payment': {
   attemptHandler: async ({ job, prepare, complete }) => {
     // Phase 1: Read state (transaction)
-    const order = await prepare({ mode: "staged" }, async ({ sql }) => {
-      const [row] = await sql`SELECT * FROM orders WHERE id = ${job.input.id}`;
+    const order = await prepare({ mode: "staged" }, async ({ txSql }) => {
+      const [row] = await txSql`SELECT * FROM orders WHERE id = ${job.input.id}`;
       return row;
     });
     // Transaction closed, heartbeat active
@@ -83,8 +83,8 @@ Use staged mode when you need to do work **between** two transactions — typica
     const { paymentId } = await paymentAPI.charge(order.amount);
 
     // Phase 3: Write results (new transaction)
-    return complete(async ({ finish, sql }) => {
-      await sql`UPDATE orders SET payment_id = ${paymentId} WHERE id = ${order.id}`;
+    return complete(async ({ finish, txSql }) => {
+      await txSql`UPDATE orders SET payment_id = ${paymentId} WHERE id = ${order.id}`;
       return finish({ output: { paymentId } });
     });
   },
@@ -132,14 +132,14 @@ Within staged mode, `step` lets you perform **multiple independent transactions*
     let cursor;
 
     do {
-      const batch = await step(async ({ sql }) => {
-        const rows = await sql`
+      const batch = await step(async ({ txSql }) => {
+        const rows = await txSql`
           SELECT id, value FROM raw_events
           WHERE processed = false
           ORDER BY id LIMIT 500
         `;
         if (rows.length > 0) {
-          await sql`
+          await txSql`
             UPDATE raw_events SET processed = true
             WHERE id = ANY(${rows.map(r => r.id)})
           `;
@@ -186,8 +186,8 @@ This means even without `prepare`, you can get staged behavior by doing async wo
   attemptHandler: async ({ job, complete }) => {
     await emailService.send(job.input.to, job.input.body);
 
-    return complete(async ({ finish, sql }) => {
-      await sql`UPDATE notifications SET sent = true WHERE id = ${job.input.id}`;
+    return complete(async ({ finish, txSql }) => {
+      await txSql`UPDATE notifications SET sent = true WHERE id = ${job.input.id}`;
       return finish({ output: { sentAt: new Date().toISOString() } });
     });
   },
@@ -202,11 +202,11 @@ Staged mode adds a round-trip and loses read consistency for no benefit. Put eve
 
 ```ts
 attemptHandler: async ({ job, prepare, complete }) => {
-  const data = await prepare({ mode: "staged" }, async ({ sql }) => {
-    return (await sql`SELECT * FROM items WHERE id = ${job.input.id}`)[0];
+  const data = await prepare({ mode: "staged" }, async ({ txSql }) => {
+    return (await txSql`SELECT * FROM items WHERE id = ${job.input.id}`)[0];
   });
-  return complete(async ({ finish, sql }) => {
-    await sql`UPDATE items SET status = 'done' WHERE id = ${data.id}`;
+  return complete(async ({ finish, txSql }) => {
+    await txSql`UPDATE items SET status = 'done' WHERE id = ${data.id}`;
     return finish({ output: { done: true } });
   });
 };
@@ -219,11 +219,11 @@ This is the same as calling `complete()` directly, but with extra ceremony.
 
 ```ts
 attemptHandler: async ({ job, prepare, complete }) => {
-  const item = await prepare({ mode: "atomic" }, async ({ sql }) => {
-    return (await sql`SELECT stock FROM items WHERE id = ${job.input.id}`)[0];
+  const item = await prepare({ mode: "atomic" }, async ({ txSql }) => {
+    return (await txSql`SELECT stock FROM items WHERE id = ${job.input.id}`)[0];
   });
-  return complete(async ({ finish, sql }) => {
-    await sql`UPDATE items SET stock = stock - 1 WHERE id = ${job.input.id}`;
+  return complete(async ({ finish, txSql }) => {
+    await txSql`UPDATE items SET stock = stock - 1 WHERE id = ${job.input.id}`;
     return finish({ output: { reserved: true } });
   });
 };

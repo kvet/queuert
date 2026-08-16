@@ -65,8 +65,8 @@ Use when you want to load a resource once per attempt and make it available to t
 
 ```ts
 const loadUser: AttemptMiddleware<typeof stateAdapter, {}, { user: User }> = {
-  wrapPrepare: async ({ job, sql, next }) => {
-    const [user] = await sql`SELECT * FROM users WHERE id = ${job.input.userId}`;
+  wrapPrepare: async ({ job, txSql, next }) => {
+    const [user] = await txSql`SELECT * FROM users WHERE id = ${job.input.userId}`;
     return next({ user });
   },
 };
@@ -93,8 +93,8 @@ Use to inject context into each `step` call — metrics recorders, progress trac
 
 ```ts
 const metrics: AttemptMiddleware<typeof stateAdapter, {}, {}, { metrics: Metrics }> = {
-  wrapStep: async ({ job, sql, next }) => {
-    const metrics = new Metrics(job.id, sql);
+  wrapStep: async ({ job, txSql, next }) => {
+    const metrics = new Metrics(job.id, txSql);
     return next({ metrics });
   },
 };
@@ -121,10 +121,10 @@ const audit: AttemptMiddleware<
   {},
   { audit: (event: string) => Promise<void> }
 > = {
-  wrapComplete: async ({ job, sql, next }) =>
+  wrapComplete: async ({ job, txSql, next }) =>
     next({
       audit: async (event) =>
-        void (await sql`INSERT INTO audit (job_id, event) VALUES (${job.id}, ${event})`),
+        void (await txSql`INSERT INTO audit (job_id, event) VALUES (${job.id}, ${event})`),
     }),
 };
 ```
