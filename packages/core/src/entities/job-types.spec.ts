@@ -1,10 +1,12 @@
 import { describe, expect, it, vi } from "vitest";
 
 import { JobTypeValidationError } from "../errors.js";
-import { type JobTypesOptions, createJobTypes, createNoopJobTypes } from "./job-types.js";
+import { createJobTypes, createNoopJobTypes } from "./job-types.js";
 
 describe("createJobTypes", () => {
-  const createMockConfig = (overrides: Partial<JobTypesOptions> = {}): JobTypesOptions => ({
+  const createMockConfig = (
+    overrides: Partial<Parameters<typeof createJobTypes>[0]> = {},
+  ): Parameters<typeof createJobTypes>[0] => ({
     getTypeNames: () => [],
     validateEntry: vi.fn(),
     parseInput: vi.fn((_, input) => input),

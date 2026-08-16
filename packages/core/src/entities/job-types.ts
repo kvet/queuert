@@ -21,32 +21,6 @@ export type JobTypeDefinitions<T extends JobTypes<any>> = T[typeof definitionsSy
 export const noopRegistries: WeakSet<JobTypes<any>> = new WeakSet<JobTypes<any>>();
 
 /**
- * Configuration for createJobTypes.
- * Adapters implement these functions to provide validation logic.
- * Functions should throw on validation failure (any error type).
- */
-export type JobTypesOptions = {
-  /**
-   * Returns the known job type names. Used for runtime duplicate detection when
-   * {@link createClient} merges slices.
-   */
-  getTypeNames: () => readonly string[];
-  /** Validate that a job type can start a chain. Throw on failure. */
-  validateEntry: (typeName: string) => void;
-  /** Parse and validate input. Return transformed value or throw on failure. */
-  parseInput: (typeName: string, input: unknown) => unknown;
-  /** Parse and validate output. Return transformed value or throw on failure. */
-  parseOutput: (typeName: string, output: unknown) => unknown;
-  /**
-   * Validate continuation target. Receives { typeName, input } for
-   * nominal/structural validation. Throw on failure.
-   */
-  validateContinueWith: (typeName: string, target: ResolvedJobTypeReference) => void;
-  /** Validate blocker references. Receives array of { typeName, input } objects. Throw on failure. */
-  validateBlockers: (typeName: string, blockers: readonly ResolvedJobTypeReference[]) => void;
-};
-
-/**
  * Runtime registry for job type validation.
  *
  * Methods are split by return type:
@@ -111,6 +85,8 @@ export const createNoopJobTypes = <
  * Create a job type registry with runtime validation.
  * Wraps adapter errors in JobTypeValidationError.
  *
+ * @param options - Adapter-supplied validation callbacks. Functions should throw on validation failure (any error type).
+ *
  * @example
  * const registry = createJobTypes<MyJobTypes>({
  *   getTypeNames: () => Object.keys(schemas),
@@ -126,13 +102,30 @@ export const createNoopJobTypes = <
 export const createJobTypes = <
   TJobTypeDefinitions extends BaseJobTypeDefinitions,
   TExternalJobTypeDefinitions extends BaseJobTypeDefinitions = Record<never, never>,
->(
-  config: JobTypesOptions,
-): JobTypes<TJobTypeDefinitions, TExternalJobTypeDefinitions> => ({
-  getTypeNames: () => config.getTypeNames(),
+>(options: {
+  /**
+   * Returns the known job type names. Used for runtime duplicate detection when
+   * {@link createClient} merges slices.
+   */
+  getTypeNames: () => readonly string[];
+  /** Validate that a job type can start a chain. Throw on failure. */
+  validateEntry: (typeName: string) => void;
+  /** Parse and validate input. Return transformed value or throw on failure. */
+  parseInput: (typeName: string, input: unknown) => unknown;
+  /** Parse and validate output. Return transformed value or throw on failure. */
+  parseOutput: (typeName: string, output: unknown) => unknown;
+  /**
+   * Validate continuation target. Receives { typeName, input } for
+   * nominal/structural validation. Throw on failure.
+   */
+  validateContinueWith: (typeName: string, target: ResolvedJobTypeReference) => void;
+  /** Validate blocker references. Receives array of { typeName, input } objects. Throw on failure. */
+  validateBlockers: (typeName: string, blockers: readonly ResolvedJobTypeReference[]) => void;
+}): JobTypes<TJobTypeDefinitions, TExternalJobTypeDefinitions> => ({
+  getTypeNames: () => options.getTypeNames(),
   validateEntry: (typeName) => {
     try {
-      config.validateEntry(typeName);
+      options.validateEntry(typeName);
     } catch (cause) {
       throw new JobTypeValidationError(`Job type "${typeName}" is not an entry point`, {
         code: "not_entry_point",
@@ -143,7 +136,7 @@ export const createJobTypes = <
   },
   parseInput: (typeName, input) => {
     try {
-      return config.parseInput(typeName, input);
+      return options.parseInput(typeName, input);
     } catch (cause) {
       throw new JobTypeValidationError(`Invalid input for job type "${typeName}"`, {
         code: "invalid_input",
@@ -155,7 +148,7 @@ export const createJobTypes = <
   },
   parseOutput: (typeName, output) => {
     try {
-      return config.parseOutput(typeName, output);
+      return options.parseOutput(typeName, output);
     } catch (cause) {
       throw new JobTypeValidationError(`Invalid output for job type "${typeName}"`, {
         code: "invalid_output",
@@ -167,7 +160,7 @@ export const createJobTypes = <
   },
   validateContinueWith: (typeName, target) => {
     try {
-      config.validateContinueWith(typeName, target);
+      options.validateContinueWith(typeName, target);
     } catch (cause) {
       throw new JobTypeValidationError(
         `Job type "${typeName}" cannot continue to "${target.typeName}"`,
@@ -177,7 +170,7 @@ export const createJobTypes = <
   },
   validateBlockers: (typeName, blockers) => {
     try {
-      config.validateBlockers(typeName, blockers);
+      options.validateBlockers(typeName, blockers);
     } catch (cause) {
       throw new JobTypeValidationError(`Invalid blockers for job type "${typeName}"`, {
         code: "invalid_blockers",

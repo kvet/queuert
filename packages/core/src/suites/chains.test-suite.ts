@@ -116,16 +116,16 @@ export const chainsTestSuite = ({ it }: { it: TestAPI<TestSuiteContext> }): void
               expect(job.id).not.toEqual(chain.id);
               expect(job.chainId).toEqual(chain.id);
 
-              const result = await complete(async ({ finish }) =>
-                finish({
+              return complete(async ({ finish }) => {
+                const result = await finish({
                   output: {
                     result: job.input.valueNextNext,
                   },
-                }),
-              );
-              expectTypeOf(result.typeName).toEqualTypeOf<"linear_next_next">();
-              expectTypeOf(result.status).toEqualTypeOf<"completed">();
-              return result;
+                });
+                expectTypeOf(result.typeName).toEqualTypeOf<"linear_next_next">();
+                expectTypeOf(result.status).toEqualTypeOf<"completed">();
+                return result;
+              });
             },
           },
         },

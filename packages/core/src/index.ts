@@ -5,31 +5,14 @@ export { defineJobTypes } from "./entities/define-job-types.js";
 export {
   type BaseJobTypeDefinition,
   type BaseJobTypeDefinitions,
-  type JobTypeDefs,
   type JobTypeReference,
-  type NominalJobTypeReference,
-  type ResolvedJobTypeReference,
-  type StructuralJobTypeReference,
 } from "./entities/job-type.js";
 export {
   type JobTypeDefinitionErrors,
   type ValidatedJobTypeDefinitions,
 } from "./entities/job-type.validation.js";
-export {
-  createJobTypes,
-  type JobTypeDefinitions,
-  type JobTypes,
-  type JobTypesOptions,
-} from "./entities/job-types.js";
-export {
-  type BlockerChains,
-  type JobTypeEntryNames,
-  type JobTypeNames,
-  type JobTypeProperty,
-  type ResolvedChain,
-  type ResolvedChainJobs,
-  type ResolvedJob,
-} from "./entities/job-types.resolvers.js";
+export { createJobTypes, type JobTypeDefinitions, type JobTypes } from "./entities/job-types.js";
+export { type JobTypeEntryNames, type JobTypeNames } from "./entities/job-types.resolvers.js";
 export { type CompletedJob, type Job, type JobStatus } from "./entities/job.js";
 export { type JobTypesDefinitions } from "./entities/merge-job-types.js";
 export { type ScheduleOptions } from "./entities/schedule.js";
@@ -83,23 +66,7 @@ export {
   type TransactionHooksHandle,
   type TransactionHooksSavepoint,
 } from "./transaction-hooks.js";
-export { type AttemptConfig } from "./worker/attempt-heartbeat.js";
 export { type AttemptMiddleware } from "./worker/attempt-middleware.js";
 export { createProcessors } from "./worker/create-processors.js";
-export {
-  type AttemptFinish,
-  type AttemptComplete,
-  type AttemptCompleteCallback,
-  type AttemptCompleteOptions,
-  type AttemptHandler,
-  type AttemptPrepare,
-  type AttemptPrepareCallback,
-  type AttemptPrepareOptions,
-  type AttemptStep,
-  type JobAbortReason,
-} from "./worker/job-process.js";
-export {
-  type InProcessWorkerProcessor,
-  type ProcessorDefinitions,
-  type Processors,
-} from "./worker/processors.js";
+export { type JobAbortReason } from "./worker/job-process.js";
+export { type Processors } from "./worker/processors.js";

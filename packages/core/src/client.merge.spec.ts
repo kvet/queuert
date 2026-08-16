@@ -2,11 +2,7 @@ import { describe, expect, expectTypeOf, it, vi } from "vitest";
 
 import { defineJobTypes } from "./entities/define-job-types.js";
 import { type BaseJobTypeDefinitions } from "./entities/job-type.js";
-import {
-  type JobTypesOptions,
-  type JobTypeDefinitions,
-  createJobTypes,
-} from "./entities/job-types.js";
+import { type JobTypeDefinitions, createJobTypes } from "./entities/job-types.js";
 import {
   type JobTypeContinuation,
   type JobTypeEntryNames,
@@ -302,7 +298,7 @@ describe("mergeJobTypes", () => {
     });
 
     it("delegates validateContinueWith and validateBlockers", () => {
-      const configA: JobTypesOptions = {
+      const configA: Parameters<typeof createJobTypes>[0] = {
         getTypeNames: () => ["job-a"],
         validateEntry: vi.fn(),
         parseInput: vi.fn((_, input) => input),

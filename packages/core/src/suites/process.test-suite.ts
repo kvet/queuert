@@ -478,24 +478,22 @@ export const processTestSuite = ({ it }: { it: TestAPI<TestSuiteContext> }): voi
               });
               expect(result).toEqual("prepare");
 
-              const completedJob = await complete(
-                async ({ finish, transactionHooks, ...txCtx }) => {
-                  expectTypeOf(txCtx).toEqualTypeOf<{ $test: true }>();
-                  expect(txCtx).toBeDefined();
-                  expect(transactionHooks).toBeDefined();
+              return complete(async ({ finish, transactionHooks, ...txCtx }) => {
+                expectTypeOf(txCtx).toEqualTypeOf<{ $test: true }>();
+                expect(txCtx).toBeDefined();
+                expect(transactionHooks).toBeDefined();
 
-                  return finish({ output: { result: true } });
-                },
-              );
-              expectTypeOf(completedJob.typeName).toEqualTypeOf<"test">();
-              expectTypeOf(completedJob.status).toEqualTypeOf<"completed">();
-              expect(completedJob.typeName).toBe("test");
-              expect(completedJob.status).toBe("completed");
-              if (completedJob.status === "completed") {
-                expectTypeOf(completedJob.completedBy).toEqualTypeOf<string | null>();
-                expect(completedJob.completedBy).toMatch(/^worker-[0-9a-f-]{36}$/);
-              }
-              return completedJob;
+                const completedJob = await finish({ output: { result: true } });
+                expectTypeOf(completedJob.typeName).toEqualTypeOf<"test">();
+                expectTypeOf(completedJob.status).toEqualTypeOf<"completed">();
+                expect(completedJob.typeName).toBe("test");
+                expect(completedJob.status).toBe("completed");
+                if (completedJob.status === "completed") {
+                  expectTypeOf(completedJob.completedBy).toEqualTypeOf<string | null>();
+                  expect(completedJob.completedBy).toMatch(/^worker-[0-9a-f-]{36}$/);
+                }
+                return completedJob;
+              });
             },
           },
         },
