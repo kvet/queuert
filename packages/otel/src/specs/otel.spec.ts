@@ -92,9 +92,9 @@ describe("Metrics", () => {
       { method: "jobCreated", args: { typeName: "test" } },
       { method: "workerStarted", args: { workerId: workerIdMatcher } },
       { method: "jobAttemptStarted", args: { typeName: "test", status: "running" } },
-      { method: "jobAttemptCompleted", args: { typeName: "test", output: { result: true } } },
       { method: "jobCompleted", args: { typeName: "test", output: { result: true } } },
       { method: "chainCompleted", args: { typeName: "test", output: { result: true } } },
+      { method: "jobAttemptCompleted", args: { typeName: "test", output: { result: true } } },
       { method: "workerStopping", args: { workerId: workerIdMatcher } },
       { method: "workerStopped", args: { workerId: workerIdMatcher } },
     ]);
@@ -138,13 +138,13 @@ describe("Metrics", () => {
         jobTypes,
         backoffConfig: {
           initialDelayMs: 10,
-          multiplier: 2.0,
-          maxDelayMs: 100,
+          multiplier: 1,
+          maxDelayMs: 10,
         },
         processors: {
           test: {
             attemptHandler: async ({ job, complete }) => {
-              if (job.attempt < 4) {
+              if (job.attempt < 2) {
                 throw new Error("Unexpected error");
               }
               return complete(async ({ finish }) => finish({ output: null }));
@@ -154,7 +154,7 @@ describe("Metrics", () => {
       }),
     });
 
-    const job = await withTransactionHooks(async (transactionHooks) =>
+    const chain = await withTransactionHooks(async (transactionHooks) =>
       withTransaction(async (txCtx) =>
         client.createChain({
           ...txCtx,
@@ -166,7 +166,7 @@ describe("Metrics", () => {
     );
 
     await withWorkers([await worker.start()], async () => {
-      await client.awaitChain(job, completionOptions);
+      await client.awaitChain(chain, completionOptions);
     });
 
     await expectMetrics([
@@ -177,15 +177,83 @@ describe("Metrics", () => {
       { method: "jobAttemptFailed" },
       { method: "jobRescheduled" },
       { method: "jobAttemptStarted" },
-      { method: "jobAttemptFailed" },
-      { method: "jobRescheduled" },
-      { method: "jobAttemptStarted" },
-      { method: "jobAttemptFailed" },
-      { method: "jobRescheduled" },
-      { method: "jobAttemptStarted" },
-      { method: "jobAttemptCompleted" },
       { method: "jobCompleted" },
       { method: "chainCompleted" },
+      { method: "jobAttemptCompleted" },
+      { method: "workerStopping" },
+      { method: "workerStopped" },
+    ]);
+  });
+
+  it("tracks metrics for job rescheduling", async ({
+    stateAdapter,
+    notifyAdapter,
+    withTransaction,
+    withWorkers,
+    observabilityAdapter,
+    log,
+    expectMetrics,
+  }) => {
+    const jobTypes = defineJobTypes<{
+      test: {
+        entry: true;
+        input: null;
+        output: null;
+      };
+    }>();
+
+    const client = await createClient({
+      stateAdapter,
+      notifyAdapter,
+      observabilityAdapter,
+      log,
+      jobTypes,
+    });
+    const worker = await createInProcessWorker({
+      client,
+      concurrency: 1,
+      processors: createProcessors({
+        client,
+        jobTypes,
+        processors: {
+          test: {
+            attemptHandler: async ({ job, complete }) => {
+              if (job.attempt < 2) {
+                return complete(async ({ finish }) => finish({ reschedule: { afterMs: 100 } }));
+              }
+              return complete(async ({ finish }) => finish({ output: null }));
+            },
+          },
+        },
+      }),
+    });
+
+    const chain = await withTransactionHooks(async (transactionHooks) =>
+      withTransaction(async (txCtx) =>
+        client.createChain({
+          ...txCtx,
+          transactionHooks,
+          typeName: "test",
+          input: null,
+        }),
+      ),
+    );
+
+    await withWorkers([await worker.start()], async () => {
+      await client.awaitChain(chain, completionOptions);
+    });
+
+    await expectMetrics([
+      { method: "chainCreated" },
+      { method: "jobCreated" },
+      { method: "workerStarted" },
+      { method: "jobAttemptStarted" },
+      { method: "jobRescheduled" },
+      { method: "jobAttemptCompleted" },
+      { method: "jobAttemptStarted" },
+      { method: "jobCompleted" },
+      { method: "chainCompleted" },
+      { method: "jobAttemptCompleted" },
       { method: "workerStopping" },
       { method: "workerStopped" },
     ]);
@@ -284,16 +352,16 @@ describe("Metrics", () => {
       { method: "workerStarted" },
       { method: "jobAttemptStarted", args: { typeName: "linear" } },
       { method: "jobCreated", args: { typeName: "linear_next", chainTypeName: "linear" } },
-      { method: "jobAttemptCompleted", args: { typeName: "linear" } },
       { method: "jobCompleted", args: { typeName: "linear" } },
+      { method: "jobAttemptCompleted", args: { typeName: "linear" } },
       { method: "jobAttemptStarted", args: { typeName: "linear_next" } },
       { method: "jobCreated", args: { typeName: "linear_next_next", chainTypeName: "linear" } },
-      { method: "jobAttemptCompleted", args: { typeName: "linear_next" } },
       { method: "jobCompleted", args: { typeName: "linear_next" } },
+      { method: "jobAttemptCompleted", args: { typeName: "linear_next" } },
       { method: "jobAttemptStarted", args: { typeName: "linear_next_next" } },
-      { method: "jobAttemptCompleted", args: { typeName: "linear_next_next" } },
       { method: "jobCompleted", args: { typeName: "linear_next_next" } },
       { method: "chainCompleted", args: { typeName: "linear" } },
+      { method: "jobAttemptCompleted", args: { typeName: "linear_next_next" } },
       { method: "workerStopping" },
       { method: "workerStopped" },
     ]);
@@ -412,17 +480,17 @@ describe("Metrics", () => {
       { method: "workerStarted" },
       { method: "jobAttemptStarted", args: { typeName: "blocker" } },
       { method: "jobCreated", args: { typeName: "blocker" } },
-      { method: "jobAttemptCompleted", args: { typeName: "blocker" } },
       { method: "jobCompleted", args: { typeName: "blocker" } },
-      { method: "jobAttemptStarted", args: { typeName: "blocker" } },
       { method: "jobAttemptCompleted", args: { typeName: "blocker" } },
+      { method: "jobAttemptStarted", args: { typeName: "blocker" } },
       { method: "jobCompleted", args: { typeName: "blocker" } },
       { method: "chainCompleted", args: { typeName: "blocker" } },
       { method: "jobUnblocked", args: { typeName: "main" } },
+      { method: "jobAttemptCompleted", args: { typeName: "blocker" } },
       { method: "jobAttemptStarted", args: { typeName: "main" } },
-      { method: "jobAttemptCompleted", args: { typeName: "main" } },
       { method: "jobCompleted", args: { typeName: "main" } },
       { method: "chainCompleted", args: { typeName: "main" } },
+      { method: "jobAttemptCompleted", args: { typeName: "main" } },
       { method: "workerStopping" },
       { method: "workerStopped" },
     ]);
@@ -993,6 +1061,183 @@ describe("Spans", () => {
     ]);
   });
 
+  it("tracks error spans on retry", async ({
+    stateAdapter,
+    notifyAdapter,
+    withTransaction,
+    withWorkers,
+    observabilityAdapter,
+    log,
+    expectSpans,
+  }) => {
+    const jobTypes = defineJobTypes<{
+      test: {
+        entry: true;
+        input: null;
+        output: null;
+      };
+    }>();
+
+    const client = await createClient({
+      stateAdapter,
+      notifyAdapter,
+      observabilityAdapter,
+      log,
+      jobTypes,
+    });
+    const worker = await createInProcessWorker({
+      client,
+      concurrency: 1,
+      processors: createProcessors({
+        client,
+        jobTypes,
+        backoffConfig: {
+          initialDelayMs: 10,
+          multiplier: 1,
+          maxDelayMs: 10,
+        },
+        processors: {
+          test: {
+            attemptHandler: async ({ job, complete }) => {
+              if (job.attempt < 2) {
+                throw new Error("Unexpected error");
+              }
+              return complete(async ({ finish }) => finish({ output: null }));
+            },
+          },
+        },
+      }),
+    });
+
+    const chain = await withTransactionHooks(async (transactionHooks) =>
+      withTransaction(async (txCtx) =>
+        client.createChain({
+          ...txCtx,
+          transactionHooks,
+          typeName: "test",
+          input: null,
+        }),
+      ),
+    );
+
+    await withWorkers([await worker.start()], async () => {
+      await client.awaitChain(chain, completionOptions);
+    });
+
+    await expectSpans([
+      { name: "create chain.test", kind: "PRODUCER" },
+      { name: "create job.test", kind: "PRODUCER", parentName: "create chain.test" },
+      // Attempt 1: auto-setup prepare runs, then handler throws
+      { name: "prepare", kind: "INTERNAL", parentName: "start job-attempt.test" },
+      {
+        name: "start job-attempt.test",
+        kind: "CONSUMER",
+        parentName: "create job.test",
+        status: "ERROR",
+      },
+      // Attempt 2: completes
+      { name: "complete", kind: "INTERNAL", parentName: "start job-attempt.test" },
+      {
+        name: "complete chain.test",
+        kind: "CONSUMER",
+        parentName: "start job-attempt.test",
+        links: 1,
+      },
+      {
+        name: "start job-attempt.test",
+        kind: "CONSUMER",
+        parentName: "create job.test",
+        status: "OK",
+      },
+    ]);
+  });
+
+  it("tracks spans for job rescheduling", async ({
+    stateAdapter,
+    notifyAdapter,
+    withTransaction,
+    withWorkers,
+    observabilityAdapter,
+    log,
+    expectSpans,
+  }) => {
+    const jobTypes = defineJobTypes<{
+      test: {
+        entry: true;
+        input: null;
+        output: null;
+      };
+    }>();
+
+    const client = await createClient({
+      stateAdapter,
+      notifyAdapter,
+      observabilityAdapter,
+      log,
+      jobTypes,
+    });
+    const worker = await createInProcessWorker({
+      client,
+      concurrency: 1,
+      processors: createProcessors({
+        client,
+        jobTypes,
+        processors: {
+          test: {
+            attemptHandler: async ({ job, complete }) => {
+              if (job.attempt < 2) {
+                return complete(async ({ finish }) => finish({ reschedule: { afterMs: 100 } }));
+              }
+              return complete(async ({ finish }) => finish({ output: null }));
+            },
+          },
+        },
+      }),
+    });
+
+    const chain = await withTransactionHooks(async (transactionHooks) =>
+      withTransaction(async (txCtx) =>
+        client.createChain({
+          ...txCtx,
+          transactionHooks,
+          typeName: "test",
+          input: null,
+        }),
+      ),
+    );
+
+    await withWorkers([await worker.start()], async () => {
+      await client.awaitChain(chain, completionOptions);
+    });
+
+    await expectSpans([
+      { name: "create chain.test", kind: "PRODUCER" },
+      { name: "create job.test", kind: "PRODUCER", parentName: "create chain.test" },
+      // Attempt 1: reschedule — span ends OK
+      { name: "complete", kind: "INTERNAL", parentName: "start job-attempt.test" },
+      {
+        name: "start job-attempt.test",
+        kind: "CONSUMER",
+        parentName: "create job.test",
+        status: "OK",
+      },
+      // Attempt 2: completes normally
+      { name: "complete", kind: "INTERNAL", parentName: "start job-attempt.test" },
+      {
+        name: "complete chain.test",
+        kind: "CONSUMER",
+        parentName: "start job-attempt.test",
+        links: 1,
+      },
+      {
+        name: "start job-attempt.test",
+        kind: "CONSUMER",
+        parentName: "create job.test",
+        status: "OK",
+      },
+    ]);
+  });
+
   it("tracks execute spans with index attribute", async ({
     stateAdapter,
     notifyAdapter,
@@ -1155,111 +1400,6 @@ describe("Spans", () => {
         kind: "CONSUMER",
         parentName: "create job.test",
         events: [{ name: "abort", attributes: { "queuert.abort.reason": "worker_stopping" } }],
-      },
-    ]);
-  });
-
-  it("tracks error spans on retry", async ({
-    stateAdapter,
-    notifyAdapter,
-    withTransaction,
-    withWorkers,
-    observabilityAdapter,
-    log,
-    expectSpans,
-  }) => {
-    const jobTypes = defineJobTypes<{
-      test: {
-        entry: true;
-        input: null;
-        output: null;
-      };
-    }>();
-
-    const client = await createClient({
-      stateAdapter,
-      notifyAdapter,
-      observabilityAdapter,
-      log,
-      jobTypes,
-    });
-    const worker = await createInProcessWorker({
-      client,
-      concurrency: 1,
-      processors: createProcessors({
-        client,
-        jobTypes,
-        backoffConfig: {
-          initialDelayMs: 10,
-          multiplier: 2.0,
-          maxDelayMs: 100,
-        },
-        processors: {
-          test: {
-            attemptHandler: async ({ job, complete }) => {
-              if (job.attempt < 4) {
-                throw new Error("Unexpected error");
-              }
-              return complete(async ({ finish }) => finish({ output: null }));
-            },
-          },
-        },
-      }),
-    });
-
-    const job = await withTransactionHooks(async (transactionHooks) =>
-      withTransaction(async (txCtx) =>
-        client.createChain({
-          ...txCtx,
-          transactionHooks,
-          typeName: "test",
-          input: null,
-        }),
-      ),
-    );
-
-    await withWorkers([await worker.start()], async () => {
-      await client.awaitChain(job, completionOptions);
-    });
-
-    await expectSpans([
-      { name: "create chain.test", kind: "PRODUCER" },
-      { name: "create job.test", kind: "PRODUCER", parentName: "create chain.test" },
-      // Attempts 1-3: auto-setup prepare runs, then handler throws
-      { name: "prepare", kind: "INTERNAL", parentName: "start job-attempt.test" },
-      {
-        name: "start job-attempt.test",
-        kind: "CONSUMER",
-        parentName: "create job.test",
-        status: "ERROR",
-      },
-      { name: "prepare", kind: "INTERNAL", parentName: "start job-attempt.test" },
-      {
-        name: "start job-attempt.test",
-        kind: "CONSUMER",
-        parentName: "create job.test",
-        status: "ERROR",
-      },
-      { name: "prepare", kind: "INTERNAL", parentName: "start job-attempt.test" },
-      {
-        name: "start job-attempt.test",
-        kind: "CONSUMER",
-        parentName: "create job.test",
-        status: "ERROR",
-      },
-      // Attempt 4: complete + chain completion (no auto-prepare since finish({ output:  }) called first)
-      { name: "complete", kind: "INTERNAL", parentName: "start job-attempt.test" },
-      {
-        name: "complete chain.test",
-        kind: "CONSUMER",
-        parentName: "start job-attempt.test",
-        links: 1,
-      },
-      {
-        name: "start job-attempt.test",
-        kind: "CONSUMER",
-        parentName: "create job.test",
-        status: "OK",
       },
     ]);
   });
@@ -2644,9 +2784,9 @@ describe("Rollback", () => {
       { method: "jobAttemptFailed" },
       { method: "jobRescheduled" },
       { method: "jobAttemptStarted" },
-      { method: "jobAttemptCompleted" },
       { method: "jobCompleted" },
       { method: "chainCompleted" },
+      { method: "jobAttemptCompleted" },
       { method: "workerStopping" },
       { method: "workerStopped" },
     ]);
@@ -2732,9 +2872,9 @@ describe("Rollback", () => {
       { method: "stateAdapterError" },
       { method: "jobAttemptReclaimed" },
       { method: "jobAttemptStarted" },
-      { method: "jobAttemptCompleted" },
       { method: "jobCompleted" },
       { method: "chainCompleted" },
+      { method: "jobAttemptCompleted" },
       { method: "workerStopping" },
       { method: "workerStopped" },
     ]);
@@ -2819,12 +2959,12 @@ describe("Rollback", () => {
       { method: "jobRescheduled" },
       { method: "jobAttemptStarted" },
       { method: "jobCreated" },
-      { method: "jobAttemptCompleted" },
       { method: "jobCompleted" },
-      { method: "jobAttemptStarted" },
       { method: "jobAttemptCompleted" },
+      { method: "jobAttemptStarted" },
       { method: "jobCompleted" },
       { method: "chainCompleted" },
+      { method: "jobAttemptCompleted" },
       { method: "workerStopping" },
       { method: "workerStopped" },
     ]);
@@ -2902,12 +3042,12 @@ describe("Rollback", () => {
       { method: "workerStarted" },
       { method: "jobAttemptStarted" },
       { method: "stateAdapterError" },
-      { method: "jobAttemptFailed" },
       { method: "jobRescheduled" },
+      { method: "jobAttemptFailed" },
       { method: "jobAttemptStarted" },
-      { method: "jobAttemptCompleted" },
       { method: "jobCompleted" },
       { method: "chainCompleted" },
+      { method: "jobAttemptCompleted" },
       { method: "workerStopping" },
       { method: "workerStopped" },
     ]);
@@ -3083,12 +3223,12 @@ describe("Rollback", () => {
       { method: "jobRescheduled" },
       { method: "jobAttemptStarted" },
       { method: "jobCreated" },
-      { method: "jobAttemptCompleted" },
       { method: "jobCompleted" },
-      { method: "jobAttemptStarted" },
       { method: "jobAttemptCompleted" },
+      { method: "jobAttemptStarted" },
       { method: "jobCompleted" },
       { method: "chainCompleted" },
+      { method: "jobAttemptCompleted" },
       { method: "workerStopping" },
       { method: "workerStopped" },
     ]);

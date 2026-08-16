@@ -2,6 +2,7 @@ import { type AnyChain, type CompletedChain, mapStatePairToChain } from "../enti
 import { type BaseJobTypeDefinitions } from "../entities/job-type.js";
 import { type ResolvedJobWithBlockers } from "../entities/job-types.resolvers.js";
 import { mapStateJobToJob } from "../entities/job.js";
+import { type ScheduleOptions } from "../entities/schedule.js";
 import {
   JobAlreadyCompletedError,
   JobNotFoundError,
@@ -9,6 +10,8 @@ import {
 } from "../errors.js";
 import { type TypedAbortController } from "../helpers/abort.js";
 import { type BackoffConfig } from "../helpers/backoff.js";
+import { bufferNotifyJobScheduled } from "../helpers/notify-hooks.js";
+import { bufferObservabilityEvent } from "../helpers/observability-hooks.js";
 import { type SavepointContext, createSavepointContext } from "../helpers/savepoint-context.js";
 import {
   type TransactionContext,
@@ -54,7 +57,10 @@ export type {
   JobAbortReason,
 } from "./job-process.types.js";
 
-type AnyWorkerOutcome = { output: unknown } | { continueWith: AnyContinueWith };
+type AnyWorkerOutcome =
+  | { output: unknown }
+  | { continueWith: AnyContinueWith }
+  | { reschedule: ScheduleOptions };
 
 export const runJobProcess = async ({
   helpers,
@@ -395,6 +401,22 @@ export const runJobProcess = async ({
           const finish = async (outcome: AnyWorkerOutcome) => {
             finishOnce.begin();
             try {
+              if ("reschedule" in outcome) {
+                const rescheduledJob = await helpers.stateAdapter.finishJobAttempt({
+                  txCtx,
+                  jobId: job.id,
+                  workerId,
+                  outcome: { schedule: outcome.reschedule },
+                });
+                bufferNotifyJobScheduled(transactionHooks, helpers.notifyAdapter, rescheduledJob);
+                bufferObservabilityEvent(transactionHooks, () => {
+                  helpers.observabilityHelper.jobRescheduled(rescheduledJob);
+                });
+                const finishResult = { job: rescheduledJob, continuation: null };
+                finishOnce.succeed(finishResult);
+                return mapFinishResult(finishResult);
+              }
+
               const finishResult =
                 "output" in outcome
                   ? await completeChain(helpers, {
@@ -497,14 +519,13 @@ export const runJobProcess = async ({
       await prepareTransactionContext.resolve();
       await completeTransactionContext?.resolve();
 
-      // Reports the pre-write row: the attempt is described as it ran, not as
-      // the completion left it.
+      emitAttemptDuration();
+
       helpers.observabilityHelper.jobAttemptCompleted(job, {
         output: finished.job.output,
         continuedWith: finished.continuation ?? undefined,
         workerId,
       });
-      emitAttemptDuration();
       attemptSpanHandle?.end({
         status: "completed",
         continuedWith: finished.continuation
@@ -513,7 +534,10 @@ export const runJobProcess = async ({
               jobTypeName: finished.continuation.typeName,
             }
           : undefined,
-        chainCompleted: finished.continuation ? undefined : { output: finished.job.output },
+        chainCompleted:
+          finished.continuation || !finished.job.completedAt
+            ? undefined
+            : { output: finished.job.output },
       });
     } catch (error) {
       await disposeAttemptLostListener?.();

@@ -6,7 +6,16 @@ export const createNoopObservabilityAdapter = (): ObservabilityAdapter => ({
   workerStopping: () => {},
   workerStopped: () => {},
 
+  chainCreated: () => {},
+  chainCompleted: () => {},
+  chainDeleted: () => {},
+
   jobCreated: () => {},
+  jobCompleted: () => {},
+  jobRescheduled: () => {},
+  jobBlocked: () => {},
+  jobUnblocked: () => {},
+
   jobAttemptStarted: () => {},
   jobAttemptTakenByAnotherWorker: () => {},
   jobAttemptAlreadyCompleted: () => {},
@@ -14,17 +23,7 @@ export const createNoopObservabilityAdapter = (): ObservabilityAdapter => ({
   jobAttemptExtended: () => {},
   jobAttemptFailed: () => {},
   jobAttemptCompleted: () => {},
-  jobCompleted: () => {},
   jobAttemptReclaimed: () => {},
-
-  chainCreated: () => {},
-  chainCompleted: () => {},
-  chainDeleted: () => {},
-
-  jobRescheduled: () => {},
-
-  jobBlocked: () => {},
-  jobUnblocked: () => {},
 
   notifyAdapterError: () => {},
 

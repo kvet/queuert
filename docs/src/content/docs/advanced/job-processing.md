@@ -134,7 +134,7 @@ Every attempt handler receives a `signal` (`TypedAbortSignal<JobAbortReason>`) t
 | `"error"`                   | An internal error occurred during attempt extension                                |
 | `"worker_stopping"`         | The worker is shutting down — the job is still valid and the attempt is still held |
 
-The first four reasons indicate the job is no longer owned by this worker — handlers should stop immediately. `"worker_stopping"` is different: the job remains valid, but the worker is draining, so handlers should check `signal.reason` and wrap up quickly. Every attempt must still end in an outcome: call `complete`, or throw so the attempt is rescheduled. A handler that simply returns without completing fails the attempt.
+The first four reasons indicate the job is no longer owned by this worker — handlers should stop immediately. `"worker_stopping"` is different: the job remains valid, but the worker is draining, so handlers should check `signal.reason` and wrap up quickly. Every attempt must still end in an outcome: call `complete`, or throw so the attempt is rescheduled with backoff. A handler that simply returns without completing fails the attempt.
 
 ```typescript
 attemptHandler: async ({ signal, complete }) => {

@@ -937,39 +937,49 @@ export const createInProcessStateAdapter = async ({
       withWriteLock(txCtx, () => {
         const journal = txCtx?.journal;
         const job = idx.jobs.get(jobId);
-
-        if (outcome.error !== undefined) {
-          if (!job || !isRunning(job)) throw new Error("Job not found or not running");
-          const now = new Date();
-          const requestedScheduledAt =
-            outcome.schedule?.at ??
-            (outcome.schedule?.afterMs ? new Date(now.getTime() + outcome.schedule.afterMs) : now);
-          const updatedJob: DbJob = {
-            ...job,
-            lastAttemptAt: now,
-            lastAttemptError: outcome.error,
-            attemptBy: null,
-            attemptUntil: null,
-            attemptAt: null,
-            scheduledAt: clampToFloor(requestedScheduledAt, now),
-          };
-          idx.writeJob(journal, job, updatedJob);
-          return updatedJob;
+        if (!job || isCompleted(job)) throw new Error("Job not found or already completed");
+        if (outcome.error !== undefined || outcome.schedule !== undefined) {
+          if (job.attemptBy === null || (workerId !== null && job.attemptBy !== workerId))
+            throw new Error("Job not running or not owned by worker");
         }
-
-        if (!job || job.completedAt !== null) throw new Error("Job not found or already completed");
-        const continuedToId = outcome.continuedToId ?? null;
+        const now = new Date();
         const updatedJob: DbJob = {
           ...job,
-          completedAt: new Date(),
-          completedBy: workerId,
-          output: continuedToId != null ? null : outcome.output,
-          continuedToId,
-          blocked: false,
           attemptBy: null,
           attemptUntil: null,
           attemptAt: null,
-          lastAttemptError: null,
+          ...(outcome.error !== undefined || outcome.schedule !== undefined
+            ? { lastAttemptAt: now, lastAttemptError: outcome.error ?? null }
+            : {}),
+          ...(outcome.schedule !== undefined
+            ? {
+                scheduledAt: clampToFloor(
+                  outcome.schedule.at ??
+                    (outcome.schedule.afterMs
+                      ? new Date(now.getTime() + outcome.schedule.afterMs)
+                      : now),
+                  now,
+                ),
+              }
+            : {}),
+          ...(outcome.output !== undefined
+            ? {
+                output: outcome.output,
+                completedAt: now,
+                completedBy: workerId,
+                blocked: false,
+                lastAttemptError: null,
+              }
+            : {}),
+          ...(outcome.continuedToId !== undefined
+            ? {
+                continuedToId: outcome.continuedToId,
+                completedAt: now,
+                completedBy: workerId,
+                blocked: false,
+                lastAttemptError: null,
+              }
+            : {}),
         };
         idx.writeJob(journal, job, updatedJob);
         return updatedJob;
@@ -978,7 +988,7 @@ export const createInProcessStateAdapter = async ({
     reclaimExpiredJobAttempt: async ({ txCtx, typeNames, ignoredJobIds }) =>
       withWriteLock(txCtx, () => {
         const journal = txCtx?.journal;
-        const nowMs = Date.now();
+        const now = Date.now();
         const ignoredSet = ignoredJobIds ? new Set(ignoredJobIds) : undefined;
 
         let candidateJob: DbJob | undefined;
@@ -989,7 +999,7 @@ export const createInProcessStateAdapter = async ({
             const job = set.at(i)!;
             if (!job.attemptUntil) break;
             const lu = job.attemptUntil.getTime();
-            if (lu > nowMs) break;
+            if (lu > now) break;
             if (ignoredSet?.has(job.id)) continue;
             if (!candidateJob || lu < candidateJob.attemptUntil!.getTime()) candidateJob = job;
             break;

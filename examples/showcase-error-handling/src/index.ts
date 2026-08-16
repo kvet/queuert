@@ -6,7 +6,7 @@
  * Scenarios:
  * 1. Discriminated Unions: Success/failure represented in typed outputs
  * 2. Compensation Pattern: Failed job continues to rollback/refund job
- * 3. Explicit Rescheduling: Rate-limited API calls with rescheduleJob
+ * 3. Automatic Backoff: Transient errors retry with exponential backoff
  */
 
 import assert from "node:assert/strict";
@@ -21,7 +21,6 @@ import {
   createInProcessWorker,
   createProcessors,
   defineJobTypes,
-  rescheduleJob,
   withTransactionHooks,
 } from "queuert";
 
@@ -60,17 +59,16 @@ const jobTypes = defineJobTypes<{
     input: { chargeId: string; reason: string };
     output: { refunded: true; refundId: string };
   };
-
   /*
-   * Workflow (rescheduling):
-   *   call-rate-limited-api <--+ (reschedule on rate limit)
-   *        |                   |
-   *        +-------------------+
+   * Workflow (backoff):
+   *   call-flaky-api <--+ (throw → automatic exponential backoff)
+   *        |            |
+   *        +------------+
    *        |
    *        v (success)
    *   output { data }
    */
-  "call-rate-limited-api": {
+  "call-flaky-api": {
     entry: true;
     input: { endpoint: string };
     output: { data: string };
@@ -79,7 +77,6 @@ const jobTypes = defineJobTypes<{
 
 // Simulation state
 let shipmentShouldFail = false;
-let apiRateLimited = true;
 
 await using pg = await acquirePostgres("postgres:18", import.meta.url);
 const sql = postgres(pg.connectionString, { max: 10 });
@@ -169,13 +166,16 @@ const worker = await createInProcessWorker({
         },
       },
 
-      "call-rate-limited-api": {
+      "call-flaky-api": {
+        backoffConfig: { initialDelayMs: 200, maxDelayMs: 1000 },
         attemptHandler: async ({ job, complete }) => {
-          console.log(`[call-rate-limited-api] Attempt ${job.attempt} to ${job.input.endpoint}`);
+          console.log(
+            `[call-flaky-api] Attempt ${job.attempt} to ${job.input.endpoint}` +
+              (job.lastAttemptError != null ? ` (previous: ${job.lastAttemptError})` : ""),
+          );
 
-          if (apiRateLimited && job.attempt < 3) {
-            console.log(`  Rate limited! Rescheduling in 100ms...`);
-            rescheduleJob({ afterMs: 100 });
+          if (job.attempt < 3) {
+            throw new Error(`Service unavailable (attempt ${job.attempt})`);
           }
 
           console.log(`  API call SUCCESS`);
@@ -268,23 +268,24 @@ const orderResult2 = await client.awaitChain(order2, { timeoutMs: 5000 });
 console.log(`Final output: ${JSON.stringify(orderResult2.output)}`);
 assert.ok("refunded" in orderResult2.output);
 
-// Scenario 3: Explicit rescheduling
-console.log("\n--- Scenario 3: Explicit Rescheduling ---");
-console.log("API is rate-limited, job reschedules itself.\n");
+// Scenario 3: Automatic backoff on transient errors
+console.log("\n--- Scenario 3: Automatic Backoff ---");
+console.log(
+  "Thrown errors reschedule with exponential backoff. lastAttemptError carries context.\n",
+);
 
-apiRateLimited = true;
 const apiCall = await withTransactionHooks(async (transactionHooks) =>
   sql.begin(async (txSql) => {
     const result = await client.createChain({
       sql: txSql,
       transactionHooks,
-      typeName: "call-rate-limited-api",
+      typeName: "call-flaky-api",
       input: { endpoint: "/api/data" },
     });
     return result;
   }),
 );
-const apiResult = await client.awaitChain(apiCall, { timeoutMs: 5000 });
+const apiResult = await client.awaitChain(apiCall, { timeoutMs: 10000 });
 console.log(`Final output: ${JSON.stringify(apiResult.output)}`);
 assert.ok("data" in apiResult.output);
 

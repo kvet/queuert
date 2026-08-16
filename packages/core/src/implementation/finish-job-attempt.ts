@@ -39,7 +39,6 @@ export const finishJobAttempt = async (
     helpers.observabilityHelper.jobCompleted(completedJob, {
       output,
       continuedWith: continuation ?? undefined,
-      workerId,
     });
     helpers.observabilityHelper.jobDuration(completedJob);
   });

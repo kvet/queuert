@@ -1518,94 +1518,87 @@ RETURNING *
       return mapDbJobToStateJob(job);
     },
     finishJobAttempt: async ({ txCtx, jobId, workerId, outcome }) => {
-      if (outcome.error !== undefined) {
-        const scheduledAtIso =
-          outcome.schedule?.at?.toISOString().replace("T", " ").replace("Z", "") ?? null;
-        const scheduleAfterMsOrNull = outcome.schedule?.afterMs ?? null;
-        const [job] = await executeTypedSql({
-          txCtx,
-          sql: templateCache.getOrCompute("finishJobAttemptFailed", () =>
-            applyTemplate(
-              sql(
-                `
-UPDATE {{table_prefix}}job
-SET last_attempt_at = datetime('now', 'subsec'),
-  last_attempt_error = ?,
-  attempt_at = NULL,
-  attempt_by = NULL,
-  attempt_until = NULL,
-  scheduled_at = MAX(
-    COALESCE(?,
-      CASE WHEN ? IS NOT NULL THEN datetime('now', 'subsec', '+' || (? / 1000.0) || ' seconds') ELSE NULL END,
-      datetime('now', 'subsec')),
-    datetime('now', 'subsec'))
-WHERE id = ?
-  AND attempt_by = ?
-RETURNING *
-`,
-                {
-                  id: "finishJobAttemptFailed",
-                  params: [
-                    t.string(),
-                    t["string?"](),
-                    t["number?"](),
-                    t["number?"](),
-                    idDataType,
-                    t["string?"](),
-                  ],
-                  columns: { ...dbJobColumns },
-                },
-              ),
-            ),
-          ),
-          params: [
-            JSON.stringify(outcome.error),
-            scheduledAtIso,
-            scheduleAfterMsOrNull,
-            scheduleAfterMsOrNull,
-            jobId,
-            workerId,
-          ],
-        });
-
-        return mapDbJobToStateJob(job);
-      }
-
+      const isCompletion =
+        outcome.output !== undefined || outcome.continuedToId !== undefined ? 1 : 0;
+      const scheduledAtIso =
+        outcome.schedule?.at?.toISOString().replace("T", " ").replace("Z", "") ?? null;
+      const scheduleAfterMsOrNull = outcome.schedule?.afterMs ?? null;
       const [job] = await executeTypedSql({
         txCtx,
-        sql: templateCache.getOrCompute("finishJobAttemptCompleted", () =>
+        sql: templateCache.getOrCompute("finishJobAttempt", () =>
           applyTemplate(
             sql(
               `
 UPDATE {{table_prefix}}job
-SET completed_at = datetime('now', 'subsec'),
-  completed_by = ?,
-  output = ?,
-  continued_to_id = ?,
-  blocked = 0,
+SET last_attempt_at = CASE WHEN ? THEN last_attempt_at ELSE datetime('now', 'subsec') END,
+  last_attempt_error = CASE WHEN ? THEN NULL ELSE ? END,
   attempt_at = NULL,
   attempt_by = NULL,
   attempt_until = NULL,
-  last_attempt_error = NULL
+  completed_at = CASE WHEN ? THEN datetime('now', 'subsec') ELSE NULL END,
+  completed_by = CASE WHEN ? THEN ? ELSE NULL END,
+  output = CASE WHEN ? THEN ? ELSE NULL END,
+  continued_to_id = CASE WHEN ? THEN ? ELSE NULL END,
+  blocked = CASE WHEN ? THEN 0 ELSE blocked END,
+  scheduled_at = CASE WHEN ? THEN scheduled_at
+    ELSE MAX(
+      COALESCE(?,
+        CASE WHEN ? IS NOT NULL THEN datetime('now', 'subsec', '+' || (? / 1000.0) || ' seconds') ELSE NULL END,
+        datetime('now', 'subsec')),
+      datetime('now', 'subsec')) END
 WHERE id = ?
   AND completed_at IS NULL
+  AND (? OR attempt_by = ?)
 RETURNING *
 `,
               {
-                id: "finishJobAttemptCompleted",
-                params: [t["string?"](), t["string?"](), t["string?"](), idDataType],
+                id: "finishJobAttempt",
+                params: [
+                  t.number(),
+                  t.number(),
+                  t["string?"](),
+                  t.number(),
+                  t.number(),
+                  t["string?"](),
+                  t.number(),
+                  t["string?"](),
+                  t.number(),
+                  t["string?"](),
+                  t.number(),
+                  t.number(),
+                  t["string?"](),
+                  t["number?"](),
+                  t["number?"](),
+                  idDataType,
+                  t.number(),
+                  t["string?"](),
+                ],
                 columns: { ...dbJobColumns },
               },
             ),
           ),
         ),
         params: [
+          isCompletion,
+          isCompletion,
+          outcome.error !== undefined ? JSON.stringify(outcome.error) : null,
+          isCompletion,
+          isCompletion,
           workerId,
-          outcome.continuedToId != null || outcome.output === undefined
-            ? null
-            : JSON.stringify(outcome.output),
+          isCompletion,
+          isCompletion && outcome.continuedToId == null && outcome.output !== undefined
+            ? JSON.stringify(outcome.output)
+            : null,
+          isCompletion,
           outcome.continuedToId ?? null,
+          isCompletion,
+          isCompletion,
+          scheduledAtIso,
+          scheduleAfterMsOrNull,
+          scheduleAfterMsOrNull,
           jobId,
+          isCompletion,
+          workerId,
         ],
       });
 

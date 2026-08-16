@@ -44,7 +44,24 @@ type WorkerStoppedLogEntry = LogEntry<
   WorkerBasicData
 >;
 
-/** Basic job identification data included in log entries. */
+export type ChainBasicData = {
+  id: string;
+  typeName: string;
+};
+type ChainCreatedLogEntry = LogEntry<
+  "chain_created",
+  "info",
+  "Chain created",
+  ChainBasicData & { input: unknown }
+>;
+type ChainCompletedLogEntry = LogEntry<
+  "chain_completed",
+  "info",
+  "Chain completed",
+  ChainBasicData & { output: unknown }
+>;
+type ChainDeletedLogEntry = LogEntry<"chain_deleted", "info", "Chain deleted", ChainBasicData>;
+
 export type JobBasicData = {
   id: string;
   typeName: string;
@@ -57,16 +74,46 @@ export type JobAttemptData = JobProcessingData & {
   attemptBy: string;
   attemptUntil: Date;
 };
+export type JobCompletionData = JobProcessingData & {
+  output?: unknown;
+  continuedWith?: JobBasicData;
+};
 type JobCreatedLogEntry = LogEntry<
   "job_created",
   "info",
   "Job created",
   {
     input: unknown;
-    blockers: ChainData[];
+    blockers: ChainBasicData[];
     scheduledAt: Date;
   } & JobBasicData
 >;
+type JobAttemptCompletedLogEntry = LogEntry<
+  "job_attempt_completed",
+  "info",
+  "Job attempt completed",
+  JobCompletionData & WorkerBasicData
+>;
+type JobCompletedLogEntry = LogEntry<"job_completed", "info", "Job completed", JobCompletionData>;
+type JobRescheduledLogEntry = LogEntry<
+  "job_rescheduled",
+  "info",
+  "Job rescheduled",
+  JobBasicData & { scheduledAt: Date }
+>;
+type JobBlockedLogEntry = LogEntry<
+  "job_blocked",
+  "info",
+  "Job blocked by incomplete chains",
+  { blockedByChains: ChainBasicData[] } & JobBasicData
+>;
+type JobUnblockedLogEntry = LogEntry<
+  "job_unblocked",
+  "info",
+  "Job unblocked",
+  { unblockedByChain: ChainBasicData } & JobBasicData
+>;
+
 type JobAttemptStartedLogEntry = LogEntry<
   "job_attempt_started",
   "info",
@@ -110,61 +157,6 @@ type JobAttemptFailedLogEntry = LogEntry<
   JobProcessingData & WorkerBasicData,
   unknown
 >;
-export type JobCompletionData = JobProcessingData & {
-  output?: unknown;
-  continuedWith?: JobBasicData;
-};
-type JobAttemptCompletedLogEntry = LogEntry<
-  "job_attempt_completed",
-  "info",
-  "Job attempt completed",
-  JobCompletionData & WorkerBasicData
->;
-type JobCompletedLogEntry = LogEntry<
-  "job_completed",
-  "info",
-  "Job completed",
-  JobCompletionData & { workerId: string | null }
->;
-
-/** Chain identification data included in log entries. */
-export type ChainData = {
-  id: string;
-  typeName: string;
-};
-type ChainCreatedLogEntry = LogEntry<
-  "chain_created",
-  "info",
-  "Chain created",
-  ChainData & { input: unknown }
->;
-type ChainCompletedLogEntry = LogEntry<
-  "chain_completed",
-  "info",
-  "Chain completed",
-  { output: unknown } & ChainData
->;
-type ChainDeletedLogEntry = LogEntry<"chain_deleted", "info", "Chain deleted", ChainData>;
-
-type JobRescheduledLogEntry = LogEntry<
-  "job_rescheduled",
-  "info",
-  "Job rescheduled",
-  JobBasicData & { scheduledAt: Date }
->;
-
-type JobBlockedLogEntry = LogEntry<
-  "job_blocked",
-  "info",
-  "Job blocked by incomplete chains",
-  { blockedByChains: ChainData[] } & JobBasicData
->;
-type JobUnblockedLogEntry = LogEntry<
-  "job_unblocked",
-  "info",
-  "Job unblocked",
-  { unblockedByChain: ChainData } & JobBasicData
->;
 
 type NotifyAdapterErrorLogEntry = LogEntry<
   "notify_adapter_error",
@@ -185,7 +177,7 @@ type StateAdapterErrorLogEntry = LogEntry<
 type JobTypeValidationErrorLogEntry = LogEntry<
   "job_type_validation_error",
   "error",
-  string, // Dynamic message from the error
+  string,
   { code: string; typeName: string } & Record<string, unknown>,
   unknown
 >;
@@ -196,8 +188,17 @@ type TypedLogEntry =
   | WorkerErrorLogEntry
   | WorkerStoppingLogEntry
   | WorkerStoppedLogEntry
+  // chain
+  | ChainCreatedLogEntry
+  | ChainCompletedLogEntry
+  | ChainDeletedLogEntry
   // job
   | JobCreatedLogEntry
+  | JobCompletedLogEntry
+  | JobRescheduledLogEntry
+  | JobBlockedLogEntry
+  | JobUnblockedLogEntry
+  // job attempt
   | JobAttemptStartedLogEntry
   | JobAttemptTakenByAnotherWorkerLogEntry
   | JobAttemptAlreadyCompletedLogEntry
@@ -206,16 +207,6 @@ type TypedLogEntry =
   | JobAttemptReclaimedLogEntry
   | JobAttemptFailedLogEntry
   | JobAttemptCompletedLogEntry
-  | JobCompletedLogEntry
-  // chain
-  | ChainCreatedLogEntry
-  | ChainCompletedLogEntry
-  | ChainDeletedLogEntry
-  // trigger
-  | JobRescheduledLogEntry
-  // blockers
-  | JobBlockedLogEntry
-  | JobUnblockedLogEntry
   // notify adapter
   | NotifyAdapterErrorLogEntry
   // state adapter

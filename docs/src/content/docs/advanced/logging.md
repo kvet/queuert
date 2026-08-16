@@ -55,13 +55,13 @@ All entries are strongly typed — the `type` field determines the exact shape o
 
 ### Job Lifecycle
 
-| Type              | Level  | Message                          | Data                                                                                                       |
-| ----------------- | ------ | -------------------------------- | ---------------------------------------------------------------------------------------------------------- |
-| `job_created`     | `info` | Job created                      | `id`, `typeName`, `chainId`, `chainTypeName`, `input`, `blockers`, `scheduledAt`                           |
-| `job_completed`   | `info` | Job completed                    | `id`, `typeName`, `chainId`, `chainTypeName`, `status`, `attempt`, `output?`, `continuedWith?`, `workerId` |
-| `job_blocked`     | `info` | Job blocked by incomplete chains | `id`, `typeName`, `chainId`, `chainTypeName`, `blockedByChains`                                            |
-| `job_rescheduled` | `info` | Job rescheduled                  | `id`, `typeName`, `chainId`, `chainTypeName`, `scheduledAt`                                                |
-| `job_unblocked`   | `info` | Job unblocked                    | `id`, `typeName`, `chainId`, `chainTypeName`, `unblockedByChain`                                           |
+| Type              | Level  | Message                          | Data                                                                                           |
+| ----------------- | ------ | -------------------------------- | ---------------------------------------------------------------------------------------------- |
+| `job_created`     | `info` | Job created                      | `id`, `typeName`, `chainId`, `chainTypeName`, `input`, `blockers`, `scheduledAt`               |
+| `job_completed`   | `info` | Job completed                    | `id`, `typeName`, `chainId`, `chainTypeName`, `status`, `attempt`, `output?`, `continuedWith?` |
+| `job_blocked`     | `info` | Job blocked by incomplete chains | `id`, `typeName`, `chainId`, `chainTypeName`, `blockedByChains`                                |
+| `job_rescheduled` | `info` | Job rescheduled                  | `id`, `typeName`, `chainId`, `chainTypeName`, `scheduledAt`                                    |
+| `job_unblocked`   | `info` | Job unblocked                    | `id`, `typeName`, `chainId`, `chainTypeName`, `unblockedByChain`                               |
 
 ### Attempt Lifecycle
 
@@ -103,7 +103,7 @@ Log entry data fields compose from a few base shapes:
 
 - **JobBasicData** — `id`, `typeName`, `chainId`, `chainTypeName`
 - **JobProcessingData** — extends JobBasicData with `status`, `attempt`
-- **ChainData** — `id`, `typeName`
+- **ChainBasicData** — `id`, `typeName`
 
 ## Relationship to ObservabilityAdapter
 

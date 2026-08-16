@@ -66,12 +66,9 @@ const jobTypes = defineJobTypes<{
 
 ## Rescheduling
 
-When a job throws an error, it's automatically rescheduled with exponential backoff. For
-transient failures where you want explicit control over retry timing, use `rescheduleJob`:
+When a job throws an error, it's automatically rescheduled with exponential backoff:
 
 ```ts
-import { rescheduleJob } from "queuert";
-
 const worker = await createInProcessWorker({
   client,
   processors: createProcessors({
@@ -79,17 +76,11 @@ const worker = await createInProcessWorker({
     jobTypes,
     processors: {
       "call-external-api": {
-        attemptHandler: async ({ job, prepare, complete }) => {
+        attemptHandler: async ({ job, complete }) => {
           const response = await fetch(job.input.url);
 
-          if (response.status === 429) {
-            // Rate limited — retry after the specified delay
-            const retryAfter = parseInt(response.headers.get("Retry-After") || "60", 10);
-            rescheduleJob({ afterMs: retryAfter * 1000 });
-          }
-
           if (!response.ok) {
-            // Other errors use default exponential backoff
+            // Rescheduled automatically with exponential backoff
             throw new Error(`API error: ${response.status}`);
           }
 
@@ -104,15 +95,7 @@ const worker = await createInProcessWorker({
 const stop = await worker.start();
 ```
 
-`rescheduleJob` throws a `RescheduleJobError` which the worker catches specially. Unlike
-regular errors that trigger exponential backoff based on attempt count, `rescheduleJob` uses
-your specified schedule exactly:
-
-```ts
-rescheduleJob({ afterMs: 30_000 }); // 30 seconds from now
-rescheduleJob({ at: new Date("2026-06-15T09:00:00Z") }); // specific time
-rescheduleJob({ afterMs: 60_000 }, originalError); // with cause for logging
-```
+For explicit control over retry timing, see [Rescheduling from a Handler](../scheduling/#rescheduling-from-a-handler).
 
 ## lastAttemptError
 
@@ -135,4 +118,4 @@ attemptHandler: async ({ job, complete }) => {
 
 Values are truncated to 10,000 characters.
 
-See [examples/showcase-error-handling](https://github.com/kvet/queuert/tree/main/examples/showcase-error-handling) for a complete working example demonstrating discriminated unions, compensation patterns, and explicit rescheduling. See also [Job Processing Reliability](../processing-reliability/) for engine-level safety guarantees (savepoints, automatic rollback), [Timeouts](../timeouts/), and [Job Processing Modes](../processing-modes/).
+See [examples/showcase-error-handling](https://github.com/kvet/queuert/tree/main/examples/showcase-error-handling) for a complete working example demonstrating discriminated unions, compensation patterns, and automatic backoff. See also [Job Processing Reliability](../processing-reliability/) for engine-level safety guarantees (savepoints, automatic rollback), [Timeouts](../timeouts/), and [Job Processing Modes](../processing-modes/).

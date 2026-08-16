@@ -1472,67 +1472,43 @@ RETURNING *
     },
 
     finishJobAttempt: async ({ txCtx, jobId, workerId, outcome }) => {
-      if (outcome.error !== undefined) {
-        const [job] = await executeTypedSql({
-          txCtx,
-          sql: templateCache.getOrCompute("finishJobAttemptFailed", () =>
-            applyTemplate(
-              sql(
-                `
-UPDATE {{schema}}.{{table_prefix}}job
-SET last_attempt_at = now(),
-  last_attempt_error = $2::jsonb,
-  attempt_at = NULL,
-  attempt_by = NULL,
-  attempt_until = NULL,
-  scheduled_at = GREATEST(COALESCE($3::timestamptz, now() + ($4::bigint || ' milliseconds')::interval, now()), now())
-WHERE id = $1
-  AND attempt_by = $5
-RETURNING *
-`,
-                {
-                  id: "finishJobAttemptFailed",
-                  params: [idDataType, t.string(), t["date?"](), t["number?"](), t["string?"]()],
-                  columns: { ...dbJobColumns },
-                },
-              ),
-            ),
-          ),
-          params: [
-            jobId,
-            JSON.stringify(outcome.error),
-            outcome.schedule?.at?.toISOString() ?? null,
-            outcome.schedule?.afterMs ?? null,
-            workerId,
-          ],
-        });
-
-        return mapDbJobToStateJob(job);
-      }
-
+      const isCompletion = outcome.output !== undefined || outcome.continuedToId !== undefined;
       const [job] = await executeTypedSql({
         txCtx,
-        sql: templateCache.getOrCompute("finishJobAttemptCompleted", () =>
+        sql: templateCache.getOrCompute("finishJobAttempt", () =>
           applyTemplate(
             sql(
               `
 UPDATE {{schema}}.{{table_prefix}}job
-SET completed_at = now(),
-  completed_by = $3,
-  output = $2::jsonb,
-  continued_to_id = $4::{{id_type}},
-  blocked = false,
+SET last_attempt_at = CASE WHEN $5::boolean THEN last_attempt_at ELSE now() END,
+  last_attempt_error = CASE WHEN $5::boolean THEN NULL ELSE $2::jsonb END,
   attempt_at = NULL,
   attempt_by = NULL,
   attempt_until = NULL,
-  last_attempt_error = NULL
+  completed_at = CASE WHEN $5::boolean THEN now() ELSE NULL END,
+  completed_by = CASE WHEN $5::boolean THEN $8 ELSE NULL END,
+  output = CASE WHEN $5::boolean THEN $6::jsonb ELSE NULL END,
+  continued_to_id = CASE WHEN $5::boolean THEN $7::{{id_type}} ELSE NULL END,
+  blocked = CASE WHEN $5::boolean THEN false ELSE blocked END,
+  scheduled_at = CASE WHEN $5::boolean THEN scheduled_at
+    ELSE GREATEST(COALESCE($3::timestamptz, now() + ($4::bigint || ' milliseconds')::interval, now()), now()) END
 WHERE id = $1
   AND completed_at IS NULL
+  AND ($5::boolean OR attempt_by = $8)
 RETURNING *
 `,
               {
-                id: "finishJobAttemptCompleted",
-                params: [idDataType, t["string?"](), t["string?"](), idNullableDataType],
+                id: "finishJobAttempt",
+                params: [
+                  idDataType,
+                  t["string?"](),
+                  t["date?"](),
+                  t["number?"](),
+                  t.boolean(),
+                  t["string?"](),
+                  idNullableDataType,
+                  t["string?"](),
+                ],
                 columns: { ...dbJobColumns },
               },
             ),
@@ -1540,11 +1516,15 @@ RETURNING *
         ),
         params: [
           jobId,
-          outcome.continuedToId != null || outcome.output === undefined
-            ? null
-            : JSON.stringify(outcome.output),
-          workerId,
+          outcome.error !== undefined ? JSON.stringify(outcome.error) : null,
+          outcome.schedule?.at?.toISOString() ?? null,
+          outcome.schedule?.afterMs ?? null,
+          isCompletion,
+          isCompletion && outcome.continuedToId == null && outcome.output !== undefined
+            ? JSON.stringify(outcome.output)
+            : null,
           outcome.continuedToId ?? null,
+          workerId,
         ],
       });
 

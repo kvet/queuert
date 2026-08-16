@@ -240,6 +240,16 @@ export type OutputJob<
   { status: "completed"; continuedToId: null }
 > & { continuedTo: undefined };
 
+export type RescheduledJob<
+  TJobId,
+  TJobTypeDefinitions extends BaseJobTypeDefinitions,
+  TJobTypeName extends string,
+  TChainTypeName extends string = JobTypeReachingEntry<TJobTypeDefinitions, TJobTypeName>,
+> = Extract<
+  ResolvedJob<TJobId, TJobTypeDefinitions, TJobTypeName, TChainTypeName>,
+  { status: "pending" }
+>;
+
 export type ContinuedJob<
   TJobId,
   TJobTypeDefinitions extends BaseJobTypeDefinitions,

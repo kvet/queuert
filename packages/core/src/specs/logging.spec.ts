@@ -131,13 +131,7 @@ describe("Logging", () => {
       },
       {
         type: "job_completed",
-        data: {
-          ...jobArgs,
-          status: "completed",
-          attempt: 1,
-          output: { result: true },
-          ...workerArgs,
-        },
+        data: { ...jobArgs, status: "completed", attempt: 1, output: { result: true } },
       },
       {
         type: "chain_completed",
@@ -165,7 +159,7 @@ describe("Logging", () => {
     withWorkers,
     observabilityAdapter,
     log,
-    expect,
+    expectLogs,
   }) => {
     const jobTypes = defineJobTypes<{
       test: {
@@ -190,13 +184,13 @@ describe("Logging", () => {
         jobTypes,
         backoffConfig: {
           initialDelayMs: 10,
-          multiplier: 2.0,
-          maxDelayMs: 100,
+          multiplier: 1,
+          maxDelayMs: 10,
         },
         processors: {
           test: {
             attemptHandler: async ({ job, complete }) => {
-              if (job.attempt < 4) {
+              if (job.attempt < 2) {
                 throw new Error("Unexpected error");
               }
               return complete(async ({ finish }) => finish({ output: null }));
@@ -206,7 +200,7 @@ describe("Logging", () => {
       }),
     });
 
-    const job = await withTransactionHooks(async (transactionHooks) =>
+    const chain = await withTransactionHooks(async (transactionHooks) =>
       withTransaction(async (txCtx) =>
         client.createChain({
           ...txCtx,
@@ -218,37 +212,96 @@ describe("Logging", () => {
     );
 
     await withWorkers([await worker.start()], async () => {
-      await client.awaitChain(job, completionOptions);
+      await client.awaitChain(chain, completionOptions);
     });
 
-    const logs = log.mock.calls.map((call) => call[0]);
-
-    const failedLogs = logs.filter((entry) => entry.type === "job_attempt_failed");
-    expect(failedLogs).toEqual([
-      expect.objectContaining({ type: "job_attempt_failed", error: expect.anything() }),
-      expect.objectContaining({ type: "job_attempt_failed", error: expect.anything() }),
-      expect.objectContaining({ type: "job_attempt_failed", error: expect.anything() }),
+    expectLogs([
+      { type: "chain_created", data: { typeName: "test" } },
+      { type: "job_created", data: { typeName: "test" } },
+      { type: "worker_started" },
+      { type: "job_attempt_started", data: { typeName: "test", attempt: 1 } },
+      { type: "job_rescheduled", data: { typeName: "test" } },
+      { type: "job_attempt_failed", error: expect.anything() },
+      { type: "job_attempt_started", data: { typeName: "test", attempt: 2 } },
+      { type: "job_completed", data: { typeName: "test" } },
+      { type: "chain_completed", data: { typeName: "test" } },
+      { type: "job_attempt_completed", data: { typeName: "test" } },
+      { type: "worker_stopping" },
+      { type: "worker_stopped" },
     ]);
-    expect(failedLogs).not.toContainEqual(
-      expect.objectContaining({
-        data: expect.objectContaining({ scheduleAfterMs: expect.anything() }),
+  });
+
+  it("logs job rescheduling", async ({
+    stateAdapter,
+    notifyAdapter,
+    withTransaction,
+    withWorkers,
+    observabilityAdapter,
+    log,
+    expectLogs,
+  }) => {
+    const jobTypes = defineJobTypes<{
+      test: {
+        entry: true;
+        input: null;
+        output: null;
+      };
+    }>();
+
+    const client = await createClient({
+      stateAdapter,
+      notifyAdapter,
+      observabilityAdapter,
+      log,
+      jobTypes,
+    });
+    const worker = await createInProcessWorker({
+      client,
+      concurrency: 1,
+      processors: createProcessors({
+        client,
+        jobTypes,
+        processors: {
+          test: {
+            attemptHandler: async ({ job, complete }) => {
+              if (job.attempt < 2) {
+                return complete(async ({ finish }) => finish({ reschedule: { afterMs: 100 } }));
+              }
+              return complete(async ({ finish }) => finish({ output: null }));
+            },
+          },
+        },
       }),
+    });
+
+    const chain = await withTransactionHooks(async (transactionHooks) =>
+      withTransaction(async (txCtx) =>
+        client.createChain({
+          ...txCtx,
+          transactionHooks,
+          typeName: "test",
+          input: null,
+        }),
+      ),
     );
 
-    const rescheduledLogs = logs.filter((entry) => entry.type === "job_rescheduled");
-    expect(rescheduledLogs).toEqual([
-      expect.objectContaining({
-        type: "job_rescheduled",
-        data: expect.objectContaining({ scheduledAt: expect.any(Date) }),
-      }),
-      expect.objectContaining({
-        type: "job_rescheduled",
-        data: expect.objectContaining({ scheduledAt: expect.any(Date) }),
-      }),
-      expect.objectContaining({
-        type: "job_rescheduled",
-        data: expect.objectContaining({ scheduledAt: expect.any(Date) }),
-      }),
+    await withWorkers([await worker.start()], async () => {
+      await client.awaitChain(chain, completionOptions);
+    });
+
+    expectLogs([
+      { type: "chain_created", data: { typeName: "test" } },
+      { type: "job_created", data: { typeName: "test" } },
+      { type: "worker_started" },
+      { type: "job_attempt_started", data: { typeName: "test", attempt: 1 } },
+      { type: "job_rescheduled", data: { typeName: "test" } },
+      { type: "job_attempt_completed", data: { typeName: "test" } },
+      { type: "job_attempt_started", data: { typeName: "test", attempt: 2 } },
+      { type: "job_completed", data: { typeName: "test" } },
+      { type: "chain_completed", data: { typeName: "test" } },
+      { type: "job_attempt_completed", data: { typeName: "test" } },
+      { type: "worker_stopping" },
+      { type: "worker_stopped" },
     ]);
   });
 
@@ -586,7 +639,7 @@ describe("Logging", () => {
     expectLogs([
       { type: "chain_created", data: { input: { value: 42 } } },
       { type: "job_created", data: { input: { value: 42 } } },
-      { type: "job_completed", data: { output: { result: 84 }, workerId: null } },
+      { type: "job_completed", data: { output: { result: 84 } } },
       { type: "chain_completed", data: { output: { result: 84 } } },
     ]);
   });
@@ -1676,7 +1729,12 @@ describe("Logging rollback", () => {
       { type: "job_created", data: { typeName: "test" } },
       {
         type: "job_rescheduled",
-        data: { id: chain.id, typeName: "test", chainId: chain.id, chainTypeName: "test" },
+        data: {
+          id: chain.id,
+          typeName: "test",
+          chainId: chain.id,
+          chainTypeName: "test",
+        },
       },
     ]);
   });

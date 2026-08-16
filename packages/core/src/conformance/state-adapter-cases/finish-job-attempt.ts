@@ -156,7 +156,7 @@ export const finishJobAttemptGroup: ConformanceGroup<StateConformanceFixture> = 
             txCtx,
             jobId: created.id,
             workerId: "worker-1",
-            outcome: { error: "transient failure" },
+            outcome: { error: "transient failure", schedule: { afterMs: 5000 } },
           }),
         );
 
@@ -213,6 +213,49 @@ export const finishJobAttemptGroup: ConformanceGroup<StateConformanceFixture> = 
       },
     },
     {
+      name: "reschedules a running job back to pending without recording an error",
+      run: async ({ stateAdapter }, expect) => {
+        const [{ job: created }] = await stateAdapter.withTransaction(async (txCtx) =>
+          stateAdapter.createChains({
+            txCtx,
+            jobs: [
+              {
+                typeName: "reschedule-test",
+                chainTypeName: "reschedule-test",
+                input: null,
+              },
+            ],
+          }),
+        );
+
+        await stateAdapter.withTransaction(async (txCtx) =>
+          stateAdapter.startJobAttempt({
+            txCtx,
+            workerId: "worker-1",
+            typeNames: ["reschedule-test"],
+          }),
+        );
+
+        const before = Date.now();
+        const rescheduled = await stateAdapter.withTransaction(async (txCtx) =>
+          stateAdapter.finishJobAttempt({
+            txCtx,
+            jobId: created.id,
+            workerId: "worker-1",
+            outcome: { schedule: { afterMs: 5000 } },
+          }),
+        );
+
+        expect(rescheduled.completedAt).toBeNull();
+        expect(rescheduled.attemptAt).toBeNull();
+        expect(rescheduled.attemptBy).toBeNull();
+        expect(rescheduled.attemptUntil).toBeNull();
+        expect(rescheduled.lastAttemptError).toBeNull();
+        expect(rescheduled.lastAttemptAt).toBeInstanceOf(Date);
+        expect(rescheduled.scheduledAt.getTime()).toBeGreaterThanOrEqual(before + 4000);
+      },
+    },
+    {
       name: "leaves a non-running job untouched when failing",
       run: async ({ stateAdapter }, expect) => {
         const [{ job: created }] = await stateAdapter.withTransaction(async (txCtx) =>
@@ -234,7 +277,7 @@ export const finishJobAttemptGroup: ConformanceGroup<StateConformanceFixture> = 
               txCtx,
               jobId: created.id,
               workerId: null,
-              outcome: { error: "should-not-apply" },
+              outcome: { error: "should-not-apply", schedule: { afterMs: 5000 } },
             }),
           )
           .catch(() => {});
@@ -335,7 +378,7 @@ export const finishJobAttemptGroup: ConformanceGroup<StateConformanceFixture> = 
             txCtx,
             jobId: created.id,
             workerId: "worker-1",
-            outcome: { error: "first attempt failed" },
+            outcome: { error: "first attempt failed", schedule: { afterMs: 5000 } },
           }),
         );
         expect(failed.lastAttemptError).toBe("first attempt failed");

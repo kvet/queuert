@@ -1,5 +1,3 @@
-import { type ScheduleOptions } from "./entities/schedule.js";
-
 /** Thrown when a job ID fails the state adapter's `validateId` check. */
 export class InvalidJobIdError extends Error {
   /** The ID that failed validation. */
@@ -229,35 +227,6 @@ export class HookNotRegisteredError extends Error {
     this.key = options.key;
   }
 }
-
-/** Thrown (internally or via {@link rescheduleJob}) to reschedule a job for later processing. */
-export class RescheduleJobError extends Error {
-  readonly schedule: ScheduleOptions;
-  constructor(
-    message: string,
-    options: {
-      schedule: ScheduleOptions;
-      cause?: unknown;
-    },
-  ) {
-    super(message, options.cause !== undefined ? { cause: options.cause } : undefined);
-    this.name = "RescheduleJobError";
-    this.schedule = options.schedule;
-  }
-}
-
-/**
- * Throw a {@link RescheduleJobError} to reschedule the current job.
- *
- * @param schedule - When to retry (absolute date or relative delay).
- * @param cause - Optional underlying error.
- */
-export const rescheduleJob = (schedule: ScheduleOptions, cause?: unknown): never => {
-  throw new RescheduleJobError(`Reschedule job`, {
-    schedule,
-    cause,
-  });
-};
 
 /** Thrown when merging registries that contain overlapping job type names. */
 export class DuplicateJobTypeError extends Error {

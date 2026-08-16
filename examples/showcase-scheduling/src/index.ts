@@ -7,6 +7,7 @@
  * 1. Recurring Jobs: Independent chains with scheduled delays
  * 2. Deduplication: Prevent duplicate recurring job instances
  * 3. Trigger Early: Run a future-scheduled job immediately via a locked read-modify-write
+ * 4. Rescheduling from a Handler: Rate-limited API defers with finish({ reschedule })
  */
 
 import assert from "node:assert/strict";
@@ -52,6 +53,21 @@ const jobTypes = defineJobTypes<{
     input: { userId: string; message: string };
     output: { sentAt: string };
   };
+
+  /*
+   * Workflow (rescheduling):
+   *   call-rate-limited-api <--+ (reschedule on rate limit)
+   *        |                   |
+   *        +-------------------+
+   *        |
+   *        v (success)
+   *   output { data }
+   */
+  "call-rate-limited-api": {
+    entry: true;
+    input: { endpoint: string };
+    output: { data: string };
+  };
 }>();
 
 // Using short intervals for demo purposes
@@ -64,6 +80,7 @@ const MAX_HEALTH_CHECKS = 3;
 // Simulation state
 let userSubscribed = true;
 let serviceRunning = true;
+let apiRateLimited = true;
 
 await using pg = await acquirePostgres("postgres:18", import.meta.url);
 const sql = postgres(pg.connectionString, { max: 10 });
@@ -200,6 +217,22 @@ const worker = await createInProcessWorker({
             ]);
             return finish({ output: { sentAt: new Date().toISOString() } });
           }),
+      },
+
+      "call-rate-limited-api": {
+        attemptHandler: async ({ job, complete }) => {
+          console.log(`[call-rate-limited-api] Attempt ${job.attempt} to ${job.input.endpoint}`);
+
+          if (apiRateLimited && job.attempt < 3) {
+            console.log(`  Rate limited! Rescheduling in 100ms...`);
+            return complete(async ({ finish }) => finish({ reschedule: { afterMs: 100 } }));
+          }
+
+          console.log(`  API call SUCCESS`);
+          return complete(async ({ finish }) =>
+            finish({ output: { data: `Response from ${job.input.endpoint}` } }),
+          );
+        },
       },
     },
   }),
@@ -362,6 +395,29 @@ console.log("SCENARIO 3 COMPLETED");
 console.log("-".repeat(40));
 console.log(`Reminders sent: ${reminderCount.count}`);
 assert.equal(Number(reminderCount.count), 1);
+
+// Scenario 4: Rescheduling from a Handler
+console.log("\n--- Scenario 4: Rescheduling from a Handler ---");
+console.log("Rate-limited API defers with finish({ reschedule }) — no error, no backoff.\n");
+
+apiRateLimited = true;
+const apiCall = await withTransactionHooks(async (transactionHooks) =>
+  sql.begin(async (txSql) =>
+    client.createChain({
+      sql: txSql,
+      transactionHooks,
+      typeName: "call-rate-limited-api",
+      input: { endpoint: "/api/data" },
+    }),
+  ),
+);
+const apiResult = await client.awaitChain(apiCall, { timeoutMs: 5000 });
+
+console.log("\n" + "-".repeat(40));
+console.log("SCENARIO 4 COMPLETED");
+console.log("-".repeat(40));
+console.log(`Final output: ${JSON.stringify(apiResult.output)}`);
+assert.ok("data" in apiResult.output);
 
 await stopWorker();
 await notifyAdapter.close();

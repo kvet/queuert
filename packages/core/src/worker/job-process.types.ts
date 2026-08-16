@@ -5,10 +5,11 @@ import {
   type JobTypeContinuation,
   type JobTypeHasBlockers,
   type JobTypeProperty,
-  type ResolvedJobWithBlockers,
   type OutputJob,
+  type RescheduledJob,
+  type ResolvedJobWithBlockers,
 } from "../entities/job-types.resolvers.js";
-import { type AnyJob, type CompletedJob } from "../entities/job.js";
+import { type AnyJob } from "../entities/job.js";
 import { type ScheduleOptions } from "../entities/schedule.js";
 import { type TypedAbortSignal } from "../helpers/abort.js";
 import {
@@ -63,6 +64,8 @@ type AttemptOutputOutcome<
         output: JobTypeProperty<TJobTypeDefinitions, TJobTypeName, "output">;
       };
 
+type AttemptRescheduleOutcome = { reschedule: ScheduleOptions };
+
 /** Every outcome `finish` accepts, as a single union. */
 export type AttemptOutcome<
   TStateAdapter extends StateAdapter<BaseTxContext, any>,
@@ -70,7 +73,8 @@ export type AttemptOutcome<
   TJobTypeName extends string,
 > =
   | AttemptOutputOutcome<TJobTypeDefinitions, TJobTypeName>
-  | AttemptContinueWithOutcome<TStateAdapter, TJobTypeDefinitions, TJobTypeName>;
+  | AttemptContinueWithOutcome<TStateAdapter, TJobTypeDefinitions, TJobTypeName>
+  | AttemptRescheduleOutcome;
 
 /** Resolves the committed job shape from the outcome's discriminant key.*/
 export type AttemptFinishResult<
@@ -87,12 +91,19 @@ export type AttemptFinishResult<
       TChainTypeName,
       TContinuationTypeName
     >
-  : OutputJob<
-      GetStateAdapterJobId<TStateAdapter>,
-      TJobTypeDefinitions,
-      TJobTypeName,
-      TChainTypeName
-    >;
+  : TOutcome extends { reschedule: any }
+    ? RescheduledJob<
+        GetStateAdapterJobId<TStateAdapter>,
+        TJobTypeDefinitions,
+        TJobTypeName,
+        TChainTypeName
+      >
+    : OutputJob<
+        GetStateAdapterJobId<TStateAdapter>,
+        TJobTypeDefinitions,
+        TJobTypeName,
+        TChainTypeName
+      >;
 
 /**
  * Commits an outcome. The only effectful call inside the complete callback — it
@@ -158,7 +169,7 @@ export type AttemptComplete<
   TJobTypeName extends string,
   TChainTypeName extends string,
   TCompleteCtx = Record<string, unknown>,
-> = <TResult extends CompletedJob<AnyJob>>(
+> = <TResult extends Exclude<AnyJob, { status: "running" }>>(
   completeCallback: AttemptCompleteCallback<
     TStateAdapter,
     TJobTypeDefinitions,
@@ -254,4 +265,4 @@ export type AttemptHandler<
       TCompleteCtx
     >;
   } & THandlerCtx,
-) => Promise<CompletedJob<AnyJob>>;
+) => Promise<Exclude<AnyJob, { status: "running" }>>;

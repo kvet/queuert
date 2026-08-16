@@ -1,6 +1,10 @@
 import { describe, expectTypeOf, it } from "vitest";
 
-import { type ContinuedJob, type OutputJob } from "../entities/job-types.resolvers.js";
+import {
+  type ContinuedJob,
+  type OutputJob,
+  type RescheduledJob,
+} from "../entities/job-types.resolvers.js";
 import { type InProcessStateAdapter } from "../state-adapter/state-adapter.in-process.js";
 import {
   type AttemptFinish,
@@ -223,12 +227,14 @@ describe("AttemptFinish", () => {
 
     it("exposes no continueWith key at all for a terminal job type", () => {
       expectTypeOf<Extract<TerminalOutcome, { continueWith: unknown }>>().toBeNever();
-      expectTypeOf<keyof TerminalOutcome>().toEqualTypeOf<"output">();
+      expectTypeOf<Extract<TerminalOutcome, { output: unknown }>>().not.toBeNever();
+      expectTypeOf<Extract<TerminalOutcome, { reschedule: unknown }>>().not.toBeNever();
     });
 
     it("exposes no output key at all for a job type with no output", () => {
       expectTypeOf<Extract<BranchingOutcome, { output: unknown }>>().toBeNever();
-      expectTypeOf<keyof BranchingOutcome>().toEqualTypeOf<"continueWith">();
+      expectTypeOf<Extract<BranchingOutcome, { continueWith: unknown }>>().not.toBeNever();
+      expectTypeOf<Extract<BranchingOutcome, { reschedule: unknown }>>().not.toBeNever();
     });
 
     it("rejects a continueWith outcome on a terminal job type", () => {
@@ -405,7 +411,15 @@ describe("AttemptHandler", () => {
     >();
   });
 
-  it("does not accept a job that is not completed", () => {
-    expectTypeOf<Options["job"]>().not.toExtend<Awaited<ReturnType<Handler>>>();
+  it("does not accept a running job", () => {
+    expectTypeOf<Extract<Options["job"], { status: "running" }>>().not.toExtend<
+      Awaited<ReturnType<Handler>>
+    >();
+  });
+
+  it("accepts a rescheduled (pending) job", () => {
+    expectTypeOf<RescheduledJob<string, LinearDefs, "entry", "entry">>().toExtend<
+      Awaited<ReturnType<Handler>>
+    >();
   });
 });

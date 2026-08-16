@@ -32,8 +32,6 @@ export {
   JobTakenByAnotherWorkerError,
   JobTypeMismatchError,
   JobTypeValidationError,
-  rescheduleJob,
-  RescheduleJobError,
   UnknownJobTypeError,
   WaitChainTimeoutError,
   type JobTypeValidationErrorCode,

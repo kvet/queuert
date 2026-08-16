@@ -4,7 +4,7 @@ import { type JobTypeValidationError } from "../errors.js";
 import { type NotifyAdapter } from "../notify-adapter/notify-adapter.js";
 import { type StateAdapter, type StateJob } from "../state-adapter/state-adapter.js";
 import {
-  type ChainData,
+  type ChainBasicData,
   type JobAttemptData,
   type JobBasicData,
   type JobCompletionData,
@@ -44,7 +44,7 @@ const mapStateJobToJobAttemptData = (job: StateJob): JobAttemptData => ({
 
 const mapStateJobToJobCompletionData = (
   job: StateJob,
-  options: { output: unknown; continuedWith?: StateJob },
+  options: { output?: unknown; continuedWith?: StateJob },
 ): JobCompletionData => ({
   ...mapStateJobToJobProcessingData(job),
   output: options.output,
@@ -53,12 +53,12 @@ const mapStateJobToJobCompletionData = (
     : undefined,
 });
 
-const mapStateJobToChainData = (job: StateJob): ChainData => ({
+const mapStateJobToChainData = (job: StateJob): ChainBasicData => ({
   id: job.chainId,
   typeName: job.chainTypeName,
 });
 
-const mapChainToData = (chain: AnyChain): ChainData => ({
+const mapChainToData = (chain: AnyChain): ChainBasicData => ({
   id: chain.id,
   typeName: chain.typeName,
 });
@@ -76,6 +76,12 @@ export type ObservabilityHelper = {
   workerError: (options: { workerId: string }, error: unknown) => void;
   workerStopping: (options: { workerId: string }) => void;
   workerStopped: (options: { workerId: string }) => void;
+
+  // chain
+  chainCreated: (job: StateJob, options: { input: unknown }) => void;
+  chainCompleted: (headJob: StateJob, options: { output: unknown }) => void;
+  chainDeleted: (job: StateJob) => void;
+
   // job
   jobCreated: (
     job: StateJob,
@@ -84,6 +90,12 @@ export type ObservabilityHelper = {
       blockers: AnyChain[];
     },
   ) => void;
+  jobCompleted: (job: StateJob, options: { output: unknown; continuedWith?: StateJob }) => void;
+  jobRescheduled: (job: StateJob) => void;
+  jobBlocked: (job: StateJob, options: { blockedByChains: AnyChain[] }) => void;
+  jobUnblocked: (job: StateJob, options: { unblockedByChain: StateJob }) => void;
+
+  // job attempt
   jobAttemptStarted: (job: StateJob, options: { workerId: string }) => void;
   jobAttemptTakenByAnotherWorker: (job: StateJob, options: { workerId: string }) => void;
   jobAttemptAlreadyCompleted: (job: StateJob, options: { workerId: string }) => void;
@@ -92,35 +104,28 @@ export type ObservabilityHelper = {
   jobAttemptFailed: (job: StateJob, options: { workerId: string; error: unknown }) => void;
   jobAttemptCompleted: (
     job: StateJob,
-    options: { output: unknown; continuedWith?: StateJob; workerId: string },
-  ) => void;
-  jobCompleted: (
-    job: StateJob,
-    options: { output: unknown; continuedWith?: StateJob; workerId: string | null },
+    options: { output?: unknown; continuedWith?: StateJob; workerId: string },
   ) => void;
   jobAttemptReclaimed: (job: StateJob, options: { workerId: string }) => void;
-  // chain
-  chainCreated: (job: StateJob, options: { input: unknown }) => void;
-  chainCompleted: (headJob: StateJob, options: { output: unknown }) => void;
-  chainDeleted: (job: StateJob) => void;
-  // reschedule
-  jobRescheduled: (job: StateJob) => void;
-  // blockers
-  jobBlocked: (job: StateJob, options: { blockedByChains: AnyChain[] }) => void;
-  jobUnblocked: (job: StateJob, options: { unblockedByChain: StateJob }) => void;
+
   // notify adapter
   notifyAdapterError: (operation: keyof NotifyAdapter, error: unknown) => void;
+
   // state adapter
   stateAdapterError: (operation: keyof StateAdapter<any, any>, error: unknown) => void;
+
   // job type validation
   jobTypeValidationError: (error: JobTypeValidationError) => void;
+
   // histograms
   chainDuration: (headJob: StateJob, tailJob: StateJob) => void;
   jobDuration: (job: StateJob) => void;
   jobAttemptDuration: (job: StateJob, options: { durationMs: number; workerId: string }) => void;
+
   // gauges
   jobTypeIdleChange: (delta: number, workerId: string, typeNames: readonly string[]) => void;
   jobTypeProcessingChange: (delta: number, job: StateJob, workerId: string) => void;
+
   // tracing
   startJobSpan: (data: JobSpanInputData) => JobSpanHandle | undefined;
   startAttemptSpan: (data: JobAttemptSpanInputData) => JobAttemptSpanHandle | undefined;
@@ -151,7 +156,6 @@ export const createObservabilityHelper = ({
     });
     adapter.workerStarted(options);
   },
-
   workerError(options, error) {
     log({
       type: "worker_error",
@@ -162,7 +166,6 @@ export const createObservabilityHelper = ({
     });
     adapter.workerError({ ...options, error });
   },
-
   workerStopping(options) {
     log({
       type: "worker_stopping",
@@ -172,7 +175,6 @@ export const createObservabilityHelper = ({
     });
     adapter.workerStopping(options);
   },
-
   workerStopped(options) {
     log({
       type: "worker_stopped",
@@ -181,6 +183,38 @@ export const createObservabilityHelper = ({
       data: options,
     });
     adapter.workerStopped(options);
+  },
+
+  // chain
+  chainCreated(job, options) {
+    const data = { ...mapStateJobToChainData(job), input: options.input };
+    log({
+      type: "chain_created",
+      level: "info",
+      message: "Chain created",
+      data,
+    });
+    adapter.chainCreated(data);
+  },
+  chainCompleted(headJob, options) {
+    const data = { ...mapStateJobToChainData(headJob), output: options.output };
+    log({
+      type: "chain_completed",
+      level: "info",
+      message: "Chain completed",
+      data,
+    });
+    adapter.chainCompleted(data);
+  },
+  chainDeleted(job) {
+    const data = mapStateJobToChainData(job);
+    log({
+      type: "chain_deleted",
+      level: "info",
+      message: "Chain deleted",
+      data,
+    });
+    adapter.chainDeleted(data);
   },
 
   // job
@@ -200,7 +234,53 @@ export const createObservabilityHelper = ({
     });
     adapter.jobCreated(data);
   },
+  jobCompleted(job, options) {
+    const data = mapStateJobToJobCompletionData(job, options);
 
+    log({
+      type: "job_completed",
+      level: "info",
+      message: "Job completed",
+      data,
+    });
+    adapter.jobCompleted(data);
+  },
+  jobRescheduled(job) {
+    const data = {
+      ...mapStateJobToJobBasicData(job),
+      scheduledAt: job.scheduledAt,
+    };
+    log({
+      type: "job_rescheduled",
+      level: "info",
+      message: "Job rescheduled",
+      data,
+    });
+    adapter.jobRescheduled(data);
+  },
+  jobBlocked(job, options) {
+    const blockedByChains = options.blockedByChains.map(mapChainToData);
+    const data = { ...mapStateJobToJobBasicData(job), blockedByChains };
+    log({
+      type: "job_blocked",
+      level: "info",
+      message: "Job blocked by incomplete chains",
+      data,
+    });
+    adapter.jobBlocked(data);
+  },
+  jobUnblocked(job, options) {
+    const unblockedByChain = mapStateJobToChainData(options.unblockedByChain);
+    log({
+      type: "job_unblocked",
+      level: "info",
+      message: "Job unblocked",
+      data: { ...mapStateJobToJobBasicData(job), unblockedByChain },
+    });
+    adapter.jobUnblocked({ ...mapStateJobToJobBasicData(job), unblockedByChain });
+  },
+
+  // job attempt
   jobAttemptStarted(job, options) {
     const data = { ...mapStateJobToJobProcessingData(job), workerId: options.workerId };
     log({
@@ -211,7 +291,6 @@ export const createObservabilityHelper = ({
     });
     adapter.jobAttemptStarted(data);
   },
-
   jobAttemptTakenByAnotherWorker(job, options) {
     const data = {
       ...mapStateJobToJobAttemptData(job),
@@ -225,7 +304,6 @@ export const createObservabilityHelper = ({
     });
     adapter.jobAttemptTakenByAnotherWorker(data);
   },
-
   jobAttemptAlreadyCompleted(job, options) {
     const data = {
       ...mapStateJobToJobProcessingData(job),
@@ -240,7 +318,6 @@ export const createObservabilityHelper = ({
     });
     adapter.jobAttemptAlreadyCompleted(data);
   },
-
   jobAttemptExpired(job, options) {
     const data = {
       ...mapStateJobToJobAttemptData(job),
@@ -254,7 +331,6 @@ export const createObservabilityHelper = ({
     });
     adapter.jobAttemptExpired(data);
   },
-
   jobAttemptExtended(job, options) {
     const data = {
       ...mapStateJobToJobAttemptData(job),
@@ -268,7 +344,6 @@ export const createObservabilityHelper = ({
     });
     adapter.jobAttemptExtended(data);
   },
-
   jobAttemptReclaimed(job, options) {
     const data = {
       ...mapStateJobToJobAttemptData(job),
@@ -282,7 +357,6 @@ export const createObservabilityHelper = ({
     });
     adapter.jobAttemptReclaimed(data);
   },
-
   jobAttemptFailed(job, options) {
     const data = {
       ...mapStateJobToJobProcessingData(job),
@@ -297,7 +371,6 @@ export const createObservabilityHelper = ({
     });
     adapter.jobAttemptFailed({ ...data, error: options.error });
   },
-
   jobAttemptCompleted(job, options) {
     const data = {
       ...mapStateJobToJobCompletionData(job, options),
@@ -310,93 +383,6 @@ export const createObservabilityHelper = ({
       data,
     });
     adapter.jobAttemptCompleted(data);
-  },
-
-  jobCompleted(job, options) {
-    const data = {
-      ...mapStateJobToJobCompletionData(job, options),
-      workerId: options.workerId,
-    };
-    log({
-      type: "job_completed",
-      level: "info",
-      message: "Job completed",
-      data,
-    });
-    adapter.jobCompleted(data);
-  },
-
-  // chain
-  chainCreated(job, options) {
-    const data = { ...mapStateJobToChainData(job), input: options.input };
-    log({
-      type: "chain_created",
-      level: "info",
-      message: "Chain created",
-      data,
-    });
-    adapter.chainCreated(data);
-  },
-
-  chainCompleted(headJob, options) {
-    const data = { ...mapStateJobToChainData(headJob), output: options.output };
-    log({
-      type: "chain_completed",
-      level: "info",
-      message: "Chain completed",
-      data,
-    });
-    adapter.chainCompleted(data);
-  },
-
-  chainDeleted(job) {
-    const data = mapStateJobToChainData(job);
-    log({
-      type: "chain_deleted",
-      level: "info",
-      message: "Chain deleted",
-      data,
-    });
-    adapter.chainDeleted(data);
-  },
-
-  // reschedule
-  jobRescheduled(job) {
-    const data = {
-      ...mapStateJobToJobBasicData(job),
-      scheduledAt: job.scheduledAt,
-    };
-    log({
-      type: "job_rescheduled",
-      level: "info",
-      message: "Job rescheduled",
-      data,
-    });
-    adapter.jobRescheduled(data);
-  },
-
-  // blockers
-  jobBlocked(job, options) {
-    const blockedByChains = options.blockedByChains.map(mapChainToData);
-    const data = { ...mapStateJobToJobBasicData(job), blockedByChains };
-    log({
-      type: "job_blocked",
-      level: "info",
-      message: "Job blocked by incomplete chains",
-      data,
-    });
-    adapter.jobBlocked(data);
-  },
-
-  jobUnblocked(job, options) {
-    const unblockedByChain = mapStateJobToChainData(options.unblockedByChain);
-    log({
-      type: "job_unblocked",
-      level: "info",
-      message: "Job unblocked",
-      data: { ...mapStateJobToJobBasicData(job), unblockedByChain },
-    });
-    adapter.jobUnblocked({ ...mapStateJobToJobBasicData(job), unblockedByChain });
   },
 
   // notify adapter
@@ -438,21 +424,19 @@ export const createObservabilityHelper = ({
     });
   },
 
-  // histograms (no logging, metrics only)
+  // histograms
   chainDuration(headJob, tailJob) {
     if (tailJob.completedAt && headJob.createdAt) {
       const durationMs = tailJob.completedAt.getTime() - headJob.createdAt.getTime();
       adapter.chainDuration({ ...mapStateJobToChainData(headJob), durationMs });
     }
   },
-
   jobDuration(job) {
     if (job.completedAt && job.createdAt) {
       const durationMs = job.completedAt.getTime() - job.createdAt.getTime();
       adapter.jobDuration({ ...mapStateJobToJobProcessingData(job), durationMs });
     }
   },
-
   jobAttemptDuration(job, options) {
     adapter.jobAttemptDuration({
       ...mapStateJobToJobProcessingData(job),
@@ -461,13 +445,12 @@ export const createObservabilityHelper = ({
     });
   },
 
-  // gauges (no logging, metrics only)
+  // gauges
   jobTypeIdleChange(delta, workerId, typeNames) {
     for (const typeName of typeNames) {
       adapter.jobTypeIdleChange({ delta, typeName, workerId });
     }
   },
-
   jobTypeProcessingChange(delta, job, workerId) {
     adapter.jobTypeProcessingChange({
       delta,

@@ -2,7 +2,7 @@ import { type NotifyAdapter } from "../notify-adapter/notify-adapter.js";
 import { type StateAdapter } from "../state-adapter/state-adapter.js";
 import { type JobAbortReason } from "../worker/job-process.js";
 import {
-  type ChainData,
+  type ChainBasicData,
   type JobAttemptData,
   type JobBasicData,
   type JobCompletionData,
@@ -140,14 +140,25 @@ export type ObservabilityAdapter = {
   workerStopping: (data: WorkerBasicData) => void;
   workerStopped: (data: WorkerBasicData) => void;
 
+  // chain
+  chainCreated: (data: ChainBasicData & { input: unknown }) => void;
+  chainCompleted: (data: ChainBasicData & { output: unknown }) => void;
+  chainDeleted: (data: ChainBasicData) => void;
+
   // job
   jobCreated: (
     data: JobBasicData & {
       input: unknown;
-      blockers: ChainData[];
+      blockers: ChainBasicData[];
       scheduledAt: Date;
     },
   ) => void;
+  jobCompleted: (data: JobCompletionData) => void;
+  jobRescheduled: (data: JobBasicData & { scheduledAt: Date }) => void;
+  jobBlocked: (data: JobBasicData & { blockedByChains: ChainBasicData[] }) => void;
+  jobUnblocked: (data: JobBasicData & { unblockedByChain: ChainBasicData }) => void;
+
+  // job attempt
   jobAttemptStarted: (data: JobProcessingData & WorkerBasicData) => void;
   jobAttemptTakenByAnotherWorker: (data: JobAttemptData & WorkerBasicData) => void;
   jobAttemptAlreadyCompleted: (
@@ -157,20 +168,7 @@ export type ObservabilityAdapter = {
   jobAttemptExtended: (data: JobAttemptData & WorkerBasicData) => void;
   jobAttemptFailed: (data: JobProcessingData & WorkerBasicData & { error: unknown }) => void;
   jobAttemptCompleted: (data: JobCompletionData & WorkerBasicData) => void;
-  jobCompleted: (data: JobCompletionData & { workerId: string | null }) => void;
   jobAttemptReclaimed: (data: JobAttemptData & WorkerBasicData) => void;
-
-  // chain
-  chainCreated: (data: ChainData & { input: unknown }) => void;
-  chainCompleted: (data: ChainData & { output: unknown }) => void;
-  chainDeleted: (data: ChainData) => void;
-
-  // reschedule
-  jobRescheduled: (data: JobBasicData & { scheduledAt: Date }) => void;
-
-  // blockers
-  jobBlocked: (data: JobBasicData & { blockedByChains: ChainData[] }) => void;
-  jobUnblocked: (data: JobBasicData & { unblockedByChain: ChainData }) => void;
 
   // notify adapter
   notifyAdapterError: (data: { operation: keyof NotifyAdapter; error: unknown }) => void;
@@ -179,11 +177,11 @@ export type ObservabilityAdapter = {
   stateAdapterError: (data: { operation: keyof StateAdapter<any, any>; error: unknown }) => void;
 
   // histograms
-  chainDuration: (data: ChainData & { durationMs: number }) => void;
+  chainDuration: (data: ChainBasicData & { durationMs: number }) => void;
   jobDuration: (data: JobProcessingData & { durationMs: number }) => void;
   jobAttemptDuration: (data: JobProcessingData & WorkerBasicData & { durationMs: number }) => void;
 
-  // gauges (UpDownCounters)
+  // gauges
   jobTypeIdleChange: (data: WorkerBasicData & { delta: number; typeName: string }) => void;
   jobTypeProcessingChange: (data: WorkerBasicData & { delta: number; typeName: string }) => void;
 

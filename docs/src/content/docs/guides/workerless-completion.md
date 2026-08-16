@@ -87,7 +87,7 @@ See [examples/showcase-workerless](https://github.com/kvet/queuert/tree/main/exa
 
 ## How It Works
 
-The `completeChain` method calls your `handler` with the current job and a `completeJob` function. Pass the job to `completeJob`, then call `finish` with the outcome you want: `{ output: ... }` finishes the chain, `{ continueWith: {...} }` adds the next job. These are the same outcome shapes a worker uses.
+The `completeChain` method calls your `handler` with the current job and a `completeJob` function. Pass the job to `completeJob`, then call `finish` with the outcome you want: `{ output: ... }` finishes the chain, `{ continueWith: {...} }` adds the next job.
 
 Your handler can also decline: just return without calling `completeJob`. The chain stays untouched. Use this when the chain has already moved past the stage you meant to complete.
 

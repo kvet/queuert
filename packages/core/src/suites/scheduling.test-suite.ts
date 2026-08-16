@@ -2,7 +2,6 @@ import { type TestAPI } from "vitest";
 
 import { createClient } from "../client.js";
 import { defineJobTypes } from "../entities/define-job-types.js";
-import { rescheduleJob } from "../errors.js";
 import { createInProcessWorker } from "../in-process-worker.js";
 import { withTransactionHooks } from "../transaction-hooks.js";
 import { createProcessors } from "../worker/create-processors.js";
@@ -323,7 +322,7 @@ export const schedulingTestSuite = ({ it }: { it: TestAPI<TestSuiteContext> }): 
     });
   });
 
-  it("rescheduleJob with schedule.afterMs defers job retry", async ({
+  it("rescheduling with afterMs defers the next attempt by the given delay", async ({
     stateAdapter,
     notifyAdapter,
     withTransaction,
@@ -362,9 +361,12 @@ export const schedulingTestSuite = ({ it }: { it: TestAPI<TestSuiteContext> }): 
           test: {
             attemptHandler: async ({ job, complete }) => {
               attemptCount++;
+              if (attemptCount > 1) {
+                expect(job.lastAttemptError).toBeNull();
+              }
               if (attemptCount === 1) {
                 firstAttemptDone.resolve();
-                rescheduleJob({ afterMs: 300 }, "Rescheduling for later");
+                return complete(async ({ finish }) => finish({ reschedule: { afterMs: 300 } }));
               }
               return complete(async ({ finish }) =>
                 finish({ output: { result: job.input.value * 2 } }),
@@ -487,7 +489,7 @@ export const schedulingTestSuite = ({ it }: { it: TestAPI<TestSuiteContext> }): 
     });
   });
 
-  it("rescheduleJob with schedule.at defers job retry", async ({
+  it("rescheduling with schedule.at defers the next attempt to the given time", async ({
     stateAdapter,
     notifyAdapter,
     withTransaction,
@@ -526,9 +528,14 @@ export const schedulingTestSuite = ({ it }: { it: TestAPI<TestSuiteContext> }): 
           test: {
             attemptHandler: async ({ job, complete }) => {
               attemptCount++;
+              if (attemptCount > 1) {
+                expect(job.lastAttemptError).toBeNull();
+              }
               if (attemptCount === 1) {
                 firstAttemptDone.resolve();
-                rescheduleJob({ at: new Date(Date.now() + 300) }, "Rescheduling for later");
+                return complete(async ({ finish }) =>
+                  finish({ reschedule: { at: new Date(Date.now() + 300) } }),
+                );
               }
               return complete(async ({ finish }) =>
                 finish({ output: { result: job.input.value * 2 } }),
@@ -696,7 +703,7 @@ export const schedulingTestSuite = ({ it }: { it: TestAPI<TestSuiteContext> }): 
     expect(continuation.scheduledAt.getTime() - past.getTime()).toBeGreaterThan(30 * 60 * 1000);
   });
 
-  it("rescheduleJob with past schedule.at clamps scheduledAt to now", async ({
+  it("rescheduling with past schedule.at clamps scheduledAt to now", async ({
     stateAdapter,
     notifyAdapter,
     withTransaction,
@@ -730,11 +737,14 @@ export const schedulingTestSuite = ({ it }: { it: TestAPI<TestSuiteContext> }): 
         jobTypes,
         processors: {
           test: {
-            attemptHandler: async ({ complete }) => {
+            attemptHandler: async ({ job, complete }) => {
               attempts++;
+              if (attempts > 1) {
+                expect(job.lastAttemptError).toBeNull();
+              }
               if (attempts === 1) {
                 firstAttemptDone.resolve();
-                rescheduleJob({ at: past }, "retry");
+                return complete(async ({ finish }) => finish({ reschedule: { at: past } }));
               }
               return complete(async ({ finish }) => finish({ output: null }));
             },

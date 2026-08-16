@@ -14,7 +14,13 @@ import {
   type ResolvedChainJobs,
   type ResolvedJob,
 } from "./entities/job-types.resolvers.js";
-import { type AnyJob, type CompletedJob, deriveStatus, mapStateJobToJob } from "./entities/job.js";
+import {
+  type AnyJob,
+  type CompletedJob,
+  type JobStatus,
+  deriveStatus,
+  mapStateJobToJob,
+} from "./entities/job.js";
 import {
   type JobTypesDefinitions,
   type ValidatedSlices,
@@ -769,7 +775,7 @@ export const createClient = async <
       });
 
       const notFound: TJobId[] = [];
-      const notReschedulable: { jobId: TJobId; status: string }[] = [];
+      const notReschedulable: { jobId: TJobId; status: JobStatus }[] = [];
       classified.forEach((entry, index) => {
         if (entry === undefined) {
           notFound.push(ids[index]);

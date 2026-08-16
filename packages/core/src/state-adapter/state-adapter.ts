@@ -168,7 +168,7 @@ export type StateAdapter<TTxContext extends BaseTxContext, TJobId extends string
    * Finishes a job attempt. Outcome is discriminated by key:
    * - `{ output }` — completed with terminal output
    * - `{ continuedToId }` — completed with successor link
-   * - `{ error, schedule }` — failed, returned to pending
+   * - `{ schedule, error? }` — returned to pending (with or without error)
    */
   finishJobAttempt: (
     params: {
@@ -177,7 +177,7 @@ export type StateAdapter<TTxContext extends BaseTxContext, TJobId extends string
       outcome:
         | { output: unknown; continuedToId?: never; error?: never; schedule?: never }
         | { continuedToId: TJobId; output?: never; error?: never; schedule?: never }
-        | { error: string; schedule?: ScheduleOptions; output?: never; continuedToId?: never };
+        | { schedule: ScheduleOptions; error?: string; output?: never; continuedToId?: never };
     } & WriteTxContextParam<TTxContext>,
   ) => Promise<StateJob>;
 

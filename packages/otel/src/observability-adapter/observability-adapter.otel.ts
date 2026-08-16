@@ -150,12 +150,48 @@ export const createOtelObservabilityAdapter = async ({
       workerStoppedCounter?.add(1, { "queuert.worker.id": workerId });
     },
 
+    chainCreated: ({ typeName }) => {
+      chainCreatedCounter?.add(1, { "queuert.chain.type": typeName });
+    },
+    chainCompleted: ({ typeName }) => {
+      chainCompletedCounter?.add(1, { "queuert.chain.type": typeName });
+    },
+    chainDeleted: ({ typeName }) => {
+      chainDeletedCounter?.add(1, { "queuert.chain.type": typeName });
+    },
+
     jobCreated: ({ typeName, chainTypeName }) => {
       jobCreatedCounter?.add(1, {
         "queuert.job.type": typeName,
         "queuert.chain.type": chainTypeName,
       });
     },
+    jobCompleted: ({ typeName, chainTypeName, continuedWith }) => {
+      jobCompletedCounter?.add(1, {
+        "queuert.job.type": typeName,
+        "queuert.chain.type": chainTypeName,
+        "queuert.job.continued": continuedWith !== undefined,
+      });
+    },
+    jobRescheduled: ({ typeName, chainTypeName }) => {
+      jobRescheduledCounter?.add(1, {
+        "queuert.job.type": typeName,
+        "queuert.chain.type": chainTypeName,
+      });
+    },
+    jobBlocked: ({ typeName, chainTypeName }) => {
+      jobBlockedCounter?.add(1, {
+        "queuert.job.type": typeName,
+        "queuert.chain.type": chainTypeName,
+      });
+    },
+    jobUnblocked: ({ typeName, chainTypeName }) => {
+      jobUnblockedCounter?.add(1, {
+        "queuert.job.type": typeName,
+        "queuert.chain.type": chainTypeName,
+      });
+    },
+
     jobAttemptStarted: ({ typeName, chainTypeName, workerId }) => {
       jobAttemptStartedCounter?.add(1, {
         "queuert.job.type": typeName,
@@ -210,44 +246,6 @@ export const createOtelObservabilityAdapter = async ({
         "queuert.job.type": typeName,
         "queuert.chain.type": chainTypeName,
         "queuert.worker.id": workerId,
-      });
-    },
-    jobCompleted: ({ typeName, chainTypeName, workerId, continuedWith }) => {
-      jobCompletedCounter?.add(1, {
-        "queuert.job.type": typeName,
-        "queuert.chain.type": chainTypeName,
-        ...(workerId !== null ? { "queuert.worker.id": workerId } : {}),
-        "queuert.job.continued": continuedWith !== undefined,
-      });
-    },
-
-    chainCreated: ({ typeName }) => {
-      chainCreatedCounter?.add(1, { "queuert.chain.type": typeName });
-    },
-    chainCompleted: ({ typeName }) => {
-      chainCompletedCounter?.add(1, { "queuert.chain.type": typeName });
-    },
-    chainDeleted: ({ typeName }) => {
-      chainDeletedCounter?.add(1, { "queuert.chain.type": typeName });
-    },
-
-    jobRescheduled: ({ typeName, chainTypeName }) => {
-      jobRescheduledCounter?.add(1, {
-        "queuert.job.type": typeName,
-        "queuert.chain.type": chainTypeName,
-      });
-    },
-
-    jobBlocked: ({ typeName, chainTypeName }) => {
-      jobBlockedCounter?.add(1, {
-        "queuert.job.type": typeName,
-        "queuert.chain.type": chainTypeName,
-      });
-    },
-    jobUnblocked: ({ typeName, chainTypeName }) => {
-      jobUnblockedCounter?.add(1, {
-        "queuert.job.type": typeName,
-        "queuert.chain.type": chainTypeName,
       });
     },
 
@@ -446,7 +444,6 @@ export const createOtelObservabilityAdapter = async ({
           if (result.status === "failed") {
             attemptSpan.recordException(toException(result.error));
             attemptSpan.setStatus({ code: SpanStatusCode.ERROR });
-            attemptSpan.setAttribute("queuert.attempt.result", "failed");
             if (result.rescheduledAt) {
               attemptSpan.setAttribute(
                 "queuert.rescheduled_at",
@@ -458,7 +455,6 @@ export const createOtelObservabilityAdapter = async ({
             }
           } else {
             attemptSpan.setStatus({ code: SpanStatusCode.OK });
-            attemptSpan.setAttribute("queuert.attempt.result", "completed");
 
             if (result.continuedWith) {
               attemptSpan.setAttribute("queuert.continued_with.job_id", result.continuedWith.jobId);

@@ -3,7 +3,6 @@ import {
   JobAlreadyCompletedError,
   JobNotFoundError,
   JobTakenByAnotherWorkerError,
-  RescheduleJobError,
 } from "../errors.js";
 import { type BackoffConfig, calculateBackoffMs } from "../helpers/backoff.js";
 import { bufferObservabilityEvent } from "../helpers/observability-hooks.js";
@@ -40,11 +39,8 @@ export const handleJobHandlerError = async (
     return {};
   }
 
-  const isRescheduled = error instanceof RescheduleJobError;
-  const schedule: ScheduleOptions = isRescheduled
-    ? error.schedule
-    : { afterMs: calculateBackoffMs(job.attempt, backoffConfig) };
-  const errorString = isRescheduled ? serializeError(error.cause) : serializeError(error);
+  const schedule: ScheduleOptions = { afterMs: calculateBackoffMs(job.attempt, backoffConfig) };
+  const errorString = serializeError(error);
 
   const rescheduledJob = await helpers.stateAdapter.finishJobAttempt({
     txCtx,
@@ -54,11 +50,11 @@ export const handleJobHandlerError = async (
   });
 
   bufferObservabilityEvent(transactionHooks, () => {
+    helpers.observabilityHelper.jobRescheduled(rescheduledJob);
     helpers.observabilityHelper.jobAttemptFailed(job, {
       workerId,
       error,
     });
-    helpers.observabilityHelper.jobRescheduled(rescheduledJob);
   });
 
   return { schedule };

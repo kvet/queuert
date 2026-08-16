@@ -155,7 +155,7 @@ export const withSavepointGroup: ConformanceGroup<StateConformanceFixture> = {
                   txCtx: sp2TxCtx,
                   jobId,
                   workerId: null,
-                  outcome: { error: "inner failure" },
+                  outcome: { error: "inner failure", schedule: { afterMs: 5000 } },
                 });
                 throw new Error("inner savepoint failure");
               })
