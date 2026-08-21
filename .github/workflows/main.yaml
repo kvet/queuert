@@ -36,7 +36,7 @@ jobs:
     name: Test
     runs-on: ubuntu-latest
 
-    timeout-minutes: 15
+    timeout-minutes: 10
 
     steps:
       - uses: actions/checkout@v4
@@ -48,16 +48,13 @@ jobs:
       - name: Test
         run: bun run test:ci
 
-      - name: Examples
-        run: bun run examples
-
-  benchmarks:
+  examples:
     needs: [check]
 
-    name: Benchmarks
+    name: Examples
     runs-on: ubuntu-latest
 
-    timeout-minutes: 15
+    timeout-minutes: 10
 
     steps:
       - uses: actions/checkout@v4
@@ -66,13 +63,94 @@ jobs:
 
       - uses: ./.github/actions/setup-repo
 
-      - name: Benchmarks
-        run: bun run benchmarks
+      - name: Examples
+        run: bun run examples
+
+  benchmark-memory-footprint:
+    needs: [check]
+
+    name: Benchmark / Memory Footprint
+    runs-on: ubuntu-latest
+
+    timeout-minutes: 5
+
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - uses: ./.github/actions/setup-repo
+
+      - name: Memory Footprint
+        run: bun run --filter './benchmarks/memory-footprint' start
+
+  benchmark-processing-capacity:
+    needs: [check]
+
+    name: Benchmark / Processing Capacity
+    runs-on: ubuntu-latest
+
+    timeout-minutes: 10
+
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - uses: ./.github/actions/setup-repo
+
+      - name: Processing Capacity
+        run: bun run --filter './benchmarks/processing-capacity' start
+
+  benchmark-query-performance:
+    needs: [check]
+
+    name: Benchmark / Query Performance
+    runs-on: ubuntu-latest
+
+    timeout-minutes: 10
+
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - uses: ./.github/actions/setup-repo
+
+      - name: Query Performance
+        run: bun run --filter './benchmarks/query-performance' start
+
+  benchmark-type-complexity:
+    needs: [check]
+
+    name: Benchmark / Type Complexity
+    runs-on: ubuntu-latest
+
+    timeout-minutes: 10
+
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - uses: ./.github/actions/setup-repo
+
+      - name: Type Complexity
+        run: bun run --filter './benchmarks/type-complexity' start
 
   # PR CHECKS
 
   required-collector-job:
-    needs: [check, test, benchmarks]
+    needs:
+      [
+        check,
+        test,
+        examples,
+        benchmark-memory-footprint,
+        benchmark-processing-capacity,
+        benchmark-query-performance,
+        benchmark-type-complexity,
+      ]
     if: github.event_name == 'pull_request' && always()
 
     name: Required Checks
