@@ -11,13 +11,7 @@ export const reclaimExpiredJobAttemptGroup: ConformanceGroup<StateConformanceFix
         const [{ job: created }] = await stateAdapter.withTransaction(async (txCtx) =>
           stateAdapter.createChains({
             txCtx,
-            jobs: [
-              {
-                typeName: "expire-test",
-                chainTypeName: "expire-test",
-                input: null,
-              },
-            ],
+            jobs: [{ typeName: "expire-test", input: null }],
           }),
         );
 
@@ -55,13 +49,7 @@ export const reclaimExpiredJobAttemptGroup: ConformanceGroup<StateConformanceFix
         const [{ job: created }] = await stateAdapter.withTransaction(async (txCtx) =>
           stateAdapter.createChains({
             txCtx,
-            jobs: [
-              {
-                typeName: "no-expire-test",
-                chainTypeName: "no-expire-test",
-                input: null,
-              },
-            ],
+            jobs: [{ typeName: "no-expire-test", input: null }],
           }),
         );
 
@@ -95,26 +83,14 @@ export const reclaimExpiredJobAttemptGroup: ConformanceGroup<StateConformanceFix
         const [{ job: jobA }] = await stateAdapter.withTransaction(async (txCtx) =>
           stateAdapter.createChains({
             txCtx,
-            jobs: [
-              {
-                typeName: "ignore-test",
-                chainTypeName: "ignore-test",
-                input: { order: "a" },
-              },
-            ],
+            jobs: [{ typeName: "ignore-test", input: { order: "a" } }],
           }),
         );
 
         const [{ job: jobB }] = await stateAdapter.withTransaction(async (txCtx) =>
           stateAdapter.createChains({
             txCtx,
-            jobs: [
-              {
-                typeName: "ignore-test",
-                chainTypeName: "ignore-test",
-                input: { order: "b" },
-              },
-            ],
+            jobs: [{ typeName: "ignore-test", input: { order: "b" } }],
           }),
         );
 

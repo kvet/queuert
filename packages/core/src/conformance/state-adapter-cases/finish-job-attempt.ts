@@ -10,13 +10,7 @@ export const finishJobAttemptGroup: ConformanceGroup<StateConformanceFixture> = 
         const [{ job: created }] = await stateAdapter.withTransaction(async (txCtx) =>
           stateAdapter.createChains({
             txCtx,
-            jobs: [
-              {
-                typeName: "complete-test",
-                chainTypeName: "complete-test",
-                input: { value: 1 },
-              },
-            ],
+            jobs: [{ typeName: "complete-test", input: { value: 1 } }],
           }),
         );
 
@@ -61,7 +55,7 @@ export const finishJobAttemptGroup: ConformanceGroup<StateConformanceFixture> = 
         const [{ job: parent }] = await stateAdapter.withTransaction(async (txCtx) =>
           stateAdapter.createChains({
             txCtx,
-            jobs: [{ typeName: "cont-parent", chainTypeName: "cont-parent", input: null }],
+            jobs: [{ typeName: "cont-parent", input: null }],
           }),
         );
 
@@ -99,13 +93,7 @@ export const finishJobAttemptGroup: ConformanceGroup<StateConformanceFixture> = 
         const [{ job: created }] = await stateAdapter.withTransaction(async (txCtx) =>
           stateAdapter.createChains({
             txCtx,
-            jobs: [
-              {
-                typeName: "workerless-test",
-                chainTypeName: "workerless-test",
-                input: null,
-              },
-            ],
+            jobs: [{ typeName: "workerless-test", input: null }],
           }),
         );
 
@@ -128,13 +116,7 @@ export const finishJobAttemptGroup: ConformanceGroup<StateConformanceFixture> = 
         const [{ job: created }] = await stateAdapter.withTransaction(async (txCtx) =>
           stateAdapter.createChains({
             txCtx,
-            jobs: [
-              {
-                typeName: "fail-test",
-                chainTypeName: "fail-test",
-                input: null,
-              },
-            ],
+            jobs: [{ typeName: "fail-test", input: null }],
           }),
         );
 
@@ -175,13 +157,7 @@ export const finishJobAttemptGroup: ConformanceGroup<StateConformanceFixture> = 
         const [{ job: created }] = await stateAdapter.withTransaction(async (txCtx) =>
           stateAdapter.createChains({
             txCtx,
-            jobs: [
-              {
-                typeName: "fail-then-schedule",
-                chainTypeName: "fail-then-schedule",
-                input: null,
-              },
-            ],
+            jobs: [{ typeName: "fail-then-schedule", input: null }],
           }),
         );
 
@@ -218,13 +194,7 @@ export const finishJobAttemptGroup: ConformanceGroup<StateConformanceFixture> = 
         const [{ job: created }] = await stateAdapter.withTransaction(async (txCtx) =>
           stateAdapter.createChains({
             txCtx,
-            jobs: [
-              {
-                typeName: "reschedule-test",
-                chainTypeName: "reschedule-test",
-                input: null,
-              },
-            ],
+            jobs: [{ typeName: "reschedule-test", input: null }],
           }),
         );
 
@@ -261,13 +231,7 @@ export const finishJobAttemptGroup: ConformanceGroup<StateConformanceFixture> = 
         const [{ job: created }] = await stateAdapter.withTransaction(async (txCtx) =>
           stateAdapter.createChains({
             txCtx,
-            jobs: [
-              {
-                typeName: "fail-non-running",
-                chainTypeName: "fail-non-running",
-                input: null,
-              },
-            ],
+            jobs: [{ typeName: "fail-non-running", input: null }],
           }),
         );
 
@@ -294,13 +258,7 @@ export const finishJobAttemptGroup: ConformanceGroup<StateConformanceFixture> = 
         const [{ job: created }] = await stateAdapter.withTransaction(async (txCtx) =>
           stateAdapter.createChains({
             txCtx,
-            jobs: [
-              {
-                typeName: "double-complete-test",
-                chainTypeName: "double-complete-test",
-                input: { v: 1 },
-              },
-            ],
+            jobs: [{ typeName: "double-complete-test", input: { v: 1 } }],
           }),
         );
 
@@ -355,13 +313,7 @@ export const finishJobAttemptGroup: ConformanceGroup<StateConformanceFixture> = 
         const [{ job: created }] = await stateAdapter.withTransaction(async (txCtx) =>
           stateAdapter.createChains({
             txCtx,
-            jobs: [
-              {
-                typeName: "complete-clears-error",
-                chainTypeName: "complete-clears-error",
-                input: null,
-              },
-            ],
+            jobs: [{ typeName: "complete-clears-error", input: null }],
           }),
         );
 

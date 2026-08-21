@@ -10,26 +10,14 @@ export const startJobAttemptGroup: ConformanceGroup<StateConformanceFixture> = {
         await stateAdapter.withTransaction(async (txCtx) =>
           stateAdapter.createChains({
             txCtx,
-            jobs: [
-              {
-                typeName: "acquire-test",
-                chainTypeName: "acquire-test",
-                input: { order: 1 },
-              },
-            ],
+            jobs: [{ typeName: "acquire-test", input: { order: 1 } }],
           }),
         );
 
         await stateAdapter.withTransaction(async (txCtx) =>
           stateAdapter.createChains({
             txCtx,
-            jobs: [
-              {
-                typeName: "acquire-test",
-                chainTypeName: "acquire-test",
-                input: { order: 2 },
-              },
-            ],
+            jobs: [{ typeName: "acquire-test", input: { order: 2 } }],
           }),
         );
 
@@ -69,26 +57,14 @@ export const startJobAttemptGroup: ConformanceGroup<StateConformanceFixture> = {
         const [{ job: blockerJob }] = await stateAdapter.withTransaction(async (txCtx) =>
           stateAdapter.createChains({
             txCtx,
-            jobs: [
-              {
-                typeName: "blocked-skip",
-                chainTypeName: "blocked-skip",
-                input: null,
-              },
-            ],
+            jobs: [{ typeName: "blocked-skip", input: null }],
           }),
         );
 
         const [{ job: mainJob }] = await stateAdapter.withTransaction(async (txCtx) =>
           stateAdapter.createChains({
             txCtx,
-            jobs: [
-              {
-                typeName: "blocked-skip",
-                chainTypeName: "blocked-skip",
-                input: null,
-              },
-            ],
+            jobs: [{ typeName: "blocked-skip", input: null }],
           }),
         );
 
@@ -117,13 +93,7 @@ export const startJobAttemptGroup: ConformanceGroup<StateConformanceFixture> = {
         const [{ job: blockerJob }] = await stateAdapter.withTransaction(async (txCtx) =>
           stateAdapter.createChains({
             txCtx,
-            jobs: [
-              {
-                typeName: "blocked-only",
-                chainTypeName: "blocked-only",
-                input: null,
-              },
-            ],
+            jobs: [{ typeName: "blocked-only", input: null }],
           }),
         );
 
@@ -139,26 +109,14 @@ export const startJobAttemptGroup: ConformanceGroup<StateConformanceFixture> = {
         const [{ job: blockedJob }] = await stateAdapter.withTransaction(async (txCtx) =>
           stateAdapter.createChains({
             txCtx,
-            jobs: [
-              {
-                typeName: "blocked-only",
-                chainTypeName: "blocked-only",
-                input: { value: "blocked" },
-              },
-            ],
+            jobs: [{ typeName: "blocked-only", input: { value: "blocked" } }],
           }),
         );
 
         const [{ job: anotherBlocker }] = await stateAdapter.withTransaction(async (txCtx) =>
           stateAdapter.createChains({
             txCtx,
-            jobs: [
-              {
-                typeName: "blocked-only",
-                chainTypeName: "blocked-only",
-                input: null,
-              },
-            ],
+            jobs: [{ typeName: "blocked-only", input: null }],
           }),
         );
 
@@ -197,14 +155,7 @@ export const startJobAttemptGroup: ConformanceGroup<StateConformanceFixture> = {
         await stateAdapter.withTransaction(async (txCtx) =>
           stateAdapter.createChains({
             txCtx,
-            jobs: [
-              {
-                typeName: "future-acquire",
-                chainTypeName: "future-acquire",
-                input: null,
-                schedule: { afterMs: 60_000 },
-              },
-            ],
+            jobs: [{ typeName: "future-acquire", input: null, schedule: { afterMs: 60_000 } }],
           }),
         );
 
@@ -232,7 +183,6 @@ export const startJobAttemptGroup: ConformanceGroup<StateConformanceFixture> = {
             txCtx,
             jobs: Array.from({ length: count }, (_, i) => ({
               typeName: "acquire-concurrency",
-              chainTypeName: "acquire-concurrency",
               input: { index: i },
             })),
           }),

@@ -10,13 +10,7 @@ export const createContinuationJobGroup: ConformanceGroup<StateConformanceFixtur
         const [{ job: headJob }] = await stateAdapter.withTransaction(async (txCtx) =>
           stateAdapter.createChains({
             txCtx,
-            jobs: [
-              {
-                typeName: "root-job",
-                chainTypeName: "root-job",
-                input: null,
-              },
-            ],
+            jobs: [{ typeName: "root-job", input: null }],
           }),
         );
 
@@ -41,7 +35,7 @@ export const createContinuationJobGroup: ConformanceGroup<StateConformanceFixtur
         const [{ job: headJob }] = await stateAdapter.withTransaction(async (txCtx) =>
           stateAdapter.createChains({
             txCtx,
-            jobs: [{ typeName: "root", chainTypeName: "c", input: null }],
+            jobs: [{ typeName: "root", input: null }],
           }),
         );
 
@@ -79,13 +73,7 @@ export const createContinuationJobGroup: ConformanceGroup<StateConformanceFixtur
         const [{ job: headJob }] = await stateAdapter.withTransaction(async (txCtx) =>
           stateAdapter.createChains({
             txCtx,
-            jobs: [
-              {
-                typeName: "root",
-                chainTypeName: "c",
-                input: null,
-              },
-            ],
+            jobs: [{ typeName: "root", input: null }],
           }),
         );
 
@@ -123,13 +111,7 @@ export const createContinuationJobGroup: ConformanceGroup<StateConformanceFixtur
         const [{ job: headJob }] = await stateAdapter.withTransaction(async (txCtx) =>
           stateAdapter.createChains({
             txCtx,
-            jobs: [
-              {
-                typeName: "chain-root",
-                chainTypeName: "chain-root",
-                input: null,
-              },
-            ],
+            jobs: [{ typeName: "chain-root", input: null }],
           }),
         );
 
@@ -166,13 +148,7 @@ export const createContinuationJobGroup: ConformanceGroup<StateConformanceFixtur
         const [{ job: headJob }] = await stateAdapter.withTransaction(async (txCtx) =>
           stateAdapter.createChains({
             txCtx,
-            jobs: [
-              {
-                typeName: "t",
-                chainTypeName: "t",
-                input: null,
-              },
-            ],
+            jobs: [{ typeName: "t", input: null }],
           }),
         );
         expect(headJob.id).toBe(headJob.chainId);
@@ -209,13 +185,7 @@ export const createContinuationJobGroup: ConformanceGroup<StateConformanceFixtur
         const [{ job: headJob }] = await stateAdapter.withTransaction(async (txCtx) =>
           stateAdapter.createChains({
             txCtx,
-            jobs: [
-              {
-                typeName: "completed-parent",
-                chainTypeName: "completed-parent",
-                input: null,
-              },
-            ],
+            jobs: [{ typeName: "completed-parent", input: null }],
           }),
         );
 
@@ -255,13 +225,7 @@ export const createContinuationJobGroup: ConformanceGroup<StateConformanceFixtur
         const [{ job: headJob }] = await stateAdapter.withTransaction(async (txCtx) =>
           stateAdapter.createChains({
             txCtx,
-            jobs: [
-              {
-                typeName: "root",
-                chainTypeName: "root",
-                input: null,
-              },
-            ],
+            jobs: [{ typeName: "root", input: null }],
           }),
         );
 
@@ -314,13 +278,13 @@ export const createContinuationJobGroup: ConformanceGroup<StateConformanceFixtur
         const [{ job: head1 }] = await stateAdapter.withTransaction(async (txCtx) =>
           stateAdapter.createChains({
             txCtx,
-            jobs: [{ typeName: "root1", chainTypeName: "root1", input: null }],
+            jobs: [{ typeName: "root1", input: null }],
           }),
         );
         const [{ job: head2 }] = await stateAdapter.withTransaction(async (txCtx) =>
           stateAdapter.createChains({
             txCtx,
-            jobs: [{ typeName: "root2", chainTypeName: "root2", input: null }],
+            jobs: [{ typeName: "root2", input: null }],
           }),
         );
 

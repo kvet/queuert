@@ -37,7 +37,6 @@ export const createChains = async (
     chains: chains.map((chain) => ({
       typeName: chain.typeName,
       id: chain.id,
-      chainTypeName: chain.typeName,
       input: chain.input,
       blockers: chain.blockers,
       deduplication: chain.deduplication,

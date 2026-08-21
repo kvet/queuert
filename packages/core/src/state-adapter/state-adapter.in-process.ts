@@ -688,12 +688,11 @@ export const createInProcessStateAdapter = async ({
             schedule,
             chainTraceContext,
             traceContext,
-            chainTypeName,
             deduplication,
           } = jobInput;
 
           if (deduplication) {
-            const existing = idx.findDeduplicatedJob(chainTypeName, deduplication);
+            const existing = idx.findDeduplicatedJob(typeName, deduplication);
             if (existing) {
               results.push({ job: existing, deduplicated: true });
               continue;
@@ -710,7 +709,7 @@ export const createInProcessStateAdapter = async ({
             id,
             typeName,
             chainId: id,
-            chainTypeName,
+            chainTypeName: typeName,
             chainIndex: 0,
             deduplicationKey: deduplication?.key ?? null,
             input,

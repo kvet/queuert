@@ -13,13 +13,7 @@ export const getChainsGroup: ConformanceGroup<StateConformanceFixture> = {
         const [{ job: headJob }] = await stateAdapter.withTransaction(async (txCtx) =>
           stateAdapter.createChains({
             txCtx,
-            jobs: [
-              {
-                typeName: "chain-root",
-                chainTypeName: "chain-root",
-                input: { step: 1 },
-              },
-            ],
+            jobs: [{ typeName: "chain-root", input: { step: 1 } }],
           }),
         );
 
@@ -36,13 +30,7 @@ export const getChainsGroup: ConformanceGroup<StateConformanceFixture> = {
         const [{ job: headJob }] = await stateAdapter.withTransaction(async (txCtx) =>
           stateAdapter.createChains({
             txCtx,
-            jobs: [
-              {
-                typeName: "chain-root",
-                chainTypeName: "chain-root",
-                input: null,
-              },
-            ],
+            jobs: [{ typeName: "chain-root", input: null }],
           }),
         );
 
@@ -70,13 +58,7 @@ export const getChainsGroup: ConformanceGroup<StateConformanceFixture> = {
         const [{ job: headJob }] = await stateAdapter.withTransaction(async (txCtx) =>
           stateAdapter.createChains({
             txCtx,
-            jobs: [
-              {
-                typeName: "single-root",
-                chainTypeName: "single-root",
-                input: null,
-              },
-            ],
+            jobs: [{ typeName: "single-root", input: null }],
           }),
         );
 
@@ -93,13 +75,7 @@ export const getChainsGroup: ConformanceGroup<StateConformanceFixture> = {
         const [{ job: headJob }] = await stateAdapter.withTransaction(async (txCtx) =>
           stateAdapter.createChains({
             txCtx,
-            jobs: [
-              {
-                typeName: "single-root-locked",
-                chainTypeName: "single-root-locked",
-                input: null,
-              },
-            ],
+            jobs: [{ typeName: "single-root-locked", input: null }],
           }),
         );
 
@@ -118,13 +94,7 @@ export const getChainsGroup: ConformanceGroup<StateConformanceFixture> = {
         const [{ job: real }] = await stateAdapter.withTransaction(async (txCtx) =>
           stateAdapter.createChains({
             txCtx,
-            jobs: [
-              {
-                typeName: "chain-lookup-test",
-                chainTypeName: "chain-lookup-test",
-                input: null,
-              },
-            ],
+            jobs: [{ typeName: "chain-lookup-test", input: null }],
           }),
         );
         const nonexistentId = real.chainId.slice(0, -1) + (real.chainId.endsWith("0") ? "1" : "0");
@@ -138,13 +108,7 @@ export const getChainsGroup: ConformanceGroup<StateConformanceFixture> = {
         const [{ job: headJob }] = await stateAdapter.withTransaction(async (txCtx) =>
           stateAdapter.createChains({
             txCtx,
-            jobs: [
-              {
-                typeName: "chain-locked",
-                chainTypeName: "chain-locked",
-                input: null,
-              },
-            ],
+            jobs: [{ typeName: "chain-locked", input: null }],
           }),
         );
 
@@ -224,13 +188,7 @@ export const getChainsGroup: ConformanceGroup<StateConformanceFixture> = {
           .withTransaction(async (txCtx) => {
             const [{ job }] = await stateAdapter.createChains({
               txCtx,
-              jobs: [
-                {
-                  typeName: "iso-chain-create",
-                  chainTypeName: "iso-chain-create",
-                  input: null,
-                },
-              ],
+              jobs: [{ typeName: "iso-chain-create", input: null }],
             });
             newChainId = job.chainId;
             signalTxReady!();
@@ -257,13 +215,7 @@ export const getChainsGroup: ConformanceGroup<StateConformanceFixture> = {
         const [{ job: seed }] = await stateAdapter.withTransaction(async (txCtx) =>
           stateAdapter.createChains({
             txCtx,
-            jobs: [
-              {
-                typeName: "iso-latest-root",
-                chainTypeName: "iso-latest",
-                input: null,
-              },
-            ],
+            jobs: [{ typeName: "iso-latest-root", input: null }],
           }),
         );
 

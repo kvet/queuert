@@ -1077,7 +1077,7 @@ export const operationalCoverageGroups: IndexCoverageGroup[] = [
           await stateAdapter.withTransaction(async (txCtx) =>
             stateAdapter.createChains({
               txCtx,
-              jobs: [{ typeName: "idx:test", chainTypeName: "idx:test", input: {} }],
+              jobs: [{ typeName: "idx:test", input: {} }],
             }),
           );
         },
@@ -1092,7 +1092,6 @@ export const operationalCoverageGroups: IndexCoverageGroup[] = [
               jobs: [
                 {
                   typeName: "idx:dedup",
-                  chainTypeName: "idx:dedup",
                   input: {},
                   deduplication: { key: "idx-dedup-key", scope: "running" },
                 },
@@ -1145,7 +1144,6 @@ export const operationalCoverageGroups: IndexCoverageGroup[] = [
               jobs: [
                 {
                   typeName: "idx:blocker-target",
-                  chainTypeName: "idx:blocker-target",
                   input: {},
                 },
               ],

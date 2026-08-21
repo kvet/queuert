@@ -18,7 +18,7 @@ describe("SQLite State Adapter Variance - All Custom Options", () => {
     const [{ job }] = await stateAdapter.withTransaction(async (txCtx) =>
       stateAdapter.createChains({
         txCtx,
-        jobs: [{ typeName: "t", chainTypeName: "t", input: null }],
+        jobs: [{ typeName: "t", input: null }],
       }),
     );
     expect(job.id.startsWith("job-")).toBe(true);

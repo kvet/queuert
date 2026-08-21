@@ -247,7 +247,6 @@ export const createStateChains = async (
     transactionHooks,
   }: {
     chains: (CommonInput & {
-      chainTypeName: string;
       deduplication?: DeduplicationOptions;
     })[];
     txCtx: BaseTxContext;
@@ -258,7 +257,7 @@ export const createStateChains = async (
 
   const { parsed, spanHandles } = prepareJobs(helpers, chains, (entry) =>
     helpers.observabilityHelper.startJobSpan({
-      chainTypeName: entry.chainTypeName,
+      chainTypeName: entry.typeName,
       jobTypeName: entry.typeName,
       isChainHead: true,
     }),
@@ -271,7 +270,6 @@ export const createStateChains = async (
     schedule: chain.schedule,
     chainTraceContext: spanHandles[i]?.getChainTraceContext() ?? null,
     traceContext: spanHandles[i]?.getTraceContext() ?? null,
-    chainTypeName: chain.chainTypeName,
     deduplication: chain.deduplication,
   }));
 

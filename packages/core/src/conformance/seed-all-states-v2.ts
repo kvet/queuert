@@ -105,7 +105,6 @@ export const seedAllStatesV2 = async <TTxContext extends BaseTxContext>(
 ): Promise<SeedSentinelsV2> => {
   const headJob = (typeName: string, index: number, schedule?: { afterMs: number }) => ({
     typeName,
-    chainTypeName: typeName,
     input: { index },
     ...(schedule ? { schedule } : {}),
   });
@@ -336,7 +335,7 @@ export const seedAllStatesV2 = async <TTxContext extends BaseTxContext>(
   const [{ job: chainRoot }] = await stateAdapter.withTransaction(async (txCtx) =>
     stateAdapter.createChains({
       txCtx,
-      jobs: [{ typeName: "seed:chain", chainTypeName: "seed:chain", input: { n: 0 } }],
+      jobs: [{ typeName: "seed:chain", input: { n: 0 } }],
     }),
   );
   let lastChainJob = chainRoot;
@@ -404,7 +403,6 @@ export const seedAllStatesV2 = async <TTxContext extends BaseTxContext>(
       txCtx,
       jobs: Array.from({ length: seedConfigV2.throwawayChains * scale }, (_, i) => ({
         typeName: "seed:throwaway:chain",
-        chainTypeName: "seed:throwaway:chain",
         input: { index: i },
       })),
     }),
@@ -415,7 +413,6 @@ export const seedAllStatesV2 = async <TTxContext extends BaseTxContext>(
       txCtx,
       jobs: Array.from({ length: seedConfigV2.throwawayCascadeChains * scale }, (_, i) => ({
         typeName: "seed:throwaway:cascade-parent",
-        chainTypeName: "seed:throwaway:cascade-parent",
         input: { index: i },
       })),
     });
@@ -423,7 +420,6 @@ export const seedAllStatesV2 = async <TTxContext extends BaseTxContext>(
       txCtx,
       jobs: Array.from({ length: seedConfigV2.throwawayCascadeChains * scale }, (_, i) => ({
         typeName: "seed:throwaway:cascade-child",
-        chainTypeName: "seed:throwaway:cascade-child",
         input: { index: i },
       })),
     });
@@ -442,7 +438,6 @@ export const seedAllStatesV2 = async <TTxContext extends BaseTxContext>(
       txCtx,
       jobs: Array.from({ length: seedConfigV2.throwawayUnblockers * scale }, (_, i) => ({
         typeName: "seed:throwaway:unblocker",
-        chainTypeName: "seed:throwaway:unblocker",
         input: { index: i },
       })),
     });
@@ -450,7 +445,6 @@ export const seedAllStatesV2 = async <TTxContext extends BaseTxContext>(
       txCtx,
       jobs: Array.from({ length: seedConfigV2.throwawayUnblockers * scale }, (_, i) => ({
         typeName: "seed:throwaway:unblock-target",
-        chainTypeName: "seed:throwaway:unblock-target",
         input: { index: i },
       })),
     });

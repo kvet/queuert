@@ -25,7 +25,7 @@ const createJob = async (
   const [{ job }] = await stateAdapter.withTransaction(async (txCtx) =>
     stateAdapter.createChains({
       txCtx,
-      jobs: [{ typeName, chainTypeName: typeName, input }],
+      jobs: [{ typeName, input }],
     }),
   );
   return job;
@@ -561,14 +561,7 @@ describe("Dashboard API", () => {
       const [{ job }] = await stateAdapter.withTransaction(async (txCtx) =>
         stateAdapter.createChains({
           txCtx,
-          jobs: [
-            {
-              typeName: "scheduled-type",
-              chainTypeName: "scheduled-type",
-              input: null,
-              schedule: { afterMs: 60_000 },
-            },
-          ],
+          jobs: [{ typeName: "scheduled-type", input: null, schedule: { afterMs: 60_000 } }],
         }),
       );
 

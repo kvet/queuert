@@ -370,10 +370,9 @@ export const validationAdapterConformanceGroups: ConformanceGroup<ValidationAdap
           name: "nominal: passes for valid name",
           run: async ({ continuations }, expect) => {
             expect(() => {
-              continuations.buildNominal().validateContinueWith("step1", {
-                typeName: "step2",
-                input: { data: "x" },
-              });
+              continuations
+                .buildNominal()
+                .validateContinueWith("step1", { typeName: "step2", input: { data: "x" } });
             }).not.toThrow();
           },
         },
@@ -382,10 +381,9 @@ export const validationAdapterConformanceGroups: ConformanceGroup<ValidationAdap
           run: async ({ continuations }) => {
             expectJobTypeValidationError(
               () => {
-                continuations.buildNominal().validateContinueWith("step1", {
-                  typeName: "step3",
-                  input: {},
-                });
+                continuations
+                  .buildNominal()
+                  .validateContinueWith("step1", { typeName: "step3", input: {} });
               },
               "invalid_continuation",
               "step1",
@@ -396,10 +394,9 @@ export const validationAdapterConformanceGroups: ConformanceGroup<ValidationAdap
           name: "structural: passes for matching shape",
           run: async ({ continuations }, expect) => {
             expect(() => {
-              continuations.buildStructural().validateContinueWith("router", {
-                typeName: "handler",
-                input: { payload: "x" },
-              });
+              continuations
+                .buildStructural()
+                .validateContinueWith("router", { typeName: "handler", input: { payload: "x" } });
             }).not.toThrow();
           },
         },

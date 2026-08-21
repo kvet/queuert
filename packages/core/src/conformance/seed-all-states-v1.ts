@@ -46,7 +46,6 @@ export const seedAllStatesV1 = async <TTxContext extends BaseTxContext>(
 ): Promise<SeedSentinelsV1> => {
   const headJob = (typeName: string, index: number, schedule?: { afterMs: number }) => ({
     typeName,
-    chainTypeName: typeName,
     input: { index },
     ...(schedule ? { schedule } : {}),
   });
@@ -162,7 +161,7 @@ export const seedAllStatesV1 = async <TTxContext extends BaseTxContext>(
   const [{ job: chainRoot }] = await stateAdapter.withTransaction(async (txCtx) =>
     stateAdapter.createChains({
       txCtx,
-      jobs: [{ typeName: "seed:chain", chainTypeName: "seed:chain", input: { n: 0 } }],
+      jobs: [{ typeName: "seed:chain", input: { n: 0 } }],
     }),
   );
   for (let step = 1; step < chainLength; step++) {

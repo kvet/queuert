@@ -14,13 +14,7 @@ export const getJobsGroup: ConformanceGroup<StateConformanceFixture> = {
         const [{ job: real }] = await stateAdapter.withTransaction(async (txCtx) =>
           stateAdapter.createChains({
             txCtx,
-            jobs: [
-              {
-                typeName: "lookup-test",
-                chainTypeName: "lookup-test",
-                input: null,
-              },
-            ],
+            jobs: [{ typeName: "lookup-test", input: null }],
           }),
         );
         const nonexistentId = real.id.slice(0, -1) + (real.id.endsWith("0") ? "1" : "0");
@@ -34,13 +28,7 @@ export const getJobsGroup: ConformanceGroup<StateConformanceFixture> = {
         const [{ job: seed }] = await stateAdapter.withTransaction(async (txCtx) =>
           stateAdapter.createChains({
             txCtx,
-            jobs: [
-              {
-                typeName: "lock-blocking-job",
-                chainTypeName: "lock-blocking-job",
-                input: { value: 1 },
-              },
-            ],
+            jobs: [{ typeName: "lock-blocking-job", input: { value: 1 } }],
           }),
         );
 
@@ -98,7 +86,6 @@ export const getJobsGroup: ConformanceGroup<StateConformanceFixture> = {
             txCtx,
             jobs: Array.from({ length: count }, (_, i) => ({
               typeName: "parallel-read",
-              chainTypeName: "parallel-read",
               input: { index: i },
             })),
           }),
@@ -134,13 +121,7 @@ export const getJobsGroup: ConformanceGroup<StateConformanceFixture> = {
           .withTransaction(async (txCtx) => {
             const [{ job }] = await stateAdapter.createChains({
               txCtx,
-              jobs: [
-                {
-                  typeName: "iso-insert",
-                  chainTypeName: "iso-insert",
-                  input: null,
-                },
-              ],
+              jobs: [{ typeName: "iso-insert", input: null }],
             });
             insertedId = job.id;
             signalTxReady!();
@@ -167,13 +148,7 @@ export const getJobsGroup: ConformanceGroup<StateConformanceFixture> = {
         const [{ job: seed }] = await stateAdapter.withTransaction(async (txCtx) =>
           stateAdapter.createChains({
             txCtx,
-            jobs: [
-              {
-                typeName: "iso-update",
-                chainTypeName: "iso-update",
-                input: null,
-              },
-            ],
+            jobs: [{ typeName: "iso-update", input: null }],
           }),
         );
 
@@ -221,13 +196,7 @@ export const getJobsGroup: ConformanceGroup<StateConformanceFixture> = {
         const [{ job: seed }] = await stateAdapter.withTransaction(async (txCtx) =>
           stateAdapter.createChains({
             txCtx,
-            jobs: [
-              {
-                typeName: "iso-delete",
-                chainTypeName: "iso-delete",
-                input: null,
-              },
-            ],
+            jobs: [{ typeName: "iso-delete", input: null }],
           }),
         );
 
@@ -268,13 +237,7 @@ export const getJobsGroup: ConformanceGroup<StateConformanceFixture> = {
         const [{ job: seed }] = await stateAdapter.withTransaction(async (txCtx) =>
           stateAdapter.createChains({
             txCtx,
-            jobs: [
-              {
-                typeName: "iso-locked-job",
-                chainTypeName: "iso-locked-job",
-                input: null,
-              },
-            ],
+            jobs: [{ typeName: "iso-locked-job", input: null }],
           }),
         );
 

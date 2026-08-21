@@ -16,7 +16,7 @@ describe("PostgreSQL State Adapter Variance - Text ID Type", () => {
     const [{ job }] = await stateAdapter.withTransaction(async (txCtx) =>
       stateAdapter.createChains({
         txCtx,
-        jobs: [{ typeName: "t", chainTypeName: "t", input: null }],
+        jobs: [{ typeName: "t", input: null }],
       }),
     );
     expect(typeof job.id).toBe("string");

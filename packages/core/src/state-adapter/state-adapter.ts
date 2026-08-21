@@ -99,7 +99,6 @@ export type StateAdapter<TTxContext extends BaseTxContext, TJobId extends string
       schedule?: ScheduleOptions;
       chainTraceContext?: string | null;
       traceContext?: string | null;
-      chainTypeName: string;
       deduplication?: DeduplicationOptions;
     }[];
   }) => Promise<{ job: StateJob; deduplicated: boolean }[]>;

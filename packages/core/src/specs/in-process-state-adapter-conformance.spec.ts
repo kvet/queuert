@@ -27,7 +27,7 @@ describe("In-Process State Adapter Conformance", () => {
     const [{ job }] = await stateAdapter.withTransaction(async (txCtx) =>
       stateAdapter.createChains({
         txCtx,
-        jobs: [{ typeName: "t", chainTypeName: "t", input: null }],
+        jobs: [{ typeName: "t", input: null }],
       }),
     );
     expect(UUID_PATTERN.test(job.id)).toBe(true);

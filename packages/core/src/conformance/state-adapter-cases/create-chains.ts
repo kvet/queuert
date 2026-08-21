@@ -12,13 +12,7 @@ export const createChainsGroup: ConformanceGroup<StateConformanceFixture> = {
         const [{ job }] = await stateAdapter.withTransaction(async (txCtx) =>
           stateAdapter.createChains({
             txCtx,
-            jobs: [
-              {
-                typeName: "chain-test",
-                chainTypeName: "chain-test",
-                input: null,
-              },
-            ],
+            jobs: [{ typeName: "chain-test", input: null }],
           }),
         );
 
@@ -33,13 +27,7 @@ export const createChainsGroup: ConformanceGroup<StateConformanceFixture> = {
           for (let i = 0; i < 10; i++) {
             const [{ job }] = await stateAdapter.createChains({
               txCtx,
-              jobs: [
-                {
-                  typeName: "test-job",
-                  chainTypeName: "test-job",
-                  input: { value: i },
-                },
-              ],
+              jobs: [{ typeName: "test-job", input: { value: i } }],
             });
             results.push(job);
           }
@@ -61,7 +49,6 @@ export const createChainsGroup: ConformanceGroup<StateConformanceFixture> = {
             jobs: [
               {
                 typeName: "test-job",
-                chainTypeName: "test-job",
                 input,
               },
             ],
@@ -84,13 +71,7 @@ export const createChainsGroup: ConformanceGroup<StateConformanceFixture> = {
         const [{ job }] = await stateAdapter.withTransaction(async (txCtx) =>
           stateAdapter.createChains({
             txCtx,
-            jobs: [
-              {
-                typeName: "null-test",
-                chainTypeName: "null-test",
-                input: null,
-              },
-            ],
+            jobs: [{ typeName: "null-test", input: null }],
           }),
         );
 
@@ -131,13 +112,7 @@ export const createChainsGroup: ConformanceGroup<StateConformanceFixture> = {
         const [{ job }] = await stateAdapter.withTransaction(async (txCtx) =>
           stateAdapter.createChains({
             txCtx,
-            jobs: [
-              {
-                typeName: "json-test",
-                chainTypeName: "json-test",
-                input: complexInput,
-              },
-            ],
+            jobs: [{ typeName: "json-test", input: complexInput }],
           }),
         );
 
@@ -154,7 +129,6 @@ export const createChainsGroup: ConformanceGroup<StateConformanceFixture> = {
             jobs: [
               {
                 typeName: "dedup-test",
-                chainTypeName: "dedup-test",
                 input: { value: 1 },
                 deduplication: { key: "same-key", scope: "running" },
               },
@@ -168,7 +142,6 @@ export const createChainsGroup: ConformanceGroup<StateConformanceFixture> = {
             jobs: [
               {
                 typeName: "dedup-test",
-                chainTypeName: "dedup-test",
                 input: { value: 2 },
                 deduplication: { key: "same-key", scope: "running" },
               },
@@ -185,7 +158,6 @@ export const createChainsGroup: ConformanceGroup<StateConformanceFixture> = {
             jobs: [
               {
                 typeName: "dedup-test",
-                chainTypeName: "dedup-test",
                 input: { value: 3 },
                 deduplication: { key: "different-key", scope: "running" },
               },
@@ -205,7 +177,6 @@ export const createChainsGroup: ConformanceGroup<StateConformanceFixture> = {
             jobs: [
               {
                 typeName: "scope-test",
-                chainTypeName: "scope-test",
                 input: null,
                 deduplication: { key: "scope-key", scope: "running" },
               },
@@ -229,7 +200,6 @@ export const createChainsGroup: ConformanceGroup<StateConformanceFixture> = {
               jobs: [
                 {
                   typeName: "scope-test",
-                  chainTypeName: "scope-test",
                   input: null,
                   deduplication: { key: "scope-key", scope: "running" },
                 },
@@ -245,7 +215,6 @@ export const createChainsGroup: ConformanceGroup<StateConformanceFixture> = {
             jobs: [
               {
                 typeName: "scope-test-any",
-                chainTypeName: "scope-test-any",
                 input: null,
                 deduplication: { key: "any-key", scope: "any" },
               },
@@ -268,7 +237,6 @@ export const createChainsGroup: ConformanceGroup<StateConformanceFixture> = {
             jobs: [
               {
                 typeName: "scope-test-any",
-                chainTypeName: "scope-test-any",
                 input: null,
                 deduplication: { key: "any-key", scope: "any" },
               },
@@ -288,7 +256,6 @@ export const createChainsGroup: ConformanceGroup<StateConformanceFixture> = {
             jobs: [
               {
                 typeName: "step1",
-                chainTypeName: "step1",
                 input: null,
                 deduplication: { key: "multi-key", scope: "running" },
               },
@@ -317,7 +284,6 @@ export const createChainsGroup: ConformanceGroup<StateConformanceFixture> = {
             jobs: [
               {
                 typeName: "step1",
-                chainTypeName: "step1",
                 input: null,
                 deduplication: { key: "multi-key", scope: "running" },
               },
@@ -343,7 +309,6 @@ export const createChainsGroup: ConformanceGroup<StateConformanceFixture> = {
               jobs: [
                 {
                   typeName: "step1",
-                  chainTypeName: "step1",
                   input: null,
                   deduplication: { key: "multi-key", scope: "running" },
                 },
@@ -363,7 +328,6 @@ export const createChainsGroup: ConformanceGroup<StateConformanceFixture> = {
             jobs: [
               {
                 typeName: "coexist",
-                chainTypeName: "coexist",
                 input: null,
                 deduplication: { key: "coexist-key", scope: "running" },
               },
@@ -386,7 +350,6 @@ export const createChainsGroup: ConformanceGroup<StateConformanceFixture> = {
             jobs: [
               {
                 typeName: "coexist",
-                chainTypeName: "coexist",
                 input: null,
                 deduplication: { key: "coexist-key", scope: "running" },
               },
@@ -402,7 +365,6 @@ export const createChainsGroup: ConformanceGroup<StateConformanceFixture> = {
             jobs: [
               {
                 typeName: "coexist",
-                chainTypeName: "coexist",
                 input: null,
                 deduplication: { key: "coexist-key", scope: "running" },
               },
@@ -421,14 +383,7 @@ export const createChainsGroup: ConformanceGroup<StateConformanceFixture> = {
         const [{ job: afterMsJob }] = await stateAdapter.withTransaction(async (txCtx) =>
           stateAdapter.createChains({
             txCtx,
-            jobs: [
-              {
-                typeName: "schedule-test",
-                chainTypeName: "schedule-test",
-                input: null,
-                schedule: { afterMs: 5000 },
-              },
-            ],
+            jobs: [{ typeName: "schedule-test", input: null, schedule: { afterMs: 5000 } }],
           }),
         );
 
@@ -440,14 +395,7 @@ export const createChainsGroup: ConformanceGroup<StateConformanceFixture> = {
         const [{ job: atJob }] = await stateAdapter.withTransaction(async (txCtx) =>
           stateAdapter.createChains({
             txCtx,
-            jobs: [
-              {
-                typeName: "schedule-test-at",
-                chainTypeName: "schedule-test-at",
-                input: null,
-                schedule: { at: futureDate },
-              },
-            ],
+            jobs: [{ typeName: "schedule-test-at", input: null, schedule: { at: futureDate } }],
           }),
         );
 
@@ -461,14 +409,7 @@ export const createChainsGroup: ConformanceGroup<StateConformanceFixture> = {
         const [{ job }] = await stateAdapter.withTransaction(async (txCtx) =>
           stateAdapter.createChains({
             txCtx,
-            jobs: [
-              {
-                typeName: "schedule-past",
-                chainTypeName: "schedule-past",
-                input: null,
-                schedule: { at: past },
-              },
-            ],
+            jobs: [{ typeName: "schedule-past", input: null, schedule: { at: past } }],
           }),
         );
 
@@ -487,7 +428,6 @@ export const createChainsGroup: ConformanceGroup<StateConformanceFixture> = {
             jobs: [
               {
                 typeName: "trace-test",
-                chainTypeName: "trace-test",
                 input: null,
                 chainTraceContext,
                 traceContext,
@@ -507,13 +447,7 @@ export const createChainsGroup: ConformanceGroup<StateConformanceFixture> = {
         const [{ job }] = await stateAdapter.withTransaction(async (txCtx) =>
           stateAdapter.createChains({
             txCtx,
-            jobs: [
-              {
-                typeName: "date-test",
-                chainTypeName: "date-test",
-                input: null,
-              },
-            ],
+            jobs: [{ typeName: "date-test", input: null }],
           }),
         );
 
@@ -531,21 +465,9 @@ export const createChainsGroup: ConformanceGroup<StateConformanceFixture> = {
           stateAdapter.createChains({
             txCtx,
             jobs: [
-              {
-                typeName: "batch-a",
-                chainTypeName: "batch-a",
-                input: { value: 1 },
-              },
-              {
-                typeName: "batch-b",
-                chainTypeName: "batch-b",
-                input: { value: 2 },
-              },
-              {
-                typeName: "batch-c",
-                chainTypeName: "batch-c",
-                input: { value: 3 },
-              },
+              { typeName: "batch-a", input: { value: 1 } },
+              { typeName: "batch-b", input: { value: 2 } },
+              { typeName: "batch-c", input: { value: 3 } },
             ],
           }),
         );
@@ -574,7 +496,6 @@ export const createChainsGroup: ConformanceGroup<StateConformanceFixture> = {
             jobs: [
               {
                 typeName: "dedup-test",
-                chainTypeName: "dedup-test",
                 input: { value: "existing" },
                 deduplication: { key: "dup-key-1", scope: "running" },
               },
@@ -588,13 +509,11 @@ export const createChainsGroup: ConformanceGroup<StateConformanceFixture> = {
             jobs: [
               {
                 typeName: "dedup-test",
-                chainTypeName: "dedup-test",
                 input: { value: "new-1" },
                 deduplication: { key: "dup-key-1", scope: "running" },
               },
               {
                 typeName: "dedup-test",
-                chainTypeName: "dedup-test",
                 input: { value: "new-2" },
                 deduplication: { key: "dup-key-unique", scope: "running" },
               },
@@ -630,7 +549,6 @@ export const createChainsGroup: ConformanceGroup<StateConformanceFixture> = {
               {
                 typeName: "id-test",
                 id: userId,
-                chainTypeName: "id-test",
                 input: null,
               },
             ],
@@ -655,7 +573,6 @@ export const createChainsGroup: ConformanceGroup<StateConformanceFixture> = {
                 {
                   typeName: "invalid-id-test",
                   id: badId,
-                  chainTypeName: "invalid-id-test",
                   input: null,
                 },
               ],
@@ -673,7 +590,6 @@ export const createChainsGroup: ConformanceGroup<StateConformanceFixture> = {
             jobs: [
               {
                 typeName: "id-dedup",
-                chainTypeName: "id-dedup",
                 input: null,
                 deduplication: { key: "dedup-id-key", scope: "running" },
               },
@@ -689,7 +605,6 @@ export const createChainsGroup: ConformanceGroup<StateConformanceFixture> = {
               {
                 typeName: "id-dedup",
                 id: userId,
-                chainTypeName: "id-dedup",
                 input: null,
                 deduplication: { key: "dedup-id-key", scope: "running" },
               },
@@ -713,7 +628,6 @@ export const createChainsGroup: ConformanceGroup<StateConformanceFixture> = {
               {
                 typeName: "collision-test",
                 id: userId,
-                chainTypeName: "collision-test",
                 input: null,
               },
             ],
@@ -728,7 +642,6 @@ export const createChainsGroup: ConformanceGroup<StateConformanceFixture> = {
                 {
                   typeName: "collision-test-2",
                   id: userId,
-                  chainTypeName: "collision-test-2",
                   input: null,
                 },
               ],
@@ -748,7 +661,6 @@ export const createChainsGroup: ConformanceGroup<StateConformanceFixture> = {
               {
                 typeName: "original",
                 id: userId,
-                chainTypeName: "original",
                 input: { preserved: true },
               },
             ],
@@ -763,7 +675,6 @@ export const createChainsGroup: ConformanceGroup<StateConformanceFixture> = {
                 {
                   typeName: "intruder",
                   id: userId,
-                  chainTypeName: "intruder",
                   input: { preserved: false },
                 },
               ],
@@ -788,13 +699,11 @@ export const createChainsGroup: ConformanceGroup<StateConformanceFixture> = {
                 {
                   typeName: "batch-dup-1",
                   id: userId,
-                  chainTypeName: "batch-dup-1",
                   input: null,
                 },
                 {
                   typeName: "batch-dup-2",
                   id: userId,
-                  chainTypeName: "batch-dup-2",
                   input: null,
                 },
               ],

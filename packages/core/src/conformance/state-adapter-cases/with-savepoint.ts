@@ -10,13 +10,7 @@ export const withSavepointGroup: ConformanceGroup<StateConformanceFixture> = {
         const [{ job }] = await stateAdapter.withTransaction(async (txCtx) => {
           const results = await stateAdapter.createChains({
             txCtx,
-            jobs: [
-              {
-                typeName: "sp-test",
-                chainTypeName: "sp-test",
-                input: null,
-              },
-            ],
+            jobs: [{ typeName: "sp-test", input: null }],
           });
 
           await stateAdapter.withSavepoint(txCtx, async (spTxCtx) => {
@@ -42,13 +36,7 @@ export const withSavepointGroup: ConformanceGroup<StateConformanceFixture> = {
         const [{ job }] = await stateAdapter.withTransaction(async (txCtx) => {
           const results = await stateAdapter.createChains({
             txCtx,
-            jobs: [
-              {
-                typeName: "sp-rollback",
-                chainTypeName: "sp-rollback",
-                input: null,
-              },
-            ],
+            jobs: [{ typeName: "sp-rollback", input: null }],
           });
 
           await stateAdapter
@@ -78,26 +66,14 @@ export const withSavepointGroup: ConformanceGroup<StateConformanceFixture> = {
         const jobs = await stateAdapter.withTransaction(async (txCtx) => {
           const [{ job: job1 }] = await stateAdapter.createChains({
             txCtx,
-            jobs: [
-              {
-                typeName: "sp-outer-1",
-                chainTypeName: "sp-outer-1",
-                input: { before: true },
-              },
-            ],
+            jobs: [{ typeName: "sp-outer-1", input: { before: true } }],
           });
 
           await stateAdapter
             .withSavepoint(txCtx, async (spTxCtx) => {
               await stateAdapter.createChains({
                 txCtx: spTxCtx,
-                jobs: [
-                  {
-                    typeName: "sp-inner",
-                    chainTypeName: "sp-inner",
-                    input: { inside: true },
-                  },
-                ],
+                jobs: [{ typeName: "sp-inner", input: { inside: true } }],
               });
               throw new Error("savepoint failure");
             })
@@ -105,13 +81,7 @@ export const withSavepointGroup: ConformanceGroup<StateConformanceFixture> = {
 
           const [{ job: job2 }] = await stateAdapter.createChains({
             txCtx,
-            jobs: [
-              {
-                typeName: "sp-outer-2",
-                chainTypeName: "sp-outer-2",
-                input: { after: true },
-              },
-            ],
+            jobs: [{ typeName: "sp-outer-2", input: { after: true } }],
           });
 
           return [job1, job2];
@@ -131,13 +101,7 @@ export const withSavepointGroup: ConformanceGroup<StateConformanceFixture> = {
         const [{ job }] = await stateAdapter.withTransaction(async (txCtx) => {
           const results = await stateAdapter.createChains({
             txCtx,
-            jobs: [
-              {
-                typeName: "sp-nested",
-                chainTypeName: "sp-nested",
-                input: { step: 0 },
-              },
-            ],
+            jobs: [{ typeName: "sp-nested", input: { step: 0 } }],
           });
           const jobId = results[0].job.id;
 
@@ -197,13 +161,7 @@ export const withSavepointGroup: ConformanceGroup<StateConformanceFixture> = {
           async (txCtx) => {
             const [{ job: jobBefore }] = await stateAdapter.createChains({
               txCtx,
-              jobs: [
-                {
-                  typeName: "sp-poison-before",
-                  chainTypeName: "sp-poison-before",
-                  input: null,
-                },
-              ],
+              jobs: [{ typeName: "sp-poison-before", input: null }],
             });
 
             await stateAdapter
@@ -214,13 +172,7 @@ export const withSavepointGroup: ConformanceGroup<StateConformanceFixture> = {
 
             const [{ job: jobAfter }] = await stateAdapter.createChains({
               txCtx,
-              jobs: [
-                {
-                  typeName: "sp-poison-after",
-                  chainTypeName: "sp-poison-after",
-                  input: null,
-                },
-              ],
+              jobs: [{ typeName: "sp-poison-after", input: null }],
             });
 
             return [{ job: jobBefore }, { job: jobAfter }];

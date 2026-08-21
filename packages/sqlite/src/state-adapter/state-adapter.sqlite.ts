@@ -917,7 +917,7 @@ WHERE id IN (SELECT value FROM json_each(?))
           const deduplicationKey = job.deduplication.key;
           const deduplicationScope = job.deduplication.scope;
 
-          const batchKey = `${deduplicationKey}\0${job.chainTypeName}`;
+          const batchKey = `${deduplicationKey}\0${job.typeName}`;
           const firstIdx = intraBatchDedup.get(batchKey);
           if (firstIdx !== undefined) {
             deferredDupes.push({ index: i, firstIndex: firstIdx });
@@ -964,7 +964,7 @@ LIMIT 1
             params: [
               deduplicationKey,
               deduplicationKey,
-              job.chainTypeName,
+              job.typeName,
               deduplicationScope,
               deduplicationScope,
             ],
@@ -985,7 +985,7 @@ LIMIT 1
           json: {
             id: newId,
             type_name: typeName,
-            chain_type_name: job.chainTypeName,
+            chain_type_name: typeName,
             input: input !== undefined ? JSON.stringify(input) : null,
             deduplication_key: job.deduplication?.key ?? null,
             scheduled_at: schedule?.at?.toISOString().replace("T", " ").replace("Z", "") ?? null,

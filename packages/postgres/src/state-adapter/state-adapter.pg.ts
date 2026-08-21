@@ -945,18 +945,18 @@ input_data AS (
     gi.id,
     raw.type_name,
     gi.id                AS chain_id,
-    raw.chain_type_name,
+    raw.type_name        AS chain_type_name,
     0                    AS chain_index,
     raw.input, raw.dedup_key, raw.dedup_scope,
     raw.scheduled_at, raw.schedule_after_ms,
     raw.chain_trace_context, raw.trace_context, raw.ord
   FROM unnest(
-    $2::text[], $3::text[],
-    $4::jsonb[], $5::text[], $6::text[],
-    $7::timestamptz[], $8::bigint[],
-    $9::text[], $10::text[]
+    $2::text[],
+    $3::jsonb[], $4::text[], $5::text[],
+    $6::timestamptz[], $7::bigint[],
+    $8::text[], $9::text[]
   ) WITH ORDINALITY AS raw(
-    type_name, chain_type_name,
+    type_name,
     input, dedup_key, dedup_scope,
     scheduled_at, schedule_after_ms,
     chain_trace_context, trace_context, ord
@@ -1022,7 +1022,6 @@ ORDER BY ord
                 params: [
                   t.array(),
                   t.array(),
-                  t.array<string | null>(),
                   t.jsonArray(),
                   t.array<string | null>(),
                   t.array<string | null>(),
@@ -1039,7 +1038,6 @@ ORDER BY ord
         params: [
           ids,
           jobs.map((j) => j.typeName),
-          jobs.map((j) => j.chainTypeName),
           jobs.map((j) => j.input),
           jobs.map((j) => j.deduplication?.key ?? null),
           jobs.map((j) => (j.deduplication ? j.deduplication.scope : null)),
