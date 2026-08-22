@@ -24,10 +24,7 @@ export const createPrismaSqliteStateProvider = <TPrisma extends PrismaLikeClient
     executeSql: async ({ txCtx, sql, params, columnTypes, readOnly }) => {
       const runQuery = async (): Promise<unknown[]> => {
         const prismaClient = (txCtx?.prisma ?? prisma) as PrismaLikeClient;
-        if (params && params.length > 0) {
-          return prismaClient.$queryRawUnsafe(sql, ...params);
-        }
-        return prismaClient.$queryRawUnsafe(sql);
+        return prismaClient.$queryRawUnsafe(sql, ...params);
       };
 
       let result: unknown[];

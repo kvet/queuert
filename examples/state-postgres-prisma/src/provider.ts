@@ -21,17 +21,7 @@ export const createPrismaPgStateProvider = <TPrisma extends PrismaLikeClient>({
     // `id` not forwarded: Prisma's engine caches plans by SQL text per connection.
     executeSql: async ({ txCtx, sql, params }) => {
       const prismaClient = (txCtx?.prisma ?? prisma) as PrismaLikeClient;
-
-      if (params && params.length > 0) {
-        return prismaClient.$queryRawUnsafe(sql, ...params);
-      }
-
-      const isSelect = /^\s*SELECT\b/i.test(sql);
-      if (isSelect) {
-        return prismaClient.$queryRawUnsafe(sql);
-      }
-      await prismaClient.$executeRawUnsafe(sql);
-      return [];
+      return prismaClient.$queryRawUnsafe(sql, ...params);
     },
   };
 };
