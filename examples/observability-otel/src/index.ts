@@ -66,7 +66,7 @@ const jobTypes = defineJobTypes<{
   };
 
   /*
-   * Scenario 3 - Blockers (fan-out/fan-in):
+   * Scenario 3 - Blockers (fan-out):
    *   fetch-user ------+
    *                    +--> process-with-blockers
    *   fetch-permissions+
@@ -322,7 +322,7 @@ const orderChain = await withTransactionHooks(async (transactionHooks) =>
 const orderResult = await client.awaitChain(orderChain, { timeoutMs: 10000 });
 console.log("Result:", orderResult.output);
 
-// Scenario 3: Blockers (fan-out/fan-in)
+// Scenario 3: Blockers (fan-out)
 console.log("\n--- Scenario 3: Blockers ---");
 console.log("Two blockers run in parallel, main job waits. Traces linked across chains.\n");
 const blockerChain = await withTransactionHooks(async (transactionHooks) =>

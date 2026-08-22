@@ -12,7 +12,7 @@ import { createServer } from "node:http";
 
 import { createDashboard } from "@queuert/dashboard";
 
-import { client, db, notifyAdapter, stateAdapter } from "./client.js";
+import { client, db, notifyAdapter, stateAdapter } from "./common.js";
 
 const PORT = 3333;
 

@@ -12,7 +12,7 @@
   "type": "module",
   "scripts": {
     "dashboard": "bun run --filter '@queuert/dashboard' build && tsx src/dashboard.ts",
-    "start": "tsx src/start.ts",
+    "start": "tsx src/populator.ts",
     "typecheck": "tsc --noEmit"
   },
   "devDependencies": {

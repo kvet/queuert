@@ -1,7 +1,19 @@
-import { createSqliteStateAdapter } from "@queuert/sqlite";
+import { join } from "node:path";
+
+import { createAsyncRwLock, createSqliteStateAdapter } from "@queuert/sqlite";
+import Database from "better-sqlite3";
+import { createBetterSqlite3StateProvider } from "example-state-sqlite-better-sqlite3/provider";
 import { createClient, createInProcessNotifyAdapter, defineJobTypes } from "queuert";
 
-import { createDatabase, createStateProvider } from "./db.js";
+const DB_PATH = join(import.meta.dirname, "..", "data.db");
+
+const createDatabase = (): Database.Database => {
+  const db = new Database(DB_PATH);
+  db.pragma("auto_vacuum = INCREMENTAL");
+  db.pragma("journal_mode = WAL");
+  db.pragma("foreign_keys = ON");
+  return db;
+};
 
 export const jobTypes = defineJobTypes<{
   /*
@@ -31,8 +43,8 @@ export const jobTypes = defineJobTypes<{
   };
 
   /*
-   * Scenario 3 - Blockers (fan-out/fan-in):
-   *   fetch-user ------+
+   * Scenario 3 - Blockers (fan-out):
+   *   fetch-user -------+
    *                     +--> process-with-blockers
    *   fetch-permissions-+
    */
@@ -100,7 +112,8 @@ export const jobTypes = defineJobTypes<{
 }>();
 
 export const db = createDatabase();
-const stateProvider = createStateProvider(db);
+const lock = createAsyncRwLock();
+const stateProvider = createBetterSqlite3StateProvider({ db, lock });
 
 export const stateAdapter = await createSqliteStateAdapter({ stateProvider });
 await stateAdapter.migrateToLatest();
