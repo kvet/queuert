@@ -3,6 +3,7 @@
 - [REF] Leverage assert and expect from vitest import to minimize the number of lines in tests and perform assertions in a clean way
 - [REF] separate doc with "### Abort Signal and Reasons" section from docs/src/content/docs/advanced/job-processing.md
 - [REF] Clean up `completeJobSpan` — only span helper taking `(job, options)` instead of a flat `*InputData` object, and despite the name it ends nothing (the OTel impl starts a new span). Its `chainCompleted: boolean` silently creates the chain consumer span as a second responsibility. `JobAttemptSpanResult.chainCompleted` is typed `{ output }` but nothing reads the payload — collapse it to `boolean`.
+- [REF] job_attempt_completed log is emitted after notify adapter (any logging example)
 
 # Short term
 

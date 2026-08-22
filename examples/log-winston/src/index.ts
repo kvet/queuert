@@ -140,11 +140,7 @@ const successChain = await withTransactionHooks(async (transactionHooks) =>
     }),
   ),
 );
-
-const successCompleted = await client.awaitChain(successChain, {
-  timeoutMs: 5000,
-});
-logger.info("Successful job completed", { output: successCompleted.output });
+await client.awaitChain(successChain, { timeoutMs: 5000 });
 
 // 7. Run job that fails then succeeds (demonstrates error logging with stack trace)
 logger.info("--- Running job that fails first attempt ---");
@@ -158,11 +154,7 @@ const failThenSucceedChain = await withTransactionHooks(async (transactionHooks)
     }),
   ),
 );
-
-const retryCompleted = await client.awaitChain(failThenSucceedChain, {
-  timeoutMs: 5000,
-});
-logger.info("Retry job completed after failure", { output: retryCompleted.output });
+await client.awaitChain(failThenSucceedChain, { timeoutMs: 5000 });
 
 // 8. Cleanup
 await stopWorker();
