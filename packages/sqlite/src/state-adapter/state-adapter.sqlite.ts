@@ -733,14 +733,7 @@ WHERE jb.blocked_by_chain_id IN (SELECT value FROM json_each(?))
           ),
         });
         try {
-          const result = await fn(txCtx);
-          await executeTypedSql({
-            txCtx,
-            sql: applyTemplate(
-              sql(/* sql */ `RELEASE SAVEPOINT ${sp}`, { readOnly: true, params: [], columns: {} }),
-            ),
-          });
-          return result;
+          return await fn(txCtx);
         } catch (error) {
           await executeTypedSql({
             txCtx,

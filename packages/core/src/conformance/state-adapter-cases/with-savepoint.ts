@@ -135,6 +135,64 @@ export const withSavepointGroup: ConformanceGroup<StateConformanceFixture> = {
       },
     },
     {
+      name: "rolls back the whole parent savepoint after a nested savepoint succeeded",
+      run: async ({ stateAdapter }, expect) => {
+        let parentJobId: string;
+        let nestedJobId: string;
+
+        const [{ job: outerJob }] = await stateAdapter.withTransaction(async (txCtx) => {
+          const results = await stateAdapter.createChains({
+            txCtx,
+            jobs: [
+              {
+                typeName: "sp-parent-outer",
+                input: { outer: true },
+              },
+            ],
+          });
+
+          await stateAdapter
+            .withSavepoint(txCtx, async (spTxCtx) => {
+              const [{ job: parentJob }] = await stateAdapter.createChains({
+                txCtx: spTxCtx,
+                jobs: [
+                  {
+                    typeName: "sp-parent-body",
+                    input: { parent: true },
+                  },
+                ],
+              });
+              parentJobId = parentJob.id;
+
+              await stateAdapter.withSavepoint(spTxCtx, async (sp2TxCtx) => {
+                const [{ job: nestedJob }] = await stateAdapter.createChains({
+                  txCtx: sp2TxCtx,
+                  jobs: [
+                    {
+                      typeName: "sp-parent-nested",
+                      input: { nested: true },
+                    },
+                  ],
+                });
+                nestedJobId = nestedJob.id;
+              });
+
+              throw new Error("parent savepoint failure");
+            })
+            .catch(() => {});
+
+          return results;
+        });
+
+        const [outer, parent, nested] = await stateAdapter.getJobs({
+          jobIds: [outerJob.id, parentJobId!, nestedJobId!],
+        });
+        expect(outer?.id).toEqual(outerJob.id);
+        expect(parent).toBeUndefined();
+        expect(nested).toBeUndefined();
+      },
+    },
+    {
       name: "re-throws the original error",
       run: async ({ stateAdapter }, expect) => {
         await stateAdapter.withTransaction(async (txCtx) => {

@@ -794,14 +794,7 @@ SELECT chain_id FROM connected
           ),
         });
         try {
-          const result = await fn(txCtx);
-          await executeTypedSql({
-            txCtx,
-            sql: applyTemplate(
-              sql(/* sql */ `RELEASE SAVEPOINT ${sp}`, { readOnly: true, params: [], columns: {} }),
-            ),
-          });
-          return result;
+          return await fn(txCtx);
         } catch (error) {
           await executeTypedSql({
             txCtx,
