@@ -10,13 +10,16 @@ import { type Log } from "../observability-adapter/log.js";
 import { type ObservabilityAdapter } from "../observability-adapter/observability-adapter.js";
 import { createNoopObservabilityAdapter } from "../observability-adapter/observability-adapter.noop.js";
 import { type StateAdapter } from "../state-adapter/state-adapter.js";
+import { type TransactionHooks, withTransactionHooks } from "../transaction-hooks.js";
 import { createFlakyBatchGenerator } from "./flaky-test-helper.spec-helper.js";
 
 export type TestSuiteContext = {
   stateAdapter: StateAdapter<{ $test: true }, string>;
   generateId: () => string;
   notifyAdapter: NotifyAdapter | undefined;
-  withTransaction: <T>(cb: (txCtx: { $test: true }) => Promise<T>) => Promise<T>;
+  withTransaction: <T>(
+    cb: (txCtx: { $test: true }, transactionHooks: TransactionHooks) => Promise<T>,
+  ) => Promise<T>;
   poisonTransaction: ((txCtx: { $test: true }) => Promise<void>) | undefined;
   poisonExecute:
     | ((cb: (adapter: StateAdapter<{ $test: true }, string>) => Promise<void>) => Promise<void>)
@@ -54,9 +57,11 @@ export const extendWithCommon = <
     ],
     withTransaction: [
       async ({ stateAdapter }, use) => {
-        await use(async (cb) => {
-          return stateAdapter.withTransaction(cb);
-        });
+        await use(async (cb) =>
+          withTransactionHooks(async (transactionHooks) =>
+            stateAdapter.withTransaction(async (txCtx) => cb(txCtx, transactionHooks)),
+          ),
+        );
       },
       { scope: "test" },
     ],

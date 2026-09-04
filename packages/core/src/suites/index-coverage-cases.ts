@@ -2,6 +2,9 @@ import { type SeedSentinelsV2 } from "../conformance/seed-all-states-v2.js";
 import { type StateAdapter } from "../state-adapter/state-adapter.js";
 
 export type IndexCoverageCaseKey =
+  // type discovery
+  | "listJobTypeNames/default"
+  | "listChainTypeNames/default"
   // listJobs > no status
   | "listJobs/noStatus/default"
   | "listJobs/noStatus/typeName"
@@ -107,6 +110,31 @@ export type IndexCoverageGroup = {
 };
 
 export const observabilityCoverageGroups: IndexCoverageGroup[] = [
+  {
+    name: "listJobTypeNames",
+    cases: [
+      {
+        key: "listJobTypeNames/default",
+        label: "default",
+        run: async () => async (stateAdapter) => {
+          await stateAdapter.listJobTypeNames({});
+        },
+      },
+    ],
+  },
+
+  {
+    name: "listChainTypeNames",
+    cases: [
+      {
+        key: "listChainTypeNames/default",
+        label: "default",
+        run: async () => async (stateAdapter) => {
+          await stateAdapter.listChainTypeNames({});
+        },
+      },
+    ],
+  },
   {
     name: "listJobs > no status",
     cases: [

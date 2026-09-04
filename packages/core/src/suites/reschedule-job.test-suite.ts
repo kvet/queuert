@@ -9,7 +9,6 @@ import {
   JobsNotReschedulableError,
 } from "../errors.js";
 import { createInProcessWorker } from "../in-process-worker.js";
-import { withTransactionHooks } from "../transaction-hooks.js";
 import { createProcessors } from "../worker/create-processors.js";
 import { type TestSuiteContext } from "./spec-context.spec-helper.js";
 
@@ -38,16 +37,14 @@ export const rescheduleJobTestSuite = ({ it }: { it: TestAPI<TestSuiteContext> }
       jobTypes,
     });
 
-    const chain = await withTransactionHooks(async (transactionHooks) =>
-      withTransaction(async (txCtx) =>
-        client.createChain({
-          ...txCtx,
-          transactionHooks,
-          typeName: "report",
-          input: { type: "daily" },
-          schedule: { afterMs: 60 * 60 * 1000 },
-        }),
-      ),
+    const chain = await withTransaction(async (txCtx, transactionHooks) =>
+      client.createChain({
+        ...txCtx,
+        transactionHooks,
+        typeName: "report",
+        input: { type: "daily" },
+        schedule: { afterMs: 60 * 60 * 1000 },
+      }),
     );
 
     const beforeReschedule = await client.getJob({ id: chain.id });
@@ -55,10 +52,8 @@ export const rescheduleJobTestSuite = ({ it }: { it: TestAPI<TestSuiteContext> }
     expect(beforeReschedule!.scheduledAt.getTime()).toBeGreaterThan(Date.now() + 30_000);
 
     const before = Date.now();
-    const rescheduled = await withTransactionHooks(async (transactionHooks) =>
-      withTransaction(async (txCtx) =>
-        client.rescheduleJob({ ...txCtx, transactionHooks, id: chain.id }),
-      ),
+    const rescheduled = await withTransaction(async (txCtx, transactionHooks) =>
+      client.rescheduleJob({ ...txCtx, transactionHooks, id: chain.id }),
     );
 
     expect(rescheduled.status).toBe("pending");
@@ -88,22 +83,18 @@ export const rescheduleJobTestSuite = ({ it }: { it: TestAPI<TestSuiteContext> }
       jobTypes,
     });
 
-    const chain = await withTransactionHooks(async (transactionHooks) =>
-      withTransaction(async (txCtx) =>
-        client.createChain({ ...txCtx, transactionHooks, typeName: "task", input: null }),
-      ),
+    const chain = await withTransaction(async (txCtx, transactionHooks) =>
+      client.createChain({ ...txCtx, transactionHooks, typeName: "task", input: null }),
     );
 
     const futureDate = new Date(Date.now() + 60 * 60 * 1000);
-    const rescheduled = await withTransactionHooks(async (transactionHooks) =>
-      withTransaction(async (txCtx) =>
-        client.rescheduleJob({
-          ...txCtx,
-          transactionHooks,
-          id: chain.id,
-          schedule: { at: futureDate },
-        }),
-      ),
+    const rescheduled = await withTransaction(async (txCtx, transactionHooks) =>
+      client.rescheduleJob({
+        ...txCtx,
+        transactionHooks,
+        id: chain.id,
+        schedule: { at: futureDate },
+      }),
     );
 
     expect(rescheduled.status).toBe("pending");
@@ -130,22 +121,18 @@ export const rescheduleJobTestSuite = ({ it }: { it: TestAPI<TestSuiteContext> }
       jobTypes,
     });
 
-    const chain = await withTransactionHooks(async (transactionHooks) =>
-      withTransaction(async (txCtx) =>
-        client.createChain({ ...txCtx, transactionHooks, typeName: "task", input: null }),
-      ),
+    const chain = await withTransaction(async (txCtx, transactionHooks) =>
+      client.createChain({ ...txCtx, transactionHooks, typeName: "task", input: null }),
     );
 
     const before = Date.now();
-    const rescheduled = await withTransactionHooks(async (transactionHooks) =>
-      withTransaction(async (txCtx) =>
-        client.rescheduleJob({
-          ...txCtx,
-          transactionHooks,
-          id: chain.id,
-          schedule: { afterMs: 60 * 60 * 1000 },
-        }),
-      ),
+    const rescheduled = await withTransaction(async (txCtx, transactionHooks) =>
+      client.rescheduleJob({
+        ...txCtx,
+        transactionHooks,
+        id: chain.id,
+        schedule: { afterMs: 60 * 60 * 1000 },
+      }),
     );
 
     expect(rescheduled.status).toBe("pending");
@@ -194,22 +181,18 @@ export const rescheduleJobTestSuite = ({ it }: { it: TestAPI<TestSuiteContext> }
       }),
     });
 
-    const chain = await withTransactionHooks(async (transactionHooks) =>
-      withTransaction(async (txCtx) =>
-        client.createChain({
-          ...txCtx,
-          transactionHooks,
-          typeName: "task",
-          input: { value: 21 },
-          schedule: { afterMs: 60 * 60 * 1000 },
-        }),
-      ),
+    const chain = await withTransaction(async (txCtx, transactionHooks) =>
+      client.createChain({
+        ...txCtx,
+        transactionHooks,
+        typeName: "task",
+        input: { value: 21 },
+        schedule: { afterMs: 60 * 60 * 1000 },
+      }),
     );
 
-    await withTransactionHooks(async (transactionHooks) =>
-      withTransaction(async (txCtx) =>
-        client.rescheduleJob({ ...txCtx, transactionHooks, id: chain.id }),
-      ),
+    await withTransaction(async (txCtx, transactionHooks) =>
+      client.rescheduleJob({ ...txCtx, transactionHooks, id: chain.id }),
     );
 
     await withWorkers([await worker.start()], async () => {
@@ -243,23 +226,17 @@ export const rescheduleJobTestSuite = ({ it }: { it: TestAPI<TestSuiteContext> }
       jobTypes,
     });
 
-    const chain = await withTransactionHooks(async (transactionHooks) =>
-      withTransaction(async (txCtx) =>
-        client.createChain({ ...txCtx, transactionHooks, typeName: "task", input: null }),
-      ),
+    const chain = await withTransaction(async (txCtx, transactionHooks) =>
+      client.createChain({ ...txCtx, transactionHooks, typeName: "task", input: null }),
     );
 
-    await withTransactionHooks(async (transactionHooks) =>
-      withTransaction(async (txCtx) =>
-        client.deleteChains({ ...txCtx, transactionHooks, ids: [chain.id] }),
-      ),
+    await withTransaction(async (txCtx, transactionHooks) =>
+      client.deleteChains({ ...txCtx, transactionHooks, ids: [chain.id] }),
     );
 
     await expect(
-      withTransactionHooks(async (transactionHooks) =>
-        withTransaction(async (txCtx) =>
-          client.rescheduleJob({ ...txCtx, transactionHooks, id: chain.id }),
-        ),
+      withTransaction(async (txCtx, transactionHooks) =>
+        client.rescheduleJob({ ...txCtx, transactionHooks, id: chain.id }),
       ),
     ).rejects.toThrow(JobNotFoundError);
   });
@@ -300,10 +277,8 @@ export const rescheduleJobTestSuite = ({ it }: { it: TestAPI<TestSuiteContext> }
       }),
     });
 
-    const chain = await withTransactionHooks(async (transactionHooks) =>
-      withTransaction(async (txCtx) =>
-        client.createChain({ ...txCtx, transactionHooks, typeName: "task", input: null }),
-      ),
+    const chain = await withTransaction(async (txCtx, transactionHooks) =>
+      client.createChain({ ...txCtx, transactionHooks, typeName: "task", input: null }),
     );
 
     await withWorkers([await worker.start()], async () => {
@@ -311,10 +286,8 @@ export const rescheduleJobTestSuite = ({ it }: { it: TestAPI<TestSuiteContext> }
     });
 
     await expect(
-      withTransactionHooks(async (transactionHooks) =>
-        withTransaction(async (txCtx) =>
-          client.rescheduleJob({ ...txCtx, transactionHooks, id: chain.id }),
-        ),
+      withTransaction(async (txCtx, transactionHooks) =>
+        client.rescheduleJob({ ...txCtx, transactionHooks, id: chain.id }),
       ),
     ).rejects.toThrow(JobNotReschedulableError);
   });
@@ -343,23 +316,19 @@ export const rescheduleJobTestSuite = ({ it }: { it: TestAPI<TestSuiteContext> }
       jobTypes,
     });
 
-    const chain = await withTransactionHooks(async (transactionHooks) =>
-      withTransaction(async (txCtx) =>
-        client.createChain({
-          ...txCtx,
-          transactionHooks,
-          typeName: "report",
-          input: { type: "daily" },
-          schedule: { afterMs: 60_000 },
-        }),
-      ),
+    const chain = await withTransaction(async (txCtx, transactionHooks) =>
+      client.createChain({
+        ...txCtx,
+        transactionHooks,
+        typeName: "report",
+        input: { type: "daily" },
+        schedule: { afterMs: 60_000 },
+      }),
     );
 
     await expect(
-      withTransactionHooks(async (transactionHooks) =>
-        // @ts-expect-error missing txCtx
-        client.rescheduleJob({ transactionHooks, id: chain.id }),
-      ),
+      // @ts-expect-error missing txCtx
+      client.rescheduleJob({ id: chain.id }),
     ).rejects.toThrow("requires a transaction context");
   });
 
@@ -389,23 +358,19 @@ export const rescheduleJobTestSuite = ({ it }: { it: TestAPI<TestSuiteContext> }
       jobTypes,
     });
 
-    const blockerChain = await withTransactionHooks(async (transactionHooks) =>
-      withTransaction(async (txCtx) =>
-        client.createChain({ ...txCtx, transactionHooks, typeName: "blocker", input: null }),
-      ),
+    const blockerChain = await withTransaction(async (txCtx, transactionHooks) =>
+      client.createChain({ ...txCtx, transactionHooks, typeName: "blocker", input: null }),
     );
 
-    const blockedChain = await withTransactionHooks(async (transactionHooks) =>
-      withTransaction(async (txCtx) =>
-        client.createChain({
-          ...txCtx,
-          transactionHooks,
-          typeName: "blocked",
-          input: null,
-          blockers: [blockerChain],
-          schedule: { afterMs: 60_000 },
-        }),
-      ),
+    const blockedChain = await withTransaction(async (txCtx, transactionHooks) =>
+      client.createChain({
+        ...txCtx,
+        transactionHooks,
+        typeName: "blocked",
+        input: null,
+        blockers: [blockerChain],
+        schedule: { afterMs: 60_000 },
+      }),
     );
 
     const blockedJob = await client.getJob({ id: blockedChain.id });
@@ -413,15 +378,13 @@ export const rescheduleJobTestSuite = ({ it }: { it: TestAPI<TestSuiteContext> }
     expect(blockedJob!.status === "pending" && blockedJob!.blocked).toBe(true);
 
     const futureDate = new Date(Date.now() + 120_000);
-    const rescheduled = await withTransactionHooks(async (transactionHooks) =>
-      withTransaction(async (txCtx) =>
-        client.rescheduleJob({
-          ...txCtx,
-          transactionHooks,
-          id: blockedChain.id,
-          schedule: { at: futureDate },
-        }),
-      ),
+    const rescheduled = await withTransaction(async (txCtx, transactionHooks) =>
+      client.rescheduleJob({
+        ...txCtx,
+        transactionHooks,
+        id: blockedChain.id,
+        schedule: { at: futureDate },
+      }),
     );
 
     expect(rescheduled.status).toBe("pending");
@@ -449,24 +412,22 @@ export const rescheduleJobTestSuite = ({ it }: { it: TestAPI<TestSuiteContext> }
       jobTypes,
     });
 
-    const chains = await withTransactionHooks(async (transactionHooks) =>
-      withTransaction(async (txCtx) =>
-        client.createChains({
-          ...txCtx,
-          transactionHooks,
-          items: [
-            { typeName: "task", input: { value: 1 }, schedule: { afterMs: 60 * 60 * 1000 } },
-            { typeName: "task", input: { value: 2 }, schedule: { afterMs: 60 * 60 * 1000 } },
-            { typeName: "task", input: { value: 3 }, schedule: { afterMs: 60 * 60 * 1000 } },
-          ],
-        }),
-      ),
+    const chains = await withTransaction(async (txCtx, transactionHooks) =>
+      client.createChains({
+        ...txCtx,
+        transactionHooks,
+        items: [
+          { typeName: "task", input: { value: 1 }, schedule: { afterMs: 60 * 60 * 1000 } },
+          { typeName: "task", input: { value: 2 }, schedule: { afterMs: 60 * 60 * 1000 } },
+          { typeName: "task", input: { value: 3 }, schedule: { afterMs: 60 * 60 * 1000 } },
+        ],
+      }),
     );
 
     const before = Date.now();
     const ids = chains.map((c) => c.id);
-    const rescheduled = await withTransactionHooks(async (transactionHooks) =>
-      withTransaction(async (txCtx) => client.rescheduleJobs({ ...txCtx, transactionHooks, ids })),
+    const rescheduled = await withTransaction(async (txCtx, transactionHooks) =>
+      client.rescheduleJobs({ ...txCtx, transactionHooks, ids }),
     );
 
     expect(rescheduled).toHaveLength(3);
@@ -498,25 +459,21 @@ export const rescheduleJobTestSuite = ({ it }: { it: TestAPI<TestSuiteContext> }
       jobTypes,
     });
 
-    const chains = await withTransactionHooks(async (transactionHooks) =>
-      withTransaction(async (txCtx) =>
-        client.createChains({
-          ...txCtx,
-          transactionHooks,
-          items: [
-            { typeName: "task", input: { value: 1 } },
-            { typeName: "task", input: { value: 2 } },
-          ],
-        }),
-      ),
+    const chains = await withTransaction(async (txCtx, transactionHooks) =>
+      client.createChains({
+        ...txCtx,
+        transactionHooks,
+        items: [
+          { typeName: "task", input: { value: 1 } },
+          { typeName: "task", input: { value: 2 } },
+        ],
+      }),
     );
 
     const ids = chains.map((c) => c.id);
     const futureDate = new Date(Date.now() + 60 * 60 * 1000);
-    const rescheduled = await withTransactionHooks(async (transactionHooks) =>
-      withTransaction(async (txCtx) =>
-        client.rescheduleJobs({ ...txCtx, transactionHooks, ids, schedule: { at: futureDate } }),
-      ),
+    const rescheduled = await withTransaction(async (txCtx, transactionHooks) =>
+      client.rescheduleJobs({ ...txCtx, transactionHooks, ids, schedule: { at: futureDate } }),
     );
 
     expect(rescheduled).toHaveLength(2);
@@ -545,10 +502,8 @@ export const rescheduleJobTestSuite = ({ it }: { it: TestAPI<TestSuiteContext> }
       jobTypes,
     });
 
-    const rescheduled = await withTransactionHooks(async (transactionHooks) =>
-      withTransaction(async (txCtx) =>
-        client.rescheduleJobs({ ...txCtx, transactionHooks, ids: [] }),
-      ),
+    const rescheduled = await withTransaction(async (txCtx, transactionHooks) =>
+      client.rescheduleJobs({ ...txCtx, transactionHooks, ids: [] }),
     );
 
     expect(rescheduled).toEqual([]);
@@ -574,34 +529,28 @@ export const rescheduleJobTestSuite = ({ it }: { it: TestAPI<TestSuiteContext> }
       jobTypes,
     });
 
-    const [chainA, chainB] = await withTransactionHooks(async (transactionHooks) =>
-      withTransaction(async (txCtx) =>
-        client.createChains({
-          ...txCtx,
-          transactionHooks,
-          items: [
-            { typeName: "task", input: { value: 1 }, schedule: { afterMs: 60 * 60 * 1000 } },
-            { typeName: "task", input: { value: 2 }, schedule: { afterMs: 60 * 60 * 1000 } },
-          ],
-        }),
-      ),
+    const [chainA, chainB] = await withTransaction(async (txCtx, transactionHooks) =>
+      client.createChains({
+        ...txCtx,
+        transactionHooks,
+        items: [
+          { typeName: "task", input: { value: 1 }, schedule: { afterMs: 60 * 60 * 1000 } },
+          { typeName: "task", input: { value: 2 }, schedule: { afterMs: 60 * 60 * 1000 } },
+        ],
+      }),
     );
 
-    await withTransactionHooks(async (transactionHooks) =>
-      withTransaction(async (txCtx) =>
-        client.deleteChains({ ...txCtx, transactionHooks, ids: [chainB.id] }),
-      ),
+    await withTransaction(async (txCtx, transactionHooks) =>
+      client.deleteChains({ ...txCtx, transactionHooks, ids: [chainB.id] }),
     );
 
     await expect(
-      withTransactionHooks(async (transactionHooks) =>
-        withTransaction(async (txCtx) =>
-          client.rescheduleJobs({
-            ...txCtx,
-            transactionHooks,
-            ids: [chainA.id, chainB.id],
-          }),
-        ),
+      withTransaction(async (txCtx, transactionHooks) =>
+        client.rescheduleJobs({
+          ...txCtx,
+          transactionHooks,
+          ids: [chainA.id, chainB.id],
+        }),
       ),
     ).rejects.toThrow(JobsNotFoundError);
 
@@ -645,42 +594,36 @@ export const rescheduleJobTestSuite = ({ it }: { it: TestAPI<TestSuiteContext> }
       }),
     });
 
-    const completedChain = await withTransactionHooks(async (transactionHooks) =>
-      withTransaction(async (txCtx) =>
-        client.createChain({
-          ...txCtx,
-          transactionHooks,
-          typeName: "task",
-          input: { value: 1 },
-        }),
-      ),
+    const completedChain = await withTransaction(async (txCtx, transactionHooks) =>
+      client.createChain({
+        ...txCtx,
+        transactionHooks,
+        typeName: "task",
+        input: { value: 1 },
+      }),
     );
 
     await withWorkers([await worker.start()], async () => {
       await client.awaitChain(completedChain, { timeoutMs: 5000, pollIntervalMs: 100 });
     });
 
-    const pendingChain = await withTransactionHooks(async (transactionHooks) =>
-      withTransaction(async (txCtx) =>
-        client.createChain({
-          ...txCtx,
-          transactionHooks,
-          typeName: "task",
-          input: { value: 2 },
-          schedule: { afterMs: 60 * 60 * 1000 },
-        }),
-      ),
+    const pendingChain = await withTransaction(async (txCtx, transactionHooks) =>
+      client.createChain({
+        ...txCtx,
+        transactionHooks,
+        typeName: "task",
+        input: { value: 2 },
+        schedule: { afterMs: 60 * 60 * 1000 },
+      }),
     );
 
     await expect(
-      withTransactionHooks(async (transactionHooks) =>
-        withTransaction(async (txCtx) =>
-          client.rescheduleJobs({
-            ...txCtx,
-            transactionHooks,
-            ids: [pendingChain.id, completedChain.id],
-          }),
-        ),
+      withTransaction(async (txCtx, transactionHooks) =>
+        client.rescheduleJobs({
+          ...txCtx,
+          transactionHooks,
+          ids: [pendingChain.id, completedChain.id],
+        }),
       ),
     ).rejects.toThrow(JobsNotReschedulableError);
 
@@ -708,23 +651,19 @@ export const rescheduleJobTestSuite = ({ it }: { it: TestAPI<TestSuiteContext> }
       jobTypes,
     });
 
-    const chain = await withTransactionHooks(async (transactionHooks) =>
-      withTransaction(async (txCtx) =>
-        client.createChain({
-          ...txCtx,
-          transactionHooks,
-          typeName: "task",
-          input: null,
-          schedule: { afterMs: 60_000 },
-        }),
-      ),
+    const chain = await withTransaction(async (txCtx, transactionHooks) =>
+      client.createChain({
+        ...txCtx,
+        transactionHooks,
+        typeName: "task",
+        input: null,
+        schedule: { afterMs: 60_000 },
+      }),
     );
 
     await expect(
-      withTransactionHooks(async (transactionHooks) =>
-        // @ts-expect-error missing txCtx
-        client.rescheduleJobs({ transactionHooks, ids: [chain.id] }),
-      ),
+      // @ts-expect-error missing txCtx
+      client.rescheduleJobs({ ids: [chain.id] }),
     ).rejects.toThrow("requires a transaction context");
   });
 };

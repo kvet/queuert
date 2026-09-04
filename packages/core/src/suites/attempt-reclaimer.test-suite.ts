@@ -5,7 +5,6 @@ import { defineJobTypes } from "../entities/define-job-types.js";
 import { JobAlreadyCompletedError, JobTakenByAnotherWorkerError } from "../errors.js";
 import { sleep } from "../helpers/sleep.js";
 import { createInProcessWorker } from "../in-process-worker.js";
-import { withTransactionHooks } from "../transaction-hooks.js";
 import { type AttemptConfig } from "../worker/attempt-heartbeat.js";
 import { createProcessors } from "../worker/create-processors.js";
 import { type TestSuiteContext } from "./spec-context.spec-helper.js";
@@ -59,15 +58,13 @@ export const attemptReclaimerTestSuite = ({ it }: { it: TestAPI<TestSuiteContext
       }),
     });
 
-    const chain = await withTransactionHooks(async (transactionHooks) =>
-      withTransaction(async (txCtx) =>
-        client.createChain({
-          ...txCtx,
-          transactionHooks,
-          typeName: "test",
-          input: null,
-        }),
-      ),
+    const chain = await withTransaction(async (txCtx, transactionHooks) =>
+      client.createChain({
+        ...txCtx,
+        transactionHooks,
+        typeName: "test",
+        input: null,
+      }),
     );
 
     await withWorkers([await worker.start()], async () => {
@@ -174,30 +171,26 @@ export const attemptReclaimerTestSuite = ({ it }: { it: TestAPI<TestSuiteContext
       }),
     });
 
-    const failChain = await withTransactionHooks(async (transactionHooks) =>
-      withTransaction(async (txCtx) =>
-        client.createChain({
-          ...txCtx,
-          transactionHooks,
-          typeName: "test",
-          input: null,
-        }),
-      ),
+    const failChain = await withTransaction(async (txCtx, transactionHooks) =>
+      client.createChain({
+        ...txCtx,
+        transactionHooks,
+        typeName: "test",
+        input: null,
+      }),
     );
 
     await withWorkers([await worker1.start(), await worker2.start()], async () => {
       await jobStarted.promise;
       await sleep(10);
 
-      const successChain = await withTransactionHooks(async (transactionHooks) =>
-        withTransaction(async (txCtx) =>
-          client.createChain({
-            ...txCtx,
-            transactionHooks,
-            typeName: "test",
-            input: null,
-          }),
-        ),
+      const successChain = await withTransaction(async (txCtx, transactionHooks) =>
+        client.createChain({
+          ...txCtx,
+          transactionHooks,
+          typeName: "test",
+          input: null,
+        }),
       );
 
       await Promise.all([
@@ -317,30 +310,26 @@ export const attemptReclaimerTestSuite = ({ it }: { it: TestAPI<TestSuiteContext
       }),
     });
 
-    const failChain = await withTransactionHooks(async (transactionHooks) =>
-      withTransaction(async (txCtx) =>
-        client.createChain({
-          ...txCtx,
-          transactionHooks,
-          typeName: "test",
-          input: null,
-        }),
-      ),
+    const failChain = await withTransaction(async (txCtx, transactionHooks) =>
+      client.createChain({
+        ...txCtx,
+        transactionHooks,
+        typeName: "test",
+        input: null,
+      }),
     );
 
     await withWorkers([await worker1.start(), await worker2.start()], async () => {
       await jobStarted.promise;
       await sleep(10);
 
-      const successChain = await withTransactionHooks(async (transactionHooks) =>
-        withTransaction(async (txCtx) =>
-          client.createChain({
-            ...txCtx,
-            transactionHooks,
-            typeName: "test",
-            input: null,
-          }),
-        ),
+      const successChain = await withTransaction(async (txCtx, transactionHooks) =>
+        client.createChain({
+          ...txCtx,
+          transactionHooks,
+          typeName: "test",
+          input: null,
+        }),
       );
 
       await Promise.all([
@@ -456,30 +445,26 @@ export const attemptReclaimerTestSuite = ({ it }: { it: TestAPI<TestSuiteContext
       }),
     });
 
-    const failChain = await withTransactionHooks(async (transactionHooks) =>
-      withTransaction(async (txCtx) =>
-        client.createChain({
-          ...txCtx,
-          transactionHooks,
-          typeName: "test",
-          input: null,
-        }),
-      ),
+    const failChain = await withTransaction(async (txCtx, transactionHooks) =>
+      client.createChain({
+        ...txCtx,
+        transactionHooks,
+        typeName: "test",
+        input: null,
+      }),
     );
 
     await withWorkers([await worker1.start(), await worker2.start()], async () => {
       await jobStarted.promise;
       await sleep(10);
 
-      const successChain = await withTransactionHooks(async (transactionHooks) =>
-        withTransaction(async (txCtx) =>
-          client.createChain({
-            ...txCtx,
-            transactionHooks,
-            typeName: "test",
-            input: null,
-          }),
-        ),
+      const successChain = await withTransaction(async (txCtx, transactionHooks) =>
+        client.createChain({
+          ...txCtx,
+          transactionHooks,
+          typeName: "test",
+          input: null,
+        }),
       );
 
       await Promise.all([
@@ -552,15 +537,13 @@ export const attemptReclaimerTestSuite = ({ it }: { it: TestAPI<TestSuiteContext
       }),
     });
 
-    const chain1 = await withTransactionHooks(async (transactionHooks) =>
-      withTransaction(async (txCtx) =>
-        client.createChain({
-          ...txCtx,
-          transactionHooks,
-          typeName: "test",
-          input: { id: 1 },
-        }),
-      ),
+    const chain1 = await withTransaction(async (txCtx, transactionHooks) =>
+      client.createChain({
+        ...txCtx,
+        transactionHooks,
+        typeName: "test",
+        input: { id: 1 },
+      }),
     );
 
     await withWorkers([await worker.start()], async () => {
@@ -568,15 +551,13 @@ export const attemptReclaimerTestSuite = ({ it }: { it: TestAPI<TestSuiteContext
 
       await sleep(attemptConfig.timeoutMs * 5);
 
-      const chain2 = await withTransactionHooks(async (transactionHooks) =>
-        withTransaction(async (txCtx) =>
-          client.createChain({
-            ...txCtx,
-            transactionHooks,
-            typeName: "test",
-            input: { id: 2 },
-          }),
-        ),
+      const chain2 = await withTransaction(async (txCtx, transactionHooks) =>
+        client.createChain({
+          ...txCtx,
+          transactionHooks,
+          typeName: "test",
+          input: { id: 2 },
+        }),
       );
 
       jobsCanComplete.resolve();

@@ -5,7 +5,6 @@ import { type Chain } from "../entities/chain.js";
 import { defineJobTypes } from "../entities/define-job-types.js";
 import { sleep } from "../helpers/sleep.js";
 import { createInProcessWorker } from "../in-process-worker.js";
-import { withTransactionHooks } from "../transaction-hooks.js";
 import { type AttemptMiddleware } from "../worker/attempt-middleware.js";
 import { createProcessors } from "../worker/create-processors.js";
 import { type JobAbortReason } from "../worker/job-process.js";
@@ -56,15 +55,13 @@ export const workerTestSuite = ({ it }: { it: TestAPI<TestSuiteContext> }): void
       }),
     });
 
-    const chain = await withTransactionHooks(async (transactionHooks) =>
-      withTransaction(async (txCtx) =>
-        client.createChain({
-          ...txCtx,
-          transactionHooks,
-          typeName: "test",
-          input: { test: true },
-        }),
-      ),
+    const chain = await withTransaction(async (txCtx, transactionHooks) =>
+      client.createChain({
+        ...txCtx,
+        transactionHooks,
+        typeName: "test",
+        input: { test: true },
+      }),
     );
 
     await withWorkers([await worker.start()], async () => {
@@ -118,25 +115,21 @@ export const workerTestSuite = ({ it }: { it: TestAPI<TestSuiteContext> }): void
       }),
     });
 
-    const emailChain = await withTransactionHooks(async (transactionHooks) =>
-      withTransaction(async (txCtx) =>
-        client.createChain({
-          ...txCtx,
-          transactionHooks,
-          typeName: "email",
-          input: { to: "test@example.com" },
-        }),
-      ),
+    const emailChain = await withTransaction(async (txCtx, transactionHooks) =>
+      client.createChain({
+        ...txCtx,
+        transactionHooks,
+        typeName: "email",
+        input: { to: "test@example.com" },
+      }),
     );
-    const smsChain = await withTransactionHooks(async (transactionHooks) =>
-      withTransaction(async (txCtx) =>
-        client.createChain({
-          ...txCtx,
-          transactionHooks,
-          typeName: "sms",
-          input: { phone: "+1234567890" },
-        }),
-      ),
+    const smsChain = await withTransaction(async (txCtx, transactionHooks) =>
+      client.createChain({
+        ...txCtx,
+        transactionHooks,
+        typeName: "sms",
+        input: { phone: "+1234567890" },
+      }),
     );
 
     await withWorkers([await worker.start()], async () => {
@@ -192,15 +185,13 @@ export const workerTestSuite = ({ it }: { it: TestAPI<TestSuiteContext> }): void
     });
 
     await withWorkers([await worker.start()], async () => {
-      const chain = await withTransactionHooks(async (transactionHooks) =>
-        withTransaction(async (txCtx) =>
-          client.createChain({
-            ...txCtx,
-            transactionHooks,
-            typeName: "test",
-            input: { test: true },
-          }),
-        ),
+      const chain = await withTransaction(async (txCtx, transactionHooks) =>
+        client.createChain({
+          ...txCtx,
+          transactionHooks,
+          typeName: "test",
+          input: { test: true },
+        }),
       );
 
       await client.awaitChain(chain, completionOptions);
@@ -255,15 +246,13 @@ export const workerTestSuite = ({ it }: { it: TestAPI<TestSuiteContext> }): void
     const chains: Chain<string, "test", { jobNumber: number }, { success: boolean }>[] = [];
     for (let i = 0; i < 5; i++) {
       chains.push(
-        await withTransactionHooks(async (transactionHooks) =>
-          withTransaction(async (txCtx) =>
-            client.createChain({
-              ...txCtx,
-              transactionHooks,
-              typeName: "test",
-              input: { jobNumber: i },
-            }),
-          ),
+        await withTransaction(async (txCtx, transactionHooks) =>
+          client.createChain({
+            ...txCtx,
+            transactionHooks,
+            typeName: "test",
+            input: { jobNumber: i },
+          }),
         ),
       );
     }
@@ -335,15 +324,13 @@ export const workerTestSuite = ({ it }: { it: TestAPI<TestSuiteContext> }): void
       }),
     });
 
-    const chain = await withTransactionHooks(async (transactionHooks) =>
-      withTransaction(async (txCtx) =>
-        client.createChain({
-          ...txCtx,
-          transactionHooks,
-          typeName: "test",
-          input: { value: 42 },
-        }),
-      ),
+    const chain = await withTransaction(async (txCtx, transactionHooks) =>
+      client.createChain({
+        ...txCtx,
+        transactionHooks,
+        typeName: "test",
+        input: { value: 42 },
+      }),
     );
 
     await withWorkers([await worker.start()], async () => {
@@ -407,15 +394,13 @@ export const workerTestSuite = ({ it }: { it: TestAPI<TestSuiteContext> }): void
       }),
     });
 
-    const chain = await withTransactionHooks(async (transactionHooks) =>
-      withTransaction(async (txCtx) =>
-        client.createChain({
-          ...txCtx,
-          transactionHooks,
-          typeName: "test",
-          input: { value: 1 },
-        }),
-      ),
+    const chain = await withTransaction(async (txCtx, transactionHooks) =>
+      client.createChain({
+        ...txCtx,
+        transactionHooks,
+        typeName: "test",
+        input: { value: 1 },
+      }),
     );
 
     await withWorkers([await worker.start()], async () => {
@@ -484,15 +469,13 @@ export const workerTestSuite = ({ it }: { it: TestAPI<TestSuiteContext> }): void
       }),
     });
 
-    const chain = await withTransactionHooks(async (transactionHooks) =>
-      withTransaction(async (txCtx) =>
-        client.createChain({
-          ...txCtx,
-          transactionHooks,
-          typeName: "test",
-          input: { value: 1 },
-        }),
-      ),
+    const chain = await withTransaction(async (txCtx, transactionHooks) =>
+      client.createChain({
+        ...txCtx,
+        transactionHooks,
+        typeName: "test",
+        input: { value: 1 },
+      }),
     );
 
     await withWorkers([await worker.start()], async () => {
@@ -564,15 +547,13 @@ export const workerTestSuite = ({ it }: { it: TestAPI<TestSuiteContext> }): void
       }),
     });
 
-    const chain = await withTransactionHooks(async (transactionHooks) =>
-      withTransaction(async (txCtx) =>
-        client.createChain({
-          ...txCtx,
-          transactionHooks,
-          typeName: "test",
-          input: { value: 1 },
-        }),
-      ),
+    const chain = await withTransaction(async (txCtx, transactionHooks) =>
+      client.createChain({
+        ...txCtx,
+        transactionHooks,
+        typeName: "test",
+        input: { value: 1 },
+      }),
     );
 
     await withWorkers([await worker.start()], async () => {
@@ -654,15 +635,13 @@ export const workerTestSuite = ({ it }: { it: TestAPI<TestSuiteContext> }): void
       }),
     });
 
-    const chain = await withTransactionHooks(async (transactionHooks) =>
-      withTransaction(async (txCtx) =>
-        client.createChain({
-          ...txCtx,
-          transactionHooks,
-          typeName: "test",
-          input: { value: 1 },
-        }),
-      ),
+    const chain = await withTransaction(async (txCtx, transactionHooks) =>
+      client.createChain({
+        ...txCtx,
+        transactionHooks,
+        typeName: "test",
+        input: { value: 1 },
+      }),
     );
 
     await withWorkers([await worker.start()], async () => {
@@ -735,15 +714,13 @@ export const workerTestSuite = ({ it }: { it: TestAPI<TestSuiteContext> }): void
       }),
     });
 
-    await withTransactionHooks(async (transactionHooks) =>
-      withTransaction(async (txCtx) =>
-        client.createChain({
-          ...txCtx,
-          transactionHooks,
-          typeName: "test",
-          input: null,
-        }),
-      ),
+    await withTransaction(async (txCtx, transactionHooks) =>
+      client.createChain({
+        ...txCtx,
+        transactionHooks,
+        typeName: "test",
+        input: null,
+      }),
     );
 
     const stop = await worker.start();
@@ -805,14 +782,12 @@ export const workerTestSuite = ({ it }: { it: TestAPI<TestSuiteContext> }): void
       }),
     });
 
-    const chains = await withTransactionHooks(async (transactionHooks) =>
-      withTransaction(async (txCtx) =>
-        client.createChains({
-          ...txCtx,
-          transactionHooks,
-          items: Array.from({ length: 3 }, () => ({ typeName: "slow" as const, input: null })),
-        }),
-      ),
+    const chains = await withTransaction(async (txCtx, transactionHooks) =>
+      client.createChains({
+        ...txCtx,
+        transactionHooks,
+        items: Array.from({ length: 3 }, () => ({ typeName: "slow" as const, input: null })),
+      }),
     );
 
     await withWorkers([await worker.start()], async () => {

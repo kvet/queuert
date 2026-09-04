@@ -6,7 +6,6 @@ import { defineJobTypes } from "../entities/define-job-types.js";
 import { BlockerReferenceError } from "../errors.js";
 import { sleep } from "../helpers/sleep.js";
 import { createInProcessWorker } from "../in-process-worker.js";
-import { withTransactionHooks } from "../transaction-hooks.js";
 import { createProcessors } from "../worker/create-processors.js";
 import { type TestSuiteContext } from "./spec-context.spec-helper.js";
 
@@ -35,25 +34,21 @@ export const deletionTestSuite = ({ it }: { it: TestAPI<TestSuiteContext> }): vo
       jobTypes,
     });
 
-    const chain = await withTransactionHooks(async (transactionHooks) =>
-      withTransaction(async (txCtx) =>
-        client.createChain({
-          ...txCtx,
-          transactionHooks,
-          typeName: "test",
-          input: { value: 1 },
-        }),
-      ),
+    const chain = await withTransaction(async (txCtx, transactionHooks) =>
+      client.createChain({
+        ...txCtx,
+        transactionHooks,
+        typeName: "test",
+        input: { value: 1 },
+      }),
     );
 
-    const deletedChains = await withTransactionHooks(async (transactionHooks) =>
-      withTransaction(async (txCtx) =>
-        client.deleteChains({
-          ...txCtx,
-          transactionHooks,
-          ids: [chain.id],
-        }),
-      ),
+    const deletedChains = await withTransaction(async (txCtx, transactionHooks) =>
+      client.deleteChains({
+        ...txCtx,
+        transactionHooks,
+        ids: [chain.id],
+      }),
     );
 
     expect(deletedChains).toHaveLength(1);
@@ -101,42 +96,36 @@ export const deletionTestSuite = ({ it }: { it: TestAPI<TestSuiteContext> }): vo
       jobTypes,
     });
 
-    const chain = await withTransactionHooks(async (transactionHooks) =>
-      withTransaction(async (txCtx) =>
-        client.createChain({
-          ...txCtx,
-          transactionHooks,
-          typeName: "step1",
-          input: { value: 1 },
-        }),
-      ),
+    const chain = await withTransaction(async (txCtx, transactionHooks) =>
+      client.createChain({
+        ...txCtx,
+        transactionHooks,
+        typeName: "step1",
+        input: { value: 1 },
+      }),
     );
 
-    await withTransactionHooks(async (transactionHooks) =>
-      withTransaction(async (txCtx) =>
-        client.completeChain({
-          ...txCtx,
-          transactionHooks,
-          ...chain,
-          handler: async ({ job, completeJob }) => {
-            if (job.typeName === "step1") {
-              await completeJob(job, async ({ finish }) =>
-                finish({ continueWith: { typeName: "step2", input: { continued: true } } }),
-              );
-            }
-          },
-        }),
-      ),
+    await withTransaction(async (txCtx, transactionHooks) =>
+      client.completeChain({
+        ...txCtx,
+        transactionHooks,
+        ...chain,
+        handler: async ({ job, completeJob }) => {
+          if (job.typeName === "step1") {
+            await completeJob(job, async ({ finish }) =>
+              finish({ continueWith: { typeName: "step2", input: { continued: true } } }),
+            );
+          }
+        },
+      }),
     );
 
-    const deletedChains = await withTransactionHooks(async (transactionHooks) =>
-      withTransaction(async (txCtx) =>
-        client.deleteChains({
-          ...txCtx,
-          transactionHooks,
-          ids: [chain.id],
-        }),
-      ),
+    const deletedChains = await withTransaction(async (txCtx, transactionHooks) =>
+      client.deleteChains({
+        ...txCtx,
+        transactionHooks,
+        ids: [chain.id],
+      }),
     );
 
     expect(deletedChains).toHaveLength(1);
@@ -200,28 +189,24 @@ export const deletionTestSuite = ({ it }: { it: TestAPI<TestSuiteContext> }): vo
       }),
     });
 
-    const chain = await withTransactionHooks(async (transactionHooks) =>
-      withTransaction(async (txCtx) =>
-        client.createChain({
-          ...txCtx,
-          transactionHooks,
-          typeName: "test",
-          input: null,
-        }),
-      ),
+    const chain = await withTransaction(async (txCtx, transactionHooks) =>
+      client.createChain({
+        ...txCtx,
+        transactionHooks,
+        typeName: "test",
+        input: null,
+      }),
     );
 
     await withWorkers([await worker.start()], async () => {
       await jobStarted.promise;
 
-      const deletedChains = await withTransactionHooks(async (transactionHooks) =>
-        withTransaction(async (txCtx) =>
-          client.deleteChains({
-            ...txCtx,
-            transactionHooks,
-            ids: [chain.id],
-          }),
-        ),
+      const deletedChains = await withTransaction(async (txCtx, transactionHooks) =>
+        client.deleteChains({
+          ...txCtx,
+          transactionHooks,
+          ids: [chain.id],
+        }),
       );
 
       expect(deletedChains).toHaveLength(1);
@@ -267,23 +252,21 @@ export const deletionTestSuite = ({ it }: { it: TestAPI<TestSuiteContext> }): vo
     });
 
     let blockerChain: Chain<string, "blocker", { value: number }, { result: number }>;
-    const mainChain = await withTransactionHooks(async (transactionHooks) =>
-      withTransaction(async (txCtx) => {
-        blockerChain = await client.createChain({
-          ...txCtx,
-          transactionHooks,
-          typeName: "blocker",
-          input: { value: 1 },
-        });
-        return client.createChain({
-          ...txCtx,
-          transactionHooks,
-          typeName: "main",
-          input: null,
-          blockers: [blockerChain],
-        });
-      }),
-    );
+    const mainChain = await withTransaction(async (txCtx, transactionHooks) => {
+      blockerChain = await client.createChain({
+        ...txCtx,
+        transactionHooks,
+        typeName: "blocker",
+        input: { value: 1 },
+      });
+      return client.createChain({
+        ...txCtx,
+        transactionHooks,
+        typeName: "main",
+        input: null,
+        blockers: [blockerChain],
+      });
+    });
 
     expect(mainChain.status).toBe("running");
     const mainJob = await client.getJob({ id: mainChain.id });
@@ -291,26 +274,22 @@ export const deletionTestSuite = ({ it }: { it: TestAPI<TestSuiteContext> }): vo
 
     // Deleting blocker chain alone should fail — main chain depends on it
     await expect(
-      withTransactionHooks(async (transactionHooks) =>
-        withTransaction(async (txCtx) =>
-          client.deleteChains({
-            ...txCtx,
-            transactionHooks,
-            ids: [blockerChain!.id],
-          }),
-        ),
+      withTransaction(async (txCtx, transactionHooks) =>
+        client.deleteChains({
+          ...txCtx,
+          transactionHooks,
+          ids: [blockerChain!.id],
+        }),
       ),
     ).rejects.toThrow(BlockerReferenceError);
 
     // Deleting both together should succeed
-    const deletedChains = await withTransactionHooks(async (transactionHooks) =>
-      withTransaction(async (txCtx) =>
-        client.deleteChains({
-          ...txCtx,
-          transactionHooks,
-          ids: [mainChain.id, blockerChain!.id],
-        }),
-      ),
+    const deletedChains = await withTransaction(async (txCtx, transactionHooks) =>
+      client.deleteChains({
+        ...txCtx,
+        transactionHooks,
+        ids: [mainChain.id, blockerChain!.id],
+      }),
     );
 
     expect(deletedChains).toHaveLength(2);
@@ -375,36 +354,32 @@ export const deletionTestSuite = ({ it }: { it: TestAPI<TestSuiteContext> }): vo
     });
 
     let blockerChain: Chain<string, "blocker", { value: number }, { result: number }>;
-    await withTransactionHooks(async (transactionHooks) =>
-      withTransaction(async (txCtx) => {
-        blockerChain = await client.createChain({
-          ...txCtx,
-          transactionHooks,
-          typeName: "blocker",
-          input: { value: 1 },
-        });
-        return client.createChain({
-          ...txCtx,
-          transactionHooks,
-          typeName: "main",
-          input: null,
-          blockers: [blockerChain],
-        });
-      }),
-    );
+    await withTransaction(async (txCtx, transactionHooks) => {
+      blockerChain = await client.createChain({
+        ...txCtx,
+        transactionHooks,
+        typeName: "blocker",
+        input: { value: 1 },
+      });
+      return client.createChain({
+        ...txCtx,
+        transactionHooks,
+        typeName: "main",
+        input: null,
+        blockers: [blockerChain],
+      });
+    });
 
     // Cascade only expands downward (dependencies), not upward (dependents)
     // Blocker has no dependencies, so the set is just [blocker] — main still references it
     await expect(
-      withTransactionHooks(async (transactionHooks) =>
-        withTransaction(async (txCtx) =>
-          client.deleteChains({
-            ...txCtx,
-            transactionHooks,
-            ids: [blockerChain!.id],
-            cascade: true,
-          }),
-        ),
+      withTransaction(async (txCtx, transactionHooks) =>
+        client.deleteChains({
+          ...txCtx,
+          transactionHooks,
+          ids: [blockerChain!.id],
+          cascade: true,
+        }),
       ),
     ).rejects.toThrow(BlockerReferenceError);
   });
@@ -441,34 +416,30 @@ export const deletionTestSuite = ({ it }: { it: TestAPI<TestSuiteContext> }): vo
 
     let blockerChain: Chain<string, "blocker", { value: number }, { result: number }>;
     let mainChain: Chain<string, "main", null, { finalResult: number }>;
-    await withTransactionHooks(async (transactionHooks) =>
-      withTransaction(async (txCtx) => {
-        blockerChain = await client.createChain({
-          ...txCtx,
-          transactionHooks,
-          typeName: "blocker",
-          input: { value: 1 },
-        });
-        mainChain = await client.createChain({
-          ...txCtx,
-          transactionHooks,
-          typeName: "main",
-          input: null,
-          blockers: [blockerChain],
-        });
-      }),
-    );
+    await withTransaction(async (txCtx, transactionHooks) => {
+      blockerChain = await client.createChain({
+        ...txCtx,
+        transactionHooks,
+        typeName: "blocker",
+        input: { value: 1 },
+      });
+      mainChain = await client.createChain({
+        ...txCtx,
+        transactionHooks,
+        typeName: "main",
+        input: null,
+        blockers: [blockerChain],
+      });
+    });
 
     // Cascade from the dependent includes its blocker dependency
-    const deletedChains = await withTransactionHooks(async (transactionHooks) =>
-      withTransaction(async (txCtx) =>
-        client.deleteChains({
-          ...txCtx,
-          transactionHooks,
-          ids: [mainChain!.id],
-          cascade: true,
-        }),
-      ),
+    const deletedChains = await withTransaction(async (txCtx, transactionHooks) =>
+      client.deleteChains({
+        ...txCtx,
+        transactionHooks,
+        ids: [mainChain!.id],
+        cascade: true,
+      }),
     );
 
     expect(deletedChains).toHaveLength(2);
@@ -507,41 +478,37 @@ export const deletionTestSuite = ({ it }: { it: TestAPI<TestSuiteContext> }): vo
     // A ← B ← C (C depends on B, B depends on A)
     let chainA: Chain<string, "root", { label: string }, null>;
     let chainB: Chain<string, "dependent", { label: string }, null>;
-    const chainC = await withTransactionHooks(async (transactionHooks) =>
-      withTransaction(async (txCtx) => {
-        chainA = await client.createChain({
-          ...txCtx,
-          transactionHooks,
-          typeName: "root",
-          input: { label: "A" },
-        });
-        chainB = await client.createChain({
-          ...txCtx,
-          transactionHooks,
-          typeName: "dependent",
-          input: { label: "B" },
-          blockers: [chainA],
-        });
-        return client.createChain({
-          ...txCtx,
-          transactionHooks,
-          typeName: "dependent",
-          input: { label: "C" },
-          blockers: [chainB],
-        });
-      }),
-    );
+    const chainC = await withTransaction(async (txCtx, transactionHooks) => {
+      chainA = await client.createChain({
+        ...txCtx,
+        transactionHooks,
+        typeName: "root",
+        input: { label: "A" },
+      });
+      chainB = await client.createChain({
+        ...txCtx,
+        transactionHooks,
+        typeName: "dependent",
+        input: { label: "B" },
+        blockers: [chainA],
+      });
+      return client.createChain({
+        ...txCtx,
+        transactionHooks,
+        typeName: "dependent",
+        input: { label: "C" },
+        blockers: [chainB],
+      });
+    });
 
     // Cascade from the leaf deletes the entire dependency chain
-    const deletedChains = await withTransactionHooks(async (transactionHooks) =>
-      withTransaction(async (txCtx) =>
-        client.deleteChains({
-          ...txCtx,
-          transactionHooks,
-          ids: [chainC.id],
-          cascade: true,
-        }),
-      ),
+    const deletedChains = await withTransaction(async (txCtx, transactionHooks) =>
+      client.deleteChains({
+        ...txCtx,
+        transactionHooks,
+        ids: [chainC.id],
+        cascade: true,
+      }),
     );
 
     expect(deletedChains).toHaveLength(3);
@@ -595,47 +562,43 @@ export const deletionTestSuite = ({ it }: { it: TestAPI<TestSuiteContext> }): vo
     let chainA: Chain<string, "root", { label: string }, null>;
     let chainB: Chain<string, "mid", { label: string }, null>;
     let chainC: Chain<string, "mid", { label: string }, null>;
-    const chainD = await withTransactionHooks(async (transactionHooks) =>
-      withTransaction(async (txCtx) => {
-        chainA = await client.createChain({
-          ...txCtx,
-          transactionHooks,
-          typeName: "root",
-          input: { label: "A" },
-        });
-        chainB = await client.createChain({
-          ...txCtx,
-          transactionHooks,
-          typeName: "mid",
-          input: { label: "B" },
-          blockers: [chainA],
-        });
-        chainC = await client.createChain({
-          ...txCtx,
-          transactionHooks,
-          typeName: "mid",
-          input: { label: "C" },
-          blockers: [chainA],
-        });
-        return client.createChain({
-          ...txCtx,
-          transactionHooks,
-          typeName: "top",
-          input: { label: "D" },
-          blockers: [chainB, chainC],
-        });
-      }),
-    );
+    const chainD = await withTransaction(async (txCtx, transactionHooks) => {
+      chainA = await client.createChain({
+        ...txCtx,
+        transactionHooks,
+        typeName: "root",
+        input: { label: "A" },
+      });
+      chainB = await client.createChain({
+        ...txCtx,
+        transactionHooks,
+        typeName: "mid",
+        input: { label: "B" },
+        blockers: [chainA],
+      });
+      chainC = await client.createChain({
+        ...txCtx,
+        transactionHooks,
+        typeName: "mid",
+        input: { label: "C" },
+        blockers: [chainA],
+      });
+      return client.createChain({
+        ...txCtx,
+        transactionHooks,
+        typeName: "top",
+        input: { label: "D" },
+        blockers: [chainB, chainC],
+      });
+    });
 
-    const deletedChains = await withTransactionHooks(async (transactionHooks) =>
-      withTransaction(async (txCtx) =>
-        client.deleteChains({
-          ...txCtx,
-          transactionHooks,
-          ids: [chainD.id],
-          cascade: true,
-        }),
-      ),
+    const deletedChains = await withTransaction(async (txCtx, transactionHooks) =>
+      client.deleteChains({
+        ...txCtx,
+        transactionHooks,
+        ids: [chainD.id],
+        cascade: true,
+      }),
     );
 
     expect(deletedChains).toHaveLength(4);
@@ -670,26 +633,22 @@ export const deletionTestSuite = ({ it }: { it: TestAPI<TestSuiteContext> }): vo
       jobTypes,
     });
 
-    const chain = await withTransactionHooks(async (transactionHooks) =>
-      withTransaction(async (txCtx) =>
-        client.createChain({
-          ...txCtx,
-          transactionHooks,
-          typeName: "test",
-          input: null,
-        }),
-      ),
+    const chain = await withTransaction(async (txCtx, transactionHooks) =>
+      client.createChain({
+        ...txCtx,
+        transactionHooks,
+        typeName: "test",
+        input: null,
+      }),
     );
 
-    const deletedChains = await withTransactionHooks(async (transactionHooks) =>
-      withTransaction(async (txCtx) =>
-        client.deleteChains({
-          ...txCtx,
-          transactionHooks,
-          ids: [chain.id],
-          cascade: true,
-        }),
-      ),
+    const deletedChains = await withTransaction(async (txCtx, transactionHooks) =>
+      client.deleteChains({
+        ...txCtx,
+        transactionHooks,
+        ids: [chain.id],
+        cascade: true,
+      }),
     );
 
     expect(deletedChains).toHaveLength(1);
@@ -729,42 +688,38 @@ export const deletionTestSuite = ({ it }: { it: TestAPI<TestSuiteContext> }): vo
     // shared ← consumerA, shared ← consumerB
     let sharedChain: Chain<string, "shared", null, null>;
     let consumerA: Chain<string, "consumer", { label: string }, null>;
-    await withTransactionHooks(async (transactionHooks) =>
-      withTransaction(async (txCtx) => {
-        sharedChain = await client.createChain({
-          ...txCtx,
-          transactionHooks,
-          typeName: "shared",
-          input: null,
-        });
-        consumerA = await client.createChain({
-          ...txCtx,
-          transactionHooks,
-          typeName: "consumer",
-          input: { label: "A" },
-          blockers: [sharedChain],
-        });
-        return client.createChain({
-          ...txCtx,
-          transactionHooks,
-          typeName: "consumer",
-          input: { label: "B" },
-          blockers: [sharedChain],
-        });
-      }),
-    );
+    await withTransaction(async (txCtx, transactionHooks) => {
+      sharedChain = await client.createChain({
+        ...txCtx,
+        transactionHooks,
+        typeName: "shared",
+        input: null,
+      });
+      consumerA = await client.createChain({
+        ...txCtx,
+        transactionHooks,
+        typeName: "consumer",
+        input: { label: "A" },
+        blockers: [sharedChain],
+      });
+      return client.createChain({
+        ...txCtx,
+        transactionHooks,
+        typeName: "consumer",
+        input: { label: "B" },
+        blockers: [sharedChain],
+      });
+    });
 
     // Cascade from consumerA includes shared (dependency), but consumerB also depends on shared
     await expect(
-      withTransactionHooks(async (transactionHooks) =>
-        withTransaction(async (txCtx) =>
-          client.deleteChains({
-            ...txCtx,
-            transactionHooks,
-            ids: [consumerA!.id],
-            cascade: true,
-          }),
-        ),
+      withTransaction(async (txCtx, transactionHooks) =>
+        client.deleteChains({
+          ...txCtx,
+          transactionHooks,
+          ids: [consumerA!.id],
+          cascade: true,
+        }),
       ),
     ).rejects.toThrow(BlockerReferenceError);
   });
@@ -822,28 +777,24 @@ export const deletionTestSuite = ({ it }: { it: TestAPI<TestSuiteContext> }): vo
       }),
     });
 
-    const chain = await withTransactionHooks(async (transactionHooks) =>
-      withTransaction(async (txCtx) =>
-        client.createChain({
-          ...txCtx,
-          transactionHooks,
-          typeName: "test",
-          input: null,
-        }),
-      ),
+    const chain = await withTransaction(async (txCtx, transactionHooks) =>
+      client.createChain({
+        ...txCtx,
+        transactionHooks,
+        typeName: "test",
+        input: null,
+      }),
     );
 
     await withWorkers([await worker.start()], async () => {
       await jobStarted.promise;
 
-      const deletedChains = await withTransactionHooks(async (transactionHooks) =>
-        withTransaction(async (txCtx) =>
-          client.deleteChains({
-            ...txCtx,
-            transactionHooks,
-            ids: [chain.id],
-          }),
-        ),
+      const deletedChains = await withTransaction(async (txCtx, transactionHooks) =>
+        client.deleteChains({
+          ...txCtx,
+          transactionHooks,
+          ids: [chain.id],
+        }),
       );
 
       expect(deletedChains).toHaveLength(1);
@@ -887,28 +838,24 @@ export const deletionTestSuite = ({ it }: { it: TestAPI<TestSuiteContext> }): vo
       jobTypes,
     });
 
-    const chains = await withTransactionHooks(async (transactionHooks) =>
-      withTransaction(async (txCtx) =>
-        client.createChains({
-          ...txCtx,
-          transactionHooks,
-          items: [
-            { typeName: "test", input: { value: 1 } },
-            { typeName: "test", input: { value: 2 } },
-            { typeName: "test", input: { value: 3 } },
-          ],
-        }),
-      ),
+    const chains = await withTransaction(async (txCtx, transactionHooks) =>
+      client.createChains({
+        ...txCtx,
+        transactionHooks,
+        items: [
+          { typeName: "test", input: { value: 1 } },
+          { typeName: "test", input: { value: 2 } },
+          { typeName: "test", input: { value: 3 } },
+        ],
+      }),
     );
 
-    const deletedChains = await withTransactionHooks(async (transactionHooks) =>
-      withTransaction(async (txCtx) =>
-        client.deleteChains({
-          ...txCtx,
-          transactionHooks,
-          ids: chains.map((c) => c.id),
-        }),
-      ),
+    const deletedChains = await withTransaction(async (txCtx, transactionHooks) =>
+      client.deleteChains({
+        ...txCtx,
+        transactionHooks,
+        ids: chains.map((c) => c.id),
+      }),
     );
 
     expect(deletedChains).toHaveLength(3);
@@ -955,28 +902,24 @@ export const deletionTestSuite = ({ it }: { it: TestAPI<TestSuiteContext> }): vo
       jobTypes,
     });
 
-    const blocker = await withTransactionHooks(async (transactionHooks) =>
-      withTransaction(async (txCtx) =>
-        client.createChain({
-          ...txCtx,
-          transactionHooks,
-          typeName: "blocker",
-          input: null,
-        }),
-      ),
+    const blocker = await withTransaction(async (txCtx, transactionHooks) =>
+      client.createChain({
+        ...txCtx,
+        transactionHooks,
+        typeName: "blocker",
+        input: null,
+      }),
     );
 
-    const [mainA, mainB] = await withTransactionHooks(async (transactionHooks) =>
-      withTransaction(async (txCtx) =>
-        client.createChains({
-          ...txCtx,
-          transactionHooks,
-          items: [
-            { typeName: "main", input: { label: "A" }, blockers: [blocker] },
-            { typeName: "main", input: { label: "B" }, blockers: [blocker] },
-          ],
-        }),
-      ),
+    const [mainA, mainB] = await withTransaction(async (txCtx, transactionHooks) =>
+      client.createChains({
+        ...txCtx,
+        transactionHooks,
+        items: [
+          { typeName: "main", input: { label: "A" }, blockers: [blocker] },
+          { typeName: "main", input: { label: "B" }, blockers: [blocker] },
+        ],
+      }),
     );
 
     expect(mainA.status).toBe("running");
@@ -987,25 +930,21 @@ export const deletionTestSuite = ({ it }: { it: TestAPI<TestSuiteContext> }): vo
     expect(jobB!.status === "pending" && jobB!.blocked).toBe(true);
 
     await expect(
-      withTransactionHooks(async (transactionHooks) =>
-        withTransaction(async (txCtx) =>
-          client.deleteChains({
-            ...txCtx,
-            transactionHooks,
-            ids: [blocker.id],
-          }),
-        ),
-      ),
-    ).rejects.toThrow(BlockerReferenceError);
-
-    const deletedChains = await withTransactionHooks(async (transactionHooks) =>
-      withTransaction(async (txCtx) =>
+      withTransaction(async (txCtx, transactionHooks) =>
         client.deleteChains({
           ...txCtx,
           transactionHooks,
-          ids: [mainA.id, mainB.id, blocker.id],
+          ids: [blocker.id],
         }),
       ),
+    ).rejects.toThrow(BlockerReferenceError);
+
+    const deletedChains = await withTransaction(async (txCtx, transactionHooks) =>
+      client.deleteChains({
+        ...txCtx,
+        transactionHooks,
+        ids: [mainA.id, mainB.id, blocker.id],
+      }),
     );
 
     expect(deletedChains).toHaveLength(3);
@@ -1035,22 +974,18 @@ export const deletionTestSuite = ({ it }: { it: TestAPI<TestSuiteContext> }): vo
       jobTypes,
     });
 
-    const chain = await withTransactionHooks(async (transactionHooks) =>
-      withTransaction(async (txCtx) =>
-        client.createChain({
-          ...txCtx,
-          transactionHooks,
-          typeName: "test",
-          input: null,
-        }),
-      ),
+    const chain = await withTransaction(async (txCtx, transactionHooks) =>
+      client.createChain({
+        ...txCtx,
+        transactionHooks,
+        typeName: "test",
+        input: null,
+      }),
     );
 
     await expect(
-      withTransactionHooks(async (transactionHooks) =>
-        // @ts-expect-error missing txCtx
-        client.deleteChains({ transactionHooks, ids: [chain.id] }),
-      ),
+      // @ts-expect-error missing txCtx
+      client.deleteChains({ ids: [chain.id] }),
     ).rejects.toThrow("requires a transaction context");
   });
 
@@ -1074,21 +1009,17 @@ export const deletionTestSuite = ({ it }: { it: TestAPI<TestSuiteContext> }): vo
       jobTypes,
     });
 
-    const chain = await withTransactionHooks(async (transactionHooks) =>
-      withTransaction(async (txCtx) =>
-        client.createChain({
-          ...txCtx,
-          transactionHooks,
-          typeName: "test",
-          input: { value: 42 },
-        }),
-      ),
+    const chain = await withTransaction(async (txCtx, transactionHooks) =>
+      client.createChain({
+        ...txCtx,
+        transactionHooks,
+        typeName: "test",
+        input: { value: 42 },
+      }),
     );
 
-    const deleted = await withTransactionHooks(async (transactionHooks) =>
-      withTransaction(async (txCtx) =>
-        client.deleteChain({ ...txCtx, transactionHooks, id: chain.id }),
-      ),
+    const deleted = await withTransaction(async (txCtx, transactionHooks) =>
+      client.deleteChain({ ...txCtx, transactionHooks, id: chain.id }),
     );
 
     expect(deleted).toMatchObject({
@@ -1122,14 +1053,12 @@ export const deletionTestSuite = ({ it }: { it: TestAPI<TestSuiteContext> }): vo
       jobTypes,
     });
 
-    const deleted = await withTransactionHooks(async (transactionHooks) =>
-      withTransaction(async (txCtx) =>
-        client.deleteChain({
-          ...txCtx,
-          transactionHooks,
-          id: "00000000-0000-0000-0000-000000000000",
-        }),
-      ),
+    const deleted = await withTransaction(async (txCtx, transactionHooks) =>
+      client.deleteChain({
+        ...txCtx,
+        transactionHooks,
+        id: "00000000-0000-0000-0000-000000000000",
+      }),
     );
 
     expect(deleted).toBeUndefined();
@@ -1162,33 +1091,29 @@ export const deletionTestSuite = ({ it }: { it: TestAPI<TestSuiteContext> }): vo
     });
 
     let blockerChain: Chain<string, "blocker", { value: number }, null>;
-    const mainChain = await withTransactionHooks(async (transactionHooks) =>
-      withTransaction(async (txCtx) => {
-        blockerChain = await client.createChain({
-          ...txCtx,
-          transactionHooks,
-          typeName: "blocker",
-          input: { value: 1 },
-        });
-        return client.createChain({
-          ...txCtx,
-          transactionHooks,
-          typeName: "main",
-          input: null,
-          blockers: [blockerChain],
-        });
-      }),
-    );
+    const mainChain = await withTransaction(async (txCtx, transactionHooks) => {
+      blockerChain = await client.createChain({
+        ...txCtx,
+        transactionHooks,
+        typeName: "blocker",
+        input: { value: 1 },
+      });
+      return client.createChain({
+        ...txCtx,
+        transactionHooks,
+        typeName: "main",
+        input: null,
+        blockers: [blockerChain],
+      });
+    });
 
-    const deleted = await withTransactionHooks(async (transactionHooks) =>
-      withTransaction(async (txCtx) =>
-        client.deleteChain({
-          ...txCtx,
-          transactionHooks,
-          id: mainChain.id,
-          cascade: true,
-        }),
-      ),
+    const deleted = await withTransaction(async (txCtx, transactionHooks) =>
+      client.deleteChain({
+        ...txCtx,
+        transactionHooks,
+        id: mainChain.id,
+        cascade: true,
+      }),
     );
 
     expect(deleted?.id).toBe(mainChain.id);
@@ -1224,29 +1149,25 @@ export const deletionTestSuite = ({ it }: { it: TestAPI<TestSuiteContext> }): vo
     });
 
     let blockerChain: Chain<string, "blocker", null, null>;
-    await withTransactionHooks(async (transactionHooks) =>
-      withTransaction(async (txCtx) => {
-        blockerChain = await client.createChain({
-          ...txCtx,
-          transactionHooks,
-          typeName: "blocker",
-          input: null,
-        });
-        return client.createChain({
-          ...txCtx,
-          transactionHooks,
-          typeName: "main",
-          input: null,
-          blockers: [blockerChain],
-        });
-      }),
-    );
+    await withTransaction(async (txCtx, transactionHooks) => {
+      blockerChain = await client.createChain({
+        ...txCtx,
+        transactionHooks,
+        typeName: "blocker",
+        input: null,
+      });
+      return client.createChain({
+        ...txCtx,
+        transactionHooks,
+        typeName: "main",
+        input: null,
+        blockers: [blockerChain],
+      });
+    });
 
     await expect(
-      withTransactionHooks(async (transactionHooks) =>
-        withTransaction(async (txCtx) =>
-          client.deleteChain({ ...txCtx, transactionHooks, id: blockerChain!.id }),
-        ),
+      withTransaction(async (txCtx, transactionHooks) =>
+        client.deleteChain({ ...txCtx, transactionHooks, id: blockerChain!.id }),
       ),
     ).rejects.toThrow(BlockerReferenceError);
   });
@@ -1271,17 +1192,13 @@ export const deletionTestSuite = ({ it }: { it: TestAPI<TestSuiteContext> }): vo
       jobTypes,
     });
 
-    const chain = await withTransactionHooks(async (transactionHooks) =>
-      withTransaction(async (txCtx) =>
-        client.createChain({ ...txCtx, transactionHooks, typeName: "test", input: null }),
-      ),
+    const chain = await withTransaction(async (txCtx, transactionHooks) =>
+      client.createChain({ ...txCtx, transactionHooks, typeName: "test", input: null }),
     );
 
     await expect(
-      withTransactionHooks(async (transactionHooks) =>
-        // @ts-expect-error missing txCtx
-        client.deleteChain({ transactionHooks, id: chain.id }),
-      ),
+      // @ts-expect-error missing txCtx
+      client.deleteChain({ id: chain.id }),
     ).rejects.toThrow("requires a transaction context");
   });
 
@@ -1326,51 +1243,43 @@ export const deletionTestSuite = ({ it }: { it: TestAPI<TestSuiteContext> }): vo
     //   B   C  (batch-created)
     //    \ /
     //     A
-    const chainA = await withTransactionHooks(async (transactionHooks) =>
-      withTransaction(async (txCtx) =>
-        client.createChain({
-          ...txCtx,
-          transactionHooks,
-          typeName: "root",
-          input: { label: "A" },
-        }),
-      ),
+    const chainA = await withTransaction(async (txCtx, transactionHooks) =>
+      client.createChain({
+        ...txCtx,
+        transactionHooks,
+        typeName: "root",
+        input: { label: "A" },
+      }),
     );
 
-    const [chainB, chainC] = await withTransactionHooks(async (transactionHooks) =>
-      withTransaction(async (txCtx) =>
-        client.createChains({
-          ...txCtx,
-          transactionHooks,
-          items: [
-            { typeName: "mid", input: { label: "B" }, blockers: [chainA] },
-            { typeName: "mid", input: { label: "C" }, blockers: [chainA] },
-          ],
-        }),
-      ),
+    const [chainB, chainC] = await withTransaction(async (txCtx, transactionHooks) =>
+      client.createChains({
+        ...txCtx,
+        transactionHooks,
+        items: [
+          { typeName: "mid", input: { label: "B" }, blockers: [chainA] },
+          { typeName: "mid", input: { label: "C" }, blockers: [chainA] },
+        ],
+      }),
     );
 
-    const chainD = await withTransactionHooks(async (transactionHooks) =>
-      withTransaction(async (txCtx) =>
-        client.createChain({
-          ...txCtx,
-          transactionHooks,
-          typeName: "top",
-          input: { label: "D" },
-          blockers: [chainB, chainC],
-        }),
-      ),
+    const chainD = await withTransaction(async (txCtx, transactionHooks) =>
+      client.createChain({
+        ...txCtx,
+        transactionHooks,
+        typeName: "top",
+        input: { label: "D" },
+        blockers: [chainB, chainC],
+      }),
     );
 
-    const deletedChains = await withTransactionHooks(async (transactionHooks) =>
-      withTransaction(async (txCtx) =>
-        client.deleteChains({
-          ...txCtx,
-          transactionHooks,
-          ids: [chainD.id],
-          cascade: true,
-        }),
-      ),
+    const deletedChains = await withTransaction(async (txCtx, transactionHooks) =>
+      client.deleteChains({
+        ...txCtx,
+        transactionHooks,
+        ids: [chainD.id],
+        cascade: true,
+      }),
     );
 
     expect(deletedChains).toHaveLength(4);

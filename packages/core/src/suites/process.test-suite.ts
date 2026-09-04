@@ -4,7 +4,6 @@ import { createClient } from "../client.js";
 import { defineJobTypes } from "../entities/define-job-types.js";
 import { sleep } from "../helpers/sleep.js";
 import { createInProcessWorker } from "../in-process-worker.js";
-import { withTransactionHooks } from "../transaction-hooks.js";
 import { createProcessors } from "../worker/create-processors.js";
 import { type TestSuiteContext } from "./spec-context.spec-helper.js";
 
@@ -172,21 +171,19 @@ export const processTestSuite = ({ it }: { it: TestAPI<TestSuiteContext> }): voi
       continueWithChain,
       continueAfterCompleteChain,
       finishConcurrentlyChain,
-    ] = await withTransactionHooks(async (transactionHooks) =>
-      withTransaction(async (txCtx) =>
-        client.createChains({
-          ...txCtx,
-          transactionHooks,
-          items: [
-            { typeName: "test-prepare-twice", input: null },
-            { typeName: "test-complete-twice", input: null },
-            { typeName: "test-prepare-after-auto-setup", input: null },
-            { typeName: "test-continueWith-twice", input: null },
-            { typeName: "test-continue-after-complete", input: null },
-            { typeName: "test-finish-concurrently", input: null },
-          ],
-        }),
-      ),
+    ] = await withTransaction(async (txCtx, transactionHooks) =>
+      client.createChains({
+        ...txCtx,
+        transactionHooks,
+        items: [
+          { typeName: "test-prepare-twice", input: null },
+          { typeName: "test-complete-twice", input: null },
+          { typeName: "test-prepare-after-auto-setup", input: null },
+          { typeName: "test-continueWith-twice", input: null },
+          { typeName: "test-continue-after-complete", input: null },
+          { typeName: "test-finish-concurrently", input: null },
+        ],
+      }),
     );
 
     await withWorkers([await worker.start()], async () => {
@@ -267,15 +264,13 @@ export const processTestSuite = ({ it }: { it: TestAPI<TestSuiteContext> }): voi
       }),
     });
 
-    const chain = await withTransactionHooks(async (transactionHooks) =>
-      withTransaction(async (txCtx) =>
-        client.createChain({
-          ...txCtx,
-          transactionHooks,
-          typeName: "test",
-          input: null,
-        }),
-      ),
+    const chain = await withTransaction(async (txCtx, transactionHooks) =>
+      client.createChain({
+        ...txCtx,
+        transactionHooks,
+        typeName: "test",
+        input: null,
+      }),
     );
     await withWorkers([await worker.start()], async () => {
       await client.awaitChain(chain, completionOptions);
@@ -332,15 +327,13 @@ export const processTestSuite = ({ it }: { it: TestAPI<TestSuiteContext> }): voi
       }),
     });
 
-    const chain = await withTransactionHooks(async (transactionHooks) =>
-      withTransaction(async (txCtx) =>
-        client.createChain({
-          ...txCtx,
-          transactionHooks,
-          typeName: "test",
-          input: null,
-        }),
-      ),
+    const chain = await withTransaction(async (txCtx, transactionHooks) =>
+      client.createChain({
+        ...txCtx,
+        transactionHooks,
+        typeName: "test",
+        input: null,
+      }),
     );
     await withWorkers([await worker.start()], async () => {
       await client.awaitChain(chain, completionOptions);
@@ -406,15 +399,13 @@ export const processTestSuite = ({ it }: { it: TestAPI<TestSuiteContext> }): voi
       }),
     });
 
-    const job = await withTransactionHooks(async (transactionHooks) =>
-      withTransaction(async (txCtx) =>
-        client.createChain({
-          ...txCtx,
-          transactionHooks,
-          typeName: "test",
-          input: null,
-        }),
-      ),
+    const job = await withTransaction(async (txCtx, transactionHooks) =>
+      client.createChain({
+        ...txCtx,
+        transactionHooks,
+        typeName: "test",
+        input: null,
+      }),
     );
 
     await withWorkers([await worker.start()], async () => {
@@ -500,15 +491,13 @@ export const processTestSuite = ({ it }: { it: TestAPI<TestSuiteContext> }): voi
       }),
     });
 
-    const chain = await withTransactionHooks(async (transactionHooks) =>
-      withTransaction(async (txCtx) =>
-        client.createChain({
-          ...txCtx,
-          transactionHooks,
-          typeName: "test",
-          input: { test: true },
-        }),
-      ),
+    const chain = await withTransaction(async (txCtx, transactionHooks) =>
+      client.createChain({
+        ...txCtx,
+        transactionHooks,
+        typeName: "test",
+        input: { test: true },
+      }),
     );
     // expectTypeOf<(typeof chain)["status"]>().toEqualTypeOf<"pending" | "blocked">();
     expectTypeOf<(typeof chain)["input"]>().toEqualTypeOf<{ test: boolean }>();
@@ -602,8 +591,8 @@ export const processTestSuite = ({ it }: { it: TestAPI<TestSuiteContext> }): voi
       }),
     });
 
-    const [completedChain, continuedChain] = await withTransactionHooks(async (transactionHooks) =>
-      withTransaction(async (txCtx) =>
+    const [completedChain, continuedChain] = await withTransaction(
+      async (txCtx, transactionHooks) =>
         client.createChains({
           ...txCtx,
           transactionHooks,
@@ -612,7 +601,6 @@ export const processTestSuite = ({ it }: { it: TestAPI<TestSuiteContext> }): voi
             { typeName: "continue-then-read", input: null },
           ],
         }),
-      ),
     );
 
     await withWorkers([await worker.start()], async () => {

@@ -4,7 +4,6 @@ import { createClient } from "../client.js";
 import { defineJobTypes } from "../entities/define-job-types.js";
 import { createInProcessWorker } from "../in-process-worker.js";
 import { type StateAdapter } from "../state-adapter/state-adapter.js";
-import { withTransactionHooks } from "../transaction-hooks.js";
 import { createProcessors } from "../worker/create-processors.js";
 import { type TestSuiteContext } from "./spec-context.spec-helper.js";
 
@@ -86,17 +85,15 @@ export const stateResilienceTestSuite = ({
         }),
       });
 
-      const chains = await withTransactionHooks(async (transactionHooks) =>
-        withTransaction(async (txCtx) =>
-          client.createChains({
-            ...txCtx,
-            transactionHooks,
-            items: Array.from({ length: 20 }, (_, i) => ({
-              typeName: "test",
-              input: { value: i, atomic: i % 2 === 0 },
-            })),
-          }),
-        ),
+      const chains = await withTransaction(async (txCtx, transactionHooks) =>
+        client.createChains({
+          ...txCtx,
+          transactionHooks,
+          items: Array.from({ length: 20 }, (_, i) => ({
+            typeName: "test",
+            input: { value: i, atomic: i % 2 === 0 },
+          })),
+        }),
       );
 
       await withWorkers([await flakyWorker.start()], async () => {
@@ -180,17 +177,15 @@ export const stateResilienceTestSuite = ({
         }),
       });
 
-      const chains = await withTransactionHooks(async (transactionHooks) =>
-        withTransaction(async (txCtx) =>
-          client.createChains({
-            ...txCtx,
-            transactionHooks,
-            items: Array.from({ length: 20 }, (_, i) => ({
-              typeName: "test",
-              input: { value: i, atomic: i % 2 === 0 },
-            })),
-          }),
-        ),
+      const chains = await withTransaction(async (txCtx, transactionHooks) =>
+        client.createChains({
+          ...txCtx,
+          transactionHooks,
+          items: Array.from({ length: 20 }, (_, i) => ({
+            typeName: "test",
+            input: { value: i, atomic: i % 2 === 0 },
+          })),
+        }),
       );
 
       await withWorkers([await flakyWorker.start()], async () => {
@@ -298,17 +293,15 @@ export const stateResilienceTestSuite = ({
         }),
       });
 
-      const chains = await withTransactionHooks(async (transactionHooks) =>
-        withTransaction(async (txCtx) =>
-          client.createChains({
-            ...txCtx,
-            transactionHooks,
-            items: Array.from({ length: 20 }, (_, i) => ({
-              typeName: "test",
-              input: { value: i, atomic: i % 2 === 0 },
-            })),
-          }),
-        ),
+      const chains = await withTransaction(async (txCtx, transactionHooks) =>
+        client.createChains({
+          ...txCtx,
+          transactionHooks,
+          items: Array.from({ length: 20 }, (_, i) => ({
+            typeName: "test",
+            input: { value: i, atomic: i % 2 === 0 },
+          })),
+        }),
       );
 
       await withWorkers([await flakyWorker1.start(), await flakyWorker2.start()], async () => {
@@ -388,17 +381,15 @@ export const stateResilienceTestSuite = ({
         }),
       });
 
-      const chains = await withTransactionHooks(async (transactionHooks) =>
-        withTransaction(async (txCtx) =>
-          client.createChains({
-            ...txCtx,
-            transactionHooks,
-            items: Array.from({ length: 20 }, (_, i) => ({
-              typeName: "test",
-              input: { value: i, atomic: i % 2 === 0 },
-            })),
-          }),
-        ),
+      const chains = await withTransaction(async (txCtx, transactionHooks) =>
+        client.createChains({
+          ...txCtx,
+          transactionHooks,
+          items: Array.from({ length: 20 }, (_, i) => ({
+            typeName: "test",
+            input: { value: i, atomic: i % 2 === 0 },
+          })),
+        }),
       );
 
       await withWorkers([await flakyWorker.start()], async () => {
@@ -479,17 +470,15 @@ export const stateResilienceTestSuite = ({
         }),
       });
 
-      const chains = await withTransactionHooks(async (transactionHooks) =>
-        withTransaction(async (txCtx) =>
-          client.createChains({
-            ...txCtx,
-            transactionHooks,
-            items: Array.from({ length: 20 }, (_, i) => ({
-              typeName: "test",
-              input: { value: i, atomic: i % 2 === 0 },
-            })),
-          }),
-        ),
+      const chains = await withTransaction(async (txCtx, transactionHooks) =>
+        client.createChains({
+          ...txCtx,
+          transactionHooks,
+          items: Array.from({ length: 20 }, (_, i) => ({
+            typeName: "test",
+            input: { value: i, atomic: i % 2 === 0 },
+          })),
+        }),
       );
 
       await withWorkers([await flakyWorker.start()], async () => {
@@ -594,17 +583,15 @@ export const stateResilienceTestSuite = ({
         }),
       });
 
-      const chains = await withTransactionHooks(async (transactionHooks) =>
-        withTransaction(async (txCtx) =>
-          client.createChains({
-            ...txCtx,
-            transactionHooks,
-            items: Array.from({ length: 20 }, (_, i) => ({
-              typeName: "test",
-              input: { value: i, atomic: i % 2 === 0 },
-            })),
-          }),
-        ),
+      const chains = await withTransaction(async (txCtx, transactionHooks) =>
+        client.createChains({
+          ...txCtx,
+          transactionHooks,
+          items: Array.from({ length: 20 }, (_, i) => ({
+            typeName: "test",
+            input: { value: i, atomic: i % 2 === 0 },
+          })),
+        }),
       );
 
       await withWorkers([await flakyWorker1.start(), await flakyWorker2.start()], async () => {

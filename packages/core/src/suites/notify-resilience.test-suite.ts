@@ -4,7 +4,6 @@ import { createClient } from "../client.js";
 import { defineJobTypes } from "../entities/define-job-types.js";
 import { createInProcessWorker } from "../in-process-worker.js";
 import { type NotifyAdapter } from "../notify-adapter/notify-adapter.js";
-import { withTransactionHooks } from "../transaction-hooks.js";
 import { createProcessors } from "../worker/create-processors.js";
 import { type TestSuiteContext } from "./spec-context.spec-helper.js";
 
@@ -72,17 +71,15 @@ export const notifyResilienceTestSuite = ({
 
     await withWorkers([await worker.start()], async () => {
       // at least one notify pushes worker to process jobs
-      const chains = await withTransactionHooks(async (transactionHooks) =>
-        withTransaction(async (txCtx) =>
-          client.createChains({
-            ...txCtx,
-            transactionHooks,
-            items: Array.from({ length: 20 }, (_, i) => ({
-              typeName: "test",
-              input: { value: i, atomic: i % 2 === 0 },
-            })),
-          }),
-        ),
+      const chains = await withTransaction(async (txCtx, transactionHooks) =>
+        client.createChains({
+          ...txCtx,
+          transactionHooks,
+          items: Array.from({ length: 20 }, (_, i) => ({
+            typeName: "test",
+            input: { value: i, atomic: i % 2 === 0 },
+          })),
+        }),
       );
 
       await Promise.all(

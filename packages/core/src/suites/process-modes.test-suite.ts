@@ -5,7 +5,6 @@ import { defineJobTypes } from "../entities/define-job-types.js";
 import { sleep } from "../helpers/sleep.js";
 import { createInProcessWorker } from "../in-process-worker.js";
 import { createSpyStateAdapter } from "../state-adapter/state-adapter.spy.spec-helper.js";
-import { withTransactionHooks } from "../transaction-hooks.js";
 import { createProcessors } from "../worker/create-processors.js";
 import { type TestSuiteContext } from "./spec-context.spec-helper.js";
 
@@ -67,15 +66,13 @@ export const processModesTestSuite = ({ it }: { it: TestAPI<TestSuiteContext> })
       }),
     });
 
-    const chain = await withTransactionHooks(async (transactionHooks) =>
-      withTransaction(async (txCtx) =>
-        client.createChain({
-          ...txCtx,
-          transactionHooks,
-          typeName: "atomic-complete",
-          input: { value: 10 },
-        }),
-      ),
+    const chain = await withTransaction(async (txCtx, transactionHooks) =>
+      client.createChain({
+        ...txCtx,
+        transactionHooks,
+        typeName: "atomic-complete",
+        input: { value: 10 },
+      }),
     );
 
     await withWorkers([await worker.start()], async () => {
@@ -159,15 +156,13 @@ export const processModesTestSuite = ({ it }: { it: TestAPI<TestSuiteContext> })
       }),
     });
 
-    const chain = await withTransactionHooks(async (transactionHooks) =>
-      withTransaction(async (txCtx) =>
-        client.createChain({
-          ...txCtx,
-          transactionHooks,
-          typeName: "staged-complete",
-          input: { value: 10 },
-        }),
-      ),
+    const chain = await withTransaction(async (txCtx, transactionHooks) =>
+      client.createChain({
+        ...txCtx,
+        transactionHooks,
+        typeName: "staged-complete",
+        input: { value: 10 },
+      }),
     );
 
     await withWorkers([await worker.start()], async () => {
@@ -262,15 +257,13 @@ export const processModesTestSuite = ({ it }: { it: TestAPI<TestSuiteContext> })
       }),
     });
 
-    const chain = await withTransactionHooks(async (transactionHooks) =>
-      withTransaction(async (txCtx) =>
-        client.createChain({
-          ...txCtx,
-          transactionHooks,
-          typeName: "staged-with-callback",
-          input: { value: 10 },
-        }),
-      ),
+    const chain = await withTransaction(async (txCtx, transactionHooks) =>
+      client.createChain({
+        ...txCtx,
+        transactionHooks,
+        typeName: "staged-with-callback",
+        input: { value: 10 },
+      }),
     );
 
     await withWorkers([await worker.start()], async () => {
@@ -367,15 +360,13 @@ export const processModesTestSuite = ({ it }: { it: TestAPI<TestSuiteContext> })
       }),
     });
 
-    const chain = await withTransactionHooks(async (transactionHooks) =>
-      withTransaction(async (txCtx) =>
-        client.createChain({
-          ...txCtx,
-          transactionHooks,
-          typeName: "staged-without-callback",
-          input: { value: 10 },
-        }),
-      ),
+    const chain = await withTransaction(async (txCtx, transactionHooks) =>
+      client.createChain({
+        ...txCtx,
+        transactionHooks,
+        typeName: "staged-without-callback",
+        input: { value: 10 },
+      }),
     );
 
     await withWorkers([await worker.start()], async () => {
@@ -470,15 +461,13 @@ export const processModesTestSuite = ({ it }: { it: TestAPI<TestSuiteContext> })
       }),
     });
 
-    const chain = await withTransactionHooks(async (transactionHooks) =>
-      withTransaction(async (txCtx) =>
-        client.createChain({
-          ...txCtx,
-          transactionHooks,
-          typeName: "atomic-with-callback",
-          input: { value: 10 },
-        }),
-      ),
+    const chain = await withTransaction(async (txCtx, transactionHooks) =>
+      client.createChain({
+        ...txCtx,
+        transactionHooks,
+        typeName: "atomic-with-callback",
+        input: { value: 10 },
+      }),
     );
 
     await withWorkers([await worker.start()], async () => {
@@ -567,15 +556,13 @@ export const processModesTestSuite = ({ it }: { it: TestAPI<TestSuiteContext> })
       }),
     });
 
-    const chain = await withTransactionHooks(async (transactionHooks) =>
-      withTransaction(async (txCtx) =>
-        client.createChain({
-          ...txCtx,
-          transactionHooks,
-          typeName: "atomic-without-callback",
-          input: { value: 10 },
-        }),
-      ),
+    const chain = await withTransaction(async (txCtx, transactionHooks) =>
+      client.createChain({
+        ...txCtx,
+        transactionHooks,
+        typeName: "atomic-without-callback",
+        input: { value: 10 },
+      }),
     );
 
     await withWorkers([await worker.start()], async () => {
@@ -664,15 +651,13 @@ export const processModesTestSuite = ({ it }: { it: TestAPI<TestSuiteContext> })
       }),
     });
 
-    const chain = await withTransactionHooks(async (transactionHooks) =>
-      withTransaction(async (txCtx) =>
-        client.createChain({
-          ...txCtx,
-          transactionHooks,
-          typeName: "execute-basic",
-          input: { value: 10 },
-        }),
-      ),
+    const chain = await withTransaction(async (txCtx, transactionHooks) =>
+      client.createChain({
+        ...txCtx,
+        transactionHooks,
+        typeName: "execute-basic",
+        input: { value: 10 },
+      }),
     );
 
     await withWorkers([await worker.start()], async () => {
@@ -764,15 +749,13 @@ export const processModesTestSuite = ({ it }: { it: TestAPI<TestSuiteContext> })
       }),
     });
 
-    const chain = await withTransactionHooks(async (transactionHooks) =>
-      withTransaction(async (txCtx) =>
-        client.createChain({
-          ...txCtx,
-          transactionHooks,
-          typeName: "execute-return",
-          input: null,
-        }),
-      ),
+    const chain = await withTransaction(async (txCtx, transactionHooks) =>
+      client.createChain({
+        ...txCtx,
+        transactionHooks,
+        typeName: "execute-return",
+        input: null,
+      }),
     );
 
     await withWorkers([await worker.start()], async () => {
@@ -839,15 +822,13 @@ export const processModesTestSuite = ({ it }: { it: TestAPI<TestSuiteContext> })
       }),
     });
 
-    const chain = await withTransactionHooks(async (transactionHooks) =>
-      withTransaction(async (txCtx) =>
-        client.createChain({
-          ...txCtx,
-          transactionHooks,
-          typeName: "execute-multi",
-          input: null,
-        }),
-      ),
+    const chain = await withTransaction(async (txCtx, transactionHooks) =>
+      client.createChain({
+        ...txCtx,
+        transactionHooks,
+        typeName: "execute-multi",
+        input: null,
+      }),
     );
 
     await withWorkers([await worker.start()], async () => {
@@ -931,15 +912,13 @@ export const processModesTestSuite = ({ it }: { it: TestAPI<TestSuiteContext> })
       }),
     });
 
-    const chain = await withTransactionHooks(async (transactionHooks) =>
-      withTransaction(async (txCtx) =>
-        client.createChain({
-          ...txCtx,
-          transactionHooks,
-          typeName: "execute-hooks",
-          input: null,
-        }),
-      ),
+    const chain = await withTransaction(async (txCtx, transactionHooks) =>
+      client.createChain({
+        ...txCtx,
+        transactionHooks,
+        typeName: "execute-hooks",
+        input: null,
+      }),
     );
 
     await withWorkers([await worker.start()], async () => {
@@ -1006,15 +985,13 @@ export const processModesTestSuite = ({ it }: { it: TestAPI<TestSuiteContext> })
       }),
     });
 
-    const chain = await withTransactionHooks(async (transactionHooks) =>
-      withTransaction(async (txCtx) =>
-        client.createChain({
-          ...txCtx,
-          transactionHooks,
-          typeName: "execute-race",
-          input: { value: 10 },
-        }),
-      ),
+    const chain = await withTransaction(async (txCtx, transactionHooks) =>
+      client.createChain({
+        ...txCtx,
+        transactionHooks,
+        typeName: "execute-race",
+        input: { value: 10 },
+      }),
     );
 
     await withWorkers([await worker.start()], async () => {
@@ -1118,15 +1095,13 @@ export const processModesTestSuite = ({ it }: { it: TestAPI<TestSuiteContext> })
       }),
     });
 
-    const chain = await withTransactionHooks(async (transactionHooks) =>
-      withTransaction(async (txCtx) =>
-        client.createChain({
-          ...txCtx,
-          transactionHooks,
-          typeName: "execute-auto",
-          input: { value: 10 },
-        }),
-      ),
+    const chain = await withTransaction(async (txCtx, transactionHooks) =>
+      client.createChain({
+        ...txCtx,
+        transactionHooks,
+        typeName: "execute-auto",
+        input: { value: 10 },
+      }),
     );
 
     await withWorkers([await worker.start()], async () => {
