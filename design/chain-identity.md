@@ -95,28 +95,3 @@ table remains available later if users ask; nothing here forecloses it.
 **Chain completion has to be on the root row.** It is derived today from the terminal job, but a
 partial index on the root needs it there — so the `running`-scope index requires denormalizing it.
 That is the one genuinely new invariant this design introduces.
-
-**Timing.** All of this is breaking (`major`). The current major line is unreleased, so landing it
-before release costs one changeset; landing it after costs another major.
-
-## Dependencies
-
-- **Supersedes** `reads-by-deduplication.md` — the by-identity
-  read is part of this design, with a global key and an optional `typeName` instead of a per-type key
-  and a required one. That work was implemented once and reverted.
-- **Closes** [#3](https://github.com/kvet/queuert/issues/3) — the unique indexes replace the
-  lock-based fixes that were explored for it.
-- **Unblocks** [list-chains-by-deduplication.md](list-chains-by-deduplication.md) — its open filter
-  questions were about fields this removes.
-- **Simplifies** [builtin-cleanup.md](builtin-cleanup.md) — `scheduleCleanup`'s read-compare-swap
-  loses the absent-row race; the unique index catches it.
-- **Includes** [drop-caller-supplied-id.md](drop-caller-supplied-id.md) — caller-supplied `id` is
-  kept as an assignment-only option but collisions become a hard `DuplicateJobIdError`, so the
-  `ON CONFLICT` rewrite no longer needs to worry about silently swallowing a raw `23505`.
-
-## Open question
-
-**Backfill of existing duplicates.** A live database may already hold two chains that violate either
-new index (that is [#3](https://github.com/kvet/queuert/issues/3) having fired), and
-`CREATE UNIQUE INDEX` will abort. Fail the migration with a diagnostic query, keep the newest and
-clear the losers' keys, or ship a pre-migration check. This is the main migration risk.

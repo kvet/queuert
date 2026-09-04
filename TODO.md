@@ -1,57 +1,51 @@
 # Triage
 
-- [REF] Leverage assert and expect from vitest import to minimize the number of lines in tests and perform assertions in a clean way
-- [REF] separate doc with "### Abort Signal and Reasons" section from docs/src/content/docs/advanced/job-processing.md
-- [REF] Clean up `completeJobSpan` — only span helper taking `(job, options)` instead of a flat `*InputData` object, and despite the name it ends nothing (the OTel impl starts a new span). Its `chainCompleted: boolean` silently creates the chain consumer span as a second responsibility. `JobAttemptSpanResult.chainCompleted` is typed `{ output }` but nothing reads the payload — collapse it to `boolean`.
-- [REF] job_attempt_completed log is emitted after notify adapter (any logging example)
+- [REF] Worker liveness. Move attempt ownership to worker. Have workers to be registered in the DB and have a heartbeat.
 
 # Short term
 
-- [REF] minimize listing queries surface — make `typeName` a required partition key on `listChains`/`listJobs` (single, index-leading), one sort per status, drop uncoverable filters (`chainTypeName`, `chainId[]`/`jobId[]` on `listJobs`, completed-slice secondary predicates), add loose-scan `listJobTypeNames`/`listChainTypeNames` with running-work counts, and route cross-type work (cleanup) through per-type fan-out. See `design/minimize-listing-surface.md`.
-- [TASK] Chain identity — `deduplication` is one name for three needs (idempotent enqueue, singleton/recurrence, correlation lookup), and the third one doesn't work at all. Replace it with `identity: { key, scope }`, persisting `scope` and making `key` globally unique so two partial unique indexes can enforce it — closing [#3](https://github.com/kvet/queuert/issues/3). Also brings by-identity reads, `deduplicated` → `created`, and a migration guard for pre-existing duplicates. See `design/chain-identity.md`.
-- [TASK] Built-in cleanup — `createCleanupJobTypes()`, policy-free `createCleanupProcessors()`, and `scheduleCleanup`/`unscheduleCleanup` (per-name recurring schedules, CAS upsert, `typeNames` scoping) from a `queuert/cleanup` subpath. Depends on chain identity above. See `design/builtin-cleanup.md`.
+- [REF] minimize listing queries surface. See `design/minimize-listing-surface.md`.
+- [EPIC] Chain identity. Closing [#3](https://github.com/kvet/queuert/issues/3). See `design/chain-identity.md`.
+  - [TASK] List chains by identity — `listChains` gains an `identity` filter to page through the full recurrence history of a key
+- [TASK] Built-in cleanup. See `design/builtin-cleanup.md`.
 - [TASK] Enforce json-serializable inputs and outputs (like no Date in job definitions) — see `design/json-serializable-types.md`
-- [EPIC] Worker liveness — move the attempt lease from the job row to a `worker` table. `attempt_until` asserts that the worker _process_ is alive, once per running job, on the largest table in the database: it is a non-HOT update every `heartbeatMs` per attempt, rewriting entries in the primary key and `job_idx` as well, and it is read by exactly one query (`reclaimExpiredJobAttempt`) while every attempt guard already keys on `attempt_by`. The reclaimer's `ignoredJobIds` parameter is the current code admitting the granularity is wrong. Replace with `worker (id, started_at, heartbeat_at, stopping_at)`, heartbeated once per process; reclaim becomes dead-worker-driven and batched; `job` drops `attempt_until`, so `job_running_idx` becomes `(type_name, attempt_at)` over a write-once column and the job row takes **no writes between claim and finish**. Also fixes two behavioral things: graceful shutdown releases attempts immediately instead of pinning them for a full timeout, and `timeoutMs` becomes a worker-local watchdog that aborts and explicitly releases — today it cannot stop a handler (promises are uncancellable), it only authorizes a duplicate execution. Open: tombstone vs delete on shutdown, who runs reclaim, whether `attempt_by` gets an FK. Breaking (`major`). See `design/worker-liveness.md`.
-- [EPIC,COMPLEX] Job model v3 — the chain becomes a row. Three tables (`chain`, `job`, `job_blocker`) instead of two: chain-level facts stop being inferred from job rows (`chain_index = 0` head, `continued_to_id IS NULL` tail), the 1B-row job table sheds four chain-shaped indexes and ~80 B/row of denormalized chain facts, and identity uniqueness becomes two partial unique indexes with neither of chain identity's compensating predicate terms. `StateAdapter` gains `StateChain` / `StateJobBlocker` and returns `[chain, head, tail?]` / `[job, chain]` composites; no client method changes signature. Also the natural home for the one-tail-per-chain invariant: the tail becomes a column on the chain row, so uniqueness is structural instead of a third `chain_id` partial index on the 1B-row job table (see the continuation write-ordering bug above). Unpartitioned by design — partitioning stays a separate deferred adapter. **Requires** the listing-surface minimization (its chain index set is entirely `type_name`-led; without required `typeName` the index accounting stops being a relocation). Must be benchmarked against `processing-capacity` before merging — acquisition gains a chain join. Breaking (`major`), and the hardest migration in the list. See `design/job-model-v3.md`.
+- [TASK] Consolidate attempt abort events — we have lots silly API to maintain `JobAbortReason` into `HardJobAbortReason` (error-level: `taken_by_another_worker`, `not_found`, `already_completed`, `error`) and `SoftJobAbortReason` (`worker_stopping`).
 
 # Medium term
 
-- [EPIC] State-snapshot OTel gauges — opt-in `@queuert/otel-state` package emitting `running_jobs/chains{type,status}`, `oldest_ready_job/chain_age_seconds{type}`, `stuck_jobs/chains{type}` from a periodic metrics chain (cleanup-style). Adds one metrics-specific partial index (`job_stuck_idx`) and a `getMetricsSnapshot` adapter method. Open questions: single-runner snapshot distribution (DB-stored vs per-process), the stuck-job signal (job-model no longer carries `attempts_since_user_reschedule` — define stuck off attempt/age instead), default stuck threshold. See `design/state-snapshot-metrics.md`.
-- [EPIC] Unbounded blockers — scale blocker resolution to 1m+ blocked jobs (fan-out) and 1m+ blocker chains per job (fan-in). Shared schema primitive: `job_blocker.blocked` boolean (denormalized chain completion status, replaces the join-per-blocker-row unblock query with `NOT EXISTS` on a partial index). Shared runtime primitive: library-owned system chains (`__queuert/...` namespace, user-mounted via `createBatchedUnblockJobTypes()` + `createBatchedUnblockProcessors()`). **Fan-out**: `unblockJobs` gains `limit` + `hasMore`; when more remain, `finishJob` schedules a system chain that drains in 100-job batches, each in its own transaction. **Fan-in**: opt-in `unsealedBlockers: true` flag; job created without blockers, attached incrementally via `client.addJobBlockers`, finalized with `client.sealJobBlockers`; handler gets `getBlockers()` (sealed, bounded) or `listBlockers()` (unsealed, paginated async iterator). Supersedes the "uncap job blockers" sketches in Triage / Long term. See `design/unbounded-blockers.md`.
+- [EPIC] State-snapshot OTel gauges
+- [EPIC] Unbounded blockers. See `design/unbounded-blockers.md`.
 - [EPIC] how to cleanup chains with 1k+ jobs in a single transaction (SQLite WAL, PG lock footprint)? introduce truncateChainJobs?
-- [EPIC,COMPLEX] Batched processors — opt-in `batchLimit` on a processor; opportunistic batching (process up to N when available, never wait to accumulate). Array-shaped `attemptHandler({ jobs, prepare, finalize })`, one prepare/finalize per batch, group attempt/complete/release. Replaces the singular state-adapter methods with array-only counterparts. **Requires** the attempt outcome descriptors rework, which resolves what was this epic's hardest open question — a batch is `settle(descriptor[])`, a single job is `settle(descriptor)`, same vocabulary. Remaining open questions: group reclamation, batch return typing, OTel mapping. See `design/batched-processors.md`
-- [EPIC] Built-in job priority — add `priority INTEGER NOT NULL DEFAULT 0` to the job schema + replace acquisition index with expression index `(type_name, (priority - attempt) DESC, scheduled_at ASC) WHERE blocked = false AND attempt_until IS NULL AND completed_at IS NULL` . Linear demotion via `priority - attempt` in v1; wall-clock aging deferred to v2. Design decisions settled in `design/job-priority.md`: numeric (not named tiers), dedup keeps existing-priority, `continueWith` inherits parent's priority, `getStartAttemptDelayMs` stays priority-blind.
-- [TASK] List chains by identity — `listChains` gains an `identity` filter to page through the full recurrence history of a key (every occurrence, not just the one a write would collapse onto). Chain identity resolves all four of the original composition questions; the one remaining is index coverage, since the `running`-scope unique index excludes exactly the completed rows this listing is for. Read-only (no `lock`). See `design/list-chains-by-deduplication.md`.
-- [REF] expand the Chain type to have head and tail jobs for easy rescheduleJob knowing the chain id
-- [REF] imperical completeChain that is leverages lock: true and rescheduleJob, new completeJob (maybe even some)
-- [TASK,COMPLEX] rework seed data (v1 and v2 mess)
-- [TASK] Consolidate attempt abort events — split `JobAbortReason` into `HardJobAbortReason` (error-level: `taken_by_another_worker`, `not_found`, `already_completed`, `error`) and `SoftJobAbortReason` (`worker_stopping`). Replace the four separate observability events/counters with a single `job_attempt_aborted` event + `reason` discriminator. Narrow the attempt handler signal to `SoftJobAbortReason`. Keep `job_attempt_expired` (warning) and `job_attempt_reclaimed` (housekeeping) as separate events. See `design/attempt-abort-events.md`.
-- [TASK] Unify workerless and worker tracing — workerless completion (`completeChain`) should create an attempt span like the worker path, eliminating the asymmetric `completeJobSpan` adapter method. See `design/otel-tracing-unification.md`
-- [EPIC] Align `@queuert/otel` with OpenTelemetry messaging semantic conventions — emit `messaging.system = "queuert"` on every metric/span, restructure span names to `{operation} {destination}` form (`create`/`process`/`settle` from the spec registry) with `messaging.destination.name` carrying the chain/job type, fix SpanKind on settle-style spans (`complete`/`complete` should be `CLIENT` or `INTERNAL`, not `CONSUMER`), add `error.type` on failure counters (except `workerError`, which stays low-cardinality per accepted design), declare `unit` (`{job}`, `{worker}`, `{error}`, `{attempt}`) on counters/UpDownCounters, and either emit the standard `messaging.client.sent.messages` / `messaging.client.consumed.messages` / `messaging.process.duration` alongside the `queuert.*` ones or document the deliberate divergence. Update `docs/src/content/docs/advanced/otel-metrics.md` to stop claiming the attributes "follow OpenTelemetry semantic conventions" until they actually do, and consider attaching `messaging.message.id = jobId` on process spans for producer→consumer trace correlation.
-- [EPIC,COMPLEX] SQLite production-readiness — concurrency model (WAL, busy_timeout, drop the `createAsyncRwLock` prescription), write promotion via a sentinel table, batched `createJobs`/`addJobsBlockers`, rewrite examples to production patterns + add multi-worker example, validate `PRAGMA foreign_keys` at init, drop `skipConcurrencyTests`. See `design/sqlite-ready.md`
-  - [REF] Promote transactions via a dedicated sentinel table — `lock: "exclusive"` currently promotes a deferred transaction with per-query no-op `UPDATE ... SET id = id` statements targeting the rows being read, which is pure ceremony (SQLite's write lock is database-wide, so a zero-row `UPDATE` promotes identically) and forces every lockable read to carry a duplicated `*Locked` statement variant whose only difference is the promotion write — a cost that grows with each new lookup form (chain identity adds one). Replace with one cached, parameterless write to a `{{table_prefix}}serializator` table (the SQLite analogue of `queuert_migration_lock` on PG), deleting the four `*Locked` statement variants. `BEGIN IMMEDIATE` in `withTransaction` would be simpler but can't be mandated — `SqliteStateProvider` is a public extension point and ORM-native `db.transaction()` issues plain `BEGIN`. Open: eager promotion (sound, but every tx becomes a writer) vs lazy (preserves read-only txs, but a `lock: "exclusive"` read after an unlocked read can fail `SQLITE_BUSY_SNAPSHOT`, which `busy_timeout` does not cover). Gates the rwlock removal above. See `design/sqlite-write-promotion.md`.
-- [REF] Handle routing with seroval on dashboard instead of path-based routing (e.g. `/chains/${chainId}` → `/chain?chainId=${chainId}`) — simplifies dashboard API and allows more flexible UI patterns (modals, nested views)
+- [EPIC,COMPLEX] Batched processors. See `design/batched-processors.md`
+- [TASK] Unify workerless and worker tracing — workerless completion (`completeChain`) should create an attempt span like the worker path, eliminating the asymmetric `completeJobSpan` adapter method
+- [EPIC] Align `@queuert/otel` with OpenTelemetry messaging semantic conventions
+- [EPIC] SQLite production-readiness
+  - [TASK] Get rid of `createAsyncRwLock()`
+  - [TASK] No multi-worker example
+  - [TASK] `PRAGMA foreign_keys = ON` is required for the `job_blocker.blocked_by_chain_id` FK but not validated at adapter init by default
+  - [TASK] Promote transactions via a dedicated sentinel table (like migration lock in PG) to prevent WAL contention
 - [TASK,COMPLEX] Better dashboard UI
 - [EPIC] Docs website enhancements
   - [TASK] Add interactive examples / live demos
   - [TASK] Custom branding and styling
   - [?,REF] Sexy website
 - [EPIC] MySQL/MariaDB adapter
-
-# Long term
-
-- [IDEA] Change complete job chain to something more empirical?
-- [IDEA] Reset jobs in chains + dashboard
-- [IDEA] Expose dashboard API as a public, documented surface — currently internal with no stability guarantees
-- [IDEA] Allow custom middleware configuration (change timeouts guide and example to use middleware)
-- [EPIC,BLOCKED] test against bun and its built-in postgres, redis clients — blocked by https://github.com/oven-sh/bun/issues/21342 (testcontainers hangs under Bun, preventing on-demand container provisioning in examples and conformance specs)
+- [EPIC] Test against bun and its built-in postgres, redis clients
   - [TASK] postgres-state example
   - [TASK] postgres-notify example
   - [TASK] redis-notify example
-- [IDEA] Job variants — a tuple of variants under a single job type name, each declaring its own correlated `input` / `output` / `continueWith` / `blockers` / `entry`. The handler is one function whose `job` is a discriminated union over the variants, so narrowing `job.input` narrows `job.blockers`, the legal `continueWith` targets, and the expected output together. No `discriminator:` field, no tuple of handlers, no positional alignment — the runtime just delivers a job whose persisted shape matches exactly one variant and the user's `if`/`switch` narrows the rest. Lets a single workflow branch on runtime state without splitting into multiple job types.
+
+# Long term
+
+- [IDEA] Built-in job priority
+- [IDEA] expand the Chain type to have head and tail jobs for easy rescheduleJob knowing the chain id
+- [IDEA] Change complete job chain to something more empirical? (leverages `lock: true` and rescheduleJob, new completeJob (maybe even some))
+- [IDEA] Reset jobs in chains + dashboard
+- [IDEA] Split dashboard into API and UI packages (to use the API in other contexts, e.g. CLI)
+- [IDEA] CLI tool
 - [IDEA] MCP server
 - [IDEA] Add OpenTelemetry logs support to @queuert/otel adapter (OTEL logs API is experimental)
 - [IDEA] Hard timeout (worker threads) - True isolation with `terminate()`; enables memory limits and untrusted code sandboxing
 - [IDEA] Singletons/concurrency limit
-- [IDEA] Partitioned PG adapter (`@queuert/postgres-partitioned`) — separate adapter that range-partitions `job` on `chain_id` (UUIDv7 → effectively by chain birthday) for retention via `DROP PARTITION`. Defer until a user hits limits with the standard PG adapter. See `design/partitioned-pg-adapter.md`.
+- [IDEA] Partitioned PG adapter
 - [IDEA] Browser runtime support - SQLite WASM (OPFS) state adapter, Web Workers as job processors, BroadcastChannel notify adapter
