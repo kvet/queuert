@@ -1,7 +1,7 @@
 import { A, useSearchParams } from "@solidjs/router";
-import { For, Show, createMemo, createResource, createSignal } from "solid-js";
+import { For, Show, createEffect, createMemo, createResource, createSignal } from "solid-js";
 
-import { PAGE_SIZE, type UnknownJob, listJobs } from "../api.js";
+import { PAGE_SIZE, type UnknownJob, getJobsByIds, listJobTypeNames, listJobs } from "../api.js";
 import { createAutoLoadMore } from "./createAutoLoadMore.js";
 import { JobStatusBadge } from "./StatusBadge.js";
 import { TimeAgo } from "./TimeAgo.js";
@@ -11,10 +11,14 @@ export function JobList() {
 
   const status = () => (searchParams.status ?? "") as string;
   const typeName = () => (searchParams.typeName ?? "") as string;
-  const id = () => (searchParams.id ?? "") as string;
+  const ids = () => (searchParams.ids ?? "") as string;
 
   const orderBy = () => (searchParams.orderBy ?? "") as string;
   const orderDirection = () => (searchParams.orderDirection ?? "desc") as string;
+
+  const idMode = () => ids().length > 0;
+
+  const [typeNames] = createResource(listJobTypeNames);
 
   const effectiveStatus = createMemo(() => {
     const s = status();
@@ -64,17 +68,45 @@ export function JobList() {
   let loadMoreController: AbortController | null = null;
 
   const [page] = createResource(
-    () => ({
-      status: status(),
-      typeName: typeName(),
-      id: id(),
-      orderBy: orderBy() || undefined,
-      orderDirection: orderDirection() || undefined,
-    }),
+    () => {
+      const idsVal = ids();
+      if (idsVal) return { mode: "ids" as const, ids: idsVal };
+      const tn = typeName();
+      if (!tn) {
+        setItems([]);
+        setCursor(null);
+        return null;
+      }
+      return {
+        mode: "list" as const,
+        typeName: tn,
+        status: status(),
+        orderBy: orderBy() || undefined,
+        orderDirection: orderDirection() || undefined,
+      };
+    },
     async (params) => {
       loadMoreController?.abort();
       loadMoreController = null;
-      const result = await listJobs({ ...params, limit: PAGE_SIZE });
+
+      if (params.mode === "ids") {
+        const idList = params.ids
+          .split(",")
+          .map((s) => s.trim())
+          .filter(Boolean);
+        const result = await getJobsByIds(idList);
+        setItems(result.items);
+        setCursor(null);
+        return result;
+      }
+
+      const result = await listJobs({
+        typeName: params.typeName,
+        status: params.status,
+        orderBy: params.orderBy,
+        orderDirection: params.orderDirection,
+        limit: PAGE_SIZE,
+      });
       setItems(result.items);
       setCursor(result.nextCursor);
       return result;
@@ -83,15 +115,15 @@ export function JobList() {
 
   const loadMore = async () => {
     const c = cursor();
-    if (!c) return;
+    const tn = typeName();
+    if (!c || !tn) return;
     const controller = new AbortController();
     loadMoreController = controller;
     let result: Awaited<ReturnType<typeof listJobs>>;
     try {
       result = await listJobs({
+        typeName: tn,
         status: status(),
-        typeName: typeName(),
-        id: id(),
         orderBy: orderBy() || undefined,
         orderDirection: orderDirection() || undefined,
         cursor: c,
@@ -120,22 +152,30 @@ export function JobList() {
       <div class="filter-bar">
         <input
           type="text"
-          placeholder="Job ID"
-          value={id()}
+          placeholder="Job IDs (comma-separated)"
+          value={ids()}
           onChange={(e) => {
-            setSearchParams({ id: e.target.value.trim() || undefined });
-          }}
-        />
-        <input
-          type="text"
-          placeholder="Type name"
-          value={typeName()}
-          onChange={(e) => {
-            setSearchParams({ typeName: e.target.value.trim() || undefined });
+            setSearchParams({ ids: e.target.value.trim() || undefined });
           }}
         />
         <select
+          ref={(el) => {
+            createEffect(() => {
+              typeNames();
+              el.value = typeName();
+            });
+          }}
+          disabled={idMode()}
+          onChange={(e) => {
+            setSearchParams({ typeName: e.target.value || undefined });
+          }}
+        >
+          <option value="">Select type…</option>
+          <For each={typeNames()}>{(name) => <option value={name}>{name}</option>}</For>
+        </select>
+        <select
           value={status()}
+          disabled={idMode()}
           onChange={(e) => {
             setSearchParams({ status: e.target.value || undefined, orderBy: undefined });
           }}
@@ -151,6 +191,7 @@ export function JobList() {
         </select>
         <select
           value={orderBy() || orderByOptions()[0].value}
+          disabled={idMode()}
           onChange={(e) => {
             setSearchParams({ orderBy: e.target.value || undefined });
           }}
@@ -161,6 +202,7 @@ export function JobList() {
         </select>
         <button
           class="order-direction-btn"
+          disabled={idMode()}
           title={orderDirection() === "asc" ? "Ascending" : "Descending"}
           onClick={() => {
             setSearchParams({ orderDirection: orderDirection() === "asc" ? "desc" : "asc" });
@@ -170,7 +212,11 @@ export function JobList() {
         </button>
       </div>
 
-      <Show when={!page.loading && items().length === 0}>
+      <Show when={!idMode() && !typeName()}>
+        <div class="empty">Select a type to list jobs</div>
+      </Show>
+
+      <Show when={(idMode() || typeName()) && !page.loading && items().length === 0}>
         <div class="empty">No jobs found</div>
       </Show>
 
@@ -185,7 +231,7 @@ export function JobList() {
                   class="filter-btn"
                   title={`Filter by ${job.typeName}`}
                   onClick={() => {
-                    setSearchParams({ typeName: job.typeName });
+                    setSearchParams({ typeName: job.typeName, ids: undefined });
                   }}
                 />
               </span>
@@ -195,7 +241,7 @@ export function JobList() {
                   class="filter-btn"
                   title={`Filter by ${job.id}`}
                   onClick={() => {
-                    setSearchParams({ id: job.id });
+                    setSearchParams({ ids: job.id });
                   }}
                 />
               </span>

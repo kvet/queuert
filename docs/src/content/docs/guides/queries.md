@@ -13,25 +13,36 @@ const chain = await client.getChain({ id: chainId });
 const job = await client.getJob({ id: jobId });
 
 // Batch lookups — positional array, undefined for missing IDs
-const batch = await client.getChains({ ids: [id1, id2, id3] });
-const batchJobs = await client.getJobs({ ids: [id1, id2] });
+const chains = await client.getChains({ ids: [id1, id2, id3] });
+const jobs = await client.getJobs({ ids: [id1, id2] });
+
+// Discover which types exist in the data
+const chainTypes = await client.listChainTypeNames();
+const jobTypes = await client.listJobTypeNames();
+
+// Per-status counts for specific types
+const chainCounts = await client.countByChainTypeNames({
+  typeNames: ["send-email"],
+});
+const jobCounts = await client.countByJobTypeNames({
+  typeNames: ["send-email"],
+});
 
 // Paginated lists with filters
-const chains = await client.listChains({
-  typeName: ["send-email"],
+const sendEmailChains = await client.listChains({
+  typeName: "send-email",
   status: "running",
   limit: 20,
 });
-
-const jobs = await client.listJobs({
-  chainId: [chainId],
-  status: "completed",
+const nextPage = await client.listChains({
+  typeName: "send-email",
+  cursor: sendEmailChains.nextCursor,
+  limit: 20,
 });
 
-// Cursor-based pagination
-const nextPage = await client.listChains({
-  typeName: ["send-email"],
-  cursor: chains.nextCursor,
+const completedJobs = await client.listJobs({
+  typeName: "send-email",
+  status: "completed",
 });
 
 // Jobs within a specific chain, in chain order

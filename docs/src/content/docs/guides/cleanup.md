@@ -33,39 +33,55 @@ const cleanupProcessorRegistry = createProcessors({
   jobTypes: cleanupJobTypes,
   processors: {
     "queuert.cleanup": {
-      attemptHandler: async ({ job, step, complete }) => {
+      attemptHandler: async ({ job, signal, step, complete }) => {
         const cutoffDate = new Date(Date.now() - CLEANUP_RETENTION_MS);
         let deletedChainCount = 0;
-        let cursor: string | undefined;
+
+        const typeNames = await client.listChainTypeNames();
+        let roundDeletedCount: number;
 
         do {
-          const page = await client.listChains({
-            status: "completed",
-            orderBy: "completedAt",
-            independent: true,
-            to: cutoffDate,
-            orderDirection: "asc",
-            limit: CLEANUP_BATCH_SIZE,
-            ...(cursor != null ? { cursor } : {}),
-          });
+          roundDeletedCount = 0;
 
-          const chainsToDelete = page.items.filter(
-            (chain) => chain.id !== job.chainId && chain.status === "completed",
-          );
+          for (const typeName of typeNames) {
+            let cursor: string | undefined;
 
-          if (chainsToDelete.length > 0) {
-            const deleted = await step(async ({ transactionHooks, ...txCtx }) =>
-              client.deleteChains({
-                ...txCtx,
-                transactionHooks,
-                ids: chainsToDelete.map((chain) => chain.id),
-              }),
-            );
-            deletedChainCount += deleted.length;
+            do {
+              if (signal.aborted) {
+                return complete(async ({ finish }) => finish({ reschedule: { afterMs: 0 } }));
+              }
+
+              const page = await client.listChains({
+                typeName,
+                status: "completed",
+                orderBy: "completedAt",
+                independent: true,
+                to: cutoffDate,
+                orderDirection: "asc",
+                limit: CLEANUP_BATCH_SIZE,
+                ...(cursor != null ? { cursor } : {}),
+              });
+
+              const chainsToDelete = page.items.filter(
+                (chain) => chain.id !== job.chainId && chain.status === "completed",
+              );
+
+              if (chainsToDelete.length > 0) {
+                const deleted = await step(async ({ transactionHooks, ...txCtx }) =>
+                  client.deleteChains({
+                    ...txCtx,
+                    transactionHooks,
+                    ids: chainsToDelete.map((chain) => chain.id),
+                  }),
+                );
+                deletedChainCount += deleted.length;
+                roundDeletedCount += deleted.length;
+              }
+
+              cursor = page.nextCursor ?? undefined;
+            } while (cursor);
           }
-
-          cursor = page.nextCursor ?? undefined;
-        } while (cursor);
+        } while (!signal.aborted && roundDeletedCount > 0);
 
         await stateAdapter.vacuum();
 
@@ -95,9 +111,12 @@ const cleanupProcessorRegistry = createProcessors({
 Key patterns used:
 
 - **Retention cutoff** — `CLEANUP_RETENTION_MS` controls how long completed chains are kept before deletion
+- **Per-type iteration** — iterates over all chain type names so each type's completed chains are cleaned up independently
 - **Status-filtered listing** — `status: "completed"` with `orderBy: "completedAt"` pushes filtering to the database and orders by completion time, so the oldest-completed chains are deleted first
 - **Cursor pagination** — processes chains in bounded batches using `listChains` cursor, preventing unbounded memory usage
+- **Stabilization loop** — repeats the full pass until a round deletes zero chains, so chains that become independent after their dependents are removed get cleaned up in subsequent rounds
 - **`step` batching** — each batch of deletions runs in its own guarded transaction via `step`, so the handler never holds a single long-lived transaction. The attempt is verified on each `step` call, ensuring the worker still owns the job
+- **Graceful shutdown** — checks `signal.aborted` before each batch; when the worker is stopping, reschedules the job immediately so a fresh worker can resume cleanup
 - **Vacuum** — reclaims disk space after all deletions complete
 - **`deduplication`** with `scope: "running"` — ensures only one cleanup chain is active at a time
 - **Complete before scheduling** — `finish({ output: null })` applies the completion inside the complete transaction, so the next run is created against an already-completed chain and does not deduplicate against the one finishing

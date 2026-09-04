@@ -58,17 +58,15 @@ const matchesJobStatus = (
   return true;
 };
 
-const matchesDateRange = (createdAt: Date, from?: Date, to?: Date): boolean => {
-  if (from && createdAt < from) return false;
-  if (to && createdAt > to) return false;
+const matchesDateRange = (value: Date | null | undefined, from?: Date, to?: Date): boolean => {
+  if (!from && !to) return true;
+  if (!value) return false;
+  if (from && value < from) return false;
+  if (to && value > to) return false;
   return true;
 };
 
-const matchesTypeNameFilter = (job: DbJob, typeNames?: string[]): boolean =>
-  !typeNames || typeNames.length === 0 || typeNames.includes(job.typeName);
-
-const matchesChainTypeNameFilter = (job: DbJob, chainTypeNames?: string[]): boolean =>
-  !chainTypeNames || chainTypeNames.length === 0 || chainTypeNames.includes(job.chainTypeName);
+const matchesTypeNameFilter = (job: DbJob, typeName: string): boolean => job.typeName === typeName;
 
 // ── Pagination helpers ──────────────────────────────────────────────
 
@@ -1091,11 +1089,86 @@ export const createInProcessStateAdapter = async ({
         return { deleted, blockerRefs: [] };
       }),
 
+    listChainTypeNames: async ({ txCtx }) =>
+      withReadLock(txCtx, () => {
+        const names = new Set<string>();
+        for (const job of idx.headJobsByCreatedAt.iterate("asc")) {
+          names.add(job.chainTypeName);
+        }
+        return Array.from(names);
+      }),
+
+    listJobTypeNames: async ({ txCtx }) =>
+      withReadLock(txCtx, () => {
+        const names = new Set<string>();
+        for (const job of idx.jobs.values()) {
+          names.add(job.typeName);
+        }
+        return Array.from(names);
+      }),
+
+    countByChainTypeNames: async ({ txCtx, typeNames }) =>
+      withReadLock(txCtx, () => {
+        const CAP = 10_000;
+        const counts = new Map<string, { running: number; completed: number }>();
+        for (const name of typeNames) {
+          counts.set(name, { running: 0, completed: 0 });
+        }
+
+        for (const headJob of idx.headJobsByCreatedAt.iterate("asc")) {
+          const c = counts.get(headJob.chainTypeName);
+          if (!c) continue;
+          const tailJob = idx.getLastJob(headJob.id);
+          if (isChainCompleted(tailJob ?? headJob)) {
+            if (c.completed <= CAP) c.completed++;
+          } else {
+            if (c.running <= CAP) c.running++;
+          }
+        }
+
+        return typeNames.map((name) => {
+          const c = counts.get(name)!;
+          return {
+            running: { count: Math.min(c.running, CAP), hasMore: c.running > CAP },
+            completed: { count: Math.min(c.completed, CAP), hasMore: c.completed > CAP },
+          };
+        });
+      }),
+
+    countByJobTypeNames: async ({ txCtx, typeNames }) =>
+      withReadLock(txCtx, () => {
+        const CAP = 10_000;
+        const counts = new Map<string, { pending: number; running: number; completed: number }>();
+        for (const name of typeNames) {
+          counts.set(name, { pending: 0, running: 0, completed: 0 });
+        }
+
+        for (const job of idx.jobs.values()) {
+          const c = counts.get(job.typeName);
+          if (!c) continue;
+          if (isCompleted(job)) {
+            if (c.completed <= CAP) c.completed++;
+          } else if (isRunning(job)) {
+            if (c.running <= CAP) c.running++;
+          } else {
+            if (c.pending <= CAP) c.pending++;
+          }
+        }
+
+        return typeNames.map((name) => {
+          const c = counts.get(name)!;
+          return {
+            pending: { count: Math.min(c.pending, CAP), hasMore: c.pending > CAP },
+            running: { count: Math.min(c.running, CAP), hasMore: c.running > CAP },
+            completed: { count: Math.min(c.completed, CAP), hasMore: c.completed > CAP },
+          };
+        });
+      }),
+
     listChains: async ({
       txCtx,
       typeName,
       independent,
-      chainId,
       from,
       to,
       status,
@@ -1104,14 +1177,12 @@ export const createInProcessStateAdapter = async ({
       page,
     }) =>
       withReadLock(txCtx, () => {
-        const idMatchChainIds = chainId ? new Set<string>(chainId) : undefined;
         const blockerChainIds =
           independent !== undefined ? new Set<string>(idx.blockedByChain.keys()) : undefined;
 
         const chains: [DbJob, DbJob | undefined][] = [];
         for (const job of idx.headJobsByCreatedAt.iterate("asc")) {
           const tailJob = idx.getLastJob(job.id);
-          if (idMatchChainIds && !idMatchChainIds.has(job.chainId)) continue;
           if (blockerChainIds) {
             const isBlocker = blockerChainIds.has(job.chainId);
             if (independent === true && isBlocker) continue;
@@ -1119,8 +1190,12 @@ export const createInProcessStateAdapter = async ({
           }
           if (!matchesTypeNameFilter(job, typeName)) continue;
           if (!matchesChainStatus(job, tailJob, status)) continue;
-          if (!matchesDateRange(job.createdAt, from, to)) continue;
-          chains.push([job, tailJob && tailJob.id !== job.id ? tailJob : undefined]);
+          const pair: [DbJob, DbJob | undefined] = [
+            job,
+            tailJob && tailJob.id !== job.id ? tailJob : undefined,
+          ];
+          if (!matchesDateRange(chainTimestampGetters[orderBy](pair), from, to)) continue;
+          chains.push(pair);
         }
 
         return paginateByTimestamp(
@@ -1134,20 +1209,16 @@ export const createInProcessStateAdapter = async ({
 
     listJobs: async (params) =>
       withReadLock(params.txCtx, () => {
-        const { typeName, chainTypeName, chainId, jobId, from, to, orderBy, orderDirection, page } =
-          params;
+        const { typeName, from, to, orderBy, orderDirection, page } = params;
         const status = params.status;
         const blocked = status === "pending" ? params.blocked : undefined;
         const continued = status === "completed" ? params.continued : undefined;
 
         const matched: DbJob[] = [];
         for (const job of idx.jobs.values()) {
-          if (jobId && !jobId.includes(job.id)) continue;
           if (!matchesJobStatus(job, status, blocked, continued)) continue;
           if (!matchesTypeNameFilter(job, typeName)) continue;
-          if (!matchesChainTypeNameFilter(job, chainTypeName)) continue;
-          if (chainId && !chainId.includes(job.chainId)) continue;
-          if (!matchesDateRange(job.createdAt, from, to)) continue;
+          if (!matchesDateRange(jobTimestampGetters[orderBy](job), from, to)) continue;
           matched.push(job);
         }
 

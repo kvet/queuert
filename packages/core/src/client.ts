@@ -194,7 +194,7 @@ type CreateChainsResult<
  *
  * Methods are split into two categories:
  * - **Mutating** — `createChain`, `createChains`, `completeChain`, `deleteChain`, `deleteChains`, `rescheduleJob`, `rescheduleJobs`. Require `transactionHooks` and a transaction context.
- * - **Read-only** — `getChain`, `getJob`, `listChains`, `listJobs`, `listChainJobs`, `getJobBlockers`, `listBlockedJobs`, `awaitChain`. Accept an optional transaction context.
+ * - **Read-only** — `getChain`, `getJob`, `listChainTypeNames`, `listJobTypeNames`, `countByChainTypeNames`, `countByJobTypeNames`, `listChains`, `listJobs`, `listChainJobs`, `getJobBlockers`, `listBlockedJobs`, `awaitChain`. Accept an optional transaction context.
  */
 export type Client<
   TJobTypeDefinitions extends BaseJobTypeDefinitions,
@@ -448,17 +448,63 @@ export type Client<
   ) => Promise<(ResolvedJob<TJobId, TJobTypeDefinitions, TJobTypeName> | undefined)[]>;
 
   /**
-   * List chains with filtering and cursor-based pagination. Defaults to newest first.
-   *
-   * @remarks
-   * Filtering by `status` alone is not optimized — it applies to the last job in the chain
-   * and cannot use an index. Always combine with `typeName` or a date range (`from`/`to`).
+   * Returns distinct chain type names present in the data, sorted alphabetically.
    */
-  listChains: <TChainTypeName extends JobTypeEntryNames<TJobTypeDefinitions>>(
+  listChainTypeNames: <
+    TChainTypeName extends JobTypeEntryNames<TJobTypeDefinitions> =
+      JobTypeEntryNames<TJobTypeDefinitions>,
+  >(
+    options?: Partial<GetStateAdapterTxContext<TStateAdapter>>,
+  ) => Promise<TChainTypeName[]>;
+
+  /**
+   * Returns distinct job type names present in the data, sorted alphabetically.
+   */
+  listJobTypeNames: <
+    TJobTypeName extends JobTypeNames<TJobTypeDefinitions> = JobTypeNames<TJobTypeDefinitions>,
+  >(
+    options?: Partial<GetStateAdapterTxContext<TStateAdapter>>,
+  ) => Promise<TJobTypeName[]>;
+
+  /**
+   * Returns capped per-status counts for the given chain type names, in input order.
+   */
+  countByChainTypeNames: (
     options: {
-      typeName?: TChainTypeName[];
+      typeNames: JobTypeEntryNames<TJobTypeDefinitions>[];
+    } & Partial<GetStateAdapterTxContext<TStateAdapter>>,
+  ) => Promise<
+    {
+      running: { count: number; hasMore: boolean };
+      completed: { count: number; hasMore: boolean };
+    }[]
+  >;
+
+  /**
+   * Returns capped per-status counts for the given job type names, in input order.
+   */
+  countByJobTypeNames: (
+    options: {
+      typeNames: JobTypeNames<TJobTypeDefinitions>[];
+    } & Partial<GetStateAdapterTxContext<TStateAdapter>>,
+  ) => Promise<
+    {
+      pending: { count: number; hasMore: boolean };
+      running: { count: number; hasMore: boolean };
+      completed: { count: number; hasMore: boolean };
+    }[]
+  >;
+
+  /**
+   * List chains with filtering and cursor-based pagination. Defaults to newest first.
+   */
+  listChains: <
+    TChainTypeName extends JobTypeEntryNames<TJobTypeDefinitions> =
+      JobTypeEntryNames<TJobTypeDefinitions>,
+  >(
+    options: {
+      typeName: TChainTypeName;
       independent?: boolean;
-      chainId?: TJobId[];
       from?: Date;
       to?: Date;
       orderDirection?: OrderDirection;
@@ -473,16 +519,13 @@ export type Client<
   ) => Promise<Page<ResolvedChain<TJobId, TJobTypeDefinitions, TChainTypeName>>>;
 
   /**
-   * List jobs with filtering and cursor-based pagination. Defaults to newest
-   * first. Blockers are not populated — use
-   * {@link Client.getJobBlockers | getJobBlockers} for a specific job.
+   * List jobs with filtering and cursor-based pagination. Defaults to newest first.
    */
-  listJobs: <TJobTypeName extends JobTypeNames<TJobTypeDefinitions>>(
+  listJobs: <
+    TJobTypeName extends JobTypeNames<TJobTypeDefinitions> = JobTypeNames<TJobTypeDefinitions>,
+  >(
     options: {
-      typeName?: TJobTypeName[];
-      chainTypeName?: JobTypeEntryNames<TJobTypeDefinitions>[];
-      chainId?: TJobId[];
-      jobId?: TJobId[];
+      typeName: TJobTypeName;
       from?: Date;
       to?: Date;
       orderDirection?: OrderDirection;
@@ -1194,11 +1237,44 @@ export const createClient = async <
       });
     },
 
-    listChains: async <TChainTypeName extends JobTypeEntryNames<TJobTypeDefinitions>>(
+    listChainTypeNames: async <
+      TChainTypeName extends JobTypeEntryNames<TJobTypeDefinitions> =
+        JobTypeEntryNames<TJobTypeDefinitions>,
+    >(
+      options?: Partial<GetStateAdapterTxContext<TStateAdapter>>,
+    ): Promise<TChainTypeName[]> => {
+      const txCtx = options ? normalizeTxCtx(options as Record<string, unknown>) : undefined;
+      const names = await helpers.stateAdapter.listChainTypeNames({ txCtx });
+      return names.sort() as TChainTypeName[];
+    },
+
+    listJobTypeNames: async <
+      TJobTypeName extends JobTypeNames<TJobTypeDefinitions> = JobTypeNames<TJobTypeDefinitions>,
+    >(
+      options?: Partial<GetStateAdapterTxContext<TStateAdapter>>,
+    ): Promise<TJobTypeName[]> => {
+      const txCtx = options ? normalizeTxCtx(options as Record<string, unknown>) : undefined;
+      const names = await helpers.stateAdapter.listJobTypeNames({ txCtx });
+      return names.sort() as TJobTypeName[];
+    },
+
+    countByJobTypeNames: async ({ typeNames, ...rest }) => {
+      const txCtx = normalizeTxCtx(rest as Record<string, unknown>);
+      return helpers.stateAdapter.countByJobTypeNames({ txCtx, typeNames });
+    },
+
+    countByChainTypeNames: async ({ typeNames, ...rest }) => {
+      const txCtx = normalizeTxCtx(rest as Record<string, unknown>);
+      return helpers.stateAdapter.countByChainTypeNames({ txCtx, typeNames });
+    },
+
+    listChains: async <
+      TChainTypeName extends JobTypeEntryNames<TJobTypeDefinitions> =
+        JobTypeEntryNames<TJobTypeDefinitions>,
+    >(
       options: {
-        typeName?: TChainTypeName[];
+        typeName: TChainTypeName;
         independent?: boolean;
-        chainId?: TJobId[];
         from?: Date;
         to?: Date;
         orderDirection?: OrderDirection;
@@ -1214,7 +1290,6 @@ export const createClient = async <
       const {
         typeName,
         independent,
-        chainId,
         from,
         to,
         status,
@@ -1230,7 +1305,6 @@ export const createClient = async <
         txCtx,
         typeName,
         independent,
-        chainId,
         from,
         to,
         status,
@@ -1247,12 +1321,11 @@ export const createClient = async <
       };
     },
 
-    listJobs: async <TJobTypeName extends JobTypeNames<TJobTypeDefinitions>>(
+    listJobs: async <
+      TJobTypeName extends JobTypeNames<TJobTypeDefinitions> = JobTypeNames<TJobTypeDefinitions>,
+    >(
       options: {
-        typeName?: TJobTypeName[];
-        chainTypeName?: JobTypeEntryNames<TJobTypeDefinitions>[];
-        chainId?: TJobId[];
-        jobId?: TJobId[];
+        typeName: TJobTypeName;
         from?: Date;
         to?: Date;
         orderDirection?: OrderDirection;
@@ -1268,9 +1341,6 @@ export const createClient = async <
     ): Promise<Page<ResolvedJob<TJobId, TJobTypeDefinitions, TJobTypeName>>> => {
       const {
         typeName,
-        chainTypeName,
-        chainId,
-        jobId,
         from,
         to,
         status,
@@ -1299,9 +1369,6 @@ export const createClient = async <
       const result = await helpers.stateAdapter.listJobs({
         txCtx,
         typeName,
-        chainTypeName,
-        chainId,
-        jobId,
         from,
         to,
         status,

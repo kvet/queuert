@@ -13,17 +13,15 @@ import {
   parseLimit,
   parseOrderBy,
   parseOrderDirection,
-  parseTypeNameFilter,
 } from "./params.js";
 
 export const handleJobsList = async (url: URL, client: Client<any, any>): Promise<Response> => {
+  const typeName = url.searchParams.get("typeName");
+  if (!typeName) return serovalResponse({ items: [], nextCursor: null });
+
   const { status, blocked, continued } = parseJobStatusFilter(
     url.searchParams.get("status") ?? undefined,
   );
-  const typeName = parseTypeNameFilter(url.searchParams.get("typeName") ?? undefined);
-  const chainTypeName = parseTypeNameFilter(url.searchParams.get("chainTypeName") ?? undefined);
-  const chainId = url.searchParams.get("chainId") ?? undefined;
-  const id = url.searchParams.get("id") ?? undefined;
   const rawOrderBy = url.searchParams.get("orderBy") ?? undefined;
   const orderDirection = parseOrderDirection(url.searchParams.get("orderDirection") ?? undefined);
   const limit = parseLimit(url.searchParams.get("limit") ?? undefined);
@@ -42,9 +40,6 @@ export const handleJobsList = async (url: URL, client: Client<any, any>): Promis
 
   const common = {
     typeName,
-    chainTypeName,
-    chainId: chainId ? [chainId] : undefined,
-    jobId: id ? [id] : undefined,
     orderDirection,
     cursor: parseCursor(url.searchParams.get("cursor") ?? undefined, {
       type: "timestampWithId",
@@ -75,6 +70,39 @@ export const handleJobsList = async (url: URL, client: Client<any, any>): Promis
   return serovalResponse({
     items: result.items,
     nextCursor: result.nextCursor,
+  });
+};
+
+export const handleJobTypesList = async (client: Client<any, any>): Promise<Response> => {
+  const names = await client.listJobTypeNames();
+  return serovalResponse(names);
+};
+
+export const handleJobTypesCounts = async (
+  url: URL,
+  client: Client<any, any>,
+): Promise<Response> => {
+  const raw = url.searchParams.get("typeNames") ?? "";
+  const typeNames = raw
+    .split(",")
+    .map((s) => s.trim())
+    .filter(Boolean);
+  if (typeNames.length === 0) return serovalResponse([]);
+  const counts = await client.countByJobTypeNames({ typeNames });
+  return serovalResponse(typeNames.map((typeName, i) => ({ typeName, ...counts[i] })));
+};
+
+export const handleJobsByIds = async (url: URL, client: Client<any, any>): Promise<Response> => {
+  const raw = url.searchParams.get("ids") ?? "";
+  const ids = raw
+    .split(",")
+    .map((s) => s.trim())
+    .filter(Boolean);
+  if (ids.length === 0) return serovalResponse({ items: [], nextCursor: null });
+  const jobs = await client.getJobs({ ids });
+  return serovalResponse({
+    items: jobs.filter((j): j is NonNullable<typeof j> => j != null),
+    nextCursor: null,
   });
 };
 

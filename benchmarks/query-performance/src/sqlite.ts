@@ -1,4 +1,4 @@
-import { mkdirSync, writeFileSync } from "node:fs";
+import { mkdirSync, rmSync, writeFileSync } from "node:fs";
 import { dirname } from "node:path";
 
 import { createAsyncRwLock, createSqliteStateAdapter } from "@queuert/sqlite";
@@ -68,7 +68,65 @@ const sentinels = await fastSeedAllStatesV2(baseProvider, { scale });
 db.exec("ANALYZE");
 console.log("Seed complete.\n");
 
+const pageSize = (db.pragma("page_size") as { page_size: number }[])[0].page_size;
+const pageCount = (db.pragma("page_count") as { page_count: number }[])[0].page_count;
+const totalBytes = pageSize * pageCount;
+const fmtBytes = (bytes: number) => {
+  if (bytes >= 1024 * 1024) return `${(bytes / (1024 * 1024)).toFixed(1)} MB`;
+  if (bytes >= 1024) return `${(bytes / 1024).toFixed(1)} KB`;
+  return `${bytes} B`;
+};
+console.log(`  Database size: ${fmtBytes(totalBytes)} (${pageCount} pages × ${pageSize} B)`);
+
+const sizeLines: string[] = [
+  `-- scale=${scale}`,
+  "",
+  `Database size: ${fmtBytes(totalBytes)} (${pageCount} pages × ${pageSize} B)`,
+];
+
+try {
+  const sizeRows = db
+    .prepare(
+      `SELECT m.type AS kind, d.name, m.tbl_name AS table_name,
+              SUM(d.pgsize) AS bytes,
+              COALESCE(s.stat, '') AS stat
+       FROM dbstat d
+       JOIN sqlite_master m ON m.name = d.name
+       LEFT JOIN sqlite_stat1 s ON s.tbl = d.name AND s.idx IS NULL
+                                OR s.idx = d.name
+       WHERE d.name LIKE 'queuert_%'
+       GROUP BY d.name
+       ORDER BY m.tbl_name, m.type DESC, d.name`,
+    )
+    .all() as { kind: string; name: string; table_name: string; bytes: number; stat: string }[];
+  console.log("  Table & index sizes:");
+  sizeLines.push("");
+  let lastTable = "";
+  for (const row of sizeRows) {
+    if (row.table_name !== lastTable) {
+      if (lastTable) {
+        sizeLines.push("");
+        console.log("");
+      }
+      lastTable = row.table_name;
+    }
+    const rows = row.stat ? row.stat.split(" ")[0] : "";
+    const rowsSuffix = rows ? `  (${rows} rows)` : "";
+    const line = `${row.kind.padEnd(5)}  ${row.name.padEnd(50)} ${fmtBytes(row.bytes).padStart(10)}${rowsSuffix}`;
+    console.log(`    ${line}`);
+    sizeLines.push(line);
+  }
+} catch {
+  console.log(
+    "  (dbstat not available — compile with SQLITE_ENABLE_DBSTAT_VTAB for per-table breakdown)",
+  );
+  sizeLines.push("(dbstat not available)");
+}
+console.log("");
+
+rmSync(EXPLANATIONS_DIR, { recursive: true, force: true });
 mkdirSync(EXPLANATIONS_DIR, { recursive: true });
+writeFileSync(`${EXPLANATIONS_DIR}/_table_sizes.txt`, sizeLines.join("\n") + "\n");
 
 console.log("═══════════════════════════════════════════════════════════════════════════════════");
 console.log("  QUERY PERFORMANCE — SQLITE (better-sqlite3)");

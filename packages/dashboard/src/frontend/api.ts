@@ -21,24 +21,20 @@ export type PageResult<T> = {
   nextCursor: string | null;
 };
 
-export const listChains = async (
-  params: {
-    typeName?: string;
-    status?: string;
-    independent?: boolean;
-    id?: string;
-    orderBy?: string;
-    orderDirection?: string;
-    cursor?: string;
-    limit?: number;
-    signal?: AbortSignal;
-  } = {},
-): Promise<PageResult<UnknownChain>> => {
+export const listChains = async (params: {
+  typeName: string;
+  status?: string;
+  independent?: boolean;
+  orderBy?: string;
+  orderDirection?: string;
+  cursor?: string;
+  limit?: number;
+  signal?: AbortSignal;
+}): Promise<PageResult<UnknownChain>> => {
   const searchParams = new URLSearchParams();
-  if (params.typeName) searchParams.set("typeName", params.typeName);
+  searchParams.set("typeName", params.typeName);
   if (params.status) searchParams.set("status", params.status);
   if (params.independent === false) searchParams.set("independent", "false");
-  if (params.id) searchParams.set("id", params.id);
   if (params.orderBy) searchParams.set("orderBy", params.orderBy);
   if (params.orderDirection) searchParams.set("orderDirection", params.orderDirection);
   if (params.cursor) searchParams.set("cursor", params.cursor);
@@ -49,26 +45,18 @@ export const listChains = async (
   });
 };
 
-export const listJobs = async (
-  params: {
-    status?: string;
-    typeName?: string;
-    chainTypeName?: string;
-    chainId?: string;
-    id?: string;
-    orderBy?: string;
-    orderDirection?: string;
-    cursor?: string;
-    limit?: number;
-    signal?: AbortSignal;
-  } = {},
-): Promise<PageResult<UnknownJob>> => {
+export const listJobs = async (params: {
+  typeName: string;
+  status?: string;
+  orderBy?: string;
+  orderDirection?: string;
+  cursor?: string;
+  limit?: number;
+  signal?: AbortSignal;
+}): Promise<PageResult<UnknownJob>> => {
   const searchParams = new URLSearchParams();
+  searchParams.set("typeName", params.typeName);
   if (params.status) searchParams.set("status", params.status);
-  if (params.typeName) searchParams.set("typeName", params.typeName);
-  if (params.chainTypeName) searchParams.set("chainTypeName", params.chainTypeName);
-  if (params.chainId) searchParams.set("chainId", params.chainId);
-  if (params.id) searchParams.set("id", params.id);
   if (params.orderBy) searchParams.set("orderBy", params.orderBy);
   if (params.orderDirection) searchParams.set("orderDirection", params.orderDirection);
   if (params.cursor) searchParams.set("cursor", params.cursor);
@@ -136,3 +124,37 @@ export const getJobDetail = async (
   continuation: UnknownJob | null;
   blockers: UnknownChain[];
 }> => fetchSeroval(`/jobs/${jobId}`);
+
+export const getChainsByIds = async (ids: string[]): Promise<PageResult<UnknownChain>> =>
+  fetchSeroval<PageResult<UnknownChain>>(`/chains/by-ids?ids=${encodeURIComponent(ids.join(","))}`);
+
+export const getJobsByIds = async (ids: string[]): Promise<PageResult<UnknownJob>> =>
+  fetchSeroval<PageResult<UnknownJob>>(`/jobs/by-ids?ids=${encodeURIComponent(ids.join(","))}`);
+
+export const listChainTypeNames = async (): Promise<string[]> =>
+  fetchSeroval<string[]>("/chain-types");
+
+export const listJobTypeNames = async (): Promise<string[]> => fetchSeroval<string[]>("/job-types");
+
+export type ChainTypeCounts = {
+  typeName: string;
+  running: { count: number; hasMore: boolean };
+  completed: { count: number; hasMore: boolean };
+};
+
+export type JobTypeCounts = {
+  typeName: string;
+  pending: { count: number; hasMore: boolean };
+  running: { count: number; hasMore: boolean };
+  completed: { count: number; hasMore: boolean };
+};
+
+export const countByChainTypeNames = async (typeNames: string[]): Promise<ChainTypeCounts[]> =>
+  fetchSeroval<ChainTypeCounts[]>(
+    `/chain-types/counts?typeNames=${encodeURIComponent(typeNames.join(","))}`,
+  );
+
+export const countByJobTypeNames = async (typeNames: string[]): Promise<JobTypeCounts[]> =>
+  fetchSeroval<JobTypeCounts[]>(
+    `/job-types/counts?typeNames=${encodeURIComponent(typeNames.join(","))}`,
+  );

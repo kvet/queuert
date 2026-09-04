@@ -52,5 +52,6 @@ describe("Client covariance", () => {
     type ClientDefs2 = Client<Defs2, StateAdapter<BaseTxContext, any>>;
 
     expectTypeOf<ClientDefs1>().not.toExtend<ClientDefs2>();
+    expectTypeOf<ClientDefs2>().not.toExtend<ClientDefs1>();
   });
 });

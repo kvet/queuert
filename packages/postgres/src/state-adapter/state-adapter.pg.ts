@@ -356,7 +356,7 @@ DROP INDEX CONCURRENTLY IF EXISTS {{schema}}.{{table_prefix}}job_listing_idx`),
       ...concurrentIndex(
         "{{table_prefix}}job_pending_idx",
         "{{table_prefix}}job",
-        "scheduled_at",
+        "type_name, scheduled_at",
         "attempt_at IS NULL AND completed_at IS NULL",
       ),
       ...concurrentIndex(
@@ -368,7 +368,7 @@ DROP INDEX CONCURRENTLY IF EXISTS {{schema}}.{{table_prefix}}job_listing_idx`),
       ...concurrentIndex(
         "{{table_prefix}}job_completed_idx",
         "{{table_prefix}}job",
-        "completed_at",
+        "type_name, completed_at",
         "completed_at IS NOT NULL",
       ),
       ...concurrentIndex(
@@ -381,22 +381,22 @@ DROP INDEX CONCURRENTLY IF EXISTS {{schema}}.{{table_prefix}}job_listing_idx`),
       ...concurrentIndex(
         "{{table_prefix}}chain_tail_running_idx",
         "{{table_prefix}}job",
-        "chain_id",
+        "chain_type_name, chain_id",
         "continued_to_id IS NULL AND completed_at IS NULL",
       ),
       ...concurrentIndex(
         "{{table_prefix}}chain_tail_completed_idx",
         "{{table_prefix}}job",
-        "chain_id",
+        "chain_type_name, chain_id",
         "continued_to_id IS NULL AND completed_at IS NOT NULL",
       ),
       ...concurrentIndex(
         "{{table_prefix}}chain_head_idx",
         "{{table_prefix}}job",
-        "created_at",
+        "chain_type_name, created_at",
         "chain_index = 0",
       ),
-      ...concurrentIndex("{{table_prefix}}job_idx", "{{table_prefix}}job", "created_at"),
+      ...concurrentIndex("{{table_prefix}}job_idx", "{{table_prefix}}job", "type_name, created_at"),
     ],
   },
 ];
@@ -554,6 +554,7 @@ RETURNING 1 AS extended`,
   };
 };
 
+const COUNT_CAP = 10000;
 const SQL_IDENTIFIER_PATTERN = /^[a-zA-Z_][a-zA-Z0-9_]*$/;
 
 const validateSqlIdentifier = (value: string, name: string): void => {
@@ -1746,11 +1747,187 @@ SELECT
       };
     },
 
+    listChainTypeNames: async ({ txCtx }) => {
+      const rows = await executeTypedSql({
+        txCtx,
+        sql: templateCache.getOrCompute("listChainTypeNames", () =>
+          applyTemplate(
+            sql(
+              /* sql */ `
+WITH RECURSIVE types AS (
+  (SELECT chain_type_name FROM {{schema}}.{{table_prefix}}job WHERE chain_index = 0 ORDER BY chain_type_name LIMIT 1)
+  UNION ALL
+  SELECT (SELECT chain_type_name FROM {{schema}}.{{table_prefix}}job WHERE chain_index = 0 AND chain_type_name > types.chain_type_name ORDER BY chain_type_name LIMIT 1)
+  FROM types WHERE types.chain_type_name IS NOT NULL
+)
+SELECT chain_type_name FROM types WHERE chain_type_name IS NOT NULL
+`,
+              {
+                id: "listChainTypeNames",
+                params: [],
+                columns: { chain_type_name: t.string() },
+                readOnly: true,
+              },
+            ),
+          ),
+        ),
+      });
+      return rows.map((r) => r.chain_type_name);
+    },
+
+    listJobTypeNames: async ({ txCtx }) => {
+      const rows = await executeTypedSql({
+        txCtx,
+        sql: templateCache.getOrCompute("listJobTypeNames", () =>
+          applyTemplate(
+            sql(
+              /* sql */ `
+WITH RECURSIVE types AS (
+  (SELECT type_name FROM {{schema}}.{{table_prefix}}job ORDER BY type_name LIMIT 1)
+  UNION ALL
+  SELECT (SELECT type_name FROM {{schema}}.{{table_prefix}}job WHERE type_name > types.type_name ORDER BY type_name LIMIT 1)
+  FROM types WHERE types.type_name IS NOT NULL
+)
+SELECT type_name FROM types WHERE type_name IS NOT NULL
+`,
+              {
+                id: "listJobTypeNames",
+                params: [],
+                columns: { type_name: t.string() },
+                readOnly: true,
+              },
+            ),
+          ),
+        ),
+      });
+      return rows.map((r) => r.type_name);
+    },
+
+    countByChainTypeNames: async ({ txCtx, typeNames }) => {
+      if (typeNames.length === 0) return [];
+
+      const rows = await executeTypedSql({
+        txCtx,
+        sql: templateCache.getOrCompute("countByChainTypeNames", () =>
+          applyTemplate(
+            sql(
+              /* sql */ `
+SELECT
+  t.name,
+  (SELECT count(*) FROM (
+    SELECT 1 FROM {{schema}}.{{table_prefix}}job
+    WHERE chain_type_name = t.name AND continued_to_id IS NULL AND completed_at IS NULL
+    LIMIT ${COUNT_CAP + 1}
+  ) sub) AS running_cnt,
+  (SELECT count(*) FROM (
+    SELECT 1 FROM {{schema}}.{{table_prefix}}job
+    WHERE chain_type_name = t.name AND continued_to_id IS NULL AND completed_at IS NOT NULL
+    LIMIT ${COUNT_CAP + 1}
+  ) sub) AS completed_cnt
+FROM unnest($1::text[]) WITH ORDINALITY AS t(name, ord)
+ORDER BY t.ord
+`,
+              {
+                id: "countByChainTypeNames",
+                params: [t.array()],
+                columns: {
+                  name: t.string(),
+                  running_cnt: t.number(),
+                  completed_cnt: t.number(),
+                },
+                readOnly: true,
+              },
+            ),
+          ),
+        ),
+        params: [[...typeNames]],
+      });
+
+      const map = new Map(rows.map((r) => [r.name, r]));
+      return typeNames.map((name) => {
+        const r = map.get(name);
+        if (!r)
+          return {
+            running: { count: 0, hasMore: false },
+            completed: { count: 0, hasMore: false },
+          };
+        return {
+          running: {
+            count: Math.min(r.running_cnt, COUNT_CAP),
+            hasMore: r.running_cnt > COUNT_CAP,
+          },
+          completed: {
+            count: Math.min(r.completed_cnt, COUNT_CAP),
+            hasMore: r.completed_cnt > COUNT_CAP,
+          },
+        };
+      });
+    },
+
+    countByJobTypeNames: async ({ txCtx, typeNames }) => {
+      if (typeNames.length === 0) return [];
+
+      const rows = await executeTypedSql({
+        txCtx,
+        sql: templateCache.getOrCompute("countByJobTypeNames", () =>
+          applyTemplate(
+            sql(
+              /* sql */ `
+SELECT
+  t.name,
+  (SELECT count(*) FROM (SELECT 1 FROM {{schema}}.{{table_prefix}}job WHERE type_name = t.name AND attempt_at IS NULL AND completed_at IS NULL LIMIT ${COUNT_CAP + 1}) sub) AS pending_cnt,
+  (SELECT count(*) FROM (SELECT 1 FROM {{schema}}.{{table_prefix}}job WHERE type_name = t.name AND attempt_at IS NOT NULL AND completed_at IS NULL LIMIT ${COUNT_CAP + 1}) sub) AS running_cnt,
+  (SELECT count(*) FROM (SELECT 1 FROM {{schema}}.{{table_prefix}}job WHERE type_name = t.name AND completed_at IS NOT NULL LIMIT ${COUNT_CAP + 1}) sub) AS completed_cnt
+FROM unnest($1::text[]) WITH ORDINALITY AS t(name, ord)
+ORDER BY t.ord
+`,
+              {
+                id: "countByJobTypeNames",
+                params: [t.array()],
+                columns: {
+                  name: t.string(),
+                  pending_cnt: t.number(),
+                  running_cnt: t.number(),
+                  completed_cnt: t.number(),
+                },
+                readOnly: true,
+              },
+            ),
+          ),
+        ),
+        params: [[...typeNames]],
+      });
+
+      const map = new Map(rows.map((r) => [r.name, r]));
+      return typeNames.map((name) => {
+        const r = map.get(name);
+        if (!r)
+          return {
+            pending: { count: 0, hasMore: false },
+            running: { count: 0, hasMore: false },
+            completed: { count: 0, hasMore: false },
+          };
+        return {
+          pending: {
+            count: Math.min(r.pending_cnt, COUNT_CAP),
+            hasMore: r.pending_cnt > COUNT_CAP,
+          },
+          running: {
+            count: Math.min(r.running_cnt, COUNT_CAP),
+            hasMore: r.running_cnt > COUNT_CAP,
+          },
+          completed: {
+            count: Math.min(r.completed_cnt, COUNT_CAP),
+            hasMore: r.completed_cnt > COUNT_CAP,
+          },
+        };
+      });
+    },
+
     listChains: async ({
       txCtx,
       typeName,
       independent,
-      chainId,
       from,
       to,
       status,
@@ -1767,20 +1944,10 @@ SELECT
       const dir = orderDirection === "desc" ? "DESC" : "ASC";
 
       const addTypeName = (alias: string) => {
-        if (typeName?.length) {
-          conditions.push(`${alias}.type_name = ANY($${p}::text[])`);
-          params.push(typeName);
-          paramTypes.push(t.array());
-          p++;
-        }
-      };
-      const addChainId = (alias: string) => {
-        if (chainId?.length) {
-          conditions.push(`${alias}.chain_id = ANY($${p}::${idType}[])`);
-          params.push(chainId);
-          paramTypes.push(t.array());
-          p++;
-        }
+        conditions.push(`${alias}.chain_type_name = $${p}::text`);
+        params.push(typeName);
+        paramTypes.push(t.string());
+        p++;
       };
       const addIndependent = (alias: string) => {
         if (independent === true) {
@@ -1793,15 +1960,15 @@ SELECT
           );
         }
       };
-      const addDateRange = (alias: string) => {
+      const addDateRange = (alias: string, col = "created_at") => {
         if (from) {
-          conditions.push(`${alias}.created_at >= $${p}::timestamptz`);
+          conditions.push(`${alias}.${col} >= $${p}::timestamptz`);
           params.push(from);
           paramTypes.push(t["date?"]());
           p++;
         }
         if (to) {
-          conditions.push(`${alias}.created_at <= $${p}::timestamptz`);
+          conditions.push(`${alias}.${col} <= $${p}::timestamptz`);
           params.push(to);
           paramTypes.push(t["date?"]());
           p++;
@@ -1813,8 +1980,7 @@ SELECT
       if (status === "running") {
         // Drive from chain tails WHERE continued_to_id IS NULL AND completed_at IS NULL
         conditions.push("tail.continued_to_id IS NULL", "tail.completed_at IS NULL");
-        addTypeName("root");
-        addChainId("root");
+        addTypeName("tail");
         addIndependent("root");
         addDateRange("root");
         if (cursor) {
@@ -1829,12 +1995,11 @@ SELECT
         paramTypes.push(t.number());
         sqlStr = `SELECT row_to_json(root) AS head_job, row_to_json(tail) AS tail_job FROM ${schema}.${tablePrefix}job tail JOIN ${schema}.${tablePrefix}job root ON root.id = tail.chain_id WHERE ${conditions.join(" AND ")} ORDER BY root.created_at ${dir}, root.id ${dir} LIMIT $${p}`;
       } else if (status === "completed" && orderBy === "completedAt") {
-        // Drive from job_completed_idx (completed tails in completed_at order)
+        // Drive from chain_tail_completed_idx (completed tails in completed_at order)
         conditions.push("tail.continued_to_id IS NULL", "tail.completed_at IS NOT NULL");
-        addTypeName("root");
-        addChainId("root");
+        addTypeName("tail");
         addIndependent("root");
-        addDateRange("root");
+        addDateRange("tail", "completed_at");
         if (cursor) {
           conditions.push(
             `(tail.completed_at ${cmp} $${p}::timestamptz OR (tail.completed_at = $${p}::timestamptz AND root.id ${cmp} $${p + 1}::${idType}))`,
@@ -1850,7 +2015,6 @@ SELECT
         // No status or completed+createdAt: drive from chain_head_idx (roots in created_at order)
         conditions.push("head_job.chain_index = 0");
         addTypeName("head_job");
-        addChainId("head_job");
         addIndependent("head_job");
         addDateRange("head_job");
         if (status === "completed") {
@@ -1917,18 +2081,7 @@ SELECT
     },
 
     listJobs: async (listJobsParams) => {
-      const {
-        txCtx,
-        typeName,
-        chainTypeName,
-        chainId,
-        jobId,
-        from,
-        to,
-        orderBy,
-        orderDirection,
-        page,
-      } = listJobsParams;
+      const { txCtx, typeName, from, to, orderBy, orderDirection, page } = listJobsParams;
       const status = listJobsParams.status;
       const blocked =
         status === "pending" ? (listJobsParams as { blocked?: boolean }).blocked : undefined;
@@ -1968,38 +2121,18 @@ SELECT
         }
       }
 
-      if (typeName?.length) {
-        conditions.push(`j.type_name = ANY($${p}::text[])`);
-        params.push(typeName);
-        paramTypes.push(t.array());
-        p++;
-      }
-      if (chainTypeName?.length) {
-        conditions.push(`j.chain_type_name = ANY($${p}::text[])`);
-        params.push(chainTypeName);
-        paramTypes.push(t.array());
-        p++;
-      }
-      if (chainId?.length) {
-        conditions.push(`j.chain_id = ANY($${p}::${idType}[])`);
-        params.push(chainId);
-        paramTypes.push(t.array());
-        p++;
-      }
-      if (jobId?.length) {
-        conditions.push(`j.id = ANY($${p}::${idType}[])`);
-        params.push(jobId);
-        paramTypes.push(t.array());
-        p++;
-      }
+      conditions.push(`j.type_name = $${p}::text`);
+      params.push(typeName);
+      paramTypes.push(t.string());
+      p++;
       if (from) {
-        conditions.push(`j.created_at >= $${p}::timestamptz`);
+        conditions.push(`j.${sqlColumn} >= $${p}::timestamptz`);
         params.push(from);
         paramTypes.push(t["date?"]());
         p++;
       }
       if (to) {
-        conditions.push(`j.created_at <= $${p}::timestamptz`);
+        conditions.push(`j.${sqlColumn} <= $${p}::timestamptz`);
         params.push(to);
         paramTypes.push(t["date?"]());
         p++;

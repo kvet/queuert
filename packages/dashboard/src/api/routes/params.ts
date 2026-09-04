@@ -4,12 +4,6 @@ import { decodeIdCursor, decodeTimestampWithIdCursor } from "queuert/internal";
 const VALID_JOB_STATUSES = new Set<string>(["pending", "running", "completed"]);
 const VALID_CHAIN_STATUSES = new Set<string>(["running", "completed"]);
 
-export const parseTypeNameFilter = (raw: string | undefined): string[] | undefined => {
-  if (!raw) return undefined;
-  const values = raw.split(",").filter(Boolean);
-  return values.length > 0 ? values : undefined;
-};
-
 export const parseChainStatusFilter = (raw: string | undefined): ChainStatus | undefined => {
   if (!raw) return undefined;
   return VALID_CHAIN_STATUSES.has(raw) ? (raw as ChainStatus) : undefined;

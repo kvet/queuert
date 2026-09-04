@@ -44,13 +44,11 @@ export const createPrismaSqliteStateProvider = <TPrisma extends PrismaLikeClient
 
       return result.map((row) => {
         if (!row || typeof row !== "object") return row;
-        const source = row as Record<string, unknown>;
-        const converted: Record<string, unknown> = { ...source };
+        const r = row as Record<string, unknown>;
         for (const col of numericColumns) {
-          const value = source[col];
-          if (typeof value === "bigint") converted[col] = Number(value);
+          if (typeof r[col] === "bigint") r[col] = Number(r[col]);
         }
-        return converted;
+        return r;
       });
     },
   };

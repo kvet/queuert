@@ -82,7 +82,7 @@ describe("Dashboard API", () => {
       const { request, stateAdapter } = await createTestDashboard();
       const root = await createJob(stateAdapter, "test-type", { key: "value" });
 
-      const res = await request("/api/chains");
+      const res = await request("/api/chains?typeName=test-type");
       const body = await parseBody(res);
 
       expect(body.items).toHaveLength(1);
@@ -97,7 +97,7 @@ describe("Dashboard API", () => {
         step: 2,
       });
 
-      const res = await request("/api/chains");
+      const res = await request("/api/chains?typeName=chain-type");
       const body = await parseBody(res);
 
       expect(body.items).toHaveLength(1);
@@ -109,7 +109,7 @@ describe("Dashboard API", () => {
       const { request, stateAdapter } = await createTestDashboard();
       await createJob(stateAdapter, "test", null);
 
-      const res = await request("/api/chains");
+      const res = await request("/api/chains?typeName=test");
       const body = await parseBody(res);
 
       expect(body.items[0].createdAt).toBeInstanceOf(Date);
@@ -118,10 +118,10 @@ describe("Dashboard API", () => {
     it("respects limit param", async () => {
       const { request, stateAdapter } = await createTestDashboard();
       for (let i = 0; i < 5; i++) {
-        await createJob(stateAdapter, `type-${i}`, null);
+        await createJob(stateAdapter, "test-type", null);
       }
 
-      const res = await request("/api/chains?limit=2");
+      const res = await request("/api/chains?typeName=test-type&limit=2");
       const body = await parseBody(res);
 
       expect(body.items).toHaveLength(2);
@@ -130,8 +130,8 @@ describe("Dashboard API", () => {
 
     it("excludes blocker chains unless independent=false", async () => {
       const { request, stateAdapter } = await createTestDashboard();
-      const blockerChain = await createJob(stateAdapter, "blocker-type", null);
-      const mainChain = await createJob(stateAdapter, "main-type", null);
+      const blockerChain = await createJob(stateAdapter, "test-type", null);
+      const mainChain = await createJob(stateAdapter, "test-type", null);
 
       await stateAdapter.withTransaction(async (txCtx) =>
         stateAdapter.addJobsBlockers({
@@ -140,10 +140,12 @@ describe("Dashboard API", () => {
         }),
       );
 
-      const independent = await parseBody(await request("/api/chains"));
+      const independent = await parseBody(await request("/api/chains?typeName=test-type"));
       expect(independent.items.map((c: { id: string }) => c.id)).toEqual([mainChain.chainId]);
 
-      const blockers = await parseBody(await request("/api/chains?independent=false"));
+      const blockers = await parseBody(
+        await request("/api/chains?typeName=test-type&independent=false"),
+      );
       expect(blockers.items.map((c: { id: string }) => c.id)).toEqual([blockerChain.chainId]);
     });
 
@@ -155,10 +157,14 @@ describe("Dashboard API", () => {
       await startAttempt(stateAdapter, "done-type");
       await completeJob(stateAdapter, done.id, { output: null });
 
-      const completed = await parseBody(await request("/api/chains?status=completed"));
+      const completed = await parseBody(
+        await request("/api/chains?typeName=done-type&status=completed"),
+      );
       expect(completed.items.map((c: { id: string }) => c.id)).toEqual([done.chainId]);
 
-      const inProgress = await parseBody(await request("/api/chains?status=running"));
+      const inProgress = await parseBody(
+        await request("/api/chains?typeName=running-type&status=running"),
+      );
       expect(inProgress.items.map((c: { id: string }) => c.id)).toEqual([running.chainId]);
     });
 
@@ -167,7 +173,9 @@ describe("Dashboard API", () => {
       await createJob(stateAdapter, "test-type", null);
 
       for (const orderBy of ["bogus", "completedAt", "id; DROP TABLE job"]) {
-        const res = await request(`/api/chains?orderBy=${encodeURIComponent(orderBy)}`);
+        const res = await request(
+          `/api/chains?typeName=test-type&orderBy=${encodeURIComponent(orderBy)}`,
+        );
         expect(res.status).toBe(200);
         expect((await parseBody(res)).items).toHaveLength(1);
       }
@@ -381,6 +389,93 @@ describe("Dashboard API", () => {
     });
   });
 
+  describe("GET /api/chain-types", () => {
+    it("returns empty array when no chains exist", async () => {
+      const { request } = await createTestDashboard();
+      const res = await request("/api/chain-types");
+
+      expect(res.status).toBe(200);
+      expect(await parseBody(res)).toEqual([]);
+    });
+
+    it("returns distinct chain type names sorted alphabetically", async () => {
+      const { request, stateAdapter } = await createTestDashboard();
+      await createJob(stateAdapter, "beta-type", null);
+      await createJob(stateAdapter, "alpha-type", null);
+      await createJob(stateAdapter, "beta-type", null);
+
+      const body = await parseBody(await request("/api/chain-types"));
+
+      expect(body).toEqual(["alpha-type", "beta-type"]);
+    });
+  });
+
+  describe("GET /api/chain-types/counts", () => {
+    it("returns empty array when no typeNames given", async () => {
+      const { request } = await createTestDashboard();
+      const res = await request("/api/chain-types/counts");
+
+      expect(res.status).toBe(200);
+      expect(await parseBody(res)).toEqual([]);
+    });
+
+    it("returns per-status counts for each requested type name", async () => {
+      const { request, stateAdapter } = await createTestDashboard();
+      await createJob(stateAdapter, "type-a", null);
+      const done = await createJob(stateAdapter, "type-b", null);
+      await startAttempt(stateAdapter, "type-b");
+      await completeJob(stateAdapter, done.id, { output: null });
+
+      const body = await parseBody(
+        await request("/api/chain-types/counts?typeNames=type-a,type-b"),
+      );
+
+      expect(body).toHaveLength(2);
+      expect(body[0].typeName).toBe("type-a");
+      expect(body[0].running.count).toBe(1);
+      expect(body[1].typeName).toBe("type-b");
+      expect(body[1].completed.count).toBe(1);
+    });
+  });
+
+  describe("GET /api/chains/by-ids", () => {
+    it("returns empty list when no ids given", async () => {
+      const { request } = await createTestDashboard();
+      const res = await request("/api/chains/by-ids");
+      const body = await parseBody(res);
+
+      expect(res.status).toBe(200);
+      expect(body.items).toEqual([]);
+    });
+
+    it("returns chains matching the given ids", async () => {
+      const { request, stateAdapter } = await createTestDashboard();
+      const a = await createJob(stateAdapter, "type-a", null);
+      await createJob(stateAdapter, "type-b", null);
+      const c = await createJob(stateAdapter, "type-c", null);
+
+      const body = await parseBody(
+        await request(`/api/chains/by-ids?ids=${a.chainId},${c.chainId}`),
+      );
+
+      expect(body.items).toHaveLength(2);
+      const ids = body.items.map((c: { id: string }) => c.id).sort();
+      expect(ids).toEqual([a.chainId, c.chainId].sort());
+    });
+
+    it("skips non-existent ids", async () => {
+      const { request, stateAdapter } = await createTestDashboard();
+      const a = await createJob(stateAdapter, "type-a", null);
+
+      const body = await parseBody(
+        await request(`/api/chains/by-ids?ids=${a.chainId},nonexistent`),
+      );
+
+      expect(body.items).toHaveLength(1);
+      expect(body.items[0].id).toBe(a.chainId);
+    });
+  });
+
   describe("GET /api/jobs", () => {
     it("returns empty list when no jobs exist", async () => {
       const { request } = await createTestDashboard();
@@ -393,43 +488,13 @@ describe("Dashboard API", () => {
 
     it("returns jobs across chains", async () => {
       const { request, stateAdapter } = await createTestDashboard();
-      await createJob(stateAdapter, "type-a", null);
-      await createJob(stateAdapter, "type-b", null);
+      await createJob(stateAdapter, "test-type", null);
+      await createJob(stateAdapter, "test-type", null);
 
-      const res = await request("/api/jobs");
+      const res = await request("/api/jobs?typeName=test-type");
       const body = await parseBody(res);
 
       expect(body.items).toHaveLength(2);
-    });
-
-    it("filters by chainTypeName", async () => {
-      const { request, stateAdapter } = await createTestDashboard();
-      const root = await createJob(stateAdapter, "chain-type", null);
-      await createContinuation(stateAdapter, "chain-step2", root.id, null);
-      await createJob(stateAdapter, "other-type", null);
-
-      const res = await request("/api/jobs?chainTypeName=chain-type");
-      const body = await parseBody(res);
-
-      expect(body.items).toHaveLength(2);
-      for (const job of body.items) {
-        expect(job.chainTypeName).toBe("chain-type");
-      }
-    });
-
-    it("filters by chainId", async () => {
-      const { request, stateAdapter } = await createTestDashboard();
-      const root = await createJob(stateAdapter, "chain-type", null);
-      await createContinuation(stateAdapter, "chain-step2", root.id, null);
-      await createJob(stateAdapter, "other-type", null);
-
-      const res = await request(`/api/jobs?chainId=${root.chainId}`);
-      const body = await parseBody(res);
-
-      expect(body.items).toHaveLength(2);
-      for (const job of body.items) {
-        expect(job.chainId).toBe(root.chainId);
-      }
     });
 
     it("filters by each job status alias", async () => {
@@ -461,10 +526,25 @@ describe("Dashboard API", () => {
       );
       await completeJob(stateAdapter, continued.id, { continuedToId: continuation.id });
 
-      const ids = async (status: string) =>
-        (await parseBody(await request(`/api/jobs?status=${status}`))).items
-          .map((job: { id: string }) => job.id)
-          .sort();
+      const allTypeNames = [
+        "pending-type",
+        "blocker-type",
+        "blocked-type",
+        "running-type",
+        "terminal-type",
+        "continued-type",
+        "continued-next",
+      ];
+      const ids = async (status: string) => {
+        const items: { id: string }[] = [];
+        for (const typeName of allTypeNames) {
+          const page = await parseBody(
+            await request(`/api/jobs?typeName=${typeName}&status=${status}`),
+          );
+          items.push(...page.items);
+        }
+        return items.map((job) => job.id).sort();
+      };
 
       expect(await ids("blocked")).toEqual([blocked.id]);
       expect(await ids("pending-unblocked")).toEqual(
@@ -482,14 +562,94 @@ describe("Dashboard API", () => {
       await createJob(stateAdapter, "test-type", null);
 
       for (const query of [
-        "status=pending&orderBy=completedAt",
-        "status=running&orderBy=scheduledAt",
-        "status=completed&orderBy=attemptUntil",
-        "orderBy=bogus",
+        "typeName=test-type&status=pending&orderBy=completedAt",
+        "typeName=test-type&status=running&orderBy=scheduledAt",
+        "typeName=test-type&status=completed&orderBy=attemptUntil",
+        "typeName=test-type&orderBy=bogus",
       ]) {
         const res = await request(`/api/jobs?${query}`);
         expect(res.status).toBe(200);
       }
+    });
+  });
+
+  describe("GET /api/job-types", () => {
+    it("returns empty array when no jobs exist", async () => {
+      const { request } = await createTestDashboard();
+      const res = await request("/api/job-types");
+
+      expect(res.status).toBe(200);
+      expect(await parseBody(res)).toEqual([]);
+    });
+
+    it("returns distinct job type names sorted alphabetically", async () => {
+      const { request, stateAdapter } = await createTestDashboard();
+      const root = await createJob(stateAdapter, "root-type", null);
+      await createContinuation(stateAdapter, "cont-type", root.id, null);
+
+      const body = await parseBody(await request("/api/job-types"));
+
+      expect(body).toEqual(["cont-type", "root-type"]);
+    });
+  });
+
+  describe("GET /api/job-types/counts", () => {
+    it("returns empty array when no typeNames given", async () => {
+      const { request } = await createTestDashboard();
+      const res = await request("/api/job-types/counts");
+
+      expect(res.status).toBe(200);
+      expect(await parseBody(res)).toEqual([]);
+    });
+
+    it("returns per-status counts for each requested type name", async () => {
+      const { request, stateAdapter } = await createTestDashboard();
+      await createJob(stateAdapter, "type-a", null);
+      await createJob(stateAdapter, "type-b", null);
+      await startAttempt(stateAdapter, "type-b");
+
+      const body = await parseBody(await request("/api/job-types/counts?typeNames=type-a,type-b"));
+
+      expect(body).toHaveLength(2);
+      expect(body[0].typeName).toBe("type-a");
+      expect(body[0].pending.count).toBe(1);
+      expect(body[0].running.count).toBe(0);
+      expect(body[1].typeName).toBe("type-b");
+      expect(body[1].running.count).toBe(1);
+    });
+  });
+
+  describe("GET /api/jobs/by-ids", () => {
+    it("returns empty list when no ids given", async () => {
+      const { request } = await createTestDashboard();
+      const res = await request("/api/jobs/by-ids");
+      const body = await parseBody(res);
+
+      expect(res.status).toBe(200);
+      expect(body.items).toEqual([]);
+    });
+
+    it("returns jobs matching the given ids", async () => {
+      const { request, stateAdapter } = await createTestDashboard();
+      const a = await createJob(stateAdapter, "type-a", null);
+      await createJob(stateAdapter, "type-b", null);
+      const c = await createJob(stateAdapter, "type-c", null);
+
+      const body = await parseBody(await request(`/api/jobs/by-ids?ids=${a.id},${c.id}`));
+
+      expect(body.items).toHaveLength(2);
+      const ids = body.items.map((j: { id: string }) => j.id).sort();
+      expect(ids).toEqual([a.id, c.id].sort());
+    });
+
+    it("skips non-existent ids", async () => {
+      const { request, stateAdapter } = await createTestDashboard();
+      const a = await createJob(stateAdapter, "type-a", null);
+
+      const body = await parseBody(await request(`/api/jobs/by-ids?ids=${a.id},nonexistent`));
+
+      expect(body.items).toHaveLength(1);
+      expect(body.items[0].id).toBe(a.id);
     });
   });
 
@@ -615,7 +775,9 @@ describe("Dashboard API", () => {
       const { request, stateAdapter } = await createTestDashboard();
       await createJob(stateAdapter, "test-type", null);
 
-      const res = await request(`/api/chains?cursor=${encodeRawCursor(payload)}`);
+      const res = await request(
+        `/api/chains?typeName=test-type&cursor=${encodeRawCursor(payload)}`,
+      );
 
       expect(res.status).toBe(200);
       expect((await parseBody(res)).items).toHaveLength(1);
@@ -625,7 +787,7 @@ describe("Dashboard API", () => {
       const { request, stateAdapter } = await createTestDashboard();
       await createJob(stateAdapter, "test-type", null);
 
-      const res = await request("/api/chains?cursor=not-a-cursor");
+      const res = await request("/api/chains?typeName=test-type&cursor=not-a-cursor");
 
       expect(res.status).toBe(200);
       expect((await parseBody(res)).items).toHaveLength(1);
@@ -633,20 +795,22 @@ describe("Dashboard API", () => {
 
     it("drops a cursor issued for a different orderBy instead of failing", async () => {
       const { request, stateAdapter } = await createTestDashboard();
-      const first = await createJob(stateAdapter, "type-a", null);
-      const second = await createJob(stateAdapter, "type-b", null);
-      for (const job of [first, second]) {
-        await startAttempt(stateAdapter, job.typeName);
-        await completeJob(stateAdapter, job.id, { output: null });
-      }
+      const first = await createJob(stateAdapter, "test-type", null);
+      const second = await createJob(stateAdapter, "test-type", null);
+      await startAttempt(stateAdapter, "test-type");
+      await completeJob(stateAdapter, first.id, { output: null });
+      await startAttempt(stateAdapter, "test-type");
+      await completeJob(stateAdapter, second.id, { output: null });
 
       const page = await parseBody(
-        await request("/api/chains?status=completed&orderBy=completedAt&limit=1"),
+        await request(
+          "/api/chains?typeName=test-type&status=completed&orderBy=completedAt&limit=1",
+        ),
       );
       expect(page.nextCursor).not.toBeNull();
 
       const res = await request(
-        `/api/chains?status=completed&orderBy=createdAt&cursor=${encodeURIComponent(page.nextCursor)}`,
+        `/api/chains?typeName=test-type&status=completed&orderBy=createdAt&cursor=${encodeURIComponent(page.nextCursor)}`,
       );
 
       expect(res.status).toBe(200);

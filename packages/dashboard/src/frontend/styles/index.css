@@ -62,27 +62,70 @@ a:hover {
 
 .nav {
   display: flex;
-  gap: 16px;
+  align-items: center;
+  gap: 24px;
   border-bottom: 1px solid var(--border);
   padding-bottom: 12px;
   margin-bottom: 24px;
 }
 
-.nav a {
-  font-weight: 500;
-  padding: 4px 8px;
-  border-radius: var(--radius);
-}
-
-.nav a[aria-current="page"] {
-  background: var(--accent);
-  color: #fff;
-}
-
 .nav-title {
   font-weight: 700;
-  margin-right: auto;
   color: var(--text);
+  text-decoration: none;
+}
+
+.nav-title:hover {
+  color: var(--text);
+  text-decoration: none;
+}
+
+.nav-docs {
+  display: inline-flex;
+  align-items: center;
+  color: var(--text-muted);
+  margin-right: auto;
+  margin-left: -15px;
+}
+
+.nav-docs:hover {
+  color: var(--text-secondary);
+  text-decoration: none;
+}
+
+.nav-group {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+}
+
+.nav-group-label {
+  font-weight: 600;
+  font-size: 14px;
+  color: var(--text-muted);
+  margin-right: 2px;
+}
+
+.nav-group[data-active] .nav-group-label {
+  color: var(--text);
+}
+
+.nav-group a {
+  font-weight: 500;
+  font-size: 13px;
+  padding: 2px 8px;
+  border-radius: var(--radius);
+  color: var(--text-secondary);
+}
+
+.nav-group a:hover {
+  color: var(--text);
+  text-decoration: none;
+}
+
+.nav-group a[aria-current="page"] {
+  background: var(--accent);
+  color: #fff;
 }
 
 .filter-bar {
@@ -102,6 +145,12 @@ a:hover {
   font-size: 13px;
 }
 
+.filter-bar select:disabled,
+.filter-bar button:disabled {
+  opacity: 0.4;
+  cursor: not-allowed;
+}
+
 .checkbox-label {
   display: flex;
   align-items: center;
@@ -109,6 +158,11 @@ a:hover {
   font-size: 13px;
   cursor: pointer;
   margin-left: auto;
+}
+
+.checkbox-label[data-disabled] {
+  opacity: 0.4;
+  cursor: not-allowed;
 }
 
 .select-with-warning {
@@ -534,4 +588,59 @@ a:hover {
 .dialog-btn-delete:not(:disabled):hover {
   background: #dc2626;
   border-color: #dc2626;
+}
+
+.type-table {
+  width: 100%;
+  border-collapse: collapse;
+  font-size: 14px;
+}
+
+.type-table th {
+  text-align: left;
+  font-size: 12px;
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+  color: var(--text-muted);
+  border-bottom: 1px solid var(--border);
+  padding: 6px 12px;
+}
+
+.type-table th:not(:first-child) {
+  text-align: right;
+}
+
+.type-table td {
+  padding: 8px 12px;
+  border-bottom: 1px solid var(--border);
+}
+
+.type-table td:not(:first-child) {
+  text-align: right;
+  font-family: var(--font-mono);
+  font-size: 13px;
+}
+
+.type-table tbody tr:hover {
+  background: var(--bg-hover);
+}
+
+.count-zero {
+  color: var(--text-muted);
+}
+
+.count-link {
+  font-weight: 500;
+}
+
+.count-link[data-status="pending"] {
+  color: var(--status-pending);
+}
+
+.count-link[data-status="running"] {
+  color: var(--status-running);
+}
+
+.count-link[data-status="completed"] {
+  color: var(--status-completed);
 }

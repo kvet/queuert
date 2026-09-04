@@ -1,6 +1,8 @@
 import { type ConformanceGroup } from "./runner.js";
 import { addJobsBlockersGroup } from "./state-adapter-cases/add-jobs-blockers.js";
 import { closeGroup } from "./state-adapter-cases/close.js";
+import { countByChainTypeNamesGroup } from "./state-adapter-cases/count-by-chain-type-names.js";
+import { countByJobTypeNamesGroup } from "./state-adapter-cases/count-by-job-type-names.js";
 import { createChainsGroup } from "./state-adapter-cases/create-chains.js";
 import { createContinuationJobGroup } from "./state-adapter-cases/create-continuation-job.js";
 import { deleteChainsGroup } from "./state-adapter-cases/delete-chains.js";
@@ -12,7 +14,9 @@ import { getJobsGroup } from "./state-adapter-cases/get-jobs.js";
 import { getStartAttemptDelayMsGroup } from "./state-adapter-cases/get-start-attempt-delay-ms.js";
 import { listBlockedJobsGroup } from "./state-adapter-cases/list-blocked-jobs.js";
 import { listChainJobsGroup } from "./state-adapter-cases/list-chain-jobs.js";
+import { listChainTypeNamesGroup } from "./state-adapter-cases/list-chain-type-names.js";
 import { listChainsGroup } from "./state-adapter-cases/list-chains.js";
+import { listJobTypeNamesGroup } from "./state-adapter-cases/list-job-type-names.js";
 import { listJobsGroup } from "./state-adapter-cases/list-jobs.js";
 import { reclaimExpiredJobAttemptGroup } from "./state-adapter-cases/reclaim-expired-job-attempt.js";
 import { rescheduleJobsGroup } from "./state-adapter-cases/reschedule-jobs.js";
@@ -41,6 +45,10 @@ export const stateAdapterConformanceGroups: ConformanceGroup<StateConformanceFix
   getStartAttemptDelayMsGroup,
   rescheduleJobsGroup,
   deleteChainsGroup,
+  listJobTypeNamesGroup,
+  listChainTypeNamesGroup,
+  countByJobTypeNamesGroup,
+  countByChainTypeNamesGroup,
   listChainsGroup,
   listJobsGroup,
   listChainJobsGroup,

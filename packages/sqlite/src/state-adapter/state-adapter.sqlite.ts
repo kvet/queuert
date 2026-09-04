@@ -265,7 +265,7 @@ ON {{table_prefix}}job (type_name, scheduled_at)
 WHERE blocked = 0 AND attempt_at IS NULL AND completed_at IS NULL`),
       sql(/* sql */ `
 CREATE INDEX IF NOT EXISTS {{table_prefix}}job_pending_idx
-ON {{table_prefix}}job (scheduled_at)
+ON {{table_prefix}}job (type_name, scheduled_at)
 WHERE attempt_at IS NULL AND completed_at IS NULL`),
       sql(/* sql */ `
 CREATE INDEX IF NOT EXISTS {{table_prefix}}job_running_idx
@@ -273,7 +273,7 @@ ON {{table_prefix}}job (type_name, attempt_until)
 WHERE attempt_at IS NOT NULL AND completed_at IS NULL`),
       sql(/* sql */ `
 CREATE INDEX IF NOT EXISTS {{table_prefix}}job_completed_idx
-ON {{table_prefix}}job (completed_at)
+ON {{table_prefix}}job (type_name, completed_at)
 WHERE completed_at IS NOT NULL`),
       sql(/* sql */ `
 CREATE UNIQUE INDEX IF NOT EXISTS {{table_prefix}}job_continuation_idx
@@ -281,20 +281,20 @@ ON {{table_prefix}}job (continued_to_id)
 WHERE continued_to_id IS NOT NULL`),
       sql(/* sql */ `
 CREATE INDEX IF NOT EXISTS {{table_prefix}}chain_tail_running_idx
-ON {{table_prefix}}job (chain_id)
+ON {{table_prefix}}job (chain_type_name, chain_id)
 WHERE continued_to_id IS NULL AND completed_at IS NULL`),
       sql(/* sql */ `
 CREATE INDEX IF NOT EXISTS {{table_prefix}}chain_tail_completed_idx
-ON {{table_prefix}}job (chain_id)
+ON {{table_prefix}}job (chain_type_name, chain_id)
 WHERE continued_to_id IS NULL AND completed_at IS NOT NULL`),
       sql(/* sql */ `DROP INDEX IF EXISTS {{table_prefix}}chain_listing_idx`),
       sql(/* sql */ `
 CREATE INDEX IF NOT EXISTS {{table_prefix}}chain_head_idx
-ON {{table_prefix}}job (created_at) WHERE chain_index = 0`),
+ON {{table_prefix}}job (chain_type_name, created_at) WHERE chain_index = 0`),
       sql(/* sql */ `DROP INDEX IF EXISTS {{table_prefix}}job_listing_idx`),
       sql(/* sql */ `
 CREATE INDEX IF NOT EXISTS {{table_prefix}}job_idx
-ON {{table_prefix}}job (created_at)`),
+ON {{table_prefix}}job (type_name, created_at)`),
     ],
   },
 ];
@@ -386,6 +386,7 @@ CREATE TABLE IF NOT EXISTS {{table_prefix}}migration (
   };
 };
 
+const COUNT_CAP = 10000;
 const SQL_IDENTIFIER_PATTERN = /^[a-zA-Z_][a-zA-Z0-9_]*$/;
 
 const validateSqlIdentifier = (value: string, name: string): void => {
@@ -1793,11 +1794,186 @@ WHERE chain_id IN (SELECT value FROM json_each(?))
       });
       return { deleted, blockerRefs: [] };
     },
+
+    listChainTypeNames: async ({ txCtx }) => {
+      const rows = await executeTypedSql({
+        txCtx,
+        sql: templateCache.getOrCompute("listChainTypeNames", () =>
+          applyTemplate(
+            sql(
+              /* sql */ `
+WITH RECURSIVE types AS (
+  SELECT min(chain_type_name) AS chain_type_name FROM ${tablePrefix}job WHERE chain_index = 0
+  UNION ALL
+  SELECT (SELECT min(chain_type_name) FROM ${tablePrefix}job WHERE chain_index = 0 AND chain_type_name > types.chain_type_name)
+  FROM types WHERE types.chain_type_name IS NOT NULL
+)
+SELECT chain_type_name FROM types WHERE chain_type_name IS NOT NULL
+`,
+              {
+                id: "listChainTypeNames",
+                params: [],
+                columns: { chain_type_name: t.string() },
+                readOnly: true,
+              },
+            ),
+          ),
+        ),
+      });
+      return rows.map((r) => r.chain_type_name);
+    },
+
+    listJobTypeNames: async ({ txCtx }) => {
+      const rows = await executeTypedSql({
+        txCtx,
+        sql: templateCache.getOrCompute("listJobTypeNames", () =>
+          applyTemplate(
+            sql(
+              /* sql */ `
+WITH RECURSIVE types AS (
+  SELECT min(type_name) AS type_name FROM ${tablePrefix}job
+  UNION ALL
+  SELECT (SELECT min(type_name) FROM ${tablePrefix}job WHERE type_name > types.type_name)
+  FROM types WHERE types.type_name IS NOT NULL
+)
+SELECT type_name FROM types WHERE type_name IS NOT NULL
+`,
+              {
+                id: "listJobTypeNames",
+                params: [],
+                columns: { type_name: t.string() },
+                readOnly: true,
+              },
+            ),
+          ),
+        ),
+      });
+      return rows.map((r) => r.type_name);
+    },
+
+    countByChainTypeNames: async ({ txCtx, typeNames }) => {
+      if (typeNames.length === 0) return [];
+
+      const rows = await executeTypedSql({
+        txCtx,
+        sql: templateCache.getOrCompute("countByChainTypeNames", () =>
+          applyTemplate(
+            sql(
+              /* sql */ `
+SELECT
+  je.value AS name,
+  (SELECT count(*) FROM (
+    SELECT 1 FROM ${tablePrefix}job
+    WHERE chain_type_name = je.value AND continued_to_id IS NULL AND completed_at IS NULL
+    LIMIT ${COUNT_CAP + 1}
+  )) AS running_cnt,
+  (SELECT count(*) FROM (
+    SELECT 1 FROM ${tablePrefix}job
+    WHERE chain_type_name = je.value AND continued_to_id IS NULL AND completed_at IS NOT NULL
+    LIMIT ${COUNT_CAP + 1}
+  )) AS completed_cnt
+FROM json_each(?) AS je
+`,
+              {
+                id: "countByChainTypeNames",
+                params: [t.string()],
+                columns: {
+                  name: t.string(),
+                  running_cnt: t.number(),
+                  completed_cnt: t.number(),
+                },
+                readOnly: true,
+              },
+            ),
+          ),
+        ),
+        params: [JSON.stringify(typeNames)],
+      });
+
+      const map = new Map(rows.map((r) => [r.name, r]));
+      return typeNames.map((name) => {
+        const r = map.get(name);
+        if (!r)
+          return {
+            running: { count: 0, hasMore: false },
+            completed: { count: 0, hasMore: false },
+          };
+        return {
+          running: {
+            count: Math.min(r.running_cnt, COUNT_CAP),
+            hasMore: r.running_cnt > COUNT_CAP,
+          },
+          completed: {
+            count: Math.min(r.completed_cnt, COUNT_CAP),
+            hasMore: r.completed_cnt > COUNT_CAP,
+          },
+        };
+      });
+    },
+
+    countByJobTypeNames: async ({ txCtx, typeNames }) => {
+      if (typeNames.length === 0) return [];
+
+      const rows = await executeTypedSql({
+        txCtx,
+        sql: templateCache.getOrCompute("countByJobTypeNames", () =>
+          applyTemplate(
+            sql(
+              /* sql */ `
+SELECT
+  je.value AS name,
+  (SELECT count(*) FROM (SELECT 1 FROM ${tablePrefix}job WHERE type_name = je.value AND attempt_at IS NULL AND completed_at IS NULL LIMIT ${COUNT_CAP + 1})) AS pending_cnt,
+  (SELECT count(*) FROM (SELECT 1 FROM ${tablePrefix}job WHERE type_name = je.value AND attempt_at IS NOT NULL AND completed_at IS NULL LIMIT ${COUNT_CAP + 1})) AS running_cnt,
+  (SELECT count(*) FROM (SELECT 1 FROM ${tablePrefix}job WHERE type_name = je.value AND completed_at IS NOT NULL LIMIT ${COUNT_CAP + 1})) AS completed_cnt
+FROM json_each(?) AS je
+`,
+              {
+                id: "countByJobTypeNames",
+                params: [t.string()],
+                columns: {
+                  name: t.string(),
+                  pending_cnt: t.number(),
+                  running_cnt: t.number(),
+                  completed_cnt: t.number(),
+                },
+                readOnly: true,
+              },
+            ),
+          ),
+        ),
+        params: [JSON.stringify(typeNames)],
+      });
+
+      const map = new Map(rows.map((r) => [r.name, r]));
+      return typeNames.map((name) => {
+        const r = map.get(name);
+        if (!r)
+          return {
+            pending: { count: 0, hasMore: false },
+            running: { count: 0, hasMore: false },
+            completed: { count: 0, hasMore: false },
+          };
+        return {
+          pending: {
+            count: Math.min(r.pending_cnt, COUNT_CAP),
+            hasMore: r.pending_cnt > COUNT_CAP,
+          },
+          running: {
+            count: Math.min(r.running_cnt, COUNT_CAP),
+            hasMore: r.running_cnt > COUNT_CAP,
+          },
+          completed: {
+            count: Math.min(r.completed_cnt, COUNT_CAP),
+            hasMore: r.completed_cnt > COUNT_CAP,
+          },
+        };
+      });
+    },
+
     listChains: async ({
       txCtx,
       typeName,
       independent,
-      chainId,
       from,
       to,
       status,
@@ -1813,12 +1989,10 @@ WHERE chain_id IN (SELECT value FROM json_each(?))
       const params: unknown[] = [];
       const paramTypes: DataType[] = [];
 
-      const addFilter = () => {
-        if (typeName?.length) {
-          conditions.push("root.type_name IN (SELECT value FROM json_each(?))");
-          params.push(JSON.stringify(typeName));
-          paramTypes.push(t.string());
-        }
+      const addFilter = (typeAlias = "root", dateAlias = "root", dateCol = "created_at") => {
+        conditions.push(`${typeAlias}.chain_type_name = ?`);
+        params.push(typeName);
+        paramTypes.push(t.string());
         if (independent === true) {
           conditions.push(
             `NOT EXISTS (SELECT 1 FROM ${tablePrefix}job_blocker jb WHERE jb.blocked_by_chain_id = root.chain_id)`,
@@ -1828,18 +2002,13 @@ WHERE chain_id IN (SELECT value FROM json_each(?))
             `EXISTS (SELECT 1 FROM ${tablePrefix}job_blocker jb WHERE jb.blocked_by_chain_id = root.chain_id)`,
           );
         }
-        if (chainId?.length) {
-          conditions.push("root.chain_id IN (SELECT value FROM json_each(?))");
-          params.push(JSON.stringify(chainId));
-          paramTypes.push(t.string());
-        }
         if (from) {
-          conditions.push("root.created_at >= ?");
+          conditions.push(`${dateAlias}.${dateCol} >= ?`);
           params.push(isoToSqlite(from.toISOString()));
           paramTypes.push(t.string());
         }
         if (to) {
-          conditions.push("root.created_at <= ?");
+          conditions.push(`${dateAlias}.${dateCol} <= ?`);
           params.push(isoToSqlite(to.toISOString()));
           paramTypes.push(t.string());
         }
@@ -1849,7 +2018,7 @@ WHERE chain_id IN (SELECT value FROM json_each(?))
 
       if (status === "running" && orderBy === "createdAt") {
         // Drive from tails WHERE continued_to_id IS NULL AND completed_at IS NULL, JOIN to root
-        addFilter();
+        addFilter("tail");
         const sortAlias = "root";
         const sortCol = "created_at";
         if (cursor) {
@@ -1872,7 +2041,7 @@ WHERE chain_id IN (SELECT value FROM json_each(?))
         sqlStr = `SELECT ${jobColumnsSelect("root")}, ${jobColumnsPrefixedSelect("tail", "lc_")} FROM ${tablePrefix}job AS tail JOIN ${tablePrefix}job AS root ON root.chain_id = tail.chain_id AND root.chain_index = 0 WHERE tail.continued_to_id IS NULL AND tail.completed_at IS NULL ${where} ORDER BY root.created_at ${orderDir}, root.id ${orderDir} LIMIT ?`;
       } else if (status === "completed" && orderBy === "completedAt") {
         // Drive from tails WHERE continued_to_id IS NULL AND completed_at IS NOT NULL, JOIN to root, sort by tail.completed_at
-        addFilter();
+        addFilter("tail", "tail", "completed_at");
         const sortAlias = "tail";
         const sortCol = "completed_at";
         if (cursor) {
@@ -1988,18 +2157,7 @@ WHERE chain_id IN (SELECT value FROM json_each(?))
     },
 
     listJobs: async (listJobsParams) => {
-      const {
-        txCtx,
-        typeName,
-        chainTypeName,
-        chainId,
-        jobId,
-        from,
-        to,
-        orderBy,
-        orderDirection,
-        page,
-      } = listJobsParams;
+      const { txCtx, typeName, from, to, orderBy, orderDirection, page } = listJobsParams;
       const status = listJobsParams.status as string | undefined;
       const blocked =
         status === "pending" ? (listJobsParams as { blocked?: boolean }).blocked : undefined;
@@ -2038,33 +2196,16 @@ WHERE chain_id IN (SELECT value FROM json_each(?))
         }
       }
 
-      if (typeName?.length) {
-        conditions.push("j.type_name IN (SELECT value FROM json_each(?))");
-        params.push(JSON.stringify(typeName));
-        paramTypes.push(t.string());
-      }
-      if (chainTypeName?.length) {
-        conditions.push("j.chain_type_name IN (SELECT value FROM json_each(?))");
-        params.push(JSON.stringify(chainTypeName));
-        paramTypes.push(t.string());
-      }
-      if (chainId?.length) {
-        conditions.push("j.chain_id IN (SELECT value FROM json_each(?))");
-        params.push(JSON.stringify(chainId));
-        paramTypes.push(t.string());
-      }
-      if (jobId?.length) {
-        conditions.push("j.id IN (SELECT value FROM json_each(?))");
-        params.push(JSON.stringify(jobId));
-        paramTypes.push(t.string());
-      }
+      conditions.push("j.type_name = ?");
+      params.push(typeName);
+      paramTypes.push(t.string());
       if (from) {
-        conditions.push("j.created_at >= ?");
+        conditions.push(`j.${sortCol} >= ?`);
         params.push(isoToSqlite(from.toISOString()));
         paramTypes.push(t.string());
       }
       if (to) {
-        conditions.push("j.created_at <= ?");
+        conditions.push(`j.${sortCol} <= ?`);
         params.push(isoToSqlite(to.toISOString()));
         paramTypes.push(t.string());
       }

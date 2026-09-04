@@ -787,68 +787,381 @@ export const clientQueriesTestSuite = ({ it: baseIt }: { it: TestAPI<TestSuiteCo
     );
   });
 
+  describe("listChainTypeNames", () => {
+    it("listChainTypeNames returns empty array when no chains exist", async ({
+      client,
+      expect,
+    }) => {
+      const names = await client.listChainTypeNames();
+
+      expect(names).toEqual([]);
+    });
+
+    it("listChainTypeNames returns sorted distinct chain type names", async ({
+      client,
+      withTransaction,
+      expect,
+    }) => {
+      await withTransaction(async (txCtx, transactionHooks) =>
+        client.createChain({
+          ...txCtx,
+          transactionHooks,
+          typeName: "notification",
+          input: { message: "hi" },
+        }),
+      );
+      await withTransaction(async (txCtx, transactionHooks) =>
+        client.createChain({
+          ...txCtx,
+          transactionHooks,
+          typeName: "order",
+          input: { amount: 1 },
+        }),
+      );
+      await withTransaction(async (txCtx, transactionHooks) =>
+        client.createChain({
+          ...txCtx,
+          transactionHooks,
+          typeName: "order",
+          input: { amount: 2 },
+        }),
+      );
+
+      const names = await client.listChainTypeNames();
+
+      expect(names).toEqual(["notification", "order"]);
+    });
+
+    it("listChainTypeNames does not include continuation-only type names", async ({
+      client,
+      withTransaction,
+      expect,
+    }) => {
+      const order = await withTransaction(async (txCtx, transactionHooks) =>
+        client.createChain({
+          ...txCtx,
+          transactionHooks,
+          typeName: "order",
+          input: { amount: 1 },
+        }),
+      );
+
+      await withTransaction(async (txCtx, transactionHooks) =>
+        client.completeChain({
+          ...txCtx,
+          transactionHooks,
+          ...order,
+          handler: async ({ job, completeJob }) => {
+            if (job.typeName === "order") {
+              return completeJob(job, async ({ finish }) =>
+                finish({
+                  continueWith: { typeName: "order_fulfill", input: { orderId: "o1" } },
+                }),
+              );
+            }
+          },
+        }),
+      );
+
+      const names = await client.listChainTypeNames();
+
+      expect(names).toEqual(["order"]);
+    });
+  });
+
+  describe("listJobTypeNames", () => {
+    it("listJobTypeNames returns empty array when no jobs exist", async ({ client, expect }) => {
+      const names = await client.listJobTypeNames();
+
+      expect(names).toEqual([]);
+    });
+
+    it("listJobTypeNames returns sorted distinct job type names", async ({
+      client,
+      withTransaction,
+      expect,
+    }) => {
+      await withTransaction(async (txCtx, transactionHooks) =>
+        client.createChain({
+          ...txCtx,
+          transactionHooks,
+          typeName: "notification",
+          input: { message: "hi" },
+        }),
+      );
+      await withTransaction(async (txCtx, transactionHooks) =>
+        client.createChain({
+          ...txCtx,
+          transactionHooks,
+          typeName: "order",
+          input: { amount: 1 },
+        }),
+      );
+      await withTransaction(async (txCtx, transactionHooks) =>
+        client.createChain({
+          ...txCtx,
+          transactionHooks,
+          typeName: "order",
+          input: { amount: 2 },
+        }),
+      );
+
+      const names = await client.listJobTypeNames();
+
+      expect(names).toEqual(["notification", "order"]);
+    });
+
+    it("listJobTypeNames includes continuation job type names", async ({
+      client,
+      withTransaction,
+      expect,
+    }) => {
+      const order = await withTransaction(async (txCtx, transactionHooks) =>
+        client.createChain({
+          ...txCtx,
+          transactionHooks,
+          typeName: "order",
+          input: { amount: 1 },
+        }),
+      );
+
+      await withTransaction(async (txCtx, transactionHooks) =>
+        client.completeChain({
+          ...txCtx,
+          transactionHooks,
+          ...order,
+          handler: async ({ job, completeJob }) => {
+            if (job.typeName === "order") {
+              return completeJob(job, async ({ finish }) =>
+                finish({
+                  continueWith: { typeName: "order_fulfill", input: { orderId: "o1" } },
+                }),
+              );
+            }
+          },
+        }),
+      );
+
+      const names = await client.listJobTypeNames();
+
+      expect(names).toEqual(["order", "order_fulfill"]);
+    });
+  });
+
+  describe("countByChainTypeNames", () => {
+    it("returns empty array for empty input", async ({ client, expect }) => {
+      const counts = await client.countByChainTypeNames({ typeNames: [] });
+      expect(counts).toEqual([]);
+    });
+
+    it("counts running chains", async ({ client, withTransaction, expect }) => {
+      await withTransaction(async (txCtx, transactionHooks) =>
+        client.createChain({ ...txCtx, transactionHooks, typeName: "order", input: { amount: 1 } }),
+      );
+      await withTransaction(async (txCtx, transactionHooks) =>
+        client.createChain({
+          ...txCtx,
+          transactionHooks,
+          typeName: "notification",
+          input: { message: "hi" },
+        }),
+      );
+
+      const counts = await client.countByChainTypeNames({
+        typeNames: ["order", "notification", "report"],
+      });
+
+      expect(counts).toEqual([
+        { running: { count: 1, hasMore: false }, completed: { count: 0, hasMore: false } },
+        { running: { count: 1, hasMore: false }, completed: { count: 0, hasMore: false } },
+        { running: { count: 0, hasMore: false }, completed: { count: 0, hasMore: false } },
+      ]);
+    });
+
+    it("counts completed chains", async ({
+      stateAdapter,
+      notifyAdapter,
+      observabilityAdapter,
+      log,
+      withTransaction,
+      withWorkers,
+      expect,
+    }) => {
+      const jobTypes = defineJobTypes<{
+        task_a: { entry: true; input: null; output: null };
+        task_b: { entry: true; input: null; output: null };
+      }>();
+      const client = await createClient({
+        stateAdapter,
+        notifyAdapter,
+        observabilityAdapter,
+        log,
+        jobTypes,
+      });
+
+      const chainA = await withTransaction(async (txCtx, transactionHooks) =>
+        client.createChain({ ...txCtx, transactionHooks, typeName: "task_a", input: null }),
+      );
+      await withTransaction(async (txCtx, transactionHooks) =>
+        client.createChain({ ...txCtx, transactionHooks, typeName: "task_a", input: null }),
+      );
+      await withTransaction(async (txCtx, transactionHooks) =>
+        client.createChain({ ...txCtx, transactionHooks, typeName: "task_b", input: null }),
+      );
+
+      const worker = await createInProcessWorker({
+        client,
+        concurrency: 1,
+        processors: createProcessors({
+          client,
+          jobTypes,
+          processors: {
+            task_a: {
+              attemptHandler: async ({ complete }) =>
+                complete(async ({ finish }) => finish({ output: null })),
+            },
+            task_b: {
+              attemptHandler: async ({ complete }) =>
+                complete(async ({ finish }) => finish({ output: null })),
+            },
+          },
+        }),
+      });
+
+      await withWorkers([await worker.start()], async () => {
+        await client.awaitChain(chainA, completionOptions);
+      });
+
+      const counts = await client.countByChainTypeNames({ typeNames: ["task_a", "task_b"] });
+
+      expect(counts[0].completed.count).toBeGreaterThanOrEqual(1);
+      expect(counts[0].running.count + counts[0].completed.count).toBe(2);
+      expect(counts[1].running.count + counts[1].completed.count).toBeGreaterThanOrEqual(1);
+    });
+  });
+
+  describe("countByJobTypeNames", () => {
+    it("returns empty array for empty input", async ({ client, expect }) => {
+      const counts = await client.countByJobTypeNames({ typeNames: [] });
+      expect(counts).toEqual([]);
+    });
+
+    it("counts pending jobs", async ({ client, withTransaction, expect }) => {
+      await withTransaction(async (txCtx, transactionHooks) =>
+        client.createChain({ ...txCtx, transactionHooks, typeName: "order", input: { amount: 1 } }),
+      );
+      await withTransaction(async (txCtx, transactionHooks) =>
+        client.createChain({ ...txCtx, transactionHooks, typeName: "order", input: { amount: 2 } }),
+      );
+      await withTransaction(async (txCtx, transactionHooks) =>
+        client.createChain({
+          ...txCtx,
+          transactionHooks,
+          typeName: "notification",
+          input: { message: "hi" },
+        }),
+      );
+
+      const counts = await client.countByJobTypeNames({
+        typeNames: ["order", "notification", "report"],
+      });
+
+      expect(counts).toEqual([
+        {
+          pending: { count: 2, hasMore: false },
+          running: { count: 0, hasMore: false },
+          completed: { count: 0, hasMore: false },
+        },
+        {
+          pending: { count: 1, hasMore: false },
+          running: { count: 0, hasMore: false },
+          completed: { count: 0, hasMore: false },
+        },
+        {
+          pending: { count: 0, hasMore: false },
+          running: { count: 0, hasMore: false },
+          completed: { count: 0, hasMore: false },
+        },
+      ]);
+    });
+
+    it("counts running and completed jobs", async ({
+      stateAdapter,
+      notifyAdapter,
+      observabilityAdapter,
+      log,
+      withTransaction,
+      withWorkers,
+      expect,
+    }) => {
+      const jobTypes = defineJobTypes<{
+        task_a: { entry: true; input: null; output: null };
+        task_b: { entry: true; input: null; output: null };
+      }>();
+      const client = await createClient({
+        stateAdapter,
+        notifyAdapter,
+        observabilityAdapter,
+        log,
+        jobTypes,
+      });
+
+      await withTransaction(async (txCtx, transactionHooks) =>
+        client.createChain({ ...txCtx, transactionHooks, typeName: "task_a", input: null }),
+      );
+      const toComplete = await withTransaction(async (txCtx, transactionHooks) =>
+        client.createChain({ ...txCtx, transactionHooks, typeName: "task_a", input: null }),
+      );
+      await withTransaction(async (txCtx, transactionHooks) =>
+        client.createChain({ ...txCtx, transactionHooks, typeName: "task_b", input: null }),
+      );
+
+      const worker = await createInProcessWorker({
+        client,
+        concurrency: 1,
+        processors: createProcessors({
+          client,
+          jobTypes,
+          processors: {
+            task_a: {
+              attemptHandler: async ({ complete }) =>
+                complete(async ({ finish }) => finish({ output: null })),
+            },
+            task_b: {
+              attemptHandler: async ({ complete }) =>
+                complete(async ({ finish }) => finish({ output: null })),
+            },
+          },
+        }),
+      });
+
+      await withWorkers([await worker.start()], async () => {
+        await client.awaitChain(toComplete, completionOptions);
+      });
+
+      const counts = await client.countByJobTypeNames({ typeNames: ["task_a", "task_b"] });
+
+      expect(counts[0].completed.count).toBeGreaterThanOrEqual(1);
+      expect(counts[0].pending.count + counts[0].running.count + counts[0].completed.count).toBe(2);
+      expect(
+        counts[1].pending.count + counts[1].running.count + counts[1].completed.count,
+      ).toBeGreaterThanOrEqual(1);
+    });
+  });
+
   describe("listChains", () => {
     it("listChains returns empty page when no chains exist", async ({ client, expect }) => {
-      const page = await client.listChains({});
+      const page = await client.listChains({ typeName: "order" });
 
       expect(page.items).toEqual([]);
       expect(page.nextCursor).toBeNull();
     });
 
-    it("listChains returns all chains", async ({ client, withTransaction, expect }) => {
-      const chain1 = await withTransaction(async (txCtx, transactionHooks) =>
-        client.createChain({
-          ...txCtx,
-          transactionHooks,
-          typeName: "order",
-          input: { amount: 100 },
-        }),
-      );
-      const chain2 = await withTransaction(async (txCtx, transactionHooks) =>
-        client.createChain({
-          ...txCtx,
-          transactionHooks,
-          typeName: "notification",
-          input: { message: "hi" },
-        }),
-      );
-
-      const page = await client.listChains({});
-
-      expect(page.items).toHaveLength(2);
-      const ids = page.items.map((c) => c.id);
-      expect(ids).toContain(chain1.id);
-      expect(ids).toContain(chain2.id);
-    });
-
-    it("listChains filters by typeName", async ({ client, withTransaction, expect }) => {
-      await withTransaction(async (txCtx, transactionHooks) =>
-        client.createChain({
-          ...txCtx,
-          transactionHooks,
-          typeName: "order",
-          input: { amount: 100 },
-        }),
-      );
-      const notif = await withTransaction(async (txCtx, transactionHooks) =>
-        client.createChain({
-          ...txCtx,
-          transactionHooks,
-          typeName: "notification",
-          input: { message: "hi" },
-        }),
-      );
-
-      const page = await client.listChains({
-        typeName: ["notification"],
-      });
-
-      expect(page.items).toHaveLength(1);
-      expect(page.items[0].id).toBe(notif.id);
-      expect(page.items[0].typeName).toBe("notification");
-    });
-
-    it("listChains filters by id", async ({ client, withTransaction, expect }) => {
+    it("listChains returns chains of the given type", async ({
+      client,
+      withTransaction,
+      expect,
+    }) => {
       const chain1 = await withTransaction(async (txCtx, transactionHooks) =>
         client.createChain({
           ...txCtx,
@@ -866,9 +1179,7 @@ export const clientQueriesTestSuite = ({ it: baseIt }: { it: TestAPI<TestSuiteCo
         }),
       );
 
-      const page = await client.listChains({
-        chainId: [chain1.id],
-      });
+      const page = await client.listChains({ typeName: "order" });
 
       expect(page.items).toHaveLength(1);
       expect(page.items[0].id).toBe(chain1.id);
@@ -897,12 +1208,11 @@ export const clientQueriesTestSuite = ({ it: baseIt }: { it: TestAPI<TestSuiteCo
         }),
       );
 
-      const allChains = await client.listChains({});
-      const rootChains = await client.listChains({ independent: true });
+      const allChains = await client.listChains({ typeName: "order" });
+      const rootChains = await client.listChains({ typeName: "order", independent: true });
 
-      expect(allChains.items).toHaveLength(2);
-      expect(rootChains.items).toHaveLength(1);
-      expect(rootChains.items[0].typeName).toBe("report");
+      expect(allChains.items).toHaveLength(1);
+      expect(rootChains.items).toHaveLength(0);
     });
 
     it("listChains filters by status", async ({ client, withTransaction, expect }) => {
@@ -932,9 +1242,9 @@ export const clientQueriesTestSuite = ({ it: baseIt }: { it: TestAPI<TestSuiteCo
         }),
       );
 
-      const running = await client.listChains({ status: "running" });
+      const running = await client.listChains({ typeName: "order", status: "running" });
 
-      expect(running.items).toHaveLength(3);
+      expect(running.items).toHaveLength(1);
     });
 
     it("listChains orders ascending", async ({ client, withTransaction, expect }) => {
@@ -956,8 +1266,8 @@ export const clientQueriesTestSuite = ({ it: baseIt }: { it: TestAPI<TestSuiteCo
         }),
       );
 
-      const desc = await client.listChains({});
-      const asc = await client.listChains({ orderDirection: "asc" });
+      const desc = await client.listChains({ typeName: "order" });
+      const asc = await client.listChains({ typeName: "order", orderDirection: "asc" });
 
       expect(desc.items).toHaveLength(2);
       expect(asc.items).toHaveLength(2);
@@ -991,11 +1301,15 @@ export const clientQueriesTestSuite = ({ it: baseIt }: { it: TestAPI<TestSuiteCo
         }),
       );
 
-      const page1 = await client.listChains({ limit: 2 });
+      const page1 = await client.listChains({ typeName: "order", limit: 2 });
       expect(page1.items).toHaveLength(2);
       expect(page1.nextCursor).not.toBeNull();
 
-      const page2 = await client.listChains({ limit: 2, cursor: page1.nextCursor! });
+      const page2 = await client.listChains({
+        typeName: "order",
+        limit: 2,
+        cursor: page1.nextCursor!,
+      });
       expect(page2.items).toHaveLength(1);
       expect(page2.nextCursor).toBeNull();
 
@@ -1026,6 +1340,7 @@ export const clientQueriesTestSuite = ({ it: baseIt }: { it: TestAPI<TestSuiteCo
       const latest = Math.max(...createdMs);
 
       const page = await client.listChains({
+        typeName: "order",
         from: new Date(earliest - 1000),
         to: new Date(latest + 1000),
       });
@@ -1033,6 +1348,7 @@ export const clientQueriesTestSuite = ({ it: baseIt }: { it: TestAPI<TestSuiteCo
       expect(page.items).toHaveLength(2);
 
       const empty = await client.listChains({
+        typeName: "order",
         from: new Date(latest + 60_000),
       });
       expect(empty.items).toHaveLength(0);
@@ -1092,7 +1408,7 @@ export const clientQueriesTestSuite = ({ it: baseIt }: { it: TestAPI<TestSuiteCo
       );
       await sleep(5);
       const chainB = await withTransaction(async (txCtx, transactionHooks) =>
-        client.createChain({ ...txCtx, transactionHooks, typeName: "task_b", input: null }),
+        client.createChain({ ...txCtx, transactionHooks, typeName: "task_a", input: null }),
       );
 
       await withWorkers([await worker.start()], async () => {
@@ -1101,6 +1417,7 @@ export const clientQueriesTestSuite = ({ it: baseIt }: { it: TestAPI<TestSuiteCo
       });
 
       const byCreatedAt = await client.listChains({
+        typeName: "task_a",
         status: "completed",
         orderBy: "createdAt",
         orderDirection: "asc",
@@ -1109,6 +1426,7 @@ export const clientQueriesTestSuite = ({ it: baseIt }: { it: TestAPI<TestSuiteCo
       expect(byCreatedAt.items[1].id).toBe(chainB.id);
 
       const byCompletedAt = await client.listChains({
+        typeName: "task_a",
         status: "completed",
         orderBy: "completedAt",
         orderDirection: "desc",
@@ -1133,7 +1451,7 @@ export const clientQueriesTestSuite = ({ it: baseIt }: { it: TestAPI<TestSuiteCo
       );
 
       const page = await client.listChains({
-        typeName: ["order"],
+        typeName: "order",
       });
 
       const result = page.items[0];
@@ -1149,13 +1467,13 @@ export const clientQueriesTestSuite = ({ it: baseIt }: { it: TestAPI<TestSuiteCo
 
   describe("listJobs", () => {
     it("listJobs returns empty page when no jobs exist", async ({ client, expect }) => {
-      const page = await client.listJobs({});
+      const page = await client.listJobs({ typeName: "order" });
 
       expect(page.items).toEqual([]);
       expect(page.nextCursor).toBeNull();
     });
 
-    it("listJobs returns all jobs across chains", async ({ client, withTransaction, expect }) => {
+    it("listJobs returns jobs of the given type", async ({ client, withTransaction, expect }) => {
       await withTransaction(async (txCtx, transactionHooks) =>
         client.createChain({
           ...txCtx,
@@ -1173,94 +1491,9 @@ export const clientQueriesTestSuite = ({ it: baseIt }: { it: TestAPI<TestSuiteCo
         }),
       );
 
-      const page = await client.listJobs({});
-
-      expect(page.items).toHaveLength(2);
-    });
-
-    it("listJobs filters by typeName", async ({ client, withTransaction, expect }) => {
-      await withTransaction(async (txCtx, transactionHooks) =>
-        client.createChain({
-          ...txCtx,
-          transactionHooks,
-          typeName: "order",
-          input: { amount: 100 },
-        }),
-      );
-      await withTransaction(async (txCtx, transactionHooks) =>
-        client.createChain({
-          ...txCtx,
-          transactionHooks,
-          typeName: "notification",
-          input: { message: "hi" },
-        }),
-      );
-
-      const page = await client.listJobs({
-        typeName: ["notification"],
-      });
+      const page = await client.listJobs({ typeName: "order" });
 
       expect(page.items).toHaveLength(1);
-      expect(page.items[0].typeName).toBe("notification");
-    });
-
-    it("listJobs filters by chainTypeName", async ({ client, withTransaction, expect }) => {
-      await withTransaction(async (txCtx, transactionHooks) =>
-        client.createChain({
-          ...txCtx,
-          transactionHooks,
-          typeName: "order",
-          input: { amount: 100 },
-        }),
-      );
-      await withTransaction(async (txCtx, transactionHooks) =>
-        client.createChain({
-          ...txCtx,
-          transactionHooks,
-          typeName: "notification",
-          input: { message: "hi" },
-        }),
-      );
-
-      const page = await client.listJobs({
-        chainTypeName: ["order"],
-      });
-
-      expect(page.items).toHaveLength(1);
-      expect(page.items[0].chainTypeName).toBe("order");
-
-      // Type-level: chainTypeName only accepts entry job type names
-      expectTypeOf(client.listJobs)
-        .parameter(0)
-        .toHaveProperty("chainTypeName")
-        .exclude<undefined>()
-        .items.toEqualTypeOf<"order" | "notification" | "report">();
-    });
-
-    it("listJobs filters by chainId", async ({ client, withTransaction, expect }) => {
-      const chain = await withTransaction(async (txCtx, transactionHooks) =>
-        client.createChain({
-          ...txCtx,
-          transactionHooks,
-          typeName: "order",
-          input: { amount: 100 },
-        }),
-      );
-      await withTransaction(async (txCtx, transactionHooks) =>
-        client.createChain({
-          ...txCtx,
-          transactionHooks,
-          typeName: "notification",
-          input: { message: "hi" },
-        }),
-      );
-
-      const page = await client.listJobs({
-        chainId: [chain.id],
-      });
-
-      expect(page.items).toHaveLength(1);
-      expect(page.items[0].chainId).toBe(chain.id);
     });
 
     it("listJobs filters by status", async ({ client, withTransaction, expect }) => {
@@ -1290,20 +1523,27 @@ export const clientQueriesTestSuite = ({ it: baseIt }: { it: TestAPI<TestSuiteCo
         }),
       );
 
-      const pending = await client.listJobs({ status: "pending" });
-      const blocked = await client.listJobs({ status: "pending", blocked: true });
-      const runnable = await client.listJobs({ status: "pending", blocked: false });
+      const pending = await client.listJobs({ typeName: "report", status: "pending" });
+      const blocked = await client.listJobs({
+        typeName: "report",
+        status: "pending",
+        blocked: true,
+      });
+      const runnable = await client.listJobs({
+        typeName: "order",
+        status: "pending",
+        blocked: false,
+      });
 
-      expect(pending.items).toHaveLength(3);
-      const report = pending.items.find((j) => j.typeName === "report");
-      expect(report?.status === "pending" && report.blocked).toBe(true);
+      expect(pending.items).toHaveLength(1);
+      expect(pending.items[0].status === "pending" && pending.items[0].blocked).toBe(true);
 
       expect(blocked.items).toHaveLength(1);
       expect(blocked.items[0].typeName).toBe("report");
       expect(blocked.items[0].status === "pending" && blocked.items[0].blocked).toBe(true);
 
-      expect(runnable.items).toHaveLength(2);
-      expect(runnable.items.map((j) => j.typeName).sort()).toEqual(["notification", "order"]);
+      expect(runnable.items).toHaveLength(1);
+      expect(runnable.items[0].typeName).toBe("order");
     });
 
     it("listJobs orders ascending", async ({ client, withTransaction, expect }) => {
@@ -1325,8 +1565,8 @@ export const clientQueriesTestSuite = ({ it: baseIt }: { it: TestAPI<TestSuiteCo
         }),
       );
 
-      const desc = await client.listJobs({});
-      const asc = await client.listJobs({ orderDirection: "asc" });
+      const desc = await client.listJobs({ typeName: "order" });
+      const asc = await client.listJobs({ typeName: "order", orderDirection: "asc" });
 
       expect(desc.items).toHaveLength(2);
       expect(asc.items).toHaveLength(2);
@@ -1360,11 +1600,15 @@ export const clientQueriesTestSuite = ({ it: baseIt }: { it: TestAPI<TestSuiteCo
         }),
       );
 
-      const page1 = await client.listJobs({ limit: 2 });
+      const page1 = await client.listJobs({ typeName: "order", limit: 2 });
       expect(page1.items).toHaveLength(2);
       expect(page1.nextCursor).not.toBeNull();
 
-      const page2 = await client.listJobs({ limit: 2, cursor: page1.nextCursor! });
+      const page2 = await client.listJobs({
+        typeName: "order",
+        limit: 2,
+        cursor: page1.nextCursor!,
+      });
       expect(page2.items).toHaveLength(1);
       expect(page2.nextCursor).toBeNull();
     });
@@ -1392,17 +1636,20 @@ export const clientQueriesTestSuite = ({ it: baseIt }: { it: TestAPI<TestSuiteCo
       const latest = Math.max(...createdMs);
 
       const page = await client.listJobs({
+        typeName: "order",
         from: new Date(earliest - 1000),
         to: new Date(latest + 1000),
       });
       expect(page.items).toHaveLength(2);
 
       const futureOnly = await client.listJobs({
+        typeName: "order",
         from: new Date(latest + 60_000),
       });
       expect(futureOnly.items).toHaveLength(0);
 
       const pastOnly = await client.listJobs({
+        typeName: "order",
         to: new Date(earliest - 60_000),
       });
       expect(pastOnly.items).toHaveLength(0);
@@ -1462,7 +1709,7 @@ export const clientQueriesTestSuite = ({ it: baseIt }: { it: TestAPI<TestSuiteCo
       );
       await sleep(5);
       const chainB = await withTransaction(async (txCtx, transactionHooks) =>
-        client.createChain({ ...txCtx, transactionHooks, typeName: "job_b", input: null }),
+        client.createChain({ ...txCtx, transactionHooks, typeName: "job_a", input: null }),
       );
 
       await withWorkers([await worker.start()], async () => {
@@ -1471,6 +1718,7 @@ export const clientQueriesTestSuite = ({ it: baseIt }: { it: TestAPI<TestSuiteCo
       });
 
       const byCreatedAt = await client.listJobs({
+        typeName: "job_a",
         status: "completed",
         orderBy: "createdAt",
         orderDirection: "asc",
@@ -1479,6 +1727,7 @@ export const clientQueriesTestSuite = ({ it: baseIt }: { it: TestAPI<TestSuiteCo
       expect(byCreatedAt.items[1].id).toBe(chainB.id);
 
       const byCompletedAt = await client.listJobs({
+        typeName: "job_a",
         status: "completed",
         orderBy: "completedAt",
         orderDirection: "desc",
@@ -1510,12 +1759,13 @@ export const clientQueriesTestSuite = ({ it: baseIt }: { it: TestAPI<TestSuiteCo
         client.createChain({
           ...txCtx,
           transactionHooks,
-          typeName: "notification",
-          input: { message: "hi" },
+          typeName: "order",
+          input: { amount: 2 },
         }),
       );
 
       const byScheduledAt = await client.listJobs({
+        typeName: "order",
         status: "pending",
         orderBy: "scheduledAt",
         orderDirection: "asc",
@@ -1536,7 +1786,7 @@ export const clientQueriesTestSuite = ({ it: baseIt }: { it: TestAPI<TestSuiteCo
         }),
       );
 
-      const page = await client.listJobs({ typeName: ["notification"] });
+      const page = await client.listJobs({ typeName: "notification" });
       const job = page.items[0];
 
       expect(job.typeName).toBe("notification");
@@ -2292,15 +2542,15 @@ export const clientQueriesTestSuite = ({ it: baseIt }: { it: TestAPI<TestSuiteCo
       expect(headJob).not.toBeNull();
       expect(headJob!.status).toBe("completed");
 
-      const chains = await client.listChains({ typeName: ["task"] });
+      const chains = await client.listChains({ typeName: "task" });
       expect(chains.items).toHaveLength(1);
       const completedChain = chains.items[0];
       expect(completedChain.status).toBe("completed");
       expect((completedChain as { output: unknown }).output).toEqual({ final: 20 });
 
-      const jobs = await client.listJobs({ chainId: [chain.id] });
-      expect(jobs.items).toHaveLength(2);
-      expect(jobs.items.every((j) => j.status === "completed")).toBe(true);
+      const jobs = await client.listJobs({ typeName: "task" });
+      expect(jobs.items).toHaveLength(1);
+      expect(jobs.items[0].status).toBe("completed");
 
       const chainJobs = await client.listChainJobs({ chainId: chain.id });
       expect(chainJobs.items).toHaveLength(2);
@@ -2412,8 +2662,8 @@ export const clientQueriesTestSuite = ({ it: baseIt }: { it: TestAPI<TestSuiteCo
         }),
       );
 
-      const chains = await client.listChains({});
-      const jobs = await client.listJobs({});
+      const chains = await client.listChains({ typeName: "order" });
+      const jobs = await client.listJobs({ typeName: "order" });
 
       expect(chains.items).toHaveLength(1);
       expect(jobs.items).toHaveLength(1);

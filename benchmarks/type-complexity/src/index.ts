@@ -202,8 +202,8 @@ const { transactionHooks } = createTransactionHooks();
 const chain = await client.createChain({ typeName: "${typeName}", input: ${input}, transactionHooks });
 const fetchedChain = await client.getChain({ typeName: "${typeName}", id: chain.id });
 const job = await client.getJob({ typeName: "${typeName}", id: chain.id });
-const chains = await client.listChains({ typeName: ["${typeName}"] });
-const jobs = await client.listJobs({ typeName: ["${typeName}"] });
+const chains = await client.listChains({ typeName: "${typeName}" });
+const jobs = await client.listJobs({ typeName: "${typeName}" });
 ${generateCompleteChainCall(defs, entryDef)}
 void fetchedChain;
 void job;

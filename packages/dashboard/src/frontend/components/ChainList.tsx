@@ -1,7 +1,13 @@
 import { A, useSearchParams } from "@solidjs/router";
-import { For, Show, createMemo, createResource, createSignal } from "solid-js";
+import { For, Show, createEffect, createMemo, createResource, createSignal } from "solid-js";
 
-import { PAGE_SIZE, type UnknownChain, listChains } from "../api.js";
+import {
+  PAGE_SIZE,
+  type UnknownChain,
+  getChainsByIds,
+  listChainTypeNames,
+  listChains,
+} from "../api.js";
 import { createAutoLoadMore } from "./createAutoLoadMore.js";
 import { ChainStatusBadge } from "./StatusBadge.js";
 import { TimeAgo } from "./TimeAgo.js";
@@ -11,10 +17,14 @@ export function ChainList() {
 
   const typeName = () => (searchParams.typeName ?? "") as string;
   const status = () => (searchParams.status ?? "") as string;
-  const id = () => (searchParams.id ?? "") as string;
+  const ids = () => (searchParams.ids ?? "") as string;
   const independent = () => searchParams.independent !== "false";
   const orderBy = () => (searchParams.orderBy ?? "") as string;
   const orderDirection = () => (searchParams.orderDirection ?? "desc") as string;
+
+  const idMode = () => ids().length > 0;
+
+  const [typeNames] = createResource(listChainTypeNames);
 
   const orderByOptions = createMemo(() => {
     const s = status();
@@ -43,20 +53,45 @@ export function ChainList() {
   let loadMoreController: AbortController | null = null;
 
   const [page] = createResource(
-    () => ({
-      typeName: typeName(),
-      status: status(),
-      id: id(),
-      independent: independent(),
-      orderBy: orderBy() || undefined,
-      orderDirection: orderDirection() || undefined,
-    }),
+    () => {
+      const idsVal = ids();
+      if (idsVal) return { mode: "ids" as const, ids: idsVal };
+      const tn = typeName();
+      if (!tn) {
+        setItems([]);
+        setCursor(null);
+        return null;
+      }
+      return {
+        mode: "list" as const,
+        typeName: tn,
+        status: status(),
+        independent: independent(),
+        orderBy: orderBy() || undefined,
+        orderDirection: orderDirection() || undefined,
+      };
+    },
     async (params) => {
       loadMoreController?.abort();
       loadMoreController = null;
+
+      if (params.mode === "ids") {
+        const idList = params.ids
+          .split(",")
+          .map((s) => s.trim())
+          .filter(Boolean);
+        const result = await getChainsByIds(idList);
+        setItems(result.items);
+        setCursor(null);
+        return result;
+      }
+
       const result = await listChains({
-        ...params,
+        typeName: params.typeName,
+        status: params.status,
         independent: params.independent,
+        orderBy: params.orderBy,
+        orderDirection: params.orderDirection,
         limit: PAGE_SIZE,
       });
       setItems(result.items);
@@ -67,15 +102,15 @@ export function ChainList() {
 
   const loadMore = async () => {
     const c = cursor();
-    if (!c) return;
+    const tn = typeName();
+    if (!c || !tn) return;
     const controller = new AbortController();
     loadMoreController = controller;
     let result: Awaited<ReturnType<typeof listChains>>;
     try {
       result = await listChains({
-        typeName: typeName(),
+        typeName: tn,
         status: status(),
-        id: id(),
         independent: independent(),
         orderBy: orderBy() || undefined,
         orderDirection: orderDirection() || undefined,
@@ -105,22 +140,30 @@ export function ChainList() {
       <div class="filter-bar">
         <input
           type="text"
-          placeholder="Chain ID"
-          value={id()}
+          placeholder="Chain IDs (comma-separated)"
+          value={ids()}
           onChange={(e) => {
-            setSearchParams({ id: e.target.value.trim() || undefined });
-          }}
-        />
-        <input
-          type="text"
-          placeholder="Type name"
-          value={typeName()}
-          onChange={(e) => {
-            setSearchParams({ typeName: e.target.value.trim() || undefined });
+            setSearchParams({ ids: e.target.value.trim() || undefined });
           }}
         />
         <select
+          ref={(el) => {
+            createEffect(() => {
+              typeNames();
+              el.value = typeName();
+            });
+          }}
+          disabled={idMode()}
+          onChange={(e) => {
+            setSearchParams({ typeName: e.target.value || undefined });
+          }}
+        >
+          <option value="">Select type…</option>
+          <For each={typeNames()}>{(name) => <option value={name}>{name}</option>}</For>
+        </select>
+        <select
           value={status()}
+          disabled={idMode()}
           onChange={(e) => {
             setSearchParams({ status: e.target.value || undefined, orderBy: undefined });
           }}
@@ -131,6 +174,7 @@ export function ChainList() {
         </select>
         <select
           value={orderBy() || orderByOptions()[0].value}
+          disabled={idMode()}
           onChange={(e) => {
             setSearchParams({ orderBy: e.target.value || undefined });
           }}
@@ -141,6 +185,7 @@ export function ChainList() {
         </select>
         <button
           class="order-direction-btn"
+          disabled={idMode()}
           title={orderDirection() === "asc" ? "Ascending" : "Descending"}
           onClick={() => {
             setSearchParams({ orderDirection: orderDirection() === "asc" ? "desc" : "asc" });
@@ -148,10 +193,11 @@ export function ChainList() {
         >
           {orderDirection() === "asc" ? "↑" : "↓"}
         </button>
-        <label class="checkbox-label">
+        <label class="checkbox-label" data-disabled={idMode() || undefined}>
           <input
             type="checkbox"
             checked={independent()}
+            disabled={idMode()}
             onChange={(e) => {
               setSearchParams({ independent: e.target.checked ? undefined : "false" });
             }}
@@ -160,7 +206,11 @@ export function ChainList() {
         </label>
       </div>
 
-      <Show when={!page.loading && items().length === 0}>
+      <Show when={!idMode() && !typeName()}>
+        <div class="empty">Select a type to list chains</div>
+      </Show>
+
+      <Show when={(idMode() || typeName()) && !page.loading && items().length === 0}>
         <div class="empty">No chains found</div>
       </Show>
 
@@ -179,7 +229,7 @@ export function ChainList() {
                   class="filter-btn"
                   title={`Filter by ${chain.typeName}`}
                   onClick={() => {
-                    setSearchParams({ typeName: chain.typeName });
+                    setSearchParams({ typeName: chain.typeName, ids: undefined });
                   }}
                 />
               </span>
@@ -189,7 +239,7 @@ export function ChainList() {
                   class="filter-btn"
                   title={`Filter by ${chain.id}`}
                   onClick={() => {
-                    setSearchParams({ id: chain.id });
+                    setSearchParams({ ids: chain.id });
                   }}
                 />
               </span>

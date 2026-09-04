@@ -3,69 +3,48 @@ import { type StateAdapter } from "../state-adapter/state-adapter.js";
 
 export type IndexCoverageCaseKey =
   // type discovery
-  | "listJobTypeNames/default"
   | "listChainTypeNames/default"
+  | "listJobTypeNames/default"
+  // counts
+  | "countByChainTypeNames/default"
+  | "countByJobTypeNames/default"
   // listJobs > no status
   | "listJobs/noStatus/default"
-  | "listJobs/noStatus/typeName"
-  | "listJobs/noStatus/chainTypeName"
-  | "listJobs/noStatus/chainId"
-  | "listJobs/noStatus/jobId"
   | "listJobs/noStatus/fromTo"
   | "listJobs/noStatus/cursor"
   // listJobs > pending
   | "listJobs/pending/default"
   | "listJobs/pending/blocked"
   | "listJobs/pending/unblocked"
-  | "listJobs/pending/typeName"
-  | "listJobs/pending/typeNameBlocked"
-  | "listJobs/pending/typeNameUnblocked"
-  | "listJobs/pending/chainTypeName"
   | "listJobs/pending/fromTo"
   | "listJobs/pending/orderByCreatedAt"
   | "listJobs/pending/cursor"
   // listJobs > running
   | "listJobs/running/default"
-  | "listJobs/running/typeName"
-  | "listJobs/running/chainTypeName"
   | "listJobs/running/orderByCreatedAt"
   | "listJobs/running/orderByAttemptUntil"
   | "listJobs/running/cursor"
   // listJobs > completed
   | "listJobs/completed/default"
-  | "listJobs/completed/typeName"
-  | "listJobs/completed/chainTypeName"
   | "listJobs/completed/continued"
   | "listJobs/completed/notContinued"
-  | "listJobs/completed/typeNameContinued"
-  | "listJobs/completed/typeNameNotContinued"
   | "listJobs/completed/orderByCreatedAt"
   | "listJobs/completed/cursor"
   // listChains > no status
   | "listChains/noStatus/default"
-  | "listChains/noStatus/typeName"
   | "listChains/noStatus/independent"
   | "listChains/noStatus/nonIndependent"
-  | "listChains/noStatus/typeNameIndependent"
-  | "listChains/noStatus/typeNameNonIndependent"
   | "listChains/noStatus/fromTo"
-  | "listChains/noStatus/chainId"
   | "listChains/noStatus/cursor"
   // listChains > running
   | "listChains/running/default"
-  | "listChains/running/typeName"
   | "listChains/running/independent"
   | "listChains/running/nonIndependent"
-  | "listChains/running/typeNameIndependent"
-  | "listChains/running/typeNameNonIndependent"
   | "listChains/running/cursor"
   // listChains > completed
   | "listChains/completed/default"
-  | "listChains/completed/typeName"
   | "listChains/completed/independent"
   | "listChains/completed/nonIndependent"
-  | "listChains/completed/typeNameIndependent"
-  | "listChains/completed/typeNameNonIndependent"
   | "listChains/completed/orderByCreatedAt"
   | "listChains/completed/orderByCompletedAt"
   | "listChains/completed/cursor"
@@ -111,6 +90,18 @@ export type IndexCoverageGroup = {
 
 export const observabilityCoverageGroups: IndexCoverageGroup[] = [
   {
+    name: "listChainTypeNames",
+    cases: [
+      {
+        key: "listChainTypeNames/default",
+        label: "default",
+        run: async () => async (stateAdapter) => {
+          await stateAdapter.listChainTypeNames({});
+        },
+      },
+    ],
+  },
+  {
     name: "listJobTypeNames",
     cases: [
       {
@@ -124,13 +115,25 @@ export const observabilityCoverageGroups: IndexCoverageGroup[] = [
   },
 
   {
-    name: "listChainTypeNames",
+    name: "countByChainTypeNames",
     cases: [
       {
-        key: "listChainTypeNames/default",
+        key: "countByChainTypeNames/default",
         label: "default",
-        run: async () => async (stateAdapter) => {
-          await stateAdapter.listChainTypeNames({});
+        run: async () => async (stateAdapter, sentinels) => {
+          await stateAdapter.countByChainTypeNames({ typeNames: sentinels.pending.typeNames });
+        },
+      },
+    ],
+  },
+  {
+    name: "countByJobTypeNames",
+    cases: [
+      {
+        key: "countByJobTypeNames/default",
+        label: "default",
+        run: async () => async (stateAdapter, sentinels) => {
+          await stateAdapter.countByJobTypeNames({ typeNames: sentinels.pending.typeNames });
         },
       },
     ],
@@ -145,54 +148,7 @@ export const observabilityCoverageGroups: IndexCoverageGroup[] = [
           await stateAdapter.listJobs({
             orderBy: "createdAt",
             orderDirection: "desc",
-            page: { limit: 20 },
-          });
-        },
-      },
-      {
-        key: "listJobs/noStatus/typeName",
-        label: "+ typeName",
-        run: async () => async (stateAdapter) => {
-          await stateAdapter.listJobs({
-            orderBy: "createdAt",
-            orderDirection: "desc",
-            typeName: ["seed:pending:order"],
-            page: { limit: 20 },
-          });
-        },
-      },
-      {
-        key: "listJobs/noStatus/chainTypeName",
-        label: "+ chainTypeName",
-        run: async () => async (stateAdapter) => {
-          await stateAdapter.listJobs({
-            orderBy: "createdAt",
-            orderDirection: "desc",
-            chainTypeName: ["seed:pending:order"],
-            page: { limit: 20 },
-          });
-        },
-      },
-      {
-        key: "listJobs/noStatus/chainId",
-        label: "+ chainId",
-        run: async () => async (stateAdapter, sentinels) => {
-          await stateAdapter.listJobs({
-            orderBy: "createdAt",
-            orderDirection: "desc",
-            chainId: [sentinels.longChain.chainId],
-            page: { limit: 20 },
-          });
-        },
-      },
-      {
-        key: "listJobs/noStatus/jobId",
-        label: "+ jobId",
-        run: async () => async (stateAdapter, sentinels) => {
-          await stateAdapter.listJobs({
-            orderBy: "createdAt",
-            orderDirection: "desc",
-            jobId: [sentinels.pending.jobId],
+            typeName: "seed:pending:order",
             page: { limit: 20 },
           });
         },
@@ -206,6 +162,7 @@ export const observabilityCoverageGroups: IndexCoverageGroup[] = [
           await stateAdapter.listJobs({
             orderBy: "createdAt",
             orderDirection: "desc",
+            typeName: "seed:pending:order",
             from,
             to: now,
             page: { limit: 20 },
@@ -219,11 +176,13 @@ export const observabilityCoverageGroups: IndexCoverageGroup[] = [
           const page1 = await stateAdapter.listJobs({
             orderBy: "createdAt",
             orderDirection: "desc",
+            typeName: "seed:pending:order",
             page: { limit: 2 },
           });
           await stateAdapter.listJobs({
             orderBy: "createdAt",
             orderDirection: "desc",
+            typeName: "seed:pending:order",
             page: { limit: 20, cursor: page1.nextCursor! },
           });
         },
@@ -242,6 +201,7 @@ export const observabilityCoverageGroups: IndexCoverageGroup[] = [
             orderBy: "scheduledAt",
             orderDirection: "desc",
             status: "pending",
+            typeName: "seed:pending:order",
             page: { limit: 20 },
           });
         },
@@ -254,6 +214,7 @@ export const observabilityCoverageGroups: IndexCoverageGroup[] = [
             orderBy: "scheduledAt",
             orderDirection: "desc",
             status: "pending",
+            typeName: "seed:pending:order",
             blocked: true,
             page: { limit: 20 },
           });
@@ -267,61 +228,8 @@ export const observabilityCoverageGroups: IndexCoverageGroup[] = [
             orderBy: "scheduledAt",
             orderDirection: "desc",
             status: "pending",
+            typeName: "seed:pending:order",
             blocked: false,
-            page: { limit: 20 },
-          });
-        },
-      },
-      {
-        key: "listJobs/pending/typeName",
-        label: "+ typeName",
-        run: async () => async (stateAdapter) => {
-          await stateAdapter.listJobs({
-            orderBy: "scheduledAt",
-            orderDirection: "desc",
-            status: "pending",
-            typeName: ["seed:pending:order"],
-            page: { limit: 20 },
-          });
-        },
-      },
-      {
-        key: "listJobs/pending/typeNameBlocked",
-        label: "+ typeName + blocked",
-        run: async () => async (stateAdapter) => {
-          await stateAdapter.listJobs({
-            orderBy: "scheduledAt",
-            orderDirection: "desc",
-            status: "pending",
-            typeName: ["seed:blocked:fanin:1"],
-            blocked: true,
-            page: { limit: 20 },
-          });
-        },
-      },
-      {
-        key: "listJobs/pending/typeNameUnblocked",
-        label: "+ typeName + unblocked",
-        run: async () => async (stateAdapter) => {
-          await stateAdapter.listJobs({
-            orderBy: "scheduledAt",
-            orderDirection: "desc",
-            status: "pending",
-            typeName: ["seed:pending:order"],
-            blocked: false,
-            page: { limit: 20 },
-          });
-        },
-      },
-      {
-        key: "listJobs/pending/chainTypeName",
-        label: "+ chainTypeName",
-        run: async () => async (stateAdapter) => {
-          await stateAdapter.listJobs({
-            orderBy: "scheduledAt",
-            orderDirection: "desc",
-            status: "pending",
-            chainTypeName: ["seed:pending:order"],
             page: { limit: 20 },
           });
         },
@@ -336,6 +244,7 @@ export const observabilityCoverageGroups: IndexCoverageGroup[] = [
             orderBy: "scheduledAt",
             orderDirection: "desc",
             status: "pending",
+            typeName: "seed:pending:order",
             from,
             to: now,
             page: { limit: 20 },
@@ -349,6 +258,7 @@ export const observabilityCoverageGroups: IndexCoverageGroup[] = [
           await stateAdapter.listJobs({
             orderDirection: "desc",
             status: "pending",
+            typeName: "seed:pending:order",
             orderBy: "createdAt",
             page: { limit: 20 },
           });
@@ -362,6 +272,7 @@ export const observabilityCoverageGroups: IndexCoverageGroup[] = [
             orderBy: "scheduledAt",
             orderDirection: "desc",
             status: "pending",
+            typeName: "seed:pending:order",
             blocked: false,
             page: { limit: 2 },
           });
@@ -369,6 +280,7 @@ export const observabilityCoverageGroups: IndexCoverageGroup[] = [
             orderBy: "scheduledAt",
             orderDirection: "desc",
             status: "pending",
+            typeName: "seed:pending:order",
             blocked: false,
             page: { limit: 20, cursor: page1.nextCursor! },
           });
@@ -388,32 +300,7 @@ export const observabilityCoverageGroups: IndexCoverageGroup[] = [
             orderBy: "attemptAt",
             orderDirection: "desc",
             status: "running",
-            page: { limit: 20 },
-          });
-        },
-      },
-      {
-        key: "listJobs/running/typeName",
-        label: "+ typeName",
-        run: async () => async (stateAdapter) => {
-          await stateAdapter.listJobs({
-            orderBy: "attemptAt",
-            orderDirection: "desc",
-            status: "running",
-            typeName: ["seed:running:order"],
-            page: { limit: 20 },
-          });
-        },
-      },
-      {
-        key: "listJobs/running/chainTypeName",
-        label: "+ chainTypeName",
-        run: async () => async (stateAdapter) => {
-          await stateAdapter.listJobs({
-            orderBy: "attemptAt",
-            orderDirection: "desc",
-            status: "running",
-            chainTypeName: ["seed:running:order"],
+            typeName: "seed:running:order",
             page: { limit: 20 },
           });
         },
@@ -425,6 +312,7 @@ export const observabilityCoverageGroups: IndexCoverageGroup[] = [
           await stateAdapter.listJobs({
             orderDirection: "desc",
             status: "running",
+            typeName: "seed:running:order",
             orderBy: "createdAt",
             page: { limit: 20 },
           });
@@ -437,6 +325,7 @@ export const observabilityCoverageGroups: IndexCoverageGroup[] = [
           await stateAdapter.listJobs({
             orderDirection: "desc",
             status: "running",
+            typeName: "seed:running:order",
             orderBy: "attemptUntil",
             page: { limit: 20 },
           });
@@ -450,12 +339,14 @@ export const observabilityCoverageGroups: IndexCoverageGroup[] = [
             orderBy: "attemptAt",
             orderDirection: "desc",
             status: "running",
+            typeName: "seed:running:order",
             page: { limit: 2 },
           });
           await stateAdapter.listJobs({
             orderBy: "attemptAt",
             orderDirection: "desc",
             status: "running",
+            typeName: "seed:running:order",
             page: { limit: 20, cursor: page1.nextCursor! },
           });
         },
@@ -474,32 +365,7 @@ export const observabilityCoverageGroups: IndexCoverageGroup[] = [
             orderBy: "completedAt",
             orderDirection: "desc",
             status: "completed",
-            page: { limit: 20 },
-          });
-        },
-      },
-      {
-        key: "listJobs/completed/typeName",
-        label: "+ typeName",
-        run: async () => async (stateAdapter) => {
-          await stateAdapter.listJobs({
-            orderBy: "completedAt",
-            orderDirection: "desc",
-            status: "completed",
-            typeName: ["seed:completed:order"],
-            page: { limit: 20 },
-          });
-        },
-      },
-      {
-        key: "listJobs/completed/chainTypeName",
-        label: "+ chainTypeName",
-        run: async () => async (stateAdapter) => {
-          await stateAdapter.listJobs({
-            orderBy: "completedAt",
-            orderDirection: "desc",
-            status: "completed",
-            chainTypeName: ["seed:completed:order"],
+            typeName: "seed:completed:order",
             page: { limit: 20 },
           });
         },
@@ -512,6 +378,7 @@ export const observabilityCoverageGroups: IndexCoverageGroup[] = [
             orderBy: "completedAt",
             orderDirection: "desc",
             status: "completed",
+            typeName: "seed:completed:order",
             continued: true,
             page: { limit: 20 },
           });
@@ -525,34 +392,7 @@ export const observabilityCoverageGroups: IndexCoverageGroup[] = [
             orderBy: "completedAt",
             orderDirection: "desc",
             status: "completed",
-            continued: false,
-            page: { limit: 20 },
-          });
-        },
-      },
-      {
-        key: "listJobs/completed/typeNameContinued",
-        label: "+ typeName + continued",
-        run: async () => async (stateAdapter) => {
-          await stateAdapter.listJobs({
-            orderBy: "completedAt",
-            orderDirection: "desc",
-            status: "completed",
-            typeName: ["seed:chain"],
-            continued: true,
-            page: { limit: 20 },
-          });
-        },
-      },
-      {
-        key: "listJobs/completed/typeNameNotContinued",
-        label: "+ typeName + not continued",
-        run: async () => async (stateAdapter) => {
-          await stateAdapter.listJobs({
-            orderBy: "completedAt",
-            orderDirection: "desc",
-            status: "completed",
-            typeName: ["seed:completed:order"],
+            typeName: "seed:completed:order",
             continued: false,
             page: { limit: 20 },
           });
@@ -565,6 +405,7 @@ export const observabilityCoverageGroups: IndexCoverageGroup[] = [
           await stateAdapter.listJobs({
             orderDirection: "desc",
             status: "completed",
+            typeName: "seed:completed:order",
             orderBy: "createdAt",
             page: { limit: 20 },
           });
@@ -578,12 +419,14 @@ export const observabilityCoverageGroups: IndexCoverageGroup[] = [
             orderBy: "completedAt",
             orderDirection: "desc",
             status: "completed",
+            typeName: "seed:completed:order",
             page: { limit: 2 },
           });
           await stateAdapter.listJobs({
             orderBy: "completedAt",
             orderDirection: "desc",
             status: "completed",
+            typeName: "seed:completed:order",
             page: { limit: 20, cursor: page1.nextCursor! },
           });
         },
@@ -601,18 +444,7 @@ export const observabilityCoverageGroups: IndexCoverageGroup[] = [
           await stateAdapter.listChains({
             orderBy: "createdAt",
             orderDirection: "desc",
-            page: { limit: 20 },
-          });
-        },
-      },
-      {
-        key: "listChains/noStatus/typeName",
-        label: "+ typeName",
-        run: async () => async (stateAdapter) => {
-          await stateAdapter.listChains({
-            orderBy: "createdAt",
-            orderDirection: "desc",
-            typeName: ["seed:pending:order"],
+            typeName: "seed:pending:order",
             page: { limit: 20 },
           });
         },
@@ -624,6 +456,7 @@ export const observabilityCoverageGroups: IndexCoverageGroup[] = [
           await stateAdapter.listChains({
             orderBy: "createdAt",
             orderDirection: "desc",
+            typeName: "seed:pending:order",
             independent: true,
             page: { limit: 20 },
           });
@@ -636,32 +469,7 @@ export const observabilityCoverageGroups: IndexCoverageGroup[] = [
           await stateAdapter.listChains({
             orderBy: "createdAt",
             orderDirection: "desc",
-            independent: false,
-            page: { limit: 20 },
-          });
-        },
-      },
-      {
-        key: "listChains/noStatus/typeNameIndependent",
-        label: "+ typeName + independent",
-        run: async () => async (stateAdapter) => {
-          await stateAdapter.listChains({
-            orderBy: "createdAt",
-            orderDirection: "desc",
-            typeName: ["seed:pending:order"],
-            independent: true,
-            page: { limit: 20 },
-          });
-        },
-      },
-      {
-        key: "listChains/noStatus/typeNameNonIndependent",
-        label: "+ typeName + non-independent",
-        run: async () => async (stateAdapter) => {
-          await stateAdapter.listChains({
-            orderBy: "createdAt",
-            orderDirection: "desc",
-            typeName: ["seed:pending:order"],
+            typeName: "seed:pending:order",
             independent: false,
             page: { limit: 20 },
           });
@@ -676,20 +484,9 @@ export const observabilityCoverageGroups: IndexCoverageGroup[] = [
           await stateAdapter.listChains({
             orderBy: "createdAt",
             orderDirection: "desc",
+            typeName: "seed:pending:order",
             from,
             to: now,
-            page: { limit: 20 },
-          });
-        },
-      },
-      {
-        key: "listChains/noStatus/chainId",
-        label: "+ chainId",
-        run: async () => async (stateAdapter, sentinels) => {
-          await stateAdapter.listChains({
-            orderBy: "createdAt",
-            orderDirection: "desc",
-            chainId: [sentinels.longChain.chainId],
             page: { limit: 20 },
           });
         },
@@ -701,11 +498,13 @@ export const observabilityCoverageGroups: IndexCoverageGroup[] = [
           const page1 = await stateAdapter.listChains({
             orderBy: "createdAt",
             orderDirection: "desc",
+            typeName: "seed:pending:order",
             page: { limit: 2 },
           });
           await stateAdapter.listChains({
             orderBy: "createdAt",
             orderDirection: "desc",
+            typeName: "seed:pending:order",
             page: { limit: 20, cursor: page1.nextCursor! },
           });
         },
@@ -724,19 +523,7 @@ export const observabilityCoverageGroups: IndexCoverageGroup[] = [
             orderBy: "createdAt",
             orderDirection: "desc",
             status: "running",
-            page: { limit: 20 },
-          });
-        },
-      },
-      {
-        key: "listChains/running/typeName",
-        label: "+ typeName",
-        run: async () => async (stateAdapter) => {
-          await stateAdapter.listChains({
-            orderBy: "createdAt",
-            orderDirection: "desc",
-            status: "running",
-            typeName: ["seed:running:order"],
+            typeName: "seed:running:order",
             page: { limit: 20 },
           });
         },
@@ -749,6 +536,7 @@ export const observabilityCoverageGroups: IndexCoverageGroup[] = [
             orderBy: "createdAt",
             orderDirection: "desc",
             status: "running",
+            typeName: "seed:running:order",
             independent: true,
             page: { limit: 20 },
           });
@@ -762,34 +550,7 @@ export const observabilityCoverageGroups: IndexCoverageGroup[] = [
             orderBy: "createdAt",
             orderDirection: "desc",
             status: "running",
-            independent: false,
-            page: { limit: 20 },
-          });
-        },
-      },
-      {
-        key: "listChains/running/typeNameIndependent",
-        label: "+ typeName + independent",
-        run: async () => async (stateAdapter) => {
-          await stateAdapter.listChains({
-            orderBy: "createdAt",
-            orderDirection: "desc",
-            status: "running",
-            typeName: ["seed:running:order"],
-            independent: true,
-            page: { limit: 20 },
-          });
-        },
-      },
-      {
-        key: "listChains/running/typeNameNonIndependent",
-        label: "+ typeName + non-independent",
-        run: async () => async (stateAdapter) => {
-          await stateAdapter.listChains({
-            orderBy: "createdAt",
-            orderDirection: "desc",
-            status: "running",
-            typeName: ["seed:running:order"],
+            typeName: "seed:running:order",
             independent: false,
             page: { limit: 20 },
           });
@@ -803,12 +564,14 @@ export const observabilityCoverageGroups: IndexCoverageGroup[] = [
             orderBy: "createdAt",
             orderDirection: "desc",
             status: "running",
+            typeName: "seed:running:order",
             page: { limit: 2 },
           });
           await stateAdapter.listChains({
             orderBy: "createdAt",
             orderDirection: "desc",
             status: "running",
+            typeName: "seed:running:order",
             page: { limit: 20, cursor: page1.nextCursor! },
           });
         },
@@ -827,19 +590,7 @@ export const observabilityCoverageGroups: IndexCoverageGroup[] = [
             orderBy: "completedAt",
             orderDirection: "desc",
             status: "completed",
-            page: { limit: 20 },
-          });
-        },
-      },
-      {
-        key: "listChains/completed/typeName",
-        label: "+ typeName",
-        run: async () => async (stateAdapter) => {
-          await stateAdapter.listChains({
-            orderBy: "completedAt",
-            orderDirection: "desc",
-            status: "completed",
-            typeName: ["seed:completed:order"],
+            typeName: "seed:completed:order",
             page: { limit: 20 },
           });
         },
@@ -852,6 +603,7 @@ export const observabilityCoverageGroups: IndexCoverageGroup[] = [
             orderBy: "completedAt",
             orderDirection: "desc",
             status: "completed",
+            typeName: "seed:completed:order",
             independent: true,
             page: { limit: 20 },
           });
@@ -865,34 +617,7 @@ export const observabilityCoverageGroups: IndexCoverageGroup[] = [
             orderBy: "completedAt",
             orderDirection: "desc",
             status: "completed",
-            independent: false,
-            page: { limit: 20 },
-          });
-        },
-      },
-      {
-        key: "listChains/completed/typeNameIndependent",
-        label: "+ typeName + independent",
-        run: async () => async (stateAdapter) => {
-          await stateAdapter.listChains({
-            orderBy: "completedAt",
-            orderDirection: "desc",
-            status: "completed",
-            typeName: ["seed:completed:order"],
-            independent: true,
-            page: { limit: 20 },
-          });
-        },
-      },
-      {
-        key: "listChains/completed/typeNameNonIndependent",
-        label: "+ typeName + non-independent",
-        run: async () => async (stateAdapter) => {
-          await stateAdapter.listChains({
-            orderBy: "completedAt",
-            orderDirection: "desc",
-            status: "completed",
-            typeName: ["seed:completed:order"],
+            typeName: "seed:completed:order",
             independent: false,
             page: { limit: 20 },
           });
@@ -905,6 +630,7 @@ export const observabilityCoverageGroups: IndexCoverageGroup[] = [
           await stateAdapter.listChains({
             orderDirection: "desc",
             status: "completed",
+            typeName: "seed:completed:order",
             orderBy: "createdAt",
             page: { limit: 20 },
           });
@@ -917,6 +643,7 @@ export const observabilityCoverageGroups: IndexCoverageGroup[] = [
           await stateAdapter.listChains({
             orderDirection: "desc",
             status: "completed",
+            typeName: "seed:completed:order",
             orderBy: "completedAt",
             page: { limit: 20 },
           });
@@ -930,12 +657,14 @@ export const observabilityCoverageGroups: IndexCoverageGroup[] = [
             orderBy: "completedAt",
             orderDirection: "desc",
             status: "completed",
+            typeName: "seed:completed:order",
             page: { limit: 2 },
           });
           await stateAdapter.listChains({
             orderBy: "completedAt",
             orderDirection: "desc",
             status: "completed",
+            typeName: "seed:completed:order",
             page: { limit: 20, cursor: page1.nextCursor! },
           });
         },
@@ -947,12 +676,14 @@ export const observabilityCoverageGroups: IndexCoverageGroup[] = [
           const page1 = await stateAdapter.listChains({
             orderDirection: "desc",
             status: "completed",
+            typeName: "seed:completed:order",
             orderBy: "createdAt",
             page: { limit: 2 },
           });
           await stateAdapter.listChains({
             orderDirection: "desc",
             status: "completed",
+            typeName: "seed:completed:order",
             orderBy: "createdAt",
             page: { limit: 20, cursor: page1.nextCursor! },
           });
@@ -965,12 +696,14 @@ export const observabilityCoverageGroups: IndexCoverageGroup[] = [
           const page1 = await stateAdapter.listChains({
             orderDirection: "desc",
             status: "completed",
+            typeName: "seed:completed:order",
             orderBy: "completedAt",
             page: { limit: 2 },
           });
           await stateAdapter.listChains({
             orderDirection: "desc",
             status: "completed",
+            typeName: "seed:completed:order",
             orderBy: "completedAt",
             page: { limit: 20, cursor: page1.nextCursor! },
           });

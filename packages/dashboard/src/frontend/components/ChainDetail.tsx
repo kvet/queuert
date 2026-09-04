@@ -1,5 +1,5 @@
 import { A, useNavigate, useParams } from "@solidjs/router";
-import { For, Show, createResource, createSignal } from "solid-js";
+import { For, Match, Show, Switch, createResource, createSignal } from "solid-js";
 
 import {
   type UnknownChain,
@@ -115,158 +115,172 @@ export function ChainDetail() {
 
   return (
     <div>
-      <BackLink fallback="/" />
+      <BackLink fallback="/chains" />
 
-      <Show when={chain()} keyed fallback={<div class="empty">Loading...</div>}>
-        {(d) => {
-          return (
-            <>
-              <div class="detail-header">
-                <h2>
-                  {d.chain.typeName} <ChainStatusBadge chain={d.chain} />
-                </h2>
-                <div class="id">chain {d.chain.id}</div>
-                <div style={{ "font-size": "13px", color: "var(--text-secondary)" }}>
-                  Created <TimeAgo date={d.chain.createdAt} />
+      <Switch>
+        <Match when={chain.error}>
+          <div class="empty">Chain not found</div>
+        </Match>
+        <Match when={chain.loading}>
+          <div class="empty">Loading...</div>
+        </Match>
+        <Match when={chain()} keyed>
+          {(d) => {
+            return (
+              <>
+                <div class="detail-header">
+                  <h2>
+                    {d.chain.typeName} <ChainStatusBadge chain={d.chain} />
+                  </h2>
+                  <div class="id">chain {d.chain.id}</div>
+                  <div style={{ "font-size": "13px", color: "var(--text-secondary)" }}>
+                    Created <TimeAgo date={d.chain.createdAt} />
+                  </div>
+                  <button class="delete-btn" onClick={() => setShowDelete(true)}>
+                    Delete chain
+                  </button>
                 </div>
-                <button class="delete-btn" onClick={() => setShowDelete(true)}>
-                  Delete chain
-                </button>
-              </div>
 
-              <ConfirmDeleteDialog
-                chainId={d.chain.id}
-                open={showDelete()}
-                onClose={() => {
-                  setShowDelete(false);
-                  setDeleteError(null);
-                }}
-                onConfirm={(options) => void handleDelete(options)}
-                deleting={deleting()}
-                error={deleteError()}
-              />
+                <ConfirmDeleteDialog
+                  chainId={d.chain.id}
+                  open={showDelete()}
+                  onClose={() => {
+                    setShowDelete(false);
+                    setDeleteError(null);
+                  }}
+                  onConfirm={(options) => void handleDelete(options)}
+                  deleting={deleting()}
+                  error={deleteError()}
+                />
 
-              <Show when={blockingItems().length}>
-                <div class="section">
-                  <h3>Blocking</h3>
-                  <p
-                    style={{
-                      "font-size": "13px",
-                      color: "var(--text-secondary)",
-                      "margin-bottom": "8px",
-                    }}
-                  >
-                    Jobs depending on this chain as a blocker:
-                  </p>
-                  <ul class="blocker-list">
-                    <For each={blockingItems()}>
-                      {(job) => (
-                        <li>
-                          <JobStatusBadge job={job} /> {job.typeName}{" "}
-                          <A href={`/chains/${job.chainId}`} class="chain-link">
-                            chain {job.chainId}
-                          </A>
-                        </li>
-                      )}
-                    </For>
-                  </ul>
-                  <Show when={blockingCursor()}>
-                    <button
-                      class="load-more"
-                      disabled={blockingLoading()}
-                      onClick={() => {
-                        void loadMoreBlocking();
+                <Show when={blockingItems().length}>
+                  <div class="section">
+                    <h3>Blocking</h3>
+                    <p
+                      style={{
+                        "font-size": "13px",
+                        color: "var(--text-secondary)",
+                        "margin-bottom": "8px",
                       }}
                     >
-                      {blockingLoading() ? "Loading…" : blockingFailed() ? "Retry" : "Load more"}
+                      Jobs depending on this chain as a blocker:
+                    </p>
+                    <ul class="blocker-list">
+                      <For each={blockingItems()}>
+                        {(job) => (
+                          <li>
+                            <JobStatusBadge job={job} /> {job.typeName}{" "}
+                            <A href={`/chains/${job.chainId}`} class="chain-link">
+                              chain {job.chainId}
+                            </A>
+                          </li>
+                        )}
+                      </For>
+                    </ul>
+                    <Show when={blockingCursor()}>
+                      <button
+                        class="load-more"
+                        disabled={blockingLoading()}
+                        onClick={() => {
+                          void loadMoreBlocking();
+                        }}
+                      >
+                        {blockingLoading() ? "Loading…" : blockingFailed() ? "Retry" : "Load more"}
+                      </button>
+                    </Show>
+                  </div>
+                </Show>
+
+                <div class="section">
+                  <h3>
+                    Jobs ({jobs().length}
+                    {jobsCursor() ? "+" : ""})
+                  </h3>
+                  <For each={jobs()}>
+                    {(job, i) => (
+                      <div class="card">
+                        <A
+                          class="card-link"
+                          href={`/jobs/${job.id}`}
+                          aria-label={`Open job ${job.id}`}
+                        />
+                        <div class="card-header">
+                          <span class="card-type">
+                            {i() + 1}. {job.typeName}
+                          </span>
+                          <span class="card-id">{job.id}</span>
+                          <span class="card-time">
+                            <TimeAgo date={job.createdAt} />
+                          </span>
+                        </div>
+                        <div class="card-meta">
+                          <JobStatusBadge job={job} />
+                        </div>
+                        <Show when={job.input != null}>
+                          <div
+                            class="section"
+                            style={{ "margin-top": "8px", "margin-bottom": "0" }}
+                          >
+                            <h3>Input</h3>
+                            <JsonView data={job.input} />
+                          </div>
+                        </Show>
+                        <Show when={job.output != null}>
+                          <div
+                            class="section"
+                            style={{ "margin-top": "8px", "margin-bottom": "0" }}
+                          >
+                            <h3>Output</h3>
+                            <JsonView data={job.output} />
+                          </div>
+                        </Show>
+                        <Show when={job.lastAttemptError}>
+                          <div class="error-text" style={{ "margin-top": "4px" }}>
+                            {String(job.lastAttemptError).slice(0, 200)}
+                          </div>
+                        </Show>
+                        <Show when={jobBlockers()[job.id]?.length}>
+                          <div style={{ "margin-top": "8px" }}>
+                            <strong style={{ "font-size": "12px" }}>Blockers</strong>
+                            <ul class="blocker-list">
+                              <For each={jobBlockers()[job.id]}>
+                                {(blocker) => (
+                                  <li>
+                                    <ChainStatusBadge chain={blocker} /> {blocker.typeName}{" "}
+                                    <A href={`/chains/${blocker.id}`} class="chain-link">
+                                      chain {blocker.id}
+                                    </A>
+                                  </li>
+                                )}
+                              </For>
+                            </ul>
+                          </div>
+                        </Show>
+                      </div>
+                    )}
+                  </For>
+                  <Show when={jobsCursor()}>
+                    <button
+                      class="load-more"
+                      ref={autoLoadMoreJobs.ref}
+                      disabled={autoLoadMoreJobs.loading()}
+                      onClick={() => {
+                        autoLoadMoreJobs.trigger();
+                      }}
+                    >
+                      {autoLoadMoreJobs.loading()
+                        ? "Loading…"
+                        : autoLoadMoreJobs.failed()
+                          ? "Retry"
+                          : "Load more"}
                     </button>
                   </Show>
                 </div>
-              </Show>
-
-              <div class="section">
-                <h3>
-                  Jobs ({jobs().length}
-                  {jobsCursor() ? "+" : ""})
-                </h3>
-                <For each={jobs()}>
-                  {(job, i) => (
-                    <div class="card">
-                      <A
-                        class="card-link"
-                        href={`/jobs/${job.id}`}
-                        aria-label={`Open job ${job.id}`}
-                      />
-                      <div class="card-header">
-                        <span class="card-type">
-                          {i() + 1}. {job.typeName}
-                        </span>
-                        <span class="card-id">{job.id}</span>
-                        <span class="card-time">
-                          <TimeAgo date={job.createdAt} />
-                        </span>
-                      </div>
-                      <div class="card-meta">
-                        <JobStatusBadge job={job} />
-                      </div>
-                      <Show when={job.input != null}>
-                        <div class="section" style={{ "margin-top": "8px", "margin-bottom": "0" }}>
-                          <h3>Input</h3>
-                          <JsonView data={job.input} />
-                        </div>
-                      </Show>
-                      <Show when={job.output != null}>
-                        <div class="section" style={{ "margin-top": "8px", "margin-bottom": "0" }}>
-                          <h3>Output</h3>
-                          <JsonView data={job.output} />
-                        </div>
-                      </Show>
-                      <Show when={job.lastAttemptError}>
-                        <div class="error-text" style={{ "margin-top": "4px" }}>
-                          {String(job.lastAttemptError).slice(0, 200)}
-                        </div>
-                      </Show>
-                      <Show when={jobBlockers()[job.id]?.length}>
-                        <div style={{ "margin-top": "8px" }}>
-                          <strong style={{ "font-size": "12px" }}>Blockers</strong>
-                          <ul class="blocker-list">
-                            <For each={jobBlockers()[job.id]}>
-                              {(blocker) => (
-                                <li>
-                                  <ChainStatusBadge chain={blocker} /> {blocker.typeName}{" "}
-                                  <A href={`/chains/${blocker.id}`} class="chain-link">
-                                    chain {blocker.id}
-                                  </A>
-                                </li>
-                              )}
-                            </For>
-                          </ul>
-                        </div>
-                      </Show>
-                    </div>
-                  )}
-                </For>
-                <Show when={jobsCursor()}>
-                  <button
-                    class="load-more"
-                    ref={autoLoadMoreJobs.ref}
-                    disabled={autoLoadMoreJobs.loading()}
-                    onClick={() => {
-                      autoLoadMoreJobs.trigger();
-                    }}
-                  >
-                    {autoLoadMoreJobs.loading()
-                      ? "Loading…"
-                      : autoLoadMoreJobs.failed()
-                        ? "Retry"
-                        : "Load more"}
-                  </button>
-                </Show>
-              </div>
-            </>
-          );
-        }}
-      </Show>
+              </>
+            );
+          }}
+        </Match>
+      </Switch>
     </div>
   );
 }

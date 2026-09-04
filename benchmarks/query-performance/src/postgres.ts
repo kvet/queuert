@@ -1,4 +1,4 @@
-import { mkdirSync, writeFileSync } from "node:fs";
+import { mkdirSync, rmSync, writeFileSync } from "node:fs";
 import { dirname } from "node:path";
 
 import { createPgStateAdapter } from "@queuert/postgres";
@@ -61,12 +61,54 @@ await stateAdapter.migrateToLatest();
 console.log(`Seeding data (scale=${scale})...`);
 const sentinels = await fastSeedAllStatesV2(baseProvider, { scale });
 
-await pool.query("ANALYZE");
+await pool.query("VACUUM ANALYZE");
 console.log("Seed complete.\n");
+
+const sizeResult = await pool.query<{
+  kind: string;
+  name: string;
+  table_name: string;
+  size: string;
+  rows: string;
+}>(`
+  SELECT 'table' AS kind, c.relname AS name, c.relname AS table_name,
+         pg_size_pretty(pg_table_size(c.oid)) AS size,
+         c.reltuples::bigint::text AS rows
+  FROM pg_class c JOIN pg_namespace n ON n.oid = c.relnamespace
+  WHERE n.nspname = 'public' AND c.relname LIKE 'queuert_%' AND c.relkind = 'r'
+  UNION ALL
+  SELECT 'index' AS kind, c.relname AS name, t.relname AS table_name,
+         pg_size_pretty(pg_relation_size(c.oid)) AS size,
+         c.reltuples::bigint::text AS rows
+  FROM pg_class c
+  JOIN pg_namespace n ON n.oid = c.relnamespace
+  JOIN pg_index i ON i.indexrelid = c.oid
+  JOIN pg_class t ON t.oid = i.indrelid
+  WHERE n.nspname = 'public' AND c.relname LIKE 'queuert_%' AND c.relkind = 'i'
+  ORDER BY table_name, kind DESC, name
+`);
+console.log("  Table & index sizes (after VACUUM ANALYZE):");
+const sizeLines: string[] = [`-- scale=${scale}`, ""];
+let lastTable = "";
+for (const row of sizeResult.rows) {
+  if (row.table_name !== lastTable) {
+    if (lastTable) {
+      sizeLines.push("");
+      console.log("");
+    }
+    lastTable = row.table_name;
+  }
+  const line = `${row.kind}  ${row.name.padEnd(50)} ${row.size.padStart(10)}  (${row.rows} rows)`;
+  console.log(`    ${line}`);
+  sizeLines.push(line);
+}
+console.log("");
 
 capturing = true;
 
+rmSync(EXPLANATIONS_DIR, { recursive: true, force: true });
 mkdirSync(EXPLANATIONS_DIR, { recursive: true });
+writeFileSync(`${EXPLANATIONS_DIR}/_table_sizes.txt`, sizeLines.join("\n") + "\n");
 
 console.log("═══════════════════════════════════════════════════════════════════════════════════");
 console.log("  QUERY PERFORMANCE — POSTGRESQL (pg)");

@@ -8,14 +8,14 @@ import {
   parseLimit,
   parseOrderBy,
   parseOrderDirection,
-  parseTypeNameFilter,
 } from "./params.js";
 
 export const handleChainsList = async (url: URL, client: Client<any, any>): Promise<Response> => {
-  const typeName = parseTypeNameFilter(url.searchParams.get("typeName") ?? undefined);
+  const typeName = url.searchParams.get("typeName");
+  if (!typeName) return serovalResponse({ items: [], nextCursor: null });
+
   const status = parseChainStatusFilter(url.searchParams.get("status") ?? undefined);
   const independent = url.searchParams.get("independent") !== "false";
-  const id = url.searchParams.get("id") ?? undefined;
   const rawOrderBy = url.searchParams.get("orderBy") ?? undefined;
   const orderDirection = parseOrderDirection(url.searchParams.get("orderDirection") ?? undefined);
   const limit = parseLimit(url.searchParams.get("limit") ?? undefined);
@@ -30,7 +30,6 @@ export const handleChainsList = async (url: URL, client: Client<any, any>): Prom
   const common = {
     typeName,
     independent,
-    chainId: id ? [id] : undefined,
     orderDirection,
     cursor: parseCursor(url.searchParams.get("cursor") ?? undefined, {
       type: "timestampWithId",
@@ -138,6 +137,39 @@ export const handleChainDelete = async (
     }
     throw err;
   }
+};
+
+export const handleChainTypesList = async (client: Client<any, any>): Promise<Response> => {
+  const names = await client.listChainTypeNames();
+  return serovalResponse(names);
+};
+
+export const handleChainTypesCounts = async (
+  url: URL,
+  client: Client<any, any>,
+): Promise<Response> => {
+  const raw = url.searchParams.get("typeNames") ?? "";
+  const typeNames = raw
+    .split(",")
+    .map((s) => s.trim())
+    .filter(Boolean);
+  if (typeNames.length === 0) return serovalResponse([]);
+  const counts = await client.countByChainTypeNames({ typeNames });
+  return serovalResponse(typeNames.map((typeName, i) => ({ typeName, ...counts[i] })));
+};
+
+export const handleChainsByIds = async (url: URL, client: Client<any, any>): Promise<Response> => {
+  const raw = url.searchParams.get("ids") ?? "";
+  const ids = raw
+    .split(",")
+    .map((s) => s.trim())
+    .filter(Boolean);
+  if (ids.length === 0) return serovalResponse({ items: [], nextCursor: null });
+  const chains = await client.getChains({ ids });
+  return serovalResponse({
+    items: chains.filter((c): c is NonNullable<typeof c> => c != null),
+    nextCursor: null,
+  });
 };
 
 export const handleChainBlocking = async (

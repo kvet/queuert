@@ -1,15 +1,17 @@
 # Triage
 
 - [REF] Worker liveness. Move attempt ownership to worker. Have workers to be registered in the DB and have a heartbeat.
+- [REF] Return back statuses. Get rid of continued substatus
+- [REF] Move chain information to the head row
 
 # Short term
 
-- [REF] minimize listing queries surface. See `design/minimize-listing-surface.md`.
 - [EPIC] Chain identity. Closing [#3](https://github.com/kvet/queuert/issues/3). See `design/chain-identity.md`.
   - [TASK] List chains by identity — `listChains` gains an `identity` filter to page through the full recurrence history of a key
 - [TASK] Built-in cleanup. See `design/builtin-cleanup.md`.
 - [TASK] Enforce json-serializable inputs and outputs (like no Date in job definitions) — see `design/json-serializable-types.md`
 - [TASK] Consolidate attempt abort events — we have lots silly API to maintain `JobAbortReason` into `HardJobAbortReason` (error-level: `taken_by_another_worker`, `not_found`, `already_completed`, `error`) and `SoftJobAbortReason` (`worker_stopping`).
+- [TASK] Rework dashboard doc — UI views section and screenshots are stale after the type-first navigation redesign
 
 # Medium term
 

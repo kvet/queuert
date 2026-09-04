@@ -468,7 +468,7 @@ export const schedulingTestSuite = ({ it }: { it: TestAPI<TestSuiteContext> }): 
       await allDone.promise;
 
       const { items: chains } = await client.listChains({
-        typeName: ["recurring"],
+        typeName: "recurring",
         limit: 10,
       });
       expect(chains).toHaveLength(3);

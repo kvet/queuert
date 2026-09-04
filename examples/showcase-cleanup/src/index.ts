@@ -71,39 +71,56 @@ const cleanupProcessorRegistry = createProcessors({
   jobTypes: cleanupJobTypes,
   processors: {
     "queuert.cleanup": {
-      attemptHandler: async ({ job, step, complete }) => {
+      attemptHandler: async ({ job, signal, step, complete }) => {
         const cutoffDate = new Date(Date.now() - CLEANUP_RETENTION_MS);
         let deletedChainCount = 0;
-        let cursor: string | undefined;
+
+        const typeNames = await client.listChainTypeNames();
+        let roundDeletedCount: number;
 
         do {
-          const page = await client.listChains({
-            status: "completed",
-            orderBy: "completedAt",
-            independent: true,
-            to: cutoffDate,
-            orderDirection: "asc",
-            limit: CLEANUP_BATCH_SIZE,
-            ...(cursor != null ? { cursor } : {}),
-          });
+          roundDeletedCount = 0;
 
-          const chainsToDelete = page.items.filter(
-            (chain) => chain.id !== job.chainId && chain.status === "completed",
-          );
+          for (const typeName of typeNames) {
+            let cursor: string | undefined;
 
-          if (chainsToDelete.length > 0) {
-            const deleted = await step(async ({ txSql, transactionHooks }) =>
-              client.deleteChains({
-                txSql,
-                transactionHooks,
-                ids: chainsToDelete.map((chain) => chain.id),
-              }),
-            );
-            deletedChainCount += deleted.length;
+            do {
+              if (signal.aborted) {
+                console.log("[queuert.cleanup] Received abort signal, rescheduling");
+                return complete(async ({ finish }) => finish({ reschedule: { afterMs: 0 } }));
+              }
+
+              const page = await client.listChains({
+                typeName,
+                status: "completed",
+                orderBy: "completedAt",
+                independent: true,
+                to: cutoffDate,
+                orderDirection: "asc",
+                limit: CLEANUP_BATCH_SIZE,
+                ...(cursor != null ? { cursor } : {}),
+              });
+
+              const chainsToDelete = page.items.filter(
+                (chain) => chain.id !== job.chainId && chain.status === "completed",
+              );
+
+              if (chainsToDelete.length > 0) {
+                const deleted = await step(async ({ txSql, transactionHooks }) =>
+                  client.deleteChains({
+                    txSql,
+                    transactionHooks,
+                    ids: chainsToDelete.map((chain) => chain.id),
+                  }),
+                );
+                deletedChainCount += deleted.length;
+                roundDeletedCount += deleted.length;
+              }
+
+              cursor = page.nextCursor ?? undefined;
+            } while (cursor);
           }
-
-          cursor = page.nextCursor ?? undefined;
-        } while (cursor);
+        } while (!signal.aborted && roundDeletedCount > 0);
 
         console.log(`[queuert.cleanup] Deleted ${deletedChainCount} chain(s)`);
 
@@ -187,7 +204,7 @@ console.log(`${immediateChains.length} work chains completed, 1 scheduled for la
 
 // Check chain count before cleanup
 const beforeCleanup = await client.listChains({
-  typeName: ["work.process"],
+  typeName: "work.process",
   limit: 100,
 });
 console.log(`\nChains before cleanup: ${beforeCleanup.items.length}`);
@@ -228,7 +245,7 @@ console.log("\nCleanup completed!");
 
 // Check chain count after cleanup
 const afterCleanup = await client.listChains({
-  typeName: ["work.process"],
+  typeName: "work.process",
   limit: 100,
 });
 console.log(`Chains after cleanup: ${afterCleanup.items.length}`);
@@ -236,7 +253,7 @@ assert.equal(afterCleanup.items.length, 1, "only the future-scheduled chain shou
 
 // Check that a next cleanup run was scheduled
 const pendingCleanup = await client.listJobs({
-  typeName: ["queuert.cleanup"],
+  typeName: "queuert.cleanup",
   status: "pending",
   limit: 10,
 });

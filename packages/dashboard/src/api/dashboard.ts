@@ -6,9 +6,19 @@ import {
   handleChainDelete,
   handleChainDetail,
   handleChainJobs,
+  handleChainTypesCounts,
+  handleChainTypesList,
+  handleChainsByIds,
   handleChainsList,
 } from "./routes/chains.js";
-import { handleJobDetail, handleJobReschedule, handleJobsList } from "./routes/jobs.js";
+import {
+  handleJobDetail,
+  handleJobReschedule,
+  handleJobTypesCounts,
+  handleJobTypesList,
+  handleJobsByIds,
+  handleJobsList,
+} from "./routes/jobs.js";
 
 type Assets = Record<string, { content: string; contentType: string }>;
 
@@ -63,6 +73,8 @@ export const createDashboard = async <
     let match: RegExpMatchArray | null;
 
     // API routes
+    if (localPath === "/api/chains/by-ids") return handleChainsByIds(url, client);
+
     match = localPath.match(/^\/api\/chains\/([^/]+)\/blocking$/);
     if (match) return handleChainBlocking(url, client, match[1]);
 
@@ -76,7 +88,11 @@ export const createDashboard = async <
       });
     if (match) return handleChainDetail(url, client, match[1]);
 
+    if (localPath === "/api/chain-types/counts") return handleChainTypesCounts(url, client);
+    if (localPath === "/api/chain-types") return handleChainTypesList(client);
     if (localPath === "/api/chains") return handleChainsList(url, client);
+
+    if (localPath === "/api/jobs/by-ids") return handleJobsByIds(url, client);
 
     match = localPath.match(/^\/api\/jobs\/([^/]+)\/reschedule$/);
     if (match && request.method === "POST") return handleJobReschedule(client, match[1]);
@@ -84,6 +100,8 @@ export const createDashboard = async <
     match = localPath.match(/^\/api\/jobs\/([^/]+)$/);
     if (match) return handleJobDetail(url, client, match[1]);
 
+    if (localPath === "/api/job-types/counts") return handleJobTypesCounts(url, client);
+    if (localPath === "/api/job-types") return handleJobTypesList(client);
     if (localPath === "/api/jobs") return handleJobsList(url, client);
 
     // Static assets + SPA fallback

@@ -213,12 +213,38 @@ export type StateAdapter<TTxContext extends BaseTxContext, TJobId extends string
     blockerRefs: BlockerReference[];
   }>;
 
+  /** Returns distinct chain type names present in the data. */
+  listChainTypeNames: (params: ReadTxContextParam<TTxContext>) => Promise<string[]>;
+
+  /** Returns distinct job type names present in the data. */
+  listJobTypeNames: (params: ReadTxContextParam<TTxContext>) => Promise<string[]>;
+
+  /** Returns capped per-status counts for each requested job type name, in input order. */
+  countByJobTypeNames: (
+    params: ReadTxContextParam<TTxContext> & { typeNames: string[] },
+  ) => Promise<
+    {
+      pending: { count: number; hasMore: boolean };
+      running: { count: number; hasMore: boolean };
+      completed: { count: number; hasMore: boolean };
+    }[]
+  >;
+
+  /** Returns capped per-status counts for each requested chain type name, in input order. */
+  countByChainTypeNames: (
+    params: ReadTxContextParam<TTxContext> & { typeNames: string[] },
+  ) => Promise<
+    {
+      running: { count: number; hasMore: boolean };
+      completed: { count: number; hasMore: boolean };
+    }[]
+  >;
+
   /** Lists chains with pagination, status-dependent ordering, and filtering. */
   listChains: (
     params: ReadTxContextParam<TTxContext> & {
-      typeName?: string[];
+      typeName: string;
       independent?: boolean;
-      chainId?: TJobId[];
       from?: Date;
       to?: Date;
       orderDirection: OrderDirection;
@@ -233,10 +259,7 @@ export type StateAdapter<TTxContext extends BaseTxContext, TJobId extends string
   /** Lists jobs with pagination, status-dependent ordering, and filtering. */
   listJobs: (
     params: ReadTxContextParam<TTxContext> & {
-      typeName?: string[];
-      chainTypeName?: string[];
-      chainId?: TJobId[];
-      jobId?: TJobId[];
+      typeName: string;
       from?: Date;
       to?: Date;
       orderDirection: OrderDirection;
