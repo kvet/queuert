@@ -54,7 +54,7 @@ jobs:
     name: Examples
     runs-on: ubuntu-latest
 
-    timeout-minutes: 10
+    timeout-minutes: 5
 
     steps:
       - uses: actions/checkout@v4
@@ -90,7 +90,7 @@ jobs:
     name: Benchmark / Processing Capacity
     runs-on: ubuntu-latest
 
-    timeout-minutes: 10
+    timeout-minutes: 5
 
     steps:
       - uses: actions/checkout@v4
@@ -108,7 +108,7 @@ jobs:
     name: Benchmark / Query Performance
     runs-on: ubuntu-latest
 
-    timeout-minutes: 10
+    timeout-minutes: 15
 
     steps:
       - uses: actions/checkout@v4
