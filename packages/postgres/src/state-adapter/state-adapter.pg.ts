@@ -921,6 +921,369 @@ FROM inserted i JOIN completed c ON c.new_id = i.id
       }));
     },
 
+    completeJobs: async ({ txCtx, jobs }) => {
+      if (jobs.length === 0) return [];
+
+      const rows = await executeTypedSql({
+        txCtx,
+        sql: templateCache.getOrCompute("completeJobs", () =>
+          applyTemplate(
+            sql(
+              `
+WITH input_data AS (
+  SELECT job_id, output, completed_by
+  FROM unnest($1::{{id_type}}[], $2::text[], $3::text[]) AS t(job_id, output, completed_by)
+)
+UPDATE {{schema}}.{{table_prefix}}job j
+SET last_attempt_error = NULL,
+  attempt_at = NULL,
+  attempt_by = NULL,
+  attempt_until = NULL,
+  completed_at = now(),
+  completed_by = d.completed_by,
+  output = d.output::jsonb,
+  blocked = false
+FROM input_data d
+WHERE j.id = d.job_id
+  AND j.completed_at IS NULL
+RETURNING j.*
+`,
+              {
+                id: "completeJobs",
+                params: [t.array(), t.array<string | null>(), t.array<string | null>()],
+                columns: { ...dbJobColumns },
+              },
+            ),
+          ),
+        ),
+        params: [
+          jobs.map((job) => job.jobId as string),
+          jobs.map((job) => (job.output !== undefined ? JSON.stringify(job.output) : null)),
+          jobs.map((job) => job.completedBy ?? null),
+        ],
+      });
+
+      const completedById = new Map(rows.map((row) => [row.id, row]));
+
+      return jobs.map((job) => mapDbJobToStateJob(completedById.get(job.jobId)!));
+    },
+
+    rescheduleJobs: async ({ txCtx, jobs }) => {
+      if (jobs.length === 0) return [];
+      const rows = await executeTypedSql({
+        txCtx,
+        sql: templateCache.getOrCompute("rescheduleJobs", () =>
+          applyTemplate(
+            sql(
+              `
+WITH input_data AS (
+  SELECT job_id, at, after_ms, error
+  FROM unnest($1::{{id_type}}[], $2::timestamptz[], $3::bigint[], $4::text[]) AS t(job_id, at, after_ms, error)
+)
+UPDATE {{schema}}.{{table_prefix}}job j
+SET scheduled_at = GREATEST(COALESCE(d.at, now() + (d.after_ms || ' milliseconds')::interval, now()), now()),
+  last_attempt_at = CASE WHEN j.attempt_at IS NULL THEN j.last_attempt_at ELSE now() END,
+  last_attempt_error = CASE WHEN j.attempt_at IS NULL THEN j.last_attempt_error ELSE d.error::jsonb END,
+  attempt_at = NULL,
+  attempt_by = NULL,
+  attempt_until = NULL
+FROM input_data d
+WHERE j.id = d.job_id
+  AND j.completed_at IS NULL
+RETURNING j.*
+`,
+              {
+                id: "rescheduleJobs",
+                params: [
+                  t.array(),
+                  t.array<string | null>(),
+                  t.array<string | null>(),
+                  t.array<string | null>(),
+                ],
+                columns: { ...dbJobColumns },
+              },
+            ),
+          ),
+        ),
+        params: [
+          jobs.map((job) => job.jobId as string),
+          jobs.map((job) => job.schedule?.at?.toISOString() ?? null),
+          jobs.map((job) => (job.schedule?.afterMs != null ? String(job.schedule.afterMs) : null)),
+          jobs.map((job) => (job.error !== undefined ? JSON.stringify(job.error) : null)),
+        ],
+      });
+      const rowById = new Map(rows.map((row) => [row.id, row]));
+      const seen = new Set<string>();
+      const result: StateJob[] = [];
+      for (const job of jobs) {
+        const jobId = job.jobId as string;
+        if (seen.has(jobId)) continue;
+        seen.add(jobId);
+        const row = rowById.get(jobId);
+        if (row) result.push(mapDbJobToStateJob(row));
+      }
+      return result;
+    },
+
+    deleteChains: async ({ txCtx, chainIds, cascade }) => {
+      const effectiveChainIds = cascade ? await expandChainIds(txCtx, chainIds) : chainIds;
+      if (effectiveChainIds.length === 0) return { deleted: [], blockerRefs: [] };
+      const [row] = await executeTypedSql({
+        txCtx,
+        sql: templateCache.getOrCompute("deleteChains", () =>
+          applyTemplate(
+            sql(
+              `
+WITH _locked AS (
+  -- Lock all jobs in chains being deleted before checking external refs, so
+  -- the check and DELETE see the same state even under concurrency.
+  SELECT id FROM {{schema}}.{{table_prefix}}job
+  WHERE chain_id = ANY($1::{{id_type}}[])
+  ORDER BY ctid
+  FOR UPDATE
+),
+_external_refs AS (
+  SELECT jb.job_id, jb.blocked_by_chain_id
+  FROM {{schema}}.{{table_prefix}}job_blocker jb
+  JOIN {{schema}}.{{table_prefix}}job j ON j.id = jb.job_id
+  WHERE jb.blocked_by_chain_id = ANY($1::{{id_type}}[])
+    AND j.chain_id != ALL($1::{{id_type}}[])
+),
+_deleted_blockers AS (
+  DELETE FROM {{schema}}.{{table_prefix}}job_blocker
+  WHERE job_id IN (SELECT id FROM _locked)
+    AND NOT EXISTS (SELECT 1 FROM _external_refs)
+),
+_deleted_jobs AS (
+  DELETE FROM {{schema}}.{{table_prefix}}job
+  WHERE id IN (SELECT id FROM _locked)
+    AND NOT EXISTS (SELECT 1 FROM _external_refs)
+  RETURNING *
+),
+_deleted_pairs AS (
+  SELECT
+    row_to_json(root) AS head_job,
+    row_to_json(lc) AS tail_job
+  FROM (SELECT * FROM _deleted_jobs WHERE chain_index = 0) AS root
+  LEFT JOIN LATERAL (
+    SELECT *
+    FROM _deleted_jobs
+    WHERE chain_id = root.id
+    ORDER BY chain_index DESC
+    LIMIT 1
+  ) AS lc ON TRUE
+)
+SELECT
+  COALESCE((SELECT json_agg(row_to_json(p)) FROM _deleted_pairs p), '[]'::json) AS deleted,
+  COALESCE((SELECT json_agg(row_to_json(r)) FROM _external_refs r), '[]'::json) AS blocker_refs
+`,
+              {
+                id: "deleteChains",
+                params: [t.array()],
+                columns: {
+                  deleted: t.json<{ head_job: DbJob; tail_job: DbJob | null }[]>(),
+                  blocker_refs: t.json<{ job_id: string; blocked_by_chain_id: string }[]>(),
+                },
+              },
+            ),
+          ),
+        ),
+        params: [effectiveChainIds],
+      });
+      return {
+        deleted: row.deleted.map((pair): [StateJob, StateJob | undefined] => [
+          mapDbJobToStateJob(pair.head_job),
+          pair.tail_job && pair.tail_job.id !== pair.head_job.id
+            ? mapDbJobToStateJob(pair.tail_job)
+            : undefined,
+        ]),
+        blockerRefs: row.blocker_refs.map((r) => ({
+          chainId: r.blocked_by_chain_id,
+          referencedByJobId: r.job_id,
+        })),
+      };
+    },
+
+    startJobAttempt: async ({ txCtx, typeNames, workerId }) => {
+      const [result] = await executeTypedSql({
+        txCtx,
+        sql: templateCache.getOrCompute("startJobAttempt", () =>
+          applyTemplate(
+            sql(
+              `
+WITH acquired_job AS (
+  SELECT j.id
+  FROM (SELECT type_name FROM unnest($1::text[]) AS u(type_name) ORDER BY random()) AS t
+  CROSS JOIN LATERAL (
+    SELECT id
+    FROM {{schema}}.{{table_prefix}}job
+    WHERE type_name = t.type_name
+      AND blocked = false
+      AND attempt_at IS NULL
+      AND completed_at IS NULL
+      AND scheduled_at <= now()
+    ORDER BY scheduled_at ASC
+    LIMIT 1
+    FOR UPDATE SKIP LOCKED
+  ) j
+  LIMIT 1
+)
+UPDATE {{schema}}.{{table_prefix}}job
+SET attempt = attempt + 1,
+  attempt_at = now(),
+  attempt_by = $2
+WHERE id = (SELECT id FROM acquired_job)
+RETURNING *
+`,
+              {
+                id: "startJobAttempt",
+                params: [t.array(), t.string()],
+                columns: { ...dbJobColumns },
+              },
+            ),
+          ),
+        ),
+        params: [typeNames, workerId],
+      });
+
+      return { job: result ? mapDbJobToStateJob(result) : undefined };
+    },
+    getStartAttemptDelayMs: async ({ txCtx, typeNames }) => {
+      const [result] = await executeTypedSql({
+        txCtx,
+        sql: templateCache.getOrCompute("getStartAttemptDelayMs", () =>
+          applyTemplate(
+            sql(
+              `
+WITH due AS (
+  SELECT j.id
+  FROM (SELECT type_name FROM unnest($1::text[]) AS u(type_name) ORDER BY random()) AS t
+  CROSS JOIN LATERAL (
+    SELECT id
+    FROM {{schema}}.{{table_prefix}}job
+    WHERE type_name = t.type_name
+      AND blocked = false
+      AND attempt_at IS NULL
+      AND completed_at IS NULL
+      AND scheduled_at <= now()
+    ORDER BY scheduled_at ASC
+    LIMIT 1
+    FOR UPDATE SKIP LOCKED
+  ) j
+  LIMIT 1
+),
+upcoming AS (
+  SELECT j.scheduled_at
+  FROM unnest($1::text[]) AS t(type_name)
+  CROSS JOIN LATERAL (
+    SELECT scheduled_at
+    FROM {{schema}}.{{table_prefix}}job
+    WHERE type_name = t.type_name
+      AND blocked = false
+      AND attempt_at IS NULL
+      AND completed_at IS NULL
+      AND scheduled_at > now()
+    ORDER BY scheduled_at ASC
+    LIMIT 1
+  ) j
+  ORDER BY j.scheduled_at ASC
+  LIMIT 1
+)
+SELECT delay_ms
+FROM (
+  SELECT COALESCE(
+    (SELECT 0 FROM due LIMIT 1),
+    (SELECT CEIL(EXTRACT(EPOCH FROM (scheduled_at - now())) * 1000)::integer FROM upcoming)
+  ) AS delay_ms
+) d
+WHERE delay_ms IS NOT NULL
+`,
+              {
+                id: "getStartAttemptDelayMs",
+                params: [t.array()],
+                columns: { delay_ms: t.number() },
+              },
+            ),
+          ),
+        ),
+        params: [typeNames],
+      });
+      return result ? result.delay_ms : null;
+    },
+
+    extendJobAttempt: async ({ txCtx, jobId, workerId, timeoutMs }) => {
+      const [job] = await executeTypedSql({
+        txCtx,
+        sql: templateCache.getOrCompute("extendJobAttempt", () =>
+          applyTemplate(
+            sql(
+              `
+UPDATE {{schema}}.{{table_prefix}}job
+SET attempt_until = now() + ($3::bigint || ' milliseconds')::interval
+WHERE id = $1
+  AND attempt_by = $2
+RETURNING *
+`,
+              {
+                id: "extendJobAttempt",
+                params: [idDataType, t.string(), t.number()],
+                columns: { ...dbJobColumns },
+              },
+            ),
+          ),
+        ),
+        params: [jobId, workerId, timeoutMs],
+      });
+
+      return mapDbJobToStateJob(job);
+    },
+
+    reclaimExpiredJobAttempt: async ({ txCtx, typeNames, ignoredJobIds }) => {
+      const [job] = await executeTypedSql({
+        txCtx,
+        sql: templateCache.getOrCompute("reclaimExpiredJobAttempt", () =>
+          applyTemplate(
+            sql(
+              `
+WITH job_to_unlock AS (
+  SELECT j.id
+  FROM (SELECT type_name FROM unnest($1::text[]) AS u(type_name) ORDER BY random()) AS t
+  CROSS JOIN LATERAL (
+    SELECT id
+    FROM {{schema}}.{{table_prefix}}job
+    WHERE type_name = t.type_name
+      AND attempt_at IS NOT NULL
+      AND attempt_until IS NOT NULL
+      AND attempt_until <= now()
+      AND completed_at IS NULL
+      AND id != ALL($2::{{id_type}}[])
+    ORDER BY attempt_until ASC
+    LIMIT 1
+    FOR UPDATE SKIP LOCKED
+  ) j
+  LIMIT 1
+)
+UPDATE {{schema}}.{{table_prefix}}job as job
+SET attempt_at = NULL,
+  attempt_by = NULL,
+  attempt_until = NULL
+FROM job_to_unlock
+WHERE job.id = job_to_unlock.id
+RETURNING job.*
+`,
+              {
+                id: "reclaimExpiredJobAttempt",
+                params: [t.array(), t.array()],
+                columns: { ...dbJobColumns },
+              },
+            ),
+          ),
+        ),
+        params: [typeNames, ignoredJobIds ?? []],
+      });
+      return job ? mapDbJobToStateJob(job) : undefined;
+    },
+
     addJobsBlockers: async ({ txCtx, jobBlockers }) => {
       if (jobBlockers.length === 0) return [];
 
@@ -1184,369 +1547,6 @@ SELECT
       return {
         unblockedJobs: result.unblocked_jobs.map(mapDbJobToStateJob),
         blockerTraceContexts: result.blocker_trace_contexts,
-      };
-    },
-
-    startJobAttempt: async ({ txCtx, typeNames, workerId }) => {
-      const [result] = await executeTypedSql({
-        txCtx,
-        sql: templateCache.getOrCompute("startJobAttempt", () =>
-          applyTemplate(
-            sql(
-              `
-WITH acquired_job AS (
-  SELECT j.id
-  FROM (SELECT type_name FROM unnest($1::text[]) AS u(type_name) ORDER BY random()) AS t
-  CROSS JOIN LATERAL (
-    SELECT id
-    FROM {{schema}}.{{table_prefix}}job
-    WHERE type_name = t.type_name
-      AND blocked = false
-      AND attempt_at IS NULL
-      AND completed_at IS NULL
-      AND scheduled_at <= now()
-    ORDER BY scheduled_at ASC
-    LIMIT 1
-    FOR UPDATE SKIP LOCKED
-  ) j
-  LIMIT 1
-)
-UPDATE {{schema}}.{{table_prefix}}job
-SET attempt = attempt + 1,
-  attempt_at = now(),
-  attempt_by = $2
-WHERE id = (SELECT id FROM acquired_job)
-RETURNING *
-`,
-              {
-                id: "startJobAttempt",
-                params: [t.array(), t.string()],
-                columns: { ...dbJobColumns },
-              },
-            ),
-          ),
-        ),
-        params: [typeNames, workerId],
-      });
-
-      return { job: result ? mapDbJobToStateJob(result) : undefined };
-    },
-    extendJobAttempt: async ({ txCtx, jobId, workerId, timeoutMs }) => {
-      const [job] = await executeTypedSql({
-        txCtx,
-        sql: templateCache.getOrCompute("extendJobAttempt", () =>
-          applyTemplate(
-            sql(
-              `
-UPDATE {{schema}}.{{table_prefix}}job
-SET attempt_until = now() + ($3::bigint || ' milliseconds')::interval
-WHERE id = $1
-  AND attempt_by = $2
-RETURNING *
-`,
-              {
-                id: "extendJobAttempt",
-                params: [idDataType, t.string(), t.number()],
-                columns: { ...dbJobColumns },
-              },
-            ),
-          ),
-        ),
-        params: [jobId, workerId, timeoutMs],
-      });
-
-      return mapDbJobToStateJob(job);
-    },
-
-    completeJobs: async ({ txCtx, jobs }) => {
-      if (jobs.length === 0) return [];
-
-      const rows = await executeTypedSql({
-        txCtx,
-        sql: templateCache.getOrCompute("completeJobs", () =>
-          applyTemplate(
-            sql(
-              `
-WITH input_data AS (
-  SELECT job_id, output, completed_by
-  FROM unnest($1::{{id_type}}[], $2::text[], $3::text[]) AS t(job_id, output, completed_by)
-)
-UPDATE {{schema}}.{{table_prefix}}job j
-SET last_attempt_error = NULL,
-  attempt_at = NULL,
-  attempt_by = NULL,
-  attempt_until = NULL,
-  completed_at = now(),
-  completed_by = d.completed_by,
-  output = d.output::jsonb,
-  blocked = false
-FROM input_data d
-WHERE j.id = d.job_id
-  AND j.completed_at IS NULL
-RETURNING j.*
-`,
-              {
-                id: "completeJobs",
-                params: [t.array(), t.array<string | null>(), t.array<string | null>()],
-                columns: { ...dbJobColumns },
-              },
-            ),
-          ),
-        ),
-        params: [
-          jobs.map((job) => job.jobId as string),
-          jobs.map((job) => (job.output !== undefined ? JSON.stringify(job.output) : null)),
-          jobs.map((job) => job.completedBy ?? null),
-        ],
-      });
-
-      const completedById = new Map(rows.map((row) => [row.id, row]));
-
-      return jobs.map((job) => mapDbJobToStateJob(completedById.get(job.jobId)!));
-    },
-
-    reclaimExpiredJobAttempt: async ({ txCtx, typeNames, ignoredJobIds }) => {
-      const [job] = await executeTypedSql({
-        txCtx,
-        sql: templateCache.getOrCompute("reclaimExpiredJobAttempt", () =>
-          applyTemplate(
-            sql(
-              `
-WITH job_to_unlock AS (
-  SELECT j.id
-  FROM (SELECT type_name FROM unnest($1::text[]) AS u(type_name) ORDER BY random()) AS t
-  CROSS JOIN LATERAL (
-    SELECT id
-    FROM {{schema}}.{{table_prefix}}job
-    WHERE type_name = t.type_name
-      AND attempt_at IS NOT NULL
-      AND attempt_until IS NOT NULL
-      AND attempt_until <= now()
-      AND completed_at IS NULL
-      AND id != ALL($2::{{id_type}}[])
-    ORDER BY attempt_until ASC
-    LIMIT 1
-    FOR UPDATE SKIP LOCKED
-  ) j
-  LIMIT 1
-)
-UPDATE {{schema}}.{{table_prefix}}job as job
-SET attempt_at = NULL,
-  attempt_by = NULL,
-  attempt_until = NULL
-FROM job_to_unlock
-WHERE job.id = job_to_unlock.id
-RETURNING job.*
-`,
-              {
-                id: "reclaimExpiredJobAttempt",
-                params: [t.array(), t.array()],
-                columns: { ...dbJobColumns },
-              },
-            ),
-          ),
-        ),
-        params: [typeNames, ignoredJobIds ?? []],
-      });
-      return job ? mapDbJobToStateJob(job) : undefined;
-    },
-
-    getStartAttemptDelayMs: async ({ txCtx, typeNames }) => {
-      const [result] = await executeTypedSql({
-        txCtx,
-        sql: templateCache.getOrCompute("getStartAttemptDelayMs", () =>
-          applyTemplate(
-            sql(
-              `
-WITH due AS (
-  SELECT j.id
-  FROM (SELECT type_name FROM unnest($1::text[]) AS u(type_name) ORDER BY random()) AS t
-  CROSS JOIN LATERAL (
-    SELECT id
-    FROM {{schema}}.{{table_prefix}}job
-    WHERE type_name = t.type_name
-      AND blocked = false
-      AND attempt_at IS NULL
-      AND completed_at IS NULL
-      AND scheduled_at <= now()
-    ORDER BY scheduled_at ASC
-    LIMIT 1
-    FOR UPDATE SKIP LOCKED
-  ) j
-  LIMIT 1
-),
-upcoming AS (
-  SELECT j.scheduled_at
-  FROM unnest($1::text[]) AS t(type_name)
-  CROSS JOIN LATERAL (
-    SELECT scheduled_at
-    FROM {{schema}}.{{table_prefix}}job
-    WHERE type_name = t.type_name
-      AND blocked = false
-      AND attempt_at IS NULL
-      AND completed_at IS NULL
-      AND scheduled_at > now()
-    ORDER BY scheduled_at ASC
-    LIMIT 1
-  ) j
-  ORDER BY j.scheduled_at ASC
-  LIMIT 1
-)
-SELECT delay_ms
-FROM (
-  SELECT COALESCE(
-    (SELECT 0 FROM due LIMIT 1),
-    (SELECT CEIL(EXTRACT(EPOCH FROM (scheduled_at - now())) * 1000)::integer FROM upcoming)
-  ) AS delay_ms
-) d
-WHERE delay_ms IS NOT NULL
-`,
-              {
-                id: "getStartAttemptDelayMs",
-                params: [t.array()],
-                columns: { delay_ms: t.number() },
-              },
-            ),
-          ),
-        ),
-        params: [typeNames],
-      });
-      return result ? result.delay_ms : null;
-    },
-
-    rescheduleJobs: async ({ txCtx, jobs }) => {
-      if (jobs.length === 0) return [];
-      const rows = await executeTypedSql({
-        txCtx,
-        sql: templateCache.getOrCompute("rescheduleJobs", () =>
-          applyTemplate(
-            sql(
-              `
-WITH input_data AS (
-  SELECT job_id, at, after_ms, error
-  FROM unnest($1::{{id_type}}[], $2::timestamptz[], $3::bigint[], $4::text[]) AS t(job_id, at, after_ms, error)
-)
-UPDATE {{schema}}.{{table_prefix}}job j
-SET scheduled_at = GREATEST(COALESCE(d.at, now() + (d.after_ms || ' milliseconds')::interval, now()), now()),
-  last_attempt_at = CASE WHEN j.attempt_at IS NULL THEN j.last_attempt_at ELSE now() END,
-  last_attempt_error = CASE WHEN j.attempt_at IS NULL THEN j.last_attempt_error ELSE d.error::jsonb END,
-  attempt_at = NULL,
-  attempt_by = NULL,
-  attempt_until = NULL
-FROM input_data d
-WHERE j.id = d.job_id
-  AND j.completed_at IS NULL
-RETURNING j.*
-`,
-              {
-                id: "rescheduleJobs",
-                params: [
-                  t.array(),
-                  t.array<string | null>(),
-                  t.array<string | null>(),
-                  t.array<string | null>(),
-                ],
-                columns: { ...dbJobColumns },
-              },
-            ),
-          ),
-        ),
-        params: [
-          jobs.map((job) => job.jobId as string),
-          jobs.map((job) => job.schedule?.at?.toISOString() ?? null),
-          jobs.map((job) => (job.schedule?.afterMs != null ? String(job.schedule.afterMs) : null)),
-          jobs.map((job) => (job.error !== undefined ? JSON.stringify(job.error) : null)),
-        ],
-      });
-      const rowById = new Map(rows.map((row) => [row.id, row]));
-      const seen = new Set<string>();
-      const result: StateJob[] = [];
-      for (const job of jobs) {
-        const jobId = job.jobId as string;
-        if (seen.has(jobId)) continue;
-        seen.add(jobId);
-        const row = rowById.get(jobId);
-        if (row) result.push(mapDbJobToStateJob(row));
-      }
-      return result;
-    },
-
-    deleteChains: async ({ txCtx, chainIds, cascade }) => {
-      const effectiveChainIds = cascade ? await expandChainIds(txCtx, chainIds) : chainIds;
-      if (effectiveChainIds.length === 0) return { deleted: [], blockerRefs: [] };
-      const [row] = await executeTypedSql({
-        txCtx,
-        sql: templateCache.getOrCompute("deleteChains", () =>
-          applyTemplate(
-            sql(
-              `
-WITH _locked AS (
-  -- Lock all jobs in chains being deleted before checking external refs, so
-  -- the check and DELETE see the same state even under concurrency.
-  SELECT id FROM {{schema}}.{{table_prefix}}job
-  WHERE chain_id = ANY($1::{{id_type}}[])
-  ORDER BY ctid
-  FOR UPDATE
-),
-_external_refs AS (
-  SELECT jb.job_id, jb.blocked_by_chain_id
-  FROM {{schema}}.{{table_prefix}}job_blocker jb
-  JOIN {{schema}}.{{table_prefix}}job j ON j.id = jb.job_id
-  WHERE jb.blocked_by_chain_id = ANY($1::{{id_type}}[])
-    AND j.chain_id != ALL($1::{{id_type}}[])
-),
-_deleted_blockers AS (
-  DELETE FROM {{schema}}.{{table_prefix}}job_blocker
-  WHERE job_id IN (SELECT id FROM _locked)
-    AND NOT EXISTS (SELECT 1 FROM _external_refs)
-),
-_deleted_jobs AS (
-  DELETE FROM {{schema}}.{{table_prefix}}job
-  WHERE id IN (SELECT id FROM _locked)
-    AND NOT EXISTS (SELECT 1 FROM _external_refs)
-  RETURNING *
-),
-_deleted_pairs AS (
-  SELECT
-    row_to_json(root) AS head_job,
-    row_to_json(lc) AS tail_job
-  FROM (SELECT * FROM _deleted_jobs WHERE chain_index = 0) AS root
-  LEFT JOIN LATERAL (
-    SELECT *
-    FROM _deleted_jobs
-    WHERE chain_id = root.id
-    ORDER BY chain_index DESC
-    LIMIT 1
-  ) AS lc ON TRUE
-)
-SELECT
-  COALESCE((SELECT json_agg(row_to_json(p)) FROM _deleted_pairs p), '[]'::json) AS deleted,
-  COALESCE((SELECT json_agg(row_to_json(r)) FROM _external_refs r), '[]'::json) AS blocker_refs
-`,
-              {
-                id: "deleteChains",
-                params: [t.array()],
-                columns: {
-                  deleted: t.json<{ head_job: DbJob; tail_job: DbJob | null }[]>(),
-                  blocker_refs: t.json<{ job_id: string; blocked_by_chain_id: string }[]>(),
-                },
-              },
-            ),
-          ),
-        ),
-        params: [effectiveChainIds],
-      });
-      return {
-        deleted: row.deleted.map((pair): [StateJob, StateJob | undefined] => [
-          mapDbJobToStateJob(pair.head_job),
-          pair.tail_job && pair.tail_job.id !== pair.head_job.id
-            ? mapDbJobToStateJob(pair.tail_job)
-            : undefined,
-        ]),
-        blockerRefs: row.blocker_refs.map((r) => ({
-          chainId: r.blocked_by_chain_id,
-          referencedByJobId: r.job_id,
-        })),
       };
     },
 

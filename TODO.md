@@ -13,9 +13,13 @@
   - getChains => [StateChain, StateJob, StateJob | undefined][] // maybe { chain: StateChain, head: StateJob, tail: StateJob | undefined }[]
   - createJobs => [StateChain, StateJob, { created }][]
   - getJobBlockers => [StateChain, StateJob, StateJob | undefined][]
+  - startJobAttempt => [StateChain, StateJob][] // always tail
   - completeJobs => [StateChain, StateJob, StateJob | undefined][] // we no longer call completeJobs -> getJobs -> unblockJobs => completeJobs -> unblockJobs
   - continueJobs get rid of chainTraceContext
   - continueJobs & completeJobs should accept a single completedBy
+- rework StateAdapter implementations
+  - create DbHeadJobRow (maps to StateChain and StateJob) & DbTailJobRow (maps to StateJob)
+  - create DbJobBlockerRow
 
 - optimize processing
   - acquireJob returns 'hasBlockers'

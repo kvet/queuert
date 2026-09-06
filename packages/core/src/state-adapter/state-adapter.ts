@@ -115,6 +115,73 @@ export type StateAdapter<TTxContext extends BaseTxContext, TJobId extends string
     }[];
   }) => Promise<{ job: StateJob; continuation: StateJob }[]>;
 
+  /**
+   * Completes each job with its terminal output, ending its chain. Returns
+   * results in input order. Handing a chain on is `continueJobs`, not this.
+   */
+  completeJobs: (
+    params: {
+      jobs: {
+        jobId: TJobId;
+        completedBy?: string | null;
+        output: unknown;
+      }[];
+    } & WriteTxContextParam<TTxContext>,
+  ) => Promise<StateJob[]>;
+
+  /** Returns jobs to pending, clearing any running attempt. Skips completed and missing ids. */
+  rescheduleJobs: (
+    params: {
+      jobs: {
+        jobId: TJobId;
+        schedule?: ScheduleOptions;
+        error?: string;
+      }[];
+    } & WriteTxContextParam<TTxContext>,
+  ) => Promise<StateJob[]>;
+
+  /**
+   * Deletes all jobs in the given chains atomically. Fails with `blockerRefs` if any
+   * chain is referenced as a blocker by a job outside the set. `cascade` includes
+   * transitive dependencies.
+   */
+  deleteChains: (
+    params: { chainIds: TJobId[]; cascade?: boolean } & WriteTxContextParam<TTxContext>,
+  ) => Promise<{
+    deleted: [StateJob, StateJob | undefined][];
+    blockerRefs: BlockerReference[];
+  }>;
+
+  /**
+   * Atomically selects a pending job and starts an attempt. Two parallel callers
+   * must never receive the same job — locked rows must be skipped, not waited on.
+   */
+  startJobAttempt: (
+    params: { typeNames: string[]; workerId: string } & WriteTxContextParam<TTxContext>,
+  ) => Promise<{ job: StateJob | undefined }>;
+
+  /** Ms until a pending job of these types can be attempted: 0 if due now, null if none. */
+  getStartAttemptDelayMs: (
+    params: { typeNames: string[] } & ReadTxContextParam<TTxContext>,
+  ) => Promise<number | null>;
+
+  /** Extends a running job attempt's deadline. */
+  extendJobAttempt: (
+    params: {
+      jobId: TJobId;
+      workerId: string;
+      timeoutMs: number;
+    } & WriteTxContextParam<TTxContext>,
+  ) => Promise<StateJob>;
+
+  /** Releases an expired job attempt back to the pending pool. */
+  reclaimExpiredJobAttempt: (
+    params: {
+      typeNames: string[];
+      ignoredJobIds?: TJobId[];
+    } & WriteTxContextParam<TTxContext>,
+  ) => Promise<StateJob | undefined>;
+
   /** Adds blocker dependencies to jobs. Returns results in input order. */
   addJobsBlockers: (params: {
     txCtx: TTxContext;
@@ -141,78 +208,21 @@ export type StateAdapter<TTxContext extends BaseTxContext, TJobId extends string
     params: { blockedByChainId: TJobId } & WriteTxContextParam<TTxContext>,
   ) => Promise<{ unblockedJobs: StateJob[]; blockerTraceContexts: (string | null)[] }>;
 
-  /**
-   * Atomically selects a pending job and starts an attempt. Two parallel callers
-   * must never receive the same job — locked rows must be skipped, not waited on.
-   */
-  startJobAttempt: (
-    params: { typeNames: string[]; workerId: string } & WriteTxContextParam<TTxContext>,
-  ) => Promise<{ job: StateJob | undefined }>;
-
-  /** Extends a running job attempt's deadline. */
-  extendJobAttempt: (
-    params: {
-      jobId: TJobId;
-      workerId: string;
-      timeoutMs: number;
-    } & WriteTxContextParam<TTxContext>,
-  ) => Promise<StateJob>;
-
-  /**
-   * Completes each job with its terminal output, ending its chain. Returns
-   * results in input order. Handing a chain on is `continueJobs`, not this.
-   */
-  completeJobs: (
-    params: {
-      jobs: {
-        jobId: TJobId;
-        completedBy?: string | null;
-        output: unknown;
-      }[];
-    } & WriteTxContextParam<TTxContext>,
-  ) => Promise<StateJob[]>;
-
-  /** Releases an expired job attempt back to the pending pool. */
-  reclaimExpiredJobAttempt: (
-    params: {
-      typeNames: string[];
-      ignoredJobIds?: TJobId[];
-    } & WriteTxContextParam<TTxContext>,
-  ) => Promise<StateJob | undefined>;
-
-  /** Ms until a pending job of these types can be attempted: 0 if due now, null if none. */
-  getStartAttemptDelayMs: (
-    params: { typeNames: string[] } & ReadTxContextParam<TTxContext>,
-  ) => Promise<number | null>;
-
-  /** Returns jobs to pending, clearing any running attempt. Skips completed and missing ids. */
-  rescheduleJobs: (
-    params: {
-      jobs: {
-        jobId: TJobId;
-        schedule?: ScheduleOptions;
-        error?: string;
-      }[];
-    } & WriteTxContextParam<TTxContext>,
-  ) => Promise<StateJob[]>;
-
-  /**
-   * Deletes all jobs in the given chains atomically. Fails with `blockerRefs` if any
-   * chain is referenced as a blocker by a job outside the set. `cascade` includes
-   * transitive dependencies.
-   */
-  deleteChains: (
-    params: { chainIds: TJobId[]; cascade?: boolean } & WriteTxContextParam<TTxContext>,
-  ) => Promise<{
-    deleted: [StateJob, StateJob | undefined][];
-    blockerRefs: BlockerReference[];
-  }>;
-
   /** Returns distinct chain type names present in the data. */
   listChainTypeNames: (params: ReadTxContextParam<TTxContext>) => Promise<string[]>;
 
   /** Returns distinct job type names present in the data. */
   listJobTypeNames: (params: ReadTxContextParam<TTxContext>) => Promise<string[]>;
+
+  /** Returns capped per-status counts for each requested chain type name, in input order. */
+  countByChainTypeNames: (
+    params: ReadTxContextParam<TTxContext> & { typeNames: string[] },
+  ) => Promise<
+    {
+      running: { count: number; hasMore: boolean };
+      completed: { count: number; hasMore: boolean };
+    }[]
+  >;
 
   /** Returns capped per-status counts for each requested job type name, in input order. */
   countByJobTypeNames: (
@@ -220,16 +230,6 @@ export type StateAdapter<TTxContext extends BaseTxContext, TJobId extends string
   ) => Promise<
     {
       pending: { count: number; hasMore: boolean };
-      running: { count: number; hasMore: boolean };
-      completed: { count: number; hasMore: boolean };
-    }[]
-  >;
-
-  /** Returns capped per-status counts for each requested chain type name, in input order. */
-  countByChainTypeNames: (
-    params: ReadTxContextParam<TTxContext> & { typeNames: string[] },
-  ) => Promise<
-    {
       running: { count: number; hasMore: boolean };
       completed: { count: number; hasMore: boolean };
     }[]
