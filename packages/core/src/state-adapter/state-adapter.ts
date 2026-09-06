@@ -86,11 +86,8 @@ export type StateAdapter<TTxContext extends BaseTxContext, TJobId extends string
     params: { jobIds: TJobId[] } & LockTxContextParam<TTxContext>,
   ) => Promise<(StateJob | undefined)[]>;
 
-  /**
-   * Creates each chain's first job. Returns results in input order.
-   * Supports deduplication — matching entries return the existing row with `deduplicated: true`.
-   */
-  createChains: (params: {
+  /** Creates chain heads. Deduplicated matches return `deduplicated: true`. */
+  createJobs: (params: {
     txCtx: TTxContext;
     jobs: {
       typeName: string;
@@ -103,13 +100,10 @@ export type StateAdapter<TTxContext extends BaseTxContext, TJobId extends string
     }[];
   }) => Promise<{ job: StateJob; deduplicated: boolean }[]>;
 
-  /**
-   * Creates the successor job of `continueFromId` within the same chain.
-   * Idempotent — if a successor already exists, returns it with `deduplicated: true`.
-   */
-  createContinuationJob: (params: {
+  /** Completes each `continueFromId` and inserts its chain successor, linking the two. */
+  continueJobs: (params: {
     txCtx: TTxContext;
-    job: {
+    jobs: {
       typeName: string;
       id?: TJobId;
       input: unknown;
@@ -117,8 +111,9 @@ export type StateAdapter<TTxContext extends BaseTxContext, TJobId extends string
       chainTraceContext?: string | null;
       traceContext?: string | null;
       continueFromId: TJobId;
-    };
-  }) => Promise<{ job: StateJob; deduplicated: boolean }>;
+      completedBy?: string | null;
+    }[];
+  }) => Promise<{ job: StateJob; continuation: StateJob }[]>;
 
   /** Adds blocker dependencies to jobs. Returns results in input order. */
   addJobsBlockers: (params: {
@@ -164,21 +159,18 @@ export type StateAdapter<TTxContext extends BaseTxContext, TJobId extends string
   ) => Promise<StateJob>;
 
   /**
-   * Finishes a job attempt. Outcome is discriminated by key:
-   * - `{ output }` — completed with terminal output
-   * - `{ continuedToId }` — completed with successor link
-   * - `{ schedule, error? }` — returned to pending (with or without error)
+   * Completes each job with its terminal output, ending its chain. Returns
+   * results in input order. Handing a chain on is `continueJobs`, not this.
    */
-  finishJobAttempt: (
+  completeJobs: (
     params: {
-      jobId: TJobId;
-      workerId: string | null;
-      outcome:
-        | { output: unknown; continuedToId?: never; error?: never; schedule?: never }
-        | { continuedToId: TJobId; output?: never; error?: never; schedule?: never }
-        | { schedule: ScheduleOptions; error?: string; output?: never; continuedToId?: never };
+      jobs: {
+        jobId: TJobId;
+        completedBy?: string | null;
+        output: unknown;
+      }[];
     } & WriteTxContextParam<TTxContext>,
-  ) => Promise<StateJob>;
+  ) => Promise<StateJob[]>;
 
   /** Releases an expired job attempt back to the pending pool. */
   reclaimExpiredJobAttempt: (
@@ -193,11 +185,14 @@ export type StateAdapter<TTxContext extends BaseTxContext, TJobId extends string
     params: { typeNames: string[] } & ReadTxContextParam<TTxContext>,
   ) => Promise<number | null>;
 
-  /** Reschedules pending jobs. Skips non-pending and missing ids. Returns updated rows in input order. */
+  /** Returns jobs to pending, clearing any running attempt. Skips completed and missing ids. */
   rescheduleJobs: (
     params: {
-      jobIds: TJobId[];
-      schedule?: ScheduleOptions;
+      jobs: {
+        jobId: TJobId;
+        schedule?: ScheduleOptions;
+        error?: string;
+      }[];
     } & WriteTxContextParam<TTxContext>,
   ) => Promise<StateJob[]>;
 

@@ -27,7 +27,7 @@ export const countByChainTypeNamesGroup: ConformanceGroup<StateConformanceFixtur
       name: "countByChainTypeNames counts running chains",
       run: async ({ stateAdapter }, expect) => {
         await stateAdapter.withTransaction(async (txCtx) =>
-          stateAdapter.createChains({
+          stateAdapter.createJobs({
             txCtx,
             jobs: [
               { typeName: "chain-count-a", input: null },
@@ -52,7 +52,7 @@ export const countByChainTypeNamesGroup: ConformanceGroup<StateConformanceFixtur
       name: "countByChainTypeNames counts completed chains",
       run: async ({ stateAdapter }, expect) => {
         await stateAdapter.withTransaction(async (txCtx) =>
-          stateAdapter.createChains({
+          stateAdapter.createJobs({
             txCtx,
             jobs: [{ typeName: "chain-done", input: null }],
           }),
@@ -63,11 +63,9 @@ export const countByChainTypeNamesGroup: ConformanceGroup<StateConformanceFixtur
         );
 
         await stateAdapter.withTransaction(async (txCtx) =>
-          stateAdapter.finishJobAttempt({
+          stateAdapter.completeJobs({
             txCtx,
-            jobId: job!.id,
-            workerId: "w1",
-            outcome: { output: null },
+            jobs: [{ jobId: job!.id, completedBy: "w1", output: null }],
           }),
         );
 
@@ -82,7 +80,7 @@ export const countByChainTypeNamesGroup: ConformanceGroup<StateConformanceFixtur
       name: "countByChainTypeNames preserves input order",
       run: async ({ stateAdapter }, expect) => {
         await stateAdapter.withTransaction(async (txCtx) =>
-          stateAdapter.createChains({
+          stateAdapter.createJobs({
             txCtx,
             jobs: [
               { typeName: "chain-z", input: null },

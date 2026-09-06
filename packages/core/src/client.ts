@@ -845,8 +845,7 @@ export const createClient = async <
 
       const rescheduled = await helpers.stateAdapter.rescheduleJobs({
         txCtx,
-        jobIds: ids,
-        schedule,
+        jobs: ids.map((id: TJobId) => ({ jobId: id, schedule })),
       });
       for (const job of rescheduled) {
         bufferNotifyJobScheduled(transactionHooks, helpers.notifyAdapter, job);
@@ -951,7 +950,6 @@ export const createClient = async <
                     workerId: null,
                   })
                 : await continueChain(helpers, {
-                    job: stateJob,
                     fromJob: stateJob,
                     continueWith: outcome.continueWith,
                     txCtx,

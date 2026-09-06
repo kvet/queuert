@@ -152,8 +152,8 @@ Same shape — wrap the `await runStateAdapterConformance(...)` call in whatever
 On any case failure the runner throws a `ConformanceError` whose message summarizes which cases failed plus their assertion messages:
 
 ```
-ConformanceError: 2/132 conformance cases failed (130 passed, 0 skipped)
-  x createContinuationJob > inherits chainId from the parent and assigns a new job id
+ConformanceError: 2/202 conformance cases failed (200 passed, 0 skipped)
+  x continueJobs > inherits chainId from the parent and assigns a new job id
     expected 'chain-abc' to be 'chain-xyz'
   x addJobsBlockers > marks job blocked when incomplete blockers present
     expected false to be true

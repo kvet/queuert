@@ -8,7 +8,7 @@ export const extendJobAttemptGroup: ConformanceGroup<StateConformanceFixture> = 
       name: "extends attempt on a running job",
       run: async ({ stateAdapter }, expect) => {
         const [{ job: created }] = await stateAdapter.withTransaction(async (txCtx) =>
-          stateAdapter.createChains({
+          stateAdapter.createJobs({
             txCtx,
             jobs: [{ typeName: "attempt-test", input: null }],
           }),
@@ -47,7 +47,7 @@ export const extendJobAttemptGroup: ConformanceGroup<StateConformanceFixture> = 
       name: "updates attemptUntil on subsequent extensions",
       run: async ({ stateAdapter }, expect) => {
         const [{ job: created }] = await stateAdapter.withTransaction(async (txCtx) =>
-          stateAdapter.createChains({
+          stateAdapter.createJobs({
             txCtx,
             jobs: [{ typeName: "re-attempt-test", input: null }],
           }),
@@ -86,7 +86,7 @@ export const extendJobAttemptGroup: ConformanceGroup<StateConformanceFixture> = 
       name: "rejects extension by a different worker",
       run: async ({ stateAdapter }, expect) => {
         const [{ job: created }] = await stateAdapter.withTransaction(async (txCtx) =>
-          stateAdapter.createChains({
+          stateAdapter.createJobs({
             txCtx,
             jobs: [{ typeName: "ownership-test", input: null }],
           }),

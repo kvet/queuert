@@ -22,8 +22,8 @@ The `job` table stores all job state:
 | `id`                  | configurable (default: `uuid`) | Primary key. Type is set via `idType`; values are generated in JS via `generateId`                                                              |
 | `type_name`           | `text`                         | Job type identifier                                                                                                                             |
 | `chain_id`            | same as `id`                   | Foreign key to head job — every job in a chain points to the head                                                                               |
-| `chain_type_name`     | `text`                         | Type name of the chain (copied from root for query efficiency)                                                                                  |
-| `chain_index`         | `integer`                      | Position in chain (0 for root, incrementing for continuations)                                                                                  |
+| `chain_type_name`     | `text`                         | Type name of the chain                                                                                                                          |
+| `chain_index`         | `integer`                      | Position in chain (0 for the head, incrementing for continuations)                                                                              |
 | `continued_to_id`     | same as `id`                   | FK to the next job in the chain — non-null exactly when this job has a successor (set transactionally when `continueWith` inserts the next row) |
 | `input`               | `jsonb`                        | Job input data                                                                                                                                  |
 | `output`              | `jsonb`                        | Completion output (null until completed)                                                                                                        |

@@ -987,6 +987,54 @@ describe("Metrics", () => {
       { method: "jobRescheduled", args: { typeName: "test" } },
     ]);
   });
+
+  it("records no creation metrics when a chain is deduplicated", async ({
+    stateAdapter,
+    notifyAdapter,
+    withTransaction,
+    observabilityAdapter,
+    log,
+    expectMetrics,
+    expect,
+  }) => {
+    const jobTypes = defineJobTypes<{
+      test: { entry: true; input: null; output: null };
+    }>();
+
+    const client = await createClient({
+      stateAdapter,
+      notifyAdapter,
+      observabilityAdapter,
+      log,
+      jobTypes,
+    });
+
+    const create = async () =>
+      withTransactionHooks(async (transactionHooks) =>
+        withTransaction(async (txCtx) =>
+          client.createChain({
+            ...txCtx,
+            transactionHooks,
+            typeName: "test",
+            input: null,
+            deduplication: { key: "same-key", scope: "any" },
+          }),
+        ),
+      );
+
+    const first = await create();
+    const second = await create();
+
+    expect(first.deduplicated).toBe(false);
+    expect(second.deduplicated).toBe(true);
+    expect(second.id).toBe(first.id);
+
+    // Only the first call inserted a row, so only it records creation metrics.
+    await expectMetrics([
+      { method: "chainCreated", args: { typeName: "test" } },
+      { method: "jobCreated", args: { typeName: "test" } },
+    ]);
+  });
 });
 
 describe("Spans", () => {
@@ -2725,12 +2773,12 @@ describe("Rollback", () => {
     let completeJobErrorThrown = false;
     const erroringStateAdapter: typeof stateAdapter = {
       ...stateAdapter,
-      finishJobAttempt: async (args) => {
-        if (!("error" in args.outcome) && !completeJobErrorThrown) {
+      completeJobs: async (args) => {
+        if (!completeJobErrorThrown) {
           completeJobErrorThrown = true;
           throw new Error("simulated completeJob failure");
         }
-        return stateAdapter.finishJobAttempt(args);
+        return stateAdapter.completeJobs(args);
       },
     };
 
@@ -2809,12 +2857,12 @@ describe("Rollback", () => {
     let handlerFailed = false;
     const erroringStateAdapter: typeof stateAdapter = {
       ...stateAdapter,
-      finishJobAttempt: async (args) => {
-        if ("error" in args.outcome && !rescheduleErrorThrown) {
+      rescheduleJobs: async (args) => {
+        if (args.jobs.some((job) => job.error !== undefined) && !rescheduleErrorThrown) {
           rescheduleErrorThrown = true;
-          throw new Error("simulated abandonJob failure");
+          throw new Error("simulated reschedule failure");
         }
-        return stateAdapter.finishJobAttempt(args);
+        return stateAdapter.rescheduleJobs(args);
       },
     };
 
@@ -3157,12 +3205,12 @@ describe("Rollback", () => {
     let createJobErrorThrown = false;
     const erroringStateAdapter: typeof stateAdapter = {
       ...stateAdapter,
-      createContinuationJob: async (args) => {
+      continueJobs: async (args) => {
         if (!createJobErrorThrown) {
           createJobErrorThrown = true;
           throw new Error("simulated createJob failure");
         }
-        return stateAdapter.createContinuationJob(args);
+        return stateAdapter.continueJobs(args);
       },
     };
 

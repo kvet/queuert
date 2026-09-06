@@ -15,7 +15,7 @@ export const listChainTypeNamesGroup: ConformanceGroup<StateConformanceFixture> 
       name: "listChainTypeNames returns distinct chain type names",
       run: async ({ stateAdapter }, expect) => {
         await stateAdapter.withTransaction(async (txCtx) =>
-          stateAdapter.createChains({
+          stateAdapter.createJobs({
             txCtx,
             jobs: [
               { typeName: "zebra", input: null },
@@ -34,16 +34,16 @@ export const listChainTypeNamesGroup: ConformanceGroup<StateConformanceFixture> 
       name: "listChainTypeNames does not include continuation-only type names",
       run: async ({ stateAdapter }, expect) => {
         const [{ job: root }] = await stateAdapter.withTransaction(async (txCtx) =>
-          stateAdapter.createChains({
+          stateAdapter.createJobs({
             txCtx,
             jobs: [{ typeName: "root-type", input: null }],
           }),
         );
 
         await stateAdapter.withTransaction(async (txCtx) =>
-          stateAdapter.createContinuationJob({
+          stateAdapter.continueJobs({
             txCtx,
-            job: { typeName: "cont-type", continueFromId: root.id, input: null },
+            jobs: [{ typeName: "cont-type", continueFromId: root.id, input: null }],
           }),
         );
 

@@ -671,7 +671,7 @@ export const createInProcessStateAdapter = async ({
     getJobs: async ({ txCtx, jobIds }) =>
       withReadLock(txCtx, () => jobIds.map((jobId): StateJob | undefined => idx.jobs.get(jobId))),
 
-    createChains: async ({ txCtx, jobs: jobInputs }) =>
+    createJobs: async ({ txCtx, jobs: jobInputs }) =>
       withWriteLock(txCtx, () => {
         for (const jobInput of jobInputs) {
           if (jobInput.id !== undefined) validateId(jobInput.id, "caller");
@@ -722,48 +722,79 @@ export const createInProcessStateAdapter = async ({
         return results;
       }),
 
-    createContinuationJob: async ({ txCtx, job: jobInput }) =>
+    continueJobs: async ({ txCtx, jobs: jobInputs }) =>
       withWriteLock(txCtx, () => {
-        if (jobInput.id !== undefined) validateId(jobInput.id, "caller");
-        const journal = txCtx?.journal;
-        const {
-          typeName,
-          id: providedId,
-          input,
-          schedule,
-          chainTraceContext,
-          traceContext,
-          continueFromId,
-        } = jobInput;
-
-        const parent = idx.jobs.get(continueFromId);
-        if (!parent) throw new Error(`continueWith parent job ${continueFromId} not found`);
-        const chainIndex = parent.chainIndex + 1;
-
-        const existing = idx.findExistingContinuation(parent.chainId, chainIndex);
-        if (existing) return { job: existing, deduplicated: true };
-
-        const id = providedId ?? generateId();
-
-        if (idx.jobs.has(id)) {
-          throw new Error(`Job id "${id}" already exists`);
+        for (const jobInput of jobInputs) {
+          if (jobInput.id !== undefined) validateId(jobInput.id, "caller");
         }
+        const journal = txCtx?.journal;
+        const now = new Date();
+        const results: { job: DbJob; continuation: DbJob }[] = [];
 
-        const job = buildDbJob({
-          id,
-          typeName,
-          chainId: parent.chainId,
-          chainTypeName: parent.chainTypeName,
-          chainIndex,
-          deduplicationKey: null,
-          input,
-          schedule,
-          chainTraceContext,
-          traceContext,
+        const parents = jobInputs.map((jobInput) => {
+          const parent = idx.jobs.get(jobInput.continueFromId);
+          if (!parent || isCompleted(parent)) {
+            throw new Error(`Job ${jobInput.continueFromId} not found or already completed`);
+          }
+          return parent;
         });
 
-        idx.writeJob(journal, undefined, job);
-        return { job, deduplicated: false };
+        for (const [index, jobInput] of jobInputs.entries()) {
+          const {
+            typeName,
+            id: providedId,
+            input,
+            schedule,
+            chainTraceContext,
+            traceContext,
+            completedBy,
+          } = jobInput;
+
+          const parent = parents[index];
+          const chainIndex = parent.chainIndex + 1;
+
+          if (idx.findExistingContinuation(parent.chainId, chainIndex)) {
+            throw new Error(`Chain "${parent.chainId}" already has a job at index ${chainIndex}`);
+          }
+
+          const id = providedId ?? generateId();
+
+          if (idx.jobs.has(id)) {
+            throw new Error(`Job id "${id}" already exists`);
+          }
+
+          const continuation = buildDbJob({
+            id,
+            typeName,
+            chainId: parent.chainId,
+            chainTypeName: parent.chainTypeName,
+            chainIndex,
+            deduplicationKey: null,
+            input,
+            schedule,
+            chainTraceContext,
+            traceContext,
+          });
+          idx.writeJob(journal, undefined, continuation);
+
+          const completedJob: DbJob = {
+            ...parent,
+            attemptAt: null,
+            attemptBy: null,
+            attemptUntil: null,
+            continuedToId: id,
+            completedAt: now,
+            completedBy: completedBy ?? null,
+            output: null,
+            blocked: false,
+            lastAttemptError: null,
+          };
+          idx.writeJob(journal, parent, completedJob);
+
+          results.push({ job: completedJob, continuation });
+        }
+
+        return results;
       }),
 
     addJobsBlockers: async ({ txCtx, jobBlockers: jobBlockerInputs }) =>
@@ -930,56 +961,28 @@ export const createInProcessStateAdapter = async ({
         return updatedJob;
       }),
 
-    finishJobAttempt: async ({ txCtx, jobId, workerId, outcome }) =>
+    completeJobs: async ({ txCtx, jobs: jobInputs }) =>
       withWriteLock(txCtx, () => {
         const journal = txCtx?.journal;
-        const job = idx.jobs.get(jobId);
-        if (!job || isCompleted(job)) throw new Error("Job not found or already completed");
-        if (outcome.error !== undefined || outcome.schedule !== undefined) {
-          if (job.attemptBy === null || (workerId !== null && job.attemptBy !== workerId))
-            throw new Error("Job not running or not owned by worker");
-        }
         const now = new Date();
-        const updatedJob: DbJob = {
-          ...job,
-          attemptBy: null,
-          attemptUntil: null,
-          attemptAt: null,
-          ...(outcome.error !== undefined || outcome.schedule !== undefined
-            ? { lastAttemptAt: now, lastAttemptError: outcome.error ?? null }
-            : {}),
-          ...(outcome.schedule !== undefined
-            ? {
-                scheduledAt: clampToFloor(
-                  outcome.schedule.at ??
-                    (outcome.schedule.afterMs
-                      ? new Date(now.getTime() + outcome.schedule.afterMs)
-                      : now),
-                  now,
-                ),
-              }
-            : {}),
-          ...(outcome.output !== undefined
-            ? {
-                output: outcome.output,
-                completedAt: now,
-                completedBy: workerId,
-                blocked: false,
-                lastAttemptError: null,
-              }
-            : {}),
-          ...(outcome.continuedToId !== undefined
-            ? {
-                continuedToId: outcome.continuedToId,
-                completedAt: now,
-                completedBy: workerId,
-                blocked: false,
-                lastAttemptError: null,
-              }
-            : {}),
-        };
-        idx.writeJob(journal, job, updatedJob);
-        return updatedJob;
+        return jobInputs.map(({ jobId, completedBy, output }) => {
+          const job = idx.jobs.get(jobId);
+          if (!job || isCompleted(job))
+            throw new Error(`Job ${jobId} not found or already completed`);
+          const updatedJob: DbJob = {
+            ...job,
+            attemptAt: null,
+            attemptBy: null,
+            attemptUntil: null,
+            output: output ?? null,
+            completedAt: now,
+            completedBy: completedBy ?? null,
+            blocked: false,
+            lastAttemptError: null,
+          };
+          idx.writeJob(journal, job, updatedJob);
+          return updatedJob;
+        });
       }),
 
     reclaimExpiredJobAttempt: async ({ txCtx, typeNames, ignoredJobIds }) =>
@@ -1034,22 +1037,31 @@ export const createInProcessStateAdapter = async ({
         return Math.max(0, nextScheduledAt - now);
       }),
 
-    rescheduleJobs: async ({ txCtx, jobIds, schedule }) =>
+    rescheduleJobs: async ({ txCtx, jobs }) =>
       withWriteLock(txCtx, () => {
-        if (jobIds.length === 0) return [];
+        if (jobs.length === 0) return [];
         const journal = txCtx?.journal;
         const now = new Date();
-        const requestedScheduledAt =
-          schedule?.at ?? (schedule?.afterMs ? new Date(now.getTime() + schedule.afterMs) : now);
-        const resolvedScheduledAt = clampToFloor(requestedScheduledAt, now);
         const rescheduled: StateJob[] = [];
         const seen = new Set<string>();
-        for (const jobId of jobIds) {
+        for (const { jobId, schedule, error } of jobs) {
           if (seen.has(jobId)) continue;
           seen.add(jobId);
           const job = idx.jobs.get(jobId);
-          if (!job || !isPending(job)) continue;
-          const updatedJob: DbJob = { ...job, scheduledAt: resolvedScheduledAt };
+          if (!job || isCompleted(job)) continue;
+          const requestedScheduledAt =
+            schedule?.at ?? (schedule?.afterMs ? new Date(now.getTime() + schedule.afterMs) : now);
+          const resolvedScheduledAt = clampToFloor(requestedScheduledAt, now);
+          const updatedJob: DbJob = {
+            ...job,
+            scheduledAt: resolvedScheduledAt,
+            attemptAt: null,
+            attemptBy: null,
+            attemptUntil: null,
+            ...(job.attemptAt !== null
+              ? { lastAttemptAt: now, lastAttemptError: error ?? null }
+              : {}),
+          };
           idx.writeJob(journal, job, updatedJob);
           rescheduled.push(updatedJob);
         }

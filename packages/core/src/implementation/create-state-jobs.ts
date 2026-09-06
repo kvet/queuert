@@ -274,7 +274,7 @@ export const createStateChains = async (
   }));
 
   const createResults = await runCreate(spanHandles, async () =>
-    helpers.stateAdapter.createChains({ txCtx, jobs: createJobParams }),
+    helpers.stateAdapter.createJobs({ txCtx, jobs: createJobParams }),
   );
 
   return finalizeCreatedJobs(helpers, {
@@ -287,20 +287,22 @@ export const createStateChains = async (
   });
 };
 
-export const continueStateJob = async (
+export const continueStateJobs = async (
   helpers: Helpers,
   {
     job,
     fromJob,
+    workerId,
     txCtx,
     transactionHooks,
   }: {
     job: CommonInput;
     fromJob: StateJob;
+    workerId: string | null;
     txCtx: BaseTxContext;
     transactionHooks: TransactionHooks;
   },
-): Promise<{ job: StateJob; deduplicated: boolean }> => {
+): Promise<{ completedJob: StateJob; continuation: StateJob }> => {
   const { parsed, spanHandles } = prepareJobs(helpers, [job], () =>
     helpers.observabilityHelper.startJobSpan({
       chainTypeName: fromJob.chainTypeName,
@@ -312,28 +314,31 @@ export const continueStateJob = async (
   );
   const [spanHandle] = spanHandles;
 
-  const createResult = await runCreate(spanHandles, async () =>
-    helpers.stateAdapter.createContinuationJob({
+  const [{ job: completedJob, continuation }] = await runCreate(spanHandles, async () =>
+    helpers.stateAdapter.continueJobs({
       txCtx,
-      job: {
-        id: job.id,
-        typeName: job.typeName,
-        input: parsed[0].parsedInput,
-        schedule: job.schedule,
-        chainTraceContext: spanHandle?.getChainTraceContext() ?? null,
-        traceContext: spanHandle?.getTraceContext() ?? null,
-        continueFromId: fromJob.id,
-      },
+      jobs: [
+        {
+          id: job.id,
+          typeName: job.typeName,
+          input: parsed[0].parsedInput,
+          schedule: job.schedule,
+          chainTraceContext: spanHandle?.getChainTraceContext() ?? null,
+          traceContext: spanHandle?.getTraceContext() ?? null,
+          continueFromId: fromJob.id,
+          completedBy: workerId,
+        },
+      ],
     }),
   );
 
   const [result] = await finalizeCreatedJobs(helpers, {
     parsed,
     spanHandles,
-    createResults: [createResult],
+    createResults: [{ job: continuation, deduplicated: false }],
     isChainHead: false,
     txCtx,
     transactionHooks,
   });
-  return result;
+  return { completedJob, continuation: result.job };
 };

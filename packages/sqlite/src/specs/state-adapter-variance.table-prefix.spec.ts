@@ -15,7 +15,7 @@ it("index");
 describe("SQLite State Adapter Variance - Custom Table Prefix", () => {
   it("generates UUID job IDs", async ({ stateAdapter }) => {
     const [{ job }] = await stateAdapter.withTransaction(async (txCtx) =>
-      stateAdapter.createChains({
+      stateAdapter.createJobs({
         txCtx,
         jobs: [{ typeName: "t", input: null }],
       }),

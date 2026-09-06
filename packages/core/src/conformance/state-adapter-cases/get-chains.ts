@@ -11,7 +11,7 @@ export const getChainsGroup: ConformanceGroup<StateConformanceFixture> = {
       name: "handles chain relationships correctly",
       run: async ({ stateAdapter }, expect) => {
         const [{ job: headJob }] = await stateAdapter.withTransaction(async (txCtx) =>
-          stateAdapter.createChains({
+          stateAdapter.createJobs({
             txCtx,
             jobs: [{ typeName: "chain-root", input: { step: 1 } }],
           }),
@@ -28,20 +28,22 @@ export const getChainsGroup: ConformanceGroup<StateConformanceFixture> = {
       name: "returns [headJob, tailJob] for multi-chain",
       run: async ({ stateAdapter }, expect) => {
         const [{ job: headJob }] = await stateAdapter.withTransaction(async (txCtx) =>
-          stateAdapter.createChains({
+          stateAdapter.createJobs({
             txCtx,
             jobs: [{ typeName: "chain-root", input: null }],
           }),
         );
 
-        const { job: continuation } = await stateAdapter.withTransaction(async (txCtx) =>
-          stateAdapter.createContinuationJob({
+        const [{ continuation }] = await stateAdapter.withTransaction(async (txCtx) =>
+          stateAdapter.continueJobs({
             txCtx,
-            job: {
-              typeName: "chain-step2",
-              continueFromId: headJob.id,
-              input: null,
-            },
+            jobs: [
+              {
+                typeName: "chain-step2",
+                continueFromId: headJob.id,
+                input: null,
+              },
+            ],
           }),
         );
 
@@ -56,7 +58,7 @@ export const getChainsGroup: ConformanceGroup<StateConformanceFixture> = {
       name: "returns [headJob, undefined] for a single-root chain",
       run: async ({ stateAdapter }, expect) => {
         const [{ job: headJob }] = await stateAdapter.withTransaction(async (txCtx) =>
-          stateAdapter.createChains({
+          stateAdapter.createJobs({
             txCtx,
             jobs: [{ typeName: "single-root", input: null }],
           }),
@@ -73,7 +75,7 @@ export const getChainsGroup: ConformanceGroup<StateConformanceFixture> = {
       name: "returns [headJob, undefined] for a single-root chain with lock: exclusive",
       run: async ({ stateAdapter }, expect) => {
         const [{ job: headJob }] = await stateAdapter.withTransaction(async (txCtx) =>
-          stateAdapter.createChains({
+          stateAdapter.createJobs({
             txCtx,
             jobs: [{ typeName: "single-root-locked", input: null }],
           }),
@@ -92,7 +94,7 @@ export const getChainsGroup: ConformanceGroup<StateConformanceFixture> = {
       name: "returns undefined for nonexistent chain ID",
       run: async ({ stateAdapter }, expect) => {
         const [{ job: real }] = await stateAdapter.withTransaction(async (txCtx) =>
-          stateAdapter.createChains({
+          stateAdapter.createJobs({
             txCtx,
             jobs: [{ typeName: "chain-lookup-test", input: null }],
           }),
@@ -106,20 +108,22 @@ export const getChainsGroup: ConformanceGroup<StateConformanceFixture> = {
       name: "lock: exclusive blocks a concurrent locked read until the holding tx commits",
       run: async ({ stateAdapter }, expect) => {
         const [{ job: headJob }] = await stateAdapter.withTransaction(async (txCtx) =>
-          stateAdapter.createChains({
+          stateAdapter.createJobs({
             txCtx,
             jobs: [{ typeName: "chain-locked", input: null }],
           }),
         );
 
-        const { job: continuation } = await stateAdapter.withTransaction(async (txCtx) =>
-          stateAdapter.createContinuationJob({
+        const [{ continuation }] = await stateAdapter.withTransaction(async (txCtx) =>
+          stateAdapter.continueJobs({
             txCtx,
-            job: {
-              typeName: "chain-locked-step2",
-              continueFromId: headJob.id,
-              input: null,
-            },
+            jobs: [
+              {
+                typeName: "chain-locked-step2",
+                continueFromId: headJob.id,
+                input: null,
+              },
+            ],
           }),
         );
 
@@ -186,7 +190,7 @@ export const getChainsGroup: ConformanceGroup<StateConformanceFixture> = {
 
         const txPromise = stateAdapter
           .withTransaction(async (txCtx) => {
-            const [{ job }] = await stateAdapter.createChains({
+            const [{ job }] = await stateAdapter.createJobs({
               txCtx,
               jobs: [{ typeName: "iso-chain-create", input: null }],
             });
@@ -213,7 +217,7 @@ export const getChainsGroup: ConformanceGroup<StateConformanceFixture> = {
           return;
         }
         const [{ job: seed }] = await stateAdapter.withTransaction(async (txCtx) =>
-          stateAdapter.createChains({
+          stateAdapter.createJobs({
             txCtx,
             jobs: [{ typeName: "iso-latest-root", input: null }],
           }),
@@ -230,13 +234,15 @@ export const getChainsGroup: ConformanceGroup<StateConformanceFixture> = {
 
         const txPromise = stateAdapter
           .withTransaction(async (txCtx) => {
-            await stateAdapter.createContinuationJob({
+            await stateAdapter.continueJobs({
               txCtx,
-              job: {
-                typeName: "iso-latest-cont",
-                continueFromId: seed.id,
-                input: null,
-              },
+              jobs: [
+                {
+                  typeName: "iso-latest-cont",
+                  continueFromId: seed.id,
+                  input: null,
+                },
+              ],
             });
             signalTxReady!();
             await gate;

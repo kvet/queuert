@@ -97,102 +97,95 @@ The benchmark covers every state-adapter method exercised in production: operati
 
 ### Operational queries
 
-Single-job operations on the hot path — acquiring, extending, and finishing attempts. All sub-8 ms on PostgreSQL, sub-1 ms on SQLite.
-
 | Query                            | PG p50 (ms) | SQLite p50 (ms) |
 | -------------------------------- | ----------: | --------------: |
-| getChains/default                |        0.78 |            0.15 |
-| getChains/lock                   |        1.40 |            0.67 |
-| getJobs/default                  |        0.52 |            0.05 |
-| getJobs/lock                     |        1.00 |            0.07 |
-| createChains/default             |        2.84 |            0.13 |
-| createChains/deduplication       |        2.94 |            0.10 |
-| createContinuationJob/default    |        1.92 |            0.13 |
-| addJobsBlockers/default          |        7.55 |            0.30 |
-| getJobBlockers/default           |        0.90 |            0.18 |
-| unblockJobs/default              |        2.60 |            0.12 |
-| startJobAttempt/default          |        1.42 |            0.07 |
-| extendJobAttempt/default         |        1.12 |            0.05 |
-| finishJobAttempt/failure         |        1.22 |            0.09 |
-| finishJobAttempt/success         |        1.16 |            0.09 |
-| reclaimExpiredJobAttempt/default |        1.76 |            0.07 |
-| getStartAttemptDelayMs/default   |        1.77 |            0.04 |
-| rescheduleJobs/default           |        1.32 |            0.06 |
-| deleteChains/default             |        3.73 |            0.19 |
-| deleteChains/cascade             |        4.70 |            0.07 |
+| getChains/default                |        0.76 |            0.16 |
+| getChains/lock                   |        1.21 |            0.66 |
+| getJobs/default                  |        0.54 |            0.05 |
+| getJobs/lock                     |        1.06 |            0.07 |
+| createJobs/default               |        4.22 |            0.13 |
+| createJobs/deduplication         |        3.04 |            0.10 |
+| continueJobs/default             |        2.58 |            0.22 |
+| addJobsBlockers/default          |        7.56 |            0.29 |
+| getJobBlockers/default           |        0.87 |            0.17 |
+| unblockJobs/default              |        2.72 |            0.13 |
+| startJobAttempt/default          |        1.54 |            0.07 |
+| extendJobAttempt/default         |        1.09 |            0.05 |
+| completeJobs/default             |        1.46 |            0.06 |
+| reclaimExpiredJobAttempt/default |        1.43 |            0.07 |
+| getStartAttemptDelayMs/default   |        2.36 |            0.04 |
+| rescheduleJobs/default           |        1.34 |            0.06 |
+| deleteChains/default             |        2.60 |            0.19 |
+| deleteChains/cascade             |        3.69 |            0.07 |
 
 ### Type discovery & counts
 
 | Query                         | PG p50 (ms) | SQLite p50 (ms) |
 | ----------------------------- | ----------: | --------------: |
-| listChainTypeNames/default    |        1.28 |            0.06 |
-| listJobTypeNames/default      |        1.07 |            0.06 |
-| countByChainTypeNames/default |        4.86 |            1.14 |
-| countByJobTypeNames/default   |        3.56 |            2.63 |
+| listChainTypeNames/default    |        0.95 |            0.06 |
+| listJobTypeNames/default      |        1.02 |            0.05 |
+| countByChainTypeNames/default |        3.35 |            1.14 |
+| countByJobTypeNames/default   |        2.12 |            2.61 |
 
 ### List chains
-
-Paginated chain listing. The `nonIndependent` filter (chains with blockers) is consistently slower due to the join surface. `orderByCreatedAt` on completed chains remains the most expensive query on PostgreSQL.
 
 | Query                                         | PG p50 (ms) | SQLite p50 (ms) |
 | --------------------------------------------- | ----------: | --------------: |
 | **No status filter**                          |             |                 |
-| listChains/noStatus/default                   |       52.88 |            0.75 |
-| listChains/noStatus/independent               |       55.76 |            0.70 |
-| listChains/noStatus/nonIndependent            |       94.65 |          320.90 |
-| listChains/noStatus/fromTo                    |       53.02 |            0.55 |
-| listChains/noStatus/cursor                    |      102.23 |            1.22 |
+| listChains/noStatus/default                   |       56.71 |            0.53 |
+| listChains/noStatus/independent               |       58.90 |            0.63 |
+| listChains/noStatus/nonIndependent            |       91.16 |          282.21 |
+| listChains/noStatus/fromTo                    |       56.81 |            0.53 |
+| listChains/noStatus/cursor                    |      116.98 |            0.99 |
 | **Running**                                   |             |                 |
-| listChains/running/default                    |       72.95 |           31.87 |
-| listChains/running/independent                |       79.92 |           38.05 |
-| listChains/running/nonIndependent             |      228.75 |           23.12 |
-| listChains/running/cursor                     |      141.68 |           58.07 |
+| listChains/running/default                    |       71.30 |           29.37 |
+| listChains/running/independent                |       84.22 |           36.04 |
+| listChains/running/nonIndependent             |      265.13 |           22.07 |
+| listChains/running/cursor                     |      146.47 |           52.81 |
 | **Completed**                                 |             |                 |
-| listChains/completed/default                  |       31.25 |           70.77 |
-| listChains/completed/independent              |       32.37 |           82.18 |
-| listChains/completed/nonIndependent           |       75.79 |           40.86 |
-| listChains/completed/orderByCreatedAt         |      447.89 |            0.58 |
-| listChains/completed/orderByCompletedAt       |       30.93 |           69.48 |
-| listChains/completed/cursor                   |       62.93 |          141.27 |
-| listChains/completed/orderByCreatedAtCursor   |      887.17 |            1.08 |
-| listChains/completed/orderByCompletedAtCursor |       62.33 |          138.01 |
+| listChains/completed/default                  |       36.72 |           66.11 |
+| listChains/completed/independent              |       35.35 |           84.59 |
+| listChains/completed/nonIndependent           |       79.57 |           40.49 |
+| listChains/completed/orderByCreatedAt         |      456.47 |            0.55 |
+| listChains/completed/orderByCompletedAt       |       34.99 |           65.99 |
+| listChains/completed/cursor                   |       69.49 |          138.11 |
+| listChains/completed/orderByCreatedAtCursor   |      909.36 |            1.24 |
+| listChains/completed/orderByCompletedAtCursor |       70.65 |          134.93 |
 
 ### List jobs
-
-Paginated job listing with filter combinations. Unfiltered lookups are fast; filtering by `typeName` without a status constraint is the most expensive pattern.
 
 | Query                                | PG p50 (ms) | SQLite p50 (ms) |
 | ------------------------------------ | ----------: | --------------: |
 | **No status filter**                 |             |                 |
-| listJobs/noStatus/default            |       48.96 |            0.24 |
-| listJobs/noStatus/fromTo             |       43.55 |            0.26 |
-| listJobs/noStatus/cursor             |       44.93 |            0.47 |
+| listJobs/noStatus/default            |       42.71 |            0.24 |
+| listJobs/noStatus/fromTo             |       41.90 |            0.25 |
+| listJobs/noStatus/cursor             |       44.15 |            0.44 |
 | **Pending**                          |             |                 |
-| listJobs/pending/default             |       43.68 |            0.26 |
-| listJobs/pending/blocked             |       17.19 |           27.53 |
-| listJobs/pending/unblocked           |       43.52 |            0.24 |
-| listJobs/pending/fromTo              |       46.97 |            0.26 |
-| listJobs/pending/orderByCreatedAt    |       45.48 |            0.26 |
-| listJobs/pending/cursor              |       45.67 |            0.48 |
+| listJobs/pending/default             |       41.45 |            0.23 |
+| listJobs/pending/blocked             |       16.68 |           27.54 |
+| listJobs/pending/unblocked           |       41.37 |            0.23 |
+| listJobs/pending/fromTo              |       42.07 |            0.24 |
+| listJobs/pending/orderByCreatedAt    |       44.21 |            0.22 |
+| listJobs/pending/cursor              |       43.22 |            0.44 |
 | **Running**                          |             |                 |
-| listJobs/running/default             |       11.18 |            7.98 |
-| listJobs/running/orderByCreatedAt    |        9.68 |            0.26 |
-| listJobs/running/orderByAttemptUntil |        8.98 |            0.24 |
-| listJobs/running/cursor              |       15.94 |           12.78 |
+| listJobs/running/default             |       10.43 |            7.37 |
+| listJobs/running/orderByCreatedAt    |        8.54 |            0.24 |
+| listJobs/running/orderByAttemptUntil |        7.93 |            0.24 |
+| listJobs/running/cursor              |       12.75 |           11.80 |
 | **Completed**                        |             |                 |
-| listJobs/completed/default           |       20.82 |            0.26 |
-| listJobs/completed/continued         |        1.90 |            0.60 |
-| listJobs/completed/notContinued      |       21.16 |            0.24 |
-| listJobs/completed/orderByCreatedAt  |       21.51 |            0.25 |
-| listJobs/completed/cursor            |       20.77 |            0.56 |
+| listJobs/completed/default           |       19.96 |            0.24 |
+| listJobs/completed/continued         |        2.25 |            0.56 |
+| listJobs/completed/notContinued      |       19.45 |            0.25 |
+| listJobs/completed/orderByCreatedAt  |       19.78 |            0.24 |
+| listJobs/completed/cursor            |       19.95 |            0.48 |
 
 ### List chain jobs & blocked jobs
 
 | Query                   | PG p50 (ms) | SQLite p50 (ms) |
 | ----------------------- | ----------: | --------------: |
-| listChainJobs/default   |        1.18 |            0.13 |
-| listChainJobs/cursor    |        1.89 |            0.26 |
-| listBlockedJobs/default |      166.95 |          183.84 |
-| listBlockedJobs/cursor  |      321.36 |          364.61 |
+| listChainJobs/default   |        1.40 |            0.12 |
+| listChainJobs/cursor    |        1.57 |            0.25 |
+| listBlockedJobs/default |      194.12 |          180.32 |
+| listBlockedJobs/cursor  |      368.34 |          362.33 |
 
 See [query-performance](https://github.com/kvet/queuert/tree/main/benchmarks/query-performance) for the full benchmark tool, query plans, and per-adapter EXPLAIN output.

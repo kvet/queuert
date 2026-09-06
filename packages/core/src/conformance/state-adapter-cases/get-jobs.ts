@@ -12,7 +12,7 @@ export const getJobsGroup: ConformanceGroup<StateConformanceFixture> = {
       run: async ({ stateAdapter }, expect) => {
         // Create a real job to get a valid ID format, then look up a derived nonexistent one
         const [{ job: real }] = await stateAdapter.withTransaction(async (txCtx) =>
-          stateAdapter.createChains({
+          stateAdapter.createJobs({
             txCtx,
             jobs: [{ typeName: "lookup-test", input: null }],
           }),
@@ -26,7 +26,7 @@ export const getJobsGroup: ConformanceGroup<StateConformanceFixture> = {
       name: "lock: exclusive blocks a concurrent locked read until the holding tx commits",
       run: async ({ stateAdapter }, expect) => {
         const [{ job: seed }] = await stateAdapter.withTransaction(async (txCtx) =>
-          stateAdapter.createChains({
+          stateAdapter.createJobs({
             txCtx,
             jobs: [{ typeName: "lock-blocking-job", input: { value: 1 } }],
           }),
@@ -82,7 +82,7 @@ export const getJobsGroup: ConformanceGroup<StateConformanceFixture> = {
         }
         const count = 10;
         const created = await stateAdapter.withTransaction(async (txCtx) =>
-          stateAdapter.createChains({
+          stateAdapter.createJobs({
             txCtx,
             jobs: Array.from({ length: count }, (_, i) => ({
               typeName: "parallel-read",
@@ -119,7 +119,7 @@ export const getJobsGroup: ConformanceGroup<StateConformanceFixture> = {
 
         const txPromise = stateAdapter
           .withTransaction(async (txCtx) => {
-            const [{ job }] = await stateAdapter.createChains({
+            const [{ job }] = await stateAdapter.createJobs({
               txCtx,
               jobs: [{ typeName: "iso-insert", input: null }],
             });
@@ -146,7 +146,7 @@ export const getJobsGroup: ConformanceGroup<StateConformanceFixture> = {
           return;
         }
         const [{ job: seed }] = await stateAdapter.withTransaction(async (txCtx) =>
-          stateAdapter.createChains({
+          stateAdapter.createJobs({
             txCtx,
             jobs: [{ typeName: "iso-update", input: null }],
           }),
@@ -194,7 +194,7 @@ export const getJobsGroup: ConformanceGroup<StateConformanceFixture> = {
           return;
         }
         const [{ job: seed }] = await stateAdapter.withTransaction(async (txCtx) =>
-          stateAdapter.createChains({
+          stateAdapter.createJobs({
             txCtx,
             jobs: [{ typeName: "iso-delete", input: null }],
           }),
@@ -235,7 +235,7 @@ export const getJobsGroup: ConformanceGroup<StateConformanceFixture> = {
           return;
         }
         const [{ job: seed }] = await stateAdapter.withTransaction(async (txCtx) =>
-          stateAdapter.createChains({
+          stateAdapter.createJobs({
             txCtx,
             jobs: [{ typeName: "iso-locked-job", input: null }],
           }),

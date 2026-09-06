@@ -402,11 +402,9 @@ export const runJobProcess = async ({
             finishOnce.begin();
             try {
               if ("reschedule" in outcome) {
-                const rescheduledJob = await helpers.stateAdapter.finishJobAttempt({
+                const [rescheduledJob] = await helpers.stateAdapter.rescheduleJobs({
                   txCtx,
-                  jobId: job.id,
-                  workerId,
-                  outcome: { schedule: outcome.reschedule },
+                  jobs: [{ jobId: job.id, schedule: outcome.reschedule }],
                 });
                 bufferNotifyJobScheduled(transactionHooks, helpers.notifyAdapter, rescheduledJob);
                 bufferObservabilityEvent(transactionHooks, () => {
@@ -427,7 +425,6 @@ export const runJobProcess = async ({
                       workerId,
                     })
                   : await continueChain(helpers, {
-                      job,
                       fromJob: {
                         ...job,
                         chainTraceContext:

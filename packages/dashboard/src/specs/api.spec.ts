@@ -23,7 +23,7 @@ const createJob = async (
   input: unknown,
 ) => {
   const [{ job }] = await stateAdapter.withTransaction(async (txCtx) =>
-    stateAdapter.createChains({
+    stateAdapter.createJobs({
       txCtx,
       jobs: [{ typeName, input }],
     }),
@@ -37,13 +37,13 @@ const createContinuation = async (
   continueFromId: string,
   input: unknown,
 ) => {
-  const { job } = await stateAdapter.withTransaction(async (txCtx) =>
-    stateAdapter.createContinuationJob({
+  const [{ continuation }] = await stateAdapter.withTransaction(async (txCtx) =>
+    stateAdapter.continueJobs({
       txCtx,
-      job: { typeName, continueFromId, input },
+      jobs: [{ typeName, continueFromId, input, completedBy: "worker-1" }],
     }),
   );
-  return job;
+  return continuation;
 };
 
 const startAttempt = async (
@@ -57,10 +57,10 @@ const startAttempt = async (
 const completeJob = async (
   stateAdapter: Awaited<ReturnType<typeof createInProcessStateAdapter>>,
   jobId: string,
-  outcome: { output: unknown } | { continuedToId: string },
+  output: unknown,
 ) =>
   stateAdapter.withTransaction(async (txCtx) =>
-    stateAdapter.finishJobAttempt({ txCtx, jobId, workerId: "worker-1", outcome }),
+    stateAdapter.completeJobs({ txCtx, jobs: [{ jobId, completedBy: "worker-1", output }] }),
   );
 
 const encodeRawCursor = (payload: unknown) =>
@@ -524,7 +524,6 @@ describe("Dashboard API", () => {
         continued.id,
         null,
       );
-      await completeJob(stateAdapter, continued.id, { continuedToId: continuation.id });
 
       const allTypeNames = [
         "pending-type",
@@ -670,14 +669,6 @@ describe("Dashboard API", () => {
       const { request, stateAdapter } = await createTestDashboard();
       const root = await createJob(stateAdapter, "chain-type", { step: 1 });
       const cont = await createContinuation(stateAdapter, "chain-step2", root.id, { step: 2 });
-      await stateAdapter.withTransaction(async (txCtx) =>
-        stateAdapter.finishJobAttempt({
-          txCtx,
-          jobId: root.id,
-          workerId: "test",
-          outcome: { continuedToId: cont.id },
-        }),
-      );
 
       const res = await request(`/api/jobs/${root.id}`);
       const body = await parseBody(res);
@@ -692,14 +683,6 @@ describe("Dashboard API", () => {
       const { request, stateAdapter } = await createTestDashboard();
       const root = await createJob(stateAdapter, "chain-type", { step: 1 });
       const cont = await createContinuation(stateAdapter, "chain-step2", root.id, { step: 2 });
-      await stateAdapter.withTransaction(async (txCtx) =>
-        stateAdapter.finishJobAttempt({
-          txCtx,
-          jobId: root.id,
-          workerId: "test",
-          outcome: { continuedToId: cont.id },
-        }),
-      );
 
       const res = await request(`/api/jobs/${cont.id}`);
       const body = await parseBody(res);
@@ -719,7 +702,7 @@ describe("Dashboard API", () => {
     it("reschedules a pending future-scheduled job to now", async () => {
       const { request, stateAdapter } = await createTestDashboard();
       const [{ job }] = await stateAdapter.withTransaction(async (txCtx) =>
-        stateAdapter.createChains({
+        stateAdapter.createJobs({
           txCtx,
           jobs: [{ typeName: "scheduled-type", input: null, schedule: { afterMs: 60_000 } }],
         }),

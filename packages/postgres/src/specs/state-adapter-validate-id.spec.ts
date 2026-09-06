@@ -34,7 +34,7 @@ describe("validateId", () => {
 
   const createJob = async (adapter: PgStateAdapter<PgPoolContext, string>, id?: string) =>
     adapter.withTransaction(async (txCtx) =>
-      adapter.createChains({
+      adapter.createJobs({
         txCtx,
         jobs: [{ typeName: "t", id, input: null }],
       }),

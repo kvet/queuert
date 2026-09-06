@@ -33,14 +33,14 @@ export const wrapStateAdapterWithLogging = <
     // Operation methods - wrap with error logging
     getChains: wrap("getChains", stateAdapter.getChains),
     getJobs: wrap("getJobs", stateAdapter.getJobs),
-    createChains: wrap("createChains", stateAdapter.createChains),
-    createContinuationJob: wrap("createContinuationJob", stateAdapter.createContinuationJob),
+    createJobs: wrap("createJobs", stateAdapter.createJobs),
+    continueJobs: wrap("continueJobs", stateAdapter.continueJobs),
     addJobsBlockers: wrap("addJobsBlockers", stateAdapter.addJobsBlockers),
     getJobBlockers: wrap("getJobBlockers", stateAdapter.getJobBlockers),
     unblockJobs: wrap("unblockJobs", stateAdapter.unblockJobs),
     startJobAttempt: wrap("startJobAttempt", stateAdapter.startJobAttempt),
     extendJobAttempt: wrap("extendJobAttempt", stateAdapter.extendJobAttempt),
-    finishJobAttempt: wrap("finishJobAttempt", stateAdapter.finishJobAttempt),
+    completeJobs: wrap("completeJobs", stateAdapter.completeJobs),
     reclaimExpiredJobAttempt: wrap(
       "reclaimExpiredJobAttempt",
       stateAdapter.reclaimExpiredJobAttempt,

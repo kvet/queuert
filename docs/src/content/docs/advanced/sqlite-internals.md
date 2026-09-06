@@ -34,7 +34,7 @@ The `{tablePrefix}job` table stores all job state:
 | `type_name`           | `TEXT`                         | Job type identifier                                                                                               |
 | `chain_id`            | same as `id`                   | Foreign key to head job                                                                                           |
 | `chain_type_name`     | `TEXT`                         | Type name of the chain                                                                                            |
-| `chain_index`         | `INTEGER`                      | Position in chain (0 for root)                                                                                    |
+| `chain_index`         | `INTEGER`                      | Position in chain (0 for the head)                                                                                |
 | `continued_to_id`     | same as `id`                   | FK to the next job in the chain — non-null when the job has a successor (set in the same savepoint as the INSERT) |
 | `input`               | `TEXT`                         | Job input as JSON string                                                                                          |
 | `output`              | `TEXT`                         | Completion output as JSON string                                                                                  |

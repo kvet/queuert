@@ -9,7 +9,7 @@ export const reclaimExpiredJobAttemptGroup: ConformanceGroup<StateConformanceFix
       name: "removes expired attempt and resets job to pending",
       run: async ({ stateAdapter }, expect) => {
         const [{ job: created }] = await stateAdapter.withTransaction(async (txCtx) =>
-          stateAdapter.createChains({
+          stateAdapter.createJobs({
             txCtx,
             jobs: [{ typeName: "expire-test", input: null }],
           }),
@@ -47,7 +47,7 @@ export const reclaimExpiredJobAttemptGroup: ConformanceGroup<StateConformanceFix
       name: "returns undefined when no expired attempts exist",
       run: async ({ stateAdapter }, expect) => {
         const [{ job: created }] = await stateAdapter.withTransaction(async (txCtx) =>
-          stateAdapter.createChains({
+          stateAdapter.createJobs({
             txCtx,
             jobs: [{ typeName: "no-expire-test", input: null }],
           }),
@@ -81,14 +81,14 @@ export const reclaimExpiredJobAttemptGroup: ConformanceGroup<StateConformanceFix
       name: "respects ignoredJobIds in reclaimExpiredJobAttempt",
       run: async ({ stateAdapter }, expect) => {
         const [{ job: jobA }] = await stateAdapter.withTransaction(async (txCtx) =>
-          stateAdapter.createChains({
+          stateAdapter.createJobs({
             txCtx,
             jobs: [{ typeName: "ignore-test", input: { order: "a" } }],
           }),
         );
 
         const [{ job: jobB }] = await stateAdapter.withTransaction(async (txCtx) =>
-          stateAdapter.createChains({
+          stateAdapter.createJobs({
             txCtx,
             jobs: [{ typeName: "ignore-test", input: { order: "b" } }],
           }),

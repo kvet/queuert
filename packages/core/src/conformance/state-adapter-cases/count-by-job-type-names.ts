@@ -28,7 +28,7 @@ export const countByJobTypeNamesGroup: ConformanceGroup<StateConformanceFixture>
       name: "countByJobTypeNames counts pending jobs",
       run: async ({ stateAdapter }, expect) => {
         await stateAdapter.withTransaction(async (txCtx) =>
-          stateAdapter.createChains({
+          stateAdapter.createJobs({
             txCtx,
             jobs: [
               { typeName: "count-a", input: null },
@@ -65,7 +65,7 @@ export const countByJobTypeNamesGroup: ConformanceGroup<StateConformanceFixture>
       name: "countByJobTypeNames counts running jobs",
       run: async ({ stateAdapter }, expect) => {
         await stateAdapter.withTransaction(async (txCtx) =>
-          stateAdapter.createChains({
+          stateAdapter.createJobs({
             txCtx,
             jobs: [
               { typeName: "count-run", input: null },
@@ -88,7 +88,7 @@ export const countByJobTypeNamesGroup: ConformanceGroup<StateConformanceFixture>
       name: "countByJobTypeNames counts completed jobs",
       run: async ({ stateAdapter }, expect) => {
         await stateAdapter.withTransaction(async (txCtx) =>
-          stateAdapter.createChains({
+          stateAdapter.createJobs({
             txCtx,
             jobs: [{ typeName: "count-done", input: null }],
           }),
@@ -99,11 +99,9 @@ export const countByJobTypeNamesGroup: ConformanceGroup<StateConformanceFixture>
         );
 
         await stateAdapter.withTransaction(async (txCtx) =>
-          stateAdapter.finishJobAttempt({
+          stateAdapter.completeJobs({
             txCtx,
-            jobId: job!.id,
-            workerId: "w1",
-            outcome: { output: null },
+            jobs: [{ jobId: job!.id, completedBy: "w1", output: null }],
           }),
         );
 
@@ -122,7 +120,7 @@ export const countByJobTypeNamesGroup: ConformanceGroup<StateConformanceFixture>
       name: "countByJobTypeNames preserves input order",
       run: async ({ stateAdapter }, expect) => {
         await stateAdapter.withTransaction(async (txCtx) =>
-          stateAdapter.createChains({
+          stateAdapter.createJobs({
             txCtx,
             jobs: [
               { typeName: "count-z", input: null },

@@ -9,7 +9,7 @@ export const rescheduleJobsGroup: ConformanceGroup<StateConformanceFixture> = {
       run: async ({ stateAdapter }, expect) => {
         const futureDate = new Date(Date.now() + 60_000);
         const [{ job: created }] = await stateAdapter.withTransaction(async (txCtx) =>
-          stateAdapter.createChains({
+          stateAdapter.createJobs({
             txCtx,
             jobs: [{ typeName: "trigger-test", input: null, schedule: { at: futureDate } }],
           }),
@@ -19,7 +19,7 @@ export const rescheduleJobsGroup: ConformanceGroup<StateConformanceFixture> = {
 
         const before = Date.now();
         const triggered = await stateAdapter.withTransaction(async (txCtx) =>
-          stateAdapter.rescheduleJobs({ txCtx, jobIds: [created.id] }),
+          stateAdapter.rescheduleJobs({ txCtx, jobs: [{ jobId: created.id }] }),
         );
 
         expect(triggered).toHaveLength(1);
@@ -34,7 +34,7 @@ export const rescheduleJobsGroup: ConformanceGroup<StateConformanceFixture> = {
       run: async ({ stateAdapter }, expect) => {
         const futureDate = new Date(Date.now() + 60_000);
         const [{ job: created }] = await stateAdapter.withTransaction(async (txCtx) =>
-          stateAdapter.createChains({
+          stateAdapter.createJobs({
             txCtx,
             jobs: [{ typeName: "trigger-acquire", input: null, schedule: { at: futureDate } }],
           }),
@@ -50,7 +50,7 @@ export const rescheduleJobsGroup: ConformanceGroup<StateConformanceFixture> = {
         expect(beforeTrigger.job).toBeUndefined();
 
         await stateAdapter.withTransaction(async (txCtx) =>
-          stateAdapter.rescheduleJobs({ txCtx, jobIds: [created.id] }),
+          stateAdapter.rescheduleJobs({ txCtx, jobs: [{ jobId: created.id }] }),
         );
 
         const afterTrigger = await stateAdapter.withTransaction(async (txCtx) =>
@@ -69,7 +69,7 @@ export const rescheduleJobsGroup: ConformanceGroup<StateConformanceFixture> = {
       run: async ({ stateAdapter }, expect) => {
         const futureDate = new Date(Date.now() + 60_000);
         const [{ job: created }] = await stateAdapter.withTransaction(async (txCtx) =>
-          stateAdapter.createChains({
+          stateAdapter.createJobs({
             txCtx,
             jobs: [
               { typeName: "trigger-fields", input: { key: "value" }, schedule: { at: futureDate } },
@@ -78,7 +78,7 @@ export const rescheduleJobsGroup: ConformanceGroup<StateConformanceFixture> = {
         );
 
         const triggered = await stateAdapter.withTransaction(async (txCtx) =>
-          stateAdapter.rescheduleJobs({ txCtx, jobIds: [created.id] }),
+          stateAdapter.rescheduleJobs({ txCtx, jobs: [{ jobId: created.id }] }),
         );
 
         expect(triggered[0].id).toBe(created.id);
@@ -93,7 +93,7 @@ export const rescheduleJobsGroup: ConformanceGroup<StateConformanceFixture> = {
       run: async ({ stateAdapter }, expect) => {
         const futureDate = new Date(Date.now() + 60_000);
         const created = await stateAdapter.withTransaction(async (txCtx) =>
-          stateAdapter.createChains({
+          stateAdapter.createJobs({
             txCtx,
             jobs: [
               { typeName: "trigger-batch", input: { i: 1 }, schedule: { at: futureDate } },
@@ -105,7 +105,7 @@ export const rescheduleJobsGroup: ConformanceGroup<StateConformanceFixture> = {
         const ids = created.map((c) => c.job.id);
 
         const triggered = await stateAdapter.withTransaction(async (txCtx) =>
-          stateAdapter.rescheduleJobs({ txCtx, jobIds: ids }),
+          stateAdapter.rescheduleJobs({ txCtx, jobs: ids.map((jobId) => ({ jobId })) }),
         );
 
         expect(triggered.map((j) => j.id)).toEqual(ids);
@@ -113,7 +113,7 @@ export const rescheduleJobsGroup: ConformanceGroup<StateConformanceFixture> = {
         // Preserves input order when input order differs from insertion order.
         const reversed = [...ids].reverse();
         const reversedTriggered = await stateAdapter.withTransaction(async (txCtx) =>
-          stateAdapter.rescheduleJobs({ txCtx, jobIds: reversed }),
+          stateAdapter.rescheduleJobs({ txCtx, jobs: reversed.map((jobId) => ({ jobId })) }),
         );
         expect(reversedTriggered.map((j) => j.id)).toEqual(reversed);
       },
@@ -122,7 +122,7 @@ export const rescheduleJobsGroup: ConformanceGroup<StateConformanceFixture> = {
       name: "returns empty array for empty jobIds",
       run: async ({ stateAdapter }, expect) => {
         const triggered = await stateAdapter.withTransaction(async (txCtx) =>
-          stateAdapter.rescheduleJobs({ txCtx, jobIds: [] }),
+          stateAdapter.rescheduleJobs({ txCtx, jobs: [] }),
         );
         expect(triggered).toEqual([]);
       },
@@ -132,7 +132,7 @@ export const rescheduleJobsGroup: ConformanceGroup<StateConformanceFixture> = {
       run: async ({ stateAdapter }, expect) => {
         const futureDate = new Date(Date.now() + 60_000);
         const [{ job: created }] = await stateAdapter.withTransaction(async (txCtx) =>
-          stateAdapter.createChains({
+          stateAdapter.createJobs({
             txCtx,
             jobs: [{ typeName: "trigger-missing", input: null, schedule: { at: futureDate } }],
           }),
@@ -140,18 +140,21 @@ export const rescheduleJobsGroup: ConformanceGroup<StateConformanceFixture> = {
 
         const missingId = crypto.randomUUID();
         const triggered = await stateAdapter.withTransaction(async (txCtx) =>
-          stateAdapter.rescheduleJobs({ txCtx, jobIds: [created.id, missingId] }),
+          stateAdapter.rescheduleJobs({
+            txCtx,
+            jobs: [{ jobId: created.id }, { jobId: missingId }],
+          }),
         );
 
         expect(triggered.map((j) => j.id)).toEqual([created.id]);
       },
     },
     {
-      name: "skips non-pending ids",
+      name: "skips completed ids",
       run: async ({ stateAdapter }, expect) => {
         const futureDate = new Date(Date.now() + 60_000);
         const created = await stateAdapter.withTransaction(async (txCtx) =>
-          stateAdapter.createChains({
+          stateAdapter.createJobs({
             txCtx,
             jobs: [
               { typeName: "trigger-not-pending", input: null, schedule: { at: futureDate } },
@@ -162,26 +165,128 @@ export const rescheduleJobsGroup: ConformanceGroup<StateConformanceFixture> = {
         const [pending, toComplete] = created.map((c) => c.job);
 
         await stateAdapter.withTransaction(async (txCtx) =>
-          stateAdapter.finishJobAttempt({
+          stateAdapter.completeJobs({
             txCtx,
-            jobId: toComplete.id,
-            workerId: null,
-            outcome: { output: null },
+            jobs: [{ jobId: toComplete.id, completedBy: null, output: null }],
           }),
         );
 
         const triggered = await stateAdapter.withTransaction(async (txCtx) =>
-          stateAdapter.rescheduleJobs({ txCtx, jobIds: [pending.id, toComplete.id] }),
+          stateAdapter.rescheduleJobs({
+            txCtx,
+            jobs: [{ jobId: pending.id }, { jobId: toComplete.id }],
+          }),
         );
 
         expect(triggered.map((j) => j.id)).toEqual([pending.id]);
       },
     },
     {
+      name: "clears a running attempt and records the error",
+      run: async ({ stateAdapter }, expect) => {
+        const [{ job: created }] = await stateAdapter.withTransaction(async (txCtx) =>
+          stateAdapter.createJobs({
+            txCtx,
+            jobs: [{ typeName: "resched-fail-test", input: null }],
+          }),
+        );
+
+        await stateAdapter.withTransaction(async (txCtx) =>
+          stateAdapter.startJobAttempt({
+            txCtx,
+            workerId: "worker-1",
+            typeNames: ["resched-fail-test"],
+          }),
+        );
+
+        await stateAdapter.withTransaction(async (txCtx) =>
+          stateAdapter.extendJobAttempt({
+            txCtx,
+            jobId: created.id,
+            workerId: "worker-1",
+            timeoutMs: 10_000,
+          }),
+        );
+
+        const before = Date.now();
+        const [failed] = await stateAdapter.withTransaction(async (txCtx) =>
+          stateAdapter.rescheduleJobs({
+            txCtx,
+            jobs: [{ jobId: created.id, schedule: { afterMs: 5000 }, error: "transient failure" }],
+          }),
+        );
+
+        expect(failed.completedAt).toBeNull();
+        expect(failed.attemptAt).toBeNull();
+        expect(failed.attemptBy).toBeNull();
+        expect(failed.attemptUntil).toBeNull();
+        expect(failed.lastAttemptError).toBe("transient failure");
+        expect(failed.lastAttemptAt).toBeInstanceOf(Date);
+        expect(failed.scheduledAt.getTime()).toBeGreaterThanOrEqual(before + 4000);
+      },
+    },
+    {
+      name: "clears a running attempt without recording an error",
+      run: async ({ stateAdapter }, expect) => {
+        const [{ job: created }] = await stateAdapter.withTransaction(async (txCtx) =>
+          stateAdapter.createJobs({
+            txCtx,
+            jobs: [{ typeName: "resched-running-test", input: null }],
+          }),
+        );
+
+        await stateAdapter.withTransaction(async (txCtx) =>
+          stateAdapter.startJobAttempt({
+            txCtx,
+            workerId: "worker-1",
+            typeNames: ["resched-running-test"],
+          }),
+        );
+
+        const before = Date.now();
+        const [rescheduled] = await stateAdapter.withTransaction(async (txCtx) =>
+          stateAdapter.rescheduleJobs({
+            txCtx,
+            jobs: [{ jobId: created.id, schedule: { afterMs: 5000 } }],
+          }),
+        );
+
+        expect(rescheduled.completedAt).toBeNull();
+        expect(rescheduled.attemptAt).toBeNull();
+        expect(rescheduled.attemptBy).toBeNull();
+        expect(rescheduled.attemptUntil).toBeNull();
+        expect(rescheduled.lastAttemptError).toBeNull();
+        expect(rescheduled.lastAttemptAt).toBeInstanceOf(Date);
+        expect(rescheduled.scheduledAt.getTime()).toBeGreaterThanOrEqual(before + 4000);
+      },
+    },
+    {
+      name: "leaves attempt bookkeeping untouched when there is no attempt to clear",
+      run: async ({ stateAdapter }, expect) => {
+        const [{ job: created }] = await stateAdapter.withTransaction(async (txCtx) =>
+          stateAdapter.createJobs({
+            txCtx,
+            jobs: [{ typeName: "resched-no-attempt", input: null }],
+          }),
+        );
+
+        const [rescheduled] = await stateAdapter.withTransaction(async (txCtx) =>
+          stateAdapter.rescheduleJobs({
+            txCtx,
+            jobs: [{ jobId: created.id, schedule: { afterMs: 5000 }, error: "should-not-apply" }],
+          }),
+        );
+
+        expect(rescheduled.lastAttemptError).toBeNull();
+        expect(rescheduled.lastAttemptAt).toBeNull();
+        expect(rescheduled.scheduledAt.getTime()).toBeGreaterThan(Date.now() + 4000);
+      },
+    },
+    {
       name: "reschedules to a future absolute date with schedule.at",
       run: async ({ stateAdapter }, expect) => {
         const [{ job: created }] = await stateAdapter.withTransaction(async (txCtx) =>
-          stateAdapter.createChains({
+          stateAdapter.createJobs({
             txCtx,
             jobs: [{ typeName: "resched-at", input: null }],
           }),
@@ -191,8 +296,7 @@ export const rescheduleJobsGroup: ConformanceGroup<StateConformanceFixture> = {
         const rescheduled = await stateAdapter.withTransaction(async (txCtx) =>
           stateAdapter.rescheduleJobs({
             txCtx,
-            jobIds: [created.id],
-            schedule: { at: futureDate },
+            jobs: [{ jobId: created.id, schedule: { at: futureDate } }],
           }),
         );
 
@@ -208,7 +312,7 @@ export const rescheduleJobsGroup: ConformanceGroup<StateConformanceFixture> = {
       name: "reschedules into the future with schedule.afterMs",
       run: async ({ stateAdapter }, expect) => {
         const [{ job: created }] = await stateAdapter.withTransaction(async (txCtx) =>
-          stateAdapter.createChains({
+          stateAdapter.createJobs({
             txCtx,
             jobs: [{ typeName: "resched-after", input: null }],
           }),
@@ -218,8 +322,7 @@ export const rescheduleJobsGroup: ConformanceGroup<StateConformanceFixture> = {
         const rescheduled = await stateAdapter.withTransaction(async (txCtx) =>
           stateAdapter.rescheduleJobs({
             txCtx,
-            jobIds: [created.id],
-            schedule: { afterMs: 60_000 },
+            jobs: [{ jobId: created.id, schedule: { afterMs: 60_000 } }],
           }),
         );
 
@@ -230,7 +333,7 @@ export const rescheduleJobsGroup: ConformanceGroup<StateConformanceFixture> = {
       name: "clamps a past schedule.at to now",
       run: async ({ stateAdapter }, expect) => {
         const [{ job: created }] = await stateAdapter.withTransaction(async (txCtx) =>
-          stateAdapter.createChains({
+          stateAdapter.createJobs({
             txCtx,
             jobs: [
               {
@@ -245,7 +348,10 @@ export const rescheduleJobsGroup: ConformanceGroup<StateConformanceFixture> = {
         const past = new Date(Date.now() - 60 * 60 * 1000);
         const before = Date.now();
         const rescheduled = await stateAdapter.withTransaction(async (txCtx) =>
-          stateAdapter.rescheduleJobs({ txCtx, jobIds: [created.id], schedule: { at: past } }),
+          stateAdapter.rescheduleJobs({
+            txCtx,
+            jobs: [{ jobId: created.id, schedule: { at: past } }],
+          }),
         );
 
         expect(rescheduled[0].scheduledAt.getTime()).toBeGreaterThanOrEqual(before - 1000);
@@ -257,7 +363,7 @@ export const rescheduleJobsGroup: ConformanceGroup<StateConformanceFixture> = {
       run: async ({ stateAdapter }, expect) => {
         const [{ job: blockerJob }, { job: blockedJob }] = await stateAdapter.withTransaction(
           async (txCtx) =>
-            stateAdapter.createChains({
+            stateAdapter.createJobs({
               txCtx,
               jobs: [
                 { typeName: "resched-blocker", input: null },
@@ -286,8 +392,7 @@ export const rescheduleJobsGroup: ConformanceGroup<StateConformanceFixture> = {
         const rescheduled = await stateAdapter.withTransaction(async (txCtx) =>
           stateAdapter.rescheduleJobs({
             txCtx,
-            jobIds: [blockedJob.id],
-            schedule: { at: futureDate },
+            jobs: [{ jobId: blockedJob.id, schedule: { at: futureDate } }],
           }),
         );
 
@@ -302,7 +407,7 @@ export const rescheduleJobsGroup: ConformanceGroup<StateConformanceFixture> = {
       name: "omitted schedule reschedules to now",
       run: async ({ stateAdapter }, expect) => {
         const [{ job: created }] = await stateAdapter.withTransaction(async (txCtx) =>
-          stateAdapter.createChains({
+          stateAdapter.createJobs({
             txCtx,
             jobs: [
               {
@@ -316,7 +421,7 @@ export const rescheduleJobsGroup: ConformanceGroup<StateConformanceFixture> = {
 
         const before = Date.now();
         const rescheduled = await stateAdapter.withTransaction(async (txCtx) =>
-          stateAdapter.rescheduleJobs({ txCtx, jobIds: [created.id] }),
+          stateAdapter.rescheduleJobs({ txCtx, jobs: [{ jobId: created.id }] }),
         );
 
         expect(rescheduled[0].scheduledAt.getTime()).toBeGreaterThanOrEqual(before - 1000);

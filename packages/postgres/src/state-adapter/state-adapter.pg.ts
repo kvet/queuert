@@ -916,7 +916,7 @@ FOR UPDATE
       return classifyJobRows(jobIds, rows);
     }) as StateAdapter<TTxContext, TIdType>["getJobs"],
 
-    createChains: async ({ txCtx, jobs }) => {
+    createJobs: async ({ txCtx, jobs }) => {
       if (jobs.length === 0) return [];
 
       for (const job of jobs) {
@@ -926,7 +926,7 @@ FOR UPDATE
 
       const results = await executeTypedSql({
         txCtx,
-        sql: templateCache.getOrCompute("createChains", () =>
+        sql: templateCache.getOrCompute("createJobs", () =>
           applyTemplate(
             sql(
               `
@@ -946,7 +946,7 @@ input_data AS (
     raw.chain_trace_context, raw.trace_context, raw.ord
   FROM unnest(
     $2::text[],
-    $3::jsonb[], $4::text[], $5::text[],
+    $3::text[], $4::text[], $5::text[],
     $6::timestamptz[], $7::bigint[],
     $8::text[], $9::text[]
   ) WITH ORDINALITY AS raw(
@@ -992,7 +992,7 @@ inserted_jobs AS (
   INSERT INTO {{schema}}.{{table_prefix}}job (id, type_name, chain_id, chain_type_name, chain_index, input, deduplication_key, scheduled_at, chain_trace_context, trace_context)
   SELECT
     ti.id, ti.type_name, ti.chain_id, ti.chain_type_name,
-    ti.chain_index, ti.input, ti.dedup_key,
+    ti.chain_index, ti.input::jsonb, ti.dedup_key,
     GREATEST(COALESCE(ti.scheduled_at, now() + (ti.schedule_after_ms || ' milliseconds')::interval, now()), now()),
     ti.chain_trace_context, ti.trace_context
   FROM to_insert ti
@@ -1012,11 +1012,11 @@ FROM inserted_jobs ij JOIN to_insert ti ON ti.chain_id = ij.chain_id AND ti.chai
 ORDER BY ord
 `,
               {
-                id: "createChains",
+                id: "createJobs",
                 params: [
                   t.array(),
                   t.array(),
-                  t.jsonArray(),
+                  t.array<string | null>(),
                   t.array<string | null>(),
                   t.array<string | null>(),
                   t.array<string | null>(),
@@ -1032,7 +1032,7 @@ ORDER BY ord
         params: [
           ids,
           jobs.map((j) => j.typeName),
-          jobs.map((j) => j.input),
+          jobs.map((j) => (j.input !== undefined ? JSON.stringify(j.input) : null)),
           jobs.map((j) => j.deduplication?.key ?? null),
           jobs.map((j) => (j.deduplication ? j.deduplication.scope : null)),
           jobs.map((j) => j.schedule?.at?.toISOString() ?? null),
@@ -1048,78 +1048,109 @@ ORDER BY ord
       }));
     },
 
-    createContinuationJob: async ({ txCtx, job }) => {
-      if (job.id !== undefined) validateId(job.id, "caller");
-      const id = (job.id ?? generateId()) as string;
+    continueJobs: async ({ txCtx, jobs }) => {
+      if (jobs.length === 0) return [];
+      for (const job of jobs) {
+        if (job.id !== undefined) validateId(job.id, "caller");
+      }
+      const ids = jobs.map((job) => (job.id ?? generateId()) as string);
 
-      const [result] = await executeTypedSql({
+      const rows = await executeTypedSql({
         txCtx,
-        sql: templateCache.getOrCompute("createContinuationJob", () =>
+        sql: templateCache.getOrCompute("continueJobs", () =>
           applyTemplate(
             sql(
               `
-WITH parent AS (
-  SELECT id, chain_id, chain_type_name, chain_index
-  FROM {{schema}}.{{table_prefix}}job
-  WHERE id = $3::{{id_type}}
+WITH input_data AS (
+  SELECT new_id, type_name, input, sched_at, sched_after_ms, chain_trace_context, trace_context, continue_from_id, completed_by
+  FROM unnest(
+    $1::{{id_type}}[], $2::text[], $3::text[],
+    $4::timestamptz[], $5::bigint[],
+    $6::text[], $7::text[], $8::{{id_type}}[], $9::text[]
+  ) AS t(
+    new_id, type_name, input, sched_at, sched_after_ms,
+    chain_trace_context, trace_context, continue_from_id, completed_by
+  )
 ),
-existing_continuation AS (
-  SELECT j.*
-  FROM {{schema}}.{{table_prefix}}job j, parent p
-  WHERE j.chain_id = p.chain_id
-    AND j.chain_index = p.chain_index + 1
-    AND j.id != j.chain_id
-  LIMIT 1
+parent AS (
+  SELECT d.*, p.chain_id, p.chain_type_name, p.chain_index
+  FROM input_data d
+  JOIN {{schema}}.{{table_prefix}}job p
+    ON p.id = d.continue_from_id AND p.completed_at IS NULL
 ),
 inserted AS (
   INSERT INTO {{schema}}.{{table_prefix}}job (id, type_name, chain_id, chain_type_name, chain_index, input, scheduled_at, chain_trace_context, trace_context)
   SELECT
-    $1::{{id_type}}, $2, p.chain_id, p.chain_type_name, p.chain_index + 1, $4,
-    GREATEST(COALESCE($5::timestamptz, now() + ($6::bigint || ' milliseconds')::interval, now()), now()),
-    $7, $8
-  FROM parent p
-  WHERE NOT EXISTS (SELECT 1 FROM existing_continuation)
-  ON CONFLICT (chain_id, chain_index) DO UPDATE SET id = {{schema}}.{{table_prefix}}job.id
+    pr.new_id, pr.type_name, pr.chain_id, pr.chain_type_name, pr.chain_index + 1, pr.input::jsonb,
+    GREATEST(COALESCE(pr.sched_at, now() + (pr.sched_after_ms || ' milliseconds')::interval, now()), now()),
+    pr.chain_trace_context, pr.trace_context
+  FROM parent pr
   RETURNING *
+),
+completed AS (
+  UPDATE {{schema}}.{{table_prefix}}job j
+  SET completed_at = now(),
+    completed_by = pr.completed_by,
+    continued_to_id = pr.new_id,
+    output = NULL,
+    blocked = false,
+    last_attempt_error = NULL,
+    attempt_at = NULL,
+    attempt_by = NULL,
+    attempt_until = NULL
+  FROM parent pr
+  WHERE j.id = pr.continue_from_id
+    AND j.completed_at IS NULL
+  RETURNING j.*, pr.new_id
 )
-SELECT ij.*, (ij.id != $1::{{id_type}}) AS deduplicated FROM inserted ij
+SELECT FALSE AS is_continuation, c.id, c.type_name, c.chain_id, c.chain_type_name, c.chain_index, c.continued_to_id, c.input, c.output, c.blocked, c.created_at, c.scheduled_at, c.completed_at, c.completed_by, c.attempt, c.last_attempt_error, c.last_attempt_at, c.attempt_at, c.attempt_by, c.attempt_until, c.deduplication_key, c.chain_trace_context, c.trace_context
+FROM completed c
 UNION ALL
-SELECT ec.*, TRUE AS deduplicated FROM existing_continuation ec
+SELECT TRUE AS is_continuation, i.id, i.type_name, i.chain_id, i.chain_type_name, i.chain_index, i.continued_to_id, i.input, i.output, i.blocked, i.created_at, i.scheduled_at, i.completed_at, i.completed_by, i.attempt, i.last_attempt_error, i.last_attempt_at, i.attempt_at, i.attempt_by, i.attempt_until, i.deduplication_key, i.chain_trace_context, i.trace_context
+FROM inserted i JOIN completed c ON c.new_id = i.id
 `,
               {
-                id: "createContinuationJob",
+                id: "continueJobs",
                 params: [
-                  idDataType,
-                  t.string(),
-                  idDataType,
-                  t.json(),
-                  t["string?"](),
-                  t["number?"](),
-                  t["string?"](),
-                  t["string?"](),
+                  t.array(),
+                  t.array(),
+                  t.array<string | null>(),
+                  t.array<string | null>(),
+                  t.array<number | null>(),
+                  t.array<string | null>(),
+                  t.array<string | null>(),
+                  t.array(),
+                  t.array<string | null>(),
                 ],
-                columns: { ...dbJobColumns, deduplicated: t.boolean() },
+                columns: { ...dbJobColumns, is_continuation: t.boolean() },
               },
             ),
           ),
         ),
         params: [
-          id,
-          job.typeName,
-          job.continueFromId,
-          job.input,
-          job.schedule?.at?.toISOString() ?? null,
-          job.schedule?.afterMs ?? null,
-          job.chainTraceContext ?? null,
-          job.traceContext ?? null,
+          ids,
+          jobs.map((job) => job.typeName),
+          jobs.map((job) => (job.input !== undefined ? JSON.stringify(job.input) : null)),
+          jobs.map((job) => job.schedule?.at?.toISOString() ?? null),
+          jobs.map((job) => job.schedule?.afterMs ?? null),
+          jobs.map((job) => job.chainTraceContext ?? null),
+          jobs.map((job) => job.traceContext ?? null),
+          jobs.map((job) => job.continueFromId),
+          jobs.map((job) => job.completedBy ?? null),
         ],
       });
 
-      if (!result) {
-        throw new Error(`continueWith parent job ${job.continueFromId} not found`);
-      }
+      const completedById = new Map(
+        rows.filter((row) => !row.is_continuation).map((row) => [row.id, row]),
+      );
+      const continuationById = new Map(
+        rows.filter((row) => row.is_continuation).map((row) => [row.id, row]),
+      );
 
-      return { job: mapDbJobToStateJob(result), deduplicated: result.deduplicated };
+      return jobs.map((job, i) => ({
+        job: mapDbJobToStateJob(completedById.get(job.continueFromId)!),
+        continuation: mapDbJobToStateJob(continuationById.get(ids[i])!),
+      }));
     },
 
     addJobsBlockers: async ({ txCtx, jobBlockers }) => {
@@ -1249,11 +1280,7 @@ ORDER BY fj.id
         ]),
       );
 
-      return jobBlockers.map((entry) => {
-        const result = resultMap.get(entry.jobId);
-        if (!result) throw new Error(`Missing blocker result for job ${entry.jobId}`);
-        return result;
-      });
+      return jobBlockers.map((entry) => resultMap.get(entry.jobId)!);
     },
 
     getJobBlockers: async ({ txCtx, jobId }) => {
@@ -1463,64 +1490,51 @@ RETURNING *
       return mapDbJobToStateJob(job);
     },
 
-    finishJobAttempt: async ({ txCtx, jobId, workerId, outcome }) => {
-      const isCompletion = outcome.output !== undefined || outcome.continuedToId !== undefined;
-      const [job] = await executeTypedSql({
+    completeJobs: async ({ txCtx, jobs }) => {
+      if (jobs.length === 0) return [];
+
+      const rows = await executeTypedSql({
         txCtx,
-        sql: templateCache.getOrCompute("finishJobAttempt", () =>
+        sql: templateCache.getOrCompute("completeJobs", () =>
           applyTemplate(
             sql(
               `
-UPDATE {{schema}}.{{table_prefix}}job
-SET last_attempt_at = CASE WHEN $5::boolean THEN last_attempt_at ELSE now() END,
-  last_attempt_error = CASE WHEN $5::boolean THEN NULL ELSE $2::jsonb END,
+WITH input_data AS (
+  SELECT job_id, output, completed_by
+  FROM unnest($1::{{id_type}}[], $2::text[], $3::text[]) AS t(job_id, output, completed_by)
+)
+UPDATE {{schema}}.{{table_prefix}}job j
+SET last_attempt_error = NULL,
   attempt_at = NULL,
   attempt_by = NULL,
   attempt_until = NULL,
-  completed_at = CASE WHEN $5::boolean THEN now() ELSE NULL END,
-  completed_by = CASE WHEN $5::boolean THEN $8 ELSE NULL END,
-  output = CASE WHEN $5::boolean THEN $6::jsonb ELSE NULL END,
-  continued_to_id = CASE WHEN $5::boolean THEN $7::{{id_type}} ELSE NULL END,
-  blocked = CASE WHEN $5::boolean THEN false ELSE blocked END,
-  scheduled_at = CASE WHEN $5::boolean THEN scheduled_at
-    ELSE GREATEST(COALESCE($3::timestamptz, now() + ($4::bigint || ' milliseconds')::interval, now()), now()) END
-WHERE id = $1
-  AND completed_at IS NULL
-  AND ($5::boolean OR attempt_by = $8)
-RETURNING *
+  completed_at = now(),
+  completed_by = d.completed_by,
+  output = d.output::jsonb,
+  blocked = false
+FROM input_data d
+WHERE j.id = d.job_id
+  AND j.completed_at IS NULL
+RETURNING j.*
 `,
               {
-                id: "finishJobAttempt",
-                params: [
-                  idDataType,
-                  t["string?"](),
-                  t["date?"](),
-                  t["number?"](),
-                  t.boolean(),
-                  t["string?"](),
-                  idNullableDataType,
-                  t["string?"](),
-                ],
+                id: "completeJobs",
+                params: [t.array(), t.array<string | null>(), t.array<string | null>()],
                 columns: { ...dbJobColumns },
               },
             ),
           ),
         ),
         params: [
-          jobId,
-          outcome.error !== undefined ? JSON.stringify(outcome.error) : null,
-          outcome.schedule?.at?.toISOString() ?? null,
-          outcome.schedule?.afterMs ?? null,
-          isCompletion,
-          isCompletion && outcome.continuedToId == null && outcome.output !== undefined
-            ? JSON.stringify(outcome.output)
-            : null,
-          outcome.continuedToId ?? null,
-          workerId,
+          jobs.map((job) => job.jobId as string),
+          jobs.map((job) => (job.output !== undefined ? JSON.stringify(job.output) : null)),
+          jobs.map((job) => job.completedBy ?? null),
         ],
       });
 
-      return mapDbJobToStateJob(job);
+      const completedById = new Map(rows.map((row) => [row.id, row]));
+
+      return jobs.map((job) => mapDbJobToStateJob(completedById.get(job.jobId)!));
     },
 
     reclaimExpiredJobAttempt: async ({ txCtx, typeNames, ignoredJobIds }) => {
@@ -1632,40 +1646,61 @@ WHERE delay_ms IS NOT NULL
       return result ? result.delay_ms : null;
     },
 
-    rescheduleJobs: async ({ txCtx, jobIds, schedule }) => {
-      if (jobIds.length === 0) return [];
+    rescheduleJobs: async ({ txCtx, jobs }) => {
+      if (jobs.length === 0) return [];
       const rows = await executeTypedSql({
         txCtx,
         sql: templateCache.getOrCompute("rescheduleJobs", () =>
           applyTemplate(
             sql(
               `
-UPDATE {{schema}}.{{table_prefix}}job
-SET scheduled_at = GREATEST(COALESCE($2::timestamptz, now() + ($3::bigint || ' milliseconds')::interval, now()), now())
-WHERE id = ANY($1::{{id_type}}[])
-  AND completed_at IS NULL
-  AND attempt_at IS NULL
-RETURNING *
+WITH input_data AS (
+  SELECT job_id, at, after_ms, error
+  FROM unnest($1::{{id_type}}[], $2::timestamptz[], $3::bigint[], $4::text[]) AS t(job_id, at, after_ms, error)
+)
+UPDATE {{schema}}.{{table_prefix}}job j
+SET scheduled_at = GREATEST(COALESCE(d.at, now() + (d.after_ms || ' milliseconds')::interval, now()), now()),
+  last_attempt_at = CASE WHEN j.attempt_at IS NULL THEN j.last_attempt_at ELSE now() END,
+  last_attempt_error = CASE WHEN j.attempt_at IS NULL THEN j.last_attempt_error ELSE d.error::jsonb END,
+  attempt_at = NULL,
+  attempt_by = NULL,
+  attempt_until = NULL
+FROM input_data d
+WHERE j.id = d.job_id
+  AND j.completed_at IS NULL
+RETURNING j.*
 `,
               {
                 id: "rescheduleJobs",
-                params: [t.array(), t["date?"](), t["number?"]()],
+                params: [
+                  t.array(),
+                  t.array<string | null>(),
+                  t.array<string | null>(),
+                  t.array<string | null>(),
+                ],
                 columns: { ...dbJobColumns },
               },
             ),
           ),
         ),
         params: [
-          jobIds as string[],
-          schedule?.at?.toISOString() ?? null,
-          schedule?.afterMs ?? null,
+          jobs.map((job) => job.jobId as string),
+          jobs.map((job) => job.schedule?.at?.toISOString() ?? null),
+          jobs.map((job) => (job.schedule?.afterMs != null ? String(job.schedule.afterMs) : null)),
+          jobs.map((job) => (job.error !== undefined ? JSON.stringify(job.error) : null)),
         ],
       });
-      const orderById = new Map(jobIds.map((id, i) => [id as string, i]));
-      return rows
-        .slice()
-        .sort((a, b) => orderById.get(a.id)! - orderById.get(b.id)!)
-        .map(mapDbJobToStateJob);
+      const rowById = new Map(rows.map((row) => [row.id, row]));
+      const seen = new Set<string>();
+      const result: StateJob[] = [];
+      for (const job of jobs) {
+        const jobId = job.jobId as string;
+        if (seen.has(jobId)) continue;
+        seen.add(jobId);
+        const row = rowById.get(jobId);
+        if (row) result.push(mapDbJobToStateJob(row));
+      }
+      return result;
     },
 
     deleteChains: async ({ txCtx, chainIds, cascade }) => {

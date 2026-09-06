@@ -14,7 +14,7 @@ it("index");
 describe("PostgreSQL State Adapter Variance - Text ID Type", () => {
   it("generates text job IDs", async ({ stateAdapter }) => {
     const [{ job }] = await stateAdapter.withTransaction(async (txCtx) =>
-      stateAdapter.createChains({
+      stateAdapter.createJobs({
         txCtx,
         jobs: [{ typeName: "t", input: null }],
       }),

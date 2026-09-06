@@ -8,7 +8,7 @@ export const withTransactionGroup: ConformanceGroup<StateConformanceFixture> = {
       name: "maintains transaction isolation",
       run: async ({ stateAdapter }, expect) => {
         const [{ job }] = await stateAdapter.withTransaction(async (txCtx) =>
-          stateAdapter.createChains({
+          stateAdapter.createJobs({
             txCtx,
             jobs: [{ typeName: "isolation-test", input: { value: "original" } }],
           }),
@@ -17,7 +17,7 @@ export const withTransactionGroup: ConformanceGroup<StateConformanceFixture> = {
         let rolledBackJobId: string | undefined;
         try {
           await stateAdapter.withTransaction(async (txCtx) => {
-            const [{ job: innerJob }] = await stateAdapter.createChains({
+            const [{ job: innerJob }] = await stateAdapter.createJobs({
               txCtx,
               jobs: [{ typeName: "rollback-test", input: { value: "should-rollback" } }],
             });
@@ -40,7 +40,7 @@ export const withTransactionGroup: ConformanceGroup<StateConformanceFixture> = {
       name: "restores updated job state when rolled back",
       run: async ({ stateAdapter }, expect) => {
         const [{ job }] = await stateAdapter.withTransaction(async (txCtx) =>
-          stateAdapter.createChains({
+          stateAdapter.createJobs({
             txCtx,
             jobs: [{ typeName: "update-rollback", input: null }],
           }),
@@ -79,7 +79,7 @@ export const withTransactionGroup: ConformanceGroup<StateConformanceFixture> = {
       name: "revives deleted chains when rolled back",
       run: async ({ stateAdapter }, expect) => {
         const [{ job }] = await stateAdapter.withTransaction(async (txCtx) =>
-          stateAdapter.createChains({
+          stateAdapter.createJobs({
             txCtx,
             jobs: [{ typeName: "delete-rollback", input: null }],
           }),
@@ -111,13 +111,13 @@ export const withTransactionGroup: ConformanceGroup<StateConformanceFixture> = {
       name: "restores blocker state when rolled back",
       run: async ({ stateAdapter }, expect) => {
         const [{ job: blocker }] = await stateAdapter.withTransaction(async (txCtx) =>
-          stateAdapter.createChains({
+          stateAdapter.createJobs({
             txCtx,
             jobs: [{ typeName: "blocker-rollback-a", input: null }],
           }),
         );
         const [{ job: target }] = await stateAdapter.withTransaction(async (txCtx) =>
-          stateAdapter.createChains({
+          stateAdapter.createJobs({
             txCtx,
             jobs: [{ typeName: "blocker-rollback-b", input: null }],
           }),
@@ -170,7 +170,7 @@ export const withTransactionGroup: ConformanceGroup<StateConformanceFixture> = {
 
         const txPromise = stateAdapter
           .withTransaction(async (txCtx) => {
-            await stateAdapter.createChains({
+            await stateAdapter.createJobs({
               txCtx,
               jobs: [{ typeName: "independent-vs-tx", input: { side: "tx" } }],
             });
@@ -183,7 +183,7 @@ export const withTransactionGroup: ConformanceGroup<StateConformanceFixture> = {
         await txReady;
 
         const outsidePromise = stateAdapter.withTransaction(async (outsideTxCtx) =>
-          stateAdapter.createChains({
+          stateAdapter.createJobs({
             txCtx: outsideTxCtx,
             jobs: [{ typeName: "independent-vs-tx", input: { side: "outside" } }],
           }),
@@ -202,13 +202,13 @@ export const withTransactionGroup: ConformanceGroup<StateConformanceFixture> = {
       name: "rolls back mixed mutations atomically with consistent indexes",
       run: async ({ stateAdapter }, expect) => {
         const [{ job: a }] = await stateAdapter.withTransaction(async (txCtx) =>
-          stateAdapter.createChains({
+          stateAdapter.createJobs({
             txCtx,
             jobs: [{ typeName: "mixed-rollback", input: null }],
           }),
         );
         const [{ job: b }] = await stateAdapter.withTransaction(async (txCtx) =>
-          stateAdapter.createChains({
+          stateAdapter.createJobs({
             txCtx,
             jobs: [{ typeName: "mixed-rollback", input: null }],
           }),
@@ -221,11 +221,9 @@ export const withTransactionGroup: ConformanceGroup<StateConformanceFixture> = {
               workerId: "worker-1",
               typeNames: ["mixed-rollback"],
             });
-            await stateAdapter.finishJobAttempt({
+            await stateAdapter.completeJobs({
               txCtx,
-              jobId: a.id,
-              workerId: "worker-1",
-              outcome: { output: { ok: true } },
+              jobs: [{ jobId: a.id, completedBy: "worker-1", output: { ok: true } }],
             });
             await stateAdapter.deleteChains({ txCtx, chainIds: [b.chainId] });
             throw new Error("rollback after mixed mutations");
@@ -263,7 +261,7 @@ export const withTransactionGroup: ConformanceGroup<StateConformanceFixture> = {
         const results = await Promise.all(
           Array.from({ length: count }, async (_, i) =>
             stateAdapter.withTransaction(async (txCtx) =>
-              stateAdapter.createChains({
+              stateAdapter.createJobs({
                 txCtx,
                 jobs: [{ typeName: "parallel-tx", input: { index: i } }],
               }),
@@ -288,7 +286,7 @@ export const withTransactionGroup: ConformanceGroup<StateConformanceFixture> = {
           return;
         }
         const [{ job: seedJob }] = await stateAdapter.withTransaction(async (txCtx) =>
-          stateAdapter.createChains({
+          stateAdapter.createJobs({
             txCtx,
             jobs: [{ typeName: "mixed-concurrency", input: null }],
           }),
@@ -297,7 +295,7 @@ export const withTransactionGroup: ConformanceGroup<StateConformanceFixture> = {
         const txWork = Promise.all(
           Array.from({ length: 3 }, async (_, i) =>
             stateAdapter.withTransaction(async (txCtx) =>
-              stateAdapter.createChains({
+              stateAdapter.createJobs({
                 txCtx,
                 jobs: [{ typeName: "mixed-tx", input: { index: i } }],
               }),

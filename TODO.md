@@ -4,6 +4,26 @@
 - [REF] Return back statuses. Get rid of continued substatus
 - [REF] Move chain information to the head row
 
+# Right now
+
+- rework StateAdapter
+  - get rid of chainTypeName from Job
+  - create StateChain { id, typeName, deduplicationKey, createdAt, completedAt?, traceContext }
+  - remove chainTypeName, deduplicationKey, chainTraceContext from StateJob
+  - create StateJobBlocker { jobId, blockedByChainId, index, completed, traceContext }
+  - getChains => [StateChain, StateJob, StateJob | undefined][] // maybe { chain: StateChain, head: StateJob, tail: StateJob | undefined }[]
+  - createJobs => [StateChain, StateJob, { created }][]
+  - getJobBlockers => [StateChain, StateJob, StateJob | undefined][]
+  - completeJobs => [StateChain, StateJob, StateJob | undefined][] // we no longer call completeJobs -> getJobs -> unblockJobs => completeJobs -> unblockJobs
+  - continueJobs get rid of chainTraceContext
+  - continueJobs & completeJobs should accept a single completedBy
+
+- optimize processing
+  - acquireJob returns 'hasBlockers'
+  - completeJobs return 'hasBlocked'
+  - pg pipelining
+  - head row optimization
+
 # Short term
 
 - [EPIC] Chain identity. Closing [#3](https://github.com/kvet/queuert/issues/3). See `design/chain-identity.md`.

@@ -9,19 +9,19 @@ export const listBlockedJobsGroup: ConformanceGroup<StateConformanceFixture> = {
       name: "listBlockedJobs returns jobs blocked by a chain",
       run: async ({ stateAdapter }, expect) => {
         const [{ job: blockerChain }] = await stateAdapter.withTransaction(async (txCtx) =>
-          stateAdapter.createChains({
+          stateAdapter.createJobs({
             txCtx,
             jobs: [{ typeName: "blocker-type", input: null }],
           }),
         );
         const [{ job: blockedJob }] = await stateAdapter.withTransaction(async (txCtx) =>
-          stateAdapter.createChains({
+          stateAdapter.createJobs({
             txCtx,
             jobs: [{ typeName: "blocked-type", input: null }],
           }),
         );
         await stateAdapter.withTransaction(async (txCtx) =>
-          stateAdapter.createChains({
+          stateAdapter.createJobs({
             txCtx,
             jobs: [{ typeName: "unrelated-type", input: null }],
           }),
@@ -48,7 +48,7 @@ export const listBlockedJobsGroup: ConformanceGroup<StateConformanceFixture> = {
       name: "listBlockedJobs returns empty page when no jobs are blocked",
       run: async ({ stateAdapter }, expect) => {
         const [{ job: chain }] = await stateAdapter.withTransaction(async (txCtx) =>
-          stateAdapter.createChains({
+          stateAdapter.createJobs({
             txCtx,
             jobs: [{ typeName: "test-type", input: null }],
           }),
@@ -66,20 +66,20 @@ export const listBlockedJobsGroup: ConformanceGroup<StateConformanceFixture> = {
       name: "listBlockedJobs sorts asc when orderDirection is asc",
       run: async ({ stateAdapter }, expect) => {
         const [{ job: blockerChain }] = await stateAdapter.withTransaction(async (txCtx) =>
-          stateAdapter.createChains({
+          stateAdapter.createJobs({
             txCtx,
             jobs: [{ typeName: "blocker-type", input: null }],
           }),
         );
         const [{ job: blockedJob1 }] = await stateAdapter.withTransaction(async (txCtx) =>
-          stateAdapter.createChains({
+          stateAdapter.createJobs({
             txCtx,
             jobs: [{ typeName: "blocked-a", input: null }],
           }),
         );
         await sleep(5);
         const [{ job: blockedJob2 }] = await stateAdapter.withTransaction(async (txCtx) =>
-          stateAdapter.createChains({
+          stateAdapter.createJobs({
             txCtx,
             jobs: [{ typeName: "blocked-b", input: null }],
           }),
@@ -121,7 +121,7 @@ export const listBlockedJobsGroup: ConformanceGroup<StateConformanceFixture> = {
       name: "listBlockedJobs paginates with cursor",
       run: async ({ stateAdapter }, expect) => {
         const [{ job: blockerChain }] = await stateAdapter.withTransaction(async (txCtx) =>
-          stateAdapter.createChains({
+          stateAdapter.createJobs({
             txCtx,
             jobs: [{ typeName: "blocker-type", input: null }],
           }),
@@ -129,7 +129,7 @@ export const listBlockedJobsGroup: ConformanceGroup<StateConformanceFixture> = {
         const blockedJobs = [];
         for (let i = 0; i < 4; i++) {
           const [{ job }] = await stateAdapter.withTransaction(async (txCtx) =>
-            stateAdapter.createChains({
+            stateAdapter.createJobs({
               txCtx,
               jobs: [{ typeName: `blocked-${i}`, input: null }],
             }),
@@ -171,13 +171,13 @@ export const listBlockedJobsGroup: ConformanceGroup<StateConformanceFixture> = {
           return;
         }
         const [{ job: blocker }] = await stateAdapter.withTransaction(async (txCtx) =>
-          stateAdapter.createChains({
+          stateAdapter.createJobs({
             txCtx,
             jobs: [{ typeName: "iso-listblocked-src", input: null }],
           }),
         );
         const [{ job: target }] = await stateAdapter.withTransaction(async (txCtx) =>
-          stateAdapter.createChains({
+          stateAdapter.createJobs({
             txCtx,
             jobs: [{ typeName: "iso-listblocked-target", input: null }],
           }),

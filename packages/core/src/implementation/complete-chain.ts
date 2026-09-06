@@ -5,7 +5,7 @@ import { type Helpers } from "../setup-helpers.js";
 import { type BaseTxContext, type StateJob } from "../state-adapter/state-adapter.js";
 import { type TransactionHooks } from "../transaction-hooks.js";
 import { type FinishResult } from "./attempt-outcome.js";
-import { finishJobAttempt } from "./finish-job-attempt.js";
+import { completeJob } from "./complete-job.js";
 
 /**
  * Commits the `{ output }` outcome: the job carries the chain's final value, so
@@ -30,12 +30,12 @@ export const completeChain = async (
 ): Promise<FinishResult> => {
   const parsedOutput = helpers.jobTypes.parseOutput(job.typeName, output);
 
-  const completedJob = await finishJobAttempt(helpers, {
+  const completedJob = await completeJob(helpers, {
     job,
     txCtx,
     transactionHooks,
     workerId,
-    outcome: { output: parsedOutput },
+    output: parsedOutput,
   });
 
   const [headJob] = await helpers.stateAdapter.getJobs({
