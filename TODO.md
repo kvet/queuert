@@ -7,7 +7,6 @@
 # Right now
 
 - rework StateAdapter
-  - get rid of chainTypeName from Job
   - create StateChain { id, typeName, deduplicationKey, createdAt, completedAt?, traceContext }
   - remove chainTypeName, deduplicationKey, chainTraceContext from StateJob
   - create StateJobBlocker { jobId, blockedByChainId, index, completed, traceContext }

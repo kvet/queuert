@@ -51,7 +51,7 @@ export function JobDetail() {
                   </h2>
                   <div class="id">job {job.id}</div>
                   <A href={`/chains/${job.chainId}`} class="chain-link">
-                    {job.chainTypeName} ({job.chainId})
+                    {d.chain?.typeName} ({job.chainId})
                   </A>
                 </div>
 
@@ -85,7 +85,7 @@ export function JobDetail() {
                     <Show when={job.lastAttemptAt}>
                       <dt>Last attempt at</dt>
                       <dd>
-                        {fmtDate(job.lastAttemptAt!)} (<TimeAgo date={job.lastAttemptAt!} />)
+                        {fmtDate(job.lastAttemptAt)} (<TimeAgo date={job.lastAttemptAt} />)
                       </dd>
                     </Show>
                     <Show when={job.lastAttemptError}>
@@ -151,8 +151,8 @@ export function JobDetail() {
                         <Show when={running().attemptUntil}>
                           <dt>Deadline</dt>
                           <dd>
-                            {fmtDate(running().attemptUntil!)} (
-                            <TimeAgo date={running().attemptUntil!} />)
+                            {fmtDate(running().attemptUntil)} (
+                            <TimeAgo date={running().attemptUntil} />)
                           </dd>
                         </Show>
                       </dl>

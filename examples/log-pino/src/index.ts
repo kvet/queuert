@@ -61,7 +61,8 @@ const loggerInjectionMiddleware: AttemptMiddleware<any, { log: Logger }> = {
         jobAttempt: {
           jobId: job.id,
           typeName: job.typeName,
-          chainTypeName: job.chainTypeName,
+          chainId: job.chainId,
+          // TODO: add chainTypeName
           attempt: job.attempt,
           workerId,
         },

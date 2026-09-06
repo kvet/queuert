@@ -81,29 +81,17 @@ export type AttemptFinishResult<
   TStateAdapter extends StateAdapter<BaseTxContext, any>,
   TJobTypeDefinitions extends BaseJobTypeDefinitions,
   TJobTypeName extends string,
-  TChainTypeName extends string,
   TOutcome,
 > = TOutcome extends { continueWith: { typeName: infer TContinuationTypeName extends string } }
   ? ContinuedJob<
       GetStateAdapterJobId<TStateAdapter>,
       TJobTypeDefinitions,
       TJobTypeName,
-      TChainTypeName,
       TContinuationTypeName
     >
   : TOutcome extends { reschedule: any }
-    ? RescheduledJob<
-        GetStateAdapterJobId<TStateAdapter>,
-        TJobTypeDefinitions,
-        TJobTypeName,
-        TChainTypeName
-      >
-    : OutputJob<
-        GetStateAdapterJobId<TStateAdapter>,
-        TJobTypeDefinitions,
-        TJobTypeName,
-        TChainTypeName
-      >;
+    ? RescheduledJob<GetStateAdapterJobId<TStateAdapter>, TJobTypeDefinitions, TJobTypeName>
+    : OutputJob<GetStateAdapterJobId<TStateAdapter>, TJobTypeDefinitions, TJobTypeName>;
 
 /**
  * Commits an outcome. The only effectful call inside the complete callback — it
@@ -117,22 +105,18 @@ export type AttemptFinish<
   TStateAdapter extends StateAdapter<BaseTxContext, any>,
   TJobTypeDefinitions extends BaseJobTypeDefinitions,
   TJobTypeName extends string,
-  TChainTypeName extends string,
 > = <TOutcome extends AttemptOutcome<TStateAdapter, TJobTypeDefinitions, TJobTypeName>>(
   outcome: TOutcome,
-) => Promise<
-  AttemptFinishResult<TStateAdapter, TJobTypeDefinitions, TJobTypeName, TChainTypeName, TOutcome>
->;
+) => Promise<AttemptFinishResult<TStateAdapter, TJobTypeDefinitions, TJobTypeName, TOutcome>>;
 
 /** Options passed to the complete callback: the finish function and the transaction context. */
 export type AttemptCompleteOptions<
   TStateAdapter extends StateAdapter<BaseTxContext, any>,
   TJobTypeDefinitions extends BaseJobTypeDefinitions,
   TJobTypeName extends string,
-  TChainTypeName extends string,
   TCompleteCtx = Record<string, unknown>,
 > = {
-  finish: AttemptFinish<TStateAdapter, TJobTypeDefinitions, TJobTypeName, TChainTypeName>;
+  finish: AttemptFinish<TStateAdapter, TJobTypeDefinitions, TJobTypeName>;
 } & { transactionHooks: TransactionHooks } & GetStateAdapterTxContext<TStateAdapter> &
   TCompleteCtx;
 
@@ -141,7 +125,6 @@ export type AttemptCompleteCallback<
   TStateAdapter extends StateAdapter<BaseTxContext, any>,
   TJobTypeDefinitions extends BaseJobTypeDefinitions,
   TJobTypeName extends string,
-  TChainTypeName extends string,
   TResult,
   TCompleteCtx = Record<string, unknown>,
 > = (
@@ -149,7 +132,6 @@ export type AttemptCompleteCallback<
     TStateAdapter,
     TJobTypeDefinitions,
     TJobTypeName,
-    TChainTypeName,
     TCompleteCtx
   >,
 ) => Promise<TResult>;
@@ -167,14 +149,12 @@ export type AttemptComplete<
   TStateAdapter extends StateAdapter<BaseTxContext, any>,
   TJobTypeDefinitions extends BaseJobTypeDefinitions,
   TJobTypeName extends string,
-  TChainTypeName extends string,
   TCompleteCtx = Record<string, unknown>,
 > = <TResult extends Exclude<AnyJob, { status: "running" }>>(
   completeCallback: AttemptCompleteCallback<
     TStateAdapter,
     TJobTypeDefinitions,
     TJobTypeName,
-    TChainTypeName,
     TResult,
     TCompleteCtx
   >,
@@ -241,7 +221,6 @@ export type AttemptHandler<
   TStateAdapter extends StateAdapter<BaseTxContext, any>,
   TJobTypeDefinitions extends BaseJobTypeDefinitions,
   TJobTypeName extends string,
-  TChainTypeName extends string,
   THandlerCtx,
   TPrepareCtx,
   TStepCtx,
@@ -252,17 +231,10 @@ export type AttemptHandler<
     job: ResolvedJobWithBlockers<
       GetStateAdapterJobId<TStateAdapter>,
       TJobTypeDefinitions,
-      TJobTypeName,
-      TChainTypeName
+      TJobTypeName
     > & { status: "running" };
     prepare: AttemptPrepare<TStateAdapter, TPrepareCtx>;
     step: AttemptStep<TStateAdapter, TStepCtx>;
-    complete: AttemptComplete<
-      TStateAdapter,
-      TJobTypeDefinitions,
-      TJobTypeName,
-      TChainTypeName,
-      TCompleteCtx
-    >;
+    complete: AttemptComplete<TStateAdapter, TJobTypeDefinitions, TJobTypeName, TCompleteCtx>;
   } & THandlerCtx,
 ) => Promise<Exclude<AnyJob, { status: "running" }>>;

@@ -583,56 +583,6 @@ export const workerlessCompletionTestSuite = ({ it }: { it: TestAPI<TestSuiteCon
     });
   });
 
-  it("correctly narrows chainTypeName in completeChain", async ({
-    stateAdapter,
-    notifyAdapter,
-    withTransaction,
-    observabilityAdapter,
-    log,
-    expect,
-  }) => {
-    const jobTypes = defineJobTypes<{
-      entryA: { entry: true; input: null; continueWith: { typeName: "shared" } };
-      entryB: { entry: true; input: null; continueWith: { typeName: "shared" } };
-      shared: { input: null; output: { done: boolean } };
-    }>();
-
-    const client = await createClient({
-      stateAdapter,
-      notifyAdapter,
-      observabilityAdapter,
-      log,
-      jobTypes,
-    });
-
-    const chain = await withTransaction(async (txCtx, transactionHooks) =>
-      client.createChain({ ...txCtx, transactionHooks, typeName: "entryA", input: null }),
-    );
-
-    await withTransaction(async (txCtx, transactionHooks) =>
-      client.completeChain({
-        ...txCtx,
-        transactionHooks,
-        ...chain,
-        handler: async ({ job, completeJob }) => {
-          expectTypeOf(job.chainTypeName).toEqualTypeOf<"entryA">();
-          expect(job.chainTypeName).toBe("entryA");
-
-          if (job.typeName === "entryA") {
-            job = await completeJob(job, async ({ finish }) =>
-              finish({ continueWith: { typeName: "shared", input: null } }),
-            );
-          }
-
-          expectTypeOf(job.chainTypeName).toEqualTypeOf<"entryA">();
-          expect(job.chainTypeName).toBe("entryA");
-
-          return completeJob(job, async ({ finish }) => finish({ output: { done: true } }));
-        },
-      }),
-    );
-  });
-
   it("completeChain throws when called without transaction context", async ({
     stateAdapter,
     notifyAdapter,

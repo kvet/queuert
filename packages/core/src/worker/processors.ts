@@ -1,5 +1,5 @@
 import { type BaseJobTypeDefinitions } from "../entities/job-type.js";
-import { type JobTypeNames, type JobTypeReachingEntry } from "../entities/job-types.resolvers.js";
+import { type JobTypeNames } from "../entities/job-types.resolvers.js";
 import { type BackoffConfig } from "../helpers/backoff.js";
 import { type StateAdapter } from "../state-adapter/state-adapter.js";
 import { type AttemptConfig } from "./attempt-heartbeat.js";
@@ -21,7 +21,6 @@ export type InProcessWorkerProcessor<
     TStateAdapter,
     TJobTypeDefinitions,
     TJobTypeName,
-    JobTypeReachingEntry<TJobTypeDefinitions, TJobTypeName>,
     THandlerCtx,
     TPrepareCtx,
     TStepCtx,

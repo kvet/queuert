@@ -19,7 +19,8 @@ import { createWinstonLog } from "./log.js";
 type JobAttemptMeta = {
   jobId: string;
   typeName: string;
-  chainTypeName: string;
+  chainId: string;
+  // TODO: add chainTypeName
   attempt: number;
   workerId: string;
 };
@@ -78,7 +79,7 @@ const loggerInjectionMiddleware: AttemptMiddleware<any, { log: winston.Logger }>
         jobAttempt: {
           jobId: job.id,
           typeName: job.typeName,
-          chainTypeName: job.chainTypeName,
+          chainId: job.chainId,
           attempt: job.attempt,
           workerId,
         } satisfies JobAttemptMeta,

@@ -72,17 +72,12 @@ type TerminalDefs = {
 
 declare const prepare: AttemptPrepare<InProcessStateAdapter>;
 declare const step: AttemptStep<InProcessStateAdapter>;
-declare const complete: AttemptComplete<InProcessStateAdapter, LinearDefs, "entry", "entry">;
+declare const complete: AttemptComplete<InProcessStateAdapter, LinearDefs, "entry">;
 
-declare const linearCommit: AttemptFinish<InProcessStateAdapter, LinearDefs, "entry", "entry">;
-declare const branchingCommit: AttemptFinish<InProcessStateAdapter, BranchingDefs, "root", "root">;
-declare const sharedCommit: AttemptFinish<InProcessStateAdapter, SharedInputDefs, "root", "root">;
-declare const terminalCommit: AttemptFinish<
-  InProcessStateAdapter,
-  TerminalDefs,
-  "terminal",
-  "terminal"
->;
+declare const linearCommit: AttemptFinish<InProcessStateAdapter, LinearDefs, "entry">;
+declare const branchingCommit: AttemptFinish<InProcessStateAdapter, BranchingDefs, "root">;
+declare const sharedCommit: AttemptFinish<InProcessStateAdapter, SharedInputDefs, "root">;
+declare const terminalCommit: AttemptFinish<InProcessStateAdapter, TerminalDefs, "terminal">;
 
 const prepareBare = async () => prepare({ mode: "staged" });
 const prepareWithCallback = async () => prepare({ mode: "atomic" }, () => 42);
@@ -257,17 +252,13 @@ describe("AttemptFinish", () => {
     type ContinuedResult = Awaited<ReturnType<typeof commitContinue>>;
 
     it("resolves an output outcome to the completed job", () => {
-      expectTypeOf<OutputResult>().toExtend<
-        OutputJob<string, TerminalDefs, "terminal", "terminal">
-      >();
+      expectTypeOf<OutputResult>().toExtend<OutputJob<string, TerminalDefs, "terminal">>();
       expectTypeOf<OutputResult["status"]>().toEqualTypeOf<"completed">();
       expectTypeOf<OutputResult["continuedTo"]>().toEqualTypeOf<undefined>();
     });
 
     it("resolves a continueWith outcome to the continued job", () => {
-      expectTypeOf<ContinuedResult>().toExtend<
-        ContinuedJob<string, LinearDefs, "entry", "entry", "step">
-      >();
+      expectTypeOf<ContinuedResult>().toExtend<ContinuedJob<string, LinearDefs, "entry", "step">>();
       expectTypeOf<ContinuedResult["continuedTo"]["typeName"]>().toEqualTypeOf<"step">();
       expectTypeOf<ContinuedResult["continuedTo"]["input"]>().toEqualTypeOf<{
         stepValue: boolean;
@@ -352,22 +343,16 @@ describe("AttemptComplete", () => {
   });
 
   it("exposes finish and the transaction context to the callback", () => {
-    type Options = AttemptCompleteOptions<InProcessStateAdapter, LinearDefs, "entry", "entry">;
+    type Options = AttemptCompleteOptions<InProcessStateAdapter, LinearDefs, "entry">;
     expectTypeOf<Options>().toHaveProperty("finish");
     expectTypeOf<Options>().toHaveProperty("transactionHooks");
     expectTypeOf<Options>().toHaveProperty("tx");
   });
 
   it("types the callback as receiving those options", () => {
-    type Callback = AttemptCompleteCallback<
-      InProcessStateAdapter,
-      LinearDefs,
-      "entry",
-      "entry",
-      never
-    >;
+    type Callback = AttemptCompleteCallback<InProcessStateAdapter, LinearDefs, "entry", never>;
     expectTypeOf<Parameters<Callback>[0]>().toEqualTypeOf<
-      AttemptCompleteOptions<InProcessStateAdapter, LinearDefs, "entry", "entry">
+      AttemptCompleteOptions<InProcessStateAdapter, LinearDefs, "entry">
     >();
   });
 });
@@ -376,7 +361,6 @@ describe("AttemptHandler", () => {
   type Handler = AttemptHandler<
     InProcessStateAdapter,
     LinearDefs,
-    "entry",
     "entry",
     Record<string, unknown>,
     Record<string, unknown>,
@@ -401,7 +385,7 @@ describe("AttemptHandler", () => {
     expectTypeOf<Options["prepare"]>().toEqualTypeOf<AttemptPrepare<InProcessStateAdapter>>();
     expectTypeOf<Options["step"]>().toEqualTypeOf<AttemptStep<InProcessStateAdapter>>();
     expectTypeOf<Options["complete"]>().toEqualTypeOf<
-      AttemptComplete<InProcessStateAdapter, LinearDefs, "entry", "entry">
+      AttemptComplete<InProcessStateAdapter, LinearDefs, "entry">
     >();
   });
 
@@ -418,7 +402,7 @@ describe("AttemptHandler", () => {
   });
 
   it("accepts a rescheduled (pending) job", () => {
-    expectTypeOf<RescheduledJob<string, LinearDefs, "entry", "entry">>().toExtend<
+    expectTypeOf<RescheduledJob<string, LinearDefs, "entry">>().toExtend<
       Awaited<ReturnType<Handler>>
     >();
   });

@@ -9,24 +9,14 @@ export type JobStatus = "pending" | "running" | "completed";
  *
  * @typeParam TJobId - The job ID type (e.g. `string` or `UUID`)
  * @typeParam TJobTypeName - The job type name literal
- * @typeParam TChainTypeName - The chain type name literal
  * @typeParam TInput - The job's input payload type
  * @typeParam TOutput - The job's output type (available when terminally completed)
  */
-export type Job<
-  TJobId,
-  TJobTypeName,
-  TChainTypeName,
-  TInput,
-  TOutput,
-  TCanContinue extends boolean,
-> = {
+export type Job<TJobId, TJobTypeName, TInput, TOutput, TCanContinue extends boolean> = {
   id: TJobId;
   /** ID of the chain this job belongs to (equals `id` for the first job). */
   chainId: TJobId;
   typeName: TJobTypeName;
-  /** Type name of the chain this job belongs to. */
-  chainTypeName: TChainTypeName;
   input: TInput;
   createdAt: Date;
   /** When the job becomes eligible for processing. */
@@ -59,7 +49,7 @@ export type Job<
     ))
 );
 
-export type AnyJob = Job<any, any, any, any, any, boolean>;
+export type AnyJob = Job<any, any, any, any, boolean>;
 
 /** A job narrowed to `"completed"` status. */
 export type CompletedJob<TJob extends AnyJob> = Extract<
