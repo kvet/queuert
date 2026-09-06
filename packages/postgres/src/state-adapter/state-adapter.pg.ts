@@ -27,6 +27,7 @@ import {
 } from "queuert/internal";
 
 import { type PgStateProvider } from "../state-provider/state-provider.pg.js";
+import { createLegacyUpgrade } from "./legacy-upgrade.pg.js";
 
 type DbJob = {
   id: string;
@@ -59,39 +60,11 @@ type DbJob = {
   trace_context: string | null;
 };
 
-const concurrentIndex = (
-  name: string,
-  on: string,
-  columns: string,
-  where?: string,
-  unique?: boolean,
-) => [
-  sql(/* sql */ `
-DO $$ BEGIN
-  PERFORM 1 FROM pg_class c
-  JOIN pg_namespace n ON n.oid = c.relnamespace
-  JOIN pg_index i ON i.indexrelid = c.oid
-  WHERE n.nspname = '{{schema}}' AND c.relname = '${name}' AND NOT i.indisvalid;
-  IF FOUND THEN EXECUTE 'DROP INDEX {{schema}}.${name}'; END IF;
-END $$`),
-  sql(/* sql */ `
-CREATE ${unique ? "UNIQUE " : ""}INDEX CONCURRENTLY IF NOT EXISTS ${name}
-ON {{schema}}.${on} (${columns})${where ? `\nWHERE ${where}` : ""}`),
-];
-
-/** @internal */
 export const migrations: Migration[] = [
   {
-    name: "20240101000000_initial_schema",
+    name: "001_initial_schema",
     type: "transactional",
     statements: [
-      sql(/* sql */ `
-DO $$
-BEGIN
-  IF NOT EXISTS (SELECT 1 FROM pg_type WHERE typname = '{{table_prefix}}job_status' AND typnamespace = '{{schema}}'::regnamespace) THEN
-    CREATE TYPE {{schema}}.{{table_prefix}}job_status AS ENUM ('blocked','pending','running','completed');
-  END IF;
-END$$`),
       sql(/* sql */ `
 CREATE TABLE IF NOT EXISTS {{schema}}.{{table_prefix}}job (
   id                            {{id_type}} PRIMARY KEY,
@@ -99,12 +72,13 @@ CREATE TABLE IF NOT EXISTS {{schema}}.{{table_prefix}}job (
   chain_id                      {{id_type}} NOT NULL REFERENCES {{schema}}.{{table_prefix}}job(id),
   chain_type_name               text NOT NULL,
   chain_index                   integer NOT NULL,
+  continued_to_id               {{id_type}} REFERENCES {{schema}}.{{table_prefix}}job(id),
 
   input                         jsonb,
   output                        jsonb,
 
   -- state
-  status                        {{schema}}.{{table_prefix}}job_status NOT NULL DEFAULT 'pending',
+  blocked                       boolean NOT NULL DEFAULT false,
   created_at                    timestamptz NOT NULL DEFAULT now(),
   scheduled_at                  timestamptz NOT NULL DEFAULT now(),
   completed_at                  timestamptz,
@@ -114,10 +88,9 @@ CREATE TABLE IF NOT EXISTS {{schema}}.{{table_prefix}}job (
   attempt                       integer NOT NULL DEFAULT 0,
   last_attempt_at               timestamptz,
   last_attempt_error            jsonb,
-
-  -- leasing
-  leased_by                     text,
-  leased_until                  timestamptz,
+  attempt_at                    timestamptz,
+  attempt_by                    text,
+  attempt_until                 timestamptz,
 
   -- deduplication
   deduplication_key             text,
@@ -125,6 +98,13 @@ CREATE TABLE IF NOT EXISTS {{schema}}.{{table_prefix}}job (
   -- tracing
   chain_trace_context           text,
   trace_context                 text
+) WITH (
+  fillfactor = 75,
+  autovacuum_vacuum_cost_delay = 0,
+  autovacuum_vacuum_threshold = 5000,
+  autovacuum_vacuum_scale_factor = 0,
+  autovacuum_analyze_threshold = 5000,
+  autovacuum_analyze_scale_factor = 0
 )`),
       sql(/* sql */ `
 CREATE TABLE IF NOT EXISTS {{schema}}.{{table_prefix}}job_blocker (
@@ -132,271 +112,59 @@ CREATE TABLE IF NOT EXISTS {{schema}}.{{table_prefix}}job_blocker (
   blocked_by_chain_id           {{id_type}} NOT NULL REFERENCES {{schema}}.{{table_prefix}}job(id),
   index                         integer NOT NULL,
   trace_context                 text,
-  PRIMARY KEY (job_id, blocked_by_chain_id)
+  PRIMARY KEY (job_id, blocked_by_chain_id, "index")
+) WITH (
+  autovacuum_vacuum_cost_delay = 0,
+  autovacuum_vacuum_threshold = 5000,
+  autovacuum_vacuum_scale_factor = 0,
+  autovacuum_analyze_threshold = 5000,
+  autovacuum_analyze_scale_factor = 0
 )`),
       sql(/* sql */ `
-CREATE INDEX IF NOT EXISTS {{table_prefix}}job_acquisition_idx
-ON {{schema}}.{{table_prefix}}job (type_name, scheduled_at)
-WHERE status = 'pending'`),
-      sql(/* sql */ `
-CREATE UNIQUE INDEX IF NOT EXISTS {{table_prefix}}job_chain_index_idx
+CREATE UNIQUE INDEX IF NOT EXISTS {{table_prefix}}chain_index_idx
 ON {{schema}}.{{table_prefix}}job (chain_id, chain_index)`),
       sql(/* sql */ `
 CREATE INDEX IF NOT EXISTS {{table_prefix}}job_deduplication_idx
 ON {{schema}}.{{table_prefix}}job (deduplication_key, created_at DESC)
 WHERE deduplication_key IS NOT NULL AND chain_index = 0`),
       sql(/* sql */ `
-CREATE INDEX IF NOT EXISTS {{table_prefix}}job_expired_lease_idx
-ON {{schema}}.{{table_prefix}}job (type_name, leased_until)
-WHERE status = 'running' AND leased_until IS NOT NULL`),
+CREATE INDEX IF NOT EXISTS {{table_prefix}}job_ready_idx
+ON {{schema}}.{{table_prefix}}job (type_name, scheduled_at)
+WHERE blocked = false AND attempt_at IS NULL AND completed_at IS NULL`),
+      sql(/* sql */ `
+CREATE INDEX IF NOT EXISTS {{table_prefix}}job_pending_idx
+ON {{schema}}.{{table_prefix}}job (type_name, scheduled_at)
+WHERE attempt_at IS NULL AND completed_at IS NULL`),
+      sql(/* sql */ `
+CREATE INDEX IF NOT EXISTS {{table_prefix}}job_running_idx
+ON {{schema}}.{{table_prefix}}job (type_name, attempt_until)
+WHERE attempt_at IS NOT NULL AND completed_at IS NULL`),
+      sql(/* sql */ `
+CREATE INDEX IF NOT EXISTS {{table_prefix}}job_completed_idx
+ON {{schema}}.{{table_prefix}}job (type_name, completed_at)
+WHERE completed_at IS NOT NULL`),
+      sql(/* sql */ `
+CREATE UNIQUE INDEX IF NOT EXISTS {{table_prefix}}job_continuation_idx
+ON {{schema}}.{{table_prefix}}job (continued_to_id)
+WHERE continued_to_id IS NOT NULL`),
+      sql(/* sql */ `
+CREATE INDEX IF NOT EXISTS {{table_prefix}}chain_tail_running_idx
+ON {{schema}}.{{table_prefix}}job (chain_type_name, chain_id)
+WHERE continued_to_id IS NULL AND completed_at IS NULL`),
+      sql(/* sql */ `
+CREATE INDEX IF NOT EXISTS {{table_prefix}}chain_tail_completed_idx
+ON {{schema}}.{{table_prefix}}job (chain_type_name, chain_id)
+WHERE continued_to_id IS NULL AND completed_at IS NOT NULL`),
+      sql(/* sql */ `
+CREATE INDEX IF NOT EXISTS {{table_prefix}}chain_head_idx
+ON {{schema}}.{{table_prefix}}job (chain_type_name, created_at)
+WHERE chain_index = 0`),
+      sql(/* sql */ `
+CREATE INDEX IF NOT EXISTS {{table_prefix}}job_idx
+ON {{schema}}.{{table_prefix}}job (type_name, created_at)`),
       sql(/* sql */ `
 CREATE INDEX IF NOT EXISTS {{table_prefix}}job_blocker_chain_idx
 ON {{schema}}.{{table_prefix}}job_blocker (blocked_by_chain_id)`),
-      sql(/* sql */ `
-CREATE INDEX IF NOT EXISTS {{table_prefix}}job_chain_listing_idx
-ON {{schema}}.{{table_prefix}}job (created_at DESC) WHERE chain_index = 0`),
-      sql(/* sql */ `
-CREATE INDEX IF NOT EXISTS {{table_prefix}}job_listing_idx
-ON {{schema}}.{{table_prefix}}job (created_at DESC)`),
-      sql(/* sql */ `
-CREATE INDEX IF NOT EXISTS {{table_prefix}}job_listing_status_idx
-ON {{schema}}.{{table_prefix}}job (status, created_at DESC)`),
-      sql(/* sql */ `
-CREATE INDEX IF NOT EXISTS {{table_prefix}}job_listing_type_name_idx
-ON {{schema}}.{{table_prefix}}job (type_name, created_at DESC)`),
-      sql(/* sql */ `
-CREATE INDEX IF NOT EXISTS {{table_prefix}}job_chain_listing_type_name_idx
-ON {{schema}}.{{table_prefix}}job (type_name, created_at DESC) WHERE chain_index = 0`),
-    ],
-  },
-  {
-    name: "20240102000000_vacuum_tuning",
-    type: "transactional",
-    statements: [
-      sql(/* sql */ `
-ALTER TABLE {{schema}}.{{table_prefix}}job SET (
-  fillfactor = 75,
-  autovacuum_vacuum_scale_factor = 0.02,
-  autovacuum_analyze_scale_factor = 0.02,
-  autovacuum_vacuum_cost_delay = 0
-)`),
-      sql(/* sql */ `
-ALTER TABLE {{schema}}.{{table_prefix}}job_blocker SET (
-  autovacuum_vacuum_cost_delay = 0
-)`),
-    ],
-  },
-  {
-    name: "20260430000000_rename_chain_indexes",
-    type: "transactional",
-    statements: [
-      sql(/* sql */ `
-ALTER INDEX IF EXISTS {{schema}}.{{table_prefix}}job_chain_index_idx
-RENAME TO {{table_prefix}}chain_index_idx`),
-      sql(/* sql */ `
-ALTER INDEX IF EXISTS {{schema}}.{{table_prefix}}job_chain_listing_idx
-RENAME TO {{table_prefix}}chain_listing_idx`),
-      sql(/* sql */ `
-ALTER INDEX IF EXISTS {{schema}}.{{table_prefix}}job_chain_listing_type_name_idx
-RENAME TO {{table_prefix}}chain_listing_type_name_idx`),
-    ],
-  },
-  {
-    name: "20260517000000_drop_job_id_default",
-    type: "transactional",
-    statements: [
-      sql(/* sql */ `ALTER TABLE {{schema}}.{{table_prefix}}job ALTER COLUMN id DROP DEFAULT`),
-    ],
-  },
-  {
-    name: "20260531000000_vacuum_threshold_pinning",
-    type: "transactional",
-    statements: [
-      sql(/* sql */ `
-ALTER TABLE {{schema}}.{{table_prefix}}job SET (
-  autovacuum_vacuum_threshold = 5000,
-  autovacuum_vacuum_scale_factor = 0,
-  autovacuum_analyze_threshold = 5000,
-  autovacuum_analyze_scale_factor = 0
-)`),
-      sql(/* sql */ `
-ALTER TABLE {{schema}}.{{table_prefix}}job_blocker SET (
-  autovacuum_vacuum_threshold = 5000,
-  autovacuum_vacuum_scale_factor = 0,
-  autovacuum_analyze_threshold = 5000,
-  autovacuum_analyze_scale_factor = 0
-)`),
-    ],
-  },
-  {
-    name: "20260617000000_blocker_composite_pk",
-    type: "transactional",
-    statements: [
-      sql(`
-ALTER TABLE {{schema}}.{{table_prefix}}job_blocker
-  DROP CONSTRAINT {{table_prefix}}job_blocker_pkey,
-  ADD PRIMARY KEY (job_id, blocked_by_chain_id, "index")`),
-    ],
-  },
-  {
-    name: "20260622000000_job_model_v2_columns",
-    type: "transactional",
-    statements: [
-      sql(/* sql */ `
-ALTER TABLE {{schema}}.{{table_prefix}}job
-  ADD COLUMN IF NOT EXISTS continued_to_id {{id_type}} REFERENCES {{schema}}.{{table_prefix}}job(id),
-  ADD COLUMN IF NOT EXISTS leased_at timestamptz,
-  ADD COLUMN IF NOT EXISTS blocked boolean NOT NULL DEFAULT false`),
-    ],
-  },
-  {
-    name: "20260622000001_job_model_v2_backfill",
-    type: "batched",
-    statements: [
-      sql(/* sql */ `
-UPDATE {{schema}}.{{table_prefix}}job
-SET continued_to_id = sub.next_id
-FROM (
-  SELECT j.id, n.id AS next_id
-  FROM {{schema}}.{{table_prefix}}job j
-  JOIN {{schema}}.{{table_prefix}}job n
-    ON n.chain_id = j.chain_id AND n.chain_index = j.chain_index + 1
-  WHERE j.continued_to_id IS NULL
-  LIMIT 1000
-) sub
-WHERE {{schema}}.{{table_prefix}}job.id = sub.id`),
-      sql(/* sql */ `
-UPDATE {{schema}}.{{table_prefix}}job
-SET blocked = true, status = 'pending'
-WHERE id IN (
-  SELECT id FROM {{schema}}.{{table_prefix}}job
-  WHERE status = 'blocked'
-  LIMIT 1000
-)`),
-      sql(/* sql */ `
-UPDATE {{schema}}.{{table_prefix}}job
-SET leased_at = COALESCE(leased_until, now()),
-  leased_by = COALESCE(leased_by, 'migrated')
-WHERE id IN (
-  SELECT id FROM {{schema}}.{{table_prefix}}job
-  WHERE status = 'running' AND (leased_at IS NULL OR leased_by IS NULL)
-  LIMIT 1000
-)`),
-    ],
-  },
-  {
-    name: "20260622000002_job_model_v2_finalize",
-    type: "transactional",
-    // Atomic catch-up-and-cut: old-version workers keep minting old-shape rows
-    // behind the batched drain, so the finalize takes an exclusive table lock,
-    // backfills the stragglers under it, and applies the DDL cut in the same
-    // transaction. The commit errors every old-worker statement — the cut.
-    statements: [
-      sql(/* sql */ `
-LOCK TABLE {{schema}}.{{table_prefix}}job IN ACCESS EXCLUSIVE MODE`),
-      sql(/* sql */ `
-UPDATE {{schema}}.{{table_prefix}}job
-SET continued_to_id = sub.next_id
-FROM (
-  SELECT j.id, n.id AS next_id
-  FROM {{schema}}.{{table_prefix}}job j
-  JOIN {{schema}}.{{table_prefix}}job n
-    ON n.chain_id = j.chain_id AND n.chain_index = j.chain_index + 1
-  WHERE j.continued_to_id IS NULL
-) sub
-WHERE {{schema}}.{{table_prefix}}job.id = sub.id`),
-      sql(/* sql */ `
-UPDATE {{schema}}.{{table_prefix}}job
-SET blocked = true, status = 'pending'
-WHERE status = 'blocked'`),
-      sql(/* sql */ `
-UPDATE {{schema}}.{{table_prefix}}job
-SET leased_at = COALESCE(leased_until, now()),
-  leased_by = COALESCE(leased_by, 'migrated')
-WHERE status = 'running' AND (leased_at IS NULL OR leased_by IS NULL)`),
-      sql(/* sql */ `
-ALTER TABLE {{schema}}.{{table_prefix}}job DROP COLUMN IF EXISTS status`),
-      sql(/* sql */ `
-DROP TYPE IF EXISTS {{schema}}.{{table_prefix}}job_status`),
-      sql(
-        /* sql */ `ALTER TABLE {{schema}}.{{table_prefix}}job RENAME COLUMN leased_at TO attempt_at`,
-      ),
-      sql(
-        /* sql */ `ALTER TABLE {{schema}}.{{table_prefix}}job RENAME COLUMN leased_by TO attempt_by`,
-      ),
-      sql(
-        /* sql */ `ALTER TABLE {{schema}}.{{table_prefix}}job RENAME COLUMN leased_until TO attempt_until`,
-      ),
-    ],
-  },
-  {
-    name: "20260622000003_job_model_v2_indexes",
-    type: "non-transactional",
-    statements: [
-      sql(/* sql */ `
-DROP INDEX CONCURRENTLY IF EXISTS {{schema}}.{{table_prefix}}job_acquisition_idx`),
-      sql(/* sql */ `
-DROP INDEX CONCURRENTLY IF EXISTS {{schema}}.{{table_prefix}}job_expired_lease_idx`),
-      sql(/* sql */ `
-DROP INDEX CONCURRENTLY IF EXISTS {{schema}}.{{table_prefix}}job_listing_status_idx`),
-      sql(/* sql */ `
-DROP INDEX CONCURRENTLY IF EXISTS {{schema}}.{{table_prefix}}job_listing_type_name_idx`),
-      sql(/* sql */ `
-DROP INDEX CONCURRENTLY IF EXISTS {{schema}}.{{table_prefix}}chain_listing_type_name_idx`),
-      sql(/* sql */ `
-DROP INDEX CONCURRENTLY IF EXISTS {{schema}}.{{table_prefix}}chain_listing_idx`),
-      sql(/* sql */ `
-DROP INDEX CONCURRENTLY IF EXISTS {{schema}}.{{table_prefix}}job_listing_idx`),
-      ...concurrentIndex(
-        "{{table_prefix}}job_ready_idx",
-        "{{table_prefix}}job",
-        "type_name, scheduled_at",
-        "blocked = false AND attempt_at IS NULL AND completed_at IS NULL",
-      ),
-      ...concurrentIndex(
-        "{{table_prefix}}job_pending_idx",
-        "{{table_prefix}}job",
-        "type_name, scheduled_at",
-        "attempt_at IS NULL AND completed_at IS NULL",
-      ),
-      ...concurrentIndex(
-        "{{table_prefix}}job_running_idx",
-        "{{table_prefix}}job",
-        "type_name, attempt_until",
-        "attempt_at IS NOT NULL AND completed_at IS NULL",
-      ),
-      ...concurrentIndex(
-        "{{table_prefix}}job_completed_idx",
-        "{{table_prefix}}job",
-        "type_name, completed_at",
-        "completed_at IS NOT NULL",
-      ),
-      ...concurrentIndex(
-        "{{table_prefix}}job_continuation_idx",
-        "{{table_prefix}}job",
-        "continued_to_id",
-        "continued_to_id IS NOT NULL",
-        true,
-      ),
-      ...concurrentIndex(
-        "{{table_prefix}}chain_tail_running_idx",
-        "{{table_prefix}}job",
-        "chain_type_name, chain_id",
-        "continued_to_id IS NULL AND completed_at IS NULL",
-      ),
-      ...concurrentIndex(
-        "{{table_prefix}}chain_tail_completed_idx",
-        "{{table_prefix}}job",
-        "chain_type_name, chain_id",
-        "continued_to_id IS NULL AND completed_at IS NOT NULL",
-      ),
-      ...concurrentIndex(
-        "{{table_prefix}}chain_head_idx",
-        "{{table_prefix}}job",
-        "chain_type_name, created_at",
-        "chain_index = 0",
-      ),
-      ...concurrentIndex("{{table_prefix}}job_idx", "{{table_prefix}}job", "type_name, created_at"),
     ],
   },
 ];
@@ -2329,9 +2097,12 @@ ORDER BY t.ord
     },
 
     migrateToLatest: async () => {
+      const legacy = createLegacyUpgrade(stateProvider, applyTemplate, idDataType);
       return createMigrator<TTxContext>({
         migrations,
         store: createMigrationStore(stateProvider, applyTemplate),
+        before: legacy.renameLegacySchemaAside,
+        after: legacy.importLegacySchema,
       }).migrateToLatest();
     },
 

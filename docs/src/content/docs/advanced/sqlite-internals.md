@@ -17,12 +17,28 @@ The adapter creates its schema via `migrateToLatest()`. All table names use a co
 
 The `{tablePrefix}migration` table tracks applied schema migrations:
 
-| Column       | Type   | Description                                                  |
-| ------------ | ------ | ------------------------------------------------------------ |
-| `name`       | `TEXT` | Migration identifier (e.g., `20240101000000_initial_schema`) |
-| `applied_at` | `TEXT` | ISO 8601 timestamp — when the migration was applied          |
+| Column       | Type   | Description                                         |
+| ------------ | ------ | --------------------------------------------------- |
+| `name`       | `TEXT` | Migration identifier (e.g., `001_initial_schema`)   |
+| `applied_at` | `TEXT` | ISO 8601 timestamp — when the migration was applied |
 
 Unlike the PostgreSQL adapter, there is no cross-process migration lease: SQLite's single-writer serialization already makes a second concurrent migrator fail loudly, and multi-process shared-file deployments are not a supported shape.
+
+### Upgrading from 0.15.x
+
+The 0.15.x schema is not migrated in place. `migrateToLatest()` renames the live `{tablePrefix}job`
+and `{tablePrefix}job_blocker` aside to `{tablePrefix}job_old` and `{tablePrefix}job_blocker_old`,
+installs the current schema from scratch — exactly the statements a fresh install runs — imports the
+rows into it a chain at a time, and drops the renamed tables once the row counts match. The 0.15.x
+migration records are dropped with them.
+
+- **The database must already be at v0.15.1.** `migrateToLatest()` refuses an older schema with an
+  error naming the migration it expected. Upgrade to 0.15.1 and run `migrateToLatest()` first.
+- **Stop your workers first**, and back up the database file. Job processing is unavailable while the
+  upgrade runs.
+- **An interrupted upgrade resumes.** Chains are imported whole and in id order, so a re-run picks up
+  from the last imported chain. The renamed tables are only dropped after the imported row counts are
+  verified against them.
 
 ### Job Table
 

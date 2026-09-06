@@ -59,10 +59,10 @@ Primary key: `(job_id, blocked_by_chain_id, index)` — each blocker slot is uni
 
 The `migration` table tracks applied schema migrations:
 
-| Column       | Type          | Description                                                  |
-| ------------ | ------------- | ------------------------------------------------------------ |
-| `name`       | `text`        | Migration identifier (e.g., `20240101000000_initial_schema`) |
-| `applied_at` | `timestamptz` | When the migration was applied                               |
+| Column       | Type          | Description                                       |
+| ------------ | ------------- | ------------------------------------------------- |
+| `name`       | `text`        | Migration identifier (e.g., `001_initial_schema`) |
+| `applied_at` | `timestamptz` | When the migration was applied                    |
 
 ### Migration Lock Table
 
@@ -74,7 +74,24 @@ The `migration_lock` table holds a single-row lease that gives `migrateToLatest(
 | `locked_by`    | `text`        | Owner id of the current migration run |
 | `locked_until` | `timestamptz` | Lease expiry (heartbeat-extended)     |
 
-Before reading the applied set, `migrateToLatest()` claims the lease (stealing it only when expired), heartbeats it every 20s with a 60s TTL while migrations run, and releases it afterwards. Waiting processes poll every second, then re-read the applied set — so a pod that lost the race sees the winner's work and skips, which makes `migrateToLatest()` safe to run from every pod in a rolling deploy. A crashed migrator blocks others only until its lease expires. The lease uses plain autocommit statements, so it works with any state provider — no pinned connection or session state required.
+Before reading the applied set, `migrateToLatest()` claims the lease (stealing it only when expired), heartbeats it every 20s with a 60s TTL while migrations run, and releases it afterwards. Waiting processes poll every second, then re-read the applied set — so a pod that lost the race sees the winner's work and skips, which makes `migrateToLatest()` safe to run from every pod in a rolling deploy. A crashed migrator blocks others only until its lease expires. The lease uses plain autocommit statements, so it works with any state provider — no pinned connection or session state required. The 0.15.x upgrade is the exception to the rolling-deploy part: see [Upgrading from 0.15.x](#upgrading-from-015x).
+
+### Upgrading from 0.15.x
+
+The 0.15.x schema is not migrated in place. `migrateToLatest()` renames the live `{tablePrefix}job`
+and `{tablePrefix}job_blocker` aside to `{tablePrefix}job_old` and `{tablePrefix}job_blocker_old`,
+installs the current schema from scratch — exactly the statements a fresh install runs — imports the
+rows into it a chain at a time, and drops the renamed tables once the row counts match. The
+`{tablePrefix}job_status` enum is dropped with them, as are the 0.15.x migration records.
+
+- **The database must already be at v0.15.1.** `migrateToLatest()` refuses an older schema with an
+  error naming the migration it expected. Upgrade to 0.15.1 and run `migrateToLatest()` first.
+- **Stop your workers first.** Unlike the incremental migrations before it, this is not a rolling
+  deploy: job processing is unavailable while it runs, and old-version workers fail against the new
+  schema. Back up the database before starting.
+- **An interrupted upgrade resumes.** Chains are imported whole and in id order, so a re-run picks up
+  from the last imported chain. The renamed tables are only dropped after the imported row counts are
+  verified against them.
 
 ## Indexes
 

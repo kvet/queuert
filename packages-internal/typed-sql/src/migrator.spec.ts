@@ -12,6 +12,7 @@ type RunEvent =
   | { kind: "statement"; sql: string; inTx: boolean }
   | { kind: "batch"; sql: string; inTx: boolean }
   | { kind: "record"; name: string; inTx: boolean }
+  | { kind: "script"; name: string }
   | { kind: "acquire"; acquired: boolean }
   | { kind: "extend"; extended: boolean | "reject" }
   | { kind: "release" };
@@ -96,10 +97,10 @@ const harness = (
   return { events, applied, store };
 };
 
-const A = "20240101000000_alpha";
-const B = "20240201000000_bravo";
-const C = "20240301000000_charlie";
-const BOOM = "20240401000000_boom";
+const A = "001_alpha";
+const B = "002_bravo";
+const C = "003_charlie";
+const BOOM = "004_boom";
 
 const tx = (name: string): Migration => ({
   name,
@@ -201,7 +202,90 @@ describe("createMigrator", () => {
     });
   });
 
+  describe("before/after scripts", () => {
+    it("runs `before` ahead of the applied-set read and `after` behind the last migration", async () => {
+      const { events, applied, store } = harness();
+      const result = await createMigrator({
+        migrations: [tx(A)],
+        store,
+        before: async () => void events.push({ kind: "script", name: "before" }),
+        after: async () => void events.push({ kind: "script", name: "after" }),
+      }).migrateToLatest();
+
+      expect(result).toEqual({ skipped: [], applied: [A], unrecognized: [] });
+      expect(events).toEqual([
+        { kind: "script", name: "before" },
+        { kind: "begin" },
+        { kind: "commit" },
+        { kind: "begin" },
+        { kind: "statement", sql: A, inTx: true },
+        { kind: "record", name: A, inTx: true },
+        { kind: "commit" },
+        { kind: "script", name: "after" },
+      ]);
+      expect([...applied]).toEqual([A]);
+    });
+
+    it("records nothing for a script itself", async () => {
+      const { events, applied, store } = harness();
+      await createMigrator({
+        migrations: [],
+        store,
+        before: async () => void events.push({ kind: "script", name: "before" }),
+        after: async () => void events.push({ kind: "script", name: "after" }),
+      }).migrateToLatest();
+
+      expect([...applied]).toEqual([]);
+      expect(events.some((e) => e.kind === "record")).toBe(false);
+    });
+
+    it("does not run the migrations when `before` throws", async () => {
+      const { events, applied, store } = harness();
+      await expect(
+        createMigrator({
+          migrations: [tx(A)],
+          store,
+          before: async () => {
+            throw new Error("cannot upgrade");
+          },
+        }).migrateToLatest(),
+      ).rejects.toThrow(/cannot upgrade/);
+
+      expect([...applied]).toEqual([]);
+      expect(events.some((e) => e.kind === "record")).toBe(false);
+    });
+
+    it("aborts a long-running script once the lease is stolen", async () => {
+      const { applied, store } = harness({
+        lock: { acquireResults: [true, false], extendResults: [false] },
+      });
+      await expect(
+        createMigrator({
+          migrations: [],
+          store,
+          lock: { heartbeatIntervalMs: 5 },
+          after: async (assertLockHeld) => {
+            for (let batch = 0; batch < 10; batch++) {
+              assertLockHeld();
+              await new Promise((resolve) => setTimeout(resolve, 20));
+            }
+          },
+        }).migrateToLatest(),
+      ).rejects.toThrow(/another process took over/);
+
+      expect([...applied]).toEqual([]);
+    });
+  });
+
   describe("migration lock", () => {
+    const stretchStatementsPastHeartbeat = (store: MigrationStore<TxCtx>): void => {
+      const base = store.executeMigrationStatement;
+      store.executeMigrationStatement = async (txCtx, statement) => {
+        await base(txCtx, statement);
+        await new Promise((resolve) => setTimeout(resolve, 50));
+      };
+    };
+
     it("acquires the lease before reading the applied set and releases it afterwards", async () => {
       const { events, store } = harness({ lock: {} });
       const result = await createMigrator({ migrations: [tx(A)], store }).migrateToLatest();
@@ -239,11 +323,7 @@ describe("createMigrator", () => {
         type: "transactional",
         statements: [sql(A)],
       };
-      const baseExecute = store.executeMigrationStatement;
-      store.executeMigrationStatement = async (txCtx, statement) => {
-        await baseExecute(txCtx, statement);
-        await new Promise((resolve) => setTimeout(resolve, 50));
-      };
+      stretchStatementsPastHeartbeat(store);
       await createMigrator({
         migrations: [slow],
         store,
@@ -257,11 +337,7 @@ describe("createMigrator", () => {
       const { events, applied, store } = harness({
         lock: { acquireResults: [true, false], extendResults: [false] },
       });
-      const baseExecute = store.executeMigrationStatement;
-      store.executeMigrationStatement = async (txCtx, statement) => {
-        await baseExecute(txCtx, statement);
-        await new Promise((resolve) => setTimeout(resolve, 50));
-      };
+      stretchStatementsPastHeartbeat(store);
       await expect(
         createMigrator({
           migrations: [tx(A), tx(B)],
@@ -278,11 +354,7 @@ describe("createMigrator", () => {
       const { events, applied, store } = harness({
         lock: { extendResults: [false] },
       });
-      const baseExecute = store.executeMigrationStatement;
-      store.executeMigrationStatement = async (txCtx, statement) => {
-        await baseExecute(txCtx, statement);
-        await new Promise((resolve) => setTimeout(resolve, 50));
-      };
+      stretchStatementsPastHeartbeat(store);
       const result = await createMigrator({
         migrations: [tx(A), tx(B)],
         store,
@@ -298,11 +370,7 @@ describe("createMigrator", () => {
       const { applied, store } = harness({
         lock: { extendResults: ["reject"] },
       });
-      const baseExecute = store.executeMigrationStatement;
-      store.executeMigrationStatement = async (txCtx, statement) => {
-        await baseExecute(txCtx, statement);
-        await new Promise((resolve) => setTimeout(resolve, 50));
-      };
+      stretchStatementsPastHeartbeat(store);
       await expect(
         createMigrator({
           migrations: [tx(A), tx(B)],
@@ -318,11 +386,7 @@ describe("createMigrator", () => {
       const { events, applied, store } = harness({
         lock: { acquireResults: [true, false], extendResults: [false] },
       });
-      const baseExecute = store.executeMigrationStatement;
-      store.executeMigrationStatement = async (txCtx, statement) => {
-        await baseExecute(txCtx, statement);
-        await new Promise((resolve) => setTimeout(resolve, 50));
-      };
+      stretchStatementsPastHeartbeat(store);
       const m: Migration = {
         name: A,
         type: "non-transactional",
