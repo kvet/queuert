@@ -94,14 +94,15 @@ export const countByJobTypeNamesGroup: ConformanceGroup<StateConformanceFixture>
           }),
         );
 
-        const { job } = await stateAdapter.withTransaction(async (txCtx) =>
+        const acquired = await stateAdapter.withTransaction(async (txCtx) =>
           stateAdapter.startJobAttempt({ txCtx, typeNames: ["count-done"], workerId: "w1" }),
         );
 
         await stateAdapter.withTransaction(async (txCtx) =>
           stateAdapter.completeJobs({
             txCtx,
-            jobs: [{ jobId: job!.id, completedBy: "w1", output: null }],
+            completedBy: "w1",
+            jobs: [{ jobId: acquired!.id, output: null }],
           }),
         );
 

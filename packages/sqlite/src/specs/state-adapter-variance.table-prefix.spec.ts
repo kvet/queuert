@@ -14,14 +14,14 @@ it("index");
 
 describe("SQLite State Adapter Variance - Custom Table Prefix", () => {
   it("generates UUID job IDs", async ({ stateAdapter }) => {
-    const [{ job }] = await stateAdapter.withTransaction(async (txCtx) =>
+    const [stateChain] = await stateAdapter.withTransaction(async (txCtx) =>
       stateAdapter.createJobs({
         txCtx,
         jobs: [{ typeName: "t", input: null }],
       }),
     );
-    expect(UUID_PATTERN.test(job.id)).toBe(true);
-    expect(UUID_PATTERN.test(job.chainId)).toBe(true);
+    expect(UUID_PATTERN.test(stateChain.head.id)).toBe(true);
+    expect(UUID_PATTERN.test(stateChain.head.chainId)).toBe(true);
   });
 
   it("creates tables with correct prefix", ({ tableNames }) => {

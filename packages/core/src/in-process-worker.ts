@@ -119,40 +119,41 @@ const performJob = async ({
     helpers.stateAdapter.withTransaction,
   );
 
-  let job: StateJob | undefined;
+  let stateJob: Awaited<ReturnType<typeof helpers.stateAdapter.startJobAttempt>>;
   try {
-    ({ job } = await prepareTransactionContext.run(async (txCtx) =>
+    stateJob = await prepareTransactionContext.run(async (txCtx) =>
       helpers.stateAdapter.startJobAttempt({
         txCtx,
         typeNames,
         workerId,
       }),
-    ));
+    );
   } catch (error) {
     await prepareTransactionContext.reject(error);
     throw error;
   }
 
-  if (!job) {
+  if (!stateJob) {
     await prepareTransactionContext.resolve();
     return { job: null };
   }
 
-  const jobTypeProcessor = processors[job.typeName];
+  const jobTypeProcessor = processors[stateJob.typeName];
   if (!jobTypeProcessor) {
-    const error = new Error(`No attempt handler registered for job type "${job.typeName}"`);
+    const error = new Error(`No attempt handler registered for job type "${stateJob.typeName}"`);
     await prepareTransactionContext.reject(error);
     throw error;
   }
 
   return {
-    job,
+    // TODO!!!: why not stateJob?
+    job: stateJob,
     execute: async () => {
       try {
         await runJobProcess({
           helpers,
           attemptHandler: jobTypeProcessor.attemptHandler as any,
-          job,
+          stateJob,
           prepareTransactionContext: prepareTransactionContext as TransactionContext<BaseTxContext>,
           backoffConfig: jobTypeProcessor.backoffConfig ?? defaultBackoffConfig,
           attemptConfig: jobTypeProcessor.attemptConfig ?? defaultAttemptConfig,

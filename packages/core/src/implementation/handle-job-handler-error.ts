@@ -14,14 +14,14 @@ import { type TransactionHooks } from "../transaction-hooks.js";
 export const handleJobHandlerError = async (
   helpers: Helpers,
   {
-    job,
+    stateJob,
     error,
     txCtx,
     transactionHooks,
     backoffConfig,
     workerId,
   }: {
-    job: StateJob;
+    stateJob: StateJob;
     error: unknown;
     txCtx: BaseTxContext;
     transactionHooks: TransactionHooks;
@@ -39,23 +39,26 @@ export const handleJobHandlerError = async (
     return {};
   }
 
-  const schedule: ScheduleOptions = { afterMs: calculateBackoffMs(job.attempt, backoffConfig) };
+  const schedule: ScheduleOptions = {
+    afterMs: calculateBackoffMs(stateJob.attempt, backoffConfig),
+  };
   const errorString = serializeError(error);
 
   const [rescheduledJob] = await helpers.stateAdapter.rescheduleJobs({
     txCtx,
-    jobs: [{ jobId: job.id, schedule, error: errorString }],
+    jobs: [{ jobId: stateJob.id, schedule, error: errorString }],
   });
+
+  // `rescheduleJobs` skips completed and missing jobs, so there may be nothing to report.
+  if (!rescheduledJob) return {};
 
   bufferObservabilityEvent(transactionHooks, () => {
     helpers.observabilityHelper.jobRescheduled(rescheduledJob);
-    helpers.observabilityHelper.jobAttemptFailed(job, {
+    helpers.observabilityHelper.jobAttemptFailed(stateJob, {
       workerId,
       error,
     });
   });
-
-  if (!rescheduledJob) return {};
 
   return { schedule };
 };

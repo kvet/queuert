@@ -155,28 +155,33 @@ WHERE chain_index = 0 AND id > $1 ORDER BY id LIMIT $2`,
     },
   );
 
-  // A whole chain per statement: `chain_id` points back at the head and
-  // `continued_to_id` forward at the successor, so no row order satisfies both —
-  // but foreign keys are checked at statement end, by which point the chain is
-  // complete. `attempt_at` did not exist in v0.15 and a running row may carry no
-  // lease at all; workers are stopped during an upgrade, so every running attempt
-  // is orphaned and starts over from now.
+  // A whole chain per statement: the head row carries the chain's own columns, and
+  // `chain_completed_at` is the completion of the successor-less row — which the
+  // self-join below already identifies as `n.id IS NULL`, so a window function over
+  // the rows the statement reads anyway derives it. Batching by chain also keeps
+  // `job_blocker.job_id`'s foreign key satisfiable. `attempt_at` did not exist in
+  // v0.15 and a running row may carry no lease at all; workers are stopped during an
+  // upgrade, so every running attempt is orphaned and starts over from now.
   const importChainsSql = sql(
     /* sql */ `INSERT INTO {{schema}}.{{table_prefix}}job (
-  id, type_name, chain_id, chain_type_name, chain_index, continued_to_id,
+  id, type_name, chain_id, chain_index, continued_to_id,
   input, output, blocked,
   created_at, scheduled_at, completed_at, completed_by,
   attempt, last_attempt_at, last_attempt_error,
   attempt_at, attempt_by, attempt_until,
-  deduplication_key, chain_trace_context, trace_context)
-SELECT o.id, o.type_name, o.chain_id, o.chain_type_name, o.chain_index, n.id,
+  chain_completed_at, deduplication_key, chain_trace_context, trace_context)
+SELECT o.id, o.type_name, o.chain_id, o.chain_index, n.id,
   o.input, o.output, o.status = 'blocked',
   o.created_at, o.scheduled_at, o.completed_at, o.completed_by,
   o.attempt, o.last_attempt_at, o.last_attempt_error,
   CASE WHEN o.status = 'running' THEN now() END,
   CASE WHEN o.status = 'running' THEN COALESCE(o.leased_by, 'migrated') ELSE o.leased_by END,
   CASE WHEN o.status = 'running' THEN COALESCE(o.leased_until, now()) ELSE o.leased_until END,
-  o.deduplication_key, o.chain_trace_context, o.trace_context
+  CASE WHEN o.chain_index = 0
+    THEN max(o.completed_at) FILTER (WHERE n.id IS NULL) OVER (PARTITION BY o.chain_id) END,
+  CASE WHEN o.chain_index = 0 THEN o.deduplication_key END,
+  CASE WHEN o.chain_index = 0 THEN o.chain_trace_context END,
+  o.trace_context
 FROM {{schema}}.{{table_prefix}}job_old o
 LEFT JOIN {{schema}}.{{table_prefix}}job_old n
   ON n.chain_id = o.chain_id AND n.chain_index = o.chain_index + 1

@@ -1404,6 +1404,12 @@ describe("Logging rollback", () => {
   }) => {
     const jobTypes = defineJobTypes<{
       test: { entry: true; input: null; output: null };
+      dependent: {
+        entry: true;
+        input: null;
+        output: null;
+        blockers: [{ typeName: "test" }];
+      };
     }>();
 
     let unblockErrorThrown = false;
@@ -1450,9 +1456,22 @@ describe("Logging rollback", () => {
     });
 
     const chain = await withTransactionHooks(async (transactionHooks) =>
-      withTransaction(async (txCtx) =>
-        client.createChain({ ...txCtx, transactionHooks, typeName: "test", input: null }),
-      ),
+      withTransaction(async (txCtx) => {
+        const created = await client.createChain({
+          ...txCtx,
+          transactionHooks,
+          typeName: "test",
+          input: null,
+        });
+        await client.createChain({
+          ...txCtx,
+          transactionHooks,
+          typeName: "dependent",
+          input: null,
+          blockers: [created],
+        });
+        return created;
+      }),
     );
 
     await withWorkers([await worker.start()], async () => {
@@ -1483,6 +1502,12 @@ describe("Logging rollback", () => {
   }) => {
     const jobTypes = defineJobTypes<{
       test: { entry: true; input: null; output: { result: number } };
+      dependent: {
+        entry: true;
+        input: null;
+        output: null;
+        blockers: [{ typeName: "test" }];
+      };
     }>();
 
     let unblockErrorThrown = false;
@@ -1513,9 +1538,22 @@ describe("Logging rollback", () => {
     });
 
     const chain = await withTransactionHooks(async (transactionHooks) =>
-      withTransaction(async (txCtx) =>
-        client.createChain({ ...txCtx, transactionHooks, typeName: "test", input: null }),
-      ),
+      withTransaction(async (txCtx) => {
+        const created = await client.createChain({
+          ...txCtx,
+          transactionHooks,
+          typeName: "test",
+          input: null,
+        });
+        await client.createChain({
+          ...txCtx,
+          transactionHooks,
+          typeName: "dependent",
+          input: null,
+          blockers: [created],
+        });
+        return created;
+      }),
     );
 
     log.mockClear();

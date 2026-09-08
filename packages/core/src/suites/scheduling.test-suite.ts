@@ -674,10 +674,10 @@ export const schedulingTestSuite = ({ it }: { it: TestAPI<TestSuiteContext> }): 
       await client.awaitChain(chain, { timeoutMs: 2000, pollIntervalMs: 50 });
     });
 
-    const chainJobs = await stateAdapter.listChainJobs({
+    const chainJobs = await client.listChainJobs({
       chainId: chain.id,
       orderDirection: "asc",
-      page: { limit: 10 },
+      limit: 10,
     });
     const continuation = chainJobs.items[1];
     expect(continuation).toBeDefined();

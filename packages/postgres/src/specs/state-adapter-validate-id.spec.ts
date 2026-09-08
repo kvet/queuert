@@ -77,8 +77,8 @@ describe("validateId", () => {
         generateId: () => `ok-${crypto.randomUUID()}`,
         validateId: (id) => id.startsWith("ok-"),
       });
-      const [{ job }] = await createJob(adapter, "ok-custom");
-      expect(job.id).toBe("ok-custom");
+      const [stateChain] = await createJob(adapter, "ok-custom");
+      expect(stateChain.head.id).toBe("ok-custom");
     } finally {
       await pool.end();
     }

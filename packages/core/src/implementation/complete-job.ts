@@ -22,18 +22,19 @@ export const completeJob = async (
     workerId: string | null;
     output: unknown;
   },
-): Promise<StateJob> => {
-  const [completedJob] = await helpers.stateAdapter.completeJobs({
+): Promise<StateJob & { hasBlockedJobs: boolean }> => {
+  const [completed] = await helpers.stateAdapter.completeJobs({
     txCtx,
-    jobs: [{ jobId: job.id, completedBy: workerId, output }],
+    completedBy: workerId,
+    jobs: [{ jobId: job.id, output }],
   });
 
   bufferJobCompletedEvents(helpers, {
-    completedJob,
+    completedJob: completed,
     output,
     continuation: null,
     transactionHooks,
   });
 
-  return completedJob;
+  return completed;
 };

@@ -1,13 +1,12 @@
 import { describe, expect, it } from "vitest";
 
-import { type StateJob } from "../state-adapter/state-adapter.js";
-import { deriveStatus, mapStatePairToChain } from "./chain.js";
+import { type StateChainInfo, type StateJobInfo } from "../state-adapter/state-adapter.js";
+import { mapStateChainToChain } from "./chain.js";
 
-const completedHead = {
-  id: "job-1",
+const headJob: StateJobInfo = {
+  id: "chain-1",
   chainId: "chain-1",
   typeName: "test",
-  chainTypeName: "test",
   input: { value: 1 },
   output: null,
   createdAt: new Date("2026-01-01T00:00:00Z"),
@@ -20,31 +19,63 @@ const completedHead = {
   attemptUntil: null,
   completedAt: new Date("2026-01-01T00:01:00Z"),
   completedBy: "worker-1",
-  continuedToId: null,
+  continuedToId: "job-2",
   blocked: false,
-  deduplicationKey: null,
-  chainTraceContext: null,
   traceContext: null,
-} satisfies StateJob;
+};
 
-const continuedHead: StateJob = { ...completedHead, continuedToId: "job-2" };
+const chainInfo: StateChainInfo = {
+  id: "chain-1",
+  typeName: "test",
+  deduplicationKey: null,
+  createdAt: new Date("2026-01-01T00:00:00Z"),
+  completedAt: null,
+  traceContext: null,
+};
 
-describe("deriveStatus", () => {
-  it("treats a continued job as a chain that is still running", () => {
-    expect(deriveStatus(continuedHead)).toBe("running");
-  });
-
-  it("treats a terminally completed job as a completed chain", () => {
-    expect(deriveStatus(completedHead)).toBe("completed");
-  });
-});
-
-describe("mapStatePairToChain", () => {
+describe("mapStateChainToChain", () => {
   it("does not fabricate an output for a chain whose head has continued", () => {
-    const chain = mapStatePairToChain([continuedHead, undefined]);
+    const chain = mapStateChainToChain({ ...chainInfo, head: headJob, tail: undefined });
 
     expect(chain.status).toBe("running");
     expect("output" in chain).toBe(false);
     expect("completedAt" in chain).toBe(false);
+  });
+
+  it("reads the chain's completion from the chain, and its output from the tail", () => {
+    const tail: StateJobInfo = {
+      ...headJob,
+      id: "job-2",
+      continuedToId: null,
+      output: { value: 2 },
+      completedAt: new Date("2026-01-01T00:02:00Z"),
+    };
+
+    const chain = mapStateChainToChain({
+      ...chainInfo,
+      completedAt: new Date("2026-01-01T00:02:00Z"),
+      head: headJob,
+      tail,
+    });
+
+    expect(chain).toMatchObject({
+      status: "completed",
+      output: { value: 2 },
+      completedAt: new Date("2026-01-01T00:02:00Z"),
+      input: { value: 1 },
+    });
+  });
+
+  it("reads a single-job chain's output from its head", () => {
+    const soleJob: StateJobInfo = { ...headJob, continuedToId: null, output: { value: 9 } };
+
+    const chain = mapStateChainToChain({
+      ...chainInfo,
+      completedAt: new Date("2026-01-01T00:01:00Z"),
+      head: soleJob,
+      tail: undefined,
+    });
+
+    expect(chain).toMatchObject({ status: "completed", output: { value: 9 } });
   });
 });

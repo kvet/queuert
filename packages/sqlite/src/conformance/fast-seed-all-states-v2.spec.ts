@@ -11,7 +11,7 @@ import { fastSeedAllStatesV2 } from "./fast-seed-all-states-v2.js";
 
 const jobQuery = `
   SELECT
-    type_name, chain_type_name, chain_index,
+    type_name, chain_index,
     input, output,
     blocked, attempt,
     attempt_by, completed_by,
@@ -19,6 +19,7 @@ const jobQuery = `
     deduplication_key,
     chain_trace_context, trace_context,
     continued_to_id IS NOT NULL AS has_continuation,
+    chain_completed_at IS NOT NULL AS has_chain_completion,
     created_at, scheduled_at, attempt_at, attempt_until, completed_at, last_attempt_at
   FROM queuert_job
   ORDER BY type_name, chain_index,

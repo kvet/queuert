@@ -22,13 +22,13 @@ const createJob = async (
   typeName: string,
   input: unknown,
 ) => {
-  const [{ job }] = await stateAdapter.withTransaction(async (txCtx) =>
+  const [stateChain] = await stateAdapter.withTransaction(async (txCtx) =>
     stateAdapter.createJobs({
       txCtx,
       jobs: [{ typeName, input }],
     }),
   );
-  return job;
+  return stateChain.head;
 };
 
 const createContinuation = async (
@@ -40,7 +40,8 @@ const createContinuation = async (
   const [{ continuation }] = await stateAdapter.withTransaction(async (txCtx) =>
     stateAdapter.continueJobs({
       txCtx,
-      jobs: [{ typeName, continueFromId, input, completedBy: "worker-1" }],
+      completedBy: "worker-1",
+      jobs: [{ typeName, continueFromId, input }],
     }),
   );
   return continuation;
@@ -60,7 +61,11 @@ const completeJob = async (
   output: unknown,
 ) =>
   stateAdapter.withTransaction(async (txCtx) =>
-    stateAdapter.completeJobs({ txCtx, jobs: [{ jobId, completedBy: "worker-1", output }] }),
+    stateAdapter.completeJobs({
+      txCtx,
+      completedBy: "worker-1",
+      jobs: [{ jobId, output }],
+    }),
   );
 
 const encodeRawCursor = (payload: unknown) =>
@@ -323,70 +328,6 @@ describe("Dashboard API", () => {
       expect(res.status).toBe(409);
       expect(body.error).toContain("blocker");
     });
-
-    it("cascade deletes chain and its blockers", async () => {
-      const { request, stateAdapter } = await createTestDashboard();
-      const blockerChain = await createJob(stateAdapter, "blocker-type", null);
-      const mainJob = await createJob(stateAdapter, "main-type", null);
-
-      await stateAdapter.withTransaction(async (txCtx) =>
-        stateAdapter.addJobsBlockers({
-          txCtx,
-          jobBlockers: [{ jobId: mainJob.id, blockedByChainIds: [blockerChain.chainId] }],
-        }),
-      );
-
-      const res = await request(`/api/chains/${mainJob.chainId}?cascade=true`, {
-        method: "DELETE",
-      });
-      const body = await parseBody(res);
-
-      expect(res.status).toBe(200);
-      expect(body.deleted).toHaveLength(2);
-
-      const mainDetail = await request(`/api/chains/${mainJob.chainId}`);
-      expect(mainDetail.status).toBe(404);
-
-      const blockerDetail = await request(`/api/chains/${blockerChain.chainId}`);
-      expect(blockerDetail.status).toBe(404);
-    });
-
-    it("cascade delete without blockers deletes only the target chain", async () => {
-      const { request, stateAdapter } = await createTestDashboard();
-      const root = await createJob(stateAdapter, "test-type", null);
-
-      const res = await request(`/api/chains/${root.chainId}?cascade=true`, {
-        method: "DELETE",
-      });
-      const body = await parseBody(res);
-
-      expect(res.status).toBe(200);
-      expect(body.deleted).toHaveLength(1);
-    });
-
-    it("cascade delete still fails when resolved set has external dependents", async () => {
-      const { request, stateAdapter } = await createTestDashboard();
-      const sharedBlocker = await createJob(stateAdapter, "shared-blocker", null);
-      const chainA = await createJob(stateAdapter, "chain-a", null);
-      const chainB = await createJob(stateAdapter, "chain-b", null);
-
-      await stateAdapter.withTransaction(async (txCtx) =>
-        stateAdapter.addJobsBlockers({
-          txCtx,
-          jobBlockers: [
-            { jobId: chainA.id, blockedByChainIds: [sharedBlocker.chainId] },
-            { jobId: chainB.id, blockedByChainIds: [sharedBlocker.chainId] },
-          ],
-        }),
-      );
-
-      const res = await request(`/api/chains/${chainA.chainId}?cascade=true`, {
-        method: "DELETE",
-      });
-
-      expect(res.status).toBe(409);
-      expect((await parseBody(res)).error).toContain("blocker");
-    });
   });
 
   describe("GET /api/chain-types", () => {
@@ -550,8 +491,6 @@ describe("Dashboard API", () => {
         [pending.id, blockerChain.id, continuation.id].sort(),
       );
       expect(await ids("running")).toEqual([running.id]);
-      expect(await ids("completed-terminal")).toEqual([terminal.id]);
-      expect(await ids("completed-continued")).toEqual([continued.id]);
       expect(await ids("completed")).toEqual([terminal.id, continued.id].sort());
       expect(await ids("bogus-status")).toHaveLength(7);
     });
@@ -714,18 +653,18 @@ describe("Dashboard API", () => {
   describe("POST /api/jobs/:jobId/reschedule", () => {
     it("reschedules a pending future-scheduled job to now", async () => {
       const { request, stateAdapter } = await createTestDashboard();
-      const [{ job }] = await stateAdapter.withTransaction(async (txCtx) =>
+      const [stateChain] = await stateAdapter.withTransaction(async (txCtx) =>
         stateAdapter.createJobs({
           txCtx,
           jobs: [{ typeName: "scheduled-type", input: null, schedule: { afterMs: 60_000 } }],
         }),
       );
 
-      const res = await request(`/api/jobs/${job.id}/reschedule`, { method: "POST" });
+      const res = await request(`/api/jobs/${stateChain.head.id}/reschedule`, { method: "POST" });
       const body = await parseBody(res);
 
       expect(res.status).toBe(200);
-      expect(body.job.id).toBe(job.id);
+      expect(body.job.id).toBe(stateChain.head.id);
     });
 
     it("returns 404 for missing job", async () => {

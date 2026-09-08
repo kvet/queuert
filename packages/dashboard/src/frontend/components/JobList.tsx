@@ -23,7 +23,6 @@ export function JobList() {
   const effectiveStatus = createMemo(() => {
     const s = status();
     if (s === "blocked" || s === "pending-unblocked") return "pending";
-    if (s === "completed-terminal" || s === "completed-continued") return "completed";
     return s;
   });
 
@@ -186,8 +185,6 @@ export function JobList() {
           <option value="blocked">Pending (blocked)</option>
           <option value="running">Running</option>
           <option value="completed">Completed</option>
-          <option value="completed-terminal">Completed (terminal)</option>
-          <option value="completed-continued">Completed (continued)</option>
         </select>
         <select
           value={orderBy() || orderByOptions()[0].value}

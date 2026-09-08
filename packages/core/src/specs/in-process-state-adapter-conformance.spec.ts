@@ -24,14 +24,14 @@ describe("In-Process State Adapter Conformance", () => {
   });
 
   conformanceIt("generates UUID job IDs", async ({ stateAdapter }) => {
-    const [{ job }] = await stateAdapter.withTransaction(async (txCtx) =>
+    const [stateChain] = await stateAdapter.withTransaction(async (txCtx) =>
       stateAdapter.createJobs({
         txCtx,
         jobs: [{ typeName: "t", input: null }],
       }),
     );
-    expect(UUID_PATTERN.test(job.id)).toBe(true);
-    expect(UUID_PATTERN.test(job.chainId)).toBe(true);
+    expect(UUID_PATTERN.test(stateChain.head.id)).toBe(true);
+    expect(UUID_PATTERN.test(stateChain.head.chainId)).toBe(true);
   });
 
   conformanceIt("withSavepoint outside a transaction throws", async ({ stateAdapter }) => {

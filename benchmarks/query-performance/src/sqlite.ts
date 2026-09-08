@@ -12,6 +12,8 @@ import { observabilityCoverageGroups, operationalCoverageGroups } from "queuert/
 
 const ITERATIONS = 10;
 const EXPLANATIONS_DIR = new URL("../explanations/sqlite", import.meta.url).pathname;
+const RESULTS_DIR = new URL("../results", import.meta.url).pathname;
+const RESULTS_FILE = `${RESULTS_DIR}/sqlite.txt`;
 
 const parseScale = (): number => {
   const flag = process.argv.find((a) => a.startsWith("--scale="));
@@ -27,6 +29,12 @@ const stats = (times: number[]) => ({
 });
 
 const fmt = (ms: number) => `${ms.toFixed(2)}ms`;
+
+const resultLines: string[] = [];
+const report = (line = "") => {
+  console.log(line);
+  resultLines.push(line);
+};
 
 type CapturedQuery = { id: string | undefined; sql: string; plan: string[] };
 
@@ -128,12 +136,12 @@ rmSync(EXPLANATIONS_DIR, { recursive: true, force: true });
 mkdirSync(EXPLANATIONS_DIR, { recursive: true });
 writeFileSync(`${EXPLANATIONS_DIR}/_table_sizes.txt`, sizeLines.join("\n") + "\n");
 
-console.log("═══════════════════════════════════════════════════════════════════════════════════");
-console.log("  QUERY PERFORMANCE — SQLITE (better-sqlite3)");
-console.log("═══════════════════════════════════════════════════════════════════════════════════");
+report("═══════════════════════════════════════════════════════════════════════════════════");
+report("  QUERY PERFORMANCE — SQLITE (better-sqlite3)");
+report("═══════════════════════════════════════════════════════════════════════════════════");
 
 for (const group of [...operationalCoverageGroups, ...observabilityCoverageGroups]) {
-  console.log(`  ${group.name}`);
+  report(`  ${group.name}`);
   for (const testCase of group.cases) {
     const times: number[] = [];
     let planCapture: CapturedQuery[] = [];
@@ -147,7 +155,7 @@ for (const group of [...operationalCoverageGroups, ...observabilityCoverageGroup
     }
     times.sort((a, b) => a - b);
     const s = stats(times);
-    console.log(
+    report(
       `    ${testCase.key.padEnd(50)} p50=${fmt(s.p50).padStart(10)}  p95=${fmt(s.p95).padStart(10)}  max=${fmt(s.max).padStart(10)}`,
     );
 
@@ -165,7 +173,12 @@ for (const group of [...operationalCoverageGroups, ...observabilityCoverageGroup
     ].join("\n\n");
     writeFileSync(filePath, content + "\n");
   }
-  console.log("");
+  report("");
 }
+
+mkdirSync(RESULTS_DIR, { recursive: true });
+writeFileSync(RESULTS_FILE, [`-- scale=${scale}`, "", ...resultLines].join("\n") + "\n");
+console.log(`  Results written to ${RESULTS_FILE}`);
+console.log(`  Explanations written to ${EXPLANATIONS_DIR}\n`);
 
 db.close();

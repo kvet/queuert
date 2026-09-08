@@ -17,41 +17,55 @@ The adapter creates its schema via `migrateToLatest()`. All objects live under a
 
 The `job` table stores all job state:
 
-| Column                | Type                           | Description                                                                                                                                     |
-| --------------------- | ------------------------------ | ----------------------------------------------------------------------------------------------------------------------------------------------- |
-| `id`                  | configurable (default: `uuid`) | Primary key. Type is set via `idType`; values are generated in JS via `generateId`                                                              |
-| `type_name`           | `text`                         | Job type identifier                                                                                                                             |
-| `chain_id`            | same as `id`                   | Foreign key to head job — every job in a chain points to the head                                                                               |
-| `chain_type_name`     | `text`                         | Type name of the chain                                                                                                                          |
-| `chain_index`         | `integer`                      | Position in chain (0 for the head, incrementing for continuations)                                                                              |
-| `continued_to_id`     | same as `id`                   | FK to the next job in the chain — non-null exactly when this job has a successor (set transactionally when `continueWith` inserts the next row) |
-| `input`               | `jsonb`                        | Job input data                                                                                                                                  |
-| `output`              | `jsonb`                        | Completion output (null until completed)                                                                                                        |
-| `blocked`             | `boolean`                      | Whether the job is waiting on blockers. Blocked jobs are logically pending but excluded from acquisition                                        |
-| `created_at`          | `timestamptz`                  | When the job was created                                                                                                                        |
-| `scheduled_at`        | `timestamptz`                  | Earliest time the job can be acquired                                                                                                           |
-| `completed_at`        | `timestamptz`                  | When the job completed (null until completed)                                                                                                   |
-| `completed_by`        | `text`                         | Worker ID that completed the job (null for workerless)                                                                                          |
-| `attempt`             | `integer`                      | Number of processing attempts (starts at 0)                                                                                                     |
-| `last_attempt_at`     | `timestamptz`                  | When the last attempt started                                                                                                                   |
-| `last_attempt_error`  | `jsonb`                        | Error from last failed attempt                                                                                                                  |
-| `attempt_at`          | `timestamptz`                  | When the current attempt started (null when idle)                                                                                               |
-| `attempt_by`          | `text`                         | Worker ID holding the current attempt                                                                                                           |
-| `attempt_until`       | `timestamptz`                  | Attempt expiry time                                                                                                                             |
-| `deduplication_key`   | `text`                         | Key for chain deduplication                                                                                                                     |
-| `chain_trace_context` | `text`                         | W3C traceparent                                                                                                                                 |
-| `trace_context`       | `text`                         | W3C traceparent                                                                                                                                 |
+// TODO!!!: WTF is 'same as id'???
+
+| Column                | Type                           | Description                                                                                                                                               |
+| --------------------- | ------------------------------ | --------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `id`                  | configurable (default: `uuid`) | Primary key. Type is set via `idType`; values are generated in JS via `generateId`                                                                        |
+| `type_name`           | `text`                         | Job type identifier                                                                                                                                       |
+| `chain_id`            | same as `id`                   | The head job's id — every job in a chain points to the head. No foreign key (see [Dropped foreign keys](#dropped-foreign-keys))                           |
+| `chain_index`         | `integer`                      | Position in chain (0 for the head, incrementing for continuations)                                                                                        |
+| `continued_to_id`     | same as `id`                   | The next job in the chain — non-null exactly when this job has a successor (set transactionally when `continueWith` inserts the next row). No foreign key |
+| `input`               | `jsonb`                        | Job input data                                                                                                                                            |
+| `output`              | `jsonb`                        | Completion output (null until completed)                                                                                                                  |
+| `blocked`             | `boolean`                      | Whether the job is waiting on blockers. Blocked jobs are logically pending but excluded from acquisition                                                  |
+| `created_at`          | `timestamptz`                  | When the job was created                                                                                                                                  |
+| `scheduled_at`        | `timestamptz`                  | Earliest time the job can be acquired                                                                                                                     |
+| `completed_at`        | `timestamptz`                  | When the job completed (null until completed)                                                                                                             |
+| `completed_by`        | `text`                         | Worker ID that completed the job (null for workerless)                                                                                                    |
+| `attempt`             | `integer`                      | Number of processing attempts (starts at 0)                                                                                                               |
+| `last_attempt_at`     | `timestamptz`                  | When the last attempt started                                                                                                                             |
+| `last_attempt_error`  | `jsonb`                        | Error from last failed attempt                                                                                                                            |
+| `attempt_at`          | `timestamptz`                  | When the current attempt started (null when idle)                                                                                                         |
+| `attempt_by`          | `text`                         | Worker ID holding the current attempt                                                                                                                     |
+| `attempt_until`       | `timestamptz`                  | Attempt expiry time                                                                                                                                       |
+| `chain_completed_at`  | `timestamptz`                  | **Head rows only.** When the chain completed (null while running). Set on the head when the job that ends the chain completes                             |
+| `deduplication_key`   | `text`                         | **Head rows only.** Key for chain deduplication                                                                                                           |
+| `chain_trace_context` | `text`                         | **Head rows only.** W3C traceparent for the chain                                                                                                         |
+| `trace_context`       | `text`                         | W3C traceparent for this job                                                                                                                              |
+
+The head row is the chain: its `type_name` is the chain's type, its `created_at` the chain's creation, and `chain_completed_at` the chain's completion. Continuation rows carry none of the chain columns, so no chain fact is stored twice.
+
+Columns are declared `timestamptz → integer → boolean → id → text/jsonb` so the fixed-width values sit together and stop paying alignment padding around the `jsonb` payloads.
+
+// TODO!!!: WTF this section? We show the current state in the docs and not historic ruminations of llm
+
+### Dropped foreign keys
+
+Neither `chain_id` nor `continued_to_id` has a foreign key, and neither does `job_blocker.blocked_by_chain_id`. A referential-integrity check takes a `KEY SHARE` lock on the parent row, and RI checks have no `SKIP LOCKED`. For `blocked_by_chain_id` that lock points cross-transaction at another chain's head row — the row job acquisition holds `FOR UPDATE` — so an insert would wait for the length of a job handler. `addJobsBlockers` performs that existence check itself and throws `ChainNotFoundError`, which rolls the transaction back exactly as the constraint did. `job_blocker.job_id` keeps its foreign key: its parent is always a row the same transaction just inserted, so its `KEY SHARE` never conflicts.
+
+That wait is reduced rather than abolished. `addJobsBlockers` still takes `FOR UPDATE` on the blocker chain's head, and a locked read of a job now covers that head too, so registering a blocker on a chain that is inside a `step` or `complete` window waits for that window. What is gone is the wait for a whole handler: the head is locked just before completion rather than for the length of the attempt.
 
 ### Job Blocker Table
 
 The `job_blocker` table tracks dependencies between jobs and chains:
 
-| Column                | Type                     | Description                      |
-| --------------------- | ------------------------ | -------------------------------- |
-| `job_id`              | foreign key to `job(id)` | The blocked job                  |
-| `blocked_by_chain_id` | foreign key to `job(id)` | Head job ID of the blocker chain |
-| `index`               | `integer`                | Position in the blockers array   |
-| `trace_context`       | `text`                   | W3C traceparent                  |
+| Column                | Type                     | Description                                                                                          |
+| --------------------- | ------------------------ | ---------------------------------------------------------------------------------------------------- |
+| `job_id`              | foreign key to `job(id)` | The blocked job                                                                                      |
+| `blocked_by_chain_id` | same as `id`             | Head job ID of the blocker chain. No foreign key (see [Dropped foreign keys](#dropped-foreign-keys)) |
+| `index`               | `integer`                | Position in the blockers array                                                                       |
+| `trace_context`       | `text`                   | W3C traceparent                                                                                      |
 
 Primary key: `(job_id, blocked_by_chain_id, index)` — each blocker slot is unique.
 
@@ -99,19 +113,18 @@ All indexes use partial conditions (WHERE clauses) to minimize size and target s
 
 ### Job Table
 
-| Index                      | Definition                                                                                        | Purpose                      |
-| -------------------------- | ------------------------------------------------------------------------------------------------- | ---------------------------- |
-| `job_deduplication_idx`    | `(deduplication_key, created_at DESC) WHERE deduplication_key IS NOT NULL AND chain_index = 0`    | Deduplication lookup         |
-| `job_continuation_idx`     | `UNIQUE (continued_to_id) WHERE continued_to_id IS NOT NULL`                                      | Successor uniqueness         |
-| `chain_index_idx`          | `UNIQUE (chain_id, chain_index)`                                                                  | Chain position uniqueness    |
-| `job_idx`                  | `(type_name, created_at)`                                                                         | All jobs by type and time    |
-| `job_pending_idx`          | `(type_name, scheduled_at) WHERE attempt_at IS NULL AND completed_at IS NULL`                     | Pending job listing          |
-| `job_ready_idx`            | `(type_name, scheduled_at) WHERE blocked = false AND attempt_at IS NULL AND completed_at IS NULL` | Job acquisition              |
-| `job_running_idx`          | `(type_name, attempt_until) WHERE attempt_at IS NOT NULL AND completed_at IS NULL`                | Attempt reclamation          |
-| `job_completed_idx`        | `(type_name, completed_at) WHERE completed_at IS NOT NULL`                                        | Completed jobs and chains    |
-| `chain_head_idx`           | `(chain_type_name, created_at) WHERE chain_index = 0`                                             | Chain heads by type and time |
-| `chain_tail_running_idx`   | `(chain_type_name, chain_id) WHERE continued_to_id IS NULL AND completed_at IS NULL`              | Running chain tail lookup    |
-| `chain_tail_completed_idx` | `(chain_type_name, chain_id) WHERE continued_to_id IS NULL AND completed_at IS NOT NULL`          | Completed chain tail lookup  |
+| Index                   | Definition                                                                                        | Purpose                   |
+| ----------------------- | ------------------------------------------------------------------------------------------------- | ------------------------- |
+| `job_deduplication_idx` | `(deduplication_key, created_at DESC) WHERE deduplication_key IS NOT NULL AND chain_index = 0`    | Deduplication lookup      |
+| `chain_index_idx`       | `UNIQUE (chain_id, chain_index) WHERE chain_index > 0`                                            | Chain position uniqueness |
+| `job_idx`               | `(type_name, created_at)`                                                                         | All jobs by type and time |
+| `job_pending_idx`       | `(type_name, scheduled_at) WHERE attempt_at IS NULL AND completed_at IS NULL`                     | Pending job listing       |
+| `job_ready_idx`         | `(type_name, scheduled_at) WHERE blocked = false AND attempt_at IS NULL AND completed_at IS NULL` | Job acquisition           |
+| `job_running_idx`       | `(type_name, attempt_until) WHERE attempt_at IS NOT NULL AND completed_at IS NULL`                | Attempt reclamation       |
+| `job_completed_idx`     | `(type_name, completed_at) WHERE completed_at IS NOT NULL`                                        | Completed job listing     |
+| `chain_idx`             | `(type_name, created_at) WHERE chain_index = 0`                                                   | Chains by type and time   |
+| `chain_running_idx`     | `(type_name, created_at) WHERE chain_index = 0 AND chain_completed_at IS NULL`                    | Running chain listing     |
+| `chain_completed_idx`   | `(type_name, chain_completed_at) WHERE chain_index = 0 AND chain_completed_at IS NOT NULL`        | Completed chain listing   |
 
 ### Job Blocker Table
 

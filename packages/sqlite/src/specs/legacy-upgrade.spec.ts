@@ -238,7 +238,7 @@ const jobContract: ColumnContract = {
     { from: "leased_by", to: "attempt_by" },
     { from: "leased_until", to: "attempt_until" },
   ],
-  drop: ["status"],
+  drop: ["status", "chain_type_name"],
   add: [
     {
       column: "continued_to_id",
@@ -271,8 +271,37 @@ const jobContract: ColumnContract = {
       derive: (after, beforeRow) =>
         (String(beforeRow.status) === "running") === (after !== null && after !== undefined),
     },
+    {
+      column: "chain_completed_at",
+      // A chain column: on the head row only, and equal to the tail's completed_at.
+      derive: (after, beforeRow, snapshot) => {
+        if (Number(beforeRow.chain_index) !== 0) return after === null || after === undefined;
+        const chainId = String(beforeRow.chain_id);
+        let tail: Readonly<ReconcilerRow> | undefined;
+        for (const [, row] of snapshot) {
+          if (String(row.chain_id) !== chainId) continue;
+          if (!tail || Number(row.chain_index) > Number(tail.chain_index)) tail = row;
+        }
+        return String(after ?? null) === String(tail?.completed_at ?? null);
+      },
+    },
   ],
   inPlace: [
+    // The chain columns move to the head row: a continuation keeps neither.
+    {
+      column: "deduplication_key",
+      predicate: (after, beforeRow) =>
+        Number(beforeRow.chain_index) === 0
+          ? after === (beforeRow.deduplication_key ?? null)
+          : after === null || after === undefined,
+    },
+    {
+      column: "chain_trace_context",
+      predicate: (after, beforeRow) =>
+        Number(beforeRow.chain_index) === 0
+          ? after === (beforeRow.chain_trace_context ?? null)
+          : after === null || after === undefined,
+    },
     {
       column: "attempt_by",
       predicate: (after, beforeRow) =>
@@ -403,14 +432,19 @@ describe("v0.15.1 upgrade path", () => {
         }),
       );
       expect(chainJobs.length).toBe(sentinels.chainLength);
-      expect(chainJobs.every((job, i) => (job.input as { n: number }).n === i)).toBe(true);
+      expect(chainJobs.every((stateJob, i) => (stateJob.input as { n: number }).n === i)).toBe(
+        true,
+      );
+      expect(chainJobs.every((stateJob) => stateJob.chain.id === sentinels.chainId)).toBe(true);
+      // The chain is still running, so nothing set its head row's chain_completed_at.
+      expect(chainJobs[0].chain.completedAt).toBeNull();
       for (let i = 0; i < chainJobs.length - 1; i++) {
         expect(chainJobs[i].continuedToId).toBe(chainJobs[i + 1].id);
       }
       expect(chainJobs[chainJobs.length - 1].continuedToId).toBeNull();
 
       const [blockerChain] = await adapter.getJobBlockers({ jobId: sentinels.blockedJobId });
-      expect(blockerChain[0].chainId).toBe(sentinels.fanInBlockerId);
+      expect(blockerChain.id).toBe(sentinels.fanInBlockerId);
       const [fanIn] = await query<{ c: number }>(
         provider,
         "SELECT count(*) AS c FROM queuert_job_blocker WHERE blocked_by_chain_id = ?",
@@ -421,12 +455,15 @@ describe("v0.15.1 upgrade path", () => {
       const [completed] = await adapter.getJobs({ jobIds: [sentinels.completedJobId] });
       expect(completed?.completedAt).not.toBeNull();
       expect(completed?.output).toMatchObject({ ok: true });
+      // A completed chain carries its completion on the head row the import derived it onto.
+      expect(completed?.chain.completedAt).not.toBeNull();
 
       const [running] = await adapter.getJobs({ jobIds: [sentinels.runningJobId] });
       expect(running?.attemptAt).not.toBeNull();
       expect(running?.attemptBy).not.toBeNull();
       expect(running?.attemptUntil).not.toBeNull();
       expect(running?.completedAt).toBeNull();
+      expect(running?.chain.completedAt).toBeNull();
 
       const [retried] = await adapter.getJobs({ jobIds: [sentinels.retriedJobId] });
       expect(retried?.completedAt).toBeNull();

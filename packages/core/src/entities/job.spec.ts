@@ -1,13 +1,21 @@
 import { describe, expect, expectTypeOf, it } from "vitest";
 
-import { type StateJob } from "../state-adapter/state-adapter.js";
+import { type StateJobInfo } from "../state-adapter/state-adapter.js";
 import { type AnyJob, deriveStatus, mapStateJobToJob } from "./job.js";
 
-const pendingStateJob = {
+const chainInfo = {
+  id: "chain-1",
+  typeName: "test",
+  deduplicationKey: null,
+  createdAt: new Date("2026-01-01T00:00:00Z"),
+  completedAt: null,
+  traceContext: null,
+};
+
+const pendingJobInfo: StateJobInfo = {
   id: "job-1",
   chainId: "chain-1",
   typeName: "test",
-  chainTypeName: "test",
   input: { value: 1 },
   output: null,
   createdAt: new Date("2026-01-01T00:00:00Z"),
@@ -22,12 +30,12 @@ const pendingStateJob = {
   completedBy: null,
   continuedToId: null,
   blocked: false,
-  deduplicationKey: null,
-  chainTraceContext: null,
   traceContext: null,
-} satisfies StateJob;
+};
 
-const runningStateJob: StateJob = {
+const pendingStateJob = { ...pendingJobInfo, chain: chainInfo };
+
+const runningStateJob = {
   ...pendingStateJob,
   attempt: 1,
   attemptAt: new Date("2026-01-01T00:00:30Z"),

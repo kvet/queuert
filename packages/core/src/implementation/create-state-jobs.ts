@@ -9,7 +9,12 @@ import {
 } from "../helpers/observability-hooks.js";
 import { type ObservabilityHelper } from "../observability-adapter/observability-helper.js";
 import { type Helpers } from "../setup-helpers.js";
-import { type BaseTxContext, type StateJob } from "../state-adapter/state-adapter.js";
+import {
+  type BaseTxContext,
+  type StateChain,
+  type StateJob,
+  type StateJobInfo,
+} from "../state-adapter/state-adapter.js";
 import { type TransactionHooks } from "../transaction-hooks.js";
 
 const MAX_BLOCKERS_PER_JOB = 100;
@@ -52,23 +57,24 @@ const finalizeCreatedJobs = async (
   }: {
     parsed: ParsedEntry[];
     spanHandles: JobSpanHandle[];
-    createResults: { job: StateJob; deduplicated: boolean }[];
+    createResults: (StateChain & { deduplicated: boolean })[];
     isChainHead: boolean;
     txCtx: BaseTxContext;
     transactionHooks: TransactionHooks;
   },
-): Promise<{ job: StateJob; deduplicated: boolean }[]> => {
+): Promise<(StateChain & { deduplicated: boolean })[]> => {
   try {
-    const jobs: StateJob[] = createResults.map((r) => r.job);
+    // Mutable copy: head job info may be updated by addJobsBlockers.
+    const stateChains: StateChain[] = createResults.map(({ deduplicated: _, ...chain }) => chain);
     const perJobIncompleteBlockerChainIds: string[][] = parsed.map(() => []);
 
     for (let i = 0; i < createResults.length; i++) {
       if (createResults[i].deduplicated) {
         spanHandles[i]?.end({
           status: "deduplicated",
-          chainId: jobs[i].chainId,
-          jobId: jobs[i].id,
-          existingChainTraceContext: jobs[i].chainTraceContext,
+          chainId: stateChains[i].id,
+          jobId: stateChains[i].head.id,
+          existingChainTraceContext: stateChains[i].traceContext,
         });
       }
     }
@@ -88,9 +94,9 @@ const finalizeCreatedJobs = async (
         spanHandles[i]
           ? blockers.map((blocker, bi) =>
               helpers.observabilityHelper.startBlockerSpan({
-                chainId: jobs[i].chainId,
-                chainTypeName: jobs[i].chainTypeName,
-                jobId: jobs[i].id,
+                chainId: stateChains[i].id,
+                chainTypeName: stateChains[i].typeName,
+                jobId: stateChains[i].head.id,
                 jobTypeName: parsed[i].typeName,
                 jobTraceContext: spanHandles[i]!.getTraceContext(),
                 blockerChainId: blocker.id,
@@ -104,7 +110,7 @@ const finalizeCreatedJobs = async (
 
     if (blockerIndices.length > 0) {
       const blockerParams = blockerIndices.map((i, bi) => ({
-        jobId: jobs[i].id,
+        jobId: stateChains[i].head.id,
         blockedByChainIds: parsed[i].blockers!.map((b) => b.id),
         blockerTraceContexts: blockerSpanHandlesPerEntry[bi].map(
           (h) => h?.getTraceContext() ?? null,
@@ -123,15 +129,18 @@ const finalizeCreatedJobs = async (
         const blockerChainIds = blockerChains.map((b) => b.id);
         const blockerSpanHandlesList = blockerSpanHandlesPerEntry[bi];
 
-        jobs[i] = result.job;
-        perJobIncompleteBlockerChainIds[i] = result.incompleteBlockerChainIds;
+        // addJobsBlockers returns StateJob & { blockers }; extract the updated job info.
+        const { chain: _chain, blockers: resultBlockers, ...updatedJobInfo } = result;
+        stateChains[i] = { ...stateChains[i], head: updatedJobInfo };
+        const incomplete = resultBlockers.filter((b) => b.completedAt === null);
+        perJobIncompleteBlockerChainIds[i] = incomplete.map((b) => b.id);
 
-        const incompleteSet = new Set(result.incompleteBlockerChainIds);
+        const incompleteSet = new Set(perJobIncompleteBlockerChainIds[i]);
         blockerSpanHandlesList.forEach((handle, hi) => {
           if (!handle) return;
           bufferObservabilityEvent(transactionHooks, () => {
             handle.end({
-              blockerChainTraceContext: result.blockerChainTraceContexts[hi],
+              blockerChainTraceContext: resultBlockers[hi].traceContext,
             });
           });
           if (!incompleteSet.has(blockerChainIds[hi])) {
@@ -149,7 +158,7 @@ const finalizeCreatedJobs = async (
     for (let i = 0; i < parsed.length; i++) {
       if (createResults[i].deduplicated) continue;
 
-      const job = jobs[i];
+      const stateChain = stateChains[i];
       const jobInput = parsed[i];
       const blockerChains = jobInput.blockers ?? [];
 
@@ -157,7 +166,11 @@ const finalizeCreatedJobs = async (
       helpers.jobTypes.validateBlockers(jobInput.typeName, blockerRefs);
 
       bufferObservabilityEvent(transactionHooks, () =>
-        spanHandles[i]?.end({ status: "created", chainId: job.chainId, jobId: job.id }),
+        spanHandles[i]?.end({
+          status: "created",
+          chainId: stateChain.id,
+          jobId: stateChain.head.id,
+        }),
       );
 
       if (spanHandles[i]) {
@@ -168,12 +181,13 @@ const finalizeCreatedJobs = async (
 
       if (isChainHead) {
         bufferObservabilityEvent(transactionHooks, () => {
-          helpers.observabilityHelper.chainCreated(job, { input: jobInput.input });
+          helpers.observabilityHelper.chainCreated(stateChain, { input: jobInput.input });
         });
       }
 
+      const stateJob: StateJob = { ...stateChain.head, chain: stateChain };
       bufferObservabilityEvent(transactionHooks, () => {
-        helpers.observabilityHelper.jobCreated(job, {
+        helpers.observabilityHelper.jobCreated(stateJob, {
           input: jobInput.input,
           blockers: blockerChains,
         });
@@ -184,17 +198,17 @@ const finalizeCreatedJobs = async (
         const incompleteBlockerSet = new Set(incompleteBlockerChainIds);
         const incompleteBlockerChains = blockerChains.filter((b) => incompleteBlockerSet.has(b.id));
         bufferObservabilityEvent(transactionHooks, () => {
-          helpers.observabilityHelper.jobBlocked(job, {
+          helpers.observabilityHelper.jobBlocked(stateJob, {
             blockedByChains: incompleteBlockerChains,
           });
         });
       }
 
-      bufferNotifyJobScheduled(transactionHooks, helpers.notifyAdapter, job);
+      bufferNotifyJobScheduled(transactionHooks, helpers.notifyAdapter, stateJob);
     }
 
     return parsed.map((_, i) => ({
-      job: jobs[i],
+      ...stateChains[i],
       deduplicated: createResults[i].deduplicated,
     }));
   } catch (error) {
@@ -252,7 +266,7 @@ export const createStateChains = async (
     txCtx: BaseTxContext;
     transactionHooks: TransactionHooks;
   },
-): Promise<{ job: StateJob; deduplicated: boolean }[]> => {
+): Promise<(StateChain & { deduplicated: boolean })[]> => {
   if (chains.length === 0) return [];
 
   const { parsed, spanHandles } = prepareJobs(helpers, chains, (entry) =>
@@ -302,43 +316,45 @@ export const continueStateJobs = async (
     txCtx: BaseTxContext;
     transactionHooks: TransactionHooks;
   },
-): Promise<{ completedJob: StateJob; continuation: StateJob }> => {
+): Promise<{ completedJob: StateJob; continuation: StateJobInfo }> => {
   const { parsed, spanHandles } = prepareJobs(helpers, [job], () =>
     helpers.observabilityHelper.startJobSpan({
-      chainTypeName: fromJob.chainTypeName,
+      chainTypeName: fromJob.chain.typeName,
       jobTypeName: job.typeName,
       isChainHead: false,
-      originChainTraceContext: fromJob.chainTraceContext,
+      originChainTraceContext: fromJob.chain.traceContext,
       originTraceContext: fromJob.traceContext,
     }),
   );
   const [spanHandle] = spanHandles;
 
-  const [{ job: completedJob, continuation }] = await runCreate(spanHandles, async () =>
+  const [{ continuation, ...completedJob }] = await runCreate(spanHandles, async () =>
     helpers.stateAdapter.continueJobs({
       txCtx,
+      completedBy: workerId,
       jobs: [
         {
           id: job.id,
           typeName: job.typeName,
           input: parsed[0].parsedInput,
           schedule: job.schedule,
-          chainTraceContext: spanHandle?.getChainTraceContext() ?? null,
           traceContext: spanHandle?.getTraceContext() ?? null,
           continueFromId: fromJob.id,
-          completedBy: workerId,
         },
       ],
     }),
   );
 
+  // The continuation shares the chain of the job it continues.
   const [result] = await finalizeCreatedJobs(helpers, {
     parsed,
     spanHandles,
-    createResults: [{ job: continuation, deduplicated: false }],
+    createResults: [
+      { ...completedJob.chain, head: continuation, tail: undefined, deduplicated: false },
+    ],
     isChainHead: false,
     txCtx,
     transactionHooks,
   });
-  return { completedJob, continuation: result.job };
+  return { completedJob, continuation: result.head };
 };

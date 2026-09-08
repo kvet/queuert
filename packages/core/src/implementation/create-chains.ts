@@ -1,4 +1,4 @@
-import { type AnyChain, type Chain, mapStatePairToChain } from "../entities/chain.js";
+import { type AnyChain, type Chain, mapStateChainToChain } from "../entities/chain.js";
 import { type DeduplicationOptions } from "../entities/deduplication.js";
 import { type ScheduleOptions } from "../entities/schedule.js";
 import { type Helpers } from "../setup-helpers.js";
@@ -47,7 +47,7 @@ export const createChains = async (
   });
 
   return results.map((r) => ({
-    ...mapStatePairToChain([r.job, undefined]),
+    ...mapStateChainToChain(r),
     deduplicated: r.deduplicated,
   }));
 };

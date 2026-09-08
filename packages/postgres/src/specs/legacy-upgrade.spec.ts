@@ -6,6 +6,7 @@ import { gunzipSync } from "node:zlib";
 import { type AcquiredPostgres, acquirePostgres } from "@queuert/testcontainers";
 import {
   type ColumnContract,
+  type InPlaceChange,
   type ReconcilerRow,
   createMigrationReconciler,
   createMigrator,
@@ -230,6 +231,41 @@ const failingProvider = (provider: Provider, match: string, occurrence: number):
 
 const pgBool = (v: unknown): boolean => v === true || v === "t" || v === 1;
 
+const sameTimestamp = (a: unknown, b: unknown): boolean => {
+  if (a == null || b == null) return a == null && b == null;
+  return new Date(a as string).getTime() === new Date(b as string).getTime();
+};
+
+/** The successor-less row of each chain, the row a v0.15 chain's completion lived on. */
+const tailIndex = new WeakMap<object, Map<string, ReconcilerRow>>();
+const chainTail = (
+  snapshot: ReadonlyMap<string, Readonly<ReconcilerRow>>,
+  chainId: string,
+): Readonly<ReconcilerRow> | undefined => {
+  let byChain = tailIndex.get(snapshot);
+  if (!byChain) {
+    byChain = new Map();
+    for (const [, row] of snapshot) {
+      const key = String(row.chain_id);
+      const current = byChain.get(key);
+      if (!current || Number(row.chain_index) > Number(current.chain_index)) {
+        byChain.set(key, row);
+      }
+    }
+    tailIndex.set(snapshot, byChain);
+  }
+  return byChain.get(chainId);
+};
+
+/** A chain column is written on head rows only, and is null everywhere else. */
+const headOnly = (column: string): InPlaceChange => ({
+  column,
+  predicate: (after, beforeRow) =>
+    Number(beforeRow.chain_index) === 0
+      ? (after ?? null) === (beforeRow[column] ?? null)
+      : after == null,
+});
+
 const statusOf = (row: Record<string, unknown>): string => {
   // oxlint-disable-next-line typescript/no-base-to-string
   if ("status" in row && row.status != null) return String(row.status);
@@ -271,8 +307,17 @@ const jobContract: ColumnContract = {
     { from: "leased_by", to: "attempt_by" },
     { from: "leased_until", to: "attempt_until" },
   ],
-  drop: ["status"],
+  drop: ["status", "chain_type_name"],
   add: [
+    {
+      // The chain's completion, read off the row that has no successor.
+      column: "chain_completed_at",
+      derive: (after, beforeRow, snapshot) => {
+        if (Number(beforeRow.chain_index) !== 0) return after == null;
+        const tail = chainTail(snapshot, String(beforeRow.chain_id));
+        return sameTimestamp(after, tail?.completed_at ?? null);
+      },
+    },
     {
       column: "continued_to_id",
       derive: (after, beforeRow, snapshot) => {
@@ -306,6 +351,8 @@ const jobContract: ColumnContract = {
     },
   ],
   inPlace: [
+    headOnly("deduplication_key"),
+    headOnly("chain_trace_context"),
     {
       column: "attempt_by",
       predicate: (after, beforeRow) =>
@@ -443,14 +490,17 @@ describe("v0.15.1 upgrade path", () => {
         }),
       );
       expect(chainJobs.length).toBe(sentinels.chainLength);
-      expect(chainJobs.every((job, i) => (job.input as { n: number }).n === i)).toBe(true);
+      expect(chainJobs.every((stateJob, i) => (stateJob.input as { n: number }).n === i)).toBe(
+        true,
+      );
       for (let i = 0; i < chainJobs.length - 1; i++) {
         expect(chainJobs[i].continuedToId).toBe(chainJobs[i + 1].id);
       }
       expect(chainJobs[chainJobs.length - 1].continuedToId).toBeNull();
+      expect(chainJobs[0].chain.completedAt).toEqual(chainJobs[chainJobs.length - 1].completedAt);
 
       const [blockerChain] = await adapter.getJobBlockers({ jobId: sentinels.blockedJobId });
-      expect(blockerChain[0].chainId).toBe(sentinels.fanInBlockerId);
+      expect(blockerChain.id).toBe(sentinels.fanInBlockerId);
       const [fanIn] = await query<{ c: number }>(
         provider,
         "SELECT count(*)::int AS c FROM queuert_job_blocker WHERE blocked_by_chain_id = $1",
@@ -461,12 +511,14 @@ describe("v0.15.1 upgrade path", () => {
       const [completed] = await adapter.getJobs({ jobIds: [sentinels.completedJobId] });
       expect(completed?.completedAt).not.toBeNull();
       expect(completed?.output).toMatchObject({ ok: true });
+      expect(completed?.chain.completedAt).not.toBeNull();
 
       const [running] = await adapter.getJobs({ jobIds: [sentinels.runningJobId] });
       expect(running?.attemptAt).not.toBeNull();
       expect(running?.attemptBy).not.toBeNull();
       expect(running?.attemptUntil).not.toBeNull();
       expect(running?.completedAt).toBeNull();
+      expect(running?.chain.completedAt).toBeNull();
 
       const [retried] = await adapter.getJobs({ jobIds: [sentinels.retriedJobId] });
       expect(retried?.completedAt).toBeNull();
@@ -704,13 +756,16 @@ describe("custom id types", () => {
 
         const [head] = await adapter.getJobs({ jobIds: ["job.a0"] });
         expect(head?.continuedToId).toBe("job.a1");
+        // A one-job blocker chain: its completion lives on the row it starts with.
         const [blocked] = await adapter.getJobs({ jobIds: ["job.a1"] });
         expect(blocked?.blocked).toBe(true);
         expect(blocked?.continuedToId).toBeNull();
+        expect(blocked?.chain.completedAt).toBeNull();
         const [running] = await adapter.getJobs({ jobIds: ["job.b0"] });
         expect(running?.attemptAt).not.toBeNull();
-        const [[blocker]] = await adapter.getJobBlockers({ jobId: "job.a1" });
-        expect(blocker.chainId).toBe("job.b0");
+        expect(running?.chain.completedAt).toBeNull();
+        const [blocker] = await adapter.getJobBlockers({ jobId: "job.a1" });
+        expect(blocker.id).toBe("job.b0");
 
         const [relation] = await sql.unsafe(
           `SELECT to_regclass('public.queuert_job_old') AS job_old`,

@@ -47,7 +47,7 @@ All API endpoints are read-only except `POST /api/jobs/{jobId}/reschedule` and `
 
 ### Chain Mutation Endpoints
 
-**`DELETE /api/chains/{chainId}`** — Delete a chain and all its jobs. Supports `cascade=true` to include transitive blocker chains.
+**`DELETE /api/chains/{chainId}`** — Delete a chain and all its jobs.
 
 ### Asset Serving
 

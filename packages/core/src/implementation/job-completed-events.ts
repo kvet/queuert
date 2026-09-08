@@ -1,6 +1,6 @@
 import { bufferObservabilityEvent } from "../helpers/observability-hooks.js";
 import { type Helpers } from "../setup-helpers.js";
-import { type StateJob } from "../state-adapter/state-adapter.js";
+import { type StateJob, type StateJobInfo } from "../state-adapter/state-adapter.js";
 import { type TransactionHooks } from "../transaction-hooks.js";
 
 /**
@@ -18,7 +18,7 @@ export const bufferJobCompletedEvents = (
   }: {
     completedJob: StateJob;
     output: unknown;
-    continuation: StateJob | null;
+    continuation: StateJobInfo | null;
     transactionHooks: TransactionHooks;
   },
 ): void => {

@@ -19,9 +19,7 @@ export const handleJobsList = async (url: URL, client: Client<any, any>): Promis
   const typeName = url.searchParams.get("typeName");
   if (!typeName) return serovalResponse({ items: [], nextCursor: null });
 
-  const { status, blocked, continued } = parseJobStatusFilter(
-    url.searchParams.get("status") ?? undefined,
-  );
+  const { status, blocked } = parseJobStatusFilter(url.searchParams.get("status") ?? undefined);
   const rawOrderBy = url.searchParams.get("orderBy") ?? undefined;
   const orderDirection = parseOrderDirection(url.searchParams.get("orderDirection") ?? undefined);
   const limit = parseLimit(url.searchParams.get("limit") ?? undefined);
@@ -59,12 +57,7 @@ export const handleJobsList = async (url: URL, client: Client<any, any>): Promis
       : listing.status === "running"
         ? await client.listJobs({ ...common, status: listing.status, orderBy: listing.orderBy })
         : listing.status === "completed"
-          ? await client.listJobs({
-              ...common,
-              status: listing.status,
-              continued,
-              orderBy: listing.orderBy,
-            })
+          ? await client.listJobs({ ...common, status: listing.status, orderBy: listing.orderBy })
           : await client.listJobs({ ...common, orderBy: listing.orderBy });
 
   return serovalResponse({

@@ -48,6 +48,7 @@ For each modified file:
 
 Apply the review framework from `.claude/agents/review-code/instructions.md`:
 
+- Project convention compliance (`CLAUDE.md`, `code-style.md`)
 - Correctness analysis
 - Design evaluation
 - Security review
@@ -80,9 +81,10 @@ Provide a structured report with:
 1. Executive summary
 2. Critical issues (must fix)
 3. Concerns (should consider)
-4. Suggestions (nice to have)
-5. Alternative approaches with trade-offs
-6. Questions for the author
+4. Convention violations (`code-style.md`)
+5. Suggestions (nice to have)
+6. Alternative approaches with trade-offs
+7. Questions for the author
 
 ## Output Format
 
@@ -100,6 +102,14 @@ Provide a structured report with:
 ## Concerns
 
 [Design issues, edge cases, potential problems]
+
+## Convention Violations
+
+[Every departure from `code-style.md` or `CLAUDE.md`, one row each. Obvious comments — any comment restating what the code says — belong here, not in Suggestions. Omit the section only when the diff has none.]
+
+| File:line | Rule | What the code does | Fix |
+| --------- | ---- | ------------------ | --- |
+| ...       | ...  | ...                | ... |
 
 ## Suggestions
 
@@ -129,4 +139,4 @@ Provide a structured report with:
 
 - **CRITICAL**: Bugs, security issues, data loss risks, breaking changes, missing changeset for user-facing changes
 - **CONCERN**: Design flaws, missing edge cases, unclear intent, potential issues, changeset present but incomplete (wrong bump level, missing affected package, unclear description)
-- **SUGGESTION**: Style, readability, minor optimizations, documentation
+- **SUGGESTION**: Readability, minor optimizations, documentation

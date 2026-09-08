@@ -7,7 +7,7 @@ export const withSavepointGroup: ConformanceGroup<StateConformanceFixture> = {
     {
       name: "commits changes on success",
       run: async ({ stateAdapter }, expect) => {
-        const [{ job }] = await stateAdapter.withTransaction(async (txCtx) => {
+        const [stateChain] = await stateAdapter.withTransaction(async (txCtx) => {
           const results = await stateAdapter.createJobs({
             txCtx,
             jobs: [{ typeName: "sp-test", input: null }],
@@ -16,14 +16,15 @@ export const withSavepointGroup: ConformanceGroup<StateConformanceFixture> = {
           await stateAdapter.withSavepoint(txCtx, async (spTxCtx) => {
             await stateAdapter.completeJobs({
               txCtx: spTxCtx,
-              jobs: [{ jobId: results[0].job.id, completedBy: null, output: { done: true } }],
+              completedBy: null,
+              jobs: [{ jobId: results[0].head.id, output: { done: true } }],
             });
           });
 
           return results;
         });
 
-        const [retrieved] = await stateAdapter.getJobs({ jobIds: [job.id] });
+        const [retrieved] = await stateAdapter.getJobs({ jobIds: [stateChain.head.id] });
         expect(retrieved?.completedAt).toBeInstanceOf(Date);
         expect(retrieved?.output).toEqual({ done: true });
       },
@@ -31,7 +32,7 @@ export const withSavepointGroup: ConformanceGroup<StateConformanceFixture> = {
     {
       name: "rolls back changes on error",
       run: async ({ stateAdapter }, expect) => {
-        const [{ job }] = await stateAdapter.withTransaction(async (txCtx) => {
+        const [stateChain] = await stateAdapter.withTransaction(async (txCtx) => {
           const results = await stateAdapter.createJobs({
             txCtx,
             jobs: [{ typeName: "sp-rollback", input: null }],
@@ -41,7 +42,8 @@ export const withSavepointGroup: ConformanceGroup<StateConformanceFixture> = {
             .withSavepoint(txCtx, async (spTxCtx) => {
               await stateAdapter.completeJobs({
                 txCtx: spTxCtx,
-                jobs: [{ jobId: results[0].job.id, completedBy: null, output: { done: true } }],
+                completedBy: null,
+                jobs: [{ jobId: results[0].head.id, output: { done: true } }],
               });
               throw new Error("simulated failure");
             })
@@ -50,7 +52,7 @@ export const withSavepointGroup: ConformanceGroup<StateConformanceFixture> = {
           return results;
         });
 
-        const [retrieved] = await stateAdapter.getJobs({ jobIds: [job.id] });
+        const [retrieved] = await stateAdapter.getJobs({ jobIds: [stateChain.head.id] });
         expect(retrieved?.completedAt).toBeNull();
         expect(retrieved?.attemptAt).toBeNull();
         expect(retrieved?.output).toBeNull();
@@ -60,7 +62,7 @@ export const withSavepointGroup: ConformanceGroup<StateConformanceFixture> = {
       name: "does not affect outer transaction on rollback",
       run: async ({ stateAdapter }, expect) => {
         const jobs = await stateAdapter.withTransaction(async (txCtx) => {
-          const [{ job: job1 }] = await stateAdapter.createJobs({
+          const [chain1] = await stateAdapter.createJobs({
             txCtx,
             jobs: [{ typeName: "sp-outer-1", input: { before: true } }],
           });
@@ -75,36 +77,37 @@ export const withSavepointGroup: ConformanceGroup<StateConformanceFixture> = {
             })
             .catch(() => {});
 
-          const [{ job: job2 }] = await stateAdapter.createJobs({
+          const [chain2] = await stateAdapter.createJobs({
             txCtx,
             jobs: [{ typeName: "sp-outer-2", input: { after: true } }],
           });
 
-          return [job1, job2];
+          return [chain1.head, chain2.head];
         });
 
-        const [job1] = await stateAdapter.getJobs({ jobIds: [jobs[0].id] });
-        const [job2] = await stateAdapter.getJobs({ jobIds: [jobs[1].id] });
-        expect(job1).toBeDefined();
-        expect(job1?.input).toEqual({ before: true });
-        expect(job2).toBeDefined();
-        expect(job2?.input).toEqual({ after: true });
+        const [view1] = await stateAdapter.getJobs({ jobIds: [jobs[0].id] });
+        const [view2] = await stateAdapter.getJobs({ jobIds: [jobs[1].id] });
+        expect(view1).toBeDefined();
+        expect(view1?.input).toEqual({ before: true });
+        expect(view2).toBeDefined();
+        expect(view2?.input).toEqual({ after: true });
       },
     },
     {
       name: "supports nested savepoints",
       run: async ({ stateAdapter }, expect) => {
-        const [{ job }] = await stateAdapter.withTransaction(async (txCtx) => {
+        const [stateChain] = await stateAdapter.withTransaction(async (txCtx) => {
           const results = await stateAdapter.createJobs({
             txCtx,
             jobs: [{ typeName: "sp-nested", input: { step: 0 } }],
           });
-          const jobId = results[0].job.id;
+          const jobId = results[0].head.id;
 
           await stateAdapter.withSavepoint(txCtx, async (spTxCtx) => {
             await stateAdapter.completeJobs({
               txCtx: spTxCtx,
-              jobs: [{ jobId, completedBy: null, output: { step: 1 } }],
+              completedBy: null,
+              jobs: [{ jobId, output: { step: 1 } }],
             });
 
             await stateAdapter
@@ -121,7 +124,7 @@ export const withSavepointGroup: ConformanceGroup<StateConformanceFixture> = {
           return results;
         });
 
-        const [retrieved] = await stateAdapter.getJobs({ jobIds: [job.id] });
+        const [retrieved] = await stateAdapter.getJobs({ jobIds: [stateChain.head.id] });
         expect(retrieved?.completedAt).toBeInstanceOf(Date);
         expect(retrieved?.output).toEqual({ step: 1 });
       },
@@ -132,7 +135,7 @@ export const withSavepointGroup: ConformanceGroup<StateConformanceFixture> = {
         let parentJobId: string;
         let nestedJobId: string;
 
-        const [{ job: outerJob }] = await stateAdapter.withTransaction(async (txCtx) => {
+        const [outerChain] = await stateAdapter.withTransaction(async (txCtx) => {
           const results = await stateAdapter.createJobs({
             txCtx,
             jobs: [
@@ -145,7 +148,7 @@ export const withSavepointGroup: ConformanceGroup<StateConformanceFixture> = {
 
           await stateAdapter
             .withSavepoint(txCtx, async (spTxCtx) => {
-              const [{ job: parentJob }] = await stateAdapter.createJobs({
+              const [parentChain] = await stateAdapter.createJobs({
                 txCtx: spTxCtx,
                 jobs: [
                   {
@@ -154,10 +157,10 @@ export const withSavepointGroup: ConformanceGroup<StateConformanceFixture> = {
                   },
                 ],
               });
-              parentJobId = parentJob.id;
+              parentJobId = parentChain.head.id;
 
               await stateAdapter.withSavepoint(spTxCtx, async (sp2TxCtx) => {
-                const [{ job: nestedJob }] = await stateAdapter.createJobs({
+                const [nestedChain] = await stateAdapter.createJobs({
                   txCtx: sp2TxCtx,
                   jobs: [
                     {
@@ -166,7 +169,7 @@ export const withSavepointGroup: ConformanceGroup<StateConformanceFixture> = {
                     },
                   ],
                 });
-                nestedJobId = nestedJob.id;
+                nestedJobId = nestedChain.head.id;
               });
 
               throw new Error("parent savepoint failure");
@@ -177,9 +180,9 @@ export const withSavepointGroup: ConformanceGroup<StateConformanceFixture> = {
         });
 
         const [outer, parent, nested] = await stateAdapter.getJobs({
-          jobIds: [outerJob.id, parentJobId!, nestedJobId!],
+          jobIds: [outerChain.head.id, parentJobId!, nestedJobId!],
         });
-        expect(outer?.id).toEqual(outerJob.id);
+        expect(outer?.id).toEqual(outerChain.head.id);
         expect(parent).toBeUndefined();
         expect(nested).toBeUndefined();
       },
@@ -207,30 +210,28 @@ export const withSavepointGroup: ConformanceGroup<StateConformanceFixture> = {
         }
         const poison = poisonTransaction;
 
-        const [{ job: jobBefore }, { job: jobAfter }] = await stateAdapter.withTransaction(
-          async (txCtx) => {
-            const [{ job: jobBefore }] = await stateAdapter.createJobs({
-              txCtx,
-              jobs: [{ typeName: "sp-poison-before", input: null }],
-            });
+        const [beforeChain, afterChain] = await stateAdapter.withTransaction(async (txCtx) => {
+          const [beforeChain] = await stateAdapter.createJobs({
+            txCtx,
+            jobs: [{ typeName: "sp-poison-before", input: null }],
+          });
 
-            await stateAdapter
-              .withSavepoint(txCtx, async (spTxCtx) => {
-                await poison(spTxCtx);
-              })
-              .catch(() => {});
+          await stateAdapter
+            .withSavepoint(txCtx, async (spTxCtx) => {
+              await poison(spTxCtx);
+            })
+            .catch(() => {});
 
-            const [{ job: jobAfter }] = await stateAdapter.createJobs({
-              txCtx,
-              jobs: [{ typeName: "sp-poison-after", input: null }],
-            });
+          const [afterChain] = await stateAdapter.createJobs({
+            txCtx,
+            jobs: [{ typeName: "sp-poison-after", input: null }],
+          });
 
-            return [{ job: jobBefore }, { job: jobAfter }];
-          },
-        );
+          return [beforeChain, afterChain];
+        });
 
-        const [before] = await stateAdapter.getJobs({ jobIds: [jobBefore.id] });
-        const [after] = await stateAdapter.getJobs({ jobIds: [jobAfter.id] });
+        const [before] = await stateAdapter.getJobs({ jobIds: [beforeChain.head.id] });
+        const [after] = await stateAdapter.getJobs({ jobIds: [afterChain.head.id] });
         expect(before).toBeDefined();
         expect(after).toBeDefined();
       },

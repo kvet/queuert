@@ -11,12 +11,10 @@ export const parseChainStatusFilter = (raw: string | undefined): ChainStatus | u
 
 export const parseJobStatusFilter = (
   raw: string | undefined,
-): { status?: JobStatus; blocked?: boolean; continued?: boolean } => {
+): { status?: JobStatus; blocked?: boolean } => {
   if (!raw) return {};
   if (raw === "blocked") return { status: "pending", blocked: true };
   if (raw === "pending-unblocked") return { status: "pending", blocked: false };
-  if (raw === "completed-terminal") return { status: "completed", continued: false };
-  if (raw === "completed-continued") return { status: "completed", continued: true };
   if (VALID_JOB_STATUSES.has(raw)) return { status: raw as JobStatus };
   return {};
 };

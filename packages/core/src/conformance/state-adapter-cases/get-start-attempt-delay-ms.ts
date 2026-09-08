@@ -63,14 +63,14 @@ export const getStartAttemptDelayMsGroup: ConformanceGroup<StateConformanceFixtu
     {
       name: "returns null when only pending job is blocked",
       run: async ({ stateAdapter }, expect) => {
-        const [{ job: blockerJob }] = await stateAdapter.withTransaction(async (txCtx) =>
+        const [blockerChain] = await stateAdapter.withTransaction(async (txCtx) =>
           stateAdapter.createJobs({
             txCtx,
             jobs: [{ typeName: "delay-blocker", input: null }],
           }),
         );
 
-        const [{ job: blockedJob }] = await stateAdapter.withTransaction(async (txCtx) =>
+        const [blockedChain] = await stateAdapter.withTransaction(async (txCtx) =>
           stateAdapter.createJobs({
             txCtx,
             jobs: [{ typeName: "delay-blocked", input: null, schedule: { afterMs: 5000 } }],
@@ -80,7 +80,9 @@ export const getStartAttemptDelayMsGroup: ConformanceGroup<StateConformanceFixtu
         await stateAdapter.withTransaction(async (txCtx) =>
           stateAdapter.addJobsBlockers({
             txCtx,
-            jobBlockers: [{ jobId: blockedJob.id, blockedByChainIds: [blockerJob.chainId] }],
+            jobBlockers: [
+              { jobId: blockedChain.head.id, blockedByChainIds: [blockerChain.head.chainId] },
+            ],
           }),
         );
 

@@ -7,39 +7,33 @@ export const continueJobsGroup: ConformanceGroup<StateConformanceFixture> = {
     {
       name: "inherits chainId from the parent and assigns a new job id",
       run: async ({ stateAdapter }, expect) => {
-        const [{ job: headJob }] = await stateAdapter.withTransaction(async (txCtx) =>
+        const [headChain] = await stateAdapter.withTransaction(async (txCtx) =>
           stateAdapter.createJobs({
             txCtx,
             jobs: [{ typeName: "root-job", input: null }],
           }),
         );
 
-        const [{ job: completedHead, continuation: childJob }] = await stateAdapter.withTransaction(
-          async (txCtx) =>
-            stateAdapter.continueJobs({
-              txCtx,
-              jobs: [
-                {
-                  typeName: "child-job",
-                  continueFromId: headJob.id,
-                  input: null,
-                  completedBy: "worker-1",
-                },
-              ],
-            }),
+        const [completedResult] = await stateAdapter.withTransaction(async (txCtx) =>
+          stateAdapter.continueJobs({
+            txCtx,
+            completedBy: "worker-1",
+            jobs: [{ typeName: "child-job", continueFromId: headChain.head.id, input: null }],
+          }),
         );
+        const childJob = completedResult.continuation;
 
-        expect(childJob.chainId).toBe(headJob.chainId);
-        expect(childJob.id).not.toBe(headJob.id);
-        expect(completedHead.continuedToId).toBe(childJob.id);
-        expect(completedHead.completedAt).not.toBeNull();
-        expect(completedHead.completedBy).toBe("worker-1");
+        expect(childJob.chainId).toBe(headChain.head.chainId);
+        expect(childJob.id).not.toBe(headChain.head.id);
+        expect(completedResult.continuedToId).toBe(childJob.id);
+        expect(completedResult.completedAt).not.toBeNull();
+        expect(completedResult.completedBy).toBe("worker-1");
       },
     },
     {
       name: "round-trips a scalar JSON input on the continuation",
       run: async ({ stateAdapter }, expect) => {
-        const [{ job: headJob }] = await stateAdapter.withTransaction(async (txCtx) =>
+        const [headChain] = await stateAdapter.withTransaction(async (txCtx) =>
           stateAdapter.createJobs({
             txCtx,
             jobs: [{ typeName: "root-scalar", input: null }],
@@ -49,7 +43,9 @@ export const continueJobsGroup: ConformanceGroup<StateConformanceFixture> = {
         const [{ continuation }] = await stateAdapter.withTransaction(async (txCtx) =>
           stateAdapter.continueJobs({
             txCtx,
-            jobs: [{ typeName: "child-scalar", continueFromId: headJob.id, input: "bare string" }],
+            jobs: [
+              { typeName: "child-scalar", continueFromId: headChain.head.id, input: "bare string" },
+            ],
           }),
         );
 
@@ -60,7 +56,7 @@ export const continueJobsGroup: ConformanceGroup<StateConformanceFixture> = {
     {
       name: "completes the parent and links it to the continuation",
       run: async ({ stateAdapter }, expect) => {
-        const [{ job: headJob }] = await stateAdapter.withTransaction(async (txCtx) =>
+        const [headChain] = await stateAdapter.withTransaction(async (txCtx) =>
           stateAdapter.createJobs({
             txCtx,
             jobs: [{ typeName: "root", input: null }],
@@ -78,7 +74,7 @@ export const continueJobsGroup: ConformanceGroup<StateConformanceFixture> = {
         await stateAdapter.withTransaction(async (txCtx) =>
           stateAdapter.extendJobAttempt({
             txCtx,
-            jobId: headJob.id,
+            jobId: headChain.head.id,
             workerId: "worker-1",
             timeoutMs: 10_000,
           }),
@@ -87,11 +83,11 @@ export const continueJobsGroup: ConformanceGroup<StateConformanceFixture> = {
         const [{ continuation }] = await stateAdapter.withTransaction(async (txCtx) =>
           stateAdapter.continueJobs({
             txCtx,
-            jobs: [{ typeName: "child", continueFromId: headJob.id, input: null }],
+            jobs: [{ typeName: "child", continueFromId: headChain.head.id, input: null }],
           }),
         );
 
-        const [headAfter] = await stateAdapter.getJobs({ jobIds: [headJob.id] });
+        const [headAfter] = await stateAdapter.getJobs({ jobIds: [headChain.head.id] });
         expect(headAfter!.continuedToId).toBe(continuation.id);
         expect(headAfter!.completedAt).not.toBeNull();
         expect(headAfter!.completedBy).toBe(null);
@@ -122,7 +118,7 @@ export const continueJobsGroup: ConformanceGroup<StateConformanceFixture> = {
     {
       name: "rejects continuation from an already-completed parent",
       run: async ({ stateAdapter }, expect) => {
-        const [{ job: headJob }] = await stateAdapter.withTransaction(async (txCtx) =>
+        const [headChain] = await stateAdapter.withTransaction(async (txCtx) =>
           stateAdapter.createJobs({
             txCtx,
             jobs: [{ typeName: "completed-parent", input: null }],
@@ -132,11 +128,12 @@ export const continueJobsGroup: ConformanceGroup<StateConformanceFixture> = {
         await stateAdapter.withTransaction(async (txCtx) =>
           stateAdapter.completeJobs({
             txCtx,
-            jobs: [{ jobId: headJob.id, completedBy: null, output: { done: true } }],
+            completedBy: null,
+            jobs: [{ jobId: headChain.head.id, output: { done: true } }],
           }),
         );
 
-        const [completedParent] = await stateAdapter.getJobs({ jobIds: [headJob.id] });
+        const [completedParent] = await stateAdapter.getJobs({ jobIds: [headChain.head.id] });
         expect(completedParent!.completedAt).not.toBeNull();
 
         await expect(
@@ -146,7 +143,7 @@ export const continueJobsGroup: ConformanceGroup<StateConformanceFixture> = {
               jobs: [
                 {
                   typeName: "child-of-completed",
-                  continueFromId: headJob.id,
+                  continueFromId: headChain.head.id,
                   input: null,
                 },
               ],
@@ -158,7 +155,7 @@ export const continueJobsGroup: ConformanceGroup<StateConformanceFixture> = {
     {
       name: "rejects a second continuation from the same parent",
       run: async ({ stateAdapter }, expect) => {
-        const [{ job: headJob }] = await stateAdapter.withTransaction(async (txCtx) =>
+        const [headChain] = await stateAdapter.withTransaction(async (txCtx) =>
           stateAdapter.createJobs({
             txCtx,
             jobs: [{ typeName: "root", input: null }],
@@ -171,7 +168,7 @@ export const continueJobsGroup: ConformanceGroup<StateConformanceFixture> = {
             jobs: [
               {
                 typeName: "child",
-                continueFromId: headJob.id,
+                continueFromId: headChain.head.id,
                 input: { v: 1 },
               },
             ],
@@ -185,7 +182,7 @@ export const continueJobsGroup: ConformanceGroup<StateConformanceFixture> = {
               jobs: [
                 {
                   typeName: "child",
-                  continueFromId: headJob.id,
+                  continueFromId: headChain.head.id,
                   input: { v: 2 },
                 },
               ],
@@ -200,7 +197,7 @@ export const continueJobsGroup: ConformanceGroup<StateConformanceFixture> = {
     {
       name: "lets only one of two concurrent continuations take a chain position",
       run: async ({ stateAdapter }, expect) => {
-        const [{ job: headJob }] = await stateAdapter.withTransaction(async (txCtx) =>
+        const [headChain] = await stateAdapter.withTransaction(async (txCtx) =>
           stateAdapter.createJobs({
             txCtx,
             jobs: [{ typeName: "chain-root", input: null }],
@@ -215,7 +212,7 @@ export const continueJobsGroup: ConformanceGroup<StateConformanceFixture> = {
                 jobs: [
                   {
                     typeName: "chain-step2",
-                    continueFromId: headJob.id,
+                    continueFromId: headChain.head.id,
                     input: { from },
                   },
                 ],
@@ -231,7 +228,7 @@ export const continueJobsGroup: ConformanceGroup<StateConformanceFixture> = {
     {
       name: "continues several chains in one batch, in input order",
       run: async ({ stateAdapter }, expect) => {
-        const heads = await stateAdapter.withTransaction(async (txCtx) =>
+        const [chainA, chainB] = await stateAdapter.withTransaction(async (txCtx) =>
           stateAdapter.createJobs({
             txCtx,
             jobs: [
@@ -240,32 +237,31 @@ export const continueJobsGroup: ConformanceGroup<StateConformanceFixture> = {
             ],
           }),
         );
-        const [headA, headB] = heads.map((h) => h.job);
 
         const results = await stateAdapter.withTransaction(async (txCtx) =>
           stateAdapter.continueJobs({
             txCtx,
             jobs: [
-              { typeName: "batch-step", continueFromId: headA.id, input: { n: 1 } },
-              { typeName: "batch-step", continueFromId: headB.id, input: { n: 2 } },
+              { typeName: "batch-step", continueFromId: chainA.head.id, input: { n: 1 } },
+              { typeName: "batch-step", continueFromId: chainB.head.id, input: { n: 2 } },
             ],
           }),
         );
 
         expect(results).toHaveLength(2);
-        expect(results.map((r) => r.job.id)).toEqual([headA.id, headB.id]);
-        expect(results[0].continuation.chainId).toBe(headA.chainId);
-        expect(results[1].continuation.chainId).toBe(headB.chainId);
-        expect(results[0].job.continuedToId).toBe(results[0].continuation.id);
-        expect(results[1].job.continuedToId).toBe(results[1].continuation.id);
-        expect(results[0].job.completedAt).toBeInstanceOf(Date);
-        expect(results[1].job.completedAt).toBeInstanceOf(Date);
+        expect(results.map((r) => r.id)).toEqual([chainA.head.id, chainB.head.id]);
+        expect(results[0].continuation.chainId).toBe(chainA.head.chainId);
+        expect(results[1].continuation.chainId).toBe(chainB.head.chainId);
+        expect(results[0].continuedToId).toBe(results[0].continuation.id);
+        expect(results[1].continuedToId).toBe(results[1].continuation.id);
+        expect(results[0].completedAt).toBeInstanceOf(Date);
+        expect(results[1].completedAt).toBeInstanceOf(Date);
       },
     },
     {
       name: "rejects a batch that continues the same job twice",
       run: async ({ stateAdapter }, expect) => {
-        const [{ job: head }] = await stateAdapter.withTransaction(async (txCtx) =>
+        const [stateChain] = await stateAdapter.withTransaction(async (txCtx) =>
           stateAdapter.createJobs({
             txCtx,
             jobs: [{ typeName: "batch-dup-root", input: null }],
@@ -277,8 +273,8 @@ export const continueJobsGroup: ConformanceGroup<StateConformanceFixture> = {
             stateAdapter.continueJobs({
               txCtx,
               jobs: [
-                { typeName: "batch-dup-step", continueFromId: head.id, input: { n: 1 } },
-                { typeName: "batch-dup-step", continueFromId: head.id, input: { n: 2 } },
+                { typeName: "batch-dup-step", continueFromId: stateChain.head.id, input: { n: 1 } },
+                { typeName: "batch-dup-step", continueFromId: stateChain.head.id, input: { n: 2 } },
               ],
             }),
           ),
@@ -288,7 +284,7 @@ export const continueJobsGroup: ConformanceGroup<StateConformanceFixture> = {
     {
       name: "rejects a batch entry that continues a job the same batch creates",
       run: async ({ stateAdapter, generateId }, expect) => {
-        const [{ job: head }] = await stateAdapter.withTransaction(async (txCtx) =>
+        const [stateChain] = await stateAdapter.withTransaction(async (txCtx) =>
           stateAdapter.createJobs({
             txCtx,
             jobs: [{ typeName: "batch-chain-root", input: null }],
@@ -307,7 +303,7 @@ export const continueJobsGroup: ConformanceGroup<StateConformanceFixture> = {
                 {
                   typeName: "batch-chain-step",
                   id: successorId,
-                  continueFromId: head.id,
+                  continueFromId: stateChain.head.id,
                   input: { n: 1 },
                 },
                 { typeName: "batch-chain-step", continueFromId: successorId, input: { n: 2 } },
@@ -317,7 +313,7 @@ export const continueJobsGroup: ConformanceGroup<StateConformanceFixture> = {
         ).rejects.toThrow();
 
         // The whole batch is discarded, so the head is untouched.
-        const [headAfter] = await stateAdapter.getJobs({ jobIds: [head.id] });
+        const [headAfter] = await stateAdapter.getJobs({ jobIds: [stateChain.head.id] });
         expect(headAfter!.completedAt).toBeNull();
         expect(headAfter!.continuedToId).toBeNull();
       },
@@ -325,13 +321,13 @@ export const continueJobsGroup: ConformanceGroup<StateConformanceFixture> = {
     {
       name: "extends a chain across multiple sequential continuations",
       run: async ({ stateAdapter }, expect) => {
-        const [{ job: headJob }] = await stateAdapter.withTransaction(async (txCtx) =>
+        const [headChain] = await stateAdapter.withTransaction(async (txCtx) =>
           stateAdapter.createJobs({
             txCtx,
             jobs: [{ typeName: "t", input: null }],
           }),
         );
-        expect(headJob.id).toBe(headJob.chainId);
+        expect(headChain.head.id).toBe(headChain.head.chainId);
 
         const [{ continuation: cont1 }] = await stateAdapter.withTransaction(async (txCtx) =>
           stateAdapter.continueJobs({
@@ -339,13 +335,13 @@ export const continueJobsGroup: ConformanceGroup<StateConformanceFixture> = {
             jobs: [
               {
                 typeName: "t2",
-                continueFromId: headJob.id,
+                continueFromId: headChain.head.id,
                 input: null,
               },
             ],
           }),
         );
-        expect(cont1.chainId).toBe(headJob.chainId);
+        expect(cont1.chainId).toBe(headChain.head.chainId);
 
         const [{ continuation: cont2 }] = await stateAdapter.withTransaction(async (txCtx) =>
           stateAdapter.continueJobs({
@@ -359,14 +355,14 @@ export const continueJobsGroup: ConformanceGroup<StateConformanceFixture> = {
             ],
           }),
         );
-        expect(cont2.chainId).toBe(headJob.chainId);
+        expect(cont2.chainId).toBe(headChain.head.chainId);
         expect(cont2.id).not.toBe(cont1.id);
       },
     },
     {
       name: "continues distinct parents independently",
       run: async ({ stateAdapter }, expect) => {
-        const [{ job: headJob }] = await stateAdapter.withTransaction(async (txCtx) =>
+        const [rootChain] = await stateAdapter.withTransaction(async (txCtx) =>
           stateAdapter.createJobs({
             txCtx,
             jobs: [{ typeName: "root", input: null }],
@@ -380,7 +376,7 @@ export const continueJobsGroup: ConformanceGroup<StateConformanceFixture> = {
               jobs: [
                 {
                   typeName: "step",
-                  continueFromId: headJob.id,
+                  continueFromId: rootChain.head.id,
                   input: { value: "first" },
                 },
               ],
@@ -395,7 +391,7 @@ export const continueJobsGroup: ConformanceGroup<StateConformanceFixture> = {
               jobs: [
                 {
                   typeName: "step",
-                  continueFromId: headJob.id,
+                  continueFromId: rootChain.head.id,
                   input: { value: "duplicate" },
                 },
               ],
@@ -417,7 +413,7 @@ export const continueJobsGroup: ConformanceGroup<StateConformanceFixture> = {
           }),
         );
 
-        expect(next.chainId).toBe(headJob.chainId);
+        expect(next.chainId).toBe(rootChain.head.chainId);
       },
     },
     {
@@ -425,13 +421,13 @@ export const continueJobsGroup: ConformanceGroup<StateConformanceFixture> = {
       run: async ({ stateAdapter, generateId }, expect) => {
         const sharedId = (generateId ?? (() => crypto.randomUUID()))();
 
-        const [{ job: head1 }] = await stateAdapter.withTransaction(async (txCtx) =>
+        const [chain1] = await stateAdapter.withTransaction(async (txCtx) =>
           stateAdapter.createJobs({
             txCtx,
             jobs: [{ typeName: "root1", input: null }],
           }),
         );
-        const [{ job: head2 }] = await stateAdapter.withTransaction(async (txCtx) =>
+        const [chain2] = await stateAdapter.withTransaction(async (txCtx) =>
           stateAdapter.createJobs({
             txCtx,
             jobs: [{ typeName: "root2", input: null }],
@@ -445,7 +441,7 @@ export const continueJobsGroup: ConformanceGroup<StateConformanceFixture> = {
               {
                 typeName: "child",
                 id: sharedId,
-                continueFromId: head1.id,
+                continueFromId: chain1.head.id,
                 input: null,
               },
             ],
@@ -460,7 +456,7 @@ export const continueJobsGroup: ConformanceGroup<StateConformanceFixture> = {
                 {
                   typeName: "child",
                   id: sharedId,
-                  continueFromId: head2.id,
+                  continueFromId: chain2.head.id,
                   input: null,
                 },
               ],

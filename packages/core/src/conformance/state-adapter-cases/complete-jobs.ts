@@ -7,7 +7,7 @@ export const completeJobsGroup: ConformanceGroup<StateConformanceFixture> = {
     {
       name: "completes a job with output",
       run: async ({ stateAdapter }, expect) => {
-        const [{ job: created }] = await stateAdapter.withTransaction(async (txCtx) =>
+        const [createdChain] = await stateAdapter.withTransaction(async (txCtx) =>
           stateAdapter.createJobs({
             txCtx,
             jobs: [{ typeName: "complete-test", input: { value: 1 } }],
@@ -25,7 +25,7 @@ export const completeJobsGroup: ConformanceGroup<StateConformanceFixture> = {
         await stateAdapter.withTransaction(async (txCtx) =>
           stateAdapter.extendJobAttempt({
             txCtx,
-            jobId: created.id,
+            jobId: createdChain.head.id,
             workerId: "worker-1",
             timeoutMs: 10_000,
           }),
@@ -34,7 +34,8 @@ export const completeJobsGroup: ConformanceGroup<StateConformanceFixture> = {
         const [completed] = await stateAdapter.withTransaction(async (txCtx) =>
           stateAdapter.completeJobs({
             txCtx,
-            jobs: [{ jobId: created.id, completedBy: "worker-1", output: { result: 42 } }],
+            completedBy: "worker-1",
+            jobs: [{ jobId: createdChain.head.id, output: { result: 42 } }],
           }),
         );
 
@@ -50,7 +51,7 @@ export const completeJobsGroup: ConformanceGroup<StateConformanceFixture> = {
     {
       name: "completes multiple jobs in one call, returning results in input order",
       run: async ({ stateAdapter }, expect) => {
-        const created = await stateAdapter.withTransaction(async (txCtx) =>
+        const createdChains = await stateAdapter.withTransaction(async (txCtx) =>
           stateAdapter.createJobs({
             txCtx,
             jobs: [
@@ -59,19 +60,20 @@ export const completeJobsGroup: ConformanceGroup<StateConformanceFixture> = {
             ],
           }),
         );
-        const [first, second] = created.map((r) => r.job);
+        const [firstChain, secondChain] = createdChains;
 
         const completed = await stateAdapter.withTransaction(async (txCtx) =>
           stateAdapter.completeJobs({
             txCtx,
+            completedBy: null,
             jobs: [
-              { jobId: second.id, completedBy: null, output: { done: 2 } },
-              { jobId: first.id, completedBy: null, output: { done: 1 } },
+              { jobId: secondChain.head.id, output: { done: 2 } },
+              { jobId: firstChain.head.id, output: { done: 1 } },
             ],
           }),
         );
 
-        expect(completed.map((job) => job.id)).toEqual([second.id, first.id]);
+        expect(completed.map((c) => c.id)).toEqual([secondChain.head.id, firstChain.head.id]);
         expect(completed[0].output).toEqual({ done: 2 });
         expect(completed[1].output).toEqual({ done: 1 });
       },
@@ -79,7 +81,7 @@ export const completeJobsGroup: ConformanceGroup<StateConformanceFixture> = {
     {
       name: "fails the batch when any job is missing or already completed",
       run: async ({ stateAdapter }, expect) => {
-        const [{ job: created }] = await stateAdapter.withTransaction(async (txCtx) =>
+        const [createdChain] = await stateAdapter.withTransaction(async (txCtx) =>
           stateAdapter.createJobs({
             txCtx,
             jobs: [{ typeName: "batch-fail-test", input: null }],
@@ -90,22 +92,23 @@ export const completeJobsGroup: ConformanceGroup<StateConformanceFixture> = {
           stateAdapter.withTransaction(async (txCtx) =>
             stateAdapter.completeJobs({
               txCtx,
+              completedBy: null,
               jobs: [
-                { jobId: created.id, completedBy: null, output: { ok: true } },
-                { jobId: "missing-id", completedBy: null, output: { ok: true } },
+                { jobId: createdChain.head.id, output: { ok: true } },
+                { jobId: "missing-id", output: { ok: true } },
               ],
             }),
           ),
         ).rejects.toThrow();
 
-        const [after] = await stateAdapter.getJobs({ jobIds: [created.id] });
+        const [after] = await stateAdapter.getJobs({ jobIds: [createdChain.head.id] });
         expect(after!.completedAt).toBeNull();
       },
     },
     {
       name: "completes a job with null completedBy (workerless)",
       run: async ({ stateAdapter }, expect) => {
-        const [{ job: created }] = await stateAdapter.withTransaction(async (txCtx) =>
+        const [createdChain] = await stateAdapter.withTransaction(async (txCtx) =>
           stateAdapter.createJobs({
             txCtx,
             jobs: [{ typeName: "workerless-test", input: null }],
@@ -115,7 +118,8 @@ export const completeJobsGroup: ConformanceGroup<StateConformanceFixture> = {
         const [completed] = await stateAdapter.withTransaction(async (txCtx) =>
           stateAdapter.completeJobs({
             txCtx,
-            jobs: [{ jobId: created.id, completedBy: null, output: { done: true } }],
+            completedBy: null,
+            jobs: [{ jobId: createdChain.head.id, output: { done: true } }],
           }),
         );
 
@@ -126,7 +130,7 @@ export const completeJobsGroup: ConformanceGroup<StateConformanceFixture> = {
     {
       name: "completes a job whose output is undefined, storing it as null",
       run: async ({ stateAdapter }, expect) => {
-        const [{ job: created }] = await stateAdapter.withTransaction(async (txCtx) =>
+        const [createdChain] = await stateAdapter.withTransaction(async (txCtx) =>
           stateAdapter.createJobs({
             txCtx,
             jobs: [{ typeName: "undefined-output", input: null }],
@@ -136,14 +140,15 @@ export const completeJobsGroup: ConformanceGroup<StateConformanceFixture> = {
         const [completed] = await stateAdapter.withTransaction(async (txCtx) =>
           stateAdapter.completeJobs({
             txCtx,
-            jobs: [{ jobId: created.id, completedBy: null, output: undefined }],
+            completedBy: null,
+            jobs: [{ jobId: createdChain.head.id, output: undefined }],
           }),
         );
 
         expect(completed.completedAt).toBeInstanceOf(Date);
         expect(completed.output).toBeNull();
 
-        const [stored] = await stateAdapter.getJobs({ jobIds: [created.id] });
+        const [stored] = await stateAdapter.getJobs({ jobIds: [createdChain.head.id] });
         expect(stored!.completedAt).toBeInstanceOf(Date);
         expect(stored!.output).toBeNull();
       },
@@ -151,7 +156,7 @@ export const completeJobsGroup: ConformanceGroup<StateConformanceFixture> = {
     {
       name: "leaves an already-completed job untouched on double-completion",
       run: async ({ stateAdapter }, expect) => {
-        const [{ job: created }] = await stateAdapter.withTransaction(async (txCtx) =>
+        const [createdChain] = await stateAdapter.withTransaction(async (txCtx) =>
           stateAdapter.createJobs({
             txCtx,
             jobs: [{ typeName: "double-complete-test", input: { v: 1 } }],
@@ -169,7 +174,7 @@ export const completeJobsGroup: ConformanceGroup<StateConformanceFixture> = {
         await stateAdapter.withTransaction(async (txCtx) =>
           stateAdapter.extendJobAttempt({
             txCtx,
-            jobId: created.id,
+            jobId: createdChain.head.id,
             workerId: "worker-1",
             timeoutMs: 10_000,
           }),
@@ -178,7 +183,8 @@ export const completeJobsGroup: ConformanceGroup<StateConformanceFixture> = {
         const [completed] = await stateAdapter.withTransaction(async (txCtx) =>
           stateAdapter.completeJobs({
             txCtx,
-            jobs: [{ jobId: created.id, completedBy: "worker-1", output: { first: true } }],
+            completedBy: "worker-1",
+            jobs: [{ jobId: createdChain.head.id, output: { first: true } }],
           }),
         );
 
@@ -189,12 +195,13 @@ export const completeJobsGroup: ConformanceGroup<StateConformanceFixture> = {
           .withTransaction(async (txCtx) =>
             stateAdapter.completeJobs({
               txCtx,
-              jobs: [{ jobId: created.id, completedBy: "worker-2", output: { second: true } }],
+              completedBy: "worker-2",
+              jobs: [{ jobId: createdChain.head.id, output: { second: true } }],
             }),
           )
           .catch(() => {});
 
-        const [after] = await stateAdapter.getJobs({ jobIds: [created.id] });
+        const [after] = await stateAdapter.getJobs({ jobIds: [createdChain.head.id] });
         expect(after!.output).toEqual({ first: true });
         expect(after!.completedBy).toBe("worker-1");
       },
@@ -202,7 +209,7 @@ export const completeJobsGroup: ConformanceGroup<StateConformanceFixture> = {
     {
       name: "clears lastAttemptError when completing a job that previously failed",
       run: async ({ stateAdapter }, expect) => {
-        const [{ job: created }] = await stateAdapter.withTransaction(async (txCtx) =>
+        const [createdChain] = await stateAdapter.withTransaction(async (txCtx) =>
           stateAdapter.createJobs({
             txCtx,
             jobs: [{ typeName: "complete-clears-error", input: null }],
@@ -221,11 +228,15 @@ export const completeJobsGroup: ConformanceGroup<StateConformanceFixture> = {
           stateAdapter.rescheduleJobs({
             txCtx,
             jobs: [
-              { jobId: created.id, schedule: { afterMs: 5000 }, error: "first attempt failed" },
+              {
+                jobId: createdChain.head.id,
+                schedule: { afterMs: 5000 },
+                error: "first attempt failed",
+              },
             ],
           }),
         );
-        expect(failed.lastAttemptError).toBe("first attempt failed");
+        expect(failed!.lastAttemptError).toBe("first attempt failed");
 
         await stateAdapter.withTransaction(async (txCtx) =>
           stateAdapter.startJobAttempt({
@@ -238,7 +249,8 @@ export const completeJobsGroup: ConformanceGroup<StateConformanceFixture> = {
         const [completed] = await stateAdapter.withTransaction(async (txCtx) =>
           stateAdapter.completeJobs({
             txCtx,
-            jobs: [{ jobId: created.id, completedBy: "worker-1", output: { ok: true } }],
+            completedBy: "worker-1",
+            jobs: [{ jobId: createdChain.head.id, output: { ok: true } }],
           }),
         );
 
@@ -246,6 +258,131 @@ export const completeJobsGroup: ConformanceGroup<StateConformanceFixture> = {
         expect(completed.lastAttemptError).toBeNull();
         expect(completed.attemptAt).toBeNull();
         expect(completed.attemptUntil).toBeNull();
+      },
+    },
+    {
+      name: "completing the only job in a chain completes the chain",
+      run: async ({ stateAdapter }, expect) => {
+        const [createdChain] = await stateAdapter.withTransaction(async (txCtx) =>
+          stateAdapter.createJobs({
+            txCtx,
+            jobs: [{ typeName: "one-job-chain", input: null }],
+          }),
+        );
+
+        const [completed] = await stateAdapter.withTransaction(async (txCtx) =>
+          stateAdapter.completeJobs({
+            txCtx,
+            completedBy: "worker-1",
+            jobs: [{ jobId: createdChain.head.id, output: { done: true } }],
+          }),
+        );
+
+        expect(completed.id).toBe(createdChain.head.id);
+        expect(completed.completedAt).toBeInstanceOf(Date);
+        expect(completed.chain.id).toBe(createdChain.head.chainId);
+        expect(completed.chain.completedAt).toBeInstanceOf(Date);
+
+        // The head and the completing job are the same row here, so both halves of the
+        // write have to survive — an implementation that splits them loses one silently.
+        const [chain] = await stateAdapter.getChains({ chainIds: [createdChain.head.chainId] });
+        expect(chain!.tail).toBeUndefined();
+        expect(chain!.head.completedAt).toBeInstanceOf(Date);
+        expect(chain!.head.completedBy).toBe("worker-1");
+        expect(chain!.head.output).toEqual({ done: true });
+        expect(chain!.completedAt).toBeInstanceOf(Date);
+      },
+    },
+    {
+      name: "completing the tail of a multi-job chain completes the chain",
+      run: async ({ stateAdapter }, expect) => {
+        const [headChain] = await stateAdapter.withTransaction(async (txCtx) =>
+          stateAdapter.createJobs({
+            txCtx,
+            jobs: [{ typeName: "multi-job-chain", input: null }],
+          }),
+        );
+
+        const [{ continuation: tail }] = await stateAdapter.withTransaction(async (txCtx) =>
+          stateAdapter.continueJobs({
+            txCtx,
+            completedBy: "worker-1",
+            jobs: [{ typeName: "multi-job-chain", input: null, continueFromId: headChain.head.id }],
+          }),
+        );
+
+        const [chainBeforeCompletion] = await stateAdapter.getChains({
+          chainIds: [headChain.head.chainId],
+        });
+        expect(chainBeforeCompletion!.completedAt).toBeNull();
+
+        const [completed] = await stateAdapter.withTransaction(async (txCtx) =>
+          stateAdapter.completeJobs({
+            txCtx,
+            completedBy: "worker-1",
+            jobs: [{ jobId: tail.id, output: null }],
+          }),
+        );
+
+        expect(completed.id).toBe(tail.id);
+        expect(completed.chain.id).toBe(headChain.head.chainId);
+        expect(completed.chain.completedAt).toBeInstanceOf(Date);
+
+        const [chain] = await stateAdapter.getChains({ chainIds: [headChain.head.chainId] });
+        expect(chain!.completedAt).toBeInstanceOf(Date);
+        expect(chain!.tail!.id).toBe(tail.id);
+      },
+    },
+    {
+      name: "reports hasBlockedJobs only when a job depends on the completing chain",
+      run: async ({ stateAdapter }, expect) => {
+        const [blockerChain] = await stateAdapter.withTransaction(async (txCtx) =>
+          stateAdapter.createJobs({
+            txCtx,
+            jobs: [{ typeName: "has-blocking-blocker", input: null }],
+          }),
+        );
+
+        const [dependentChain] = await stateAdapter.withTransaction(async (txCtx) =>
+          stateAdapter.createJobs({
+            txCtx,
+            jobs: [{ typeName: "has-blocking-dependent", input: null }],
+          }),
+        );
+
+        await stateAdapter.withTransaction(async (txCtx) =>
+          stateAdapter.addJobsBlockers({
+            txCtx,
+            jobBlockers: [
+              { jobId: dependentChain.head.id, blockedByChainIds: [blockerChain.head.chainId] },
+            ],
+          }),
+        );
+
+        const [blockerCompleted] = await stateAdapter.withTransaction(async (txCtx) =>
+          stateAdapter.completeJobs({
+            txCtx,
+            completedBy: null,
+            jobs: [{ jobId: blockerChain.head.id, output: null }],
+          }),
+        );
+        expect(blockerCompleted.hasBlockedJobs).toBe(true);
+
+        const [independentChain] = await stateAdapter.withTransaction(async (txCtx) =>
+          stateAdapter.createJobs({
+            txCtx,
+            jobs: [{ typeName: "has-blocking-independent", input: null }],
+          }),
+        );
+
+        const [independentCompleted] = await stateAdapter.withTransaction(async (txCtx) =>
+          stateAdapter.completeJobs({
+            txCtx,
+            completedBy: null,
+            jobs: [{ jobId: independentChain.head.id, output: null }],
+          }),
+        );
+        expect(independentCompleted.hasBlockedJobs).toBe(false);
       },
     },
   ],

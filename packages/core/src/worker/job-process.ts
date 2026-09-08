@@ -1,4 +1,4 @@
-import { type AnyChain, type CompletedChain, mapStatePairToChain } from "../entities/chain.js";
+import { type AnyChain, type CompletedChain, mapStateChainToChain } from "../entities/chain.js";
 import { type BaseJobTypeDefinitions } from "../entities/job-type.js";
 import { type ResolvedJobWithBlockers } from "../entities/job-types.resolvers.js";
 import { mapStateJobToJob } from "../entities/job.js";
@@ -66,7 +66,7 @@ export const runJobProcess = async ({
   helpers,
   attemptHandler,
   prepareTransactionContext,
-  job,
+  stateJob,
   backoffConfig,
   attemptConfig,
   workerId,
@@ -84,7 +84,7 @@ export const runJobProcess = async ({
     Record<string, unknown>
   >;
   prepareTransactionContext: TransactionContext<BaseTxContext>;
-  job: StateJob;
+  stateJob: StateJob & { hasBlockers: boolean };
   backoffConfig: BackoffConfig;
   attemptConfig: AttemptConfig;
   workerId: string;
@@ -115,15 +115,15 @@ export const runJobProcess = async ({
     if (abortController.signal.reason === "worker_stopping") return;
     if (abortController.signal.reason === "already_completed") {
       throw new JobAlreadyCompletedError("Job already completed (signal aborted)", {
-        jobId: job.id,
+        jobId: stateJob.id,
       });
     }
     if (abortController.signal.reason === "not_found") {
-      throw new JobNotFoundError("Job not found (signal aborted)", { jobId: job.id });
+      throw new JobNotFoundError("Job not found (signal aborted)", { jobId: stateJob.id });
     }
     if (abortController.signal.reason === "taken_by_another_worker") {
       throw new JobTakenByAnotherWorkerError("Job taken by another worker (signal aborted)", {
-        jobId: job.id,
+        jobId: stateJob.id,
         workerId,
       });
     }
@@ -134,7 +134,7 @@ export const runJobProcess = async ({
 
     await refetchJobLockedImpl(helpers, {
       txCtx,
-      job,
+      job: stateJob,
       workerId,
     }).catch((error: unknown) => {
       if (!abortController.signal.aborted) {
@@ -176,12 +176,12 @@ export const runJobProcess = async ({
         await runInGuardedTransaction(async (txCtx) =>
           helpers.stateAdapter.extendJobAttempt({
             txCtx,
-            jobId: job.id,
+            jobId: stateJob.id,
             workerId,
             timeoutMs,
           }),
         );
-        helpers.observabilityHelper.jobAttemptExtended(job, { workerId });
+        helpers.observabilityHelper.jobAttemptExtended(stateJob, { workerId });
       } catch (error) {
         if (
           error instanceof JobTakenByAnotherWorkerError ||
@@ -198,34 +198,36 @@ export const runJobProcess = async ({
   });
   let disposeAttemptLostListener: (() => Promise<void>) | null = null;
 
-  const blockerPairs = await prepareTransactionContext.run(async (txCtx) =>
-    helpers.stateAdapter.getJobBlockers({ txCtx, jobId: job.id }),
-  );
+  const blockerChains = stateJob.hasBlockers
+    ? await prepareTransactionContext.run(async (txCtx) =>
+        helpers.stateAdapter.getJobBlockers({ txCtx, jobId: stateJob.id }),
+      )
+    : [];
   const runningJob = {
-    ...mapStateJobToJob(job),
-    blockers: blockerPairs.map(mapStatePairToChain) as CompletedChain<AnyChain>[],
+    ...mapStateJobToJob(stateJob),
+    blockers: blockerChains.map(mapStateChainToChain) as CompletedChain<AnyChain>[],
   } as ResolvedJobWithBlockers<any, any, any> & { status: "running" };
 
   const runJobAttempt = async () => {
     const attemptStartTime = Date.now();
     const finishOnce = createFinishOnce();
     const emitAttemptDuration = () => {
-      helpers.observabilityHelper.jobAttemptDuration(job, {
+      helpers.observabilityHelper.jobAttemptDuration(stateJob, {
         durationMs: Date.now() - attemptStartTime,
         workerId,
       });
     };
 
-    helpers.observabilityHelper.jobAttemptStarted(job, { workerId });
+    helpers.observabilityHelper.jobAttemptStarted(stateJob, { workerId });
     const attemptSpanHandle = helpers.observabilityHelper.startAttemptSpan({
-      chainId: job.chainId,
-      chainTypeName: job.chainTypeName,
-      jobId: job.id,
-      jobTypeName: job.typeName,
-      attempt: job.attempt,
+      chainId: stateJob.chain.id,
+      chainTypeName: stateJob.chain.typeName,
+      jobId: stateJob.id,
+      jobTypeName: stateJob.typeName,
+      attempt: stateJob.attempt,
       workerId,
-      chainTraceContext: job.chainTraceContext,
-      traceContext: job.traceContext,
+      chainTraceContext: stateJob.chain.traceContext,
+      traceContext: stateJob.traceContext,
     });
 
     let cleanupAbortListener: (() => void) | null = null;
@@ -285,7 +287,7 @@ export const runJobProcess = async ({
           await prepareTransactionContext.run(async (txCtx) =>
             helpers.stateAdapter.extendJobAttempt({
               txCtx,
-              jobId: job.id,
+              jobId: stateJob.id,
               workerId,
               timeoutMs: attemptConfig.timeoutMs,
             }),
@@ -295,7 +297,7 @@ export const runJobProcess = async ({
           await attemptHeartbeat.start();
           try {
             disposeAttemptLostListener = await helpers.notifyAdapter.listenJobAttemptLost(
-              job.id,
+              stateJob.id,
               () => {
                 if (!abortController.signal.aborted) {
                   void runInGuardedTransaction(async () => Promise.resolve()).catch(() => {});
@@ -403,13 +405,19 @@ export const runJobProcess = async ({
               if ("reschedule" in outcome) {
                 const [rescheduledJob] = await helpers.stateAdapter.rescheduleJobs({
                   txCtx,
-                  jobs: [{ jobId: job.id, schedule: outcome.reschedule }],
+                  jobs: [{ jobId: stateJob.id, schedule: outcome.reschedule }],
                 });
-                bufferNotifyJobScheduled(transactionHooks, helpers.notifyAdapter, rescheduledJob);
-                bufferObservabilityEvent(transactionHooks, () => {
-                  helpers.observabilityHelper.jobRescheduled(rescheduledJob);
-                });
-                const finishResult = { job: rescheduledJob, continuation: null };
+                // TODO!!!: WTF???
+                if (rescheduledJob) {
+                  bufferNotifyJobScheduled(transactionHooks, helpers.notifyAdapter, rescheduledJob);
+                  bufferObservabilityEvent(transactionHooks, () => {
+                    helpers.observabilityHelper.jobRescheduled(rescheduledJob);
+                  });
+                  const finishResult = { job: rescheduledJob, continuation: null };
+                  finishOnce.succeed(finishResult);
+                  return mapFinishResult(finishResult);
+                }
+                const finishResult = { job: stateJob, continuation: null };
                 finishOnce.succeed(finishResult);
                 return mapFinishResult(finishResult);
               }
@@ -417,7 +425,7 @@ export const runJobProcess = async ({
               const finishResult =
                 "output" in outcome
                   ? await completeChain(helpers, {
-                      job,
+                      job: stateJob,
                       output: outcome.output,
                       txCtx,
                       transactionHooks,
@@ -425,10 +433,14 @@ export const runJobProcess = async ({
                     })
                   : await continueChain(helpers, {
                       fromJob: {
-                        ...job,
-                        chainTraceContext:
-                          attemptSpanHandle?.getChainTraceContext() ?? job.chainTraceContext,
-                        traceContext: attemptSpanHandle?.getTraceContext() ?? job.traceContext,
+                        ...stateJob,
+                        traceContext: attemptSpanHandle?.getTraceContext() ?? stateJob.traceContext,
+                        chain: {
+                          ...stateJob.chain,
+                          traceContext:
+                            attemptSpanHandle?.getChainTraceContext() ??
+                            stateJob.chain.traceContext,
+                        },
                       },
                       continueWith: outcome.continueWith,
                       txCtx,
@@ -517,7 +529,7 @@ export const runJobProcess = async ({
 
       emitAttemptDuration();
 
-      helpers.observabilityHelper.jobAttemptCompleted(job, {
+      helpers.observabilityHelper.jobAttemptCompleted(stateJob, {
         output: finished.job.output,
         continuedWith: finished.continuation ?? undefined,
         workerId,
@@ -547,7 +559,7 @@ export const runJobProcess = async ({
         const errorResult = await runInGuardedTransaction(async (txCtx, transactionHooks) =>
           transactionHooks.withSavepoint(async () =>
             handleJobHandlerError(helpers, {
-              job,
+              stateJob,
               error,
               txCtx,
               transactionHooks,

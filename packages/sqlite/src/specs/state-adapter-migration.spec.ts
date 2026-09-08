@@ -67,15 +67,14 @@ describe("migrateToLatest", () => {
         unrecognized: [],
       });
       expect(await objectNames(provider)).toEqual([
-        "queuert_chain_head_idx",
+        "queuert_chain_completed_idx",
+        "queuert_chain_idx",
         "queuert_chain_index_idx",
-        "queuert_chain_tail_completed_idx",
-        "queuert_chain_tail_running_idx",
+        "queuert_chain_running_idx",
         "queuert_job",
         "queuert_job_blocker",
         "queuert_job_blocker_chain_idx",
         "queuert_job_completed_idx",
-        "queuert_job_continuation_idx",
         "queuert_job_deduplication_idx",
         "queuert_job_idx",
         "queuert_job_pending_idx",

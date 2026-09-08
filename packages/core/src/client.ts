@@ -1,4 +1,4 @@
-import { type Chain, mapStatePairToChain } from "./entities/chain.js";
+import { type Chain, mapStateChainToChain } from "./entities/chain.js";
 import { type DeduplicationOptions } from "./entities/deduplication.js";
 import { type BaseJobTypeDefinitions } from "./entities/job-type.js";
 import { type JobTypes } from "./entities/job-types.js";
@@ -57,6 +57,8 @@ import {
   type GetStateAdapterJobId,
   type GetStateAdapterTxContext,
   type StateAdapter,
+  type StateChain,
+  type StateJob,
 } from "./state-adapter/state-adapter.js";
 import { type TransactionHooks } from "./transaction-hooks.js";
 import { type AttemptFinishResult, type AttemptOutcome } from "./worker/job-process.types.js";
@@ -226,8 +228,7 @@ export type Client<
 
   /**
    * Delete a single chain by ID. Returns the deleted chain, or `undefined` if no
-   * chain with that ID exists. When `cascade` is true, includes transitive
-   * dependencies.
+   * chain with that ID exists.
    *
    * @throws {@link BlockerReferenceError} if external jobs depend on it.
    */
@@ -237,14 +238,12 @@ export type Client<
   >(
     options: {
       id: TJobId;
-      cascade?: boolean;
       transactionHooks: TransactionHooks;
     } & GetStateAdapterTxContext<TStateAdapter>,
   ) => Promise<ResolvedChain<TJobId, TJobTypeDefinitions, TEntryName> | undefined>;
 
   /**
-   * Delete chains by ID. Missing IDs are silently skipped. When `cascade` is
-   * true, includes transitive dependencies.
+   * Delete chains by ID. Missing IDs are silently skipped.
    *
    * @throws {@link BlockerReferenceError} if external jobs depend on them.
    */
@@ -254,7 +253,6 @@ export type Client<
   >(
     options: {
       ids: TJobId[];
-      cascade?: boolean;
       transactionHooks: TransactionHooks;
     } & GetStateAdapterTxContext<TStateAdapter>,
   ) => Promise<ResolvedChain<TJobId, TJobTypeDefinitions, TEntryName>[]>;
@@ -522,7 +520,7 @@ export type Client<
       | { status?: undefined; orderBy?: "createdAt" }
       | { status: "pending"; blocked?: boolean; orderBy?: "createdAt" | "scheduledAt" }
       | { status: "running"; orderBy?: "createdAt" | "attemptAt" | "attemptUntil" }
-      | { status: "completed"; continued?: boolean; orderBy?: "createdAt" | "completedAt" }
+      | { status: "completed"; orderBy?: "createdAt" | "completedAt" }
     ) &
       Partial<GetStateAdapterTxContext<TStateAdapter>>,
   ) => Promise<Page<ResolvedJob<TJobId, TJobTypeDefinitions, TJobTypeName>>>;
@@ -695,14 +693,12 @@ export const createClient = async <
     >(
       options: {
         id: TJobId;
-        cascade?: boolean;
         transactionHooks: TransactionHooks;
       } & GetStateAdapterTxContext<TStateAdapter>,
     ): Promise<ResolvedChain<TJobId, TJobTypeDefinitions, TEntryName> | undefined> => {
-      const { id, cascade, transactionHooks, ...rest } = options;
+      const { id, transactionHooks, ...rest } = options;
       const deleted = await client.deleteChains<TEntryName>({
         ids: [id],
-        cascade,
         transactionHooks,
         ...(rest as GetStateAdapterTxContext<TStateAdapter>),
       });
@@ -716,19 +712,25 @@ export const createClient = async <
     >(
       options: {
         ids: TJobId[];
-        cascade?: boolean;
         transactionHooks: TransactionHooks;
       } & GetStateAdapterTxContext<TStateAdapter>,
     ): Promise<ResolvedChain<TJobId, TJobTypeDefinitions, TEntryName>[]> => {
-      const { ids, cascade, transactionHooks, ...rest } = options;
+      const { ids, transactionHooks, ...rest } = options;
       const txCtx = requireTxCtx(rest);
 
-      const { deleted, blockerRefs } = await helpers.stateAdapter.deleteChains({
+      const verdicts = await helpers.stateAdapter.deleteChains({
         txCtx,
         chainIds: ids,
-        cascade,
       });
 
+      const blockerRefs = verdicts.flatMap((verdict) =>
+        Array.isArray(verdict)
+          ? verdict.map((blockedJob) => ({
+              chainId: blockedJob.blockedByChainId,
+              referencedByJobId: blockedJob.jobId,
+            }))
+          : [],
+      );
       if (blockerRefs.length > 0) {
         throw new BlockerReferenceError(
           `Cannot delete chains: ${[...new Set(blockerRefs.map((r) => r.chainId))].join(", ")} referenced as blockers`,
@@ -736,15 +738,25 @@ export const createClient = async <
         );
       }
 
-      const deletedChains = deleted.map(
-        (pair) =>
-          mapStatePairToChain(pair) as ResolvedChain<TJobId, TJobTypeDefinitions, TEntryName>,
-      );
+      const deletedChains = verdicts
+        .filter(
+          (verdict): verdict is StateChain => verdict !== undefined && !Array.isArray(verdict),
+        )
+        .map(
+          (stateChain) =>
+            mapStateChainToChain(stateChain) as ResolvedChain<
+              TJobId,
+              TJobTypeDefinitions,
+              TEntryName
+            >,
+        );
 
-      for (const pair of deleted) {
-        bufferObservabilityEvent(transactionHooks, () => {
-          helpers.observabilityHelper.chainDeleted(pair[0]);
-        });
+      for (const stateChain of verdicts) {
+        if (stateChain !== undefined && !Array.isArray(stateChain)) {
+          bufferObservabilityEvent(transactionHooks, () => {
+            helpers.observabilityHelper.chainDeleted(stateChain);
+          });
+        }
       }
 
       return deletedChains;
@@ -798,7 +810,7 @@ export const createClient = async <
       const txCtx = requireTxCtx(rest);
 
       if (ids.length === 0) return [];
-      const classified = await helpers.stateAdapter.getJobs({
+      const existingJobs = await helpers.stateAdapter.getJobs({
         txCtx,
         jobIds: ids,
         lock: "exclusive",
@@ -806,13 +818,13 @@ export const createClient = async <
 
       const notFound: TJobId[] = [];
       const notReschedulable: { jobId: TJobId; status: JobStatus }[] = [];
-      classified.forEach((entry, index) => {
-        if (entry === undefined) {
+      existingJobs.forEach((stateJob, index) => {
+        if (stateJob === undefined) {
           notFound.push(ids[index]);
-        } else if (entry.completedAt !== null || entry.attemptAt !== null) {
+        } else if (stateJob.completedAt !== null || stateJob.attemptAt !== null) {
           notReschedulable.push({
-            jobId: entry.id as TJobId,
-            status: deriveStatus(entry),
+            jobId: stateJob.id as TJobId,
+            status: deriveStatus(stateJob),
           });
         }
       });
@@ -834,15 +846,20 @@ export const createClient = async <
         txCtx,
         jobs: ids.map((id: TJobId) => ({ jobId: id, schedule })),
       });
-      for (const job of rescheduled) {
-        bufferNotifyJobScheduled(transactionHooks, helpers.notifyAdapter, job);
+      for (const stateJob of rescheduled) {
+        if (stateJob === undefined) continue;
+        bufferNotifyJobScheduled(transactionHooks, helpers.notifyAdapter, stateJob);
         bufferObservabilityEvent(transactionHooks, () => {
-          helpers.observabilityHelper.jobRescheduled(job);
+          helpers.observabilityHelper.jobRescheduled(stateJob);
         });
       }
-      return rescheduled.map(
-        (job) => mapStateJobToJob(job) as ResolvedJob<TJobId, TJobTypeDefinitions, TJobTypeName>,
-      );
+      // TODO!!!: this shouldn't be filtered
+      return rescheduled
+        .filter((stateJob): stateJob is NonNullable<typeof stateJob> => stateJob !== undefined)
+        .map(
+          (stateJob) =>
+            mapStateJobToJob(stateJob) as ResolvedJob<TJobId, TJobTypeDefinitions, TJobTypeName>,
+        );
     },
 
     completeChain: async <
@@ -869,28 +886,25 @@ export const createClient = async <
     ): Promise<TResult> => {
       const { id, typeName, handler, transactionHooks, ...rest } = options;
       const txCtx = requireTxCtx(rest);
-      const classified = await helpers.stateAdapter.getChains({
+      const stateChains = await helpers.stateAdapter.getChains({
         txCtx,
         chainIds: [id],
         lock: "exclusive",
       });
 
-      const chainPair = classified[0];
-      if (chainPair === undefined) {
+      const stateChain = stateChains[0];
+      if (stateChain === undefined) {
         throw new ChainNotFoundError(`Chain with id ${id} not found`, {
           chainId: id,
         });
       }
 
-      const [headJob, tailJob] = chainPair;
-      const currentJob = tailJob ?? headJob;
-
-      if (currentJob.chainTypeName !== typeName) {
+      if (stateChain.typeName !== typeName) {
         throw new ChainTypeMismatchError(
-          `Expected chain ${String(id)} to have type "${typeName}" but found "${currentJob.chainTypeName}"`,
+          `Expected chain ${String(id)} to have type "${typeName}" but found "${stateChain.typeName}"`,
           {
             expectedTypeName: typeName,
-            actualTypeName: currentJob.chainTypeName,
+            actualTypeName: stateChain.typeName,
           },
         );
       }
@@ -973,6 +987,11 @@ export const createClient = async <
         return completeResult.continuedTo ?? completeResult;
       };
 
+      // TODO!!!: should we extract a helper?
+      const currentJob: StateJob = {
+        ...(stateChain.tail ?? stateChain.head),
+        chain: stateChain,
+      };
       await handler({ job: mapStateJobToJob(currentJob), completeJob });
 
       const [updatedChain] = await helpers.stateAdapter.getChains({
@@ -986,7 +1005,7 @@ export const createClient = async <
         });
       }
 
-      return mapStatePairToChain(updatedChain) as TResult;
+      return mapStateChainToChain(updatedChain) as TResult;
     },
 
     awaitChain: async <
@@ -1013,29 +1032,29 @@ export const createClient = async <
       let typeValidated = !typeName;
 
       const checkChain = async () => {
-        const [chainPair] = await helpers.stateAdapter.getChains({
+        const [stateChain] = await helpers.stateAdapter.getChains({
           chainIds: [id],
         });
-        if (!chainPair) {
+        if (!stateChain) {
           throw new ChainNotFoundError(`Chain with id ${id} not found`, {
             chainId: id as string,
           });
         }
 
         if (!typeValidated) {
-          if (chainPair[0].chainTypeName !== typeName) {
+          if (stateChain.typeName !== typeName) {
             throw new ChainTypeMismatchError(
-              `Expected chain ${String(id)} to have type "${typeName}" but found "${chainPair[0].chainTypeName}"`,
+              `Expected chain ${String(id)} to have type "${typeName}" but found "${stateChain.typeName}"`,
               {
                 expectedTypeName: typeName!,
-                actualTypeName: chainPair[0].chainTypeName,
+                actualTypeName: stateChain.typeName,
               },
             );
           }
           typeValidated = true;
         }
 
-        const mapped = mapStatePairToChain(chainPair);
+        const mapped = mapStateChainToChain(stateChain);
         return mapped.status === "completed"
           ? (mapped as ResolvedChain<TJobId, TJobTypeDefinitions, TChainTypeName> & {
               status: "completed";
@@ -1132,7 +1151,7 @@ export const createClient = async <
 
       if (ids.length === 0) return [];
 
-      const chainPairs = lock
+      const stateChains = lock
         ? await helpers.stateAdapter.getChains({
             txCtx: requireTxCtx(rest),
             chainIds: ids,
@@ -1141,23 +1160,23 @@ export const createClient = async <
         : await helpers.stateAdapter.getChains({ txCtx: normalizeTxCtx(rest), chainIds: ids });
 
       if (typeName) {
-        const mismatch = chainPairs.find((p) => p && p[0].chainTypeName !== typeName);
+        const mismatch = stateChains.find((s) => s && s.typeName !== typeName);
         if (mismatch) {
-          const idx = chainPairs.indexOf(mismatch);
+          const idx = stateChains.indexOf(mismatch);
           throw new ChainTypeMismatchError(
-            `Expected chain ${String(ids[idx])} to have type "${typeName}" but found "${mismatch[0].chainTypeName}"`,
+            `Expected chain ${String(ids[idx])} to have type "${typeName}" but found "${mismatch.typeName}"`,
             {
               expectedTypeName: typeName,
-              actualTypeName: mismatch[0].chainTypeName,
+              actualTypeName: mismatch.typeName,
             },
           );
         }
       }
 
-      return chainPairs.map((chainPair) => {
-        if (!chainPair) return undefined;
+      return stateChains.map((stateChain) => {
+        if (!stateChain) return undefined;
 
-        return mapStatePairToChain(chainPair) as ResolvedChain<
+        return mapStateChainToChain(stateChain) as ResolvedChain<
           TJobId,
           TJobTypeDefinitions,
           TChainTypeName
@@ -1196,7 +1215,7 @@ export const createClient = async <
 
       if (ids.length === 0) return [];
 
-      const jobs = lock
+      const stateJobs = lock
         ? await helpers.stateAdapter.getJobs({
             txCtx: requireTxCtx(rest),
             jobIds: ids,
@@ -1205,9 +1224,9 @@ export const createClient = async <
         : await helpers.stateAdapter.getJobs({ txCtx: normalizeTxCtx(rest), jobIds: ids });
 
       if (typeName) {
-        const mismatch = jobs.find((j) => j && j.typeName !== typeName);
+        const mismatch = stateJobs.find((s) => s && s.typeName !== typeName);
         if (mismatch) {
-          const idx = jobs.indexOf(mismatch);
+          const idx = stateJobs.indexOf(mismatch);
           throw new JobTypeMismatchError(
             `Expected job ${String(ids[idx])} to have type "${typeName}" but found "${mismatch.typeName}"`,
             { expectedTypeName: typeName, actualTypeName: mismatch.typeName },
@@ -1215,10 +1234,10 @@ export const createClient = async <
         }
       }
 
-      return jobs.map((job) => {
-        if (!job) return undefined;
+      return stateJobs.map((stateJob) => {
+        if (!stateJob) return undefined;
 
-        return mapStateJobToJob(job) as ResolvedJob<TJobId, TJobTypeDefinitions, TJobTypeName>;
+        return mapStateJobToJob(stateJob) as ResolvedJob<TJobId, TJobTypeDefinitions, TJobTypeName>;
       });
     },
 
@@ -1299,8 +1318,12 @@ export const createClient = async <
       } as Parameters<typeof helpers.stateAdapter.listChains>[0]);
       return {
         items: result.items.map(
-          (pair) =>
-            mapStatePairToChain(pair) as ResolvedChain<TJobId, TJobTypeDefinitions, TChainTypeName>,
+          (stateChain) =>
+            mapStateChainToChain(stateChain) as ResolvedChain<
+              TJobId,
+              TJobTypeDefinitions,
+              TChainTypeName
+            >,
         ),
         nextCursor: result.nextCursor,
       };
@@ -1320,7 +1343,7 @@ export const createClient = async <
         | { status?: undefined; orderBy?: "createdAt" }
         | { status: "pending"; blocked?: boolean; orderBy?: "createdAt" | "scheduledAt" }
         | { status: "running"; orderBy?: "createdAt" | "attemptAt" | "attemptUntil" }
-        | { status: "completed"; continued?: boolean; orderBy?: "createdAt" | "completedAt" }
+        | { status: "completed"; orderBy?: "createdAt" | "completedAt" }
       ) &
         Partial<GetStateAdapterTxContext<TStateAdapter>>,
     ): Promise<Page<ResolvedJob<TJobId, TJobTypeDefinitions, TJobTypeName>>> => {
@@ -1331,7 +1354,6 @@ export const createClient = async <
         status,
         orderBy,
         blocked,
-        continued,
         orderDirection = "desc",
         cursor,
         limit = 50,
@@ -1340,7 +1362,6 @@ export const createClient = async <
         status?: string;
         orderBy?: string;
         blocked?: boolean;
-        continued?: boolean;
       };
       const txCtx = normalizeTxCtx(rest);
 
@@ -1361,11 +1382,11 @@ export const createClient = async <
         orderDirection,
         page: { cursor, limit },
         ...(blocked !== undefined ? { blocked } : {}),
-        ...(continued !== undefined ? { continued } : {}),
       } as Parameters<typeof helpers.stateAdapter.listJobs>[0]);
       return {
         items: result.items.map(
-          (job) => mapStateJobToJob(job) as ResolvedJob<TJobId, TJobTypeDefinitions, TJobTypeName>,
+          (stateJob) =>
+            mapStateJobToJob(stateJob) as ResolvedJob<TJobId, TJobTypeDefinitions, TJobTypeName>,
         ),
         nextCursor: result.nextCursor,
       };
@@ -1394,16 +1415,16 @@ export const createClient = async <
       const txCtx = normalizeTxCtx(rest);
 
       if (chainTypeName) {
-        const [chainPair] = await helpers.stateAdapter.getChains({
+        const [stateChain] = await helpers.stateAdapter.getChains({
           txCtx,
           chainIds: [chainId],
         });
-        if (chainPair && chainPair[0].chainTypeName !== chainTypeName) {
+        if (stateChain && stateChain.typeName !== chainTypeName) {
           throw new ChainTypeMismatchError(
-            `Expected chain ${String(chainId)} to have type "${chainTypeName}" but found "${chainPair[0].chainTypeName}"`,
+            `Expected chain ${String(chainId)} to have type "${chainTypeName}" but found "${stateChain.typeName}"`,
             {
               expectedTypeName: chainTypeName,
-              actualTypeName: chainPair[0].chainTypeName,
+              actualTypeName: stateChain.typeName,
             },
           );
         }
@@ -1417,8 +1438,12 @@ export const createClient = async <
       });
       return {
         items: result.items.map(
-          (job) =>
-            mapStateJobToJob(job) as ResolvedChainJobs<TJobId, TJobTypeDefinitions, TChainTypeName>,
+          (stateJob) =>
+            mapStateJobToJob(stateJob) as ResolvedChainJobs<
+              TJobId,
+              TJobTypeDefinitions,
+              TChainTypeName
+            >,
         ),
         nextCursor: result.nextCursor,
       };
@@ -1441,14 +1466,14 @@ export const createClient = async <
       const txCtx = normalizeTxCtx(rest);
 
       if (typeName) {
-        const [job] = await helpers.stateAdapter.getJobs({
+        const [stateJob] = await helpers.stateAdapter.getJobs({
           txCtx,
           jobIds: [jobId],
         });
-        if (job && job.typeName !== typeName) {
+        if (stateJob && stateJob.typeName !== typeName) {
           throw new JobTypeMismatchError(
-            `Expected job ${String(jobId)} to have type "${typeName}" but found "${job.typeName}"`,
-            { expectedTypeName: typeName, actualTypeName: job.typeName },
+            `Expected job ${String(jobId)} to have type "${typeName}" but found "${stateJob.typeName}"`,
+            { expectedTypeName: typeName, actualTypeName: stateJob.typeName },
           );
         }
       }
@@ -1457,7 +1482,7 @@ export const createClient = async <
         txCtx,
         jobId,
       });
-      return blockers.map((pair) => mapStatePairToChain(pair)) as unknown as TBlockers;
+      return blockers.map((stateChain) => mapStateChainToChain(stateChain)) as unknown as TBlockers;
     },
 
     listBlockedJobs: async <
@@ -1481,30 +1506,30 @@ export const createClient = async <
       const txCtx = normalizeTxCtx(rest);
 
       if (typeName) {
-        const [chainPair] = await helpers.stateAdapter.getChains({
+        const [stateChain] = await helpers.stateAdapter.getChains({
           txCtx,
           chainIds: [chainId],
         });
-        if (chainPair && chainPair[0].chainTypeName !== typeName) {
+        if (stateChain && stateChain.typeName !== typeName) {
           throw new ChainTypeMismatchError(
-            `Expected chain ${String(chainId)} to have type "${typeName}" but found "${chainPair[0].chainTypeName}"`,
+            `Expected chain ${String(chainId)} to have type "${typeName}" but found "${stateChain.typeName}"`,
             {
               expectedTypeName: typeName,
-              actualTypeName: chainPair[0].chainTypeName,
+              actualTypeName: stateChain.typeName,
             },
           );
         }
       }
 
-      const result = await helpers.stateAdapter.listBlockedJobs({
+      const stateJobPage = await helpers.stateAdapter.listBlockedJobs({
         txCtx,
         chainId,
         orderDirection,
         page: { cursor, limit },
       });
       return {
-        items: result.items.map((job) => mapStateJobToJob(job) as TBlockedJob),
-        nextCursor: result.nextCursor,
+        items: stateJobPage.items.map((stateJob) => mapStateJobToJob(stateJob) as TBlockedJob),
+        nextCursor: stateJobPage.nextCursor,
       };
     },
   };

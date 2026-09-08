@@ -3029,6 +3029,12 @@ describe("Rollback", () => {
   }) => {
     const jobTypes = defineJobTypes<{
       test: { entry: true; input: null; output: null };
+      dependent: {
+        entry: true;
+        input: null;
+        output: null;
+        blockers: [{ typeName: "test" }];
+      };
     }>();
 
     let unblockErrorThrown = false;
@@ -3075,9 +3081,22 @@ describe("Rollback", () => {
     });
 
     const chain = await withTransactionHooks(async (transactionHooks) =>
-      withTransaction(async (txCtx) =>
-        client.createChain({ ...txCtx, transactionHooks, typeName: "test", input: null }),
-      ),
+      withTransaction(async (txCtx) => {
+        const created = await client.createChain({
+          ...txCtx,
+          transactionHooks,
+          typeName: "test",
+          input: null,
+        });
+        await client.createChain({
+          ...txCtx,
+          transactionHooks,
+          typeName: "dependent",
+          input: null,
+          blockers: [created],
+        });
+        return created;
+      }),
     );
 
     await withWorkers([await worker.start()], async () => {
@@ -3087,6 +3106,9 @@ describe("Rollback", () => {
     await expectMetrics([
       { method: "chainCreated" },
       { method: "jobCreated" },
+      { method: "chainCreated" },
+      { method: "jobCreated" },
+      { method: "jobBlocked" },
       { method: "workerStarted" },
       { method: "jobAttemptStarted" },
       { method: "stateAdapterError" },
@@ -3095,6 +3117,7 @@ describe("Rollback", () => {
       { method: "jobAttemptStarted" },
       { method: "jobCompleted" },
       { method: "chainCompleted" },
+      { method: "jobUnblocked" },
       { method: "jobAttemptCompleted" },
       { method: "workerStopping" },
       { method: "workerStopped" },
@@ -3111,6 +3134,12 @@ describe("Rollback", () => {
   }) => {
     const jobTypes = defineJobTypes<{
       test: { entry: true; input: null; output: { result: number } };
+      dependent: {
+        entry: true;
+        input: null;
+        output: null;
+        blockers: [{ typeName: "test" }];
+      };
     }>();
 
     let unblockErrorThrown = false;
@@ -3141,9 +3170,22 @@ describe("Rollback", () => {
     });
 
     const chain = await withTransactionHooks(async (transactionHooks) =>
-      withTransaction(async (txCtx) =>
-        client.createChain({ ...txCtx, transactionHooks, typeName: "test", input: null }),
-      ),
+      withTransaction(async (txCtx) => {
+        const created = await client.createChain({
+          ...txCtx,
+          transactionHooks,
+          typeName: "test",
+          input: null,
+        });
+        await client.createChain({
+          ...txCtx,
+          transactionHooks,
+          typeName: "dependent",
+          input: null,
+          blockers: [created],
+        });
+        return created;
+      }),
     );
 
     // First attempt: unblockJobs fails inside finishJob → entire transaction rolls back
@@ -3175,9 +3217,13 @@ describe("Rollback", () => {
     await expectMetrics([
       { method: "chainCreated" },
       { method: "jobCreated" },
+      { method: "chainCreated" },
+      { method: "jobCreated" },
+      { method: "jobBlocked" },
       { method: "stateAdapterError" },
       { method: "jobCompleted" },
       { method: "chainCompleted" },
+      { method: "jobUnblocked" },
     ]);
   });
 

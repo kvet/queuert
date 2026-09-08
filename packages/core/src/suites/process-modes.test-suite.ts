@@ -86,15 +86,12 @@ export const processModesTestSuite = ({ it }: { it: TestAPI<TestSuiteContext> })
         status: "committed",
         children: [
           expect.objectContaining({ name: "startJobAttempt" }),
-          expect.objectContaining({ name: "getJobBlockers" }),
           expect.objectContaining({
             name: "withSavepoint",
             status: "committed",
             children: [
               expect.objectContaining({ name: "user-completion" }),
               expect.objectContaining({ name: "completeJobs" }),
-              expect.objectContaining({ name: "getJobs" }),
-              expect.objectContaining({ name: "unblockJobs" }),
             ],
           }),
         ],
@@ -176,7 +173,6 @@ export const processModesTestSuite = ({ it }: { it: TestAPI<TestSuiteContext> })
         status: "committed",
         children: [
           expect.objectContaining({ name: "startJobAttempt" }),
-          expect.objectContaining({ name: "getJobBlockers" }),
           expect.objectContaining({ name: "extendJobAttempt" }),
         ],
       }),
@@ -191,8 +187,6 @@ export const processModesTestSuite = ({ it }: { it: TestAPI<TestSuiteContext> })
             children: [
               expect.objectContaining({ name: "user-completion" }),
               expect.objectContaining({ name: "completeJobs" }),
-              expect.objectContaining({ name: "getJobs" }),
-              expect.objectContaining({ name: "unblockJobs" }),
             ],
           }),
         ],
@@ -277,7 +271,6 @@ export const processModesTestSuite = ({ it }: { it: TestAPI<TestSuiteContext> })
         status: "committed",
         children: [
           expect.objectContaining({ name: "startJobAttempt" }),
-          expect.objectContaining({ name: "getJobBlockers" }),
           expect.objectContaining({
             name: "withSavepoint",
             status: "committed",
@@ -297,8 +290,6 @@ export const processModesTestSuite = ({ it }: { it: TestAPI<TestSuiteContext> })
             children: [
               expect.objectContaining({ name: "user-completion" }),
               expect.objectContaining({ name: "completeJobs" }),
-              expect.objectContaining({ name: "getJobs" }),
-              expect.objectContaining({ name: "unblockJobs" }),
             ],
           }),
         ],
@@ -380,7 +371,6 @@ export const processModesTestSuite = ({ it }: { it: TestAPI<TestSuiteContext> })
         status: "committed",
         children: [
           expect.objectContaining({ name: "startJobAttempt" }),
-          expect.objectContaining({ name: "getJobBlockers" }),
           expect.objectContaining({ name: "extendJobAttempt" }),
         ],
       }),
@@ -395,8 +385,6 @@ export const processModesTestSuite = ({ it }: { it: TestAPI<TestSuiteContext> })
             children: [
               expect.objectContaining({ name: "user-completion" }),
               expect.objectContaining({ name: "completeJobs" }),
-              expect.objectContaining({ name: "getJobs" }),
-              expect.objectContaining({ name: "unblockJobs" }),
             ],
           }),
         ],
@@ -481,7 +469,6 @@ export const processModesTestSuite = ({ it }: { it: TestAPI<TestSuiteContext> })
         status: "committed",
         children: [
           expect.objectContaining({ name: "startJobAttempt" }),
-          expect.objectContaining({ name: "getJobBlockers" }),
           expect.objectContaining({
             name: "withSavepoint",
             status: "committed",
@@ -493,8 +480,6 @@ export const processModesTestSuite = ({ it }: { it: TestAPI<TestSuiteContext> })
             children: [
               expect.objectContaining({ name: "user-completion" }),
               expect.objectContaining({ name: "completeJobs" }),
-              expect.objectContaining({ name: "getJobs" }),
-              expect.objectContaining({ name: "unblockJobs" }),
             ],
           }),
         ],
@@ -576,15 +561,12 @@ export const processModesTestSuite = ({ it }: { it: TestAPI<TestSuiteContext> })
         status: "committed",
         children: [
           expect.objectContaining({ name: "startJobAttempt" }),
-          expect.objectContaining({ name: "getJobBlockers" }),
           expect.objectContaining({
             name: "withSavepoint",
             status: "committed",
             children: [
               expect.objectContaining({ name: "user-completion" }),
               expect.objectContaining({ name: "completeJobs" }),
-              expect.objectContaining({ name: "getJobs" }),
-              expect.objectContaining({ name: "unblockJobs" }),
             ],
           }),
         ],
@@ -671,7 +653,6 @@ export const processModesTestSuite = ({ it }: { it: TestAPI<TestSuiteContext> })
         status: "committed",
         children: [
           expect.objectContaining({ name: "startJobAttempt" }),
-          expect.objectContaining({ name: "getJobBlockers" }),
           expect.objectContaining({ name: "extendJobAttempt" }),
         ],
       }),
@@ -694,8 +675,6 @@ export const processModesTestSuite = ({ it }: { it: TestAPI<TestSuiteContext> })
             children: [
               expect.objectContaining({ name: "user-completion" }),
               expect.objectContaining({ name: "completeJobs" }),
-              expect.objectContaining({ name: "getJobs" }),
-              expect.objectContaining({ name: "unblockJobs" }),
             ],
           }),
         ],
@@ -1005,7 +984,6 @@ export const processModesTestSuite = ({ it }: { it: TestAPI<TestSuiteContext> })
         status: "committed",
         children: [
           expect.objectContaining({ name: "startJobAttempt" }),
-          expect.objectContaining({ name: "getJobBlockers" }),
           expect.objectContaining({ name: "extendJobAttempt" }),
         ],
       }),
@@ -1028,8 +1006,6 @@ export const processModesTestSuite = ({ it }: { it: TestAPI<TestSuiteContext> })
             children: [
               expect.objectContaining({ name: "user-completion" }),
               expect.objectContaining({ name: "completeJobs" }),
-              expect.objectContaining({ name: "getJobs" }),
-              expect.objectContaining({ name: "unblockJobs" }),
             ],
           }),
         ],
@@ -1115,7 +1091,6 @@ export const processModesTestSuite = ({ it }: { it: TestAPI<TestSuiteContext> })
         status: "committed",
         children: [
           expect.objectContaining({ name: "startJobAttempt" }),
-          expect.objectContaining({ name: "getJobBlockers" }),
           expect.objectContaining({ name: "extendJobAttempt" }),
         ],
       }),
@@ -1138,8 +1113,6 @@ export const processModesTestSuite = ({ it }: { it: TestAPI<TestSuiteContext> })
             children: [
               expect.objectContaining({ name: "user-completion" }),
               expect.objectContaining({ name: "completeJobs" }),
-              expect.objectContaining({ name: "getJobs" }),
-              expect.objectContaining({ name: "unblockJobs" }),
             ],
           }),
         ],
