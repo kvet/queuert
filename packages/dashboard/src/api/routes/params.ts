@@ -1,7 +1,7 @@
 import { type ChainStatus, type JobStatus } from "queuert";
 import { decodeIdCursor, decodeTimestampWithIdCursor } from "queuert/internal";
 
-const VALID_JOB_STATUSES = new Set<string>(["pending", "running", "completed"]);
+const VALID_JOB_STATUSES = new Set<string>(["blocked", "pending", "running", "completed"]);
 const VALID_CHAIN_STATUSES = new Set<string>(["running", "completed"]);
 
 export const parseChainStatusFilter = (raw: string | undefined): ChainStatus | undefined => {
@@ -9,14 +9,9 @@ export const parseChainStatusFilter = (raw: string | undefined): ChainStatus | u
   return VALID_CHAIN_STATUSES.has(raw) ? (raw as ChainStatus) : undefined;
 };
 
-export const parseJobStatusFilter = (
-  raw: string | undefined,
-): { status?: JobStatus; blocked?: boolean } => {
-  if (!raw) return {};
-  if (raw === "blocked") return { status: "pending", blocked: true };
-  if (raw === "pending-unblocked") return { status: "pending", blocked: false };
-  if (VALID_JOB_STATUSES.has(raw)) return { status: raw as JobStatus };
-  return {};
+export const parseJobStatusFilter = (raw: string | undefined): JobStatus | undefined => {
+  if (!raw) return undefined;
+  return VALID_JOB_STATUSES.has(raw) ? (raw as JobStatus) : undefined;
 };
 
 export const parseCursor = (

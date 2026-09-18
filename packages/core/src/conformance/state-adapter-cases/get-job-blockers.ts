@@ -62,19 +62,19 @@ export const getJobBlockersGroup: ConformanceGroup<StateConformanceFixture> = {
           }),
         );
 
-        const [{ continuation: blockerContinuation }] = await stateAdapter.withTransaction(
-          async (txCtx) =>
-            stateAdapter.continueJobs({
-              txCtx,
-              jobs: [
-                {
-                  typeName: "blocker-step2",
-                  continueFromId: blockerRootChain.head.id,
-                  input: null,
-                },
-              ],
-            }),
+        const [continuedBlockerContinuation] = await stateAdapter.withTransaction(async (txCtx) =>
+          stateAdapter.continueJobs({
+            txCtx,
+            jobs: [
+              {
+                typeName: "blocker-step2",
+                continueFromId: blockerRootChain.head.id,
+                input: null,
+              },
+            ],
+          }),
         );
+        const { continuation: blockerContinuation } = continuedBlockerContinuation!;
 
         const [mainChain] = await stateAdapter.withTransaction(async (txCtx) =>
           stateAdapter.createJobs({

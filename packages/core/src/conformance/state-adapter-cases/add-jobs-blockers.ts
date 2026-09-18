@@ -1,4 +1,3 @@
-import { ChainNotFoundError } from "../../errors.js";
 import { type ConformanceGroup } from "../runner.js";
 import { type StateConformanceFixture } from "./types.js";
 
@@ -34,10 +33,10 @@ export const addJobsBlockersGroup: ConformanceGroup<StateConformanceFixture> = {
 
         expect(result.completedAt).toBeNull();
         expect(result.attemptAt).toBeNull();
-        expect(result.blocked).toBe(true);
+        expect(result.status).toBe("blocked");
         expect(result.blockers).toHaveLength(1);
-        expect(result.blockers[0].id).toBe(blockerChain.head.chainId);
-        expect(result.blockers[0].completedAt).toBeNull();
+        expect(result.blockers[0]!.id).toBe(blockerChain.head.chainId);
+        expect(result.blockers[0]!.completedAt).toBeNull();
       },
     },
     {
@@ -76,13 +75,13 @@ export const addJobsBlockersGroup: ConformanceGroup<StateConformanceFixture> = {
 
         expect(result.completedAt).toBeNull();
         expect(result.attemptAt).toBeNull();
-        expect(result.blocked).toBe(false);
+        expect(result.status).toBe("pending");
         expect(result.blockers).toHaveLength(1);
-        expect(result.blockers[0].completedAt).toBeInstanceOf(Date);
+        expect(result.blockers[0]!.completedAt).toBeInstanceOf(Date);
       },
     },
     {
-      name: "throws ChainNotFoundError for an unknown blocker chain",
+      name: "reports an undefined blocker for an unknown blocker chain",
       run: async ({ stateAdapter }, expect) => {
         const [mainChain] = await stateAdapter.withTransaction(async (txCtx) =>
           stateAdapter.createJobs({
@@ -94,17 +93,22 @@ export const addJobsBlockersGroup: ConformanceGroup<StateConformanceFixture> = {
         const missingChainId =
           mainChain.head.chainId.slice(0, -1) + (mainChain.head.chainId.endsWith("0") ? "1" : "0");
 
+        // The adapter reports the missing chain instead of throwing; aborting the
+        // transaction is the caller's job, and is what discards the batch's writes.
         await expect(
-          stateAdapter.withTransaction(async (txCtx) =>
-            stateAdapter.addJobsBlockers({
+          stateAdapter.withTransaction(async (txCtx) => {
+            const [result] = await stateAdapter.addJobsBlockers({
               txCtx,
               jobBlockers: [{ jobId: mainChain.head.id, blockedByChainIds: [missingChainId] }],
-            }),
-          ),
-        ).rejects.toThrow(ChainNotFoundError);
+            });
+            expect(result.blockers).toHaveLength(1);
+            expect(result.blockers[0]).toBeUndefined();
+            throw new Error("caller aborts");
+          }),
+        ).rejects.toThrow("caller aborts");
 
         const [unchanged] = await stateAdapter.getJobs({ jobIds: [mainChain.head.id] });
-        expect(unchanged!.blocked).toBe(false);
+        expect(unchanged!.status).toBe("pending");
         expect(await stateAdapter.getJobBlockers({ jobId: mainChain.head.id })).toHaveLength(0);
       },
     },
@@ -148,16 +152,16 @@ export const addJobsBlockersGroup: ConformanceGroup<StateConformanceFixture> = {
         expect(results[0].id).toBe(mainChain1.head.id);
         expect(results[0].completedAt).toBeNull();
         expect(results[0].attemptAt).toBeNull();
-        expect(results[0].blocked).toBe(true);
-        expect(results[0].blockers.map((blocker) => blocker.id)).toEqual([
+        expect(results[0].status).toBe("blocked");
+        expect(results[0].blockers.map((blocker) => blocker!.id)).toEqual([
           blockerChain1.head.chainId,
         ]);
 
         expect(results[1].id).toBe(mainChain2.head.id);
         expect(results[1].completedAt).toBeNull();
         expect(results[1].attemptAt).toBeNull();
-        expect(results[1].blocked).toBe(true);
-        expect(results[1].blockers.map((blocker) => blocker.id)).toEqual([
+        expect(results[1].status).toBe("blocked");
+        expect(results[1].blockers.map((blocker) => blocker!.id)).toEqual([
           blockerChain1.head.chainId,
           blockerChain2.head.chainId,
         ]);
@@ -217,15 +221,15 @@ export const addJobsBlockersGroup: ConformanceGroup<StateConformanceFixture> = {
         expect(results[0].id).toBe(mainChain1.head.id);
         expect(results[0].completedAt).toBeNull();
         expect(results[0].attemptAt).toBeNull();
-        expect(results[0].blocked).toBe(false);
-        expect(results[0].blockers[0].completedAt).toBeInstanceOf(Date);
+        expect(results[0].status).toBe("pending");
+        expect(results[0].blockers[0]!.completedAt).toBeInstanceOf(Date);
 
         expect(results[1].id).toBe(mainChain2.head.id);
         expect(results[1].completedAt).toBeNull();
         expect(results[1].attemptAt).toBeNull();
-        expect(results[1].blocked).toBe(true);
-        expect(results[1].blockers[0].id).toBe(incompleteBlockerChain.head.chainId);
-        expect(results[1].blockers[0].completedAt).toBeNull();
+        expect(results[1].status).toBe("blocked");
+        expect(results[1].blockers[0]!.id).toBe(incompleteBlockerChain.head.chainId);
+        expect(results[1].blockers[0]!.completedAt).toBeNull();
       },
     },
     {
@@ -262,7 +266,7 @@ export const addJobsBlockersGroup: ConformanceGroup<StateConformanceFixture> = {
         );
 
         expect(result.blockers).toHaveLength(1);
-        expect(result.blockers[0].traceContext).toEqual(blockerChainTraceContext);
+        expect(result.blockers[0]!.traceContext).toEqual(blockerChainTraceContext);
       },
     },
     {
@@ -317,22 +321,23 @@ export const addJobsBlockersGroup: ConformanceGroup<StateConformanceFixture> = {
         );
 
         expect(result.blockers).toHaveLength(2);
-        expect(result.blockers[0].traceContext).toEqual(chainTraceA);
-        expect(result.blockers[1].traceContext).toEqual(chainTraceB);
+        expect(result.blockers[0]!.traceContext).toEqual(chainTraceA);
+        expect(result.blockers[1]!.traceContext).toEqual(chainTraceB);
       },
     },
     {
-      name: "rejects a continuation job id as a blocker chain id",
+      name: "reports an undefined blocker for a continuation job id",
       run: async ({ stateAdapter }, expect) => {
         const [headChain] = await stateAdapter.withTransaction(async (txCtx) =>
           stateAdapter.createJobs({ txCtx, jobs: [{ typeName: "blocker", input: null }] }),
         );
-        const [{ continuation }] = await stateAdapter.withTransaction(async (txCtx) =>
+        const [continued] = await stateAdapter.withTransaction(async (txCtx) =>
           stateAdapter.continueJobs({
             txCtx,
             jobs: [{ typeName: "blocker", input: null, continueFromId: headChain.head.id }],
           }),
         );
+        const { continuation } = continued!;
 
         const [mainChain] = await stateAdapter.withTransaction(async (txCtx) =>
           stateAdapter.createJobs({ txCtx, jobs: [{ typeName: "main", input: null }] }),
@@ -340,16 +345,18 @@ export const addJobsBlockersGroup: ConformanceGroup<StateConformanceFixture> = {
 
         // Only a head row identifies a chain, so a continuation's id is not a chain id.
         await expect(
-          stateAdapter.withTransaction(async (txCtx) =>
-            stateAdapter.addJobsBlockers({
+          stateAdapter.withTransaction(async (txCtx) => {
+            const [result] = await stateAdapter.addJobsBlockers({
               txCtx,
               jobBlockers: [{ jobId: mainChain.head.id, blockedByChainIds: [continuation.id] }],
-            }),
-          ),
-        ).rejects.toThrow();
+            });
+            expect(result.blockers[0]).toBeUndefined();
+            throw new Error("caller aborts");
+          }),
+        ).rejects.toThrow("caller aborts");
 
         const [after] = await stateAdapter.getJobs({ jobIds: [mainChain.head.id] });
-        expect(after!.blocked).toBe(false);
+        expect(after!.status).toBe("pending");
         expect(await stateAdapter.getJobBlockers({ jobId: mainChain.head.id })).toHaveLength(0);
       },
     },
@@ -386,8 +393,8 @@ export const addJobsBlockersGroup: ConformanceGroup<StateConformanceFixture> = {
           }),
         );
 
-        expect(result.blocked).toBe(true);
-        expect(result.blockers.map((blocker) => blocker.id)).toEqual([
+        expect(result.status).toBe("blocked");
+        expect(result.blockers.map((blocker) => blocker!.id)).toEqual([
           blockerChain.head.chainId,
           blockerChain.head.chainId,
           blockerChain.head.chainId,

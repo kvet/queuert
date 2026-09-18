@@ -92,7 +92,7 @@ export class JobAlreadyCompletedError extends Error {
   }
 }
 
-/** Thrown when attempting to reschedule a job that is not in a reschedulable state (must be pending). */
+/** Thrown when attempting to reschedule a job that is not in a reschedulable state (must be pending or blocked). */
 export class JobNotReschedulableError extends Error {
   /** The job that could not be rescheduled. */
   readonly jobId: string;
@@ -104,13 +104,14 @@ export class JobNotReschedulableError extends Error {
   }
 }
 
+// TODO!!!: its possible to reschedule even if it's running; only completed jobs are not rescheduled
 /**
  * Batch variant of {@link JobNotReschedulableError} — thrown by the plural
  * {@link Client.rescheduleJobs | rescheduleJobs} listing every input id whose
- * status is not `pending`.
+ * status is neither `pending` nor `blocked`.
  */
 export class JobsNotReschedulableError extends Error {
-  /** The input ids whose status is not `pending`. */
+  /** The input ids whose status is neither `pending` nor `blocked`. */
   readonly jobIds: readonly string[];
 
   constructor(message: string, options: { jobIds: readonly string[]; cause?: unknown }) {

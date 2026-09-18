@@ -37,14 +37,14 @@ const createContinuation = async (
   continueFromId: string,
   input: unknown,
 ) => {
-  const [{ continuation }] = await stateAdapter.withTransaction(async (txCtx) =>
+  const [continued] = await stateAdapter.withTransaction(async (txCtx) =>
     stateAdapter.continueJobs({
       txCtx,
       completedBy: "worker-1",
       jobs: [{ typeName, continueFromId, input }],
     }),
   );
-  return continuation;
+  return continued!.continuation;
 };
 
 const startAttempt = async (
@@ -487,9 +487,7 @@ describe("Dashboard API", () => {
       };
 
       expect(await ids("blocked")).toEqual([blocked.id]);
-      expect(await ids("pending-unblocked")).toEqual(
-        [pending.id, blockerChain.id, continuation.id].sort(),
-      );
+      expect(await ids("pending")).toEqual([pending.id, blockerChain.id, continuation.id].sort());
       expect(await ids("running")).toEqual([running.id]);
       expect(await ids("completed")).toEqual([terminal.id, continued.id].sort());
       expect(await ids("bogus-status")).toHaveLength(7);
@@ -550,6 +548,7 @@ describe("Dashboard API", () => {
 
       expect(body).toHaveLength(2);
       expect(body[0].typeName).toBe("type-a");
+      expect(body[0].blocked.count).toBe(0);
       expect(body[0].pending.count).toBe(1);
       expect(body[0].running.count).toBe(0);
       expect(body[1].typeName).toBe("type-b");
@@ -685,7 +684,7 @@ describe("Dashboard API", () => {
       const body = await parseBody(res);
 
       expect(res.status).toBe(409);
-      expect(body.error).toContain('not "pending"');
+      expect(body.error).toContain('neither "pending" nor "blocked"');
     });
   });
 

@@ -1,5 +1,4 @@
 import { type AnyChain } from "../entities/chain.js";
-import { deriveStatus } from "../entities/job.js";
 import { type JobTypeValidationError } from "../errors.js";
 import { type NotifyAdapter } from "../notify-adapter/notify-adapter.js";
 import {
@@ -38,7 +37,7 @@ const mapStateJobToJobBasicData = (stateJob: StateJob): JobBasicData => ({
 
 const mapStateJobToJobProcessingData = (stateJob: StateJob): JobProcessingData => ({
   ...mapStateJobToJobBasicData(stateJob),
-  status: deriveStatus(stateJob),
+  status: stateJob.status,
   attempt: stateJob.attempt,
 });
 

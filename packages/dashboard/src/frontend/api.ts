@@ -141,6 +141,7 @@ export type ChainTypeCounts = {
 
 export type JobTypeCounts = {
   typeName: string;
+  blocked: { count: number; hasMore: boolean };
   pending: { count: number; hasMore: boolean };
   running: { count: number; hasMore: boolean };
   completed: { count: number; hasMore: boolean };

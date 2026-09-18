@@ -227,6 +227,7 @@ export const rescheduleJobsGroup: ConformanceGroup<StateConformanceFixture> = {
           }),
         );
 
+        expect(failed!.status).toBe("pending");
         expect(failed!.completedAt).toBeNull();
         expect(failed!.attemptAt).toBeNull();
         expect(failed!.attemptBy).toBeNull();
@@ -404,7 +405,7 @@ export const rescheduleJobsGroup: ConformanceGroup<StateConformanceFixture> = {
         const [refreshedBlockedJob] = await stateAdapter.getJobs({
           jobIds: [blockedChain.head.id],
         });
-        expect(refreshedBlockedJob!.blocked).toBe(true);
+        expect(refreshedBlockedJob!.status).toBe("blocked");
 
         const futureDate = new Date(Date.now() + 120_000);
         const rescheduled = await stateAdapter.withTransaction(async (txCtx) =>
@@ -415,7 +416,7 @@ export const rescheduleJobsGroup: ConformanceGroup<StateConformanceFixture> = {
         );
 
         expect(rescheduled).toHaveLength(1);
-        expect(rescheduled[0]!.blocked).toBe(true);
+        expect(rescheduled[0]!.status).toBe("blocked");
         expect(Math.abs(rescheduled[0]!.scheduledAt.getTime() - futureDate.getTime())).toBeLessThan(
           1000,
         );

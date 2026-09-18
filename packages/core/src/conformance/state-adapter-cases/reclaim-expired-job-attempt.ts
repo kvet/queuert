@@ -36,6 +36,7 @@ export const reclaimExpiredJobAttemptGroup: ConformanceGroup<StateConformanceFix
 
         expect(expired).toBeDefined();
         expect(expired!.id).toBe(createdChain.head.id);
+        expect(expired!.status).toBe("pending");
         expect(expired!.completedAt).toBeNull();
         expect(expired!.attemptAt).toBeNull();
         expect(expired!.attemptBy).toBeNull();

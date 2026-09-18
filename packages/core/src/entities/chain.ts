@@ -11,12 +11,12 @@ export const mapStateChainToChain = (stateChain: StateChain): AnyChain => {
     createdAt: stateChain.createdAt,
   };
 
-  if (stateChain.completedAt === null) return { ...base, status: "running" };
+  if (stateChain.status === "running") return { ...base, status: "running" };
 
   return {
     ...base,
     status: "completed",
     output: (stateChain.tail ?? stateChain.head).output,
-    completedAt: stateChain.completedAt,
+    completedAt: stateChain.completedAt!,
   };
 };

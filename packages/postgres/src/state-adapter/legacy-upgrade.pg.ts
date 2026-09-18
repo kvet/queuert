@@ -73,12 +73,12 @@ export const createLegacyUpgrade = <TTxContext extends BaseTxContext>(
   const jobOldPresentSql = relationPresentSql("job_old");
   const jobPresentSql = relationPresentSql("job");
 
-  // `status` was dropped by the new model, so its presence distinguishes a v0.15.1
-  // job table — the only shape this import knows how to read — from a newer one.
+  // `chain_type_name` was dropped by the head-row model, so its presence distinguishes
+  // a v0.15.1 job table — the only shape this import knows how to read — from a newer one.
   const legacyShapeSql = sql(
     /* sql */ `SELECT EXISTS(
   SELECT 1 FROM information_schema.columns
-  WHERE table_schema = '{{schema}}' AND table_name = '{{table_prefix}}job' AND column_name = 'status'
+  WHERE table_schema = '{{schema}}' AND table_name = '{{table_prefix}}job' AND column_name = 'chain_type_name'
 ) AS present`,
     {
       id: "legacy:present:shape",
@@ -156,27 +156,32 @@ WHERE chain_index = 0 AND id > $1 ORDER BY id LIMIT $2`,
   );
 
   // A whole chain per statement: the head row carries the chain's own columns, and
-  // `chain_completed_at` is the completion of the successor-less row — which the
+  // the chain's completion is the completion of the successor-less row — which the
   // self-join below already identifies as `n.id IS NULL`, so a window function over
-  // the rows the statement reads anyway derives it. Batching by chain also keeps
-  // `job_blocker.job_id`'s foreign key satisfiable. `attempt_at` did not exist in
-  // v0.15 and a running row may carry no lease at all; workers are stopped during an
-  // upgrade, so every running attempt is orphaned and starts over from now.
+  // the rows the statement reads anyway derives both `chain_completed_at` and
+  // `chain_status`. Batching by chain also keeps `job_blocker.job_id`'s foreign key
+  // satisfiable. `status` carries the same four values in both models and is cast out
+  // of the old enum. `attempt_at` did not exist in v0.15 and a running row may carry no
+  // lease at all; workers are stopped during an upgrade, so every running attempt is
+  // orphaned and starts over from now.
   const importChainsSql = sql(
     /* sql */ `INSERT INTO {{schema}}.{{table_prefix}}job (
   id, type_name, chain_id, chain_index, continued_to_id,
-  input, output, blocked,
+  input, output, status,
   created_at, scheduled_at, completed_at, completed_by,
   attempt, last_attempt_at, last_attempt_error,
   attempt_at, attempt_by, attempt_until,
-  chain_completed_at, deduplication_key, chain_trace_context, trace_context)
+  chain_status, chain_completed_at, deduplication_key, chain_trace_context, trace_context)
 SELECT o.id, o.type_name, o.chain_id, o.chain_index, n.id,
-  o.input, o.output, o.status = 'blocked',
+  o.input, o.output, o.status::text,
   o.created_at, o.scheduled_at, o.completed_at, o.completed_by,
   o.attempt, o.last_attempt_at, o.last_attempt_error,
   CASE WHEN o.status = 'running' THEN now() END,
   CASE WHEN o.status = 'running' THEN COALESCE(o.leased_by, 'migrated') ELSE o.leased_by END,
   CASE WHEN o.status = 'running' THEN COALESCE(o.leased_until, now()) ELSE o.leased_until END,
+  CASE WHEN o.chain_index = 0
+    THEN CASE WHEN max(o.completed_at) FILTER (WHERE n.id IS NULL) OVER (PARTITION BY o.chain_id) IS NULL
+      THEN 'running' ELSE 'completed' END END,
   CASE WHEN o.chain_index = 0
     THEN max(o.completed_at) FILTER (WHERE n.id IS NULL) OVER (PARTITION BY o.chain_id) END,
   CASE WHEN o.chain_index = 0 THEN o.deduplication_key END,

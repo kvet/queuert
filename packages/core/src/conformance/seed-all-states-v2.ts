@@ -149,12 +149,12 @@ export const seedAllStatesV2 = async <TTxContext extends BaseTxContext>(
           const job = acquired;
           if (mode === "running") {
             jobs.push(
-              await stateAdapter.extendJobAttempt({
+              (await stateAdapter.extendJobAttempt({
                 txCtx,
                 jobId: job.id,
                 workerId: seedConfigV2.workerId,
                 timeoutMs: seedConfigV2.attemptMs,
-              }),
+              }))!,
             );
           } else if (mode === "completed") {
             const completed = await stateAdapter.completeJobs({
@@ -167,7 +167,7 @@ export const seedAllStatesV2 = async <TTxContext extends BaseTxContext>(
                 },
               ],
             });
-            jobs.push(...completed);
+            jobs.push(...completed.filter((entry) => entry !== undefined));
           } else {
             const [rescheduled] = await stateAdapter.rescheduleJobs({
               txCtx,
@@ -350,11 +350,12 @@ export const seedAllStatesV2 = async <TTxContext extends BaseTxContext>(
         workerId: seedConfigV2.workerId,
       });
       if (!acquired) return;
-      const [{ continuation }] = await stateAdapter.continueJobs({
+      const [continued] = await stateAdapter.continueJobs({
         txCtx,
         completedBy: seedConfigV2.workerId,
         jobs: [{ typeName: "seed:chain", input: { n: step }, continueFromId: acquired.id }],
       });
+      const { continuation } = continued!;
       lastChainJob = continuation;
     });
   }
@@ -380,12 +381,12 @@ export const seedAllStatesV2 = async <TTxContext extends BaseTxContext>(
         if (!acquired) break;
         const job = acquired;
         jobs.push(
-          await stateAdapter.extendJobAttempt({
+          (await stateAdapter.extendJobAttempt({
             txCtx,
             jobId: job.id,
             workerId: seedConfigV2.workerId,
             timeoutMs: 1,
-          }),
+          }))!,
         );
       }
       return jobs;

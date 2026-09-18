@@ -19,22 +19,24 @@ export const handleJobsList = async (url: URL, client: Client<any, any>): Promis
   const typeName = url.searchParams.get("typeName");
   if (!typeName) return serovalResponse({ items: [], nextCursor: null });
 
-  const { status, blocked } = parseJobStatusFilter(url.searchParams.get("status") ?? undefined);
+  const status = parseJobStatusFilter(url.searchParams.get("status") ?? undefined);
   const rawOrderBy = url.searchParams.get("orderBy") ?? undefined;
   const orderDirection = parseOrderDirection(url.searchParams.get("orderDirection") ?? undefined);
   const limit = parseLimit(url.searchParams.get("limit") ?? undefined);
 
   const listing =
-    status === "pending"
+    status === "blocked"
       ? ({ status, orderBy: parseOrderBy(rawOrderBy, ["scheduledAt", "createdAt"]) } as const)
-      : status === "running"
-        ? ({
-            status,
-            orderBy: parseOrderBy(rawOrderBy, ["attemptAt", "attemptUntil", "createdAt"]),
-          } as const)
-        : status === "completed"
-          ? ({ status, orderBy: parseOrderBy(rawOrderBy, ["completedAt", "createdAt"]) } as const)
-          : ({ status: undefined, orderBy: parseOrderBy(rawOrderBy, ["createdAt"]) } as const);
+      : status === "pending"
+        ? ({ status, orderBy: parseOrderBy(rawOrderBy, ["scheduledAt", "createdAt"]) } as const)
+        : status === "running"
+          ? ({
+              status,
+              orderBy: parseOrderBy(rawOrderBy, ["attemptAt", "attemptUntil", "createdAt"]),
+            } as const)
+          : status === "completed"
+            ? ({ status, orderBy: parseOrderBy(rawOrderBy, ["completedAt", "createdAt"]) } as const)
+            : ({ status: undefined, orderBy: parseOrderBy(rawOrderBy, ["createdAt"]) } as const);
 
   const common = {
     typeName,
@@ -47,18 +49,15 @@ export const handleJobsList = async (url: URL, client: Client<any, any>): Promis
   };
 
   const result =
-    listing.status === "pending"
-      ? await client.listJobs({
-          ...common,
-          status: listing.status,
-          blocked,
-          orderBy: listing.orderBy,
-        })
-      : listing.status === "running"
+    listing.status === "blocked"
+      ? await client.listJobs({ ...common, status: listing.status, orderBy: listing.orderBy })
+      : listing.status === "pending"
         ? await client.listJobs({ ...common, status: listing.status, orderBy: listing.orderBy })
-        : listing.status === "completed"
+        : listing.status === "running"
           ? await client.listJobs({ ...common, status: listing.status, orderBy: listing.orderBy })
-          : await client.listJobs({ ...common, orderBy: listing.orderBy });
+          : listing.status === "completed"
+            ? await client.listJobs({ ...common, status: listing.status, orderBy: listing.orderBy })
+            : await client.listJobs({ ...common, orderBy: listing.orderBy });
 
   return serovalResponse({
     items: result.items,

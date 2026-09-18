@@ -39,13 +39,13 @@ export const completeJobsGroup: ConformanceGroup<StateConformanceFixture> = {
           }),
         );
 
-        expect(completed.output).toEqual({ result: 42 });
-        expect(completed.continuedToId).toBeNull();
-        expect(completed.completedAt).toBeInstanceOf(Date);
-        expect(completed.completedBy).toBe("worker-1");
-        expect(completed.attemptBy).toBeNull();
-        expect(completed.attemptUntil).toBeNull();
-        expect(completed.attemptAt).toBeNull();
+        expect(completed!.output).toEqual({ result: 42 });
+        expect(completed!.continuedToId).toBeNull();
+        expect(completed!.completedAt).toBeInstanceOf(Date);
+        expect(completed!.completedBy).toBe("worker-1");
+        expect(completed!.attemptBy).toBeNull();
+        expect(completed!.attemptUntil).toBeNull();
+        expect(completed!.attemptAt).toBeNull();
       },
     },
     {
@@ -73,13 +73,13 @@ export const completeJobsGroup: ConformanceGroup<StateConformanceFixture> = {
           }),
         );
 
-        expect(completed.map((c) => c.id)).toEqual([secondChain.head.id, firstChain.head.id]);
-        expect(completed[0].output).toEqual({ done: 2 });
-        expect(completed[1].output).toEqual({ done: 1 });
+        expect(completed.map((c) => c!.id)).toEqual([secondChain.head.id, firstChain.head.id]);
+        expect(completed[0]!.output).toEqual({ done: 2 });
+        expect(completed[1]!.output).toEqual({ done: 1 });
       },
     },
     {
-      name: "fails the batch when any job is missing or already completed",
+      name: "reports an undefined result for a missing or already-completed job",
       run: async ({ stateAdapter }, expect) => {
         const [createdChain] = await stateAdapter.withTransaction(async (txCtx) =>
           stateAdapter.createJobs({
@@ -88,18 +88,27 @@ export const completeJobsGroup: ConformanceGroup<StateConformanceFixture> = {
           }),
         );
 
+        const missingJobId =
+          createdChain.head.id.slice(0, -1) + (createdChain.head.id.endsWith("0") ? "1" : "0");
+
+        // The missing id is a hole in the result, not a thrown error: the caller reads
+        // it and decides whether to abort, which is what keeps the batch atomic.
         await expect(
-          stateAdapter.withTransaction(async (txCtx) =>
-            stateAdapter.completeJobs({
+          stateAdapter.withTransaction(async (txCtx) => {
+            const results = await stateAdapter.completeJobs({
               txCtx,
               completedBy: null,
               jobs: [
                 { jobId: createdChain.head.id, output: { ok: true } },
-                { jobId: "missing-id", output: { ok: true } },
+                { jobId: missingJobId, output: { ok: true } },
               ],
-            }),
-          ),
-        ).rejects.toThrow();
+            });
+            expect(results).toHaveLength(2);
+            expect(results[0]?.completedAt).toBeInstanceOf(Date);
+            expect(results[1]).toBeUndefined();
+            throw new Error("caller aborts");
+          }),
+        ).rejects.toThrow("caller aborts");
 
         const [after] = await stateAdapter.getJobs({ jobIds: [createdChain.head.id] });
         expect(after!.completedAt).toBeNull();
@@ -123,8 +132,8 @@ export const completeJobsGroup: ConformanceGroup<StateConformanceFixture> = {
           }),
         );
 
-        expect(completed.completedAt).toBeInstanceOf(Date);
-        expect(completed.completedBy).toBeNull();
+        expect(completed!.completedAt).toBeInstanceOf(Date);
+        expect(completed!.completedBy).toBeNull();
       },
     },
     {
@@ -145,8 +154,8 @@ export const completeJobsGroup: ConformanceGroup<StateConformanceFixture> = {
           }),
         );
 
-        expect(completed.completedAt).toBeInstanceOf(Date);
-        expect(completed.output).toBeNull();
+        expect(completed!.completedAt).toBeInstanceOf(Date);
+        expect(completed!.output).toBeNull();
 
         const [stored] = await stateAdapter.getJobs({ jobIds: [createdChain.head.id] });
         expect(stored!.completedAt).toBeInstanceOf(Date);
@@ -188,8 +197,8 @@ export const completeJobsGroup: ConformanceGroup<StateConformanceFixture> = {
           }),
         );
 
-        expect(completed.completedAt).toBeInstanceOf(Date);
-        expect(completed.output).toEqual({ first: true });
+        expect(completed!.completedAt).toBeInstanceOf(Date);
+        expect(completed!.output).toEqual({ first: true });
 
         await stateAdapter
           .withTransaction(async (txCtx) =>
@@ -254,10 +263,10 @@ export const completeJobsGroup: ConformanceGroup<StateConformanceFixture> = {
           }),
         );
 
-        expect(completed.completedAt).toBeInstanceOf(Date);
-        expect(completed.lastAttemptError).toBeNull();
-        expect(completed.attemptAt).toBeNull();
-        expect(completed.attemptUntil).toBeNull();
+        expect(completed!.completedAt).toBeInstanceOf(Date);
+        expect(completed!.lastAttemptError).toBeNull();
+        expect(completed!.attemptAt).toBeNull();
+        expect(completed!.attemptUntil).toBeNull();
       },
     },
     {
@@ -278,10 +287,12 @@ export const completeJobsGroup: ConformanceGroup<StateConformanceFixture> = {
           }),
         );
 
-        expect(completed.id).toBe(createdChain.head.id);
-        expect(completed.completedAt).toBeInstanceOf(Date);
-        expect(completed.chain.id).toBe(createdChain.head.chainId);
-        expect(completed.chain.completedAt).toBeInstanceOf(Date);
+        expect(completed!.id).toBe(createdChain.head.id);
+        expect(completed!.status).toBe("completed");
+        expect(completed!.completedAt).toBeInstanceOf(Date);
+        expect(completed!.chain.id).toBe(createdChain.head.chainId);
+        expect(completed!.chain.status).toBe("completed");
+        expect(completed!.chain.completedAt).toBeInstanceOf(Date);
 
         // The head and the completing job are the same row here, so both halves of the
         // write have to survive — an implementation that splits them loses one silently.
@@ -303,13 +314,14 @@ export const completeJobsGroup: ConformanceGroup<StateConformanceFixture> = {
           }),
         );
 
-        const [{ continuation: tail }] = await stateAdapter.withTransaction(async (txCtx) =>
+        const [continuedTail] = await stateAdapter.withTransaction(async (txCtx) =>
           stateAdapter.continueJobs({
             txCtx,
             completedBy: "worker-1",
             jobs: [{ typeName: "multi-job-chain", input: null, continueFromId: headChain.head.id }],
           }),
         );
+        const { continuation: tail } = continuedTail!;
 
         const [chainBeforeCompletion] = await stateAdapter.getChains({
           chainIds: [headChain.head.chainId],
@@ -324,9 +336,9 @@ export const completeJobsGroup: ConformanceGroup<StateConformanceFixture> = {
           }),
         );
 
-        expect(completed.id).toBe(tail.id);
-        expect(completed.chain.id).toBe(headChain.head.chainId);
-        expect(completed.chain.completedAt).toBeInstanceOf(Date);
+        expect(completed!.id).toBe(tail.id);
+        expect(completed!.chain.id).toBe(headChain.head.chainId);
+        expect(completed!.chain.completedAt).toBeInstanceOf(Date);
 
         const [chain] = await stateAdapter.getChains({ chainIds: [headChain.head.chainId] });
         expect(chain!.completedAt).toBeInstanceOf(Date);
@@ -366,7 +378,7 @@ export const completeJobsGroup: ConformanceGroup<StateConformanceFixture> = {
             jobs: [{ jobId: blockerChain.head.id, output: null }],
           }),
         );
-        expect(blockerCompleted.hasBlockedJobs).toBe(true);
+        expect(blockerCompleted!.hasBlockedJobs).toBe(true);
 
         const [independentChain] = await stateAdapter.withTransaction(async (txCtx) =>
           stateAdapter.createJobs({
@@ -382,7 +394,7 @@ export const completeJobsGroup: ConformanceGroup<StateConformanceFixture> = {
             jobs: [{ jobId: independentChain.head.id, output: null }],
           }),
         );
-        expect(independentCompleted.hasBlockedJobs).toBe(false);
+        expect(independentCompleted!.hasBlockedJobs).toBe(false);
       },
     },
   ],

@@ -170,17 +170,24 @@ export const runJobProcess = async ({
       }),
     );
   };
+  const extendAttempt = async (txCtx: BaseTxContext, timeoutMs: number): Promise<void> => {
+    const extended = await helpers.stateAdapter.extendJobAttempt({
+      txCtx,
+      jobId: stateJob.id,
+      workerId,
+      timeoutMs,
+    });
+    if (!extended) {
+      throw new JobTakenByAnotherWorkerError(`Job taken by another worker`, {
+        jobId: stateJob.id,
+        workerId,
+      });
+    }
+  };
   const attemptHeartbeat = createAttemptHeartbeat({
     commitRenewal: async (timeoutMs: number) => {
       try {
-        await runInGuardedTransaction(async (txCtx) =>
-          helpers.stateAdapter.extendJobAttempt({
-            txCtx,
-            jobId: stateJob.id,
-            workerId,
-            timeoutMs,
-          }),
-        );
+        await runInGuardedTransaction(async (txCtx) => extendAttempt(txCtx, timeoutMs));
         helpers.observabilityHelper.jobAttemptExtended(stateJob, { workerId });
       } catch (error) {
         if (
@@ -285,12 +292,7 @@ export const runJobProcess = async ({
 
         if (config.mode === "staged") {
           await prepareTransactionContext.run(async (txCtx) =>
-            helpers.stateAdapter.extendJobAttempt({
-              txCtx,
-              jobId: stateJob.id,
-              workerId,
-              timeoutMs: attemptConfig.timeoutMs,
-            }),
+            extendAttempt(txCtx, attemptConfig.timeoutMs),
           );
           await prepareTransactionContext.resolve();
 

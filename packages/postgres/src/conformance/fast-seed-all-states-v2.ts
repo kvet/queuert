@@ -29,8 +29,8 @@ export const fastSeedAllStatesV2 = async <TTxContext extends BaseTxContext>(
     const count = seedConfigV2.pendingPerType * scale;
     const rows = await exec(
       `WITH ids AS (SELECT gen_random_uuid() AS id, gs.i FROM generate_series(0, $2 - 1) AS gs(i))
-       INSERT INTO ${job} (id, type_name, chain_id, chain_index, input, blocked, created_at)
-       SELECT ids.id, $1, ids.id, 0, jsonb_build_object('index', ids.i), false,
+       INSERT INTO ${job} (id, type_name, chain_id, chain_index, input, status, chain_status, created_at)
+       SELECT ids.id, $1, ids.id, 0, jsonb_build_object('index', ids.i), 'pending', 'running',
               now() - interval '10 minutes'
        FROM ids RETURNING id`,
       [typeName, count],
@@ -41,8 +41,8 @@ export const fastSeedAllStatesV2 = async <TTxContext extends BaseTxContext>(
   // --- Block: Scheduled ---
   const [{ id: scheduledJobId }] = await exec(
     `WITH ids AS (SELECT gen_random_uuid() AS id, gs.i FROM generate_series(0, $2 - 1) AS gs(i))
-     INSERT INTO ${job} (id, type_name, chain_id, chain_index, input, blocked, scheduled_at, created_at)
-     SELECT ids.id, $1, ids.id, 0, jsonb_build_object('index', ids.i), false,
+     INSERT INTO ${job} (id, type_name, chain_id, chain_index, input, status, chain_status, scheduled_at, created_at)
+     SELECT ids.id, $1, ids.id, 0, jsonb_build_object('index', ids.i), 'pending', 'running',
             now() + interval '${seedConfigV2.futureMs} milliseconds',
             now() - interval '10 minutes'
      FROM ids RETURNING id`,
@@ -55,9 +55,9 @@ export const fastSeedAllStatesV2 = async <TTxContext extends BaseTxContext>(
     const count = seedConfigV2.runningPerType * scale;
     const rows = await exec(
       `WITH ids AS (SELECT gen_random_uuid() AS id, gs.i FROM generate_series(0, $2 - 1) AS gs(i))
-       INSERT INTO ${job} (id, type_name, chain_id, chain_index, input, blocked,
+       INSERT INTO ${job} (id, type_name, chain_id, chain_index, input, status, chain_status,
                            attempt, attempt_at, attempt_by, attempt_until, created_at)
-       SELECT ids.id, $1, ids.id, 0, jsonb_build_object('index', ids.i), false,
+       SELECT ids.id, $1, ids.id, 0, jsonb_build_object('index', ids.i), 'running', 'running',
               1, now(), '${seedConfigV2.workerId}', now() + interval '${seedConfigV2.attemptMs} milliseconds',
               now() - interval '9 minutes'
        FROM ids RETURNING id`,
@@ -72,9 +72,9 @@ export const fastSeedAllStatesV2 = async <TTxContext extends BaseTxContext>(
     const count = seedConfigV2.completedPerType * scale;
     const rows = await exec(
       `WITH ids AS (SELECT gen_random_uuid() AS id, gs.i FROM generate_series(0, $2 - 1) AS gs(i))
-       INSERT INTO ${job} (id, type_name, chain_id, chain_index, input, blocked,
+       INSERT INTO ${job} (id, type_name, chain_id, chain_index, input, status, chain_status,
                            attempt, completed_at, completed_by, output, chain_completed_at, created_at)
-       SELECT ids.id, $1, ids.id, 0, jsonb_build_object('index', ids.i), false,
+       SELECT ids.id, $1, ids.id, 0, jsonb_build_object('index', ids.i), 'completed', 'completed',
               1, now() - interval '5 minutes', '${seedConfigV2.workerId}',
               jsonb_build_object('ok', true, 'index', ids.i),
               now() - interval '5 minutes',
@@ -88,9 +88,9 @@ export const fastSeedAllStatesV2 = async <TTxContext extends BaseTxContext>(
   // --- Block: Retried ---
   const [{ id: retriedJobId }] = await exec(
     `WITH ids AS (SELECT gen_random_uuid() AS id, gs.i FROM generate_series(0, $2 - 1) AS gs(i))
-     INSERT INTO ${job} (id, type_name, chain_id, chain_index, input, blocked,
+     INSERT INTO ${job} (id, type_name, chain_id, chain_index, input, status, chain_status,
                          attempt, last_attempt_at, last_attempt_error, scheduled_at, created_at)
-     SELECT ids.id, $1, ids.id, 0, jsonb_build_object('index', ids.i), false,
+     SELECT ids.id, $1, ids.id, 0, jsonb_build_object('index', ids.i), 'pending', 'running',
             1, now(), '"seeded transient failure"'::jsonb,
             now() + interval '${seedConfigV2.futureMs} milliseconds',
             now() - interval '7 minutes'
@@ -112,9 +112,9 @@ export const fastSeedAllStatesV2 = async <TTxContext extends BaseTxContext>(
     // Create blocker chains for this tier
     const blockerRows = await exec(
       `WITH ids AS (SELECT gen_random_uuid() AS id, gs.i FROM generate_series(0, $2 - 1) AS gs(i))
-       INSERT INTO ${job} (id, type_name, chain_id, chain_index, input, blocked,
+       INSERT INTO ${job} (id, type_name, chain_id, chain_index, input, status, chain_status,
                            scheduled_at, created_at)
-       SELECT ids.id, $1, ids.id, 0, jsonb_build_object('index', ids.i), false,
+       SELECT ids.id, $1, ids.id, 0, jsonb_build_object('index', ids.i), 'pending', 'running',
               now() + interval '${seedConfigV2.futureMs} milliseconds',
               now() - interval '6 minutes'
        FROM ids RETURNING id`,
@@ -125,8 +125,8 @@ export const fastSeedAllStatesV2 = async <TTxContext extends BaseTxContext>(
     // Create blocked jobs
     await exec(
       `WITH ids AS (SELECT gen_random_uuid() AS id, gs.i FROM generate_series(0, $1 - 1) AS gs(i))
-       INSERT INTO ${job} (id, type_name, chain_id, chain_index, input, blocked, created_at)
-       SELECT ids.id, $2, ids.id, 0, jsonb_build_object('index', ids.i), true,
+       INSERT INTO ${job} (id, type_name, chain_id, chain_index, input, status, chain_status, created_at)
+       SELECT ids.id, $2, ids.id, 0, jsonb_build_object('index', ids.i), 'blocked', 'running',
               now() - interval '2 minutes'
        FROM ids`,
       [blockedCount, tierName],
@@ -164,9 +164,9 @@ export const fastSeedAllStatesV2 = async <TTxContext extends BaseTxContext>(
     // Create blocker chains
     const blockerRows = await exec(
       `WITH ids AS (SELECT gen_random_uuid() AS id, gs.i FROM generate_series(0, $2 - 1) AS gs(i))
-       INSERT INTO ${job} (id, type_name, chain_id, chain_index, input, blocked,
+       INSERT INTO ${job} (id, type_name, chain_id, chain_index, input, status, chain_status,
                            scheduled_at, created_at)
-       SELECT ids.id, $1, ids.id, 0, jsonb_build_object('index', ids.i), false,
+       SELECT ids.id, $1, ids.id, 0, jsonb_build_object('index', ids.i), 'pending', 'running',
               now() + interval '${seedConfigV2.futureMs} milliseconds',
               now() - interval '6 minutes'
        FROM ids RETURNING id`,
@@ -177,8 +177,8 @@ export const fastSeedAllStatesV2 = async <TTxContext extends BaseTxContext>(
     // Create blocked jobs
     await exec(
       `WITH ids AS (SELECT gen_random_uuid() AS id, gs.i FROM generate_series(0, $1 - 1) AS gs(i))
-       INSERT INTO ${job} (id, type_name, chain_id, chain_index, input, blocked, created_at)
-       SELECT ids.id, $2, ids.id, 0, jsonb_build_object('index', ids.i), true,
+       INSERT INTO ${job} (id, type_name, chain_id, chain_index, input, status, chain_status, created_at)
+       SELECT ids.id, $2, ids.id, 0, jsonb_build_object('index', ids.i), 'blocked', 'running',
               now() - interval '2 minutes'
        FROM ids`,
       [totalBlocked, tierBlockedName],
@@ -208,9 +208,9 @@ export const fastSeedAllStatesV2 = async <TTxContext extends BaseTxContext>(
   const nonIndependentCount = seedConfigV2.nonIndependent * scale;
   await exec(
     `WITH ids AS (SELECT gen_random_uuid() AS id, gs.i FROM generate_series(0, $1 - 1) AS gs(i))
-     INSERT INTO ${job} (id, type_name, chain_id, chain_index, input, blocked, created_at)
+     INSERT INTO ${job} (id, type_name, chain_id, chain_index, input, status, chain_status, created_at)
      SELECT ids.id, 'seed:nonindep', ids.id, 0,
-            jsonb_build_object('index', ids.i), true,
+            jsonb_build_object('index', ids.i), 'blocked', 'running',
             now() - interval '1 minute'
      FROM ids`,
     [nonIndependentCount],
@@ -246,16 +246,17 @@ export const fastSeedAllStatesV2 = async <TTxContext extends BaseTxContext>(
     const step = row.step as number;
     const isLast = step === chainLength - 1;
     if (isLast) {
+      // The tail is the pending row, so the chain — a head-row fact — is still running.
       await exec(
-        `INSERT INTO ${job} (id, type_name, chain_id, chain_index, input, blocked, created_at)
-         VALUES ($1, 'seed:chain', $2, $3, $4, false, now() - interval '3 minutes')`,
+        `INSERT INTO ${job} (id, type_name, chain_id, chain_index, input, status, chain_status, created_at)
+         VALUES ($1, 'seed:chain', $2, $3, $4, 'pending', CASE WHEN $3 = 0 THEN 'running' END, now() - interval '3 minutes')`,
         [row.id, chainId, step, JSON.stringify({ n: step })],
       );
     } else {
       await exec(
-        `INSERT INTO ${job} (id, type_name, chain_id, chain_index, input, blocked,
+        `INSERT INTO ${job} (id, type_name, chain_id, chain_index, input, status, chain_status,
                              attempt, completed_at, completed_by, created_at)
-         VALUES ($1, 'seed:chain', $2, $3, $4, false, 1, now() - interval '3 minutes', '${seedConfigV2.workerId}',
+         VALUES ($1, 'seed:chain', $2, $3, $4, 'completed', CASE WHEN $3 = 0 THEN 'running' END, 1, now() - interval '3 minutes', '${seedConfigV2.workerId}',
                  now() - interval '3 minutes')`,
         [row.id, chainId, step, JSON.stringify({ n: step })],
       );
@@ -275,8 +276,8 @@ export const fastSeedAllStatesV2 = async <TTxContext extends BaseTxContext>(
   // --- Block: Throwaway pending ---
   await exec(
     `WITH ids AS (SELECT gen_random_uuid() AS id, gs.i FROM generate_series(0, $2 - 1) AS gs(i))
-     INSERT INTO ${job} (id, type_name, chain_id, chain_index, input, blocked)
-     SELECT ids.id, $1, ids.id, 0, jsonb_build_object('index', ids.i), false
+     INSERT INTO ${job} (id, type_name, chain_id, chain_index, input, status, chain_status)
+     SELECT ids.id, $1, ids.id, 0, jsonb_build_object('index', ids.i), 'pending', 'running'
      FROM ids RETURNING id`,
     ["seed:throwaway:pending", seedConfigV2.throwawayPending * scale],
   );
@@ -284,9 +285,9 @@ export const fastSeedAllStatesV2 = async <TTxContext extends BaseTxContext>(
   // --- Block: Throwaway running ---
   await exec(
     `WITH ids AS (SELECT gen_random_uuid() AS id, gs.i FROM generate_series(0, $2 - 1) AS gs(i))
-     INSERT INTO ${job} (id, type_name, chain_id, chain_index, input, blocked,
+     INSERT INTO ${job} (id, type_name, chain_id, chain_index, input, status, chain_status,
                          attempt, attempt_at, attempt_by, attempt_until)
-     SELECT ids.id, $1, ids.id, 0, jsonb_build_object('index', ids.i), false,
+     SELECT ids.id, $1, ids.id, 0, jsonb_build_object('index', ids.i), 'running', 'running',
             1, now(), '${seedConfigV2.workerId}', now() + interval '${seedConfigV2.attemptMs} milliseconds'
      FROM ids RETURNING id`,
     ["seed:throwaway:running", seedConfigV2.throwawayRunning * scale],
@@ -295,9 +296,9 @@ export const fastSeedAllStatesV2 = async <TTxContext extends BaseTxContext>(
   // --- Block: Throwaway expired running (attempt_until in the past for reclaimExpiredJobAttempt) ---
   await exec(
     `WITH ids AS (SELECT gen_random_uuid() AS id, gs.i FROM generate_series(0, $2 - 1) AS gs(i))
-     INSERT INTO ${job} (id, type_name, chain_id, chain_index, input, blocked,
+     INSERT INTO ${job} (id, type_name, chain_id, chain_index, input, status, chain_status,
                          attempt, attempt_at, attempt_by, attempt_until, created_at)
-     SELECT ids.id, $1, ids.id, 0, jsonb_build_object('index', ids.i), false,
+     SELECT ids.id, $1, ids.id, 0, jsonb_build_object('index', ids.i), 'running', 'running',
             1, now() - interval '10 minutes', '${seedConfigV2.workerId}', now() - interval '5 minutes',
             now() - interval '15 minutes'
      FROM ids RETURNING id`,
@@ -307,8 +308,8 @@ export const fastSeedAllStatesV2 = async <TTxContext extends BaseTxContext>(
   // --- Block: Throwaway chains (for deleteChains) ---
   const throwawayChainRows = await exec(
     `WITH ids AS (SELECT gen_random_uuid() AS id, gs.i FROM generate_series(0, $2 - 1) AS gs(i))
-     INSERT INTO ${job} (id, type_name, chain_id, chain_index, input, blocked)
-     SELECT ids.id, $1, ids.id, 0, jsonb_build_object('index', ids.i), false
+     INSERT INTO ${job} (id, type_name, chain_id, chain_index, input, status, chain_status)
+     SELECT ids.id, $1, ids.id, 0, jsonb_build_object('index', ids.i), 'pending', 'running'
      FROM ids RETURNING id`,
     ["seed:throwaway:chain", seedConfigV2.throwawayChains * scale],
   );
@@ -316,9 +317,9 @@ export const fastSeedAllStatesV2 = async <TTxContext extends BaseTxContext>(
   // --- Block: Throwaway unblockers (chains that block a target, for unblockJobs) ---
   const throwawayUnblockerRows = await exec(
     `WITH ids AS (SELECT gen_random_uuid() AS id, gs.i FROM generate_series(0, $2 - 1) AS gs(i))
-     INSERT INTO ${job} (id, type_name, chain_id, chain_index, input, blocked,
+     INSERT INTO ${job} (id, type_name, chain_id, chain_index, input, status, chain_status,
                          scheduled_at)
-     SELECT ids.id, $1, ids.id, 0, jsonb_build_object('index', ids.i), false,
+     SELECT ids.id, $1, ids.id, 0, jsonb_build_object('index', ids.i), 'pending', 'running',
             now() + interval '${seedConfigV2.futureMs} milliseconds'
      FROM ids RETURNING id`,
     ["seed:throwaway:unblocker", seedConfigV2.throwawayUnblockers * scale],
@@ -327,8 +328,8 @@ export const fastSeedAllStatesV2 = async <TTxContext extends BaseTxContext>(
   // Create targets blocked by each unblocker
   await exec(
     `WITH ids AS (SELECT gen_random_uuid() AS id, gs.i FROM generate_series(0, $2 - 1) AS gs(i))
-     INSERT INTO ${job} (id, type_name, chain_id, chain_index, input, blocked)
-     SELECT ids.id, $1, ids.id, 0, jsonb_build_object('index', ids.i), true
+     INSERT INTO ${job} (id, type_name, chain_id, chain_index, input, status, chain_status)
+     SELECT ids.id, $1, ids.id, 0, jsonb_build_object('index', ids.i), 'blocked', 'running'
      FROM ids`,
     ["seed:throwaway:unblock-target", seedConfigV2.throwawayUnblockers * scale],
   );

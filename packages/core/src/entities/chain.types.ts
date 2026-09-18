@@ -1,10 +1,10 @@
-/** Possible statuses of a chain. Derived from the status of its latest job. */
+/** Possible statuses of a chain. Stored on the chain's head job. */
 export type ChainStatus = "running" | "completed";
 
 /**
  * A chain. Discriminated union on {@link Chain.status | status}.
  *
- * A chain is identified by the ID of its first job. Its status is derived from the latest job in the chain.
+ * A chain is identified by the ID of its head job, which also carries the chain's status.
  *
  * @typeParam TJobId - The job ID type
  * @typeParam TChainTypeName - The chain type name literal (matches the entry job type name)

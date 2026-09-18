@@ -3,7 +3,7 @@ import { For, Show, createEffect, createMemo, createResource, createSignal } fro
 
 import { PAGE_SIZE, type UnknownJob, getJobsByIds, listJobTypeNames, listJobs } from "../api.js";
 import { createAutoLoadMore } from "./createAutoLoadMore.js";
-import { JobStatusBadge } from "./StatusBadge.js";
+import { StatusBadge } from "./StatusBadge.js";
 import { TimeAgo } from "./TimeAgo.js";
 
 export function JobList() {
@@ -20,15 +20,9 @@ export function JobList() {
 
   const [typeNames] = createResource(listJobTypeNames);
 
-  const effectiveStatus = createMemo(() => {
-    const s = status();
-    if (s === "blocked" || s === "pending-unblocked") return "pending";
-    return s;
-  });
-
   const orderByOptions = createMemo(() => {
-    const s = effectiveStatus();
-    if (s === "pending")
+    const s = status();
+    if (s === "blocked" || s === "pending")
       return [
         { value: "scheduledAt", label: "Scheduled" },
         { value: "createdAt", label: "Created" },
@@ -180,9 +174,8 @@ export function JobList() {
           }}
         >
           <option value="">All statuses</option>
+          <option value="blocked">Blocked</option>
           <option value="pending">Pending</option>
-          <option value="pending-unblocked">Pending (unblocked)</option>
-          <option value="blocked">Pending (blocked)</option>
           <option value="running">Running</option>
           <option value="completed">Completed</option>
         </select>
@@ -250,7 +243,7 @@ export function JobList() {
               <A href={`/chains/${job.chainId}`} class="chain-link">
                 chain {job.chainId}
               </A>
-              <JobStatusBadge job={job} />
+              <StatusBadge status={job.status} />
             </div>
             <Show when={job.input != null}>
               <div class="card-input">{inputPreview(job.input)}</div>

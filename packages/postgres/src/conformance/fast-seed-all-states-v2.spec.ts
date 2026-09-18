@@ -14,7 +14,7 @@ const jobQuery = `
   SELECT
     type_name, chain_index,
     input, output,
-    blocked, attempt,
+    status, chain_status, attempt,
     attempt_by, completed_by,
     last_attempt_error,
     deduplication_key,

@@ -1,7 +1,6 @@
 # Triage
 
 - [REF] Worker liveness. Move attempt ownership to worker. Have workers to be registered in the DB and have a heartbeat.
-- [REF] Return back statuses. Get rid of continued substatus
 - [REF] PG pipelining
 
 # Short term

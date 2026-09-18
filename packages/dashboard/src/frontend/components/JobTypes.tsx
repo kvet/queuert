@@ -18,7 +18,7 @@ export function JobTypes() {
     c.hasMore ? `${c.count.toLocaleString()}+` : c.count.toLocaleString();
 
   const total = (entry: JobTypeCounts) =>
-    entry.pending.count + entry.running.count + entry.completed.count;
+    entry.blocked.count + entry.pending.count + entry.running.count + entry.completed.count;
 
   return (
     <div>
@@ -31,6 +31,7 @@ export function JobTypes() {
           <thead>
             <tr>
               <th>Type name</th>
+              <th>Blocked</th>
               <th>Pending</th>
               <th>Running</th>
               <th>Completed</th>
@@ -45,6 +46,20 @@ export function JobTypes() {
                     <A href={`/jobs?typeName=${encodeURIComponent(entry.typeName)}`}>
                       {entry.typeName}
                     </A>
+                  </td>
+                  <td>
+                    <Show
+                      when={entry.blocked.count > 0}
+                      fallback={<span class="count-zero">0</span>}
+                    >
+                      <A
+                        href={`/jobs?typeName=${encodeURIComponent(entry.typeName)}&status=blocked`}
+                        class="count-link"
+                        data-status="blocked"
+                      >
+                        {formatCount(entry.blocked)}
+                      </A>
+                    </Show>
                   </td>
                   <td>
                     <Show
@@ -90,7 +105,10 @@ export function JobTypes() {
                   </td>
                   <td>
                     {total(entry).toLocaleString()}
-                    {entry.pending.hasMore || entry.running.hasMore || entry.completed.hasMore
+                    {entry.blocked.hasMore ||
+                    entry.pending.hasMore ||
+                    entry.running.hasMore ||
+                    entry.completed.hasMore
                       ? "+"
                       : ""}
                   </td>

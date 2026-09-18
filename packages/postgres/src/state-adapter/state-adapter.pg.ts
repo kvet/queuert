@@ -17,19 +17,15 @@ import {
   sql,
   t,
 } from "@queuert/typed-sql";
-import {
-  type BaseTxContext,
-  // TODO!!!: it is not allowed to throw queuert errors from adapters
-  ChainNotFoundError,
-  JobNotFoundError,
-  type StateAdapter,
-} from "queuert";
+import { type BaseTxContext, type StateAdapter } from "queuert";
 import {
   type StateBlockedJob,
   type StateChain,
   type StateChainInfo,
+  type StateChainStatus,
   type StateJob,
   type StateJobInfo,
+  type StateJobStatus,
   createIdValidator,
   decodeIdCursor,
   decodeTimestampWithIdCursor,
@@ -41,8 +37,8 @@ import { createLegacyUpgrade } from "./legacy-upgrade.pg.js";
 
 // TODO!!!: fucked comments everywhere
 /**
- * A `job` row. `chain_completed_at`, `deduplication_key` and `chain_trace_context`
- * are the chain columns: they are written on head rows only.
+ * A `job` row. `chain_status`, `chain_completed_at`, `deduplication_key` and
+ * `chain_trace_context` are the chain columns: they are written on head rows only.
  */
 type DbJob = {
   id: string;
@@ -54,7 +50,7 @@ type DbJob = {
   input: unknown;
   output: unknown;
 
-  blocked: boolean;
+  status: string;
   created_at: string;
   scheduled_at: string;
   completed_at: string | null;
@@ -68,6 +64,7 @@ type DbJob = {
   attempt_by: string | null;
   attempt_until: string | null;
 
+  chain_status: string | null;
   chain_completed_at: string | null;
   deduplication_key: string | null;
 
@@ -78,6 +75,7 @@ type DbJob = {
 /** The chain columns of a head row, joined in alongside a job row. */
 type DbChainColumns = {
   c_type_name: string | null;
+  c_status: string | null;
   c_created_at: string | null;
   c_completed_at: string | null;
   c_deduplication_key: string | null;
@@ -90,10 +88,12 @@ export const migrations: Migration[] = [
     type: "transactional",
     statements: [
       sql(/* sql */ `
--- Columns are ordered timestamptz -> integer -> boolean -> id -> text/jsonb so the
--- fixed-width ones stop paying alignment padding around the jsonb payloads. Neither
+-- Columns are ordered timestamptz -> integer -> id -> text/jsonb so the fixed-width
+-- ones stop paying alignment padding around the jsonb payloads. Neither
 -- self-referential foreign key is declared: chain_id's parent is locked FOR UPDATE by
--- acquisition, and RI checks have no SKIP LOCKED.
+-- acquisition, and RI checks have no SKIP LOCKED. Both statuses are text under a CHECK
+-- rather than enums: the v0.15.x upgrade keeps that lineage's job_status enum alive
+-- until its import is done, so a type of that name cannot be created here.
 CREATE TABLE IF NOT EXISTS {{schema}}.{{table_prefix}}job (
   created_at                    timestamptz NOT NULL DEFAULT now(),
   scheduled_at                  timestamptz NOT NULL DEFAULT now(),
@@ -106,12 +106,14 @@ CREATE TABLE IF NOT EXISTS {{schema}}.{{table_prefix}}job (
   chain_index                   integer NOT NULL,
   attempt                       integer NOT NULL DEFAULT 0,
 
-  blocked                       boolean NOT NULL DEFAULT false,
-
   id                            {{id_type}} PRIMARY KEY,
   chain_id                      {{id_type}} NOT NULL,
   continued_to_id               {{id_type}},
 
+  status                        text NOT NULL DEFAULT 'pending'
+                                CHECK (status IN ('blocked', 'pending', 'running', 'completed')),
+  chain_status                  text
+                                CHECK (chain_status IN ('running', 'completed')),
   type_name                     text NOT NULL,
   completed_by                  text,
   attempt_by                    text,
@@ -153,22 +155,25 @@ WHERE chain_index > 0`),
 CREATE INDEX IF NOT EXISTS {{table_prefix}}job_deduplication_idx
 ON {{schema}}.{{table_prefix}}job (deduplication_key, created_at DESC)
 WHERE deduplication_key IS NOT NULL AND chain_index = 0`),
+      // One partial index per job status: acquisition and the pending listing share
+      // `job_ready_idx`, the blocked listing has its own so the acquisition index never
+      // carries a row it cannot hand out.
       sql(/* sql */ `
 CREATE INDEX IF NOT EXISTS {{table_prefix}}job_ready_idx
 ON {{schema}}.{{table_prefix}}job (type_name, scheduled_at)
-WHERE blocked = false AND attempt_at IS NULL AND completed_at IS NULL`),
+WHERE status = 'pending'`),
       sql(/* sql */ `
-CREATE INDEX IF NOT EXISTS {{table_prefix}}job_pending_idx
+CREATE INDEX IF NOT EXISTS {{table_prefix}}job_blocked_idx
 ON {{schema}}.{{table_prefix}}job (type_name, scheduled_at)
-WHERE attempt_at IS NULL AND completed_at IS NULL`),
+WHERE status = 'blocked'`),
       sql(/* sql */ `
 CREATE INDEX IF NOT EXISTS {{table_prefix}}job_running_idx
 ON {{schema}}.{{table_prefix}}job (type_name, attempt_until)
-WHERE attempt_at IS NOT NULL AND completed_at IS NULL`),
+WHERE status = 'running'`),
       sql(/* sql */ `
 CREATE INDEX IF NOT EXISTS {{table_prefix}}job_completed_idx
 ON {{schema}}.{{table_prefix}}job (type_name, completed_at)
-WHERE completed_at IS NOT NULL`),
+WHERE status = 'completed'`),
       // Chain listing and counting are head-anchored: every chain fact is on the head row.
       sql(/* sql */ `
 CREATE INDEX IF NOT EXISTS {{table_prefix}}chain_idx
@@ -177,11 +182,11 @@ WHERE chain_index = 0`),
       sql(/* sql */ `
 CREATE INDEX IF NOT EXISTS {{table_prefix}}chain_running_idx
 ON {{schema}}.{{table_prefix}}job (type_name, created_at)
-WHERE chain_index = 0 AND chain_completed_at IS NULL`),
+WHERE chain_index = 0 AND chain_status = 'running'`),
       sql(/* sql */ `
 CREATE INDEX IF NOT EXISTS {{table_prefix}}chain_completed_idx
 ON {{schema}}.{{table_prefix}}job (type_name, chain_completed_at)
-WHERE chain_index = 0 AND chain_completed_at IS NOT NULL`),
+WHERE chain_index = 0 AND chain_status = 'completed'`),
       sql(/* sql */ `
 CREATE INDEX IF NOT EXISTS {{table_prefix}}job_idx
 ON {{schema}}.{{table_prefix}}job (type_name, created_at)`),
@@ -346,6 +351,19 @@ RETURNING 1 AS extended`,
 };
 
 const COUNT_CAP = 10000;
+
+// Status filters are spelled as literals, never parameters, so the planner can match
+// the status' partial index; the lookup keeps caller input out of the SQL text.
+const jobStatusConditions: Record<StateJobStatus, string> = {
+  blocked: "j.status = 'blocked'",
+  pending: "j.status = 'pending'",
+  running: "j.status = 'running'",
+  completed: "j.status = 'completed'",
+};
+const chainStatusConditions: Record<StateChainStatus, string> = {
+  running: "head_job.chain_status = 'running'",
+  completed: "head_job.chain_status = 'completed'",
+};
 const SQL_IDENTIFIER_PATTERN = /^[a-zA-Z_][a-zA-Z0-9_]*$/;
 
 const validateSqlIdentifier = (value: string, name: string): void => {
@@ -367,7 +385,7 @@ const mapDbJobToStateJobInfo = (dbJob: DbJob): StateJobInfo => {
     input: dbJob.input,
     output: dbJob.output,
 
-    blocked: dbJob.blocked,
+    status: dbJob.status as StateJobStatus,
     createdAt: new Date(dbJob.created_at),
     scheduledAt: new Date(dbJob.scheduled_at),
     completedAt: dbJob.completed_at ? new Date(dbJob.completed_at) : null,
@@ -389,6 +407,7 @@ const mapDbJobToStateJobInfo = (dbJob: DbJob): StateJobInfo => {
 const mapDbHeadToStateChainInfo = (head: DbJob): StateChainInfo => ({
   id: head.id,
   typeName: head.type_name,
+  status: head.chain_status as StateChainStatus,
   deduplicationKey: head.deduplication_key,
   createdAt: new Date(head.created_at),
   completedAt: head.chain_completed_at ? new Date(head.chain_completed_at) : null,
@@ -399,6 +418,7 @@ const mapDbHeadToStateChainInfo = (head: DbJob): StateChainInfo => ({
 const mapDbChainColumns = (chainId: string, row: DbChainColumns): StateChainInfo => ({
   id: chainId,
   typeName: row.c_type_name!,
+  status: row.c_status as StateChainStatus,
   deduplicationKey: row.c_deduplication_key,
   createdAt: new Date(row.c_created_at!),
   completedAt: row.c_completed_at ? new Date(row.c_completed_at) : null,
@@ -490,7 +510,7 @@ export const createPgStateAdapter = async <
     continued_to_id: idNullableDataType,
     input: t.json(),
     output: t.json(),
-    blocked: t.boolean(),
+    status: t.string(),
     created_at: t.string(),
     scheduled_at: t.string(),
     completed_at: t["string?"](),
@@ -501,6 +521,7 @@ export const createPgStateAdapter = async <
     attempt_at: t["string?"](),
     attempt_by: t["string?"](),
     attempt_until: t["string?"](),
+    chain_status: t["string?"](),
     chain_completed_at: t["string?"](),
     deduplication_key: t["string?"](),
     chain_trace_context: t["string?"](),
@@ -509,6 +530,7 @@ export const createPgStateAdapter = async <
 
   const dbChainColumns = {
     c_type_name: t["string?"](),
+    c_status: t["string?"](),
     c_created_at: t["string?"](),
     c_completed_at: t["string?"](),
     c_deduplication_key: t["string?"](),
@@ -523,7 +545,7 @@ export const createPgStateAdapter = async <
 
   /** The `SELECT` list fragment those columns come from. */
   const chainColumnsSelect = (alias: string) =>
-    `${alias}.type_name AS c_type_name, ${alias}.created_at AS c_created_at, ${alias}.chain_completed_at AS c_completed_at, ${alias}.deduplication_key AS c_deduplication_key, ${alias}.chain_trace_context AS c_trace_context`;
+    `${alias}.type_name AS c_type_name, ${alias}.chain_status AS c_status, ${alias}.created_at AS c_created_at, ${alias}.chain_completed_at AS c_completed_at, ${alias}.deduplication_key AS c_deduplication_key, ${alias}.chain_trace_context AS c_trace_context`;
 
   /**
    * Every row of one chain. Spelled as head-by-primary-key `OR` continuations, because
@@ -778,7 +800,7 @@ existing_deduplicated AS (
     AND j.chain_index = 0
     AND j.type_name = id2.type_name
     AND (
-      (id2.dedup_scope = 'running' AND j.chain_completed_at IS NULL)
+      (id2.dedup_scope = 'running' AND j.chain_status = 'running')
       OR (id2.dedup_scope = 'any')
     )
   ORDER BY id2.ord, j.created_at DESC
@@ -798,10 +820,10 @@ to_insert AS (
     )
 ),
 inserted_jobs AS (
-  INSERT INTO {{schema}}.{{table_prefix}}job (id, type_name, chain_id, chain_index, input, deduplication_key, scheduled_at, chain_trace_context, trace_context)
+  INSERT INTO {{schema}}.{{table_prefix}}job (id, type_name, chain_id, chain_index, chain_status, input, deduplication_key, scheduled_at, chain_trace_context, trace_context)
   SELECT
     ti.id, ti.type_name, ti.chain_id,
-    ti.chain_index, ti.input::jsonb, ti.dedup_key,
+    ti.chain_index, 'running', ti.input::jsonb, ti.dedup_key,
     GREATEST(COALESCE(ti.scheduled_at, now() + (ti.schedule_after_ms || ' milliseconds')::interval, now()), now()),
     ti.chain_trace_context, ti.trace_context
   FROM to_insert ti
@@ -887,7 +909,7 @@ parent AS (
   SELECT d.*, p.chain_id, p.chain_index
   FROM input_data d
   JOIN {{schema}}.{{table_prefix}}job p
-    ON p.id = d.continue_from_id AND p.completed_at IS NULL
+    ON p.id = d.continue_from_id AND p.status <> 'completed'
 ),
 inserted AS (
   INSERT INTO {{schema}}.{{table_prefix}}job (id, type_name, chain_id, chain_index, input, scheduled_at, trace_context)
@@ -900,18 +922,18 @@ inserted AS (
 ),
 completed AS (
   UPDATE {{schema}}.{{table_prefix}}job j
-  SET completed_at = now(),
+  SET status = 'completed',
+    completed_at = now(),
     completed_by = $8,
     continued_to_id = pr.new_id,
     output = NULL,
-    blocked = false,
     last_attempt_error = NULL,
     attempt_at = NULL,
     attempt_by = NULL,
     attempt_until = NULL
   FROM parent pr
   WHERE j.id = pr.continue_from_id
-    AND j.completed_at IS NULL
+    AND j.status <> 'completed'
   RETURNING j.*, pr.new_id
 )
 -- h is read from the statement's own pre-execution snapshot, so it does not see the
@@ -965,7 +987,10 @@ JOIN inserted i ON i.id = c.new_id
       const rowByContinuationId = new Map(rows.map((row) => [row.continuation_id, row]));
 
       return jobs.map((_job, i) => {
-        const row = rowByContinuationId.get(ids[i])!;
+        // The `parent` CTE matched nothing for this entry: its predecessor is gone or
+        // already completed, which the caller reads as a hole rather than an error.
+        const row = rowByContinuationId.get(ids[i]);
+        if (!row) return undefined;
         return {
           ...mapDbJobToStateJobInfo(row.job_row),
           chain: mapDbHeadToStateChainInfo(row.head_job),
@@ -993,7 +1018,7 @@ WITH input_data AS (
 targets AS (
   SELECT d.job_id, d.output, j.chain_id
   FROM input_data d
-  JOIN {{schema}}.{{table_prefix}}job j ON j.id = d.job_id AND j.completed_at IS NULL
+  JOIN {{schema}}.{{table_prefix}}job j ON j.id = d.job_id AND j.status <> 'completed'
 ),
 row_effects AS (
   SELECT
@@ -1018,14 +1043,15 @@ row_effects AS (
   ) ids
 )
 UPDATE {{schema}}.{{table_prefix}}job j
-SET last_attempt_error = CASE WHEN e.completes_job THEN NULL ELSE j.last_attempt_error END,
+SET status = CASE WHEN e.completes_job THEN 'completed' ELSE j.status END,
+  last_attempt_error = CASE WHEN e.completes_job THEN NULL ELSE j.last_attempt_error END,
   attempt_at = CASE WHEN e.completes_job THEN NULL ELSE j.attempt_at END,
   attempt_by = CASE WHEN e.completes_job THEN NULL ELSE j.attempt_by END,
   attempt_until = CASE WHEN e.completes_job THEN NULL ELSE j.attempt_until END,
   completed_at = CASE WHEN e.completes_job THEN now() ELSE j.completed_at END,
   completed_by = CASE WHEN e.completes_job THEN $3 ELSE j.completed_by END,
   output = CASE WHEN e.completes_job THEN e.output::jsonb ELSE j.output END,
-  blocked = CASE WHEN e.completes_job THEN false ELSE j.blocked END,
+  chain_status = CASE WHEN e.completes_chain THEN 'completed' ELSE j.chain_status END,
   chain_completed_at = CASE WHEN e.completes_chain AND j.chain_completed_at IS NULL
                             THEN now() ELSE j.chain_completed_at END
 FROM row_effects e
@@ -1052,12 +1078,10 @@ RETURNING j.*, e.has_blocking
       const rowById = new Map(rows.map((row) => [row.id, row]));
 
       return jobs.map((job) => {
+        // No row means the id matched no job, or one already completed: a hole in the
+        // result the caller reads, not an error this layer raises.
         const row = rowById.get(job.jobId);
-        if (!row) {
-          throw new JobNotFoundError(`Job "${job.jobId}" not found or already completed`, {
-            jobId: job.jobId as string,
-          });
-        }
+        if (!row) return undefined;
         const head = rowById.get(row.chain_id)!;
         return {
           ...mapDbJobToStateJobInfo(row),
@@ -1081,15 +1105,16 @@ WITH input_data AS (
 ),
 updated AS (
   UPDATE {{schema}}.{{table_prefix}}job j
-  SET scheduled_at = GREATEST(COALESCE(d.at, now() + (d.after_ms || ' milliseconds')::interval, now()), now()),
-    last_attempt_at = CASE WHEN j.attempt_at IS NULL THEN j.last_attempt_at ELSE now() END,
-    last_attempt_error = CASE WHEN j.attempt_at IS NULL THEN j.last_attempt_error ELSE d.error::jsonb END,
+  SET status = CASE WHEN j.status = 'running' THEN 'pending' ELSE j.status END,
+    scheduled_at = GREATEST(COALESCE(d.at, now() + (d.after_ms || ' milliseconds')::interval, now()), now()),
+    last_attempt_at = CASE WHEN j.status = 'running' THEN now() ELSE j.last_attempt_at END,
+    last_attempt_error = CASE WHEN j.status = 'running' THEN d.error::jsonb ELSE j.last_attempt_error END,
     attempt_at = NULL,
     attempt_by = NULL,
     attempt_until = NULL
   FROM input_data d
   WHERE j.id = d.job_id
-    AND j.completed_at IS NULL
+    AND j.status <> 'completed'
   RETURNING j.*
 )
 SELECT u.*, ${chainColumnsSelect("h")}
@@ -1257,9 +1282,7 @@ WITH acquired_job AS (
     SELECT id
     FROM {{schema}}.{{table_prefix}}job
     WHERE type_name = t.type_name
-      AND blocked = false
-      AND attempt_at IS NULL
-      AND completed_at IS NULL
+      AND status = 'pending'
       AND scheduled_at <= now()
     ORDER BY scheduled_at ASC
     LIMIT 1
@@ -1275,7 +1298,8 @@ locked_chain AS (
 ),
 updated AS (
   UPDATE {{schema}}.{{table_prefix}}job
-  SET attempt = attempt + 1,
+  SET status = 'running',
+    attempt = attempt + 1,
     attempt_at = now(),
     attempt_by = $2
   WHERE id = (SELECT id FROM acquired_job)
@@ -1319,9 +1343,7 @@ WITH due AS (
     SELECT id
     FROM {{schema}}.{{table_prefix}}job
     WHERE type_name = t.type_name
-      AND blocked = false
-      AND attempt_at IS NULL
-      AND completed_at IS NULL
+      AND status = 'pending'
       AND scheduled_at <= now()
     ORDER BY scheduled_at ASC
     LIMIT 1
@@ -1336,9 +1358,7 @@ upcoming AS (
     SELECT scheduled_at
     FROM {{schema}}.{{table_prefix}}job
     WHERE type_name = t.type_name
-      AND blocked = false
-      AND attempt_at IS NULL
-      AND completed_at IS NULL
+      AND status = 'pending'
       AND scheduled_at > now()
     ORDER BY scheduled_at ASC
     LIMIT 1
@@ -1397,7 +1417,8 @@ JOIN {{schema}}.{{table_prefix}}job h ON h.id = u.chain_id
         params: [jobId, workerId, timeoutMs],
       });
 
-      return mapDbJobRowToStateJob(job);
+      // No row means no job with this id holds an attempt by this worker.
+      return job ? mapDbJobRowToStateJob(job) : undefined;
     },
 
     reclaimExpiredJobAttempt: async ({ txCtx, typeNames, ignoredJobIds }) => {
@@ -1414,10 +1435,9 @@ WITH job_to_unlock AS (
     SELECT id
     FROM {{schema}}.{{table_prefix}}job
     WHERE type_name = t.type_name
-      AND attempt_at IS NOT NULL
+      AND status = 'running'
       AND attempt_until IS NOT NULL
       AND attempt_until <= now()
-      AND completed_at IS NULL
       AND id != ALL($2::{{id_type}}[])
     ORDER BY attempt_until ASC
     LIMIT 1
@@ -1427,7 +1447,8 @@ WITH job_to_unlock AS (
 ),
 updated AS (
   UPDATE {{schema}}.{{table_prefix}}job as job
-  SET attempt_at = NULL,
+  SET status = 'pending',
+    attempt_at = NULL,
     attempt_by = NULL,
     attempt_until = NULL
   FROM job_to_unlock
@@ -1496,15 +1517,13 @@ has_incomplete_blockers AS (
   SELECT DISTINCT d.job_id
   FROM input_data d
   LEFT JOIN locked_blocker_heads h ON h.id = d.blocked_by_chain_id
-  WHERE h.chain_completed_at IS NULL
+  WHERE h.chain_status IS DISTINCT FROM 'completed'
 ),
 updated_jobs AS (
   UPDATE {{schema}}.{{table_prefix}}job j
-  SET blocked = true
+  SET status = 'blocked'
   WHERE j.id IN (SELECT job_id FROM has_incomplete_blockers)
-    AND j.completed_at IS NULL
-    AND j.attempt_at IS NULL
-    AND j.blocked = false
+    AND j.status = 'pending'
   RETURNING j.*
 ),
 distinct_job_ids AS (
@@ -1547,22 +1566,20 @@ LEFT JOIN locked_blocker_heads h ON h.id = d.blocked_by_chain_id
       const jobChainInfoById = new Map<string, StateChainInfo>();
       const blockerChainInfoById = new Map<string, StateChainInfo>();
       for (const row of results) {
-        // A blocker chain with no head row is the check `blocked_by_chain_id`'s dropped
-        // foreign key used to perform; throwing rolls the caller's transaction back.
-        if (!row.head_job) {
-          throw new ChainNotFoundError(`Chain "${row.blocked_by_chain_id}" not found`, {
-            chainId: row.blocked_by_chain_id,
-          });
-        }
         jobInfoById.set(row.job_row.id, mapDbJobToStateJobInfo(row.job_row));
         jobChainInfoById.set(row.job_row.id, mapDbHeadToStateChainInfo(row.job_chain_head));
+        // A blocker chain with no head row is the check `blocked_by_chain_id`'s dropped
+        // foreign key used to perform. It stays absent from the map, so its position
+        // comes back `undefined` and the caller aborts the transaction, rolling back
+        // the rows this statement inserted for the other positions.
+        if (!row.head_job) continue;
         blockerChainInfoById.set(row.blocked_by_chain_id, mapDbHeadToStateChainInfo(row.head_job));
       }
 
       return jobBlockers.map((entry) => ({
         ...jobInfoById.get(entry.jobId)!,
         chain: jobChainInfoById.get(entry.jobId)!,
-        blockers: entry.blockedByChainIds.map((chainId) => blockerChainInfoById.get(chainId)!),
+        blockers: entry.blockedByChainIds.map((chainId) => blockerChainInfoById.get(chainId)),
       }));
     },
 
@@ -1611,7 +1628,7 @@ WHERE j.id IN (
   FROM {{schema}}.{{table_prefix}}job_blocker jb
   WHERE jb.blocked_by_chain_id = $1
 )
-AND j.blocked = true
+AND j.status = 'blocked'
 ORDER BY j.id
 FOR UPDATE
 `,
@@ -1641,7 +1658,7 @@ blockers_status AS (
   SELECT
     jb.job_id,
     jb.blocked_by_chain_id,
-    (h.chain_completed_at IS NOT NULL) AS blocker_complete
+    (h.chain_status = 'completed') AS blocker_complete
   FROM {{schema}}.{{table_prefix}}job_blocker jb
   LEFT JOIN {{schema}}.{{table_prefix}}job h ON h.id = jb.blocked_by_chain_id
   WHERE jb.job_id IN (SELECT job_id FROM direct_blocked)
@@ -1654,10 +1671,10 @@ ready_jobs AS (
 ),
 updated AS (
   UPDATE {{schema}}.{{table_prefix}}job j
-  SET scheduled_at = GREATEST(j.scheduled_at, now()),
-    blocked = false
+  SET status = 'pending',
+    scheduled_at = GREATEST(j.scheduled_at, now())
   WHERE j.id IN (SELECT job_id FROM ready_jobs)
-    AND j.blocked = true
+    AND j.status = 'blocked'
   RETURNING j.*
 ),
 blocker_rows AS (
@@ -1780,12 +1797,12 @@ SELECT
   t.name,
   (SELECT count(*) FROM (
     SELECT 1 FROM {{schema}}.{{table_prefix}}job
-    WHERE type_name = t.name AND chain_index = 0 AND chain_completed_at IS NULL
+    WHERE type_name = t.name AND chain_index = 0 AND chain_status = 'running'
     LIMIT ${COUNT_CAP + 1}
   ) sub) AS running_cnt,
   (SELECT count(*) FROM (
     SELECT 1 FROM {{schema}}.{{table_prefix}}job
-    WHERE type_name = t.name AND chain_index = 0 AND chain_completed_at IS NOT NULL
+    WHERE type_name = t.name AND chain_index = 0 AND chain_status = 'completed'
     LIMIT ${COUNT_CAP + 1}
   ) sub) AS completed_cnt
 FROM unnest($1::text[]) WITH ORDINALITY AS t(name, ord)
@@ -1839,9 +1856,10 @@ ORDER BY t.ord
               /* sql */ `
 SELECT
   t.name,
-  (SELECT count(*) FROM (SELECT 1 FROM {{schema}}.{{table_prefix}}job WHERE type_name = t.name AND attempt_at IS NULL AND completed_at IS NULL LIMIT ${COUNT_CAP + 1}) sub) AS pending_cnt,
-  (SELECT count(*) FROM (SELECT 1 FROM {{schema}}.{{table_prefix}}job WHERE type_name = t.name AND attempt_at IS NOT NULL AND completed_at IS NULL LIMIT ${COUNT_CAP + 1}) sub) AS running_cnt,
-  (SELECT count(*) FROM (SELECT 1 FROM {{schema}}.{{table_prefix}}job WHERE type_name = t.name AND completed_at IS NOT NULL LIMIT ${COUNT_CAP + 1}) sub) AS completed_cnt
+  (SELECT count(*) FROM (SELECT 1 FROM {{schema}}.{{table_prefix}}job WHERE type_name = t.name AND status = 'blocked' LIMIT ${COUNT_CAP + 1}) sub) AS blocked_cnt,
+  (SELECT count(*) FROM (SELECT 1 FROM {{schema}}.{{table_prefix}}job WHERE type_name = t.name AND status = 'pending' LIMIT ${COUNT_CAP + 1}) sub) AS pending_cnt,
+  (SELECT count(*) FROM (SELECT 1 FROM {{schema}}.{{table_prefix}}job WHERE type_name = t.name AND status = 'running' LIMIT ${COUNT_CAP + 1}) sub) AS running_cnt,
+  (SELECT count(*) FROM (SELECT 1 FROM {{schema}}.{{table_prefix}}job WHERE type_name = t.name AND status = 'completed' LIMIT ${COUNT_CAP + 1}) sub) AS completed_cnt
 FROM unnest($1::text[]) WITH ORDINALITY AS t(name, ord)
 ORDER BY t.ord
 `,
@@ -1850,6 +1868,7 @@ ORDER BY t.ord
                 params: [t.array()],
                 columns: {
                   name: t.string(),
+                  blocked_cnt: t.number(),
                   pending_cnt: t.number(),
                   running_cnt: t.number(),
                   completed_cnt: t.number(),
@@ -1867,11 +1886,16 @@ ORDER BY t.ord
         const r = map.get(name);
         if (!r)
           return {
+            blocked: { count: 0, hasMore: false },
             pending: { count: 0, hasMore: false },
             running: { count: 0, hasMore: false },
             completed: { count: 0, hasMore: false },
           };
         return {
+          blocked: {
+            count: Math.min(r.blocked_cnt, COUNT_CAP),
+            hasMore: r.blocked_cnt > COUNT_CAP,
+          },
           pending: {
             count: Math.min(r.pending_cnt, COUNT_CAP),
             hasMore: r.pending_cnt > COUNT_CAP,
@@ -1917,10 +1941,8 @@ ORDER BY t.ord
       paramTypes.push(t.string());
       p++;
 
-      if (status === "running") {
-        conditions.push("head_job.chain_completed_at IS NULL");
-      } else if (status === "completed") {
-        conditions.push("head_job.chain_completed_at IS NOT NULL");
+      if (status !== undefined) {
+        conditions.push(chainStatusConditions[status]);
       }
 
       if (independent === true) {
@@ -2012,12 +2034,7 @@ ORDER BY t.ord
       return { items, nextCursor };
     },
 
-    listJobs: async (listJobsParams) => {
-      const { txCtx, typeName, from, to, orderBy, orderDirection, page } = listJobsParams;
-      const status = listJobsParams.status;
-      const blocked =
-        status === "pending" ? (listJobsParams as { blocked?: boolean }).blocked : undefined;
-
+    listJobs: async ({ txCtx, typeName, from, to, status, orderBy, orderDirection, page }) => {
       const sqlColumn = {
         createdAt: "created_at",
         scheduledAt: "scheduled_at",
@@ -2032,17 +2049,8 @@ ORDER BY t.ord
       const paramTypes: DataType[] = [];
       let p = 1;
 
-      if (status === "pending") {
-        conditions.push("j.attempt_at IS NULL AND j.completed_at IS NULL");
-        if (blocked === true) {
-          conditions.push("j.blocked = true");
-        } else if (blocked === false) {
-          conditions.push("j.blocked = false");
-        }
-      } else if (status === "running") {
-        conditions.push("j.attempt_at IS NOT NULL AND j.completed_at IS NULL");
-      } else if (status === "completed") {
-        conditions.push("j.completed_at IS NOT NULL");
+      if (status !== undefined) {
+        conditions.push(jobStatusConditions[status]);
       }
 
       conditions.push(`j.type_name = $${p}::text`);

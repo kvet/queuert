@@ -1,7 +1,7 @@
 import { type AnyChain } from "../entities/chain.js";
 import { type DeduplicationOptions } from "../entities/deduplication.js";
 import { type ScheduleOptions } from "../entities/schedule.js";
-import { BlockerLimitExceededError } from "../errors.js";
+import { BlockerLimitExceededError, ChainNotFoundError, JobNotFoundError } from "../errors.js";
 import { bufferNotifyJobScheduled } from "../helpers/notify-hooks.js";
 import {
   bufferObservabilityEvent,
@@ -130,7 +130,18 @@ const finalizeCreatedJobs = async (
         const blockerSpanHandlesList = blockerSpanHandlesPerEntry[bi];
 
         // addJobsBlockers returns StateJob & { blockers }; extract the updated job info.
-        const { chain: _chain, blockers: resultBlockers, ...updatedJobInfo } = result;
+        const { chain: _chain, blockers: rawBlockers, ...updatedJobInfo } = result;
+        // A hole means the id names no chain head. The adapter reports it rather than
+        // throwing, so the error the caller sees is raised here -- and throwing rolls
+        // back the blocker rows written for the positions that did resolve.
+        const resultBlockers = rawBlockers.map((blocker, hi) => {
+          if (!blocker) {
+            throw new ChainNotFoundError(`Chain with id ${blockerChainIds[hi]} not found`, {
+              chainId: blockerChainIds[hi],
+            });
+          }
+          return blocker;
+        });
         stateChains[i] = { ...stateChains[i], head: updatedJobInfo };
         const incomplete = resultBlockers.filter((b) => b.completedAt === null);
         perJobIncompleteBlockerChainIds[i] = incomplete.map((b) => b.id);
@@ -328,7 +339,7 @@ export const continueStateJobs = async (
   );
   const [spanHandle] = spanHandles;
 
-  const [{ continuation, ...completedJob }] = await runCreate(spanHandles, async () =>
+  const [continued] = await runCreate(spanHandles, async () =>
     helpers.stateAdapter.continueJobs({
       txCtx,
       completedBy: workerId,
@@ -344,6 +355,15 @@ export const continueStateJobs = async (
       ],
     }),
   );
+
+  // The caller holds the predecessor's row, so a hole here means it was completed or
+  // deleted out from under a lock the adapter never took.
+  if (!continued) {
+    throw new JobNotFoundError(`Job ${fromJob.id} not found or already completed`, {
+      jobId: fromJob.id,
+    });
+  }
+  const { continuation, ...completedJob } = continued;
 
   // The continuation shares the chain of the job it continues.
   const [result] = await finalizeCreatedJobs(helpers, {

@@ -73,7 +73,7 @@ export const listChainsGroup: ConformanceGroup<StateConformanceFixture> = {
           }),
         );
 
-        const [{ continuation }] = await stateAdapter.withTransaction(async (txCtx) =>
+        const [continued] = await stateAdapter.withTransaction(async (txCtx) =>
           stateAdapter.continueJobs({
             txCtx,
             jobs: [
@@ -85,6 +85,7 @@ export const listChainsGroup: ConformanceGroup<StateConformanceFixture> = {
             ],
           }),
         );
+        const { continuation } = continued!;
 
         const result = await stateAdapter.listChains({
           typeName: "test-chain",
@@ -910,7 +911,7 @@ export const listChainsGroup: ConformanceGroup<StateConformanceFixture> = {
         await stateAdapter.withTransaction(async (txCtx) =>
           stateAdapter.startJobAttempt({ txCtx, workerId: "w1", typeNames: ["task"] }),
         );
-        const [{ continuation: tailA }] = await stateAdapter.withTransaction(async (txCtx) =>
+        const [continuedTailA] = await stateAdapter.withTransaction(async (txCtx) =>
           stateAdapter.continueJobs({
             txCtx,
             completedBy: "w1",
@@ -923,6 +924,7 @@ export const listChainsGroup: ConformanceGroup<StateConformanceFixture> = {
             ],
           }),
         );
+        const { continuation: tailA } = continuedTailA!;
 
         // Start headB (next pending "task")
         await stateAdapter.withTransaction(async (txCtx) =>

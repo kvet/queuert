@@ -18,7 +18,6 @@ import {
   type AnyJob,
   type CompletedJob,
   type JobStatus,
-  deriveStatus,
   mapStateJobToJob,
 } from "./entities/job.js";
 import {
@@ -258,12 +257,12 @@ export type Client<
   ) => Promise<ResolvedChain<TJobId, TJobTypeDefinitions, TEntryName>[]>;
 
   /**
-   * Reschedule a pending job by setting its `scheduledAt` from the optional
+   * Reschedule a pending or blocked job by setting its `scheduledAt` from the optional
    * `schedule` (`{ at }` | `{ afterMs }`); omitting `schedule` reschedules to
    * now. Past times clamp to now.
    *
    * @throws {@link JobNotFoundError} if the job does not exist.
-   * @throws {@link JobNotReschedulableError} if the job is not pending.
+   * @throws {@link JobNotReschedulableError} if the job is neither pending nor blocked.
    */
   rescheduleJob: <
     TJobTypeName extends JobTypeNames<TJobTypeDefinitions> = JobTypeNames<TJobTypeDefinitions>,
@@ -276,13 +275,13 @@ export type Client<
   ) => Promise<ResolvedJob<TJobId, TJobTypeDefinitions, TJobTypeName>>;
 
   /**
-   * Reschedule multiple pending jobs, setting each `scheduledAt` from the
+   * Reschedule multiple pending or blocked jobs, setting each `scheduledAt` from the
    * optional `schedule` (omitted = now, past times clamped to now). Validation
    * is atomic — no job is rescheduled on failure. Returns jobs in input order.
    * Empty `ids` returns `[]`.
    *
    * @throws {@link JobsNotFoundError} (batch variant listing every offending id) if any input is missing.
-   * @throws {@link JobsNotReschedulableError} (batch variant listing every offending id) if any input is not pending.
+   * @throws {@link JobsNotReschedulableError} (batch variant listing every offending id) if any input is neither pending nor blocked.
    */
   rescheduleJobs: <
     TJobTypeName extends JobTypeNames<TJobTypeDefinitions> = JobTypeNames<TJobTypeDefinitions>,
@@ -474,6 +473,7 @@ export type Client<
     } & Partial<GetStateAdapterTxContext<TStateAdapter>>,
   ) => Promise<
     {
+      blocked: { count: number; hasMore: boolean };
       pending: { count: number; hasMore: boolean };
       running: { count: number; hasMore: boolean };
       completed: { count: number; hasMore: boolean };
@@ -518,7 +518,8 @@ export type Client<
       limit?: number;
     } & (
       | { status?: undefined; orderBy?: "createdAt" }
-      | { status: "pending"; blocked?: boolean; orderBy?: "createdAt" | "scheduledAt" }
+      | { status: "blocked"; orderBy?: "createdAt" | "scheduledAt" }
+      | { status: "pending"; orderBy?: "createdAt" | "scheduledAt" }
       | { status: "running"; orderBy?: "createdAt" | "attemptAt" | "attemptUntil" }
       | { status: "completed"; orderBy?: "createdAt" | "completedAt" }
     ) &
@@ -789,7 +790,7 @@ export const createClient = async <
         }
         if (error instanceof JobsNotReschedulableError) {
           throw new JobNotReschedulableError(
-            `Cannot reschedule job ${String(id)}: job is not "pending"`,
+            `Cannot reschedule job ${String(id)}: job is neither "pending" nor "blocked"`,
             { jobId: id as string, cause: error },
           );
         }
@@ -821,10 +822,10 @@ export const createClient = async <
       existingJobs.forEach((stateJob, index) => {
         if (stateJob === undefined) {
           notFound.push(ids[index]);
-        } else if (stateJob.completedAt !== null || stateJob.attemptAt !== null) {
+        } else if (stateJob.status === "running" || stateJob.status === "completed") {
           notReschedulable.push({
             jobId: stateJob.id as TJobId,
-            status: deriveStatus(stateJob),
+            status: stateJob.status,
           });
         }
       });
@@ -835,7 +836,7 @@ export const createClient = async <
       }
       if (notReschedulable.length > 0) {
         throw new JobsNotReschedulableError(
-          `Cannot reschedule jobs whose status is not "pending": ${notReschedulable
+          `Cannot reschedule jobs whose status is not "pending" or "blocked": ${notReschedulable
             .map((j) => `${j.jobId} (${j.status})`)
             .join(", ")}`,
           { jobIds: notReschedulable.map((j) => j.jobId) },
@@ -1341,7 +1342,8 @@ export const createClient = async <
         limit?: number;
       } & (
         | { status?: undefined; orderBy?: "createdAt" }
-        | { status: "pending"; blocked?: boolean; orderBy?: "createdAt" | "scheduledAt" }
+        | { status: "blocked"; orderBy?: "createdAt" | "scheduledAt" }
+        | { status: "pending"; orderBy?: "createdAt" | "scheduledAt" }
         | { status: "running"; orderBy?: "createdAt" | "attemptAt" | "attemptUntil" }
         | { status: "completed"; orderBy?: "createdAt" | "completedAt" }
       ) &
@@ -1353,7 +1355,6 @@ export const createClient = async <
         to,
         status,
         orderBy,
-        blocked,
         orderDirection = "desc",
         cursor,
         limit = 50,
@@ -1361,11 +1362,11 @@ export const createClient = async <
       } = options as typeof options & {
         status?: string;
         orderBy?: string;
-        blocked?: boolean;
       };
       const txCtx = normalizeTxCtx(rest);
 
       const defaultOrderBy: Record<string, string> = {
+        blocked: "scheduledAt",
         pending: "scheduledAt",
         running: "attemptAt",
         completed: "completedAt",
@@ -1381,7 +1382,6 @@ export const createClient = async <
         orderBy: resolvedOrderBy,
         orderDirection,
         page: { cursor, limit },
-        ...(blocked !== undefined ? { blocked } : {}),
       } as Parameters<typeof helpers.stateAdapter.listJobs>[0]);
       return {
         items: result.items.map(

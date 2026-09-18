@@ -7,7 +7,7 @@ sidebar:
 
 ### Job
 
-An individual unit of work. Jobs have a lifecycle: `pending` → `running` → `completed`. Each job belongs to a Job Type and contains typed input/output. Jobs that depend on other chains start as `pending` with `blocked: true` and become `blocked: false` when their blockers complete (see [Job Blockers](/queuert/guides/job-blockers/)).
+An individual unit of work. Jobs have a lifecycle: `pending` → `running` → `completed`. Each job belongs to a Job Type and contains typed input/output. Jobs that depend on other chains start as `blocked` and become `pending` when their blockers complete (see [Job Blockers](/queuert/guides/job-blockers/)).
 
 ### Chain
 

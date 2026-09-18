@@ -34,7 +34,7 @@ export const getChainsGroup: ConformanceGroup<StateConformanceFixture> = {
           }),
         );
 
-        const [{ continuation }] = await stateAdapter.withTransaction(async (txCtx) =>
+        const [continued] = await stateAdapter.withTransaction(async (txCtx) =>
           stateAdapter.continueJobs({
             txCtx,
             jobs: [
@@ -46,6 +46,7 @@ export const getChainsGroup: ConformanceGroup<StateConformanceFixture> = {
             ],
           }),
         );
+        const { continuation } = continued!;
 
         const [chain] = await stateAdapter.getChains({ chainIds: [headChain.head.id] });
         expect(chain).toBeDefined();
@@ -115,7 +116,7 @@ export const getChainsGroup: ConformanceGroup<StateConformanceFixture> = {
           }),
         );
 
-        const [{ continuation }] = await stateAdapter.withTransaction(async (txCtx) =>
+        const [continued] = await stateAdapter.withTransaction(async (txCtx) =>
           stateAdapter.continueJobs({
             txCtx,
             jobs: [
@@ -127,6 +128,7 @@ export const getChainsGroup: ConformanceGroup<StateConformanceFixture> = {
             ],
           }),
         );
+        const { continuation } = continued!;
 
         let releaseHolder: (() => void) | undefined;
         const holderGate = new Promise<void>((r) => {

@@ -1,5 +1,5 @@
-/** Possible statuses of a job. */
-export type JobStatus = "pending" | "running" | "completed";
+/** Possible statuses of a job. A `blocked` job is waiting on incomplete blocker chains. */
+export type JobStatus = "blocked" | "pending" | "running" | "completed";
 
 /**
  * A job within a chain. Discriminated union on {@link Job.status | status},
@@ -27,12 +27,15 @@ export type Job<TJobId, TJobTypeName, TInput, TOutput, TCanContinue extends bool
   lastAttemptError: string | null;
 } & (
   | {
+      /** Waiting on blocker chains; becomes `pending` when the last one completes. */
+      status: "blocked";
+    }
+  | {
       status: "pending";
-      blocked: boolean;
     }
   | {
       status: "running";
-      /** When the current attempt started. Non-null by construction — `running` is derived from it. */
+      /** When the current attempt started. Always written alongside the `running` status. */
       attemptAt: Date;
       /** Worker that owns the current attempt. Always written alongside `attemptAt`. */
       attemptBy: string;

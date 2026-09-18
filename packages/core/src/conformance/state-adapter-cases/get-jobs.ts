@@ -87,7 +87,7 @@ export const getJobsGroup: ConformanceGroup<StateConformanceFixture> = {
             jobs: [{ typeName: "lock-head-chain", input: null }],
           }),
         );
-        const [{ continuation }] = await stateAdapter.withTransaction(async (txCtx) =>
+        const [continued] = await stateAdapter.withTransaction(async (txCtx) =>
           stateAdapter.continueJobs({
             txCtx,
             jobs: [
@@ -95,6 +95,7 @@ export const getJobsGroup: ConformanceGroup<StateConformanceFixture> = {
             ],
           }),
         );
+        const { continuation } = continued!;
 
         let releaseHolder: (() => void) | undefined;
         const holderGate = new Promise<void>((r) => {

@@ -47,7 +47,7 @@ export const unblockJobsGroup: ConformanceGroup<StateConformanceFixture> = {
 
         expect(result).toHaveLength(1);
         expect(result[0].job.id).toBe(mainChain.head.id);
-        expect(result[0].job.blocked).toBe(false);
+        expect(result[0].job.status).toBe("pending");
         expect(result[0].job.completedAt).toBeNull();
         expect(result[0].job.attemptAt).toBeNull();
       },
@@ -105,12 +105,12 @@ export const unblockJobsGroup: ConformanceGroup<StateConformanceFixture> = {
 
         expect(result).toHaveLength(1);
         expect(result[0].jobId).toBe(mainChain.head.id);
-        expect(result[0].job.blocked).toBe(true);
+        expect(result[0].job.status).toBe("blocked");
 
         const [stillBlocked] = await stateAdapter.getJobs({ jobIds: [mainChain.head.id] });
         expect(stillBlocked?.completedAt).toBeNull();
         expect(stillBlocked?.attemptAt).toBeNull();
-        expect(stillBlocked?.blocked).toBe(true);
+        expect(stillBlocked?.status).toBe("blocked");
       },
     },
     {
@@ -468,7 +468,7 @@ export const unblockJobsGroup: ConformanceGroup<StateConformanceFixture> = {
           mainJobIds.map(async (jobId) => stateAdapter.getJobs({ jobIds: [jobId] })),
         );
 
-        const stranded = finalStates.filter(([job]) => job?.blocked);
+        const stranded = finalStates.filter(([job]) => job?.status === "blocked");
         expect(stranded).toHaveLength(0);
       },
     },
@@ -545,7 +545,7 @@ export const unblockJobsGroup: ConformanceGroup<StateConformanceFixture> = {
           mainJobs.map(async (main) => stateAdapter.getJobs({ jobIds: [main.id] })),
         );
 
-        const stranded = finalStates.filter(([job]) => job?.blocked);
+        const stranded = finalStates.filter(([job]) => job?.status === "blocked");
         expect(stranded).toHaveLength(0);
       },
     },
@@ -584,7 +584,7 @@ export const unblockJobsGroup: ConformanceGroup<StateConformanceFixture> = {
         );
 
         const [completedJob] = await stateAdapter.getJobs({ jobIds: [mainChain.head.id] });
-        expect(completedJob!.blocked).toBe(false);
+        expect(completedJob!.status).toBe("completed");
 
         await stateAdapter.withTransaction(async (txCtx) =>
           stateAdapter.completeJobs({

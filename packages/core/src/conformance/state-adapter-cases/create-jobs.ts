@@ -99,7 +99,7 @@ export const createJobsGroup: ConformanceGroup<StateConformanceFixture> = {
         );
         const job = created.head;
 
-        expect(job.blocked).toBe(false);
+        expect(job.status).toBe("pending");
         expect(job.input).toBeNull();
         expect(job.output).toBeNull();
         expect(job.completedAt).toBeNull();
@@ -113,6 +113,7 @@ export const createJobsGroup: ConformanceGroup<StateConformanceFixture> = {
         expect(created.id).toBe(job.chainId);
         expect(created.typeName).toBe(job.typeName);
         expect(created.deduplicationKey).toBeNull();
+        expect(created.status).toBe("running");
         expect(created.completedAt).toBeNull();
       },
     },
@@ -330,11 +331,12 @@ export const createJobsGroup: ConformanceGroup<StateConformanceFixture> = {
 
         const step2 = await stateAdapter.withTransaction(async (txCtx) => {
           await stateAdapter.startJobAttempt({ txCtx, workerId: "worker-1", typeNames: ["step1"] });
-          const [{ continuation }] = await stateAdapter.continueJobs({
+          const [continued] = await stateAdapter.continueJobs({
             txCtx,
             completedBy: "w",
             jobs: [{ typeName: "step2", input: null, continueFromId: rootChain.head.id }],
           });
+          const { continuation } = continued!;
           return continuation;
         });
 

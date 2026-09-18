@@ -20,13 +20,14 @@ const headJob: StateJobInfo = {
   completedAt: new Date("2026-01-01T00:01:00Z"),
   completedBy: "worker-1",
   continuedToId: "job-2",
-  blocked: false,
+  status: "completed",
   traceContext: null,
 };
 
 const chainInfo: StateChainInfo = {
   id: "chain-1",
   typeName: "test",
+  status: "running",
   deduplicationKey: null,
   createdAt: new Date("2026-01-01T00:00:00Z"),
   completedAt: null,
@@ -53,6 +54,7 @@ describe("mapStateChainToChain", () => {
 
     const chain = mapStateChainToChain({
       ...chainInfo,
+      status: "completed",
       completedAt: new Date("2026-01-01T00:02:00Z"),
       head: headJob,
       tail,
@@ -71,6 +73,7 @@ describe("mapStateChainToChain", () => {
 
     const chain = mapStateChainToChain({
       ...chainInfo,
+      status: "completed",
       completedAt: new Date("2026-01-01T00:01:00Z"),
       head: soleJob,
       tail: undefined,

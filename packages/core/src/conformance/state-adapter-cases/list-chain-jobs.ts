@@ -25,7 +25,7 @@ export const listChainJobsGroup: ConformanceGroup<StateConformanceFixture> = {
             jobs: [{ typeName: "step-1", input: null }],
           }),
         );
-        const [{ continuation: step2 }] = await stateAdapter.withTransaction(async (txCtx) =>
+        const [continuedStep2] = await stateAdapter.withTransaction(async (txCtx) =>
           stateAdapter.continueJobs({
             txCtx,
             jobs: [
@@ -37,6 +37,7 @@ export const listChainJobsGroup: ConformanceGroup<StateConformanceFixture> = {
             ],
           }),
         );
+        const { continuation: step2 } = continuedStep2!;
         await stateAdapter.withTransaction(async (txCtx) =>
           stateAdapter.continueJobs({
             txCtx,
@@ -110,7 +111,7 @@ export const listChainJobsGroup: ConformanceGroup<StateConformanceFixture> = {
         );
         let prevId = rootChain.head.id;
         for (let i = 1; i < 5; i++) {
-          const [{ continuation: next }] = await stateAdapter.withTransaction(async (txCtx) =>
+          const [continuedNext] = await stateAdapter.withTransaction(async (txCtx) =>
             stateAdapter.continueJobs({
               txCtx,
               jobs: [
@@ -122,6 +123,7 @@ export const listChainJobsGroup: ConformanceGroup<StateConformanceFixture> = {
               ],
             }),
           );
+          const { continuation: next } = continuedNext!;
           prevId = next.id;
         }
 
@@ -165,7 +167,7 @@ export const listChainJobsGroup: ConformanceGroup<StateConformanceFixture> = {
         );
         let prevId = rootChain.head.id;
         for (let i = 1; i < 5; i++) {
-          const [{ continuation: next }] = await stateAdapter.withTransaction(async (txCtx) =>
+          const [continuedNext] = await stateAdapter.withTransaction(async (txCtx) =>
             stateAdapter.continueJobs({
               txCtx,
               jobs: [
@@ -177,6 +179,7 @@ export const listChainJobsGroup: ConformanceGroup<StateConformanceFixture> = {
               ],
             }),
           );
+          const { continuation: next } = continuedNext!;
           prevId = next.id;
         }
 

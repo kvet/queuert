@@ -34,6 +34,7 @@ export const startJobAttemptGroup: ConformanceGroup<StateConformanceFixture> = {
 
         expect(acquired).toBeDefined();
         expect(acquired!.input).toEqual({ order: 1 });
+        expect(acquired!.status).toBe("running");
         expect(acquired!.attemptAt).toBeInstanceOf(Date);
         expect(acquired!.attemptBy).toBe("worker-1");
         expect(acquired!.completedAt).toBeNull();

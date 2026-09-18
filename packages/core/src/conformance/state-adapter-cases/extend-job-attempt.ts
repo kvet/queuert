@@ -34,13 +34,13 @@ export const extendJobAttemptGroup: ConformanceGroup<StateConformanceFixture> = 
           }),
         );
 
-        expect(renewed.attemptBy).toBe("worker-1");
-        expect(renewed.attemptUntil).toBeInstanceOf(Date);
-        expect(renewed.attemptUntil!.getTime()).toBeGreaterThanOrEqual(before + 9_000);
-        expect(renewed.attemptUntil!.getTime()).toBeLessThan(before + 11_000);
-        expect(renewed.attemptAt).toBeInstanceOf(Date);
-        expect(renewed.completedAt).toBeNull();
-        expect(renewed.attemptAt!.getTime()).toBe(acquired!.attemptAt!.getTime());
+        expect(renewed!.attemptBy).toBe("worker-1");
+        expect(renewed!.attemptUntil).toBeInstanceOf(Date);
+        expect(renewed!.attemptUntil!.getTime()).toBeGreaterThanOrEqual(before + 9_000);
+        expect(renewed!.attemptUntil!.getTime()).toBeLessThan(before + 11_000);
+        expect(renewed!.attemptAt).toBeInstanceOf(Date);
+        expect(renewed!.completedAt).toBeNull();
+        expect(renewed!.attemptAt!.getTime()).toBe(acquired!.attemptAt!.getTime());
       },
     },
     {
@@ -79,11 +79,11 @@ export const extendJobAttemptGroup: ConformanceGroup<StateConformanceFixture> = 
           }),
         );
 
-        expect(second.attemptUntil!.getTime()).toBeGreaterThan(first.attemptUntil!.getTime());
+        expect(second!.attemptUntil!.getTime()).toBeGreaterThan(first!.attemptUntil!.getTime());
       },
     },
     {
-      name: "rejects extension by a different worker",
+      name: "reports an undefined result for an extension by a different worker",
       run: async ({ stateAdapter }, expect) => {
         const [createdChain] = await stateAdapter.withTransaction(async (txCtx) =>
           stateAdapter.createJobs({
@@ -100,16 +100,19 @@ export const extendJobAttemptGroup: ConformanceGroup<StateConformanceFixture> = 
           }),
         );
 
-        await expect(
-          stateAdapter.withTransaction(async (txCtx) =>
-            stateAdapter.extendJobAttempt({
-              txCtx,
-              jobId: createdChain.head.id,
-              workerId: "worker-2",
-              timeoutMs: 10_000,
-            }),
-          ),
-        ).rejects.toThrow();
+        const extended = await stateAdapter.withTransaction(async (txCtx) =>
+          stateAdapter.extendJobAttempt({
+            txCtx,
+            jobId: createdChain.head.id,
+            workerId: "worker-2",
+            timeoutMs: 10_000,
+          }),
+        );
+
+        expect(extended).toBeUndefined();
+
+        const [unchanged] = await stateAdapter.getJobs({ jobIds: [createdChain.head.id] });
+        expect(unchanged!.attemptBy).toBe("worker-1");
       },
     },
   ],

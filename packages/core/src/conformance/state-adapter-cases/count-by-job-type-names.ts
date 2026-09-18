@@ -17,6 +17,7 @@ export const countByJobTypeNamesGroup: ConformanceGroup<StateConformanceFixture>
         const result = await stateAdapter.countByJobTypeNames({ typeNames: ["nonexistent"] });
         expect(result).toEqual([
           {
+            blocked: { count: 0, hasMore: false },
             pending: { count: 0, hasMore: false },
             running: { count: 0, hasMore: false },
             completed: { count: 0, hasMore: false },
@@ -44,16 +45,19 @@ export const countByJobTypeNamesGroup: ConformanceGroup<StateConformanceFixture>
 
         expect(result).toEqual([
           {
+            blocked: { count: 0, hasMore: false },
             pending: { count: 2, hasMore: false },
             running: { count: 0, hasMore: false },
             completed: { count: 0, hasMore: false },
           },
           {
+            blocked: { count: 0, hasMore: false },
             pending: { count: 1, hasMore: false },
             running: { count: 0, hasMore: false },
             completed: { count: 0, hasMore: false },
           },
           {
+            blocked: { count: 0, hasMore: false },
             pending: { count: 0, hasMore: false },
             running: { count: 0, hasMore: false },
             completed: { count: 0, hasMore: false },
@@ -85,6 +89,34 @@ export const countByJobTypeNamesGroup: ConformanceGroup<StateConformanceFixture>
       },
     },
     {
+      name: "countByJobTypeNames counts blocked jobs apart from pending ones",
+      run: async ({ stateAdapter }, expect) => {
+        const [blockerChain, blockedChain] = await stateAdapter.withTransaction(async (txCtx) =>
+          stateAdapter.createJobs({
+            txCtx,
+            jobs: [
+              { typeName: "count-blocker", input: null },
+              { typeName: "count-blocked", input: null },
+              { typeName: "count-blocked", input: null },
+            ],
+          }),
+        );
+        await stateAdapter.withTransaction(async (txCtx) =>
+          stateAdapter.addJobsBlockers({
+            txCtx,
+            jobBlockers: [
+              { jobId: blockedChain.head.id, blockedByChainIds: [blockerChain.head.chainId] },
+            ],
+          }),
+        );
+
+        const result = await stateAdapter.countByJobTypeNames({ typeNames: ["count-blocked"] });
+
+        expect(result[0].blocked.count).toBe(1);
+        expect(result[0].pending.count).toBe(1);
+      },
+    },
+    {
       name: "countByJobTypeNames counts completed jobs",
       run: async ({ stateAdapter }, expect) => {
         await stateAdapter.withTransaction(async (txCtx) =>
@@ -110,6 +142,7 @@ export const countByJobTypeNamesGroup: ConformanceGroup<StateConformanceFixture>
 
         expect(result).toEqual([
           {
+            blocked: { count: 0, hasMore: false },
             pending: { count: 0, hasMore: false },
             running: { count: 0, hasMore: false },
             completed: { count: 1, hasMore: false },

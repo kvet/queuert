@@ -229,8 +229,6 @@ const failingProvider = (provider: Provider, match: string, occurrence: number):
   };
 };
 
-const pgBool = (v: unknown): boolean => v === true || v === "t" || v === 1;
-
 const sameTimestamp = (a: unknown, b: unknown): boolean => {
   if (a == null || b == null) return a == null && b == null;
   return new Date(a as string).getTime() === new Date(b as string).getTime();
@@ -266,14 +264,8 @@ const headOnly = (column: string): InPlaceChange => ({
       : after == null,
 });
 
-const statusOf = (row: Record<string, unknown>): string => {
-  // oxlint-disable-next-line typescript/no-base-to-string
-  if ("status" in row && row.status != null) return String(row.status);
-  if (row.completed_at != null) return "completed";
-  if (row.attempt_at != null) return "running";
-  if (pgBool(row.blocked)) return "blocked";
-  return "pending";
-};
+// oxlint-disable-next-line typescript/no-base-to-string
+const statusOf = (row: Record<string, unknown>): string => String(row.status);
 
 const relations = async (provider: Provider): Promise<Record<string, boolean>> => {
   const [row] = await query<Record<string, string | null>>(
@@ -307,7 +299,9 @@ const jobContract: ColumnContract = {
     { from: "leased_by", to: "attempt_by" },
     { from: "leased_until", to: "attempt_until" },
   ],
-  drop: ["status", "chain_type_name"],
+  // `status` is not named: it carries the same four values in both models and must
+  // survive byte-identical.
+  drop: ["chain_type_name"],
   add: [
     {
       // The chain's completion, read off the row that has no successor.
@@ -316,6 +310,15 @@ const jobContract: ColumnContract = {
         if (Number(beforeRow.chain_index) !== 0) return after == null;
         const tail = chainTail(snapshot, String(beforeRow.chain_id));
         return sameTimestamp(after, tail?.completed_at ?? null);
+      },
+    },
+    {
+      // Head rows only; `completed` exactly when the successor-less row has completed.
+      column: "chain_status",
+      derive: (after, beforeRow, snapshot) => {
+        if (Number(beforeRow.chain_index) !== 0) return after == null;
+        const tail = chainTail(snapshot, String(beforeRow.chain_id));
+        return after === (tail?.completed_at != null ? "completed" : "running");
       },
     },
     {
@@ -338,10 +341,6 @@ const jobContract: ColumnContract = {
           Number(successor.chain_index) === nextIndex
         );
       },
-    },
-    {
-      column: "blocked",
-      derive: (after, beforeRow) => pgBool(after) === (String(beforeRow.status) === "blocked"),
     },
     {
       column: "attempt_at",
@@ -509,11 +508,14 @@ describe("v0.15.1 upgrade path", () => {
       expect(fanIn?.c).toBe(sentinels.fanInBlockedCount);
 
       const [completed] = await adapter.getJobs({ jobIds: [sentinels.completedJobId] });
+      expect(completed?.status).toBe("completed");
       expect(completed?.completedAt).not.toBeNull();
       expect(completed?.output).toMatchObject({ ok: true });
+      expect(completed?.chain.status).toBe("completed");
       expect(completed?.chain.completedAt).not.toBeNull();
 
       const [running] = await adapter.getJobs({ jobIds: [sentinels.runningJobId] });
+      expect(running?.status).toBe("running");
       expect(running?.attemptAt).not.toBeNull();
       expect(running?.attemptBy).not.toBeNull();
       expect(running?.attemptUntil).not.toBeNull();
@@ -521,18 +523,19 @@ describe("v0.15.1 upgrade path", () => {
       expect(running?.chain.completedAt).toBeNull();
 
       const [retried] = await adapter.getJobs({ jobIds: [sentinels.retriedJobId] });
+      expect(retried?.status).toBe("pending");
       expect(retried?.completedAt).toBeNull();
       expect(retried?.attemptAt).toBeNull();
-      expect(retried?.blocked).toBe(false);
       expect(String(retried?.lastAttemptError)).toContain("transient");
 
       const [scheduled] = await adapter.getJobs({ jobIds: [sentinels.scheduledJobId] });
       expect(scheduled?.scheduledAt.getTime()).toBeGreaterThan(scheduled!.createdAt.getTime());
 
       const [blockedJob] = await adapter.getJobs({ jobIds: [sentinels.blockedJobId] });
+      expect(blockedJob?.status).toBe("blocked");
       expect(blockedJob?.completedAt).toBeNull();
       expect(blockedJob?.attemptAt).toBeNull();
-      expect(blockedJob?.blocked).toBe(true);
+      expect(blockedJob?.chain.status).toBe("running");
     },
   );
 });
@@ -613,7 +616,7 @@ describe("upgrade phases", () => {
     async ({ loaded: { provider, adapter } }) => {
       // A database carrying records the code does not know about, whose table is
       // already past v0.15.1: the ledger check passes, the shape check must not.
-      await query(provider, "ALTER TABLE queuert_job DROP COLUMN status");
+      await query(provider, "ALTER TABLE queuert_job DROP COLUMN chain_type_name");
 
       await expect(adapter.migrateToLatest()).rejects.toThrow(/not in the v0\.15\.1 shape/);
       expect(await relations(provider)).toEqual({
@@ -758,7 +761,7 @@ describe("custom id types", () => {
         expect(head?.continuedToId).toBe("job.a1");
         // A one-job blocker chain: its completion lives on the row it starts with.
         const [blocked] = await adapter.getJobs({ jobIds: ["job.a1"] });
-        expect(blocked?.blocked).toBe(true);
+        expect(blocked?.status).toBe("blocked");
         expect(blocked?.continuedToId).toBeNull();
         expect(blocked?.chain.completedAt).toBeNull();
         const [running] = await adapter.getJobs({ jobIds: ["job.b0"] });

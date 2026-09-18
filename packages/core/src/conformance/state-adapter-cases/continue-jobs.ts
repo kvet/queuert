@@ -21,13 +21,16 @@ export const continueJobsGroup: ConformanceGroup<StateConformanceFixture> = {
             jobs: [{ typeName: "child-job", continueFromId: headChain.head.id, input: null }],
           }),
         );
-        const childJob = completedResult.continuation;
+        const childJob = completedResult!.continuation;
 
         expect(childJob.chainId).toBe(headChain.head.chainId);
         expect(childJob.id).not.toBe(headChain.head.id);
-        expect(completedResult.continuedToId).toBe(childJob.id);
-        expect(completedResult.completedAt).not.toBeNull();
-        expect(completedResult.completedBy).toBe("worker-1");
+        expect(completedResult!.continuedToId).toBe(childJob.id);
+        expect(completedResult!.status).toBe("completed");
+        expect(childJob.status).toBe("pending");
+        expect(completedResult!.chain.status).toBe("running");
+        expect(completedResult!.completedAt).not.toBeNull();
+        expect(completedResult!.completedBy).toBe("worker-1");
       },
     },
     {
@@ -40,7 +43,7 @@ export const continueJobsGroup: ConformanceGroup<StateConformanceFixture> = {
           }),
         );
 
-        const [{ continuation }] = await stateAdapter.withTransaction(async (txCtx) =>
+        const [continued] = await stateAdapter.withTransaction(async (txCtx) =>
           stateAdapter.continueJobs({
             txCtx,
             jobs: [
@@ -48,6 +51,7 @@ export const continueJobsGroup: ConformanceGroup<StateConformanceFixture> = {
             ],
           }),
         );
+        const { continuation } = continued!;
 
         const [stored] = await stateAdapter.getJobs({ jobIds: [continuation.id] });
         expect(stored!.input).toBe("bare string");
@@ -80,12 +84,13 @@ export const continueJobsGroup: ConformanceGroup<StateConformanceFixture> = {
           }),
         );
 
-        const [{ continuation }] = await stateAdapter.withTransaction(async (txCtx) =>
+        const [continued] = await stateAdapter.withTransaction(async (txCtx) =>
           stateAdapter.continueJobs({
             txCtx,
             jobs: [{ typeName: "child", continueFromId: headChain.head.id, input: null }],
           }),
         );
+        const { continuation } = continued!;
 
         const [headAfter] = await stateAdapter.getJobs({ jobIds: [headChain.head.id] });
         expect(headAfter!.continuedToId).toBe(continuation.id);
@@ -97,26 +102,27 @@ export const continueJobsGroup: ConformanceGroup<StateConformanceFixture> = {
       },
     },
     {
-      name: "rejects continuation referencing a non-existent parent",
+      name: "reports an undefined result for a non-existent parent",
       run: async ({ stateAdapter }, expect) => {
-        await expect(
-          stateAdapter.withTransaction(async (txCtx) =>
-            stateAdapter.continueJobs({
-              txCtx,
-              jobs: [
-                {
-                  typeName: "child",
-                  continueFromId: "00000000-0000-0000-0000-000000000000",
-                  input: null,
-                },
-              ],
-            }),
-          ),
-        ).rejects.toThrow();
+        const results = await stateAdapter.withTransaction(async (txCtx) =>
+          stateAdapter.continueJobs({
+            txCtx,
+            jobs: [
+              {
+                typeName: "child",
+                continueFromId: "00000000-0000-0000-0000-000000000000",
+                input: null,
+              },
+            ],
+          }),
+        );
+
+        expect(results).toHaveLength(1);
+        expect(results[0]).toBeUndefined();
       },
     },
     {
-      name: "rejects continuation from an already-completed parent",
+      name: "reports an undefined result for an already-completed parent",
       run: async ({ stateAdapter }, expect) => {
         const [headChain] = await stateAdapter.withTransaction(async (txCtx) =>
           stateAdapter.createJobs({
@@ -136,24 +142,33 @@ export const continueJobsGroup: ConformanceGroup<StateConformanceFixture> = {
         const [completedParent] = await stateAdapter.getJobs({ jobIds: [headChain.head.id] });
         expect(completedParent!.completedAt).not.toBeNull();
 
-        await expect(
-          stateAdapter.withTransaction(async (txCtx) =>
-            stateAdapter.continueJobs({
-              txCtx,
-              jobs: [
-                {
-                  typeName: "child-of-completed",
-                  continueFromId: headChain.head.id,
-                  input: null,
-                },
-              ],
-            }),
-          ),
-        ).rejects.toThrow();
+        const results = await stateAdapter.withTransaction(async (txCtx) =>
+          stateAdapter.continueJobs({
+            txCtx,
+            jobs: [
+              {
+                typeName: "child-of-completed",
+                continueFromId: headChain.head.id,
+                input: null,
+              },
+            ],
+          }),
+        );
+
+        expect(results).toHaveLength(1);
+        expect(results[0]).toBeUndefined();
+
+        // Nothing was written for the entry that resolved to nothing.
+        const chainJobs = await stateAdapter.listChainJobs({
+          chainId: headChain.id,
+          orderDirection: "asc",
+          page: { limit: 10 },
+        });
+        expect(chainJobs.items).toHaveLength(1);
       },
     },
     {
-      name: "rejects a second continuation from the same parent",
+      name: "reports an undefined result for a second continuation from the same parent",
       run: async ({ stateAdapter }, expect) => {
         const [headChain] = await stateAdapter.withTransaction(async (txCtx) =>
           stateAdapter.createJobs({
@@ -162,7 +177,7 @@ export const continueJobsGroup: ConformanceGroup<StateConformanceFixture> = {
           }),
         );
 
-        const [{ continuation: c1 }] = await stateAdapter.withTransaction(async (txCtx) =>
+        const [continuedC1] = await stateAdapter.withTransaction(async (txCtx) =>
           stateAdapter.continueJobs({
             txCtx,
             jobs: [
@@ -174,21 +189,24 @@ export const continueJobsGroup: ConformanceGroup<StateConformanceFixture> = {
             ],
           }),
         );
+        const { continuation: c1 } = continuedC1!;
 
-        await expect(
-          stateAdapter.withTransaction(async (txCtx) =>
-            stateAdapter.continueJobs({
-              txCtx,
-              jobs: [
-                {
-                  typeName: "child",
-                  continueFromId: headChain.head.id,
-                  input: { v: 2 },
-                },
-              ],
-            }),
-          ),
-        ).rejects.toThrow();
+        // The first continuation completed the parent, so the second finds nothing to
+        // continue -- a hole, reported before the taken chain position can be hit.
+        const [second] = await stateAdapter.withTransaction(async (txCtx) =>
+          stateAdapter.continueJobs({
+            txCtx,
+            jobs: [
+              {
+                typeName: "child",
+                continueFromId: headChain.head.id,
+                input: { v: 2 },
+              },
+            ],
+          }),
+        );
+
+        expect(second).toBeUndefined();
 
         const [stored] = await stateAdapter.getJobs({ jobIds: [c1.id] });
         expect(stored!.input).toEqual({ v: 1 });
@@ -221,8 +239,20 @@ export const continueJobsGroup: ConformanceGroup<StateConformanceFixture> = {
           ),
         );
 
-        expect(results.filter((r) => r.status === "fulfilled")).toHaveLength(1);
-        expect(results.filter((r) => r.status === "rejected")).toHaveLength(1);
+        // Exactly one takes the position. The loser either trips the chain-position
+        // constraint (both saw an open parent) or finds the parent already completed
+        // and reports a hole -- which of the two depends on how the engine serializes.
+        const continued = results.filter(
+          (result) => result.status === "fulfilled" && result.value[0] !== undefined,
+        );
+        expect(continued).toHaveLength(1);
+
+        const chainJobs = await stateAdapter.listChainJobs({
+          chainId: headChain.id,
+          orderDirection: "asc",
+          page: { limit: 10 },
+        });
+        expect(chainJobs.items).toHaveLength(2);
       },
     },
     {
@@ -249,13 +279,13 @@ export const continueJobsGroup: ConformanceGroup<StateConformanceFixture> = {
         );
 
         expect(results).toHaveLength(2);
-        expect(results.map((r) => r.id)).toEqual([chainA.head.id, chainB.head.id]);
-        expect(results[0].continuation.chainId).toBe(chainA.head.chainId);
-        expect(results[1].continuation.chainId).toBe(chainB.head.chainId);
-        expect(results[0].continuedToId).toBe(results[0].continuation.id);
-        expect(results[1].continuedToId).toBe(results[1].continuation.id);
-        expect(results[0].completedAt).toBeInstanceOf(Date);
-        expect(results[1].completedAt).toBeInstanceOf(Date);
+        expect(results.map((r) => r!.id)).toEqual([chainA.head.id, chainB.head.id]);
+        expect(results[0]!.continuation.chainId).toBe(chainA.head.chainId);
+        expect(results[1]!.continuation.chainId).toBe(chainB.head.chainId);
+        expect(results[0]!.continuedToId).toBe(results[0]!.continuation.id);
+        expect(results[1]!.continuedToId).toBe(results[1]!.continuation.id);
+        expect(results[0]!.completedAt).toBeInstanceOf(Date);
+        expect(results[1]!.completedAt).toBeInstanceOf(Date);
       },
     },
     {
@@ -282,7 +312,7 @@ export const continueJobsGroup: ConformanceGroup<StateConformanceFixture> = {
       },
     },
     {
-      name: "rejects a batch entry that continues a job the same batch creates",
+      name: "reports an undefined result for a batch entry continuing a job the same batch creates",
       run: async ({ stateAdapter, generateId }, expect) => {
         const [stateChain] = await stateAdapter.withTransaction(async (txCtx) =>
           stateAdapter.createJobs({
@@ -295,27 +325,34 @@ export const continueJobsGroup: ConformanceGroup<StateConformanceFixture> = {
         // batch's own insert were visible to later entries, which it must not be.
         const successorId = (generateId ?? (() => crypto.randomUUID()))();
 
-        await expect(
-          stateAdapter.withTransaction(async (txCtx) =>
-            stateAdapter.continueJobs({
-              txCtx,
-              jobs: [
-                {
-                  typeName: "batch-chain-step",
-                  id: successorId,
-                  continueFromId: stateChain.head.id,
-                  input: { n: 1 },
-                },
-                { typeName: "batch-chain-step", continueFromId: successorId, input: { n: 2 } },
-              ],
-            }),
-          ),
-        ).rejects.toThrow();
+        const results = await stateAdapter.withTransaction(async (txCtx) =>
+          stateAdapter.continueJobs({
+            txCtx,
+            jobs: [
+              {
+                typeName: "batch-chain-step",
+                id: successorId,
+                continueFromId: stateChain.head.id,
+                input: { n: 1 },
+              },
+              { typeName: "batch-chain-step", continueFromId: successorId, input: { n: 2 } },
+            ],
+          }),
+        );
 
-        // The whole batch is discarded, so the head is untouched.
+        expect(results[0]).toBeDefined();
+        expect(results[1]).toBeUndefined();
+
+        // Entry 1 stands on its own: the hole is entry 2's alone, and it wrote nothing.
         const [headAfter] = await stateAdapter.getJobs({ jobIds: [stateChain.head.id] });
-        expect(headAfter!.completedAt).toBeNull();
-        expect(headAfter!.continuedToId).toBeNull();
+        expect(headAfter!.continuedToId).toBe(successorId);
+
+        const chainJobs = await stateAdapter.listChainJobs({
+          chainId: stateChain.id,
+          orderDirection: "asc",
+          page: { limit: 10 },
+        });
+        expect(chainJobs.items).toHaveLength(2);
       },
     },
     {
@@ -329,7 +366,7 @@ export const continueJobsGroup: ConformanceGroup<StateConformanceFixture> = {
         );
         expect(headChain.head.id).toBe(headChain.head.chainId);
 
-        const [{ continuation: cont1 }] = await stateAdapter.withTransaction(async (txCtx) =>
+        const [continuedCont1] = await stateAdapter.withTransaction(async (txCtx) =>
           stateAdapter.continueJobs({
             txCtx,
             jobs: [
@@ -341,9 +378,10 @@ export const continueJobsGroup: ConformanceGroup<StateConformanceFixture> = {
             ],
           }),
         );
+        const { continuation: cont1 } = continuedCont1!;
         expect(cont1.chainId).toBe(headChain.head.chainId);
 
-        const [{ continuation: cont2 }] = await stateAdapter.withTransaction(async (txCtx) =>
+        const [continuedCont2] = await stateAdapter.withTransaction(async (txCtx) =>
           stateAdapter.continueJobs({
             txCtx,
             jobs: [
@@ -355,6 +393,7 @@ export const continueJobsGroup: ConformanceGroup<StateConformanceFixture> = {
             ],
           }),
         );
+        const { continuation: cont2 } = continuedCont2!;
         expect(cont2.chainId).toBe(headChain.head.chainId);
         expect(cont2.id).not.toBe(cont1.id);
       },
@@ -369,38 +408,38 @@ export const continueJobsGroup: ConformanceGroup<StateConformanceFixture> = {
           }),
         );
 
-        const [{ continuation: existingContinuation }] = await stateAdapter.withTransaction(
-          async (txCtx) =>
-            stateAdapter.continueJobs({
-              txCtx,
-              jobs: [
-                {
-                  typeName: "step",
-                  continueFromId: rootChain.head.id,
-                  input: { value: "first" },
-                },
-              ],
-            }),
+        const [continuedExistingContinuation] = await stateAdapter.withTransaction(async (txCtx) =>
+          stateAdapter.continueJobs({
+            txCtx,
+            jobs: [
+              {
+                typeName: "step",
+                continueFromId: rootChain.head.id,
+                input: { value: "first" },
+              },
+            ],
+          }),
+        );
+        const { continuation: existingContinuation } = continuedExistingContinuation!;
+
+        // The root is completed, so continuing it again reports a hole.
+        const [duplicate] = await stateAdapter.withTransaction(async (txCtx) =>
+          stateAdapter.continueJobs({
+            txCtx,
+            jobs: [
+              {
+                typeName: "step",
+                continueFromId: rootChain.head.id,
+                input: { value: "duplicate" },
+              },
+            ],
+          }),
         );
 
-        // The root is completed and its chain position taken, so continuing it again fails.
-        await expect(
-          stateAdapter.withTransaction(async (txCtx) =>
-            stateAdapter.continueJobs({
-              txCtx,
-              jobs: [
-                {
-                  typeName: "step",
-                  continueFromId: rootChain.head.id,
-                  input: { value: "duplicate" },
-                },
-              ],
-            }),
-          ),
-        ).rejects.toThrow();
+        expect(duplicate).toBeUndefined();
 
         // Continuing the existing continuation extends the chain.
-        const [{ continuation: next }] = await stateAdapter.withTransaction(async (txCtx) =>
+        const [continuedNext] = await stateAdapter.withTransaction(async (txCtx) =>
           stateAdapter.continueJobs({
             txCtx,
             jobs: [
@@ -412,6 +451,7 @@ export const continueJobsGroup: ConformanceGroup<StateConformanceFixture> = {
             ],
           }),
         );
+        const { continuation: next } = continuedNext!;
 
         expect(next.chainId).toBe(rootChain.head.chainId);
       },

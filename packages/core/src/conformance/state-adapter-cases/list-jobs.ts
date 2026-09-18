@@ -195,27 +195,25 @@ export const listJobsGroup: ConformanceGroup<StateConformanceFixture> = {
 
         const blockedResult = await stateAdapter.listJobs({
           orderBy: "scheduledAt",
-          status: "pending",
-          blocked: true,
+          status: "blocked",
           typeName: "blocked-filter",
           orderDirection: "desc",
           page: { limit: 10 },
         });
         expect(blockedResult.items).toHaveLength(1);
         expect(blockedResult.items[0].id).toBe(blockedChain.head.id);
-        expect(blockedResult.items[0].blocked).toBe(true);
+        expect(blockedResult.items[0].status).toBe("blocked");
 
-        const unblockedResult = await stateAdapter.listJobs({
+        const pendingResult = await stateAdapter.listJobs({
           orderBy: "scheduledAt",
           status: "pending",
-          blocked: false,
           typeName: "blocked-filter",
           orderDirection: "desc",
           page: { limit: 10 },
         });
-        expect(unblockedResult.items).toHaveLength(1);
-        expect(unblockedResult.items[0].id).toBe(unblockedChain.head.id);
-        expect(unblockedResult.items[0].blocked).toBe(false);
+        expect(pendingResult.items).toHaveLength(1);
+        expect(pendingResult.items[0].id).toBe(unblockedChain.head.id);
+        expect(pendingResult.items[0].status).toBe("pending");
       },
     },
     {
@@ -727,13 +725,14 @@ export const listJobsGroup: ConformanceGroup<StateConformanceFixture> = {
         await stateAdapter.withTransaction(async (txCtx) =>
           stateAdapter.startJobAttempt({ txCtx, workerId: "w1", typeNames: ["multi-step"] }),
         );
-        const [{ continuation: tail }] = await stateAdapter.withTransaction(async (txCtx) =>
+        const [continuedTail] = await stateAdapter.withTransaction(async (txCtx) =>
           stateAdapter.continueJobs({
             txCtx,
             completedBy: "w1",
             jobs: [{ typeName: "multi-step", continueFromId: headChain.head.id, input: null }],
           }),
         );
+        const { continuation: tail } = continuedTail!;
 
         // Head is completed (continued), tail is pending
         const completed = await stateAdapter.listJobs({

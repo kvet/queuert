@@ -14,11 +14,13 @@ export type IndexCoverageCaseKey =
   | "listJobs/noStatus/cursor"
   // listJobs > pending
   | "listJobs/pending/default"
-  | "listJobs/pending/blocked"
-  | "listJobs/pending/unblocked"
   | "listJobs/pending/fromTo"
   | "listJobs/pending/orderByCreatedAt"
   | "listJobs/pending/cursor"
+  // listJobs > blocked
+  | "listJobs/blocked/default"
+  | "listJobs/blocked/orderByCreatedAt"
+  | "listJobs/blocked/cursor"
   // listJobs > running
   | "listJobs/running/default"
   | "listJobs/running/orderByCreatedAt"
@@ -203,34 +205,6 @@ export const observabilityCoverageGroups: IndexCoverageGroup[] = [
         },
       },
       {
-        key: "listJobs/pending/blocked",
-        label: "+ blocked",
-        run: async () => async (stateAdapter) => {
-          await stateAdapter.listJobs({
-            orderBy: "scheduledAt",
-            orderDirection: "desc",
-            status: "pending",
-            typeName: "seed:pending:order",
-            blocked: true,
-            page: { limit: 20 },
-          });
-        },
-      },
-      {
-        key: "listJobs/pending/unblocked",
-        label: "+ unblocked",
-        run: async () => async (stateAdapter) => {
-          await stateAdapter.listJobs({
-            orderBy: "scheduledAt",
-            orderDirection: "desc",
-            status: "pending",
-            typeName: "seed:pending:order",
-            blocked: false,
-            page: { limit: 20 },
-          });
-        },
-      },
-      {
         key: "listJobs/pending/fromTo",
         label: "+ from/to",
         run: async () => async (stateAdapter) => {
@@ -269,7 +243,6 @@ export const observabilityCoverageGroups: IndexCoverageGroup[] = [
             orderDirection: "desc",
             status: "pending",
             typeName: "seed:pending:order",
-            blocked: false,
             page: { limit: 2 },
           });
           await stateAdapter.listJobs({
@@ -277,7 +250,58 @@ export const observabilityCoverageGroups: IndexCoverageGroup[] = [
             orderDirection: "desc",
             status: "pending",
             typeName: "seed:pending:order",
-            blocked: false,
+            page: { limit: 20, cursor: page1.nextCursor! },
+          });
+        },
+      },
+    ],
+  },
+
+  {
+    name: "listJobs > blocked",
+    cases: [
+      {
+        key: "listJobs/blocked/default",
+        label: "default",
+        run: async () => async (stateAdapter) => {
+          await stateAdapter.listJobs({
+            orderBy: "scheduledAt",
+            orderDirection: "desc",
+            status: "blocked",
+            typeName: "seed:blocked:fanin:1",
+            page: { limit: 20 },
+          });
+        },
+      },
+      {
+        key: "listJobs/blocked/orderByCreatedAt",
+        label: "+ orderBy:createdAt",
+        run: async () => async (stateAdapter) => {
+          await stateAdapter.listJobs({
+            orderDirection: "desc",
+            status: "blocked",
+            typeName: "seed:blocked:fanin:1",
+            orderBy: "createdAt",
+            page: { limit: 20 },
+          });
+        },
+      },
+      {
+        key: "listJobs/blocked/cursor",
+        label: "cursor",
+        run: async () => async (stateAdapter) => {
+          const page1 = await stateAdapter.listJobs({
+            orderBy: "scheduledAt",
+            orderDirection: "desc",
+            status: "blocked",
+            typeName: "seed:blocked:fanin:1",
+            page: { limit: 2 },
+          });
+          await stateAdapter.listJobs({
+            orderBy: "scheduledAt",
+            orderDirection: "desc",
+            status: "blocked",
+            typeName: "seed:blocked:fanin:1",
             page: { limit: 20, cursor: page1.nextCursor! },
           });
         },

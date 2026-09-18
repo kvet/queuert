@@ -26,12 +26,13 @@ describe("PostgreSQL State Adapter Concurrency", () => {
         ],
       }),
     );
-    const [{ continuation }] = await stateAdapter.withTransaction(async (txCtx) =>
+    const [continued] = await stateAdapter.withTransaction(async (txCtx) =>
       stateAdapter.continueJobs({
         txCtx,
         jobs: [{ typeName: "blocker:step", input: null, continueFromId: blockerChain.head.id }],
       }),
     );
+    const { continuation } = continued!;
 
     let onBlockerAdded: () => void = () => {};
     const blockerAdded = new Promise<void>((resolve) => (onBlockerAdded = resolve));
@@ -62,7 +63,7 @@ describe("PostgreSQL State Adapter Concurrency", () => {
     await adder;
 
     const [completed] = await completer;
-    expect(completed.hasBlockedJobs).toBe(true);
+    expect(completed?.hasBlockedJobs).toBe(true);
 
     const unblockedResults = await stateAdapter.withTransaction(async (txCtx) =>
       stateAdapter.unblockJobs({ txCtx, blockedByChainId: blockerChain.id }),
