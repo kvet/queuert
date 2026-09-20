@@ -19,8 +19,6 @@ const knex = knexFactory({
   useNullAsDefault: true,
   pool: {
     afterCreate: (conn: Database.Database, done: (err: Error | null) => void) => {
-      conn.pragma("auto_vacuum = INCREMENTAL");
-      conn.pragma("foreign_keys = ON");
       done(null);
     },
   },

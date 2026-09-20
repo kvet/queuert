@@ -1,11 +1,10 @@
 # Triage
 
-- [REF] Worker liveness. Move attempt ownership to worker. Have workers to be registered in the DB and have a heartbeat.
-- [REF] Return back statuses. Get rid of continued substatus
-- [REF] Move chain information to the head row
+- [REF] PG pipelining
 
 # Short term
 
+- [EPIC] Worker liveness. Move attempt ownership to worker. Have workers to be registered in the DB and have a heartbeat. See `design/worker-liveness.md`.
 - [EPIC] Chain identity. Closing [#3](https://github.com/kvet/queuert/issues/3). See `design/chain-identity.md`.
   - [TASK] List chains by identity — `listChains` gains an `identity` filter to page through the full recurrence history of a key
 - [TASK] Built-in cleanup. See `design/builtin-cleanup.md`.
@@ -24,7 +23,6 @@
 - [EPIC] SQLite production-readiness
   - [TASK] Get rid of `createAsyncRwLock()`
   - [TASK] No multi-worker example
-  - [TASK] `PRAGMA foreign_keys = ON` is required for the `job_blocker.blocked_by_chain_id` FK but not validated at adapter init by default
   - [TASK] Promote transactions via a dedicated sentinel table (like migration lock in PG) to prevent WAL contention
 - [TASK,COMPLEX] Better dashboard UI
 - [EPIC] Docs website enhancements

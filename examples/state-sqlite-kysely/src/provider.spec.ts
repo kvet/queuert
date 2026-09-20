@@ -11,8 +11,6 @@ type Database = Record<string, never>;
 test("state-sqlite-kysely provider passes state adapter conformance", async () => {
   await runStateAdapterConformance(async () => {
     const sqliteDb = new BetterSqlite3(":memory:");
-    sqliteDb.pragma("auto_vacuum = INCREMENTAL");
-    sqliteDb.pragma("foreign_keys = ON");
 
     const db = new Kysely<Database>({
       dialect: new SqliteDialect({ database: sqliteDb }),

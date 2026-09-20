@@ -4,11 +4,11 @@ import Database from "better-sqlite3";
 import {
   type StateAdapter,
   createClient,
+  createInProcessNotifyAdapter,
   createInProcessWorker,
   createProcessors,
   defineJobTypes,
   withTransactionHooks,
-  createInProcessNotifyAdapter,
 } from "queuert";
 import { stateAdapterConformanceTestSuite, withWorkers } from "queuert/testing";
 import { describe, expectTypeOf, it, vi } from "vitest";
@@ -30,9 +30,6 @@ describe("SQLite State Adapter Conformance", () => {
       // oxlint-disable-next-line no-empty-pattern
       async ({}, use) => {
         const db = new Database(":memory:");
-        db.pragma("journal_mode = WAL");
-        db.pragma("auto_vacuum = INCREMENTAL");
-        db.pragma("foreign_keys = ON");
         await use(db);
         db.close();
       },

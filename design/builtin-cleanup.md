@@ -213,13 +213,6 @@ await withTransactionHooks((transactionHooks) =>
 Array merge for the two slices, one transactional call to install the schedule. Rolling deploys
 compose: deploy N+1 calls `scheduleCleanup({ name: "b" })` and `unscheduleCleanup({ name: "a" })`.
 
-### Vacuum
-
-Deferred, unchanged from the prior design: `vacuum()` lives on the concrete PostgreSQL/SQLite
-adapters, not on the core `StateAdapter` interface, so a core-exported handler cannot call it. The
-guide tells users to vacuum on their own cadence. Resolving it later means an optional
-`vacuum?: () => Promise<void>` hop or hoisting `vacuum` onto the interface.
-
 ### Export location
 
 A dedicated `queuert/cleanup` subpath (matching the existing `./conformance`, `./testing`

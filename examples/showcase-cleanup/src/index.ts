@@ -124,8 +124,6 @@ const cleanupProcessorRegistry = createProcessors({
 
         console.log(`[queuert.cleanup] Deleted ${deletedChainCount} chain(s)`);
 
-        await stateAdapter.vacuum();
-
         return complete(async ({ finish, txSql, transactionHooks }) => {
           const completedJob = await finish({ output: null });
 

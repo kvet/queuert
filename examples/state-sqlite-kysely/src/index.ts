@@ -16,8 +16,6 @@ import { createKyselySqliteStateProvider } from "./provider.js";
 const sqliteDb = new BetterSqlite3(":memory:");
 
 // 2. Configure SQLite pragmas
-sqliteDb.pragma("auto_vacuum = INCREMENTAL");
-sqliteDb.pragma("foreign_keys = ON");
 
 // 3. Define Kysely database schema
 type Database = {

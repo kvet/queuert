@@ -7,7 +7,7 @@ sidebar:
 
 ## Overview
 
-Without cleanup, the job table grows unboundedly as completed chains accumulate. This guide shows how to implement cleanup as a regular Queuert job — listing completed chains older than a cutoff date, deleting them in batches using cursor pagination, reclaiming disk space with vacuum, and scheduling the next run.
+Without cleanup, the job table grows unboundedly as completed chains accumulate. This guide shows how to implement cleanup as a regular Queuert job — listing completed chains older than a cutoff date, deleting them in batches using cursor pagination, and scheduling the next run.
 
 ## Define a Cleanup Job Type
 
@@ -83,8 +83,6 @@ const cleanupProcessorRegistry = createProcessors({
           }
         } while (!signal.aborted && roundDeletedCount > 0);
 
-        await stateAdapter.vacuum();
-
         return complete(async ({ finish, transactionHooks, ...txCtx }) => {
           const completedJob = await finish({ output: null });
 
@@ -117,7 +115,6 @@ Key patterns used:
 - **Stabilization loop** — repeats the full pass until a round deletes zero chains, so chains that become independent after their dependents are removed get cleaned up in subsequent rounds
 - **`step` batching** — each batch of deletions runs in its own guarded transaction via `step`, so the handler never holds a single long-lived transaction. The attempt is verified on each `step` call, ensuring the worker still owns the job
 - **Graceful shutdown** — checks `signal.aborted` before each batch; when the worker is stopping, reschedules the job immediately so a fresh worker can resume cleanup
-- **Vacuum** — reclaims disk space after all deletions complete
 - **`deduplication`** with `scope: "running"` — ensures only one cleanup chain is active at a time
 - **Complete before scheduling** — `finish({ output: null })` applies the completion inside the complete transaction, so the next run is created against an already-completed chain and does not deduplicate against the one finishing
 - **`schedule`** — defers the next run by `CLEANUP_INTERVAL_MS`
@@ -158,18 +155,6 @@ await withTransactionHooks(async (transactionHooks) =>
 ```
 
 After the first run completes, the cleanup job automatically schedules its next run.
-
-## Reclaiming Disk Space
-
-The cleanup job calls `stateAdapter.vacuum()` after all batches are deleted, reclaiming disk space as part of the cleanup run.
-
-### PostgreSQL
-
-The adapter tunes autovacuum aggressively on the job tables so PostgreSQL handles most space reclamation automatically; the explicit vacuum step ensures timely cleanup after large deletions. See [PostgreSQL Internals](/queuert/advanced/postgres-internals/#vacuum-tuning) for the exact settings.
-
-### SQLite
-
-SQLite does not reclaim space automatically. The vacuum step frees reclaimable pages via incremental vacuum. This requires `PRAGMA auto_vacuum = INCREMENTAL` to be set on the database before table creation. See [SQLite Internals](/queuert/advanced/sqlite-internals/#vacuum) for details.
 
 ## Customization Ideas
 

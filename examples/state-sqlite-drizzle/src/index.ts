@@ -5,19 +5,17 @@ import { drizzle } from "drizzle-orm/better-sqlite3";
 import { integer, sqliteTable, text } from "drizzle-orm/sqlite-core";
 import {
   createClient,
+  createInProcessNotifyAdapter,
   createInProcessWorker,
   createProcessors,
   defineJobTypes,
   withTransactionHooks,
-  createInProcessNotifyAdapter,
 } from "queuert";
 
 import { createDrizzleSqliteStateProvider } from "./provider.js";
 
 // 1. Create in-memory SQLite database
 const sqlite = new Database(":memory:");
-sqlite.pragma("auto_vacuum = INCREMENTAL");
-sqlite.pragma("foreign_keys = ON");
 
 // 2. Define Drizzle schema
 const users = sqliteTable("users", {

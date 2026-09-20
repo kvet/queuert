@@ -143,7 +143,7 @@ export const createChainsTestSuite = ({ it }: { it: TestAPI<TestSuiteContext> })
       expect(main.status).toBe("running");
 
       const mainJob = await client.getJob({ id: main.id });
-      expect(mainJob!.status === "pending" && mainJob!.blocked).toBe(true);
+      expect(mainJob!.status).toBe("blocked");
     });
 
     it("creates a chain with scheduling", async ({
@@ -533,8 +533,8 @@ export const createChainsTestSuite = ({ it }: { it: TestAPI<TestSuiteContext> })
 
       const job0 = await client.getJob({ id: chains[0].id });
       const job1 = await client.getJob({ id: chains[1].id });
-      expect(job0!.status === "pending" && job0!.blocked).toBe(true);
-      expect(job1!.status === "pending" && job1!.blocked).toBe(true);
+      expect(job0!.status).toBe("blocked");
+      expect(job1!.status).toBe("blocked");
     });
 
     it("handles batch with scheduling", async ({
@@ -670,8 +670,8 @@ export const createChainsTestSuite = ({ it }: { it: TestAPI<TestSuiteContext> })
 
       const blockedJob = await client.getJob({ id: blockedChain.id });
       const unblockedJob = await client.getJob({ id: unblockedChain.id });
-      expect(blockedJob!.status === "pending" && blockedJob!.blocked).toBe(true);
-      expect(unblockedJob!.status === "pending" && unblockedJob!.blocked).toBe(false);
+      expect(blockedJob!.status).toBe("blocked");
+      expect(unblockedJob!.status).toBe("pending");
     });
 
     it("workers unblock and process batch-created blocked chains", async ({
@@ -729,7 +729,7 @@ export const createChainsTestSuite = ({ it }: { it: TestAPI<TestSuiteContext> })
       for (const chain of chains) {
         expect(chain.status).toBe("running");
         const job = await client.getJob({ id: chain.id });
-        expect(job!.status === "pending" && job!.blocked).toBe(true);
+        expect(job!.status).toBe("blocked");
       }
 
       const worker = await createInProcessWorker({

@@ -2,6 +2,7 @@
 "queuert": major
 "@queuert/postgres": major
 "@queuert/sqlite": major
+"@queuert/dashboard": major
 ---
 
 Add `client.listChainTypeNames()` and `client.listJobTypeNames()` for discovering which job and chain types exist in the data. Both return a sorted array of distinct type names present in the store. Add `client.countByChainTypeNames()` and `client.countByJobTypeNames()` for per-status counts of given type names, with a capped count and `hasMore` flag.

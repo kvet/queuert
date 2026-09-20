@@ -8,7 +8,7 @@ export const getStartAttemptDelayMsGroup: ConformanceGroup<StateConformanceFixtu
       name: "returns 0 for an immediately available pending job",
       run: async ({ stateAdapter }, expect) => {
         await stateAdapter.withTransaction(async (txCtx) =>
-          stateAdapter.createChains({
+          stateAdapter.createJobs({
             txCtx,
             jobs: [{ typeName: "avail-test", input: null }],
           }),
@@ -22,7 +22,7 @@ export const getStartAttemptDelayMsGroup: ConformanceGroup<StateConformanceFixtu
       name: "returns milliseconds until next scheduled job",
       run: async ({ stateAdapter }, expect) => {
         await stateAdapter.withTransaction(async (txCtx) =>
-          stateAdapter.createChains({
+          stateAdapter.createJobs({
             txCtx,
             jobs: [{ typeName: "future-test", input: null, schedule: { afterMs: 5000 } }],
           }),
@@ -38,7 +38,7 @@ export const getStartAttemptDelayMsGroup: ConformanceGroup<StateConformanceFixtu
       name: "returns 0 when a ready-now job exists alongside a future-scheduled one",
       run: async ({ stateAdapter }, expect) => {
         await stateAdapter.withTransaction(async (txCtx) =>
-          stateAdapter.createChains({
+          stateAdapter.createJobs({
             txCtx,
             jobs: [
               { typeName: "mixed-test", input: null },
@@ -63,15 +63,15 @@ export const getStartAttemptDelayMsGroup: ConformanceGroup<StateConformanceFixtu
     {
       name: "returns null when only pending job is blocked",
       run: async ({ stateAdapter }, expect) => {
-        const [{ job: blockerJob }] = await stateAdapter.withTransaction(async (txCtx) =>
-          stateAdapter.createChains({
+        const [blockerChain] = await stateAdapter.withTransaction(async (txCtx) =>
+          stateAdapter.createJobs({
             txCtx,
             jobs: [{ typeName: "delay-blocker", input: null }],
           }),
         );
 
-        const [{ job: blockedJob }] = await stateAdapter.withTransaction(async (txCtx) =>
-          stateAdapter.createChains({
+        const [blockedChain] = await stateAdapter.withTransaction(async (txCtx) =>
+          stateAdapter.createJobs({
             txCtx,
             jobs: [{ typeName: "delay-blocked", input: null, schedule: { afterMs: 5000 } }],
           }),
@@ -80,7 +80,9 @@ export const getStartAttemptDelayMsGroup: ConformanceGroup<StateConformanceFixtu
         await stateAdapter.withTransaction(async (txCtx) =>
           stateAdapter.addJobsBlockers({
             txCtx,
-            jobBlockers: [{ jobId: blockedJob.id, blockedByChainIds: [blockerJob.chainId] }],
+            jobBlockers: [
+              { jobId: blockedChain.head.id, blockedByChainIds: [blockerChain.head.chainId] },
+            ],
           }),
         );
 
@@ -108,7 +110,7 @@ export const getStartAttemptDelayMsGroup: ConformanceGroup<StateConformanceFixtu
 
         const txPromise = stateAdapter
           .withTransaction(async (txCtx) => {
-            await stateAdapter.createChains({
+            await stateAdapter.createJobs({
               txCtx,
               jobs: [{ typeName: "iso-next", input: null, schedule: { afterMs: 5000 } }],
             });

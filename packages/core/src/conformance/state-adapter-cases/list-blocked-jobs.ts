@@ -8,20 +8,20 @@ export const listBlockedJobsGroup: ConformanceGroup<StateConformanceFixture> = {
     {
       name: "listBlockedJobs returns jobs blocked by a chain",
       run: async ({ stateAdapter }, expect) => {
-        const [{ job: blockerChain }] = await stateAdapter.withTransaction(async (txCtx) =>
-          stateAdapter.createChains({
+        const [blockerChain] = await stateAdapter.withTransaction(async (txCtx) =>
+          stateAdapter.createJobs({
             txCtx,
             jobs: [{ typeName: "blocker-type", input: null }],
           }),
         );
-        const [{ job: blockedJob }] = await stateAdapter.withTransaction(async (txCtx) =>
-          stateAdapter.createChains({
+        const [blockedChain] = await stateAdapter.withTransaction(async (txCtx) =>
+          stateAdapter.createJobs({
             txCtx,
             jobs: [{ typeName: "blocked-type", input: null }],
           }),
         );
         await stateAdapter.withTransaction(async (txCtx) =>
-          stateAdapter.createChains({
+          stateAdapter.createJobs({
             txCtx,
             jobs: [{ typeName: "unrelated-type", input: null }],
           }),
@@ -30,31 +30,33 @@ export const listBlockedJobsGroup: ConformanceGroup<StateConformanceFixture> = {
         await stateAdapter.withTransaction(async (txCtx) =>
           stateAdapter.addJobsBlockers({
             txCtx,
-            jobBlockers: [{ jobId: blockedJob.id, blockedByChainIds: [blockerChain.chainId] }],
+            jobBlockers: [
+              { jobId: blockedChain.head.id, blockedByChainIds: [blockerChain.head.chainId] },
+            ],
           }),
         );
 
         const result = await stateAdapter.listBlockedJobs({
-          chainId: blockerChain.chainId,
+          chainId: blockerChain.head.chainId,
           orderDirection: "desc",
           page: { limit: 10 },
         });
 
         expect(result.items).toHaveLength(1);
-        expect(result.items[0].id).toBe(blockedJob.id);
+        expect(result.items[0].id).toBe(blockedChain.head.id);
       },
     },
     {
       name: "listBlockedJobs returns empty page when no jobs are blocked",
       run: async ({ stateAdapter }, expect) => {
-        const [{ job: chain }] = await stateAdapter.withTransaction(async (txCtx) =>
-          stateAdapter.createChains({
+        const [stateChain] = await stateAdapter.withTransaction(async (txCtx) =>
+          stateAdapter.createJobs({
             txCtx,
             jobs: [{ typeName: "test-type", input: null }],
           }),
         );
         const result = await stateAdapter.listBlockedJobs({
-          chainId: chain.chainId,
+          chainId: stateChain.head.chainId,
           orderDirection: "desc",
           page: { limit: 10 },
         });
@@ -65,21 +67,21 @@ export const listBlockedJobsGroup: ConformanceGroup<StateConformanceFixture> = {
     {
       name: "listBlockedJobs sorts asc when orderDirection is asc",
       run: async ({ stateAdapter }, expect) => {
-        const [{ job: blockerChain }] = await stateAdapter.withTransaction(async (txCtx) =>
-          stateAdapter.createChains({
+        const [blockerChain] = await stateAdapter.withTransaction(async (txCtx) =>
+          stateAdapter.createJobs({
             txCtx,
             jobs: [{ typeName: "blocker-type", input: null }],
           }),
         );
-        const [{ job: blockedJob1 }] = await stateAdapter.withTransaction(async (txCtx) =>
-          stateAdapter.createChains({
+        const [blockedChain1] = await stateAdapter.withTransaction(async (txCtx) =>
+          stateAdapter.createJobs({
             txCtx,
             jobs: [{ typeName: "blocked-a", input: null }],
           }),
         );
         await sleep(5);
-        const [{ job: blockedJob2 }] = await stateAdapter.withTransaction(async (txCtx) =>
-          stateAdapter.createChains({
+        const [blockedChain2] = await stateAdapter.withTransaction(async (txCtx) =>
+          stateAdapter.createJobs({
             txCtx,
             jobs: [{ typeName: "blocked-b", input: null }],
           }),
@@ -88,63 +90,69 @@ export const listBlockedJobsGroup: ConformanceGroup<StateConformanceFixture> = {
         await stateAdapter.withTransaction(async (txCtx) =>
           stateAdapter.addJobsBlockers({
             txCtx,
-            jobBlockers: [{ jobId: blockedJob1.id, blockedByChainIds: [blockerChain.chainId] }],
+            jobBlockers: [
+              { jobId: blockedChain1.head.id, blockedByChainIds: [blockerChain.head.chainId] },
+            ],
           }),
         );
         await stateAdapter.withTransaction(async (txCtx) =>
           stateAdapter.addJobsBlockers({
             txCtx,
-            jobBlockers: [{ jobId: blockedJob2.id, blockedByChainIds: [blockerChain.chainId] }],
+            jobBlockers: [
+              { jobId: blockedChain2.head.id, blockedByChainIds: [blockerChain.head.chainId] },
+            ],
           }),
         );
 
         const desc = await stateAdapter.listBlockedJobs({
-          chainId: blockerChain.chainId,
+          chainId: blockerChain.head.chainId,
           orderDirection: "desc",
           page: { limit: 10 },
         });
         const asc = await stateAdapter.listBlockedJobs({
-          chainId: blockerChain.chainId,
+          chainId: blockerChain.head.chainId,
           orderDirection: "asc",
           page: { limit: 10 },
         });
 
         expect(desc.items).toHaveLength(2);
         expect(asc.items).toHaveLength(2);
-        expect(desc.items[0].id).toBe(blockedJob2.id);
-        expect(desc.items[1].id).toBe(blockedJob1.id);
-        expect(asc.items[0].id).toBe(blockedJob1.id);
-        expect(asc.items[1].id).toBe(blockedJob2.id);
+        expect(desc.items[0].id).toBe(blockedChain2.head.id);
+        expect(desc.items[1].id).toBe(blockedChain1.head.id);
+        expect(asc.items[0].id).toBe(blockedChain1.head.id);
+        expect(asc.items[1].id).toBe(blockedChain2.head.id);
       },
     },
     {
       name: "listBlockedJobs paginates with cursor",
       run: async ({ stateAdapter }, expect) => {
-        const [{ job: blockerChain }] = await stateAdapter.withTransaction(async (txCtx) =>
-          stateAdapter.createChains({
+        const [blockerChain] = await stateAdapter.withTransaction(async (txCtx) =>
+          stateAdapter.createJobs({
             txCtx,
             jobs: [{ typeName: "blocker-type", input: null }],
           }),
         );
-        const blockedJobs = [];
+        const blockedChains = [];
         for (let i = 0; i < 4; i++) {
-          const [{ job }] = await stateAdapter.withTransaction(async (txCtx) =>
-            stateAdapter.createChains({
+          const [stateChain] = await stateAdapter.withTransaction(async (txCtx) =>
+            stateAdapter.createJobs({
               txCtx,
               jobs: [{ typeName: `blocked-${i}`, input: null }],
             }),
           );
-          blockedJobs.push(job);
+          blockedChains.push(stateChain);
           await stateAdapter.withTransaction(async (txCtx) =>
             stateAdapter.addJobsBlockers({
               txCtx,
-              jobBlockers: [{ jobId: job.id, blockedByChainIds: [blockerChain.chainId] }],
+              jobBlockers: [
+                { jobId: stateChain.head.id, blockedByChainIds: [blockerChain.head.chainId] },
+              ],
             }),
           );
         }
 
         const page1 = await stateAdapter.listBlockedJobs({
-          chainId: blockerChain.chainId,
+          chainId: blockerChain.head.chainId,
           orderDirection: "desc",
           page: { limit: 2 },
         });
@@ -152,14 +160,17 @@ export const listBlockedJobsGroup: ConformanceGroup<StateConformanceFixture> = {
         expect(page1.nextCursor).not.toBeNull();
 
         const page2 = await stateAdapter.listBlockedJobs({
-          chainId: blockerChain.chainId,
+          chainId: blockerChain.head.chainId,
           orderDirection: "desc",
           page: { limit: 2, cursor: page1.nextCursor! },
         });
         expect(page2.items).toHaveLength(2);
         expect(page2.nextCursor).toBeNull();
 
-        const allIds = [...page1.items.map((j) => j.id), ...page2.items.map((j) => j.id)];
+        const allIds = [
+          ...page1.items.map((item) => item.id),
+          ...page2.items.map((item) => item.id),
+        ];
         expect(new Set(allIds).size).toBe(4);
       },
     },
@@ -170,14 +181,14 @@ export const listBlockedJobsGroup: ConformanceGroup<StateConformanceFixture> = {
           expect.skip("requires concurrent transactions");
           return;
         }
-        const [{ job: blocker }] = await stateAdapter.withTransaction(async (txCtx) =>
-          stateAdapter.createChains({
+        const [blockerChain] = await stateAdapter.withTransaction(async (txCtx) =>
+          stateAdapter.createJobs({
             txCtx,
             jobs: [{ typeName: "iso-listblocked-src", input: null }],
           }),
         );
-        const [{ job: target }] = await stateAdapter.withTransaction(async (txCtx) =>
-          stateAdapter.createChains({
+        const [targetChain] = await stateAdapter.withTransaction(async (txCtx) =>
+          stateAdapter.createJobs({
             txCtx,
             jobs: [{ typeName: "iso-listblocked-target", input: null }],
           }),
@@ -196,7 +207,9 @@ export const listBlockedJobsGroup: ConformanceGroup<StateConformanceFixture> = {
           .withTransaction(async (txCtx) => {
             await stateAdapter.addJobsBlockers({
               txCtx,
-              jobBlockers: [{ jobId: target.id, blockedByChainIds: [blocker.chainId] }],
+              jobBlockers: [
+                { jobId: targetChain.head.id, blockedByChainIds: [blockerChain.head.chainId] },
+              ],
             });
             signalTxReady!();
             await gate;
@@ -206,7 +219,7 @@ export const listBlockedJobsGroup: ConformanceGroup<StateConformanceFixture> = {
 
         await txReady;
         const listPromise = stateAdapter.listBlockedJobs({
-          chainId: blocker.chainId,
+          chainId: blockerChain.head.chainId,
           orderDirection: "desc",
           page: { limit: 10 },
         });

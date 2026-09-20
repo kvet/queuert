@@ -20,7 +20,7 @@ The name says "collapse duplicate writes", so the third use has no vocabulary to
 
 ### `scope` is a query parameter, so nothing can enforce it
 
-`createChains` runs a `SELECT` whose predicate is built per call, then inserts what it did not match.
+`createJobs` runs a `SELECT` whose predicate is built per call, then inserts what it did not match.
 Under READ COMMITTED both CTEs share one snapshot, so two concurrent same-key creates both match
 nothing and both insert ([#3](https://github.com/kvet/queuert/issues/3)). A conditional predicate
 cannot become a unique index, so nothing at the storage layer can enforce it either.

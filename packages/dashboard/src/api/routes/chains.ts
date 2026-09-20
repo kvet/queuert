@@ -108,7 +108,6 @@ export const handleChainJobs = async (
 export const handleChainDelete = async (
   client: Client<any, any>,
   chainId: string,
-  options?: { cascade?: boolean },
 ): Promise<Response> => {
   const chain = await client.getChain({ id: chainId });
   if (!chain) {
@@ -121,7 +120,6 @@ export const handleChainDelete = async (
       withTransactionHooks(async (transactionHooks) =>
         client.deleteChains({
           ids: [chainId],
-          cascade: options?.cascade,
           transactionHooks,
           ...txCtx,
         }),

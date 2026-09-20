@@ -1,16 +1,14 @@
 import { type StateJob } from "../state-adapter/state-adapter.js";
-import { type AnyJob, type JobStatus } from "./job.types.js";
+import { type AnyJob } from "./job.types.js";
 
 export type * from "./job.types.js";
-
-export const deriveStatus = (stateJob: Pick<StateJob, "completedAt" | "attemptAt">): JobStatus =>
-  stateJob.completedAt !== null ? "completed" : stateJob.attemptAt !== null ? "running" : "pending";
 
 export const mapStateJobToJob = (stateJob: StateJob): AnyJob => {
   const base = {
     id: stateJob.id,
     chainId: stateJob.chainId,
-    chainTypeName: stateJob.chainTypeName,
+    chainTypeName: stateJob.chain.typeName,
+    chainIndex: stateJob.chainIndex,
     typeName: stateJob.typeName,
     input: stateJob.input,
     createdAt: stateJob.createdAt,
@@ -20,7 +18,7 @@ export const mapStateJobToJob = (stateJob: StateJob): AnyJob => {
     lastAttemptError: stateJob.lastAttemptError,
   };
 
-  switch (deriveStatus(stateJob)) {
+  switch (stateJob.status) {
     case "completed":
       if (stateJob.continuedToId !== null) {
         return {
@@ -47,7 +45,9 @@ export const mapStateJobToJob = (stateJob: StateJob): AnyJob => {
         attemptBy: stateJob.attemptBy!,
         attemptUntil: stateJob.attemptUntil,
       };
+    case "blocked":
+      return { ...base, status: "blocked" };
     case "pending":
-      return { ...base, status: "pending", blocked: stateJob.blocked };
+      return { ...base, status: "pending" };
   }
 };

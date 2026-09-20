@@ -109,12 +109,8 @@ export const rescheduleJob = async (jobId: string): Promise<UnknownJob> => {
   return job;
 };
 
-export const deleteChain = async (
-  chainId: string,
-  options?: { cascade?: boolean },
-): Promise<void> => {
-  const queryString = options?.cascade ? "?cascade=true" : "";
-  await fetchSeroval(`/chains/${chainId}${queryString}`, { method: "DELETE" });
+export const deleteChain = async (chainId: string): Promise<void> => {
+  await fetchSeroval(`/chains/${chainId}`, { method: "DELETE" });
 };
 
 export const getJobDetail = async (
@@ -144,6 +140,7 @@ export type ChainTypeCounts = {
 
 export type JobTypeCounts = {
   typeName: string;
+  blocked: { count: number; hasMore: boolean };
   pending: { count: number; hasMore: boolean };
   running: { count: number; hasMore: boolean };
   completed: { count: number; hasMore: boolean };

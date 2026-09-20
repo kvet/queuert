@@ -8,8 +8,8 @@ export const reclaimExpiredJobAttemptGroup: ConformanceGroup<StateConformanceFix
     {
       name: "removes expired attempt and resets job to pending",
       run: async ({ stateAdapter }, expect) => {
-        const [{ job: created }] = await stateAdapter.withTransaction(async (txCtx) =>
-          stateAdapter.createChains({
+        const [createdChain] = await stateAdapter.withTransaction(async (txCtx) =>
+          stateAdapter.createJobs({
             txCtx,
             jobs: [{ typeName: "expire-test", input: null }],
           }),
@@ -22,7 +22,7 @@ export const reclaimExpiredJobAttemptGroup: ConformanceGroup<StateConformanceFix
         await stateAdapter.withTransaction(async (txCtx) =>
           stateAdapter.extendJobAttempt({
             txCtx,
-            jobId: created.id,
+            jobId: createdChain.head.id,
             workerId: "worker-1",
             timeoutMs: 1,
           }),
@@ -35,7 +35,8 @@ export const reclaimExpiredJobAttemptGroup: ConformanceGroup<StateConformanceFix
         );
 
         expect(expired).toBeDefined();
-        expect(expired!.id).toBe(created.id);
+        expect(expired!.id).toBe(createdChain.head.id);
+        expect(expired!.status).toBe("pending");
         expect(expired!.completedAt).toBeNull();
         expect(expired!.attemptAt).toBeNull();
         expect(expired!.attemptBy).toBeNull();
@@ -46,8 +47,8 @@ export const reclaimExpiredJobAttemptGroup: ConformanceGroup<StateConformanceFix
     {
       name: "returns undefined when no expired attempts exist",
       run: async ({ stateAdapter }, expect) => {
-        const [{ job: created }] = await stateAdapter.withTransaction(async (txCtx) =>
-          stateAdapter.createChains({
+        const [createdChain] = await stateAdapter.withTransaction(async (txCtx) =>
+          stateAdapter.createJobs({
             txCtx,
             jobs: [{ typeName: "no-expire-test", input: null }],
           }),
@@ -64,7 +65,7 @@ export const reclaimExpiredJobAttemptGroup: ConformanceGroup<StateConformanceFix
         await stateAdapter.withTransaction(async (txCtx) =>
           stateAdapter.extendJobAttempt({
             txCtx,
-            jobId: created.id,
+            jobId: createdChain.head.id,
             workerId: "worker-1",
             timeoutMs: 60_000,
           }),
@@ -80,15 +81,15 @@ export const reclaimExpiredJobAttemptGroup: ConformanceGroup<StateConformanceFix
     {
       name: "respects ignoredJobIds in reclaimExpiredJobAttempt",
       run: async ({ stateAdapter }, expect) => {
-        const [{ job: jobA }] = await stateAdapter.withTransaction(async (txCtx) =>
-          stateAdapter.createChains({
+        const [chainA] = await stateAdapter.withTransaction(async (txCtx) =>
+          stateAdapter.createJobs({
             txCtx,
             jobs: [{ typeName: "ignore-test", input: { order: "a" } }],
           }),
         );
 
-        const [{ job: jobB }] = await stateAdapter.withTransaction(async (txCtx) =>
-          stateAdapter.createChains({
+        const [chainB] = await stateAdapter.withTransaction(async (txCtx) =>
+          stateAdapter.createJobs({
             txCtx,
             jobs: [{ typeName: "ignore-test", input: { order: "b" } }],
           }),
@@ -104,7 +105,7 @@ export const reclaimExpiredJobAttemptGroup: ConformanceGroup<StateConformanceFix
         await stateAdapter.withTransaction(async (txCtx) =>
           stateAdapter.extendJobAttempt({
             txCtx,
-            jobId: jobA.id,
+            jobId: chainA.head.id,
             workerId: "worker-1",
             timeoutMs: 1,
           }),
@@ -112,7 +113,7 @@ export const reclaimExpiredJobAttemptGroup: ConformanceGroup<StateConformanceFix
         await stateAdapter.withTransaction(async (txCtx) =>
           stateAdapter.extendJobAttempt({
             txCtx,
-            jobId: jobB.id,
+            jobId: chainB.head.id,
             workerId: "worker-1",
             timeoutMs: 1,
           }),
@@ -124,12 +125,12 @@ export const reclaimExpiredJobAttemptGroup: ConformanceGroup<StateConformanceFix
           stateAdapter.reclaimExpiredJobAttempt({
             txCtx,
             typeNames: ["ignore-test"],
-            ignoredJobIds: [jobA.id],
+            ignoredJobIds: [chainA.head.id],
           }),
         );
 
         expect(expired).toBeDefined();
-        expect(expired!.id).toBe(jobB.id);
+        expect(expired!.id).toBe(chainB.head.id);
       },
     },
   ],

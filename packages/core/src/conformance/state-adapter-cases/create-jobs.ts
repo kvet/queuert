@@ -1,35 +1,59 @@
 import { InvalidJobIdError } from "../../errors.js";
-import { type StateJob } from "../../state-adapter/state-adapter.js";
+import { type StateJobInfo } from "../../state-adapter/state-adapter.js";
 import { type ConformanceGroup } from "../runner.js";
 import { type StateConformanceFixture } from "./types.js";
 
-export const createChainsGroup: ConformanceGroup<StateConformanceFixture> = {
-  name: "createChains",
+export const createJobsGroup: ConformanceGroup<StateConformanceFixture> = {
+  name: "createJobs",
   cases: [
     {
       name: "assigns chainId correctly for new jobs",
       run: async ({ stateAdapter }, expect) => {
-        const [{ job }] = await stateAdapter.withTransaction(async (txCtx) =>
-          stateAdapter.createChains({
+        const [stateChain] = await stateAdapter.withTransaction(async (txCtx) =>
+          stateAdapter.createJobs({
             txCtx,
             jobs: [{ typeName: "chain-test", input: null }],
           }),
         );
 
-        expect(job.chainId).toBe(job.id);
+        expect(stateChain.head.chainId).toBe(stateChain.head.id);
+        expect(stateChain.head.chainIndex).toBe(0);
+      },
+    },
+    {
+      name: "round-trips scalar JSON inputs",
+      run: async ({ stateAdapter }, expect) => {
+        const results = await stateAdapter.withTransaction(async (txCtx) =>
+          stateAdapter.createJobs({
+            txCtx,
+            jobs: [
+              { typeName: "scalar-input", input: "a bare string" },
+              { typeName: "scalar-input", input: 42 },
+              { typeName: "scalar-input", input: true },
+            ],
+          }),
+        );
+
+        const retrieved = await stateAdapter.getJobs({
+          jobIds: results.map((r) => r.head.id),
+        });
+
+        expect(retrieved[0]!.input).toBe("a bare string");
+        expect(retrieved[1]!.input).toBe(42);
+        expect(retrieved[2]!.input).toBe(true);
       },
     },
     {
       name: "generates unique job IDs",
       run: async ({ stateAdapter }, expect) => {
         const jobs = await stateAdapter.withTransaction(async (txCtx) => {
-          const results: StateJob[] = [];
+          const results: StateJobInfo[] = [];
           for (let i = 0; i < 10; i++) {
-            const [{ job }] = await stateAdapter.createChains({
+            const [stateChain] = await stateAdapter.createJobs({
               txCtx,
               jobs: [{ typeName: "test-job", input: { value: i } }],
             });
-            results.push(job);
+            results.push(stateChain.head);
           }
           return results;
         });
@@ -43,8 +67,8 @@ export const createChainsGroup: ConformanceGroup<StateConformanceFixture> = {
       name: "persists and retrieves jobs correctly",
       run: async ({ stateAdapter }, expect) => {
         const input = { nested: { value: 42 }, array: [1, 2, 3] };
-        const [{ job: created }] = await stateAdapter.withTransaction(async (txCtx) =>
-          stateAdapter.createChains({
+        const [createdChain] = await stateAdapter.withTransaction(async (txCtx) =>
+          stateAdapter.createJobs({
             txCtx,
             jobs: [
               {
@@ -55,10 +79,10 @@ export const createChainsGroup: ConformanceGroup<StateConformanceFixture> = {
           }),
         );
 
-        const [retrieved] = await stateAdapter.getJobs({ jobIds: [created.id] });
+        const [retrieved] = await stateAdapter.getJobs({ jobIds: [createdChain.head.id] });
 
         expect(retrieved).toBeDefined();
-        expect(retrieved?.id).toBe(created.id);
+        expect(retrieved?.id).toBe(createdChain.head.id);
         expect(retrieved?.typeName).toBe("test-job");
         expect(retrieved?.input).toEqual(input);
         expect(retrieved?.completedAt).toBeNull();
@@ -68,14 +92,15 @@ export const createChainsGroup: ConformanceGroup<StateConformanceFixture> = {
     {
       name: "handles null values correctly",
       run: async ({ stateAdapter }, expect) => {
-        const [{ job }] = await stateAdapter.withTransaction(async (txCtx) =>
-          stateAdapter.createChains({
+        const [created] = await stateAdapter.withTransaction(async (txCtx) =>
+          stateAdapter.createJobs({
             txCtx,
             jobs: [{ typeName: "null-test", input: null }],
           }),
         );
+        const job = created.head;
 
-        expect(job.blocked).toBe(false);
+        expect(job.status).toBe("pending");
         expect(job.input).toBeNull();
         expect(job.output).toBeNull();
         expect(job.completedAt).toBeNull();
@@ -85,8 +110,12 @@ export const createChainsGroup: ConformanceGroup<StateConformanceFixture> = {
         expect(job.attemptAt).toBeNull();
         expect(job.attemptBy).toBeNull();
         expect(job.attemptUntil).toBeNull();
-        expect(job.deduplicationKey).toBeNull();
         expect(job.id).toBe(job.chainId);
+        expect(created.id).toBe(job.chainId);
+        expect(created.typeName).toBe(job.typeName);
+        expect(created.deduplicationKey).toBeNull();
+        expect(created.status).toBe("running");
+        expect(created.completedAt).toBeNull();
       },
     },
     {
@@ -109,22 +138,22 @@ export const createChainsGroup: ConformanceGroup<StateConformanceFixture> = {
           emptyArray: [],
         };
 
-        const [{ job }] = await stateAdapter.withTransaction(async (txCtx) =>
-          stateAdapter.createChains({
+        const [stateChain] = await stateAdapter.withTransaction(async (txCtx) =>
+          stateAdapter.createJobs({
             txCtx,
             jobs: [{ typeName: "json-test", input: complexInput }],
           }),
         );
 
-        const [retrieved] = await stateAdapter.getJobs({ jobIds: [job.id] });
+        const [retrieved] = await stateAdapter.getJobs({ jobIds: [stateChain.head.id] });
         expect(retrieved?.input).toEqual(complexInput);
       },
     },
     {
       name: "deduplicates jobs with same deduplication key",
       run: async ({ stateAdapter }, expect) => {
-        const [{ job: first }] = await stateAdapter.withTransaction(async (txCtx) =>
-          stateAdapter.createChains({
+        const [firstChain] = await stateAdapter.withTransaction(async (txCtx) =>
+          stateAdapter.createJobs({
             txCtx,
             jobs: [
               {
@@ -136,8 +165,8 @@ export const createChainsGroup: ConformanceGroup<StateConformanceFixture> = {
           }),
         );
 
-        const [{ job: second, deduplicated }] = await stateAdapter.withTransaction(async (txCtx) =>
-          stateAdapter.createChains({
+        const [secondResult] = await stateAdapter.withTransaction(async (txCtx) =>
+          stateAdapter.createJobs({
             txCtx,
             jobs: [
               {
@@ -148,31 +177,70 @@ export const createChainsGroup: ConformanceGroup<StateConformanceFixture> = {
             ],
           }),
         );
+        const { deduplicated } = secondResult;
 
         expect(deduplicated).toBe(true);
-        expect(second.id).toBe(first.id);
+        expect(secondResult.head.id).toBe(firstChain.head.id);
+        expect(secondResult.deduplicationKey).toBe("same-key");
 
-        const [{ deduplicated: notDeduped }] = await stateAdapter.withTransaction(async (txCtx) =>
-          stateAdapter.createChains({
+        const [{ deduplicated: deduplicatedAfterCompletion }] = await stateAdapter.withTransaction(
+          async (txCtx) =>
+            stateAdapter.createJobs({
+              txCtx,
+              jobs: [
+                {
+                  typeName: "dedup-test",
+                  input: { value: 3 },
+                  deduplication: { key: "different-key", scope: "running" },
+                },
+              ],
+            }),
+        );
+
+        expect(deduplicatedAfterCompletion).toBe(false);
+      },
+    },
+    {
+      name: "scopes the deduplication key by the chain's own type name",
+      run: async ({ stateAdapter }, expect) => {
+        const [firstChain] = await stateAdapter.withTransaction(async (txCtx) =>
+          stateAdapter.createJobs({
             txCtx,
             jobs: [
               {
-                typeName: "dedup-test",
-                input: { value: 3 },
-                deduplication: { key: "different-key", scope: "running" },
+                typeName: "dedup-scope-a",
+                input: null,
+                deduplication: { key: "shared-key", scope: "running" },
               },
             ],
           }),
         );
 
-        expect(notDeduped).toBe(false);
+        const [otherResult] = await stateAdapter.withTransaction(async (txCtx) =>
+          stateAdapter.createJobs({
+            txCtx,
+            jobs: [
+              {
+                typeName: "dedup-scope-b",
+                input: null,
+                deduplication: { key: "shared-key", scope: "running" },
+              },
+            ],
+          }),
+        );
+        const { deduplicated } = otherResult;
+
+        expect(deduplicated).toBe(false);
+        expect(otherResult.head.id).not.toBe(firstChain.head.id);
+        expect(otherResult.typeName).toBe("dedup-scope-b");
+        expect(otherResult.deduplicationKey).toBe("shared-key");
       },
     },
     {
       name: "deduplication scope 'running' does not match completed jobs",
       run: async ({ stateAdapter }, expect) => {
-        const [{ job: first }] = await stateAdapter.withTransaction(async (txCtx) =>
-          stateAdapter.createChains({
+        const [firstChain] = await stateAdapter.withTransaction(async (txCtx) =>
+          stateAdapter.createJobs({
             txCtx,
             jobs: [
               {
@@ -185,17 +253,16 @@ export const createChainsGroup: ConformanceGroup<StateConformanceFixture> = {
         );
 
         await stateAdapter.withTransaction(async (txCtx) =>
-          stateAdapter.finishJobAttempt({
+          stateAdapter.completeJobs({
             txCtx,
-            jobId: first.id,
-            workerId: null,
-            outcome: { output: null },
+            completedBy: null,
+            jobs: [{ jobId: firstChain.head.id, output: null }],
           }),
         );
 
-        const [{ deduplicated: incompleteDeduped }] = await stateAdapter.withTransaction(
-          async (txCtx) =>
-            stateAdapter.createChains({
+        const [{ deduplicated: deduplicatedForIncompleteScope }] =
+          await stateAdapter.withTransaction(async (txCtx) =>
+            stateAdapter.createJobs({
               txCtx,
               jobs: [
                 {
@@ -205,12 +272,12 @@ export const createChainsGroup: ConformanceGroup<StateConformanceFixture> = {
                 },
               ],
             }),
-        );
+          );
 
-        expect(incompleteDeduped).toBe(false);
+        expect(deduplicatedForIncompleteScope).toBe(false);
 
-        const [{ job: anyFirst }] = await stateAdapter.withTransaction(async (txCtx) =>
-          stateAdapter.createChains({
+        const [anyFirstChain] = await stateAdapter.withTransaction(async (txCtx) =>
+          stateAdapter.createJobs({
             txCtx,
             jobs: [
               {
@@ -223,35 +290,35 @@ export const createChainsGroup: ConformanceGroup<StateConformanceFixture> = {
         );
 
         await stateAdapter.withTransaction(async (txCtx) =>
-          stateAdapter.finishJobAttempt({
+          stateAdapter.completeJobs({
             txCtx,
-            jobId: anyFirst.id,
-            workerId: null,
-            outcome: { output: null },
+            completedBy: null,
+            jobs: [{ jobId: anyFirstChain.head.id, output: null }],
           }),
         );
 
-        const [{ deduplicated: anyDeduped }] = await stateAdapter.withTransaction(async (txCtx) =>
-          stateAdapter.createChains({
-            txCtx,
-            jobs: [
-              {
-                typeName: "scope-test-any",
-                input: null,
-                deduplication: { key: "any-key", scope: "any" },
-              },
-            ],
-          }),
+        const [{ deduplicated: deduplicatedForAnyScope }] = await stateAdapter.withTransaction(
+          async (txCtx) =>
+            stateAdapter.createJobs({
+              txCtx,
+              jobs: [
+                {
+                  typeName: "scope-test-any",
+                  input: null,
+                  deduplication: { key: "any-key", scope: "any" },
+                },
+              ],
+            }),
         );
 
-        expect(anyDeduped).toBe(true);
+        expect(deduplicatedForAnyScope).toBe(true);
       },
     },
     {
       name: "deduplication scope 'running' matches multi-step chains that have continued",
       run: async ({ stateAdapter }, expect) => {
-        const [{ job: root }] = await stateAdapter.withTransaction(async (txCtx) =>
-          stateAdapter.createChains({
+        const [rootChain] = await stateAdapter.withTransaction(async (txCtx) =>
+          stateAdapter.createJobs({
             txCtx,
             jobs: [
               {
@@ -263,48 +330,20 @@ export const createChainsGroup: ConformanceGroup<StateConformanceFixture> = {
           }),
         );
 
-        const { job: step2 } = await stateAdapter.withTransaction(async (txCtx) => {
+        const step2 = await stateAdapter.withTransaction(async (txCtx) => {
           await stateAdapter.startJobAttempt({ txCtx, workerId: "worker-1", typeNames: ["step1"] });
-          const continuation = await stateAdapter.createContinuationJob({
+          const [continued] = await stateAdapter.continueJobs({
             txCtx,
-            job: { typeName: "step2", input: null, continueFromId: root.id },
+            completedBy: "w",
+            jobs: [{ typeName: "step2", input: null, continueFromId: rootChain.head.id }],
           });
-          await stateAdapter.finishJobAttempt({
-            txCtx,
-            jobId: root.id,
-            workerId: "w",
-            outcome: { continuedToId: continuation.job.id },
-          });
+          const { continuation } = continued!;
           return continuation;
         });
 
-        const [{ deduplicated: midChain }] = await stateAdapter.withTransaction(async (txCtx) =>
-          stateAdapter.createChains({
-            txCtx,
-            jobs: [
-              {
-                typeName: "step1",
-                input: null,
-                deduplication: { key: "multi-key", scope: "running" },
-              },
-            ],
-          }),
-        );
-
-        expect(midChain).toBe(true);
-
-        await stateAdapter.withTransaction(async (txCtx) =>
-          stateAdapter.finishJobAttempt({
-            txCtx,
-            jobId: step2.id,
-            workerId: "w",
-            outcome: { output: null },
-          }),
-        );
-
-        const [{ deduplicated: afterComplete }] = await stateAdapter.withTransaction(
+        const [{ deduplicated: deduplicatedMidChain }] = await stateAdapter.withTransaction(
           async (txCtx) =>
-            stateAdapter.createChains({
+            stateAdapter.createJobs({
               txCtx,
               jobs: [
                 {
@@ -316,14 +355,38 @@ export const createChainsGroup: ConformanceGroup<StateConformanceFixture> = {
             }),
         );
 
-        expect(afterComplete).toBe(false);
+        expect(deduplicatedMidChain).toBe(true);
+
+        await stateAdapter.withTransaction(async (txCtx) =>
+          stateAdapter.completeJobs({
+            txCtx,
+            completedBy: "w",
+            jobs: [{ jobId: step2.id, output: null }],
+          }),
+        );
+
+        const [{ deduplicated: deduplicatedAfterComplete }] = await stateAdapter.withTransaction(
+          async (txCtx) =>
+            stateAdapter.createJobs({
+              txCtx,
+              jobs: [
+                {
+                  typeName: "step1",
+                  input: null,
+                  deduplication: { key: "multi-key", scope: "running" },
+                },
+              ],
+            }),
+        );
+
+        expect(deduplicatedAfterComplete).toBe(false);
       },
     },
     {
       name: "deduplication scope 'running' picks running chain when completed chain exists with same key",
       run: async ({ stateAdapter }, expect) => {
-        const [{ job: first }] = await stateAdapter.withTransaction(async (txCtx) =>
-          stateAdapter.createChains({
+        const [firstChain] = await stateAdapter.withTransaction(async (txCtx) =>
+          stateAdapter.createJobs({
             txCtx,
             jobs: [
               {
@@ -336,31 +399,15 @@ export const createChainsGroup: ConformanceGroup<StateConformanceFixture> = {
         );
 
         await stateAdapter.withTransaction(async (txCtx) =>
-          stateAdapter.finishJobAttempt({
+          stateAdapter.completeJobs({
             txCtx,
-            jobId: first.id,
-            workerId: "w",
-            outcome: { output: null },
+            completedBy: "w",
+            jobs: [{ jobId: firstChain.head.id, output: null }],
           }),
         );
 
-        const [{ job: second }] = await stateAdapter.withTransaction(async (txCtx) =>
-          stateAdapter.createChains({
-            txCtx,
-            jobs: [
-              {
-                typeName: "coexist",
-                input: null,
-                deduplication: { key: "coexist-key", scope: "running" },
-              },
-            ],
-          }),
-        );
-
-        expect(second.id).not.toBe(first.id);
-
-        const [{ deduplicated, job: matched }] = await stateAdapter.withTransaction(async (txCtx) =>
-          stateAdapter.createChains({
+        const [secondChain] = await stateAdapter.withTransaction(async (txCtx) =>
+          stateAdapter.createJobs({
             txCtx,
             jobs: [
               {
@@ -371,50 +418,72 @@ export const createChainsGroup: ConformanceGroup<StateConformanceFixture> = {
             ],
           }),
         );
+
+        expect(secondChain.head.id).not.toBe(firstChain.head.id);
+
+        const [matchedChain] = await stateAdapter.withTransaction(async (txCtx) =>
+          stateAdapter.createJobs({
+            txCtx,
+            jobs: [
+              {
+                typeName: "coexist",
+                input: null,
+                deduplication: { key: "coexist-key", scope: "running" },
+              },
+            ],
+          }),
+        );
+        const { deduplicated } = matchedChain;
 
         expect(deduplicated).toBe(true);
-        expect(matched.id).toBe(second.id);
+        expect(matchedChain.head.id).toBe(secondChain.head.id);
       },
     },
     {
       name: "creates job with schedule options",
       run: async ({ stateAdapter }, expect) => {
         const before = Date.now();
-        const [{ job: afterMsJob }] = await stateAdapter.withTransaction(async (txCtx) =>
-          stateAdapter.createChains({
+        const [afterMsChain] = await stateAdapter.withTransaction(async (txCtx) =>
+          stateAdapter.createJobs({
             txCtx,
             jobs: [{ typeName: "schedule-test", input: null, schedule: { afterMs: 5000 } }],
           }),
         );
 
-        const afterMsDiff = afterMsJob.scheduledAt.getTime() - before;
+        const afterMsDiff = afterMsChain.head.scheduledAt.getTime() - before;
         expect(afterMsDiff).toBeGreaterThanOrEqual(4900);
         expect(afterMsDiff).toBeLessThan(6000);
 
         const futureDate = new Date(Date.now() + 60_000);
-        const [{ job: atJob }] = await stateAdapter.withTransaction(async (txCtx) =>
-          stateAdapter.createChains({
+        const [atChain] = await stateAdapter.withTransaction(async (txCtx) =>
+          stateAdapter.createJobs({
             txCtx,
             jobs: [{ typeName: "schedule-test-at", input: null, schedule: { at: futureDate } }],
           }),
         );
 
-        expect(Math.abs(atJob.scheduledAt.getTime() - futureDate.getTime())).toBeLessThan(1000);
+        expect(Math.abs(atChain.head.scheduledAt.getTime() - futureDate.getTime())).toBeLessThan(
+          1000,
+        );
       },
     },
     {
       name: "clamps past schedule.at to now (scheduled_at is eligibility floor, never a past lie)",
       run: async ({ stateAdapter }, expect) => {
         const past = new Date(Date.now() - 60 * 60 * 1000);
-        const [{ job }] = await stateAdapter.withTransaction(async (txCtx) =>
-          stateAdapter.createChains({
+        const [stateChain] = await stateAdapter.withTransaction(async (txCtx) =>
+          stateAdapter.createJobs({
             txCtx,
             jobs: [{ typeName: "schedule-past", input: null, schedule: { at: past } }],
           }),
         );
 
-        expect(job.scheduledAt.getTime() - past.getTime()).toBeGreaterThan(30 * 60 * 1000);
-        expect(Math.abs(job.scheduledAt.getTime() - Date.now())).toBeLessThan(60 * 1000);
+        expect(stateChain.head.scheduledAt.getTime() - past.getTime()).toBeGreaterThan(
+          30 * 60 * 1000,
+        );
+        expect(Math.abs(stateChain.head.scheduledAt.getTime() - Date.now())).toBeLessThan(
+          60 * 1000,
+        );
       },
     },
     {
@@ -422,8 +491,8 @@ export const createChainsGroup: ConformanceGroup<StateConformanceFixture> = {
       run: async ({ stateAdapter }, expect) => {
         const chainTraceContext = "00-abc123-chain111-01";
         const traceContext = "00-abc123-job222-01";
-        const [{ job }] = await stateAdapter.withTransaction(async (txCtx) =>
-          stateAdapter.createChains({
+        const [stateChain] = await stateAdapter.withTransaction(async (txCtx) =>
+          stateAdapter.createJobs({
             txCtx,
             jobs: [
               {
@@ -436,25 +505,25 @@ export const createChainsGroup: ConformanceGroup<StateConformanceFixture> = {
           }),
         );
 
-        const [retrieved] = await stateAdapter.getJobs({ jobIds: [job.id] });
-        expect(retrieved?.chainTraceContext).toEqual(chainTraceContext);
+        const [retrieved] = await stateAdapter.getJobs({ jobIds: [stateChain.head.id] });
+        expect(retrieved?.chain.traceContext).toEqual(chainTraceContext);
         expect(retrieved?.traceContext).toEqual(traceContext);
       },
     },
     {
       name: "stores and retrieves dates correctly",
       run: async ({ stateAdapter }, expect) => {
-        const [{ job }] = await stateAdapter.withTransaction(async (txCtx) =>
-          stateAdapter.createChains({
+        const [stateChain] = await stateAdapter.withTransaction(async (txCtx) =>
+          stateAdapter.createJobs({
             txCtx,
             jobs: [{ typeName: "date-test", input: null }],
           }),
         );
 
-        expect(job.createdAt).toBeInstanceOf(Date);
-        expect(job.scheduledAt).toBeInstanceOf(Date);
+        expect(stateChain.head.createdAt).toBeInstanceOf(Date);
+        expect(stateChain.head.scheduledAt).toBeInstanceOf(Date);
 
-        const timeDiff = Math.abs(Date.now() - job.createdAt.getTime());
+        const timeDiff = Math.abs(Date.now() - stateChain.head.createdAt.getTime());
         expect(timeDiff).toBeLessThan(5000);
       },
     },
@@ -462,7 +531,7 @@ export const createChainsGroup: ConformanceGroup<StateConformanceFixture> = {
       name: "creates multiple jobs in a single batch",
       run: async ({ stateAdapter }, expect) => {
         const results = await stateAdapter.withTransaction(async (txCtx) =>
-          stateAdapter.createChains({
+          stateAdapter.createJobs({
             txCtx,
             jobs: [
               { typeName: "batch-a", input: { value: 1 } },
@@ -475,23 +544,23 @@ export const createChainsGroup: ConformanceGroup<StateConformanceFixture> = {
         expect(results).toHaveLength(3);
         for (const result of results) {
           expect(result.deduplicated).toBe(false);
-          expect(result.job.completedAt).toBeNull();
-          expect(result.job.attemptAt).toBeNull();
-          expect(result.job.chainId).toBe(result.job.id);
+          expect(result.head.completedAt).toBeNull();
+          expect(result.head.attemptAt).toBeNull();
+          expect(result.head.chainId).toBe(result.head.id);
         }
-        expect(results[0].job.typeName).toBe("batch-a");
-        expect(results[1].job.typeName).toBe("batch-b");
-        expect(results[2].job.typeName).toBe("batch-c");
-        expect(results[0].job.input).toEqual({ value: 1 });
-        expect(results[1].job.input).toEqual({ value: 2 });
-        expect(results[2].job.input).toEqual({ value: 3 });
+        expect(results[0].head.typeName).toBe("batch-a");
+        expect(results[1].head.typeName).toBe("batch-b");
+        expect(results[2].head.typeName).toBe("batch-c");
+        expect(results[0].head.input).toEqual({ value: 1 });
+        expect(results[1].head.input).toEqual({ value: 2 });
+        expect(results[2].head.input).toEqual({ value: 3 });
       },
     },
     {
       name: "handles per-row deduplication in a batch",
       run: async ({ stateAdapter }, expect) => {
-        const [{ job: existingJob }] = await stateAdapter.withTransaction(async (txCtx) =>
-          stateAdapter.createChains({
+        const [existingChain] = await stateAdapter.withTransaction(async (txCtx) =>
+          stateAdapter.createJobs({
             txCtx,
             jobs: [
               {
@@ -504,7 +573,7 @@ export const createChainsGroup: ConformanceGroup<StateConformanceFixture> = {
         );
 
         const results = await stateAdapter.withTransaction(async (txCtx) =>
-          stateAdapter.createChains({
+          stateAdapter.createJobs({
             txCtx,
             jobs: [
               {
@@ -523,16 +592,16 @@ export const createChainsGroup: ConformanceGroup<StateConformanceFixture> = {
 
         expect(results).toHaveLength(2);
         expect(results[0].deduplicated).toBe(true);
-        expect(results[0].job.id).toBe(existingJob.id);
+        expect(results[0].head.id).toBe(existingChain.head.id);
         expect(results[1].deduplicated).toBe(false);
-        expect(results[1].job.id).not.toBe(existingJob.id);
+        expect(results[1].head.id).not.toBe(existingChain.head.id);
       },
     },
     {
       name: "returns empty array for empty input",
       run: async ({ stateAdapter }, expect) => {
         const results = await stateAdapter.withTransaction(async (txCtx) =>
-          stateAdapter.createChains({ txCtx, jobs: [] }),
+          stateAdapter.createJobs({ txCtx, jobs: [] }),
         );
 
         expect(results).toEqual([]);
@@ -542,8 +611,8 @@ export const createChainsGroup: ConformanceGroup<StateConformanceFixture> = {
       name: "uses caller-supplied id when provided",
       run: async ({ stateAdapter, generateId }, expect) => {
         const userId = (generateId ?? (() => crypto.randomUUID()))();
-        const [{ job }] = await stateAdapter.withTransaction(async (txCtx) =>
-          stateAdapter.createChains({
+        const [stateChain] = await stateAdapter.withTransaction(async (txCtx) =>
+          stateAdapter.createJobs({
             txCtx,
             jobs: [
               {
@@ -554,8 +623,8 @@ export const createChainsGroup: ConformanceGroup<StateConformanceFixture> = {
             ],
           }),
         );
-        expect(job.id).toBe(userId);
-        expect(job.chainId).toBe(userId);
+        expect(stateChain.head.id).toBe(userId);
+        expect(stateChain.head.chainId).toBe(userId);
       },
     },
     {
@@ -567,7 +636,7 @@ export const createChainsGroup: ConformanceGroup<StateConformanceFixture> = {
         const badId = generateInvalidId!();
         await expect(
           stateAdapter.withTransaction(async (txCtx) =>
-            stateAdapter.createChains({
+            stateAdapter.createJobs({
               txCtx,
               jobs: [
                 {
@@ -584,8 +653,8 @@ export const createChainsGroup: ConformanceGroup<StateConformanceFixture> = {
     {
       name: "dedup wins over caller-supplied id",
       run: async ({ stateAdapter, generateId }, expect) => {
-        const [{ job: first }] = await stateAdapter.withTransaction(async (txCtx) =>
-          stateAdapter.createChains({
+        const [firstChain] = await stateAdapter.withTransaction(async (txCtx) =>
+          stateAdapter.createJobs({
             txCtx,
             jobs: [
               {
@@ -598,8 +667,8 @@ export const createChainsGroup: ConformanceGroup<StateConformanceFixture> = {
         );
 
         const userId = (generateId ?? (() => crypto.randomUUID()))();
-        const [{ job: second, deduplicated }] = await stateAdapter.withTransaction(async (txCtx) =>
-          stateAdapter.createChains({
+        const [secondChain] = await stateAdapter.withTransaction(async (txCtx) =>
+          stateAdapter.createJobs({
             txCtx,
             jobs: [
               {
@@ -611,18 +680,19 @@ export const createChainsGroup: ConformanceGroup<StateConformanceFixture> = {
             ],
           }),
         );
+        const { deduplicated } = secondChain;
 
         expect(deduplicated).toBe(true);
-        expect(second.id).toBe(first.id);
-        expect(second.id).not.toBe(userId);
+        expect(secondChain.head.id).toBe(firstChain.head.id);
+        expect(secondChain.head.id).not.toBe(userId);
       },
     },
     {
-      name: "caller-supplied id collision on createChains errors",
+      name: "caller-supplied id collision on createJobs errors",
       run: async ({ stateAdapter, generateId }, expect) => {
         const userId = (generateId ?? (() => crypto.randomUUID()))();
         await stateAdapter.withTransaction(async (txCtx) =>
-          stateAdapter.createChains({
+          stateAdapter.createJobs({
             txCtx,
             jobs: [
               {
@@ -636,7 +706,7 @@ export const createChainsGroup: ConformanceGroup<StateConformanceFixture> = {
 
         await expect(
           stateAdapter.withTransaction(async (txCtx) =>
-            stateAdapter.createChains({
+            stateAdapter.createJobs({
               txCtx,
               jobs: [
                 {
@@ -655,7 +725,7 @@ export const createChainsGroup: ConformanceGroup<StateConformanceFixture> = {
       run: async ({ stateAdapter, generateId }, expect) => {
         const userId = (generateId ?? (() => crypto.randomUUID()))();
         await stateAdapter.withTransaction(async (txCtx) =>
-          stateAdapter.createChains({
+          stateAdapter.createJobs({
             txCtx,
             jobs: [
               {
@@ -669,7 +739,7 @@ export const createChainsGroup: ConformanceGroup<StateConformanceFixture> = {
 
         await expect(
           stateAdapter.withTransaction(async (txCtx) =>
-            stateAdapter.createChains({
+            stateAdapter.createJobs({
               txCtx,
               jobs: [
                 {
@@ -693,7 +763,7 @@ export const createChainsGroup: ConformanceGroup<StateConformanceFixture> = {
         const userId = (generateId ?? (() => crypto.randomUUID()))();
         await expect(
           stateAdapter.withTransaction(async (txCtx) =>
-            stateAdapter.createChains({
+            stateAdapter.createJobs({
               txCtx,
               jobs: [
                 {

@@ -9,7 +9,7 @@ import {
   listChains,
 } from "../api.js";
 import { createAutoLoadMore } from "./createAutoLoadMore.js";
-import { ChainStatusBadge } from "./StatusBadge.js";
+import { StatusBadge } from "./StatusBadge.js";
 import { TimeAgo } from "./TimeAgo.js";
 
 export function ChainList() {
@@ -248,7 +248,7 @@ export function ChainList() {
               </span>
             </div>
             <div class="card-meta">
-              <ChainStatusBadge chain={chain} />
+              <StatusBadge status={chain.status} />
             </div>
             <Show when={chain.input != null}>
               <div class="card-input">{inputPreview(chain.input)}</div>

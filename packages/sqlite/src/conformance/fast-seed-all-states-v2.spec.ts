@@ -1,6 +1,6 @@
 import Database from "better-sqlite3";
 import { seedAllStatesV2 } from "queuert/testing";
-import { it as baseIt, describe, expect } from "vitest";
+import { describe, expect, it } from "vitest";
 
 import { createSqliteStateAdapter } from "../state-adapter/state-adapter.sqlite.js";
 import {
@@ -11,14 +11,15 @@ import { fastSeedAllStatesV2 } from "./fast-seed-all-states-v2.js";
 
 const jobQuery = `
   SELECT
-    type_name, chain_type_name, chain_index,
+    type_name, chain_index,
     input, output,
-    blocked, attempt,
+    status, chain_status, attempt,
     attempt_by, completed_by,
     last_attempt_error,
-    deduplication_key,
+    chain_deduplication_key,
     chain_trace_context, trace_context,
     continued_to_id IS NOT NULL AS has_continuation,
+    chain_completed_at IS NOT NULL AS has_chain_completion,
     created_at, scheduled_at, attempt_at, attempt_until, completed_at, last_attempt_at
   FROM queuert_job
   ORDER BY type_name, chain_index,
@@ -73,21 +74,11 @@ const assertTemporalRelationships = (rows: TimestampRow[], label: string) => {
   }
 };
 
-const it = baseIt;
-
-const createDb = () => {
-  const db = new Database(":memory:");
-  db.pragma("journal_mode = WAL");
-  db.pragma("auto_vacuum = INCREMENTAL");
-  db.pragma("foreign_keys = ON");
-  return db;
-};
-
 describe("fast seed v2 conformance", { timeout: 120_000 }, () => {
   it("produces identical data to seedAllStatesV2", async () => {
     for (const scale of [1, 2]) {
       // Correct seed
-      const correctDb = createDb();
+      const correctDb = new Database(":memory:");
       const correctProvider = createBetterSqlite3Provider({ db: correctDb });
       const correctAdapter = await createSqliteStateAdapter<BetterSqlite3Context, string>({
         stateProvider: correctProvider,
@@ -99,7 +90,7 @@ describe("fast seed v2 conformance", { timeout: 120_000 }, () => {
       const correctBlockers = correctDb.prepare(blockerQuery).all();
 
       // Fast seed
-      const fastDb = createDb();
+      const fastDb = new Database(":memory:");
       const fastProvider = createBetterSqlite3Provider({ db: fastDb });
       const fastAdapter = await createSqliteStateAdapter<BetterSqlite3Context, string>({
         stateProvider: fastProvider,

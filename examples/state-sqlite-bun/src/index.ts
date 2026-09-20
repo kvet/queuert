@@ -3,19 +3,17 @@ import { Database } from "bun:sqlite";
 import { createAsyncRwLock, createSqliteStateAdapter } from "@queuert/sqlite";
 import {
   createClient,
+  createInProcessNotifyAdapter,
   createInProcessWorker,
   createProcessors,
   defineJobTypes,
   withTransactionHooks,
-  createInProcessNotifyAdapter,
 } from "queuert";
 
 import { createBunSqliteStateProvider } from "./provider.js";
 
 // 1. Create in-memory SQLite database
 const db = new Database(":memory:");
-db.run("PRAGMA auto_vacuum = INCREMENTAL");
-db.run("PRAGMA foreign_keys = ON");
 
 // 2. Create application schema
 db.run(`

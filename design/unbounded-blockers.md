@@ -11,7 +11,7 @@ Two coupled features share a schema primitive (`job_blocker.blocked`) and a runt
 
 ### Fan-out: one chain unblocks many
 
-When a chain completes, `finishJob` calls `stateAdapter.unblockJobs({ blockedByChainId })`
+When a chain completes, `completeChain` calls `stateAdapter.unblockJobs({ blockedByChainId })`
 inside the completing job's transaction. That single call clears `blocked = false` on **every**
 dependent of the chain in one `UPDATE` and buffers one notify + one observability event per
 unblocked job. One shared setup chain that a million jobs wait on means a million-row update
@@ -166,7 +166,7 @@ The user controls which workers process system jobs, consistent with the horizon
 model where each worker explicitly declares which job types it handles.
 
 If no worker registers the system processor, continuation chains pile up unprocessed. The
-library should emit a loud runtime warning (or error) when `finishJob` schedules a continuation
+library should emit a loud runtime warning (or error) when `continueChain` schedules a continuation
 for a type no active worker has registered.
 
 The same pattern is reused by other library-provided processors (e.g. built-in cleanup).
@@ -176,7 +176,7 @@ The same pattern is reused by other library-provided processors (e.g. built-in c
 ## Feature 1: Batched unblock (fan-out)
 
 `unblockJobs` releases at most a batch (e.g. 100) of dependents per call and reports whether
-more remain. When more remain, `finishJob` schedules a system chain carrying
+more remain. When more remain, `continueChain` schedules a system chain carrying
 `blockedByChainId`; its handler re-invokes the batched unblock and re-continues until drained.
 
 Self-terminating and idempotent: a batch releasing fewer than the limit means the currently
@@ -189,7 +189,7 @@ continuations.
 
 ```
 chain completes
-  → finishJob
+  → completeChain
     → unblockJobs({ blockedByChainId, limit: 100 })
     → notify + observability for each released job (≤ 100)
     → if hasMore: schedule system chain { blockedByChainId }

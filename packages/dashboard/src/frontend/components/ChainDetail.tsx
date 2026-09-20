@@ -13,7 +13,7 @@ import { BackLink } from "./BackLink.js";
 import { ConfirmDeleteDialog } from "./ConfirmDeleteDialog.js";
 import { createAutoLoadMore } from "./createAutoLoadMore.js";
 import { JsonView } from "./JsonView.js";
-import { ChainStatusBadge, JobStatusBadge } from "./StatusBadge.js";
+import { StatusBadge } from "./StatusBadge.js";
 import { TimeAgo } from "./TimeAgo.js";
 
 export function ChainDetail() {
@@ -100,11 +100,11 @@ export function ChainDetail() {
   const [deleting, setDeleting] = createSignal(false);
   const [deleteError, setDeleteError] = createSignal<string | null>(null);
 
-  const handleDelete = async (options: { cascade: boolean }) => {
+  const handleDelete = async () => {
     setDeleting(true);
     setDeleteError(null);
     try {
-      await deleteChain(params.id, { cascade: options.cascade });
+      await deleteChain(params.id);
       navigate("/");
     } catch (err) {
       setDeleteError(err instanceof Error ? err.message : String(err));
@@ -130,7 +130,7 @@ export function ChainDetail() {
               <>
                 <div class="detail-header">
                   <h2>
-                    {d.chain.typeName} <ChainStatusBadge chain={d.chain} />
+                    {d.chain.typeName} <StatusBadge status={d.chain.status} />
                   </h2>
                   <div class="id">chain {d.chain.id}</div>
                   <div style={{ "font-size": "13px", color: "var(--text-secondary)" }}>
@@ -148,7 +148,7 @@ export function ChainDetail() {
                     setShowDelete(false);
                     setDeleteError(null);
                   }}
-                  onConfirm={(options) => void handleDelete(options)}
+                  onConfirm={() => void handleDelete()}
                   deleting={deleting()}
                   error={deleteError()}
                 />
@@ -169,7 +169,7 @@ export function ChainDetail() {
                       <For each={blockingItems()}>
                         {(job) => (
                           <li>
-                            <JobStatusBadge job={job} /> {job.typeName}{" "}
+                            <StatusBadge status={job.status} /> {job.typeName}{" "}
                             <A href={`/chains/${job.chainId}`} class="chain-link">
                               chain {job.chainId}
                             </A>
@@ -214,7 +214,7 @@ export function ChainDetail() {
                           </span>
                         </div>
                         <div class="card-meta">
-                          <JobStatusBadge job={job} />
+                          <StatusBadge status={job.status} />
                         </div>
                         <Show when={job.input != null}>
                           <div
@@ -246,7 +246,7 @@ export function ChainDetail() {
                               <For each={jobBlockers()[job.id]}>
                                 {(blocker) => (
                                   <li>
-                                    <ChainStatusBadge chain={blocker} /> {blocker.typeName}{" "}
+                                    <StatusBadge status={blocker.status} /> {blocker.typeName}{" "}
                                     <A href={`/chains/${blocker.id}`} class="chain-link">
                                       chain {blocker.id}
                                     </A>

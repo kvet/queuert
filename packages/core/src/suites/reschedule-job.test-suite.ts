@@ -374,8 +374,7 @@ export const rescheduleJobTestSuite = ({ it }: { it: TestAPI<TestSuiteContext> }
     );
 
     const blockedJob = await client.getJob({ id: blockedChain.id });
-    expect(blockedJob!.status).toBe("pending");
-    expect(blockedJob!.status === "pending" && blockedJob!.blocked).toBe(true);
+    expect(blockedJob!.status).toBe("blocked");
 
     const futureDate = new Date(Date.now() + 120_000);
     const rescheduled = await withTransaction(async (txCtx, transactionHooks) =>
@@ -387,8 +386,7 @@ export const rescheduleJobTestSuite = ({ it }: { it: TestAPI<TestSuiteContext> }
       }),
     );
 
-    expect(rescheduled.status).toBe("pending");
-    expect(rescheduled.status === "pending" && rescheduled.blocked).toBe(true);
+    expect(rescheduled.status).toBe("blocked");
     expect(Math.abs(rescheduled.scheduledAt.getTime() - futureDate.getTime())).toBeLessThan(1000);
   });
 

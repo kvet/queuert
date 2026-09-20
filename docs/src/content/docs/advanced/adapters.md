@@ -54,7 +54,7 @@ All StateAdapter methods must complete in a **single database round-trip**, wher
 
 - **O(1) round trips**: Each method—regardless of how many jobs it affects—executes exactly one database operation
 - **O(n) is incorrect**: If an adapter implementation requires multiple round trips proportional to input size, the implementation is wrong
-- **Batch operations**: Methods accepting arrays (e.g., `deleteChains`, `addJobsBlockers`) must use batch SQL (multi-row INSERT, UPDATE with IN clause, CTEs) rather than loops
+- **Batch operations**: Array-accepting methods must use batch SQL (multi-row INSERT, IN clauses, CTEs) — never loops. The round-trip count must stay constant regardless of input size; a small fixed number above one is acceptable where the engine requires it
 
 This principle ensures predictable performance and proper atomicity. Use batch SQL (multi-row INSERT, UPDATE with IN/ANY clause, CTEs) rather than loops.
 
@@ -77,7 +77,7 @@ Users create a `StateProvider` implementation to integrate with their database c
 
 Whether `txCtx` is optional depends on what the method does:
 
-- **Mutating methods require it** (`createChains`, `createContinuationJob`, `addJobsBlockers`, `unblockJobs`, `startJobAttempt`, `extendJobAttempt`, `finishJobAttempt`, `reclaimExpiredJobAttempt`, `rescheduleJobs`, `deleteChains`). A write is never standalone in practice — it has to commit or roll back together with the caller's other writes, including the notify and observability side effects buffered on `transactionHooks`. The type enforces this, so a missing `txCtx` is a compile error rather than a silently auto-committed write.
+- **Mutating methods require it** (`createJobs`, `continueJobs`, `addJobsBlockers`, `unblockJobs`, `startJobAttempt`, `extendJobAttempt`, `completeJobs`, `reclaimExpiredJobAttempt`, `rescheduleJobs`, `deleteChains`). A write is never standalone in practice — it has to commit or roll back together with the caller's other writes, including the notify and observability side effects buffered on `transactionHooks`. The type enforces this, so a missing `txCtx` is a compile error rather than a silently auto-committed write.
 - **Read-only methods leave it optional** (`getChains`, `getJobs`, `getJobBlockers`, `getStartAttemptDelayMs`, `listJobTypeNames`, `listChainTypeNames`, `countByJobTypeNames`, `countByChainTypeNames`, `listChains`, `listJobs`, `listChainJobs`, `listBlockedJobs`). With a `txCtx` the read joins the caller's transaction and sees its uncommitted writes; without one the adapter acquires its own connection, executes, and releases.
 - **`lock: "exclusive"` requires it.** `getChains` and `getJobs` don't mutate rows, but a write-intent lock only lasts as long as the transaction that took it, so the parameter type pairs `lock` with a mandatory `txCtx`.
 

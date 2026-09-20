@@ -7,9 +7,9 @@ import { type StateAdapter } from "../state-adapter/state-adapter.js";
 import {
   type AttemptMiddleware,
   type MergedAttemptHandlerCtx,
-  type MergedStepCtx,
   type MergedCompleteCtx,
   type MergedPrepareCtx,
+  type MergedStepCtx,
 } from "./attempt-middleware.js";
 import { createProcessors } from "./create-processors.js";
 
@@ -248,14 +248,6 @@ describe("AttemptMiddleware accepts concrete (non-any) state adapters", () => {
     void mwComplete;
   });
 
-  /*
-   * Typed against `DbStateAdapter`, not `typeof stateAdapter`: the in-process
-   * adapter's txCtx has only optional properties, so it stays assignable to a
-   * bare-`any` wildcard and cannot reproduce the ctx collapse this guards.
-   * `createProcessors` now requires the middleware adapter to match the
-   * client's, so the client is retyped to the same alias — the call only stamps
-   * objects, so the in-process instance backing it is never touched.
-   */
   it("merges ctx across a multi-element tuple of concrete-adapter middleware", () => {
     type Tx = { db: { query: (sql: string) => Promise<unknown> } };
     type DbStateAdapter = StateAdapter<Tx, string>;
