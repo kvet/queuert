@@ -2,7 +2,7 @@ import { type Chain, type Job } from "queuert";
 // @ts-expect-error tsgo doesn't resolve export * re-exports from seroval
 import { deserialize } from "seroval";
 
-export type UnknownJob = Job<string, string, unknown, unknown, true>;
+export type UnknownJob = Job<string, string, string, unknown, unknown, true>;
 export type UnknownChain = Chain<string, string, unknown, unknown>;
 
 const BASE = "./api";
@@ -117,7 +117,6 @@ export const getJobDetail = async (
   jobId: string,
 ): Promise<{
   job: UnknownJob;
-  chain: UnknownChain | null;
   continuation: UnknownJob | null;
   blockers: UnknownChain[];
 }> => fetchSeroval(`/jobs/${jobId}`);

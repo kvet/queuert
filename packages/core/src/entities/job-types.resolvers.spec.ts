@@ -52,7 +52,7 @@ describe("OutputJob", () => {
 });
 
 describe("ContinuedJob", () => {
-  type Result = ContinuedJob<string, LinearDefs, "entry", "step">;
+  type Result = ContinuedJob<string, LinearDefs, "entry", "entry", "step">;
 
   it("resolves status to completed", () => {
     expectTypeOf<Result["status"]>().toEqualTypeOf<"completed">();
@@ -60,7 +60,7 @@ describe("ContinuedJob", () => {
 
   it("narrows continuedTo to the specific continuation job type", () => {
     expectTypeOf<Result["continuedTo"]>().toEqualTypeOf<
-      ContinuationJob<string, LinearDefs, "step">
+      ContinuationJob<string, LinearDefs, "step", "entry">
     >();
   });
 
@@ -79,13 +79,13 @@ describe("ContinuedJob", () => {
 
 describe("ContinuedJob branching", () => {
   it("narrows to branchA when TContinuationTypeName is branchA", () => {
-    type Result = ContinuedJob<string, BranchingDefs, "root", "branchA">;
+    type Result = ContinuedJob<string, BranchingDefs, "root", "root", "branchA">;
     expectTypeOf<Result["continuedTo"]["typeName"]>().toEqualTypeOf<"branchA">();
     expectTypeOf<Result["continuedTo"]["input"]>().toEqualTypeOf<{ a: number }>();
   });
 
   it("narrows to branchB when TContinuationTypeName is branchB", () => {
-    type Result = ContinuedJob<string, BranchingDefs, "root", "branchB">;
+    type Result = ContinuedJob<string, BranchingDefs, "root", "root", "branchB">;
     expectTypeOf<Result["continuedTo"]["typeName"]>().toEqualTypeOf<"branchB">();
     expectTypeOf<Result["continuedTo"]["input"]>().toEqualTypeOf<{ b: string }>();
   });

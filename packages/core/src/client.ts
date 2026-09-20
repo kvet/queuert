@@ -88,10 +88,13 @@ type ChainCompleteOptions<
   TStateAdapter extends StateAdapter<any, any>,
   TJobTypeDefinitions extends BaseJobTypeDefinitions,
   TJobTypeName extends string,
+  TChainTypeName extends string,
 > = {
   finish: <TOutcome extends AttemptOutcome<TStateAdapter, TJobTypeDefinitions, TJobTypeName>>(
     outcome: TOutcome,
-  ) => Promise<AttemptFinishResult<TStateAdapter, TJobTypeDefinitions, TJobTypeName, TOutcome>>;
+  ) => Promise<
+    AttemptFinishResult<TStateAdapter, TJobTypeDefinitions, TJobTypeName, TChainTypeName, TOutcome>
+  >;
   transactionHooks: TransactionHooks;
 } & GetStateAdapterTxContext<TStateAdapter>;
 
@@ -114,9 +117,19 @@ type ChainHandler<
     ...args: true extends IsUnion<TJobTypeName>
       ? [job: "Error: narrow the job type before calling completeJob (e.g. check job.typeName)"]
       : [
-          job: ResolvedJob<GetStateAdapterJobId<TStateAdapter>, TJobTypeDefinitions, TJobTypeName>,
+          job: ResolvedJob<
+            GetStateAdapterJobId<TStateAdapter>,
+            TJobTypeDefinitions,
+            TJobTypeName,
+            TChainTypeName
+          >,
           completeCallback: (
-            completeOptions: ChainCompleteOptions<TStateAdapter, TJobTypeDefinitions, TJobTypeName>,
+            completeOptions: ChainCompleteOptions<
+              TStateAdapter,
+              TJobTypeDefinitions,
+              TJobTypeName,
+              TChainTypeName
+            >,
           ) => Promise<TResult>,
         ]
   ) => Promise<ChainCompleteJobResult<TResult>>;

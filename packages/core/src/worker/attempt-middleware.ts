@@ -11,6 +11,7 @@ import { type TransactionHooks } from "../transaction-hooks.js";
 type RunningJob<TStateAdapter extends StateAdapter<any, any>> = ResolvedJobWithBlockers<
   GetStateAdapterJobId<TStateAdapter>,
   BaseJobTypeDefinitions,
+  string,
   string
 > & { status: "running" };
 

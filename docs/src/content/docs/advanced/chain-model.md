@@ -97,6 +97,7 @@ The head job can be:
 
 ### Performance
 
+- `chainTypeName` denormalized on every job for O(1) filtering
 - No subqueries needed to find chains by type
 - Efficient at scale (millions of jobs)
 

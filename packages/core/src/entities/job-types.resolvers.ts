@@ -11,7 +11,7 @@
  *
  * Computed cross-type resolution:
  * - `JobTypeContinuation<TJobTypeDefinitions, K>` — resolves continueWith references to type name strings
- * - `JobTypeChainNames<TJobTypeDefinitions, K>` — all type names reachable from K by following continuations
+ * - `JobTypeReachingEntry<TJobTypeDefinitions, K>` — which entry types can reach K via chain walking
  */
 
 import { type Chain, type CompletedChain } from "./chain.types.js";
@@ -114,6 +114,33 @@ type ChainWalk<
     ? Visited
     : ChainWalk<TJobTypeDefinitions, JobTypeContinuation<TJobTypeDefinitions, K>, Visited | K>;
 
+type EntryKeys<TJobTypeDefinitions extends BaseJobTypeDefinitions> = {
+  [K in keyof TJobTypeDefinitions & string]: TJobTypeDefinitions[K] extends { entry: true }
+    ? K
+    : never;
+}[keyof TJobTypeDefinitions & string];
+
+type ChainReachMap<TJobTypeDefinitions extends BaseJobTypeDefinitions> = {
+  [TypeName in keyof TJobTypeDefinitions]: {
+    [E in EntryKeys<TJobTypeDefinitions>]: TypeName extends ChainWalk<TJobTypeDefinitions, E>
+      ? E
+      : never;
+  }[EntryKeys<TJobTypeDefinitions>];
+};
+
+/**
+ * Which entry types can reach K via chain walking.
+ * Distributive — for unions, computes within the slice containing K.
+ */
+export type JobTypeReachingEntry<
+  TJobTypeDefinitions extends BaseJobTypeDefinitions,
+  K extends string,
+> = TJobTypeDefinitions extends any
+  ? K extends keyof TJobTypeDefinitions
+    ? ChainReachMap<TJobTypeDefinitions>[K] & string
+    : never
+  : never;
+
 /**
  * All type names reachable from K by following continuation links.
  * Distributive — for unions, walks within the slice containing K.
@@ -157,9 +184,11 @@ export type ResolvedJob<
   TJobId,
   TJobTypeDefinitions extends BaseJobTypeDefinitions,
   TJobTypeName extends string,
+  TChainTypeName extends string = JobTypeReachingEntry<TJobTypeDefinitions, TJobTypeName>,
 > = Job<
   TJobId,
   TJobTypeName,
+  TChainTypeName,
   JobTypeProperty<TJobTypeDefinitions, TJobTypeName, "input">,
   JobTypeProperty<TJobTypeDefinitions, TJobTypeName, "output">,
   [JobTypeContinuation<TJobTypeDefinitions, TJobTypeName>] extends [never] ? false : true
@@ -169,7 +198,8 @@ export type ResolvedJobWithBlockers<
   TJobId,
   TJobTypeDefinitions extends BaseJobTypeDefinitions,
   TJobTypeName extends string,
-> = ResolvedJob<TJobId, TJobTypeDefinitions, TJobTypeName> & {
+  TChainTypeName extends string = JobTypeReachingEntry<TJobTypeDefinitions, TJobTypeName>,
+> = ResolvedJob<TJobId, TJobTypeDefinitions, TJobTypeName, TChainTypeName> & {
   blockers: CompletedBlockerChains<TJobId, TJobTypeDefinitions, TJobTypeName>;
 };
 
@@ -177,10 +207,12 @@ export type ContinuationJob<
   TJobId,
   TJobTypeDefinitions extends BaseJobTypeDefinitions,
   TContinuationTypeName extends string,
+  TChainTypeName extends string,
 > = Extract<
   Job<
     TJobId,
     TContinuationTypeName,
+    TChainTypeName,
     JobTypeProperty<TJobTypeDefinitions, TContinuationTypeName, "input">,
     JobTypeProperty<TJobTypeDefinitions, TContinuationTypeName, "output">,
     [JobTypeContinuation<TJobTypeDefinitions, TContinuationTypeName>] extends [never] ? false : true
@@ -192,17 +224,19 @@ export type ContinuationJobs<
   TJobId,
   TJobTypeDefinitions extends BaseJobTypeDefinitions,
   TJobTypeName extends string,
+  TChainTypeName extends string = JobTypeReachingEntry<TJobTypeDefinitions, TJobTypeName>,
 > =
   JobTypeContinuation<TJobTypeDefinitions, TJobTypeName> extends infer TContinuation extends string
-    ? ContinuationJob<TJobId, TJobTypeDefinitions, TContinuation>
+    ? ContinuationJob<TJobId, TJobTypeDefinitions, TContinuation, TChainTypeName>
     : never;
 
 export type OutputJob<
   TJobId,
   TJobTypeDefinitions extends BaseJobTypeDefinitions,
   TJobTypeName extends string,
+  TChainTypeName extends string = JobTypeReachingEntry<TJobTypeDefinitions, TJobTypeName>,
 > = Extract<
-  ResolvedJob<TJobId, TJobTypeDefinitions, TJobTypeName>,
+  ResolvedJob<TJobId, TJobTypeDefinitions, TJobTypeName, TChainTypeName>,
   { status: "completed"; continuedToId: null }
 > & { continuedTo: undefined };
 
@@ -210,18 +244,26 @@ export type RescheduledJob<
   TJobId,
   TJobTypeDefinitions extends BaseJobTypeDefinitions,
   TJobTypeName extends string,
-> = Extract<ResolvedJob<TJobId, TJobTypeDefinitions, TJobTypeName>, { status: "pending" }>;
+  TChainTypeName extends string = JobTypeReachingEntry<TJobTypeDefinitions, TJobTypeName>,
+> = Extract<
+  ResolvedJob<TJobId, TJobTypeDefinitions, TJobTypeName, TChainTypeName>,
+  { status: "pending" }
+>;
 
 export type ContinuedJob<
   TJobId,
   TJobTypeDefinitions extends BaseJobTypeDefinitions,
   TJobTypeName extends string,
+  TChainTypeName extends string = JobTypeReachingEntry<TJobTypeDefinitions, TJobTypeName>,
   TContinuationTypeName extends string = string,
 > = Exclude<
-  Extract<ResolvedJob<TJobId, TJobTypeDefinitions, TJobTypeName>, { status: "completed" }>,
+  Extract<
+    ResolvedJob<TJobId, TJobTypeDefinitions, TJobTypeName, TChainTypeName>,
+    { status: "completed" }
+  >,
   { continuedToId: null }
 > & {
-  continuedTo: ContinuationJob<TJobId, TJobTypeDefinitions, TContinuationTypeName>;
+  continuedTo: ContinuationJob<TJobId, TJobTypeDefinitions, TContinuationTypeName, TChainTypeName>;
 };
 
 /** Resolves a {@link Chain} with concrete input/output types for a given entry type name. */
@@ -253,6 +295,7 @@ export type ResolvedChainJobs<
         [K in TChainTypeNames]: Job<
           TJobId,
           K,
+          TChainTypeName,
           JobTypeProperty<TJobTypeDefinitions, K, "input">,
           JobTypeProperty<TJobTypeDefinitions, K, "output">,
           [JobTypeContinuation<TJobTypeDefinitions, K>] extends [never] ? false : true

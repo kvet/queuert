@@ -78,6 +78,7 @@ export const runJobProcess = async ({
     StateAdapter<BaseTxContext, any>,
     BaseJobTypeDefinitions,
     string,
+    string,
     Record<string, unknown>,
     Record<string, unknown>,
     Record<string, unknown>,
@@ -213,7 +214,7 @@ export const runJobProcess = async ({
   const runningJob = {
     ...mapStateJobToJob(stateJob),
     blockers: blockerChains.map(mapStateChainToChain) as CompletedChain<AnyChain>[],
-  } as ResolvedJobWithBlockers<any, any, any> & { status: "running" };
+  } as ResolvedJobWithBlockers<any, any, any, any> & { status: "running" };
 
   const runJobAttempt = async () => {
     const attemptStartTime = Date.now();
@@ -479,7 +480,7 @@ export const runJobProcess = async ({
         completeSpan?.end({ error });
         throw error;
       }
-    }) as AttemptComplete<StateAdapter<BaseTxContext, any>, BaseJobTypeDefinitions, string>;
+    }) as AttemptComplete<StateAdapter<BaseTxContext, any>, BaseJobTypeDefinitions, string, string>;
 
     let autoSetupDone = false;
     let autoPreparePromise: Promise<void> | null = null;

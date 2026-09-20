@@ -9,6 +9,7 @@ import {
   type JobTypeChainNames,
   type JobTypeContinuation,
   type JobTypeEntryDefinitions,
+  type JobTypeReachingEntry,
   type ResolvedChain,
   type ResolvedJob,
 } from "./job-types.resolvers.js";
@@ -798,6 +799,178 @@ describe("ResolvedChain", () => {
 
     // Input can be either first job's input or second job's input
     expectTypeOf<ChainInput>().toEqualTypeOf<{ start: number } | { continued: string }>();
+  });
+});
+
+describe("JobTypeReachingEntry", () => {
+  it("computes reaching chain types for complex job graphs", () => {
+    // Complex graph with:
+    // - 5 entry points
+    // - Multiple shared internal jobs reachable from different chains
+    // - Branching paths
+    // - Deep chains (up to 6 levels)
+    // - Diamond patterns (multiple paths converging)
+    const defs = defineJobTypes<{
+      // Entry points
+      entryA: { entry: true; input: { a: true }; continueWith: { typeName: "sharedStep1" } };
+      entryB: { entry: true; input: { b: true }; continueWith: { typeName: "sharedStep1" } };
+      entryC: { entry: true; input: { c: true }; continueWith: { typeName: "branchC1" } };
+      entryD: { entry: true; input: { d: true }; continueWith: { typeName: "deepChain1" } };
+      entryE: {
+        entry: true;
+        input: { e: true };
+
+        continueWith: { typeName: "branchE1" | "branchE2" };
+      };
+
+      // Shared step reachable from A and B
+      sharedStep1: {
+        input: { step: 1 };
+
+        continueWith: { typeName: "sharedStep2" };
+      };
+      sharedStep2: {
+        input: { step: 2 };
+
+        continueWith: { typeName: "finalShared" };
+      };
+      finalShared: {
+        input: { final: true };
+        output: { done: "shared" };
+      };
+
+      // Branch from C
+      branchC1: {
+        input: { c1: true };
+
+        continueWith: { typeName: "branchC2" };
+      };
+      branchC2: {
+        input: { c2: true };
+
+        continueWith: { typeName: "finalShared" }; // Converges to shared final
+      };
+
+      // Deep chain from D (6 levels)
+      deepChain1: {
+        input: { depth: 1 };
+
+        continueWith: { typeName: "deepChain2" };
+      };
+      deepChain2: {
+        input: { depth: 2 };
+
+        continueWith: { typeName: "deepChain3" };
+      };
+      deepChain3: {
+        input: { depth: 3 };
+
+        continueWith: { typeName: "deepChain4" };
+      };
+      deepChain4: {
+        input: { depth: 4 };
+
+        continueWith: { typeName: "deepChain5" };
+      };
+      deepChain5: {
+        input: { depth: 5 };
+
+        continueWith: { typeName: "deepChain6" };
+      };
+      deepChain6: {
+        input: { depth: 6 };
+        output: { done: "deep" };
+      };
+
+      // Branches from E (both converge to same final)
+      branchE1: {
+        input: { e1: true };
+
+        continueWith: { typeName: "convergencePoint" };
+      };
+      branchE2: {
+        input: { e2: true };
+
+        continueWith: { typeName: "convergencePoint" };
+      };
+      convergencePoint: {
+        input: { converged: true };
+        output: { done: "converged" };
+      };
+    }>();
+
+    // Entry points reach only themselves
+    expectTypeOf<
+      JobTypeReachingEntry<JobTypeDefinitions<typeof defs>, "entryA">
+    >().toEqualTypeOf<"entryA">();
+    expectTypeOf<
+      JobTypeReachingEntry<JobTypeDefinitions<typeof defs>, "entryB">
+    >().toEqualTypeOf<"entryB">();
+    expectTypeOf<
+      JobTypeReachingEntry<JobTypeDefinitions<typeof defs>, "entryC">
+    >().toEqualTypeOf<"entryC">();
+    expectTypeOf<
+      JobTypeReachingEntry<JobTypeDefinitions<typeof defs>, "entryD">
+    >().toEqualTypeOf<"entryD">();
+    expectTypeOf<
+      JobTypeReachingEntry<JobTypeDefinitions<typeof defs>, "entryE">
+    >().toEqualTypeOf<"entryE">();
+
+    // Shared steps reachable from A and B
+    expectTypeOf<
+      JobTypeReachingEntry<JobTypeDefinitions<typeof defs>, "sharedStep1">
+    >().toEqualTypeOf<"entryA" | "entryB">();
+    expectTypeOf<
+      JobTypeReachingEntry<JobTypeDefinitions<typeof defs>, "sharedStep2">
+    >().toEqualTypeOf<"entryA" | "entryB">();
+
+    // Final shared is reachable from A, B, and C (via diamond pattern)
+    expectTypeOf<
+      JobTypeReachingEntry<JobTypeDefinitions<typeof defs>, "finalShared">
+    >().toEqualTypeOf<"entryA" | "entryB" | "entryC">();
+
+    // C-only branches
+    expectTypeOf<
+      JobTypeReachingEntry<JobTypeDefinitions<typeof defs>, "branchC1">
+    >().toEqualTypeOf<"entryC">();
+    expectTypeOf<
+      JobTypeReachingEntry<JobTypeDefinitions<typeof defs>, "branchC2">
+    >().toEqualTypeOf<"entryC">();
+
+    // Deep chain only from D
+    expectTypeOf<
+      JobTypeReachingEntry<JobTypeDefinitions<typeof defs>, "deepChain1">
+    >().toEqualTypeOf<"entryD">();
+    expectTypeOf<
+      JobTypeReachingEntry<JobTypeDefinitions<typeof defs>, "deepChain6">
+    >().toEqualTypeOf<"entryD">();
+
+    // E branches and convergence point
+    expectTypeOf<
+      JobTypeReachingEntry<JobTypeDefinitions<typeof defs>, "branchE1">
+    >().toEqualTypeOf<"entryE">();
+    expectTypeOf<
+      JobTypeReachingEntry<JobTypeDefinitions<typeof defs>, "branchE2">
+    >().toEqualTypeOf<"entryE">();
+    expectTypeOf<
+      JobTypeReachingEntry<JobTypeDefinitions<typeof defs>, "convergencePoint">
+    >().toEqualTypeOf<"entryE">();
+
+    // ResolvedJob uses the computed chain type by default
+    type SharedStep1Job = ResolvedJob<string, JobTypeDefinitions<typeof defs>, "sharedStep1">;
+    expectTypeOf<SharedStep1Job["chainTypeName"]>().toEqualTypeOf<"entryA" | "entryB">();
+
+    type FinalSharedJob = ResolvedJob<string, JobTypeDefinitions<typeof defs>, "finalShared">;
+    expectTypeOf<FinalSharedJob["chainTypeName"]>().toEqualTypeOf<"entryA" | "entryB" | "entryC">();
+
+    // Can narrow with explicit 4th param
+    type FinalSharedFromA = ResolvedJob<
+      string,
+      JobTypeDefinitions<typeof defs>,
+      "finalShared",
+      "entryA"
+    >;
+    expectTypeOf<FinalSharedFromA["chainTypeName"]>().toEqualTypeOf<"entryA">();
   });
 });
 

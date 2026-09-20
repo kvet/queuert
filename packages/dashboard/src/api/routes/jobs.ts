@@ -111,15 +111,13 @@ export const handleJobDetail = async (
   const continuationId =
     job.status === "completed" && job.continuedToId !== null ? job.continuedToId : null;
 
-  const [blockers, continuation, chain] = await Promise.all([
+  const [blockers, continuation] = await Promise.all([
     client.getJobBlockers({ jobId: job.id }),
     continuationId ? client.getJob({ id: continuationId }) : Promise.resolve(null),
-    client.getChain({ id: job.chainId }),
   ]);
 
   return serovalResponse({
     job,
-    chain: chain ?? null,
     continuation: continuation ?? null,
     blockers,
   });

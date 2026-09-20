@@ -603,19 +603,6 @@ describe("Dashboard API", () => {
       expect(body.blockers).toEqual([]);
     });
 
-    it("returns the owning chain so the job can be labelled by chain type", async () => {
-      const { request, stateAdapter } = await createTestDashboard();
-      const root = await createJob(stateAdapter, "chain-type", { step: 1 });
-      const cont = await createContinuation(stateAdapter, "chain-step2", root.id, { step: 2 });
-
-      const res = await request(`/api/jobs/${cont.id}`);
-      const body = await parseBody(res);
-
-      expect(res.status).toBe(200);
-      expect(body.chain.id).toBe(root.id);
-      expect(body.chain.typeName).toBe("chain-type");
-    });
-
     it("returns continuation for job in chain", async () => {
       const { request, stateAdapter } = await createTestDashboard();
       const root = await createJob(stateAdapter, "chain-type", { step: 1 });
