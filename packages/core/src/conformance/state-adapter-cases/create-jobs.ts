@@ -17,6 +17,7 @@ export const createJobsGroup: ConformanceGroup<StateConformanceFixture> = {
         );
 
         expect(stateChain.head.chainId).toBe(stateChain.head.id);
+        expect(stateChain.head.chainIndex).toBe(0);
       },
     },
     {

@@ -8,6 +8,7 @@ export const mapStateJobToJob = (stateJob: StateJob): AnyJob => {
     id: stateJob.id,
     chainId: stateJob.chainId,
     chainTypeName: stateJob.chain.typeName,
+    chainIndex: stateJob.chainIndex,
     typeName: stateJob.typeName,
     input: stateJob.input,
     createdAt: stateJob.createdAt,

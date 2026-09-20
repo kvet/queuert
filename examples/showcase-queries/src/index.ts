@@ -195,7 +195,7 @@ if (chain) {
 const job = await client.getJob({ id: orderChain.id });
 if (job) {
   console.log(`Job: ${job.typeName} (${job.status})`);
-  console.log(`  Id: ${job.id}`);
+  console.log(`  Chain index: ${job.chainIndex}`);
 }
 
 const missing = await client.getChain({ id: "00000000-0000-0000-0000-000000000000" as any });
@@ -310,7 +310,7 @@ const chainJobs = await client.listChainJobs({
 });
 console.log(`Jobs in order chain (${orderChain.id}):`);
 for (const j of chainJobs.items) {
-  console.log(`  ${j.typeName} — ${j.status}`);
+  console.log(`  [${j.chainIndex}] ${j.typeName} — ${j.status}`);
 }
 
 // Scenario 7: Blocker relationships

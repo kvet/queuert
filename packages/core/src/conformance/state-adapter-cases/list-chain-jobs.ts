@@ -60,6 +60,7 @@ export const listChainJobsGroup: ConformanceGroup<StateConformanceFixture> = {
         expect(result.items[0].typeName).toBe("step-1");
         expect(result.items[1].typeName).toBe("step-2");
         expect(result.items[2].typeName).toBe("step-3");
+        expect(result.items.map((item) => item.chainIndex)).toEqual([0, 1, 2]);
         expect(result.items.map((item) => item.chain.id)).toEqual([
           rootChain.head.chainId,
           rootChain.head.chainId,
@@ -98,6 +99,7 @@ export const listChainJobsGroup: ConformanceGroup<StateConformanceFixture> = {
         expect(result.items).toHaveLength(2);
         expect(result.items[0].typeName).toBe("step-2");
         expect(result.items[1].typeName).toBe("step-1");
+        expect(result.items.map((item) => item.chainIndex)).toEqual([1, 0]);
       },
     },
     {
@@ -136,6 +138,7 @@ export const listChainJobsGroup: ConformanceGroup<StateConformanceFixture> = {
         expect(page1.nextCursor).not.toBeNull();
         expect(page1.items[0].typeName).toBe("step-0");
         expect(page1.items[1].typeName).toBe("step-1");
+        expect(page1.items.map((item) => item.chainIndex)).toEqual([0, 1]);
 
         const page2 = await stateAdapter.listChainJobs({
           chainId: rootChain.head.chainId,
@@ -146,6 +149,7 @@ export const listChainJobsGroup: ConformanceGroup<StateConformanceFixture> = {
         expect(page2.nextCursor).not.toBeNull();
         expect(page2.items[0].typeName).toBe("step-2");
         expect(page2.items[1].typeName).toBe("step-3");
+        expect(page2.items.map((item) => item.chainIndex)).toEqual([2, 3]);
 
         const page3 = await stateAdapter.listChainJobs({
           chainId: rootChain.head.chainId,

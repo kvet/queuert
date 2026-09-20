@@ -24,6 +24,7 @@ export const continueJobsGroup: ConformanceGroup<StateConformanceFixture> = {
         const childJob = completedResult!.continuation;
 
         expect(childJob.chainId).toBe(headChain.head.chainId);
+        expect(childJob.chainIndex).toBe(1);
         expect(childJob.id).not.toBe(headChain.head.id);
         expect(completedResult!.continuedToId).toBe(childJob.id);
         expect(completedResult!.status).toBe("completed");
@@ -365,6 +366,7 @@ export const continueJobsGroup: ConformanceGroup<StateConformanceFixture> = {
           }),
         );
         expect(headChain.head.id).toBe(headChain.head.chainId);
+        expect(headChain.head.chainIndex).toBe(0);
 
         const [continuedCont1] = await stateAdapter.withTransaction(async (txCtx) =>
           stateAdapter.continueJobs({
@@ -380,6 +382,7 @@ export const continueJobsGroup: ConformanceGroup<StateConformanceFixture> = {
         );
         const { continuation: cont1 } = continuedCont1!;
         expect(cont1.chainId).toBe(headChain.head.chainId);
+        expect(cont1.chainIndex).toBe(1);
 
         const [continuedCont2] = await stateAdapter.withTransaction(async (txCtx) =>
           stateAdapter.continueJobs({
@@ -395,6 +398,7 @@ export const continueJobsGroup: ConformanceGroup<StateConformanceFixture> = {
         );
         const { continuation: cont2 } = continuedCont2!;
         expect(cont2.chainId).toBe(headChain.head.chainId);
+        expect(cont2.chainIndex).toBe(2);
         expect(cont2.id).not.toBe(cont1.id);
       },
     },

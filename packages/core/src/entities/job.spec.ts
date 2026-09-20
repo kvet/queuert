@@ -17,6 +17,7 @@ const pendingJobInfo: StateJobInfo = {
   id: "job-1",
   chainId: "chain-1",
   typeName: "test",
+  chainIndex: 0,
   input: { value: 1 },
   output: null,
   createdAt: new Date("2026-01-01T00:00:00Z"),
@@ -55,6 +56,11 @@ describe("mapStateJobToJob", () => {
         completedAt: new Date("2026-01-01T00:01:00Z"),
       }).status,
     ).toBe("completed");
+  });
+
+  it("carries the chain position through", () => {
+    expect(mapStateJobToJob(pendingStateJob).chainIndex).toBe(0);
+    expect(mapStateJobToJob({ ...pendingStateJob, chainIndex: 3 }).chainIndex).toBe(3);
   });
 
   it("carries the attempt triplet through on a running job", () => {

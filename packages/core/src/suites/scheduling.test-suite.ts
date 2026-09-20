@@ -679,9 +679,9 @@ export const schedulingTestSuite = ({ it }: { it: TestAPI<TestSuiteContext> }): 
       orderDirection: "asc",
       limit: 10,
     });
-    const continuation = chainJobs.items[1];
+    const continuation = chainJobs.items.find((job) => job.chainIndex === 1);
     expect(continuation).toBeDefined();
-    expect(continuation.scheduledAt.getTime() - past.getTime()).toBeGreaterThan(30 * 60 * 1000);
+    expect(continuation!.scheduledAt.getTime() - past.getTime()).toBeGreaterThan(30 * 60 * 1000);
   });
 
   it("rescheduling with past schedule.at clamps scheduledAt to now", async ({

@@ -20,7 +20,6 @@ import {
  * (`chainIndex === 0`), mirroring the SQL schema.
  */
 type DbJob = StateJobInfo & {
-  chainIndex: number;
   chainStatus: StateChainStatus | null;
   chainCompletedAt: Date | null;
   deduplicationKey: string | null;

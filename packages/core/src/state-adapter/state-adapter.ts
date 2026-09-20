@@ -4,16 +4,15 @@ import { type OrderDirection, type Page, type PageParams } from "../pagination.j
 
 // TODO!!!: one line doc comments
 
-/** Stored job status. `blocked` is a pending job gated by incomplete blocker chains. */
 export type StateJobStatus = "blocked" | "pending" | "running" | "completed";
 
-/** Stored chain status, written on the head row. */
 export type StateChainStatus = "running" | "completed";
 
 export type StateJobInfo = {
   id: string;
   typeName: string;
   chainId: string;
+  chainIndex: number;
   status: StateJobStatus;
   createdAt: Date;
   input: unknown;

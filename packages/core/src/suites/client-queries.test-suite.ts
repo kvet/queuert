@@ -1789,6 +1789,7 @@ export const clientQueriesTestSuite = ({ it: baseIt }: { it: TestAPI<TestSuiteCo
       expect(job.createdAt).toBeInstanceOf(Date);
       expect(job.scheduledAt).toBeInstanceOf(Date);
       expect(job.id).toBe(job.chainId);
+      expect(job.chainIndex).toBe(0);
       expect(job.attempt).toBe(0);
     });
   });
@@ -1863,6 +1864,7 @@ export const clientQueriesTestSuite = ({ it: baseIt }: { it: TestAPI<TestSuiteCo
       expect(second.input).toEqual({ n: 1 });
       expect(third.input).toEqual({ n: 2 });
       expect(first.id).toBe(chain.id);
+      expect(page.items.map((job) => job.chainIndex)).toEqual([0, 1, 2]);
       for (const job of page.items) {
         expect(job.chainId).toBe(chain.id);
         expect(job.status).toBe("completed");
@@ -1936,8 +1938,12 @@ export const clientQueriesTestSuite = ({ it: baseIt }: { it: TestAPI<TestSuiteCo
 
       expect(asc.items[0].id).toBe(chain.id);
       expect(asc.items[1].id).not.toBe(chain.id);
+      expect(asc.items[0].chainIndex).toBe(0);
+      expect(asc.items[1].chainIndex).toBe(1);
       expect(desc.items[0].id).not.toBe(chain.id);
       expect(desc.items[1].id).toBe(chain.id);
+      expect(desc.items[0].chainIndex).toBe(1);
+      expect(desc.items[1].chainIndex).toBe(0);
     });
 
     it("listChainJobs paginates", async ({
@@ -1997,6 +2003,7 @@ export const clientQueriesTestSuite = ({ it: baseIt }: { it: TestAPI<TestSuiteCo
       expect(page1.items).toHaveLength(2);
       expect(page1.nextCursor).not.toBeNull();
       expect(page1.items[0].id).toBe(chain.id);
+      expect(page1.items.map((job) => job.chainIndex)).toEqual([0, 1]);
 
       const page2 = await client.listChainJobs({
         chainId: chain.id,
@@ -2006,6 +2013,7 @@ export const clientQueriesTestSuite = ({ it: baseIt }: { it: TestAPI<TestSuiteCo
       expect(page2.items).toHaveLength(1);
       expect(page2.nextCursor).toBeNull();
       expect(page2.items[0].input).toEqual({ n: 2 });
+      expect(page2.items[0].chainIndex).toBe(2);
     });
 
     it("listChainJobs only returns jobs from the specified chain", async ({

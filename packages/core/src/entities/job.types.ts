@@ -27,6 +27,8 @@ export type Job<
   typeName: TJobTypeName;
   /** Type name of the chain this job belongs to. */
   chainTypeName: TChainTypeName;
+  /** Position in the chain: 0 for the head job, incrementing for each continuation. */
+  chainIndex: number;
   input: TInput;
   createdAt: Date;
   /** When the job becomes eligible for processing. */

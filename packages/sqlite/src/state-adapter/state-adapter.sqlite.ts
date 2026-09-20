@@ -398,6 +398,7 @@ const mapDbJobToStateJob = (dbJob: DbJob): StateJobInfo => {
     id: dbJob.id,
     typeName: dbJob.type_name,
     chainId: dbJob.chain_id,
+    chainIndex: dbJob.chain_index,
     continuedToId: dbJob.continued_to_id,
     input: parseJson(dbJob.input),
     output: parseJson(dbJob.output),

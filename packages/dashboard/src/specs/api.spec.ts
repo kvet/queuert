@@ -615,6 +615,7 @@ describe("Dashboard API", () => {
       expect(body.continuation).not.toBeNull();
       expect(body.continuation.id).toBe(cont.id);
       expect(body.continuation.chainId).toBe(root.chainId);
+      expect(body.continuation.chainIndex).toBe(1);
     });
 
     it("returns null continuation for last job in chain", async () => {
