@@ -332,7 +332,7 @@ export const rescheduleJobTestSuite = ({ it }: { it: TestAPI<TestSuiteContext> }
     ).rejects.toThrow("requires a transaction context");
   });
 
-  it("reschedules a blocked job", async ({
+  it("throws JobNotReschedulableError for blocked job", async ({
     stateAdapter,
     notifyAdapter,
     withTransaction,
@@ -358,38 +358,65 @@ export const rescheduleJobTestSuite = ({ it }: { it: TestAPI<TestSuiteContext> }
       jobTypes,
     });
 
-    const blockerChain = await withTransaction(async (txCtx, transactionHooks) =>
-      client.createChain({ ...txCtx, transactionHooks, typeName: "blocker", input: null }),
-    );
-
-    const blockedChain = await withTransaction(async (txCtx, transactionHooks) =>
-      client.createChain({
+    const blockedChain = await withTransaction(async (txCtx, transactionHooks) => {
+      const blockerChain = await client.createChain({
+        ...txCtx,
+        transactionHooks,
+        typeName: "blocker",
+        input: null,
+      });
+      return client.createChain({
         ...txCtx,
         transactionHooks,
         typeName: "blocked",
         input: null,
         blockers: [blockerChain],
-        schedule: { afterMs: 60_000 },
-      }),
-    );
+      });
+    });
 
-    const blockedJob = await client.getJob({ id: blockedChain.id });
-    expect(blockedJob!.status).toBe("pending");
-    expect(blockedJob!.status === "pending" && blockedJob!.blocked).toBe(true);
+    await expect(
+      withTransaction(async (txCtx, transactionHooks) =>
+        client.rescheduleJob({ ...txCtx, transactionHooks, id: blockedChain.id }),
+      ),
+    ).rejects.toThrow(JobNotReschedulableError);
+  });
 
-    const futureDate = new Date(Date.now() + 120_000);
-    const rescheduled = await withTransaction(async (txCtx, transactionHooks) =>
-      client.rescheduleJob({
+  it("rescheduleJobs returns the job at every position of a repeated id", async ({
+    stateAdapter,
+    notifyAdapter,
+    withTransaction,
+    observabilityAdapter,
+    log,
+    expect,
+  }) => {
+    const jobTypes = defineJobTypes<{
+      task: { entry: true; input: null; output: null };
+    }>();
+
+    const client = await createClient({
+      stateAdapter,
+      notifyAdapter,
+      observabilityAdapter,
+      log,
+      jobTypes,
+    });
+
+    const chain = await withTransaction(async (txCtx, transactionHooks) =>
+      client.createChain({
         ...txCtx,
         transactionHooks,
-        id: blockedChain.id,
-        schedule: { at: futureDate },
+        typeName: "task",
+        input: null,
+        schedule: { afterMs: 60 * 60 * 1000 },
       }),
     );
 
-    expect(rescheduled.status).toBe("pending");
-    expect(rescheduled.status === "pending" && rescheduled.blocked).toBe(true);
-    expect(Math.abs(rescheduled.scheduledAt.getTime() - futureDate.getTime())).toBeLessThan(1000);
+    const rescheduled = await withTransaction(async (txCtx, transactionHooks) =>
+      client.rescheduleJobs({ ...txCtx, transactionHooks, ids: [chain.id, chain.id] }),
+    );
+
+    expect(rescheduled.map((job) => job.id)).toEqual([chain.id, chain.id]);
+    expect(rescheduled.map((job) => job.status)).toEqual(["pending", "pending"]);
   });
 
   it("rescheduleJobs reschedules multiple pending jobs in input order", async ({

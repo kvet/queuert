@@ -47,7 +47,7 @@ All API endpoints are read-only except `POST /api/jobs/{jobId}/reschedule` and `
 
 ### Chain Mutation Endpoints
 
-**`DELETE /api/chains/{chainId}`** — Delete a chain and all its jobs. Supports `cascade=true` to include transitive blocker chains.
+**`DELETE /api/chains/{chainId}`** — Delete a chain and all its jobs.
 
 ### Asset Serving
 
@@ -65,7 +65,7 @@ The frontend is a SolidJS single-page application built with Vite.
 
 ### Views
 
-**Chain List** (`/`) — Default view showing all chains ordered by creation time (newest first). Each chain displays as a card with type name, chain ID, status badge, date, and input preview. Supports filtering by chain ID, job ID, type name, and status, with an order-by dropdown for sorting.
+**Chain List** (`/`) — Default view. Lists the chains of one selected type, newest first by default. Each chain displays as a card with type name, chain ID, status badge, date, and input preview. Supports lookup by chain ID and filtering by type name and status, with a status-dependent order-by dropdown and a direction toggle.
 
 **Chain Detail** (`/chains/:id`) — The job sequence within a chain, loaded a page at a time as you scroll. Shows each job as a card with input/output JSON, blocker dependencies with links to blocker chains, and a "Blocking" section listing jobs from other chains that depend on this chain.
 

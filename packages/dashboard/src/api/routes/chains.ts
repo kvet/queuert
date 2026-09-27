@@ -38,12 +38,7 @@ export const handleChainsList = async (url: URL, client: Client<any, any>): Prom
     limit,
   };
 
-  const result =
-    listing.status === "completed"
-      ? await client.listChains({ ...common, status: listing.status, orderBy: listing.orderBy })
-      : listing.status === "running"
-        ? await client.listChains({ ...common, status: listing.status, orderBy: listing.orderBy })
-        : await client.listChains({ ...common, orderBy: listing.orderBy });
+  const result = await client.listChains({ ...common, ...listing });
 
   return serovalResponse({
     items: result.items,
@@ -108,7 +103,6 @@ export const handleChainJobs = async (
 export const handleChainDelete = async (
   client: Client<any, any>,
   chainId: string,
-  options?: { cascade?: boolean },
 ): Promise<Response> => {
   const chain = await client.getChain({ id: chainId });
   if (!chain) {
@@ -121,7 +115,6 @@ export const handleChainDelete = async (
       withTransactionHooks(async (transactionHooks) =>
         client.deleteChains({
           ids: [chainId],
-          cascade: options?.cascade,
           transactionHooks,
           ...txCtx,
         }),

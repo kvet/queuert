@@ -50,13 +50,13 @@ Public-facing adapter factories that may perform I/O are async for consistency. 
 
 ### Atomic Operations Principle
 
-All StateAdapter methods must complete in a **single database round-trip**, where the database engine supports it. This is a core design principle:
+StateAdapter methods should complete in a **single database round-trip** wherever the database engine supports it, and in a constant number of round trips everywhere else. This is a core design principle:
 
-- **O(1) round trips**: Each method—regardless of how many jobs it affects—executes exactly one database operation
+- **O(1) round trips**: The number of database operations a method executes must not depend on how many jobs it affects. One is the target; a small fixed number above one (for example, a locking `SELECT` before the `UPDATE` it guards) is acceptable where the engine requires it
 - **O(n) is incorrect**: If an adapter implementation requires multiple round trips proportional to input size, the implementation is wrong
-- **Batch operations**: Methods accepting arrays (e.g., `deleteChains`, `addJobsBlockers`) must use batch SQL (multi-row INSERT, UPDATE with IN clause, CTEs) rather than loops
+- **Batch operations**: Array-accepting methods must use batch SQL (multi-row INSERT, UPDATE with IN/ANY clauses, CTEs) — never loops
 
-This principle ensures predictable performance and proper atomicity. Use batch SQL (multi-row INSERT, UPDATE with IN/ANY clause, CTEs) rather than loops.
+This principle ensures predictable performance and proper atomicity.
 
 ### Context Architecture
 
@@ -77,9 +77,9 @@ Users create a `StateProvider` implementation to integrate with their database c
 
 Whether `txCtx` is optional depends on what the method does:
 
-- **Mutating methods require it** (`createChains`, `createContinuationJob`, `addJobsBlockers`, `unblockJobs`, `startJobAttempt`, `extendJobAttempt`, `finishJobAttempt`, `reclaimExpiredJobAttempt`, `rescheduleJobs`, `deleteChains`). A write is never standalone in practice — it has to commit or roll back together with the caller's other writes, including the notify and observability side effects buffered on `transactionHooks`. The type enforces this, so a missing `txCtx` is a compile error rather than a silently auto-committed write.
+- **Mutating methods require it** (`createJobs`, `continueJobs`, `addJobsBlockers`, `unblockJobs`, `startJobAttempt`, `extendJobAttempt`, `completeJobs`, `reclaimExpiredJobAttempt`, `rescheduleJobs`, `deleteChains`). A write is never standalone in practice — it has to commit or roll back together with the caller's other writes, including the notify and observability side effects buffered on `transactionHooks`. The type enforces this, so a missing `txCtx` is a compile error rather than a silently auto-committed write.
 - **Read-only methods leave it optional** (`getChains`, `getJobs`, `getJobBlockers`, `getStartAttemptDelayMs`, `listJobTypeNames`, `listChainTypeNames`, `countByJobTypeNames`, `countByChainTypeNames`, `listChains`, `listJobs`, `listChainJobs`, `listBlockedJobs`). With a `txCtx` the read joins the caller's transaction and sees its uncommitted writes; without one the adapter acquires its own connection, executes, and releases.
-- **`lock: "exclusive"` requires it.** `getChains` and `getJobs` don't mutate rows, but a write-intent lock only lasts as long as the transaction that took it, so the parameter type pairs `lock` with a mandatory `txCtx`.
+- **`lock: "exclusive"` requires it.** `getChains` and `getJobs` don't mutate rows, but a write-intent lock only lasts as long as the transaction that took it, so the parameter type pairs `lock` with a mandatory `txCtx`. `getChains` locks each chain's head row; `getJobs` locks each job **and its chain's head row**, in a consistent id order. `completeJobs` relies on that head lock already being held — take it with `getJobs({ lock: "exclusive" })` earlier in the same transaction, or a blocker committed in the meantime is missed and its job stays blocked against a completed chain.
 
 At the provider layer, `executeSql` keeps an unconditionally optional `txCtx` — that's what lets the adapter run reads on their own connection, and DDL operations (like `CREATE INDEX CONCURRENTLY`) that cannot run inside a transaction at all.
 

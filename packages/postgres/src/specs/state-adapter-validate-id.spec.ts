@@ -34,7 +34,7 @@ describe("validateId", () => {
 
   const createJob = async (adapter: PgStateAdapter<PgPoolContext, string>, id?: string) =>
     adapter.withTransaction(async (txCtx) =>
-      adapter.createChains({
+      adapter.createJobs({
         txCtx,
         jobs: [{ typeName: "t", id, input: null }],
       }),
@@ -77,8 +77,8 @@ describe("validateId", () => {
         generateId: () => `ok-${crypto.randomUUID()}`,
         validateId: (id) => id.startsWith("ok-"),
       });
-      const [{ job }] = await createJob(adapter, "ok-custom");
-      expect(job.id).toBe("ok-custom");
+      const [stateChain] = await createJob(adapter, "ok-custom");
+      expect(stateChain.head.id).toBe("ok-custom");
     } finally {
       await pool.end();
     }

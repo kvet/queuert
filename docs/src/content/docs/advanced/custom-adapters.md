@@ -149,14 +149,14 @@ Same shape — wrap the `await runStateAdapterConformance(...)` call in whatever
 
 ## What happens on failure
 
-On any case failure the runner throws a `ConformanceError` whose message summarizes which cases failed plus their assertion messages:
+On any case failure the runner throws a `ConformanceError` whose message summarizes which cases failed plus their assertion messages (the case totals grow as the suite does):
 
 ```
-ConformanceError: 2/132 conformance cases failed (130 passed, 0 skipped)
-  x createContinuationJob > inherits chainId from the parent and assigns a new job id
+ConformanceError: 2/216 conformance cases failed (214 passed, 0 skipped)
+  x continueJobs > inherits chainId from the parent and assigns a new job id
     expected 'chain-abc' to be 'chain-xyz'
-  x addJobsBlockers > marks job blocked when incomplete blockers present
-    expected false to be true
+  x addJobsBlockers > adds blockers and reports the blocker chain as incomplete
+    expected 'pending' to be 'blocked'
 ```
 
 `err.cause` is an `AggregateError` holding the original thrown errors with full stacks, so IDEs and CI viewers can jump to the failing case source line inside `queuert/conformance`.

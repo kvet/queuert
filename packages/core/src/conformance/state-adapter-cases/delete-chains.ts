@@ -1,5 +1,9 @@
+import { sleep } from "../../helpers/sleep.js";
+import { type StateBlockedJob, type StateChain } from "../../state-adapter/state-adapter.js";
 import { type ConformanceGroup } from "../runner.js";
 import { type StateConformanceFixture } from "./types.js";
+
+const LOCK_BLOCK_OBSERVATION_MS = 100;
 
 export const deleteChainsGroup: ConformanceGroup<StateConformanceFixture> = {
   name: "deleteChains",
@@ -7,38 +11,39 @@ export const deleteChainsGroup: ConformanceGroup<StateConformanceFixture> = {
     {
       name: "deletes all jobs in the given chains",
       run: async ({ stateAdapter }, expect) => {
-        const [{ job }] = await stateAdapter.withTransaction(async (txCtx) =>
-          stateAdapter.createChains({
+        const [stateChain] = await stateAdapter.withTransaction(async (txCtx) =>
+          stateAdapter.createJobs({
             txCtx,
             jobs: [{ typeName: "delete-test", input: null }],
           }),
         );
 
-        const { deleted } = await stateAdapter.withTransaction(async (txCtx) =>
+        const [deleted] = await stateAdapter.withTransaction(async (txCtx) =>
           stateAdapter.deleteChains({
             txCtx,
-            chainIds: [job.chainId],
+            chainIds: [stateChain.head.chainId],
           }),
         );
 
-        expect(deleted).toHaveLength(1);
-        expect(deleted[0][0].id).toBe(job.id);
-        expect(deleted[0][1]).toBeUndefined();
-        expect(await stateAdapter.getJobs({ jobIds: [job.id] })).toEqual([undefined]);
+        const deletedChain = deleted as StateChain;
+        expect(deletedChain.id).toBe(stateChain.id);
+        expect(deletedChain.head.id).toBe(stateChain.head.id);
+        expect(deletedChain.tail).toBeUndefined();
+        expect(await stateAdapter.getJobs({ jobIds: [stateChain.head.id] })).toEqual([undefined]);
       },
     },
     {
       name: "does not delete jobs from other chains",
       run: async ({ stateAdapter }, expect) => {
-        const [{ job: jobA }] = await stateAdapter.withTransaction(async (txCtx) =>
-          stateAdapter.createChains({
+        const [chainA] = await stateAdapter.withTransaction(async (txCtx) =>
+          stateAdapter.createJobs({
             txCtx,
             jobs: [{ typeName: "chain-a", input: null }],
           }),
         );
 
-        const [{ job: jobB }] = await stateAdapter.withTransaction(async (txCtx) =>
-          stateAdapter.createChains({
+        const [chainB] = await stateAdapter.withTransaction(async (txCtx) =>
+          stateAdapter.createJobs({
             txCtx,
             jobs: [{ typeName: "chain-b", input: null }],
           }),
@@ -47,27 +52,106 @@ export const deleteChainsGroup: ConformanceGroup<StateConformanceFixture> = {
         await stateAdapter.withTransaction(async (txCtx) =>
           stateAdapter.deleteChains({
             txCtx,
-            chainIds: [jobA.chainId],
+            chainIds: [chainA.head.chainId],
           }),
         );
 
-        expect(await stateAdapter.getJobs({ jobIds: [jobA.id] })).toEqual([undefined]);
-        const jobBResult = await stateAdapter.getJobs({ jobIds: [jobB.id] });
-        expect(Array.isArray(jobBResult) && typeof jobBResult[0] === "object").toBe(true);
+        expect(await stateAdapter.getJobs({ jobIds: [chainA.head.id] })).toEqual([undefined]);
+        const [jobB] = await stateAdapter.getJobs({ jobIds: [chainB.head.id] });
+        expect(jobB?.id).toBe(chainB.head.id);
       },
     },
     {
-      name: "returns empty deleted + blockerRefs when a chain is referenced as blocker",
+      name: "deletes every job of a multi-job chain and reports its continuation as the tail",
       run: async ({ stateAdapter }, expect) => {
-        const [{ job: blockerJob }] = await stateAdapter.withTransaction(async (txCtx) =>
-          stateAdapter.createChains({
+        const [stateChain] = await stateAdapter.withTransaction(async (txCtx) =>
+          stateAdapter.createJobs({
+            txCtx,
+            jobs: [{ typeName: "delete-multi", input: null }],
+          }),
+        );
+        const [continued] = await stateAdapter.withTransaction(async (txCtx) =>
+          stateAdapter.continueJobs({
+            txCtx,
+            jobs: [{ typeName: "delete-multi-step", continueFromId: stateChain.id, input: null }],
+          }),
+        );
+        const continuationId = continued!.continuation.id;
+
+        const [deleted] = await stateAdapter.withTransaction(async (txCtx) =>
+          stateAdapter.deleteChains({ txCtx, chainIds: [stateChain.id] }),
+        );
+
+        const deletedChain = deleted as StateChain;
+        expect(deletedChain.id).toBe(stateChain.id);
+        expect(deletedChain.head.id).toBe(stateChain.id);
+        expect(deletedChain.tail?.id).toBe(continuationId);
+        expect(await stateAdapter.getJobs({ jobIds: [stateChain.id, continuationId] })).toEqual([
+          undefined,
+          undefined,
+        ]);
+        const chainJobs = await stateAdapter.listChainJobs({
+          chainId: stateChain.id,
+          orderDirection: "asc",
+          page: { limit: 10 },
+        });
+        expect(chainJobs.items).toEqual([]);
+      },
+    },
+    {
+      name: "deleting a dependent chain alone releases its blocker references",
+      run: async ({ stateAdapter }, expect) => {
+        const [blockerChain, mainChain] = await stateAdapter.withTransaction(async (txCtx) =>
+          stateAdapter.createJobs({
+            txCtx,
+            jobs: [
+              { typeName: "blocker", input: null },
+              { typeName: "main", input: null },
+            ],
+          }),
+        );
+        await stateAdapter.withTransaction(async (txCtx) =>
+          stateAdapter.addJobsBlockers({
+            txCtx,
+            jobBlockers: [{ jobId: mainChain.id, blockedByChainIds: [blockerChain.id] }],
+          }),
+        );
+
+        const [deletedMain] = await stateAdapter.withTransaction(async (txCtx) =>
+          stateAdapter.deleteChains({ txCtx, chainIds: [mainChain.id] }),
+        );
+        expect((deletedMain as StateChain).id).toBe(mainChain.id);
+
+        const blockedJobs = await stateAdapter.listBlockedJobs({
+          chainId: blockerChain.id,
+          orderDirection: "desc",
+          page: { limit: 10 },
+        });
+        expect(blockedJobs.items).toEqual([]);
+        expect(
+          await stateAdapter.withTransaction(async (txCtx) =>
+            stateAdapter.unblockJobs({ txCtx, blockedByChainId: blockerChain.id }),
+          ),
+        ).toEqual([]);
+
+        const [deletedBlocker] = await stateAdapter.withTransaction(async (txCtx) =>
+          stateAdapter.deleteChains({ txCtx, chainIds: [blockerChain.id] }),
+        );
+        expect((deletedBlocker as StateChain).id).toBe(blockerChain.id);
+      },
+    },
+    {
+      name: "deletes nothing and returns the referencing blocker rows when a chain is an outside blocker",
+      run: async ({ stateAdapter }, expect) => {
+        const [blockerChain] = await stateAdapter.withTransaction(async (txCtx) =>
+          stateAdapter.createJobs({
             txCtx,
             jobs: [{ typeName: "blocker", input: null }],
           }),
         );
 
-        const [{ job: mainJob }] = await stateAdapter.withTransaction(async (txCtx) =>
-          stateAdapter.createChains({
+        const [mainChain] = await stateAdapter.withTransaction(async (txCtx) =>
+          stateAdapter.createJobs({
             txCtx,
             jobs: [{ typeName: "main", input: null }],
           }),
@@ -76,266 +160,165 @@ export const deleteChainsGroup: ConformanceGroup<StateConformanceFixture> = {
         await stateAdapter.withTransaction(async (txCtx) =>
           stateAdapter.addJobsBlockers({
             txCtx,
-            jobBlockers: [{ jobId: mainJob.id, blockedByChainIds: [blockerJob.chainId] }],
+            jobBlockers: [
+              { jobId: mainChain.head.id, blockedByChainIds: [blockerChain.head.chainId] },
+            ],
           }),
         );
 
-        const blocked = await stateAdapter.withTransaction(async (txCtx) =>
-          stateAdapter.deleteChains({ txCtx, chainIds: [blockerJob.chainId] }),
+        const [blockerResult] = await stateAdapter.withTransaction(async (txCtx) =>
+          stateAdapter.deleteChains({ txCtx, chainIds: [blockerChain.head.chainId] }),
         );
-        expect(blocked.deleted).toEqual([]);
-        expect(blocked.blockerRefs).toEqual([
-          { chainId: blockerJob.chainId, referencedByJobId: mainJob.id },
+        expect(Array.isArray(blockerResult)).toBe(true);
+        const references = blockerResult as StateBlockedJob[];
+        expect(references).toHaveLength(1);
+        expect(references[0].jobId).toBe(mainChain.head.id);
+        expect(references[0].blockedByChainId).toBe(blockerChain.id);
+        expect(references[0].job.id).toBe(mainChain.head.id);
+
+        const [blockerStillThere] = await stateAdapter.getJobs({ jobIds: [blockerChain.head.id] });
+        expect(blockerStillThere?.id).toBe(blockerChain.head.id);
+
+        const results = await stateAdapter.withTransaction(async (txCtx) =>
+          stateAdapter.deleteChains({
+            txCtx,
+            chainIds: [mainChain.head.chainId, blockerChain.head.chainId],
+          }),
+        );
+
+        expect(results).toHaveLength(2);
+        expect((results[0] as StateChain).id).toBe(mainChain.id);
+        expect((results[1] as StateChain).id).toBe(blockerChain.id);
+      },
+    },
+    {
+      name: "sees a blocker reference committed while it waited on the head lock",
+      run: async ({ stateAdapter }, expect) => {
+        if (stateAdapter.transactionConcurrency === "serialized") {
+          expect.skip("requires concurrent transactions");
+          return;
+        }
+
+        const [blockerChain] = await stateAdapter.withTransaction(async (txCtx) =>
+          stateAdapter.createJobs({
+            txCtx,
+            jobs: [{ typeName: "late-reference-blocker", input: null }],
+          }),
+        );
+
+        let signalBlockerAdded: (() => void) | undefined;
+        const blockerAdded = new Promise<void>((r) => {
+          signalBlockerAdded = r;
+        });
+        let releaseAdder: (() => void) | undefined;
+        const adderGate = new Promise<void>((r) => {
+          releaseAdder = r;
+        });
+
+        const adderTx = stateAdapter.withTransaction(async (txCtx) => {
+          const [blockedChain] = await stateAdapter.createJobs({
+            txCtx,
+            jobs: [{ typeName: "late-reference-blocked", input: null }],
+          });
+          await stateAdapter.addJobsBlockers({
+            txCtx,
+            jobBlockers: [{ jobId: blockedChain.head.id, blockedByChainIds: [blockerChain.id] }],
+          });
+          signalBlockerAdded!();
+          await adderGate;
+          return blockedChain;
+        });
+
+        await blockerAdded;
+
+        let deleteSettled = false;
+        const deleteTx = stateAdapter
+          .withTransaction(async (txCtx) =>
+            stateAdapter.deleteChains({ txCtx, chainIds: [blockerChain.id] }),
+          )
+          .finally(() => {
+            deleteSettled = true;
+          });
+
+        await sleep(LOCK_BLOCK_OBSERVATION_MS);
+        expect(deleteSettled).toBe(false);
+
+        releaseAdder!();
+        const blockedChain = await adderTx;
+
+        const [result] = await deleteTx;
+        expect(Array.isArray(result)).toBe(true);
+        expect((result as StateBlockedJob[]).map((ref) => ref.jobId)).toEqual([
+          blockedChain.head.id,
         ]);
 
-        // Blocker chain is still intact
-        const blockerStillThere = await stateAdapter.getJobs({ jobIds: [blockerJob.id] });
-        expect(Array.isArray(blockerStillThere) && typeof blockerStillThere[0] === "object").toBe(
-          true,
-        );
-
-        // Deleting both together succeeds
-        const { deleted, blockerRefs } = await stateAdapter.withTransaction(async (txCtx) =>
-          stateAdapter.deleteChains({
-            txCtx,
-            chainIds: [mainJob.chainId, blockerJob.chainId],
-          }),
-        );
-
-        expect(deleted).toHaveLength(2);
-        expect(blockerRefs).toEqual([]);
+        const [blockerStillThere] = await stateAdapter.getChains({ chainIds: [blockerChain.id] });
+        expect(blockerStillThere?.id).toBe(blockerChain.id);
       },
     },
     {
-      name: "cascade deletes chain and its dependencies",
+      name: "deletes a continuation committed while it waited on the head lock",
       run: async ({ stateAdapter }, expect) => {
-        const [{ job: blockerJob }] = await stateAdapter.withTransaction(async (txCtx) =>
-          stateAdapter.createChains({
+        if (stateAdapter.transactionConcurrency === "serialized") {
+          expect.skip("requires concurrent transactions");
+          return;
+        }
+
+        const [stateChain] = await stateAdapter.withTransaction(async (txCtx) =>
+          stateAdapter.createJobs({
             txCtx,
-            jobs: [{ typeName: "blocker", input: null }],
+            jobs: [{ typeName: "late-continuation", input: null }],
           }),
         );
 
-        const [{ job: mainJob }] = await stateAdapter.withTransaction(async (txCtx) =>
-          stateAdapter.createChains({
-            txCtx,
-            jobs: [{ typeName: "main", input: null }],
-          }),
-        );
+        let signalContinued: (() => void) | undefined;
+        const continued = new Promise<void>((r) => {
+          signalContinued = r;
+        });
+        let releaseContinuer: (() => void) | undefined;
+        const continuerGate = new Promise<void>((r) => {
+          releaseContinuer = r;
+        });
 
-        await stateAdapter.withTransaction(async (txCtx) =>
-          stateAdapter.addJobsBlockers({
+        const continuerTx = stateAdapter.withTransaction(async (txCtx) => {
+          await stateAdapter.getJobs({ txCtx, jobIds: [stateChain.head.id], lock: "exclusive" });
+          const [result] = await stateAdapter.continueJobs({
             txCtx,
-            jobBlockers: [{ jobId: mainJob.id, blockedByChainIds: [blockerJob.chainId] }],
-          }),
-        );
+            jobs: [
+              {
+                typeName: "late-continuation:step",
+                input: null,
+                continueFromId: stateChain.head.id,
+              },
+            ],
+          });
+          signalContinued!();
+          await continuerGate;
+          return result!.continuation;
+        });
 
-        const { deleted } = await stateAdapter.withTransaction(async (txCtx) =>
-          stateAdapter.deleteChains({
-            txCtx,
-            chainIds: [mainJob.chainId],
-            cascade: true,
-          }),
-        );
+        await continued;
 
-        expect(deleted).toHaveLength(2);
-        expect(await stateAdapter.getJobs({ jobIds: [blockerJob.id] })).toEqual([undefined]);
-        expect(await stateAdapter.getJobs({ jobIds: [mainJob.id] })).toEqual([undefined]);
-      },
-    },
-    {
-      name: "cascade returns empty deleted + blockerRefs when deleting chain referenced as blocker",
-      run: async ({ stateAdapter }, expect) => {
-        const [{ job: blockerJob }] = await stateAdapter.withTransaction(async (txCtx) =>
-          stateAdapter.createChains({
-            txCtx,
-            jobs: [{ typeName: "blocker", input: null }],
-          }),
-        );
+        let deleteSettled = false;
+        const deleteTx = stateAdapter
+          .withTransaction(async (txCtx) =>
+            stateAdapter.deleteChains({ txCtx, chainIds: [stateChain.id] }),
+          )
+          .finally(() => {
+            deleteSettled = true;
+          });
 
-        const [{ job: mainJob }] = await stateAdapter.withTransaction(async (txCtx) =>
-          stateAdapter.createChains({
-            txCtx,
-            jobs: [{ typeName: "main", input: null }],
-          }),
-        );
+        await sleep(LOCK_BLOCK_OBSERVATION_MS);
+        expect(deleteSettled).toBe(false);
 
-        await stateAdapter.withTransaction(async (txCtx) =>
-          stateAdapter.addJobsBlockers({
-            txCtx,
-            jobBlockers: [{ jobId: mainJob.id, blockedByChainIds: [blockerJob.chainId] }],
-          }),
-        );
+        releaseContinuer!();
+        const continuation = await continuerTx;
 
-        const { deleted, blockerRefs } = await stateAdapter.withTransaction(async (txCtx) =>
-          stateAdapter.deleteChains({
-            txCtx,
-            chainIds: [blockerJob.chainId],
-            cascade: true,
-          }),
-        );
-        expect(deleted).toEqual([]);
-        expect(blockerRefs).toEqual([
-          { chainId: blockerJob.chainId, referencedByJobId: mainJob.id },
-        ]);
-      },
-    },
-    {
-      name: "cascade resolves transitive dependencies",
-      run: async ({ stateAdapter }, expect) => {
-        // A ← B ← C (C depends on B, B depends on A)
-        const [{ job: jobA }] = await stateAdapter.withTransaction(async (txCtx) =>
-          stateAdapter.createChains({
-            txCtx,
-            jobs: [{ typeName: "chain-a", input: null }],
-          }),
-        );
-
-        const [{ job: jobB }] = await stateAdapter.withTransaction(async (txCtx) =>
-          stateAdapter.createChains({
-            txCtx,
-            jobs: [{ typeName: "chain-b", input: null }],
-          }),
-        );
-
-        const [{ job: jobC }] = await stateAdapter.withTransaction(async (txCtx) =>
-          stateAdapter.createChains({
-            txCtx,
-            jobs: [{ typeName: "chain-c", input: null }],
-          }),
-        );
-
-        await stateAdapter.withTransaction(async (txCtx) =>
-          stateAdapter.addJobsBlockers({
-            txCtx,
-            jobBlockers: [{ jobId: jobB.id, blockedByChainIds: [jobA.chainId] }],
-          }),
-        );
-
-        await stateAdapter.withTransaction(async (txCtx) =>
-          stateAdapter.addJobsBlockers({
-            txCtx,
-            jobBlockers: [{ jobId: jobC.id, blockedByChainIds: [jobB.chainId] }],
-          }),
-        );
-
-        // Delete from C (topmost dependent) — cascades down to B and A
-        const { deleted } = await stateAdapter.withTransaction(async (txCtx) =>
-          stateAdapter.deleteChains({
-            txCtx,
-            chainIds: [jobC.chainId],
-            cascade: true,
-          }),
-        );
-
-        expect(deleted).toHaveLength(3);
-        expect(await stateAdapter.getJobs({ jobIds: [jobA.id] })).toEqual([undefined]);
-        expect(await stateAdapter.getJobs({ jobIds: [jobB.id] })).toEqual([undefined]);
-        expect(await stateAdapter.getJobs({ jobIds: [jobC.id] })).toEqual([undefined]);
-      },
-    },
-    {
-      name: "cascade deduplicates diamond dependencies",
-      run: async ({ stateAdapter }, expect) => {
-        //     D
-        //    / \
-        //   B   C
-        //    \ /
-        //     A
-        const [{ job: jobA }] = await stateAdapter.withTransaction(async (txCtx) =>
-          stateAdapter.createChains({
-            txCtx,
-            jobs: [{ typeName: "diamond-a", input: null }],
-          }),
-        );
-
-        const [{ job: jobB }] = await stateAdapter.withTransaction(async (txCtx) =>
-          stateAdapter.createChains({
-            txCtx,
-            jobs: [{ typeName: "diamond-b", input: null }],
-          }),
-        );
-
-        const [{ job: jobC }] = await stateAdapter.withTransaction(async (txCtx) =>
-          stateAdapter.createChains({
-            txCtx,
-            jobs: [{ typeName: "diamond-c", input: null }],
-          }),
-        );
-
-        const [{ job: jobD }] = await stateAdapter.withTransaction(async (txCtx) =>
-          stateAdapter.createChains({
-            txCtx,
-            jobs: [{ typeName: "diamond-d", input: null }],
-          }),
-        );
-
-        await stateAdapter.withTransaction(async (txCtx) =>
-          stateAdapter.addJobsBlockers({
-            txCtx,
-            jobBlockers: [{ jobId: jobB.id, blockedByChainIds: [jobA.chainId] }],
-          }),
-        );
-
-        await stateAdapter.withTransaction(async (txCtx) =>
-          stateAdapter.addJobsBlockers({
-            txCtx,
-            jobBlockers: [{ jobId: jobC.id, blockedByChainIds: [jobA.chainId] }],
-          }),
-        );
-
-        await stateAdapter.withTransaction(async (txCtx) =>
-          stateAdapter.addJobsBlockers({
-            txCtx,
-            jobBlockers: [{ jobId: jobD.id, blockedByChainIds: [jobB.chainId, jobC.chainId] }],
-          }),
-        );
-
-        const { deleted } = await stateAdapter.withTransaction(async (txCtx) =>
-          stateAdapter.deleteChains({
-            txCtx,
-            chainIds: [jobD.chainId],
-            cascade: true,
-          }),
-        );
-
-        expect(deleted).toHaveLength(4);
-        expect(await stateAdapter.getJobs({ jobIds: [jobA.id] })).toEqual([undefined]);
-        expect(await stateAdapter.getJobs({ jobIds: [jobB.id] })).toEqual([undefined]);
-        expect(await stateAdapter.getJobs({ jobIds: [jobC.id] })).toEqual([undefined]);
-        expect(await stateAdapter.getJobs({ jobIds: [jobD.id] })).toEqual([undefined]);
-      },
-    },
-    {
-      name: "cascade with no blocker relationships deletes only specified chains",
-      run: async ({ stateAdapter }, expect) => {
-        const [{ job: jobA }] = await stateAdapter.withTransaction(async (txCtx) =>
-          stateAdapter.createChains({
-            txCtx,
-            jobs: [{ typeName: "standalone-a", input: null }],
-          }),
-        );
-
-        const [{ job: jobB }] = await stateAdapter.withTransaction(async (txCtx) =>
-          stateAdapter.createChains({
-            txCtx,
-            jobs: [{ typeName: "standalone-b", input: null }],
-          }),
-        );
-
-        const { deleted } = await stateAdapter.withTransaction(async (txCtx) =>
-          stateAdapter.deleteChains({
-            txCtx,
-            chainIds: [jobA.chainId],
-            cascade: true,
-          }),
-        );
-
-        expect(deleted).toHaveLength(1);
-        expect(deleted[0][0].id).toBe(jobA.id);
-        expect(await stateAdapter.getJobs({ jobIds: [jobA.id] })).toEqual([undefined]);
-        const jobBSurvives = await stateAdapter.getJobs({ jobIds: [jobB.id] });
-        expect(Array.isArray(jobBSurvives) && typeof jobBSurvives[0] === "object").toBe(true);
+        const [deleted] = await deleteTx;
+        expect((deleted as StateChain).tail?.id).toBe(continuation.id);
+        expect(
+          await stateAdapter.getJobs({ jobIds: [stateChain.head.id, continuation.id] }),
+        ).toEqual([undefined, undefined]);
       },
     },
   ],

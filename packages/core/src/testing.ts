@@ -53,7 +53,6 @@ export {
 export { withWorkers } from "./helpers/with-workers.js";
 
 // Migration fixture seeding
-export { seedAllStatesV1, type SeedSentinelsV1 } from "./conformance/seed-all-states-v1.js";
 export {
   seedAllStatesV2,
   seedConfigV2,

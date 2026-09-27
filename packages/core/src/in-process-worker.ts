@@ -114,45 +114,45 @@ const performJob = async ({
   defaultAttemptConfig: AttemptConfig;
   workerId: string;
   stopSignal: AbortSignal;
-}): Promise<{ job: null } | { job: StateJob; execute: () => Promise<void> }> => {
+}): Promise<{ stateJob: null } | { stateJob: StateJob; execute: () => Promise<void> }> => {
   const prepareTransactionContext = await createTransactionContext(
     helpers.stateAdapter.withTransaction,
   );
 
-  let job: StateJob | undefined;
+  let stateJob: Awaited<ReturnType<typeof helpers.stateAdapter.startJobAttempt>>;
   try {
-    ({ job } = await prepareTransactionContext.run(async (txCtx) =>
+    stateJob = await prepareTransactionContext.run(async (txCtx) =>
       helpers.stateAdapter.startJobAttempt({
         txCtx,
         typeNames,
         workerId,
       }),
-    ));
+    );
   } catch (error) {
     await prepareTransactionContext.reject(error);
     throw error;
   }
 
-  if (!job) {
+  if (!stateJob) {
     await prepareTransactionContext.resolve();
-    return { job: null };
+    return { stateJob: null };
   }
 
-  const jobTypeProcessor = processors[job.typeName];
+  const jobTypeProcessor = processors[stateJob.typeName];
   if (!jobTypeProcessor) {
-    const error = new Error(`No attempt handler registered for job type "${job.typeName}"`);
+    const error = new Error(`No attempt handler registered for job type "${stateJob.typeName}"`);
     await prepareTransactionContext.reject(error);
     throw error;
   }
 
   return {
-    job,
+    stateJob,
     execute: async () => {
       try {
         await runJobProcess({
           helpers,
           attemptHandler: jobTypeProcessor.attemptHandler as any,
-          job,
+          stateJob,
           prepareTransactionContext: prepareTransactionContext as TransactionContext<BaseTxContext>,
           backoffConfig: jobTypeProcessor.backoffConfig ?? defaultBackoffConfig,
           attemptConfig: jobTypeProcessor.attemptConfig ?? defaultAttemptConfig,
@@ -404,23 +404,21 @@ export const createInProcessWorker = async <
                 stopSignal: stopController.signal,
               });
 
-              if (!result.job) {
+              if (!result.stateJob) {
                 break;
               }
-              jobIdsInProgress.add(result.job.id);
-              const execute = result.execute;
-              const acquiredJob = result.job;
+              jobIdsInProgress.add(result.stateJob.id);
               void executor.add(async () => {
-                observabilityHelper.jobTypeProcessingChange(1, acquiredJob, workerId);
+                observabilityHelper.jobTypeProcessingChange(1, result.stateJob, workerId);
                 observabilityHelper.jobTypeIdleChange(-1, workerId, typeNames);
                 try {
-                  await execute();
+                  await result.execute();
                 } catch (error) {
                   observabilityHelper.workerError({ workerId }, error);
                 } finally {
-                  jobIdsInProgress.delete(acquiredJob.id);
+                  jobIdsInProgress.delete(result.stateJob.id);
                   observabilityHelper.jobTypeIdleChange(1, workerId, typeNames);
-                  observabilityHelper.jobTypeProcessingChange(-1, acquiredJob, workerId);
+                  observabilityHelper.jobTypeProcessingChange(-1, result.stateJob, workerId);
                 }
               });
             }

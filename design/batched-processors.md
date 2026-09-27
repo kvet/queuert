@@ -59,7 +59,7 @@ createProcessors({
 
 **One type per batch.** A batch shares a handler, so it must share a type. The adapter picks the type with the oldest pending job and fills up to that type's limit — one statement, no cross-type fairness logic in the worker.
 
-**The batch is the unit.** One attempt lease, one completion transaction, one abort. If any job turns out to be in a bad state mid-batch, the whole batch aborts and the survivors return via attempt expiry. Per-job fates inside a shared transaction would need per-job rollback, which buys little and costs a lot.
+**The batch is the unit.** One attempt, one completion transaction, one abort. If any job turns out to be in a bad state mid-batch, the whole batch aborts and the survivors return via attempt expiry. Per-job fates inside a shared transaction would need per-job rollback, which buys little and costs a lot.
 
 **`fail` is a value, not a throw.** A throw fails all N — that is the all-or-nothing signal. Failing a subset therefore has to be data, so per-job errors ride in the same outcome array as successes and land in the same write.
 

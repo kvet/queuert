@@ -18,37 +18,37 @@ export const refetchJobLocked = async (
     workerId: string;
   },
 ): Promise<StateJob> => {
-  const [fetchedJob] = await helpers.stateAdapter.getJobs({
+  const [fetched] = await helpers.stateAdapter.getJobs({
     txCtx,
     jobIds: [job.id],
     lock: "exclusive",
   });
 
-  if (!fetchedJob) {
+  if (!fetched) {
     throw new JobNotFoundError(`Job not found`, {
       jobId: job.id,
     });
   }
 
-  if (fetchedJob.completedAt !== null) {
-    helpers.observabilityHelper.jobAttemptAlreadyCompleted(fetchedJob, { workerId });
+  if (fetched.completedAt !== null) {
+    helpers.observabilityHelper.jobAttemptAlreadyCompleted(fetched, { workerId });
     throw new JobAlreadyCompletedError("Job is already completed", {
-      jobId: fetchedJob.id,
+      jobId: fetched.id,
     });
   }
 
-  if (fetchedJob.attemptBy !== workerId) {
-    helpers.observabilityHelper.jobAttemptTakenByAnotherWorker(fetchedJob, { workerId });
+  if (fetched.attemptBy !== workerId) {
+    helpers.observabilityHelper.jobAttemptTakenByAnotherWorker(fetched, { workerId });
     throw new JobTakenByAnotherWorkerError(`Job taken by another worker`, {
-      jobId: fetchedJob.id,
+      jobId: fetched.id,
       workerId,
-      attemptBy: fetchedJob.attemptBy,
+      attemptBy: fetched.attemptBy,
     });
   }
 
-  if (fetchedJob.attemptUntil && fetchedJob.attemptUntil.getTime() < Date.now()) {
-    helpers.observabilityHelper.jobAttemptExpired(fetchedJob, { workerId });
+  if (fetched.attemptUntil && fetched.attemptUntil.getTime() < Date.now()) {
+    helpers.observabilityHelper.jobAttemptExpired(fetched, { workerId });
   }
 
-  return fetchedJob;
+  return fetched;
 };

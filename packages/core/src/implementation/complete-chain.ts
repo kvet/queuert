@@ -1,11 +1,14 @@
-import { ChainNotFoundError } from "../errors.js";
 import { bufferNotifyChainCompletion, bufferNotifyJobScheduled } from "../helpers/notify-hooks.js";
 import { bufferObservabilityEvent } from "../helpers/observability-hooks.js";
 import { type Helpers } from "../setup-helpers.js";
-import { type BaseTxContext, type StateJob } from "../state-adapter/state-adapter.js";
+import {
+  type BaseTxContext,
+  type StateJob,
+  type StateJobInfo,
+} from "../state-adapter/state-adapter.js";
 import { type TransactionHooks } from "../transaction-hooks.js";
 import { type FinishResult } from "./attempt-outcome.js";
-import { finishJobAttempt } from "./finish-job-attempt.js";
+import { completeJob } from "./complete-job.js";
 
 /**
  * Commits the `{ output }` outcome: the job carries the chain's final value, so
@@ -30,52 +33,50 @@ export const completeChain = async (
 ): Promise<FinishResult> => {
   const parsedOutput = helpers.jobTypes.parseOutput(job.typeName, output);
 
-  const completedJob = await finishJobAttempt(helpers, {
+  const completed = await completeJob(helpers, {
     job,
     txCtx,
     transactionHooks,
     workerId,
-    outcome: { output: parsedOutput },
+    output: parsedOutput,
   });
-
-  const [headJob] = await helpers.stateAdapter.getJobs({
-    txCtx,
-    jobIds: [completedJob.chainId],
-  });
-
-  if (!headJob) {
-    throw new ChainNotFoundError(`Chain with id ${completedJob.chainId} not found`, {
-      chainId: completedJob.chainId,
-    });
-  }
+  const { chain } = completed;
 
   bufferObservabilityEvent(transactionHooks, () => {
-    helpers.observabilityHelper.chainCompleted(headJob, { output: parsedOutput });
-    helpers.observabilityHelper.chainDuration(headJob, completedJob);
+    helpers.observabilityHelper.chainCompleted(chain, { output: parsedOutput });
+    helpers.observabilityHelper.chainDuration(chain);
   });
-  bufferNotifyChainCompletion(transactionHooks, helpers.notifyAdapter, completedJob);
+  bufferNotifyChainCompletion(transactionHooks, helpers.notifyAdapter, completed);
 
-  const { unblockedJobs, blockerTraceContexts } = await helpers.stateAdapter.unblockJobs({
+  if (!completed.hasBlockedJobs) return { job: completed, continuation: null };
+
+  const unblockedResults = await helpers.stateAdapter.unblockJobs({
     txCtx,
-    blockedByChainId: headJob.id,
+    blockedByChainId: chain.id,
   });
-  for (const traceContext of blockerTraceContexts) {
+
+  for (const blockedJob of unblockedResults) {
+    if (blockedJob.traceContext === null) continue;
     bufferObservabilityEvent(transactionHooks, () => {
       helpers.observabilityHelper.completeBlockerSpan({
-        traceContext,
-        blockerChainTypeName: headJob.chainTypeName,
+        traceContext: blockedJob.traceContext!,
+        blockerChainTypeName: chain.typeName,
       });
     });
   }
 
-  unblockedJobs.forEach((unblockedJob) => {
-    bufferNotifyJobScheduled(transactionHooks, helpers.notifyAdapter, unblockedJob);
-    bufferObservabilityEvent(transactionHooks, () => {
-      helpers.observabilityHelper.jobUnblocked(unblockedJob, {
-        unblockedByChain: headJob,
-      });
-    });
-  });
+  const unblockedJobs = new Map<string, StateJob>();
+  for (const blockedJob of unblockedResults) {
+    if (blockedJob.job.status !== "pending") continue;
+    unblockedJobs.set(blockedJob.job.id, blockedJob.job);
+  }
 
-  return { job: completedJob, continuation: null };
+  for (const stateJob of unblockedJobs.values()) {
+    bufferNotifyJobScheduled(transactionHooks, helpers.notifyAdapter, stateJob);
+    bufferObservabilityEvent(transactionHooks, () => {
+      helpers.observabilityHelper.jobUnblocked(stateJob, { unblockedByChain: chain });
+    });
+  }
+
+  return { job: completed, continuation: null };
 };

@@ -17,6 +17,7 @@ export const countByJobTypeNamesGroup: ConformanceGroup<StateConformanceFixture>
         const result = await stateAdapter.countByJobTypeNames({ typeNames: ["nonexistent"] });
         expect(result).toEqual([
           {
+            blocked: { count: 0, hasMore: false },
             pending: { count: 0, hasMore: false },
             running: { count: 0, hasMore: false },
             completed: { count: 0, hasMore: false },
@@ -28,7 +29,7 @@ export const countByJobTypeNamesGroup: ConformanceGroup<StateConformanceFixture>
       name: "countByJobTypeNames counts pending jobs",
       run: async ({ stateAdapter }, expect) => {
         await stateAdapter.withTransaction(async (txCtx) =>
-          stateAdapter.createChains({
+          stateAdapter.createJobs({
             txCtx,
             jobs: [
               { typeName: "count-a", input: null },
@@ -44,16 +45,19 @@ export const countByJobTypeNamesGroup: ConformanceGroup<StateConformanceFixture>
 
         expect(result).toEqual([
           {
+            blocked: { count: 0, hasMore: false },
             pending: { count: 2, hasMore: false },
             running: { count: 0, hasMore: false },
             completed: { count: 0, hasMore: false },
           },
           {
+            blocked: { count: 0, hasMore: false },
             pending: { count: 1, hasMore: false },
             running: { count: 0, hasMore: false },
             completed: { count: 0, hasMore: false },
           },
           {
+            blocked: { count: 0, hasMore: false },
             pending: { count: 0, hasMore: false },
             running: { count: 0, hasMore: false },
             completed: { count: 0, hasMore: false },
@@ -65,7 +69,7 @@ export const countByJobTypeNamesGroup: ConformanceGroup<StateConformanceFixture>
       name: "countByJobTypeNames counts running jobs",
       run: async ({ stateAdapter }, expect) => {
         await stateAdapter.withTransaction(async (txCtx) =>
-          stateAdapter.createChains({
+          stateAdapter.createJobs({
             txCtx,
             jobs: [
               { typeName: "count-run", input: null },
@@ -85,25 +89,52 @@ export const countByJobTypeNamesGroup: ConformanceGroup<StateConformanceFixture>
       },
     },
     {
+      name: "countByJobTypeNames counts blocked jobs apart from pending ones",
+      run: async ({ stateAdapter }, expect) => {
+        const [blockerChain, blockedChain] = await stateAdapter.withTransaction(async (txCtx) =>
+          stateAdapter.createJobs({
+            txCtx,
+            jobs: [
+              { typeName: "count-blocker", input: null },
+              { typeName: "count-blocked", input: null },
+              { typeName: "count-blocked", input: null },
+            ],
+          }),
+        );
+        await stateAdapter.withTransaction(async (txCtx) =>
+          stateAdapter.addJobsBlockers({
+            txCtx,
+            jobBlockers: [
+              { jobId: blockedChain.head.id, blockedByChainIds: [blockerChain.head.chainId] },
+            ],
+          }),
+        );
+
+        const result = await stateAdapter.countByJobTypeNames({ typeNames: ["count-blocked"] });
+
+        expect(result[0].blocked.count).toBe(1);
+        expect(result[0].pending.count).toBe(1);
+      },
+    },
+    {
       name: "countByJobTypeNames counts completed jobs",
       run: async ({ stateAdapter }, expect) => {
         await stateAdapter.withTransaction(async (txCtx) =>
-          stateAdapter.createChains({
+          stateAdapter.createJobs({
             txCtx,
             jobs: [{ typeName: "count-done", input: null }],
           }),
         );
 
-        const { job } = await stateAdapter.withTransaction(async (txCtx) =>
+        const acquired = await stateAdapter.withTransaction(async (txCtx) =>
           stateAdapter.startJobAttempt({ txCtx, typeNames: ["count-done"], workerId: "w1" }),
         );
 
         await stateAdapter.withTransaction(async (txCtx) =>
-          stateAdapter.finishJobAttempt({
+          stateAdapter.completeJobs({
             txCtx,
-            jobId: job!.id,
-            workerId: "w1",
-            outcome: { output: null },
+            completedBy: "w1",
+            jobs: [{ jobId: acquired!.id, output: null }],
           }),
         );
 
@@ -111,6 +142,7 @@ export const countByJobTypeNamesGroup: ConformanceGroup<StateConformanceFixture>
 
         expect(result).toEqual([
           {
+            blocked: { count: 0, hasMore: false },
             pending: { count: 0, hasMore: false },
             running: { count: 0, hasMore: false },
             completed: { count: 1, hasMore: false },
@@ -122,7 +154,7 @@ export const countByJobTypeNamesGroup: ConformanceGroup<StateConformanceFixture>
       name: "countByJobTypeNames preserves input order",
       run: async ({ stateAdapter }, expect) => {
         await stateAdapter.withTransaction(async (txCtx) =>
-          stateAdapter.createChains({
+          stateAdapter.createJobs({
             txCtx,
             jobs: [
               { typeName: "count-z", input: null },

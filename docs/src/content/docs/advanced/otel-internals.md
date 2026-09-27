@@ -34,7 +34,7 @@ All metric methods accept primitive data types (strings, numbers) rather than do
 
 ### ObservabilityHelper
 
-The helper layer maps domain objects (`StateJob`, `Job`, `Chain`) to the adapter's primitive parameters. It also handles logging via the `Log` interface. This separation means the OTEL adapter never needs to import or understand Queuert's domain types.
+The helper layer maps domain objects to the adapter's primitive parameters. It also handles logging via the `Log` interface. This separation means the OTEL adapter never needs to import or understand Queuert's domain types.
 
 ### Noop Default
 
@@ -46,13 +46,13 @@ Queuert persists trace context in the database so spans can be linked across pro
 
 ### Storage Model
 
-Each job stores two trace contexts as W3C traceparent strings:
+Trace contexts are stored as W3C traceparent strings, one per level:
 
-| Field               | Stored On           | Purpose                                                                    |
-| ------------------- | ------------------- | -------------------------------------------------------------------------- |
-| `chainTraceContext` | `job` table         | Chain-level span context — used for chain completion and blocker linking   |
-| `traceContext`      | `job` table         | Job-level span context — used for attempt spans and continuation linking   |
-| `trace_context`     | `job_blocker` table | Blocker PRODUCER span context — used to create CONSUMER span on resolution |
+| Field               | Stored On              | Purpose                                                                    |
+| ------------------- | ---------------------- | -------------------------------------------------------------------------- |
+| `chainTraceContext` | `job` table, head row  | Chain-level span context — used for chain completion and blocker linking   |
+| `traceContext`      | `job` table, every row | Job-level span context — used for attempt spans and continuation linking   |
+| `trace_context`     | `job_blocker` table    | Blocker PRODUCER span context — used to create CONSUMER span on resolution |
 
 ### W3C Traceparent Format
 
@@ -68,7 +68,7 @@ The OTEL adapter serializes `SpanContext` objects to this format for storage and
 
 ### Context Flow
 
-1. **Chain creation** (`createChain`): Creates PRODUCER chain span → serializes to `chainTraceContext`. Creates PRODUCER job span as child → serializes to `traceContext`. Both stored with the job in the database.
+1. **Chain creation** (`createChain`): Creates PRODUCER chain span → serializes to `chainTraceContext`. Creates PRODUCER job span as child → serializes to `traceContext`.
 
 2. **Blockers**: For each blocker dependency, creates a PRODUCER `await chain` span as child of the job span → serializes to `trace_context` in the `job_blocker` table.
 

@@ -9,8 +9,6 @@ import { createNodeSqliteStateProvider } from "./provider.js";
 test("state-sqlite-node provider passes state adapter conformance", async () => {
   await runStateAdapterConformance(async () => {
     const db = new DatabaseSync(":memory:");
-    db.exec("PRAGMA auto_vacuum = INCREMENTAL");
-    db.exec("PRAGMA foreign_keys = ON");
 
     const lock = createAsyncRwLock();
     const stateProvider = createNodeSqliteStateProvider({ db, lock });

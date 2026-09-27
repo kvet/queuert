@@ -2,11 +2,10 @@ import { type TypedSqlTemplate } from "./sql.js";
 
 export type Migration = {
   name: string;
-  statements: TypedSqlTemplate[];
   type: "transactional" | "non-transactional" | "batched";
+  statements: TypedSqlTemplate[];
 };
 
-/** Result of running `migrateToLatest`, reporting which migrations were skipped (already applied), applied, and unrecognized (present in the database but not in the code). */
 export type MigrationResult = {
   skipped: string[];
   applied: string[];
@@ -14,7 +13,6 @@ export type MigrationResult = {
 };
 
 export type MigrationStore<TTxContext> = {
-  /** Bootstrap migration infrastructure tables (migration + lock). Called once before any other method. */
   initialize?: () => Promise<void>;
   runInTransaction: <T>(fn: (txCtx: TTxContext) => Promise<T>) => Promise<T>;
   getAppliedMigrationNames: (txCtx: TTxContext | undefined) => Promise<string[]>;
@@ -41,27 +39,26 @@ export type MigrationStore<TTxContext> = {
 );
 
 export type MigrationLockOptions = {
-  /** How long a claimed lease stays valid without a heartbeat. Default: 60s. */
   ttlMs?: number;
-  /** How often the lease is extended while migrating. Default: 20s. */
   heartbeatIntervalMs?: number;
-  /** How often a waiting process re-attempts to claim the lease. Default: 1s. */
   pollIntervalMs?: number;
 };
+
+export type MigrationScript = (assertLockHeld: () => void) => Promise<void>;
 
 export type Migrator = {
   migrateToLatest: () => Promise<MigrationResult>;
   migrateTo: (targetName: string) => Promise<MigrationResult>;
 };
 
-const MIGRATION_NAME_PATTERN = /^\d{14}_[a-z][a-z0-9_]*$/;
+const MIGRATION_NAME_PATTERN = /^\d{3}_[a-z][a-z0-9_]*$/;
 
 const validateMigrations = (migrations: Migration[]): void => {
   for (let i = 0; i < migrations.length; i++) {
     const name = migrations[i].name;
     if (!MIGRATION_NAME_PATTERN.test(name)) {
       throw new Error(
-        `Invalid migration name "${name}". Must match /^\\d{14}_[a-z][a-z0-9_]*$/ (e.g. "20240101000000_initial_schema").`,
+        `Invalid migration name "${name}". Must match /^\\d{3}_[a-z][a-z0-9_]*$/ (e.g. "001_initial_schema").`,
       );
     }
     if (i > 0 && name <= migrations[i - 1].name) {
@@ -135,10 +132,14 @@ export const createMigrator = <TTxContext>({
   migrations,
   store,
   lock,
+  before,
+  after,
 }: {
   migrations: Migration[];
   store: MigrationStore<TTxContext>;
   lock?: MigrationLockOptions;
+  before?: MigrationScript;
+  after?: MigrationScript;
 }): Migrator => {
   validateMigrations(migrations);
   const knownNames = new Set(migrations.map((m) => m.name));
@@ -182,6 +183,11 @@ export const createMigrator = <TTxContext>({
   const run = async (selected: Migration[]): Promise<MigrationResult> => {
     await store.initialize?.();
     return withMigrationLock(store, lockOptions, async (assertLockHeld) => {
+      if (before) {
+        assertLockHeld();
+        await before(assertLockHeld);
+      }
+
       const previouslyApplied = await store.runInTransaction(store.getAppliedMigrationNames);
       const previouslyAppliedSet = new Set(previouslyApplied);
 
@@ -193,6 +199,11 @@ export const createMigrator = <TTxContext>({
       for (const migration of pending) {
         await runMigration(migration, assertLockHeld);
         applied.push(migration.name);
+      }
+
+      if (after) {
+        assertLockHeld();
+        await after(assertLockHeld);
       }
 
       return { skipped, applied, unrecognized };

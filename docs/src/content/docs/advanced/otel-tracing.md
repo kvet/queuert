@@ -246,7 +246,6 @@ Deduplicated chain creation stays `UNSET` — see [Deduplication](#deduplication
 
 | Attribute                      | Type   | Description                                   |
 | ------------------------------ | ------ | --------------------------------------------- |
-| `queuert.attempt.result`       | string | `"completed"` or `"failed"`                   |
 | `queuert.rescheduled_at`       | string | ISO 8601 timestamp of next retry (on failure) |
 | `queuert.rescheduled_after_ms` | number | Delay in ms before next retry (on failure)    |
 

@@ -1,5 +1,12 @@
 {
-  "migration": "20240101000000_initial_schema",
+  "appliedMigrations": [
+    "20240101000000_initial_schema",
+    "20240102000000_vacuum_tuning",
+    "20260430000000_rename_chain_indexes",
+    "20260517000000_drop_job_id_default",
+    "20260531000000_vacuum_threshold_pinning",
+    "20260617000000_blocker_composite_pk"
+  ],
   "totalJobs": 9801,
   "totalBlockers": 3000,
   "byStatus": {

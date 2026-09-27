@@ -674,14 +674,14 @@ export const schedulingTestSuite = ({ it }: { it: TestAPI<TestSuiteContext> }): 
       await client.awaitChain(chain, { timeoutMs: 2000, pollIntervalMs: 50 });
     });
 
-    const chainJobs = await stateAdapter.listChainJobs({
+    const chainJobs = await client.listChainJobs({
       chainId: chain.id,
       orderDirection: "asc",
-      page: { limit: 10 },
+      limit: 10,
     });
-    const continuation = chainJobs.items[1];
+    const continuation = chainJobs.items.find((job) => job.chainIndex === 1);
     expect(continuation).toBeDefined();
-    expect(continuation.scheduledAt.getTime() - past.getTime()).toBeGreaterThan(30 * 60 * 1000);
+    expect(continuation!.scheduledAt.getTime() - past.getTime()).toBeGreaterThan(30 * 60 * 1000);
   });
 
   it("rescheduling with past schedule.at clamps scheduledAt to now", async ({

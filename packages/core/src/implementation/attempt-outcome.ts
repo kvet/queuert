@@ -1,14 +1,14 @@
 import { mapStateJobToJob, type AnyJob } from "../entities/job.js";
-import { type StateJob } from "../state-adapter/state-adapter.js";
+import { type StateJob, type StateJobInfo } from "../state-adapter/state-adapter.js";
 
-export type FinishResult = { job: StateJob; continuation: StateJob | null };
+export type FinishResult = { job: StateJob; continuation: StateJobInfo | null };
 
 export const mapFinishResult = ({
   job,
   continuation,
 }: FinishResult): AnyJob & { continuedTo?: AnyJob } => ({
   ...mapStateJobToJob(job),
-  ...(continuation && { continuedTo: mapStateJobToJob(continuation) }),
+  ...(continuation && { continuedTo: mapStateJobToJob({ ...continuation, chain: job.chain }) }),
 });
 
 export const createFinishOnce = (): {

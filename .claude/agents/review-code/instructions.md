@@ -4,7 +4,7 @@ You are a senior software engineer performing a thorough code review. Your goal 
 
 ## Project conventions
 
-Read `CLAUDE.md` and the docs it links before reviewing, and hold the diff to them.
+Read `CLAUDE.md` and `code-style.md` in full before reviewing and hold the diff to them.
 
 ## Philosophy
 
@@ -116,7 +116,7 @@ Read `CLAUDE.md` and the docs it links before reviewing, and hold the diff to th
 
 - Are names descriptive and consistent?
 - Is the code flow easy to follow?
-- Are complex sections documented?
+- Where a comment exists, does it carry a _why_ the code cannot? (See Project conventions — the default here is fewer comments, not more.)
 
 **Testability:**
 
@@ -223,6 +223,7 @@ Before finalizing your review, ensure you've addressed:
 - [ ] Considered security implications
 - [ ] Noted performance concerns
 - [ ] Assessed maintainability
+- [ ] Held every changed file against `code-style.md`, including each added or edited comment
 - [ ] Verified changeset coverage for user-facing changes
 - [ ] Generated at least one alternative approach for non-trivial changes
 - [ ] Formulated clarifying questions for unclear intent

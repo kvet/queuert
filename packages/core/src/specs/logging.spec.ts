@@ -1,5 +1,5 @@
 // oxlint-disable no-empty-pattern
-import { it as baseIt, describe, expect } from "vitest";
+import { it as baseIt, describe, expect, onTestFinished, vi } from "vitest";
 
 import { sleep } from "../helpers/sleep.js";
 import {
@@ -572,6 +572,8 @@ describe("Logging", () => {
         type: "job_unblocked",
         data: {
           typeName: "main",
+          chainId: chain.id,
+          chainTypeName: "main",
           unblockedByChain: {
             id: blockerChainId!,
             typeName: "blocker",
@@ -586,6 +588,108 @@ describe("Logging", () => {
       { type: "worker_stopping" },
       { type: "worker_stopped" },
     ]);
+  });
+
+  it("logs and notifies an unblock once, after the last of two blockers completes", async ({
+    stateAdapter,
+    notifyAdapter,
+    withTransaction,
+    observabilityAdapter,
+    log,
+  }) => {
+    const jobTypes = defineJobTypes<{
+      blocker: { entry: true; input: null; output: null };
+      main: {
+        entry: true;
+        input: null;
+        output: null;
+        blockers: [{ typeName: "blocker" }, { typeName: "blocker" }];
+      };
+      sentinel: { entry: true; input: null; output: null };
+    }>();
+
+    const client = await createClient({
+      stateAdapter,
+      notifyAdapter,
+      observabilityAdapter,
+      log,
+      jobTypes,
+    });
+
+    const [blockerA, blockerB] = await withTransactionHooks(async (transactionHooks) =>
+      withTransaction(async (txCtx) => {
+        const blockerA = await client.createChain({
+          ...txCtx,
+          transactionHooks,
+          typeName: "blocker",
+          input: null,
+        });
+        const blockerB = await client.createChain({
+          ...txCtx,
+          transactionHooks,
+          typeName: "blocker",
+          input: null,
+        });
+        await client.createChain({
+          ...txCtx,
+          transactionHooks,
+          typeName: "main",
+          input: null,
+          blockers: [blockerA, blockerB],
+        });
+        return [blockerA, blockerB];
+      }),
+    );
+
+    const completeBlocker = async (blocker: typeof blockerA) =>
+      withTransactionHooks(async (transactionHooks) =>
+        withTransaction(async (txCtx) =>
+          client.completeChain({
+            ...txCtx,
+            transactionHooks,
+            ...blocker,
+            handler: async ({ job, completeJob }) =>
+              completeJob(job, async ({ finish }) => finish({ output: null })),
+          }),
+        ),
+      );
+    const unblockedLogs = () =>
+      log.mock.calls.filter(([entry]) => entry.type === "job_unblocked").map(([entry]) => entry);
+    const notified: string[] = [];
+    const dispose = await notifyAdapter!.listenJobScheduled(["main", "sentinel"], (typeName) =>
+      notified.push(typeName),
+    );
+    onTestFinished(dispose);
+
+    log.mockClear();
+    await completeBlocker(blockerA);
+
+    expect(unblockedLogs()).toEqual([]);
+
+    await completeBlocker(blockerB);
+
+    expect(unblockedLogs()).toEqual([
+      expect.objectContaining({
+        data: expect.objectContaining({
+          typeName: "main",
+          unblockedByChain: expect.objectContaining({ id: blockerB.id }),
+        }),
+      }),
+    ]);
+
+    // Notifications arrive in commit order, so once the sentinel's lands, every one for `main` has too.
+    await withTransactionHooks(async (transactionHooks) =>
+      withTransaction(async (txCtx) =>
+        client.createChain({ ...txCtx, transactionHooks, typeName: "sentinel", input: null }),
+      ),
+    );
+    await vi.waitFor(
+      () => {
+        expect(notified).toContain("sentinel");
+      },
+      { timeout: 5000 },
+    );
+    expect(notified.filter((typeName) => typeName === "main")).toEqual(["main"]);
   });
 
   it("logs workerless completion", async ({
@@ -1170,12 +1274,12 @@ describe("Logging rollback", () => {
     let completeJobErrorThrown = false;
     const erroringStateAdapter: typeof stateAdapter = {
       ...stateAdapter,
-      finishJobAttempt: async (args) => {
-        if (!("error" in args.outcome) && !completeJobErrorThrown) {
+      completeJobs: async (args) => {
+        if (!completeJobErrorThrown) {
           completeJobErrorThrown = true;
           throw new Error("simulated completeJob failure");
         }
-        return stateAdapter.finishJobAttempt(args);
+        return stateAdapter.completeJobs(args);
       },
     };
 
@@ -1249,12 +1353,12 @@ describe("Logging rollback", () => {
     let handlerFailed = false;
     const erroringStateAdapter: typeof stateAdapter = {
       ...stateAdapter,
-      finishJobAttempt: async (args) => {
-        if ("error" in args.outcome && !rescheduleErrorThrown) {
+      rescheduleJobs: async (args) => {
+        if (args.jobs.some((job) => job.error !== undefined) && !rescheduleErrorThrown) {
           rescheduleErrorThrown = true;
-          throw new Error("simulated abandonJob failure");
+          throw new Error("simulated reschedule failure");
         }
-        return stateAdapter.finishJobAttempt(args);
+        return stateAdapter.rescheduleJobs(args);
       },
     };
 
@@ -1404,6 +1508,12 @@ describe("Logging rollback", () => {
   }) => {
     const jobTypes = defineJobTypes<{
       test: { entry: true; input: null; output: null };
+      dependent: {
+        entry: true;
+        input: null;
+        output: null;
+        blockers: [{ typeName: "test" }];
+      };
     }>();
 
     let unblockErrorThrown = false;
@@ -1450,9 +1560,22 @@ describe("Logging rollback", () => {
     });
 
     const chain = await withTransactionHooks(async (transactionHooks) =>
-      withTransaction(async (txCtx) =>
-        client.createChain({ ...txCtx, transactionHooks, typeName: "test", input: null }),
-      ),
+      withTransaction(async (txCtx) => {
+        const created = await client.createChain({
+          ...txCtx,
+          transactionHooks,
+          typeName: "test",
+          input: null,
+        });
+        await client.createChain({
+          ...txCtx,
+          transactionHooks,
+          typeName: "dependent",
+          input: null,
+          blockers: [created],
+        });
+        return created;
+      }),
     );
 
     await withWorkers([await worker.start()], async () => {
@@ -1483,6 +1606,12 @@ describe("Logging rollback", () => {
   }) => {
     const jobTypes = defineJobTypes<{
       test: { entry: true; input: null; output: { result: number } };
+      dependent: {
+        entry: true;
+        input: null;
+        output: null;
+        blockers: [{ typeName: "test" }];
+      };
     }>();
 
     let unblockErrorThrown = false;
@@ -1513,9 +1642,22 @@ describe("Logging rollback", () => {
     });
 
     const chain = await withTransactionHooks(async (transactionHooks) =>
-      withTransaction(async (txCtx) =>
-        client.createChain({ ...txCtx, transactionHooks, typeName: "test", input: null }),
-      ),
+      withTransaction(async (txCtx) => {
+        const created = await client.createChain({
+          ...txCtx,
+          transactionHooks,
+          typeName: "test",
+          input: null,
+        });
+        await client.createChain({
+          ...txCtx,
+          transactionHooks,
+          typeName: "dependent",
+          input: null,
+          blockers: [created],
+        });
+        return created;
+      }),
     );
 
     log.mockClear();
@@ -1581,12 +1723,12 @@ describe("Logging rollback", () => {
     let createJobErrorThrown = false;
     const erroringStateAdapter: typeof stateAdapter = {
       ...stateAdapter,
-      createContinuationJob: async (args) => {
+      continueJobs: async (args) => {
         if (!createJobErrorThrown) {
           createJobErrorThrown = true;
           throw new Error("simulated createJob failure");
         }
-        return stateAdapter.createContinuationJob(args);
+        return stateAdapter.continueJobs(args);
       },
     };
 
@@ -1645,6 +1787,52 @@ describe("Logging rollback", () => {
 
     expect(continuationCreated).toHaveLength(1);
     expect(attemptFailedCount).toBe(1);
+  });
+
+  it("logs creation events only for the first of two deduplicated chains", async ({
+    stateAdapter,
+    notifyAdapter,
+    withTransaction,
+    observabilityAdapter,
+    log,
+    expectLogs,
+  }) => {
+    const jobTypes = defineJobTypes<{
+      test: { entry: true; input: null; output: null };
+    }>();
+
+    const client = await createClient({
+      stateAdapter,
+      notifyAdapter,
+      observabilityAdapter,
+      log,
+      jobTypes,
+    });
+
+    const create = async () =>
+      withTransactionHooks(async (transactionHooks) =>
+        withTransaction(async (txCtx) =>
+          client.createChain({
+            ...txCtx,
+            transactionHooks,
+            typeName: "test",
+            input: null,
+            deduplication: { key: "same-key", scope: "any" },
+          }),
+        ),
+      );
+
+    const first = await create();
+    const second = await create();
+
+    expect(first.deduplicated).toBe(false);
+    expect(second.deduplicated).toBe(true);
+    expect(second.id).toBe(first.id);
+
+    expectLogs([
+      { type: "chain_created", data: { typeName: "test" } },
+      { type: "job_created", data: { typeName: "test" } },
+    ]);
   });
 
   it("logs chain deletion", async ({

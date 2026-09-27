@@ -1,5 +1,9 @@
 {
-  "migration": "20240101000000_initial_schema",
+  "appliedMigrations": [
+    "20240101000000_initial_schema",
+    "20260430000000_rename_chain_indexes",
+    "20260617000000_blocker_composite_pk"
+  ],
   "totalJobs": 9801,
   "totalBlockers": 3000,
   "byStatus": {

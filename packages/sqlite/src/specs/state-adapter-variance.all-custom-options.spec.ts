@@ -15,14 +15,14 @@ it("index");
 
 describe("SQLite State Adapter Variance - All Custom Options", () => {
   it("generates custom-prefixed job IDs", async ({ stateAdapter }) => {
-    const [{ job }] = await stateAdapter.withTransaction(async (txCtx) =>
-      stateAdapter.createChains({
+    const [stateChain] = await stateAdapter.withTransaction(async (txCtx) =>
+      stateAdapter.createJobs({
         txCtx,
         jobs: [{ typeName: "t", input: null }],
       }),
     );
-    expect(job.id.startsWith("job-")).toBe(true);
-    expect(job.chainId.startsWith("job-")).toBe(true);
+    expect(stateChain.head.id.startsWith("job-")).toBe(true);
+    expect(stateChain.head.chainId.startsWith("job-")).toBe(true);
   });
 
   it("creates tables with correct prefix", ({ tableNames }) => {

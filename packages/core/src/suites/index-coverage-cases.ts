@@ -14,11 +14,14 @@ export type IndexCoverageCaseKey =
   | "listJobs/noStatus/cursor"
   // listJobs > pending
   | "listJobs/pending/default"
-  | "listJobs/pending/blocked"
-  | "listJobs/pending/unblocked"
   | "listJobs/pending/fromTo"
   | "listJobs/pending/orderByCreatedAt"
   | "listJobs/pending/cursor"
+  // listJobs > blocked
+  | "listJobs/blocked/default"
+  | "listJobs/blocked/fromTo"
+  | "listJobs/blocked/orderByCreatedAt"
+  | "listJobs/blocked/cursor"
   // listJobs > running
   | "listJobs/running/default"
   | "listJobs/running/orderByCreatedAt"
@@ -26,8 +29,6 @@ export type IndexCoverageCaseKey =
   | "listJobs/running/cursor"
   // listJobs > completed
   | "listJobs/completed/default"
-  | "listJobs/completed/continued"
-  | "listJobs/completed/notContinued"
   | "listJobs/completed/orderByCreatedAt"
   | "listJobs/completed/cursor"
   // listChains > no status
@@ -59,21 +60,20 @@ export type IndexCoverageCaseKey =
   | "getChains/lock"
   | "getJobs/default"
   | "getJobs/lock"
-  | "createChains/default"
-  | "createChains/deduplication"
-  | "createContinuationJob/default"
+  | "createJobs/default"
+  | "createJobs/deduplication"
+  | "continueJobs/default"
   | "addJobsBlockers/default"
   | "getJobBlockers/default"
   | "unblockJobs/default"
   | "startJobAttempt/default"
   | "extendJobAttempt/default"
-  | "finishJobAttempt/failure"
-  | "finishJobAttempt/success"
+  | "completeJobs/default"
   | "reclaimExpiredJobAttempt/default"
   | "getStartAttemptDelayMs/default"
   | "rescheduleJobs/default"
   | "deleteChains/default"
-  | "deleteChains/cascade";
+  | "deleteChains/multiJob";
 
 type Act = (stateAdapter: StateAdapter<any, string>, sentinels: SeedSentinelsV2) => Promise<void>;
 
@@ -121,7 +121,9 @@ export const observabilityCoverageGroups: IndexCoverageGroup[] = [
         key: "countByChainTypeNames/default",
         label: "default",
         run: async () => async (stateAdapter, sentinels) => {
-          await stateAdapter.countByChainTypeNames({ typeNames: sentinels.pending.typeNames });
+          await stateAdapter.countByChainTypeNames({
+            typeNames: [...sentinels.pending.typeNames, "seed:blocked:fanin:1"],
+          });
         },
       },
     ],
@@ -133,7 +135,9 @@ export const observabilityCoverageGroups: IndexCoverageGroup[] = [
         key: "countByJobTypeNames/default",
         label: "default",
         run: async () => async (stateAdapter, sentinels) => {
-          await stateAdapter.countByJobTypeNames({ typeNames: sentinels.pending.typeNames });
+          await stateAdapter.countByJobTypeNames({
+            typeNames: [...sentinels.pending.typeNames, "seed:blocked:fanin:1"],
+          });
         },
       },
     ],
@@ -207,34 +211,6 @@ export const observabilityCoverageGroups: IndexCoverageGroup[] = [
         },
       },
       {
-        key: "listJobs/pending/blocked",
-        label: "+ blocked",
-        run: async () => async (stateAdapter) => {
-          await stateAdapter.listJobs({
-            orderBy: "scheduledAt",
-            orderDirection: "desc",
-            status: "pending",
-            typeName: "seed:pending:order",
-            blocked: true,
-            page: { limit: 20 },
-          });
-        },
-      },
-      {
-        key: "listJobs/pending/unblocked",
-        label: "+ unblocked",
-        run: async () => async (stateAdapter) => {
-          await stateAdapter.listJobs({
-            orderBy: "scheduledAt",
-            orderDirection: "desc",
-            status: "pending",
-            typeName: "seed:pending:order",
-            blocked: false,
-            page: { limit: 20 },
-          });
-        },
-      },
-      {
         key: "listJobs/pending/fromTo",
         label: "+ from/to",
         run: async () => async (stateAdapter) => {
@@ -273,7 +249,6 @@ export const observabilityCoverageGroups: IndexCoverageGroup[] = [
             orderDirection: "desc",
             status: "pending",
             typeName: "seed:pending:order",
-            blocked: false,
             page: { limit: 2 },
           });
           await stateAdapter.listJobs({
@@ -281,7 +256,75 @@ export const observabilityCoverageGroups: IndexCoverageGroup[] = [
             orderDirection: "desc",
             status: "pending",
             typeName: "seed:pending:order",
-            blocked: false,
+            page: { limit: 20, cursor: page1.nextCursor! },
+          });
+        },
+      },
+    ],
+  },
+
+  {
+    name: "listJobs > blocked",
+    cases: [
+      {
+        key: "listJobs/blocked/default",
+        label: "default",
+        run: async () => async (stateAdapter) => {
+          await stateAdapter.listJobs({
+            orderBy: "scheduledAt",
+            orderDirection: "desc",
+            status: "blocked",
+            typeName: "seed:blocked:fanin:1",
+            page: { limit: 20 },
+          });
+        },
+      },
+      {
+        key: "listJobs/blocked/fromTo",
+        label: "+ from/to",
+        run: async () => async (stateAdapter) => {
+          const now = new Date();
+          const from = new Date(now.getTime() - 3600_000);
+          await stateAdapter.listJobs({
+            orderBy: "scheduledAt",
+            orderDirection: "desc",
+            status: "blocked",
+            typeName: "seed:blocked:fanin:1",
+            from,
+            to: now,
+            page: { limit: 20 },
+          });
+        },
+      },
+      {
+        key: "listJobs/blocked/orderByCreatedAt",
+        label: "+ orderBy:createdAt",
+        run: async () => async (stateAdapter) => {
+          await stateAdapter.listJobs({
+            orderDirection: "desc",
+            status: "blocked",
+            typeName: "seed:blocked:fanin:1",
+            orderBy: "createdAt",
+            page: { limit: 20 },
+          });
+        },
+      },
+      {
+        key: "listJobs/blocked/cursor",
+        label: "cursor",
+        run: async () => async (stateAdapter) => {
+          const page1 = await stateAdapter.listJobs({
+            orderBy: "scheduledAt",
+            orderDirection: "desc",
+            status: "blocked",
+            typeName: "seed:blocked:fanin:1",
+            page: { limit: 2 },
+          });
+          await stateAdapter.listJobs({
+            orderBy: "scheduledAt",
+            orderDirection: "desc",
+            status: "blocked",
+            typeName: "seed:blocked:fanin:1",
             page: { limit: 20, cursor: page1.nextCursor! },
           });
         },
@@ -366,34 +409,6 @@ export const observabilityCoverageGroups: IndexCoverageGroup[] = [
             orderDirection: "desc",
             status: "completed",
             typeName: "seed:completed:order",
-            page: { limit: 20 },
-          });
-        },
-      },
-      {
-        key: "listJobs/completed/continued",
-        label: "+ continued",
-        run: async () => async (stateAdapter) => {
-          await stateAdapter.listJobs({
-            orderBy: "completedAt",
-            orderDirection: "desc",
-            status: "completed",
-            typeName: "seed:completed:order",
-            continued: true,
-            page: { limit: 20 },
-          });
-        },
-      },
-      {
-        key: "listJobs/completed/notContinued",
-        label: "+ not continued",
-        run: async () => async (stateAdapter) => {
-          await stateAdapter.listJobs({
-            orderBy: "completedAt",
-            orderDirection: "desc",
-            status: "completed",
-            typeName: "seed:completed:order",
-            continued: false,
             page: { limit: 20 },
           });
         },
@@ -829,14 +844,14 @@ export const operationalCoverageGroups: IndexCoverageGroup[] = [
   },
 
   {
-    name: "createChains",
+    name: "createJobs",
     cases: [
       {
-        key: "createChains/default",
+        key: "createJobs/default",
         label: "default",
         run: async () => async (stateAdapter) => {
           await stateAdapter.withTransaction(async (txCtx) =>
-            stateAdapter.createChains({
+            stateAdapter.createJobs({
               txCtx,
               jobs: [{ typeName: "idx:test", input: {} }],
             }),
@@ -844,11 +859,11 @@ export const operationalCoverageGroups: IndexCoverageGroup[] = [
         },
       },
       {
-        key: "createChains/deduplication",
+        key: "createJobs/deduplication",
         label: "+ deduplication",
         run: async () => async (stateAdapter) => {
           await stateAdapter.withTransaction(async (txCtx) =>
-            stateAdapter.createChains({
+            stateAdapter.createJobs({
               txCtx,
               jobs: [
                 {
@@ -865,25 +880,26 @@ export const operationalCoverageGroups: IndexCoverageGroup[] = [
   },
 
   {
-    name: "createContinuationJob",
+    name: "continueJobs",
     cases: [
       {
-        key: "createContinuationJob/default",
+        key: "continueJobs/default",
         label: "default",
         run: async (stateAdapter) => {
-          const { job } = await stateAdapter.withTransaction(async (txCtx) =>
+          const acquired = await stateAdapter.withTransaction(async (txCtx) =>
             stateAdapter.startJobAttempt({
               txCtx,
               typeNames: ["seed:throwaway:pending"],
               workerId: "w-cont",
             }),
           );
-          if (!job) return async () => {};
+          if (!acquired) return async () => {};
           return async (stateAdapter) => {
             await stateAdapter.withTransaction(async (txCtx) =>
-              stateAdapter.createContinuationJob({
+              stateAdapter.continueJobs({
                 txCtx,
-                job: { typeName: "idx:cont", input: {}, continueFromId: job.id },
+                completedBy: "w-cont",
+                jobs: [{ typeName: "idx:cont", input: {}, continueFromId: acquired.id }],
               }),
             );
           };
@@ -899,8 +915,8 @@ export const operationalCoverageGroups: IndexCoverageGroup[] = [
         key: "addJobsBlockers/default",
         label: "default",
         run: async (stateAdapter, sentinels) => {
-          const [{ job }] = await stateAdapter.withTransaction(async (txCtx) =>
-            stateAdapter.createChains({
+          const [stateChain] = await stateAdapter.withTransaction(async (txCtx) =>
+            stateAdapter.createJobs({
               txCtx,
               jobs: [
                 {
@@ -914,7 +930,9 @@ export const operationalCoverageGroups: IndexCoverageGroup[] = [
             await stateAdapter.withTransaction(async (txCtx) =>
               stateAdapter.addJobsBlockers({
                 txCtx,
-                jobBlockers: [{ jobId: job.id, blockedByChainIds: [sentinels.longChain.chainId] }],
+                jobBlockers: [
+                  { jobId: stateChain.head.id, blockedByChainIds: [sentinels.longChain.chainId] },
+                ],
               }),
             );
           };
@@ -995,51 +1013,26 @@ export const operationalCoverageGroups: IndexCoverageGroup[] = [
   },
 
   {
-    name: "finishJobAttempt",
+    name: "completeJobs",
     cases: [
       {
-        key: "finishJobAttempt/failure",
-        label: "failure",
+        key: "completeJobs/default",
+        label: "default",
         run: async (stateAdapter) => {
-          const { job } = await stateAdapter.withTransaction(async (txCtx) =>
-            stateAdapter.startJobAttempt({
-              txCtx,
-              typeNames: ["seed:throwaway:pending"],
-              workerId: "w-fail",
-            }),
-          );
-          if (!job) return async () => {};
-          return async (stateAdapter) => {
-            await stateAdapter.withTransaction(async (txCtx) =>
-              stateAdapter.finishJobAttempt({
-                txCtx,
-                jobId: job.id,
-                workerId: "w-fail",
-                outcome: { error: "test", schedule: { afterMs: 60_000 } },
-              }),
-            );
-          };
-        },
-      },
-      {
-        key: "finishJobAttempt/success",
-        label: "success",
-        run: async (stateAdapter) => {
-          const { job } = await stateAdapter.withTransaction(async (txCtx) =>
+          const acquired = await stateAdapter.withTransaction(async (txCtx) =>
             stateAdapter.startJobAttempt({
               txCtx,
               typeNames: ["seed:throwaway:pending"],
               workerId: "w-ok",
             }),
           );
-          if (!job) return async () => {};
+          if (!acquired) return async () => {};
           return async (stateAdapter) => {
             await stateAdapter.withTransaction(async (txCtx) =>
-              stateAdapter.finishJobAttempt({
+              stateAdapter.completeJobs({
                 txCtx,
-                jobId: job.id,
-                workerId: "w-ok",
-                outcome: { output: { ok: true } },
+                completedBy: "w-ok",
+                jobs: [{ jobId: acquired.id, output: { ok: true } }],
               }),
             );
           };
@@ -1095,8 +1088,7 @@ export const operationalCoverageGroups: IndexCoverageGroup[] = [
           await stateAdapter.withTransaction(async (txCtx) =>
             stateAdapter.rescheduleJobs({
               txCtx,
-              jobIds: [sentinels.pending.jobId],
-              schedule: { afterMs: 1000 },
+              jobs: [{ jobId: sentinels.pending.jobId, schedule: { afterMs: 1000 } }],
             }),
           );
         },
@@ -1121,14 +1113,23 @@ export const operationalCoverageGroups: IndexCoverageGroup[] = [
         },
       },
       {
-        key: "deleteChains/cascade",
-        label: "+ cascade",
-        run: async (_stateAdapter, sentinels) => {
-          const chainId = sentinels.throwaway.cascadeChainIds.shift();
-          if (!chainId) return async () => {};
+        key: "deleteChains/multiJob",
+        label: "multi-job chain",
+        run: async (stateAdapter) => {
+          const chainId = await stateAdapter.withTransaction(async (txCtx) => {
+            const [chain] = await stateAdapter.createJobs({
+              txCtx,
+              jobs: [{ typeName: "idx:delete-multi", input: {} }],
+            });
+            await stateAdapter.continueJobs({
+              txCtx,
+              jobs: [{ typeName: "idx:delete-multi:step", input: {}, continueFromId: chain.id }],
+            });
+            return chain.id;
+          });
           return async (stateAdapter) => {
             await stateAdapter.withTransaction(async (txCtx) =>
-              stateAdapter.deleteChains({ txCtx, chainIds: [chainId], cascade: true }),
+              stateAdapter.deleteChains({ txCtx, chainIds: [chainId] }),
             );
           };
         },
