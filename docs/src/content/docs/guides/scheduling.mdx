@@ -82,9 +82,7 @@ attemptHandler: async ({ job, complete }) => {
 },
 ```
 
-Because `finish({ reschedule })` is a normal outcome — not an error — the job keeps a clean
-slate: no `lastAttemptError`, no failure event, no error span. The attempt counter still
-increments, so backoff reflects total attempts if the job later fails for real.
+Because `finish({ reschedule })` is a normal outcome — not an error — the job keeps a clean slate: no `lastAttemptError`, no failure event, no error span. The attempt counter still increments, so backoff reflects total attempts if the job later fails for real.
 
 ```ts
 finish({ reschedule: { afterMs: 30_000 } }); // 30 seconds from now

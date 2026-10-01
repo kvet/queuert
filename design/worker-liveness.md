@@ -125,7 +125,7 @@ listWorkers: (
 
 `stopWorker` and `reclaimExpiredWorkers` share one primitive so a graceful stop and a crash leave the database in the same shape; the only difference is which rows are selected, and both return the jobs they released. `stopWorker` normally finds nothing to release (the worker drains first), but it must still release rather than delete-and-orphan: a `running` job whose `attempt_by` names a nonexistent worker would never be reclaimed by anything.
 
-Released jobs are written as a failed attempt, not a silent requeue, which is a behavior change from today's reclaim:
+Released jobs are written as a failed attempt, not a silent reschedule, which is a behavior change from today's reclaim:
 
 - `status = 'pending'`, `attempt_at = NULL`, `attempt_by = NULL`
 - `last_attempt_at = now()`, `last_attempt_error = 'Worker stopped unexpectedly'` (serialized through the same shape `rescheduleJobs` uses for `error`)

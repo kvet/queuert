@@ -541,17 +541,25 @@ describe("Dashboard API", () => {
     it("returns per-status counts for each requested type name", async () => {
       const { request, stateAdapter } = await createTestDashboard();
       await createJob(stateAdapter, "type-a", null);
-      await createJob(stateAdapter, "type-b", null);
+      const blockerChain = await createJob(stateAdapter, "type-b", null);
       await startAttempt(stateAdapter, "type-b");
+      const blocked = await createJob(stateAdapter, "type-a", null);
+      await stateAdapter.withTransaction(async (txCtx) =>
+        stateAdapter.addJobsBlockers({
+          txCtx,
+          jobBlockers: [{ jobId: blocked.id, blockedByChainIds: [blockerChain.chainId] }],
+        }),
+      );
 
       const body = await parseBody(await request("/api/job-types/counts?typeNames=type-a,type-b"));
 
       expect(body).toHaveLength(2);
       expect(body[0].typeName).toBe("type-a");
-      expect(body[0].blocked.count).toBe(0);
+      expect(body[0].blocked.count).toBe(1);
       expect(body[0].pending.count).toBe(1);
       expect(body[0].running.count).toBe(0);
       expect(body[1].typeName).toBe("type-b");
+      expect(body[1].blocked.count).toBe(0);
       expect(body[1].running.count).toBe(1);
     });
   });

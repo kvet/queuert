@@ -6,7 +6,7 @@
  * Scenarios:
  * 1. Simple Deletion: Delete a completed chain
  * 2. Blocker Safety: Deletion rejected when chain is referenced as a blocker
- * 3. Co-deletion: Delete a chain together with its blocker
+ * 3. Co-deletion: Delete a chain together with its blocker chains, collected with getJobBlockers
  */
 
 import assert from "node:assert/strict";
@@ -209,16 +209,17 @@ try {
 
 // Scenario 3: Co-deletion — delete chain with its blockers
 console.log("\n--- Scenario 3: Co-deletion ---");
-console.log("Delete the report chain together with its blocker chains.\n");
+console.log("Delete the report chain together with its blocker chains (from getJobBlockers).\n");
 
 const coDeleted = await withTransactionHooks(async (transactionHooks) =>
-  sql.begin(async (txSql) =>
-    client.deleteChains({
+  sql.begin(async (txSql) => {
+    const blockerChains = await client.getJobBlockers({ txSql, jobId: reportChain.id });
+    return client.deleteChains({
       txSql,
       transactionHooks,
-      ids: [reportChain.id, fetchChains[0].id, fetchChains[1].id],
-    }),
-  ),
+      ids: [reportChain.id, ...blockerChains.map((blocker) => blocker.id)],
+    });
+  }),
 );
 
 console.log(`Deleted ${coDeleted.length} chain(s):`);

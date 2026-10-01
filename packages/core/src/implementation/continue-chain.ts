@@ -4,7 +4,7 @@ import { type Helpers } from "../setup-helpers.js";
 import { type BaseTxContext, type StateJob } from "../state-adapter/state-adapter.js";
 import { type TransactionHooks } from "../transaction-hooks.js";
 import { type FinishResult } from "./attempt-outcome.js";
-import { continueStateJobs } from "./create-state-jobs.js";
+import { continueStateJob } from "./create-state-jobs.js";
 import { bufferJobCompletedEvents } from "./job-completed-events.js";
 
 export type AnyContinueWith = {
@@ -36,7 +36,7 @@ export const continueChain = async (
     input: continueWith.input,
   });
 
-  const { completedJob, continuation } = await continueStateJobs(helpers, {
+  const { completedJob, continuation } = await continueStateJob(helpers, {
     job: {
       typeName: continueWith.typeName,
       id: continueWith.id,

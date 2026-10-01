@@ -108,7 +108,7 @@ export const seedAllStatesV2 = async <TTxContext extends BaseTxContext>(
     ...(schedule ? { schedule } : {}),
   });
 
-  const createRoots = async (
+  const createChains = async (
     typeName: string,
     total: number,
     schedule?: { afterMs: number },
@@ -140,13 +140,12 @@ export const seedAllStatesV2 = async <TTxContext extends BaseTxContext>(
         });
         const jobs: StateJob[] = [];
         for (let k = 0; k < indexes.length; k++) {
-          const acquired = await stateAdapter.startJobAttempt({
+          const job = await stateAdapter.startJobAttempt({
             txCtx,
             typeNames: [typeName],
             workerId: seedConfigV2.workerId,
           });
-          if (!acquired) break;
-          const job = acquired;
+          if (!job) break;
           if (mode === "running") {
             jobs.push(
               (await stateAdapter.extendJobAttempt({
@@ -192,12 +191,12 @@ export const seedAllStatesV2 = async <TTxContext extends BaseTxContext>(
   // --- Block: Pending jobs (created first = earlier createdAt) ---
   const pendingJobs: StateJobInfo[] = [];
   for (const typeName of seedConfigV2.pendingTypes) {
-    const jobs = await createRoots(typeName, seedConfigV2.pendingPerType * scale);
+    const jobs = await createChains(typeName, seedConfigV2.pendingPerType * scale);
     pendingJobs.push(...jobs);
   }
 
   // --- Block: Scheduled ---
-  const scheduled = await createRoots("seed:scheduled", seedConfigV2.scheduledCount * scale, {
+  const scheduled = await createChains("seed:scheduled", seedConfigV2.scheduledCount * scale, {
     afterMs: seedConfigV2.futureMs,
   });
 
@@ -335,13 +334,13 @@ export const seedAllStatesV2 = async <TTxContext extends BaseTxContext>(
 
   // --- Block: Long chain with continuations ---
   const chainLength = seedConfigV2.chainLength * scale;
-  const [chainRootChain] = await stateAdapter.withTransaction(async (txCtx) =>
+  const [longChain] = await stateAdapter.withTransaction(async (txCtx) =>
     stateAdapter.createJobs({
       txCtx,
       jobs: [{ typeName: "seed:chain", input: { n: 0 } }],
     }),
   );
-  let lastChainJob = chainRootChain.head;
+  let longChainTail = longChain.head;
   for (let step = 1; step < chainLength; step++) {
     await stateAdapter.withTransaction(async (txCtx) => {
       const acquired = await stateAdapter.startJobAttempt({
@@ -356,12 +355,12 @@ export const seedAllStatesV2 = async <TTxContext extends BaseTxContext>(
         jobs: [{ typeName: "seed:chain", input: { n: step }, continueFromId: acquired.id }],
       });
       const { continuation } = continued!;
-      lastChainJob = continuation;
+      longChainTail = continuation;
     });
   }
 
   // --- Block: Throwaway inventory (consumed by operational query benchmarks) ---
-  await createRoots("seed:throwaway:pending", seedConfigV2.throwawayPending * scale);
+  await createChains("seed:throwaway:pending", seedConfigV2.throwawayPending * scale);
   await createProcessed("seed:throwaway:running", seedConfigV2.throwawayRunning * scale, "running");
 
   const throwawayExpiredRunning: StateJob[] = [];
@@ -373,13 +372,12 @@ export const seedAllStatesV2 = async <TTxContext extends BaseTxContext>(
       });
       const jobs: StateJob[] = [];
       for (let k = 0; k < indexes.length; k++) {
-        const acquired = await stateAdapter.startJobAttempt({
+        const job = await stateAdapter.startJobAttempt({
           txCtx,
           typeNames: ["seed:throwaway:expired"],
           workerId: seedConfigV2.workerId,
         });
-        if (!acquired) break;
-        const job = acquired;
+        if (!job) break;
         jobs.push(
           (await stateAdapter.extendJobAttempt({
             txCtx,
@@ -451,10 +449,10 @@ export const seedAllStatesV2 = async <TTxContext extends BaseTxContext>(
       typeName: "seed:retried",
     },
     longChain: {
-      chainId: chainRootChain.head.chainId,
+      chainId: longChain.head.chainId,
       length: chainLength,
-      headJobId: chainRootChain.head.id,
-      tailJobId: lastChainJob.id,
+      headJobId: longChain.head.id,
+      tailJobId: longChainTail.id,
     },
     fanIn: {
       blockerChainIds: fanInBlockerChains.map((j) => j.chainId),

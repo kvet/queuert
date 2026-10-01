@@ -69,4 +69,4 @@ See [examples/showcase-scheduling](https://github.com/kvet/queuert/tree/main/exa
 
 ## Ordering
 
-`listChains` and `listJobs` route queries to status-specific indexes based on the `status` and `orderBy` combination. Each status has a natural default sort order — for example, completed chains default to `completedAt` descending, pending jobs to `scheduledAt` descending. Pass `orderBy: "createdAt"` to override.
+`listChains` and `listJobs` route queries to status-specific indexes based on the `status` and `orderBy` combination. Each status has a natural default sort order — for example, completed chains default to `completedAt` descending, pending and blocked jobs to `scheduledAt` descending. Pass `orderBy: "createdAt"` to override.

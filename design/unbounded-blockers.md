@@ -57,7 +57,7 @@ No race between triggers 2 and 3. If a blocker completes before sealing, `unbloc
 
 `job_blocker.blocked` is a general improvement — it applies to sealed blockers too. The current `unblockJobs` join against each blocker chain's head row is replaced by a `blocked` flip + partial index check. For sealed blockers the row count is bounded by `MAX_BLOCKERS_PER_JOB = 100`, so the performance difference is negligible — but the code path is unified.
 
-The job model deliberately omitted a `job_blocker.open` denormalization because `unblockJobs` "already operates on a bounded set." Unsealed blockers break that assumption, justifying the column. The denormalization lives on `job_blocker` (write-once-flip-once, no contention) rather than `job` (hot acquisition path, MVCC cost), so the original concern about counter-on-`job` doesn't apply.
+The job model deliberately omitted a `job_blocker.blocked` denormalization because `unblockJobs` "already operates on a bounded set." Unsealed blockers break that assumption, justifying the column. The denormalization lives on `job_blocker` (write-once-flip-once, no contention) rather than `job` (hot acquisition path, MVCC cost), so the original concern about counter-on-`job` doesn't apply.
 
 ### Adapter contract change
 

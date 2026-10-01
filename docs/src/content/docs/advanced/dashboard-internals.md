@@ -29,7 +29,11 @@ All API endpoints are read-only except `POST /api/jobs/{jobId}/reschedule` and `
 
 ### Chain Endpoints
 
-**`GET /api/chains`** — List chains with filtering and cursor-based pagination.
+**`GET /api/chain-types`** — List the distinct chain type names in the store.
+
+**`GET /api/chain-types/counts?typeNames=…`** — Capped running and completed counts per chain type.
+
+**`GET /api/chains`** — List chains of one `typeName` with filtering and cursor-based pagination; returns an empty page without a `typeName`.
 
 **`GET /api/chains/{chainId}`** — Get chain detail with the first page of its job sequence.
 
@@ -39,7 +43,11 @@ All API endpoints are read-only except `POST /api/jobs/{jobId}/reschedule` and `
 
 ### Job Endpoints
 
-**`GET /api/jobs`** — List jobs with filtering and cursor-based pagination.
+**`GET /api/job-types`** — List the distinct job type names in the store.
+
+**`GET /api/job-types/counts?typeNames=…`** — Capped blocked, pending, running and completed counts per job type.
+
+**`GET /api/jobs`** — List jobs of one `typeName` with filtering and cursor-based pagination; returns an empty page without a `typeName`.
 
 **`GET /api/jobs/{jobId}`** — Get job detail with continuation and blockers.
 
@@ -47,7 +55,7 @@ All API endpoints are read-only except `POST /api/jobs/{jobId}/reschedule` and `
 
 ### Chain Mutation Endpoints
 
-**`DELETE /api/chains/{chainId}`** — Delete a chain and all its jobs.
+**`DELETE /api/chains/{chainId}`** — Delete a chain and all its jobs. Returns 409 when the chain is still a blocker of a job in another chain; nothing is deleted.
 
 ### Asset Serving
 
@@ -65,7 +73,11 @@ The frontend is a SolidJS single-page application built with Vite.
 
 ### Views
 
-**Chain List** (`/`) — Default view. Lists the chains of one selected type, newest first by default. Each chain displays as a card with type name, chain ID, status badge, date, and input preview. Supports lookup by chain ID and filtering by type name and status, with a status-dependent order-by dropdown and a direction toggle.
+**Chain Types** (`/chains/types`) — Default view (`/` redirects here). Lists every chain type with its running and completed counts; picking a type opens the chain list filtered to it.
+
+**Job Types** (`/jobs/types`) — Lists every job type with its blocked, pending, running and completed counts; picking a type or a count opens the job list filtered to it.
+
+**Chain List** (`/chains`) — Lists the chains of one selected type, newest first by default. Each chain displays as a card with type name, chain ID, status badge, date, and input preview. Supports lookup by chain ID and filtering by type name and status, with a status-dependent order-by dropdown and a direction toggle.
 
 **Chain Detail** (`/chains/:id`) — The job sequence within a chain, loaded a page at a time as you scroll. Shows each job as a card with input/output JSON, blocker dependencies with links to blocker chains, and a "Blocking" section listing jobs from other chains that depend on this chain.
 

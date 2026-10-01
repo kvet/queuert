@@ -20,10 +20,10 @@ import {
 import { type BaseTxContext, type StateAdapter } from "queuert";
 import {
   type StateBlockedJob,
-  type StateDependentJob,
   type StateChain,
   type StateChainInfo,
   type StateChainStatus,
+  type StateDependentJob,
   type StateJob,
   type StateJobInfo,
   type StateJobStatus,
@@ -806,8 +806,8 @@ WHERE j.id IN (SELECT value FROM json_each(?))
         id: string;
         json: Record<string, unknown>;
       }[] = [];
-      const intraBatchDedup = new Map<string, number>();
-      const deferredDupes: { index: number; firstIndex: number }[] = [];
+      const firstIndexByBatchKey = new Map<string, number>();
+      const deferredDuplicates: { index: number; firstIndex: number }[] = [];
 
       for (let i = 0; i < jobs.length; i++) {
         const job = jobs[i];
@@ -818,9 +818,9 @@ WHERE j.id IN (SELECT value FROM json_each(?))
           const deduplicationScope = job.deduplication.scope;
 
           const batchKey = `${deduplicationKey}\0${job.typeName}`;
-          const firstIdx = intraBatchDedup.get(batchKey);
-          if (firstIdx !== undefined) {
-            deferredDupes.push({ index: i, firstIndex: firstIdx });
+          const firstIndex = firstIndexByBatchKey.get(batchKey);
+          if (firstIndex !== undefined) {
+            deferredDuplicates.push({ index: i, firstIndex });
             continue;
           }
 
@@ -831,7 +831,7 @@ WHERE j.id IN (SELECT value FROM json_each(?))
                 sql(
                   `
 SELECT *
-FROM {{table_prefix}}job
+FROM {{table_prefix}}job INDEXED BY {{table_prefix}}chain_deduplication_idx
 WHERE ? IS NOT NULL
   AND chain_deduplication_key = ?
   AND chain_index = 0
@@ -877,7 +877,7 @@ LIMIT 1
             continue;
           }
 
-          intraBatchDedup.set(batchKey, i);
+          firstIndexByBatchKey.set(batchKey, i);
         }
 
         const newId = providedId ?? generateId();
@@ -911,8 +911,8 @@ WITH input_data AS (
     json_extract(je.value, '$.type_name')               AS type_name,
     json_extract(je.value, '$.input')                   AS input,
     json_extract(je.value, '$.chain_deduplication_key') AS chain_deduplication_key,
-    json_extract(je.value, '$.scheduled_at')            AS sched_at,
-    json_extract(je.value, '$.schedule_after_ms')       AS sched_after_ms,
+    json_extract(je.value, '$.scheduled_at')            AS scheduled_at_input,
+    json_extract(je.value, '$.schedule_after_ms')       AS schedule_after_ms_input,
     json_extract(je.value, '$.chain_trace_context')     AS chain_trace_context,
     json_extract(je.value, '$.trace_context')           AS trace_context
   FROM json_each(?) AS je
@@ -928,9 +928,9 @@ SELECT
   d.chain_deduplication_key,
   MAX(
     COALESCE(
-      d.sched_at,
-      CASE WHEN d.sched_after_ms IS NOT NULL
-        THEN datetime('now', 'subsec', '+' || (d.sched_after_ms / 1000.0) || ' seconds')
+      d.scheduled_at_input,
+      CASE WHEN d.schedule_after_ms_input IS NOT NULL
+        THEN datetime('now', 'subsec', '+' || (d.schedule_after_ms_input / 1000.0) || ' seconds')
         ELSE NULL
       END,
       datetime('now', 'subsec')
@@ -965,7 +965,7 @@ RETURNING *
         }
       }
 
-      for (const { index, firstIndex } of deferredDupes) {
+      for (const { index, firstIndex } of deferredDuplicates) {
         results[index] = { ...results[firstIndex], deduplicated: true };
       }
 
@@ -1001,8 +1001,8 @@ WITH input_data AS (
     json_extract(je.value, '$.new_id')                  AS new_id,
     json_extract(je.value, '$.type_name')               AS type_name,
     json_extract(je.value, '$.input')                   AS input,
-    json_extract(je.value, '$.scheduled_at')            AS sched_at,
-    json_extract(je.value, '$.schedule_after_ms')       AS sched_after_ms,
+    json_extract(je.value, '$.scheduled_at')            AS scheduled_at_input,
+    json_extract(je.value, '$.schedule_after_ms')       AS schedule_after_ms_input,
     json_extract(je.value, '$.trace_context')           AS trace_context,
     json_extract(je.value, '$.continue_from_id')        AS continue_from_id
   FROM json_each(?) AS je
@@ -1016,9 +1016,9 @@ SELECT
   d.input,
   MAX(
     COALESCE(
-      d.sched_at,
-      CASE WHEN d.sched_after_ms IS NOT NULL
-        THEN datetime('now', 'subsec', '+' || (d.sched_after_ms / 1000.0) || ' seconds')
+      d.scheduled_at_input,
+      CASE WHEN d.schedule_after_ms_input IS NOT NULL
+        THEN datetime('now', 'subsec', '+' || (d.schedule_after_ms_input / 1000.0) || ' seconds')
         ELSE NULL
       END,
       datetime('now', 'subsec')
@@ -1312,9 +1312,10 @@ WHERE jb.blocked_by_chain_id IN (SELECT value FROM json_each(?))
         else blockersByChain.set(ref.blocker_chain_id, [blockedJob]);
       }
 
-      const chainsToDelete = chainIds.filter(
-        (id) => chainRowById.has(id as string) && !blockersByChain.has(id as string),
-      );
+      const referenced = blockersByChain.size > 0;
+      const chainsToDelete = referenced
+        ? []
+        : chainIds.filter((id) => chainRowById.has(id as string));
 
       if (chainsToDelete.length > 0) {
         const deleteJson = JSON.stringify(chainsToDelete);
@@ -1366,6 +1367,7 @@ WHERE (id IN (SELECT value FROM json_each(?)) AND chain_index = 0)
       return chainIds.map((chainId) => {
         const blockers = blockersByChain.get(chainId as string);
         if (blockers) return blockers;
+        if (referenced) return undefined;
         const row = chainRowById.get(chainId as string);
         if (!row) return undefined;
         return mapDbChainRowToStateChain(row);
@@ -1532,6 +1534,10 @@ SELECT
   json_extract(je.value, '$.index'),
   json_extract(je.value, '$.trace_context')
 FROM json_each(?) AS je
+WHERE EXISTS (
+  SELECT 1 FROM {{table_prefix}}job h
+  WHERE h.id = json_extract(je.value, '$.blocked_by_chain_id') AND h.chain_index = 0
+)
 `,
               {
                 id: "insertJobBlockers",
@@ -1796,9 +1802,9 @@ ORDER BY jb.job_id, jb."index"
             sql(
               /* sql */ `
 WITH RECURSIVE types AS (
-  SELECT min(type_name) AS type_name FROM ${tablePrefix}job WHERE chain_index = 0
+  SELECT min(type_name) AS type_name FROM {{table_prefix}}job WHERE chain_index = 0
   UNION ALL
-  SELECT (SELECT min(type_name) FROM ${tablePrefix}job WHERE chain_index = 0 AND type_name > types.type_name)
+  SELECT (SELECT min(type_name) FROM {{table_prefix}}job WHERE chain_index = 0 AND type_name > types.type_name)
   FROM types WHERE types.type_name IS NOT NULL
 )
 SELECT type_name FROM types WHERE type_name IS NOT NULL
@@ -1824,9 +1830,9 @@ SELECT type_name FROM types WHERE type_name IS NOT NULL
             sql(
               /* sql */ `
 WITH RECURSIVE types AS (
-  SELECT min(type_name) AS type_name FROM ${tablePrefix}job
+  SELECT min(type_name) AS type_name FROM {{table_prefix}}job
   UNION ALL
-  SELECT (SELECT min(type_name) FROM ${tablePrefix}job WHERE type_name > types.type_name)
+  SELECT (SELECT min(type_name) FROM {{table_prefix}}job WHERE type_name > types.type_name)
   FROM types WHERE types.type_name IS NOT NULL
 )
 SELECT type_name FROM types WHERE type_name IS NOT NULL
@@ -1856,15 +1862,15 @@ SELECT type_name FROM types WHERE type_name IS NOT NULL
 SELECT
   je.value AS name,
   (SELECT count(*) FROM (
-    SELECT 1 FROM ${tablePrefix}job
+    SELECT 1 FROM {{table_prefix}}job
     WHERE type_name = je.value AND chain_index = 0 AND chain_status = 'running'
     LIMIT ${COUNT_CAP + 1}
-  )) AS running_cnt,
+  )) AS running_count,
   (SELECT count(*) FROM (
-    SELECT 1 FROM ${tablePrefix}job
+    SELECT 1 FROM {{table_prefix}}job
     WHERE type_name = je.value AND chain_index = 0 AND chain_status = 'completed'
     LIMIT ${COUNT_CAP + 1}
-  )) AS completed_cnt
+  )) AS completed_count
 FROM json_each(?) AS je
 `,
               {
@@ -1872,8 +1878,8 @@ FROM json_each(?) AS je
                 params: [t.string()],
                 columns: {
                   name: t.string(),
-                  running_cnt: t.number(),
-                  completed_cnt: t.number(),
+                  running_count: t.number(),
+                  completed_count: t.number(),
                 },
                 readOnly: true,
               },
@@ -1893,12 +1899,12 @@ FROM json_each(?) AS je
           };
         return {
           running: {
-            count: Math.min(r.running_cnt, COUNT_CAP),
-            hasMore: r.running_cnt > COUNT_CAP,
+            count: Math.min(r.running_count, COUNT_CAP),
+            hasMore: r.running_count > COUNT_CAP,
           },
           completed: {
-            count: Math.min(r.completed_cnt, COUNT_CAP),
-            hasMore: r.completed_cnt > COUNT_CAP,
+            count: Math.min(r.completed_count, COUNT_CAP),
+            hasMore: r.completed_count > COUNT_CAP,
           },
         };
       });
@@ -1915,10 +1921,10 @@ FROM json_each(?) AS je
               /* sql */ `
 SELECT
   je.value AS name,
-  (SELECT count(*) FROM (SELECT 1 FROM ${tablePrefix}job WHERE type_name = je.value AND status = 'blocked' LIMIT ${COUNT_CAP + 1})) AS blocked_cnt,
-  (SELECT count(*) FROM (SELECT 1 FROM ${tablePrefix}job WHERE type_name = je.value AND status = 'pending' LIMIT ${COUNT_CAP + 1})) AS pending_cnt,
-  (SELECT count(*) FROM (SELECT 1 FROM ${tablePrefix}job WHERE type_name = je.value AND status = 'running' LIMIT ${COUNT_CAP + 1})) AS running_cnt,
-  (SELECT count(*) FROM (SELECT 1 FROM ${tablePrefix}job WHERE type_name = je.value AND status = 'completed' LIMIT ${COUNT_CAP + 1})) AS completed_cnt
+  (SELECT count(*) FROM (SELECT 1 FROM {{table_prefix}}job WHERE type_name = je.value AND status = 'blocked' LIMIT ${COUNT_CAP + 1})) AS blocked_count,
+  (SELECT count(*) FROM (SELECT 1 FROM {{table_prefix}}job WHERE type_name = je.value AND status = 'pending' LIMIT ${COUNT_CAP + 1})) AS pending_count,
+  (SELECT count(*) FROM (SELECT 1 FROM {{table_prefix}}job WHERE type_name = je.value AND status = 'running' LIMIT ${COUNT_CAP + 1})) AS running_count,
+  (SELECT count(*) FROM (SELECT 1 FROM {{table_prefix}}job WHERE type_name = je.value AND status = 'completed' LIMIT ${COUNT_CAP + 1})) AS completed_count
 FROM json_each(?) AS je
 `,
               {
@@ -1926,10 +1932,10 @@ FROM json_each(?) AS je
                 params: [t.string()],
                 columns: {
                   name: t.string(),
-                  blocked_cnt: t.number(),
-                  pending_cnt: t.number(),
-                  running_cnt: t.number(),
-                  completed_cnt: t.number(),
+                  blocked_count: t.number(),
+                  pending_count: t.number(),
+                  running_count: t.number(),
+                  completed_count: t.number(),
                 },
                 readOnly: true,
               },
@@ -1951,20 +1957,20 @@ FROM json_each(?) AS je
           };
         return {
           blocked: {
-            count: Math.min(r.blocked_cnt, COUNT_CAP),
-            hasMore: r.blocked_cnt > COUNT_CAP,
+            count: Math.min(r.blocked_count, COUNT_CAP),
+            hasMore: r.blocked_count > COUNT_CAP,
           },
           pending: {
-            count: Math.min(r.pending_cnt, COUNT_CAP),
-            hasMore: r.pending_cnt > COUNT_CAP,
+            count: Math.min(r.pending_count, COUNT_CAP),
+            hasMore: r.pending_count > COUNT_CAP,
           },
           running: {
-            count: Math.min(r.running_cnt, COUNT_CAP),
-            hasMore: r.running_cnt > COUNT_CAP,
+            count: Math.min(r.running_count, COUNT_CAP),
+            hasMore: r.running_count > COUNT_CAP,
           },
           completed: {
-            count: Math.min(r.completed_cnt, COUNT_CAP),
-            hasMore: r.completed_cnt > COUNT_CAP,
+            count: Math.min(r.completed_count, COUNT_CAP),
+            hasMore: r.completed_count > COUNT_CAP,
           },
         };
       });
@@ -1983,7 +1989,7 @@ FROM json_each(?) AS je
     }) => {
       const orderColumn = orderBy === "completedAt" ? "chain_completed_at" : "created_at";
       const cursor = page.cursor ? decodeTimestampWithIdCursor(page.cursor, orderBy) : null;
-      const orderDir = orderDirection === "desc" ? "DESC" : "ASC";
+      const sortDirection = orderDirection === "desc" ? "DESC" : "ASC";
 
       const conditions: string[] = ["head_job.chain_index = 0"];
       const params: unknown[] = [];
@@ -1999,11 +2005,11 @@ FROM json_each(?) AS je
 
       if (independent === true) {
         conditions.push(
-          `NOT EXISTS (SELECT 1 FROM ${tablePrefix}job_blocker jb WHERE jb.blocked_by_chain_id = head_job.id)`,
+          `NOT EXISTS (SELECT 1 FROM {{table_prefix}}job_blocker jb WHERE jb.blocked_by_chain_id = head_job.id)`,
         );
       } else if (independent === false) {
         conditions.push(
-          `EXISTS (SELECT 1 FROM ${tablePrefix}job_blocker jb WHERE jb.blocked_by_chain_id = head_job.id)`,
+          `EXISTS (SELECT 1 FROM {{table_prefix}}job_blocker jb WHERE jb.blocked_by_chain_id = head_job.id)`,
         );
       }
 
@@ -2020,9 +2026,9 @@ FROM json_each(?) AS je
 
       if (cursor) {
         const cursorValue = isoToSqlite(cursor.value);
-        const cmp = orderDirection === "desc" ? "<" : ">";
+        const comparison = orderDirection === "desc" ? "<" : ">";
         conditions.push(
-          `(head_job.${orderColumn} ${cmp} ? OR (head_job.${orderColumn} = ? AND head_job.id ${cmp} ?))`,
+          `(head_job.${orderColumn} ${comparison} ? OR (head_job.${orderColumn} = ? AND head_job.id ${comparison} ?))`,
         );
         params.push(cursorValue, cursorValue, cursor.id);
         paramTypes.push(t.string(), t.string(), t.string());
@@ -2030,12 +2036,12 @@ FROM json_each(?) AS je
       params.push(page.limit + 1);
       paramTypes.push(t.number());
 
-      const sqlStr = `SELECT {{job_columns:head_job}}, {{job_columns_prefixed:tail_job:tail_}} FROM (SELECT head_job.* FROM ${tablePrefix}job AS head_job WHERE ${conditions.join(" AND ")} ORDER BY head_job.${orderColumn} ${orderDir}, head_job.id ${orderDir} LIMIT ?) AS head_job${tailJoin("head_job")} ORDER BY head_job.${orderColumn} ${orderDir}, head_job.id ${orderDir}`;
+      const sqlText = `SELECT {{job_columns:head_job}}, {{job_columns_prefixed:tail_job:tail_}} FROM (SELECT head_job.* FROM {{table_prefix}}job AS head_job WHERE ${conditions.join(" AND ")} ORDER BY head_job.${orderColumn} ${sortDirection}, head_job.id ${sortDirection} LIMIT ?) AS head_job${tailJoin("head_job")} ORDER BY head_job.${orderColumn} ${sortDirection}, head_job.id ${sortDirection}`;
 
       const rows = await executeTypedSql({
         txCtx,
         sql: applyTemplate(
-          sql(sqlStr, {
+          sql(sqlText, {
             params: paramTypes,
             columns: dbChainRowColumns,
             readOnly: true,
@@ -2063,7 +2069,7 @@ FROM json_each(?) AS je
     },
 
     listJobs: async ({ txCtx, typeName, from, to, status, orderBy, orderDirection, page }) => {
-      const sortCol = {
+      const sortColumn = {
         createdAt: "created_at",
         scheduledAt: "scheduled_at",
         completedAt: "completed_at",
@@ -2084,21 +2090,21 @@ FROM json_each(?) AS je
       params.push(typeName);
       paramTypes.push(t.string());
       if (from) {
-        conditions.push(`j.${sortCol} >= ?`);
+        conditions.push(`j.${sortColumn} >= ?`);
         params.push(isoToSqlite(from.toISOString()));
         paramTypes.push(t.string());
       }
       if (to) {
-        conditions.push(`j.${sortCol} <= ?`);
+        conditions.push(`j.${sortColumn} <= ?`);
         params.push(isoToSqlite(to.toISOString()));
         paramTypes.push(t.string());
       }
       if (cursor) {
         const cursorValue = isoToSqlite(cursor.value);
         if (orderDirection === "desc") {
-          conditions.push(`(j.${sortCol} < ? OR (j.${sortCol} = ? AND j.id < ?))`);
+          conditions.push(`(j.${sortColumn} < ? OR (j.${sortColumn} = ? AND j.id < ?))`);
         } else {
-          conditions.push(`(j.${sortCol} > ? OR (j.${sortCol} = ? AND j.id > ?))`);
+          conditions.push(`(j.${sortColumn} > ? OR (j.${sortColumn} = ? AND j.id > ?))`);
         }
         params.push(cursorValue, cursorValue, cursor.id);
         paramTypes.push(t.string(), t.string(), t.string());
@@ -2106,14 +2112,14 @@ FROM json_each(?) AS je
       params.push(page.limit + 1);
       paramTypes.push(t.number());
 
-      const orderDir = orderDirection === "desc" ? "DESC" : "ASC";
+      const sortDirection = orderDirection === "desc" ? "DESC" : "ASC";
       const where = conditions.length > 0 ? `WHERE ${conditions.join(" AND ")}` : "";
-      const sqlStr = `SELECT {{job_columns:j}}, {{chain_columns:h}} FROM (SELECT j.* FROM ${tablePrefix}job j ${where} ORDER BY j.${sortCol} ${orderDir}, j.id ${orderDir} LIMIT ?) j JOIN ${tablePrefix}job h ON h.id = j.chain_id ORDER BY j.${sortCol} ${orderDir}, j.id ${orderDir}`;
+      const sqlText = `SELECT {{job_columns:j}}, {{chain_columns:h}} FROM (SELECT j.* FROM {{table_prefix}}job j ${where} ORDER BY j.${sortColumn} ${sortDirection}, j.id ${sortDirection} LIMIT ?) j JOIN {{table_prefix}}job h ON h.id = j.chain_id ORDER BY j.${sortColumn} ${sortDirection}, j.id ${sortDirection}`;
 
       const rows = await executeTypedSql({
         txCtx,
         sql: applyTemplate(
-          sql(sqlStr, {
+          sql(sqlText, {
             params: paramTypes,
             columns: { ...dbJobColumns, ...dbChainColumns },
             readOnly: true,
@@ -2132,7 +2138,7 @@ FROM json_each(?) AS je
         nextCursor = encodeCursor({
           type: "timestampWithId",
           sortKey: orderBy,
-          value: sqliteDate(lastRow[sortCol as keyof DbJob] as string).toISOString(),
+          value: sqliteDate(lastRow[sortColumn as keyof DbJob] as string).toISOString(),
           id: lastRow.id,
         });
       }
@@ -2142,44 +2148,44 @@ FROM json_each(?) AS je
 
     listChainJobs: async ({ txCtx, chainId, orderDirection, page }) => {
       const cursor = page.cursor ? decodeIdCursor(page.cursor) : null;
-      const orderDir = orderDirection === "asc" ? "ASC" : "DESC";
+      const sortDirection = orderDirection === "asc" ? "ASC" : "DESC";
       const params: unknown[] = [chainId];
       const paramTypes: DataType[] = [idDataType];
-      let sqlStr: string;
+      let sqlText: string;
 
       if (cursor) {
-        const cmp = orderDirection === "asc" ? ">" : "<";
+        const comparison = orderDirection === "asc" ? ">" : "<";
         params.length = 0;
         params.push(cursor.id, chainId, chainId, chainId, chainId, page.limit + 1);
         paramTypes.length = 0;
         paramTypes.push(idDataType, idDataType, idDataType, idDataType, idDataType, t.number());
-        sqlStr = `WITH start_row AS (
-          SELECT c.chain_index AS sc
-          FROM ${tablePrefix}job c
+        sqlText = `WITH start_row AS (
+          SELECT c.chain_index AS start_chain_index
+          FROM {{table_prefix}}job c
           WHERE c.id = ? AND c.chain_id = ?
         )
         SELECT {{job_columns:j}}, {{chain_columns:h}}
-        FROM ${tablePrefix}job j, start_row s, ${tablePrefix}job h
+        FROM {{table_prefix}}job j, start_row s, {{table_prefix}}job h
         WHERE ${chainMembers("j")}
           AND h.id = ?
-          AND j.chain_index ${cmp} s.sc
-        ORDER BY j.chain_index ${orderDir}, j.id ${orderDir}
+          AND j.chain_index ${comparison} s.start_chain_index
+        ORDER BY j.chain_index ${sortDirection}, j.id ${sortDirection}
         LIMIT ?`;
       } else {
         params.push(chainId, chainId, page.limit + 1);
         paramTypes.push(idDataType, idDataType, t.number());
-        sqlStr = `SELECT {{job_columns:j}}, {{chain_columns:h}}
-        FROM ${tablePrefix}job j, ${tablePrefix}job h
+        sqlText = `SELECT {{job_columns:j}}, {{chain_columns:h}}
+        FROM {{table_prefix}}job j, {{table_prefix}}job h
         WHERE ${chainMembers("j")}
           AND h.id = ?
-        ORDER BY j.chain_index ${orderDir}, j.id ${orderDir}
+        ORDER BY j.chain_index ${sortDirection}, j.id ${sortDirection}
         LIMIT ?`;
       }
 
       const rows = await executeTypedSql({
         txCtx,
         sql: applyTemplate(
-          sql(sqlStr, {
+          sql(sqlText, {
             params: paramTypes,
             columns: { ...dbJobColumns, ...dbChainColumns },
             readOnly: true,
@@ -2205,7 +2211,7 @@ FROM json_each(?) AS je
     listBlockedJobs: async ({ txCtx, chainId, orderDirection, page }) => {
       const cursor = page.cursor ? decodeTimestampWithIdCursor(page.cursor, "createdAt") : null;
       const conditions: string[] = [
-        `j.id IN (SELECT jb.job_id FROM ${tablePrefix}job_blocker jb WHERE jb.blocked_by_chain_id = ?)`,
+        `j.id IN (SELECT jb.job_id FROM {{table_prefix}}job_blocker jb WHERE jb.blocked_by_chain_id = ?)`,
       ];
       const params: unknown[] = [chainId];
       const paramTypes: DataType[] = [idDataType];
@@ -2223,13 +2229,13 @@ FROM json_each(?) AS je
       params.push(page.limit + 1);
       paramTypes.push(t.number());
 
-      const orderDir = orderDirection === "desc" ? "DESC" : "ASC";
-      const sqlStr = `SELECT {{job_columns:j}}, {{chain_columns:h}} FROM (SELECT j.* FROM ${tablePrefix}job j WHERE ${conditions.join(" AND ")} ORDER BY j.created_at ${orderDir}, j.id ${orderDir} LIMIT ?) j JOIN ${tablePrefix}job h ON h.id = j.chain_id ORDER BY j.created_at ${orderDir}, j.id ${orderDir}`;
+      const sortDirection = orderDirection === "desc" ? "DESC" : "ASC";
+      const sqlText = `SELECT {{job_columns:j}}, {{chain_columns:h}} FROM (SELECT j.* FROM {{table_prefix}}job j WHERE ${conditions.join(" AND ")} ORDER BY j.created_at ${sortDirection}, j.id ${sortDirection} LIMIT ?) j JOIN {{table_prefix}}job h ON h.id = j.chain_id ORDER BY j.created_at ${sortDirection}, j.id ${sortDirection}`;
 
       const rows = await executeTypedSql({
         txCtx,
         sql: applyTemplate(
-          sql(sqlStr, {
+          sql(sqlText, {
             params: paramTypes,
             columns: { ...dbJobColumns, ...dbChainColumns },
             readOnly: true,
@@ -2271,13 +2277,13 @@ FROM json_each(?) AS je
         await executeTypedSql({
           txCtx,
           sql: applyTemplate(
-            sql(/* sql */ `DELETE FROM ${tablePrefix}job_blocker`, { params: [], columns: {} }),
+            sql(/* sql */ `DELETE FROM {{table_prefix}}job_blocker`, { params: [], columns: {} }),
           ),
         });
         await executeTypedSql({
           txCtx,
           sql: applyTemplate(
-            sql(/* sql */ `DELETE FROM ${tablePrefix}job`, { params: [], columns: {} }),
+            sql(/* sql */ `DELETE FROM {{table_prefix}}job`, { params: [], columns: {} }),
           ),
         });
       });

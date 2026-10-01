@@ -441,7 +441,7 @@ describe("createMigrator", () => {
   });
 
   describe("validation", () => {
-    it("rejects a migration name that does not match the timestamp pattern", () => {
+    it("rejects a migration name that does not match the NNN_name pattern", () => {
       const { store } = harness();
       expect(() => createMigrator({ migrations: [tx("bad_name")], store })).toThrow(
         /Invalid migration name/,

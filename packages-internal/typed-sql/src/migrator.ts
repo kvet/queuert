@@ -6,6 +6,10 @@ export type Migration = {
   statements: TypedSqlTemplate[];
 };
 
+/**
+ * Result of running `migrateToLatest`, reporting which migrations were skipped (already applied),
+ * applied, and unrecognized (present in the database but not in the code).
+ */
 export type MigrationResult = {
   skipped: string[];
   applied: string[];
@@ -13,6 +17,10 @@ export type MigrationResult = {
 };
 
 export type MigrationStore<TTxContext> = {
+  /**
+   * Bootstrap migration infrastructure tables (migration + lock). Called at the start of every
+   * run, before the lock is taken, so it must be idempotent.
+   */
   initialize?: () => Promise<void>;
   runInTransaction: <T>(fn: (txCtx: TTxContext) => Promise<T>) => Promise<T>;
   getAppliedMigrationNames: (txCtx: TTxContext | undefined) => Promise<string[]>;
@@ -39,8 +47,11 @@ export type MigrationStore<TTxContext> = {
 );
 
 export type MigrationLockOptions = {
+  /** How long a claimed lease stays valid without a heartbeat. @defaultValue 60s */
   ttlMs?: number;
+  /** How often the lease is extended while migrating. @defaultValue 20s */
   heartbeatIntervalMs?: number;
+  /** How often a waiting process re-attempts to claim the lease. @defaultValue 1s */
   pollIntervalMs?: number;
 };
 

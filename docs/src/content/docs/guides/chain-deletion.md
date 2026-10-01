@@ -39,11 +39,28 @@ await withTransactionHooks(async (transactionHooks) =>
 ); // ok
 ```
 
+## Deleting a Chain with Its Blockers
+
+Deletion never follows blocker relationships on its own. To remove a chain together with the chains it waits on, collect its blocker chains with `getJobBlockers` and pass them in the same `deleteChains` call:
+
+```ts
+const blockerChains = await client.getJobBlockers({ jobId: reportChain.id });
+
+await withTransactionHooks(async (transactionHooks) =>
+  client.deleteChains({
+    transactionHooks,
+    ids: [reportChain.id, ...blockerChains.map((blocker) => blocker.id)],
+  }),
+);
+```
+
+`getJobBlockers` takes a job ID: a chain's head job has the chain's ID, and a continuation declared with its own `blockers` has to be queried separately (list the chain's jobs with `listChainJobs`). Repeat the lookup on each blocker chain to reach blockers of blockers. If any chain in the set is still a blocker of a job outside it — for example, a blocker shared with another report — the call throws `BlockerReferenceError` and deletes nothing; leave that chain out, or add its dependents to the set.
+
 ## How It Works
 
 ### What Gets Deleted
 
-Given a list of `ids`, the operation deletes all jobs in each chain (every job where `job.chainId` matches a provided ID, including the head and continuations) and cleans up blocker references pointing at deleted chains from surviving jobs.
+Given a list of `ids`, the operation deletes all jobs in each chain (every job where `job.chainId` matches a provided ID, including the head and continuations), together with the blocker references those jobs hold on other chains. References pointing at a deleted chain from a job outside the deletion set are never removed — they make the whole deletion fail (see below).
 
 ### Blocker Safety Check
 
@@ -55,3 +72,7 @@ Chain A (blocker) --> Chain B (blocked)
 deleteChains({ ids: [A] })    // BlockerReferenceError -- B depends on A
 deleteChains({ ids: [A, B] }) // Both in deletion set -- no external refs
 ```
+
+## See Also
+
+See [examples/showcase-chain-deletion](https://github.com/kvet/queuert/tree/main/examples/showcase-chain-deletion) for a complete working example demonstrating simple deletion, blocker safety, and co-deletion. See also [Transaction Hooks](../transaction-hooks/) and [Job Blockers](../job-blockers/).

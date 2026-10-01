@@ -1,5 +1,9 @@
+import { sleep } from "../../helpers/sleep.js";
+import { type StateChain } from "../../state-adapter/state-adapter.js";
 import { type ConformanceGroup } from "../runner.js";
 import { type StateConformanceFixture } from "./types.js";
+
+const LOCK_BLOCK_OBSERVATION_MS = 100;
 
 export const addJobsBlockersGroup: ConformanceGroup<StateConformanceFixture> = {
   name: "addJobsBlockers",
@@ -395,6 +399,202 @@ export const addJobsBlockersGroup: ConformanceGroup<StateConformanceFixture> = {
           blockerChain.head.chainId,
           blockerChain.head.chainId,
         ]);
+      },
+    },
+    {
+      name: "reports a blocker chain deleted while it waited on the head lock as missing",
+      run: async ({ stateAdapter }, expect) => {
+        if (stateAdapter.transactionConcurrency === "serialized") {
+          expect.skip("requires concurrent transactions");
+          return;
+        }
+
+        const [blockerChain, mainChain] = await stateAdapter.withTransaction(async (txCtx) =>
+          stateAdapter.createJobs({
+            txCtx,
+            jobs: [
+              { typeName: "deleted-blocker", input: null },
+              { typeName: "main", input: null },
+            ],
+          }),
+        );
+
+        let signalDeleted: (() => void) | undefined;
+        const deleted = new Promise<void>((r) => {
+          signalDeleted = r;
+        });
+        let releaseDeleter: (() => void) | undefined;
+        const deleterGate = new Promise<void>((r) => {
+          releaseDeleter = r;
+        });
+
+        const deleteTx = stateAdapter.withTransaction(async (txCtx) => {
+          const result = await stateAdapter.deleteChains({ txCtx, chainIds: [blockerChain.id] });
+          signalDeleted!();
+          await deleterGate;
+          return result;
+        });
+
+        await deleted;
+
+        let addSettled = false;
+        const addTx = stateAdapter
+          .withTransaction(async (txCtx) =>
+            stateAdapter.addJobsBlockers({
+              txCtx,
+              jobBlockers: [{ jobId: mainChain.head.id, blockedByChainIds: [blockerChain.id] }],
+            }),
+          )
+          .finally(() => {
+            addSettled = true;
+          });
+
+        await sleep(LOCK_BLOCK_OBSERVATION_MS);
+        expect(addSettled).toBe(false);
+
+        releaseDeleter!();
+        const [deletedChain] = await deleteTx;
+        expect((deletedChain as StateChain).id).toBe(blockerChain.id);
+
+        const [added] = await addTx;
+        expect(added.blockers).toEqual([undefined]);
+        expect(added.status).toBe("pending");
+        const blockedJobs = await stateAdapter.listBlockedJobs({
+          chainId: blockerChain.id,
+          orderDirection: "asc",
+          page: { limit: 10 },
+        });
+        expect(blockedJobs.items).toEqual([]);
+      },
+    },
+    {
+      name: "reports a blocker chain continued while it waited on the head lock as incomplete",
+      run: async ({ stateAdapter }, expect) => {
+        if (stateAdapter.transactionConcurrency === "serialized") {
+          expect.skip("requires concurrent transactions");
+          return;
+        }
+
+        const [blockerChain, mainChain] = await stateAdapter.withTransaction(async (txCtx) =>
+          stateAdapter.createJobs({
+            txCtx,
+            jobs: [
+              { typeName: "continued-blocker", input: null },
+              { typeName: "main", input: null },
+            ],
+          }),
+        );
+
+        let signalContinued: (() => void) | undefined;
+        const continued = new Promise<void>((r) => {
+          signalContinued = r;
+        });
+        let releaseContinuer: (() => void) | undefined;
+        const continuerGate = new Promise<void>((r) => {
+          releaseContinuer = r;
+        });
+
+        const continuerTx = stateAdapter.withTransaction(async (txCtx) => {
+          await stateAdapter.getJobs({ txCtx, jobIds: [blockerChain.head.id], lock: "exclusive" });
+          await stateAdapter.continueJobs({
+            txCtx,
+            jobs: [
+              {
+                typeName: "continued-blocker:step",
+                input: null,
+                continueFromId: blockerChain.head.id,
+              },
+            ],
+          });
+          signalContinued!();
+          await continuerGate;
+        });
+
+        await continued;
+
+        let addSettled = false;
+        const addTx = stateAdapter
+          .withTransaction(async (txCtx) =>
+            stateAdapter.addJobsBlockers({
+              txCtx,
+              jobBlockers: [{ jobId: mainChain.head.id, blockedByChainIds: [blockerChain.id] }],
+            }),
+          )
+          .finally(() => {
+            addSettled = true;
+          });
+
+        await sleep(LOCK_BLOCK_OBSERVATION_MS);
+        expect(addSettled).toBe(false);
+
+        releaseContinuer!();
+        await continuerTx;
+
+        const [added] = await addTx;
+        expect(added.status).toBe("blocked");
+        expect(added.blockers.map((blocker) => blocker?.status)).toEqual(["running"]);
+      },
+    },
+    {
+      name: "reports a blocker chain completed while it waited on the head lock as complete",
+      run: async ({ stateAdapter }, expect) => {
+        if (stateAdapter.transactionConcurrency === "serialized") {
+          expect.skip("requires concurrent transactions");
+          return;
+        }
+
+        const [blockerChain, mainChain] = await stateAdapter.withTransaction(async (txCtx) =>
+          stateAdapter.createJobs({
+            txCtx,
+            jobs: [
+              { typeName: "completed-blocker", input: null },
+              { typeName: "main", input: null },
+            ],
+          }),
+        );
+
+        let signalCompleted: (() => void) | undefined;
+        const completed = new Promise<void>((r) => {
+          signalCompleted = r;
+        });
+        let releaseCompleter: (() => void) | undefined;
+        const completerGate = new Promise<void>((r) => {
+          releaseCompleter = r;
+        });
+
+        const completerTx = stateAdapter.withTransaction(async (txCtx) => {
+          await stateAdapter.getJobs({ txCtx, jobIds: [blockerChain.head.id], lock: "exclusive" });
+          await stateAdapter.completeJobs({
+            txCtx,
+            jobs: [{ jobId: blockerChain.head.id, output: null }],
+          });
+          signalCompleted!();
+          await completerGate;
+        });
+
+        await completed;
+
+        let addSettled = false;
+        const addTx = stateAdapter
+          .withTransaction(async (txCtx) =>
+            stateAdapter.addJobsBlockers({
+              txCtx,
+              jobBlockers: [{ jobId: mainChain.head.id, blockedByChainIds: [blockerChain.id] }],
+            }),
+          )
+          .finally(() => {
+            addSettled = true;
+          });
+
+        await sleep(LOCK_BLOCK_OBSERVATION_MS);
+        expect(addSettled).toBe(false);
+
+        releaseCompleter!();
+        await completerTx;
+
+        const [added] = await addTx;
+        expect(added.status).toBe("pending");
+        expect(added.blockers.map((blocker) => blocker?.status)).toEqual(["completed"]);
       },
     },
   ],

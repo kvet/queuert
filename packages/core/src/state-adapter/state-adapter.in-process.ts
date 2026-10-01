@@ -11,6 +11,7 @@ import {
   type StateChain,
   type StateChainInfo,
   type StateChainStatus,
+  type StateCount,
   type StateJob,
   type StateJobInfo,
 } from "./state-adapter.js";
@@ -58,6 +59,13 @@ const matchesDateRange = (value: Date | null | undefined, from?: Date, to?: Date
 
 const matchesTypeNameFilter = (job: DbJob, typeName: string): boolean => job.typeName === typeName;
 
+const COUNT_CAP = 10_000;
+
+const cappedCount = (count: number): StateCount => ({
+  count: Math.min(count, COUNT_CAP),
+  hasMore: count > COUNT_CAP,
+});
+
 // ── Pagination helpers ──────────────────────────────────────────────
 
 type PaginateItem = DbJob | [DbJob, DbJob | undefined];
@@ -71,25 +79,25 @@ const paginateByTimestamp = <T extends PaginateItem>(
   sortKey: string,
   getTimestamp: (item: T) => Date,
 ): Page<T> => {
-  const dir = orderDirection === "desc" ? -1 : 1;
+  const directionSign = orderDirection === "desc" ? -1 : 1;
   const sorted = items.toSorted((a, b) => {
-    const d = getTimestamp(a).getTime() - getTimestamp(b).getTime();
-    if (d !== 0) return d * dir;
+    const difference = getTimestamp(a).getTime() - getTimestamp(b).getTime();
+    if (difference !== 0) return difference * directionSign;
     const idA = paginateItemId(a);
     const idB = paginateItemId(b);
-    return idA < idB ? -dir : idA > idB ? dir : 0;
+    return idA < idB ? -directionSign : idA > idB ? directionSign : 0;
   });
 
   let startIndex = 0;
   if (page.cursor) {
     const cursor = decodeTimestampWithIdCursor(page.cursor, sortKey);
     startIndex = sorted.findIndex((item) => {
-      const sv = getTimestamp(item).toISOString();
+      const value = getTimestamp(item).toISOString();
       const id = paginateItemId(item);
       if (orderDirection === "desc") {
-        return sv < cursor.value || (sv === cursor.value && id < cursor.id);
+        return value < cursor.value || (value === cursor.value && id < cursor.id);
       }
-      return sv > cursor.value || (sv === cursor.value && id > cursor.id);
+      return value > cursor.value || (value === cursor.value && id > cursor.id);
     });
     if (startIndex === -1) startIndex = sorted.length;
   }
@@ -131,11 +139,11 @@ const paginateByChainIndex = (
   page: PageParams,
   orderDirection: OrderDirection,
 ): Page<DbJob> => {
-  const dir = orderDirection === "asc" ? 1 : -1;
+  const directionSign = orderDirection === "asc" ? 1 : -1;
   const sorted = items.toSorted((a, b) => {
-    const d = a.chainIndex - b.chainIndex;
-    if (d !== 0) return d * dir;
-    return a.id < b.id ? -dir : a.id > b.id ? dir : 0;
+    const difference = a.chainIndex - b.chainIndex;
+    if (difference !== 0) return difference * directionSign;
+    return a.id < b.id ? -directionSign : a.id > b.id ? directionSign : 0;
   });
 
   let startIndex = 0;
@@ -271,8 +279,8 @@ class JobIndex {
   readonly pendingByType = new Map<string, SortedSet<DbJob>>();
   readonly runningByType = new Map<string, SortedSet<DbJob>>();
   readonly jobsByChain = new Map<string, Map<number, DbJob>>();
-  readonly lastByChain = new Map<string, DbJob>();
-  readonly dedupByKey = new Map<string, Set<DbJob>>();
+  readonly tailByChain = new Map<string, DbJob>();
+  readonly headJobsByDeduplicationKey = new Map<string, Set<DbJob>>();
   readonly jobBlockers = new Map<string, Map<string, BlockerEntry>>();
   readonly blockedByChain = new Map<string, Set<string>>();
   readonly seqByJobId = new Map<string, number>();
@@ -337,19 +345,19 @@ class JobIndex {
     }
     chainMap.set(job.chainIndex, job);
 
-    const last = this.lastByChain.get(job.chainId);
-    if (!last || job.chainIndex > last.chainIndex) {
-      this.lastByChain.set(job.chainId, job);
+    const tail = this.tailByChain.get(job.chainId);
+    if (!tail || job.chainIndex > tail.chainIndex) {
+      this.tailByChain.set(job.chainId, job);
     }
 
     if (job.id === job.chainId) {
       this.headJobsByCreatedAt.insert(job);
-      const k = this.dedupKeyFor(job);
-      if (k) {
-        let set = this.dedupByKey.get(k);
+      const indexKey = this.deduplicationIndexKey(job);
+      if (indexKey) {
+        let set = this.headJobsByDeduplicationKey.get(indexKey);
         if (!set) {
           set = new Set();
-          this.dedupByKey.set(k, set);
+          this.headJobsByDeduplicationKey.set(indexKey, set);
         }
         set.add(job);
       }
@@ -372,27 +380,27 @@ class JobIndex {
       }
     }
 
-    const last = this.lastByChain.get(job.chainId);
-    if (last && last.id === job.id) {
-      let newLast: DbJob | undefined;
+    const tail = this.tailByChain.get(job.chainId);
+    if (tail && tail.id === job.id) {
+      let newTail: DbJob | undefined;
       const remaining = this.jobsByChain.get(job.chainId);
       if (remaining) {
-        for (const j of remaining.values()) {
-          if (!newLast || j.chainIndex > newLast.chainIndex) newLast = j;
+        for (const candidate of remaining.values()) {
+          if (!newTail || candidate.chainIndex > newTail.chainIndex) newTail = candidate;
         }
       }
-      if (newLast) this.lastByChain.set(job.chainId, newLast);
-      else this.lastByChain.delete(job.chainId);
+      if (newTail) this.tailByChain.set(job.chainId, newTail);
+      else this.tailByChain.delete(job.chainId);
     }
 
     if (job.id === job.chainId) {
       this.headJobsByCreatedAt.delete(job);
-      const k = this.dedupKeyFor(job);
-      if (k) {
-        const set = this.dedupByKey.get(k);
+      const indexKey = this.deduplicationIndexKey(job);
+      if (indexKey) {
+        const set = this.headJobsByDeduplicationKey.get(indexKey);
         if (set) {
           set.delete(job);
-          if (set.size === 0) this.dedupByKey.delete(k);
+          if (set.size === 0) this.headJobsByDeduplicationKey.delete(indexKey);
         }
       }
     }
@@ -458,12 +466,12 @@ class JobIndex {
       } else {
         this.jobBlockers.set(jobId, new Map([[key, next]]));
       }
-      let inv = this.blockedByChain.get(next.blockedByChainId);
-      if (!inv) {
-        inv = new Set();
-        this.blockedByChain.set(next.blockedByChainId, inv);
+      let referencingJobIds = this.blockedByChain.get(next.blockedByChainId);
+      if (!referencingJobIds) {
+        referencingJobIds = new Set();
+        this.blockedByChain.set(next.blockedByChainId, referencingJobIds);
       }
-      inv.add(jobId);
+      referencingJobIds.add(jobId);
       if (current && current.blockedByChainId !== next.blockedByChainId) {
         this.dropInverse(jobId, current.blockedByChainId);
       }
@@ -481,10 +489,10 @@ class JobIndex {
         if (entry.blockedByChainId === blockedByChainId) return;
       }
     }
-    const inv = this.blockedByChain.get(blockedByChainId);
-    if (inv) {
-      inv.delete(jobId);
-      if (inv.size === 0) this.blockedByChain.delete(blockedByChainId);
+    const referencingJobIds = this.blockedByChain.get(blockedByChainId);
+    if (referencingJobIds) {
+      referencingJobIds.delete(jobId);
+      if (referencingJobIds.size === 0) this.blockedByChain.delete(blockedByChainId);
     }
   }
 
@@ -498,8 +506,8 @@ class JobIndex {
 
   // ── Queries ───────────────────────────────────────────────────────
 
-  getLastJob(chainId: string): DbJob | undefined {
-    return this.lastByChain.get(chainId);
+  getTailJob(chainId: string): DbJob | undefined {
+    return this.tailByChain.get(chainId);
   }
 
   findExistingContinuation(chainId: string, chainIndex: number): DbJob | undefined {
@@ -513,7 +521,7 @@ class JobIndex {
   findDeduplicatedJob(typeName: string, deduplication: DeduplicationOptions): DbJob | undefined {
     if (!deduplication.key) return undefined;
 
-    const set = this.dedupByKey.get(`${typeName}\u0000${deduplication.key}`);
+    const set = this.headJobsByDeduplicationKey.get(`${typeName}\u0000${deduplication.key}`);
     if (!set || set.size === 0) return undefined;
 
     const scope = deduplication.scope;
@@ -526,28 +534,27 @@ class JobIndex {
     return bestMatch;
   }
 
-  findExternalBlockerRefs(effectiveChainIds: readonly string[]): Map<string, StateBlockedJob[]> {
-    const chainIdSet = new Set(effectiveChainIds);
+  findExternalBlockerRefs(chainIds: ReadonlySet<string>): Map<string, StateBlockedJob[]> {
     const result = new Map<string, StateBlockedJob[]>();
-    for (const chainId of effectiveChainIds) {
+    for (const chainId of chainIds) {
       const referencingJobIds = this.blockedByChain.get(chainId);
       if (!referencingJobIds) continue;
-      for (const refJobId of referencingJobIds) {
-        const refJob = this.jobs.get(refJobId);
-        if (!refJob) continue;
-        if (chainIdSet.has(refJob.chainId)) continue;
-        for (const entry of this.blockerRows(refJobId, chainId)) {
-          let arr = result.get(chainId);
-          if (!arr) {
-            arr = [];
-            result.set(chainId, arr);
+      for (const referencingJobId of referencingJobIds) {
+        const referencingJob = this.jobs.get(referencingJobId);
+        if (!referencingJob) continue;
+        if (chainIds.has(referencingJob.chainId)) continue;
+        for (const entry of this.blockerRows(referencingJobId, chainId)) {
+          let references = result.get(chainId);
+          if (!references) {
+            references = [];
+            result.set(chainId, references);
           }
-          arr.push({
-            jobId: refJobId,
+          references.push({
+            jobId: referencingJobId,
             blockedByChainId: chainId,
             index: entry.index,
             traceContext: entry.traceContext,
-            job: refJob,
+            job: referencingJob,
           });
         }
       }
@@ -560,15 +567,15 @@ class JobIndex {
     this.pendingByType.clear();
     this.runningByType.clear();
     this.jobsByChain.clear();
-    this.lastByChain.clear();
-    this.dedupByKey.clear();
+    this.tailByChain.clear();
+    this.headJobsByDeduplicationKey.clear();
     this.jobBlockers.clear();
     this.blockedByChain.clear();
     this.headJobsByCreatedAt.clear();
     this.seqByJobId.clear();
   }
 
-  private dedupKeyFor(job: DbJob): string | undefined {
+  private deduplicationIndexKey(job: DbJob): string | undefined {
     return job.deduplicationKey != null
       ? `${job.typeName}\u0000${job.deduplicationKey}`
       : undefined;
@@ -616,8 +623,29 @@ export const createInProcessStateAdapter = async ({
     return fn();
   };
 
+  // A batch that throws midway leaves none of its writes behind, matching the SQL adapters,
+  // whose batch is a single statement — even if the caller catches the error and commits.
+  const withAtomicBatch = <T>(
+    txCtx: InProcessContext | undefined,
+    fn: (journal: JournalEntry[]) => T,
+  ): T => {
+    const batchJournal: JournalEntry[] = [];
+    let result: T;
+    try {
+      result = fn(batchJournal);
+    } catch (error) {
+      idx.rollbackTo(batchJournal, 0);
+      throw error;
+    }
+    const journal = txCtx?.journal;
+    if (journal) {
+      for (const entry of batchJournal) journal.push(entry);
+    }
+    return result;
+  };
+
   const chainPair = (headJob: DbJob): [DbJob, DbJob | undefined] => {
-    const tailJob = idx.getLastJob(headJob.id);
+    const tailJob = idx.getTailJob(headJob.id);
     return [headJob, tailJob && tailJob.id !== headJob.id ? tailJob : undefined];
   };
 
@@ -696,49 +724,50 @@ export const createInProcessStateAdapter = async ({
         for (const jobInput of jobInputs) {
           if (jobInput.id !== undefined) validateId(jobInput.id, "caller");
         }
-        const journal = txCtx?.journal;
-        const results: (StateChain & { deduplicated: boolean })[] = [];
-        for (const jobInput of jobInputs) {
-          const {
-            typeName,
-            id: providedId,
-            input,
-            schedule,
-            chainTraceContext,
-            traceContext,
-            deduplication,
-          } = jobInput;
+        return withAtomicBatch(txCtx, (journal) => {
+          const results: (StateChain & { deduplicated: boolean })[] = [];
+          for (const jobInput of jobInputs) {
+            const {
+              typeName,
+              id: providedId,
+              input,
+              schedule,
+              chainTraceContext,
+              traceContext,
+              deduplication,
+            } = jobInput;
 
-          if (deduplication) {
-            const existing = idx.findDeduplicatedJob(typeName, deduplication);
-            if (existing) {
-              results.push({ ...chainView(existing), deduplicated: true });
-              continue;
+            if (deduplication) {
+              const existing = idx.findDeduplicatedJob(typeName, deduplication);
+              if (existing) {
+                results.push({ ...chainView(existing), deduplicated: true });
+                continue;
+              }
             }
+
+            const id = providedId ?? generateId();
+
+            if (idx.jobs.has(id)) {
+              throw new Error(`Job id "${id}" already exists`);
+            }
+
+            const job = buildDbJob({
+              id,
+              typeName,
+              chainId: id,
+              chainIndex: 0,
+              deduplicationKey: deduplication?.key ?? null,
+              input,
+              schedule,
+              chainTraceContext,
+              traceContext,
+            });
+
+            idx.writeJob(journal, undefined, job);
+            results.push({ ...chainView(job), deduplicated: false });
           }
-
-          const id = providedId ?? generateId();
-
-          if (idx.jobs.has(id)) {
-            throw new Error(`Job id "${id}" already exists`);
-          }
-
-          const job = buildDbJob({
-            id,
-            typeName,
-            chainId: id,
-            chainIndex: 0,
-            deduplicationKey: deduplication?.key ?? null,
-            input,
-            schedule,
-            chainTraceContext,
-            traceContext,
-          });
-
-          idx.writeJob(journal, undefined, job);
-          results.push({ ...chainView(job), deduplicated: false });
-        }
-        return results;
+          return results;
+        });
       }),
 
     continueJobs: async ({ txCtx, completedBy, jobs: jobInputs }) =>
@@ -746,66 +775,67 @@ export const createInProcessStateAdapter = async ({
         for (const jobInput of jobInputs) {
           if (jobInput.id !== undefined) validateId(jobInput.id, "caller");
         }
-        const journal = txCtx?.journal;
-        const now = new Date();
-        const results: ((StateJob & { continuation: StateJobInfo }) | undefined)[] = [];
+        return withAtomicBatch(txCtx, (journal) => {
+          const now = new Date();
+          const results: ((StateJob & { continuation: StateJobInfo }) | undefined)[] = [];
 
-        const parents = jobInputs.map((jobInput) => {
-          const parent = idx.jobs.get(jobInput.continueFromId);
-          return !parent || isCompleted(parent) ? undefined : parent;
-        });
-
-        for (const [index, jobInput] of jobInputs.entries()) {
-          const { typeName, id: providedId, input, schedule, traceContext } = jobInput;
-
-          const parent = parents[index];
-          if (!parent) {
-            results.push(undefined);
-            continue;
-          }
-          const chainIndex = parent.chainIndex + 1;
-
-          if (idx.findExistingContinuation(parent.chainId, chainIndex)) {
-            throw new Error(`Chain "${parent.chainId}" already has a job at index ${chainIndex}`);
-          }
-
-          const id = providedId ?? generateId();
-
-          if (idx.jobs.has(id)) {
-            throw new Error(`Job id "${id}" already exists`);
-          }
-
-          const continuation = buildDbJob({
-            id,
-            typeName,
-            chainId: parent.chainId,
-            chainIndex,
-            deduplicationKey: null,
-            input,
-            schedule,
-            chainTraceContext: null,
-            traceContext,
+          const parents = jobInputs.map((jobInput) => {
+            const parent = idx.jobs.get(jobInput.continueFromId);
+            return !parent || isCompleted(parent) ? undefined : parent;
           });
-          idx.writeJob(journal, undefined, continuation);
 
-          const completedJob: DbJob = {
-            ...parent,
-            attemptAt: null,
-            attemptBy: null,
-            attemptUntil: null,
-            continuedToId: id,
-            status: "completed",
-            completedAt: now,
-            completedBy: completedBy ?? null,
-            output: null,
-            lastAttemptError: null,
-          };
-          idx.writeJob(journal, parent, completedJob);
+          for (const [index, jobInput] of jobInputs.entries()) {
+            const { typeName, id: providedId, input, schedule, traceContext } = jobInput;
 
-          results.push({ ...jobView(completedJob), continuation });
-        }
+            const parent = parents[index];
+            if (!parent) {
+              results.push(undefined);
+              continue;
+            }
+            const chainIndex = parent.chainIndex + 1;
 
-        return results;
+            if (idx.findExistingContinuation(parent.chainId, chainIndex)) {
+              throw new Error(`Chain "${parent.chainId}" already has a job at index ${chainIndex}`);
+            }
+
+            const id = providedId ?? generateId();
+
+            if (idx.jobs.has(id)) {
+              throw new Error(`Job id "${id}" already exists`);
+            }
+
+            const continuation = buildDbJob({
+              id,
+              typeName,
+              chainId: parent.chainId,
+              chainIndex,
+              deduplicationKey: null,
+              input,
+              schedule,
+              chainTraceContext: null,
+              traceContext,
+            });
+            idx.writeJob(journal, undefined, continuation);
+
+            const completedJob: DbJob = {
+              ...parent,
+              attemptAt: null,
+              attemptBy: null,
+              attemptUntil: null,
+              continuedToId: id,
+              status: "completed",
+              completedAt: now,
+              completedBy: completedBy ?? null,
+              output: null,
+              lastAttemptError: null,
+            };
+            idx.writeJob(journal, parent, completedJob);
+
+            results.push({ ...jobView(completedJob), continuation });
+          }
+
+          return results;
+        });
       }),
 
     completeJobs: async ({ txCtx, completedBy, jobs: jobInputs }) =>
@@ -894,8 +924,9 @@ export const createInProcessStateAdapter = async ({
     deleteChains: async ({ txCtx, chainIds }) =>
       withWriteLock(txCtx, () => {
         const journal = txCtx?.journal;
+        const uniqueChainIds = new Set<string>(chainIds);
 
-        const externalBlockers = idx.findExternalBlockerRefs(chainIds);
+        const externalBlockers = idx.findExternalBlockerRefs(uniqueChainIds);
         if (externalBlockers.size > 0) {
           return chainIds.map((chainId) => externalBlockers.get(chainId) ?? undefined);
         }
@@ -906,10 +937,10 @@ export const createInProcessStateAdapter = async ({
         });
 
         const jobsToRemove: DbJob[] = [];
-        for (const chainId of chainIds) {
+        for (const chainId of uniqueChainIds) {
           const chainMap = idx.jobsByChain.get(chainId);
           if (!chainMap) continue;
-          for (const j of chainMap.values()) jobsToRemove.push(j);
+          for (const job of chainMap.values()) jobsToRemove.push(job);
         }
 
         for (const job of jobsToRemove) {
@@ -995,10 +1026,12 @@ export const createInProcessStateAdapter = async ({
           for (let i = 0; i < set.size; i++) {
             const job = set.at(i)!;
             if (!job.attemptUntil) break;
-            const lu = job.attemptUntil.getTime();
-            if (lu > now) break;
+            const attemptUntil = job.attemptUntil.getTime();
+            if (attemptUntil > now) break;
             if (ignoredSet?.has(job.id)) continue;
-            if (!candidateJob || lu < candidateJob.attemptUntil!.getTime()) candidateJob = job;
+            if (!candidateJob || attemptUntil < candidateJob.attemptUntil!.getTime()) {
+              candidateJob = job;
+            }
             break;
           }
         }
@@ -1021,9 +1054,17 @@ export const createInProcessStateAdapter = async ({
         const journal = txCtx?.journal;
         const results: (StateJob & { blockers: (StateChainInfo | undefined)[] })[] = [];
 
+        const missingJobIds = jobBlockerInputs
+          .map(({ jobId }) => jobId)
+          .filter((jobId) => !idx.jobs.has(jobId));
+        if (missingJobIds.length > 0) {
+          throw new Error(
+            `addJobsBlockers requires existing jobs; not found: ${missingJobIds.join(", ")}`,
+          );
+        }
+
         for (const { jobId, blockedByChainIds, blockerTraceContexts } of jobBlockerInputs) {
-          const job = idx.jobs.get(jobId);
-          if (!job) throw new Error("Job not found");
+          const job = idx.jobs.get(jobId)!;
 
           const blockers: (StateChainInfo | undefined)[] = blockedByChainIds.map(
             (blockerChainId, index) => {
@@ -1088,8 +1129,8 @@ export const createInProcessStateAdapter = async ({
 
           if (job.status === "blocked") {
             let allComplete = true;
-            for (const { blockedByChainId: bChainId } of blockerMap.values()) {
-              const blockerHead = idx.jobs.get(bChainId);
+            for (const { blockedByChainId: otherBlockerChainId } of blockerMap.values()) {
+              const blockerHead = idx.jobs.get(otherBlockerChainId);
               if (!blockerHead || blockerHead.chainStatus !== "completed") {
                 allComplete = false;
                 break;
@@ -1146,34 +1187,32 @@ export const createInProcessStateAdapter = async ({
 
     countByChainTypeNames: async ({ txCtx, typeNames }) =>
       withReadLock(txCtx, () => {
-        const CAP = 10_000;
         const counts = new Map<string, { running: number; completed: number }>();
         for (const name of typeNames) {
           counts.set(name, { running: 0, completed: 0 });
         }
 
         for (const headJob of idx.headJobsByCreatedAt.iterate("asc")) {
-          const c = counts.get(headJob.typeName);
-          if (!c) continue;
+          const typeCounts = counts.get(headJob.typeName);
+          if (!typeCounts) continue;
           if (headJob.chainStatus === "completed") {
-            if (c.completed <= CAP) c.completed++;
+            if (typeCounts.completed <= COUNT_CAP) typeCounts.completed++;
           } else {
-            if (c.running <= CAP) c.running++;
+            if (typeCounts.running <= COUNT_CAP) typeCounts.running++;
           }
         }
 
         return typeNames.map((name) => {
-          const c = counts.get(name)!;
+          const typeCounts = counts.get(name)!;
           return {
-            running: { count: Math.min(c.running, CAP), hasMore: c.running > CAP },
-            completed: { count: Math.min(c.completed, CAP), hasMore: c.completed > CAP },
+            running: cappedCount(typeCounts.running),
+            completed: cappedCount(typeCounts.completed),
           };
         });
       }),
 
     countByJobTypeNames: async ({ txCtx, typeNames }) =>
       withReadLock(txCtx, () => {
-        const CAP = 10_000;
         const counts = new Map<
           string,
           { blocked: number; pending: number; running: number; completed: number }
@@ -1183,18 +1222,18 @@ export const createInProcessStateAdapter = async ({
         }
 
         for (const job of idx.jobs.values()) {
-          const c = counts.get(job.typeName);
-          if (!c) continue;
-          if (c[job.status] <= CAP) c[job.status]++;
+          const typeCounts = counts.get(job.typeName);
+          if (!typeCounts) continue;
+          if (typeCounts[job.status] <= COUNT_CAP) typeCounts[job.status]++;
         }
 
         return typeNames.map((name) => {
-          const c = counts.get(name)!;
+          const typeCounts = counts.get(name)!;
           return {
-            blocked: { count: Math.min(c.blocked, CAP), hasMore: c.blocked > CAP },
-            pending: { count: Math.min(c.pending, CAP), hasMore: c.pending > CAP },
-            running: { count: Math.min(c.running, CAP), hasMore: c.running > CAP },
-            completed: { count: Math.min(c.completed, CAP), hasMore: c.completed > CAP },
+            blocked: cappedCount(typeCounts.blocked),
+            pending: cappedCount(typeCounts.pending),
+            running: cappedCount(typeCounts.running),
+            completed: cappedCount(typeCounts.completed),
           };
         });
       }),

@@ -132,7 +132,7 @@ export type ObservabilityHelper = {
   jobTypeIdleChange: (delta: number, workerId: string, typeNames: readonly string[]) => void;
   jobTypeProcessingChange: (
     delta: number,
-    job: Pick<StateJobInfo, "typeName">,
+    stateJob: Pick<StateJobInfo, "typeName">,
     workerId: string,
   ) => void;
 
@@ -464,10 +464,10 @@ export const createObservabilityHelper = ({
       adapter.jobTypeIdleChange({ delta, typeName, workerId });
     }
   },
-  jobTypeProcessingChange(delta, job, workerId) {
+  jobTypeProcessingChange(delta, stateJob, workerId) {
     adapter.jobTypeProcessingChange({
       delta,
-      typeName: job.typeName,
+      typeName: stateJob.typeName,
       workerId,
     });
   },

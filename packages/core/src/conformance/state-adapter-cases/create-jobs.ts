@@ -317,7 +317,7 @@ export const createJobsGroup: ConformanceGroup<StateConformanceFixture> = {
     {
       name: "deduplication scope 'running' matches multi-step chains that have continued",
       run: async ({ stateAdapter }, expect) => {
-        const [rootChain] = await stateAdapter.withTransaction(async (txCtx) =>
+        const [headChain] = await stateAdapter.withTransaction(async (txCtx) =>
           stateAdapter.createJobs({
             txCtx,
             jobs: [
@@ -335,7 +335,7 @@ export const createJobsGroup: ConformanceGroup<StateConformanceFixture> = {
           const [continued] = await stateAdapter.continueJobs({
             txCtx,
             completedBy: "w",
-            jobs: [{ typeName: "step2", input: null, continueFromId: rootChain.head.id }],
+            jobs: [{ typeName: "step2", input: null, continueFromId: headChain.head.id }],
           });
           const { continuation } = continued!;
           return continuation;
@@ -598,6 +598,40 @@ export const createJobsGroup: ConformanceGroup<StateConformanceFixture> = {
       },
     },
     {
+      name: "deduplicates a batch entry against an earlier entry of the same batch",
+      run: async ({ stateAdapter }, expect) => {
+        const results = await stateAdapter.withTransaction(async (txCtx) =>
+          stateAdapter.createJobs({
+            txCtx,
+            jobs: [
+              {
+                typeName: "dedup-intra-batch",
+                input: { value: "first" },
+                deduplication: { key: "intra-batch-key", scope: "running" },
+              },
+              {
+                typeName: "dedup-intra-batch",
+                input: { value: "second" },
+                deduplication: { key: "intra-batch-key", scope: "running" },
+              },
+            ],
+          }),
+        );
+
+        expect(results.map((result) => result.deduplicated)).toEqual([false, true]);
+        expect(results[1].id).toBe(results[0].id);
+        expect(results[1].head.input).toEqual({ value: "first" });
+
+        const chains = await stateAdapter.listChains({
+          typeName: "dedup-intra-batch",
+          orderBy: "createdAt",
+          orderDirection: "asc",
+          page: { limit: 10 },
+        });
+        expect(chains.items).toHaveLength(1);
+      },
+    },
+    {
       name: "returns empty array for empty input",
       run: async ({ stateAdapter }, expect) => {
         const results = await stateAdapter.withTransaction(async (txCtx) =>
@@ -755,6 +789,48 @@ export const createJobsGroup: ConformanceGroup<StateConformanceFixture> = {
         const [afterCollision] = await stateAdapter.getJobs({ jobIds: [userId] });
         expect(afterCollision!.typeName).toBe("original");
         expect(afterCollision!.input).toEqual({ preserved: true });
+      },
+    },
+    {
+      name: "persists nothing from a batch whose caller-supplied id collides, even if the caller commits",
+      run: async ({ stateAdapter, generateId }, expect) => {
+        const nextId = generateId ?? (() => crypto.randomUUID());
+        const takenId = nextId();
+        await stateAdapter.withTransaction(async (txCtx) =>
+          stateAdapter.createJobs({
+            txCtx,
+            jobs: [{ typeName: "atomic-batch-existing", id: takenId, input: null }],
+          }),
+        );
+
+        const batches = [
+          { freshId: nextId(), collidingId: takenId },
+          { freshId: nextId(), collidingId: undefined },
+        ];
+        for (const { freshId, collidingId } of batches) {
+          let createRejected = false;
+          await stateAdapter
+            .withTransaction(async (txCtx) => {
+              createRejected = await stateAdapter
+                .createJobs({
+                  txCtx,
+                  jobs: [
+                    { typeName: "atomic-batch", id: freshId, input: null },
+                    { typeName: "atomic-batch", id: collidingId ?? freshId, input: null },
+                  ],
+                })
+                .then(
+                  () => false,
+                  () => true,
+                );
+            })
+            .catch(() => {
+              // A driver may refuse to commit a transaction in which a statement failed.
+            });
+
+          expect(createRejected).toBe(true);
+          expect(await stateAdapter.getJobs({ jobIds: [freshId] })).toEqual([undefined]);
+        }
       },
     },
     {

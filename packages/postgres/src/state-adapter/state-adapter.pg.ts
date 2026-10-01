@@ -1132,16 +1132,16 @@ _deleted_jobs AS (
 ),
 _deleted_pairs AS (
   SELECT
-    row_to_json(root) AS head_job,
-    row_to_json(lc) AS tail_job
-  FROM (SELECT * FROM _deleted_jobs WHERE chain_index = 0) AS root
+    row_to_json(head_job) AS head_job,
+    row_to_json(tail_job) AS tail_job
+  FROM (SELECT * FROM _deleted_jobs WHERE chain_index = 0) AS head_job
   LEFT JOIN LATERAL (
     SELECT *
     FROM _deleted_jobs
-    WHERE chain_id = root.id AND chain_index > 0
+    WHERE chain_id = head_job.id AND chain_index > 0
     ORDER BY chain_index DESC
     LIMIT 1
-  ) AS lc ON TRUE
+  ) AS tail_job ON TRUE
 )
 SELECT
   COALESCE((SELECT json_agg(row_to_json(p)) FROM _deleted_pairs p), '[]'::json) AS deleted,
@@ -1177,12 +1177,12 @@ SELECT
       const deletedById = new Map(row.deleted.map((d) => [d.head_job.id, d]));
       const refsByChainId = new Map<string, typeof row.blocker_refs>();
       for (const ref of row.blocker_refs) {
-        let arr = refsByChainId.get(ref.blocked_by_chain_id);
-        if (!arr) {
-          arr = [];
-          refsByChainId.set(ref.blocked_by_chain_id, arr);
+        let chainRefs = refsByChainId.get(ref.blocked_by_chain_id);
+        if (!chainRefs) {
+          chainRefs = [];
+          refsByChainId.set(ref.blocked_by_chain_id, chainRefs);
         }
-        arr.push(ref);
+        chainRefs.push(ref);
       }
 
       return chainIds.map((chainId): StateChain | StateBlockedJob[] | undefined => {
@@ -1441,15 +1441,16 @@ locked_blocker_heads AS (
 ),
 inserted_blockers AS (
   INSERT INTO {{schema}}.{{table_prefix}}job_blocker (job_id, blocked_by_chain_id, "index", trace_context)
-  SELECT job_id, blocked_by_chain_id, "index", trace_context
-  FROM input_data
+  SELECT d.job_id, d.blocked_by_chain_id, d."index", d.trace_context
+  FROM input_data d
+  JOIN locked_blocker_heads h ON h.id = d.blocked_by_chain_id
   RETURNING job_id, blocked_by_chain_id
 ),
 has_incomplete_blockers AS (
   SELECT DISTINCT d.job_id
   FROM input_data d
-  LEFT JOIN locked_blocker_heads h ON h.id = d.blocked_by_chain_id
-  WHERE h.chain_status IS DISTINCT FROM 'completed'
+  JOIN locked_blocker_heads h ON h.id = d.blocked_by_chain_id
+  WHERE h.chain_status = 'running'
 ),
 updated_jobs AS (
   UPDATE {{schema}}.{{table_prefix}}job j

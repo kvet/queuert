@@ -33,22 +33,24 @@ export const listChainTypeNamesGroup: ConformanceGroup<StateConformanceFixture> 
     {
       name: "listChainTypeNames does not include continuation-only type names",
       run: async ({ stateAdapter }, expect) => {
-        const [rootChain] = await stateAdapter.withTransaction(async (txCtx) =>
+        const [headChain] = await stateAdapter.withTransaction(async (txCtx) =>
           stateAdapter.createJobs({
             txCtx,
-            jobs: [{ typeName: "root-type", input: null }],
+            jobs: [{ typeName: "head-type", input: null }],
           }),
         );
 
         await stateAdapter.withTransaction(async (txCtx) =>
           stateAdapter.continueJobs({
             txCtx,
-            jobs: [{ typeName: "cont-type", continueFromId: rootChain.head.id, input: null }],
+            jobs: [
+              { typeName: "continuation-type", continueFromId: headChain.head.id, input: null },
+            ],
           }),
         );
 
         const result = await stateAdapter.listChainTypeNames({});
-        expect(result).toEqual(["root-type"]);
+        expect(result).toEqual(["head-type"]);
       },
     },
   ],

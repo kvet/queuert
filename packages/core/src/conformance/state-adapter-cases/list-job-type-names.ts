@@ -33,22 +33,24 @@ export const listJobTypeNamesGroup: ConformanceGroup<StateConformanceFixture> = 
     {
       name: "listJobTypeNames includes continuation job type names",
       run: async ({ stateAdapter }, expect) => {
-        const [rootChain] = await stateAdapter.withTransaction(async (txCtx) =>
+        const [headChain] = await stateAdapter.withTransaction(async (txCtx) =>
           stateAdapter.createJobs({
             txCtx,
-            jobs: [{ typeName: "root-type", input: null }],
+            jobs: [{ typeName: "head-type", input: null }],
           }),
         );
 
         await stateAdapter.withTransaction(async (txCtx) =>
           stateAdapter.continueJobs({
             txCtx,
-            jobs: [{ typeName: "cont-type", continueFromId: rootChain.head.id, input: null }],
+            jobs: [
+              { typeName: "continuation-type", continueFromId: headChain.head.id, input: null },
+            ],
           }),
         );
 
         const result = await stateAdapter.listJobTypeNames({});
-        expect(result.sort()).toEqual(["cont-type", "root-type"]);
+        expect(result.sort()).toEqual(["continuation-type", "head-type"]);
       },
     },
   ],

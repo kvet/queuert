@@ -84,6 +84,18 @@ SELECT 1 FROM {{table_prefix}}migration WHERE name = '${upgradeFloor}'
     },
   );
 
+  const unknownMigrationsSql = sql(
+    /* sql */ `SELECT name FROM {{table_prefix}}migration
+WHERE name NOT IN (${legacyMigrationNames.map((name) => `'${name}'`).join(", ")})
+ORDER BY name`,
+    {
+      id: "legacy:unknown-migrations",
+      params: [],
+      columns: { name: t.string() },
+      readOnly: true,
+    },
+  );
+
   // `withTransaction` opens a deferred transaction, which a concurrent migrator can make fail with
   // SQLITE_BUSY when it later upgrades from a read to a write. A no-op write as the first statement
   // takes the write lock up front (waiting on busy_timeout), so every check that follows sees
@@ -183,56 +195,112 @@ WHERE o.chain_id IN (SELECT value FROM json_each(?))`,
     { id: "legacy:jobs:import", params: [t.string()], columns: {} },
   );
 
-  // A job's blockers are imported together, so the same anti-join by job_id applies.
-  const firstBlockerBatchSql = sql(
-    /* sql */ `SELECT DISTINCT b.job_id FROM {{table_prefix}}job_blocker_old b
-WHERE NOT EXISTS (SELECT 1 FROM {{table_prefix}}job_blocker n WHERE n.job_id = b.job_id)
-ORDER BY b.job_id LIMIT ?`,
-    {
-      id: "legacy:blockers:first",
-      params: [t.number()],
-      columns: { job_id: idDataType },
-      readOnly: true,
-    },
+  const importChainBlockersSql = sql(
+    /* sql */ `INSERT INTO {{table_prefix}}job_blocker (job_id, blocked_by_chain_id, "index", trace_context)
+SELECT b.job_id, b.blocked_by_chain_id, b."index", b.trace_context
+FROM {{table_prefix}}job_old o
+JOIN {{table_prefix}}job_blocker_old b ON b.job_id = o.id
+WHERE o.chain_id IN (SELECT value FROM json_each(?))`,
+    { id: "legacy:chain-blockers:import", params: [t.string()], columns: {} },
   );
 
-  const nextBlockerBatchSql = sql(
-    /* sql */ `SELECT DISTINCT b.job_id FROM {{table_prefix}}job_blocker_old b
-WHERE b.job_id > ?
-  AND NOT EXISTS (SELECT 1 FROM {{table_prefix}}job_blocker n WHERE n.job_id = b.job_id)
-ORDER BY b.job_id LIMIT ?`,
+  // A blocker chain may have been imported by an earlier batch and completed by a worker since,
+  // after its unblock pass found no rows for the dependents imported now; unblock them here. A
+  // blocker chain not imported yet counts as complete when its legacy tail is, since its own
+  // import will not re-evaluate the dependents.
+  const unblockImportedJobsSql = sql(
+    /* sql */ `UPDATE {{table_prefix}}job
+SET status = 'pending',
+  scheduled_at = MAX(scheduled_at, datetime('now', 'subsec'))
+WHERE status = 'blocked'
+  AND id IN (
+    SELECT o.id FROM {{table_prefix}}job_old o WHERE o.chain_id IN (SELECT value FROM json_each(?))
+  )
+  AND EXISTS (SELECT 1 FROM {{table_prefix}}job_blocker b WHERE b.job_id = {{table_prefix}}job.id)
+  AND NOT EXISTS (
+    SELECT 1 FROM {{table_prefix}}job_blocker b
+    LEFT JOIN {{table_prefix}}job h ON h.id = b.blocked_by_chain_id AND h.chain_index = 0
+    WHERE b.job_id = {{table_prefix}}job.id
+      AND CASE WHEN h.id IS NOT NULL THEN h.chain_status IS NOT 'completed'
+        ELSE NOT EXISTS (
+          SELECT 1 FROM {{table_prefix}}job_old t
+          WHERE t.chain_id = b.blocked_by_chain_id AND t.completed_at IS NOT NULL
+            AND NOT EXISTS (
+              SELECT 1 FROM {{table_prefix}}job_old n
+              WHERE n.chain_id = t.chain_id AND n.chain_index = t.chain_index + 1
+            )
+        )
+      END
+  )`,
+    { id: "legacy:jobs:unblock", params: [t.string()], columns: {} },
+  );
+
+  // Blocker rows of an imported job arrive with its chain; what remains either belongs to a job
+  // that cannot be imported (reported below) or to no job at all, which is carried over as is.
+  const danglingBlockers = /* sql */ `SELECT DISTINCT b.job_id FROM {{table_prefix}}job_blocker_old b
+WHERE NOT EXISTS (SELECT 1 FROM {{table_prefix}}job_old o WHERE o.id = b.job_id)
+  AND NOT EXISTS (SELECT 1 FROM {{table_prefix}}job_blocker n WHERE n.job_id = b.job_id)`;
+
+  const firstDanglingBlockerBatchSql = sql(`${danglingBlockers}\nORDER BY b.job_id LIMIT ?`, {
+    id: "legacy:dangling-blockers:first",
+    params: [t.number()],
+    columns: { job_id: idDataType },
+    readOnly: true,
+  });
+
+  const nextDanglingBlockerBatchSql = sql(
+    `${danglingBlockers}\n  AND b.job_id > ?\nORDER BY b.job_id LIMIT ?`,
     {
-      id: "legacy:blockers:next",
+      id: "legacy:dangling-blockers:next",
       params: [idDataType, t.number()],
       columns: { job_id: idDataType },
       readOnly: true,
     },
   );
 
-  const importBlockersSql = sql(
+  const importDanglingBlockersSql = sql(
     /* sql */ `INSERT INTO {{table_prefix}}job_blocker (job_id, blocked_by_chain_id, "index", trace_context)
 SELECT job_id, blocked_by_chain_id, "index", trace_context
 FROM {{table_prefix}}job_blocker_old
 WHERE job_id IN (SELECT value FROM json_each(?))`,
-    { id: "legacy:blockers:import", params: [t.string()], columns: {} },
+    { id: "legacy:dangling-blockers:import", params: [t.string()], columns: {} },
   );
 
   const missingCountsSql = sql(
     /* sql */ `SELECT
 (SELECT count(*) FROM {{table_prefix}}job_old o
   WHERE NOT EXISTS (SELECT 1 FROM {{table_prefix}}job j WHERE j.id = o.id)) AS missing_jobs,
+(SELECT count(*) FROM {{table_prefix}}job_old) AS old_jobs,
 (SELECT count(*) FROM {{table_prefix}}job_blocker_old o
   WHERE NOT EXISTS (
     SELECT 1 FROM {{table_prefix}}job_blocker n
     WHERE n.job_id = o.job_id AND n.blocked_by_chain_id = o.blocked_by_chain_id AND n."index" = o."index"
-  )) AS missing_blockers`,
+  )) AS missing_blockers,
+(SELECT count(*) FROM {{table_prefix}}job_blocker_old) AS old_blockers`,
     {
       id: "legacy:missing",
       params: [],
-      columns: { missing_jobs: t.number(), missing_blockers: t.number() },
+      columns: {
+        missing_jobs: t.number(),
+        old_jobs: t.number(),
+        missing_blockers: t.number(),
+        old_blockers: t.number(),
+      },
       readOnly: true,
     },
   );
+
+  // Jobs are imported with their chain's head, so a job left behind is one whose chain has no
+  // head row: a continuation orphaned by a manual edit or by writes with foreign keys off.
+  const missingJobsQuery = applyTemplate(
+    sql(
+      /* sql */ `SELECT * FROM {{table_prefix}}job_old o WHERE NOT EXISTS (SELECT 1 FROM {{table_prefix}}job j WHERE j.id = o.id)`,
+      { params: [], columns: {} },
+    ),
+  ).sql;
+  const oldBlockerTable = applyTemplate(
+    sql(/* sql */ `{{table_prefix}}job_blocker_old`, { params: [], columns: {} }),
+  ).sql;
 
   const dropOldStatements = [
     /* sql */ `DROP TABLE IF EXISTS {{table_prefix}}job_blocker_old`,
@@ -301,6 +369,13 @@ WHERE job_id IN (SELECT value FROM json_each(?))`,
         );
       }
 
+      const unknownMigrations = await exec({ txCtx, sql: unknownMigrationsSql });
+      if (unknownMigrations.length > 0) {
+        throw new Error(
+          `Cannot upgrade: the queuert migration table records migrations v0.15.1 did not ship (${unknownMigrations.map((row) => row.name).join(", ")}), so the schema may not be the one this upgrade reads. Restore a v0.15.1 database, or delete the database file to start fresh.`,
+        );
+      }
+
       for (const statement of renameAsideStatements) {
         await execStatement(txCtx, statement);
       }
@@ -342,22 +417,24 @@ WHERE job_id IN (SELECT value FROM json_each(?))`,
         ? await exec({ txCtx, sql: nextChainBatchSql, params: [afterId, batchSize] })
         : await exec({ txCtx, sql: firstChainBatchSql, params: [batchSize] });
       if (batch.length === 0) return undefined;
-      const chainIds = batch.map((row) => row.id);
-      await exec({ txCtx, sql: importChainsSql, params: [JSON.stringify(chainIds)] });
-      return chainIds[chainIds.length - 1];
+      const chainIds = JSON.stringify(batch.map((row) => row.id));
+      await exec({ txCtx, sql: importChainsSql, params: [chainIds] });
+      await exec({ txCtx, sql: importChainBlockersSql, params: [chainIds] });
+      await exec({ txCtx, sql: unblockImportedJobsSql, params: [chainIds] });
+      return batch[batch.length - 1].id;
     });
     if (!chainsImported) return;
 
-    const blockersImported = await importBatches(assertLockHeld, async (txCtx, afterId) => {
+    const danglingBlockersImported = await importBatches(assertLockHeld, async (txCtx, afterId) => {
       const batch = afterId
-        ? await exec({ txCtx, sql: nextBlockerBatchSql, params: [afterId, batchSize] })
-        : await exec({ txCtx, sql: firstBlockerBatchSql, params: [batchSize] });
+        ? await exec({ txCtx, sql: nextDanglingBlockerBatchSql, params: [afterId, batchSize] })
+        : await exec({ txCtx, sql: firstDanglingBlockerBatchSql, params: [batchSize] });
       if (batch.length === 0) return undefined;
       const jobIds = batch.map((row) => row.job_id);
-      await exec({ txCtx, sql: importBlockersSql, params: [JSON.stringify(jobIds)] });
+      await exec({ txCtx, sql: importDanglingBlockersSql, params: [JSON.stringify(jobIds)] });
       return jobIds[jobIds.length - 1];
     });
-    if (!blockersImported) return;
+    if (!danglingBlockersImported) return;
 
     assertLockHeld();
     await withWriteTransaction(async (txCtx) => {
@@ -365,7 +442,7 @@ WHERE job_id IN (SELECT value FROM json_each(?))`,
       const [missing] = await exec({ txCtx, sql: missingCountsSql });
       if (missing.missing_jobs > 0 || missing.missing_blockers > 0) {
         throw new Error(
-          `Upgrade import is incomplete: ${missing.missing_jobs} jobs and ${missing.missing_blockers} blockers were not imported. The renamed-aside tables were left in place.`,
+          `Upgrade import is incomplete: ${missing.missing_jobs}/${missing.old_jobs} jobs and ${missing.missing_blockers}/${missing.old_blockers} blockers are missing from the new tables. The renamed-aside tables were left in place. Jobs are imported with their chain's head job, so a job left behind is one whose chain has no head row; list them with \`${missingJobsQuery}\`, then delete them and their ${oldBlockerTable} rows (or restore their head jobs) and run migrateToLatest() again.`,
         );
       }
       for (const statement of dropOldStatements) {

@@ -952,8 +952,14 @@ export const createClient = async <
         if (!stateJob) {
           throw new JobNotFoundError(`Job ${job.id} not found`, { jobId: job.id });
         }
+        if (stateJob.completedAt !== null) {
+          throw new JobAlreadyCompletedError(
+            `Cannot complete job ${job.id}: job is already completed`,
+            { jobId: job.id },
+          );
+        }
 
-        const wasRunning = job.status === "running";
+        const wasRunning = stateJob.status === "running";
         const finishOnce = createFinishOnce();
         const finish = async (
           outcome: AnyWorkerlessOutcome,

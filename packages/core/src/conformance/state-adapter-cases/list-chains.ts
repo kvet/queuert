@@ -66,7 +66,7 @@ export const listChainsGroup: ConformanceGroup<StateConformanceFixture> = {
     {
       name: "listChains returns chains as [headJob, tailJob] pairs",
       run: async ({ stateAdapter }, expect) => {
-        const [rootChain] = await stateAdapter.withTransaction(async (txCtx) =>
+        const [headChain] = await stateAdapter.withTransaction(async (txCtx) =>
           stateAdapter.createJobs({
             txCtx,
             jobs: [{ typeName: "test-chain", input: { step: 1 } }],
@@ -79,7 +79,7 @@ export const listChainsGroup: ConformanceGroup<StateConformanceFixture> = {
             jobs: [
               {
                 typeName: "test-chain-step2",
-                continueFromId: rootChain.head.id,
+                continueFromId: headChain.head.id,
                 input: { step: 2 },
               },
             ],
@@ -96,7 +96,7 @@ export const listChainsGroup: ConformanceGroup<StateConformanceFixture> = {
         expect(result.items).toHaveLength(1);
 
         const { head: headJob, tail: tailJob } = result.items[0];
-        expect(headJob.id).toBe(rootChain.head.id);
+        expect(headJob.id).toBe(headChain.head.id);
         expect(tailJob).toBeDefined();
         expect(tailJob!.id).toBe(continuation.id);
       },

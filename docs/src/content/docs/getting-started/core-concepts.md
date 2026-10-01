@@ -27,8 +27,7 @@ Abstracts database operations for job persistence. Queuert provides adapters for
 - `@queuert/sqlite` - SQLite state adapter _(experimental)_
 
 :::tip
-See [State Adapters](/queuert/integrations/state-adapters/) for supported ORMs, drivers, and
-configuration details.
+See [State Adapters](/queuert/integrations/state-adapters/) for supported ORMs, drivers, and configuration details.
 :::
 
 ### State Provider
@@ -47,8 +46,7 @@ Handles pub/sub notifications for efficient job scheduling. When a job is create
 - None (default) - polling only, no real-time notifications
 
 :::tip
-See [Notify Adapters](/queuert/integrations/notify-adapters/) for supported clients and
-configuration details.
+See [Notify Adapters](/queuert/integrations/notify-adapters/) for supported clients and configuration details.
 :::
 
 ### Notify Provider

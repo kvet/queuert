@@ -54,6 +54,8 @@ The `{tablePrefix}job` table stores all job state:
 
 Primary key: `id`.
 
+Two CHECK constraints keep chain state on head rows: `chain_status` is set exactly when `chain_index = 0`, and a continuation row (`chain_index > 0`) leaves `chain_completed_at`, `chain_deduplication_key` and `chain_trace_context` NULL.
+
 ### Job Blocker Table
 
 | Column                | Type         | Description                      |

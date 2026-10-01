@@ -230,6 +230,17 @@ export const createChainsTestSuite = ({ it }: { it: TestAPI<TestSuiteContext> })
           entry: true;
           input: null;
           output: null;
+          blockers: { typeName: "dependency" }[];
+        };
+        start: {
+          entry: true;
+          input: null;
+          output: null;
+          continueWith: { typeName: "startStep" };
+        };
+        startStep: {
+          input: null;
+          output: null;
           blockers: [{ typeName: "dependency" }];
         };
       }>();
@@ -281,6 +292,19 @@ export const createChainsTestSuite = ({ it }: { it: TestAPI<TestSuiteContext> })
         ).rejects.toThrow(ChainNotFoundError);
       }
 
+      const staleBlocker = { ...dep, id: crypto.randomUUID() };
+      await withTransaction(async (txCtx, transactionHooks) => {
+        await expect(
+          client.createChain({
+            ...txCtx,
+            transactionHooks,
+            typeName: "main",
+            input: null,
+            blockers: [dep, staleBlocker],
+          }),
+        ).rejects.toThrow(ChainNotFoundError);
+      });
+
       const mainJobs = await stateAdapter.listJobs({
         typeName: "main",
         orderBy: "createdAt",
@@ -288,6 +312,41 @@ export const createChainsTestSuite = ({ it }: { it: TestAPI<TestSuiteContext> })
         page: { limit: 10 },
       });
       expect(mainJobs.items).toEqual([]);
+
+      const start = await withTransaction(async (txCtx, transactionHooks) =>
+        client.createChain({ ...txCtx, transactionHooks, typeName: "start", input: null }),
+      );
+      await withTransaction(async (txCtx, transactionHooks) =>
+        client.completeChain({
+          ...txCtx,
+          transactionHooks,
+          ...start,
+          handler: async ({ job, completeJob }) => {
+            if (job.typeName !== "start") return;
+            await expect(
+              completeJob(job, async ({ finish }) =>
+                finish({
+                  continueWith: {
+                    typeName: "startStep",
+                    input: null,
+                    blockers: [staleBlocker],
+                  },
+                }),
+              ),
+            ).rejects.toThrow(ChainNotFoundError);
+          },
+        }),
+      );
+
+      const startJobs = await client.listChainJobs({ chainId: start.id, limit: 10 });
+      expect(startJobs.items).toHaveLength(1);
+      expect(startJobs.items[0].status).toBe("pending");
+      const blockedJobs = await stateAdapter.listBlockedJobs({
+        chainId: dep.id,
+        orderDirection: "asc",
+        page: { limit: 10 },
+      });
+      expect(blockedJobs.items).toEqual([]);
     });
 
     it("creates a chain with scheduling", async ({

@@ -56,7 +56,7 @@ const jobChains = await client.listJobChains({ filter });
 
 ### Domain Vocabulary
 
-The library has one vocabulary for job and chain state, and it is the one persisted in the schema and exposed on the public API: a job is `pending`, `running`, or `completed` (and separately `blocked`); a chain is `running` or `completed`. Do not introduce synonyms — no `open`/`closed`, `active`/`done`, `queued`/`finished` — in column names, status values, exported symbols, option fields, error classes, event names, or docs. A design document that reaches for a synonym in prose does not license one in code.
+The library has one vocabulary for job and chain state, and it is the one persisted in the schema and exposed on the public API: a job is `blocked`, `pending`, `running`, or `completed`; a chain is `running` or `completed`. Do not introduce synonyms — no `open`/`closed`, `active`/`done`, `queued`/`finished` — in column names, status values, exported symbols, option fields, error classes, event names, or docs. A design document that reaches for a synonym in prose does not license one in code.
 
 The same holds for the rest of the domain, not just state: once a concept has a word, that word is the only one for it — everywhere, including variable names, comments, docs, error messages, and design documents. A chain's ends are its `head` and `tail` job, never "first"/"last" or "root"/"leaf". Related terms stay in their own vocabulary too: a job has `attempt`s (not "tries" or "runs"), a job is `reschedule`d (not "requeued" or "retried"), and a chain `continueWith`s (not "chains to" or "forwards"). When a concept has no established word yet, pick one, use it consistently, and add it here.
 

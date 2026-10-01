@@ -216,8 +216,8 @@ export const withTransactionGroup: ConformanceGroup<StateConformanceFixture> = {
           }),
         );
 
-        try {
-          await stateAdapter.withTransaction(async (txCtx) => {
+        await expect(
+          stateAdapter.withTransaction(async (txCtx) => {
             await stateAdapter.startJobAttempt({
               txCtx,
               workerId: "worker-1",
@@ -230,18 +230,33 @@ export const withTransactionGroup: ConformanceGroup<StateConformanceFixture> = {
             });
             await stateAdapter.deleteChains({ txCtx, chainIds: [bChain.head.chainId] });
             throw new Error("rollback after mixed mutations");
-          });
-        } catch {
-          // Expected
-        }
+          }),
+        ).rejects.toThrow("rollback after mixed mutations");
 
-        const [aAfter] = await stateAdapter.getJobs({ jobIds: [aChain.head.id] });
-        const [bAfter] = await stateAdapter.getJobs({ jobIds: [bChain.head.id] });
+        const [aAfter, bAfter] = await stateAdapter.getJobs({
+          jobIds: [aChain.head.id, bChain.head.id],
+        });
+        expect(aAfter?.status).toBe("pending");
         expect(aAfter?.completedAt).toBeNull();
+        expect(aAfter?.output).toBeNull();
         expect(aAfter?.attemptAt).toBeNull();
-        expect(aAfter?.completedAt).toBeNull();
+        expect(aAfter?.chain.status).toBe("running");
+        expect(aAfter?.chain.completedAt).toBeNull();
+        expect(bAfter?.status).toBe("pending");
         expect(bAfter?.completedAt).toBeNull();
         expect(bAfter?.attemptAt).toBeNull();
+        expect(bAfter?.chain.status).toBe("running");
+
+        const runningChains = await stateAdapter.listChains({
+          typeName: "mixed-rollback",
+          status: "running",
+          orderBy: "createdAt",
+          orderDirection: "asc",
+          page: { limit: 10 },
+        });
+        expect(runningChains.items.map((chain) => chain.id).toSorted()).toEqual(
+          [aChain.id, bChain.id].toSorted(),
+        );
 
         const reacquired = await stateAdapter.withTransaction(async (txCtx) =>
           stateAdapter.startJobAttempt({
@@ -251,6 +266,59 @@ export const withTransactionGroup: ConformanceGroup<StateConformanceFixture> = {
           }),
         );
         expect(reacquired).toBeDefined();
+      },
+    },
+    {
+      name: "rolls back completing a tail job together with its chain's head row",
+      run: async ({ stateAdapter }, expect) => {
+        const [stateChain] = await stateAdapter.withTransaction(async (txCtx) =>
+          stateAdapter.createJobs({
+            txCtx,
+            jobs: [{ typeName: "tail-rollback", input: null }],
+          }),
+        );
+        const [continued] = await stateAdapter.withTransaction(async (txCtx) =>
+          stateAdapter.continueJobs({
+            txCtx,
+            jobs: [{ typeName: "tail-rollback:step", continueFromId: stateChain.id, input: null }],
+          }),
+        );
+        const tailId = continued!.continuation.id;
+
+        await expect(
+          stateAdapter.withTransaction(async (txCtx) => {
+            await stateAdapter.getJobs({ txCtx, jobIds: [tailId], lock: "exclusive" });
+            const [completed] = await stateAdapter.completeJobs({
+              txCtx,
+              completedBy: null,
+              jobs: [{ jobId: tailId, output: { ok: true } }],
+            });
+            expect(completed?.chain.status).toBe("completed");
+            throw new Error("rollback after completing the tail");
+          }),
+        ).rejects.toThrow("rollback after completing the tail");
+
+        const [headAfter, tailAfter] = await stateAdapter.getJobs({
+          jobIds: [stateChain.id, tailId],
+        });
+        expect(headAfter?.status).toBe("completed");
+        expect(headAfter?.continuedToId).toBe(tailId);
+        expect(tailAfter?.status).toBe("pending");
+        expect(tailAfter?.completedAt).toBeNull();
+        expect(tailAfter?.output).toBeNull();
+        expect(tailAfter?.chain.status).toBe("running");
+        expect(tailAfter?.chain.completedAt).toBeNull();
+
+        const [chainAfter] = await stateAdapter.getChains({ chainIds: [stateChain.id] });
+        expect(chainAfter?.status).toBe("running");
+        expect(chainAfter?.completedAt).toBeNull();
+        expect(chainAfter?.tail?.id).toBe(tailId);
+        expect(chainAfter?.tail?.status).toBe("pending");
+
+        const counts = await stateAdapter.countByChainTypeNames({ typeNames: ["tail-rollback"] });
+        expect(counts).toEqual([
+          { running: { count: 1, hasMore: false }, completed: { count: 0, hasMore: false } },
+        ]);
       },
     },
     {

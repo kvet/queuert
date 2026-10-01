@@ -58,7 +58,7 @@ The fundamental insight: **the head job IS the chain**. Chains work like Promise
 
 For the head job in a chain: `job.id === job.chainId`
 
-This isn't redundant—it's a meaningful signal that identifies the chain starter. Continuation jobs have `job.id !== job.chainId` but share the same `chainId` as all other jobs in the chain.
+This isn't redundant—it's a meaningful signal that identifies the chain starter. Continuation jobs have `job.id !== job.chainId` but share the same `chainId` as all other jobs in the chain. Each job also carries its position as `job.chainIndex`: `0` for the head job, incrementing by one for each continuation.
 
 ```d2
 ...@../_classes.d2

@@ -13,7 +13,7 @@ export const getChainsGroup: ConformanceGroup<StateConformanceFixture> = {
         const [headChain] = await stateAdapter.withTransaction(async (txCtx) =>
           stateAdapter.createJobs({
             txCtx,
-            jobs: [{ typeName: "chain-root", input: { step: 1 } }],
+            jobs: [{ typeName: "chain-head", input: { step: 1 } }],
           }),
         );
 
@@ -30,7 +30,7 @@ export const getChainsGroup: ConformanceGroup<StateConformanceFixture> = {
         const [headChain] = await stateAdapter.withTransaction(async (txCtx) =>
           stateAdapter.createJobs({
             txCtx,
-            jobs: [{ typeName: "chain-root", input: null }],
+            jobs: [{ typeName: "chain-head", input: null }],
           }),
         );
 
@@ -63,7 +63,7 @@ export const getChainsGroup: ConformanceGroup<StateConformanceFixture> = {
         const [headChain] = await stateAdapter.withTransaction(async (txCtx) =>
           stateAdapter.createJobs({
             txCtx,
-            jobs: [{ typeName: "single-root", input: null }],
+            jobs: [{ typeName: "single-head", input: null }],
           }),
         );
 
@@ -80,7 +80,7 @@ export const getChainsGroup: ConformanceGroup<StateConformanceFixture> = {
         const [headChain] = await stateAdapter.withTransaction(async (txCtx) =>
           stateAdapter.createJobs({
             txCtx,
-            jobs: [{ typeName: "single-root-locked", input: null }],
+            jobs: [{ typeName: "single-head-locked", input: null }],
           }),
         );
 
@@ -228,7 +228,7 @@ export const getChainsGroup: ConformanceGroup<StateConformanceFixture> = {
         const [seedChain] = await stateAdapter.withTransaction(async (txCtx) =>
           stateAdapter.createJobs({
             txCtx,
-            jobs: [{ typeName: "iso-latest-root", input: null }],
+            jobs: [{ typeName: "iso-latest-head", input: null }],
           }),
         );
 

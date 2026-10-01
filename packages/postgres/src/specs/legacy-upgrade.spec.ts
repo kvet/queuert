@@ -353,16 +353,12 @@ const jobContract: ColumnContract = {
     {
       column: "attempt_by",
       predicate: (after, beforeRow) =>
-        String(beforeRow.status) === "running"
-          ? after !== null && after !== undefined
-          : after === (beforeRow.leased_by ?? null),
+        (String(beforeRow.status) === "running") === (after !== null && after !== undefined),
     },
     {
       column: "attempt_until",
       predicate: (after, beforeRow) =>
-        String(beforeRow.status) === "running"
-          ? after !== null && after !== undefined
-          : String(after) === String(beforeRow.leased_until),
+        (String(beforeRow.status) === "running") === (after !== null && after !== undefined),
     },
   ],
 };
@@ -620,6 +616,45 @@ describe("upgrade phases", () => {
   );
 
   it(
+    "refuses a job table that already has a column the current schema added",
+    { timeout: 120_000 },
+    async ({ loaded: { provider, adapter } }) => {
+      await query(provider, "ALTER TABLE queuert_job ADD COLUMN continued_to_id uuid");
+
+      await expect(adapter.migrateToLatest()).rejects.toThrow(/not in the v0\.15\.1 shape/);
+      expect((await relations(provider)).job_old).toBe(false);
+    },
+  );
+
+  it(
+    "refuses a schema migrated past v0.15.1 without touching it",
+    { timeout: 120_000 },
+    async ({ loaded: { provider, adapter } }) => {
+      await query(
+        provider,
+        "INSERT INTO queuert_migration (name) VALUES ('20260622000000_job_model_v2_expand')",
+      );
+      const indexesBefore = await indexNames(provider);
+
+      await expect(adapter.migrateToLatest()).rejects.toThrow(
+        /migrations this upgrade does not know \(20260622000000_job_model_v2_expand\)/,
+      );
+      expect(await relations(provider)).toEqual({
+        job: true,
+        job_blocker: true,
+        job_old: false,
+        job_blocker_old: false,
+      });
+      expect((await counts(provider)).migration_rows).toBe(
+        readManifest().appliedMigrations.length + 1,
+      );
+      expect(
+        (await indexNames(provider)).filter((name) => name !== "queuert_migration_lock_pkey"),
+      ).toEqual(indexesBefore);
+    },
+  );
+
+  it(
     "renames aside at most once, however often it runs",
     { timeout: 120_000 },
     async ({ loaded: { provider } }) => {
@@ -685,6 +720,23 @@ describe("upgrade phases", () => {
         blockers: manifest.totalBlockers,
       });
       expect((await relations(provider)).job_old).toBe(false);
+    },
+  );
+
+  it(
+    "keeps the renamed-aside tables and names the left-behind jobs when a chain has no head",
+    { timeout: 120_000 },
+    async ({ loaded: { provider, adapter } }) => {
+      await query(
+        provider,
+        `UPDATE queuert_job SET chain_id = id
+         WHERE id = (SELECT id FROM queuert_job WHERE chain_index > 0 ORDER BY id LIMIT 1)`,
+      );
+
+      await expect(adapter.migrateToLatest()).rejects.toThrow(
+        /1\/\d+ jobs .* list them with `SELECT \* FROM public\.queuert_job_old o WHERE NOT EXISTS/,
+      );
+      expect((await relations(provider)).job_old).toBe(true);
     },
   );
 
@@ -807,6 +859,232 @@ describe("upgrade robustness", () => {
         await pool.end();
         await pg[Symbol.asyncDispose]();
       }
+    },
+  );
+});
+
+describe("upgrade data fidelity", () => {
+  it(
+    "clears attempt fields on jobs that are not running",
+    { timeout: 120_000 },
+    async ({ loaded: { provider, adapter } }) => {
+      const { sentinels } = readManifest();
+      await query(
+        provider,
+        "UPDATE queuert_job SET leased_by = 'stale-worker', leased_until = now() WHERE id IN ($1, $2)",
+        [sentinels.pendingJobId, sentinels.completedJobId],
+      );
+
+      await adapter.migrateToLatest();
+
+      for (const job of await adapter.getJobs({
+        jobIds: [sentinels.pendingJobId, sentinels.completedJobId],
+      })) {
+        expect(job?.attemptBy).toBeNull();
+        expect(job?.attemptUntil).toBeNull();
+        expect(job?.attemptAt).toBeNull();
+      }
+    },
+  );
+
+  it(
+    "upgrades a table prefix long enough that Postgres truncates its generated constraint names",
+    { timeout: 120_000 },
+    async () => {
+      // The longest prefix v0.15.1 could migrate: its blocker primary key rebuild dropped
+      // `<prefix>job_blocker_pkey` by name, which a longer prefix truncates differently.
+      const tablePrefix = `${"p".repeat(46)}_`;
+      const pg = await acquirePostgres("postgres:14", `pg-migration-${randomUUID()}`);
+      const pool = new Pool({ connectionString: pg.connectionString });
+      try {
+        await loadFixture(pg.connectionString, { schema: "public", tablePrefix });
+        const provider = createPgPoolProvider({ pool });
+        const foreignKeyNames = (
+          await query<{ conname: string }>(
+            provider,
+            "SELECT conname FROM pg_constraint WHERE contype = 'f' AND conrelid = to_regclass($1)",
+            [`public.${tablePrefix}job_blocker`],
+          )
+        ).map((row) => row.conname);
+        expect(foreignKeyNames).not.toContain(
+          `${tablePrefix}job_blocker_blocked_by_chain_id_fkey`.slice(0, 63),
+        );
+
+        const adapter = await createPgStateAdapter({
+          stateProvider: provider,
+          tablePrefix,
+          generateId: (): string => randomUUID(),
+        });
+        expect((await adapter.migrateToLatest()).applied).toEqual(ALL);
+
+        const manifest = readManifest();
+        const [row] = await query<Record<string, string | number | null>>(
+          provider,
+          `SELECT (SELECT count(*) FROM public.${tablePrefix}job)::int AS jobs,
+                  (SELECT count(*) FROM public.${tablePrefix}job_blocker)::int AS blockers,
+                  to_regclass('public.${tablePrefix}job_old') AS job_old,
+                  to_regclass('public.${tablePrefix}job_blocker_old') AS job_blocker_old`,
+        );
+        expect(row).toEqual({
+          jobs: manifest.totalJobs,
+          blockers: manifest.totalBlockers,
+          job_old: null,
+          job_blocker_old: null,
+        });
+      } finally {
+        await pool.end();
+        await pg[Symbol.asyncDispose]();
+      }
+    },
+  );
+});
+
+const FIRST_CHAIN_ID = "00000000-0000-4000-8000-000000000001";
+const LAST_CHAIN_ID = "ffffffff-0000-4000-8000-000000000001";
+
+// One chain sorts first and the other last, with a full batch of completed chains in between, so
+// the import lands them in different batches.
+const loadSplitBlockerFixture = async (
+  connectionString: string,
+  { blockerChainId, dependentChainId }: { blockerChainId: string; dependentChainId: string },
+): Promise<void> => {
+  const client = new Client({ connectionString });
+  await client.connect();
+  try {
+    await client.query(readFileSync(SCHEMA_PATH, "utf8"));
+    await client.query(/* sql */ `
+INSERT INTO public.queuert_job (id, type_name, chain_id, chain_type_name, chain_index, status)
+VALUES
+  ('${blockerChainId}', 'blocker', '${blockerChainId}', 'blocker', 0, 'pending'),
+  ('${dependentChainId}', 'dependent', '${dependentChainId}', 'dependent', 0, 'blocked');
+
+INSERT INTO public.queuert_job (id, type_name, chain_id, chain_type_name, chain_index, status, output, completed_at)
+SELECT id, 'filler', id, 'filler', 0, 'completed', 'null', now()
+FROM (SELECT format('10000000-0000-4000-8000-%s', lpad(i::text, 12, '0'))::uuid AS id
+      FROM generate_series(1, 1000) AS i) AS filler;
+
+INSERT INTO public.queuert_job_blocker (job_id, blocked_by_chain_id, index)
+VALUES ('${dependentChainId}', '${blockerChainId}', 0);
+`);
+  } finally {
+    await client.end();
+  }
+};
+
+const completeBlockerChain = async (
+  adapter: Database["adapter"],
+  txCtx: PgPoolContext,
+  blockerChainId: string,
+): Promise<number> => {
+  await adapter.getChains({ txCtx, chainIds: [blockerChainId], lock: "exclusive" });
+  await adapter.completeJobs({ txCtx, jobs: [{ jobId: blockerChainId, output: null }] });
+  return (await adapter.unblockJobs({ txCtx, blockedByChainId: blockerChainId })).length;
+};
+
+const crashAfterFirstBatch = async (provider: Provider): Promise<void> => {
+  await expect(
+    migratorFor(failingProvider(provider, "INSERT INTO public.queuert_job (", 2)).migrateToLatest(),
+  ).rejects.toThrow(/simulated crash/);
+};
+
+const waitForLockWaiter = async (provider: Provider): Promise<void> => {
+  for (;;) {
+    const [row] = await query<{ c: number }>(
+      provider,
+      "SELECT count(*)::int AS c FROM pg_stat_activity WHERE wait_event_type = 'Lock'",
+    );
+    if (row.c > 0) return;
+    await new Promise((resolve) => setTimeout(resolve, 20));
+  }
+};
+
+describe("blockers across import batches", () => {
+  const blockerFirst = { blockerChainId: FIRST_CHAIN_ID, dependentChainId: LAST_CHAIN_ID };
+  const dependentFirst = { blockerChainId: LAST_CHAIN_ID, dependentChainId: FIRST_CHAIN_ID };
+
+  it(
+    "unblocks a dependent whose blocker chain the engine completed between batches",
+    { timeout: 120_000 },
+    async ({ fresh: { provider, adapter, pg } }) => {
+      await loadSplitBlockerFixture(pg.connectionString, blockerFirst);
+      await crashAfterFirstBatch(provider);
+      const [blockerHead, dependentHead] = await adapter.getJobs({
+        jobIds: [FIRST_CHAIN_ID, LAST_CHAIN_ID],
+      });
+      expect(blockerHead?.status).toBe("pending");
+      expect(dependentHead).toBeUndefined();
+
+      // The dependent's blocker row is not imported yet, so the engine has nothing to unblock.
+      expect(
+        await adapter.withTransaction(async (txCtx) =>
+          completeBlockerChain(adapter, txCtx, FIRST_CHAIN_ID),
+        ),
+      ).toBe(0);
+
+      expect((await adapter.migrateToLatest()).applied).toEqual([]);
+      const [dependent] = await adapter.getJobs({ jobIds: [LAST_CHAIN_ID] });
+      expect(dependent?.status).toBe("pending");
+      const [blocker] = await adapter.getJobBlockers({ jobId: LAST_CHAIN_ID });
+      expect(blocker?.status).toBe("completed");
+      expect((await relations(provider)).job_old).toBe(false);
+    },
+  );
+
+  it(
+    "unblocks a dependent imported before its blocker chain once the engine completes it",
+    { timeout: 120_000 },
+    async ({ fresh: { provider, adapter, pg } }) => {
+      await loadSplitBlockerFixture(pg.connectionString, dependentFirst);
+      await crashAfterFirstBatch(provider);
+      const [dependentHead, blockerHead] = await adapter.getJobs({
+        jobIds: [FIRST_CHAIN_ID, LAST_CHAIN_ID],
+      });
+      expect(dependentHead?.status).toBe("blocked");
+      expect(blockerHead).toBeUndefined();
+
+      expect((await adapter.migrateToLatest()).applied).toEqual([]);
+      expect(
+        await adapter.withTransaction(async (txCtx) =>
+          completeBlockerChain(adapter, txCtx, LAST_CHAIN_ID),
+        ),
+      ).toBe(1);
+
+      const [dependent] = await adapter.getJobs({ jobIds: [FIRST_CHAIN_ID] });
+      expect(dependent?.status).toBe("pending");
+    },
+  );
+
+  it(
+    "imports a dependent after a blocker completion that holds the blocker head",
+    { timeout: 120_000 },
+    async ({ fresh: { provider, adapter, pg } }) => {
+      await loadSplitBlockerFixture(pg.connectionString, blockerFirst);
+      await crashAfterFirstBatch(provider);
+
+      let releaseCompletion!: () => void;
+      const completionReleased = new Promise<void>((resolve) => {
+        releaseCompletion = resolve;
+      });
+      let completionLocked!: () => void;
+      const completionHoldsHead = new Promise<void>((resolve) => {
+        completionLocked = resolve;
+      });
+      const completion = adapter.withTransaction(async (txCtx) => {
+        const unblocked = await completeBlockerChain(adapter, txCtx, FIRST_CHAIN_ID);
+        completionLocked();
+        await completionReleased;
+        return unblocked;
+      });
+      await completionHoldsHead;
+
+      const upgrade = adapter.migrateToLatest();
+      await waitForLockWaiter(provider);
+      releaseCompletion();
+
+      expect(await completion).toBe(0);
+      expect((await upgrade).applied).toEqual([]);
+      const [dependent] = await adapter.getJobs({ jobIds: [LAST_CHAIN_ID] });
+      expect(dependent?.status).toBe("pending");
     },
   );
 });

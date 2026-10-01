@@ -43,7 +43,7 @@ The `job` table stores all job state:
 | `chain_deduplication_key` | `text`                         | **Head rows only.** Key for chain deduplication                     |
 | `chain_trace_context`     | `text`                         | **Head rows only.** W3C traceparent for the chain                   |
 
-Primary key: `id`.
+Primary key: `id`. Two CHECK constraints tie the chain columns to head rows: a row has a `chain_status` exactly when `chain_index = 0`, and a continuation row (`chain_index > 0`) carries no `chain_completed_at`, `chain_deduplication_key` or `chain_trace_context`.
 
 Columns are declared `timestamptz → integer → id → text/jsonb` so the fixed-width values sit together and stop paying alignment padding around the `jsonb` payloads.
 
@@ -104,10 +104,10 @@ The `migration_lock` table holds a single-row lease that gives `migrateToLatest(
 
 ## Row Locking
 
-A chain's head row is its lock: every operation that reads or changes chain state, or depends on the chain continuing to exist, locks the head first. Every site that locks several rows orders them by `id`, so concurrent lockers take them in the same order and cannot deadlock.
+A chain's head row is its lock: every operation that reads or changes chain state, or depends on the chain continuing to exist, locks the head first. Every site that waits on several row locks orders them by `id`, so concurrent lockers take them in the same order and cannot deadlock. Job acquisition and expired-attempt reclamation scan in `scheduled_at` / `attempt_until` order instead, but use `SKIP LOCKED` and never wait.
 
 - **Job acquisition** (`startJobAttempt`) scans pending jobs with `FOR UPDATE OF h, j SKIP LOCKED`, locking the candidate job and its chain head together. The head lock is what lets an atomic-mode worker call `completeJobs` in the same transaction — `completeJobs` requires its caller to hold the head, or a blocker committed in the meantime is missed and its job stays blocked against a completed chain. Because both locks are taken inside the candidate scan, a job whose head another transaction holds (a blocker being added, a locked read, a client completing the chain) is skipped and the next due job is tried; `getStartAttemptDelayMs` applies the same rule, so it never reports a due job that cannot be acquired.
-- **Adding blockers** (`addJobsBlockers`) locks each blocker chain's head before inserting `job_blocker` rows and reading the blocker's status.
+- **Adding blockers** (`addJobsBlockers`) locks each blocker chain's head before inserting `job_blocker` rows and reading the blocker's status. Only rows whose blocker head it locked are inserted: a head that does not exist — or that a concurrent `deleteChains` removed while it waited on the lock — is reported as a missing blocker and leaves no row behind.
 - **Deleting chains** (`deleteChains`) locks the heads and members of the chains in one statement, then checks for outside `job_blocker` references and deletes in a second one. The second statement takes a fresh snapshot, so it sees any blocker or continuation committed by the transaction it waited on — within a single statement only the locked rows would be rechecked, and a new `job_blocker` row would be missed.
 - **Unblocking** (`unblockJobs`) likewise locks the blocked jobs in one statement and recomputes their blockers in the next.
 

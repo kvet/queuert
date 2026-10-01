@@ -21,7 +21,7 @@ export const listJobsGroup: ConformanceGroup<StateConformanceFixture> = {
     {
       name: "listJobs returns all jobs across chains",
       run: async ({ stateAdapter }, expect) => {
-        const [rootChain] = await stateAdapter.withTransaction(async (txCtx) =>
+        const [headChain] = await stateAdapter.withTransaction(async (txCtx) =>
           stateAdapter.createJobs({
             txCtx,
             jobs: [{ typeName: "chain-type", input: { step: 1 } }],
@@ -33,7 +33,7 @@ export const listJobsGroup: ConformanceGroup<StateConformanceFixture> = {
             jobs: [
               {
                 typeName: "chain-type",
-                continueFromId: rootChain.head.id,
+                continueFromId: headChain.head.id,
                 input: { step: 2 },
               },
             ],

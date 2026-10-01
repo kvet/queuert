@@ -180,18 +180,66 @@ const it = baseIt.extend<{ loaded: Db; fresh: Db }>({
   },
 });
 
+const crashingProvider = (
+  provider: Provider,
+  shouldCrash: (options: Parameters<Provider["executeSql"]>[0]) => boolean,
+): Provider => ({
+  ...provider,
+  executeSql: async (options) => {
+    if (shouldCrash(options)) throw new Error("simulated crash");
+    return provider.executeSql(options);
+  },
+});
+
 const failingProvider = (provider: Provider, match: string, occurrence: number): Provider => {
   let seen = 0;
-  return {
-    ...provider,
-    executeSql: async (options) => {
-      if (options.sql.includes(match) && ++seen === occurrence) {
-        throw new Error("simulated crash");
-      }
-      return provider.executeSql(options);
-    },
-  };
+  return crashingProvider(
+    provider,
+    (options) => options.sql.includes(match) && ++seen === occurrence,
+  );
 };
+
+// A legacy blocked job with a single blocker row, whose chain and blocker chain land in import
+// batches of the given order.
+const findBlockerPair = async (
+  provider: Provider,
+  order: "blocker first" | "dependent first",
+): Promise<{ jobId: string; chainId: string; blockerChainId: string }> => {
+  const [pair] = await query<{ jobId: string; chainId: string; blockerChainId: string }>(
+    provider,
+    `WITH heads AS (
+       SELECT id, (row_number() OVER (ORDER BY id) - 1) / 1000 AS batch
+       FROM queuert_job WHERE chain_index = 0
+     )
+     SELECT b.job_id AS jobId, j.chain_id AS chainId, b.blocked_by_chain_id AS blockerChainId
+     FROM queuert_job_blocker b
+     JOIN queuert_job j ON j.id = b.job_id
+     JOIN heads dependent ON dependent.id = j.chain_id
+     JOIN heads blocker ON blocker.id = b.blocked_by_chain_id
+     WHERE j.status = 'blocked'
+       AND (SELECT count(*) FROM queuert_job_blocker x WHERE x.job_id = b.job_id) = 1
+       AND ${order === "blocker first" ? "blocker.batch < dependent.batch" : "dependent.batch < blocker.batch"}
+     ORDER BY b.job_id LIMIT 1`,
+  );
+  expect(pair).toBeDefined();
+  return pair;
+};
+
+const completeChain = async (
+  provider: Provider,
+  adapter: Db["adapter"],
+  chainId: string,
+): Promise<string[]> =>
+  provider.withTransaction(async (txCtx) => {
+    const [chain] = await adapter.getChains({ txCtx, chainIds: [chainId] });
+    await adapter.completeJobs({
+      txCtx,
+      completedBy: null,
+      jobs: [{ jobId: (chain!.tail ?? chain!.head).id, output: null }],
+    });
+    const dependents = await adapter.unblockJobs({ txCtx, blockedByChainId: chainId });
+    return dependents.map((dependent) => dependent.jobId);
+  });
 
 // oxlint-disable-next-line typescript/no-base-to-string
 const statusOf = (row: Record<string, unknown>): string => String(row.status);
@@ -593,6 +641,26 @@ describe("upgrade phases", () => {
   );
 
   it(
+    "refuses a database recording migrations v0.15.1 did not ship without touching it",
+    { timeout: 60_000 },
+    async ({ loaded: { db, adapter, provider } }) => {
+      db.prepare(
+        "INSERT INTO queuert_migration (name) VALUES ('20990101000000_later_release')",
+      ).run();
+
+      await expect(adapter.migrateToLatest()).rejects.toThrow(
+        /did not ship \(20990101000000_later_release\)/,
+      );
+      expect(await relations(provider)).toEqual({
+        job: true,
+        job_blocker: true,
+        job_old: false,
+        job_blocker_old: false,
+      });
+    },
+  );
+
+  it(
     "refuses a database older than v0.15.1 without touching it",
     { timeout: 60_000 },
     async ({ loaded: { db, adapter, provider } }) => {
@@ -746,7 +814,7 @@ describe("upgrade phases", () => {
   );
 
   it(
-    "resumes a partial blocker import",
+    "imports a chain's blocker rows in the same transaction as the chain",
     { timeout: 60_000 },
     async ({ loaded: { provider, adapter } }) => {
       await expect(
@@ -757,13 +825,132 @@ describe("upgrade phases", () => {
 
       const manifest = readManifest();
       const partial = await counts(provider);
-      expect(partial.jobs).toBe(manifest.totalJobs);
+      expect(partial.jobs).toBeGreaterThan(0);
+      expect(partial.jobs).toBeLessThan(manifest.totalJobs);
       expect(partial.blockers).toBeGreaterThan(0);
-      expect(partial.blockers).toBeLessThan(manifest.totalBlockers);
-      expect((await relations(provider)).job_old).toBe(true);
+      const [imported] = await query<{ c: number }>(
+        provider,
+        `SELECT count(*) AS c FROM queuert_job_blocker_old b
+         WHERE EXISTS (SELECT 1 FROM queuert_job j WHERE j.id = b.job_id)`,
+      );
+      expect(imported?.c).toBe(partial.blockers);
 
       expect((await adapter.migrateToLatest()).applied).toEqual([]);
       await expectFullyUpgraded(provider);
+    },
+  );
+
+  it.for(["blocker first", "dependent first"] as const)(
+    "unblocks a dependent whose blocker chain the engine completed mid-upgrade (%s)",
+    { timeout: 60_000 },
+    async (order, { loaded: { provider, adapter } }) => {
+      const pair = await findBlockerPair(provider, order);
+
+      // "blocker first" stops before the dependent's batch; "dependent first" stops once every
+      // chain is in, where a separate blocker phase used to start.
+      const crashing =
+        order === "blocker first"
+          ? crashingProvider(
+              provider,
+              (options) =>
+                options.sql.includes("INSERT INTO queuert_job (") &&
+                String(options.params[0]).includes(pair.chainId),
+            )
+          : failingProvider(provider, "SELECT DISTINCT b.job_id FROM queuert_job_blocker_old", 1);
+      await expect(migratorFor(crashing).migrateToLatest()).rejects.toThrow(/simulated crash/);
+
+      const unblocked = await completeChain(provider, adapter, pair.blockerChainId);
+      expect(unblocked.includes(pair.jobId)).toBe(order === "dependent first");
+
+      expect((await adapter.migrateToLatest()).applied).toEqual([]);
+      await expectFullyUpgraded(provider);
+      const [dependent] = await adapter.getJobs({ jobIds: [pair.jobId] });
+      expect(dependent?.status).toBe("pending");
+    },
+  );
+
+  it(
+    "unblocks a dependent whose other blocker chain is completed but not imported yet",
+    { timeout: 60_000 },
+    async ({ loaded: { db, provider, adapter } }) => {
+      const pair = await findBlockerPair(provider, "blocker first");
+      const [laterCompleted] = await query<{ id: string }>(
+        provider,
+        `WITH heads AS (
+           SELECT id, (row_number() OVER (ORDER BY id) - 1) / 1000 AS batch
+           FROM queuert_job WHERE chain_index = 0
+         )
+         SELECT h.id FROM heads h
+         WHERE h.batch > (SELECT batch FROM heads WHERE id = ?)
+           AND EXISTS (
+             SELECT 1 FROM queuert_job t
+             WHERE t.chain_id = h.id AND t.completed_at IS NOT NULL
+               AND NOT EXISTS (
+                 SELECT 1 FROM queuert_job n
+                 WHERE n.chain_id = t.chain_id AND n.chain_index = t.chain_index + 1
+               )
+           )
+         ORDER BY h.id LIMIT 1`,
+        [pair.chainId],
+      );
+      expect(laterCompleted).toBeDefined();
+      db.prepare(
+        `INSERT INTO queuert_job_blocker (job_id, blocked_by_chain_id, "index") VALUES (?, ?, 1)`,
+      ).run(pair.jobId, laterCompleted.id);
+
+      await expect(
+        migratorFor(
+          crashingProvider(
+            provider,
+            (options) =>
+              options.sql.includes("INSERT INTO queuert_job (") &&
+              String(options.params[0]).includes(pair.chainId),
+          ),
+        ).migrateToLatest(),
+      ).rejects.toThrow(/simulated crash/);
+      expect(await completeChain(provider, adapter, pair.blockerChainId)).not.toContain(pair.jobId);
+
+      expect((await adapter.migrateToLatest()).applied).toEqual([]);
+      expect((await relations(provider)).job_old).toBe(false);
+      const [dependent] = await adapter.getJobs({ jobIds: [pair.jobId] });
+      expect(dependent?.status).toBe("pending");
+      expect(
+        (await adapter.getJobBlockers({ jobId: pair.jobId })).map((chain) => chain.status),
+      ).toEqual(["completed", "completed"]);
+    },
+  );
+
+  it(
+    "names the jobs it cannot import and finishes once they are removed",
+    { timeout: 60_000 },
+    async ({ loaded: { db, provider, adapter } }) => {
+      const { sentinels } = readManifest();
+      db.pragma("foreign_keys = OFF");
+      db.prepare("DELETE FROM queuert_job WHERE id = ?").run(sentinels.chainId);
+
+      const failure = await adapter.migrateToLatest().then(
+        () => undefined,
+        (error: unknown) => error as Error,
+      );
+      const manifest = readManifest();
+      expect(failure?.message).toContain(
+        `${sentinels.chainLength - 1}/${manifest.totalJobs - 1} jobs and 0/${manifest.totalBlockers} blockers are missing`,
+      );
+      expect((await relations(provider)).job_old).toBe(true);
+
+      const missingJobsQuery = /`([^`]+)`/.exec(failure!.message)![1];
+      const orphans = await query<{ id: string; chain_id: string }>(provider, missingJobsQuery);
+      expect(orphans).toHaveLength(sentinels.chainLength - 1);
+      expect(orphans.every((row) => row.chain_id === sentinels.chainId)).toBe(true);
+
+      db.prepare("DELETE FROM queuert_job_old WHERE chain_id = ?").run(sentinels.chainId);
+      expect((await adapter.migrateToLatest()).applied).toEqual([]);
+      expect(await relations(provider)).toEqual({
+        job: true,
+        job_blocker: true,
+        job_old: false,
+        job_blocker_old: false,
+      });
     },
   );
 });
@@ -804,6 +991,20 @@ describe("upgrade variants", () => {
 
       await expectFullyUpgraded(provider);
       expect(db.pragma("foreign_key_check")).toEqual([]);
+    },
+  );
+
+  it(
+    "upgrades with legacy_alter_table on",
+    { timeout: 60_000 },
+    async ({ loaded: { db, provider, adapter }, fresh }) => {
+      db.pragma("legacy_alter_table = ON");
+
+      expect((await adapter.migrateToLatest()).applied).toEqual(ALL);
+      await fresh.adapter.migrateToLatest();
+
+      await expectFullyUpgraded(provider);
+      expect(await dumpSchema(provider)).toBe(await dumpSchema(fresh.provider));
     },
   );
 
