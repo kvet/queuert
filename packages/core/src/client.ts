@@ -1,4 +1,8 @@
-import { type Chain, mapStateChainToChain } from "./entities/chain.js";
+import {
+  type ChainFields,
+  type CompletedChainFields,
+  mapStateChainToChain,
+} from "./entities/chain.js";
 import { type DeduplicationOptions } from "./entities/deduplication.js";
 import { type BaseJobTypeDefinitions } from "./entities/job-type.js";
 import { type JobTypes } from "./entities/job-types.js";
@@ -11,6 +15,7 @@ import {
   type JobTypeNames,
   type JobTypeProperty,
   type ResolvedChain,
+  type ResolvedRunningChain,
   type ResolvedChainJobs,
   type ResolvedJob,
 } from "./entities/job-types.resolvers.js";
@@ -141,14 +146,14 @@ type CompleteChainResult<
   TChainTypeName extends JobTypeEntryNames<TJobTypeDefinitions>,
   TReturn,
 > = TReturn extends { continuedTo: undefined; output: infer TOutput }
-  ? Chain<
+  ? ChainFields<
       TJobId,
       TChainTypeName,
-      JobTypeProperty<TJobTypeDefinitions, TChainTypeName, "input">,
-      TOutput
-    > & { status: "completed" }
+      JobTypeProperty<TJobTypeDefinitions, TChainTypeName, "input">
+    > &
+      CompletedChainFields<TOutput>
   : TReturn extends { continuedTo: AnyJob }
-    ? ResolvedChain<TJobId, TJobTypeDefinitions, TChainTypeName> & { status: "running" }
+    ? ResolvedRunningChain<TJobId, TJobTypeDefinitions, TChainTypeName>
     : ResolvedChain<TJobId, TJobTypeDefinitions, TChainTypeName>;
 
 type CompleteChainResultFromHandler<
@@ -203,6 +208,37 @@ export type Client<
   TJobId = GetStateAdapterJobId<TStateAdapter>,
 > = {
   readonly [helpersSymbol]: Helpers;
+
+  // `awaitChain` leads on purpose: TypeScript compares members in declaration order
+  // when it measures `Client`'s variance (once per program, on the first inference
+  // or assignment between two `Client` instantiations), and this member settles the
+  // comparison cheaply. Leading with `createChain` costs ~4k extra instantiations.
+
+  /**
+   * Wait for a chain to complete. Combines polling with notify adapter events.
+   *
+   * @throws {@link WaitChainTimeoutError} on timeout or abort.
+   * @throws {@link ChainNotFoundError} if the chain disappears or never existed.
+   * @throws {@link ChainTypeMismatchError} if `typeName` is provided and does not match.
+   */
+  awaitChain: <
+    TChainTypeName extends JobTypeEntryNames<TJobTypeDefinitions> =
+      JobTypeEntryNames<TJobTypeDefinitions>,
+  >(
+    chain: {
+      typeName?: TChainTypeName;
+      id: TJobId;
+    },
+    options: {
+      timeoutMs: number;
+      pollIntervalMs?: number;
+      signal?: AbortSignal;
+    },
+  ) => Promise<
+    ResolvedChain<TJobId, TJobTypeDefinitions, TChainTypeName> & {
+      status: "completed";
+    }
+  >;
 
   /**
    * Create a new chain. Returns the created chain with a `deduplicated` flag.
@@ -343,32 +379,6 @@ export type Client<
       handler: THandler;
     } & GetStateAdapterTxContext<TStateAdapter>,
   ) => Promise<TResult>;
-
-  /**
-   * Wait for a chain to complete. Combines polling with notify adapter events.
-   *
-   * @throws {@link WaitChainTimeoutError} on timeout or abort.
-   * @throws {@link ChainNotFoundError} if the chain disappears or never existed.
-   * @throws {@link ChainTypeMismatchError} if `typeName` is provided and does not match.
-   */
-  awaitChain: <
-    TChainTypeName extends JobTypeEntryNames<TJobTypeDefinitions> =
-      JobTypeEntryNames<TJobTypeDefinitions>,
-  >(
-    chain: {
-      typeName?: TChainTypeName;
-      id: TJobId;
-    },
-    options: {
-      timeoutMs: number;
-      pollIntervalMs?: number;
-      signal?: AbortSignal;
-    },
-  ) => Promise<
-    ResolvedChain<TJobId, TJobTypeDefinitions, TChainTypeName> & {
-      status: "completed";
-    }
-  >;
 
   /**
    * Get a single chain by ID. Pass `typeName` for type narrowing. Pass

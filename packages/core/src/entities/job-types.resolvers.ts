@@ -14,14 +14,27 @@
  * - `JobTypeReachingEntry<TJobTypeDefinitions, K>` — which entry types can reach K via chain walking
  */
 
-import { type Chain, type CompletedChain } from "./chain.types.js";
+import {
+  type Chain,
+  type ChainFields,
+  type CompletedChainFields,
+  type RunningChainFields,
+} from "./chain.types.js";
 import {
   type BaseJobTypeDefinitions,
   type JobTypeReference,
   type NominalJobTypeReference,
   type StructuralJobTypeReference,
 } from "./job-type.js";
-import { type Job } from "./job.js";
+import {
+  type CompletedJobFields,
+  type ContinuedJobFields,
+  type Job,
+  type JobFields,
+  type PendingJobFields,
+  type RunningJobFields,
+  type TerminalJobFields,
+} from "./job.js";
 
 // ─── Distributive accessors ───
 
@@ -120,13 +133,16 @@ type EntryKeys<TJobTypeDefinitions extends BaseJobTypeDefinitions> = {
     : never;
 }[keyof TJobTypeDefinitions & string];
 
-type ChainReachMap<TJobTypeDefinitions extends BaseJobTypeDefinitions> = {
-  [TypeName in keyof TJobTypeDefinitions]: {
-    [E in EntryKeys<TJobTypeDefinitions>]: TypeName extends ChainWalk<TJobTypeDefinitions, E>
-      ? E
-      : never;
-  }[EntryKeys<TJobTypeDefinitions>];
-};
+/** Entry type names whose chain walk reaches K — distributes over the slice's entry names. */
+type ChainReachingEntries<
+  TJobTypeDefinitions extends BaseJobTypeDefinitions,
+  K extends string,
+  TEntryName = EntryKeys<TJobTypeDefinitions>,
+> = TEntryName extends string
+  ? K extends ChainWalk<TJobTypeDefinitions, TEntryName>
+    ? TEntryName
+    : never
+  : never;
 
 /**
  * Which entry types can reach K via chain walking.
@@ -137,7 +153,10 @@ export type JobTypeReachingEntry<
   K extends string,
 > = TJobTypeDefinitions extends any
   ? K extends keyof TJobTypeDefinitions
-    ? ChainReachMap<TJobTypeDefinitions>[K] & string
+    ? // An `any` name stays `any`, keeping `Client` assignable across merged slices.
+      0 extends 1 & K
+      ? any
+      : ChainReachingEntries<TJobTypeDefinitions, K>
     : never
   : never;
 
@@ -194,31 +213,41 @@ export type ResolvedJob<
   [JobTypeContinuation<TJobTypeDefinitions, TJobTypeName>] extends [never] ? false : true
 >;
 
-export type ResolvedJobWithBlockers<
+/** The `running` {@link ResolvedJob} with its completed blocker chains — the job an attempt handler receives. */
+export type ResolvedRunningJob<
   TJobId,
   TJobTypeDefinitions extends BaseJobTypeDefinitions,
   TJobTypeName extends string,
   TChainTypeName extends string = JobTypeReachingEntry<TJobTypeDefinitions, TJobTypeName>,
-> = ResolvedJob<TJobId, TJobTypeDefinitions, TJobTypeName, TChainTypeName> & {
-  blockers: CompletedBlockerChains<TJobId, TJobTypeDefinitions, TJobTypeName>;
-};
+> = ResolvedJobFields<TJobId, TJobTypeDefinitions, TJobTypeName, TChainTypeName> &
+  RunningJobFields & {
+    blockers: CompletedBlockerChains<TJobId, TJobTypeDefinitions, TJobTypeName>;
+  };
+
+/** {@link JobFields} resolved from the definitions for a given job type name. */
+type ResolvedJobFields<
+  TJobId,
+  TJobTypeDefinitions extends BaseJobTypeDefinitions,
+  TJobTypeName extends string,
+  TChainTypeName extends string,
+> = JobFields<
+  TJobId,
+  TJobTypeName,
+  TChainTypeName,
+  JobTypeProperty<TJobTypeDefinitions, TJobTypeName, "input">
+>;
+
+// The single-variant resolvers below assemble the variant from its named parts
+// rather than `Extract`-ing it from `ResolvedJob`: same shape, but the checker
+// skips normalizing and filtering the whole status union per job type.
 
 export type ContinuationJob<
   TJobId,
   TJobTypeDefinitions extends BaseJobTypeDefinitions,
   TContinuationTypeName extends string,
   TChainTypeName extends string,
-> = Extract<
-  Job<
-    TJobId,
-    TContinuationTypeName,
-    TChainTypeName,
-    JobTypeProperty<TJobTypeDefinitions, TContinuationTypeName, "input">,
-    JobTypeProperty<TJobTypeDefinitions, TContinuationTypeName, "output">,
-    [JobTypeContinuation<TJobTypeDefinitions, TContinuationTypeName>] extends [never] ? false : true
-  >,
-  { status: "pending" }
->;
+> = ResolvedJobFields<TJobId, TJobTypeDefinitions, TContinuationTypeName, TChainTypeName> &
+  PendingJobFields;
 
 export type ContinuationJobs<
   TJobId,
@@ -235,20 +264,21 @@ export type OutputJob<
   TJobTypeDefinitions extends BaseJobTypeDefinitions,
   TJobTypeName extends string,
   TChainTypeName extends string = JobTypeReachingEntry<TJobTypeDefinitions, TJobTypeName>,
-> = Extract<
-  ResolvedJob<TJobId, TJobTypeDefinitions, TJobTypeName, TChainTypeName>,
-  { status: "completed"; continuedToId: null }
-> & { continuedTo: undefined };
+> =
+  JobTypeProperty<TJobTypeDefinitions, TJobTypeName, "output"> extends infer TOutput
+    ? [TOutput] extends [never]
+      ? never
+      : ResolvedJobFields<TJobId, TJobTypeDefinitions, TJobTypeName, TChainTypeName> &
+          CompletedJobFields &
+          TerminalJobFields<TOutput> & { continuedTo: undefined }
+    : never;
 
 export type RescheduledJob<
   TJobId,
   TJobTypeDefinitions extends BaseJobTypeDefinitions,
   TJobTypeName extends string,
   TChainTypeName extends string = JobTypeReachingEntry<TJobTypeDefinitions, TJobTypeName>,
-> = Extract<
-  ResolvedJob<TJobId, TJobTypeDefinitions, TJobTypeName, TChainTypeName>,
-  { status: "pending" }
->;
+> = ResolvedJobFields<TJobId, TJobTypeDefinitions, TJobTypeName, TChainTypeName> & PendingJobFields;
 
 export type ContinuedJob<
   TJobId,
@@ -256,32 +286,69 @@ export type ContinuedJob<
   TJobTypeName extends string,
   TChainTypeName extends string = JobTypeReachingEntry<TJobTypeDefinitions, TJobTypeName>,
   TContinuationTypeName extends string = string,
-> = Exclude<
-  Extract<
-    ResolvedJob<TJobId, TJobTypeDefinitions, TJobTypeName, TChainTypeName>,
-    { status: "completed" }
-  >,
-  { continuedToId: null }
-> & {
-  continuedTo: ContinuationJob<TJobId, TJobTypeDefinitions, TContinuationTypeName, TChainTypeName>;
-};
+> = [JobTypeContinuation<TJobTypeDefinitions, TJobTypeName>] extends [never]
+  ? never
+  : ResolvedJobFields<TJobId, TJobTypeDefinitions, TJobTypeName, TChainTypeName> &
+      CompletedJobFields &
+      ContinuedJobFields<TJobId> & {
+        continuedTo: ContinuationJob<
+          TJobId,
+          TJobTypeDefinitions,
+          TContinuationTypeName,
+          TChainTypeName
+        >;
+      };
 
-/** Resolves a {@link Chain} with concrete input/output types for a given entry type name. */
+/** Output of a chain started at the given entry type: the union of outputs reachable along it. */
+type ResolvedChainOutput<
+  TJobTypeDefinitions extends BaseJobTypeDefinitions,
+  TJobTypeName extends string,
+> = Exclude<
+  JobTypeProperty<
+    TJobTypeDefinitions,
+    JobTypeChainNames<TJobTypeDefinitions, TJobTypeName>,
+    "output"
+  >,
+  undefined
+>;
+
+/**
+ * Resolves a {@link Chain} with concrete input/output types for a given entry type name.
+ * Distributes over a union of entry type names: the chain's `input` is its entry
+ * type's input, its `output` the union of outputs reachable along the chain.
+ */
 export type ResolvedChain<
   TJobId,
   TJobTypeDefinitions extends BaseJobTypeDefinitions,
   TJobTypeName extends string,
-> =
-  JobTypeChainNames<TJobTypeDefinitions, TJobTypeName> extends infer TChainTypeNames extends string
-    ? {
-        [K in TChainTypeNames]: Chain<
-          TJobId,
-          TJobTypeName,
-          JobTypeProperty<TJobTypeDefinitions, K, "input">,
-          Exclude<JobTypeProperty<TJobTypeDefinitions, K, "output">, undefined>
-        >;
-      }[TChainTypeNames]
-    : never;
+> = TJobTypeName extends any
+  ? Chain<
+      TJobId,
+      TJobTypeName,
+      JobTypeProperty<TJobTypeDefinitions, TJobTypeName, "input">,
+      ResolvedChainOutput<TJobTypeDefinitions, TJobTypeName>
+    >
+  : never;
+
+/** The `completed` variant of {@link ResolvedChain}, assembled directly rather than `Extract`-ed. */
+export type ResolvedCompletedChain<
+  TJobId,
+  TJobTypeDefinitions extends BaseJobTypeDefinitions,
+  TJobTypeName extends string,
+> = TJobTypeName extends any
+  ? ChainFields<TJobId, TJobTypeName, JobTypeProperty<TJobTypeDefinitions, TJobTypeName, "input">> &
+      CompletedChainFields<ResolvedChainOutput<TJobTypeDefinitions, TJobTypeName>>
+  : never;
+
+/** The `running` variant of {@link ResolvedChain}, assembled directly rather than `Extract`-ed. */
+export type ResolvedRunningChain<
+  TJobId,
+  TJobTypeDefinitions extends BaseJobTypeDefinitions,
+  TJobTypeName extends string,
+> = TJobTypeName extends any
+  ? ChainFields<TJobId, TJobTypeName, JobTypeProperty<TJobTypeDefinitions, TJobTypeName, "input">> &
+      RunningChainFields
+  : never;
 
 /** Union of all resolved {@link Job} types reachable within a chain starting from the given entry type. */
 export type ResolvedChainJobs<
@@ -356,14 +423,30 @@ export type JobTypeBlockedNames<
     }[keyof TJobTypeDefinitions & string]
   : never;
 
-type MapToCompletedChains<TJobId, TBlockers extends readonly unknown[]> = {
-  [K in keyof TBlockers]: TBlockers[K] extends Chain<TJobId, string, unknown, unknown>
-    ? CompletedChain<TBlockers[K]>
-    : TBlockers[K];
+type MapBlockersToCompletedChains<
+  TJobId,
+  TJobTypeDefinitions extends BaseJobTypeDefinitions,
+  TBlockers extends readonly unknown[],
+> = {
+  [K in keyof TBlockers]: TBlockers[K] extends JobTypeReference
+    ? ResolvedCompletedChain<
+        TJobId,
+        TJobTypeDefinitions,
+        ResolveReferenceDistributive<TJobTypeDefinitions, TBlockers[K]> & string
+      >
+    : never;
 };
 
+/** {@link BlockerChains} with every chain narrowed to its `completed` variant — what a running job sees. */
 export type CompletedBlockerChains<
   TJobId,
   TJobTypeDefinitions extends BaseJobTypeDefinitions,
   TJobTypeName extends string,
-> = MapToCompletedChains<TJobId, BlockerChains<TJobId, TJobTypeDefinitions, TJobTypeName>>;
+> =
+  JobTypeProperty<TJobTypeDefinitions, TJobTypeName, "blockers"> extends infer TBlockers
+    ? [TBlockers] extends [never]
+      ? []
+      : TBlockers extends readonly unknown[]
+        ? MapBlockersToCompletedChains<TJobId, TJobTypeDefinitions, TBlockers>
+        : []
+    : [];

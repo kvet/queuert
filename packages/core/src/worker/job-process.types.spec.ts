@@ -423,3 +423,23 @@ describe("AttemptHandler", () => {
     >();
   });
 });
+
+describe("AttemptFinish variance", () => {
+  it("is invariant in the definitions and job type name", () => {
+    expectTypeOf<AttemptFinish<InProcessStateAdapter, LinearDefs, "entry", "entry">>().not.toExtend<
+      AttemptFinish<InProcessStateAdapter, LinearDefs, "step", "entry">
+    >();
+    expectTypeOf<AttemptFinish<InProcessStateAdapter, LinearDefs, "entry", "entry">>().not.toExtend<
+      AttemptFinish<InProcessStateAdapter, BranchingDefs, "root", "entry">
+    >();
+  });
+
+  it("is covariant in the chain type name", () => {
+    expectTypeOf<AttemptFinish<InProcessStateAdapter, LinearDefs, "entry", "entry">>().toExtend<
+      AttemptFinish<InProcessStateAdapter, LinearDefs, "entry", string>
+    >();
+    expectTypeOf<AttemptFinish<InProcessStateAdapter, LinearDefs, "entry", string>>().not.toExtend<
+      AttemptFinish<InProcessStateAdapter, LinearDefs, "entry", "entry">
+    >();
+  });
+});

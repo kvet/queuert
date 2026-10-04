@@ -1,6 +1,6 @@
 import { type AnyChain, type CompletedChain, mapStateChainToChain } from "../entities/chain.js";
 import { type BaseJobTypeDefinitions } from "../entities/job-type.js";
-import { type ResolvedJobWithBlockers } from "../entities/job-types.resolvers.js";
+import { type ResolvedRunningJob } from "../entities/job-types.resolvers.js";
 import { mapStateJobToJob } from "../entities/job.js";
 import { type ScheduleOptions } from "../entities/schedule.js";
 import {
@@ -214,7 +214,7 @@ export const runJobProcess = async ({
   const runningJob = {
     ...mapStateJobToJob(stateJob),
     blockers: blockerChains.map(mapStateChainToChain) as CompletedChain<AnyChain>[],
-  } as ResolvedJobWithBlockers<any, any, any, any> & { status: "running" };
+  } as ResolvedRunningJob<any, any, any, any>;
 
   const runJobAttempt = async () => {
     const attemptStartTime = Date.now();

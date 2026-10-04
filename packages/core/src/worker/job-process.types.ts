@@ -7,7 +7,7 @@ import {
   type JobTypeProperty,
   type OutputJob,
   type RescheduledJob,
-  type ResolvedJobWithBlockers,
+  type ResolvedRunningJob,
 } from "../entities/job-types.resolvers.js";
 import { type AnyJob } from "../entities/job.js";
 import { type ScheduleOptions } from "../entities/schedule.js";
@@ -113,11 +113,14 @@ export type AttemptFinishResult<
  * The return shape is determined by the outcome's discriminant key, never on
  * the user's data.
  */
+// The variance annotations restate what TypeScript measures for these parameters
+// and spare it that measurement (~1k instantiations per program). `TStateAdapter`
+// measures as bivariant, which no annotation can express, so it stays unannotated.
 export type AttemptFinish<
   TStateAdapter extends StateAdapter<BaseTxContext, any>,
-  TJobTypeDefinitions extends BaseJobTypeDefinitions,
-  TJobTypeName extends string,
-  TChainTypeName extends string,
+  in out TJobTypeDefinitions extends BaseJobTypeDefinitions,
+  in out TJobTypeName extends string,
+  out TChainTypeName extends string,
 > = <TOutcome extends AttemptOutcome<TStateAdapter, TJobTypeDefinitions, TJobTypeName>>(
   outcome: TOutcome,
 ) => Promise<
@@ -249,12 +252,12 @@ export type AttemptHandler<
 > = (
   processOptions: {
     signal: TypedAbortSignal<JobAbortReason>;
-    job: ResolvedJobWithBlockers<
+    job: ResolvedRunningJob<
       GetStateAdapterJobId<TStateAdapter>,
       TJobTypeDefinitions,
       TJobTypeName,
       TChainTypeName
-    > & { status: "running" };
+    >;
     prepare: AttemptPrepare<TStateAdapter, TPrepareCtx>;
     step: AttemptStep<TStateAdapter, TStepCtx>;
     complete: AttemptComplete<

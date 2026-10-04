@@ -63,29 +63,30 @@ See [memory-footprint](https://github.com/kvet/queuert/tree/main/benchmarks/memo
 
 Queuert's type-level machinery scales linearly across chain topologies. Measured on both TypeScript 6 (the last JS-based `tsc`, 6.0.2) and TypeScript 7 (the native compiler, 7.0.2), each scenario compiled against prebuilt `.d.mts` declarations (Node.js v22, Apple M1 Pro). Every scenario carries one attempt middleware so the baseline reflects a realistic client.
 
-Instantiation counts are within ~1% across the two compilers — the metric is a property of the type system, not the implementation, so the scaling numbers below are portable. What changes is wall-clock: TypeScript 7 checks **~4–5× faster** across the board. The Instantiations and Scaling columns are TS 6 counts; TS 7 lands within a percent.
+Instantiation counts are within ~1% across the two compilers — the metric is a property of the type system, not the implementation, so the scaling numbers below are portable. What changes is wall-clock: TypeScript 7 checks **~5× faster** for typical topologies, tapering to ~4× on the largest merges. The Instantiations and Scaling columns are TS 6 counts; TS 7 lands within a percent.
 
-Every realistic topology stays comfortably fast — even a 2,500-type merge (50 slices × 50, far beyond typical usage) checks in ~7s on TS 6 and ~2.2s on TS 7.
+Every realistic topology stays comfortably fast — even a 2,500-type merge (50 slices × 50, far beyond typical usage) checks in ~5.7s on TS 6 and ~1.5s on TS 7. Attempt middleware adds little: going from 1 to 10 middlewares on a 100-type chain adds ~9% instantiations.
 
 ### Type-check cost (TS 6 vs TS 7)
 
-| Scenario           | Types | Instantiations | TS 6 time | TS 7 time | Scaling |
-| ------------------ | ----: | -------------: | --------: | --------: | ------: |
-| Linear: 1 type     |     1 |         27,205 |    ~471ms |     ~99ms |    1.0x |
-| Linear: 10 types   |    10 |         37,687 |    ~509ms |    ~104ms |    1.4x |
-| Linear: 50 types   |    50 |         83,007 |    ~650ms |    ~132ms |    3.1x |
-| Linear: 100 types  |   100 |        139,657 |    ~846ms |    ~176ms |    5.1x |
-| Branched: 4w x 3d  |    85 |        119,541 |    ~774ms |    ~165ms |    4.4x |
-| Branched: 2w x 6d  |   127 |        167,583 |    ~922ms |    ~201ms |    6.2x |
-| Blockers: 8 steps  |    30 |         64,144 |    ~584ms |    ~120ms |    2.4x |
-| Blockers: 25 steps |    98 |        179,115 |    ~864ms |    ~183ms |    6.6x |
-| Loop: 20 steps     |    21 |         52,385 |    ~550ms |    ~112ms |    1.9x |
-| Loop: 50 steps     |    51 |         89,765 |    ~688ms |    ~136ms |    3.3x |
-| Merge: 2 x 50      |   100 |        143,179 |    ~807ms |    ~183ms |    5.3x |
-| Merge: 5 x 50      |   250 |        309,613 |  ~1,177ms |    ~271ms |   11.4x |
-| Merge: 10 x 50     |   500 |        587,591 |  ~1,809ms |    ~439ms |   21.6x |
-| Merge: 20 x 50     | 1,000 |      1,143,595 |  ~3,041ms |    ~814ms |   42.0x |
-| Merge: 50 x 50     | 2,500 |      2,819,011 |  ~7,059ms |  ~2,170ms |  103.6x |
+| Scenario                     | Types | Instantiations | TS 6 time | TS 7 time | Scaling |
+| ---------------------------- | ----: | -------------: | --------: | --------: | ------: |
+| Linear: 1 type               |     1 |         19,467 |    ~573ms |    ~117ms |    1.0x |
+| Linear: 10 types             |    10 |         25,544 |    ~590ms |    ~119ms |    1.3x |
+| Linear: 50 types             |    50 |         52,184 |    ~704ms |    ~137ms |    2.7x |
+| Linear: 100 types            |   100 |         85,484 |    ~906ms |    ~165ms |    4.4x |
+| Branched: 4w x 3d            |    85 |         75,923 |    ~854ms |    ~153ms |    3.9x |
+| Branched: 2w x 6d            |   127 |        104,105 |    ~971ms |    ~173ms |    5.3x |
+| Blockers: 8 steps            |    30 |         47,240 |    ~707ms |    ~134ms |    2.4x |
+| Blockers: 25 steps           |    98 |        140,859 |    ~942ms |    ~183ms |    7.2x |
+| Loop: 20 steps               |    21 |         33,422 |    ~625ms |    ~122ms |    1.7x |
+| Loop: 50 steps               |    51 |         53,792 |    ~716ms |    ~144ms |    2.8x |
+| Merge: 2 x 50                |   100 |         89,769 |    ~842ms |    ~160ms |    4.6x |
+| Merge: 5 x 50                |   250 |        188,664 |  ~1,158ms |    ~226ms |    9.7x |
+| Merge: 10 x 50               |   500 |        354,077 |  ~1,681ms |    ~337ms |   18.2x |
+| Merge: 20 x 50               | 1,000 |        684,951 |  ~2,634ms |    ~585ms |   35.2x |
+| Merge: 50 x 50               | 2,500 |      1,684,977 |  ~5,671ms |  ~1,482ms |   86.6x |
+| Middleware: 10 on linear-100 |   100 |         93,339 |    ~913ms |    ~174ms |    4.8x |
 
 See [type-complexity](https://github.com/kvet/queuert/tree/main/benchmarks/type-complexity) for the full benchmark tool and detailed results.
 

@@ -8,19 +8,21 @@ TypeScript type-checking cost across chain topologies and scales. Generates a se
 bun run start       # both compilers
 bun run start ts6   # TypeScript 6 only
 bun run start ts7   # TypeScript 7 only
+bun run start ts7 --filter=merge   # only scenarios whose name or family matches
 ```
 
 Each scenario runs 3 times; the best result is reported. Generated scenario files are kept for inspection. Run `bun install` first so both `typescript-6` and `typescript-7` are present.
 
 ## Scenarios
 
-| Family     | Shape                                     | Scale             |
-| ---------- | ----------------------------------------- | ----------------- |
-| `linear`   | Straight-line `continueWith` chains       | 1 → 100 types     |
-| `branched` | Tree-shaped chains varying in width/depth | ~7 → 127 types    |
-| `blockers` | Cross-chain blocker dependencies (≤ 3)    | ~10 → 98 types    |
-| `loop`     | Every step can loop back via unions       | ~6 → 101 types    |
-| `merge`    | Multiple slices merged into one client    | 100 → 2,500 types |
+| Family       | Shape                                        | Scale             |
+| ------------ | -------------------------------------------- | ----------------- |
+| `linear`     | Straight-line `continueWith` chains          | 1 → 100 types     |
+| `branched`   | Tree-shaped chains varying in width/depth    | ~7 → 127 types    |
+| `blockers`   | Cross-chain blocker dependencies (≤ 3)       | ~10 → 98 types    |
+| `loop`       | Every step can loop back via unions          | ~6 → 101 types    |
+| `merge`      | Multiple slices merged into one client       | 100 → 2,500 types |
+| `middleware` | `linear-100` with 1 → 10 attempt middlewares | 100 types         |
 
 ## Metrics
 

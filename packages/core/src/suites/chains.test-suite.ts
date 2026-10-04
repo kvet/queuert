@@ -139,6 +139,7 @@ export const chainsTestSuite = ({ it }: { it: TestAPI<TestSuiteContext> }): void
         input: { value: 1 },
       });
     });
+    expectTypeOf(chain.input).toEqualTypeOf<{ value: number }>();
     expectTypeOf<CompletedChain<typeof chain>["output"]>().toEqualTypeOf<{
       result: number;
     }>();

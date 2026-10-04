@@ -105,13 +105,71 @@ type ValidateJobType<
 
 type OverlappingKeys<A, B> = keyof A & AllKeys<B>;
 
+/** Every payload except `void` / `undefined` (`NonNullable<unknown>` is `{}`). */
+type NonEmptyPayload = NonNullable<unknown> | null;
+
+/** Whether any of the given payload properties is `any` — which the full validation rejects. */
+type IsAnyPayload<TJobType, TKey extends PropertyKey> = 0 extends 1 &
+  TJobType[TKey & keyof TJobType]
+  ? true
+  : false;
+
+/**
+ * Cheap, conservative check for the two most common definition shapes: `true`
+ * only when {@link ValidateJobType} certainly accepts the definition.
+ *
+ * - a terminal type — non-empty `input` and `output`, no `continueWith` / `blockers`;
+ * - a continuing type — non-empty `input`, a nominal `continueWith` to known
+ *   type names, no `output` / `blockers`.
+ *
+ * {@link NonEmptyPayload} admits every payload except `void` / `undefined` (and
+ * `any`, ruled out separately). Anything else yields `false` and falls through to the full
+ * validation, which also produces the error messages. The definition is
+ * wrapped in an object rather than a `[T]` tuple to keep the checks
+ * non-distributive without instantiating `Array` per job type.
+ */
+type IsPlainValidJobType<TJobType, TLocalKeys extends string> = {
+  definition: TJobType;
+} extends {
+  definition: {
+    entry?: boolean;
+    input: NonEmptyPayload;
+    output: NonEmptyPayload;
+    continueWith?: never;
+    blockers?: never;
+  };
+}
+  ? IsAnyPayload<TJobType, "input" | "output"> extends true
+    ? false
+    : true
+  : { definition: TJobType } extends {
+        definition: {
+          entry?: boolean;
+          input: NonEmptyPayload;
+          output?: never;
+          continueWith: { typeName: TLocalKeys };
+          blockers?: never;
+        };
+      }
+    ? { definition: TJobType } extends { definition: { continueWith: { typeName: never } } }
+      ? false
+      : IsAnyPayload<TJobType, "input"> extends true
+        ? false
+        : true
+    : false;
+
 /** Marker type for compile-time validated job type definitions. Applied by {@link defineJobTypes}. */
 export type ValidatedJobTypeDefinitions<
   T extends BaseJobTypeDefinitions,
   TExternal extends BaseJobTypeDefinitions,
 > = [OverlappingKeys<T, TExternal>] extends [never]
   ? {
-      [K in keyof T]: ValidateJobType<T[K], T, T | TExternal>;
+      // Definitions passing the cheap check validate as themselves, so the
+      // constraint check against them is trivial; only the rest pay for the
+      // full structural validation.
+      [K in keyof T]: IsPlainValidJobType<T[K], keyof T & string> extends true
+        ? T[K]
+        : ValidateJobType<T[K], T, T | TExternal>;
     }
   : `Error: local and external definitions share overlapping keys: ${OverlappingKeys<T, TExternal> & string}`;
 

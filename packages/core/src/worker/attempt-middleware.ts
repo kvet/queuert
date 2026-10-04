@@ -1,5 +1,5 @@
 import { type BaseJobTypeDefinitions } from "../entities/job-type.js";
-import { type ResolvedJobWithBlockers } from "../entities/job-types.resolvers.js";
+import { type ResolvedRunningJob } from "../entities/job-types.resolvers.js";
 import {
   type BaseTxContext,
   type GetStateAdapterJobId,
@@ -8,12 +8,12 @@ import {
 } from "../state-adapter/state-adapter.js";
 import { type TransactionHooks } from "../transaction-hooks.js";
 
-type RunningJob<TStateAdapter extends StateAdapter<any, any>> = ResolvedJobWithBlockers<
+type RunningJob<TStateAdapter extends StateAdapter<any, any>> = ResolvedRunningJob<
   GetStateAdapterJobId<TStateAdapter>,
   BaseJobTypeDefinitions,
   string,
   string
-> & { status: "running" };
+>;
 
 /**
  * Wraps job processing with cross-cutting logic for one or more phases.

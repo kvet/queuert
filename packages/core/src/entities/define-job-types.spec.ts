@@ -149,6 +149,91 @@ describe("defineJobTypes", () => {
       expectTypeOf<JobTypeDefinitions<typeof defs>>().toHaveProperty("blocker");
       expectTypeOf<JobTypeDefinitions<typeof defs>>().toHaveProperty("main");
     });
+
+    // Plain terminal / continuing definitions take a cheap validation fast path;
+    // these cases sit on its boundary and must behave as the full validation does.
+    describe("fast-path boundaries", () => {
+      it("accepts many plain terminal and continuing definitions", () => {
+        const defs = defineJobTypes<{
+          a: { entry: true; input: { a: number }; continueWith: { typeName: "b" | "c" } };
+          b: { input: { b: string }; continueWith: { typeName: "d" } };
+          c: { input: null; output: { c: true } };
+          d: { input: string[]; output: 0 };
+        }>();
+
+        expectTypeOf<keyof JobTypeDefinitions<typeof defs>>().toEqualTypeOf<
+          "a" | "b" | "c" | "d"
+        >();
+      });
+
+      it("accepts an explicitly undefined output on a continuing type", () => {
+        const defs = defineJobTypes<{
+          first: {
+            entry: true;
+            input: null;
+            continueWith: { typeName: "second" };
+            output: undefined;
+          };
+          second: { input: null; output: { done: true } };
+        }>();
+
+        expectTypeOf<JobTypeDefinitions<typeof defs>>().toHaveProperty("first");
+      });
+
+      it("accepts an explicitly undefined continueWith on a terminal type", () => {
+        const defs = defineJobTypes<{
+          only: { entry: true; input: null; output: { done: true }; continueWith: undefined };
+        }>();
+
+        expectTypeOf<JobTypeDefinitions<typeof defs>>().toHaveProperty("only");
+      });
+
+      it("rejects a terminal type without output", () => {
+        // @ts-expect-error a type without continueWith must declare an output
+        defineJobTypes<{
+          invalid: { entry: true; input: null };
+        }>();
+      });
+
+      it("rejects an optional terminal output", () => {
+        // @ts-expect-error a terminal output must be required
+        defineJobTypes<{
+          invalid: { entry: true; input: null; output?: { done: true } };
+        }>();
+      });
+
+      it("rejects any as input", () => {
+        // @ts-expect-error any collapses to never under the void/undefined check
+        defineJobTypes<{
+          invalid: { entry: true; input: any; output: { done: true } };
+        }>();
+      });
+
+      it("rejects a continueWith whose name union includes an unknown type", () => {
+        // @ts-expect-error "nonexistent" is not a defined job type
+        defineJobTypes<{
+          start: { entry: true; input: null; continueWith: { typeName: "end" | "nonexistent" } };
+          end: { input: null; output: { done: true } };
+        }>();
+      });
+
+      it("rejects a continueWith to never", () => {
+        // @ts-expect-error a continuation must name at least one type
+        defineJobTypes<{
+          start: { entry: true; input: null; continueWith: { typeName: never } };
+        }>();
+      });
+
+      it("rejects a union of individually valid definitions", () => {
+        // @ts-expect-error a definition must be a single shape, not a union of shapes
+        defineJobTypes<{
+          mixed:
+            | { entry: true; input: { a: 1 }; output: { done: true } }
+            | { entry: true; input: { b: 1 }; continueWith: { typeName: "end" } };
+          end: { input: null; output: { done: true } };
+        }>();
+      });
+    });
   });
 });
 
@@ -794,11 +879,38 @@ describe("ResolvedChain", () => {
 
     type Chain = ResolvedChain<string, JobTypeDefinitions<typeof defs>, "first">;
 
-    // The chain input should be the type from each job in the chain
-    type ChainInput = Chain extends { input: infer I } ? I : never;
+    // A chain's input is the payload it was started with — its entry job's input
+    expectTypeOf<Chain["input"]>().toEqualTypeOf<{ start: number }>();
+    expectTypeOf<Extract<Chain, { status: "completed" }>["output"]>().toEqualTypeOf<{
+      done: true;
+    }>();
+  });
 
-    // Input can be either first job's input or second job's input
-    expectTypeOf<ChainInput>().toEqualTypeOf<{ start: number } | { continued: string }>();
+  it("unions outputs reachable along a branching chain", () => {
+    type Defs = {
+      root: { entry: true; input: { r: 1 }; continueWith: { typeName: "a" | "b" } };
+      a: { input: { a: 1 }; output: { fromA: true } };
+      b: { input: { b: 1 }; output: { fromB: true } };
+    };
+    type Chain = ResolvedChain<string, Defs, "root">;
+
+    expectTypeOf<Chain["input"]>().toEqualTypeOf<{ r: 1 }>();
+    expectTypeOf<Extract<Chain, { status: "completed" }>["output"]>().toEqualTypeOf<
+      { fromA: true } | { fromB: true }
+    >();
+  });
+
+  it("distributes over a union of entry type names", () => {
+    type Defs = {
+      x: { entry: true; input: { x: 1 }; output: { outX: true } };
+      y: { entry: true; input: { y: 1 }; output: { outY: true } };
+    };
+    type Chain = ResolvedChain<string, Defs, "x" | "y">;
+
+    expectTypeOf<Extract<Chain, { typeName: "x" }>["input"]>().toEqualTypeOf<{ x: 1 }>();
+    expectTypeOf<Extract<Chain, { typeName: "y"; status: "completed" }>["output"]>().toEqualTypeOf<{
+      outY: true;
+    }>();
   });
 });
 

@@ -11,7 +11,15 @@ export type ChainStatus = "running" | "completed";
  * @typeParam TInput - The chain's input payload type (from the entry job)
  * @typeParam TOutput - The chain's output type (from the final job when completed)
  */
-export type Chain<TJobId, TChainTypeName, TInput, TOutput> = {
+export type Chain<TJobId, TChainTypeName, TInput, TOutput> = ChainFields<
+  TJobId,
+  TChainTypeName,
+  TInput
+> &
+  (RunningChainFields | CompletedChainFields<TOutput>);
+
+/** Fields shared by every {@link Chain} status variant. */
+export type ChainFields<TJobId, TChainTypeName, TInput> = {
   /** Chain ID (same as the head job's ID). */
   id: TJobId;
   /** Chain type name (matches the entry job type name). */
@@ -19,7 +27,17 @@ export type Chain<TJobId, TChainTypeName, TInput, TOutput> = {
   /** Input payload provided when the chain was started. */
   input: TInput;
   createdAt: Date;
-} & ({ status: "running" } | { status: "completed"; output: TOutput; completedAt: Date });
+};
+
+/** Status fields of a `running` {@link Chain}. @inline */
+export type RunningChainFields = { status: "running" };
+
+/** Status fields of a `completed` {@link Chain}. */
+export type CompletedChainFields<TOutput> = {
+  status: "completed";
+  output: TOutput;
+  completedAt: Date;
+};
 
 export type AnyChain = Chain<any, any, any, any>;
 
