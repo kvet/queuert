@@ -33,7 +33,7 @@ None
 
 - [IDEA] Built-in job priority
 - [IDEA] expand the Chain type to have head and tail jobs for easy rescheduleJob knowing the chain id
-- [IDEA] Change complete job chain to something more empirical? (leverages `lock: true` and rescheduleJob, new completeJob (maybe even some))
+- [IDEA] Change complete job chain to something more empirical? (leverages rescheduleJob, new completeJob (maybe even some))
 - [IDEA] Reset jobs in chains + dashboard
 - [IDEA] Split dashboard into API and UI packages (to use the API in other contexts, e.g. CLI)
 - [IDEA] CLI tool

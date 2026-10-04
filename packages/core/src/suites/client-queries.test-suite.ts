@@ -1,4 +1,4 @@
-import { type TestAPI, describe, expect, expectTypeOf } from "vitest";
+import { type TestAPI, describe, expectTypeOf } from "vitest";
 
 import { createClient } from "../client.js";
 import { defineJobTypes } from "../entities/define-job-types.js";
@@ -14,8 +14,9 @@ export const clientQueriesTestSuite = ({ it: baseIt }: { it: TestAPI<TestSuiteCo
     timeoutMs: 5000,
   };
 
-  const it = baseIt
-    .extend("client", async ({ stateAdapter, notifyAdapter, observabilityAdapter, log }) => {
+  const it = baseIt.extend(
+    "client",
+    async ({ stateAdapter, notifyAdapter, observabilityAdapter, log }) => {
       const jobTypes = defineJobTypes<{
         order: {
           entry: true;
@@ -47,69 +48,8 @@ export const clientQueriesTestSuite = ({ it: baseIt }: { it: TestAPI<TestSuiteCo
         log,
         jobTypes,
       });
-    })
-    .extend("runLockContention", async ({ stateAdapter, withTransaction, skip, client: c }) => {
-      type Scenario = (
-        client: typeof c,
-        txCtx: { $test: true },
-        ids: [string, string],
-      ) => Promise<unknown>;
-      return async ({ holder, waiter }: { holder: Scenario; waiter: Scenario }) => {
-        if (stateAdapter.transactionConcurrency === "serialized") {
-          skip();
-          return;
-        }
-
-        const first = await withTransaction(async (txCtx, transactionHooks) =>
-          c.createChain({
-            ...txCtx,
-            transactionHooks,
-            typeName: "order",
-            input: { amount: 9 },
-          }),
-        );
-        const second = await withTransaction(async (txCtx, transactionHooks) =>
-          c.createChain({
-            ...txCtx,
-            transactionHooks,
-            typeName: "notification",
-            input: { message: "second" },
-          }),
-        );
-        const ids: [string, string] = [first.id, second.id];
-
-        let releaseHolder: (() => void) | undefined;
-        const holderGate = new Promise<void>((resolve) => {
-          releaseHolder = resolve;
-        });
-        let signalHeld: (() => void) | undefined;
-        const lockHeld = new Promise<void>((resolve) => {
-          signalHeld = resolve;
-        });
-
-        const holderTx = withTransaction(async (txCtx) => {
-          await holder(c, txCtx, ids);
-          signalHeld!();
-          await holderGate;
-        });
-
-        await lockHeld;
-
-        let waiterResolved = false;
-        const waiterTx = withTransaction(async (txCtx) => waiter(c, txCtx, ids)).then((result) => {
-          waiterResolved = true;
-          return result;
-        });
-
-        await sleep(200);
-        expect(waiterResolved).toBe(false);
-
-        releaseHolder!();
-        await holderTx;
-        await waiterTx;
-        expect(waiterResolved).toBe(true);
-      };
-    });
+    },
+  );
 
   describe("getChain", () => {
     it("getChain returns undefined for nonexistent chain", async ({ client, expect }) => {
@@ -186,80 +126,6 @@ export const clientQueriesTestSuite = ({ it: baseIt }: { it: TestAPI<TestSuiteCo
         ChainTypeMismatchError,
       );
     });
-
-    it("getChain supports lock: true only with a transaction context (type level)", async ({
-      client,
-    }) => {
-      expectTypeOf(client.getChain).toBeCallableWith({ id: "x" });
-      expectTypeOf(client.getChain).toBeCallableWith({ id: "x", lock: false });
-      expectTypeOf(client.getChain).toBeCallableWith({ id: "x", lock: true, $test: true });
-    });
-
-    it("getChain returns the row under lock inside a transaction", async ({
-      client,
-      withTransaction,
-      expect,
-    }) => {
-      const created = await withTransaction(async (txCtx, transactionHooks) =>
-        client.createChain({
-          ...txCtx,
-          transactionHooks,
-          typeName: "order",
-          input: { amount: 7 },
-        }),
-      );
-
-      await withTransaction(async (txCtx) => {
-        const chain = await client.getChain({ ...txCtx, id: created.id, lock: true });
-        expect(chain!.id).toBe(created.id);
-      });
-    });
-
-    it("getChain lock: true without a transaction context throws", async ({
-      client,
-      withTransaction,
-      expect,
-    }) => {
-      const created = await withTransaction(async (txCtx, transactionHooks) =>
-        client.createChain({
-          ...txCtx,
-          transactionHooks,
-          typeName: "order",
-          input: { amount: 3 },
-        }),
-      );
-
-      await expect(
-        // @ts-expect-error lock: true without a transaction context does not compile.
-        client.getChain({ id: created.id, lock: true }),
-      ).rejects.toThrow("requires a transaction context");
-    });
-
-    it("getChain lock: true on an absent row returns undefined without blocking", async ({
-      client,
-      withTransaction,
-      expect,
-    }) => {
-      await withTransaction(async (txCtx) => {
-        expect(
-          await client.getChain({
-            ...txCtx,
-            id: "00000000-0000-0000-0000-000000000000",
-            lock: true,
-          }),
-        ).toBeUndefined();
-      });
-    });
-
-    it(
-      "getChain blocks a concurrent locked read until the holder commits",
-      { timeout: 15000 },
-      async ({ runLockContention }) =>
-        runLockContention({
-          holder: async (client, txCtx, [a]) => client.getChain({ ...txCtx, id: a, lock: true }),
-          waiter: async (client, txCtx, [a]) => client.getChain({ ...txCtx, id: a, lock: true }),
-        }),
-    );
   });
 
   describe("getChains", () => {
@@ -367,94 +233,6 @@ export const clientQueriesTestSuite = ({ it: baseIt }: { it: TestAPI<TestSuiteCo
 
       expect(chains).toEqual([undefined]);
     });
-
-    it("getChains supports lock: true only with a transaction context (type level)", async ({
-      client,
-    }) => {
-      expectTypeOf(client.getChains).toBeCallableWith({ ids: ["x"] });
-      expectTypeOf(client.getChains).toBeCallableWith({ ids: ["x"], lock: false });
-      expectTypeOf(client.getChains).toBeCallableWith({ ids: ["x"], lock: true, $test: true });
-    });
-
-    it("getChains locks every matched row inside a transaction", async ({
-      client,
-      withTransaction,
-      expect,
-    }) => {
-      const first = await withTransaction(async (txCtx, transactionHooks) =>
-        client.createChain({
-          ...txCtx,
-          transactionHooks,
-          typeName: "order",
-          input: { amount: 1 },
-        }),
-      );
-      const second = await withTransaction(async (txCtx, transactionHooks) =>
-        client.createChain({
-          ...txCtx,
-          transactionHooks,
-          typeName: "notification",
-          input: { message: "hi" },
-        }),
-      );
-
-      await withTransaction(async (txCtx) => {
-        const chains = await client.getChains({
-          ...txCtx,
-          ids: [first.id, second.id],
-          lock: true,
-        });
-        expect(chains.map((c) => c?.id)).toEqual([first.id, second.id]);
-      });
-    });
-
-    it("getChains lock: true without a transaction context throws", async ({
-      client,
-      withTransaction,
-      expect,
-    }) => {
-      const created = await withTransaction(async (txCtx, transactionHooks) =>
-        client.createChain({
-          ...txCtx,
-          transactionHooks,
-          typeName: "order",
-          input: { amount: 3 },
-        }),
-      );
-
-      await expect(
-        // @ts-expect-error lock: true without a transaction context does not compile.
-        client.getChains({ ids: [created.id], lock: true }),
-      ).rejects.toThrow("requires a transaction context");
-    });
-
-    it("getChains lock: true on absent rows returns undefined entries without blocking", async ({
-      client,
-      withTransaction,
-      expect,
-    }) => {
-      await withTransaction(async (txCtx) => {
-        expect(
-          await client.getChains({
-            ...txCtx,
-            ids: ["00000000-0000-0000-0000-000000000000"],
-            lock: true,
-          }),
-        ).toEqual([undefined]);
-      });
-    });
-
-    it(
-      "getChains blocks a concurrent locked read until the holder commits",
-      { timeout: 15000 },
-      async ({ runLockContention }) =>
-        runLockContention({
-          holder: async (client, txCtx, [a, b]) =>
-            client.getChains({ ...txCtx, ids: [a, b], lock: true }),
-          waiter: async (client, txCtx, [, b]) =>
-            client.getChains({ ...txCtx, ids: [b], lock: true }),
-        }),
-    );
   });
 
   describe("getJob", () => {
@@ -516,80 +294,6 @@ export const clientQueriesTestSuite = ({ it: baseIt }: { it: TestAPI<TestSuiteCo
         JobTypeMismatchError,
       );
     });
-
-    it("getJob supports lock: true only with a transaction context (type level)", async ({
-      client,
-    }) => {
-      expectTypeOf(client.getJob).toBeCallableWith({ id: "x" });
-      expectTypeOf(client.getJob).toBeCallableWith({ id: "x", lock: false });
-      expectTypeOf(client.getJob).toBeCallableWith({ id: "x", lock: true, $test: true });
-    });
-
-    it("getJob returns the row under lock inside a transaction", async ({
-      client,
-      withTransaction,
-      expect,
-    }) => {
-      const created = await withTransaction(async (txCtx, transactionHooks) =>
-        client.createChain({
-          ...txCtx,
-          transactionHooks,
-          typeName: "order",
-          input: { amount: 7 },
-        }),
-      );
-
-      await withTransaction(async (txCtx) => {
-        const job = await client.getJob({ ...txCtx, id: created.id, lock: true });
-        expect(job!.id).toBe(created.id);
-      });
-    });
-
-    it("getJob lock: true without a transaction context throws", async ({
-      client,
-      withTransaction,
-      expect,
-    }) => {
-      const created = await withTransaction(async (txCtx, transactionHooks) =>
-        client.createChain({
-          ...txCtx,
-          transactionHooks,
-          typeName: "order",
-          input: { amount: 3 },
-        }),
-      );
-
-      await expect(
-        // @ts-expect-error lock: true without a transaction context does not compile.
-        client.getJob({ id: created.id, lock: true }),
-      ).rejects.toThrow("requires a transaction context");
-    });
-
-    it("getJob lock: true on an absent row returns undefined without blocking", async ({
-      client,
-      withTransaction,
-      expect,
-    }) => {
-      await withTransaction(async (txCtx) => {
-        expect(
-          await client.getJob({
-            ...txCtx,
-            id: "00000000-0000-0000-0000-000000000000",
-            lock: true,
-          }),
-        ).toBeUndefined();
-      });
-    });
-
-    it(
-      "getJob blocks a concurrent locked read until the holder commits",
-      { timeout: 15000 },
-      async ({ runLockContention }) =>
-        runLockContention({
-          holder: async (client, txCtx, [a]) => client.getJob({ ...txCtx, id: a, lock: true }),
-          waiter: async (client, txCtx, [a]) => client.getJob({ ...txCtx, id: a, lock: true }),
-        }),
-    );
   });
 
   describe("getJobs", () => {
@@ -697,94 +401,6 @@ export const clientQueriesTestSuite = ({ it: baseIt }: { it: TestAPI<TestSuiteCo
 
       expect(jobs).toEqual([undefined]);
     });
-
-    it("getJobs supports lock: true only with a transaction context (type level)", async ({
-      client,
-    }) => {
-      expectTypeOf(client.getJobs).toBeCallableWith({ ids: ["x"] });
-      expectTypeOf(client.getJobs).toBeCallableWith({ ids: ["x"], lock: false });
-      expectTypeOf(client.getJobs).toBeCallableWith({ ids: ["x"], lock: true, $test: true });
-    });
-
-    it("getJobs locks every matched row inside a transaction", async ({
-      client,
-      withTransaction,
-      expect,
-    }) => {
-      const first = await withTransaction(async (txCtx, transactionHooks) =>
-        client.createChain({
-          ...txCtx,
-          transactionHooks,
-          typeName: "order",
-          input: { amount: 1 },
-        }),
-      );
-      const second = await withTransaction(async (txCtx, transactionHooks) =>
-        client.createChain({
-          ...txCtx,
-          transactionHooks,
-          typeName: "notification",
-          input: { message: "hi" },
-        }),
-      );
-
-      await withTransaction(async (txCtx) => {
-        const jobs = await client.getJobs({
-          ...txCtx,
-          ids: [first.id, second.id],
-          lock: true,
-        });
-        expect(jobs.map((j) => j?.id)).toEqual([first.id, second.id]);
-      });
-    });
-
-    it("getJobs lock: true without a transaction context throws", async ({
-      client,
-      withTransaction,
-      expect,
-    }) => {
-      const created = await withTransaction(async (txCtx, transactionHooks) =>
-        client.createChain({
-          ...txCtx,
-          transactionHooks,
-          typeName: "order",
-          input: { amount: 3 },
-        }),
-      );
-
-      await expect(
-        // @ts-expect-error lock: true without a transaction context does not compile.
-        client.getJobs({ ids: [created.id], lock: true }),
-      ).rejects.toThrow("requires a transaction context");
-    });
-
-    it("getJobs lock: true on absent rows returns undefined entries without blocking", async ({
-      client,
-      withTransaction,
-      expect,
-    }) => {
-      await withTransaction(async (txCtx) => {
-        expect(
-          await client.getJobs({
-            ...txCtx,
-            ids: ["00000000-0000-0000-0000-000000000000"],
-            lock: true,
-          }),
-        ).toEqual([undefined]);
-      });
-    });
-
-    it(
-      "getJobs blocks a concurrent locked read until the holder commits",
-      { timeout: 15000 },
-      async ({ runLockContention }) =>
-        runLockContention({
-          holder: async (client, txCtx, [a, b]) =>
-            client.getJobs({ ...txCtx, ids: [a, b], lock: true }),
-          waiter: async (client, txCtx, [, b]) =>
-            client.getJobs({ ...txCtx, ids: [b], lock: true }),
-        }),
-    );
   });
 
   describe("listChainTypeNames", () => {
