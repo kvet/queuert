@@ -1,0 +1,9 @@
+# Migration fixtures
+
+A queuert **v0.15.1** database, used by `src/specs/legacy-upgrade.spec.ts` to exercise the upgrade path onto the current schema.
+
+| File                    | Contents                                                                                                                                                                                                       |
+| ----------------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `v0.15.1.schema.sql`    | The v0.15.1 schema: the six migrations that shipped in v0.15.1 with `{{schema}}`/`{{table_prefix}}`/`{{id_type}}` resolved to `public`/`queuert_`/`uuid`, plus the `queuert_migration` table and its six rows. |
+| `v0.15.1.data.sql.gz`   | `pg_dump --data-only --inserts --disable-triggers` of `queuert_job` and `queuert_job_blocker`: 9,801 jobs and 3,000 blockers covering every job state.                                                         |
+| `v0.15.1.manifest.json` | Applied migration names, row counts, per-status counts, and sentinel row ids the spec asserts against.                                                                                                         |

@@ -1,13 +1,13 @@
 import { type ConformanceGroup } from "./runner.js";
 import { addJobsBlockersGroup } from "./state-adapter-cases/add-jobs-blockers.js";
 import { closeGroup } from "./state-adapter-cases/close.js";
+import { completeJobsGroup } from "./state-adapter-cases/complete-jobs.js";
+import { continueJobsGroup } from "./state-adapter-cases/continue-jobs.js";
 import { countByChainTypeNamesGroup } from "./state-adapter-cases/count-by-chain-type-names.js";
 import { countByJobTypeNamesGroup } from "./state-adapter-cases/count-by-job-type-names.js";
-import { createChainsGroup } from "./state-adapter-cases/create-chains.js";
-import { createContinuationJobGroup } from "./state-adapter-cases/create-continuation-job.js";
+import { createJobsGroup } from "./state-adapter-cases/create-jobs.js";
 import { deleteChainsGroup } from "./state-adapter-cases/delete-chains.js";
 import { extendJobAttemptGroup } from "./state-adapter-cases/extend-job-attempt.js";
-import { finishJobAttemptGroup } from "./state-adapter-cases/finish-job-attempt.js";
 import { getChainsGroup } from "./state-adapter-cases/get-chains.js";
 import { getJobBlockersGroup } from "./state-adapter-cases/get-job-blockers.js";
 import { getJobsGroup } from "./state-adapter-cases/get-jobs.js";
@@ -33,14 +33,14 @@ export const stateAdapterConformanceGroups: ConformanceGroup<StateConformanceFix
   withSavepointGroup,
   getChainsGroup,
   getJobsGroup,
-  createChainsGroup,
-  createContinuationJobGroup,
+  createJobsGroup,
+  continueJobsGroup,
   addJobsBlockersGroup,
   getJobBlockersGroup,
   unblockJobsGroup,
   startJobAttemptGroup,
   extendJobAttemptGroup,
-  finishJobAttemptGroup,
+  completeJobsGroup,
   reclaimExpiredJobAttemptGroup,
   getStartAttemptDelayMsGroup,
   rescheduleJobsGroup,

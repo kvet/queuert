@@ -13,7 +13,6 @@
   --status-running: #3b82f6;
   --status-completed: #22c55e;
   --status-blocked: #a855f7;
-  --status-continued: #14b8a6;
 
   --font-mono: ui-monospace, SFMono-Regular, "SF Mono", Menlo, monospace;
   --font-sans: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
@@ -130,9 +129,39 @@ a:hover {
 
 .filter-bar {
   display: flex;
-  flex-wrap: wrap;
+  flex-wrap: nowrap;
+  align-items: stretch;
   gap: 8px;
   margin-bottom: 16px;
+}
+
+.filter-bar > * {
+  flex: 0 0 auto;
+}
+
+.filter-bar > input[type="text"] {
+  flex: 1 1 0;
+  min-width: 0;
+}
+
+.filter-bar .filter-type {
+  width: 380px;
+}
+
+.filter-bar .filter-status {
+  width: 170px;
+}
+
+.filter-bar .filter-order-by {
+  width: 120px;
+}
+
+.filter-bar .filter-independent {
+  width: 130px;
+}
+
+.filter-bar select {
+  text-overflow: ellipsis;
 }
 
 .filter-bar select,
@@ -145,22 +174,18 @@ a:hover {
   font-size: 13px;
 }
 
-.filter-bar select:disabled,
-.filter-bar button:disabled {
-  opacity: 0.4;
-  cursor: not-allowed;
-}
-
-.checkbox-label {
-  display: flex;
-  align-items: center;
-  gap: 4px;
+.filter-bar .clear-btn {
+  padding: 6px 10px;
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  background: var(--bg-card);
+  color: var(--text);
   font-size: 13px;
   cursor: pointer;
-  margin-left: auto;
 }
 
-.checkbox-label[data-disabled] {
+.filter-bar select:disabled,
+.filter-bar button:disabled {
   opacity: 0.4;
   cursor: not-allowed;
 }
@@ -315,6 +340,10 @@ a:hover {
   border-radius: 999px;
 }
 
+.status-badge[data-status="blocked"] {
+  color: var(--status-blocked);
+  background: color-mix(in srgb, var(--status-blocked) 15%, transparent);
+}
 .status-badge[data-status="pending"] {
   color: var(--status-pending);
   background: color-mix(in srgb, var(--status-pending) 15%, transparent);
@@ -326,14 +355,6 @@ a:hover {
 .status-badge[data-status="completed"] {
   color: var(--status-completed);
   background: color-mix(in srgb, var(--status-completed) 15%, transparent);
-}
-.status-badge[data-blocked] {
-  color: var(--status-blocked);
-  background: color-mix(in srgb, var(--status-blocked) 15%, transparent);
-}
-.status-badge[data-continued] {
-  color: var(--status-continued);
-  background: color-mix(in srgb, var(--status-continued) 15%, transparent);
 }
 
 .load-more {
@@ -540,16 +561,6 @@ a:hover {
   margin-bottom: 12px;
 }
 
-.dialog-cascade-label {
-  display: flex;
-  align-items: center;
-  gap: 6px;
-  font-size: 13px;
-  color: var(--text-secondary);
-  cursor: pointer;
-  margin-bottom: 12px;
-}
-
 .dialog-actions {
   display: flex;
   justify-content: flex-end;
@@ -631,6 +642,10 @@ a:hover {
 
 .count-link {
   font-weight: 500;
+}
+
+.count-link[data-status="blocked"] {
+  color: var(--status-blocked);
 }
 
 .count-link[data-status="pending"] {

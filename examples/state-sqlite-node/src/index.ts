@@ -3,19 +3,17 @@ import { DatabaseSync } from "node:sqlite";
 import { createAsyncRwLock, createSqliteStateAdapter } from "@queuert/sqlite";
 import {
   createClient,
+  createInProcessNotifyAdapter,
   createInProcessWorker,
   createProcessors,
   defineJobTypes,
   withTransactionHooks,
-  createInProcessNotifyAdapter,
 } from "queuert";
 
 import { createNodeSqliteStateProvider } from "./provider.js";
 
 // 1. Create in-memory SQLite database
 const db = new DatabaseSync(":memory:");
-db.exec("PRAGMA auto_vacuum = INCREMENTAL");
-db.exec("PRAGMA foreign_keys = ON");
 
 // 2. Create application schema
 db.exec(`

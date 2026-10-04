@@ -1,28 +1,30 @@
-import { TESTCONTAINERS_RESOURCE_TYPES, extendWithPostgres } from "@queuert/testcontainers";
-import { Pool } from "pg";
-import { extendWithResourceLeakDetection, seedAllStatesV2 } from "queuert/testing";
-import { it as baseIt, describe, expect } from "vitest";
+import Database from "better-sqlite3";
+import { seedAllStates } from "queuert/testing";
+import { describe, expect, it } from "vitest";
 
-import { createPgStateAdapter } from "../state-adapter/state-adapter.pg.js";
+import { createSqliteStateAdapter } from "../state-adapter/state-adapter.sqlite.js";
 import {
-  type PgPoolContext,
-  createPgPoolProvider,
-} from "../state-provider/state-provider.pg-pool.js";
-import { fastSeedAllStatesV2 } from "./fast-seed-all-states-v2.js";
+  type BetterSqlite3Context,
+  createBetterSqlite3Provider,
+} from "../state-provider/state-provider.better-sqlite3.js";
+import { fastSeedAllStates } from "./fast-seed-all-states.js";
 
 const jobQuery = `
   SELECT
-    type_name, chain_type_name, chain_index,
+    type_name, chain_index,
     input, output,
-    blocked, attempt,
+    status, chain_status, attempt,
     attempt_by, completed_by,
     last_attempt_error,
-    deduplication_key,
+    chain_deduplication_key,
     chain_trace_context, trace_context,
     continued_to_id IS NOT NULL AS has_continuation,
+    chain_completed_at IS NOT NULL AS has_chain_completion,
     created_at, scheduled_at, attempt_at, attempt_until, completed_at, last_attempt_at
-  FROM public.queuert_job
-  ORDER BY type_name, chain_index, (input->>'index')::int NULLS LAST, (input->>'n')::int NULLS LAST
+  FROM queuert_job
+  ORDER BY type_name, chain_index,
+    CAST(json_extract(input, '$.index') AS INTEGER),
+    CAST(json_extract(input, '$.n') AS INTEGER)
 `;
 
 const blockerQuery = `
@@ -30,9 +32,9 @@ const blockerQuery = `
     j.type_name AS job_type_name,
     bj.type_name AS blocker_type_name,
     b."index" AS blocker_index
-  FROM public.queuert_job_blocker b
-  JOIN public.queuert_job j ON j.id = b.job_id
-  JOIN public.queuert_job bj ON bj.id = b.blocked_by_chain_id
+  FROM queuert_job_blocker b
+  JOIN queuert_job j ON j.id = b.job_id
+  JOIN queuert_job bj ON bj.id = b.blocked_by_chain_id
   ORDER BY j.type_name, bj.type_name, b."index"
 `;
 
@@ -40,12 +42,12 @@ type TimestampRow = {
   type_name: string;
   chain_index: number;
   input_index: number | null;
-  created_at: Date;
-  scheduled_at: Date;
-  attempt_at: Date | null;
-  attempt_until: Date | null;
-  completed_at: Date | null;
-  last_attempt_at: Date | null;
+  created_at: string;
+  scheduled_at: string;
+  attempt_at: string | null;
+  attempt_until: string | null;
+  completed_at: string | null;
+  last_attempt_at: string | null;
 };
 
 const assertTemporalRelationships = (rows: TimestampRow[], label: string) => {
@@ -72,37 +74,32 @@ const assertTemporalRelationships = (rows: TimestampRow[], label: string) => {
   }
 };
 
-const it = extendWithResourceLeakDetection(extendWithPostgres(baseIt, import.meta.url), {
-  additionalAllowedTypes: TESTCONTAINERS_RESOURCE_TYPES,
-});
-
-describe("fast seed v2 conformance", { timeout: 120_000 }, () => {
-  it("produces identical data to seedAllStatesV2", async ({ postgresConnectionString }) => {
-    const pool = new Pool({ connectionString: postgresConnectionString });
-    const provider = createPgPoolProvider({ pool });
-    const adapter = await createPgStateAdapter<PgPoolContext, string>({
-      stateProvider: provider,
-    });
-    await adapter.migrateToLatest();
-
+describe("fast seed conformance", { timeout: 120_000 }, () => {
+  it("produces identical data to seedAllStates", async () => {
     for (const scale of [1, 2]) {
-      // Reset
-      await pool.query("DELETE FROM queuert_job_blocker");
-      await pool.query("DELETE FROM queuert_job");
-
       // Correct seed
-      await seedAllStatesV2(adapter, { scale });
-      const { rows: correctJobs } = await pool.query<TimestampRow>(jobQuery);
-      const { rows: correctBlockers } = await pool.query(blockerQuery);
-
-      // Reset
-      await pool.query("DELETE FROM queuert_job_blocker");
-      await pool.query("DELETE FROM queuert_job");
+      const correctDb = new Database(":memory:");
+      const correctProvider = createBetterSqlite3Provider({ db: correctDb });
+      const correctAdapter = await createSqliteStateAdapter<BetterSqlite3Context, string>({
+        stateProvider: correctProvider,
+      });
+      await correctAdapter.migrateToLatest();
+      await seedAllStates(correctAdapter, { scale });
+      correctDb.exec("ANALYZE");
+      const correctJobs = correctDb.prepare(jobQuery).all() as TimestampRow[];
+      const correctBlockers = correctDb.prepare(blockerQuery).all();
 
       // Fast seed
-      await fastSeedAllStatesV2(provider, { scale });
-      const { rows: fastJobs } = await pool.query<TimestampRow>(jobQuery);
-      const { rows: fastBlockers } = await pool.query(blockerQuery);
+      const fastDb = new Database(":memory:");
+      const fastProvider = createBetterSqlite3Provider({ db: fastDb });
+      const fastAdapter = await createSqliteStateAdapter<BetterSqlite3Context, string>({
+        stateProvider: fastProvider,
+      });
+      await fastAdapter.migrateToLatest();
+      await fastSeedAllStates(fastProvider, { scale });
+      fastDb.exec("ANALYZE");
+      const fastJobs = fastDb.prepare(jobQuery).all() as TimestampRow[];
+      const fastBlockers = fastDb.prepare(blockerQuery).all();
 
       // Structural equivalence (non-timestamp columns)
       const stripTimestamps = (row: TimestampRow) => {
@@ -122,11 +119,10 @@ describe("fast seed v2 conformance", { timeout: 120_000 }, () => {
       );
       expect(fastBlockers, `scale=${scale} blockers`).toEqual(correctBlockers);
 
-      // Timestamp nullability must match (if correct has attempt_at set, fast must too)
+      // Timestamp nullability must match
       const toShape = (row: TimestampRow) => ({
         type_name: row.type_name,
         chain_index: row.chain_index,
-        input_index: row.input_index,
         has_scheduled_at: row.scheduled_at != null,
         has_attempt_at: row.attempt_at != null,
         has_attempt_until: row.attempt_until != null,
@@ -137,11 +133,12 @@ describe("fast seed v2 conformance", { timeout: 120_000 }, () => {
         correctJobs.map(toShape),
       );
 
-      // Temporal relationship correctness (both seeds must maintain valid ordering)
+      // Temporal relationship correctness
       assertTemporalRelationships(correctJobs, `scale=${scale} correct`);
       assertTemporalRelationships(fastJobs, `scale=${scale} fast`);
-    }
 
-    await pool.end();
+      correctDb.close();
+      fastDb.close();
+    }
   });
 });

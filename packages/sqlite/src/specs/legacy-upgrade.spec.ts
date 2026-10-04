@@ -1,0 +1,1082 @@
+import { spawn } from "node:child_process";
+import { randomUUID } from "node:crypto";
+import { readFileSync, rmSync, writeFileSync } from "node:fs";
+import { tmpdir } from "node:os";
+import { join } from "node:path";
+import { fileURLToPath } from "node:url";
+import { gunzipSync } from "node:zlib";
+
+import {
+  type ColumnContract,
+  type ReconcilerRow,
+  createMigrationReconciler,
+  createMigrator,
+  createTemplateApplier,
+  t,
+} from "@queuert/typed-sql";
+import Database from "better-sqlite3";
+import { it as baseIt, describe, expect } from "vitest";
+
+import { createLegacyUpgrade } from "../state-adapter/legacy-upgrade.sqlite.js";
+import {
+  createMigrationStore,
+  createSqliteStateAdapter,
+  migrations,
+} from "../state-adapter/state-adapter.sqlite.js";
+import {
+  type BetterSqlite3Context,
+  createBetterSqlite3Provider,
+} from "../state-provider/state-provider.better-sqlite3.js";
+import { type SqliteStateProvider } from "../state-provider/state-provider.sqlite.js";
+
+const FIXTURE_PATH = fileURLToPath(new URL("../../fixtures/v0.15.1.sqlite.gz", import.meta.url));
+const MANIFEST_PATH = fileURLToPath(
+  new URL("../../fixtures/v0.15.1.manifest.json", import.meta.url),
+);
+const MIGRATE_PROCESS_PATH = fileURLToPath(
+  new URL("./legacy-upgrade.migrate-process.ts", import.meta.url),
+);
+
+const INSTALL = "001_initial_schema";
+const ALL = [INSTALL];
+
+type Provider = SqliteStateProvider<BetterSqlite3Context>;
+type Sentinels = {
+  pendingJobId: string;
+  scheduledJobId: string;
+  runningJobId: string;
+  completedJobId: string;
+  retriedJobId: string;
+  blockedJobId: string;
+  fanInBlockerId: string;
+  fanInBlockedCount: number;
+  chainId: string;
+  chainLength: number;
+};
+type Manifest = {
+  appliedMigrations: string[];
+  totalJobs: number;
+  totalBlockers: number;
+  byStatus: Record<string, number>;
+  sentinels: Sentinels;
+};
+type Db = {
+  db: Database.Database;
+  path: string;
+  provider: Provider;
+  adapter: Awaited<ReturnType<typeof createSqliteStateAdapter<BetterSqlite3Context, string>>>;
+};
+
+const applyTemplate = createTemplateApplier({ table_prefix: "queuert_", id_type: "TEXT" });
+
+const migratorFor = (provider: Provider) => {
+  const legacy = createLegacyUpgrade(provider, applyTemplate, t.string());
+  return createMigrator({
+    migrations,
+    store: createMigrationStore(provider, applyTemplate),
+    before: legacy.renameLegacySchemaAside,
+    after: legacy.importLegacySchema,
+  });
+};
+
+const partialMigratorFor = (provider: Provider, phases: "rename" | "rename+install") =>
+  createMigrator({
+    migrations: phases === "rename" ? [] : migrations,
+    store: createMigrationStore(provider, applyTemplate),
+    before: createLegacyUpgrade(provider, applyTemplate, t.string()).renameLegacySchemaAside,
+  });
+
+// The better-sqlite3 provider returns rows only when columnTypes is non-empty (its
+// SELECT-vs-exec switch); the values are unused when reading raw rows.
+const ROW_RESULT: Record<string, "string"> = { _: "string" };
+const query = async <T = Record<string, unknown>>(
+  provider: Provider,
+  sql: string,
+  params: unknown[] = [],
+): Promise<T[]> =>
+  provider.executeSql({
+    sql,
+    params,
+    paramTypes: {},
+    columnTypes: ROW_RESULT,
+    readOnly: true,
+  }) as Promise<T[]>;
+
+const readRows = async (
+  provider: Provider,
+  table: "job" | "job_blocker",
+): Promise<ReconcilerRow[]> => query(provider, `SELECT * FROM queuert_${table}`);
+
+const cellText = (value: unknown): string => String(value);
+const sameCell = (a: unknown, b: unknown): boolean =>
+  a == null || b == null ? a == null && b == null : cellText(a) === cellText(b);
+const jobKey = (row: ReconcilerRow): string => cellText(row.id);
+const blockerKey = (row: ReconcilerRow): string =>
+  `${cellText(row.job_id)}|${cellText(row.blocked_by_chain_id)}|${cellText(row.index)}`;
+
+const readManifest = (): Manifest => JSON.parse(readFileSync(MANIFEST_PATH, "utf8")) as Manifest;
+
+const dumpSchema = async (provider: Provider): Promise<string> => {
+  const rows = await query<{ type: string; name: string; sql: string }>(
+    provider,
+    `SELECT type, name, sql FROM sqlite_master
+     WHERE name NOT LIKE 'sqlite_%' AND sql IS NOT NULL ORDER BY type, name`,
+  );
+  return rows.map((r) => `${r.type} ${r.name} ${r.sql.replace(/\s+/g, " ").trim()}`).join("\n");
+};
+
+const collectAll = async <T>(
+  fetchPage: (cursor?: string) => Promise<{ items: T[]; nextCursor: string | null }>,
+): Promise<T[]> => {
+  const items: T[] = [];
+  let cursor: string | undefined;
+  do {
+    const page = await fetchPage(cursor);
+    items.push(...page.items);
+    cursor = page.nextCursor ?? undefined;
+  } while (cursor);
+  return items;
+};
+
+const openDb = (path: string): Database.Database => {
+  const db = new Database(path);
+  db.pragma("journal_mode = DELETE"); // keep the whole database in one file for the fixture
+  return db;
+};
+
+const provision = async (load: boolean): Promise<Db & { dispose: () => void }> => {
+  const path = join(tmpdir(), `queuert-migration-${randomUUID()}.sqlite`);
+  if (load) writeFileSync(path, gunzipSync(readFileSync(FIXTURE_PATH)));
+  const db = openDb(path);
+  const provider = createBetterSqlite3Provider({ db });
+  const adapter = await createSqliteStateAdapter({
+    stateProvider: provider,
+    generateId: (): string => randomUUID(),
+  });
+  return {
+    db,
+    path,
+    provider,
+    adapter,
+    dispose: () => {
+      db.close();
+      for (const suffix of ["", "-wal", "-shm"]) rmSync(`${path}${suffix}`, { force: true });
+    },
+  };
+};
+
+const it = baseIt.extend<{ loaded: Db; fresh: Db }>({
+  // oxlint-disable-next-line no-empty-pattern
+  loaded: async ({}, use) => {
+    const db = await provision(true);
+    await use(db);
+    db.dispose();
+  },
+  // oxlint-disable-next-line no-empty-pattern
+  fresh: async ({}, use) => {
+    const db = await provision(false);
+    await use(db);
+    db.dispose();
+  },
+});
+
+const crashingProvider = (
+  provider: Provider,
+  shouldCrash: (options: Parameters<Provider["executeSql"]>[0]) => boolean,
+): Provider => ({
+  ...provider,
+  executeSql: async (options) => {
+    if (shouldCrash(options)) throw new Error("simulated crash");
+    return provider.executeSql(options);
+  },
+});
+
+const failingProvider = (provider: Provider, match: string, occurrence: number): Provider => {
+  let seen = 0;
+  return crashingProvider(
+    provider,
+    (options) => options.sql.includes(match) && ++seen === occurrence,
+  );
+};
+
+// A legacy blocked job with a single blocker row, whose chain and blocker chain land in import
+// batches of the given order.
+const findBlockerPair = async (
+  provider: Provider,
+  order: "blocker first" | "dependent first",
+): Promise<{ jobId: string; chainId: string; blockerChainId: string }> => {
+  const [pair] = await query<{ jobId: string; chainId: string; blockerChainId: string }>(
+    provider,
+    `WITH heads AS (
+       SELECT id, (row_number() OVER (ORDER BY id) - 1) / 1000 AS batch
+       FROM queuert_job WHERE chain_index = 0
+     )
+     SELECT b.job_id AS jobId, j.chain_id AS chainId, b.blocked_by_chain_id AS blockerChainId
+     FROM queuert_job_blocker b
+     JOIN queuert_job j ON j.id = b.job_id
+     JOIN heads dependent ON dependent.id = j.chain_id
+     JOIN heads blocker ON blocker.id = b.blocked_by_chain_id
+     WHERE j.status = 'blocked'
+       AND (SELECT count(*) FROM queuert_job_blocker x WHERE x.job_id = b.job_id) = 1
+       AND ${order === "blocker first" ? "blocker.batch < dependent.batch" : "dependent.batch < blocker.batch"}
+     ORDER BY b.job_id LIMIT 1`,
+  );
+  expect(pair).toBeDefined();
+  return pair;
+};
+
+const completeChain = async (
+  provider: Provider,
+  adapter: Db["adapter"],
+  chainId: string,
+): Promise<string[]> =>
+  provider.withTransaction(async (txCtx) => {
+    const [chain] = await adapter.getChains({ txCtx, chainIds: [chainId] });
+    await adapter.completeJobs({
+      txCtx,
+      completedBy: null,
+      jobs: [{ jobId: (chain!.tail ?? chain!.head).id, output: null }],
+    });
+    const dependents = await adapter.unblockJobs({ txCtx, blockedByChainId: chainId });
+    return dependents.map((dependent) => dependent.jobId);
+  });
+
+// oxlint-disable-next-line typescript/no-base-to-string
+const statusOf = (row: Record<string, unknown>): string => String(row.status);
+
+const objectNames = async (provider: Provider): Promise<string[]> =>
+  (await query<{ name: string }>(provider, "SELECT name FROM sqlite_master")).map(
+    (row) => row.name,
+  );
+
+const relations = async (
+  provider: Provider,
+  prefix = "queuert_",
+): Promise<Record<string, boolean>> => {
+  const names = new Set(await objectNames(provider));
+  return {
+    job: names.has(`${prefix}job`),
+    job_blocker: names.has(`${prefix}job_blocker`),
+    job_old: names.has(`${prefix}job_old`),
+    job_blocker_old: names.has(`${prefix}job_blocker_old`),
+  };
+};
+
+const counts = async (provider: Provider, prefix = "queuert_"): Promise<Record<string, number>> => {
+  const [row] = await query<Record<string, number>>(
+    provider,
+    `SELECT (SELECT count(*) FROM ${prefix}job) AS jobs,
+            (SELECT count(*) FROM ${prefix}job_blocker) AS blockers,
+            (SELECT count(*) FROM ${prefix}migration) AS migration_rows`,
+  );
+  return row;
+};
+
+const expectFullyUpgraded = async (provider: Provider, prefix = "queuert_"): Promise<void> => {
+  const manifest = readManifest();
+  const imported = await counts(provider, prefix);
+  expect({ jobs: imported.jobs, blockers: imported.blockers }).toEqual({
+    jobs: manifest.totalJobs,
+    blockers: manifest.totalBlockers,
+  });
+  expect(await relations(provider, prefix)).toEqual({
+    job: true,
+    job_blocker: true,
+    job_old: false,
+    job_blocker_old: false,
+  });
+};
+
+const gatedProvider = (
+  provider: Provider,
+  transactionOccurrence: number,
+): { provider: Provider; reached: Promise<void>; release: () => void } => {
+  let seen = 0;
+  const reached = Promise.withResolvers<void>();
+  const released = Promise.withResolvers<void>();
+  return {
+    provider: {
+      ...provider,
+      withTransaction: async (fn) => {
+        if (++seen === transactionOccurrence) {
+          reached.resolve();
+          await released.promise;
+        }
+        return provider.withTransaction(fn);
+      },
+    },
+    reached: reached.promise,
+    release: () => {
+      released.resolve();
+    },
+  };
+};
+
+const migrateInProcess = (
+  path: string,
+): { ready: Promise<void>; go: () => void; result: Promise<unknown> } => {
+  const child = spawn(process.execPath, ["--import", "tsx", MIGRATE_PROCESS_PATH, path], {
+    cwd: fileURLToPath(new URL("../..", import.meta.url)),
+    stdio: ["pipe", "pipe", "pipe"],
+  });
+  const ready = Promise.withResolvers<void>();
+  let stdout = "";
+  let stderr = "";
+  child.stdout.on("data", (chunk: Buffer) => {
+    stdout += chunk.toString();
+    if (stdout.startsWith("ready\n")) ready.resolve();
+  });
+  child.stderr.on("data", (chunk: Buffer) => {
+    stderr += chunk.toString();
+  });
+  const result = new Promise<unknown>((resolve, reject) => {
+    child.on("error", reject);
+    child.on("close", (code) => {
+      ready.resolve();
+      if (code !== 0) {
+        reject(new Error(`migrate process exited with ${code}: ${stderr}`));
+        return;
+      }
+      resolve(JSON.parse(stdout.slice("ready\n".length)));
+    });
+  });
+  return { ready: ready.promise, go: () => child.stdin.end("go\n"), result };
+};
+
+const rewriteTablePrefix = (db: Database.Database, prefix: string): void => {
+  const indexes = db
+    .prepare("SELECT name, sql FROM sqlite_master WHERE type = 'index' AND sql IS NOT NULL")
+    .all() as { name: string; sql: string }[];
+  for (const { name } of indexes) db.exec(`DROP INDEX ${name}`);
+  for (const table of ["job", "job_blocker"]) {
+    db.exec(`ALTER TABLE queuert_${table} RENAME TO ${prefix}${table}`);
+  }
+  // Recreated rather than renamed: RENAME quotes the name in the stored DDL, which would differ
+  // from a fresh install's and outlive the upgrade.
+  const [migrationTable] = db
+    .prepare("SELECT sql FROM sqlite_master WHERE name = 'queuert_migration'")
+    .all() as { sql: string }[];
+  db.exec(migrationTable.sql.replace("queuert_migration", `${prefix}migration`));
+  db.exec(`INSERT INTO ${prefix}migration SELECT * FROM queuert_migration`);
+  db.exec("DROP TABLE queuert_migration");
+  for (const { sql } of indexes) db.exec(sql.replaceAll("queuert_", prefix));
+};
+
+const jobContract: ColumnContract = {
+  rename: [
+    { from: "leased_by", to: "attempt_by" },
+    { from: "leased_until", to: "attempt_until" },
+    { from: "deduplication_key", to: "chain_deduplication_key" },
+  ],
+  drop: ["chain_type_name"],
+  add: [
+    {
+      column: "continued_to_id",
+      derive: (after, beforeRow, snapshot) => {
+        const chainId = String(beforeRow.chain_id);
+        const nextIndex = Number(beforeRow.chain_index) + 1;
+        if (after === null || after === undefined) {
+          for (const [, row] of snapshot) {
+            if (String(row.chain_id) === chainId && Number(row.chain_index) === nextIndex) {
+              return false;
+            }
+          }
+          return true;
+        }
+        const successor = snapshot.get(after as string);
+        return (
+          successor !== undefined &&
+          String(successor.chain_id) === chainId &&
+          Number(successor.chain_index) === nextIndex
+        );
+      },
+    },
+    {
+      column: "attempt_at",
+      derive: (after, beforeRow) =>
+        (String(beforeRow.status) === "running") === (after !== null && after !== undefined),
+    },
+    {
+      column: "chain_completed_at",
+      derive: (after, beforeRow, snapshot) => {
+        if (Number(beforeRow.chain_index) !== 0) return after === null || after === undefined;
+        const chainId = String(beforeRow.chain_id);
+        let tail: Readonly<ReconcilerRow> | undefined;
+        for (const [, row] of snapshot) {
+          if (String(row.chain_id) !== chainId) continue;
+          if (!tail || Number(row.chain_index) > Number(tail.chain_index)) tail = row;
+        }
+        return sameCell(after, tail?.completed_at);
+      },
+    },
+    {
+      column: "chain_status",
+      derive: (after, beforeRow, snapshot) => {
+        if (Number(beforeRow.chain_index) !== 0) return after === null || after === undefined;
+        const chainId = String(beforeRow.chain_id);
+        let tail: Readonly<ReconcilerRow> | undefined;
+        for (const [, row] of snapshot) {
+          if (String(row.chain_id) !== chainId) continue;
+          if (!tail || Number(row.chain_index) > Number(tail.chain_index)) tail = row;
+        }
+        return after === (tail?.completed_at != null ? "completed" : "running");
+      },
+    },
+  ],
+  inPlace: [
+    {
+      column: "chain_deduplication_key",
+      predicate: (after, beforeRow) =>
+        Number(beforeRow.chain_index) === 0
+          ? after === (beforeRow.deduplication_key ?? null)
+          : after === null || after === undefined,
+    },
+    {
+      column: "chain_trace_context",
+      predicate: (after, beforeRow) =>
+        Number(beforeRow.chain_index) === 0
+          ? after === (beforeRow.chain_trace_context ?? null)
+          : after === null || after === undefined,
+    },
+    {
+      column: "attempt_by",
+      predicate: (after, beforeRow) =>
+        String(beforeRow.status) === "running"
+          ? after !== null && after !== undefined
+          : after === null || after === undefined,
+    },
+    {
+      column: "attempt_until",
+      predicate: (after, beforeRow) =>
+        String(beforeRow.status) === "running"
+          ? after !== null && after !== undefined
+          : after === null || after === undefined,
+    },
+  ],
+};
+
+describe("v0.15.1 upgrade path", () => {
+  it(
+    "imports every row of a v0.15.1 database under its declared contract",
+    { timeout: 60_000 },
+    async ({ loaded: { provider, adapter } }) => {
+      const jobs = createMigrationReconciler("job", await readRows(provider, "job"), jobKey);
+      const blockers = createMigrationReconciler(
+        "job_blocker",
+        await readRows(provider, "job_blocker"),
+        blockerKey,
+      );
+
+      const result = await adapter.migrateToLatest();
+      expect(result.applied).toEqual(ALL);
+
+      jobs.reconcile("upgrade", jobContract, await readRows(provider, "job"));
+      blockers.reconcile("upgrade", {}, await readRows(provider, "job_blocker"));
+    },
+  );
+
+  it(
+    "drops the renamed-aside tables and the superseded migration records",
+    { timeout: 60_000 },
+    async ({ loaded: { provider, adapter } }) => {
+      await adapter.migrateToLatest();
+
+      expect(await relations(provider)).toEqual({
+        job: true,
+        job_blocker: true,
+        job_old: false,
+        job_blocker_old: false,
+      });
+      expect((await counts(provider)).migration_rows).toBe(ALL.length);
+      expect(await objectNames(provider)).not.toContain("queuert_job_old_chain_index_idx");
+    },
+  );
+
+  it("is a no-op on a second run", { timeout: 60_000 }, async ({ loaded: { adapter } }) => {
+    await adapter.migrateToLatest();
+    const again = await adapter.migrateToLatest();
+    expect(again).toEqual({ applied: [], skipped: ALL, unrecognized: [] });
+  });
+
+  it(
+    "converges to the same schema as a fresh install",
+    { timeout: 60_000 },
+    async ({ loaded, fresh }) => {
+      await loaded.adapter.migrateToLatest();
+      await fresh.adapter.migrateToLatest();
+      expect(await dumpSchema(loaded.provider)).toBe(await dumpSchema(fresh.provider));
+    },
+  );
+
+  it(
+    "matches the committed manifest counts before migrating",
+    { timeout: 60_000 },
+    async ({ loaded: { provider } }) => {
+      const manifest = readManifest();
+      const jobs = await readRows(provider, "job");
+      expect(jobs.length).toBe(manifest.totalJobs);
+      expect((await readRows(provider, "job_blocker")).length).toBe(manifest.totalBlockers);
+
+      const byStatus: Record<string, number> = {};
+      for (const job of jobs) {
+        const s = statusOf(job);
+        byStatus[s] = (byStatus[s] ?? 0) + 1;
+      }
+      expect(byStatus).toEqual(manifest.byStatus);
+      expect(
+        (
+          await query<{ name: string }>(
+            provider,
+            "SELECT name FROM queuert_migration ORDER BY name",
+          )
+        ).map((row) => row.name),
+      ).toEqual(manifest.appliedMigrations);
+    },
+  );
+
+  it(
+    "leaves data semantically intact and readable by the engine",
+    { timeout: 60_000 },
+    async ({ loaded: { provider, adapter } }) => {
+      await adapter.migrateToLatest();
+      const { sentinels } = readManifest();
+
+      const chainJobs = await collectAll(async (cursor) =>
+        adapter.listChainJobs({
+          chainId: sentinels.chainId,
+          orderDirection: "asc",
+          page: { limit: 500, cursor },
+        }),
+      );
+      expect(chainJobs.length).toBe(sentinels.chainLength);
+      expect(chainJobs.every((stateJob, i) => (stateJob.input as { n: number }).n === i)).toBe(
+        true,
+      );
+      expect(chainJobs.every((stateJob) => stateJob.chain.id === sentinels.chainId)).toBe(true);
+      expect(chainJobs[0].chain.completedAt).toBeNull();
+      for (let i = 0; i < chainJobs.length - 1; i++) {
+        expect(chainJobs[i].continuedToId).toBe(chainJobs[i + 1].id);
+      }
+      expect(chainJobs[chainJobs.length - 1].continuedToId).toBeNull();
+
+      const [blockerChain] = await adapter.getJobBlockers({ jobId: sentinels.blockedJobId });
+      expect(blockerChain.id).toBe(sentinels.fanInBlockerId);
+      const [fanIn] = await query<{ c: number }>(
+        provider,
+        "SELECT count(*) AS c FROM queuert_job_blocker WHERE blocked_by_chain_id = ?",
+        [sentinels.fanInBlockerId],
+      );
+      expect(fanIn?.c).toBe(sentinels.fanInBlockedCount);
+
+      const [completed] = await adapter.getJobs({ jobIds: [sentinels.completedJobId] });
+      expect(completed?.status).toBe("completed");
+      expect(completed?.completedAt).not.toBeNull();
+      expect(completed?.output).toMatchObject({ ok: true });
+      expect(completed?.chain.status).toBe("completed");
+      expect(completed?.chain.completedAt).not.toBeNull();
+
+      const [running] = await adapter.getJobs({ jobIds: [sentinels.runningJobId] });
+      expect(running?.status).toBe("running");
+      expect(running?.attemptAt).not.toBeNull();
+      expect(running?.attemptBy).not.toBeNull();
+      expect(running?.attemptUntil).not.toBeNull();
+      expect(running?.completedAt).toBeNull();
+      expect(running?.chain.completedAt).toBeNull();
+
+      const [retried] = await adapter.getJobs({ jobIds: [sentinels.retriedJobId] });
+      expect(retried?.status).toBe("pending");
+      expect(retried?.completedAt).toBeNull();
+      expect(retried?.attemptAt).toBeNull();
+      expect(String(retried?.lastAttemptError)).toContain("transient");
+
+      const [scheduled] = await adapter.getJobs({ jobIds: [sentinels.scheduledJobId] });
+      expect(scheduled?.scheduledAt.getTime()).toBeGreaterThan(scheduled!.createdAt.getTime());
+
+      const [blockedJob] = await adapter.getJobs({ jobIds: [sentinels.blockedJobId] });
+      expect(blockedJob?.status).toBe("blocked");
+      expect(blockedJob?.completedAt).toBeNull();
+      expect(blockedJob?.attemptAt).toBeNull();
+      expect(blockedJob?.chain.status).toBe("running");
+    },
+  );
+});
+
+describe("upgrade phases", () => {
+  it(
+    "renames the live tables aside, installs, imports, then drops them",
+    { timeout: 60_000 },
+    async ({ loaded: { provider } }) => {
+      await partialMigratorFor(provider, "rename").migrateToLatest();
+      expect(await relations(provider)).toEqual({
+        job: false,
+        job_blocker: false,
+        job_old: true,
+        job_blocker_old: true,
+      });
+      const asideIndexes = await query<{ name: string }>(
+        provider,
+        `SELECT name FROM sqlite_master WHERE type = 'index' AND sql IS NOT NULL
+           AND tbl_name IN ('queuert_job_old', 'queuert_job_blocker_old')`,
+      );
+      expect(asideIndexes.map((row) => row.name)).toEqual(["queuert_job_old_chain_index_idx"]);
+
+      await partialMigratorFor(provider, "rename+install").migrateToLatest();
+      expect((await counts(provider)).jobs).toBe(0);
+      expect(await objectNames(provider)).toContain("queuert_job_pending_idx");
+
+      await migratorFor(provider).migrateToLatest();
+      const manifest = readManifest();
+      const imported = await counts(provider);
+      expect({ jobs: imported.jobs, blockers: imported.blockers }).toEqual({
+        jobs: manifest.totalJobs,
+        blockers: manifest.totalBlockers,
+      });
+      expect(await relations(provider)).toEqual({
+        job: true,
+        job_blocker: true,
+        job_old: false,
+        job_blocker_old: false,
+      });
+    },
+  );
+
+  it(
+    "refuses a database recording migrations v0.15.1 did not ship without touching it",
+    { timeout: 60_000 },
+    async ({ loaded: { db, adapter, provider } }) => {
+      db.prepare(
+        "INSERT INTO queuert_migration (name) VALUES ('20990101000000_later_release')",
+      ).run();
+
+      await expect(adapter.migrateToLatest()).rejects.toThrow(
+        /did not ship \(20990101000000_later_release\)/,
+      );
+      expect(await relations(provider)).toEqual({
+        job: true,
+        job_blocker: true,
+        job_old: false,
+        job_blocker_old: false,
+      });
+    },
+  );
+
+  it(
+    "refuses a database older than v0.15.1 without touching it",
+    { timeout: 60_000 },
+    async ({ loaded: { db, adapter, provider } }) => {
+      db.prepare(
+        "DELETE FROM queuert_migration WHERE name = '20260617000000_blocker_composite_pk'",
+      ).run();
+
+      await expect(adapter.migrateToLatest()).rejects.toThrow(/predates v0\.15\.1/);
+      expect(await relations(provider)).toEqual({
+        job: true,
+        job_blocker: true,
+        job_old: false,
+        job_blocker_old: false,
+      });
+    },
+  );
+
+  it.for([
+    ["without a v0.15.1 column", "ALTER TABLE queuert_job DROP COLUMN leased_by"],
+    ["with a column v0.15.1 lacks", "ALTER TABLE queuert_job ADD COLUMN continued_to_id TEXT"],
+  ])(
+    "refuses a job table that is not in the v0.15.1 shape (%s)",
+    { timeout: 60_000 },
+    async ([, alter], { loaded: { db, provider, adapter } }) => {
+      db.exec(alter);
+
+      await expect(adapter.migrateToLatest()).rejects.toThrow(/not in the v0\.15\.1 shape/);
+      expect(await relations(provider)).toEqual({
+        job: true,
+        job_blocker: true,
+        job_old: false,
+        job_blocker_old: false,
+      });
+    },
+  );
+
+  it(
+    "renames aside at most once, however often it runs",
+    { timeout: 60_000 },
+    async ({ loaded: { provider } }) => {
+      await partialMigratorFor(provider, "rename").migrateToLatest();
+      await expect(partialMigratorFor(provider, "rename").migrateToLatest()).resolves.toMatchObject(
+        { applied: [] },
+      );
+
+      expect(await relations(provider)).toEqual({
+        job: false,
+        job_blocker: false,
+        job_old: true,
+        job_blocker_old: true,
+      });
+    },
+  );
+
+  it(
+    "leaves an already-upgraded database alone",
+    { timeout: 60_000 },
+    async ({ loaded: { provider, adapter } }) => {
+      await adapter.migrateToLatest();
+      const before = await objectNames(provider);
+
+      await expect(adapter.migrateToLatest()).resolves.toEqual({
+        applied: [],
+        skipped: ALL,
+        unrecognized: [],
+      });
+      expect(await objectNames(provider)).toEqual(before);
+    },
+  );
+
+  it(
+    "resumes a partial import from the last whole chain",
+    { timeout: 60_000 },
+    async ({ loaded: { provider, adapter } }) => {
+      await expect(
+        migratorFor(failingProvider(provider, "INSERT INTO queuert_job (", 3)).migrateToLatest(),
+      ).rejects.toThrow(/simulated crash/);
+
+      const manifest = readManifest();
+      const partial = await counts(provider);
+      expect(partial.jobs).toBeGreaterThan(0);
+      expect(partial.jobs).toBeLessThan(manifest.totalJobs);
+      expect((await relations(provider)).job_old).toBe(true);
+      const [split] = await query<{ c: number }>(
+        provider,
+        `SELECT count(*) AS c FROM
+           (SELECT chain_id, count(*) AS n FROM queuert_job GROUP BY chain_id) j
+           JOIN (SELECT chain_id, count(*) AS n FROM queuert_job_old GROUP BY chain_id) b
+             ON j.chain_id = b.chain_id
+         WHERE j.n <> b.n`,
+      );
+      expect(split?.c).toBe(0);
+
+      expect((await adapter.migrateToLatest()).applied).toEqual([]);
+      const final = await counts(provider);
+      expect({ jobs: final.jobs, blockers: final.blockers }).toEqual({
+        jobs: manifest.totalJobs,
+        blockers: manifest.totalBlockers,
+      });
+      expect((await relations(provider)).job_old).toBe(false);
+    },
+  );
+
+  it(
+    "re-runs a completed import without copying twice",
+    { timeout: 60_000 },
+    async ({ loaded: { provider, adapter } }) => {
+      await expect(
+        migratorFor(failingProvider(provider, "DROP TABLE", 1)).migrateToLatest(),
+      ).rejects.toThrow(/simulated crash/);
+
+      const manifest = readManifest();
+      expect((await counts(provider)).jobs).toBe(manifest.totalJobs);
+      expect((await relations(provider)).job_old).toBe(true);
+
+      await adapter.migrateToLatest();
+      expect((await counts(provider)).jobs).toBe(manifest.totalJobs);
+      expect((await relations(provider)).job_old).toBe(false);
+    },
+  );
+
+  it(
+    "resumes a partial import after the engine created chains meanwhile",
+    { timeout: 60_000 },
+    async ({ loaded: { provider, adapter } }) => {
+      await expect(
+        migratorFor(failingProvider(provider, "INSERT INTO queuert_job (", 3)).migrateToLatest(),
+      ).rejects.toThrow(/simulated crash/);
+
+      // An id sorting after every legacy chain: a resume that watermarks on the new table's
+      // highest chain id would skip the rest of the legacy chains.
+      const lateChainId = "ffffffff-ffff-4fff-bfff-ffffffffffff";
+      await provider.withTransaction(async (txCtx) =>
+        adapter.createJobs({
+          txCtx,
+          jobs: [{ typeName: "created-mid-upgrade", id: lateChainId, input: null }],
+        }),
+      );
+
+      expect((await adapter.migrateToLatest()).applied).toEqual([]);
+      const manifest = readManifest();
+      const final = await counts(provider);
+      expect({ jobs: final.jobs, blockers: final.blockers }).toEqual({
+        jobs: manifest.totalJobs + 1,
+        blockers: manifest.totalBlockers,
+      });
+      expect((await relations(provider)).job_old).toBe(false);
+      const [late] = await adapter.getJobs({ jobIds: [lateChainId] });
+      expect(late?.typeName).toBe("created-mid-upgrade");
+    },
+  );
+
+  it(
+    "imports a chain's blocker rows in the same transaction as the chain",
+    { timeout: 60_000 },
+    async ({ loaded: { provider, adapter } }) => {
+      await expect(
+        migratorFor(
+          failingProvider(provider, "INSERT INTO queuert_job_blocker (", 2),
+        ).migrateToLatest(),
+      ).rejects.toThrow(/simulated crash/);
+
+      const manifest = readManifest();
+      const partial = await counts(provider);
+      expect(partial.jobs).toBeGreaterThan(0);
+      expect(partial.jobs).toBeLessThan(manifest.totalJobs);
+      expect(partial.blockers).toBeGreaterThan(0);
+      const [imported] = await query<{ c: number }>(
+        provider,
+        `SELECT count(*) AS c FROM queuert_job_blocker_old b
+         WHERE EXISTS (SELECT 1 FROM queuert_job j WHERE j.id = b.job_id)`,
+      );
+      expect(imported?.c).toBe(partial.blockers);
+
+      expect((await adapter.migrateToLatest()).applied).toEqual([]);
+      await expectFullyUpgraded(provider);
+    },
+  );
+
+  it.for(["blocker first", "dependent first"] as const)(
+    "unblocks a dependent whose blocker chain the engine completed mid-upgrade (%s)",
+    { timeout: 60_000 },
+    async (order, { loaded: { provider, adapter } }) => {
+      const pair = await findBlockerPair(provider, order);
+
+      // "blocker first" stops before the dependent's batch; "dependent first" stops once every
+      // chain is in, where a separate blocker phase used to start.
+      const crashing =
+        order === "blocker first"
+          ? crashingProvider(
+              provider,
+              (options) =>
+                options.sql.includes("INSERT INTO queuert_job (") &&
+                String(options.params[0]).includes(pair.chainId),
+            )
+          : failingProvider(provider, "SELECT DISTINCT b.job_id FROM queuert_job_blocker_old", 1);
+      await expect(migratorFor(crashing).migrateToLatest()).rejects.toThrow(/simulated crash/);
+
+      const unblocked = await completeChain(provider, adapter, pair.blockerChainId);
+      expect(unblocked.includes(pair.jobId)).toBe(order === "dependent first");
+
+      expect((await adapter.migrateToLatest()).applied).toEqual([]);
+      await expectFullyUpgraded(provider);
+      const [dependent] = await adapter.getJobs({ jobIds: [pair.jobId] });
+      expect(dependent?.status).toBe("pending");
+    },
+  );
+
+  it(
+    "unblocks a dependent whose other blocker chain is completed but not imported yet",
+    { timeout: 60_000 },
+    async ({ loaded: { db, provider, adapter } }) => {
+      const pair = await findBlockerPair(provider, "blocker first");
+      const [laterCompleted] = await query<{ id: string }>(
+        provider,
+        `WITH heads AS (
+           SELECT id, (row_number() OVER (ORDER BY id) - 1) / 1000 AS batch
+           FROM queuert_job WHERE chain_index = 0
+         )
+         SELECT h.id FROM heads h
+         WHERE h.batch > (SELECT batch FROM heads WHERE id = ?)
+           AND EXISTS (
+             SELECT 1 FROM queuert_job t
+             WHERE t.chain_id = h.id AND t.completed_at IS NOT NULL
+               AND NOT EXISTS (
+                 SELECT 1 FROM queuert_job n
+                 WHERE n.chain_id = t.chain_id AND n.chain_index = t.chain_index + 1
+               )
+           )
+         ORDER BY h.id LIMIT 1`,
+        [pair.chainId],
+      );
+      expect(laterCompleted).toBeDefined();
+      db.prepare(
+        `INSERT INTO queuert_job_blocker (job_id, blocked_by_chain_id, "index") VALUES (?, ?, 1)`,
+      ).run(pair.jobId, laterCompleted.id);
+
+      await expect(
+        migratorFor(
+          crashingProvider(
+            provider,
+            (options) =>
+              options.sql.includes("INSERT INTO queuert_job (") &&
+              String(options.params[0]).includes(pair.chainId),
+          ),
+        ).migrateToLatest(),
+      ).rejects.toThrow(/simulated crash/);
+      expect(await completeChain(provider, adapter, pair.blockerChainId)).not.toContain(pair.jobId);
+
+      expect((await adapter.migrateToLatest()).applied).toEqual([]);
+      expect((await relations(provider)).job_old).toBe(false);
+      const [dependent] = await adapter.getJobs({ jobIds: [pair.jobId] });
+      expect(dependent?.status).toBe("pending");
+      expect(
+        (await adapter.getJobBlockers({ jobId: pair.jobId })).map((chain) => chain.status),
+      ).toEqual(["completed", "completed"]);
+    },
+  );
+
+  it(
+    "names the jobs it cannot import and finishes once they are removed",
+    { timeout: 60_000 },
+    async ({ loaded: { db, provider, adapter } }) => {
+      const { sentinels } = readManifest();
+      db.pragma("foreign_keys = OFF");
+      db.prepare("DELETE FROM queuert_job WHERE id = ?").run(sentinels.chainId);
+
+      const failure = await adapter.migrateToLatest().then(
+        () => undefined,
+        (error: unknown) => error as Error,
+      );
+      const manifest = readManifest();
+      expect(failure?.message).toContain(
+        `${sentinels.chainLength - 1}/${manifest.totalJobs - 1} jobs and 0/${manifest.totalBlockers} blockers are missing`,
+      );
+      expect((await relations(provider)).job_old).toBe(true);
+
+      const missingJobsQuery = /`([^`]+)`/.exec(failure!.message)![1];
+      const orphans = await query<{ id: string; chain_id: string }>(provider, missingJobsQuery);
+      expect(orphans).toHaveLength(sentinels.chainLength - 1);
+      expect(orphans.every((row) => row.chain_id === sentinels.chainId)).toBe(true);
+
+      db.prepare("DELETE FROM queuert_job_old WHERE chain_id = ?").run(sentinels.chainId);
+      expect((await adapter.migrateToLatest()).applied).toEqual([]);
+      expect(await relations(provider)).toEqual({
+        job: true,
+        job_blocker: true,
+        job_old: false,
+        job_blocker_old: false,
+      });
+    },
+  );
+});
+
+describe("upgrade variants", () => {
+  it(
+    "upgrades a database under a custom table prefix",
+    { timeout: 60_000 },
+    async ({ loaded: { db, provider }, fresh }) => {
+      rewriteTablePrefix(db, "app_");
+      const adapter = await createSqliteStateAdapter({
+        stateProvider: provider,
+        tablePrefix: "app_",
+        generateId: (): string => randomUUID(),
+      });
+      const freshAdapter = await createSqliteStateAdapter({
+        stateProvider: fresh.provider,
+        tablePrefix: "app_",
+        generateId: (): string => randomUUID(),
+      });
+
+      expect((await adapter.migrateToLatest()).applied).toEqual(ALL);
+      await freshAdapter.migrateToLatest();
+
+      await expectFullyUpgraded(provider, "app_");
+      expect((await counts(provider, "app_")).migration_rows).toBe(ALL.length);
+      expect(await dumpSchema(provider)).toBe(await dumpSchema(fresh.provider));
+    },
+  );
+
+  it(
+    "upgrades with foreign key enforcement on",
+    { timeout: 60_000 },
+    async ({ loaded: { db, provider, adapter } }) => {
+      db.pragma("foreign_keys = ON");
+
+      expect((await adapter.migrateToLatest()).applied).toEqual(ALL);
+
+      await expectFullyUpgraded(provider);
+      expect(db.pragma("foreign_key_check")).toEqual([]);
+    },
+  );
+
+  it(
+    "upgrades with legacy_alter_table on",
+    { timeout: 60_000 },
+    async ({ loaded: { db, provider, adapter }, fresh }) => {
+      db.pragma("legacy_alter_table = ON");
+
+      expect((await adapter.migrateToLatest()).applied).toEqual(ALL);
+      await fresh.adapter.migrateToLatest();
+
+      await expectFullyUpgraded(provider);
+      expect(await dumpSchema(provider)).toBe(await dumpSchema(fresh.provider));
+    },
+  );
+
+  it(
+    "clears attempt fields on jobs that are not running",
+    { timeout: 60_000 },
+    async ({ loaded: { db, adapter } }) => {
+      const { sentinels } = readManifest();
+      db.prepare(
+        "UPDATE queuert_job SET leased_by = 'stale-worker', leased_until = datetime('now') WHERE id IN (?, ?)",
+      ).run(sentinels.pendingJobId, sentinels.completedJobId);
+
+      await adapter.migrateToLatest();
+
+      for (const job of await adapter.getJobs({
+        jobIds: [sentinels.pendingJobId, sentinels.completedJobId],
+      })) {
+        expect(job?.attemptBy).toBeNull();
+        expect(job?.attemptUntil).toBeNull();
+        expect(job?.attemptAt).toBeNull();
+      }
+    },
+  );
+});
+
+describe("concurrent upgrades", () => {
+  it(
+    "lets two processes upgrade the same database at once",
+    { timeout: 60_000 },
+    async ({ loaded: { db, path } }) => {
+      db.close();
+      const first = migrateInProcess(path);
+      const second = migrateInProcess(path);
+      await Promise.all([first.ready, second.ready]);
+      first.go();
+      second.go();
+
+      // Without a migration lock both may apply the idempotent install; neither may fail.
+      for (const result of await Promise.all([first.result, second.result])) {
+        expect(result).toMatchObject({ unrecognized: [] });
+      }
+
+      const reopened = openDb(path);
+      try {
+        await expectFullyUpgraded(createBetterSqlite3Provider({ db: reopened }));
+      } finally {
+        reopened.close();
+      }
+    },
+  );
+
+  it.for([
+    ["before its rename", 1],
+    ["between import batches", 5],
+  ] as const)(
+    "finishes a migrator stalled %s after another completed the upgrade",
+    { timeout: 60_000 },
+    async ([, occurrence], { loaded: { path, provider } }) => {
+      const stalled = gatedProvider(provider, occurrence);
+      const stalledRun = migratorFor(stalled.provider).migrateToLatest();
+      await stalled.reached;
+
+      const other = openDb(path);
+      try {
+        await migratorFor(createBetterSqlite3Provider({ db: other })).migrateToLatest();
+      } finally {
+        other.close();
+      }
+
+      stalled.release();
+      await expect(stalledRun).resolves.toMatchObject({ unrecognized: [] });
+      await expectFullyUpgraded(provider);
+    },
+  );
+});

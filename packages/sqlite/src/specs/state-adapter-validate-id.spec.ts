@@ -20,9 +20,6 @@ describe("validateId", () => {
     validateId?: (id: string) => boolean;
   }) => {
     const db = new Database(":memory:");
-    db.pragma("journal_mode = WAL");
-    db.pragma("auto_vacuum = INCREMENTAL");
-    db.pragma("foreign_keys = ON");
     const stateProvider = createBetterSqlite3Provider({ db });
     const adapter = await createSqliteStateAdapter<BetterSqlite3Context, string>({
       stateProvider,
@@ -37,7 +34,7 @@ describe("validateId", () => {
     id?: string,
   ) =>
     adapter.withTransaction(async (txCtx) =>
-      adapter.createChains({
+      adapter.createJobs({
         txCtx,
         jobs: [{ typeName: "t", id, input: null }],
       }),
@@ -69,8 +66,8 @@ describe("validateId", () => {
       generateId: () => `ok-${crypto.randomUUID()}`,
       validateId: (id) => id.startsWith("ok-"),
     });
-    const [{ job }] = await createJob(adapter, "ok-custom");
-    expect(job.id).toBe("ok-custom");
+    const [stateChain] = await createJob(adapter, "ok-custom");
+    expect(stateChain.head.id).toBe("ok-custom");
     db.close();
   });
 });
@@ -91,9 +88,6 @@ describe("SQLite State Adapter Variance - With validateId", () => {
       // oxlint-disable-next-line no-empty-pattern
       async ({}, use) => {
         const db = new Database(":memory:");
-        db.pragma("journal_mode = WAL");
-        db.pragma("auto_vacuum = INCREMENTAL");
-        db.pragma("foreign_keys = ON");
         await use(db);
         db.close();
       },

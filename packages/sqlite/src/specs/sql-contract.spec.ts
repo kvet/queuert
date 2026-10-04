@@ -169,9 +169,6 @@ describe("SQLite SQL contract", () => {
       // oxlint-disable-next-line no-empty-pattern
       async ({}, use) => {
         const db = new Database(":memory:");
-        db.pragma("journal_mode = WAL");
-        db.pragma("auto_vacuum = INCREMENTAL");
-        db.pragma("foreign_keys = ON");
         await use(db);
         db.close();
       },
@@ -182,8 +179,6 @@ describe("SQLite SQL contract", () => {
         const stateProvider = createValidatingProvider(db);
         const adapter = await createSqliteStateAdapter({ stateProvider });
         await adapter.migrateToLatest();
-        // Conformance doesn't drive these — run them so their SQL hits the validator.
-        await adapter.vacuum();
         await adapter.truncate();
         await use(adapter as unknown as StateAdapter<{ $test: true }, string>);
       },

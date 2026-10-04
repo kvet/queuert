@@ -1,9 +1,18 @@
 import { A, useSearchParams } from "@solidjs/router";
 import { For, Show, createEffect, createMemo, createResource, createSignal } from "solid-js";
 
-import { PAGE_SIZE, type UnknownJob, getJobsByIds, listJobTypeNames, listJobs } from "../api.js";
+import {
+  PAGE_SIZE,
+  type UnknownJob,
+  countByJobTypeNames,
+  getJobsByIds,
+  listJobTypeNames,
+  listJobs,
+} from "../api.js";
 import { createAutoLoadMore } from "./createAutoLoadMore.js";
-import { JobStatusBadge } from "./StatusBadge.js";
+import { createDebouncedInput } from "./createDebouncedInput.js";
+import { formatCount, formatTotalCount } from "./formatCount.js";
+import { StatusBadge } from "./StatusBadge.js";
 import { TimeAgo } from "./TimeAgo.js";
 
 export function JobList() {
@@ -12,6 +21,9 @@ export function JobList() {
   const status = () => (searchParams.status ?? "") as string;
   const typeName = () => (searchParams.typeName ?? "") as string;
   const ids = () => (searchParams.ids ?? "") as string;
+  const idsInput = createDebouncedInput(ids, (value) => {
+    setSearchParams({ ids: value || undefined });
+  });
 
   const orderBy = () => (searchParams.orderBy ?? "") as string;
   const orderDirection = () => (searchParams.orderDirection ?? "desc") as string;
@@ -20,16 +32,19 @@ export function JobList() {
 
   const [typeNames] = createResource(listJobTypeNames);
 
-  const effectiveStatus = createMemo(() => {
-    const s = status();
-    if (s === "blocked" || s === "pending-unblocked") return "pending";
-    if (s === "completed-terminal" || s === "completed-continued") return "completed";
-    return s;
-  });
+  const [counts] = createResource(
+    () => typeName() || undefined,
+    async (name) => (await countByJobTypeNames([name]))[0],
+  );
+
+  const statusLabel = (label: string, status: "blocked" | "pending" | "running" | "completed") => {
+    const c = counts();
+    return c ? `${label} (${formatCount(c[status])})` : label;
+  };
 
   const orderByOptions = createMemo(() => {
-    const s = effectiveStatus();
-    if (s === "pending")
+    const s = status();
+    if (s === "blocked" || s === "pending")
       return [
         { value: "scheduledAt", label: "Scheduled" },
         { value: "createdAt", label: "Created" },
@@ -153,63 +168,80 @@ export function JobList() {
         <input
           type="text"
           placeholder="Job IDs (comma-separated)"
-          value={ids()}
-          onChange={(e) => {
-            setSearchParams({ ids: e.target.value.trim() || undefined });
+          value={idsInput.value()}
+          onInput={(e) => {
+            idsInput.onInput(e.currentTarget.value);
           }}
         />
-        <select
-          ref={(el) => {
-            createEffect(() => {
-              typeNames();
-              el.value = typeName();
-            });
-          }}
-          disabled={idMode()}
-          onChange={(e) => {
-            setSearchParams({ typeName: e.target.value || undefined });
-          }}
+        <Show
+          when={!idMode()}
+          fallback={
+            <button
+              class="clear-btn"
+              title="Clear IDs"
+              onClick={() => {
+                idsInput.cancel();
+                setSearchParams({ ids: undefined });
+              }}
+            >
+              Clear
+            </button>
+          }
         >
-          <option value="">Select type…</option>
-          <For each={typeNames()}>{(name) => <option value={name}>{name}</option>}</For>
-        </select>
-        <select
-          value={status()}
-          disabled={idMode()}
-          onChange={(e) => {
-            setSearchParams({ status: e.target.value || undefined, orderBy: undefined });
-          }}
-        >
-          <option value="">All statuses</option>
-          <option value="pending">Pending</option>
-          <option value="pending-unblocked">Pending (unblocked)</option>
-          <option value="blocked">Pending (blocked)</option>
-          <option value="running">Running</option>
-          <option value="completed">Completed</option>
-          <option value="completed-terminal">Completed (terminal)</option>
-          <option value="completed-continued">Completed (continued)</option>
-        </select>
-        <select
-          value={orderBy() || orderByOptions()[0].value}
-          disabled={idMode()}
-          onChange={(e) => {
-            setSearchParams({ orderBy: e.target.value || undefined });
-          }}
-        >
-          <For each={orderByOptions()}>
-            {(opt) => <option value={opt.value}>{opt.label}</option>}
-          </For>
-        </select>
-        <button
-          class="order-direction-btn"
-          disabled={idMode()}
-          title={orderDirection() === "asc" ? "Ascending" : "Descending"}
-          onClick={() => {
-            setSearchParams({ orderDirection: orderDirection() === "asc" ? "desc" : "asc" });
-          }}
-        >
-          {orderDirection() === "asc" ? "↑" : "↓"}
-        </button>
+          <select
+            class="filter-type"
+            ref={(el) => {
+              createEffect(() => {
+                typeNames();
+                el.value = typeName();
+              });
+            }}
+            onChange={(e) => {
+              setSearchParams({ typeName: e.target.value || undefined });
+            }}
+          >
+            <option value="">Select type…</option>
+            <For each={typeNames()}>{(name) => <option value={name}>{name}</option>}</For>
+          </select>
+          <select
+            class="filter-status"
+            value={status()}
+            onChange={(e) => {
+              setSearchParams({ status: e.target.value || undefined, orderBy: undefined });
+            }}
+          >
+            <option value="">
+              All statuses
+              {counts()
+                ? ` (${formatTotalCount([counts()!.blocked, counts()!.pending, counts()!.running, counts()!.completed])})`
+                : ""}
+            </option>
+            <option value="blocked">{statusLabel("Blocked", "blocked")}</option>
+            <option value="pending">{statusLabel("Pending", "pending")}</option>
+            <option value="running">{statusLabel("Running", "running")}</option>
+            <option value="completed">{statusLabel("Completed", "completed")}</option>
+          </select>
+          <select
+            class="filter-order-by"
+            value={orderBy() || orderByOptions()[0].value}
+            onChange={(e) => {
+              setSearchParams({ orderBy: e.target.value || undefined });
+            }}
+          >
+            <For each={orderByOptions()}>
+              {(opt) => <option value={opt.value}>{opt.label}</option>}
+            </For>
+          </select>
+          <button
+            class="order-direction-btn"
+            title={orderDirection() === "asc" ? "Ascending" : "Descending"}
+            onClick={() => {
+              setSearchParams({ orderDirection: orderDirection() === "asc" ? "desc" : "asc" });
+            }}
+          >
+            {orderDirection() === "asc" ? "↑" : "↓"}
+          </button>
+        </Show>
       </div>
 
       <Show when={!idMode() && !typeName()}>
@@ -225,16 +257,9 @@ export function JobList() {
           <div class="card">
             <A class="card-link" href={`/jobs/${job.id}`} aria-label={`Open job ${job.id}`} />
             <div class="card-header">
-              <span class="card-type">
-                {job.typeName}
-                <button
-                  class="filter-btn"
-                  title={`Filter by ${job.typeName}`}
-                  onClick={() => {
-                    setSearchParams({ typeName: job.typeName, ids: undefined });
-                  }}
-                />
-              </span>
+              <Show when={idMode()}>
+                <span class="card-type">{job.typeName}</span>
+              </Show>
               <span class="card-id">
                 {job.id}
                 <button
@@ -253,7 +278,7 @@ export function JobList() {
               <A href={`/chains/${job.chainId}`} class="chain-link">
                 chain {job.chainId}
               </A>
-              <JobStatusBadge job={job} />
+              <StatusBadge status={job.status} />
             </div>
             <Show when={job.input != null}>
               <div class="card-input">{inputPreview(job.input)}</div>

@@ -315,10 +315,8 @@ const it = extendWithResourceLeakDetection(extendWithPostgres(baseIt, import.met
           enumTypes,
         );
         const adapter = await createPgStateAdapter({ stateProvider });
-        // Conformance doesn't drive these — run them so their SQL hits the validator.
         await adapter.migrateToLatest();
         await adapter.truncate();
-        await adapter.vacuum();
         await use(adapter as unknown as StateAdapter<{ $test: true }, string>);
       },
       { scope: "test" },

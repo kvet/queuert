@@ -58,7 +58,7 @@ The dashboard provides:
 - **Job list** -- Cross-chain job view with status/type filtering
 - **Job detail** -- Input/output data, error messages, attempt info, continuation links
 
-Supports a small set of mutations (triggering a blocked job, deleting a chain) in addition to read queries. Add authentication middleware before the dashboard handler to restrict access.
+Supports a small set of mutations (rescheduling a job, deleting a chain) in addition to read queries. Add authentication middleware before the dashboard handler to restrict access.
 
 ## UI views
 
@@ -66,9 +66,9 @@ Supports a small set of mutations (triggering a blocked job, deleting a chain) i
 
 ![Chain list view showing chains with status badges and input previews](../../../assets/dashboard/chains-list.png)
 
-The primary view. Lists chains ordered by creation time (newest first) with inline previews. Each row shows the chain type name, chain ID, status badge, last job type (if the chain has continuations), attempt count (for blocked chains), creation time, and input preview.
+The primary view. Pick a chain type to list its chains, newest first by default; the order-by options depend on the selected status (completed chains can also be ordered by completion time). Each row shows the chain type name, chain ID, status badge, time, and input preview.
 
-Filtering supports searching by chain or job ID and by type name. Filter buttons next to type names and IDs let you quickly narrow results. A "Hide blockers" toggle filters out chains that are blockers for other chains. Pagination is cursor-based with a "Load more" button.
+Filtering supports looking up chains by ID (comma-separated), by type name, and by status. Filter buttons next to type names and IDs let you quickly narrow results. An "Independent only" toggle (on by default) hides chains that other chains depend on as blockers. Pagination is cursor-based with a "Load more" button.
 
 Clicking a row navigates to the chain detail view.
 
@@ -86,7 +86,7 @@ Shows a specific chain with its full job sequence and blocker relationships.
 
 ![Job list view showing jobs across chains with status filters](../../../assets/dashboard/jobs-list.png)
 
-A cross-chain job view with the same layout as the chain list, but each row represents an individual job with a link to its parent chain. Supports filtering by job or chain ID, type name, and status.
+A cross-chain job view with the same layout as the chain list, but each row represents an individual job with a link to its parent chain. Supports looking up jobs by ID and filtering by type name and status.
 
 ### Job detail
 
@@ -94,7 +94,7 @@ A cross-chain job view with the same layout as the chain list, but each row repr
 
 Full job inspection. Shown as a dedicated view when navigating from the job list, or inline-expanded in the chain detail view. Sections appear conditionally based on job state:
 
-- **Info** -- Status, attempt count, created/scheduled/completed timestamps, worker ID, and attempt expiry.
+- **Info** -- Status, attempt count, created/scheduled/completed timestamps, worker ID, and attempt expiry. A pending job scheduled in the future gets a **Reschedule** button that moves it to run now.
 - **Blockers** -- Only when the job has blockers. Shows each blocker chain with its status.
 - **Input** -- The job's input data as JSON.
 - **Output** or **Continued with** (mutually exclusive) -- Output shows the result JSON for terminal jobs. Continued with shows a link to the next job in the chain with its status.

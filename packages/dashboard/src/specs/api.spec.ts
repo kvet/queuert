@@ -22,13 +22,13 @@ const createJob = async (
   typeName: string,
   input: unknown,
 ) => {
-  const [{ job }] = await stateAdapter.withTransaction(async (txCtx) =>
-    stateAdapter.createChains({
+  const [stateChain] = await stateAdapter.withTransaction(async (txCtx) =>
+    stateAdapter.createJobs({
       txCtx,
       jobs: [{ typeName, input }],
     }),
   );
-  return job;
+  return stateChain.head;
 };
 
 const createContinuation = async (
@@ -37,13 +37,14 @@ const createContinuation = async (
   continueFromId: string,
   input: unknown,
 ) => {
-  const { job } = await stateAdapter.withTransaction(async (txCtx) =>
-    stateAdapter.createContinuationJob({
+  const [continued] = await stateAdapter.withTransaction(async (txCtx) =>
+    stateAdapter.continueJobs({
       txCtx,
-      job: { typeName, continueFromId, input },
+      completedBy: "worker-1",
+      jobs: [{ typeName, continueFromId, input }],
     }),
   );
-  return job;
+  return continued!.continuation;
 };
 
 const startAttempt = async (
@@ -57,10 +58,14 @@ const startAttempt = async (
 const completeJob = async (
   stateAdapter: Awaited<ReturnType<typeof createInProcessStateAdapter>>,
   jobId: string,
-  outcome: { output: unknown } | { continuedToId: string },
+  output: unknown,
 ) =>
   stateAdapter.withTransaction(async (txCtx) =>
-    stateAdapter.finishJobAttempt({ txCtx, jobId, workerId: "worker-1", outcome }),
+    stateAdapter.completeJobs({
+      txCtx,
+      completedBy: "worker-1",
+      jobs: [{ jobId, output }],
+    }),
   );
 
 const encodeRawCursor = (payload: unknown) =>
@@ -128,7 +133,7 @@ describe("Dashboard API", () => {
       expect(body.nextCursor).not.toBeNull();
     });
 
-    it("excludes blocker chains unless independent=false", async () => {
+    it("filters by independent=true, independent=false, or neither", async () => {
       const { request, stateAdapter } = await createTestDashboard();
       const blockerChain = await createJob(stateAdapter, "test-type", null);
       const mainChain = await createJob(stateAdapter, "test-type", null);
@@ -140,7 +145,14 @@ describe("Dashboard API", () => {
         }),
       );
 
-      const independent = await parseBody(await request("/api/chains?typeName=test-type"));
+      const all = await parseBody(await request("/api/chains?typeName=test-type"));
+      expect(all.items.map((c: { id: string }) => c.id).sort()).toEqual(
+        [blockerChain.chainId, mainChain.chainId].sort(),
+      );
+
+      const independent = await parseBody(
+        await request("/api/chains?typeName=test-type&independent=true"),
+      );
       expect(independent.items.map((c: { id: string }) => c.id)).toEqual([mainChain.chainId]);
 
       const blockers = await parseBody(
@@ -323,70 +335,6 @@ describe("Dashboard API", () => {
       expect(res.status).toBe(409);
       expect(body.error).toContain("blocker");
     });
-
-    it("cascade deletes chain and its blockers", async () => {
-      const { request, stateAdapter } = await createTestDashboard();
-      const blockerChain = await createJob(stateAdapter, "blocker-type", null);
-      const mainJob = await createJob(stateAdapter, "main-type", null);
-
-      await stateAdapter.withTransaction(async (txCtx) =>
-        stateAdapter.addJobsBlockers({
-          txCtx,
-          jobBlockers: [{ jobId: mainJob.id, blockedByChainIds: [blockerChain.chainId] }],
-        }),
-      );
-
-      const res = await request(`/api/chains/${mainJob.chainId}?cascade=true`, {
-        method: "DELETE",
-      });
-      const body = await parseBody(res);
-
-      expect(res.status).toBe(200);
-      expect(body.deleted).toHaveLength(2);
-
-      const mainDetail = await request(`/api/chains/${mainJob.chainId}`);
-      expect(mainDetail.status).toBe(404);
-
-      const blockerDetail = await request(`/api/chains/${blockerChain.chainId}`);
-      expect(blockerDetail.status).toBe(404);
-    });
-
-    it("cascade delete without blockers deletes only the target chain", async () => {
-      const { request, stateAdapter } = await createTestDashboard();
-      const root = await createJob(stateAdapter, "test-type", null);
-
-      const res = await request(`/api/chains/${root.chainId}?cascade=true`, {
-        method: "DELETE",
-      });
-      const body = await parseBody(res);
-
-      expect(res.status).toBe(200);
-      expect(body.deleted).toHaveLength(1);
-    });
-
-    it("cascade delete still fails when resolved set has external dependents", async () => {
-      const { request, stateAdapter } = await createTestDashboard();
-      const sharedBlocker = await createJob(stateAdapter, "shared-blocker", null);
-      const chainA = await createJob(stateAdapter, "chain-a", null);
-      const chainB = await createJob(stateAdapter, "chain-b", null);
-
-      await stateAdapter.withTransaction(async (txCtx) =>
-        stateAdapter.addJobsBlockers({
-          txCtx,
-          jobBlockers: [
-            { jobId: chainA.id, blockedByChainIds: [sharedBlocker.chainId] },
-            { jobId: chainB.id, blockedByChainIds: [sharedBlocker.chainId] },
-          ],
-        }),
-      );
-
-      const res = await request(`/api/chains/${chainA.chainId}?cascade=true`, {
-        method: "DELETE",
-      });
-
-      expect(res.status).toBe(409);
-      expect((await parseBody(res)).error).toContain("blocker");
-    });
   });
 
   describe("GET /api/chain-types", () => {
@@ -524,7 +472,6 @@ describe("Dashboard API", () => {
         continued.id,
         null,
       );
-      await completeJob(stateAdapter, continued.id, { continuedToId: continuation.id });
 
       const allTypeNames = [
         "pending-type",
@@ -547,12 +494,8 @@ describe("Dashboard API", () => {
       };
 
       expect(await ids("blocked")).toEqual([blocked.id]);
-      expect(await ids("pending-unblocked")).toEqual(
-        [pending.id, blockerChain.id, continuation.id].sort(),
-      );
+      expect(await ids("pending")).toEqual([pending.id, blockerChain.id, continuation.id].sort());
       expect(await ids("running")).toEqual([running.id]);
-      expect(await ids("completed-terminal")).toEqual([terminal.id]);
-      expect(await ids("completed-continued")).toEqual([continued.id]);
       expect(await ids("completed")).toEqual([terminal.id, continued.id].sort());
       expect(await ids("bogus-status")).toHaveLength(7);
     });
@@ -605,16 +548,25 @@ describe("Dashboard API", () => {
     it("returns per-status counts for each requested type name", async () => {
       const { request, stateAdapter } = await createTestDashboard();
       await createJob(stateAdapter, "type-a", null);
-      await createJob(stateAdapter, "type-b", null);
+      const blockerChain = await createJob(stateAdapter, "type-b", null);
       await startAttempt(stateAdapter, "type-b");
+      const blocked = await createJob(stateAdapter, "type-a", null);
+      await stateAdapter.withTransaction(async (txCtx) =>
+        stateAdapter.addJobsBlockers({
+          txCtx,
+          jobBlockers: [{ jobId: blocked.id, blockedByChainIds: [blockerChain.chainId] }],
+        }),
+      );
 
       const body = await parseBody(await request("/api/job-types/counts?typeNames=type-a,type-b"));
 
       expect(body).toHaveLength(2);
       expect(body[0].typeName).toBe("type-a");
+      expect(body[0].blocked.count).toBe(1);
       expect(body[0].pending.count).toBe(1);
       expect(body[0].running.count).toBe(0);
       expect(body[1].typeName).toBe("type-b");
+      expect(body[1].blocked.count).toBe(0);
       expect(body[1].running.count).toBe(1);
     });
   });
@@ -670,14 +622,6 @@ describe("Dashboard API", () => {
       const { request, stateAdapter } = await createTestDashboard();
       const root = await createJob(stateAdapter, "chain-type", { step: 1 });
       const cont = await createContinuation(stateAdapter, "chain-step2", root.id, { step: 2 });
-      await stateAdapter.withTransaction(async (txCtx) =>
-        stateAdapter.finishJobAttempt({
-          txCtx,
-          jobId: root.id,
-          workerId: "test",
-          outcome: { continuedToId: cont.id },
-        }),
-      );
 
       const res = await request(`/api/jobs/${root.id}`);
       const body = await parseBody(res);
@@ -686,20 +630,13 @@ describe("Dashboard API", () => {
       expect(body.continuation).not.toBeNull();
       expect(body.continuation.id).toBe(cont.id);
       expect(body.continuation.chainId).toBe(root.chainId);
+      expect(body.continuation.chainIndex).toBe(1);
     });
 
     it("returns null continuation for last job in chain", async () => {
       const { request, stateAdapter } = await createTestDashboard();
       const root = await createJob(stateAdapter, "chain-type", { step: 1 });
       const cont = await createContinuation(stateAdapter, "chain-step2", root.id, { step: 2 });
-      await stateAdapter.withTransaction(async (txCtx) =>
-        stateAdapter.finishJobAttempt({
-          txCtx,
-          jobId: root.id,
-          workerId: "test",
-          outcome: { continuedToId: cont.id },
-        }),
-      );
 
       const res = await request(`/api/jobs/${cont.id}`);
       const body = await parseBody(res);
@@ -718,18 +655,18 @@ describe("Dashboard API", () => {
   describe("POST /api/jobs/:jobId/reschedule", () => {
     it("reschedules a pending future-scheduled job to now", async () => {
       const { request, stateAdapter } = await createTestDashboard();
-      const [{ job }] = await stateAdapter.withTransaction(async (txCtx) =>
-        stateAdapter.createChains({
+      const [stateChain] = await stateAdapter.withTransaction(async (txCtx) =>
+        stateAdapter.createJobs({
           txCtx,
           jobs: [{ typeName: "scheduled-type", input: null, schedule: { afterMs: 60_000 } }],
         }),
       );
 
-      const res = await request(`/api/jobs/${job.id}/reschedule`, { method: "POST" });
+      const res = await request(`/api/jobs/${stateChain.head.id}/reschedule`, { method: "POST" });
       const body = await parseBody(res);
 
       expect(res.status).toBe(200);
-      expect(body.job.id).toBe(job.id);
+      expect(body.job.id).toBe(stateChain.head.id);
     });
 
     it("returns 404 for missing job", async () => {

@@ -15,15 +15,6 @@ import { describe, expectTypeOf, it, vi } from "vitest";
 
 import { createSqliteStateAdapter } from "../state-adapter/state-adapter.sqlite.js";
 import { createNodeSqliteProvider } from "../state-provider/state-provider.node-sqlite.js";
-
-const createDb = (): DatabaseSync => {
-  const db = new DatabaseSync(":memory:");
-  db.exec("PRAGMA journal_mode = WAL");
-  db.exec("PRAGMA auto_vacuum = INCREMENTAL");
-  db.exec("PRAGMA foreign_keys = ON");
-  return db;
-};
-
 it("index");
 
 describe("SQLite State Adapter Conformance (node:sqlite)", () => {
@@ -36,7 +27,7 @@ describe("SQLite State Adapter Conformance (node:sqlite)", () => {
     db: [
       // oxlint-disable-next-line no-empty-pattern
       async ({}, use) => {
-        const db = createDb();
+        const db = new DatabaseSync(":memory:");
         await use(db);
         db.close();
       },
@@ -57,7 +48,7 @@ describe("SQLite State Adapter Conformance (node:sqlite)", () => {
 });
 
 it("infers custom ID types through the full stack", async () => {
-  const db = createDb();
+  const db = new DatabaseSync(":memory:");
 
   try {
     const stateProvider = createNodeSqliteProvider({ db });

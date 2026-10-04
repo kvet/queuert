@@ -1,2 +1,2 @@
-export { fastSeedAllStatesV2 } from "./conformance/fast-seed-all-states-v2.js";
+export { fastSeedAllStates } from "./conformance/fast-seed-all-states.js";
 export { extendWithStateSqlite } from "./specs/state-adapter.sqlite.spec-helper.js";

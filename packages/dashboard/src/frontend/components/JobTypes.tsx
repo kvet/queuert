@@ -1,7 +1,8 @@
 import { A } from "@solidjs/router";
 import { For, Show, createResource } from "solid-js";
 
-import { type JobTypeCounts, countByJobTypeNames, listJobTypeNames } from "../api.js";
+import { countByJobTypeNames, listJobTypeNames } from "../api.js";
+import { formatCount, formatTotalCount } from "./formatCount.js";
 
 export function JobTypes() {
   const [typeNames] = createResource(listJobTypeNames);
@@ -14,12 +15,6 @@ export function JobTypes() {
     },
   );
 
-  const formatCount = (c: { count: number; hasMore: boolean }) =>
-    c.hasMore ? `${c.count.toLocaleString()}+` : c.count.toLocaleString();
-
-  const total = (entry: JobTypeCounts) =>
-    entry.pending.count + entry.running.count + entry.completed.count;
-
   return (
     <div>
       <Show when={!typeNames.loading && typeNames()?.length === 0}>
@@ -31,6 +26,7 @@ export function JobTypes() {
           <thead>
             <tr>
               <th>Type name</th>
+              <th>Blocked</th>
               <th>Pending</th>
               <th>Running</th>
               <th>Completed</th>
@@ -45,6 +41,20 @@ export function JobTypes() {
                     <A href={`/jobs?typeName=${encodeURIComponent(entry.typeName)}`}>
                       {entry.typeName}
                     </A>
+                  </td>
+                  <td>
+                    <Show
+                      when={entry.blocked.count > 0}
+                      fallback={<span class="count-zero">0</span>}
+                    >
+                      <A
+                        href={`/jobs?typeName=${encodeURIComponent(entry.typeName)}&status=blocked`}
+                        class="count-link"
+                        data-status="blocked"
+                      >
+                        {formatCount(entry.blocked)}
+                      </A>
+                    </Show>
                   </td>
                   <td>
                     <Show
@@ -89,10 +99,12 @@ export function JobTypes() {
                     </Show>
                   </td>
                   <td>
-                    {total(entry).toLocaleString()}
-                    {entry.pending.hasMore || entry.running.hasMore || entry.completed.hasMore
-                      ? "+"
-                      : ""}
+                    {formatTotalCount([
+                      entry.blocked,
+                      entry.pending,
+                      entry.running,
+                      entry.completed,
+                    ])}
                   </td>
                 </tr>
               )}

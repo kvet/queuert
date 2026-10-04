@@ -53,9 +53,8 @@ export class JobNotFoundError extends Error {
 }
 
 /**
- * Batch variant of {@link JobNotFoundError} — thrown by the plural
- * {@link Client.rescheduleJobs | rescheduleJobs} listing every input id with no
- * matching job.
+ * Thrown when {@link Client.rescheduleJobs | rescheduleJobs} targets any job that does not exist.
+ * Batch variant of {@link JobNotFoundError}, listing every input id with no matching job.
  */
 export class JobsNotFoundError extends Error {
   /** The input ids that had no matching job. */
@@ -92,7 +91,7 @@ export class JobAlreadyCompletedError extends Error {
   }
 }
 
-/** Thrown when attempting to reschedule a job that is not in a reschedulable state (must be pending). */
+/** Thrown when {@link Client.rescheduleJob | rescheduleJob} targets a job that is not `pending`. */
 export class JobNotReschedulableError extends Error {
   /** The job that could not be rescheduled. */
   readonly jobId: string;
@@ -105,9 +104,8 @@ export class JobNotReschedulableError extends Error {
 }
 
 /**
- * Batch variant of {@link JobNotReschedulableError} — thrown by the plural
- * {@link Client.rescheduleJobs | rescheduleJobs} listing every input id whose
- * status is not `pending`.
+ * Thrown when {@link Client.rescheduleJobs | rescheduleJobs} targets any job that is not
+ * `pending`. Batch variant of {@link JobNotReschedulableError}, listing every offending input id.
  */
 export class JobsNotReschedulableError extends Error {
   /** The input ids whose status is not `pending`. */

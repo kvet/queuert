@@ -5,9 +5,8 @@ import { type BaseTxContext, type StateJob } from "../state-adapter/state-adapte
 import { type TransactionHooks } from "../transaction-hooks.js";
 import { type FinishResult } from "./attempt-outcome.js";
 import { continueStateJob } from "./create-state-jobs.js";
-import { finishJobAttempt } from "./finish-job-attempt.js";
+import { bufferJobCompletedEvents } from "./job-completed-events.js";
 
-/** Runtime shape of a `continueWith` outcome, erased of the job-type generics. */
 export type AnyContinueWith = {
   typeName: string;
   id?: string;
@@ -16,25 +15,15 @@ export type AnyContinueWith = {
   blockers?: AnyChain[];
 };
 
-/**
- * Commits the `{ continueWith }` outcome: the successor is inserted first so the
- * completion can point at it, which also puts its `job_created` event ahead of
- * the predecessor's completion events.
- *
- * @param options.fromJob - Predecessor row handed to the successor. The worker
- * passes a copy carrying the live attempt span's trace contexts.
- */
 export const continueChain = async (
   helpers: Helpers,
   {
-    job,
     fromJob,
     continueWith,
     txCtx,
     transactionHooks,
     workerId,
   }: {
-    job: StateJob;
     fromJob: StateJob;
     continueWith: AnyContinueWith;
     txCtx: BaseTxContext;
@@ -47,7 +36,7 @@ export const continueChain = async (
     input: continueWith.input,
   });
 
-  const { job: continuation } = await continueStateJob(helpers, {
+  const { completedJob, continuation } = await continueStateJob(helpers, {
     job: {
       typeName: continueWith.typeName,
       id: continueWith.id,
@@ -56,16 +45,16 @@ export const continueChain = async (
       schedule: continueWith.schedule,
     },
     fromJob,
+    workerId,
     txCtx,
     transactionHooks,
   });
 
-  const completedJob = await finishJobAttempt(helpers, {
-    job,
-    txCtx,
+  bufferJobCompletedEvents(helpers, {
+    completedJob,
+    output: null,
+    continuation,
     transactionHooks,
-    workerId,
-    outcome: { continuation },
   });
 
   return { job: completedJob, continuation };

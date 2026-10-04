@@ -1,7 +1,8 @@
 import { A } from "@solidjs/router";
 import { For, Show, createResource } from "solid-js";
 
-import { type ChainTypeCounts, countByChainTypeNames, listChainTypeNames } from "../api.js";
+import { countByChainTypeNames, listChainTypeNames } from "../api.js";
+import { formatCount, formatTotalCount } from "./formatCount.js";
 
 export function ChainTypes() {
   const [typeNames] = createResource(listChainTypeNames);
@@ -13,11 +14,6 @@ export function ChainTypes() {
       return countByChainTypeNames(names);
     },
   );
-
-  const formatCount = (c: { count: number; hasMore: boolean }) =>
-    c.hasMore ? `${c.count.toLocaleString()}+` : c.count.toLocaleString();
-
-  const total = (entry: ChainTypeCounts) => entry.running.count + entry.completed.count;
 
   return (
     <div>
@@ -72,10 +68,7 @@ export function ChainTypes() {
                       </A>
                     </Show>
                   </td>
-                  <td>
-                    {total(entry).toLocaleString()}
-                    {entry.running.hasMore || entry.completed.hasMore ? "+" : ""}
-                  </td>
+                  <td>{formatTotalCount([entry.running, entry.completed])}</td>
                 </tr>
               )}
             </For>

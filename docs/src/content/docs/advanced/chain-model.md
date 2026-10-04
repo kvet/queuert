@@ -16,7 +16,7 @@ This document describes Queuert's unified job model and the Promise-inspired cha
 A **Job** is an individual unit of work with a lifecycle:
 
 ```
-pending → running → completed
+(blocked →) pending → running → completed
 ```
 
 Each job:
@@ -58,7 +58,7 @@ The fundamental insight: **the head job IS the chain**. Chains work like Promise
 
 For the head job in a chain: `job.id === job.chainId`
 
-This isn't redundant—it's a meaningful signal that identifies the chain starter. Continuation jobs have `job.id !== job.chainId` but share the same `chainId` as all other jobs in the chain.
+This isn't redundant—it's a meaningful signal that identifies the chain starter. Continuation jobs have `job.id !== job.chainId` but share the same `chainId` as all other jobs in the chain. Each job also carries its position as `job.chainIndex`: `0` for the head job, incrementing by one for each continuation.
 
 ```d2
 ...@../_classes.d2
@@ -83,7 +83,7 @@ Having the head job BE the chain (rather than a separate entity) provides:
 
 ### Simplicity
 
-- No separate `chain` table — chains are a view over the `job` table (plus a `job_blocker` junction table for dependencies)
+- No separate `chain` table — a chain's own facts (type name, status, deduplication key, trace context, completion time) live on its head row in the `job` table, and continuations are further rows in the same table (plus a `job_blocker` junction table for dependencies)
 - One primary type, one set of operations
 - No synchronization issues
 
@@ -97,7 +97,6 @@ The head job can be:
 
 ### Performance
 
-- `chainTypeName` denormalized on every job for O(1) filtering
 - No subqueries needed to find chains by type
 - Efficient at scale (millions of jobs)
 
@@ -144,13 +143,13 @@ Chains can depend on other chains to complete before starting:
 └──────────────┘
 ```
 
-Blockers are declared at the type level and provided via the `blockers` array when creating a chain. The main job starts as `pending` with `blocked: true` and transitions to `blocked: false` when all blockers complete.
+Blockers are declared at the type level and provided via the `blockers` array when creating a chain. The main job starts as `blocked` and transitions to `pending` when all blockers complete.
 
 ## Consistent Terminology
 
 Parallel entities use consistent lifecycle terminology to reduce cognitive load:
 
-- Job: `pending` → `running` → `completed`
+- Job: `blocked` → `pending` → `running` → `completed`
 - Chain: `running` → `completed`
 
 Avoid asymmetric naming (e.g., `started`/`finished` vs `created`/`completed`) even if individual terms seem natural. Consistency across the API produces fewer questions and faster comprehension.

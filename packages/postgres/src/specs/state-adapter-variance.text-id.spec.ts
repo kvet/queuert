@@ -13,14 +13,13 @@ it("index");
 
 describe("PostgreSQL State Adapter Variance - Text ID Type", () => {
   it("generates text job IDs", async ({ stateAdapter }) => {
-    const [{ job }] = await stateAdapter.withTransaction(async (txCtx) =>
-      stateAdapter.createChains({
+    const [stateChain] = await stateAdapter.withTransaction(async (txCtx) =>
+      stateAdapter.createJobs({
         txCtx,
         jobs: [{ typeName: "t", input: null }],
       }),
     );
-    expect(typeof job.id).toBe("string");
-    expect(job.id.length > 0).toBe(true);
+    expect(stateChain.head.id.length > 0).toBe(true);
   });
 
   it("creates tables in correct schema", ({ tableNames }) => {

@@ -1,7 +1,7 @@
 import { randomUUID } from "node:crypto";
 
 import { type BaseTxContext } from "queuert";
-import { type SeedSentinelsV2, seedConfigV2 } from "queuert/testing";
+import { type SeedSentinels, seedConfig } from "queuert/testing";
 
 import { type SqliteStateProvider } from "../state-provider/state-provider.sqlite.js";
 
@@ -12,10 +12,10 @@ const generateIds = (count: number): string[] => Array.from({ length: count }, (
 const futureTs = (ms: number) => `datetime('now', 'subsec', '+${ms / 1000} seconds')`;
 const pastTs = (seconds: number) => `datetime('now', 'subsec', '-${seconds} seconds')`;
 
-export const fastSeedAllStatesV2 = async <TTxContext extends BaseTxContext>(
+export const fastSeedAllStates = async <TTxContext extends BaseTxContext>(
   stateProvider: SqliteStateProvider<TTxContext>,
   { scale = 1, tablePrefix = "queuert_" }: { scale?: number; tablePrefix?: string } = {},
-): Promise<SeedSentinelsV2> => {
+): Promise<SeedSentinels> => {
   const job = `${tablePrefix}job`;
   const blockerTable = `${tablePrefix}job_blocker`;
 
@@ -43,62 +43,62 @@ export const fastSeedAllStatesV2 = async <TTxContext extends BaseTxContext>(
 
   // --- Block: Pending jobs ---
   const pendingIds: Record<string, string[]> = {};
-  for (const typeName of seedConfigV2.pendingTypes) {
-    const count = seedConfigV2.pendingPerType * scale;
+  for (const typeName of seedConfig.pendingTypes) {
+    const count = seedConfig.pendingPerType * scale;
     const ids = generateIds(count);
     pendingIds[typeName] = ids;
     await bulkInsertJobs(
       ids,
-      "id, type_name, chain_id, chain_type_name, chain_index, input, blocked, created_at",
+      "id, type_name, chain_id, chain_index, input, status, chain_status, created_at",
       (id, i) =>
-        `('${id}', '${typeName}', '${id}', '${typeName}', 0, '${JSON.stringify({ index: i })}', 0, ${pastTs(600)})`,
+        `('${id}', '${typeName}', '${id}', 0, '${JSON.stringify({ index: i })}', 'pending', 'running', ${pastTs(600)})`,
     );
   }
 
   // --- Block: Scheduled ---
-  const scheduledIds = generateIds(seedConfigV2.scheduledCount * scale);
+  const scheduledIds = generateIds(seedConfig.scheduledCount * scale);
   await bulkInsertJobs(
     scheduledIds,
-    "id, type_name, chain_id, chain_type_name, chain_index, input, blocked, scheduled_at, created_at",
+    "id, type_name, chain_id, chain_index, input, status, chain_status, scheduled_at, created_at",
     (id, i) =>
-      `('${id}', 'seed:scheduled', '${id}', 'seed:scheduled', 0, '${JSON.stringify({ index: i })}', 0, ${futureTs(seedConfigV2.futureMs)}, ${pastTs(600)})`,
+      `('${id}', 'seed:scheduled', '${id}', 0, '${JSON.stringify({ index: i })}', 'pending', 'running', ${futureTs(seedConfig.futureMs)}, ${pastTs(600)})`,
   );
 
   // --- Block: Running ---
   const runningIds: Record<string, string[]> = {};
-  for (const typeName of seedConfigV2.runningTypes) {
-    const count = seedConfigV2.runningPerType * scale;
+  for (const typeName of seedConfig.runningTypes) {
+    const count = seedConfig.runningPerType * scale;
     const ids = generateIds(count);
     runningIds[typeName] = ids;
     await bulkInsertJobs(
       ids,
-      "id, type_name, chain_id, chain_type_name, chain_index, input, blocked, attempt, attempt_at, attempt_by, attempt_until, created_at",
+      "id, type_name, chain_id, chain_index, input, status, chain_status, attempt, attempt_at, attempt_by, attempt_until, created_at",
       (id, i) =>
-        `('${id}', '${typeName}', '${id}', '${typeName}', 0, '${JSON.stringify({ index: i })}', 0, 1, datetime('now', 'subsec'), '${seedConfigV2.workerId}', ${futureTs(seedConfigV2.attemptMs)}, ${pastTs(540)})`,
+        `('${id}', '${typeName}', '${id}', 0, '${JSON.stringify({ index: i })}', 'running', 'running', 1, datetime('now', 'subsec'), '${seedConfig.workerId}', ${futureTs(seedConfig.attemptMs)}, ${pastTs(540)})`,
     );
   }
 
   // --- Block: Completed ---
   const completedIds: Record<string, string[]> = {};
-  for (const typeName of seedConfigV2.completedTypes) {
-    const count = seedConfigV2.completedPerType * scale;
+  for (const typeName of seedConfig.completedTypes) {
+    const count = seedConfig.completedPerType * scale;
     const ids = generateIds(count);
     completedIds[typeName] = ids;
     await bulkInsertJobs(
       ids,
-      "id, type_name, chain_id, chain_type_name, chain_index, input, blocked, attempt, completed_at, completed_by, output, created_at",
+      "id, type_name, chain_id, chain_index, input, status, chain_status, attempt, completed_at, completed_by, output, created_at, chain_completed_at",
       (id, i) =>
-        `('${id}', '${typeName}', '${id}', '${typeName}', 0, '${JSON.stringify({ index: i })}', 0, 1, ${pastTs(300)}, '${seedConfigV2.workerId}', '${JSON.stringify({ ok: true, index: i })}', ${pastTs(480)})`,
+        `('${id}', '${typeName}', '${id}', 0, '${JSON.stringify({ index: i })}', 'completed', 'completed', 1, ${pastTs(300)}, '${seedConfig.workerId}', '${JSON.stringify({ ok: true, index: i })}', ${pastTs(480)}, ${pastTs(300)})`,
     );
   }
 
   // --- Block: Retried ---
-  const retriedIds = generateIds(seedConfigV2.retriedCount * scale);
+  const retriedIds = generateIds(seedConfig.retriedCount * scale);
   await bulkInsertJobs(
     retriedIds,
-    "id, type_name, chain_id, chain_type_name, chain_index, input, blocked, attempt, last_attempt_at, last_attempt_error, scheduled_at, created_at",
+    "id, type_name, chain_id, chain_index, input, status, chain_status, attempt, last_attempt_at, last_attempt_error, scheduled_at, created_at",
     (id, i) =>
-      `('${id}', 'seed:retried', '${id}', 'seed:retried', 0, '${JSON.stringify({ index: i })}', 0, 1, datetime('now', 'subsec'), '"seeded transient failure"', ${futureTs(seedConfigV2.futureMs)}, ${pastTs(420)})`,
+      `('${id}', 'seed:retried', '${id}', 0, '${JSON.stringify({ index: i })}', 'pending', 'running', 1, datetime('now', 'subsec'), '"seeded transient failure"', ${futureTs(seedConfig.futureMs)}, ${pastTs(420)})`,
   );
 
   // --- Block: Fan-in (tiered) ---
@@ -106,7 +106,7 @@ export const fastSeedAllStatesV2 = async <TTxContext extends BaseTxContext>(
   let fanInBlockedJobId: string | undefined;
   let fanInBlockedCount = 0;
 
-  for (const tier of seedConfigV2.fanInTiers) {
+  for (const tier of seedConfig.fanInTiers) {
     const blockedCount = tier.blocked * scale;
     const blockerCount = tier.blockers;
     const tierName = `seed:blocked:fanin:${blockerCount}`;
@@ -116,18 +116,18 @@ export const fastSeedAllStatesV2 = async <TTxContext extends BaseTxContext>(
     fanInBlockerChainIds.push(...blockerIds);
     await bulkInsertJobs(
       blockerIds,
-      "id, type_name, chain_id, chain_type_name, chain_index, input, blocked, scheduled_at, created_at",
+      "id, type_name, chain_id, chain_index, input, status, chain_status, scheduled_at, created_at",
       (id, i) =>
-        `('${id}', '${tierBlockerName}', '${id}', '${tierBlockerName}', 0, '${JSON.stringify({ index: i })}', 0, ${futureTs(seedConfigV2.futureMs)}, ${pastTs(360)})`,
+        `('${id}', '${tierBlockerName}', '${id}', 0, '${JSON.stringify({ index: i })}', 'pending', 'running', ${futureTs(seedConfig.futureMs)}, ${pastTs(360)})`,
     );
 
     const blockedIds = generateIds(blockedCount);
     fanInBlockedJobId ??= blockedIds[0];
     await bulkInsertJobs(
       blockedIds,
-      "id, type_name, chain_id, chain_type_name, chain_index, input, blocked, created_at",
+      "id, type_name, chain_id, chain_index, input, status, chain_status, created_at",
       (id, i) =>
-        `('${id}', '${tierName}', '${id}', '${tierName}', 0, '${JSON.stringify({ index: i })}', 1, ${pastTs(120)})`,
+        `('${id}', '${tierName}', '${id}', 0, '${JSON.stringify({ index: i })}', 'blocked', 'running', ${pastTs(120)})`,
     );
 
     // Link each blocked job to all blockers in this tier
@@ -149,7 +149,7 @@ export const fastSeedAllStatesV2 = async <TTxContext extends BaseTxContext>(
   const fanOutBlockedJobIds: string[] = [];
   let fanOutBlockedCount = 0;
 
-  for (const tier of seedConfigV2.fanOutTiers) {
+  for (const tier of seedConfig.fanOutTiers) {
     const blockerCount = tier.blockers * scale;
     const blockedPerBlocker = tier.blockedPer;
     const totalBlocked = blockerCount * blockedPerBlocker;
@@ -160,9 +160,9 @@ export const fastSeedAllStatesV2 = async <TTxContext extends BaseTxContext>(
     fanOutBlockerChainId ??= blockerIds[0];
     await bulkInsertJobs(
       blockerIds,
-      "id, type_name, chain_id, chain_type_name, chain_index, input, blocked, scheduled_at, created_at",
+      "id, type_name, chain_id, chain_index, input, status, chain_status, scheduled_at, created_at",
       (id, i) =>
-        `('${id}', '${tierBlockerName}', '${id}', '${tierBlockerName}', 0, '${JSON.stringify({ index: i })}', 0, ${futureTs(seedConfigV2.futureMs)}, ${pastTs(360)})`,
+        `('${id}', '${tierBlockerName}', '${id}', 0, '${JSON.stringify({ index: i })}', 'pending', 'running', ${futureTs(seedConfig.futureMs)}, ${pastTs(360)})`,
     );
 
     const blockedIds = generateIds(totalBlocked);
@@ -171,9 +171,9 @@ export const fastSeedAllStatesV2 = async <TTxContext extends BaseTxContext>(
     }
     await bulkInsertJobs(
       blockedIds,
-      "id, type_name, chain_id, chain_type_name, chain_index, input, blocked, created_at",
+      "id, type_name, chain_id, chain_index, input, status, chain_status, created_at",
       (id, i) =>
-        `('${id}', '${tierBlockedName}', '${id}', '${tierBlockedName}', 0, '${JSON.stringify({ index: i })}', 1, ${pastTs(120)})`,
+        `('${id}', '${tierBlockedName}', '${id}', 0, '${JSON.stringify({ index: i })}', 'blocked', 'running', ${pastTs(120)})`,
     );
 
     // Each blocker blocks its own slice (round-robin assignment)
@@ -191,13 +191,13 @@ export const fastSeedAllStatesV2 = async <TTxContext extends BaseTxContext>(
   }
 
   // --- Block: Non-independent chains ---
-  const nonIndependentCount = seedConfigV2.nonIndependent * scale;
+  const nonIndependentCount = seedConfig.nonIndependent * scale;
   const nonIndependentIds = generateIds(nonIndependentCount);
   await bulkInsertJobs(
     nonIndependentIds,
-    "id, type_name, chain_id, chain_type_name, chain_index, input, blocked, created_at",
+    "id, type_name, chain_id, chain_index, input, status, chain_status, created_at",
     (id, i) =>
-      `('${id}', 'seed:nonindep', '${id}', 'seed:nonindep', 0, '${JSON.stringify({ index: i })}', 1, ${pastTs(60)})`,
+      `('${id}', 'seed:nonindep', '${id}', 0, '${JSON.stringify({ index: i })}', 'blocked', 'running', ${pastTs(60)})`,
   );
 
   for (let start = 0; start < nonIndependentIds.length; start += CHUNK) {
@@ -209,7 +209,7 @@ export const fastSeedAllStatesV2 = async <TTxContext extends BaseTxContext>(
   }
 
   // --- Block: Long chain with continuations ---
-  const chainLength = seedConfigV2.chainLength * scale;
+  const chainLength = seedConfig.chainLength * scale;
   const chainJobIds = generateIds(chainLength);
   const chainId = chainJobIds[0];
 
@@ -218,13 +218,13 @@ export const fastSeedAllStatesV2 = async <TTxContext extends BaseTxContext>(
     const isLast = step === chainLength - 1;
     if (isLast) {
       await exec(
-        `INSERT INTO ${job} (id, type_name, chain_id, chain_type_name, chain_index, input, blocked, created_at)
-         VALUES ('${id}', 'seed:chain', '${chainId}', 'seed:chain', ${step}, '${JSON.stringify({ n: step })}', 0, ${pastTs(180)})`,
+        `INSERT INTO ${job} (id, type_name, chain_id, chain_index, input, status, chain_status, created_at)
+         VALUES ('${id}', 'seed:chain', '${chainId}', ${step}, '${JSON.stringify({ n: step })}', 'pending', ${step === 0 ? "'running'" : "NULL"}, ${pastTs(180)})`,
       );
     } else {
       await exec(
-        `INSERT INTO ${job} (id, type_name, chain_id, chain_type_name, chain_index, input, blocked, attempt, completed_at, completed_by, created_at)
-         VALUES ('${id}', 'seed:chain', '${chainId}', 'seed:chain', ${step}, '${JSON.stringify({ n: step })}', 0, 1, ${pastTs(180)}, '${seedConfigV2.workerId}', ${pastTs(180)})`,
+        `INSERT INTO ${job} (id, type_name, chain_id, chain_index, input, status, chain_status, attempt, completed_at, completed_by, created_at)
+         VALUES ('${id}', 'seed:chain', '${chainId}', ${step}, '${JSON.stringify({ n: step })}', 'completed', ${step === 0 ? "'running'" : "NULL"}, 1, ${pastTs(180)}, '${seedConfig.workerId}', ${pastTs(180)})`,
       );
     }
   }
@@ -236,80 +236,56 @@ export const fastSeedAllStatesV2 = async <TTxContext extends BaseTxContext>(
   }
 
   // --- Block: Throwaway pending ---
-  const throwawayPendingIds = generateIds(seedConfigV2.throwawayPending * scale);
+  const throwawayPendingIds = generateIds(seedConfig.throwawayPending * scale);
   await bulkInsertJobs(
     throwawayPendingIds,
-    "id, type_name, chain_id, chain_type_name, chain_index, input, blocked",
+    "id, type_name, chain_id, chain_index, input, status, chain_status",
     (id, i) =>
-      `('${id}', 'seed:throwaway:pending', '${id}', 'seed:throwaway:pending', 0, '${JSON.stringify({ index: i })}', 0)`,
+      `('${id}', 'seed:throwaway:pending', '${id}', 0, '${JSON.stringify({ index: i })}', 'pending', 'running')`,
   );
 
   // --- Block: Throwaway running ---
-  const throwawayRunningIds = generateIds(seedConfigV2.throwawayRunning * scale);
+  const throwawayRunningIds = generateIds(seedConfig.throwawayRunning * scale);
   await bulkInsertJobs(
     throwawayRunningIds,
-    "id, type_name, chain_id, chain_type_name, chain_index, input, blocked, attempt, attempt_at, attempt_by, attempt_until",
+    "id, type_name, chain_id, chain_index, input, status, chain_status, attempt, attempt_at, attempt_by, attempt_until",
     (id, i) =>
-      `('${id}', 'seed:throwaway:running', '${id}', 'seed:throwaway:running', 0, '${JSON.stringify({ index: i })}', 0, 1, datetime('now', 'subsec'), '${seedConfigV2.workerId}', ${futureTs(seedConfigV2.attemptMs)})`,
+      `('${id}', 'seed:throwaway:running', '${id}', 0, '${JSON.stringify({ index: i })}', 'running', 'running', 1, datetime('now', 'subsec'), '${seedConfig.workerId}', ${futureTs(seedConfig.attemptMs)})`,
   );
 
   // --- Block: Throwaway expired running ---
-  const throwawayExpiredIds = generateIds(seedConfigV2.throwawayExpiredRunning * scale);
+  const throwawayExpiredIds = generateIds(seedConfig.throwawayExpiredRunning * scale);
   await bulkInsertJobs(
     throwawayExpiredIds,
-    "id, type_name, chain_id, chain_type_name, chain_index, input, blocked, attempt, attempt_at, attempt_by, attempt_until, created_at",
+    "id, type_name, chain_id, chain_index, input, status, chain_status, attempt, attempt_at, attempt_by, attempt_until, created_at",
     (id, i) =>
-      `('${id}', 'seed:throwaway:expired', '${id}', 'seed:throwaway:expired', 0, '${JSON.stringify({ index: i })}', 0, 1, ${pastTs(600)}, '${seedConfigV2.workerId}', ${pastTs(300)}, ${pastTs(900)})`,
+      `('${id}', 'seed:throwaway:expired', '${id}', 0, '${JSON.stringify({ index: i })}', 'running', 'running', 1, ${pastTs(600)}, '${seedConfig.workerId}', ${pastTs(300)}, ${pastTs(900)})`,
   );
 
   // --- Block: Throwaway chains ---
-  const throwawayChainIds = generateIds(seedConfigV2.throwawayChains * scale);
+  const throwawayChainIds = generateIds(seedConfig.throwawayChains * scale);
   await bulkInsertJobs(
     throwawayChainIds,
-    "id, type_name, chain_id, chain_type_name, chain_index, input, blocked",
+    "id, type_name, chain_id, chain_index, input, status, chain_status",
     (id, i) =>
-      `('${id}', 'seed:throwaway:chain', '${id}', 'seed:throwaway:chain', 0, '${JSON.stringify({ index: i })}', 0)`,
-  );
-
-  // --- Block: Throwaway cascade chains ---
-  const throwawayCascadeParentIds = generateIds(seedConfigV2.throwawayCascadeChains * scale);
-  await bulkInsertJobs(
-    throwawayCascadeParentIds,
-    "id, type_name, chain_id, chain_type_name, chain_index, input, blocked",
-    (id, i) =>
-      `('${id}', 'seed:throwaway:cascade-parent', '${id}', 'seed:throwaway:cascade-parent', 0, '${JSON.stringify({ index: i })}', 0)`,
-  );
-
-  const throwawayCascadeChildIds = generateIds(seedConfigV2.throwawayCascadeChains * scale);
-  await bulkInsertJobs(
-    throwawayCascadeChildIds,
-    "id, type_name, chain_id, chain_type_name, chain_index, input, blocked",
-    (id, i) =>
-      `('${id}', 'seed:throwaway:cascade-child', '${id}', 'seed:throwaway:cascade-child', 0, '${JSON.stringify({ index: i })}', 1)`,
-  );
-
-  const cascadeBlockerRows = throwawayCascadeChildIds.map(
-    (childId, i) => `('${childId}', '${throwawayCascadeParentIds[i]}', 0)`,
-  );
-  await exec(
-    `INSERT INTO ${blockerTable} (job_id, blocked_by_chain_id, "index") VALUES ${cascadeBlockerRows.join(", ")}`,
+      `('${id}', 'seed:throwaway:chain', '${id}', 0, '${JSON.stringify({ index: i })}', 'pending', 'running')`,
   );
 
   // --- Block: Throwaway unblockers ---
-  const throwawayUnblockerIds = generateIds(seedConfigV2.throwawayUnblockers * scale);
+  const throwawayUnblockerIds = generateIds(seedConfig.throwawayUnblockers * scale);
   await bulkInsertJobs(
     throwawayUnblockerIds,
-    "id, type_name, chain_id, chain_type_name, chain_index, input, blocked, scheduled_at",
+    "id, type_name, chain_id, chain_index, input, status, chain_status, scheduled_at",
     (id, i) =>
-      `('${id}', 'seed:throwaway:unblocker', '${id}', 'seed:throwaway:unblocker', 0, '${JSON.stringify({ index: i })}', 0, ${futureTs(seedConfigV2.futureMs)})`,
+      `('${id}', 'seed:throwaway:unblocker', '${id}', 0, '${JSON.stringify({ index: i })}', 'pending', 'running', ${futureTs(seedConfig.futureMs)})`,
   );
 
-  const throwawayUnblockTargetIds = generateIds(seedConfigV2.throwawayUnblockers * scale);
+  const throwawayUnblockTargetIds = generateIds(seedConfig.throwawayUnblockers * scale);
   await bulkInsertJobs(
     throwawayUnblockTargetIds,
-    "id, type_name, chain_id, chain_type_name, chain_index, input, blocked",
+    "id, type_name, chain_id, chain_index, input, status, chain_status",
     (id, i) =>
-      `('${id}', 'seed:throwaway:unblock-target', '${id}', 'seed:throwaway:unblock-target', 0, '${JSON.stringify({ index: i })}', 1)`,
+      `('${id}', 'seed:throwaway:unblock-target', '${id}', 0, '${JSON.stringify({ index: i })}', 'blocked', 'running')`,
   );
 
   const unblockerRows = throwawayUnblockTargetIds.map(
@@ -321,20 +297,20 @@ export const fastSeedAllStatesV2 = async <TTxContext extends BaseTxContext>(
 
   return {
     pending: {
-      jobId: pendingIds[seedConfigV2.pendingTypes[0]][0],
-      typeNames: [...seedConfigV2.pendingTypes],
+      jobId: pendingIds[seedConfig.pendingTypes[0]][0],
+      typeNames: [...seedConfig.pendingTypes],
     },
     scheduled: {
       jobId: scheduledIds[0],
       typeName: "seed:scheduled",
     },
     running: {
-      jobId: runningIds[seedConfigV2.runningTypes[0]][0],
-      typeNames: [...seedConfigV2.runningTypes],
+      jobId: runningIds[seedConfig.runningTypes[0]][0],
+      typeNames: [...seedConfig.runningTypes],
     },
     completed: {
-      jobId: completedIds[seedConfigV2.completedTypes[0]][0],
-      typeNames: [...seedConfigV2.completedTypes],
+      jobId: completedIds[seedConfig.completedTypes[0]][0],
+      typeNames: [...seedConfig.completedTypes],
     },
     retried: {
       jobId: retriedIds[0],
@@ -349,7 +325,7 @@ export const fastSeedAllStatesV2 = async <TTxContext extends BaseTxContext>(
     fanIn: {
       blockerChainIds: fanInBlockerChainIds,
       blockedCount: fanInBlockedCount,
-      blockersPerJob: seedConfigV2.fanInTiers[seedConfigV2.fanInTiers.length - 1].blockers,
+      blockersPerJob: seedConfig.fanInTiers[seedConfig.fanInTiers.length - 1].blockers,
       blockedJobId: fanInBlockedJobId!,
     },
     fanOut: {
@@ -366,7 +342,6 @@ export const fastSeedAllStatesV2 = async <TTxContext extends BaseTxContext>(
       runningTypeName: "seed:throwaway:running",
       expiredRunningTypeName: "seed:throwaway:expired",
       chainIds: throwawayChainIds,
-      cascadeChainIds: throwawayCascadeParentIds,
       unblockerChainIds: throwawayUnblockerIds,
     },
   };

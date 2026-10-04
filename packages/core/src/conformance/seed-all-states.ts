@@ -2,9 +2,10 @@ import {
   type BaseTxContext,
   type StateAdapter,
   type StateJob,
+  type StateJobInfo,
 } from "../state-adapter/state-adapter.js";
 
-export type SeedSentinelsV2 = {
+export type SeedSentinels = {
   pending: {
     jobId: string;
     typeNames: string[];
@@ -51,12 +52,11 @@ export type SeedSentinelsV2 = {
     runningTypeName: string;
     expiredRunningTypeName: string;
     chainIds: string[];
-    cascadeChainIds: string[];
     unblockerChainIds: string[];
   };
 };
 
-export const seedConfigV2 = {
+export const seedConfig = {
   workerId: "seed-worker",
   attemptMs: 3600000, // 60 * 60 * 1000
   futureMs: 86400000, // 24 * 60 * 60 * 1000
@@ -84,7 +84,6 @@ export const seedConfigV2 = {
   throwawayRunning: 20,
   throwawayExpiredRunning: 20,
   throwawayChains: 20,
-  throwawayCascadeChains: 20,
   throwawayUnblockers: 20,
 } as const;
 
@@ -99,30 +98,30 @@ const chunkIndexes = (total: number, size: number): number[][] => {
   return chunks;
 };
 
-export const seedAllStatesV2 = async <TTxContext extends BaseTxContext>(
+export const seedAllStates = async <TTxContext extends BaseTxContext>(
   stateAdapter: StateAdapter<TTxContext, string>,
   { scale = 1 }: { scale?: number } = {},
-): Promise<SeedSentinelsV2> => {
+): Promise<SeedSentinels> => {
   const headJob = (typeName: string, index: number, schedule?: { afterMs: number }) => ({
     typeName,
     input: { index },
     ...(schedule ? { schedule } : {}),
   });
 
-  const createRoots = async (
+  const createChains = async (
     typeName: string,
     total: number,
     schedule?: { afterMs: number },
-  ): Promise<StateJob[]> => {
-    const created: StateJob[] = [];
+  ): Promise<StateJobInfo[]> => {
+    const created: StateJobInfo[] = [];
     for (const indexes of chunkIndexes(total, CREATE_CHUNK)) {
       const results = await stateAdapter.withTransaction(async (txCtx) =>
-        stateAdapter.createChains({
+        stateAdapter.createJobs({
           txCtx,
           jobs: indexes.map((i) => headJob(typeName, i, schedule)),
         }),
       );
-      created.push(...results.map((r) => r.job));
+      created.push(...results.map((r) => r.head));
     }
     return created;
   };
@@ -135,48 +134,51 @@ export const seedAllStatesV2 = async <TTxContext extends BaseTxContext>(
     const processed: StateJob[] = [];
     for (const indexes of chunkIndexes(total, PROCESS_CHUNK)) {
       const batch = await stateAdapter.withTransaction(async (txCtx) => {
-        await stateAdapter.createChains({
+        await stateAdapter.createJobs({
           txCtx,
           jobs: indexes.map((i) => headJob(typeName, i)),
         });
         const jobs: StateJob[] = [];
         for (let k = 0; k < indexes.length; k++) {
-          const { job } = await stateAdapter.startJobAttempt({
+          const job = await stateAdapter.startJobAttempt({
             txCtx,
             typeNames: [typeName],
-            workerId: seedConfigV2.workerId,
+            workerId: seedConfig.workerId,
           });
           if (!job) break;
           if (mode === "running") {
             jobs.push(
-              await stateAdapter.extendJobAttempt({
+              (await stateAdapter.extendJobAttempt({
                 txCtx,
                 jobId: job.id,
-                workerId: seedConfigV2.workerId,
-                timeoutMs: seedConfigV2.attemptMs,
-              }),
+                workerId: seedConfig.workerId,
+                timeoutMs: seedConfig.attemptMs,
+              }))!,
             );
           } else if (mode === "completed") {
-            jobs.push(
-              await stateAdapter.finishJobAttempt({
-                txCtx,
-                jobId: job.id,
-                workerId: seedConfigV2.workerId,
-                outcome: { output: { ok: true, index: (job.input as { index: number }).index } },
-              }),
-            );
-          } else {
-            jobs.push(
-              await stateAdapter.finishJobAttempt({
-                txCtx,
-                jobId: job.id,
-                workerId: seedConfigV2.workerId,
-                outcome: {
-                  error: "seeded transient failure",
-                  schedule: { afterMs: seedConfigV2.futureMs },
+            const completed = await stateAdapter.completeJobs({
+              txCtx,
+              completedBy: seedConfig.workerId,
+              jobs: [
+                {
+                  jobId: job.id,
+                  output: { ok: true, index: (job.input as { index: number }).index },
                 },
-              }),
-            );
+              ],
+            });
+            jobs.push(...completed.filter((entry) => entry !== undefined));
+          } else {
+            const [rescheduled] = await stateAdapter.rescheduleJobs({
+              txCtx,
+              jobs: [
+                {
+                  jobId: job.id,
+                  schedule: { afterMs: seedConfig.futureMs },
+                  error: "seeded transient failure",
+                },
+              ],
+            });
+            jobs.push(rescheduled!);
           }
         }
         return jobs;
@@ -187,77 +189,69 @@ export const seedAllStatesV2 = async <TTxContext extends BaseTxContext>(
   };
 
   // --- Block: Pending jobs (created first = earlier createdAt) ---
-  const pendingJobs: StateJob[] = [];
-  for (const typeName of seedConfigV2.pendingTypes) {
-    const jobs = await createRoots(typeName, seedConfigV2.pendingPerType * scale);
+  const pendingJobs: StateJobInfo[] = [];
+  for (const typeName of seedConfig.pendingTypes) {
+    const jobs = await createChains(typeName, seedConfig.pendingPerType * scale);
     pendingJobs.push(...jobs);
   }
 
   // --- Block: Scheduled ---
-  const scheduled = await createRoots("seed:scheduled", seedConfigV2.scheduledCount * scale, {
-    afterMs: seedConfigV2.futureMs,
+  const scheduled = await createChains("seed:scheduled", seedConfig.scheduledCount * scale, {
+    afterMs: seedConfig.futureMs,
   });
 
   // --- Block: Running ---
   const runningJobs: StateJob[] = [];
-  for (const typeName of seedConfigV2.runningTypes) {
-    const jobs = await createProcessed(typeName, seedConfigV2.runningPerType * scale, "running");
+  for (const typeName of seedConfig.runningTypes) {
+    const jobs = await createProcessed(typeName, seedConfig.runningPerType * scale, "running");
     runningJobs.push(...jobs);
   }
 
   // --- Block: Completed (non-continued, created before continued ones) ---
   const completedJobs: StateJob[] = [];
-  for (const typeName of seedConfigV2.completedTypes) {
-    const jobs = await createProcessed(
-      typeName,
-      seedConfigV2.completedPerType * scale,
-      "completed",
-    );
+  for (const typeName of seedConfig.completedTypes) {
+    const jobs = await createProcessed(typeName, seedConfig.completedPerType * scale, "completed");
     completedJobs.push(...jobs);
   }
 
   // --- Block: Retried ---
-  const retried = await createProcessed(
-    "seed:retried",
-    seedConfigV2.retriedCount * scale,
-    "retried",
-  );
+  const retried = await createProcessed("seed:retried", seedConfig.retriedCount * scale, "retried");
 
   // --- Block: Fan-in (tiered: many×1, medium×10, few×100) ---
-  const fanInBlockerChains: StateJob[] = [];
-  const fanInBlocked: StateJob[] = [];
+  const fanInBlockerChains: StateJobInfo[] = [];
+  const fanInBlocked: StateJobInfo[] = [];
   let fanInBlockedCount = 0;
 
-  for (const tier of seedConfigV2.fanInTiers) {
+  for (const tier of seedConfig.fanInTiers) {
     const tierBlockerName = `seed:blocker:gate:${tier.blockers}`;
     const tierBlockedName = `seed:blocked:fanin:${tier.blockers}`;
 
-    const tierBlockers: StateJob[] = [];
+    const tierBlockers: StateJobInfo[] = [];
     for (const indexes of chunkIndexes(tier.blockers, CREATE_CHUNK)) {
       const results = await stateAdapter.withTransaction(async (txCtx) =>
-        stateAdapter.createChains({
+        stateAdapter.createJobs({
           txCtx,
-          jobs: indexes.map((i) => headJob(tierBlockerName, i, { afterMs: seedConfigV2.futureMs })),
+          jobs: indexes.map((i) => headJob(tierBlockerName, i, { afterMs: seedConfig.futureMs })),
         }),
       );
-      tierBlockers.push(...results.map((r) => r.job));
+      tierBlockers.push(...results.map((r) => r.head));
     }
     fanInBlockerChains.push(...tierBlockers);
 
     for (const indexes of chunkIndexes(tier.blocked * scale, CREATE_CHUNK / 2)) {
       const batch = await stateAdapter.withTransaction(async (txCtx) => {
-        const created = await stateAdapter.createChains({
+        const created = await stateAdapter.createJobs({
           txCtx,
           jobs: indexes.map((i) => headJob(tierBlockedName, i)),
         });
         await stateAdapter.addJobsBlockers({
           txCtx,
-          jobBlockers: created.map(({ job }) => ({
-            jobId: job.id,
+          jobBlockers: created.map((r) => ({
+            jobId: r.head.id,
             blockedByChainIds: tierBlockers.map((b) => b.chainId),
           })),
         });
-        return created.map((r) => r.job);
+        return created.map((r) => r.head);
       });
       fanInBlocked.push(...batch);
     }
@@ -266,23 +260,23 @@ export const seedAllStatesV2 = async <TTxContext extends BaseTxContext>(
 
   // --- Block: Fan-out (tiered: 1→1000, 10→100, 100→10) ---
   let fanOutBlockerChainId: string | undefined;
-  const fanOutBlocked: StateJob[] = [];
+  const fanOutBlocked: StateJobInfo[] = [];
   let fanOutBlockedCount = 0;
 
-  for (const tier of seedConfigV2.fanOutTiers) {
+  for (const tier of seedConfig.fanOutTiers) {
     const tierBlockerName = `seed:blocker:fanout:${tier.blockers}`;
     const tierBlockedName = `seed:blocked:fanout:${tier.blockers}`;
 
-    const tierBlockers: StateJob[] = [];
+    const tierBlockers: StateJobInfo[] = [];
     const scaledBlockers = tier.blockers * scale;
     for (const indexes of chunkIndexes(scaledBlockers, CREATE_CHUNK)) {
       const results = await stateAdapter.withTransaction(async (txCtx) =>
-        stateAdapter.createChains({
+        stateAdapter.createJobs({
           txCtx,
-          jobs: indexes.map((i) => headJob(tierBlockerName, i, { afterMs: seedConfigV2.futureMs })),
+          jobs: indexes.map((i) => headJob(tierBlockerName, i, { afterMs: seedConfig.futureMs })),
         }),
       );
-      tierBlockers.push(...results.map((r) => r.job));
+      tierBlockers.push(...results.map((r) => r.head));
     }
     fanOutBlockerChainId ??= tierBlockers[0].chainId;
 
@@ -290,18 +284,18 @@ export const seedAllStatesV2 = async <TTxContext extends BaseTxContext>(
       const blocker = tierBlockers[bIdx];
       for (const indexes of chunkIndexes(tier.blockedPer, CREATE_CHUNK / 2)) {
         const batch = await stateAdapter.withTransaction(async (txCtx) => {
-          const created = await stateAdapter.createChains({
+          const created = await stateAdapter.createJobs({
             txCtx,
             jobs: indexes.map((i) => headJob(tierBlockedName, bIdx * tier.blockedPer + i)),
           });
           await stateAdapter.addJobsBlockers({
             txCtx,
-            jobBlockers: created.map(({ job }) => ({
-              jobId: job.id,
+            jobBlockers: created.map((r) => ({
+              jobId: r.head.id,
               blockedByChainIds: [blocker.chainId],
             })),
           });
-          return created.map((r) => r.job);
+          return created.map((r) => r.head);
         });
         fanOutBlocked.push(...batch);
       }
@@ -310,87 +304,79 @@ export const seedAllStatesV2 = async <TTxContext extends BaseTxContext>(
   }
 
   // --- Block: Non-independent chains (blocked by fan-in gate, created AFTER unblocked) ---
-  const nonIndependentCount = seedConfigV2.nonIndependent * scale;
-  const nonIndependent: StateJob[] = [];
+  const nonIndependentCount = seedConfig.nonIndependent * scale;
+  const nonIndependent: StateJobInfo[] = [];
   for (const indexes of chunkIndexes(nonIndependentCount, CREATE_CHUNK / 2)) {
     const batch = await stateAdapter.withTransaction(async (txCtx) => {
-      const created = await stateAdapter.createChains({
+      const created = await stateAdapter.createJobs({
         txCtx,
         jobs: indexes.map((i) => headJob("seed:nonindep", i)),
       });
       await stateAdapter.addJobsBlockers({
         txCtx,
-        jobBlockers: created.map(({ job }) => ({
-          jobId: job.id,
+        jobBlockers: created.map((r) => ({
+          jobId: r.head.id,
           blockedByChainIds: [fanInBlockerChains[0].chainId],
         })),
       });
-      return created.map((r) => r.job);
+      return created.map((r) => r.head);
     });
     nonIndependent.push(...batch);
   }
 
   // --- Block: Long chain with continuations ---
-  const chainLength = seedConfigV2.chainLength * scale;
-  const [{ job: chainRoot }] = await stateAdapter.withTransaction(async (txCtx) =>
-    stateAdapter.createChains({
+  const chainLength = seedConfig.chainLength * scale;
+  const [longChain] = await stateAdapter.withTransaction(async (txCtx) =>
+    stateAdapter.createJobs({
       txCtx,
       jobs: [{ typeName: "seed:chain", input: { n: 0 } }],
     }),
   );
-  let lastChainJob = chainRoot;
+  let longChainTail = longChain.head;
   for (let step = 1; step < chainLength; step++) {
     await stateAdapter.withTransaction(async (txCtx) => {
-      const { job } = await stateAdapter.startJobAttempt({
+      const acquired = await stateAdapter.startJobAttempt({
         txCtx,
         typeNames: ["seed:chain"],
-        workerId: seedConfigV2.workerId,
+        workerId: seedConfig.workerId,
       });
-      if (!job) return;
-      const { job: continuation } = await stateAdapter.createContinuationJob({
+      if (!acquired) return;
+      const [continued] = await stateAdapter.continueJobs({
         txCtx,
-        job: {
-          typeName: "seed:chain",
-          input: { n: step },
-          continueFromId: job.id,
-        },
+        completedBy: seedConfig.workerId,
+        jobs: [{ typeName: "seed:chain", input: { n: step }, continueFromId: acquired.id }],
       });
-      await stateAdapter.finishJobAttempt({
-        txCtx,
-        jobId: job.id,
-        workerId: seedConfigV2.workerId,
-        outcome: { continuedToId: continuation.id },
-      });
-      lastChainJob = continuation;
+      const { continuation } = continued!;
+      longChainTail = continuation;
     });
   }
 
   // --- Block: Throwaway inventory (consumed by operational query benchmarks) ---
-  await createRoots("seed:throwaway:pending", seedConfigV2.throwawayPending * scale);
-  await createProcessed("seed:throwaway:running", seedConfigV2.throwawayRunning * scale, "running");
+  await createChains("seed:throwaway:pending", seedConfig.throwawayPending * scale);
+  await createProcessed("seed:throwaway:running", seedConfig.throwawayRunning * scale, "running");
 
   const throwawayExpiredRunning: StateJob[] = [];
-  for (const indexes of chunkIndexes(seedConfigV2.throwawayExpiredRunning * scale, PROCESS_CHUNK)) {
+  for (const indexes of chunkIndexes(seedConfig.throwawayExpiredRunning * scale, PROCESS_CHUNK)) {
     const batch = await stateAdapter.withTransaction(async (txCtx) => {
-      await stateAdapter.createChains({
+      await stateAdapter.createJobs({
         txCtx,
         jobs: indexes.map((i) => headJob("seed:throwaway:expired", i)),
       });
       const jobs: StateJob[] = [];
       for (let k = 0; k < indexes.length; k++) {
-        const { job } = await stateAdapter.startJobAttempt({
+        const job = await stateAdapter.startJobAttempt({
           txCtx,
           typeNames: ["seed:throwaway:expired"],
-          workerId: seedConfigV2.workerId,
+          workerId: seedConfig.workerId,
         });
         if (!job) break;
         jobs.push(
-          await stateAdapter.extendJobAttempt({
+          (await stateAdapter.extendJobAttempt({
             txCtx,
             jobId: job.id,
-            workerId: seedConfigV2.workerId,
+            workerId: seedConfig.workerId,
             timeoutMs: 1,
-          }),
+          }))!,
         );
       }
       return jobs;
@@ -399,60 +385,35 @@ export const seedAllStatesV2 = async <TTxContext extends BaseTxContext>(
   }
 
   const throwawayChainResults = await stateAdapter.withTransaction(async (txCtx) =>
-    stateAdapter.createChains({
+    stateAdapter.createJobs({
       txCtx,
-      jobs: Array.from({ length: seedConfigV2.throwawayChains * scale }, (_, i) => ({
+      jobs: Array.from({ length: seedConfig.throwawayChains * scale }, (_, i) => ({
         typeName: "seed:throwaway:chain",
         input: { index: i },
       })),
     }),
   );
 
-  const throwawayCascadeResults = await stateAdapter.withTransaction(async (txCtx) => {
-    const parents = await stateAdapter.createChains({
-      txCtx,
-      jobs: Array.from({ length: seedConfigV2.throwawayCascadeChains * scale }, (_, i) => ({
-        typeName: "seed:throwaway:cascade-parent",
-        input: { index: i },
-      })),
-    });
-    const children = await stateAdapter.createChains({
-      txCtx,
-      jobs: Array.from({ length: seedConfigV2.throwawayCascadeChains * scale }, (_, i) => ({
-        typeName: "seed:throwaway:cascade-child",
-        input: { index: i },
-      })),
-    });
-    await stateAdapter.addJobsBlockers({
-      txCtx,
-      jobBlockers: children.map(({ job }, i) => ({
-        jobId: job.id,
-        blockedByChainIds: [parents[i].job.chainId],
-      })),
-    });
-    return parents;
-  });
-
   const throwawayUnblockerResults = await stateAdapter.withTransaction(async (txCtx) => {
-    const blockers = await stateAdapter.createChains({
+    const blockers = await stateAdapter.createJobs({
       txCtx,
-      jobs: Array.from({ length: seedConfigV2.throwawayUnblockers * scale }, (_, i) => ({
+      jobs: Array.from({ length: seedConfig.throwawayUnblockers * scale }, (_, i) => ({
         typeName: "seed:throwaway:unblocker",
         input: { index: i },
       })),
     });
-    const targets = await stateAdapter.createChains({
+    const targets = await stateAdapter.createJobs({
       txCtx,
-      jobs: Array.from({ length: seedConfigV2.throwawayUnblockers * scale }, (_, i) => ({
+      jobs: Array.from({ length: seedConfig.throwawayUnblockers * scale }, (_, i) => ({
         typeName: "seed:throwaway:unblock-target",
         input: { index: i },
       })),
     });
     await stateAdapter.addJobsBlockers({
       txCtx,
-      jobBlockers: targets.map(({ job }, i) => ({
-        jobId: job.id,
-        blockedByChainIds: [blockers[i].job.chainId],
+      jobBlockers: targets.map((t, i) => ({
+        jobId: t.head.id,
+        blockedByChainIds: [blockers[i].id],
       })),
     });
     return blockers;
@@ -461,7 +422,7 @@ export const seedAllStatesV2 = async <TTxContext extends BaseTxContext>(
   return {
     pending: {
       jobId: pendingJobs[0].id,
-      typeNames: [...seedConfigV2.pendingTypes],
+      typeNames: [...seedConfig.pendingTypes],
     },
     scheduled: {
       jobId: scheduled[0].id,
@@ -469,26 +430,26 @@ export const seedAllStatesV2 = async <TTxContext extends BaseTxContext>(
     },
     running: {
       jobId: runningJobs[0].id,
-      typeNames: [...seedConfigV2.runningTypes],
+      typeNames: [...seedConfig.runningTypes],
     },
     completed: {
       jobId: completedJobs[0].id,
-      typeNames: [...seedConfigV2.completedTypes],
+      typeNames: [...seedConfig.completedTypes],
     },
     retried: {
       jobId: retried[0].id,
       typeName: "seed:retried",
     },
     longChain: {
-      chainId: chainRoot.chainId,
+      chainId: longChain.head.chainId,
       length: chainLength,
-      headJobId: chainRoot.id,
-      tailJobId: lastChainJob.id,
+      headJobId: longChain.head.id,
+      tailJobId: longChainTail.id,
     },
     fanIn: {
       blockerChainIds: fanInBlockerChains.map((j) => j.chainId),
       blockedCount: fanInBlockedCount,
-      blockersPerJob: seedConfigV2.fanInTiers[seedConfigV2.fanInTiers.length - 1].blockers,
+      blockersPerJob: seedConfig.fanInTiers[seedConfig.fanInTiers.length - 1].blockers,
       blockedJobId: fanInBlocked[0].id,
     },
     fanOut: {
@@ -504,9 +465,8 @@ export const seedAllStatesV2 = async <TTxContext extends BaseTxContext>(
       pendingTypeName: "seed:throwaway:pending",
       runningTypeName: "seed:throwaway:running",
       expiredRunningTypeName: "seed:throwaway:expired",
-      chainIds: throwawayChainResults.map((r) => r.job.chainId),
-      cascadeChainIds: throwawayCascadeResults.map((r) => r.job.chainId),
-      unblockerChainIds: throwawayUnblockerResults.map((r) => r.job.chainId),
+      chainIds: throwawayChainResults.map((r) => r.id),
+      unblockerChainIds: throwawayUnblockerResults.map((r) => r.id),
     },
   };
 };

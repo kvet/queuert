@@ -23,7 +23,7 @@ Attribute names follow OpenTelemetry semantic conventions (lowercase, dotted) an
 
 - `queuert.worker.id` — worker identifier
 - `queuert.job.type` — job type name
-- `queuert.chain.type` — chain (entry job) type name
+- `queuert.chain.type` — chain type name
 - `queuert.job.continued` — boolean: `true` if the completion produced a continuation, `false` otherwise
 - `queuert.adapter.operation` — adapter operation that produced an error
 
@@ -42,7 +42,7 @@ Attribute names follow OpenTelemetry semantic conventions (lowercase, dotted) an
 | ------------------------- | -------------------------------------------------------------------------------------- | ------------------------------------------------------------------------ |
 | `queuert.job.created`     | `queuert.job.type`, `queuert.chain.type`                                               | Job created                                                              |
 | `queuert.job.completed`   | `queuert.job.type`, `queuert.chain.type`, `queuert.worker.id`, `queuert.job.continued` | Job completed. `queuert.worker.id` is omitted for workerless completion. |
-| `queuert.job.blocked`     | `queuert.job.type`, `queuert.chain.type`                                               | Job blocked by pending blocker chains                                    |
+| `queuert.job.blocked`     | `queuert.job.type`, `queuert.chain.type`                                               | Job blocked by incomplete blocker chains                                 |
 | `queuert.job.rescheduled` | `queuert.job.type`, `queuert.chain.type`                                               | Pending job rescheduled by a client                                      |
 | `queuert.job.unblocked`   | `queuert.job.type`, `queuert.chain.type`                                               | Job unblocked after blocker chain completed                              |
 

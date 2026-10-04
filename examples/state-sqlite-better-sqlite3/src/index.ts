@@ -2,19 +2,17 @@ import { createAsyncRwLock, createSqliteStateAdapter } from "@queuert/sqlite";
 import Database from "better-sqlite3";
 import {
   createClient,
+  createInProcessNotifyAdapter,
   createInProcessWorker,
   createProcessors,
   defineJobTypes,
   withTransactionHooks,
-  createInProcessNotifyAdapter,
 } from "queuert";
 
 import { createBetterSqlite3StateProvider } from "./provider.js";
 
 // 1. Create in-memory SQLite database
 const db = new Database(":memory:");
-db.pragma("auto_vacuum = INCREMENTAL");
-db.pragma("foreign_keys = ON");
 
 // 2. Create application schema
 db.exec(`

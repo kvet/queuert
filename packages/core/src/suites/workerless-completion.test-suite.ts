@@ -2,7 +2,11 @@ import { type TestAPI, expectTypeOf, vi } from "vitest";
 
 import { createClient } from "../client.js";
 import { defineJobTypes } from "../entities/define-job-types.js";
-import { BlockerLimitExceededError, ChainTypeMismatchError } from "../errors.js";
+import {
+  BlockerLimitExceededError,
+  ChainTypeMismatchError,
+  JobAlreadyCompletedError,
+} from "../errors.js";
 import { sleep } from "../helpers/sleep.js";
 import { createInProcessWorker } from "../in-process-worker.js";
 import { createProcessors } from "../worker/create-processors.js";
@@ -420,7 +424,15 @@ export const workerlessCompletionTestSuite = ({ it }: { it: TestAPI<TestSuiteCon
         transactionHooks,
         ...chain,
         handler: async ({ job, completeJob }) => {
-          return completeJob(job, async ({ finish }) => finish({ output: { result: false } }));
+          const completed = await completeJob(job, async ({ finish }) =>
+            finish({ output: { result: false } }),
+          );
+
+          await expect(
+            completeJob(job, async ({ finish }) => finish({ output: { result: true } })),
+          ).rejects.toThrow(JobAlreadyCompletedError);
+
+          return completed;
         },
       }),
     );

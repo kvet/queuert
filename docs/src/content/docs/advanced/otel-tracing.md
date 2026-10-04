@@ -105,7 +105,7 @@ EXTERNAL span (e.g., HTTP request)
 
 1. **PRODUCER created and ended** in `createChain` when the job has blockers — one PRODUCER span per blocker, as a child of the job's PRODUCER span, with a link to the blocker chain's trace context
 2. **Persisted** — the PRODUCER span context is stored in the `job_blocker` table (`trace_context` column) so the CONSUMER can be created by another process
-3. **CONSUMER created** when `unblockJobs` detects the blocker chain has completed — the PRODUCER span context is read from `job_blocker` and a CONSUMER span is created as its child
+3. **CONSUMER created** when `unblockJobs` detects the blocker chain has completed — the PRODUCER span context is read from `job_blocker` and a CONSUMER span is created as its child. If the blocker chain is already completed at creation time, `createChain` creates the CONSUMER span right away instead
 
 ## Continuation Relationships
 
@@ -246,7 +246,6 @@ Deduplicated chain creation stays `UNSET` — see [Deduplication](#deduplication
 
 | Attribute                      | Type   | Description                                   |
 | ------------------------------ | ------ | --------------------------------------------- |
-| `queuert.attempt.result`       | string | `"completed"` or `"failed"`                   |
 | `queuert.rescheduled_at`       | string | ISO 8601 timestamp of next retry (on failure) |
 | `queuert.rescheduled_after_ms` | number | Delay in ms before next retry (on failure)    |
 

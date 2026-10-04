@@ -32,10 +32,7 @@ await runDoubleRunBenchmark<Infra>({
   name: "state-sqlite",
   setupInfrastructure: async () => {
     const [beforeDb, afterDb, db] = await measureMemory(async () => {
-      const db = new Database(":memory:");
-      db.pragma("auto_vacuum = INCREMENTAL");
-      db.pragma("foreign_keys = ON");
-      return db;
+      return new Database(":memory:");
     });
     console.log("\nAfter creating better-sqlite3 database:");
     diffMemory(beforeDb, afterDb);

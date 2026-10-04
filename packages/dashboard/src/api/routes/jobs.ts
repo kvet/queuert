@@ -19,15 +19,13 @@ export const handleJobsList = async (url: URL, client: Client<any, any>): Promis
   const typeName = url.searchParams.get("typeName");
   if (!typeName) return serovalResponse({ items: [], nextCursor: null });
 
-  const { status, blocked, continued } = parseJobStatusFilter(
-    url.searchParams.get("status") ?? undefined,
-  );
+  const status = parseJobStatusFilter(url.searchParams.get("status") ?? undefined);
   const rawOrderBy = url.searchParams.get("orderBy") ?? undefined;
   const orderDirection = parseOrderDirection(url.searchParams.get("orderDirection") ?? undefined);
   const limit = parseLimit(url.searchParams.get("limit") ?? undefined);
 
   const listing =
-    status === "pending"
+    status === "blocked" || status === "pending"
       ? ({ status, orderBy: parseOrderBy(rawOrderBy, ["scheduledAt", "createdAt"]) } as const)
       : status === "running"
         ? ({
@@ -48,24 +46,7 @@ export const handleJobsList = async (url: URL, client: Client<any, any>): Promis
     limit,
   };
 
-  const result =
-    listing.status === "pending"
-      ? await client.listJobs({
-          ...common,
-          status: listing.status,
-          blocked,
-          orderBy: listing.orderBy,
-        })
-      : listing.status === "running"
-        ? await client.listJobs({ ...common, status: listing.status, orderBy: listing.orderBy })
-        : listing.status === "completed"
-          ? await client.listJobs({
-              ...common,
-              status: listing.status,
-              continued,
-              orderBy: listing.orderBy,
-            })
-          : await client.listJobs({ ...common, orderBy: listing.orderBy });
+  const result = await client.listJobs({ ...common, ...listing });
 
   return serovalResponse({
     items: result.items,

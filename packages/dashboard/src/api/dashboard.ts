@@ -82,10 +82,7 @@ export const createDashboard = async <
     if (match) return handleChainJobs(url, client, match[1]);
 
     match = localPath.match(/^\/api\/chains\/([^/]+)$/);
-    if (match && request.method === "DELETE")
-      return handleChainDelete(client, match[1], {
-        cascade: url.searchParams.get("cascade") === "true",
-      });
+    if (match && request.method === "DELETE") return handleChainDelete(client, match[1]);
     if (match) return handleChainDetail(url, client, match[1]);
 
     if (localPath === "/api/chain-types/counts") return handleChainTypesCounts(url, client);

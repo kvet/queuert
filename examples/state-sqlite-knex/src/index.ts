@@ -1,5 +1,4 @@
 import { createSqliteStateAdapter } from "@queuert/sqlite";
-import type Database from "better-sqlite3";
 import knexFactory from "knex";
 import {
   createClient,
@@ -12,18 +11,11 @@ import {
 
 import { createKnexSqliteStateProvider } from "./provider.js";
 
-// 1. Create in-memory SQLite database and configure pragmas per connection
+// 1. Create in-memory SQLite database
 const knex = knexFactory({
   client: "better-sqlite3",
   connection: { filename: ":memory:" },
   useNullAsDefault: true,
-  pool: {
-    afterCreate: (conn: Database.Database, done: (err: Error | null) => void) => {
-      conn.pragma("auto_vacuum = INCREMENTAL");
-      conn.pragma("foreign_keys = ON");
-      done(null);
-    },
-  },
 });
 
 // 2. Create application schema

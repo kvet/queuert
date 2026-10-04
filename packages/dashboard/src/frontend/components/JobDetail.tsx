@@ -4,7 +4,7 @@ import { For, Match, Show, Switch, createResource, createSignal } from "solid-js
 import { getJobDetail, rescheduleJob } from "../api.js";
 import { BackLink } from "./BackLink.js";
 import { JsonView } from "./JsonView.js";
-import { ChainStatusBadge, JobStatusBadge } from "./StatusBadge.js";
+import { StatusBadge } from "./StatusBadge.js";
 import { TimeAgo } from "./TimeAgo.js";
 
 const dtf = new Intl.DateTimeFormat(undefined, {
@@ -47,7 +47,7 @@ export function JobDetail() {
               <>
                 <div class="detail-header">
                   <h2>
-                    {job.typeName} <JobStatusBadge job={job} />
+                    {job.typeName} <StatusBadge status={job.status} />
                   </h2>
                   <div class="id">job {job.id}</div>
                   <A href={`/chains/${job.chainId}`} class="chain-link">
@@ -60,7 +60,7 @@ export function JobDetail() {
                   <dl class="info-grid">
                     <dt>Status</dt>
                     <dd>
-                      <JobStatusBadge job={job} />
+                      <StatusBadge status={job.status} />
                     </dd>
                     <dt>Created</dt>
                     <dd>
@@ -119,7 +119,7 @@ export function JobDetail() {
                       <For each={d.blockers}>
                         {(blocker) => (
                           <li>
-                            <ChainStatusBadge chain={blocker} /> {blocker.typeName}{" "}
+                            <StatusBadge status={blocker.status} /> {blocker.typeName}{" "}
                             <A href={`/chains/${blocker.id}`} class="chain-link">
                               chain {blocker.id}
                             </A>
@@ -176,7 +176,7 @@ export function JobDetail() {
                     <div class="section">
                       <h3>Continuation</h3>
                       <A href={`/jobs/${cont.id}`} class="chain-link">
-                        {cont.typeName} <JobStatusBadge job={cont} />
+                        {cont.typeName} <StatusBadge status={cont.status} />
                       </A>
                     </div>
                   )}

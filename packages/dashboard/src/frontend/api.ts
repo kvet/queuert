@@ -34,7 +34,7 @@ export const listChains = async (params: {
   const searchParams = new URLSearchParams();
   searchParams.set("typeName", params.typeName);
   if (params.status) searchParams.set("status", params.status);
-  if (params.independent === false) searchParams.set("independent", "false");
+  if (params.independent !== undefined) searchParams.set("independent", String(params.independent));
   if (params.orderBy) searchParams.set("orderBy", params.orderBy);
   if (params.orderDirection) searchParams.set("orderDirection", params.orderDirection);
   if (params.cursor) searchParams.set("cursor", params.cursor);
@@ -109,12 +109,8 @@ export const rescheduleJob = async (jobId: string): Promise<UnknownJob> => {
   return job;
 };
 
-export const deleteChain = async (
-  chainId: string,
-  options?: { cascade?: boolean },
-): Promise<void> => {
-  const queryString = options?.cascade ? "?cascade=true" : "";
-  await fetchSeroval(`/chains/${chainId}${queryString}`, { method: "DELETE" });
+export const deleteChain = async (chainId: string): Promise<void> => {
+  await fetchSeroval(`/chains/${chainId}`, { method: "DELETE" });
 };
 
 export const getJobDetail = async (
@@ -136,14 +132,15 @@ export const listChainTypeNames = async (): Promise<string[]> =>
 
 export const listJobTypeNames = async (): Promise<string[]> => fetchSeroval<string[]>("/job-types");
 
-export type ChainTypeCounts = {
+type ChainTypeCounts = {
   typeName: string;
   running: { count: number; hasMore: boolean };
   completed: { count: number; hasMore: boolean };
 };
 
-export type JobTypeCounts = {
+type JobTypeCounts = {
   typeName: string;
+  blocked: { count: number; hasMore: boolean };
   pending: { count: number; hasMore: boolean };
   running: { count: number; hasMore: boolean };
   completed: { count: number; hasMore: boolean };

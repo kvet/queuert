@@ -1,8 +1,8 @@
 # Chain Deletion Showcase
 
-Deleting chains with blocker safety checks and cascade deletion.
+Deleting chains with blocker safety checks.
 
-Scenarios: simple deletion, blocker safety, co-deletion, cascade deletion.
+Scenarios: simple deletion, blocker safety, co-deletion.
 
 ## Running
 

@@ -4,12 +4,15 @@ import { For, Show, createEffect, createMemo, createResource, createSignal } fro
 import {
   PAGE_SIZE,
   type UnknownChain,
+  countByChainTypeNames,
   getChainsByIds,
   listChainTypeNames,
   listChains,
 } from "../api.js";
 import { createAutoLoadMore } from "./createAutoLoadMore.js";
-import { ChainStatusBadge } from "./StatusBadge.js";
+import { createDebouncedInput } from "./createDebouncedInput.js";
+import { formatCount, formatTotalCount } from "./formatCount.js";
+import { StatusBadge } from "./StatusBadge.js";
 import { TimeAgo } from "./TimeAgo.js";
 
 export function ChainList() {
@@ -18,13 +21,31 @@ export function ChainList() {
   const typeName = () => (searchParams.typeName ?? "") as string;
   const status = () => (searchParams.status ?? "") as string;
   const ids = () => (searchParams.ids ?? "") as string;
-  const independent = () => searchParams.independent !== "false";
+  const idsInput = createDebouncedInput(ids, (value) => {
+    setSearchParams({ ids: value || undefined });
+  });
+  const independent = () =>
+    searchParams.independent === "true"
+      ? true
+      : searchParams.independent === "false"
+        ? false
+        : undefined;
   const orderBy = () => (searchParams.orderBy ?? "") as string;
   const orderDirection = () => (searchParams.orderDirection ?? "desc") as string;
 
   const idMode = () => ids().length > 0;
 
   const [typeNames] = createResource(listChainTypeNames);
+
+  const [counts] = createResource(
+    () => typeName() || undefined,
+    async (name) => (await countByChainTypeNames([name]))[0],
+  );
+
+  const statusLabel = (label: string, status: "running" | "completed") => {
+    const c = counts();
+    return c ? `${label} (${formatCount(c[status])})` : label;
+  };
 
   const orderByOptions = createMemo(() => {
     const s = status();
@@ -141,69 +162,87 @@ export function ChainList() {
         <input
           type="text"
           placeholder="Chain IDs (comma-separated)"
-          value={ids()}
-          onChange={(e) => {
-            setSearchParams({ ids: e.target.value.trim() || undefined });
+          value={idsInput.value()}
+          onInput={(e) => {
+            idsInput.onInput(e.currentTarget.value);
           }}
         />
-        <select
-          ref={(el) => {
-            createEffect(() => {
-              typeNames();
-              el.value = typeName();
-            });
-          }}
-          disabled={idMode()}
-          onChange={(e) => {
-            setSearchParams({ typeName: e.target.value || undefined });
-          }}
+        <Show
+          when={!idMode()}
+          fallback={
+            <button
+              class="clear-btn"
+              title="Clear IDs"
+              onClick={() => {
+                idsInput.cancel();
+                setSearchParams({ ids: undefined });
+              }}
+            >
+              Clear
+            </button>
+          }
         >
-          <option value="">Select type…</option>
-          <For each={typeNames()}>{(name) => <option value={name}>{name}</option>}</For>
-        </select>
-        <select
-          value={status()}
-          disabled={idMode()}
-          onChange={(e) => {
-            setSearchParams({ status: e.target.value || undefined, orderBy: undefined });
-          }}
-        >
-          <option value="">All statuses</option>
-          <option value="running">Running</option>
-          <option value="completed">Completed</option>
-        </select>
-        <select
-          value={orderBy() || orderByOptions()[0].value}
-          disabled={idMode()}
-          onChange={(e) => {
-            setSearchParams({ orderBy: e.target.value || undefined });
-          }}
-        >
-          <For each={orderByOptions()}>
-            {(opt) => <option value={opt.value}>{opt.label}</option>}
-          </For>
-        </select>
-        <button
-          class="order-direction-btn"
-          disabled={idMode()}
-          title={orderDirection() === "asc" ? "Ascending" : "Descending"}
-          onClick={() => {
-            setSearchParams({ orderDirection: orderDirection() === "asc" ? "desc" : "asc" });
-          }}
-        >
-          {orderDirection() === "asc" ? "↑" : "↓"}
-        </button>
-        <label class="checkbox-label" data-disabled={idMode() || undefined}>
-          <input
-            type="checkbox"
-            checked={independent()}
-            disabled={idMode()}
-            onChange={(e) => {
-              setSearchParams({ independent: e.target.checked ? undefined : "false" });
+          <select
+            class="filter-type"
+            ref={(el) => {
+              createEffect(() => {
+                typeNames();
+                el.value = typeName();
+              });
             }}
-          />
-          Independent only
-        </label>
+            onChange={(e) => {
+              setSearchParams({ typeName: e.target.value || undefined });
+            }}
+          >
+            <option value="">Select type…</option>
+            <For each={typeNames()}>{(name) => <option value={name}>{name}</option>}</For>
+          </select>
+          <select
+            class="filter-status"
+            value={status()}
+            onChange={(e) => {
+              setSearchParams({ status: e.target.value || undefined, orderBy: undefined });
+            }}
+          >
+            <option value="">
+              All statuses
+              {counts() ? ` (${formatTotalCount([counts()!.running, counts()!.completed])})` : ""}
+            </option>
+            <option value="running">{statusLabel("Running", "running")}</option>
+            <option value="completed">{statusLabel("Completed", "completed")}</option>
+          </select>
+          <select
+            class="filter-order-by"
+            value={orderBy() || orderByOptions()[0].value}
+            onChange={(e) => {
+              setSearchParams({ orderBy: e.target.value || undefined });
+            }}
+          >
+            <For each={orderByOptions()}>
+              {(opt) => <option value={opt.value}>{opt.label}</option>}
+            </For>
+          </select>
+          <button
+            class="order-direction-btn"
+            title={orderDirection() === "asc" ? "Ascending" : "Descending"}
+            onClick={() => {
+              setSearchParams({ orderDirection: orderDirection() === "asc" ? "desc" : "asc" });
+            }}
+          >
+            {orderDirection() === "asc" ? "↑" : "↓"}
+          </button>
+          <select
+            class="filter-independent"
+            value={independent() === undefined ? "" : String(independent())}
+            onChange={(e) => {
+              setSearchParams({ independent: e.target.value || undefined });
+            }}
+          >
+            <option value="">All chains</option>
+            <option value="true">Independent</option>
+            <option value="false">Blockers</option>
+          </select>
+        </Show>
       </div>
 
       <Show when={!idMode() && !typeName()}>
@@ -223,16 +262,9 @@ export function ChainList() {
               aria-label={`Open chain ${chain.id}`}
             />
             <div class="card-header">
-              <span class="card-type">
-                {chain.typeName}
-                <button
-                  class="filter-btn"
-                  title={`Filter by ${chain.typeName}`}
-                  onClick={() => {
-                    setSearchParams({ typeName: chain.typeName, ids: undefined });
-                  }}
-                />
-              </span>
+              <Show when={idMode()}>
+                <span class="card-type">{chain.typeName}</span>
+              </Show>
               <span class="card-id">
                 {chain.id}
                 <button
@@ -248,7 +280,7 @@ export function ChainList() {
               </span>
             </div>
             <div class="card-meta">
-              <ChainStatusBadge chain={chain} />
+              <StatusBadge status={chain.status} />
             </div>
             <Show when={chain.input != null}>
               <div class="card-input">{inputPreview(chain.input)}</div>
