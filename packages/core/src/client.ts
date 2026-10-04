@@ -1061,7 +1061,7 @@ export const createClient = async <
         });
         if (!stateChain) {
           throw new ChainNotFoundError(`Chain with id ${id} not found`, {
-            chainId: id as string,
+            chainId: id,
           });
         }
 
@@ -1091,7 +1091,7 @@ export const createClient = async <
         timeoutController.abort(
           new WaitChainTimeoutError(
             `Timeout waiting for chain ${id} to complete after ${timeoutMs}ms`,
-            { chainId: id as string, timeoutMs },
+            { chainId: id, timeoutMs },
           ),
         );
       }, timeoutMs);
@@ -1134,7 +1134,7 @@ export const createClient = async <
           signal?.aborted
             ? `Wait for chain ${id} was aborted`
             : `Timeout waiting for chain ${id} to complete after ${timeoutMs}ms`,
-          { chainId: id as string, timeoutMs, cause: signal?.reason },
+          { chainId: id, timeoutMs, cause: signal?.reason },
         );
       } finally {
         clearTimeout(timeoutId);

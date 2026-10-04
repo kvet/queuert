@@ -25,9 +25,7 @@ Policy (what to sweep, how long to keep, how often) lives on the **schedule**, a
 export function createCleanupJobTypes() {
   return createJobTypes<{
     "__queuert/cleanup": { entry: true; input: CleanupJobInput; output: null };
-  }>({
-    /* validate the input carries a valid name/typeNames/retentionMs/intervalMs */
-  });
+  }>({/* validate the input carries a valid name/typeNames/retentionMs/intervalMs */});
 }
 ```
 

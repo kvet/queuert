@@ -117,9 +117,7 @@ export const mergeJobTypes = <const TSlices extends readonly [JobTypes<any>, ...
   const allNoop = regs.every((r) => noopRegistries.has(r));
 
   if (allNoop) {
-    return createNoopJobTypes<
-      JobTypesDefinitions<TSlices> & BaseJobTypeDefinitions
-    >() as unknown as JobTypes<JobTypesDefinitions<TSlices>>;
+    return createNoopJobTypes<JobTypesDefinitions<TSlices> & BaseJobTypeDefinitions>();
   }
 
   const validated = regs.filter((r) => !noopRegistries.has(r));

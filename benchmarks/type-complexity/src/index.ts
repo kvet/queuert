@@ -478,70 +478,58 @@ const middlewareCounts = [1, 2, 5, 10];
 
 const scenarios: Scenario[] = [
   // Single-slice: Linear
-  ...linearSizes.map(
-    (n): Scenario => ({
-      name: `linear-${n}`,
-      description: `Linear: ${n} types`,
-      group: "linear",
-      generate: () => wrapInScenario(generateLinearChain(n)),
-    }),
-  ),
+  ...linearSizes.map((n): Scenario => ({
+    name: `linear-${n}`,
+    description: `Linear: ${n} types`,
+    group: "linear",
+    generate: () => wrapInScenario(generateLinearChain(n)),
+  })),
 
   // Single-slice: Branched
-  ...branchedConfigs.map(
-    ([b, d]): Scenario => ({
-      name: `branched-${b}x${d}`,
-      description: `Branched: ${b}w x ${d}d`,
-      group: "branched",
-      generate: () => wrapInScenario(generateBranchedChain(b, d)),
-    }),
-  ),
+  ...branchedConfigs.map(([b, d]): Scenario => ({
+    name: `branched-${b}x${d}`,
+    description: `Branched: ${b}w x ${d}d`,
+    group: "branched",
+    generate: () => wrapInScenario(generateBranchedChain(b, d)),
+  })),
 
   // Single-slice: Blockers
-  ...blockerSteps.map(
-    (s): Scenario => ({
-      name: `blockers-${s}`,
-      description: `Blockers: ${s} steps`,
-      group: "blockers",
-      generate: () => wrapInScenario(generateWithBlockers(s)),
-    }),
-  ),
+  ...blockerSteps.map((s): Scenario => ({
+    name: `blockers-${s}`,
+    description: `Blockers: ${s} steps`,
+    group: "blockers",
+    generate: () => wrapInScenario(generateWithBlockers(s)),
+  })),
 
   // Single-slice: Loops
-  ...loopSizes.map(
-    (l): Scenario => ({
-      name: `loop-${l}`,
-      description: `Loop: ${l} steps`,
-      group: "loop",
-      generate: () => wrapInScenario(generateWithLoop(l)),
-    }),
-  ),
+  ...loopSizes.map((l): Scenario => ({
+    name: `loop-${l}`,
+    description: `Loop: ${l} steps`,
+    group: "loop",
+    generate: () => wrapInScenario(generateWithLoop(l)),
+  })),
 
   // Multi-slice: Merge
-  ...mergeConfigs.map(
-    ([slices, types]): Scenario => ({
-      name: `merge-${slices}x${types}`,
-      description: `Merge: ${slices} slices x ${types}`,
-      group: "merge",
-      generate: () =>
-        wrapMergeScenario(
-          Array.from({ length: slices }, (_, i) => ({
-            name: `s${i}`,
-            defs: prefixDefs(generateLinearChain(types), `s${i}`),
-          })),
-        ),
-    }),
-  ),
+  ...mergeConfigs.map(([slices, types]): Scenario => ({
+    name: `merge-${slices}x${types}`,
+    description: `Merge: ${slices} slices x ${types}`,
+    group: "merge",
+    generate: () =>
+      wrapMergeScenario(
+        Array.from({ length: slices }, (_, i) => ({
+          name: `s${i}`,
+          defs: prefixDefs(generateLinearChain(types), `s${i}`),
+        })),
+      ),
+  })),
 
   // Middleware scaling: hold chain at linear-100, vary middleware count
-  ...middlewareCounts.map(
-    (count): Scenario => ({
-      name: `middleware-${count}`,
-      description: `Middleware: ${count} on linear-100`,
-      group: "middleware",
-      generate: () => wrapInScenario(generateLinearChain(100), count),
-    }),
-  ),
+  ...middlewareCounts.map((count): Scenario => ({
+    name: `middleware-${count}`,
+    description: `Middleware: ${count} on linear-100`,
+    group: "middleware",
+    generate: () => wrapInScenario(generateLinearChain(100), count),
+  })),
 ];
 
 // --- Types ---

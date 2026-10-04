@@ -51,9 +51,7 @@ Inside the handler, `traceId` is typed:
 attemptHandler: async ({ traceId, complete }) => {
   return complete(async ({ finish }) =>
     finish({
-      output: {
-        /* ... */
-      },
+      output: {/* ... */},
     }),
   );
 };
@@ -79,9 +77,7 @@ attemptHandler: async ({ prepare, complete }) => {
   const user = await prepare({ mode: "staged" }, async ({ user }) => user);
   return complete(async ({ finish }) =>
     finish({
-      output: {
-        /* ... */
-      },
+      output: {/* ... */},
     }),
   );
 };
@@ -135,9 +131,7 @@ Because the helper writes through the complete transaction, its rows commit with
 return complete(async ({ finish, audit }) => {
   audit("order-placed");
   return finish({
-    output: {
-      /* ... */
-    },
+    output: {/* ... */},
   });
 });
 ```
@@ -162,9 +156,7 @@ const registry = createProcessors({
   client,
   jobTypes,
   attemptMiddleware: [tracing, audit],
-  processors: {
-    /* ... */
-  },
+  processors: {/* ... */},
 });
 ```
 
@@ -175,18 +167,14 @@ const orderRegistry = createProcessors({
   client,
   jobTypes,
   attemptMiddleware: [tracing, log, auditOrders],
-  processors: {
-    /* ... */
-  },
+  processors: {/* ... */},
 });
 
 const notificationRegistry = createProcessors({
   client,
   jobTypes,
   attemptMiddleware: [tracing, log, auditNotifications],
-  processors: {
-    /* ... */
-  },
+  processors: {/* ... */},
 });
 ```
 

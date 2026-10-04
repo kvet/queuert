@@ -154,9 +154,9 @@ export type JobTypeChainNames<
 
 /** Entry type definitions — filters to job types with `entry: true`. */
 export type JobTypeEntryDefinitions<TJobTypeDefinitions extends BaseJobTypeDefinitions> = {
-  [K in keyof TJobTypeDefinitions as TJobTypeDefinitions[K] extends { entry: true }
-    ? K
-    : never]: TJobTypeDefinitions[K];
+  [
+    K in keyof TJobTypeDefinitions as TJobTypeDefinitions[K] extends { entry: true } ? K : never
+  ]: TJobTypeDefinitions[K];
 };
 
 /** Entry type names — distributive, works on merged (union) definitions. */

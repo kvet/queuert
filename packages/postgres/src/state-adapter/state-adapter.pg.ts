@@ -647,7 +647,7 @@ WHERE head_job.id = ANY($1::{{id_type}}[]) AND head_job.chain_index = 0${
       });
     },
 
-    getJobs: (async ({
+    getJobs: async ({
       txCtx,
       jobIds,
       lock,
@@ -698,7 +698,7 @@ ${locked ? "ORDER BY j.id\nFOR UPDATE OF j" : "WHERE j.id = ANY($1::{{id_type}}[
         const row = byId.get(id);
         return row ? mapDbJobRowToStateJob(row) : undefined;
       });
-    }) as StateAdapter<TTxContext, TIdType>["getJobs"],
+    },
 
     createJobs: async ({ txCtx, jobs }) => {
       if (jobs.length === 0) return [];
@@ -1072,7 +1072,7 @@ JOIN {{schema}}.{{table_prefix}}job h ON h.id = u.chain_id
       });
       const rowById = new Map(rows.map((row) => [row.id, row]));
       return jobs.map((job) => {
-        const row = rowById.get(job.jobId as string);
+        const row = rowById.get(job.jobId);
         return row ? mapDbJobRowToStateJob(row) : undefined;
       });
     },
@@ -1188,15 +1188,13 @@ SELECT
       return chainIds.map((chainId): StateChain | StateBlockedJob[] | undefined => {
         const refs = refsByChainId.get(chainId);
         if (refs) {
-          return refs.map(
-            (r): StateBlockedJob => ({
-              jobId: r.job_id,
-              blockedByChainId: r.blocked_by_chain_id,
-              index: r.index,
-              traceContext: r.trace_context,
-              job: mapDbJobToStateJobInfo(r.job),
-            }),
-          );
+          return refs.map((r): StateBlockedJob => ({
+            jobId: r.job_id,
+            blockedByChainId: r.blocked_by_chain_id,
+            index: r.index,
+            traceContext: r.trace_context,
+            job: mapDbJobToStateJobInfo(r.job),
+          }));
         }
         const deleted = deletedById.get(chainId);
         if (deleted) {
@@ -1653,15 +1651,13 @@ SELECT COALESCE((
         ),
         params: [blockedByChainId],
       });
-      return result.blockers.map(
-        (b): StateDependentJob => ({
-          jobId: b.job_id,
-          blockedByChainId: b.blocked_by_chain_id,
-          index: b.index,
-          traceContext: b.trace_context,
-          job: { ...mapDbJobToStateJobInfo(b.job), chain: mapDbHeadToStateChainInfo(b.head) },
-        }),
-      );
+      return result.blockers.map((b): StateDependentJob => ({
+        jobId: b.job_id,
+        blockedByChainId: b.blocked_by_chain_id,
+        index: b.index,
+        traceContext: b.trace_context,
+        job: { ...mapDbJobToStateJobInfo(b.job), chain: mapDbHeadToStateChainInfo(b.head) },
+      }));
     },
 
     listChainTypeNames: async ({ txCtx }) => {

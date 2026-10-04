@@ -1,11 +1,10 @@
 import { createClient, createInProcessStateAdapter, defineJobTypes } from "queuert";
-// @ts-expect-error tsgo doesn't resolve export * re-exports from seroval
 import { deserialize } from "seroval";
 import { describe, expect, it } from "vitest";
 
 import { createDashboard } from "../api/dashboard.js";
 
-const parseBody = async (res: Response) => deserialize(await res.text());
+const parseBody = async (res: Response) => deserialize<any>(await res.text());
 
 const createTestDashboard = async (basePath?: string) => {
   const stateAdapter = await createInProcessStateAdapter();

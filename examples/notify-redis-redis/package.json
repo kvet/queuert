@@ -23,6 +23,6 @@
     "@queuert/testcontainers": "workspace:*",
     "@queuert/tsconfig": "workspace:*",
     "queuert": "workspace:*",
-    "redis": "6.1.0"
+    "redis": "6.3.0"
   }
 }

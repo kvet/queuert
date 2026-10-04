@@ -47,7 +47,8 @@ const canon = (value: unknown): string => {
   if (value === null || value === undefined) return "∅";
   if (value instanceof Date) return `D:${value.toISOString()}`;
   if (typeof value === "object") return `J:${JSON.stringify(value)}`;
-  return `${typeof value}:${String(value as string | number | boolean | bigint)}`;
+  // oxlint-disable-next-line typescript/no-base-to-string -- objects are handled above; only primitives and functions reach here
+  return `${typeof value}:${String(value)}`;
 };
 
 const equalCell = (a: unknown, b: unknown): boolean => canon(a) === canon(b);

@@ -85,14 +85,13 @@ export const sql = <
 >(
   sqlString: string,
   types?: { id?: string; params?: TParams; columns?: TColumns; readOnly?: boolean },
-): TypedSqlTemplate<TParams, TColumns> =>
-  ({
-    id: types?.id,
-    sql: sqlString,
-    readOnly: types?.readOnly ?? false,
-    params: types?.params ?? ([] as unknown as TParams),
-    columns: types?.columns ?? ({} as TColumns),
-  }) as TypedSqlTemplate<TParams, TColumns>;
+): TypedSqlTemplate<TParams, TColumns> => ({
+  id: types?.id,
+  sql: sqlString,
+  readOnly: types?.readOnly ?? false,
+  params: types?.params ?? ([] as unknown as TParams),
+  columns: types?.columns ?? ({} as TColumns),
+});
 
 export const extractParamTypes = (params: readonly DataType[]): Record<number, RuntimeType> => {
   const result: Record<number, RuntimeType> = {};

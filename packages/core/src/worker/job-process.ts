@@ -349,7 +349,7 @@ export const runJobProcess = async ({
                   ...stepCtx,
                   transactionHooks,
                   ...txCtx,
-                } as { transactionHooks: TransactionHooks } & BaseTxContext),
+                }),
             ),
           ) as Promise<Awaited<T>>);
           stepSpan?.end();

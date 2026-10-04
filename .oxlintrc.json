@@ -46,7 +46,15 @@
     "no-unused-expressions": "warn",
     "no-unused-labels": "warn",
     "no-unused-private-class-members": "warn",
-    "no-unused-vars": "warn",
+    "no-unused-vars": [
+      "warn",
+      {
+        "argsIgnorePattern": "^_",
+        "varsIgnorePattern": "^_",
+        "caughtErrorsIgnorePattern": "^_",
+        "ignoreRestSiblings": true
+      }
+    ],
     "no-useless-backreference": "warn",
     "no-useless-catch": "warn",
     "no-useless-escape": "warn",
@@ -75,6 +83,10 @@
     "import/no-self-import": "warn",
     "import/no-duplicates": ["warn", { "preferInline": true }],
     "import/consistent-type-specifier-style": ["warn", "prefer-inline"],
+    "import/first": "warn",
+    "import/newline-after-import": "warn",
+    "import/no-empty-named-blocks": "warn",
+    "import/no-mutable-exports": "warn",
     "typescript/await-thenable": "warn",
     "typescript/consistent-type-imports": "warn",
     "typescript/no-array-delete": "warn",

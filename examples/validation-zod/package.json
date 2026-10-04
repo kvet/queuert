@@ -10,7 +10,7 @@
   },
   "dependencies": {
     "queuert": "workspace:*",
-    "zod": "4.4.3"
+    "zod": "4.6.5"
   },
   "devDependencies": {
     "@queuert/tsconfig": "workspace:*"

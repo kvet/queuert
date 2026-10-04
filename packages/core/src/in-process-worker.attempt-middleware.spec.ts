@@ -29,7 +29,7 @@ describe("middleware ctx cannot shadow built-in handler/prepare/complete keys", 
           job: sentinel,
           prepare: sentinel,
           complete: sentinel,
-        } as unknown as Record<string, unknown>),
+        }),
     };
 
     let observedSignalIsAbortSignal = false;
@@ -81,11 +81,11 @@ describe("middleware ctx cannot shadow built-in handler/prepare/complete keys", 
       ...baseAdapter,
       withTransaction: async <T>(cb: (txCtx: MarkerTxCtx) => Promise<T>): Promise<T> =>
         baseAdapter.withTransaction(async (realTxCtx) =>
-          cb({ ...(realTxCtx as object), [MARKER_KEY]: realMarker } as MarkerTxCtx),
+          cb({ ...(realTxCtx as object), [MARKER_KEY]: realMarker }),
         ),
       withSavepoint: async <T>(realTxCtx: MarkerTxCtx, cb: (txCtx: MarkerTxCtx) => Promise<T>) =>
         baseAdapter.withSavepoint(realTxCtx as never, async (inner) =>
-          cb({ ...(inner as object), [MARKER_KEY]: realMarker } as MarkerTxCtx),
+          cb({ ...(inner as object), [MARKER_KEY]: realMarker }),
         ),
     } as unknown as typeof baseAdapter;
     const wrappedClient = await createClient({
@@ -94,8 +94,7 @@ describe("middleware ctx cannot shadow built-in handler/prepare/complete keys", 
     });
 
     const tampering: AttemptMiddleware<InProcessStateAdapter> = {
-      wrapPrepare: async ({ next }) =>
-        next({ [MARKER_KEY]: tamperedMarker } as unknown as Record<string, unknown>),
+      wrapPrepare: async ({ next }) => next({ [MARKER_KEY]: tamperedMarker }),
     };
 
     let observedMarkerIsReal = false;
@@ -127,7 +126,7 @@ describe("middleware ctx cannot shadow built-in handler/prepare/complete keys", 
           transactionHooks,
           typeName: "foo",
           input: { v: 1 },
-        } as Parameters<typeof wrappedClient.createChain>[0]),
+        }),
       ),
     );
     const stop = await worker.start();
@@ -148,11 +147,11 @@ describe("middleware ctx cannot shadow built-in handler/prepare/complete keys", 
       ...baseAdapter,
       withTransaction: async <T>(cb: (txCtx: MarkerTxCtx) => Promise<T>): Promise<T> =>
         baseAdapter.withTransaction(async (realTxCtx) =>
-          cb({ ...(realTxCtx as object), [MARKER_KEY]: realMarker } as MarkerTxCtx),
+          cb({ ...(realTxCtx as object), [MARKER_KEY]: realMarker }),
         ),
       withSavepoint: async <T>(realTxCtx: MarkerTxCtx, cb: (txCtx: MarkerTxCtx) => Promise<T>) =>
         baseAdapter.withSavepoint(realTxCtx as never, async (inner) =>
-          cb({ ...(inner as object), [MARKER_KEY]: realMarker } as MarkerTxCtx),
+          cb({ ...(inner as object), [MARKER_KEY]: realMarker }),
         ),
     } as unknown as typeof baseAdapter;
     const wrappedClient = await createClient({
@@ -161,8 +160,7 @@ describe("middleware ctx cannot shadow built-in handler/prepare/complete keys", 
     });
 
     const tampering: AttemptMiddleware<InProcessStateAdapter> = {
-      wrapComplete: async ({ next }) =>
-        next({ [MARKER_KEY]: tamperedMarker } as unknown as Record<string, unknown>),
+      wrapComplete: async ({ next }) => next({ [MARKER_KEY]: tamperedMarker }),
     };
 
     let observedMarkerIsReal = false;
@@ -193,7 +191,7 @@ describe("middleware ctx cannot shadow built-in handler/prepare/complete keys", 
           transactionHooks,
           typeName: "foo",
           input: { v: 1 },
-        } as Parameters<typeof wrappedClient.createChain>[0]),
+        }),
       ),
     );
     const stop = await worker.start();
@@ -210,7 +208,7 @@ describe("middleware ctx cannot shadow built-in handler/prepare/complete keys", 
         next({
           finish: sentinel,
           transactionHooks: sentinel,
-        } as unknown as Record<string, unknown>),
+        }),
     };
 
     let observedFinishIsFn = false;

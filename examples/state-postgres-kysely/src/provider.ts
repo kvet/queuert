@@ -10,8 +10,7 @@ export const createKyselyPgStateProvider = <TDatabase>({
 }): PgStateProvider<KyselyPgContext<TDatabase>> => {
   return {
     transactionConcurrency: "concurrent",
-    withTransaction: async (cb) =>
-      db.transaction().execute(async (txDb) => cb({ db: txDb as Kysely<TDatabase> })),
+    withTransaction: async (cb) => db.transaction().execute(async (txDb) => cb({ db: txDb })),
     // `id` not forwarded: Kysely's CompiledQuery.raw has no name field; the pg
     // dialect calls `client.query(sql, params)` unprepared. Bypass Kysely for
     // server-side prepared statements (see state-postgres-pg).

@@ -662,7 +662,7 @@ export const createSqliteStateAdapter = async <
         }
       }),
 
-    getChains: (async ({
+    getChains: async ({
       txCtx,
       chainIds,
       lock,
@@ -688,7 +688,7 @@ WHERE id IN (SELECT value FROM json_each(?))
                 {
                   id: "lockChainHeads",
                   params: [t.string()],
-                  columns: {} as Record<string, never>,
+                  columns: {},
                 },
               ),
             ),
@@ -723,12 +723,12 @@ ORDER BY head_job.id
       });
       const byId = new Map(rows.map((row) => [row.id, row]));
       return chainIds.map((chainId) => {
-        const row = byId.get(chainId as string);
+        const row = byId.get(chainId);
         return row ? mapDbChainRowToStateChain(row) : undefined;
       });
-    }) as StateAdapter<TTxContext, TIdType>["getChains"],
+    },
 
-    getJobs: (async ({
+    getJobs: async ({
       txCtx,
       jobIds,
       lock,
@@ -757,7 +757,7 @@ WHERE id IN (
                 {
                   id: "lockJobs",
                   params: [t.string(), t.string()],
-                  columns: {} as Record<string, never>,
+                  columns: {},
                 },
               ),
             ),
@@ -789,10 +789,10 @@ WHERE j.id IN (SELECT value FROM json_each(?))
       });
       const byId = new Map(rows.map((r) => [r.id, r]));
       return jobIds.map((jobId) => {
-        const row = byId.get(jobId as string);
+        const row = byId.get(jobId);
         return row ? mapDbJobRowToStateJob(row) : undefined;
       });
-    }) as StateAdapter<TTxContext, TIdType>["getJobs"],
+    },
 
     createJobs: async ({ txCtx, jobs }) => {
       for (const job of jobs) {
@@ -1227,7 +1227,7 @@ RETURNING *, ${chainColumnsReturning("{{table_prefix}}job")}
       });
       const rowById = new Map(rows.map((row) => [row.id, row]));
       return jobs.map((job) => {
-        const row = rowById.get(job.jobId as string);
+        const row = rowById.get(job.jobId);
         return row ? mapDbJobRowToStateJob(row) : undefined;
       });
     },
@@ -1365,10 +1365,10 @@ WHERE (id IN (SELECT value FROM json_each(?)) AND chain_index = 0)
       }
 
       return chainIds.map((chainId) => {
-        const blockers = blockersByChain.get(chainId as string);
+        const blockers = blockersByChain.get(chainId);
         if (blockers) return blockers;
         if (referenced) return undefined;
-        const row = chainRowById.get(chainId as string);
+        const row = chainRowById.get(chainId);
         if (!row) return undefined;
         return mapDbChainRowToStateChain(row);
       });
@@ -1783,15 +1783,13 @@ ORDER BY jb.job_id, jb."index"
         params: [blockedByChainId],
       });
 
-      return blockerRows.map(
-        (row): StateDependentJob => ({
-          jobId: row.blocker_job_id,
-          blockedByChainId: row.blocker_chain_id,
-          index: row.blocker_index,
-          traceContext: row.blocker_trace_context,
-          job: mapDbJobRowToStateJob(row),
-        }),
-      );
+      return blockerRows.map((row): StateDependentJob => ({
+        jobId: row.blocker_job_id,
+        blockedByChainId: row.blocker_chain_id,
+        index: row.blocker_index,
+        traceContext: row.blocker_trace_context,
+        job: mapDbJobRowToStateJob(row),
+      }));
     },
 
     listChainTypeNames: async ({ txCtx }) => {

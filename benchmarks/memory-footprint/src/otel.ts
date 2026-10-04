@@ -42,7 +42,7 @@ await runDoubleRunBenchmark<Infra>({
     const [beforeOtel, afterOtel, provider] = await measureMemory(async () => {
       const exporter = new NoopMetricExporter();
       const reader = new PeriodicExportingMetricReader({
-        exporter: exporter as never,
+        exporter,
         exportIntervalMillis: 60000,
       });
       const provider = new MeterProvider({ readers: [reader] });

@@ -96,7 +96,9 @@ export const createPagedList = <TParams, TItem extends { id: string }>(
       await load(value);
       // `load` keeps its error in `error()`; surface it so the refresh isn't reported as done.
       const failure = error();
-      if (failure !== undefined) throw failure;
+      if (failure !== undefined) {
+        throw failure instanceof Error ? failure : new Error("Refresh failed", { cause: failure });
+      }
       return;
     }
     controller?.abort();

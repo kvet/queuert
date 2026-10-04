@@ -150,7 +150,7 @@ describe("expect shim", () => {
 
     it("throws TypeError on non-string, non-array", () => {
       vitestExpect(() => {
-        expect({}).toContain("x" as unknown);
+        expect({}).toContain("x");
       }).toThrow(TypeError);
     });
   });

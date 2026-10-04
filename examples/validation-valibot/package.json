@@ -10,7 +10,7 @@
   },
   "dependencies": {
     "queuert": "workspace:*",
-    "valibot": "1.4.2"
+    "valibot": "1.5.0"
   },
   "devDependencies": {
     "@queuert/tsconfig": "workspace:*"

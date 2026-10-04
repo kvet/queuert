@@ -246,7 +246,7 @@ export async function runDoubleRunBenchmark<TInfra>({
   // so the full console.log call chain still fires.
   console.log("\n── WARMUP run (discarded — warms V8 JIT + lazy loads) ──");
   const originalWrite = process.stdout.write.bind(process.stdout);
-  process.stdout.write = (() => true) as typeof process.stdout.write;
+  process.stdout.write = () => true;
   const warmupCtx: LifecycleContext = {
     step: async <T>(label: string, fn: () => Promise<T>): Promise<T> => {
       const [before, after, result] = await measureMemory(fn);

@@ -24,7 +24,7 @@ export const serializeError = (err: unknown): string => {
     return truncate(JSON.stringify(err));
   } catch {
     if (typeof err === "object") {
-      const allKeys = Object.keys(err as Record<string, unknown>);
+      const allKeys = Object.keys(err);
       const keys = allKeys.slice(0, 5);
       const entries = keys.map((k) => `${k}: ${String((err as Record<string, unknown>)[k])}`);
       if (allKeys.length > keys.length) entries.push("…");

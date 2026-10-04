@@ -22,8 +22,8 @@
     "@queuert/postgres": "workspace:*",
     "@queuert/testcontainers": "workspace:*",
     "@queuert/tsconfig": "workspace:*",
-    "@types/pg": "8.20.0",
-    "pg": "8.22.0",
+    "@types/pg": "8.23.1",
+    "pg": "8.23.1",
     "queuert": "workspace:*"
   }
 }

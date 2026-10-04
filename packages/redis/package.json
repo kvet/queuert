@@ -51,9 +51,9 @@
   "devDependencies": {
     "@queuert/testcontainers": "workspace:*",
     "@queuert/tsconfig": "workspace:*",
-    "ioredis": "5.11.1",
+    "ioredis": "6.0.0",
     "queuert": "workspace:*",
-    "redis": "6.1.0"
+    "redis": "6.3.0"
   },
   "peerDependencies": {
     "queuert": "workspace:*"

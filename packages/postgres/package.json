@@ -55,8 +55,8 @@
     "@queuert/testcontainers": "workspace:*",
     "@queuert/tsconfig": "workspace:*",
     "@queuert/typed-sql": "workspace:*",
-    "@types/pg": "8.20.0",
-    "pg": "8.22.0",
+    "@types/pg": "8.23.1",
+    "pg": "8.23.1",
     "postgres": "3.4.9",
     "queuert": "workspace:*"
   },

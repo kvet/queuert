@@ -21,17 +21,16 @@ export const pendingJob = (overrides: Partial<UnknownJob> = {}): UnknownJob =>
 
 export const runningJob = (
   overrides: Partial<Extract<UnknownJob, { status: "running" }>> = {},
-): UnknownJob =>
-  ({
-    id: "job",
-    ...base,
-    status: "running",
-    attempt: 1,
-    attemptAt: new Date(1000),
-    attemptBy: "worker-1",
-    attemptUntil: new Date(11_000),
-    ...overrides,
-  }) as UnknownJob;
+): UnknownJob => ({
+  id: "job",
+  ...base,
+  status: "running",
+  attempt: 1,
+  attemptAt: new Date(1000),
+  attemptBy: "worker-1",
+  attemptUntil: new Date(11_000),
+  ...overrides,
+});
 
 export const continuedJob = (id: string, overrides: Partial<UnknownJob> = {}): UnknownJob =>
   ({
@@ -58,5 +57,10 @@ export const tailJob = (id: string, overrides: Partial<UnknownJob> = {}): Unknow
     ...overrides,
   }) as UnknownJob;
 
-export const runningChain = (id: string): UnknownChain =>
-  ({ id, typeName: "dep", input: null, createdAt: new Date(0), status: "running" }) as UnknownChain;
+export const runningChain = (id: string): UnknownChain => ({
+  id,
+  typeName: "dep",
+  input: null,
+  createdAt: new Date(0),
+  status: "running",
+});

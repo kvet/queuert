@@ -15,6 +15,7 @@ import { describe, expectTypeOf, it, vi } from "vitest";
 
 import { createSqliteStateAdapter } from "../state-adapter/state-adapter.sqlite.js";
 import { createNodeSqliteProvider } from "../state-provider/state-provider.node-sqlite.js";
+
 it("index");
 
 describe("SQLite State Adapter Conformance (node:sqlite)", () => {

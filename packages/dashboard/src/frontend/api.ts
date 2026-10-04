@@ -1,5 +1,4 @@
 import { type Chain, type Job } from "queuert";
-// @ts-expect-error tsgo doesn't resolve export * re-exports from seroval
 import { deserialize } from "seroval";
 
 export type UnknownJob = Job<string, string, string, unknown, unknown, true>;

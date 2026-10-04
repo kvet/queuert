@@ -22,9 +22,9 @@
     "@queuert/postgres": "workspace:*",
     "@queuert/testcontainers": "workspace:*",
     "@queuert/tsconfig": "workspace:*",
-    "@types/pg": "8.20.0",
-    "drizzle-orm": "0.45.2",
-    "pg": "8.22.0",
+    "@types/pg": "8.23.1",
+    "drizzle-orm": "0.45.3",
+    "pg": "8.23.1",
     "queuert": "workspace:*"
   }
 }

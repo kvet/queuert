@@ -9,7 +9,7 @@
     "typecheck": "tsc --noEmit"
   },
   "dependencies": {
-    "arktype": "2.2.3",
+    "arktype": "2.2.7",
     "queuert": "workspace:*"
   },
   "devDependencies": {
