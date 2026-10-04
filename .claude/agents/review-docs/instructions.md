@@ -21,14 +21,13 @@ The primary API documentation lives as TSDoc comments on all public exports in `
 
 Architectural documentation published as part of the docs site. These cover design philosophy, patterns, and conceptual explanations — not API signatures (which are in TSDoc).
 
+### Docs Site (`docs/src/content/docs/`)
+
+User-facing pages: `getting-started/`, `guides/`, `integrations/` (adapter setup and options), `examples.md` (index of `examples/`), and `benchmarks.md`.
+
 ### Package READMEs
 
-Each package has a README documenting:
-
-- Public exports
-- Configuration options
-- Usage examples
-- Provider/adapter setup
+Intentionally minimal — they link to the docs site. Do not ask for exports or options to be documented in a package README.
 
 ### Project Root
 
@@ -68,9 +67,9 @@ Read `CLAUDE.md` and the docs it links; they define the expected mapping.
 
 For each changed file, identify relevant documentation:
 
-- **Package source** (`packages/*/src/**`) → that package's README + relevant reference docs in `docs/src/content/docs/advanced/`
-- **Package exports** (`packages/*/src/index.ts`) → package README + CLAUDE.md
-- **Examples** (`examples/**`) → relevant package READMEs
+- **Package source** (`packages/*/src/**`) → TSDoc on the changed exports + relevant reference docs in `docs/src/content/docs/advanced/` + `integrations/` page for that adapter
+- **Package exports** (`packages/*/src/index.ts`) → TSDoc on the export + every docs page that mentions the symbol (grep `docs/src/content/docs/` and `README.md` for it)
+- **Examples** (`examples/**`) → `docs/src/content/docs/examples.md` and the matching guide
 
 Look in `docs/src/content/docs/advanced/` to identify which reference docs are relevant for a given subsystem.
 
@@ -101,6 +100,13 @@ Look in `docs/src/content/docs/advanced/` to identify which reference docs are r
 - Are new public APIs documented?
 - Are new configuration options described?
 - Are new features mentioned?
+- Does every new or changed public export have TSDoc, with `@defaultValue` and `@throws` matching the code, and `@experimental` on SQLite, NATS, and Dashboard exports?
+
+**Cross-references in touched docs**:
+
+- Internal links and referenced file paths in docs the diff touches still resolve.
+- A new `examples/showcase-*` directory is listed in `docs/src/content/docs/examples.md`, and the matching guide in `docs/src/content/docs/guides/` links to it (`See [examples/showcase-...](https://github.com/kvet/queuert/tree/main/examples/showcase-...)`).
+- A new or renamed OTEL metric, span, or attribute is reflected in `docs/src/content/docs/advanced/otel-metrics.md` / `otel-tracing.md`.
 
 ### 4. Assess Impact Severity
 
@@ -159,15 +165,15 @@ If documentation is already up to date, say so clearly. Don't invent issues.
 
 When `packages/*/src/index.ts` changes:
 
-- Check the package's README.md for export documentation
-- Verify CLAUDE.md package descriptions
+- Check TSDoc on added or changed exports
+- Grep the docs site and `README.md` for removed or renamed exports
 
 ### Subsystem Changes
 
 When adapter interfaces, worker logic, job processing, or other core subsystems change:
 
 - Identify the relevant reference doc(s) in `docs/src/content/docs/advanced/`
-- Check all package READMEs that implement or expose the subsystem
+- Check the `integrations/` and `guides/` pages that describe the subsystem
 - Check examples that use the subsystem
 
 ### Terminology Changes

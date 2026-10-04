@@ -1,11 +1,11 @@
 ---
 name: review-docs
-description: Check if documentation is up to date with code changes. Analyzes git changes and identifies documentation that may need updating, comparing code modifications against reference docs and package READMEs.
+description: Check if documentation is up to date with code changes. Analyzes git changes and identifies documentation that may need updating, comparing code modifications against TSDoc, reference docs, and the docs site.
 ---
 
 # Documentation Sync Check
 
-Analyze git changes to identify documentation that may need updating. This skill compares code modifications against reference docs (`docs/src/content/docs/advanced/`) and package READMEs to ensure documentation stays in sync with the codebase.
+Analyze git changes to identify documentation that may need updating. This skill compares code modifications against TSDoc, reference docs (`docs/src/content/docs/advanced/`), and the rest of the docs site to ensure documentation stays in sync with the codebase.
 
 ## Instructions
 
@@ -43,11 +43,11 @@ Also run `git diff --name-only` (with appropriate flags) to get the list of chan
 
 Group changes by their documentation relevance:
 
-| File Pattern        | Related Documentation                                                                          |
-| ------------------- | ---------------------------------------------------------------------------------------------- |
-| `packages/*/src/**` | TSDoc on exports, package README, relevant reference docs in `docs/src/content/docs/advanced/` |
-| `examples/**`       | Package READMEs, `CLAUDE.md`                                                                   |
-| Exports/public API  | TSDoc on exports, package README, `CLAUDE.md`                                                  |
+| File Pattern        | Related Documentation                                                                                           |
+| ------------------- | --------------------------------------------------------------------------------------------------------------- |
+| `packages/*/src/**` | TSDoc on exports, relevant reference docs in `docs/src/content/docs/advanced/`, adapter page in `integrations/` |
+| `examples/**`       | `docs/src/content/docs/examples.md`, matching guide in `docs/src/content/docs/guides/`                          |
+| Exports/public API  | TSDoc on exports, every docs page and `README.md` section that mentions the symbol                              |
 
 Look in `docs/src/content/docs/advanced/` to identify which reference docs are relevant for a given package or subsystem.
 

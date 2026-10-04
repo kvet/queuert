@@ -70,54 +70,8 @@ Evaluate how well the schema supports future changes without breaking migrations
 - Are there edge cases where orphaned rows could accumulate (e.g., deleted chains leaving dangling blockers)?
 - Is CASCADE behavior correct for deletions?
 
-## Output Format
+## Output
 
-Provide your findings in this format:
+Findings only, grouped CRITICAL / WARNING / SUGGESTION. For each: the SQL statement or DDL affected, file:line, current behavior and risk, recommended change, and whether it needs a migration.
 
-```markdown
-## Schema Review Findings
-
-### Critical Issues
-
-[Schema problems that could cause data loss, corruption, or serious performance issues]
-
-### Warnings
-
-[Missing indices, suboptimal queries, potential concurrency issues]
-
-### Suggestions
-
-[Normalization improvements, future-proofing, cleanup]
-
-### Index Coverage Analysis
-
-| Query | Table | Filter Columns | Covered By Index? | Notes |
-| ----- | ----- | -------------- | ----------------- | ----- |
-| ...   | ...   | ...            | ...               | ...   |
-
-### Cross-Backend Comparison
-
-| Feature | PostgreSQL | SQLite | Consistent? | Notes |
-| ------- | ---------- | ------ | ----------- | ----- |
-| ...     | ...        | ...    | ...         | ...   |
-
-### Forward-Compatibility Assessment
-
-| Future Feature | Schema Impact | Migration Needed? | Breaking? |
-| -------------- | ------------- | ----------------- | --------- |
-| ...            | ...           | ...               | ...       |
-
-### Concurrency Analysis
-
-| Operation | Locking Strategy | Risk | Notes |
-| --------- | ---------------- | ---- | ----- |
-| ...       | ...              | ...  | ...   |
-```
-
-For each finding, include:
-
-- Severity (CRITICAL/WARNING/SUGGESTION)
-- Specific SQL query or DDL statement affected
-- File and line location
-- Current behavior and risk
-- Recommended change
+Do not produce per-query index coverage tables or cross-backend comparison tables of things that match — mention a query only when it has a problem. Prioritize queries and DDL changed since the base tag given in your prompt; review unchanged queries only for the locking/concurrency and data-integrity checks.

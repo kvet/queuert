@@ -54,10 +54,11 @@ Apply the review framework from `.claude/agents/review-code/instructions.md`:
 - Security review
 - Performance considerations
 - Maintainability assessment
+- Public surface, persisted state, and sibling adapters (section 7)
 
 ### Step 4: Generate Alternatives
 
-For non-trivial changes, brainstorm alternative approaches:
+For changes that make a design choice (new abstraction, data structure, control flow, or API shape), brainstorm alternative approaches. Skip this for mechanical changes — renames, fixes with one obvious shape, test-only edits:
 
 - Different architectural patterns
 - Alternative algorithms or data structures
@@ -85,6 +86,8 @@ Provide a structured report with:
 5. Suggestions (nice to have)
 6. Alternative approaches with trade-offs
 7. Questions for the author
+
+Omit any section that has nothing in it rather than writing "none".
 
 ## Output Format
 

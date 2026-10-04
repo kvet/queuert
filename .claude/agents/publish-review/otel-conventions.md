@@ -135,6 +135,6 @@ Categorize findings as CRITICAL, WARNING, or SUGGESTION:
 - **SUGGESTION**: Naming polish, additional attributes that would make
   dashboards richer, opportunities to adopt newly stabilized conventions.
 
-Return a structured report with specific file paths and line numbers, plus a
-concrete rename/restructure recommendation for each finding. Cross-reference
-the spec section that justifies each call.
+Findings only, each with file path and line number, a concrete
+rename/restructure recommendation, and the spec section that justifies it.
+Only WebFetch a spec page when a specific finding depends on it.

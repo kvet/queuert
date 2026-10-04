@@ -145,6 +145,30 @@ Read `CLAUDE.md` and `code-style.md` in full before reviewing and hold the diff 
 
 Treat a missing changeset for user-facing changes as a **CRITICAL** finding. Treat a present but incomplete changeset (wrong bump level, missing affected package, unclear description, missing migration note) as a **CONCERN**.
 
+### 7. Public Surface, Persisted State, and Siblings
+
+These checks keep the library consistent change by change, so `publish-review` does not have to rediscover drift across the whole codebase. Skip any that the diff does not touch. Before flagging, check `.claude/agents/publish-review/accepted.md` — items listed there are intentional.
+
+**New or changed public exports** (anything reachable from a `package.json` `exports` entry point):
+
+- Factories: async if they do I/O, sync if pure (`code-style.md`).
+- Nullability: `undefined` for not found, `null` for explicitly empty.
+- New error classes follow the Error Class Shape in `code-style.md`.
+- `@experimental` present on new SQLite, NATS, and Dashboard exports.
+
+**Siblings** — a change to one member of a family must be checked against the others. Open the sibling's source, not just the diff:
+
+- State adapters (postgres, sqlite, in-process): an option, method, query, or behavior added or changed in one is mirrored in the others, with the same option name and type — or the divergence is deliberate and stated.
+- Notify adapters (postgres, redis, nats), and the `testing` subpaths: same option names for the same concept.
+
+**Persisted state** — schema, migrations, or state-adapter SQL:
+
+- New `WHERE` / `JOIN` / `ORDER BY` columns are covered by an index; no N+1 query hidden in a loop on PostgreSQL.
+- Every schema change has a migration, and both PostgreSQL and SQLite change together.
+- Locking is consistent with the surrounding queries (`FOR UPDATE` / `SKIP LOCKED` on PostgreSQL; SQLite serializes writes).
+
+**Observability** — new or renamed metrics, spans, or attributes in `packages/otel`: follow the rules in `.claude/agents/publish-review/otel-conventions.md` §1 and §3 (dotted lowercase names, `queuert.*` namespace for custom attributes, seconds for durations, low-cardinality attributes on counters), and the change is reflected in `docs/src/content/docs/advanced/otel-metrics.md`.
+
 ## Alternative Approaches Framework
 
 For significant changes, always consider alternative approaches. Structure your analysis:
@@ -225,6 +249,7 @@ Before finalizing your review, ensure you've addressed:
 - [ ] Assessed maintainability
 - [ ] Held every changed file against `code-style.md`, including each added or edited comment
 - [ ] Verified changeset coverage for user-facing changes
+- [ ] Checked sibling adapters for any adapter, schema, or public-export change
 - [ ] Generated at least one alternative approach for non-trivial changes
 - [ ] Formulated clarifying questions for unclear intent
 - [ ] Prioritized findings by severity

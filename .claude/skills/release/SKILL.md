@@ -62,14 +62,16 @@ prompt: |
   2. **Internal changes** (refactors, CI, docs, chore — not for the changeset summary but useful context)
   3. **Breaking changes** (if any)
   4. **Suggested version bump** (patch/minor/major) with reasoning
-  5. **Suggested changeset summary** — a concise, user-facing description of what changed.
-     Only include things users care about. Do NOT mention internal chores, CI changes,
-     or refactors that don't affect the public API.
+  5. **Changeset coverage** — read every pending `.changeset/*.md` (except README.md).
+     List user-facing changes that no pending changeset covers.
+  6. **Suggested release summary** — one or two sentences, user-facing. The per-change
+     notes already live in the pending changesets; do not repeat them.
 ```
 
 2. Present the agent's analysis to the user. **Ask the user**:
    - What version bump they want (suggest the agent's recommendation as default)
-   - Whether the suggested changeset summary is good, or if they want to adjust it
+   - Whether the suggested release summary is good, or if they want to adjust it
+   - How to handle any user-facing change not covered by a pending changeset (add one, or confirm it is internal)
 
 3. Create the changeset file at `.changeset/release-<version>.md`. All packages are linked and must be listed together:
 
@@ -89,10 +91,10 @@ prompt: |
 
 ### Step 3: Version Packages
 
-Run changeset version (must use `pnpm run` to avoid the built-in `pnpm version`):
+Run changeset version:
 
 ```bash
-pnpm run version
+bun run version
 ```
 
 Verify all packages were bumped to the expected version:
@@ -106,7 +108,7 @@ ls packages/*/package.json | xargs -I {} sh -c 'echo "--- {}"; grep "\"version\"
 Changeset-generated changelogs may have formatting issues. Run the formatter:
 
 ```bash
-pnpm fmt
+bun run fmt
 ```
 
 ### Step 5: Commit, Merge, Tag, and Push
