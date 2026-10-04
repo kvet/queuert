@@ -130,7 +130,7 @@ Look in `docs/src/content/docs/advanced/` to identify which reference docs are r
 ### Be Specific
 
 Bad: "The adapters documentation may need updating"
-Good: "In docs/src/content/docs/advanced/adapters.md, the StateAdapter interface example at line 45 uses `createJob()` but the method was renamed to `enqueueJob()` in packages/core/src/state-adapter/state-adapter.ts:123"
+Good: "In docs/src/content/docs/advanced/adapters.mdx, the StateAdapter interface example at line 45 uses `createJob()` but the method was renamed to `enqueueJob()` in packages/core/src/state-adapter/state-adapter.ts:123"
 
 ### Provide Context
 

@@ -1,0 +1,18 @@
+---
+export type Tone = "neutral" | "purple" | "blue" | "green" | "amber" | "red";
+
+type Props = {
+  tone?: Tone;
+  /** `solid` fills the box with the tone, like a status pill; `ghost` is dashed and muted. */
+  variant?: "outline" | "solid" | "ghost";
+  /** A second, muted line under the title. */
+  sub?: string;
+}
+
+const { tone = "neutral", variant = "outline", sub } = Astro.props;
+---
+
+<div class="q-d-node" data-tone={tone} data-variant={variant}>
+  <span class="q-d-node__title"><slot /></span>
+  {sub && <span class="q-d-node__sub">{sub}</span>}
+</div>

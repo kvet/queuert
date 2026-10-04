@@ -1,0 +1,44 @@
+---
+title: Awaiting Chains
+description: Wait for chains to complete with polling and notifications.
+sidebar:
+  order: 11
+---
+
+import { Arrow, Diagram, Flow, Group, Node, Rows } from "../../../components/diagram";
+
+`awaitChain` waits for a chain to complete by combining polling with notify adapter events. Between polls, it listens for completion notifications to react immediately.
+
+```ts
+const completedChain = await client.awaitChain(
+  { id: chainId },
+  { timeoutMs: 30_000, pollIntervalMs: 5_000 },
+);
+
+console.log(completedChain.output); // Typed output from the final job
+```
+
+Throws `WaitChainTimeoutError` on timeout. Supports an `AbortSignal` for cancellation.
+
+<Diagram label="awaitChain polls the database and listens for a completion notification at the same time; it returns the output when the chain completes, or throws on timeout or abort">
+  <Flow>
+    <Node tone="blue">awaitChain()</Node>
+    <Arrow />
+    <Group title="wait loop">
+      <Node sub="every pollIntervalMs">poll the DB</Node>
+      <Node tone="amber" sub="wakes the loop early">listen</Node>
+    </Group>
+    <Rows spine>
+      <Flow>
+        <Arrow tone="green" />
+        <Node tone="green" variant="solid" sub="returns the output">completed</Node>
+      </Flow>
+      <Flow>
+        <Arrow tone="red" />
+        <Node tone="red" sub="throws">timeout / abort</Node>
+      </Flow>
+    </Rows>
+  </Flow>
+</Diagram>
+
+See [examples/showcase-chain-awaiting](https://github.com/kvet/queuert/tree/main/examples/showcase-chain-awaiting) for a complete working example demonstrating basic awaiting, parallel awaiting, timeout handling, and abort signals.

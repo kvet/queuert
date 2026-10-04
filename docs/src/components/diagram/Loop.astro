@@ -1,0 +1,18 @@
+---
+import { type Tone } from "./Node.astro";
+
+type Props = {
+  label: string;
+  tone?: Tone;
+}
+
+const { label, tone = "amber" } = Astro.props;
+---
+
+<div class="q-d-loop" data-tone={tone}>
+  <slot />
+  <div class="q-d-loop__back">
+    <span class="q-d-loop__bracket" aria-hidden="true"></span>
+    <span>{label}</span>
+  </div>
+</div>

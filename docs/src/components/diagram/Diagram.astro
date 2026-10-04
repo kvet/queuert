@@ -1,0 +1,49 @@
+---
+import "./diagram.css";
+
+type Props = {
+  /** Accessible name for the whole figure. */
+  label: string;
+  caption?: string;
+  /**
+   * How a diagram that doesn't fit adapts: `auto` stacks its flows into a column, `none` keeps the
+   * row and scrolls sideways (for diagrams whose meaning depends on their 2-D arrangement).
+   */
+  stack?: "auto" | "none";
+}
+
+const { label, caption, stack = "auto" } = Astro.props;
+---
+
+<figure class="q-d not-content" aria-label={label}>
+  <div class="q-d__body" data-stack={stack}>
+    <slot />
+  </div>
+  {caption && <figcaption class="q-d__caption">{caption}</figcaption>}
+</figure>
+
+<script>
+  /*
+   * Stack a diagram when its row is wider than the figure. The row's natural width is measured
+   * while it is laid out as a row (it never shrinks then) and remembered, so a stacked diagram goes
+   * back to a row once the figure is wide enough again.
+   */
+  const naturalWidths = new WeakMap<HTMLElement, number>();
+
+  const update = (body: HTMLElement) => {
+    const row = body.firstElementChild;
+    if (!(row instanceof HTMLElement)) return;
+    if (!body.hasAttribute("data-stacked")) naturalWidths.set(body, row.offsetWidth);
+    const fits = (naturalWidths.get(body) ?? 0) <= body.clientWidth;
+    body.toggleAttribute("data-stacked", !fits);
+  };
+
+  const observer = new ResizeObserver((entries) => {
+    for (const entry of entries) update(entry.target as HTMLElement);
+  });
+
+  for (const body of document.querySelectorAll<HTMLElement>('.q-d__body[data-stack="auto"]')) {
+    update(body);
+    observer.observe(body);
+  }
+</script>

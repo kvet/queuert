@@ -1,6 +1,7 @@
 import { type BaseJobTypeDefinitions, type Client, type StateAdapter } from "queuert";
 
 import { renderHtml } from "./html.js";
+import { serovalResponse } from "./response.js";
 import {
   handleChainBlocking,
   handleChainDelete,
@@ -33,6 +34,51 @@ const loadAssets = async (): Promise<Assets | null> => {
     cachedAssets = null;
   }
   return cachedAssets;
+};
+
+const dispatchApi = async (
+  request: Request,
+  url: URL,
+  localPath: string,
+  client: Client<any, any>,
+): Promise<Response | undefined> => {
+  let match: RegExpMatchArray | null;
+
+  if (request.method === "DELETE") {
+    match = localPath.match(/^\/api\/chains\/([^/]+)$/);
+    return match ? handleChainDelete(client, match[1]) : undefined;
+  }
+  if (request.method === "POST") {
+    match = localPath.match(/^\/api\/jobs\/([^/]+)\/reschedule$/);
+    return match ? handleJobReschedule(client, match[1]) : undefined;
+  }
+  if (request.method !== "GET") return undefined;
+
+  if (localPath === "/api/chains/by-ids") return handleChainsByIds(url, client);
+
+  match = localPath.match(/^\/api\/chains\/([^/]+)\/blocking$/);
+  if (match) return handleChainBlocking(url, client, match[1]);
+
+  match = localPath.match(/^\/api\/chains\/([^/]+)\/jobs$/);
+  if (match) return handleChainJobs(url, client, match[1]);
+
+  match = localPath.match(/^\/api\/chains\/([^/]+)$/);
+  if (match) return handleChainDetail(url, client, match[1]);
+
+  if (localPath === "/api/chain-types/counts") return handleChainTypesCounts(url, client);
+  if (localPath === "/api/chain-types") return handleChainTypesList(client);
+  if (localPath === "/api/chains") return handleChainsList(url, client);
+
+  if (localPath === "/api/jobs/by-ids") return handleJobsByIds(url, client);
+
+  match = localPath.match(/^\/api\/jobs\/([^/]+)$/);
+  if (match) return handleJobDetail(url, client, match[1]);
+
+  if (localPath === "/api/job-types/counts") return handleJobTypesCounts(url, client);
+  if (localPath === "/api/job-types") return handleJobTypesList(client);
+  if (localPath === "/api/jobs") return handleJobsList(url, client);
+
+  return undefined;
 };
 
 /**
@@ -70,36 +116,15 @@ export const createDashboard = async <
       return new Response("Not Found", { status: 404 });
     }
     const localPath = basePath ? pathname.slice(basePath.length) || "/" : pathname;
-    let match: RegExpMatchArray | null;
-
-    // API routes
-    if (localPath === "/api/chains/by-ids") return handleChainsByIds(url, client);
-
-    match = localPath.match(/^\/api\/chains\/([^/]+)\/blocking$/);
-    if (match) return handleChainBlocking(url, client, match[1]);
-
-    match = localPath.match(/^\/api\/chains\/([^/]+)\/jobs$/);
-    if (match) return handleChainJobs(url, client, match[1]);
-
-    match = localPath.match(/^\/api\/chains\/([^/]+)$/);
-    if (match && request.method === "DELETE") return handleChainDelete(client, match[1]);
-    if (match) return handleChainDetail(url, client, match[1]);
-
-    if (localPath === "/api/chain-types/counts") return handleChainTypesCounts(url, client);
-    if (localPath === "/api/chain-types") return handleChainTypesList(client);
-    if (localPath === "/api/chains") return handleChainsList(url, client);
-
-    if (localPath === "/api/jobs/by-ids") return handleJobsByIds(url, client);
-
-    match = localPath.match(/^\/api\/jobs\/([^/]+)\/reschedule$/);
-    if (match && request.method === "POST") return handleJobReschedule(client, match[1]);
-
-    match = localPath.match(/^\/api\/jobs\/([^/]+)$/);
-    if (match) return handleJobDetail(url, client, match[1]);
-
-    if (localPath === "/api/job-types/counts") return handleJobTypesCounts(url, client);
-    if (localPath === "/api/job-types") return handleJobTypesList(client);
-    if (localPath === "/api/jobs") return handleJobsList(url, client);
+    if (localPath === "/api" || localPath.startsWith("/api/")) {
+      try {
+        const response = await dispatchApi(request, url, localPath, client);
+        if (response) return response;
+      } catch (err) {
+        return serovalResponse({ error: err instanceof Error ? err.message : String(err) }, 500);
+      }
+      return serovalResponse({ error: "Not found" }, 404);
+    }
 
     // Static assets + SPA fallback
     const assets = await loadAssets();

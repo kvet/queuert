@@ -1,0 +1,526 @@
+/*
+ * Diagram kit: plain HTML boxes and CSS arrows in the site's own design language, so diagrams use
+ * the page font, theme tokens and dark mode directly. Groups read like Cards (unfilled, uppercase
+ * title on the top border); nodes carry the dashboard's status colors as a square dot, or as a
+ * tinted pill in the `solid` variant.
+ *
+ * Flows lay out in a row. When the row doesn't fit, Diagram's script marks the body `data-stacked`
+ * and flows turn into columns with arrows pointing down; without JS the row scrolls sideways.
+ */
+
+.q-d {
+  --q-d-line: var(--sl-color-gray-4);
+  --q-d-label: var(--sl-color-gray-3);
+  --q-d-gap: 0.75rem;
+  margin: 2rem 0;
+  font-family: var(--sl-font);
+  font-size: var(--sl-text-body-sm);
+  line-height: 1.45;
+  color: var(--sl-color-text);
+}
+
+/* The top padding keeps the first group's title, which sits on its border, inside the scroller. */
+.q-d__body {
+  display: flex;
+  justify-content: safe center;
+  overflow-x: auto;
+  padding-top: 0.5rem;
+}
+
+/* The row keeps its natural width, so the script can tell when it no longer fits. */
+.q-d__body > * {
+  flex-shrink: 0;
+}
+
+/* A stacked row, or one that never stacks, may shrink: long sub-lines wrap before it scrolls. */
+.q-d__body:is([data-stacked], [data-stack="none"]) > * {
+  flex-shrink: 1;
+}
+
+.q-d__caption {
+  max-width: 60ch;
+  margin: 0.75rem auto 0;
+  text-align: center;
+  font-size: var(--sl-text-2xs);
+  color: var(--sl-color-gray-3);
+}
+
+/* ---------- Tones: the dashboard's status palette, plus neutral ---------- */
+
+.q-d [data-tone] {
+  --t-dot: var(--sl-color-gray-4);
+  --t-low: var(--sl-color-gray-7);
+  --t-high: var(--sl-color-white);
+}
+.q-d [data-tone="purple"] {
+  --t-dot: var(--sl-color-purple);
+  --t-low: var(--sl-color-purple-low);
+  --t-high: var(--sl-color-purple-high);
+}
+.q-d [data-tone="blue"] {
+  --t-dot: var(--sl-color-blue);
+  --t-low: var(--sl-color-blue-low);
+  --t-high: var(--sl-color-blue-high);
+}
+.q-d [data-tone="green"] {
+  --t-dot: var(--sl-color-green);
+  --t-low: var(--sl-color-green-low);
+  --t-high: var(--sl-color-green-high);
+}
+.q-d [data-tone="amber"] {
+  --t-dot: var(--sl-color-orange);
+  --t-low: var(--sl-color-orange-low);
+  --t-high: var(--sl-color-orange-high);
+}
+.q-d [data-tone="red"] {
+  --t-dot: var(--sl-color-red);
+  --t-low: var(--sl-color-red-low);
+  --t-high: var(--sl-color-red-high);
+}
+
+/* ---------- Flow ---------- */
+
+.q-d-flow {
+  display: flex;
+  align-items: center;
+}
+
+.q-d-flow[data-align="stretch"] {
+  align-items: stretch;
+}
+
+/* Boxes side by side without an arrow between them, e.g. a worker's slots. */
+.q-d-flow > .q-d-node + .q-d-node {
+  margin-inline-start: 0.375rem;
+}
+
+/* ---------- Node ---------- */
+
+.q-d-node {
+  display: flex;
+  flex-direction: column;
+  justify-content: center;
+  gap: 0.125rem;
+  min-width: 0;
+  border: 1px solid color-mix(in srgb, var(--t-dot) 45%, var(--q-border));
+  border-radius: var(--q-radius);
+  padding: 0.5rem 0.75rem;
+  background: color-mix(in srgb, var(--t-low) 45%, transparent);
+  color: var(--sl-color-white);
+}
+
+.q-d-node__title {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  font-weight: 600;
+  white-space: nowrap;
+}
+
+/* The dashboard's StatusDot. */
+.q-d-node__title::before {
+  content: "";
+  flex-shrink: 0;
+  width: 0.5rem;
+  height: 0.5rem;
+  border-radius: var(--q-radius);
+  background: var(--t-dot);
+}
+
+/* Newlines in `sub` start new lines. */
+.q-d-node__sub {
+  padding-left: 1rem;
+  white-space: pre-line;
+  font-size: var(--sl-text-2xs);
+  color: var(--sl-color-gray-3);
+}
+
+.q-d-node[data-variant="solid"] {
+  border-color: var(--t-dot);
+  background: var(--t-low);
+  color: var(--t-high);
+}
+
+.q-d-node[data-variant="solid"] .q-d-node__sub {
+  color: color-mix(in srgb, var(--t-high) 75%, transparent);
+}
+
+.q-d-node[data-variant="ghost"] {
+  border-style: dashed;
+  border-color: var(--sl-color-gray-5);
+  background: transparent;
+  color: var(--sl-color-gray-3);
+}
+
+.q-d-node[data-variant="ghost"] .q-d-node__title {
+  font-weight: 400;
+}
+
+.q-d-node code {
+  border-radius: var(--q-radius);
+  padding: 0 0.25rem;
+  background: color-mix(in srgb, currentColor 12%, transparent);
+  font-size: inherit;
+}
+
+/* ---------- Arrow ---------- */
+
+/*
+ * Label above the line, sub-label below. The two text rows share the free height equally, so the
+ * line sits at the arrow's vertical center and lines up with the centers of the boxes beside it.
+ */
+.q-d-arrow {
+  --a-color: var(--q-d-line);
+  --a-label: var(--q-d-label);
+  display: grid;
+  grid-template-rows: 1fr auto 1fr;
+  flex: 0 1 auto;
+  min-width: 2.5rem;
+  font-size: var(--sl-text-2xs);
+  line-height: 1.35;
+  text-align: center;
+}
+
+.q-d-arrow[data-tone] {
+  --a-color: var(--t-dot);
+  --a-label: var(--t-high);
+}
+
+.q-d-arrow__label,
+.q-d-arrow__sub {
+  padding-inline: 0.625rem;
+  white-space: nowrap;
+}
+
+.q-d-arrow__label {
+  align-self: end;
+  padding-bottom: 0.25rem;
+  color: var(--a-label);
+}
+
+.q-d-arrow__sub {
+  align-self: start;
+  padding-top: 0.25rem;
+  color: var(--sl-color-gray-4);
+}
+
+.q-d-arrow__line {
+  position: relative;
+  border-top: 1px solid var(--a-color);
+}
+
+.q-d-arrow[data-dashed] .q-d-arrow__line {
+  border-top-style: dashed;
+}
+
+/* Arrowhead: a small solid triangle at the line's end. */
+.q-d-arrow__line::after {
+  content: "";
+  position: absolute;
+  top: -4.5px;
+  right: -1px;
+  border-block: 4px solid transparent;
+  border-left: 7px solid var(--a-color);
+}
+
+.q-d-arrow[data-reverse] .q-d-arrow__line::after {
+  right: auto;
+  left: -1px;
+  border-left: 0;
+  border-right: 7px solid var(--a-color);
+}
+
+.q-d-arrow[data-head="none"] .q-d-arrow__line::after {
+  content: none;
+}
+
+/* ---------- Group: a Card-style box with its title on the top border ---------- */
+
+.q-d-group {
+  --g-title-lh: 1rem;
+  display: flex;
+  flex-direction: column;
+  justify-content: center;
+  gap: var(--q-d-gap);
+  border: 1px solid var(--sl-color-gray-5);
+  border-radius: var(--q-radius);
+  padding: 0 0.75rem 0.75rem;
+  background: transparent;
+}
+
+.q-d-group[data-dashed] {
+  border-style: dashed;
+}
+
+.q-d-group[data-tone] {
+  border-color: color-mix(in srgb, var(--t-dot) 55%, var(--q-border));
+}
+
+.q-d-group__title {
+  align-self: flex-start;
+  margin: calc(var(--g-title-lh) / -2) 0 0 -0.375rem;
+  padding-inline: 0.375rem;
+  background: var(--sl-color-bg);
+  font-size: var(--sl-text-2xs);
+  font-weight: 600;
+  letter-spacing: 0.06em;
+  line-height: var(--g-title-lh);
+  text-transform: uppercase;
+  white-space: nowrap;
+  color: var(--sl-color-gray-3);
+}
+
+.q-d-group[data-tone] .q-d-group__title {
+  color: var(--t-high);
+}
+
+/* The group's content keeps the box centered under its title. */
+.q-d-group > :not(.q-d-group__title) {
+  align-self: center;
+}
+
+/* ---------- Rows: flows whose columns line up, optionally fanning out from or into a spine ---------- */
+
+.q-d-rows {
+  display: grid;
+  grid-template-columns: var(--r-cols);
+  row-gap: var(--q-d-gap);
+}
+
+.q-d-rows[data-gap="none"] {
+  row-gap: 0;
+}
+
+/* Boxes fill the row's height, so vertical arrows between rows meet their edges. */
+.q-d-rows > .q-d-flow {
+  display: grid;
+  grid-column: 1 / -1;
+  grid-template-columns: subgrid;
+  align-items: stretch;
+}
+
+/* Empty cells hold a column open; anything else spans the row (e.g. a shared target). */
+.q-d-rows > :not(.q-d-flow) {
+  grid-column: 1 / -1;
+}
+
+/*
+ * The spine: a stub to the source (left, a fan-out) or the target (right, a merge, ending in an
+ * arrowhead), and a vertical bar the rows' arrows start from or end at.
+ */
+.q-d-rows[data-spine] {
+  position: relative;
+}
+
+.q-d-rows[data-spine="start"] {
+  padding-left: 1rem;
+}
+
+.q-d-rows[data-spine="end"] {
+  padding-right: 1rem;
+}
+
+.q-d-rows[data-spine]::before {
+  content: "";
+  position: absolute;
+  top: 50%;
+  width: 1rem;
+  border-top: 1px solid var(--q-d-line);
+}
+
+.q-d-rows[data-spine="start"]::before {
+  left: 0;
+}
+
+.q-d-rows[data-spine="end"]::before {
+  right: 0;
+}
+
+.q-d-rows[data-spine="end"]::after {
+  content: "";
+  position: absolute;
+  top: calc(50% - 3.5px);
+  right: -1px;
+  border-block: 4px solid transparent;
+  border-left: 7px solid var(--q-d-line);
+}
+
+.q-d-rows[data-spine] > .q-d-flow {
+  position: relative;
+}
+
+.q-d-rows[data-spine] > .q-d-flow::before {
+  content: "";
+  position: absolute;
+  top: calc(var(--q-d-gap) / -2);
+  bottom: calc(var(--q-d-gap) / -2);
+  border-left: 1px solid var(--q-d-line);
+}
+
+.q-d-rows[data-spine="start"] > .q-d-flow::before {
+  left: 0;
+}
+
+.q-d-rows[data-spine="end"] > .q-d-flow::before {
+  right: 0;
+}
+
+.q-d-rows[data-spine] > .q-d-flow:first-child::before {
+  top: 50%;
+}
+
+.q-d-rows[data-spine] > .q-d-flow:last-child::before {
+  bottom: 50%;
+}
+
+/* ---------- Loop: a return arrow under a box ---------- */
+
+/*
+ * The bracket and its label hang below the box; matching padding above keeps the box itself on the
+ * flow's center line so arrows beside it still meet it in the middle.
+ */
+.q-d-loop {
+  --l-h: 2.125rem;
+  display: flex;
+  flex-direction: column;
+  align-items: stretch;
+  padding-top: var(--l-h);
+}
+
+.q-d-loop__back {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  height: var(--l-h);
+  color: var(--t-high);
+  font-size: var(--sl-text-2xs);
+  line-height: 1.35;
+}
+
+.q-d-loop__bracket {
+  position: relative;
+  align-self: stretch;
+  height: 0.75rem;
+  margin-inline: 30%;
+  border: 1px dashed var(--t-dot);
+  border-top: 0;
+}
+
+/* Arrowhead pointing up into the box at the bracket's left end. */
+.q-d-loop__bracket::after {
+  content: "";
+  position: absolute;
+  top: 0;
+  left: -4.5px;
+  border-inline: 4px solid transparent;
+  border-bottom: 7px solid var(--t-dot);
+}
+
+.q-d-loop__back > span {
+  padding-top: 0.125rem;
+}
+
+/* ---------- Vertical layout: column flows, down arrows, and stacked diagrams ---------- */
+
+/* Stacked, flows become columns, except inside Rows, which keep their grid. */
+.q-d-flow[data-direction="column"],
+.q-d__body[data-stacked] .q-d-flow:not(.q-d-rows > *) {
+  flex-direction: column;
+  align-items: center;
+
+  > :is(.q-d-node, .q-d-group, .q-d-loop) {
+    align-self: stretch;
+  }
+
+  > .q-d-arrow {
+    align-self: stretch;
+  }
+
+  /* The loop's centering padding would only leave a gap above it. */
+  > .q-d-loop {
+    padding-top: 0;
+  }
+}
+
+/* A vertical arrow: label to the right of the line, sub-label to the left. */
+.q-d-arrow:is(
+  [data-direction="down"],
+  .q-d-flow[data-direction="column"] > *,
+  .q-d__body[data-stacked] .q-d-flow:not(.q-d-rows > *) > *
+) {
+  grid-template-columns: 1fr auto 1fr;
+  grid-template-rows: none;
+  min-width: 0;
+  min-height: 2rem;
+
+  .q-d-arrow__label {
+    grid-column: 3;
+    grid-row: 1;
+    align-self: center;
+    padding: 0 0 0 0.625rem;
+    text-align: left;
+  }
+
+  .q-d-arrow__sub {
+    grid-column: 1;
+    grid-row: 1;
+    align-self: center;
+    padding: 0 0.625rem 0 0;
+    text-align: right;
+  }
+
+  .q-d-arrow__line {
+    grid-column: 2;
+    grid-row: 1;
+    border-top: 0;
+    border-left: 1px solid var(--a-color);
+  }
+
+  &[data-dashed] .q-d-arrow__line {
+    border-left-style: dashed;
+  }
+
+  .q-d-arrow__line::after {
+    top: auto;
+    right: auto;
+    bottom: -1px;
+    left: -4.5px;
+    border-block: 0;
+    border-inline: 4px solid transparent;
+    border-top: 7px solid var(--a-color);
+  }
+
+  &[data-reverse] .q-d-arrow__line::after {
+    top: -1px;
+    bottom: auto;
+    border-top: 0;
+    border-bottom: 7px solid var(--a-color);
+  }
+
+  /* Stop short of the next group's title, which sits on its top border. */
+  &:has(+ .q-d-group, + .q-d-loop) {
+    margin-bottom: 0.5rem;
+  }
+}
+
+.q-d__body[data-stacked] .q-d-group > :not(.q-d-group__title) {
+  align-self: stretch;
+}
+
+/* Under a source in a column, a fan-out hangs from the source's bottom edge as a tree. */
+.q-d-rows[data-spine="start"]:is(
+    .q-d-flow[data-direction="column"] > *,
+    .q-d__body[data-stacked] .q-d-flow:not(.q-d-rows > *) > *
+  ) {
+  align-self: stretch;
+  margin-top: 0.75rem;
+  padding-left: 1.5rem;
+
+  &::before {
+    content: none;
+  }
+
+  > .q-d-flow:first-child::before {
+    top: -0.75rem;
+  }
+}

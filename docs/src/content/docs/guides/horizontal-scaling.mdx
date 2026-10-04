@@ -1,0 +1,135 @@
+---
+title: Horizontal Scaling
+description: Deploy multiple workers sharing the same database.
+sidebar:
+  order: 17
+---
+
+import { Arrow, Diagram, Flow, Node, Rows } from "../../../components/diagram";
+
+Deploy multiple worker processes sharing the same database for horizontal scaling. Workers coordinate via database-level locking (`FOR UPDATE SKIP LOCKED`) — no external coordination required.
+
+<Diagram
+  label="Identical workers: pub/sub wakes all three; they race to claim the job and FOR UPDATE SKIP LOCKED lets only one win"
+  stack="none"
+>
+  <Flow align="stretch">
+    <Node tone="amber" sub="Postgres LISTEN · Redis · NATS · in-process">Your pub/sub</Node>
+    <Rows spine columns="minmax(4rem, auto) auto minmax(7rem, auto)">
+      <Flow>
+        <Arrow label="1 · wake" tone="amber" dashed />
+        <Node tone="green">Worker A</Node>
+        <Arrow label="2 · claim" sub="wins" tone="green" />
+      </Flow>
+      <Flow>
+        <Arrow label="1 · wake" tone="amber" dashed />
+        <Node tone="green">Worker B</Node>
+        <Arrow label="2 · claim" sub="skipped" dashed />
+      </Flow>
+      <Flow>
+        <Arrow label="1 · wake" tone="amber" dashed />
+        <Node tone="green">Worker C</Node>
+        <Arrow label="2 · claim" sub="skipped" dashed />
+      </Flow>
+    </Rows>
+    <Node sub="FOR UPDATE SKIP LOCKED">Your database</Node>
+  </Flow>
+</Diagram>
+
+## Identical Workers
+
+The simplest approach: deploy the same worker configuration on multiple machines or processes.
+
+```ts
+// Process A (e.g., machine-1)
+const workerA = await createInProcessWorker({
+  client,
+  workerName: "worker-a",
+  concurrency: 10,
+  processors: createProcessors({ client, jobTypes, processors: { ... } }),
+});
+
+// Process B (e.g., machine-2)
+const workerB = await createInProcessWorker({
+  client,
+  workerName: "worker-b",
+  concurrency: 10,
+  processors: createProcessors({ client, jobTypes, processors: { ... } }),
+});
+```
+
+`workerName` is an optional human-readable label. The runtime always appends a random UUID, so two replicas sharing the same name still get distinct ids and cannot collide on job attempts. Workers compete for available jobs — when one acquires a job, others skip it. The notify adapter (Redis, PostgreSQL LISTEN/NOTIFY, etc.) ensures workers wake up immediately when new jobs are queued.
+
+## Specialized Workers
+
+A worker only processes the job types in its processor registry. This lets you run different worker topologies optimized for different workloads — a worker that doesn't define a processor for a job type simply ignores it. The same mechanism powers [prioritization](../prioritization/): reserve capacity for an urgent workload by giving it a worker of its own.
+
+For CPU-heavy work, spawn each worker in its own thread so they get true parallelism. Each thread creates its own client, state adapter, and worker — they share nothing except the database:
+
+```ts title="image-worker-thread.ts"
+// Each thread runs independently with its own database connection
+const stateAdapter = await createPgStateAdapter({ stateProvider });
+const client = await createClient({
+  stateAdapter,
+  notifyAdapter,
+  jobTypes: imageJobTypes,
+});
+
+const worker = await createInProcessWorker({
+  client,
+  workerName: `image-worker-${threadId}`,
+  concurrency: 1,
+  processors: createProcessors({
+    client,
+    jobTypes,
+    processors: {
+      "images.resize": { attemptHandler: resizeHandler },
+      "images.transcode": { attemptHandler: transcodeHandler },
+    },
+  }),
+});
+```
+
+```ts title="main.ts"
+import { Worker } from "node:worker_threads";
+
+// 10 threads for CPU-heavy image processing
+for (let i = 0; i < 10; i++) {
+  new Worker("./image-worker-thread.ts");
+}
+
+// Lightweight async I/O — single worker in main thread, high concurrency
+const notificationWorker = await createInProcessWorker({
+  client,
+  workerName: "notification-worker",
+  concurrency: 100,
+  processors: createProcessors({
+    client,
+    jobTypes,
+    processors: {
+      "notifications.send-email": { attemptHandler: emailHandler },
+      "notifications.send-sms": { attemptHandler: smsHandler },
+    },
+  }),
+});
+```
+
+This works because chains are stored in the database, not in worker memory. A chain that starts with `images.resize` (picked up by an image worker thread) can `continueWith` to `notifications.send-email` (picked up by the notification worker in the main thread) — the handoff happens through the database.
+
+You can also combine slices when a single worker should handle multiple domains:
+
+```ts
+const worker = await createInProcessWorker({
+  client,
+  processors: [orderProcessors, notificationProcessors],
+});
+```
+
+See [Feature Slices](../slices/) for organizing job types and processors into independent modules.
+
+## See Also
+
+- [examples/state-postgres-multi-worker](https://github.com/kvet/queuert/tree/main/examples/state-postgres-multi-worker) — multiple workers sharing a PostgreSQL database
+- [Prioritization](../prioritization/) — reserving worker capacity for urgent workloads
+- [In-Process Worker](/queuert/advanced/in-process-worker/) — worker lifecycle and configuration
+- [State Adapters](/queuert/integrations/state-adapters/) — database adapter setup

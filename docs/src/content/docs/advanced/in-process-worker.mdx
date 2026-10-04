@@ -1,0 +1,148 @@
+---
+title: In-Process Worker
+description: In-process worker lifecycle, concurrency, and attempt management.
+sidebar:
+  order: 2
+---
+
+import { Arrow, Diagram, Flow, Group, Node, Rows } from "../../../components/diagram";
+
+## Overview
+
+This document describes the worker design in Queuert: how workers coordinate job processing, manage concurrency, and handle failures.
+
+A **worker** runs a main loop that coordinates job processing across multiple **slots**. Each slot processes one job at a time; the worker manages concurrency and scaling.
+
+## Concurrency Model
+
+Workers process jobs in parallel using slots. See `createInProcessWorker` TSDoc for configuration options. Default: single slot (`concurrency: 1`).
+
+### Architecture
+
+<Diagram label="A worker with concurrency 3: the main loop spawns three slots, and each slot acquires and completes its own job in the database">
+  <Flow direction="column">
+    <Group title="worker · concurrency = 3">
+      <Flow>
+        <Node tone="green" sub={"fills empty slots\nwaits for completions"}>Main loop</Node>
+        <Rows spine>
+          <Flow>
+            <Arrow label="spawn" tone="green" />
+            <Node tone="purple" variant="solid" sub="job A · running">Slot 0</Node>
+          </Flow>
+          <Flow>
+            <Arrow label="spawn" tone="green" />
+            <Node tone="purple" variant="solid" sub="job B · running">Slot 1</Node>
+          </Flow>
+          <Flow>
+            <Arrow label="spawn" tone="green" />
+            <Node tone="purple" variant="solid" sub="job C · running">Slot 2</Node>
+          </Flow>
+        </Rows>
+      </Flow>
+    </Group>
+    <Arrow label="each slot: acquire · complete" />
+    <Node sub="FOR UPDATE SKIP LOCKED: each slot claims a different job">Your database</Node>
+  </Flow>
+</Diagram>
+
+**How it works:**
+
+1. Main loop spawns slots up to `concurrency`
+2. Each slot acquires a job and processes it independently
+3. When a slot completes, main loop spawns a replacement
+4. Slots compete for jobs via database-level locking (`FOR UPDATE SKIP LOCKED` in PostgreSQL)
+
+## Worker Lifecycle
+
+### Main Loop
+
+The worker runs a single coordinating loop:
+
+1. **Fill**: Loop `startJobAttempt` until it returns nothing or all slots are busy
+2. **Reclaim expired attempt**: Reclaim one job with an expired attempt (if any idle slots remain)
+3. **Wait**: Listen for notification, poll timeout, or slot completion
+4. **Repeat**
+
+### Shutdown
+
+On startup, the worker emits a `workerStarted` observability event.
+
+Calling `stop()` triggers graceful shutdown:
+
+1. Signal abort controller — in-flight jobs receive `"worker_stopping"` on their `signal`
+2. Stop spawning new slots
+3. Wait for all in-flight jobs to complete (or release via attempt expiry)
+4. Emit `workerStopping` and `workerStopped` observability events
+
+The `"worker_stopping"` abort reason is cooperative: handlers that check `signal.aborted` and `signal.reason` can distinguish a worker shutdown from a hard abort (e.g. `"taken_by_another_worker"`) and choose to wrap up gracefully instead of abandoning work immediately.
+
+## Worker Identity
+
+Each worker has a unique identity stored in `attemptBy`. The worker tracks active jobs internally and routes abort signals by job ID—no per-slot identity is needed.
+
+## Expired Attempt Reclamation
+
+The worker reclaims jobs with expired attempts, making them available for retry.
+
+When idle slots remain in the main loop:
+
+1. Find oldest `running` job where `attemptUntil < now()` and type matches registered types
+2. Transition job: `running` → `pending`, clear `attemptBy` and `attemptUntil`
+3. Emit `jobAttemptReclaimed` observability event
+4. Notify via `jobScheduled` (workers wake up) and `jobAttemptLost` (original worker aborts)
+
+**Design decisions:**
+
+- **Integrated with main loop**: Runs once per iteration, no separate process needed.
+- **One job per iteration**: Releases at most one expired attempt to avoid blocking slot spawning.
+- **Type-scoped**: Only releases expired attempts for job types the worker is registered to handle.
+- **Concurrent-safe**: Database locking prevents conflicts between workers.
+- **Self-aware**: When running with multiple slots, the worker excludes jobs currently being processed by itself (via `ignoredJobIds`). This prevents a race condition where a worker could release its own in-progress job if the attempt expires before extension.
+
+## Retry and Backoff
+
+When a job handler throws, the worker reschedules it with exponential backoff:
+
+```
+delay = min(initialDelayMs * multiplier^(attempt-1), maxDelayMs)
+```
+
+Example with defaults: 10s → 20s → 40s → 80s → 160s → 300s → 300s...
+
+See [Job Processing](../job-processing/) for details on error handling and abort signals.
+
+## Client-Based Construction
+
+`createInProcessWorker` accepts a `client` instance and extracts infrastructure (`stateAdapter`, `notifyAdapter`, `observabilityAdapter`, `jobTypes`, `log`) from it internally. Worker-specific options (`processors`, `concurrency`, `pollIntervalMs`, `recoveryBackoffConfig`, `defaults`, `requiredAttemptMiddleware`) remain separate parameters. The top-level `recoveryBackoffConfig` controls the worker's own main loop retry behavior (e.g., recovery from database connection errors). Per-attempt configuration — `backoffConfig`, `attemptConfig`, `attemptMiddleware` — lives on the processor registry; the worker-level `defaults.backoffConfig` / `defaults.attemptConfig` provide a fallback for processors that don't set their own (resolution order: processor → registry → worker `defaults` → library default). `requiredAttemptMiddleware` enforces that every slice merged into the worker includes a fixed set of middleware instances as an in-order subsequence — useful for guaranteeing cross-cutting concerns like auth or tracing are present on every slice. The worker only enforces presence; slices continue to run their own middleware chains.
+
+This is purely a construction convenience — no lifecycle coupling is introduced. The client and worker remain independent after construction.
+
+## Extensibility
+
+### Multi-Type Workers
+
+A single worker can handle multiple job types. Slots poll all registered types and process whichever is available first. Per-type configuration (attempt, retry) overrides worker defaults.
+
+### Attempt Middlewares
+
+Handler middleware hook into one or more job processing phases via `wrapHandler`, `wrapPrepare`, `wrapStep`, and `wrapComplete`. Each hook can inject typed context into the inner handler/callback through `next(ctx)`. Middleware compose as an onion: the first middleware's "before" runs outermost. Middleware enable cross-cutting concerns like contextual logging, audit trails, tracing spans, and resource injection.
+
+Middleware are declared on the processor registry via `createProcessors({ attemptMiddleware: [...] })`. Handler signatures inside that registry auto-infer their typed context from the middleware tuple. When multiple slices are passed as an array to `createInProcessWorker`, each processor keeps its slice's middleware chain.
+
+To share middleware across multiple registries, list them inline at each `createProcessors` call — the tuple inference narrows without requiring `as const`. Each slice's middleware chain is the runtime source of truth; the worker simply dispatches to whichever processor matches the job's typeName.
+
+## Summary
+
+The worker design emphasizes:
+
+1. **Simplicity**: Single main loop coordinating parallel slots
+2. **Efficiency**: Slots are self-contained, main loop just manages concurrency
+3. **Reliability**: Integrated attempt reclamation ensures recovery from failures
+4. **Flexibility**: Per-type configuration, multi-type workers
+5. **Extensibility**: Handler middleware enable cross-cutting concerns
+
+## See Also
+
+- [Job Processing](../job-processing/) — Prepare/complete pattern, abort signals, timeouts
+- [Adapters](../adapters/) — Notification optimization, state provider design
+- [`showcase-signals`](https://github.com/kvet/queuert/tree/main/examples/showcase-signals) — Runnable example: graceful shutdown via `worker_stopping`, external completion via `already_completed`

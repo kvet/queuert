@@ -71,6 +71,58 @@ const completeJob = async (
 const encodeRawCursor = (payload: unknown) =>
   Buffer.from(JSON.stringify(payload)).toString("base64url");
 
+const UUID_PATTERN = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
+
+/**
+ * The in-process adapter accepts any string ID; this wraps it so ID lookups throw for non-UUID IDs
+ * the way a Postgres `uuid` cast does. Setting `failures.probe` makes the type-name listing throw
+ * too, which stands in for an unreachable database; `failures.reschedule` makes rescheduling a
+ * valid ID throw, which stands in for a transient database error.
+ */
+const createUuidStrictDashboard = async () => {
+  const inner = await createInProcessStateAdapter();
+  const failures = { probe: false, reschedule: false };
+  const assertUuids = (ids: string[]) => {
+    const malformed = ids.find((id) => !UUID_PATTERN.test(id));
+    if (malformed !== undefined) {
+      throw new Error(`invalid input syntax for type uuid: "${malformed}"`);
+    }
+  };
+  const stateAdapter: typeof inner = {
+    ...inner,
+    getChains: async (params) => {
+      assertUuids(params.chainIds);
+      return inner.getChains(params);
+    },
+    getJobs: async (params) => {
+      assertUuids(params.jobIds);
+      return inner.getJobs(params);
+    },
+    rescheduleJobs: async (params) => {
+      assertUuids(params.jobs.map((job) => job.jobId));
+      if (failures.reschedule) throw new Error("deadlock detected");
+      return inner.rescheduleJobs(params);
+    },
+    listChainJobs: async (params) => {
+      assertUuids([params.chainId]);
+      return inner.listChainJobs(params);
+    },
+    listBlockedJobs: async (params) => {
+      assertUuids([params.chainId]);
+      return inner.listBlockedJobs(params);
+    },
+    listChainTypeNames: async (params) => {
+      if (failures.probe) throw new Error("connection refused");
+      return inner.listChainTypeNames(params);
+    },
+  };
+  const client = await createClient({ stateAdapter, jobTypes: defineJobTypes() });
+  const dashboard = await createDashboard({ client });
+  const request = async (path: string, init?: RequestInit) =>
+    dashboard.fetch(new Request(`http://test${path}`, init));
+  return { request, stateAdapter: inner, failures };
+};
+
 describe("Dashboard API", () => {
   describe("GET /api/chains", () => {
     it("returns empty list when no chains exist", async () => {
@@ -209,6 +261,31 @@ describe("Dashboard API", () => {
       expect(body.chain.id).toBe(root.id);
       expect(body.jobs).toHaveLength(2);
       expect(body.nextCursor).toBeNull();
+      expect(body.currentJob.typeName).toBe("chain-step2");
+    });
+
+    it("returns the tail job as currentJob even when it is past the first page", async () => {
+      const { request, stateAdapter } = await createTestDashboard();
+      const root = await createJob(stateAdapter, "chain-type", { step: 1 });
+      const step2 = await createContinuation(stateAdapter, "chain-step2", root.id, { step: 2 });
+
+      const body = await parseBody(await request(`/api/chains/${root.chainId}?limit=1`));
+
+      expect(body.jobs).toHaveLength(1);
+      expect(body.nextCursor).not.toBeNull();
+      expect(body.currentJob.id).toBe(step2.id);
+    });
+
+    it("returns a null currentJob for a completed chain", async () => {
+      const { request, stateAdapter } = await createTestDashboard();
+      const root = await createJob(stateAdapter, "completed-type", null);
+      await startAttempt(stateAdapter, "completed-type");
+      await completeJob(stateAdapter, root.id, { output: null });
+
+      const body = await parseBody(await request(`/api/chains/${root.chainId}`));
+
+      expect(body.chain.status).toBe("completed");
+      expect(body.currentJob).toBeNull();
     });
 
     it("returns 404 for missing chain", async () => {
@@ -798,6 +875,140 @@ describe("Dashboard API", () => {
       );
 
       expect(res.status).toBe(200);
+    });
+  });
+
+  describe("malformed IDs and errors", () => {
+    it("returns only the valid items when by-ids mixes valid and malformed IDs", async () => {
+      const { request, stateAdapter } = await createUuidStrictDashboard();
+      const job = await createJob(stateAdapter, "type-a", null);
+
+      const chainsRes = await request(`/api/chains/by-ids?ids=${job.chainId},junk`);
+      const jobsRes = await request(`/api/jobs/by-ids?ids=junk,${job.id}`);
+
+      expect(chainsRes.status).toBe(200);
+      expect((await parseBody(chainsRes)).items.map((c: { id: string }) => c.id)).toEqual([
+        job.chainId,
+      ]);
+      expect(jobsRes.status).toBe(200);
+      expect((await parseBody(jobsRes)).items.map((j: { id: string }) => j.id)).toEqual([job.id]);
+    });
+
+    it("returns an empty list when by-ids has only malformed IDs", async () => {
+      const { request } = await createUuidStrictDashboard();
+
+      const chainsRes = await request("/api/chains/by-ids?ids=junk,also-junk");
+      const jobsRes = await request("/api/jobs/by-ids?ids=junk");
+
+      expect(chainsRes.status).toBe(200);
+      expect((await parseBody(chainsRes)).items).toEqual([]);
+      expect(jobsRes.status).toBe(200);
+      expect((await parseBody(jobsRes)).items).toEqual([]);
+    });
+
+    it("returns 500 when by-ids lookups fail and the database probe fails too", async () => {
+      const { request, failures } = await createUuidStrictDashboard();
+      failures.probe = true;
+
+      const res = await request("/api/chains/by-ids?ids=junk");
+      const body = await parseBody(res);
+
+      expect(res.status).toBe(500);
+      expect(body.error).toContain("invalid input syntax");
+    });
+
+    it("returns 404 for chain detail, job detail and actions with a malformed ID", async () => {
+      const { request } = await createUuidStrictDashboard();
+
+      const chainRes = await request("/api/chains/junk");
+      const jobRes = await request("/api/jobs/junk");
+      const deleteRes = await request("/api/chains/junk", { method: "DELETE" });
+      const rescheduleRes = await request("/api/jobs/junk/reschedule", { method: "POST" });
+      const chainJobsRes = await request("/api/chains/junk/jobs");
+      const blockingRes = await request("/api/chains/junk/blocking");
+
+      expect(chainRes.status).toBe(404);
+      expect((await parseBody(chainRes)).error).toBe("Chain not found");
+      expect(jobRes.status).toBe(404);
+      expect((await parseBody(jobRes)).error).toBe("Job not found");
+      expect(deleteRes.status).toBe(404);
+      expect(rescheduleRes.status).toBe(404);
+      expect((await parseBody(rescheduleRes)).error).toBe("Job not found");
+      expect(chainJobsRes.status).toBe(404);
+      expect((await parseBody(chainJobsRes)).error).toBe("Chain not found");
+      expect(blockingRes.status).toBe(404);
+      expect((await parseBody(blockingRes)).error).toBe("Chain not found");
+    });
+
+    it("returns 500 when rescheduling a malformed ID and the database probe fails too", async () => {
+      const { request, failures } = await createUuidStrictDashboard();
+      failures.probe = true;
+
+      const res = await request("/api/jobs/junk/reschedule", { method: "POST" });
+
+      expect(res.status).toBe(500);
+      expect((await parseBody(res)).error).toContain("invalid input syntax");
+    });
+
+    it("returns 500 when rescheduling an existing job fails for a non-ID reason", async () => {
+      const { request, stateAdapter, failures } = await createUuidStrictDashboard();
+      const job = await createJob(stateAdapter, "type-a", null);
+      failures.reschedule = true;
+
+      const res = await request(`/api/jobs/${job.id}/reschedule`, { method: "POST" });
+
+      expect(res.status).toBe(500);
+      expect((await parseBody(res)).error).toBe("deadlock detected");
+    });
+
+    it("rejects more than 100 IDs with 400", async () => {
+      const { request } = await createTestDashboard();
+      const ids = Array.from({ length: 101 }, (_, i) => `id-${i}`).join(",");
+
+      const chainsRes = await request(`/api/chains/by-ids?ids=${ids}`);
+      const jobsRes = await request(`/api/jobs/by-ids?ids=${ids}`);
+
+      expect(chainsRes.status).toBe(400);
+      expect((await parseBody(chainsRes)).error).toBe("At most 100 IDs");
+      expect(jobsRes.status).toBe(400);
+    });
+
+    it("counts IDs after de-duplication against the 100 ID limit", async () => {
+      const { request } = await createTestDashboard();
+      const ids = [...Array.from({ length: 100 }, (_, i) => `id-${i}`), "id-0"].join(",");
+
+      const res = await request(`/api/chains/by-ids?ids=${ids}`);
+
+      expect(res.status).toBe(200);
+    });
+
+    it("returns 404 for an unknown API path or method", async () => {
+      const { request, stateAdapter } = await createTestDashboard();
+      const job = await createJob(stateAdapter, "type-a", null);
+
+      const unknownRes = await request("/api/unknown");
+      const deleteJobRes = await request(`/api/jobs/${job.id}`, { method: "DELETE" });
+      const postListRes = await request("/api/chains", { method: "POST" });
+      const getRescheduleRes = await request(`/api/jobs/${job.id}/reschedule`);
+
+      expect(unknownRes.status).toBe(404);
+      expect(await parseBody(unknownRes)).toEqual({ error: "Not found" });
+      expect(deleteJobRes.status).toBe(404);
+      expect(await parseBody(deleteJobRes)).toEqual({ error: "Not found" });
+      expect(postListRes.status).toBe(404);
+      expect(getRescheduleRes.status).toBe(404);
+    });
+
+    it("returns a seroval error body with status 500 when a handler throws", async () => {
+      const { request, failures } = await createUuidStrictDashboard();
+      failures.probe = true;
+
+      const res = await request("/api/chain-types");
+      const body = await parseBody(res);
+
+      expect(res.status).toBe(500);
+      expect(res.headers.get("content-type")).toBe("application/x-seroval");
+      expect(body).toEqual({ error: "connection refused" });
     });
   });
 

@@ -1,0 +1,184 @@
+---
+title: Chain Patterns
+description: Linear, branched, loop, and go-to patterns.
+sidebar:
+  order: 5
+---
+
+import { Arrow, Diagram, Flow, Loop, Node, Rows } from "../../../components/diagram";
+
+Chains support various execution patterns via `continueWith`:
+
+- [Linear](#linear) — `continueWith` returns the next type
+- [Branched](#branched) — `continueWith` returns one of a union of types
+- [Loop](#loop) — `continueWith` returns the same type until a terminal output
+- [Go-to](#go-to) — `continueWith` jumps to a different type, skipping intermediates
+
+## Linear
+
+<Diagram label="Linear chain: create-subscription continues with activate-trial">
+  <Flow>
+    <Node tone="purple">create-subscription</Node>
+    <Arrow label="continueWith" tone="blue" />
+    <Node tone="purple">activate-trial</Node>
+  </Flow>
+</Diagram>
+
+Jobs execute one after another: `create-subscription -> activate-trial`
+
+```ts
+const jobTypes = defineJobTypes<{
+  'create-subscription': {
+    entry: true;
+    input: { userId: string; planId: string };
+    continueWith: { typeName: 'activate-trial' };
+  };
+  'activate-trial': {
+    input: { subscriptionId: number; trialDays: number };
+    continueWith: { typeName: 'trial-decision' };
+  };
+}>();
+
+// In processor
+'create-subscription': {
+  attemptHandler: async ({ job, complete }) => {
+    return complete(async ({ finish, sql }) => {
+      const [sub] = await sql`INSERT INTO subscriptions ... RETURNING id`;
+      return finish({ continueWith: {
+        typeName: "activate-trial",
+        input: { subscriptionId: sub.id, trialDays: 7 },
+      }});
+    });
+  },
+},
+```
+
+## Branched
+
+<Diagram label="Branched chain: trial-decision continues with either convert-to-paid or expire-trial">
+  <Flow>
+    <Node tone="purple">trial-decision</Node>
+    <Rows spine>
+      <Flow>
+        <Arrow tone="blue" />
+        <Node tone="purple">convert-to-paid</Node>
+      </Flow>
+      <Flow>
+        <Arrow tone="blue" />
+        <Node tone="purple">expire-trial</Node>
+      </Flow>
+    </Rows>
+  </Flow>
+</Diagram>
+
+Jobs conditionally continue to different types: `trial-decision -> convert-to-paid | expire-trial`
+
+```ts
+'trial-decision': {
+  input: { subscriptionId: number };
+  continueWith: { typeName: 'convert-to-paid' | 'expire-trial' };  // Union type
+};
+
+// In processor - choose path based on condition
+'trial-decision': {
+  attemptHandler: async ({ job, complete }) => {
+    const shouldConvert = userWantsToConvert;
+    return complete(async ({ finish }) => finish({ continueWith: {
+      typeName: shouldConvert ? "convert-to-paid" : "expire-trial",
+      input: { subscriptionId: job.input.subscriptionId },
+    }}));
+  },
+},
+```
+
+## Loops
+
+<Diagram label="Loop: charge-billing continues with itself until it returns an output">
+  <Flow>
+    <Loop label="continueWith itself">
+      <Node tone="purple">charge-billing</Node>
+    </Loop>
+    <Arrow label="output" tone="green" />
+    <Node tone="green" variant="solid">chain completed</Node>
+  </Flow>
+</Diagram>
+
+Jobs continue to the same type: `charge-billing -> charge-billing -> ... -> done`
+
+```ts
+const jobTypes = defineJobTypes<{
+  'charge-billing': {
+    input: { subscriptionId: number; cycle: number };
+    output: { finalCycle: number; totalCharged: number };  // Terminal output
+    continueWith: { typeName: 'charge-billing' };  // Self-reference for looping
+  };
+}>();
+
+// In processor - loop or terminate with output
+'charge-billing': {
+  attemptHandler: async ({ job, complete }) => {
+    await chargePayment(job.input.subscriptionId);
+    return complete(async ({ finish }) => {
+      if (job.input.cycle < MAX_CYCLES) {
+        return finish({ continueWith: {
+          typeName: "charge-billing",
+          input: { subscriptionId: job.input.subscriptionId, cycle: job.input.cycle + 1 },
+        }});
+      }
+      return finish({ output: { finalCycle: job.input.cycle, totalCharged: calculateTotal() } });
+    });
+  },
+},
+```
+
+## Go-to
+
+<Diagram label="Go-to: charge-billing loops on itself, then jumps to cancel-subscription">
+  <Flow>
+    <Loop label="loop">
+      <Node tone="purple">charge-billing</Node>
+    </Loop>
+    <Arrow label="jump" tone="red" />
+    <Node tone="purple">cancel-subscription</Node>
+  </Flow>
+</Diagram>
+
+Jobs jump to a different type mid-chain: `charge-billing -> cancel-subscription`
+
+```ts
+const jobTypes = defineJobTypes<{
+  'charge-billing': {
+    input: { subscriptionId: number; cycle: number };
+    output: { finalCycle: number; totalCharged: number };
+    continueWith: { typeName: 'charge-billing' | 'cancel-subscription' };  // Loop or jump
+  };
+  'cancel-subscription': {
+    input: { subscriptionId: number; reason: string };
+    output: { cancelledAt: string };
+  };
+}>();
+
+// In processor - jump to cancel when max cycles reached
+'charge-billing': {
+  attemptHandler: async ({ job, complete }) => {
+    return complete(async ({ finish }) => {
+      if (job.input.cycle >= MAX_CYCLES) {
+        return finish({ continueWith: {
+          typeName: "cancel-subscription",
+          input: { subscriptionId: job.input.subscriptionId, reason: "max_billing_cycles_reached" },
+        }});
+      }
+      return finish({ continueWith: {
+        typeName: "charge-billing",
+        input: { subscriptionId: job.input.subscriptionId, cycle: job.input.cycle + 1 },
+      }});
+    });
+  },
+},
+```
+
+## Continuation References
+
+All examples above use **nominal references** — `{ typeName: "..." }`. Queuert also supports **structural references** (`{ input: {...} }`) that match any job type with a compatible input shape, enabling loose coupling. See [Job Type References](/queuert/advanced/job-type-references/) for details and examples.
+
+See [examples/showcase-chain-patterns](https://github.com/kvet/queuert/tree/main/examples/showcase-chain-patterns) for a complete working example demonstrating all four patterns through a subscription lifecycle workflow. See also [Job Blockers](../job-blockers/) for parallel dependencies and [Chain Model](/queuert/advanced/chain-model/) reference.

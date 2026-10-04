@@ -333,3 +333,12 @@ When making changes:
 - Update `docs/src/content/docs/` if there were architectural changes or naming convention updates
 - Update package READMEs (`packages/*/README.md`) if there were changes to adapter exports or configuration
 - Update `TODO.md` if any items were addressed
+- Update the dashboard screenshots whenever a change to `packages/dashboard` alters what the UI looks like (see below)
+
+### Dashboard Screenshots
+
+`docs/src/content/docs/integrations/dashboard.mdx` embeds five screenshots from `docs/src/assets/dashboard/`. Every visible dashboard change regenerates all five in the same change, and the prose and alt text next to each image are updated to match. Capture them from the `examples/dashboard` example (run `start` to populate, then `dashboard`) with Playwright, using exactly these settings so the set stays consistent:
+
+- Viewport 800×640, device scale factor 1, the viewport only (never a full-page capture)
+- Light color scheme and reduced motion, so the running-status pulse doesn't show up mid-animation
+- Views: `overview.png` (`/`), `chains-list.png` (`/chains?typeName=greet`), `chain-detail.png` (a `process-with-blockers` chain), `jobs-list.png` (`/jobs?typeName=greet`), `job-detail.png` (a `might-fail` job)

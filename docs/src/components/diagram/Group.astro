@@ -1,0 +1,17 @@
+---
+import { type Tone } from "./Node.astro";
+
+type Props = {
+  title: string;
+  tone?: Tone;
+  /** Dashed border, used for transaction boundaries. */
+  dashed?: boolean;
+}
+
+const { title, tone, dashed } = Astro.props;
+---
+
+<div class="q-d-group" data-tone={tone} data-dashed={dashed ? "" : undefined}>
+  <span class="q-d-group__title">{title}</span>
+  <slot />
+</div>

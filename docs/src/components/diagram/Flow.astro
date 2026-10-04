@@ -1,0 +1,12 @@
+---
+type Props = {
+  /** `column` lays the flow out top to bottom, with arrows pointing down. */
+  direction?: "row" | "column";
+  /** `stretch` makes every item as tall as the tallest one (e.g. a group beside a column of rows). */
+  align?: "center" | "stretch";
+};
+
+const { direction = "row", align = "center" } = Astro.props;
+---
+
+<div class="q-d-flow" data-direction={direction} data-align={align}><slot /></div>

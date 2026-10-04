@@ -1,0 +1,27 @@
+---
+type Props = {
+  /**
+   * Shared column template for the child Flows, so their boxes line up. Defaults to an arrow column
+   * and a box column. Children other than Flows span the whole row.
+   */
+  columns?: string;
+  /**
+   * Join the rows with a spine: `start` (or `true`) fans them out from a source on the left, `end`
+   * merges them into a target on the right.
+   */
+  spine?: boolean | "start" | "end";
+  /** `none` lets rows touch, so vertical arrows between them meet the boxes above and below. */
+  gap?: "normal" | "none";
+};
+
+const { columns = "minmax(3.5rem, auto) auto", spine, gap = "normal" } = Astro.props;
+---
+
+<div
+  class="q-d-rows"
+  data-spine={spine === true ? "start" : spine || undefined}
+  data-gap={gap}
+  style={`--r-cols: ${columns}`}
+>
+  <slot />
+</div>

@@ -34,5 +34,5 @@ Optional adapters:
 ## Documentation
 
 - [Getting Started](https://kvet.github.io/queuert/getting-started/introduction/)
-- [API Reference](https://kvet.github.io/queuert/reference/queuert/client/)
+- [API Reference](https://kvet.github.io/queuert/api/core/type-aliases/client/)
 - [Full Documentation](https://kvet.github.io/queuert/)

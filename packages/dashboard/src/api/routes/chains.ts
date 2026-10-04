@@ -2,6 +2,7 @@ import { BlockerReferenceError, type Client, withTransactionHooks } from "queuer
 import { helpersSymbol } from "queuert/internal";
 
 import { serovalResponse } from "../response.js";
+import { MAX_IDS, lookupEachOrNotFound, lookupOrNotFound, parseIds } from "./lookup.js";
 import {
   parseChainStatusFilter,
   parseCursor,
@@ -79,7 +80,7 @@ export const handleChainDetail = async (
   client: Client<any, any>,
   chainId: string,
 ): Promise<Response> => {
-  const chain = await client.getChain({ id: chainId });
+  const chain = await lookupOrNotFound(client, async () => client.getChain({ id: chainId }));
   if (!chain) {
     return serovalResponse({ error: "Chain not found" }, 404);
   }
@@ -87,7 +88,17 @@ export const handleChainDetail = async (
   const limit = parseLimit(url.searchParams.get("limit") ?? undefined);
   const page = await listChainJobsWithBlockers(client, chainId, { limit });
 
-  return serovalResponse({ chain, ...page });
+  // A running chain's status says nothing about what it waits on; its tail job does.
+  let currentJob = null;
+  if (chain.status !== "completed") {
+    const tailJob =
+      page.nextCursor === null
+        ? page.jobs.at(-1)
+        : (await client.listChainJobs({ chainId, orderDirection: "desc", limit: 1 })).items[0];
+    currentJob = tailJob ?? null;
+  }
+
+  return serovalResponse({ chain, currentJob, ...page });
 };
 
 export const handleChainJobs = async (
@@ -97,7 +108,12 @@ export const handleChainJobs = async (
 ): Promise<Response> => {
   const cursor = parseCursor(url.searchParams.get("cursor") ?? undefined, { type: "id" });
   const limit = parseLimit(url.searchParams.get("limit") ?? undefined);
-  const page = await listChainJobsWithBlockers(client, chainId, { cursor, limit });
+  const page = await lookupOrNotFound(client, async () =>
+    listChainJobsWithBlockers(client, chainId, { cursor, limit }),
+  );
+  if (!page) {
+    return serovalResponse({ error: "Chain not found" }, 404);
+  }
 
   return serovalResponse(page);
 };
@@ -106,7 +122,7 @@ export const handleChainDelete = async (
   client: Client<any, any>,
   chainId: string,
 ): Promise<Response> => {
-  const chain = await client.getChain({ id: chainId });
+  const chain = await lookupOrNotFound(client, async () => client.getChain({ id: chainId }));
   if (!chain) {
     return serovalResponse({ error: "Chain not found" }, 404);
   }
@@ -154,17 +170,13 @@ export const handleChainTypesCounts = async (
 };
 
 export const handleChainsByIds = async (url: URL, client: Client<any, any>): Promise<Response> => {
-  const raw = url.searchParams.get("ids") ?? "";
-  const ids = raw
-    .split(",")
-    .map((s) => s.trim())
-    .filter(Boolean);
+  const ids = parseIds(url.searchParams.get("ids"));
+  if (ids.length > MAX_IDS) return serovalResponse({ error: `At most ${MAX_IDS} IDs` }, 400);
   if (ids.length === 0) return serovalResponse({ items: [], nextCursor: null });
-  const chains = await client.getChains({ ids });
-  return serovalResponse({
-    items: chains.filter((c): c is NonNullable<typeof c> => c != null),
-    nextCursor: null,
-  });
+  const items = await lookupEachOrNotFound(client, ids, async (batch) =>
+    client.getChains({ ids: batch }),
+  );
+  return serovalResponse({ items, nextCursor: null });
 };
 
 export const handleChainBlocking = async (
@@ -177,12 +189,17 @@ export const handleChainBlocking = async (
     sortKey: "createdAt",
   });
   const limit = parseLimit(url.searchParams.get("limit") ?? undefined);
-  const result = await client.listBlockedJobs({
-    chainId,
-    orderDirection: "desc",
-    cursor,
-    limit,
-  });
+  const result = await lookupOrNotFound(client, async () =>
+    client.listBlockedJobs({
+      chainId,
+      orderDirection: "desc",
+      cursor,
+      limit,
+    }),
+  );
+  if (!result) {
+    return serovalResponse({ error: "Chain not found" }, 404);
+  }
 
   return serovalResponse({ items: result.items, nextCursor: result.nextCursor });
 };

@@ -25,5 +25,5 @@ yarn add @queuert/nats
 ## Documentation
 
 - [Notify Adapters Guide](https://kvet.github.io/queuert/integrations/notify-adapters/)
-- [API Reference](https://kvet.github.io/queuert/reference/nats/)
+- [API Reference](https://kvet.github.io/queuert/api/nats/readme/)
 - [Full Documentation](https://kvet.github.io/queuert/)

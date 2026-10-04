@@ -7,6 +7,7 @@ import {
 import { helpersSymbol } from "queuert/internal";
 
 import { serovalResponse } from "../response.js";
+import { MAX_IDS, lookupEachOrNotFound, lookupOrNotFound, parseIds } from "./lookup.js";
 import {
   parseCursor,
   parseJobStatusFilter,
@@ -74,17 +75,13 @@ export const handleJobTypesCounts = async (
 };
 
 export const handleJobsByIds = async (url: URL, client: Client<any, any>): Promise<Response> => {
-  const raw = url.searchParams.get("ids") ?? "";
-  const ids = raw
-    .split(",")
-    .map((s) => s.trim())
-    .filter(Boolean);
+  const ids = parseIds(url.searchParams.get("ids"));
+  if (ids.length > MAX_IDS) return serovalResponse({ error: `At most ${MAX_IDS} IDs` }, 400);
   if (ids.length === 0) return serovalResponse({ items: [], nextCursor: null });
-  const jobs = await client.getJobs({ ids });
-  return serovalResponse({
-    items: jobs.filter((j): j is NonNullable<typeof j> => j != null),
-    nextCursor: null,
-  });
+  const items = await lookupEachOrNotFound(client, ids, async (batch) =>
+    client.getJobs({ ids: batch }),
+  );
+  return serovalResponse({ items, nextCursor: null });
 };
 
 export const handleJobDetail = async (
@@ -92,7 +89,7 @@ export const handleJobDetail = async (
   client: Client<any, any>,
   jobId: string,
 ): Promise<Response> => {
-  const job = await client.getJob({ id: jobId });
+  const job = await lookupOrNotFound(client, async () => client.getJob({ id: jobId }));
   if (!job) {
     return serovalResponse({ error: "Job not found" }, 404);
   }
@@ -131,6 +128,13 @@ export const handleJobReschedule = async (
     if (err instanceof JobNotReschedulableError) {
       return serovalResponse({ error: err.message }, 409);
     }
-    throw err;
+    // Only a job that cannot be looked up (missing or malformed ID) is "not found"; any other
+    // failure on an existing job is a real error.
+    const job = await lookupOrNotFound(client, async () => client.getJob({ id: jobId }));
+    if (job !== undefined) {
+      // oxlint-disable-next-line typescript/only-throw-error -- re-throwing the original adapter error
+      throw err;
+    }
+    return serovalResponse({ error: "Job not found" }, 404);
   }
 };

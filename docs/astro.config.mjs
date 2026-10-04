@@ -1,5 +1,4 @@
 import starlight from "@astrojs/starlight";
-import astroD2 from "astro-d2";
 import { defineConfig } from "astro/config";
 import starlightChangelogs, { makeChangelogsSidebarLinks } from "starlight-changelogs";
 import starlightLlmsTxt from "starlight-llms-txt";
@@ -46,15 +45,10 @@ export default defineConfig({
   site: "https://kvet.github.io",
   base: "/queuert",
   integrations: [
-    astroD2({
-      sketch: true,
-      layout: "elk",
-      pad: 20,
-      theme: { dark: false },
-    }),
     starlight({
       plugins: [starlightLlmsTxt(), starlightChangelogs(), ...typeDocPlugins],
       title: "Queuert",
+      logo: { src: "./src/assets/logo.svg" },
       description: "Durable, typed job chains that commit with your database transactions",
       social: [
         {
@@ -116,6 +110,9 @@ export default defineConfig({
         ...makeChangelogsSidebarLinks([{ type: "all", base: "changelog", label: "Changelog" }]),
       ],
       customCss: ["./src/styles/custom.css"],
+      expressiveCode: {
+        styleOverrides: { borderRadius: "0.125rem" },
+      },
     }),
   ],
 });

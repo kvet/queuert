@@ -1,3 +1,5 @@
+import { readFile } from "node:fs/promises";
+
 import { describe, expect, it } from "vitest";
 
 import { renderHtml } from "../api/html.js";
@@ -20,5 +22,19 @@ describe("renderHtml", () => {
     const result = renderHtml(MOCK_HTML, "");
     expect(result).toContain('<base href="/" />');
     expect(result).not.toContain("__QUEUERT_BASE__");
+  });
+});
+
+describe("favicon", () => {
+  it("inlines the docs favicon", async () => {
+    const html = await readFile(new URL("../frontend/index.html", import.meta.url), "utf8");
+    const docsSvg = await readFile(
+      new URL("../../../../docs/public/favicon.svg", import.meta.url),
+      "utf8",
+    );
+    const href = /href="data:image\/svg\+xml,([^"]+)"/.exec(html)?.[1];
+
+    expect(href).toBeDefined();
+    expect(decodeURIComponent(href!)).toBe(docsSvg.replace(/>\s+</g, "><").trim());
   });
 });

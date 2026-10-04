@@ -24,5 +24,5 @@ yarn add @queuert/otel
 - [Observability Guide](https://kvet.github.io/queuert/integrations/observability/)
 - [Metrics Reference](https://kvet.github.io/queuert/advanced/otel-metrics/)
 - [Tracing Reference](https://kvet.github.io/queuert/advanced/otel-tracing/)
-- [API Reference](https://kvet.github.io/queuert/reference/otel/)
+- [API Reference](https://kvet.github.io/queuert/api/otel/readme/)
 - [Full Documentation](https://kvet.github.io/queuert/)

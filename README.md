@@ -137,7 +137,7 @@ npm install @queuert/otel
 - [Job Blockers](https://kvet.github.io/queuert/guides/job-blockers/)
 - [Comparison with other libraries](https://kvet.github.io/queuert/comparison/)
 - [Benchmarks](https://kvet.github.io/queuert/benchmarks/)
-- [API Reference](https://kvet.github.io/queuert/reference/queuert/client/)
+- [API Reference](https://kvet.github.io/queuert/api/core/type-aliases/client/)
 
 ## License
 

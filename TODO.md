@@ -10,7 +10,6 @@ None
 - [TASK] Built-in cleanup. See `design/builtin-cleanup.md`.
 - [TASK] Enforce json-serializable inputs and outputs (like no Date in job definitions) — see `design/json-serializable-types.md`
 - [TASK] Consolidate attempt abort events — we have lots silly API to maintain `JobAbortReason` into `HardJobAbortReason` (error-level: `taken_by_another_worker`, `not_found`, `already_completed`, `error`) and `SoftJobAbortReason` (`worker_stopping`).
-- [TASK] Rework dashboard doc — UI views section and screenshots are stale after the type-first navigation redesign
 
 # Medium term
 
@@ -24,11 +23,6 @@ None
   - [TASK] Get rid of `createAsyncRwLock()`
   - [TASK] No multi-worker example
   - [TASK] Promote transactions via a dedicated sentinel table (like migration lock in PG) to prevent WAL contention
-- [TASK,COMPLEX] Better dashboard UI
-- [EPIC] Docs website enhancements
-  - [TASK] Add interactive examples / live demos
-  - [TASK] Custom branding and styling
-  - [?,REF] Sexy website
 - [EPIC] MySQL/MariaDB adapter
 - [EPIC] Test against bun and its built-in postgres, redis clients
   - [TASK] postgres-state example

@@ -2,6 +2,7 @@
 import { readFileSync, readdirSync, writeFileSync } from "node:fs";
 import { join, relative, resolve } from "node:path";
 
+import tailwindcss from "@tailwindcss/vite";
 import { type Plugin, defineConfig } from "vite";
 import solidPlugin from "vite-plugin-solid";
 
@@ -62,7 +63,7 @@ function embedAssetsPlugin(): Plugin {
 }
 
 export default defineConfig({
-  plugins: [solidPlugin(), embedAssetsPlugin()],
+  plugins: [solidPlugin(), tailwindcss(), embedAssetsPlugin()],
   root: resolve(__dirname, "src/frontend"),
   base: "./",
   build: {

@@ -1,17 +1,566 @@
-/* astro-d2 generated diagrams: center, cap vertical space */
-img[src*="/d2/"] {
-  display: block;
-  margin: 1.5rem auto;
-  max-width: 100%;
-  max-height: 400px;
-  width: auto;
-  height: auto;
+/*
+ * The docs share the dashboard's design language (packages/dashboard/src/frontend/styles/index.css):
+ * monospace throughout, a zinc palette with a blue accent and the logo purple, near-square
+ * corners, unfilled boxes whose uppercase title sits on the top border, and the dashboard's
+ * status colors for asides. Starlight's tokens are remapped here; component tweaks follow.
+ */
+
+:root {
+  --q-radius: 0.125rem;
+  --q-brand: #8b5cf6;
+
+  --sl-font: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
+  --sl-font-mono: var(--sl-font);
+
+  /* The dashboard scale: 12px meta and labels, 14px base; headings stay small and bold. */
+  --sl-text-body: 0.875rem;
+  --sl-text-body-sm: 0.8125rem;
+  --sl-text-code: 0.8125rem;
+  --sl-text-code-sm: 0.75rem;
+  --sl-text-h1: 1.5rem;
+  --sl-text-h2: 1.1875rem;
+  --sl-text-h3: 1rem;
+  --sl-text-h4: 0.9375rem;
+  --sl-text-h5: 0.875rem;
+  --sl-line-height: 1.7;
+  --sl-line-height-headings: 1.35;
+
+  --sl-content-width: 48rem;
 }
 
-/* Dark theme: diagrams are baked with a light palette, so wrap them in a
- * white rounded card to keep them legible against the dark page. */
-:root[data-theme="dark"] img[src*="/d2/"] {
-  background: #ffffff;
-  padding: 12px;
-  border-radius: 8px;
+@media (min-width: 50em) {
+  :root {
+    --sl-text-h1: 1.625rem;
+    --sl-text-h2: 1.25rem;
+    --sl-text-h3: 1.0625rem;
+    --sl-text-h4: 0.9375rem;
+  }
+}
+
+/* Dark (Starlight's default palette): the dashboard's dark tokens. */
+:root,
+::backdrop {
+  --sl-color-white: #f4f4f5; /* fg */
+  --sl-color-gray-1: #e4e4e7;
+  --sl-color-gray-2: #d4d4d8; /* body text */
+  --sl-color-gray-3: #a1a1aa; /* fg-muted */
+  --sl-color-gray-4: #71717a;
+  --sl-color-gray-5: #3f3f46; /* border-strong */
+  --sl-color-gray-6: #18181b; /* surface */
+  --sl-color-gray-7: #27272a; /* surface-2 */
+  --sl-color-black: #09090b; /* bg */
+
+  --sl-color-accent-low: #172554;
+  --sl-color-accent: #60a5fa;
+  --sl-color-accent-high: #93c5fd;
+
+  /* Status colors: blocked (purple), pending (orange), running (blue), completed (green). */
+  --sl-color-purple-low: #2e1065;
+  --sl-color-purple: #a78bfa;
+  --sl-color-purple-high: #c4b5fd;
+  --sl-color-orange-low: #451a03;
+  --sl-color-orange: #fbbf24;
+  --sl-color-orange-high: #fcd34d;
+  --sl-color-blue-low: #172554;
+  --sl-color-blue: #60a5fa;
+  --sl-color-blue-high: #93c5fd;
+  --sl-color-green-low: #022c22;
+  --sl-color-green: #34d399;
+  --sl-color-green-high: #6ee7b7;
+  --sl-color-red-low: #450a0a;
+  --sl-color-red: #f87171;
+  --sl-color-red-high: #fca5a5;
+
+  --sl-color-text: var(--sl-color-gray-2);
+  --sl-color-text-accent: var(--sl-color-accent-high);
+  --sl-color-bg: var(--sl-color-black);
+  --sl-color-bg-nav: var(--sl-color-gray-6);
+  --sl-color-bg-sidebar: var(--sl-color-black);
+  --sl-color-bg-inline-code: var(--sl-color-gray-7);
+  --sl-color-hairline-light: #2e2e33; /* border */
+  --sl-color-hairline: #2e2e33;
+  --sl-color-hairline-shade: #2e2e33;
+  --sl-color-backdrop-overlay: rgb(0 0 0 / 0.6);
+
+  --sl-shadow-sm: none;
+  --sl-shadow-md: none;
+
+  --q-border: #2e2e33;
+  --q-selected-bg: #f4f4f5;
+  --q-selected-fg: #09090b;
+}
+
+/* Light: the dashboard's light tokens. */
+:root[data-theme="light"],
+[data-theme="light"] ::backdrop {
+  --sl-color-white: #18181b; /* fg */
+  --sl-color-gray-1: #27272a;
+  --sl-color-gray-2: #3f3f46; /* body text */
+  --sl-color-gray-3: #52525b; /* fg-muted */
+  --sl-color-gray-4: #71717a;
+  --sl-color-gray-5: #d4d4d8; /* border-strong */
+  --sl-color-gray-6: #f4f4f5; /* surface-2 */
+  --sl-color-gray-7: #f4f4f5;
+  --sl-color-black: #fafafa; /* bg */
+
+  --sl-color-accent-low: #dbeafe;
+  --sl-color-accent: #2563eb;
+  --sl-color-accent-high: #1d4ed8;
+
+  --sl-color-purple-low: #ede9fe;
+  --sl-color-purple: #8b5cf6;
+  --sl-color-purple-high: #5b21b6;
+  --sl-color-orange-low: #fef3c7;
+  --sl-color-orange: #d97706;
+  --sl-color-orange-high: #92400e;
+  --sl-color-blue-low: #dbeafe;
+  --sl-color-blue: #3b82f6;
+  --sl-color-blue-high: #1e40af;
+  --sl-color-green-low: #d1fae5;
+  --sl-color-green: #059669;
+  --sl-color-green-high: #065f46;
+  --sl-color-red-low: #fef2f2;
+  --sl-color-red: #ef4444;
+  --sl-color-red-high: #b91c1c;
+
+  --sl-color-text-accent: var(--sl-color-accent-high);
+  --sl-color-text-invert: #ffffff;
+  --sl-color-bg-nav: #ffffff;
+  --sl-color-bg-sidebar: var(--sl-color-black);
+  --sl-color-bg-inline-code: var(--sl-color-gray-6);
+  --sl-color-hairline-light: #e4e4e7; /* border */
+  --sl-color-hairline: #e4e4e7;
+  --sl-color-hairline-shade: #e4e4e7;
+  --sl-color-backdrop-overlay: rgb(0 0 0 / 0.45);
+
+  --q-border: #e4e4e7;
+  --q-selected-bg: #18181b;
+  --q-selected-fg: #ffffff;
+}
+
+body {
+  -webkit-font-smoothing: antialiased;
+}
+
+:focus-visible {
+  outline: 2px solid var(--sl-color-accent);
+  outline-offset: 2px;
+}
+
+/* ---------- Header ---------- */
+
+.header {
+  border-color: var(--q-border);
+}
+
+.site-title {
+  gap: 0.5rem;
+  color: var(--sl-color-white);
+  font-size: var(--sl-text-sm);
+  font-weight: 700;
+}
+
+.site-title img {
+  height: 1.125rem;
+}
+
+/* Search: a bordered box like the dashboard's toolbar controls. */
+button[data-open-modal] {
+  border-radius: var(--q-radius) !important;
+  height: 2rem !important;
+}
+
+@media (min-width: 50rem) {
+  button[data-open-modal] {
+    border-color: var(--sl-color-gray-5) !important;
+    background-color: var(--sl-color-bg-nav) !important;
+    color: var(--sl-color-gray-3) !important;
+  }
+  button[data-open-modal]:hover {
+    background-color: var(--sl-color-gray-7) !important;
+    color: var(--sl-color-white) !important;
+  }
+}
+
+button[data-open-modal] > kbd {
+  border-radius: var(--q-radius);
+  font-family: var(--sl-font);
+}
+
+starlight-menu-button button {
+  border-radius: var(--q-radius) !important;
+  box-shadow: none !important;
+}
+
+starlight-theme-select select,
+starlight-lang-select select {
+  font-family: var(--sl-font);
+}
+
+/* ---------- Sidebar ---------- */
+
+/* Group headings read like the dashboard's panel labels. */
+.sidebar-content .large {
+  font-size: var(--sl-text-2xs);
+  font-weight: 600;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+  color: var(--sl-color-gray-3);
+}
+
+.sidebar-content a {
+  border-radius: var(--q-radius);
+  font-size: var(--sl-text-sm);
+}
+
+.sidebar-content a:hover {
+  background-color: var(--sl-color-gray-7);
+}
+
+/* The current page is highlighted like the active top-bar tab, not filled with the accent. */
+.sidebar-content [aria-current="page"],
+.sidebar-content [aria-current="page"]:hover,
+.sidebar-content [aria-current="page"]:focus {
+  background-color: var(--sl-color-gray-7);
+  color: var(--sl-color-white);
+  font-weight: 600;
+}
+
+:root[data-theme="light"] .sidebar-content [aria-current="page"] {
+  background-color: #e4e4e7;
+}
+
+/* ---------- Table of contents ---------- */
+
+starlight-toc h2,
+mobile-starlight-toc .toggle {
+  font-size: var(--sl-text-2xs);
+  font-weight: 600;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+  color: var(--sl-color-gray-3);
+}
+
+starlight-toc a[aria-current="true"],
+mobile-starlight-toc a[aria-current="true"] {
+  color: var(--sl-color-text-accent);
+  font-weight: 600;
+}
+
+mobile-starlight-toc .toggle,
+mobile-starlight-toc .dropdown {
+  border-radius: var(--q-radius);
+}
+
+/* ---------- Page content ---------- */
+
+.content-panel {
+  border-color: var(--q-border);
+}
+
+.sl-markdown-content :is(h1, h2, h3, h4, h5, h6) {
+  font-weight: 700;
+  color: var(--sl-color-white);
+}
+
+h1#_top {
+  font-weight: 700;
+}
+
+.sl-markdown-content a:not(:where(.not-content *)) {
+  color: var(--sl-color-text-accent);
+  text-decoration: none;
+}
+
+.sl-markdown-content a:not(:where(.not-content *)):hover {
+  text-decoration: underline;
+}
+
+.sl-markdown-content code:not(:where(.not-content *)) {
+  border-radius: var(--q-radius);
+  padding: 0.0625rem 0.3125rem;
+  font-size: 0.9em;
+  color: var(--sl-color-white);
+}
+
+.sl-markdown-content hr {
+  border-color: var(--q-border);
+}
+
+/*
+ * Tables: a bordered box with a muted, uppercase header row. Starlight renders tables as
+ * scrollable `display: block` boxes whose rows don't stretch; render them as real full-width
+ * tables instead, letting cell content wrap so wide tables don't overflow the column.
+ */
+.sl-markdown-content table:not(:where(.not-content *)) {
+  display: table;
+  width: 100%;
+  border: 1px solid var(--q-border);
+  border-collapse: collapse;
+  font-size: var(--sl-text-sm);
+}
+
+.sl-markdown-content :is(th, td):not(:where(.not-content *)) {
+  border-bottom: 1px solid var(--q-border);
+  padding: 0.5rem 0.75rem;
+  overflow-wrap: anywhere;
+}
+
+.sl-markdown-content th:not(:where(.not-content *)) {
+  font-size: var(--sl-text-2xs);
+  font-weight: 600;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+  color: var(--sl-color-gray-3);
+  background: transparent;
+}
+
+/* ---------- Boxes: Card and Aside (`┌─ TITLE ─────┐`) ---------- */
+
+/*
+ * Like the dashboard's Card: unfilled, with the title on the top border. The title's page-colored
+ * background cuts the border, so the box itself must stay transparent. The title stays in flow,
+ * pulled up by half a line, so a long title wraps into the box instead of overflowing it.
+ */
+.card,
+.starlight-aside {
+  --q-box-title-lh: 1.125rem;
+  border-radius: var(--q-radius);
+  background-color: transparent !important;
+}
+
+.card {
+  border: 1px solid var(--q-border) !important;
+  padding: 0 1rem 1rem !important;
+  gap: 0.375rem !important;
+}
+
+.starlight-aside {
+  border: 1px solid var(--sl-color-asides-border);
+  padding: 0 1rem 0.875rem;
+  color: var(--sl-color-gray-2);
+}
+
+.card .title,
+.starlight-aside__title {
+  align-self: flex-start;
+  width: fit-content;
+  max-width: calc(100% + 0.75rem);
+  margin: calc(var(--q-box-title-lh) / -2) 0 0 -0.375rem;
+  gap: 0.375rem !important;
+  padding-inline: 0.375rem;
+  background-color: var(--sl-color-bg);
+  font-size: var(--sl-text-2xs) !important;
+  font-weight: 600;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+  line-height: var(--q-box-title-lh) !important;
+}
+
+.card .title {
+  color: var(--sl-color-gray-3) !important;
+}
+
+.card .icon {
+  border: 0 !important;
+  background: none !important;
+  padding: 0 !important;
+  font-size: 1rem;
+}
+
+.card .body {
+  font-size: var(--sl-text-sm) !important;
+}
+
+/* Titles hang above each box, so stacked boxes need room for them. */
+.card-grid:has(> .card) {
+  row-gap: 1.75rem !important;
+}
+
+.sl-markdown-content :is(.card-grid:has(> .card), .starlight-aside) {
+  margin-top: 1.75rem;
+}
+
+.starlight-aside--note {
+  --sl-color-asides-border: color-mix(in srgb, var(--sl-color-blue) 50%, var(--q-border));
+}
+.starlight-aside--tip {
+  --sl-color-asides-border: color-mix(in srgb, var(--sl-color-purple) 50%, var(--q-border));
+}
+.starlight-aside--caution {
+  --sl-color-asides-border: color-mix(in srgb, var(--sl-color-orange) 50%, var(--q-border));
+}
+.starlight-aside--danger {
+  --sl-color-asides-border: color-mix(in srgb, var(--sl-color-red) 50%, var(--q-border));
+}
+
+.starlight-aside__title + .starlight-aside__content {
+  margin-top: 0.375rem;
+}
+
+.starlight-aside__icon {
+  font-size: 1.125em;
+}
+
+/* ---------- Link cards, buttons, pagination ---------- */
+
+.sl-link-card {
+  border-color: var(--q-border) !important;
+  border-radius: var(--q-radius) !important;
+  box-shadow: none !important;
+  padding: 0.75rem 1rem !important;
+}
+
+.sl-link-card:hover {
+  background: var(--sl-color-gray-7) !important;
+  border-color: var(--sl-color-gray-5) !important;
+}
+
+.sl-link-card .title {
+  font-size: var(--sl-text-sm) !important;
+}
+
+.sl-link-card .description {
+  font-size: var(--sl-text-2xs);
+}
+
+.sl-link-button {
+  border-radius: var(--q-radius) !important;
+  font-size: var(--sl-text-sm) !important;
+  font-weight: 500;
+  padding: 0.5rem 0.875rem !important;
+}
+
+.sl-link-button.primary {
+  background: var(--sl-color-accent) !important;
+  border-color: var(--sl-color-accent) !important;
+  color: #ffffff !important;
+}
+
+:root:not([data-theme="light"]) .sl-link-button.primary {
+  color: #09090b !important;
+}
+
+.sl-link-button.primary:hover {
+  opacity: 0.9;
+}
+
+.sl-link-button.secondary,
+.sl-link-button.minimal {
+  border-color: var(--sl-color-gray-5) !important;
+  background: var(--sl-color-bg-nav);
+  color: var(--sl-color-white) !important;
+  padding-inline: 0.875rem !important;
+}
+
+.sl-link-button.secondary:hover,
+.sl-link-button.minimal:hover {
+  background: var(--sl-color-gray-7);
+}
+
+.pagination-links a {
+  border-color: var(--q-border) !important;
+  border-radius: var(--q-radius) !important;
+  box-shadow: none !important;
+  padding: 0.75rem 1rem !important;
+}
+
+.pagination-links a:hover {
+  background: var(--sl-color-gray-7);
+  border-color: var(--sl-color-gray-5) !important;
+}
+
+.pagination-links .link-title {
+  font-size: var(--sl-text-sm) !important;
+  font-weight: 600;
+}
+
+/* ---------- Tabs, steps, badges, file tree ---------- */
+
+/* Underlined tabs like the dashboard's status tabs: the selected one is marked in fg, not accent. */
+starlight-tabs [role="tablist"] {
+  border-bottom: 1px solid var(--q-border) !important;
+}
+
+starlight-tabs .tab > [role="tab"] {
+  padding: 0.375rem 0.875rem !important;
+  box-shadow: none !important;
+  border-bottom: 2px solid transparent;
+  margin-bottom: -1px;
+  font-size: var(--sl-text-sm);
+  color: var(--sl-color-gray-3) !important;
+}
+
+starlight-tabs .tab > [role="tab"]:hover {
+  color: var(--sl-color-white) !important;
+}
+
+starlight-tabs .tab > [role="tab"][aria-selected="true"] {
+  border-bottom-color: var(--sl-color-white);
+  color: var(--sl-color-white) !important;
+}
+
+.sl-steps > li::before {
+  border-radius: var(--q-radius) !important;
+  background-color: var(--sl-color-gray-7) !important;
+  box-shadow: inset 0 0 0 1px var(--sl-color-gray-5) !important;
+}
+
+.sl-badge {
+  border-radius: var(--q-radius) !important;
+  font-family: var(--sl-font) !important;
+}
+
+starlight-file-tree {
+  border-radius: var(--q-radius) !important;
+  border: 1px solid var(--q-border);
+}
+
+/* ---------- Splash page hero ---------- */
+
+.hero h1 {
+  display: flex;
+  align-items: center;
+  gap: 0.75rem;
+  font-size: clamp(1.75rem, calc(0.5rem + 3vw), 2.5rem) !important;
+  font-weight: 700 !important;
+}
+
+.hero h1::before {
+  content: "";
+  flex-shrink: 0;
+  width: 0.9em;
+  height: 0.9em;
+  background: url("/queuert/favicon.svg") center / contain no-repeat;
+}
+
+.hero .tagline {
+  font-size: var(--sl-text-sm) !important;
+  line-height: 1.7;
+  color: var(--sl-color-gray-3) !important;
+}
+
+.hero .actions {
+  gap: 0.75rem !important;
+}
+
+.hero .copy > * {
+  max-width: 64ch !important;
+}
+
+@media (min-width: 50rem) {
+  .hero {
+    padding-block: 3rem 1rem !important;
+  }
+}
+
+/* ---------- Search dialog (Pagefind) ---------- */
+
+site-search dialog {
+  border-radius: var(--q-radius) !important;
+}
+
+#starlight__search {
+  --pagefind-ui-font: var(--sl-font);
+  --pagefind-ui-border-radius: 2px;
 }

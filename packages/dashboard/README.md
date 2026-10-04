@@ -24,5 +24,5 @@ yarn add @queuert/dashboard
 ## Documentation
 
 - [Dashboard Guide](https://kvet.github.io/queuert/integrations/dashboard/)
-- [API Reference](https://kvet.github.io/queuert/reference/dashboard/)
+- [API Reference](https://kvet.github.io/queuert/api/dashboard/readme/)
 - [Full Documentation](https://kvet.github.io/queuert/)

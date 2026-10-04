@@ -1,0 +1,32 @@
+---
+import { type Tone } from "./Node.astro";
+
+type Props = {
+  label?: string;
+  /** Text under the line. */
+  sub?: string;
+  tone?: Tone;
+  dashed?: boolean;
+  /** Point back (left, or up when vertical). */
+  reverse?: boolean;
+  /** `down` draws a vertical arrow wherever it sits, e.g. between rows of a Rows grid. */
+  direction?: "auto" | "down";
+  /** `none` draws a plain connector. */
+  head?: "arrow" | "none";
+}
+
+const { label, sub, tone, dashed, reverse, direction = "auto", head = "arrow" } = Astro.props;
+---
+
+<div
+  class="q-d-arrow"
+  data-tone={tone}
+  data-dashed={dashed ? "" : undefined}
+  data-reverse={reverse ? "" : undefined}
+  data-direction={direction}
+  data-head={head}
+>
+  <span class="q-d-arrow__label">{label}</span>
+  <span class="q-d-arrow__line" aria-hidden="true"></span>
+  <span class="q-d-arrow__sub">{sub}</span>
+</div>

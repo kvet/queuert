@@ -22,39 +22,31 @@ hero:
 
 import { Card, CardGrid, LinkCard } from "@astrojs/starlight/components";
 
-```d2
-...@_classes.d2
+import { Arrow, Diagram, Flow, Node, Rows } from "../../components/diagram";
 
-direction: right
-
-app: App process {
-  class: process
-  client: Client { class: client }
-}
-
-worker_proc: Worker process {
-  class: process
-  worker: Worker { class: worker }
-}
-
-db: |md
-  **Your database**
-
-  Postgres · SQLite · your own
-| { class: database }
-
-notify: |md
-  **Your pub/sub** *(optional)*
-
-  Postgres LISTEN · Redis · NATS · in-process
-| { class: notify }
-
-app.client    -> db: "enqueue\n(via state adapter)" { class: flow }
-worker_proc.worker -> db: "acquire · complete\n(via state adapter)" { class: flow }
-
-app.client    -> notify: "wake hint" { class: wake }
-notify        -> worker_proc.worker: "wake" { class: wake }
-```
+<Diagram
+  label="Architecture: the client enqueues and workers acquire and complete jobs through your database; an optional pub/sub carries wake hints from the client to workers"
+  stack="none"
+>
+  <Flow align="stretch">
+    <Node tone="blue" sub="app process">Client</Node>
+    <Rows columns="minmax(7rem, auto) minmax(13rem, 16rem) minmax(7rem, auto)">
+      <Flow>
+        <Arrow label="enqueue" sub="state adapter" />
+        <Node sub="Postgres · SQLite · your own">Your database</Node>
+        <Arrow label="acquire · complete" sub="state adapter" reverse />
+      </Flow>
+      <Flow>
+        <Arrow label="wake hint" tone="amber" dashed />
+        <Node tone="amber" variant="ghost" sub="Postgres LISTEN · Redis · NATS · in-process">
+          Your pub/sub (optional)
+        </Node>
+        <Arrow label="wake" tone="amber" dashed />
+      </Flow>
+    </Rows>
+    <Node tone="green" sub="worker process">Worker</Node>
+  </Flow>
+</Diagram>
 
 ## See it in action
 
