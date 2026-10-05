@@ -131,38 +131,46 @@ const worker = await createInProcessWorker({
     jobTypes,
     processors: {
       "daily-digest": {
-        attemptHandler: async ({ job, complete }) => {
+        attemptHandler: async ({ job, finish }) => {
           console.log(
             `\n[daily-digest] Sending digest #${job.input.iteration} to user ${job.input.userId}`,
           );
 
           await new Promise((r) => setTimeout(r, 50));
 
-          return complete(async ({ finish, txSql, transactionHooks }) => {
-            await txSql.unsafe("INSERT INTO digest_logs (user_id) VALUES ($1)", [job.input.userId]);
+          return withTransactionHooks(async (transactionHooks) =>
+            sql.begin(async (txSql) => {
+              await txSql.unsafe("INSERT INTO digest_logs (user_id) VALUES ($1)", [
+                job.input.userId,
+              ]);
 
-            const shouldContinue = userSubscribed && job.input.iteration < MAX_DIGEST_ITERATIONS;
+              const shouldContinue = userSubscribed && job.input.iteration < MAX_DIGEST_ITERATIONS;
 
-            if (shouldContinue) {
-              console.log(`  Scheduling next digest in ${DIGEST_INTERVAL_MS}ms...`);
-              await client.createChain({
+              if (shouldContinue) {
+                console.log(`  Scheduling next digest in ${DIGEST_INTERVAL_MS}ms...`);
+                await client.createChain({
+                  txSql,
+                  transactionHooks,
+                  typeName: "daily-digest",
+                  input: { userId: job.input.userId, iteration: job.input.iteration + 1 },
+                  schedule: { afterMs: DIGEST_INTERVAL_MS },
+                });
+              } else {
+                console.log(`  User unsubscribed or max iterations reached. Stopping.`);
+              }
+
+              return finish({
                 txSql,
                 transactionHooks,
-                typeName: "daily-digest",
-                input: { userId: job.input.userId, iteration: job.input.iteration + 1 },
-                schedule: { afterMs: DIGEST_INTERVAL_MS },
+                output: { sentAt: new Date().toISOString() },
               });
-            } else {
-              console.log(`  User unsubscribed or max iterations reached. Stopping.`);
-            }
-
-            return finish({ output: { sentAt: new Date().toISOString() } });
-          });
+            }),
+          );
         },
       },
 
       "health-check": {
-        attemptHandler: async ({ job, complete }) => {
+        attemptHandler: async ({ job, finish }) => {
           console.log(
             `\n[health-check] Check #${job.input.checkNumber} for ${job.input.serviceId}`,
           );
@@ -170,67 +178,87 @@ const worker = await createInProcessWorker({
           const status = serviceRunning ? "healthy" : "stopped";
           console.log(`  Status: ${status}`);
 
-          return complete(async ({ finish, txSql, transactionHooks }) => {
-            await txSql.unsafe("INSERT INTO health_logs (service_id, status) VALUES ($1, $2)", [
-              job.input.serviceId,
-              status,
-            ]);
+          return withTransactionHooks(async (transactionHooks) =>
+            sql.begin(async (txSql) => {
+              await txSql.unsafe("INSERT INTO health_logs (service_id, status) VALUES ($1, $2)", [
+                job.input.serviceId,
+                status,
+              ]);
 
-            const completedJob = await finish({
-              output: { status, checkedAt: new Date().toISOString() },
-            });
-
-            const shouldContinue = serviceRunning && job.input.checkNumber < MAX_HEALTH_CHECKS;
-
-            if (shouldContinue) {
-              console.log(`  Scheduling next check in ${HEALTH_CHECK_INTERVAL_MS}ms...`);
-              await client.createChain({
+              const completedJob = await finish({
                 txSql,
                 transactionHooks,
-                typeName: "health-check",
-                input: {
-                  serviceId: job.input.serviceId,
-                  checkNumber: job.input.checkNumber + 1,
-                },
-                schedule: { afterMs: HEALTH_CHECK_INTERVAL_MS },
-                deduplication: {
-                  key: `health:${job.input.serviceId}`,
-                  scope: "running",
-                },
+                output: { status, checkedAt: new Date().toISOString() },
               });
-            } else {
-              console.log(`  Service stopped or max checks reached. Stopping.`);
-            }
 
-            return completedJob;
-          });
+              const shouldContinue = serviceRunning && job.input.checkNumber < MAX_HEALTH_CHECKS;
+
+              if (shouldContinue) {
+                console.log(`  Scheduling next check in ${HEALTH_CHECK_INTERVAL_MS}ms...`);
+                await client.createChain({
+                  txSql,
+                  transactionHooks,
+                  typeName: "health-check",
+                  input: {
+                    serviceId: job.input.serviceId,
+                    checkNumber: job.input.checkNumber + 1,
+                  },
+                  schedule: { afterMs: HEALTH_CHECK_INTERVAL_MS },
+                  deduplication: {
+                    key: `health:${job.input.serviceId}`,
+                    scope: "running",
+                  },
+                });
+              } else {
+                console.log(`  Service stopped or max checks reached. Stopping.`);
+              }
+
+              return completedJob;
+            }),
+          );
         },
       },
 
       reminder: {
-        attemptHandler: async ({ job, complete }) =>
-          complete(async ({ finish, txSql }) => {
-            console.log(`\n[reminder] "${job.input.message}" for ${job.input.userId}`);
-            await txSql.unsafe("INSERT INTO reminder_logs (user_id, message) VALUES ($1, $2)", [
-              job.input.userId,
-              job.input.message,
-            ]);
-            return finish({ output: { sentAt: new Date().toISOString() } });
-          }),
+        attemptHandler: async ({ job, finish }) =>
+          withTransactionHooks(async (transactionHooks) =>
+            sql.begin(async (txSql) => {
+              console.log(`\n[reminder] "${job.input.message}" for ${job.input.userId}`);
+              await txSql.unsafe("INSERT INTO reminder_logs (user_id, message) VALUES ($1, $2)", [
+                job.input.userId,
+                job.input.message,
+              ]);
+              return finish({
+                txSql,
+                transactionHooks,
+                output: { sentAt: new Date().toISOString() },
+              });
+            }),
+          ),
       },
 
       "call-rate-limited-api": {
-        attemptHandler: async ({ job, complete }) => {
+        attemptHandler: async ({ job, finish }) => {
           console.log(`[call-rate-limited-api] Attempt ${job.attempt} to ${job.input.endpoint}`);
 
           if (apiRateLimited && job.attempt < 3) {
             console.log(`  Rate limited! Rescheduling in 100ms...`);
-            return complete(async ({ finish }) => finish({ reschedule: { afterMs: 100 } }));
+            return withTransactionHooks(async (transactionHooks) =>
+              sql.begin(async (txSql) =>
+                finish({ txSql, transactionHooks, reschedule: { afterMs: 100 } }),
+              ),
+            );
           }
 
           console.log(`  API call SUCCESS`);
-          return complete(async ({ finish }) =>
-            finish({ output: { data: `Response from ${job.input.endpoint}` } }),
+          return withTransactionHooks(async (transactionHooks) =>
+            sql.begin(async (txSql) =>
+              finish({
+                txSql,
+                transactionHooks,
+                output: { data: `Response from ${job.input.endpoint}` },
+              }),
+            ),
           );
         },
       },

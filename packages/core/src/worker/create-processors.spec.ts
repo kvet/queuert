@@ -3,6 +3,7 @@ import { describe, expect, it } from "vitest";
 import { createClient } from "../client.js";
 import { defineJobTypes } from "../entities/define-job-types.js";
 import { createInProcessStateAdapter } from "../state-adapter/state-adapter.in-process.js";
+import { withTransactionHooks } from "../transaction-hooks.js";
 import { createProcessors } from "./create-processors.js";
 
 type Defs = {
@@ -22,8 +23,12 @@ describe("registry-level backoffConfig / attemptConfig cascade", () => {
       attemptConfig: { timeoutMs: 1111, heartbeatMs: 500 },
       processors: {
         foo: {
-          attemptHandler: async ({ complete }) =>
-            complete(async ({ finish }) => finish({ output: { ok: true as const } })),
+          attemptHandler: async ({ finish }) =>
+            withTransactionHooks(async (transactionHooks) =>
+              stateAdapter.withTransaction(async (txCtx) =>
+                finish({ ...txCtx, transactionHooks, output: { ok: true as const } }),
+              ),
+            ),
         },
       },
     });
@@ -45,8 +50,12 @@ describe("registry-level backoffConfig / attemptConfig cascade", () => {
       attemptConfig: { timeoutMs: 1111, heartbeatMs: 500 },
       processors: {
         foo: {
-          attemptHandler: async ({ complete }) =>
-            complete(async ({ finish }) => finish({ output: { ok: true as const } })),
+          attemptHandler: async ({ finish }) =>
+            withTransactionHooks(async (transactionHooks) =>
+              stateAdapter.withTransaction(async (txCtx) =>
+                finish({ ...txCtx, transactionHooks, output: { ok: true as const } }),
+              ),
+            ),
           backoffConfig: { initialDelayMs: 999, multiplier: 3, maxDelayMs: 9999 },
           attemptConfig: { timeoutMs: 9999, heartbeatMs: 1000 },
         },
@@ -68,8 +77,12 @@ describe("registry-level backoffConfig / attemptConfig cascade", () => {
       jobTypes,
       processors: {
         foo: {
-          attemptHandler: async ({ complete }) =>
-            complete(async ({ finish }) => finish({ output: { ok: true as const } })),
+          attemptHandler: async ({ finish }) =>
+            withTransactionHooks(async (transactionHooks) =>
+              stateAdapter.withTransaction(async (txCtx) =>
+                finish({ ...txCtx, transactionHooks, output: { ok: true as const } }),
+              ),
+            ),
         },
       },
     });

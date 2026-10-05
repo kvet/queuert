@@ -32,16 +32,6 @@ const isValidTraceparent = (value: unknown): value is string =>
 const toException = (error: unknown): Error | string =>
   error instanceof Error ? error : String(error);
 
-const createSubSpanHandle = (span: Span) => ({
-  end: (failure?: { error: unknown }) => {
-    if (failure) {
-      span.recordException(toException(failure.error));
-      span.setStatus({ code: SpanStatusCode.ERROR });
-    }
-    span.end();
-  },
-});
-
 /**
  * Creates an OpenTelemetry-based ObservabilityAdapter.
  *
@@ -404,37 +394,10 @@ export const createOtelObservabilityAdapter = async ({
       );
 
       const attemptCtx = trace.setSpan(context.active(), attemptSpan);
-      let stepCount = 0;
 
       return {
         getChainTraceContext: () => chainTraceContext,
         getTraceContext: () => traceContext,
-
-        startPrepare() {
-          return createSubSpanHandle(
-            tracer.startSpan("prepare", { kind: SpanKind.INTERNAL }, attemptCtx),
-          );
-        },
-
-        startStep() {
-          const index = stepCount++;
-          return createSubSpanHandle(
-            tracer.startSpan(
-              "step",
-              {
-                kind: SpanKind.INTERNAL,
-                attributes: { "queuert.step.index": index },
-              },
-              attemptCtx,
-            ),
-          );
-        },
-
-        startComplete() {
-          return createSubSpanHandle(
-            tracer.startSpan("complete", { kind: SpanKind.INTERNAL }, attemptCtx),
-          );
-        },
 
         recordAbort(reason) {
           attemptSpan.addEvent("abort", { "queuert.abort.reason": reason });

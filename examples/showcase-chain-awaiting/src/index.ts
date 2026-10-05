@@ -76,43 +76,57 @@ const worker = await createInProcessWorker({
     jobTypes,
     processors: {
       "fetch-price": {
-        attemptHandler: async ({ job, complete }) => {
+        attemptHandler: async ({ job, finish }) => {
           const basePrice = PRICES[job.input.productId] ?? 9.99;
           console.log(`[fetch-price] ${job.input.productId}: $${basePrice}`);
-          return complete(async ({ finish }) =>
-            finish({
-              continueWith: {
-                typeName: "apply-discount",
-                input: { productId: job.input.productId, basePrice },
-              },
-            }),
+          return withTransactionHooks(async (transactionHooks) =>
+            sql.begin(async (txSql) =>
+              finish({
+                txSql,
+                transactionHooks,
+                continueWith: {
+                  typeName: "apply-discount",
+                  input: { productId: job.input.productId, basePrice },
+                },
+              }),
+            ),
           );
         },
       },
 
       "apply-discount": {
-        attemptHandler: async ({ job, complete }) => {
+        attemptHandler: async ({ job, finish }) => {
           const finalPrice = Math.round(job.input.basePrice * 0.9 * 100) / 100;
           console.log(
             `[apply-discount] ${job.input.productId}: $${job.input.basePrice} → $${finalPrice}`,
           );
-          return complete(async ({ finish }) =>
-            finish({
-              output: {
-                productId: job.input.productId,
-                finalPrice,
-              },
-            }),
+          return withTransactionHooks(async (transactionHooks) =>
+            sql.begin(async (txSql) =>
+              finish({
+                txSql,
+                transactionHooks,
+                output: {
+                  productId: job.input.productId,
+                  finalPrice,
+                },
+              }),
+            ),
           );
         },
       },
 
       "long-running": {
-        attemptHandler: async ({ job, complete }) => {
+        attemptHandler: async ({ job, finish }) => {
           console.log(`[long-running] Sleeping ${job.input.durationMs}ms...`);
           await new Promise((r) => setTimeout(r, job.input.durationMs));
-          return complete(async ({ finish }) =>
-            finish({ output: { completedAt: new Date().toISOString() } }),
+          return withTransactionHooks(async (transactionHooks) =>
+            sql.begin(async (txSql) =>
+              finish({
+                txSql,
+                transactionHooks,
+                output: { completedAt: new Date().toISOString() },
+              }),
+            ),
           );
         },
       },

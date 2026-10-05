@@ -101,19 +101,21 @@ This is where the gap is sharper. pg-boss's README markets _"Exactly-once job de
 
 v12.17 (April 2026) added `{ db }` on `complete()` (and `fetch()`, `fail()`, etc.), so the _primitives_ for atomic completion exist — you can call `complete(jobId, output, { db: tx })` inside your domain transaction and the job's state flips in the same commit. But the `work()` worker loop doesn't surface them: to actually fuse "handler tx" with "completion tx," you have to opt out of `work()`, write your own `fetch` + handler + `complete(..., { db: tx })` loop, and re-implement lease, retry, and backoff yourself. Atomic processing is possible, but it's a parallel API you build — for code using the supported `work()` worker, idempotency at processing is application discipline.
 
-Queuert's complete callback runs inside the state adapter's transaction. Your handler's domain writes, the chain's completion, and the next step's `continueWith` all commit in one transaction:
+Queuert's supported worker is built around this. The handler does its work, then opens its own transaction and commits the outcome with `finish` inside it, together with its domain writes. Your handler's domain writes, the chain's completion, and the next step's `continueWith` all commit in one transaction; `finish` writes only if this attempt still owns the job, so a stale worker's transaction rolls back instead of double-committing. Lease, heartbeat, retry, and backoff stay in the worker — long work runs outside any transaction while the worker heartbeats the attempt lease:
 
 ```ts
 "send-welcome-email": {
-  attemptHandler: async ({ job, complete }) =>
-    complete(async ({ finish, sql }) => {
-      await sql`insert into email_log (user_id) values (${job.input.userId})`;
-      return finish({ continueWith: { typeName: "log-sent", input: { ... } } });
-    }),
+  attemptHandler: async ({ job, finish }) =>
+    withTransactionHooks(async (transactionHooks) =>
+      sql.begin(async (txSql) => {
+        await txSql`insert into email_log (user_id) values (${job.input.userId})`;
+        return finish({ txSql, transactionHooks, continueWith: { typeName: "log-sent", input: { ... } } });
+      }),
+    ),
 },
 ```
 
-If the worker crashes before the transaction commits, _nothing_ lands — neither the domain write nor the chain progression. The next attempt starts fresh. At-least-once delivery becomes effectively exactly-once for DB-bound work.
+If the worker crashes before that transaction commits, _nothing_ from it lands — neither the domain write nor the chain progression. The next attempt starts fresh. At-least-once delivery becomes effectively exactly-once for DB-bound work.
 
 ### What still needs care
 

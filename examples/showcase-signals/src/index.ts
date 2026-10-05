@@ -60,7 +60,7 @@ const processors = createProcessors({
   processors: {
     "poll-external-api": {
       attemptConfig: { timeoutMs: 5000, heartbeatMs: 1000 },
-      attemptHandler: async ({ signal, job, complete }) => {
+      attemptHandler: async ({ signal, job, finish }) => {
         console.log(`[poll-external-api] Polling for result (task ${job.input.taskId})`);
         onExternalResultStarted();
 
@@ -77,20 +77,24 @@ const processors = createProcessors({
           await processItem();
         }
 
-        return complete(async ({ finish }) =>
-          finish({
-            output: {
-              source: "handler",
-              result: "completed-by-handler",
-            },
-          }),
+        return withTransactionHooks(async (transactionHooks) =>
+          sql.begin(async (txSql) =>
+            finish({
+              txSql,
+              transactionHooks,
+              output: {
+                source: "handler",
+                result: "completed-by-handler",
+              },
+            }),
+          ),
         );
       },
     },
 
     "process-batch": {
       attemptConfig: { timeoutMs: 5000, heartbeatMs: 1000 },
-      attemptHandler: async ({ signal, job, complete }) => {
+      attemptHandler: async ({ signal, job, finish }) => {
         console.log(`[process-batch] Starting batch ${job.input.batchId}`);
         onBatchStarted();
 
@@ -110,14 +114,18 @@ const processors = createProcessors({
           }
         }
 
-        return complete(async ({ finish }) =>
-          finish({
-            output: {
-              processed,
-              total: job.input.itemCount,
-              interrupted: processed < job.input.itemCount,
-            },
-          }),
+        return withTransactionHooks(async (transactionHooks) =>
+          sql.begin(async (txSql) =>
+            finish({
+              txSql,
+              transactionHooks,
+              output: {
+                processed,
+                total: job.input.itemCount,
+                interrupted: processed < job.input.itemCount,
+              },
+            }),
+          ),
         );
       },
     },

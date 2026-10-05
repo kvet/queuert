@@ -9,9 +9,6 @@ import {
   type AnyAttemptMiddleware,
   type AttemptMiddleware,
   type MergedAttemptHandlerCtx,
-  type MergedCompleteCtx,
-  type MergedStepCtx,
-  type MergedPrepareCtx,
 } from "./attempt-middleware.js";
 import {
   type InProcessWorkerProcessor,
@@ -45,8 +42,10 @@ type MergedDefs<
  *   attemptMiddleware: [tracingMiddleware, loggerMiddleware],
  *   processors: {
  *     "orders.create": {
- *       attemptHandler: async ({ complete, traceId, log }) =>
- *         complete(async ({ finish }) => finish({ output: { orderId: "1" } })),
+ *       attemptHandler: async ({ finish, traceId, log }) =>
+ *         withTransactionHooks(async (transactionHooks) =>
+ *           db.transaction(async (tx) => finish({ tx, transactionHooks, output: { orderId: "1" } })),
+ *         ),
  *     },
  *   },
  * });
@@ -67,8 +66,7 @@ export const createProcessors = <
     ? Client<TClientJobTypeDefinitions, TStateAdapter>
     : `Error: client is missing required job types: ${Exclude<keyof TJobTypeDefinitions & string, keyof TClientJobTypeDefinitions & string>}`;
   jobTypes: JobTypes<TJobTypeDefinitions, TExternalJobTypeDefinitions>;
-  attemptMiddleware?: TAttemptMiddleware &
-    readonly AttemptMiddleware<TStateAdapter, any, any, any, any>[];
+  attemptMiddleware?: TAttemptMiddleware & readonly AttemptMiddleware<TStateAdapter, any>[];
   backoffConfig?: BackoffConfig;
   attemptConfig?: AttemptConfig;
   processors: {
@@ -76,20 +74,14 @@ export const createProcessors = <
       TStateAdapter,
       TMergedJobTypeDefinitions,
       K,
-      MergedAttemptHandlerCtx<TAttemptMiddleware>,
-      MergedPrepareCtx<TAttemptMiddleware>,
-      MergedStepCtx<TAttemptMiddleware>,
-      MergedCompleteCtx<TAttemptMiddleware>
+      MergedAttemptHandlerCtx<TAttemptMiddleware>
     >;
   } & Record<Exclude<TProcessors, keyof TJobTypeDefinitions & string>, never>;
 }): Processors<TJobTypeDefinitions, TAttemptMiddleware> => {
   const middleware = options.attemptMiddleware ?? [];
   const stampedProcessors: Record<string, unknown> = {};
   for (const [typeName, processor] of Object.entries(
-    options.processors as Record<
-      string,
-      InProcessWorkerProcessor<any, any, any, any, any, any, any>
-    >,
+    options.processors as Record<string, InProcessWorkerProcessor<any, any, any, any>>,
   )) {
     stampedProcessors[typeName] = Object.assign(
       {},

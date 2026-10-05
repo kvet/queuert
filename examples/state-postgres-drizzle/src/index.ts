@@ -75,18 +75,17 @@ const worker = await createInProcessWorker({
     jobTypes,
     processors: {
       send_welcome_email: {
-        attemptHandler: async ({ job, prepare, complete }) => {
-          // Load the user with Drizzle inside the job transaction
-          const [user] = await prepare({ mode: "staged" }, async ({ tx }) =>
-            tx.select().from(users).where(eq(users.id, job.input.userId)),
-          );
+        attemptHandler: async ({ job, finish }) => {
+          const [user] = await db.select().from(users).where(eq(users.id, job.input.userId));
           if (!user) throw new Error(`User ${job.input.userId} not found`);
 
           // Simulate sending email (in real app, call email service here)
           console.log(`Sending welcome email to ${user.email} for ${user.name}`);
 
-          return complete(async ({ finish }) =>
-            finish({ output: { sentAt: new Date().toISOString() } }),
+          return withTransactionHooks(async (transactionHooks) =>
+            db.transaction(async (tx) =>
+              finish({ tx, transactionHooks, output: { sentAt: new Date().toISOString() } }),
+            ),
           );
         },
       },

@@ -5,18 +5,10 @@ import { type BaseJobTypeDefinitions } from "./entities/job-type.js";
 import { type BackoffConfig } from "./helpers/backoff.js";
 import { type ParallelExecutor, createParallelExecutor } from "./helpers/parallel-executor.js";
 import { raceWithSleep } from "./helpers/sleep.js";
-import {
-  type TransactionContext,
-  createTransactionContext,
-} from "./helpers/transaction-context.js";
 import { withRetry } from "./internal.js";
 import { type NotifyAdapter } from "./notify-adapter/notify-adapter.js";
 import { type Helpers } from "./setup-helpers.js";
-import {
-  type BaseTxContext,
-  type StateAdapter,
-  type StateJob,
-} from "./state-adapter/state-adapter.js";
+import { type StateAdapter, type StateJob } from "./state-adapter/state-adapter.js";
 import { type AttemptConfig } from "./worker/attempt-heartbeat.js";
 import {
   type AnyAttemptMiddleware,
@@ -32,7 +24,7 @@ import {
 } from "./worker/processors.js";
 
 /** Per-processor runtime stamp carrying the middleware tuple of the originating slice. @internal */
-type StampedProcessor = InProcessWorkerProcessor<any, any, any, any, any, any, any> & {
+type StampedProcessor = InProcessWorkerProcessor<any, any, any, any> & {
   readonly [processorAttemptMiddlewareSymbol]: readonly AnyAttemptMiddleware[];
 };
 
@@ -98,9 +90,13 @@ const waitForNextJob = async ({
   }
 };
 
+/** Stamped on a job reclaimed after its attempt lease lapsed. */
+const RECLAIMED_ATTEMPT_ERROR =
+  "JobAttemptExpiredError: the attempt lease expired before the worker renewed it";
+
 const performJob = async ({
   helpers,
-  typeNames,
+  timeoutMsByTypeName,
   processors,
   defaultBackoffConfig,
   defaultAttemptConfig,
@@ -108,63 +104,36 @@ const performJob = async ({
   stopSignal,
 }: {
   helpers: Helpers;
-  typeNames: string[];
+  timeoutMsByTypeName: Record<string, number>;
   processors: Record<string, StampedProcessor>;
   defaultBackoffConfig: BackoffConfig;
   defaultAttemptConfig: AttemptConfig;
   workerId: string;
   stopSignal: AbortSignal;
 }): Promise<{ stateJob: null } | { stateJob: StateJob; execute: () => Promise<void> }> => {
-  const prepareTransactionContext = await createTransactionContext(
-    helpers.stateAdapter.withTransaction,
-  );
-
-  let stateJob: Awaited<ReturnType<typeof helpers.stateAdapter.startJobAttempt>>;
-  try {
-    stateJob = await prepareTransactionContext.run(async (txCtx) =>
-      helpers.stateAdapter.startJobAttempt({
-        txCtx,
-        typeNames,
-        workerId,
-      }),
-    );
-  } catch (error) {
-    await prepareTransactionContext.reject(error);
-    throw error;
-  }
-
+  const stateJob = await helpers.stateAdapter.startJobAttempt({ timeoutMsByTypeName, workerId });
   if (!stateJob) {
-    await prepareTransactionContext.resolve();
     return { stateJob: null };
   }
 
   const jobTypeProcessor = processors[stateJob.typeName];
   if (!jobTypeProcessor) {
-    const error = new Error(`No attempt handler registered for job type "${stateJob.typeName}"`);
-    await prepareTransactionContext.reject(error);
-    throw error;
+    throw new Error(`No attempt handler registered for job type "${stateJob.typeName}"`);
   }
 
   return {
     stateJob,
-    execute: async () => {
-      try {
-        await runJobProcess({
-          helpers,
-          attemptHandler: jobTypeProcessor.attemptHandler as any,
-          stateJob,
-          prepareTransactionContext: prepareTransactionContext as TransactionContext<BaseTxContext>,
-          backoffConfig: jobTypeProcessor.backoffConfig ?? defaultBackoffConfig,
-          attemptConfig: jobTypeProcessor.attemptConfig ?? defaultAttemptConfig,
-          workerId,
-          attemptMiddleware: jobTypeProcessor[processorAttemptMiddlewareSymbol],
-          stopSignal,
-        });
-      } catch (error) {
-        await prepareTransactionContext.reject(error);
-        throw error;
-      }
-    },
+    execute: async () =>
+      runJobProcess({
+        helpers,
+        attemptHandler: jobTypeProcessor.attemptHandler as any,
+        stateJob,
+        backoffConfig: jobTypeProcessor.backoffConfig ?? defaultBackoffConfig,
+        attemptConfig: jobTypeProcessor.attemptConfig ?? defaultAttemptConfig,
+        workerId,
+        attemptMiddleware: jobTypeProcessor[processorAttemptMiddlewareSymbol],
+        stopSignal,
+      }),
   };
 };
 
@@ -247,7 +216,7 @@ export type InProcessWorker = {
 export type InProcessWorkerDefaults = {
   /** Default backoff for failed job attempts. Overridden by per-processor `backoffConfig`. */
   backoffConfig?: BackoffConfig;
-  /** Default attempt duration. Overridden by per-processor `attemptConfig`. */
+  /** Default attempt lease and heartbeat. Overridden by per-processor `attemptConfig`. */
   attemptConfig?: AttemptConfig;
 };
 
@@ -307,7 +276,7 @@ export const createInProcessWorker = async <
    * Same adapter guard as `createProcessors`'s `attemptMiddleware`.
    */
   requiredAttemptMiddleware?: TRequiredAttemptMiddleware &
-    readonly AttemptMiddleware<TStateAdapter, any, any, any, any>[];
+    readonly AttemptMiddleware<TStateAdapter, any>[];
   /** A single `Processors` from {@link createProcessors}, or an array of slices to merge. */
   processors: [
     ExtraProcessorTypeNames<WorkerProcessorDefs<TProcessorsInput>, TJobTypeDefinitions>,
@@ -377,6 +346,12 @@ export const createInProcessWorker = async <
     );
   }
   const workerId = workerName ? `${workerName}-${randomUUID()}` : randomUUID();
+  const timeoutMsByTypeName = Object.fromEntries(
+    typeNames.map((typeName) => [
+      typeName,
+      (processors[typeName].attemptConfig ?? defaultAttemptConfig).timeoutMs,
+    ]),
+  );
 
   return {
     start: async (): Promise<() => Promise<void>> => {
@@ -396,7 +371,7 @@ export const createInProcessWorker = async <
             while (executor.idleSlots() > 0) {
               const result = await performJob({
                 helpers,
-                typeNames,
+                timeoutMsByTypeName,
                 processors,
                 defaultBackoffConfig,
                 defaultAttemptConfig,
@@ -428,13 +403,11 @@ export const createInProcessWorker = async <
             }
 
             if (executor.idleSlots() > 0) {
-              const reclaimed = await stateAdapter.withTransaction(async (txCtx) =>
-                stateAdapter.reclaimExpiredJobAttempt({
-                  txCtx,
-                  typeNames,
-                  ignoredJobIds: Array.from(jobIdsInProgress),
-                }),
-              );
+              const reclaimed = await stateAdapter.reclaimExpiredJobAttempt({
+                typeNames,
+                ignoredJobIds: Array.from(jobIdsInProgress),
+                lastAttemptError: RECLAIMED_ATTEMPT_ERROR,
+              });
               if (reclaimed) {
                 observabilityHelper.jobAttemptReclaimed(reclaimed, { workerId });
 

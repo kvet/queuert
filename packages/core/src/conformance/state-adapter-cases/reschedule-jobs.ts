@@ -46,7 +46,7 @@ export const rescheduleJobsGroup: ConformanceGroup<StateConformanceFixture> = {
           stateAdapter.startJobAttempt({
             txCtx,
             workerId: "worker-1",
-            typeNames: ["trigger-acquire"],
+            timeoutMsByTypeName: { "trigger-acquire": 30_000 },
           }),
         );
         expect(beforeTrigger).toBeUndefined();
@@ -59,7 +59,7 @@ export const rescheduleJobsGroup: ConformanceGroup<StateConformanceFixture> = {
           stateAdapter.startJobAttempt({
             txCtx,
             workerId: "worker-1",
-            typeNames: ["trigger-acquire"],
+            timeoutMsByTypeName: { "trigger-acquire": 30_000 },
           }),
         );
         expect(afterTrigger).toBeDefined();
@@ -227,7 +227,7 @@ export const rescheduleJobsGroup: ConformanceGroup<StateConformanceFixture> = {
           stateAdapter.startJobAttempt({
             txCtx,
             workerId: "worker-1",
-            typeNames: ["resched-fail-test"],
+            timeoutMsByTypeName: { "resched-fail-test": 30_000 },
           }),
         );
 
@@ -235,7 +235,7 @@ export const rescheduleJobsGroup: ConformanceGroup<StateConformanceFixture> = {
           stateAdapter.extendJobAttempt({
             txCtx,
             jobId: createdChain.head.id,
-            workerId: "worker-1",
+            fence: { attempt: 1, workerId: "worker-1" },
             timeoutMs: 10_000,
           }),
         );
@@ -278,7 +278,7 @@ export const rescheduleJobsGroup: ConformanceGroup<StateConformanceFixture> = {
           stateAdapter.startJobAttempt({
             txCtx,
             workerId: "worker-1",
-            typeNames: ["resched-running-test"],
+            timeoutMsByTypeName: { "resched-running-test": 30_000 },
           }),
         );
 
@@ -472,6 +472,38 @@ export const rescheduleJobsGroup: ConformanceGroup<StateConformanceFixture> = {
 
         expect(rescheduled[0]!.scheduledAt.getTime()).toBeGreaterThanOrEqual(before - 1000);
         expect(rescheduled[0]!.scheduledAt.getTime()).toBeLessThanOrEqual(Date.now() + 1000);
+      },
+    },
+    {
+      name: "reschedules without a txCtx, committing on its own",
+      run: async ({ stateAdapter }, expect) => {
+        const [createdChain] = await stateAdapter.withTransaction(async (txCtx) =>
+          stateAdapter.createJobs({
+            txCtx,
+            jobs: [{ typeName: "resched-autocommit", input: null }],
+          }),
+        );
+        const acquired = await stateAdapter.startJobAttempt({
+          workerId: "worker-1",
+          timeoutMsByTypeName: { "resched-autocommit": 30_000 },
+        });
+
+        const [rescheduled] = await stateAdapter.rescheduleJobs({
+          jobs: [
+            {
+              jobId: createdChain.head.id,
+              schedule: { afterMs: 60_000 },
+              error: "boom",
+              fence: { attempt: acquired!.attempt, workerId: "worker-1" },
+            },
+          ],
+        });
+        expect(rescheduled!.status).toBe("pending");
+
+        const [stored] = await stateAdapter.getJobs({ jobIds: [createdChain.head.id] });
+        expect(stored!.status).toBe("pending");
+        expect(stored!.lastAttemptError).toBe("boom");
+        expect(stored!.attemptBy).toBeNull();
       },
     },
   ],

@@ -11,7 +11,7 @@ This document describes Queuert's OpenTelemetry tracing implementation. Tracing 
 
 ## Span Hierarchy
 
-Queuert uses a five-level span hierarchy:
+Queuert uses a four-level span hierarchy:
 
 ```
 PRODUCER: create chain.{type}          ← Chain published (ends immediately)
@@ -23,39 +23,29 @@ PRODUCER: create chain.{type}          ← Chain published (ends immediately)
 │   │   └── CONSUMER: complete chain.{type}  ← Blocker resolved
 │   │
 │   ├── CONSUMER: start job-attempt.{type}    ← Worker processes attempt (has duration)
-│   │   ├── INTERNAL: prepare
-│   │   ├── INTERNAL: step                    ← One per step() call (optional, repeatable)
-│   │   ├── EVENT: abort                      ← Signal aborted (if interrupted)
-│   │   └── INTERNAL: complete
+│   │   └── EVENT: abort                      ← Signal aborted (if interrupted)
 │   │
 │   └── CONSUMER: start job-attempt.{type}    ← Retry attempt
-│       ├── INTERNAL: prepare
-│       └── INTERNAL: complete
 │
 ├── PRODUCER: create job.{type}        ← Continuation job
 │   │
 │   └── CONSUMER: start job-attempt.{type} (final)
-│       ├── INTERNAL: prepare
-│       ├── INTERNAL: complete
 │       └── CONSUMER: complete chain.{type}  ← Chain completion
 ```
 
-Span kinds use OpenTelemetry's PRODUCER/CONSUMER/INTERNAL semantics. The chain has both a PRODUCER (creation) and CONSUMER (completion) span for symmetry.
+Span kinds use OpenTelemetry's PRODUCER/CONSUMER semantics. The chain has both a PRODUCER (creation) and CONSUMER (completion) span for symmetry.
 
-| Span                         | Kind     | Created                                          | Ended                   | Duration         |
-| ---------------------------- | -------- | ------------------------------------------------ | ----------------------- | ---------------- |
-| **create chain.{type}**      | PRODUCER | `createChain()`                                  | Immediately             | ~0ms             |
-| **create job.{type}**        | PRODUCER | `createChain()`, `finish({ continueWith: ... })` | Immediately             | ~0ms             |
-| **await chain.{type}**       | PRODUCER | `createChain()` with blockers                    | Immediately             | ~0ms             |
-| **complete chain.{type}**    | CONSUMER | Blocker chain completes                          | Immediately             | ~0ms             |
-| **start job-attempt.{type}** | CONSUMER | Worker claims job                                | Attempt completes/fails | Processing time  |
-| **prepare**                  | INTERNAL | `prepare()` called                               | `prepare()` returns     | Transaction time |
-| **step**                     | INTERNAL | `step()` called (repeatable)                     | `step()` returns        | Transaction time |
-| **complete**                 | INTERNAL | `complete()` called                              | `complete()` returns    | Transaction time |
-| **complete job.{type}**      | CONSUMER | Workerless completion                            | Immediately             | ~0ms             |
-| **complete chain.{type}**    | CONSUMER | Final job completes                              | Immediately             | ~0ms             |
+| Span                         | Kind     | Created                                          | Ended                   | Duration        |
+| ---------------------------- | -------- | ------------------------------------------------ | ----------------------- | --------------- |
+| **create chain.{type}**      | PRODUCER | `createChain()`                                  | Immediately             | ~0ms            |
+| **create job.{type}**        | PRODUCER | `createChain()`, `finish({ continueWith: ... })` | Immediately             | ~0ms            |
+| **await chain.{type}**       | PRODUCER | `createChain()` with blockers                    | Immediately             | ~0ms            |
+| **complete chain.{type}**    | CONSUMER | Blocker chain completes                          | Immediately             | ~0ms            |
+| **start job-attempt.{type}** | CONSUMER | Worker claims job                                | Attempt completes/fails | Processing time |
+| **complete job.{type}**      | CONSUMER | Workerless completion                            | Immediately             | ~0ms            |
+| **complete chain.{type}**    | CONSUMER | Final job completes                              | Immediately             | ~0ms            |
 
-The attempt span may also carry an **`abort` event** — see [Span Events](#span-events).
+Each attempt has exactly one span, covering the whole handler; there are no child spans for phases inside it. Queuert does not see the handler's own transaction, so it has no span for it — instrument your database client if you want one. The attempt span may also carry an **`abort` event** — see [Span Events](#span-events).
 
 ## Blocker Relationships
 
@@ -77,9 +67,7 @@ EXTERNAL span (e.g., HTTP request)
 │       │   └── CONSUMER: complete chain.fetch-inventory
 │       │
 │       └── CONSUMER: start job-attempt.process-order
-│           │   job.blockers contains resolved blocker outputs
-│           ├── INTERNAL: prepare
-│           ├── INTERNAL: complete ✓
+│           │   getBlockers() returns the completed blocker chains
 │           └── CONSUMER: complete chain.process-order
 │
 ├── PRODUCER: create chain.fetch-user ─────────────────
@@ -87,8 +75,6 @@ EXTERNAL span (e.g., HTTP request)
 │   └── PRODUCER: create job.fetch-user
 │       │
 │       └── CONSUMER: start job-attempt.fetch-user ✓
-│           ├── INTERNAL: prepare
-│           ├── INTERNAL: complete
 │           └── CONSUMER: complete chain.fetch-user
 │
 └── PRODUCER: create chain.fetch-inventory ────────────
@@ -96,8 +82,6 @@ EXTERNAL span (e.g., HTTP request)
     └── PRODUCER: create job.fetch-inventory
         │
         └── CONSUMER: start job-attempt.fetch-inventory ✓
-            ├── INTERNAL: prepare
-            ├── INTERNAL: complete
             └── CONSUMER: complete chain.fetch-inventory
 ```
 
@@ -115,16 +99,12 @@ When a job continues to another job via `continueWith`, the continuation links t
 PRODUCER: create chain.multi-step ────────────────────────
 │
 ├── PRODUCER: create job.step-one
-│   └── CONSUMER: start job-attempt.step-one #1
-│       ├── INTERNAL: prepare
-│       └── INTERNAL: complete (calls continueWith)
+│   └── CONSUMER: start job-attempt.step-one #1  ← finish({ continueWith })
 │
 └── PRODUCER: create job.step-two
     │   links: [job step-one]  ← origin link
     │
     └── CONSUMER: start job-attempt.step-two #1 (final)
-        ├── INTERNAL: prepare
-        ├── INTERNAL: complete
         └── CONSUMER: complete chain.multi-step
 ```
 
@@ -206,9 +186,7 @@ PRODUCER create chain.process-user [0ms] ─────────────
 
 ## Span Status
 
-The attempt span is set to `OK` when the attempt completes and to `ERROR` (with the exception recorded) when it fails.
-
-Phase spans (`prepare`, `step`, `complete`) follow the same rule independently: if the phase throws, its span records the exception, sets `ERROR`, and still ends. A phase that returns normally leaves its status `UNSET`.
+The attempt span is set to `OK` when the attempt's `finish` committed and to `ERROR` (with the exception recorded) when it fails — the handler threw before a `finish` committed, returned without a committed `finish`, or lost the job to another worker. A handler that throws after its `finish` committed still ends the span as `OK`, because the outcome stands.
 
 Deduplicated chain creation stays `UNSET` — see [Deduplication](#deduplication).
 
@@ -235,12 +213,6 @@ Deduplicated chain creation stays `UNSET` — see [Deduplication](#deduplication
 | Attribute           | Type   | Description                      |
 | ------------------- | ------ | -------------------------------- |
 | `queuert.worker.id` | string | Worker ID processing the attempt |
-
-### Phase Attributes
-
-| Attribute            | Type   | Description                                     |
-| -------------------- | ------ | ----------------------------------------------- |
-| `queuert.step.index` | number | Zero-based index of the step within the attempt |
 
 ### Attempt Result Attributes
 
@@ -281,6 +253,6 @@ Recorded on the attempt span at the moment the job's abort signal fires, giving 
 - [OTEL Metrics](../otel-metrics/) — Counters, histograms, and gauges
 - [OTEL Internals](../otel-internals/) — Adapter architecture, W3C context propagation, and transactional buffering
 - [Chain Model](../chain-model/) — Chain identity and continuation model
-- [Job Processing](../job-processing/) — Prepare/complete pattern
+- [Job Processing](../job-processing/) — Attempt lifecycle and `finish`
 - [Adapters](../adapters/) — Overall adapter design philosophy
 - [In-Process Worker](../in-process-worker/) — Worker lifecycle and attempt handling

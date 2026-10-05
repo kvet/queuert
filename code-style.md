@@ -166,7 +166,7 @@ export const createClient = async ({
 ### General Guidelines
 
 - Embed small verification tests into existing related tests rather than creating separate ones
-- Test all relevant phases: `prepare`, `process`, `complete`
+- Test the relevant outcomes of an attempt: work before the transaction, `finish` committed, `finish` rolled back, and errors before and after the commit
 - Prefer descriptive test names that match what's being tested
 - To enable verbose logging when debugging tests, run with `DEBUG=1` environment variable
 

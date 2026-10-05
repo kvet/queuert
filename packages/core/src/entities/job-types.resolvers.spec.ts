@@ -181,10 +181,8 @@ describe("ResolvedRunningJob", () => {
     expectTypeOf<Result["chainTypeName"]>().toEqualTypeOf<"main">();
   });
 
-  it("carries completed blocker chains", () => {
-    expectTypeOf<Result["blockers"]>().toEqualTypeOf<
-      CompletedBlockerChains<string, BlockerDefs, "main">
-    >();
+  it("does not carry blocker chains", () => {
+    expectTypeOf<Result>().not.toHaveProperty("blockers");
   });
 });
 

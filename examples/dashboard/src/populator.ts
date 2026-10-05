@@ -23,146 +23,192 @@ const worker = await createInProcessWorker({
     jobTypes,
     processors: {
       greet: {
-        attemptHandler: async ({ job, complete }) => {
+        attemptHandler: async ({ job, finish }) => {
           await delay(20);
-          return complete(async ({ finish }) =>
-            finish({
-              output: {
-                greeting: `Hello, ${job.input.name}!`,
-              },
-            }),
+          return withTransactionHooks(async (transactionHooks) =>
+            stateAdapter.withTransaction(async (ctx) =>
+              finish({
+                ...ctx,
+                transactionHooks,
+                output: {
+                  greeting: `Hello, ${job.input.name}!`,
+                },
+              }),
+            ),
           );
         },
       },
 
       "order:validate": {
-        attemptHandler: async ({ job, complete }) => {
+        attemptHandler: async ({ job, finish }) => {
           await delay(50);
-          return complete(async ({ finish }) =>
-            finish({
-              continueWith: {
-                typeName: "order:process",
-                input: { orderId: job.input.orderId, validated: true },
-              },
-            }),
+          return withTransactionHooks(async (transactionHooks) =>
+            stateAdapter.withTransaction(async (ctx) =>
+              finish({
+                ...ctx,
+                transactionHooks,
+                continueWith: {
+                  typeName: "order:process",
+                  input: { orderId: job.input.orderId, validated: true },
+                },
+              }),
+            ),
           );
         },
       },
       "order:process": {
-        attemptHandler: async ({ job, complete }) => {
+        attemptHandler: async ({ job, finish }) => {
           await delay(100);
-          return complete(async ({ finish }) =>
-            finish({
-              continueWith: {
-                typeName: "order:complete",
-                input: { orderId: job.input.orderId, processed: true },
-              },
-            }),
+          return withTransactionHooks(async (transactionHooks) =>
+            stateAdapter.withTransaction(async (ctx) =>
+              finish({
+                ...ctx,
+                transactionHooks,
+                continueWith: {
+                  typeName: "order:complete",
+                  input: { orderId: job.input.orderId, processed: true },
+                },
+              }),
+            ),
           );
         },
       },
       "order:complete": {
-        attemptHandler: async ({ job, complete }) => {
+        attemptHandler: async ({ job, finish }) => {
           await delay(30);
-          return complete(async ({ finish }) =>
-            finish({
-              output: {
-                orderId: job.input.orderId,
-                status: "completed",
-              },
-            }),
+          return withTransactionHooks(async (transactionHooks) =>
+            stateAdapter.withTransaction(async (ctx) =>
+              finish({
+                ...ctx,
+                transactionHooks,
+                output: {
+                  orderId: job.input.orderId,
+                  status: "completed",
+                },
+              }),
+            ),
           );
         },
       },
 
       "fetch-user": {
-        attemptHandler: async ({ job, complete }) => {
+        attemptHandler: async ({ job, finish }) => {
           await delay(80);
-          return complete(async ({ finish }) =>
-            finish({
-              output: {
-                userId: job.input.userId,
-                name: "Alice",
-              },
-            }),
+          return withTransactionHooks(async (transactionHooks) =>
+            stateAdapter.withTransaction(async (ctx) =>
+              finish({
+                ...ctx,
+                transactionHooks,
+                output: {
+                  userId: job.input.userId,
+                  name: "Alice",
+                },
+              }),
+            ),
           );
         },
       },
       "fetch-permissions": {
-        attemptHandler: async ({ job, complete }) => {
+        attemptHandler: async ({ job, finish }) => {
           await delay(60);
-          return complete(async ({ finish }) =>
-            finish({
-              output: {
-                userId: job.input.userId,
-                permissions: ["read", "write"],
-              },
-            }),
+          return withTransactionHooks(async (transactionHooks) =>
+            stateAdapter.withTransaction(async (ctx) =>
+              finish({
+                ...ctx,
+                transactionHooks,
+                output: {
+                  userId: job.input.userId,
+                  permissions: ["read", "write"],
+                },
+              }),
+            ),
           );
         },
       },
       "process-with-blockers": {
-        attemptHandler: async ({ job, complete }) => {
-          const [userBlocker, permBlocker] = job.blockers;
+        attemptHandler: async ({ job, getBlockers, finish }) => {
+          const [userBlocker, permBlocker] = await getBlockers();
           await delay(40);
-          return complete(async ({ finish }) =>
-            finish({
-              output: {
-                taskId: job.input.taskId,
-                result: `${userBlocker.output.name} has ${permBlocker.output.permissions.join(", ")}`,
-              },
-            }),
+          return withTransactionHooks(async (transactionHooks) =>
+            stateAdapter.withTransaction(async (ctx) =>
+              finish({
+                ...ctx,
+                transactionHooks,
+                output: {
+                  taskId: job.input.taskId,
+                  result: `${userBlocker.output.name} has ${permBlocker.output.permissions.join(", ")}`,
+                },
+              }),
+            ),
           );
         },
       },
 
       "might-fail": {
-        attemptHandler: async ({ job, complete }) => {
+        attemptHandler: async ({ job, finish }) => {
           if (job.input.shouldFail && job.attempt < 2) {
             throw new Error("Simulated failure");
           }
-          return complete(async ({ finish }) => finish({ output: { success: true } }));
+          return withTransactionHooks(async (transactionHooks) =>
+            stateAdapter.withTransaction(async (ctx) =>
+              finish({ ...ctx, transactionHooks, output: { success: true } }),
+            ),
+          );
         },
         backoffConfig: { initialDelayMs: 100, maxDelayMs: 100 },
       },
 
       "scheduled-report": {
-        attemptHandler: async ({ complete }) => {
+        attemptHandler: async ({ finish }) => {
           await delay(50);
-          return complete(async ({ finish }) =>
-            finish({
-              output: {
-                generatedAt: new Date().toISOString(),
-              },
-            }),
+          return withTransactionHooks(async (transactionHooks) =>
+            stateAdapter.withTransaction(async (ctx) =>
+              finish({
+                ...ctx,
+                transactionHooks,
+                output: {
+                  generatedAt: new Date().toISOString(),
+                },
+              }),
+            ),
           );
         },
       },
 
       "count-step": {
-        attemptHandler: async ({ job, complete }) =>
-          complete(async ({ finish }) => {
-            if (job.input.n >= job.input.total) {
-              return finish({ output: { total: job.input.total } });
-            }
-            return finish({
-              continueWith: {
-                typeName: "count-step",
-                input: { n: job.input.n + 1, total: job.input.total },
-              },
-            });
-          }),
+        attemptHandler: async ({ job, finish }) =>
+          withTransactionHooks(async (transactionHooks) =>
+            stateAdapter.withTransaction(async (ctx) => {
+              if (job.input.n >= job.input.total) {
+                return finish({ ...ctx, transactionHooks, output: { total: job.input.total } });
+              }
+              return finish({
+                ...ctx,
+                transactionHooks,
+                continueWith: {
+                  typeName: "count-step",
+                  input: { n: job.input.n + 1, total: job.input.total },
+                },
+              });
+            }),
+          ),
       },
 
       signal: {
-        attemptHandler: async ({ complete }) =>
-          complete(async ({ finish }) => finish({ output: { fired: true } })),
+        attemptHandler: async ({ finish }) =>
+          withTransactionHooks(async (transactionHooks) =>
+            stateAdapter.withTransaction(async (ctx) =>
+              finish({ ...ctx, transactionHooks, output: { fired: true } }),
+            ),
+          ),
       },
 
       "blocked-task": {
-        attemptHandler: async ({ job, complete }) =>
-          complete(async ({ finish }) =>
-            finish({ output: { index: job.input.index, done: true } }),
+        attemptHandler: async ({ job, finish }) =>
+          withTransactionHooks(async (transactionHooks) =>
+            stateAdapter.withTransaction(async (ctx) =>
+              finish({ ...ctx, transactionHooks, output: { index: job.input.index, done: true } }),
+            ),
           ),
       },
     },

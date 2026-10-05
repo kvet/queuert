@@ -1,6 +1,6 @@
 # PostgreSQL State Adapter (Drizzle ORM)
 
-PostgreSQL state storage via `@queuert/postgres` with Drizzle ORM — atomic job creation inside application transactions.
+PostgreSQL state storage via `@queuert/postgres` with Drizzle ORM — job creation and completion inside application transactions.
 
 ## Running
 

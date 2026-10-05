@@ -41,14 +41,16 @@ const jobTypes = defineJobTypes<{
 
 // In processor
 'create-subscription': {
-  attemptHandler: async ({ job, complete }) => {
-    return complete(async ({ finish, sql }) => {
-      const [sub] = await sql`INSERT INTO subscriptions ... RETURNING id`;
-      return finish({ continueWith: {
-        typeName: "activate-trial",
-        input: { subscriptionId: sub.id, trialDays: 7 },
-      }});
-    });
+  attemptHandler: async ({ finish }) => {
+    return withTransactionHooks(async (transactionHooks) =>
+      sql.begin(async (txSql) => {
+        const [sub] = await txSql`INSERT INTO subscriptions ... RETURNING id`;
+        return finish({ txSql, transactionHooks, continueWith: {
+          typeName: "activate-trial",
+          input: { subscriptionId: sub.id, trialDays: 7 },
+        }});
+      }),
+    );
   },
 },
 ```
@@ -81,12 +83,14 @@ Jobs conditionally continue to different types: `trial-decision -> convert-to-pa
 
 // In processor - choose path based on condition
 'trial-decision': {
-  attemptHandler: async ({ job, complete }) => {
+  attemptHandler: async ({ job, finish }) => {
     const shouldConvert = userWantsToConvert;
-    return complete(async ({ finish }) => finish({ continueWith: {
-      typeName: shouldConvert ? "convert-to-paid" : "expire-trial",
-      input: { subscriptionId: job.input.subscriptionId },
-    }}));
+    return withTransactionHooks(async (transactionHooks) =>
+      db.transaction(async (tx) => finish({ tx, transactionHooks, continueWith: {
+        typeName: shouldConvert ? "convert-to-paid" : "expire-trial",
+        input: { subscriptionId: job.input.subscriptionId },
+      }})),
+    );
   },
 },
 ```
@@ -116,17 +120,23 @@ const jobTypes = defineJobTypes<{
 
 // In processor - loop or terminate with output
 'charge-billing': {
-  attemptHandler: async ({ job, complete }) => {
+  attemptHandler: async ({ job, finish }) => {
     await chargePayment(job.input.subscriptionId);
-    return complete(async ({ finish }) => {
-      if (job.input.cycle < MAX_CYCLES) {
-        return finish({ continueWith: {
-          typeName: "charge-billing",
-          input: { subscriptionId: job.input.subscriptionId, cycle: job.input.cycle + 1 },
-        }});
-      }
-      return finish({ output: { finalCycle: job.input.cycle, totalCharged: calculateTotal() } });
-    });
+    return withTransactionHooks(async (transactionHooks) =>
+      db.transaction(async (tx) => {
+        if (job.input.cycle < MAX_CYCLES) {
+          return finish({ tx, transactionHooks, continueWith: {
+            typeName: "charge-billing",
+            input: { subscriptionId: job.input.subscriptionId, cycle: job.input.cycle + 1 },
+          }});
+        }
+        return finish({
+          tx,
+          transactionHooks,
+          output: { finalCycle: job.input.cycle, totalCharged: calculateTotal() },
+        });
+      }),
+    );
   },
 },
 ```
@@ -160,19 +170,21 @@ const jobTypes = defineJobTypes<{
 
 // In processor - jump to cancel when max cycles reached
 'charge-billing': {
-  attemptHandler: async ({ job, complete }) => {
-    return complete(async ({ finish }) => {
-      if (job.input.cycle >= MAX_CYCLES) {
-        return finish({ continueWith: {
-          typeName: "cancel-subscription",
-          input: { subscriptionId: job.input.subscriptionId, reason: "max_billing_cycles_reached" },
+  attemptHandler: async ({ job, finish }) => {
+    return withTransactionHooks(async (transactionHooks) =>
+      db.transaction(async (tx) => {
+        if (job.input.cycle >= MAX_CYCLES) {
+          return finish({ tx, transactionHooks, continueWith: {
+            typeName: "cancel-subscription",
+            input: { subscriptionId: job.input.subscriptionId, reason: "max_billing_cycles_reached" },
+          }});
+        }
+        return finish({ tx, transactionHooks, continueWith: {
+          typeName: "charge-billing",
+          input: { subscriptionId: job.input.subscriptionId, cycle: job.input.cycle + 1 },
         }});
-      }
-      return finish({ continueWith: {
-        typeName: "charge-billing",
-        input: { subscriptionId: job.input.subscriptionId, cycle: job.input.cycle + 1 },
-      }});
-    });
+      }),
+    );
   },
 },
 ```

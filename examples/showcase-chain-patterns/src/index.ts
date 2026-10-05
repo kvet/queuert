@@ -123,50 +123,58 @@ const worker = await createInProcessWorker({
     jobTypes,
     processors: {
       "create-subscription": {
-        attemptHandler: async ({ job, complete }) => {
+        attemptHandler: async ({ job, finish }) => {
           console.log(`\n[create-subscription] Creating subscription for user ${job.input.userId}`);
 
-          return complete(async ({ finish, txSql }) => {
-            const [sub] = (await txSql.unsafe(
-              "INSERT INTO subscriptions (user_id, plan_id, status) VALUES ($1, $2, 'pending') RETURNING id",
-              [job.input.userId, job.input.planId],
-            )) as { id: number }[];
-            console.log(`  Created subscription #${sub.id}`);
+          return withTransactionHooks(async (transactionHooks) =>
+            sql.begin(async (txSql) => {
+              const [sub] = (await txSql.unsafe(
+                "INSERT INTO subscriptions (user_id, plan_id, status) VALUES ($1, $2, 'pending') RETURNING id",
+                [job.input.userId, job.input.planId],
+              )) as { id: number }[];
+              console.log(`  Created subscription #${sub.id}`);
 
-            return finish({
-              continueWith: {
-                typeName: "activate-trial",
-                input: { subscriptionId: sub.id, trialDays: TRIAL_DAYS },
-              },
-            });
-          });
+              return finish({
+                txSql,
+                transactionHooks,
+                continueWith: {
+                  typeName: "activate-trial",
+                  input: { subscriptionId: sub.id, trialDays: TRIAL_DAYS },
+                },
+              });
+            }),
+          );
         },
       },
 
       "activate-trial": {
-        attemptHandler: async ({ job, complete }) => {
+        attemptHandler: async ({ job, finish }) => {
           console.log(`\n[activate-trial] Activating ${job.input.trialDays}-day trial`);
 
-          return complete(async ({ finish, txSql }) => {
-            const trialEndsAt = new Date(Date.now() + job.input.trialDays * 24 * 60 * 60 * 1000);
-            await txSql.unsafe(
-              "UPDATE subscriptions SET status = 'trial', trial_ends_at = $1 WHERE id = $2",
-              [trialEndsAt.toISOString(), job.input.subscriptionId],
-            );
-            console.log(`  Trial activated until ${trialEndsAt.toISOString()}`);
+          return withTransactionHooks(async (transactionHooks) =>
+            sql.begin(async (txSql) => {
+              const trialEndsAt = new Date(Date.now() + job.input.trialDays * 24 * 60 * 60 * 1000);
+              await txSql.unsafe(
+                "UPDATE subscriptions SET status = 'trial', trial_ends_at = $1 WHERE id = $2",
+                [trialEndsAt.toISOString(), job.input.subscriptionId],
+              );
+              console.log(`  Trial activated until ${trialEndsAt.toISOString()}`);
 
-            return finish({
-              continueWith: {
-                typeName: "trial-decision",
-                input: { subscriptionId: job.input.subscriptionId },
-              },
-            });
-          });
+              return finish({
+                txSql,
+                transactionHooks,
+                continueWith: {
+                  typeName: "trial-decision",
+                  input: { subscriptionId: job.input.subscriptionId },
+                },
+              });
+            }),
+          );
         },
       },
 
       "trial-decision": {
-        attemptHandler: async ({ job, complete }) => {
+        attemptHandler: async ({ job, finish }) => {
           console.log(
             `\n[trial-decision] Evaluating trial for subscription #${job.input.subscriptionId}`,
           );
@@ -174,123 +182,143 @@ const worker = await createInProcessWorker({
           const shouldConvert = userConverts;
           console.log(`  User decision: ${shouldConvert ? "CONVERT to paid" : "LET EXPIRE"}`);
 
-          return complete(async ({ finish }) => {
-            if (shouldConvert) {
-              return finish({
-                continueWith: {
-                  typeName: "convert-to-paid",
-                  input: { subscriptionId: job.input.subscriptionId },
-                },
-              });
-            } else {
-              return finish({
-                continueWith: {
-                  typeName: "expire-trial",
-                  input: { subscriptionId: job.input.subscriptionId },
-                },
-              });
-            }
-          });
+          return withTransactionHooks(async (transactionHooks) =>
+            sql.begin(async (txSql) => {
+              if (shouldConvert) {
+                return finish({
+                  txSql,
+                  transactionHooks,
+                  continueWith: {
+                    typeName: "convert-to-paid",
+                    input: { subscriptionId: job.input.subscriptionId },
+                  },
+                });
+              } else {
+                return finish({
+                  txSql,
+                  transactionHooks,
+                  continueWith: {
+                    typeName: "expire-trial",
+                    input: { subscriptionId: job.input.subscriptionId },
+                  },
+                });
+              }
+            }),
+          );
         },
       },
 
       "expire-trial": {
-        attemptHandler: async ({ job, complete }) => {
+        attemptHandler: async ({ job, finish }) => {
           console.log(
             `\n[expire-trial] Trial expired for subscription #${job.input.subscriptionId}`,
           );
 
-          return complete(async ({ finish, txSql }) => {
-            await txSql.unsafe("UPDATE subscriptions SET status = 'expired' WHERE id = $1", [
-              job.input.subscriptionId,
-            ]);
-            const expiredAt = new Date().toISOString();
-            console.log(`  Subscription expired at ${expiredAt}`);
+          return withTransactionHooks(async (transactionHooks) =>
+            sql.begin(async (txSql) => {
+              await txSql.unsafe("UPDATE subscriptions SET status = 'expired' WHERE id = $1", [
+                job.input.subscriptionId,
+              ]);
+              const expiredAt = new Date().toISOString();
+              console.log(`  Subscription expired at ${expiredAt}`);
 
-            return finish({ output: { expiredAt } });
-          });
+              return finish({ txSql, transactionHooks, output: { expiredAt } });
+            }),
+          );
         },
       },
 
       "convert-to-paid": {
-        attemptHandler: async ({ job, complete }) => {
+        attemptHandler: async ({ job, finish }) => {
           console.log(
             `\n[convert-to-paid] Converting subscription #${job.input.subscriptionId} to paid`,
           );
 
-          return complete(async ({ finish, txSql }) => {
-            await txSql.unsafe("UPDATE subscriptions SET status = 'active' WHERE id = $1", [
-              job.input.subscriptionId,
-            ]);
-            console.log(`  Subscription is now active!`);
+          return withTransactionHooks(async (transactionHooks) =>
+            sql.begin(async (txSql) => {
+              await txSql.unsafe("UPDATE subscriptions SET status = 'active' WHERE id = $1", [
+                job.input.subscriptionId,
+              ]);
+              console.log(`  Subscription is now active!`);
 
-            return finish({
-              continueWith: {
-                typeName: "charge-billing",
-                input: { subscriptionId: job.input.subscriptionId, cycle: 1 },
-              },
-            });
-          });
+              return finish({
+                txSql,
+                transactionHooks,
+                continueWith: {
+                  typeName: "charge-billing",
+                  input: { subscriptionId: job.input.subscriptionId, cycle: 1 },
+                },
+              });
+            }),
+          );
         },
       },
 
       "charge-billing": {
-        attemptHandler: async ({ job, complete }) => {
+        attemptHandler: async ({ job, finish }) => {
           console.log(`\n[charge-billing] Processing cycle ${job.input.cycle}`);
 
           await new Promise((r) => setTimeout(r, 100));
           console.log(`  Charged $${PRICE_PER_CYCLE} for cycle ${job.input.cycle}`);
 
-          return complete(async ({ finish, txSql }) => {
-            const [sub] = (await txSql.unsafe(
-              "UPDATE subscriptions SET current_cycle = $1, total_charged = total_charged + $2 WHERE id = $3 RETURNING total_charged",
-              [job.input.cycle, PRICE_PER_CYCLE, job.input.subscriptionId],
-            )) as { total_charged: string }[];
+          return withTransactionHooks(async (transactionHooks) =>
+            sql.begin(async (txSql) => {
+              const [sub] = (await txSql.unsafe(
+                "UPDATE subscriptions SET current_cycle = $1, total_charged = total_charged + $2 WHERE id = $3 RETURNING total_charged",
+                [job.input.cycle, PRICE_PER_CYCLE, job.input.subscriptionId],
+              )) as { total_charged: string }[];
 
-            const totalCharged = Number(sub.total_charged);
-            console.log(`  Total charged so far: $${totalCharged.toFixed(2)}`);
+              const totalCharged = Number(sub.total_charged);
+              console.log(`  Total charged so far: $${totalCharged.toFixed(2)}`);
 
-            if (job.input.cycle < MAX_BILLING_CYCLES) {
-              console.log(`  Scheduling next billing cycle...`);
-              return finish({
-                continueWith: {
-                  typeName: "charge-billing",
-                  input: { subscriptionId: job.input.subscriptionId, cycle: job.input.cycle + 1 },
-                },
-              });
-            } else {
-              console.log(`  Max cycles reached, cancelling subscription...`);
-              return finish({
-                continueWith: {
-                  typeName: "cancel-subscription",
-                  input: {
-                    subscriptionId: job.input.subscriptionId,
-                    reason: "max_billing_cycles_reached",
+              if (job.input.cycle < MAX_BILLING_CYCLES) {
+                console.log(`  Scheduling next billing cycle...`);
+                return finish({
+                  txSql,
+                  transactionHooks,
+                  continueWith: {
+                    typeName: "charge-billing",
+                    input: { subscriptionId: job.input.subscriptionId, cycle: job.input.cycle + 1 },
                   },
-                },
-              });
-            }
-          });
+                });
+              } else {
+                console.log(`  Max cycles reached, cancelling subscription...`);
+                return finish({
+                  txSql,
+                  transactionHooks,
+                  continueWith: {
+                    typeName: "cancel-subscription",
+                    input: {
+                      subscriptionId: job.input.subscriptionId,
+                      reason: "max_billing_cycles_reached",
+                    },
+                  },
+                });
+              }
+            }),
+          );
         },
       },
 
       "cancel-subscription": {
-        attemptHandler: async ({ job, complete }) => {
+        attemptHandler: async ({ job, finish }) => {
           console.log(
             `\n[cancel-subscription] Cancelling subscription #${job.input.subscriptionId}`,
           );
           console.log(`  Reason: ${job.input.reason}`);
 
-          return complete(async ({ finish, txSql }) => {
-            const cancelledAt = new Date().toISOString();
-            await txSql.unsafe(
-              "UPDATE subscriptions SET status = 'cancelled', cancelled_at = $1 WHERE id = $2",
-              [cancelledAt, job.input.subscriptionId],
-            );
-            console.log(`  Subscription cancelled at ${cancelledAt}`);
+          return withTransactionHooks(async (transactionHooks) =>
+            sql.begin(async (txSql) => {
+              const cancelledAt = new Date().toISOString();
+              await txSql.unsafe(
+                "UPDATE subscriptions SET status = 'cancelled', cancelled_at = $1 WHERE id = $2",
+                [cancelledAt, job.input.subscriptionId],
+              );
+              console.log(`  Subscription cancelled at ${cancelledAt}`);
 
-            return finish({ output: { cancelledAt } });
-          });
+              return finish({ txSql, transactionHooks, output: { cancelledAt } });
+            }),
+          );
         },
       },
     },

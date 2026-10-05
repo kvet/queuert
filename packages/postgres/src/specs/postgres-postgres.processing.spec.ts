@@ -3,7 +3,7 @@ import {
   extendWithCommon,
   extendWithResourceLeakDetection,
   processErrorHandlingTestSuite,
-  processModesTestSuite,
+  finishTestSuite,
   processTestSuite,
   attemptReclaimerTestSuite,
   workerTestSuite,
@@ -25,8 +25,8 @@ describe("Process Error Handling", () => {
   processErrorHandlingTestSuite({ it: postgresPostgresIt });
 });
 
-describe("Process Modes", () => {
-  processModesTestSuite({ it: postgresPostgresIt });
+describe("Finish", () => {
+  finishTestSuite({ it: postgresPostgresIt });
 });
 
 describe("Process", () => {

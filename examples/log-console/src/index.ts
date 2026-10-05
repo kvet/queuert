@@ -43,23 +43,33 @@ const worker = await createInProcessWorker({
     jobTypes,
     processors: {
       greet: {
-        attemptHandler: async ({ job, complete }) => {
+        attemptHandler: async ({ job, finish }) => {
           console.log(`[app] Processing greeting for ${job.input.name}`);
 
-          return complete(async ({ finish }) =>
-            finish({ output: { greeting: `Hello, ${job.input.name}!` } }),
+          return withTransactionHooks(async (transactionHooks) =>
+            stateAdapter.withTransaction(async (ctx) =>
+              finish({
+                ...ctx,
+                transactionHooks,
+                output: { greeting: `Hello, ${job.input.name}!` },
+              }),
+            ),
           );
         },
       },
       "might-fail": {
-        attemptHandler: async ({ job, complete }) => {
+        attemptHandler: async ({ job, finish }) => {
           console.log("[app] Processing might-fail job");
 
           if (job.input.shouldFail && job.attempt < 2) {
             throw new Error("Simulated failure for demonstration");
           }
 
-          return complete(async ({ finish }) => finish({ output: { success: true as const } }));
+          return withTransactionHooks(async (transactionHooks) =>
+            stateAdapter.withTransaction(async (ctx) =>
+              finish({ ...ctx, transactionHooks, output: { success: true as const } }),
+            ),
+          );
         },
         backoffConfig: { initialDelayMs: 100, maxDelayMs: 100 },
       },

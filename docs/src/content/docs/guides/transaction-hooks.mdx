@@ -90,6 +90,22 @@ A hook definition (`HookDefinition`) contains mutable state, a flush function, a
 
 Hooks flush (and discard) concurrently — cross-hook execution order is not guaranteed. If your hook records ordered events, register every event under a single hook key and serialize the work inside `flush`/`discard` (e.g. iterate the accumulated state with `for…of await`).
 
+## In Job Handlers
+
+Attempt handlers use the same pattern. Queuert opens no transaction around an attempt: the handler opens its own, calls `finish` inside it, and passes the same `transactionHooks`. Completion events and notifications from `finish` are released only after that transaction commits.
+
+```ts
+attemptHandler: async ({ job, finish }) =>
+  withTransactionHooks(async (transactionHooks) =>
+    sql.begin(async (txSql) => {
+      await txSql`UPDATE emails SET sent = true WHERE id = ${job.input.emailId}`;
+      return finish({ txSql, transactionHooks, output: { sent: true } });
+    }),
+  ),
+```
+
+Keep `withTransactionHooks` outside the transaction, so hooks flush after `COMMIT` rather than before it. If your code retries the transaction (common under REPEATABLE READ or SERIALIZABLE), open a fresh `withTransactionHooks` scope per try: `finish` itself keeps only its last call's events, but other calls buffered by a rolled-back try (for example `createChain`) would otherwise still flush.
+
 ## Savepoints
 
 `TransactionHooks` supports savepoints for partial rollback of buffered side effects. This is useful when a sub-operation within a transaction may fail without invalidating the entire transaction.

@@ -8,7 +8,7 @@ Two coupled features share a schema primitive (`job_blocker.blocked`) and a runt
 
 ### Fan-out: one chain unblocks many
 
-When a chain completes, `completeChain` calls `stateAdapter.unblockJobs({ blockedByChainId })` inside the completing job's transaction. That single call moves **every** dependent of the chain from `status = 'blocked'` to `'pending'` in one `UPDATE` and buffers one notify + one observability event per unblocked job. One shared setup chain that a million jobs wait on means a million-row update plus a million events in a single transaction — a latency spike and a long-held lock on the completing job's path.
+When a chain completes, `completeChain` calls `stateAdapter.unblockJobs({ blockedByChainId })` inside the transaction the completing job's `finish` runs in (the handler's own, see [user-owned-transactions.md](user-owned-transactions.md)). That single call moves **every** dependent of the chain from `status = 'blocked'` to `'pending'` in one `UPDATE` and buffers one notify + one observability event per unblocked job. One shared setup chain that a million jobs wait on means a million-row update plus a million events in a single transaction — a latency spike and a long-held lock on the completing job's path.
 
 ### Fan-in: one job waits for many
 
@@ -201,20 +201,23 @@ await client.sealJobBlockers({ sql: txSql, jobId: collector.id });
 ```
 
 - `createChain` for an unsealed type: rejects `blockers` (compile error), creates the job with `unsealed_blockers = true`, `status = 'blocked'`.
-- `addJobBlockers`: validates `unsealed_blockers = true` on the target, inserts `job_blocker` rows with `blocked` set based on the blocker chain's `chain_status`. No `job.status` change — the job is already blocked by being unsealed.
+- `addJobBlockers`: validates `unsealed_blockers = true` on the target, writes each blocker chain's head first (the blockers-first `getChains({ lock: "write" })` from user-owned transactions, so attaching races with the blocker's completion as a write-write conflict at every isolation level), then inserts `job_blocker` rows with `blocked` set based on the blocker chain's `chain_status`. No `job.status` change — the job is already blocked by being unsealed.
 - `sealJobBlockers`: sets `unsealed_blockers = false`, locks the job, then checks `NOT EXISTS (SELECT 1 FROM job_blocker WHERE job_id = $1 AND blocked = true)`. If no blocked rows → `job.status = 'pending'`. If blocked rows remain → stays blocked; the normal unblock path clears it when the remaining blockers complete.
 
 **Fan-in pattern — each producer registers itself at completion**, sharing the completion transaction so the attached chain is guaranteed `completed` at the moment of attachment:
 
 ```ts
-await sql.begin(async (txSql) => {
-  // ...complete the producer...
-  await client.addJobBlockers({
-    sql: txSql,
-    jobId: collectorJobId,
-    blockers: [producerChain],
-  });
-});
+return withTransactionHooks(async (transactionHooks) =>
+  sql.begin(async (txSql) => {
+    const completedJob = await finish({ sql: txSql, transactionHooks, output: { value } });
+    await client.addJobBlockers({
+      sql: txSql,
+      jobId: collectorJobId,
+      blockers: [producerChain],
+    });
+    return completedJob;
+  }),
+);
 ```
 
 Because the producer's head row is marked `chain_status = 'completed'` in the same transaction, `addJobBlockers` inserts the `job_blocker` row with `blocked = false` — the blocker is already resolved at attachment time.
@@ -223,7 +226,7 @@ Because the producer's head row is marked `chain_status = 'completed'` in the sa
 
 ### Handler — `getBlockers` vs `listBlockers`
 
-The eagerly preloaded `job.blockers` is **removed** from the attempt handler and replaced by explicit, mutually exclusive accessors:
+User-owned transactions already removed the eagerly preloaded `job.blockers` in favor of an on-demand `getBlockers(txCtx?)`. This design adds `listBlockers` for unsealed types; the two accessors are mutually exclusive:
 
 | type def                             | handler gets                       | shape                                             |
 | ------------------------------------ | ---------------------------------- | ------------------------------------------------- |
@@ -234,38 +237,44 @@ The eagerly preloaded `job.blockers` is **removed** from the attempt handler and
 ```ts
 // Sealed — bounded, single fetch.
 "perform-action": {
-  attemptHandler: async ({ job, getBlockers, complete }) => {
+  attemptHandler: async ({ getBlockers, finish }) => {
     const [user, config] = await getBlockers();
-    return complete(async () => ({ result: user.output.role }));
+    return withTransactionHooks(async (transactionHooks) =>
+      sql.begin(async (txSql) =>
+        finish({ sql: txSql, transactionHooks, output: { result: user.output.role } }),
+      ),
+    );
   },
 }
 
 // Unsealed — streamed, unbounded.
 "aggregate": {
-  attemptHandler: async ({ job, execute, listBlockers, complete }) => {
+  attemptHandler: async ({ job, listBlockers, finish }) => {
     let total = 0;
     let count = 0;
     for await (const b of listBlockers()) {   // Completed<producer>, paged
       total += b.output.value;
       count++;
 
-      // Checkpoint via execute — each call opens a fresh guarded transaction
+      // Checkpoint in the handler's own short transaction (not ownership-fenced)
       if (count % 1000 === 0) {
-        await execute(async ({ sql }) => {
-          await sql`UPDATE aggregation_state SET total = ${total}, count = ${count} WHERE job_id = ${job.id}`;
+        await sql.begin(async (txSql) => {
+          await txSql`UPDATE aggregation_state SET total = ${total}, count = ${count} WHERE job_id = ${job.id}`;
         });
       }
     }
-    return complete(async () => ({ sum: total }));
+    return withTransactionHooks(async (transactionHooks) =>
+      sql.begin(async (txSql) => finish({ sql: txSql, transactionHooks, output: { sum: total } })),
+    );
   },
 }
 ```
 
-`getBlockers()` keeps the current behavior under the hood (single `getJobBlockers` query, all rows, bounded by `MAX_BLOCKERS_PER_JOB`) — just moved from an implicit `job.blockers` preload to an explicit call.
+`getBlockers()` is unchanged from user-owned transactions (single `getJobBlockers` query, all rows, bounded by `MAX_BLOCKERS_PER_JOB`; optional `txCtx` to read inside the transaction passed to `finish`).
 
-`listBlockers()` is a cursor paginator over `job_blocker WHERE job_id = $1 ORDER BY index` (the PK supports it), usable as an async iterator with an explicit `listBlockers({ cursor, limit }) → { items, nextCursor }` escape hatch. Every item is guaranteed `completed` (the job only runs once sealed and all blockers resolved). Awaiting `listBlockers()` is async processing-phase work, so the attempt auto-promotes to staged mode and extends the attempt while paging. Page size is an internal tuning knob, not user-facing.
+`listBlockers()` is a cursor paginator over `job_blocker WHERE job_id = $1 ORDER BY index` (the PK supports it), usable as an async iterator with an explicit `listBlockers({ cursor, limit }) → { items, nextCursor }` escape hatch. Every item is guaranteed `completed` (the job only runs once sealed and all blockers resolved). Paging runs outside any queuert-owned transaction; the heartbeat already renews the attempt lease for every attempt while the handler runs, so a long scan needs no mode switch (the earlier draft's auto-promotion to staged mode is gone along with the modes). Page size is an internal tuning knob, not user-facing.
 
-Long-running aggregations can use `execute` to checkpoint intermediate state — each call opens a fresh guarded transaction with attempt verification, so the handler never holds a single long-lived transaction across the entire blocker set.
+Long-running aggregations can checkpoint intermediate state in their own short transactions, so the handler never holds a single long-lived transaction across the entire blocker set. These checkpoint transactions are not ownership-fenced (the earlier draft's per-call attempt verification no longer exists): they must be idempotent, and a worker that lost the attempt may still write one, so the checkpoint should be treated as a resumable hint rather than authoritative state. Only the final `finish` is fenced.
 
 ---
 
@@ -294,7 +303,7 @@ Long-running aggregations can use `execute` to checkpoint intermediate state —
 
 ## Changeset
 
-Minor across core + the three adapter packages (schema column on both `job` and `job_blocker`, adapter ops, handler API addition; `job.blockers` preload removal is the breaking part — bump accordingly). Docs in `docs/src/content/docs/guides/job-blockers.md` + an example.
+Minor across core + the three adapter packages (schema column on both `job` and `job_blocker`, adapter ops, handler API addition `listBlockers`). The `job.blockers` preload removal already shipped with user-owned transactions, so it is no longer part of this change. Docs in `docs/src/content/docs/guides/job-blockers.md` + an example.
 
 ## Relationship to existing TODO items
 

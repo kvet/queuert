@@ -274,8 +274,10 @@ export const validationTestSuite = ({ it }: { it: TestAPI<TestSuiteContext> }): 
         jobTypes: simpleJobTypes,
         processors: {
           main: {
-            attemptHandler: async ({ complete }) =>
-              complete(async ({ finish }) => finish({ output: { result: 84 } })),
+            attemptHandler: async ({ finish }) =>
+              withTransaction(async (txCtx, transactionHooks) =>
+                finish({ ...txCtx, transactionHooks, output: { result: 84 } }),
+              ),
           },
         },
       }),
@@ -322,11 +324,11 @@ export const validationTestSuite = ({ it }: { it: TestAPI<TestSuiteContext> }): 
         jobTypes: simpleJobTypes,
         processors: {
           main: {
-            attemptHandler: async ({ complete }) => {
+            attemptHandler: async ({ finish }) => {
               try {
-                return await complete(async ({ finish }) =>
+                return await withTransaction(async (txCtx, transactionHooks) =>
                   // @ts-expect-error testing runtime validation
-                  finish({ output: { result: "not-a-number" } }),
+                  finish({ ...txCtx, transactionHooks, output: { result: "not-a-number" } }),
                 );
               } catch (error) {
                 validationFailed.resolve(error);
@@ -377,14 +379,20 @@ export const validationTestSuite = ({ it }: { it: TestAPI<TestSuiteContext> }): 
         jobTypes: continuationJobTypes,
         processors: {
           step1: {
-            attemptHandler: async ({ complete }) =>
-              complete(async ({ finish }) =>
-                finish({ continueWith: { typeName: "step2", input: { data: 1 } } }),
+            attemptHandler: async ({ finish }) =>
+              withTransaction(async (txCtx, transactionHooks) =>
+                finish({
+                  ...txCtx,
+                  transactionHooks,
+                  continueWith: { typeName: "step2", input: { data: 1 } },
+                }),
               ),
           },
           step2: {
-            attemptHandler: async ({ complete }) =>
-              complete(async ({ finish }) => finish({ output: { result: 42 } })),
+            attemptHandler: async ({ finish }) =>
+              withTransaction(async (txCtx, transactionHooks) =>
+                finish({ ...txCtx, transactionHooks, output: { result: 42 } }),
+              ),
           },
         },
       }),
@@ -431,10 +439,14 @@ export const validationTestSuite = ({ it }: { it: TestAPI<TestSuiteContext> }): 
         jobTypes: continuationNoFollowUpJobTypes,
         processors: {
           step1: {
-            attemptHandler: async ({ complete }) => {
+            attemptHandler: async ({ finish }) => {
               try {
-                return await complete(async ({ finish }) =>
-                  finish({ continueWith: { typeName: "step2", input: { data: 1 } } }),
+                return await withTransaction(async (txCtx, transactionHooks) =>
+                  finish({
+                    ...txCtx,
+                    transactionHooks,
+                    continueWith: { typeName: "step2", input: { data: 1 } },
+                  }),
                 );
               } catch (error) {
                 validationFailed.resolve(error);
@@ -443,8 +455,10 @@ export const validationTestSuite = ({ it }: { it: TestAPI<TestSuiteContext> }): 
             },
           },
           step2: {
-            attemptHandler: async ({ complete }) =>
-              complete(async ({ finish }) => finish({ output: { result: 1 } })),
+            attemptHandler: async ({ finish }) =>
+              withTransaction(async (txCtx, transactionHooks) =>
+                finish({ ...txCtx, transactionHooks, output: { result: 1 } }),
+              ),
           },
         },
       }),
@@ -569,8 +583,10 @@ export const validationTestSuite = ({ it }: { it: TestAPI<TestSuiteContext> }): 
         jobTypes: continuationJobTypes,
         processors: {
           step2: {
-            attemptHandler: async ({ complete }) =>
-              complete(async ({ finish }) => finish({ output: { result: 42 } })),
+            attemptHandler: async ({ finish }) =>
+              withTransaction(async (txCtx, transactionHooks) =>
+                finish({ ...txCtx, transactionHooks, output: { result: 42 } }),
+              ),
           },
         },
       }),

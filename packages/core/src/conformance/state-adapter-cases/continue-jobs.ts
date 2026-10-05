@@ -72,7 +72,7 @@ export const continueJobsGroup: ConformanceGroup<StateConformanceFixture> = {
           stateAdapter.startJobAttempt({
             txCtx,
             workerId: "worker-1",
-            typeNames: ["head"],
+            timeoutMsByTypeName: { head: 30_000 },
           }),
         );
 
@@ -80,7 +80,7 @@ export const continueJobsGroup: ConformanceGroup<StateConformanceFixture> = {
           stateAdapter.extendJobAttempt({
             txCtx,
             jobId: headChain.head.id,
-            workerId: "worker-1",
+            fence: { attempt: 1, workerId: "worker-1" },
             timeoutMs: 10_000,
           }),
         );

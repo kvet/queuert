@@ -334,9 +334,10 @@ export const workerlessCompletionTestSuite = ({ it }: { it: TestAPI<TestSuiteCon
         jobTypes,
         processors: {
           "process-approved": {
-            attemptHandler: async ({ prepare, complete }) => {
-              await prepare({ mode: "atomic" });
-              return complete(async ({ finish }) => finish({ output: { done: true } }));
+            attemptHandler: async ({ finish }) => {
+              return withTransaction(async (txCtx, transactionHooks) =>
+                finish({ ...txCtx, transactionHooks, output: { done: true } }),
+              );
             },
           },
         },
@@ -541,14 +542,16 @@ export const workerlessCompletionTestSuite = ({ it }: { it: TestAPI<TestSuiteCon
         jobTypes,
         processors: {
           test: {
-            attemptHandler: async ({ signal, complete }) => {
+            attemptHandler: async ({ signal, finish }) => {
               jobStarted.resolve();
 
               await jobCompleted.promise;
 
               try {
                 await expect(
-                  complete(async ({ finish }) => finish({ output: { result: "from-worker" } })),
+                  withTransaction(async (txCtx, transactionHooks) =>
+                    finish({ ...txCtx, transactionHooks, output: { result: "from-worker" } }),
+                  ),
                 ).rejects.toThrow();
 
                 expect(signal.aborted).toBe(true);

@@ -96,52 +96,70 @@ const worker = await createInProcessWorker({
     jobTypes,
     processors: {
       "fetch-data": {
-        attemptHandler: async ({ job, complete }) => {
+        attemptHandler: async ({ job, finish }) => {
           console.log(`Fetching data from ${job.input.url}`);
           const data = { items: [1, 2, 3], source: job.input.url };
 
-          return complete(async ({ finish }) =>
-            finish({
-              continueWith: {
-                typeName: "process-data",
-                input: { data },
-              },
-            }),
+          return withTransactionHooks(async (transactionHooks) =>
+            stateAdapter.withTransaction(async (ctx) =>
+              finish({
+                ...ctx,
+                transactionHooks,
+                continueWith: {
+                  typeName: "process-data",
+                  input: { data },
+                },
+              }),
+            ),
           );
         },
       },
       "process-data": {
-        attemptHandler: async ({ job, complete }) => {
+        attemptHandler: async ({ job, finish }) => {
           console.log("Processing data:", job.input.data);
           const data = job.input.data as { items: number[] };
 
-          return complete(async ({ finish }) =>
-            finish({
-              output: {
-                processed: true,
-                itemCount: data.items?.length ?? 0,
-              },
-            }),
+          return withTransactionHooks(async (transactionHooks) =>
+            stateAdapter.withTransaction(async (ctx) =>
+              finish({
+                ...ctx,
+                transactionHooks,
+                output: {
+                  processed: true,
+                  itemCount: data.items?.length ?? 0,
+                },
+              }),
+            ),
           );
         },
       },
       "batch-process": {
-        attemptHandler: async ({ job, complete }) => {
+        attemptHandler: async ({ job, finish, getBlockers }) => {
           console.log(`Processing batch ${job.input.batchId}`);
-          console.log("Blockers completed:", job.blockers.length);
+          const blockers = await getBlockers();
+          console.log("Blockers completed:", blockers.length);
 
-          return complete(async ({ finish }) => finish({ output: { success: true } }));
+          return withTransactionHooks(async (transactionHooks) =>
+            stateAdapter.withTransaction(async (ctx) =>
+              finish({ ...ctx, transactionHooks, output: { success: true } }),
+            ),
+          );
         },
       },
       auth: {
-        attemptHandler: async ({ job, complete }) => {
+        attemptHandler: async ({ job, finish }) => {
           console.log(`Authenticating with token: ${job.input.token.substring(0, 8)}...`);
-          return complete(async ({ finish }) =>
-            finish({
-              output: {
-                userId: `user-${job.input.token.substring(0, 4)}`,
-              },
-            }),
+
+          return withTransactionHooks(async (transactionHooks) =>
+            stateAdapter.withTransaction(async (ctx) =>
+              finish({
+                ...ctx,
+                transactionHooks,
+                output: {
+                  userId: `user-${job.input.token.substring(0, 4)}`,
+                },
+              }),
+            ),
           );
         },
       },

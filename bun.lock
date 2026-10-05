@@ -376,6 +376,21 @@
         "@queuert/tsconfig": "workspace:*",
       },
     },
+    "examples/showcase-long-running-jobs": {
+      "name": "example-showcase-long-running-jobs",
+      "version": "0.0.1",
+      "dependencies": {
+        "@queuert/postgres": "workspace:*",
+        "example-notify-postgres-postgres-js": "workspace:*",
+        "example-state-postgres-postgres-js": "workspace:*",
+        "postgres": "3.4.9",
+        "queuert": "workspace:*",
+      },
+      "devDependencies": {
+        "@queuert/testcontainers": "workspace:*",
+        "@queuert/tsconfig": "workspace:*",
+      },
+    },
     "examples/showcase-middleware": {
       "name": "example-showcase-middleware",
       "version": "0.0.1",
@@ -393,21 +408,6 @@
     },
     "examples/showcase-multiworker-prioritization": {
       "name": "example-showcase-multiworker-prioritization",
-      "version": "0.0.1",
-      "dependencies": {
-        "@queuert/postgres": "workspace:*",
-        "example-notify-postgres-postgres-js": "workspace:*",
-        "example-state-postgres-postgres-js": "workspace:*",
-        "postgres": "3.4.9",
-        "queuert": "workspace:*",
-      },
-      "devDependencies": {
-        "@queuert/testcontainers": "workspace:*",
-        "@queuert/tsconfig": "workspace:*",
-      },
-    },
-    "examples/showcase-processing-modes": {
-      "name": "example-showcase-processing-modes",
       "version": "0.0.1",
       "dependencies": {
         "@queuert/postgres": "workspace:*",
@@ -2039,11 +2039,11 @@
 
     "example-showcase-error-recovery": ["example-showcase-error-recovery@workspace:examples/showcase-error-recovery"],
 
+    "example-showcase-long-running-jobs": ["example-showcase-long-running-jobs@workspace:examples/showcase-long-running-jobs"],
+
     "example-showcase-middleware": ["example-showcase-middleware@workspace:examples/showcase-middleware"],
 
     "example-showcase-multiworker-prioritization": ["example-showcase-multiworker-prioritization@workspace:examples/showcase-multiworker-prioritization"],
-
-    "example-showcase-processing-modes": ["example-showcase-processing-modes@workspace:examples/showcase-processing-modes"],
 
     "example-showcase-queries": ["example-showcase-queries@workspace:examples/showcase-queries"],
 

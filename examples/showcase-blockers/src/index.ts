@@ -88,72 +88,97 @@ const worker = await createInProcessWorker({
     jobTypes,
     processors: {
       "fetch-source": {
-        attemptHandler: async ({ job, complete }) => {
+        attemptHandler: async ({ job, finish }) => {
           console.log(`[fetch-source] Fetching ${job.input.sourceId}...`);
           await new Promise((r) => setTimeout(r, 100));
-          return complete(async ({ finish }) =>
-            finish({
-              output: {
-                sourceId: job.input.sourceId,
-                data: `Data from ${job.input.sourceId}`,
-              },
-            }),
+          return withTransactionHooks(async (transactionHooks) =>
+            sql.begin(async (txSql) =>
+              finish({
+                txSql,
+                transactionHooks,
+                output: {
+                  sourceId: job.input.sourceId,
+                  data: `Data from ${job.input.sourceId}`,
+                },
+              }),
+            ),
           );
         },
       },
 
       "aggregate-data": {
-        attemptHandler: async ({ job, complete }) => {
-          console.log(`[aggregate-data] Aggregating ${job.blockers.length} sources`);
+        attemptHandler: async ({ job, getBlockers, finish }) => {
+          const blockers = await getBlockers();
+          console.log(`[aggregate-data] Aggregating ${blockers.length} sources`);
 
-          for (const blocker of job.blockers) {
+          for (const blocker of blockers) {
             console.log(`  - ${blocker.output.sourceId}: "${blocker.output.data}"`);
           }
 
-          return complete(async ({ finish }) =>
-            finish({
-              output: {
-                reportId: job.input.reportId,
-                totalSources: job.blockers.length,
-                combinedData: job.blockers.map((b) => b.output.data).join(" | "),
-              },
-            }),
+          return withTransactionHooks(async (transactionHooks) =>
+            sql.begin(async (txSql) =>
+              finish({
+                txSql,
+                transactionHooks,
+                output: {
+                  reportId: job.input.reportId,
+                  totalSources: blockers.length,
+                  combinedData: blockers.map((b) => b.output.data).join(" | "),
+                },
+              }),
+            ),
           );
         },
       },
 
       "validate-user": {
-        attemptHandler: async ({ job, complete }) => {
+        attemptHandler: async ({ job, finish }) => {
           console.log(`[validate-user] Validating ${job.input.userId}`);
-          return complete(async ({ finish }) =>
-            finish({ output: { userId: job.input.userId, role: "admin" } }),
+          return withTransactionHooks(async (transactionHooks) =>
+            sql.begin(async (txSql) =>
+              finish({
+                txSql,
+                transactionHooks,
+                output: { userId: job.input.userId, role: "admin" },
+              }),
+            ),
           );
         },
       },
 
       "load-config": {
-        attemptHandler: async ({ job, complete }) => {
+        attemptHandler: async ({ job, finish }) => {
           console.log(`[load-config] Loading ${job.input.configKey}`);
-          return complete(async ({ finish }) =>
-            finish({ output: { configKey: job.input.configKey, value: "production" } }),
+          return withTransactionHooks(async (transactionHooks) =>
+            sql.begin(async (txSql) =>
+              finish({
+                txSql,
+                transactionHooks,
+                output: { configKey: job.input.configKey, value: "production" },
+              }),
+            ),
           );
         },
       },
 
       "perform-action": {
-        attemptHandler: async ({ job, complete }) => {
-          const [userBlocker, configBlocker] = job.blockers;
+        attemptHandler: async ({ job, getBlockers, finish }) => {
+          const [userBlocker, configBlocker] = await getBlockers();
           console.log(
             `[perform-action] User: ${userBlocker.output.role}, Config: ${configBlocker.output.value}`,
           );
 
-          return complete(async ({ finish }) =>
-            finish({
-              output: {
-                actionId: job.input.actionId,
-                result: `Completed by ${userBlocker.output.role} with ${configBlocker.output.value}`,
-              },
-            }),
+          return withTransactionHooks(async (transactionHooks) =>
+            sql.begin(async (txSql) =>
+              finish({
+                txSql,
+                transactionHooks,
+                output: {
+                  actionId: job.input.actionId,
+                  result: `Completed by ${userBlocker.output.role} with ${configBlocker.output.value}`,
+                },
+              }),
+            ),
           );
         },
       },

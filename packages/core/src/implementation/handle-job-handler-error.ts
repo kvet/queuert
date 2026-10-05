@@ -1,66 +1,42 @@
 import { type ScheduleOptions } from "../entities/schedule.js";
-import {
-  JobAlreadyCompletedError,
-  JobNotFoundError,
-  JobTakenByAnotherWorkerError,
-} from "../errors.js";
 import { type BackoffConfig, calculateBackoffMs } from "../helpers/backoff.js";
-import { bufferObservabilityEvent } from "../helpers/observability-hooks.js";
 import { serializeError } from "../helpers/serialize-error.js";
 import { type Helpers } from "../setup-helpers.js";
-import { type BaseTxContext, type StateJob } from "../state-adapter/state-adapter.js";
-import { type TransactionHooks } from "../transaction-hooks.js";
+import { type StateAttemptFence, type StateJob } from "../state-adapter/state-adapter.js";
 
-export const handleJobHandlerError = async (
+/**
+ * Reschedules a failed attempt with backoff, fenced on the attempt, in autocommit. Returns
+ * `undefined` when the fence misses — the attempt no longer owns the job, or its own `finish`
+ * already committed.
+ */
+export const rescheduleFailedAttempt = async (
   helpers: Helpers,
   {
     stateJob,
     error,
-    txCtx,
-    transactionHooks,
     backoffConfig,
-    workerId,
+    fence,
   }: {
     stateJob: StateJob;
     error: unknown;
-    txCtx: BaseTxContext;
-    transactionHooks: TransactionHooks;
     backoffConfig: BackoffConfig;
-    workerId: string;
+    fence: StateAttemptFence;
   },
-): Promise<{
-  schedule?: ScheduleOptions;
-}> => {
-  if (
-    error instanceof JobTakenByAnotherWorkerError ||
-    error instanceof JobAlreadyCompletedError ||
-    error instanceof JobNotFoundError
-  ) {
-    return {};
-  }
-
+): Promise<{ rescheduledJob: StateJob; schedule: ScheduleOptions } | undefined> => {
   const schedule: ScheduleOptions = {
     afterMs: calculateBackoffMs(stateJob.attempt, backoffConfig),
   };
-  const errorString = serializeError(error);
 
   const [rescheduledJob] = await helpers.stateAdapter.rescheduleJobs({
-    txCtx,
-    jobs: [{ jobId: stateJob.id, schedule, error: errorString }],
+    jobs: [{ jobId: stateJob.id, schedule, error: serializeError(error), fence }],
   });
-  if (rescheduledJob === undefined) {
-    throw new JobNotFoundError(`Job ${stateJob.id} not found or already completed`, {
-      jobId: stateJob.id,
-    });
-  }
+  if (rescheduledJob === undefined) return undefined;
 
-  bufferObservabilityEvent(transactionHooks, () => {
-    helpers.observabilityHelper.jobRescheduled(rescheduledJob);
-    helpers.observabilityHelper.jobAttemptFailed(stateJob, {
-      workerId,
-      error,
-    });
+  helpers.observabilityHelper.jobRescheduled(rescheduledJob);
+  helpers.observabilityHelper.jobAttemptFailed(stateJob, {
+    workerId: fence.workerId,
+    error,
   });
 
-  return { schedule };
+  return { rescheduledJob, schedule };
 };

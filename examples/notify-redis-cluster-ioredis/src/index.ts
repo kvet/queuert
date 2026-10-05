@@ -69,18 +69,22 @@ const worker = await createInProcessWorker({
     jobTypes,
     processors: {
       generate_report: {
-        attemptHandler: async ({ job, complete }) => {
+        attemptHandler: async ({ job, finish }) => {
           console.log(`Generating ${job.input.reportType} report...`);
           await new Promise((r) => setTimeout(r, 500));
           const rowCount = Math.floor(Math.random() * 1000) + 100;
           console.log(`Report generated with ${rowCount} rows`);
-          return complete(async ({ finish }) =>
-            finish({
-              output: {
-                reportId: `RPT-${Date.now()}`,
-                rowCount,
-              },
-            }),
+          return withTransactionHooks(async (transactionHooks) =>
+            stateAdapter.withTransaction(async (ctx) =>
+              finish({
+                ...ctx,
+                transactionHooks,
+                output: {
+                  reportId: `RPT-${Date.now()}`,
+                  rowCount,
+                },
+              }),
+            ),
           );
         },
       },

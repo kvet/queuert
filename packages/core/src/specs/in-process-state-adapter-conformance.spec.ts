@@ -34,11 +34,5 @@ describe("In-Process State Adapter Conformance", () => {
     expect(UUID_PATTERN.test(stateChain.head.chainId)).toBe(true);
   });
 
-  conformanceIt("withSavepoint outside a transaction throws", async ({ stateAdapter }) => {
-    await expect(
-      stateAdapter.withSavepoint({} as { $test: true }, async () => {}),
-    ).rejects.toThrow();
-  });
-
   stateAdapterConformanceTestSuite({ it: conformanceIt });
 });

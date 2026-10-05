@@ -6,6 +6,7 @@ import { decodeIdCursor, decodeTimestampWithIdCursor, encodeCursor } from "./cur
 import { createIdValidator } from "./id-validator.js";
 import {
   type StateAdapter,
+  type StateAttemptFence,
   type StateBlockedJob,
   type StateDependentJob,
   type StateChain,
@@ -42,6 +43,9 @@ const blockerKey = (blockedByChainId: string, index: number): string =>
 const isCompleted = (job: DbJob): boolean => job.status === "completed";
 const isRunning = (job: DbJob): boolean => job.status === "running";
 const isPending = (job: DbJob): boolean => job.status === "pending";
+const matchesFence = (job: DbJob, fence: StateAttemptFence | undefined): boolean =>
+  fence === undefined ||
+  (isRunning(job) && job.attempt === fence.attempt && job.attemptBy === fence.workerId);
 
 const matchesChainStatus = (headJob: DbJob, status?: string): boolean =>
   status === undefined || headJob.chainStatus === status;
@@ -585,7 +589,7 @@ class JobIndex {
 // ── Adapter ─────────────────────────────────────────────────────────
 
 /** Transaction context for the in-process state adapter. */
-export type InProcessContext = { inTransaction?: boolean; journal?: JournalEntry[] };
+export type InProcessContext = { inTransaction: true; journal: JournalEntry[] };
 
 /** State adapter backed by in-memory data structures. Suitable for testing and single-process deployments without persistence. */
 export type InProcessStateAdapter = StateAdapter<InProcessContext, string>;
@@ -691,18 +695,6 @@ export const createInProcessStateAdapter = async ({
       }
     },
 
-    withSavepoint: async (txCtx, fn) => {
-      if (!txCtx.journal) throw new Error("withSavepoint called outside a transaction");
-      const journal = txCtx.journal;
-      const start = journal.length;
-      try {
-        return await fn(txCtx);
-      } catch (error) {
-        idx.rollbackTo(journal, start);
-        throw error;
-      }
-    },
-
     getChains: async ({ txCtx, chainIds }) =>
       withReadLock(txCtx, () =>
         chainIds.map((chainId) => {
@@ -781,7 +773,9 @@ export const createInProcessStateAdapter = async ({
 
           const parents = jobInputs.map((jobInput) => {
             const parent = idx.jobs.get(jobInput.continueFromId);
-            return !parent || isCompleted(parent) ? undefined : parent;
+            return !parent || isCompleted(parent) || !matchesFence(parent, jobInput.fence)
+              ? undefined
+              : parent;
           });
 
           for (const [index, jobInput] of jobInputs.entries()) {
@@ -842,9 +836,9 @@ export const createInProcessStateAdapter = async ({
       withWriteLock(txCtx, () => {
         const journal = txCtx?.journal;
         const now = new Date();
-        return jobInputs.map(({ jobId, output }) => {
+        return jobInputs.map(({ jobId, output, fence }) => {
           const job = idx.jobs.get(jobId);
-          if (!job || isCompleted(job)) return undefined;
+          if (!job || isCompleted(job) || !matchesFence(job, fence)) return undefined;
 
           const updatedJob: DbJob = {
             ...job,
@@ -874,11 +868,7 @@ export const createInProcessStateAdapter = async ({
             idx.writeJob(journal, headJob, head);
           }
 
-          const blocking = idx.blockedByChain.get(job.chainId);
-          return {
-            ...jobView(updatedJob),
-            hasBlockedJobs: blocking !== undefined && blocking.size > 0,
-          };
+          return jobView(updatedJob);
         });
       }),
 
@@ -889,13 +879,13 @@ export const createInProcessStateAdapter = async ({
         const now = new Date();
         const results: (StateJob | undefined)[] = [];
         const resultById = new Map<string, StateJob | undefined>();
-        for (const { jobId, schedule, error } of jobs) {
+        for (const { jobId, schedule, error, fence } of jobs) {
           if (resultById.has(jobId)) {
             results.push(resultById.get(jobId));
             continue;
           }
           const job = idx.jobs.get(jobId);
-          if (!job || isCompleted(job)) {
+          if (!job || isCompleted(job) || !matchesFence(job, fence)) {
             resultById.set(jobId, undefined);
             results.push(undefined);
             continue;
@@ -956,14 +946,14 @@ export const createInProcessStateAdapter = async ({
         return result;
       }),
 
-    startJobAttempt: async ({ txCtx, typeNames, workerId }) =>
+    startJobAttempt: async ({ txCtx, timeoutMsByTypeName, workerId }) =>
       withWriteLock(txCtx, () => {
         const journal = txCtx?.journal;
         const now = new Date();
         const nowMs = now.getTime();
 
         let bestJob: DbJob | undefined;
-        for (const typeName of typeNames) {
+        for (const typeName of Object.keys(timeoutMsByTypeName)) {
           const candidate = idx.pendingByType.get(typeName)?.first();
           if (!candidate) continue;
           if (candidate.scheduledAt.getTime() > nowMs) continue;
@@ -978,9 +968,10 @@ export const createInProcessStateAdapter = async ({
           attempt: bestJob.attempt + 1,
           attemptAt: now,
           attemptBy: workerId,
+          attemptUntil: new Date(nowMs + timeoutMsByTypeName[bestJob.typeName]),
         };
         idx.writeJob(journal, bestJob, updatedJob);
-        return { ...jobView(updatedJob), hasBlockers: idx.jobBlockers.has(updatedJob.id) };
+        return jobView(updatedJob);
       }),
 
     getStartAttemptDelayMs: async ({ txCtx, typeNames }) =>
@@ -1002,18 +993,18 @@ export const createInProcessStateAdapter = async ({
         return Math.max(0, nextScheduledAt - now);
       }),
 
-    extendJobAttempt: async ({ txCtx, jobId, workerId, timeoutMs }) =>
+    extendJobAttempt: async ({ txCtx, jobId, fence, timeoutMs }) =>
       withWriteLock(txCtx, () => {
         const journal = txCtx?.journal;
         const job = idx.jobs.get(jobId);
-        if (!job || job.attemptBy !== workerId) return undefined;
+        if (!job || !matchesFence(job, fence)) return undefined;
 
         const updatedJob: DbJob = { ...job, attemptUntil: new Date(Date.now() + timeoutMs) };
         idx.writeJob(journal, job, updatedJob);
         return jobView(updatedJob);
       }),
 
-    reclaimExpiredJobAttempt: async ({ txCtx, typeNames, ignoredJobIds }) =>
+    reclaimExpiredJobAttempt: async ({ txCtx, typeNames, ignoredJobIds, lastAttemptError }) =>
       withWriteLock(txCtx, () => {
         const journal = txCtx?.journal;
         const now = Date.now();
@@ -1044,6 +1035,8 @@ export const createInProcessStateAdapter = async ({
           attemptBy: null,
           attemptUntil: null,
           attemptAt: null,
+          lastAttemptAt: new Date(now),
+          lastAttemptError,
         };
         idx.writeJob(journal, candidateJob, updatedJob);
         return jobView(updatedJob);

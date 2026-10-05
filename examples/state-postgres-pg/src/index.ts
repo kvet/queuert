@@ -63,24 +63,35 @@ const worker = await createInProcessWorker({
     jobTypes,
     processors: {
       send_welcome_email: {
-        attemptHandler: async ({ job, prepare, complete }) => {
-          // Load the user with pg inside the job transaction
-          const user = await prepare({ mode: "staged" }, async ({ poolClient }) => {
-            const { rows } = await poolClient.query<{ id: number; name: string; email: string }>(
-              "SELECT id, name, email FROM users WHERE id = $1",
-              [job.input.userId],
-            );
-            const row = rows[0];
-            if (!row) throw new Error(`User ${job.input.userId} not found`);
-            return row;
-          });
+        attemptHandler: async ({ job, finish }) => {
+          const { rows } = await db.query<{ id: number; name: string; email: string }>(
+            "SELECT id, name, email FROM users WHERE id = $1",
+            [job.input.userId],
+          );
+          const user = rows[0];
+          if (!user) throw new Error(`User ${job.input.userId} not found`);
 
           // Simulate sending email (in real app, call email service here)
           console.log(`Sending welcome email to ${user.email} for ${user.name}`);
 
-          return complete(async ({ finish }) =>
-            finish({ output: { sentAt: new Date().toISOString() } }),
-          );
+          return withTransactionHooks(async (transactionHooks) => {
+            const poolClient = await db.connect();
+            try {
+              await poolClient.query("BEGIN");
+              const result = await finish({
+                poolClient,
+                transactionHooks,
+                output: { sentAt: new Date().toISOString() },
+              });
+              await poolClient.query("COMMIT");
+              return result;
+            } catch (error) {
+              await poolClient.query("ROLLBACK").catch(() => {});
+              throw error;
+            } finally {
+              poolClient.release();
+            }
+          });
         },
       },
     },

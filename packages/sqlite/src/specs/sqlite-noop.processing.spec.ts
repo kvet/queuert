@@ -3,7 +3,7 @@ import {
   extendWithNotifyNoop,
   extendWithResourceLeakDetection,
   processErrorHandlingTestSuite,
-  processModesTestSuite,
+  finishTestSuite,
   processTestSuite,
   attemptReclaimerTestSuite,
   workerTestSuite,
@@ -23,8 +23,8 @@ describe("Process Error Handling", () => {
   processErrorHandlingTestSuite({ it: sqliteNoopIt });
 });
 
-describe("Process Modes", () => {
-  processModesTestSuite({ it: sqliteNoopIt });
+describe("Finish", () => {
+  finishTestSuite({ it: sqliteNoopIt });
 });
 
 describe("Process", () => {

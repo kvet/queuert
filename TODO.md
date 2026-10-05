@@ -4,6 +4,7 @@ None
 
 # Short term
 
+- [EPIC] User-owned transactions (exploratory, feature branch). Queuert stops opening transactions during processing; `finish` writes fenced on `attempt` inside the user's transaction; `prepare`/`step`/`complete`, processing modes and savepoints go away. Lands before worker liveness. See `design/user-owned-transactions.md`.
 - [EPIC] Worker liveness. Move attempt ownership to worker. Have workers to be registered in the DB and have a heartbeat. See `design/worker-liveness.md`.
 - [EPIC] Chain identity. Closing [#3](https://github.com/kvet/queuert/issues/3). See `design/chain-identity.md`.
   - [TASK] List chains by identity — `listChains` gains an `identity` filter to page through the full recurrence history of a key

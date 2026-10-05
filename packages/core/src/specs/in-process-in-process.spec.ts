@@ -6,9 +6,9 @@ import { awaitChainTestSuite } from "../suites/await-chain.test-suite.js";
 import { blockerChainsTestSuite } from "../suites/blocker-chains.test-suite.js";
 import { chainsTestSuite } from "../suites/chains.test-suite.js";
 import { createChainsTestSuite } from "../suites/create-chains.test-suite.js";
+import { finishTestSuite } from "../suites/finish.test-suite.js";
 import { notifyTestSuite } from "../suites/notify.test-suite.js";
 import { processErrorHandlingTestSuite } from "../suites/process-error-handling.test-suite.js";
-import { processModesTestSuite } from "../suites/process-modes.test-suite.js";
 import { processTestSuite } from "../suites/process.test-suite.js";
 import { rescheduleJobTestSuite } from "../suites/reschedule-job.test-suite.js";
 import { schedulingTestSuite } from "../suites/scheduling.test-suite.js";
@@ -32,8 +32,8 @@ describe("Process Error Handling", () => {
   processErrorHandlingTestSuite({ it: inProcessInProcessIt });
 });
 
-describe("Process Modes", () => {
-  processModesTestSuite({ it: inProcessInProcessIt });
+describe("Finish", () => {
+  finishTestSuite({ it: inProcessInProcessIt });
 });
 
 describe("Process", () => {

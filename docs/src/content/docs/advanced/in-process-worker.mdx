@@ -58,7 +58,7 @@ Workers process jobs in parallel using slots. See `createInProcessWorker` TSDoc 
 
 The worker runs a single coordinating loop:
 
-1. **Fill**: Loop `startJobAttempt` until it returns nothing or all slots are busy
+1. **Fill**: Loop `startJobAttempt` until it returns nothing or all slots are busy. Each call is a single autocommit statement that starts the attempt and sets its lease (`attemptUntil`) to now plus the acquired type's `attemptConfig.timeoutMs`
 2. **Reclaim expired attempt**: Reclaim one job with an expired attempt (if any idle slots remain)
 3. **Wait**: Listen for notification, poll timeout, or slot completion
 4. **Repeat**
@@ -71,7 +71,7 @@ Calling `stop()` triggers graceful shutdown:
 
 1. Emit the `workerStopping` observability event
 2. Signal abort controller — in-flight jobs receive `"worker_stopping"` on their `signal`, and the main loop stops spawning new slots
-3. Wait for the main loop to exit, then for all in-flight handlers to finish (complete or throw)
+3. Wait for the main loop to exit, then for all in-flight handlers to end (return or throw)
 4. Emit the `workerStopped` observability event
 
 The `"worker_stopping"` abort reason is cooperative: handlers that check `signal.aborted` and `signal.reason` can distinguish a worker shutdown from a hard abort (e.g. `"taken_by_another_worker"`) and choose to wrap up gracefully instead of abandoning work immediately.
@@ -80,6 +80,12 @@ The `"worker_stopping"` abort reason is cooperative: handlers that check `signal
 
 Each worker has a unique identity (a random UUID, prefixed with the optional `workerName` option when set) stored in `attemptBy`. The worker tracks active jobs internally and routes abort signals by job ID—no per-slot identity is needed.
 
+## Attempt Lease and Heartbeat
+
+Every attempt holds a lease, `attemptUntil`, set when the job is acquired. While the handler runs, the slot renews it every `attemptConfig.heartbeatMs` with a single autocommit statement that only matches while the job is still `running` at this attempt and held by this worker. Renewal stops when the handler ends. A renewal that misses because the attempt's own `finish` committed simply stops the heartbeat; any other miss means the attempt was lost and aborts the handler's `signal` (`taken_by_another_worker`, `already_completed` or `not_found`).
+
+If the worker crashes, nothing renews the lease; once it lapses, a worker reclaims the job. The crashed attempt counts as used.
+
 ## Expired Attempt Reclamation
 
 The worker reclaims jobs with expired attempts, making them available for retry.
@@ -87,7 +93,7 @@ The worker reclaims jobs with expired attempts, making them available for retry.
 When idle slots remain in the main loop:
 
 1. Find a `running` job of a registered type whose `attemptUntil` has passed (the exact selection is adapter-specific — e.g. PostgreSQL picks a random registered type first, then the oldest expired job within it)
-2. Transition job: `running` → `pending`, clear `attemptAt`, `attemptBy`, and `attemptUntil`
+2. Transition job in a single autocommit statement: `running` → `pending`, clear `attemptAt`, `attemptBy`, and `attemptUntil`, and stamp `lastAttemptAt` and `lastAttemptError` (`JobAttemptExpiredError: the attempt lease expired before the worker renewed it`)
 3. Emit `jobAttemptReclaimed` observability event
 4. Notify via `jobScheduled` (workers wake up) and `jobAttemptLost` (original worker aborts)
 
@@ -96,12 +102,12 @@ When idle slots remain in the main loop:
 - **Integrated with main loop**: Runs once per iteration, no separate process needed.
 - **One job per iteration**: Releases at most one expired attempt to avoid blocking slot spawning.
 - **Type-scoped**: Only releases expired attempts for job types the worker is registered to handle.
-- **Concurrent-safe**: Database locking prevents conflicts between workers.
+- **Concurrent-safe**: The reclaim skips rows another transaction holds (`SKIP LOCKED` in PostgreSQL), so it never interferes with a handler transaction that has already written the job in `finish`.
 - **Self-aware**: When running with multiple slots, the worker excludes jobs currently being processed by itself (via `ignoredJobIds`). This prevents a race condition where a worker could release its own in-progress job if the attempt expires before extension.
 
 ## Retry and Backoff
 
-When a job handler throws, the worker reschedules it with exponential backoff:
+When a job handler throws before a `finish` commits, or returns without a committed `finish`, the worker reschedules it with exponential backoff, in a single autocommit statement fenced on the attempt:
 
 ```
 delay = min(initialDelayMs * multiplier^(attempt-1), maxDelayMs)
@@ -125,7 +131,7 @@ A single worker can handle multiple job types. Slots poll all registered types a
 
 ### Attempt Middlewares
 
-Handler middleware hook into one or more job processing phases via `wrapHandler`, `wrapPrepare`, `wrapStep`, and `wrapComplete`. Each hook can inject typed context into the inner handler/callback through `next(ctx)`. Middleware compose as an onion: the first middleware's "before" runs outermost. Middleware enable cross-cutting concerns like contextual logging, audit trails, tracing spans, and resource injection.
+Handler middleware wrap the attempt handler via `wrapHandler`, which can inject typed context into the handler through `next(ctx)` and must return what `next` returned. Middleware compose as an onion: the first middleware's "before" runs outermost. Middleware enable cross-cutting concerns like contextual logging, tracing spans, error classification, and resource injection. See [Job Attempt Middleware](../../guides/middleware/).
 
 Middleware are declared on the processor registry via `createProcessors({ attemptMiddleware: [...] })`. Handler signatures inside that registry auto-infer their typed context from the middleware tuple. When multiple slices are passed as an array to `createInProcessWorker`, each processor keeps its slice's middleware chain.
 
@@ -143,6 +149,6 @@ The worker design emphasizes:
 
 ## See Also
 
-- [Job Processing](../job-processing/) — Prepare/complete pattern, abort signals, timeouts
+- [Job Processing](../job-processing/) — Attempt lifecycle, `finish`, abort signals, isolation levels
 - [Adapters](../adapters/) — Notification optimization, state provider design
 - [`showcase-signals`](https://github.com/kvet/queuert/tree/main/examples/showcase-signals) — Runnable example: graceful shutdown via `worker_stopping`, external completion via `already_completed`

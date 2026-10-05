@@ -44,41 +44,30 @@ const defToTypeString = (def: JobTypeDef): string => {
 const handlerCtxKeys = (count: number): string =>
   count <= 0 ? "" : ", " + Array.from({ length: count }, (_, i) => `ctx${i}`).join(", ");
 
-const prepareCtxKeys = (count: number): string =>
-  count <= 0 ? "" : ", " + Array.from({ length: count }, (_, i) => `prep${i}`).join(", ");
-
-const completeCtxKeys = (count: number): string =>
-  count <= 0 ? "" : ", " + Array.from({ length: count }, (_, i) => `done${i}`).join(", ");
-
 const voidStmts = (prefix: string, count: number, indent: string): string => {
   if (count <= 0) return "";
   return Array.from({ length: count }, (_, i) => `${indent}void ${prefix}${i};`).join("\n") + "\n";
 };
 
+const finishInTransaction = (body: string): string =>
+  `withTransactionHooks(async (transactionHooks) =>
+          stateAdapter.withTransaction(async (txCtx) => {
+${body}
+          }),
+        )`;
+
 const generateProcessors = (defs: JobTypeDef[], clientVar: string, middlewareCount = 0): string => {
   const hKeys = handlerCtxKeys(middlewareCount);
-  const pKeys = prepareCtxKeys(middlewareCount);
-  const cKeys = completeCtxKeys(middlewareCount);
   const hVoid = voidStmts("ctx", middlewareCount, "        ");
-  const pVoid = voidStmts("prep", middlewareCount, "          ");
-  const cVoid = voidStmts("done", middlewareCount, "          ");
-  const hasMw = middlewareCount > 0;
 
-  // When middleware is present, force prepare-callback evaluation so MergedPrepareCtx
-  // is expanded. Otherwise skip to avoid changing the no-middleware baseline.
-  const prepareCall = hasMw
-    ? `        await prepare({ mode: "atomic" }, async ({${pKeys.replace(/^, /, " ")} }) => {\n${pVoid}        });\n`
-    : "";
+  const handler = (body: string): string => `      attemptHandler: async ({ finish${hKeys} }) => {
+${hVoid}        return ${finishInTransaction(body)};
+      },`;
 
   const processors = defs.map((def) => {
     if (def.output && !def.continueWith) {
-      const completeBody = hasMw
-        ? `complete(async ({ finish${cKeys} }) => {\n${cVoid}          return finish({ output: (${typeToValue(def.output)}) });\n        })`
-        : `complete(async ({ finish }) => finish({ output: (${typeToValue(def.output)}) }))`;
       return `    "${def.name}": {
-      attemptHandler: async ({ complete${hasMw ? ", prepare" : ""}${hKeys} }) => {
-${hVoid}${prepareCall}        return ${completeBody};
-      },
+${handler(`            return finish({ ...txCtx, transactionHooks, output: (${typeToValue(def.output)}) });`)}
     }`;
     }
 
@@ -93,41 +82,26 @@ ${hVoid}${prepareCall}        return ${completeBody};
           const blockerName = blockerNameMatch?.[1] ?? "unknown";
           const blockerDef = defs.find((d) => d.name === blockerName);
           const blockerInput = blockerDef ? typeToValue(blockerDef.input) : `{ id: "" }`;
-          return `${clientVar}.createChain({ ...txCtx, typeName: "${blockerName}", input: ${blockerInput} })`;
+          return `${clientVar}.createChain({ ...txCtx, transactionHooks, typeName: "${blockerName}", input: ${blockerInput} })`;
         });
         const blockerAwaits = blockerStartCalls
           .map((call, i) => `            const blocker${i} = await ${call};`)
           .join("\n");
         const blockerArray = blockerStartCalls.map((_, i) => `blocker${i}`).join(", ");
 
-        const completeArgs = `{ finish${hasMw ? cKeys : ""}, ...txCtx }`;
-
         return `    "${def.name}": {
-      attemptHandler: async ({ complete${hasMw ? ", prepare" : ""}${hKeys} }) => {
-${hVoid}${prepareCall}        return complete(async (${completeArgs}) => {
-${cVoid}${blockerAwaits}
-              return finish({ continueWith: { typeName: "${firstTarget}", input: ${typeToValue(targetDef.input)}, blockers: [${blockerArray}] } });
-          });
-      },
+${handler(`${blockerAwaits}
+            return finish({ ...txCtx, transactionHooks, continueWith: { typeName: "${firstTarget}", input: ${typeToValue(targetDef.input)}, blockers: [${blockerArray}] } });`)}
     }`;
       }
 
-      const completeArgs = `{ finish${hasMw ? cKeys : ""} }`;
-
       return `    "${def.name}": {
-      attemptHandler: async ({ complete${hasMw ? ", prepare" : ""}${hKeys} }) => {
-${hVoid}${prepareCall}        return complete(async (${completeArgs}) => {
-${cVoid}          return finish({ continueWith: { typeName: "${firstTarget}", input: ${typeToValue(targetDef?.input ?? "{ id: string }")} } });
-        });
-      },
+${handler(`            return finish({ ...txCtx, transactionHooks, continueWith: { typeName: "${firstTarget}", input: ${typeToValue(targetDef?.input ?? "{ id: string }")} } });`)}
     }`;
     }
 
-    const completeBody = `complete(async ({ finish${hasMw ? cKeys : ""} }) => {\n${cVoid}          return finish({ output: null });\n        })`;
     return `    "${def.name}": {
-      attemptHandler: async ({ complete${hasMw ? ", prepare" : ""}${hKeys} }) => {
-${hVoid}${prepareCall}        return ${completeBody};
-      },
+${handler(`            return finish({ ...txCtx, transactionHooks, output: null });`)}
     }`;
   });
 
@@ -139,6 +113,7 @@ const generateCompleteChainCall = (defs: JobTypeDef[], entryDef: JobTypeDef): st
 
   if (!entryDef.continueWith) {
     return `const completed = await client.completeChain({
+  ...txCtx,
   typeName: "${typeName}",
   id: chain.id,
   transactionHooks,
@@ -165,12 +140,13 @@ const generateCompleteChainCall = (defs: JobTypeDef[], entryDef: JobTypeDef): st
     const blockerArray = targetDef.blockers.map((_, i) => `b${i}`).join(", ");
 
     return `const completed = await client.completeChain({
+  ...txCtx,
   typeName: "${typeName}",
   id: chain.id,
   transactionHooks,
   handler: async ({ job, completeJob }) => {
     if (job.typeName !== "${typeName}") throw new Error("unexpected");
-    return completeJob(job, async ({ finish, ...txCtx }) => {
+    await completeJob(job, async ({ finish, ...txCtx }) => {
 ${blockerStarts.map((s) => `      ${s}`).join("\n")}
       return finish({ continueWith: { typeName: "${firstTarget}", input: ${targetInput}, blockers: [${blockerArray}] } });
     });
@@ -179,12 +155,13 @@ ${blockerStarts.map((s) => `      ${s}`).join("\n")}
   }
 
   return `const completed = await client.completeChain({
+  ...txCtx,
   typeName: "${typeName}",
   id: chain.id,
   transactionHooks,
   handler: async ({ job, completeJob }) => {
     if (job.typeName !== "${typeName}") throw new Error("unexpected");
-    return completeJob(job, async ({ finish }) =>
+    await completeJob(job, async ({ finish }) =>
       finish({ continueWith: { typeName: "${firstTarget}", input: ${targetInput} } }));
   },
 });`;
@@ -198,18 +175,21 @@ const generateClientCalls = (defs: JobTypeDef[]): string => {
   const input = typeToValue(entryDef.input);
 
   return `
-const { transactionHooks } = createTransactionHooks();
-const chain = await client.createChain({ typeName: "${typeName}", input: ${input}, transactionHooks });
-const fetchedChain = await client.getChain({ typeName: "${typeName}", id: chain.id });
-const job = await client.getJob({ typeName: "${typeName}", id: chain.id });
-const chains = await client.listChains({ typeName: "${typeName}" });
-const jobs = await client.listJobs({ typeName: "${typeName}" });
-${generateCompleteChainCall(defs, entryDef)}
-void fetchedChain;
-void job;
-void chains;
-void jobs;
-void completed;
+await withTransactionHooks(async (transactionHooks) =>
+  stateAdapter.withTransaction(async (txCtx) => {
+    const chain = await client.createChain({ ...txCtx, typeName: "${typeName}", input: ${input}, transactionHooks });
+    const fetchedChain = await client.getChain({ typeName: "${typeName}", id: chain.id });
+    const job = await client.getJob({ typeName: "${typeName}", id: chain.id });
+    const chains = await client.listChains({ typeName: "${typeName}" });
+    const jobs = await client.listJobs({ typeName: "${typeName}" });
+    ${generateCompleteChainCall(defs, entryDef)}
+    void fetchedChain;
+    void job;
+    void chains;
+    void jobs;
+    void completed;
+  }),
+);
 `;
 };
 
@@ -220,16 +200,12 @@ const generateMiddleware = (count: number): string => {
     decls.push(
       `const middleware${i}: AttemptMiddleware<
   Awaited<ReturnType<typeof createInProcessStateAdapter>>,
-  { ctx${i}: number },
-  { prep${i}: string },
-  { done${i}: boolean }
+  { ctx${i}: number }
 > = {
   wrapHandler: async ({ job, next }) => {
     void job.typeName;
     return next({ ctx${i}: ${i} });
   },
-  wrapPrepare: async ({ next }) => next({ prep${i}: "p${i}" }),
-  wrapComplete: async ({ next }) => next({ done${i}: true }),
 };`,
     );
   }
@@ -247,7 +223,7 @@ const wrapInScenario = (defs: JobTypeDef[], middlewareCount = 1): string => {
   const mwList = middlewareList(middlewareCount);
   const mwPart = mwList ? `attemptMiddleware: [${mwList}], ` : "";
 
-  return `import { defineJobTypes, createProcessors, createInProcessWorker, createClient, createTransactionHooks, type AttemptMiddleware, createInProcessStateAdapter, createInProcessNotifyAdapter } from "queuert";
+  return `import { defineJobTypes, createProcessors, createInProcessWorker, createClient, withTransactionHooks, type AttemptMiddleware, createInProcessStateAdapter, createInProcessNotifyAdapter } from "queuert";
 
 type Defs = {
 ${typeStrings.join("\n")}
@@ -304,7 +280,7 @@ const ${slice.name}Registry = defineJobTypes<${slice.name}Defs>();`;
   const clientCalls = generateClientCalls(allDefs);
   const middleware = generateMiddleware(middlewareCount);
 
-  return `import { defineJobTypes, createProcessors, createInProcessWorker, createClient, createTransactionHooks, type AttemptMiddleware, createInProcessStateAdapter, createInProcessNotifyAdapter } from "queuert";
+  return `import { defineJobTypes, createProcessors, createInProcessWorker, createClient, withTransactionHooks, type AttemptMiddleware, createInProcessStateAdapter, createInProcessNotifyAdapter } from "queuert";
 ${sliceTypeDecls.join("\n")}
 
 const stateAdapter = await createInProcessStateAdapter();

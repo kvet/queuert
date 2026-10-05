@@ -252,12 +252,12 @@ export const deleteChainsGroup: ConformanceGroup<StateConformanceFixture> = {
           await stateAdapter.startJobAttempt({
             txCtx,
             workerId: "worker-1",
-            typeNames: ["delete-repeated:step"],
+            timeoutMsByTypeName: { "delete-repeated:step": 30_000 },
           }),
           await stateAdapter.startJobAttempt({
             txCtx,
             workerId: "worker-1",
-            typeNames: ["delete-repeated:step"],
+            timeoutMsByTypeName: { "delete-repeated:step": 30_000 },
           }),
         ]);
         expect(acquired?.id).toBe(continuationId);

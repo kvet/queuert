@@ -73,10 +73,6 @@ export const extendWithStateInProcess = <T>(
             maybeThrow();
             return stateAdapter.withTransaction(fn);
           },
-          withSavepoint: async (txCtx, fn) => {
-            maybeThrow();
-            return stateAdapter.withSavepoint(txCtx, fn);
-          },
           getChains: wrap(stateAdapter.getChains),
           getJobs: wrap(stateAdapter.getJobs),
           createJobs: wrap(stateAdapter.createJobs),

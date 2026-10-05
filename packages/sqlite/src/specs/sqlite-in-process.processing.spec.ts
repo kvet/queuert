@@ -3,7 +3,7 @@ import {
   extendWithNotifyInProcess,
   extendWithResourceLeakDetection,
   processErrorHandlingTestSuite,
-  processModesTestSuite,
+  finishTestSuite,
   processTestSuite,
   attemptReclaimerTestSuite,
   workerTestSuite,
@@ -23,8 +23,8 @@ describe("Process Error Handling", () => {
   processErrorHandlingTestSuite({ it: sqliteInProcessIt });
 });
 
-describe("Process Modes", () => {
-  processModesTestSuite({ it: sqliteInProcessIt });
+describe("Finish", () => {
+  finishTestSuite({ it: sqliteInProcessIt });
 });
 
 describe("Process", () => {

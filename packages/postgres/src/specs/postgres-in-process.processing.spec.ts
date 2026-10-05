@@ -4,7 +4,7 @@ import {
   extendWithNotifyInProcess,
   extendWithResourceLeakDetection,
   processErrorHandlingTestSuite,
-  processModesTestSuite,
+  finishTestSuite,
   processTestSuite,
   attemptReclaimerTestSuite,
   workerTestSuite,
@@ -27,8 +27,8 @@ describe("Process Error Handling", () => {
   processErrorHandlingTestSuite({ it: postgresInProcessIt });
 });
 
-describe("Process Modes", () => {
-  processModesTestSuite({ it: postgresInProcessIt });
+describe("Finish", () => {
+  finishTestSuite({ it: postgresInProcessIt });
 });
 
 describe("Process", () => {

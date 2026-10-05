@@ -86,47 +86,67 @@ const worker = await createInProcessWorker({
     jobTypes,
     processors: {
       "validate-input": {
-        attemptHandler: async ({ job, complete }) => {
+        attemptHandler: async ({ job, finish }) => {
           console.log(`[validate-input] Validating order ${job.input.orderId}`);
-          return complete(async ({ finish }) => finish({ output: { valid: true } }));
+          return withTransactionHooks(async (transactionHooks) =>
+            sql.begin(async (txSql) =>
+              finish({ txSql, transactionHooks, output: { valid: true } }),
+            ),
+          );
         },
       },
 
       "check-stock": {
-        attemptHandler: async ({ job, complete }) => {
+        attemptHandler: async ({ job, finish }) => {
           console.log(`[check-stock] Checking stock for order ${job.input.orderId}`);
-          return complete(async ({ finish }) => finish({ output: { available: true } }));
+          return withTransactionHooks(async (transactionHooks) =>
+            sql.begin(async (txSql) =>
+              finish({ txSql, transactionHooks, output: { available: true } }),
+            ),
+          );
         },
       },
 
       "process-order": {
-        attemptHandler: async ({ job, complete }) => {
+        attemptHandler: async ({ job, finish }) => {
           console.log(`[process-order] Processing order ${job.input.orderId}`);
-          return complete(async ({ finish }) =>
-            finish({
-              continueWith: {
-                typeName: "ship-order",
-                input: { orderId: job.input.orderId, total: 99.99 },
-              },
-            }),
+          return withTransactionHooks(async (transactionHooks) =>
+            sql.begin(async (txSql) =>
+              finish({
+                txSql,
+                transactionHooks,
+                continueWith: {
+                  typeName: "ship-order",
+                  input: { orderId: job.input.orderId, total: 99.99 },
+                },
+              }),
+            ),
           );
         },
       },
 
       "ship-order": {
-        attemptHandler: async ({ job, complete }) => {
+        attemptHandler: async ({ job, finish }) => {
           console.log(`[ship-order] Shipping order ${job.input.orderId}`);
-          return complete(async ({ finish }) =>
-            finish({ output: { trackingId: `TRACK-${job.input.orderId}` } }),
+          return withTransactionHooks(async (transactionHooks) =>
+            sql.begin(async (txSql) =>
+              finish({
+                txSql,
+                transactionHooks,
+                output: { trackingId: `TRACK-${job.input.orderId}` },
+              }),
+            ),
           );
         },
       },
 
       "send-notification": {
-        attemptHandler: async ({ job, complete }) => {
+        attemptHandler: async ({ job, finish }) => {
           console.log(`[send-notification] Sending to ${job.input.userId}`);
-          return complete(async ({ finish }) =>
-            finish({ output: { sentAt: new Date().toISOString() } }),
+          return withTransactionHooks(async (transactionHooks) =>
+            sql.begin(async (txSql) =>
+              finish({ txSql, transactionHooks, output: { sentAt: new Date().toISOString() } }),
+            ),
           );
         },
       },

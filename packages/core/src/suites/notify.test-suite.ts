@@ -40,10 +40,10 @@ export const notifyTestSuite = ({ it }: { it: TestAPI<TestSuiteContext> }): void
         jobTypes,
         processors: {
           test: {
-            attemptHandler: async ({ job, complete }) => {
+            attemptHandler: async ({ job, finish }) => {
               await sleep(50);
-              return complete(async ({ finish }) =>
-                finish({ output: { result: job.input.value } }),
+              return withTransaction(async (txCtx, transactionHooks) =>
+                finish({ ...txCtx, transactionHooks, output: { result: job.input.value } }),
               );
             },
           },
@@ -103,10 +103,10 @@ export const notifyTestSuite = ({ it }: { it: TestAPI<TestSuiteContext> }): void
           jobTypes,
           processors: {
             test: {
-              attemptHandler: async ({ job, complete }) => {
+              attemptHandler: async ({ job, finish }) => {
                 await sleep(50);
-                return complete(async ({ finish }) =>
-                  finish({ output: { result: job.input.value } }),
+                return withTransaction(async (txCtx, transactionHooks) =>
+                  finish({ ...txCtx, transactionHooks, output: { result: job.input.value } }),
                 );
               },
             },
@@ -177,9 +177,11 @@ export const notifyTestSuite = ({ it }: { it: TestAPI<TestSuiteContext> }): void
         jobTypes,
         processors: {
           blocker: {
-            attemptHandler: async ({ complete }) => {
+            attemptHandler: async ({ finish }) => {
               await sleep(25);
-              return complete(async ({ finish }) => finish({ output: { allowed: true } }));
+              return withTransaction(async (txCtx, transactionHooks) =>
+                finish({ ...txCtx, transactionHooks, output: { allowed: true } }),
+              );
             },
           },
         },
@@ -193,9 +195,11 @@ export const notifyTestSuite = ({ it }: { it: TestAPI<TestSuiteContext> }): void
         jobTypes,
         processors: {
           main: {
-            attemptHandler: async ({ complete }) => {
+            attemptHandler: async ({ finish }) => {
               await sleep(25);
-              return complete(async ({ finish }) => finish({ output: { done: true } }));
+              return withTransaction(async (txCtx, transactionHooks) =>
+                finish({ ...txCtx, transactionHooks, output: { done: true } }),
+              );
             },
           },
         },
@@ -266,10 +270,12 @@ export const notifyTestSuite = ({ it }: { it: TestAPI<TestSuiteContext> }): void
         jobTypes,
         processors: {
           step1: {
-            attemptHandler: async ({ complete }) => {
+            attemptHandler: async ({ finish }) => {
               await sleep(25);
-              return complete(async ({ finish }) =>
+              return withTransaction(async (txCtx, transactionHooks) =>
                 finish({
+                  ...txCtx,
+                  transactionHooks,
                   continueWith: {
                     typeName: "step2",
                     input: null,
@@ -289,9 +295,11 @@ export const notifyTestSuite = ({ it }: { it: TestAPI<TestSuiteContext> }): void
         jobTypes,
         processors: {
           step2: {
-            attemptHandler: async ({ complete }) => {
+            attemptHandler: async ({ finish }) => {
               await sleep(25);
-              return complete(async ({ finish }) => finish({ output: { finished: true } }));
+              return withTransaction(async (txCtx, transactionHooks) =>
+                finish({ ...txCtx, transactionHooks, output: { finished: true } }),
+              );
             },
           },
         },
@@ -355,8 +363,7 @@ export const notifyTestSuite = ({ it }: { it: TestAPI<TestSuiteContext> }): void
         jobTypes,
         processors: {
           test: {
-            attemptHandler: async ({ signal, prepare }) => {
-              await prepare({ mode: "staged" });
+            attemptHandler: async ({ signal }) => {
               jobStarted.resolve();
 
               await sleep(1000, { signal });
@@ -437,15 +444,13 @@ export const notifyTestSuite = ({ it }: { it: TestAPI<TestSuiteContext> }): void
           jobTypes,
           processors: {
             test: {
-              attemptHandler: async ({ signal, job, prepare, complete }) => {
-                await prepare({ mode: "staged" });
-
+              attemptHandler: async ({ signal, job, finish }) => {
                 if (job.attempt > 1) {
                   await jobCompleted.promise;
                   await sleep(10);
 
-                  return complete(async ({ finish }) =>
-                    finish({ output: { result: "recovered" } }),
+                  return withTransaction(async (txCtx, transactionHooks) =>
+                    finish({ ...txCtx, transactionHooks, output: { result: "recovered" } }),
                   );
                 }
 

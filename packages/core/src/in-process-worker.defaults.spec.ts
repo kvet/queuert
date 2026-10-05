@@ -28,10 +28,14 @@ describe("createInProcessWorker defaults", () => {
         jobTypes,
         processors: {
           foo: {
-            attemptHandler: async ({ job, complete }) => {
+            attemptHandler: async ({ job, finish }) => {
               attempts.push(job.attempt);
               if (job.attempt < 3) throw new Error("retry");
-              return complete(async ({ finish }) => finish({ output: null }));
+              return withTransactionHooks(async (transactionHooks) =>
+                stateAdapter.withTransaction(async (txCtx) =>
+                  finish({ ...txCtx, transactionHooks, output: null }),
+                ),
+              );
             },
           },
         },
@@ -69,12 +73,16 @@ describe("createInProcessWorker defaults", () => {
         processors: {
           foo: {
             backoffConfig: { initialDelayMs: 1, multiplier: 1, maxDelayMs: 1 },
-            attemptHandler: async ({ job, complete }) => {
+            attemptHandler: async ({ job, finish }) => {
               const now = Date.now();
               if (lastAt !== null) delaysBetweenAttempts.push(now - lastAt);
               lastAt = now;
               if (job.attempt < 2) throw new Error("retry");
-              return complete(async ({ finish }) => finish({ output: null }));
+              return withTransactionHooks(async (transactionHooks) =>
+                stateAdapter.withTransaction(async (txCtx) =>
+                  finish({ ...txCtx, transactionHooks, output: null }),
+                ),
+              );
             },
           },
         },
@@ -108,8 +116,12 @@ describe("createInProcessWorker workerName validation", () => {
         jobTypes,
         processors: {
           foo: {
-            attemptHandler: async ({ complete }) =>
-              complete(async ({ finish }) => finish({ output: null })),
+            attemptHandler: async ({ finish }) =>
+              withTransactionHooks(async (transactionHooks) =>
+                stateAdapter.withTransaction(async (txCtx) =>
+                  finish({ ...txCtx, transactionHooks, output: null }),
+                ),
+              ),
           },
         },
       }),

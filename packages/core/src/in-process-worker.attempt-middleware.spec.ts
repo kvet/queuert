@@ -19,22 +19,23 @@ const jobTypes = defineJobTypes<Defs>();
 const stateAdapter = await createInProcessStateAdapter();
 const client = await createClient({ stateAdapter, jobTypes });
 
-describe("middleware ctx cannot shadow built-in handler/prepare/complete keys", () => {
-  it("handler built-ins (signal, job, prepare, complete) win over middleware-injected ctx", async () => {
+describe("middleware ctx cannot shadow built-in handler keys", () => {
+  it("handler built-ins (signal, job, finish, getBlockers) win over middleware-injected ctx", async () => {
     const sentinel = { tampered: true };
     const tampering: AttemptMiddleware<InProcessStateAdapter> = {
       wrapHandler: async ({ next }) =>
         next({
           signal: sentinel,
           job: sentinel,
-          prepare: sentinel,
-          complete: sentinel,
+          finish: sentinel,
+          getBlockers: sentinel,
         }),
     };
 
     let observedSignalIsAbortSignal = false;
     let observedJobHasId = false;
-    let observedCompleteIsFn = false;
+    let observedFinishIsFn = false;
+    let observedGetBlockersIsSentinel = true;
 
     const registry = createProcessors({
       client,
@@ -42,11 +43,18 @@ describe("middleware ctx cannot shadow built-in handler/prepare/complete keys", 
       attemptMiddleware: [tampering],
       processors: {
         foo: {
-          attemptHandler: async ({ signal, job, complete }) => {
+          attemptHandler: async (options) => {
+            const { signal, job, finish } = options;
             observedSignalIsAbortSignal = typeof signal?.aborted === "boolean";
             observedJobHasId = typeof job?.id === "string";
-            observedCompleteIsFn = typeof complete === "function";
-            return complete(async ({ finish }) => finish({ output: { ok: true as const } }));
+            observedFinishIsFn = typeof finish === "function";
+            observedGetBlockersIsSentinel =
+              (options as unknown as { getBlockers: unknown }).getBlockers === sentinel;
+            return withTransactionHooks(async (transactionHooks) =>
+              stateAdapter.withTransaction(async (txCtx) =>
+                finish({ ...txCtx, transactionHooks, output: { ok: true as const } }),
+              ),
+            );
           },
         },
       },
@@ -67,166 +75,51 @@ describe("middleware ctx cannot shadow built-in handler/prepare/complete keys", 
 
     expect(observedSignalIsAbortSignal).toBe(true);
     expect(observedJobHasId).toBe(true);
-    expect(observedCompleteIsFn).toBe(true);
+    expect(observedFinishIsFn).toBe(true);
+    expect(observedGetBlockersIsSentinel).toBe(false);
   });
+});
 
-  it("prepare callback's txCtx keys win over middleware-injected ctx", async () => {
-    const realMarker = { real: true };
-    const tamperedMarker = { tampered: true };
-    const MARKER_KEY = "__shadowMarker";
+describe("middleware ctx flows into the handler through wrapHandler", () => {
+  it("merges ctx across middleware, runs them as an onion and passes the finish result back out", async () => {
+    const events: string[] = [];
+    let outerResult: unknown;
 
-    type MarkerTxCtx = Record<typeof MARKER_KEY, typeof realMarker>;
-    const baseAdapter = await createInProcessStateAdapter();
-    const wrappedAdapter = {
-      ...baseAdapter,
-      withTransaction: async <T>(cb: (txCtx: MarkerTxCtx) => Promise<T>): Promise<T> =>
-        baseAdapter.withTransaction(async (realTxCtx) =>
-          cb({ ...(realTxCtx as object), [MARKER_KEY]: realMarker }),
-        ),
-      withSavepoint: async <T>(realTxCtx: MarkerTxCtx, cb: (txCtx: MarkerTxCtx) => Promise<T>) =>
-        baseAdapter.withSavepoint(realTxCtx as never, async (inner) =>
-          cb({ ...(inner as object), [MARKER_KEY]: realMarker }),
-        ),
-    } as unknown as typeof baseAdapter;
-    const wrappedClient = await createClient({
-      stateAdapter: wrappedAdapter,
-      jobTypes,
-    });
-
-    const tampering: AttemptMiddleware<InProcessStateAdapter> = {
-      wrapPrepare: async ({ next }) => next({ [MARKER_KEY]: tamperedMarker }),
-    };
-
-    let observedMarkerIsReal = false;
-
-    const registry = createProcessors({
-      client: wrappedClient,
-      jobTypes,
-      attemptMiddleware: [tampering],
-      processors: {
-        foo: {
-          attemptHandler: async ({ prepare, complete }) => {
-            await prepare({ mode: "atomic" }, async (txCtx) => {
-              observedMarkerIsReal = (txCtx as unknown as MarkerTxCtx)[MARKER_KEY] === realMarker;
-            });
-            return complete(async ({ finish }) => finish({ output: { ok: true as const } }));
-          },
-        },
+    const outer: AttemptMiddleware<InProcessStateAdapter, { tenant: string; source: string }> = {
+      wrapHandler: async ({ next }) => {
+        events.push("outer:before");
+        const result = await next({ tenant: "acme", source: "outer" });
+        outerResult = result;
+        events.push("outer:after");
+        return result;
       },
-    });
-
-    const worker = await createInProcessWorker({
-      client: wrappedClient,
-      processors: registry,
-    });
-    const chain = await withTransactionHooks(async (transactionHooks) =>
-      wrappedAdapter.withTransaction(async (txCtx) =>
-        wrappedClient.createChain({
-          ...(txCtx as unknown as object),
-          transactionHooks,
-          typeName: "foo",
-          input: { v: 1 },
-        }),
-      ),
-    );
-    const stop = await worker.start();
-    await wrappedClient.awaitChain(chain, { timeoutMs: 5000, pollIntervalMs: 50 });
-    await stop();
-
-    expect(observedMarkerIsReal).toBe(true);
-  });
-
-  it("complete callback's txCtx keys win over middleware-injected ctx", async () => {
-    const realMarker = { real: true };
-    const tamperedMarker = { tampered: true };
-    const MARKER_KEY = "__shadowMarker";
-
-    type MarkerTxCtx = Record<typeof MARKER_KEY, typeof realMarker>;
-    const baseAdapter = await createInProcessStateAdapter();
-    const wrappedAdapter = {
-      ...baseAdapter,
-      withTransaction: async <T>(cb: (txCtx: MarkerTxCtx) => Promise<T>): Promise<T> =>
-        baseAdapter.withTransaction(async (realTxCtx) =>
-          cb({ ...(realTxCtx as object), [MARKER_KEY]: realMarker }),
-        ),
-      withSavepoint: async <T>(realTxCtx: MarkerTxCtx, cb: (txCtx: MarkerTxCtx) => Promise<T>) =>
-        baseAdapter.withSavepoint(realTxCtx as never, async (inner) =>
-          cb({ ...(inner as object), [MARKER_KEY]: realMarker }),
-        ),
-    } as unknown as typeof baseAdapter;
-    const wrappedClient = await createClient({
-      stateAdapter: wrappedAdapter,
-      jobTypes,
-    });
-
-    const tampering: AttemptMiddleware<InProcessStateAdapter> = {
-      wrapComplete: async ({ next }) => next({ [MARKER_KEY]: tamperedMarker }),
     };
-
-    let observedMarkerIsReal = false;
-
-    const registry = createProcessors({
-      client: wrappedClient,
-      jobTypes,
-      attemptMiddleware: [tampering],
-      processors: {
-        foo: {
-          attemptHandler: async ({ complete }) =>
-            complete(async ({ finish, ...opts }) => {
-              observedMarkerIsReal = (opts as unknown as MarkerTxCtx)[MARKER_KEY] === realMarker;
-              return finish({ output: { ok: true as const } });
-            }),
-        },
+    const inner: AttemptMiddleware<InProcessStateAdapter, { source: string }> = {
+      wrapHandler: async ({ job, next }) => {
+        events.push(`inner:before:${job.typeName}`);
+        const result = await next({ source: "inner" });
+        events.push("inner:after");
+        return result;
       },
-    });
-
-    const worker = await createInProcessWorker({
-      client: wrappedClient,
-      processors: registry,
-    });
-    const chain = await withTransactionHooks(async (transactionHooks) =>
-      wrappedAdapter.withTransaction(async (txCtx) =>
-        wrappedClient.createChain({
-          ...(txCtx as unknown as object),
-          transactionHooks,
-          typeName: "foo",
-          input: { v: 1 },
-        }),
-      ),
-    );
-    const stop = await worker.start();
-    await wrappedClient.awaitChain(chain, { timeoutMs: 5000, pollIntervalMs: 50 });
-    await stop();
-
-    expect(observedMarkerIsReal).toBe(true);
-  });
-
-  it("complete built-ins (finish, transactionHooks) win over middleware-injected ctx", async () => {
-    const sentinel = { tampered: true };
-    const tampering: AttemptMiddleware<InProcessStateAdapter> = {
-      wrapComplete: async ({ next }) =>
-        next({
-          finish: sentinel,
-          transactionHooks: sentinel,
-        }),
     };
 
-    let observedFinishIsFn = false;
-    let observedTransactionHooksIsObject = false;
+    let observedCtx: { tenant: string; source: string } | undefined;
 
     const registry = createProcessors({
       client,
       jobTypes,
-      attemptMiddleware: [tampering],
+      attemptMiddleware: [outer, inner],
       processors: {
         foo: {
-          attemptHandler: async ({ complete }) =>
-            complete(async ({ finish, transactionHooks }) => {
-              observedFinishIsFn = typeof finish === "function";
-              observedTransactionHooksIsObject =
-                transactionHooks !== null && typeof transactionHooks === "object";
-              return finish({ output: { ok: true as const } });
-            }),
+          attemptHandler: async ({ tenant, source, finish }) => {
+            events.push("handler");
+            observedCtx = { tenant, source };
+            return withTransactionHooks(async (transactionHooks) =>
+              stateAdapter.withTransaction(async (txCtx) =>
+                finish({ ...txCtx, transactionHooks, output: { ok: true as const } }),
+              ),
+            );
+          },
         },
       },
     });
@@ -244,8 +137,19 @@ describe("middleware ctx cannot shadow built-in handler/prepare/complete keys", 
     await client.awaitChain(chain, { timeoutMs: 5000, pollIntervalMs: 50 });
     await stop();
 
-    expect(observedFinishIsFn).toBe(true);
-    expect(observedTransactionHooksIsObject).toBe(true);
+    expect(events).toEqual([
+      "outer:before",
+      "inner:before:foo",
+      "handler",
+      "inner:after",
+      "outer:after",
+    ]);
+    expect(observedCtx).toEqual({ tenant: "acme", source: "inner" });
+    expect(outerResult).toMatchObject({
+      id: chain.id,
+      status: "completed",
+      output: { ok: true },
+    });
   });
 });
 
@@ -283,8 +187,12 @@ describe("registry-level attemptMiddleware — runtime per-slice isolation", () 
       attemptMiddleware: [wrapA],
       processors: {
         a: {
-          attemptHandler: async ({ complete }) =>
-            complete(async ({ finish }) => finish({ output: null })),
+          attemptHandler: async ({ finish }) =>
+            withTransactionHooks(async (transactionHooks) =>
+              sa.withTransaction(async (txCtx) =>
+                finish({ ...txCtx, transactionHooks, output: null }),
+              ),
+            ),
         },
       },
     });
@@ -294,8 +202,12 @@ describe("registry-level attemptMiddleware — runtime per-slice isolation", () 
       attemptMiddleware: [wrapB],
       processors: {
         b: {
-          attemptHandler: async ({ complete }) =>
-            complete(async ({ finish }) => finish({ output: null })),
+          attemptHandler: async ({ finish }) =>
+            withTransactionHooks(async (transactionHooks) =>
+              sa.withTransaction(async (txCtx) =>
+                finish({ ...txCtx, transactionHooks, output: null }),
+              ),
+            ),
         },
       },
     });

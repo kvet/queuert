@@ -278,5 +278,54 @@ export const getChainsGroup: ConformanceGroup<StateConformanceFixture> = {
         expect(tailJob).toBeUndefined();
       },
     },
+    {
+      name: "lock: write returns chains like a plain read, undefined for a missing chain",
+      run: async ({ stateAdapter }, expect) => {
+        const [runningChain, completedChain] = await stateAdapter.withTransaction(async (txCtx) =>
+          stateAdapter.createJobs({
+            txCtx,
+            jobs: [
+              { typeName: "chain-write-running", input: { n: 1 } },
+              { typeName: "chain-write-completed", input: { n: 2 } },
+            ],
+          }),
+        );
+        await stateAdapter.withTransaction(async (txCtx) =>
+          stateAdapter.continueJobs({
+            txCtx,
+            jobs: [
+              {
+                typeName: "chain-write-running:step",
+                input: null,
+                continueFromId: runningChain.id,
+              },
+            ],
+          }),
+        );
+        await stateAdapter.withTransaction(async (txCtx) =>
+          stateAdapter.completeJobs({
+            txCtx,
+            jobs: [{ jobId: completedChain.id, output: { done: true } }],
+          }),
+        );
+        const missingId =
+          completedChain.id.slice(0, -1) + (completedChain.id.endsWith("0") ? "1" : "0");
+        const chainIds = [runningChain.id, missingId, completedChain.id];
+
+        const plain = await stateAdapter.getChains({ chainIds });
+        const written = await stateAdapter.withTransaction(async (txCtx) =>
+          stateAdapter.getChains({ txCtx, chainIds, lock: "write" }),
+        );
+
+        expect(written).toHaveLength(3);
+        expect(written[1]).toBeUndefined();
+        expect(written).toEqual(plain);
+        expect(written[0]!.status).toBe("running");
+        expect(written[2]!.status).toBe("completed");
+
+        const afterWrite = await stateAdapter.getChains({ chainIds });
+        expect(afterWrite).toEqual(plain);
+      },
+    },
   ],
 };

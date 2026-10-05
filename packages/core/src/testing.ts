@@ -7,6 +7,7 @@ export { clientQueriesTestSuite } from "./suites/client-queries.test-suite.js";
 export { createChainsTestSuite } from "./suites/create-chains.test-suite.js";
 export { deduplicationTestSuite } from "./suites/deduplication.test-suite.js";
 export { deletionTestSuite } from "./suites/deletion.test-suite.js";
+export { finishTestSuite } from "./suites/finish.test-suite.js";
 export {
   notifyAdapterConformanceTestSuite,
   type NotifyConformanceFixture,
@@ -14,7 +15,6 @@ export {
 export { notifyResilienceTestSuite } from "./suites/notify-resilience.test-suite.js";
 export { notifyTestSuite } from "./suites/notify.test-suite.js";
 export { processErrorHandlingTestSuite } from "./suites/process-error-handling.test-suite.js";
-export { processModesTestSuite } from "./suites/process-modes.test-suite.js";
 export { processTestSuite } from "./suites/process.test-suite.js";
 export { rescheduleJobTestSuite } from "./suites/reschedule-job.test-suite.js";
 export { schedulingTestSuite } from "./suites/scheduling.test-suite.js";

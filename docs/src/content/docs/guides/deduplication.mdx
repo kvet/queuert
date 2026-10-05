@@ -87,27 +87,33 @@ await withTransactionHooks(async (transactionHooks) =>
 
 ## Self-Scheduling Recurring Chains
 
-A recurring chain schedules its next occurrence from its own terminal job. Under `scope: "running"` the ordering matters: commit **first**, then create the next chain. `finish({ output: ... })` commits the completion inside the complete transaction, so by the time `createChain` runs, the chain being finished already reads as completed and cannot match itself.
+A recurring chain schedules its next occurrence from its own terminal job. Under `scope: "running"` the ordering matters: commit **first**, then create the next chain. Call `finish({ output: ... })` first inside the handler's transaction, so by the time `createChain` runs, the chain being finished already reads as completed and cannot match itself.
 
 ```ts
-// Inside a processor's complete callback
-return complete(async ({ finish, transactionHooks, ...txCtx }) => {
-  const completedJob = await finish({ output: { checkedAt: new Date().toISOString() } });
+// Inside a processor's attemptHandler
+return withTransactionHooks(async (transactionHooks) =>
+  stateProvider.withTransaction(async (txCtx) => {
+    const completedJob = await finish({
+      ...txCtx,
+      transactionHooks,
+      output: { checkedAt: new Date().toISOString() },
+    });
 
-  await client.createChain({
-    ...txCtx,
-    transactionHooks,
-    typeName: "health-check",
-    input: { serviceId: job.input.serviceId },
-    schedule: { afterMs: 5 * 60 * 1000 },
-    deduplication: {
-      key: `health:${job.input.serviceId}`,
-      scope: "running",
-    },
-  });
+    await client.createChain({
+      ...txCtx,
+      transactionHooks,
+      typeName: "health-check",
+      input: { serviceId: job.input.serviceId },
+      schedule: { afterMs: 5 * 60 * 1000 },
+      deduplication: {
+        key: `health:${job.input.serviceId}`,
+        scope: "running",
+      },
+    });
 
-  return completedJob;
-});
+    return completedJob;
+  }),
+);
 ```
 
 Scheduling _before_ committing instead matches the still-running chain and silently suppresses the next occurrence, ending the recurrence. The same applies to scheduling from a mid-chain job: that chain is genuinely still running, so schedule from the terminal job instead.

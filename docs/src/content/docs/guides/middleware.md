@@ -1,30 +1,19 @@
 ---
 title: Job Attempt Middleware
-description: Wrap job attempts with cross-cutting logic — tracing, resource injection, audit, contextual logging.
+description: Wrap job attempts with cross-cutting logic — tracing, resource injection, error classification, contextual logging.
 sidebar:
   order: 19
 ---
 
-`AttemptMiddleware` wraps a **job attempt** — the unit of work that includes the prepare phase, the handler, and the complete phase. Middleware lets you add cross-cutting logic (tracing spans, contextual loggers, audit trails, shared resources) without touching each individual handler.
+`AttemptMiddleware` wraps a **job attempt** — the attempt handler, from the moment the worker hands it the job until it returns. Middleware lets you add cross-cutting logic (tracing spans, contextual loggers, error classification, shared resources) without touching each individual handler.
 
-A middleware has four optional hooks, each wrapping a different phase:
-
-| Hook           | Wraps                               | Injects ctx into          |
-| -------------- | ----------------------------------- | ------------------------- |
-| `wrapHandler`  | the whole attempt handler           | `attemptHandler` options  |
-| `wrapPrepare`  | the user-supplied prepare callback  | prepare-callback options  |
-| `wrapStep`     | each user-supplied step callback    | step-callback options     |
-| `wrapComplete` | the user-supplied complete callback | complete-callback options |
-
-All four accept a `next(ctx)` call that yields the inner layer. The object passed to `next` is merged into the callback options for that phase, and its type flows into the handler signature.
+A middleware has one hook, `wrapHandler`. It receives the running `job`, the `workerId` and a `next(ctx)` callback that runs the inner layer. The object passed to `next` is merged into the `attemptHandler` options, and its type flows into the handler signature. `wrapHandler` must return what `next` returned — the handler's `finish` result.
 
 See the [Worker reference](/queuert/api/core/type-aliases/attemptmiddleware/) for the full type definition.
 
-## When to use each hook
+## Wrapping the attempt
 
-### `wrapHandler` — cross-cutting around the whole attempt
-
-Use for concerns that span the full attempt: tracing spans, contextual loggers, per-job resources, error classification.
+Use `wrapHandler` for concerns that span the full attempt: tracing spans, contextual loggers, per-job resources, error classification.
 
 ```ts
 const tracing: AttemptMiddleware<any, { traceId: string }> = {
@@ -43,100 +32,47 @@ const tracing: AttemptMiddleware<any, { traceId: string }> = {
 };
 ```
 
-A failing attempt propagates through `next()` — the middleware can observe, log, or enrich the error. After the middleware chain unwinds, the engine catches the error, reschedules the job, and returns normally. Always re-throw the error so the engine can handle it; swallowing the error without calling `complete` still fails the attempt.
+A failing attempt propagates through `next()` — the middleware can observe, log, or enrich the error. After the middleware chain unwinds, the worker checks whether a `finish` committed and, if not, reschedules the job with backoff. Always re-throw the error; swallowing it does not help, since a handler without a committed `finish` still fails the attempt.
 
 Inside the handler, `traceId` is typed:
 
 ```ts
-attemptHandler: async ({ traceId, complete }) => {
-  return complete(async ({ finish }) =>
-    finish({
-      output: {/* ... */},
-    }),
+attemptHandler: async ({ traceId, finish }) =>
+  withTransactionHooks(async (transactionHooks) =>
+    db.transaction(async (tx) =>
+      finish({
+        tx,
+        transactionHooks,
+        output: {/* ... */},
+      }),
+    ),
   );
-};
 ```
 
-### `wrapPrepare` — set up shared data inside the prepare transaction
+### Injecting shared resources
 
-Use when you want to load a resource once per attempt and make it available to the handler. The middleware runs inside the prepare transaction (so DB reads are consistent with the rest of the attempt).
+Middleware is not tied to a job type, so `job.input` is `unknown` — narrow it (or validate it) before use.
 
 ```ts
-const loadUser: AttemptMiddleware<typeof stateAdapter, {}, { user: User }> = {
-  wrapPrepare: async ({ job, txSql, next }) => {
+const loadUser: AttemptMiddleware<typeof stateAdapter, { user: User }> = {
+  wrapHandler: async ({ job, next }) => {
     const { userId } = job.input as { userId: string };
-    const [user] = await txSql`SELECT * FROM users WHERE id = ${userId}`;
+    const [user] = await sql`SELECT * FROM users WHERE id = ${userId}`;
     return next({ user });
   },
 };
 ```
 
-Middleware is not tied to a job type, so `job.input` is `unknown` — narrow it (or validate it) before use.
-
-The handler invokes the prepare callback explicitly to receive the injected ctx:
+Middleware runs outside any transaction — Queuert opens none around the attempt. Work that must commit with the job's outcome, such as an audit row, belongs in the handler's own transaction, right before `finish`:
 
 ```ts
-attemptHandler: async ({ prepare, complete }) => {
-  const user = await prepare({ mode: "staged" }, async ({ user }) => user);
-  return complete(async ({ finish }) =>
-    finish({
-      output: {/* ... */},
+attemptHandler: async ({ job, user, finish }) =>
+  withTransactionHooks(async (transactionHooks) =>
+    sql.begin(async (txSql) => {
+      await txSql`INSERT INTO audit (job_id, user_id, event) VALUES (${job.id}, ${user.id}, 'order-placed')`;
+      return finish({ txSql, transactionHooks, output: {/* ... */} });
     }),
   );
-};
-```
-
-### `wrapStep` — wrap intermediate transactions
-
-Use to inject context into each `step` call — metrics recorders, progress trackers, shared resources that need the transaction context. The middleware runs inside each `step` transaction.
-
-```ts
-const metrics: AttemptMiddleware<typeof stateAdapter, {}, {}, { metrics: Metrics }> = {
-  wrapStep: async ({ job, txSql, next }) => {
-    const metrics = new Metrics(job.id, txSql);
-    return next({ metrics });
-  },
-};
-```
-
-Inside the handler, `metrics` is typed on the step callback:
-
-```ts
-await step(async ({ metrics }) => {
-  metrics.record("batch-processed", batch.length);
-  // ...
-});
-```
-
-### `wrapComplete` — inject helpers used during complete
-
-Use to inject helpers that are only meaningful in the complete transaction — audit recorders, usage meters, post-commit notifiers.
-
-```ts
-const audit: AttemptMiddleware<
-  typeof stateAdapter,
-  {},
-  {},
-  {},
-  { audit: (event: string) => Promise<void> }
-> = {
-  wrapComplete: async ({ job, txSql, next }) =>
-    next({
-      audit: async (event) =>
-        void (await txSql`INSERT INTO audit (job_id, event) VALUES (${job.id}, ${event})`),
-    }),
-};
-```
-
-Because the helper writes through the complete transaction, its rows commit with the job — and roll back with the attempt if the handler throws.
-
-```ts
-return complete(async ({ finish, audit }) => {
-  audit("order-placed");
-  return finish({
-    output: {/* ... */},
-  });
-});
 ```
 
 ## Composition and order
@@ -144,8 +80,8 @@ return complete(async ({ finish, audit }) => {
 Multiple middlewares compose as an onion. The first middleware's "before" runs outermost:
 
 ```ts
-attemptMiddleware: [tracing, audit];
-// tracing before → audit before → handler → audit after → tracing after
+attemptMiddleware: [tracing, loadUser];
+// tracing before → loadUser before → handler → loadUser after → tracing after
 ```
 
 Each `next(ctx)` call accumulates ctx for inner layers. The handler's final ctx is the intersection of all injected ctxs.
@@ -158,7 +94,7 @@ Middleware is declared on the processor registry, not the worker:
 const registry = createProcessors({
   client,
   jobTypes,
-  attemptMiddleware: [tracing, audit],
+  attemptMiddleware: [tracing, loadUser],
   processors: {/* ... */},
 });
 ```
@@ -185,6 +121,6 @@ Per slice, handler ctx types reflect the actual middleware list for that registr
 
 ## See also
 
-- [Showcase example](https://github.com/kvet/queuert/tree/main/examples/showcase-middleware) — runnable end-to-end demo of middleware hooks
+- [Showcase example](https://github.com/kvet/queuert/tree/main/examples/showcase-middleware) — runnable end-to-end demo of `wrapHandler` middleware
 - [Worker reference](/queuert/api/core/type-aliases/attemptmiddleware/) — full API
 - [Slices guide](/queuert/guides/slices/) — splitting workflows across registries

@@ -71,7 +71,7 @@ const cleanupProcessorRegistry = createProcessors({
   jobTypes: cleanupJobTypes,
   processors: {
     "queuert.cleanup": {
-      attemptHandler: async ({ job, signal, step, complete }) => {
+      attemptHandler: async ({ job, signal, finish }) => {
         const cutoffDate = new Date(Date.now() - CLEANUP_RETENTION_MS);
         let deletedChainCount = 0;
 
@@ -87,7 +87,11 @@ const cleanupProcessorRegistry = createProcessors({
             do {
               if (signal.aborted) {
                 console.log("[queuert.cleanup] Received abort signal, rescheduling");
-                return complete(async ({ finish }) => finish({ reschedule: { afterMs: 0 } }));
+                return withTransactionHooks(async (transactionHooks) =>
+                  sql.begin(async (txSql) =>
+                    finish({ txSql, transactionHooks, reschedule: { afterMs: 0 } }),
+                  ),
+                );
               }
 
               const page = await client.listChains({
@@ -106,12 +110,14 @@ const cleanupProcessorRegistry = createProcessors({
               );
 
               if (chainsToDelete.length > 0) {
-                const deleted = await step(async ({ txSql, transactionHooks }) =>
-                  client.deleteChains({
-                    txSql,
-                    transactionHooks,
-                    ids: chainsToDelete.map((chain) => chain.id),
-                  }),
+                const deleted = await withTransactionHooks(async (transactionHooks) =>
+                  sql.begin(async (txSql) =>
+                    client.deleteChains({
+                      txSql,
+                      transactionHooks,
+                      ids: chainsToDelete.map((chain) => chain.id),
+                    }),
+                  ),
                 );
                 deletedChainCount += deleted.length;
                 roundDeletedCount += deleted.length;
@@ -124,23 +130,25 @@ const cleanupProcessorRegistry = createProcessors({
 
         console.log(`[queuert.cleanup] Deleted ${deletedChainCount} chain(s)`);
 
-        return complete(async ({ finish, txSql, transactionHooks }) => {
-          const completedJob = await finish({ output: null });
+        return withTransactionHooks(async (transactionHooks) =>
+          sql.begin(async (txSql) => {
+            const completedJob = await finish({ txSql, transactionHooks, output: null });
 
-          await client.createChain({
-            txSql,
-            transactionHooks,
-            typeName: "queuert.cleanup",
-            input: null,
-            schedule: { afterMs: CLEANUP_INTERVAL_MS },
-            deduplication: {
-              key: "queuert.cleanup",
-              scope: "running",
-            },
-          });
+            await client.createChain({
+              txSql,
+              transactionHooks,
+              typeName: "queuert.cleanup",
+              input: null,
+              schedule: { afterMs: CLEANUP_INTERVAL_MS },
+              deduplication: {
+                key: "queuert.cleanup",
+                scope: "running",
+              },
+            });
 
-          return completedJob;
-        });
+            return completedJob;
+          }),
+        );
       },
     },
   },
@@ -155,10 +163,16 @@ const worker = await createInProcessWorker({
       jobTypes: userJobTypes,
       processors: {
         "work.process": {
-          attemptHandler: async ({ job, complete }) => {
+          attemptHandler: async ({ job, finish }) => {
             console.log(`[work.process] Processing task #${job.input.taskId}`);
-            return complete(async ({ finish }) =>
-              finish({ output: { processedAt: new Date().toISOString() } }),
+            return withTransactionHooks(async (transactionHooks) =>
+              sql.begin(async (txSql) =>
+                finish({
+                  txSql,
+                  transactionHooks,
+                  output: { processedAt: new Date().toISOString() },
+                }),
+              ),
             );
           },
         },

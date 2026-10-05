@@ -7,6 +7,7 @@ import { InvalidJobIdError } from "../errors.js";
 import { createInProcessWorker } from "../in-process-worker.js";
 import { createInProcessNotifyAdapter } from "../notify-adapter/notify-adapter.in-process.js";
 import { createInProcessStateAdapter } from "../state-adapter/state-adapter.in-process.js";
+import { type TransactionHooks, withTransactionHooks } from "../transaction-hooks.js";
 import { createProcessors } from "../worker/create-processors.js";
 import { type TestSuiteContext } from "./spec-context.spec-helper.js";
 
@@ -56,11 +57,11 @@ export const chainsTestSuite = ({ it }: { it: TestAPI<TestSuiteContext> }): void
         jobTypes,
         processors: {
           linear: {
-            attemptHandler: async ({ job, complete }) => {
+            attemptHandler: async ({ job, finish }) => {
               expect(job.id).toEqual(chain.id);
               expect(job.chainId).toEqual(chain.id);
 
-              return complete(async ({ finish }) => {
+              return withTransaction(async (txCtx, transactionHooks) => {
                 expectTypeOf<
                   Extract<
                     Parameters<typeof finish>[0],
@@ -69,6 +70,8 @@ export const chainsTestSuite = ({ it }: { it: TestAPI<TestSuiteContext> }): void
                 >().toEqualTypeOf<"linear_next">();
 
                 const completedJob = await finish({
+                  ...txCtx,
+                  transactionHooks,
                   continueWith: {
                     typeName: "linear_next",
                     input: { valueNext: job.input.value + 1 },
@@ -86,11 +89,11 @@ export const chainsTestSuite = ({ it }: { it: TestAPI<TestSuiteContext> }): void
             },
           },
           linear_next: {
-            attemptHandler: async ({ job, complete }) => {
+            attemptHandler: async ({ job, finish }) => {
               expect(job.id).not.toEqual(chain.id);
               expect(job.chainId).toEqual(chain.id);
 
-              return complete(async ({ finish }) => {
+              return withTransaction(async (txCtx, transactionHooks) => {
                 expectTypeOf<
                   Extract<
                     Parameters<typeof finish>[0],
@@ -99,6 +102,8 @@ export const chainsTestSuite = ({ it }: { it: TestAPI<TestSuiteContext> }): void
                 >().toEqualTypeOf<"linear_next_next">();
 
                 const completedJob = await finish({
+                  ...txCtx,
+                  transactionHooks,
                   continueWith: {
                     typeName: "linear_next_next",
                     input: { valueNextNext: job.input.valueNext + 1 },
@@ -111,12 +116,14 @@ export const chainsTestSuite = ({ it }: { it: TestAPI<TestSuiteContext> }): void
             },
           },
           linear_next_next: {
-            attemptHandler: async ({ job, complete }) => {
+            attemptHandler: async ({ job, finish }) => {
               expect(job.id).not.toEqual(chain.id);
               expect(job.chainId).toEqual(chain.id);
 
-              return complete(async ({ finish }) => {
+              return withTransaction(async (txCtx, transactionHooks) => {
                 const result = await finish({
+                  ...txCtx,
+                  transactionHooks,
                   output: {
                     result: job.input.valueNextNext,
                   },
@@ -198,9 +205,8 @@ export const chainsTestSuite = ({ it }: { it: TestAPI<TestSuiteContext> }): void
         jobTypes,
         processors: {
           main: {
-            attemptHandler: async ({ job, prepare, complete }) => {
-              await prepare({ mode: "atomic" });
-              return complete(async ({ finish }) => {
+            attemptHandler: async ({ job, finish }) => {
+              return withTransaction(async (txCtx, transactionHooks) => {
                 expectTypeOf<
                   Extract<
                     Parameters<typeof finish>[0],
@@ -209,6 +215,8 @@ export const chainsTestSuite = ({ it }: { it: TestAPI<TestSuiteContext> }): void
                 >().toEqualTypeOf<"branch1" | "branch2">();
 
                 return finish({
+                  ...txCtx,
+                  transactionHooks,
                   continueWith: {
                     typeName: job.input.value % 2 === 0 ? "branch1" : "branch2",
                     input: { valueBranched: job.input.value },
@@ -218,10 +226,11 @@ export const chainsTestSuite = ({ it }: { it: TestAPI<TestSuiteContext> }): void
             },
           },
           branch1: {
-            attemptHandler: async ({ job, prepare, complete }) => {
-              await prepare({ mode: "atomic" });
-              return complete(async ({ finish }) =>
+            attemptHandler: async ({ job, finish }) => {
+              return withTransaction(async (txCtx, transactionHooks) =>
                 finish({
+                  ...txCtx,
+                  transactionHooks,
                   output: {
                     result1: job.input.valueBranched,
                   },
@@ -230,10 +239,11 @@ export const chainsTestSuite = ({ it }: { it: TestAPI<TestSuiteContext> }): void
             },
           },
           branch2: {
-            attemptHandler: async ({ job, prepare, complete }) => {
-              await prepare({ mode: "atomic" });
-              return complete(async ({ finish }) =>
+            attemptHandler: async ({ job, finish }) => {
+              return withTransaction(async (txCtx, transactionHooks) =>
                 finish({
+                  ...txCtx,
+                  transactionHooks,
                   output: {
                     result2: job.input.valueBranched,
                   },
@@ -325,9 +335,8 @@ export const chainsTestSuite = ({ it }: { it: TestAPI<TestSuiteContext> }): void
         jobTypes,
         processors: {
           main: {
-            attemptHandler: async ({ job, prepare, complete }) => {
-              await prepare({ mode: "atomic" });
-              return complete(async ({ finish }) => {
+            attemptHandler: async ({ job, finish }) => {
+              return withTransaction(async (txCtx, transactionHooks) => {
                 expectTypeOf<
                   Extract<
                     Parameters<typeof finish>[0],
@@ -337,12 +346,18 @@ export const chainsTestSuite = ({ it }: { it: TestAPI<TestSuiteContext> }): void
 
                 if (false as boolean) {
                   const badInput = { valueBranched2: job.input.value };
-                  // @ts-expect-error typeName/input mismatch must be rejected
-                  void finish({ continueWith: { typeName: "branch1", input: badInput } });
+                  void finish({
+                    ...txCtx,
+                    transactionHooks,
+                    // @ts-expect-error typeName/input mismatch must be rejected
+                    continueWith: { typeName: "branch1", input: badInput },
+                  });
                 }
 
                 if (job.input.value % 2 === 0) {
                   return finish({
+                    ...txCtx,
+                    transactionHooks,
                     continueWith: {
                       typeName: "branch1",
                       input: { valueBranched1: job.input.value },
@@ -350,6 +365,8 @@ export const chainsTestSuite = ({ it }: { it: TestAPI<TestSuiteContext> }): void
                   });
                 }
                 return finish({
+                  ...txCtx,
+                  transactionHooks,
                   continueWith: {
                     typeName: "branch2",
                     input: { valueBranched2: job.input.value },
@@ -359,10 +376,11 @@ export const chainsTestSuite = ({ it }: { it: TestAPI<TestSuiteContext> }): void
             },
           },
           branch1: {
-            attemptHandler: async ({ job, prepare, complete }) => {
-              await prepare({ mode: "atomic" });
-              return complete(async ({ finish }) =>
+            attemptHandler: async ({ job, finish }) => {
+              return withTransaction(async (txCtx, transactionHooks) =>
                 finish({
+                  ...txCtx,
+                  transactionHooks,
                   output: {
                     result: job.input.valueBranched1,
                   },
@@ -371,10 +389,11 @@ export const chainsTestSuite = ({ it }: { it: TestAPI<TestSuiteContext> }): void
             },
           },
           branch2: {
-            attemptHandler: async ({ job, prepare, complete }) => {
-              await prepare({ mode: "atomic" });
-              return complete(async ({ finish }) =>
+            attemptHandler: async ({ job, finish }) => {
+              return withTransaction(async (txCtx, transactionHooks) =>
                 finish({
+                  ...txCtx,
+                  transactionHooks,
                   output: {
                     result: job.input.valueBranched2,
                   },
@@ -455,9 +474,8 @@ export const chainsTestSuite = ({ it }: { it: TestAPI<TestSuiteContext> }): void
         jobTypes,
         processors: {
           loop: {
-            attemptHandler: async ({ job, prepare, complete }) => {
-              await prepare({ mode: "atomic" });
-              return complete(async ({ finish }) => {
+            attemptHandler: async ({ job, finish }) => {
+              return withTransaction(async (txCtx, transactionHooks) => {
                 expectTypeOf<
                   Extract<
                     Parameters<typeof finish>[0],
@@ -467,12 +485,14 @@ export const chainsTestSuite = ({ it }: { it: TestAPI<TestSuiteContext> }): void
 
                 return job.input.counter < 3
                   ? finish({
+                      ...txCtx,
+                      transactionHooks,
                       continueWith: {
                         typeName: "loop",
                         input: { counter: job.input.counter + 1 },
                       },
                     })
-                  : finish({ output: { done: true } });
+                  : finish({ ...txCtx, transactionHooks, output: { done: true } });
               });
             },
           },
@@ -535,9 +555,8 @@ export const chainsTestSuite = ({ it }: { it: TestAPI<TestSuiteContext> }): void
         jobTypes,
         processors: {
           start: {
-            attemptHandler: async ({ job, prepare, complete }) => {
-              await prepare({ mode: "atomic" });
-              return complete(async ({ finish }) => {
+            attemptHandler: async ({ job, finish }) => {
+              return withTransaction(async (txCtx, transactionHooks) => {
                 expectTypeOf<
                   Extract<
                     Parameters<typeof finish>[0],
@@ -546,6 +565,8 @@ export const chainsTestSuite = ({ it }: { it: TestAPI<TestSuiteContext> }): void
                 >().toEqualTypeOf<"end">();
 
                 return finish({
+                  ...txCtx,
+                  transactionHooks,
                   continueWith: {
                     typeName: "end",
                     input: { result: job.input.value + 1 },
@@ -555,9 +576,8 @@ export const chainsTestSuite = ({ it }: { it: TestAPI<TestSuiteContext> }): void
             },
           },
           end: {
-            attemptHandler: async ({ job, prepare, complete }) => {
-              await prepare({ mode: "atomic" });
-              return complete(async ({ finish }) => {
+            attemptHandler: async ({ job, finish }) => {
+              return withTransaction(async (txCtx, transactionHooks) => {
                 expectTypeOf<
                   Extract<
                     Parameters<typeof finish>[0],
@@ -567,13 +587,19 @@ export const chainsTestSuite = ({ it }: { it: TestAPI<TestSuiteContext> }): void
 
                 if (job.input.result < 3) {
                   return finish({
+                    ...txCtx,
+                    transactionHooks,
                     continueWith: {
                       typeName: "start",
                       input: { value: job.input.result },
                     },
                   });
                 } else {
-                  return finish({ output: { finalResult: job.input.result } });
+                  return finish({
+                    ...txCtx,
+                    transactionHooks,
+                    output: { finalResult: job.input.result },
+                  });
                 }
               });
             },
@@ -632,31 +658,41 @@ export const chainsTestSuite = ({ it }: { it: TestAPI<TestSuiteContext> }): void
         jobTypes,
         processors: {
           entryA: {
-            attemptHandler: async ({ job, complete }) => {
+            attemptHandler: async ({ job, finish }) => {
               // Entry job's chainTypeName should match its own typeName
               expectTypeOf(job.chainTypeName).toEqualTypeOf<"entryA">();
               expect(job.chainTypeName).toBe("entryA");
-              return complete(async ({ finish }) =>
-                finish({ continueWith: { typeName: "shared", input: { data: 1 } } }),
+              return withTransaction(async (txCtx, transactionHooks) =>
+                finish({
+                  ...txCtx,
+                  transactionHooks,
+                  continueWith: { typeName: "shared", input: { data: 1 } },
+                }),
               );
             },
           },
           entryB: {
-            attemptHandler: async ({ job, complete }) => {
+            attemptHandler: async ({ job, finish }) => {
               // Entry job's chainTypeName should match its own typeName
               expectTypeOf(job.chainTypeName).toEqualTypeOf<"entryB">();
               expect(job.chainTypeName).toBe("entryB");
-              return complete(async ({ finish }) =>
-                finish({ continueWith: { typeName: "shared", input: { data: 2 } } }),
+              return withTransaction(async (txCtx, transactionHooks) =>
+                finish({
+                  ...txCtx,
+                  transactionHooks,
+                  continueWith: { typeName: "shared", input: { data: 2 } },
+                }),
               );
             },
           },
           shared: {
-            attemptHandler: async ({ job, complete }) => {
+            attemptHandler: async ({ job, finish }) => {
               // Shared job's chainTypeName should be union of both entry types
               expectTypeOf(job.chainTypeName).toEqualTypeOf<"entryA" | "entryB">();
               expect(["entryA", "entryB"]).toContain(job.chainTypeName);
-              return complete(async ({ finish }) => finish({ output: { done: true } }));
+              return withTransaction(async (txCtx, transactionHooks) =>
+                finish({ ...txCtx, transactionHooks, output: { done: true } }),
+              );
             },
           },
         },
@@ -729,7 +765,7 @@ export const chainsTestSuite = ({ it }: { it: TestAPI<TestSuiteContext> }): void
         jobTypes,
         processors: {
           parent: {
-            attemptHandler: async ({ job, complete }) => {
+            attemptHandler: async ({ job, finish }) => {
               // Create an independent chain during job processing
               const independentChain = await withTransaction(async (txCtx, transactionHooks) =>
                 client.createChain({
@@ -742,8 +778,10 @@ export const chainsTestSuite = ({ it }: { it: TestAPI<TestSuiteContext> }): void
 
               independentChainId = independentChain.id;
 
-              return complete(async ({ finish }) =>
+              return withTransaction(async (txCtx, transactionHooks) =>
                 finish({
+                  ...txCtx,
+                  transactionHooks,
                   output: {
                     childChainId: independentChain.id,
                   },
@@ -752,9 +790,11 @@ export const chainsTestSuite = ({ it }: { it: TestAPI<TestSuiteContext> }): void
             },
           },
           independent: {
-            attemptHandler: async ({ job, complete }) => {
-              return complete(async ({ finish }) =>
+            attemptHandler: async ({ job, finish }) => {
+              return withTransaction(async (txCtx, transactionHooks) =>
                 finish({
+                  ...txCtx,
+                  transactionHooks,
                   output: {
                     result: job.input.fromParent * 2,
                   },
@@ -829,15 +869,21 @@ export const chainsTestSuite = ({ it }: { it: TestAPI<TestSuiteContext> }): void
         jobTypes,
         processors: {
           step1: {
-            attemptHandler: async ({ complete }) =>
-              complete(async ({ finish }) =>
-                finish({ continueWith: { typeName: "step2", id: userId, input: null } }),
+            attemptHandler: async ({ finish }) =>
+              withTransaction(async (txCtx, transactionHooks) =>
+                finish({
+                  ...txCtx,
+                  transactionHooks,
+                  continueWith: { typeName: "step2", id: userId, input: null },
+                }),
               ),
           },
           step2: {
-            attemptHandler: async ({ job, complete }) => {
+            attemptHandler: async ({ job, finish }) => {
               expect(job.id).toBe(userId);
-              return complete(async ({ finish }) => finish({ output: { id: job.id } }));
+              return withTransaction(async (txCtx, transactionHooks) =>
+                finish({ ...txCtx, transactionHooks, output: { id: job.id } }),
+              );
             },
           },
         },
@@ -854,10 +900,7 @@ export const chainsTestSuite = ({ it }: { it: TestAPI<TestSuiteContext> }): void
     });
   });
 
-  it("continueWith rejects caller-supplied id that fails validateId", async ({
-    expect,
-    withTransaction,
-  }) => {
+  it("continueWith rejects caller-supplied id that fails validateId", async ({ expect }) => {
     const stateAdapter = await createInProcessStateAdapter({
       generateId: () => `ok-${crypto.randomUUID()}`,
       validateId: (id) => id.startsWith("ok-"),
@@ -870,6 +913,15 @@ export const chainsTestSuite = ({ it }: { it: TestAPI<TestSuiteContext> }): void
     }>();
 
     const client = await createClient({ stateAdapter, notifyAdapter, jobTypes });
+    const withTransaction = async <T>(
+      cb: (
+        txCtx: Parameters<Parameters<typeof stateAdapter.withTransaction>[0]>[0],
+        transactionHooks: TransactionHooks,
+      ) => Promise<T>,
+    ): Promise<T> =>
+      withTransactionHooks(async (transactionHooks) =>
+        stateAdapter.withTransaction(async (txCtx) => cb(txCtx, transactionHooks)),
+      );
 
     let continueWithError: unknown;
     const worker = await createInProcessWorker({
@@ -880,10 +932,12 @@ export const chainsTestSuite = ({ it }: { it: TestAPI<TestSuiteContext> }): void
         jobTypes,
         processors: {
           step1: {
-            attemptHandler: async ({ complete }) =>
-              complete(async ({ finish }) => {
+            attemptHandler: async ({ finish }) =>
+              withTransaction(async (txCtx, transactionHooks) => {
                 try {
                   return await finish({
+                    ...txCtx,
+                    transactionHooks,
                     continueWith: { typeName: "step2", id: "bad-id", input: null },
                   });
                 } catch (err) {
@@ -893,8 +947,10 @@ export const chainsTestSuite = ({ it }: { it: TestAPI<TestSuiteContext> }): void
               }),
           },
           step2: {
-            attemptHandler: async ({ complete }) =>
-              complete(async ({ finish }) => finish({ output: null })),
+            attemptHandler: async ({ finish }) =>
+              withTransaction(async (txCtx, transactionHooks) =>
+                finish({ ...txCtx, transactionHooks, output: null }),
+              ),
           },
         },
       }),
@@ -955,20 +1011,28 @@ export const chainsTestSuite = ({ it }: { it: TestAPI<TestSuiteContext> }): void
         processors: {
           step1: {
             backoffConfig: { initialDelayMs: 1, multiplier: 1, maxDelayMs: 1 },
-            attemptHandler: async ({ job, complete }) =>
-              complete(async ({ finish }) => {
+            attemptHandler: async ({ job, finish }) =>
+              withTransaction(async (txCtx, transactionHooks) => {
                 if (job.attempt > 1) {
                   collisionOccurred = true;
-                  return finish({ continueWith: { typeName: "step2", input: null } });
+                  return finish({
+                    ...txCtx,
+                    transactionHooks,
+                    continueWith: { typeName: "step2", input: null },
+                  });
                 }
                 return finish({
+                  ...txCtx,
+                  transactionHooks,
                   continueWith: { typeName: "step2", id: sharedId, input: null },
                 });
               }),
           },
           step2: {
-            attemptHandler: async ({ complete }) =>
-              complete(async ({ finish }) => finish({ output: null })),
+            attemptHandler: async ({ finish }) =>
+              withTransaction(async (txCtx, transactionHooks) =>
+                finish({ ...txCtx, transactionHooks, output: null }),
+              ),
           },
         },
       }),

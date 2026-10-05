@@ -1,6 +1,6 @@
 ---
 title: Job Processing
-description: Prepare/complete pattern, atomic and staged modes.
+description: How an attempt runs, finishing in your own transaction, ownership fencing, and isolation levels.
 sidebar:
   order: 4
 ---
@@ -9,7 +9,7 @@ import { Arrow, Diagram, Flow, Group, Node, Rows } from "../../../components/dia
 
 ## Overview
 
-This document describes how Queuert processes jobs: transactional design, prepare/complete pattern, and timeout philosophy.
+This document describes how Queuert processes jobs: the transactional design, how an attempt runs from acquisition to `finish`, how ownership is enforced without holding locks, and how the transaction isolation level you choose affects all of it.
 
 ## Transactional Design
 
@@ -41,115 +41,184 @@ await withTransactionHooks(async (transactionHooks) =>
 
 ### Extending to Job Processing
 
-The same transactional principle extends to job processing through the prepare/complete pattern:
+The same principle extends to job processing. Queuert opens no transaction around an attempt: the handler does its work — reads, external API calls, long computations — and then opens its own transaction, writes its domain changes, and calls `finish` inside it. The outcome (an output that completes the chain, a `continueWith` that adds the next job, or a reschedule) commits or rolls back together with those domain writes.
 
-- **Prepare phase**: Read application state within a transaction
-- **Processing phase**: Perform side-effects (API calls, file operations) outside the transaction
-- **Complete phase**: Write results back within a transaction
+```typescript
+attemptHandler: async ({ job, finish }) => {
+  const { paymentId } = await paymentAPI.charge(job.input.amount);
 
-This ensures that job outputs and continuations are also created atomically with any state changes they produce.
+  return withTransactionHooks(async (transactionHooks) =>
+    db.transaction(async (tx) => {
+      await tx.orders.update({ where: { id: job.input.orderId }, data: { paymentId } });
+      return finish({ tx, transactionHooks, output: { paymentId } });
+    }),
+  );
+},
+```
 
-Observability events (metrics, span ends, logs) emitted during the prepare and complete phases are transactional — they are buffered and only flushed after the transaction commits. If the transaction rolls back, no observability events leak out.
+Observability events and notifications produced by `finish` are buffered in `transactionHooks` and released only after your transaction commits. If it rolls back, nothing leaks out.
 
-## Prepare/Complete Pattern
+## The Attempt Lifecycle
 
-Attempt handlers split processing into phases: `prepare` reads the data the attempt needs, the handler does its work in between, and `complete` writes exactly one outcome — an output that ends the chain, a continuation that extends it with a successor job, or a reschedule that returns the job to pending (`finish({ reschedule })`). The split is what lets an attempt run atomically in a single transaction or stage long-running work between two.
-
-### Auto-Setup (Default)
-
-Most jobs don't need `prepare`. Call `complete` directly and auto-setup infers the mode:
-
-- **Synchronous `complete`** (called immediately, no prior `await`): atomic mode — single transaction wraps everything
-- **Async work before `complete`**: staged mode -- heartbeat active between async work and complete
-- Accessing `prepare` after auto-setup throws: "prepare cannot be accessed after auto-setup"
-
-See [Processing Modes](../../guides/processing-modes/) for examples and a decision flowchart.
-
-### Explicit Modes
-
-For more control, call `prepare` explicitly:
-
-- **Atomic mode**: Prepare and complete run in the same transaction. Rarely needed since calling `complete` directly achieves the same result with less ceremony.
-- **Staged mode**: Prepare runs in one transaction, long-running work happens outside, then complete runs in another transaction. The worker automatically extends the attempt between phases. Implement the processing phase idempotently as it may retry if the worker crashes.
-
-### Intermediate Transactions with `step`
-
-Handlers can call `step` to perform intermediate transactional work — each call opens a fresh guarded transaction with attempt verification. This is useful for batched operations like bulk deletes where holding a single long-lived transaction would be impractical. If `prepare` hasn't been called, `step` automatically enters staged mode. `step` is not reachable once `complete` has started — work that must observe the terminal transition belongs inside the complete transaction. See [Processing Modes — Step](../../guides/processing-modes/#intermediate-transactions-with-step).
-
-## Error Recovery and Savepoints
-
-Both the `prepare` and `complete` callbacks run inside database savepoints. This is the mechanism that keeps jobs safe when user code throws.
-
-### Why Savepoints
-
-A naive approach would run user callbacks directly inside the job's transaction. The problem: if user code throws after executing partial SQL, the transaction is **poisoned** — most databases reject further statements on a transaction that has seen an error. The engine couldn't even reschedule the job because the reschedule SQL would fail on the same broken transaction.
-
-Savepoints solve this. A savepoint is a checkpoint within a transaction. If code inside the savepoint throws, the database rolls back to that checkpoint — undoing the partial work — while the outer transaction remains healthy. The engine can then reschedule the job and commit normally.
-
-### How It Works
-
-<Diagram label="Each callback runs in a savepoint inside its transaction: a throw rolls back to the savepoint, and the job is rescheduled with backoff; on success the outcome commits">
+<Diagram label="An attempt: acquire and heartbeat are single statements; the handler's work runs outside any transaction; finish commits inside the handler's own transaction; afterwards the worker checks whether a finish committed">
   <Flow direction="column">
-    <Group title="transaction · acquires the job" dashed>
-      <Group title="savepoint · prepare callback" tone="amber" dashed>
-        <Node sub="throws? roll back to the savepoint">your SQL</Node>
-      </Group>
+    <Node tone="blue" sub="single statement · sets the attempt lease">acquire</Node>
+    <Arrow />
+    <Group title="attempt handler · heartbeat renews the lease until the handler ends">
+      <Flow direction="column">
+        <Node variant="ghost" sub="no transaction held">your work</Node>
+        <Arrow />
+        <Group title="your transaction" dashed>
+          <Node tone="green" sub={"your domain writes\nfinish({ ...txCtx, transactionHooks, outcome })"}>commit</Node>
+        </Group>
+      </Flow>
     </Group>
     <Arrow />
-    <Node variant="ghost" sub="the attempt auto-extends between transactions">async work · staged mode only</Node>
-    <Arrow />
-    <Group title="transaction · completes the job" dashed>
-      <Group title="savepoint · complete callback" tone="amber" dashed>
-        <Node sub={"commit writes the outcome\nthrows? roll back to the savepoint"}>your SQL</Node>
-      </Group>
-    </Group>
+    <Node sub="single statement · only matches if no finish committed">post-handler check</Node>
     <Rows spine columns="minmax(5.5rem, auto) auto">
       <Flow>
-        <Arrow label="success" tone="green" />
-        <Node tone="green" variant="solid">commit</Node>
+        <Arrow label="finish committed" tone="green" />
+        <Node tone="green" variant="solid">attempt completed</Node>
       </Flow>
       <Flow>
-        <Arrow label="error" tone="red" />
+        <Arrow label="no finish committed" tone="red" />
         <Node tone="red" sub="exponential backoff">reschedule</Node>
       </Flow>
     </Rows>
   </Flow>
 </Diagram>
 
-On any unhandled error the job is rescheduled with exponential backoff (default: 10 s → 20 s → 40 s → ... capped at 300 s). There is no maximum retry count — jobs retry indefinitely. Use [discriminated unions or compensation patterns](../../guides/error-handling/) to handle permanently failing jobs.
+1. **Acquire.** The worker picks a pending job and starts an attempt in one autocommit statement: it increments `attempt`, sets `attemptBy` to the worker id and sets the lease `attemptUntil` to now plus the processor's `attemptConfig.timeoutMs`.
+2. **Heartbeat.** While the handler runs, the worker renews the lease every `attemptConfig.heartbeatMs`, each renewal a single statement conditional on the attempt still being this worker's. If the worker crashes, the lease lapses and another worker reclaims the job; the crashed attempt counts as used.
+3. **Handler.** Your handler runs with no transaction open. It ends by opening a transaction, calling `finish` in it, and returning what `finish` returned.
+4. **Post-handler check.** When the handler ends — by returning or by throwing — the worker runs a fenced reschedule. If your `finish` committed, it matches nothing and the attempt is recorded as completed. If no `finish` committed, it reschedules the job with backoff and records the failure.
 
-See [Job Processing Reliability](../../guides/processing-reliability/) for per-phase error scenarios with code examples.
+The worker's own statements (acquire, heartbeat, reclaim, the post-handler reschedule) never run inside your transaction and never open one.
 
-### Abort Signal and Reasons
+## `finish`
+
+`finish` takes your transaction context and `transactionHooks` spread alongside exactly one outcome — the same convention as `client.createChain`:
+
+- `finish({ ...txCtx, transactionHooks, output })` — completes the job and its chain, and unblocks jobs waiting on the chain.
+- `finish({ ...txCtx, transactionHooks, continueWith: { typeName, input, blockers?, schedule? } })` — completes the job and adds the next job to the chain.
+- `finish({ ...txCtx, transactionHooks, reschedule: { afterMs } | { at } })` — returns the job to pending without counting the attempt as failed.
+
+The transaction context and `transactionHooks` are required. `finish` performs several writes (for example completing the chain and unblocking its dependents), so it always needs a transaction, and Queuert never opens one for you.
+
+**The handler must return what `finish` returned.** The handler's return type is the finished job, so forgetting `finish` is a compile error. Return it out of your transaction and hooks callbacks: `return withTransactionHooks(async (transactionHooks) => db.transaction(async (tx) => finish({ tx, transactionHooks, output })))`. The type only proves `finish` was called; whether it committed is decided by the post-handler check.
+
+**Validation before writes.** Output parsing, `continueWith` validation and blocker existence checks run before the first write. If `finish` throws, it has written nothing, so catching the error never leaves a partly written chain behind.
+
+**Safe in retried transactions.** If your driver or your own loop retries the transaction callback, `finish` may be called again; the last call wins. `finish` cannot be called after the handler has ended.
+
+### Reading blockers
+
+Job types that declare blockers get `getBlockers` in the handler options. It reads the blocker chains — all completed, in declaration order, typed by the job type definition. Call it without arguments to read on its own connection, or pass your transaction context to read inside that transaction:
+
+```typescript
+attemptHandler: async ({ getBlockers, finish }) => {
+  const [auth, config] = await getBlockers();
+
+  return withTransactionHooks(async (transactionHooks) =>
+    db.transaction(async (tx) =>
+      finish({ tx, transactionHooks, output: { userId: auth.output.userId, region: config.output.region } }),
+    ),
+  );
+},
+```
+
+Blockers are not preloaded. Acquisition already guarantees all of them are completed, so handlers that only need that guarantee pay no read.
+
+### Long work and intermediate writes
+
+Because no transaction is held while the handler runs, long work — external API calls, file processing, batched database work — needs no special mode. The heartbeat keeps the attempt alive for the whole handler.
+
+If a handler commits intermediate work in transactions of its own before calling `finish` (for example deleting rows in batches), those writes are not tied to the attempt's ownership: they commit even if the attempt is later lost. Make them idempotent, so a later attempt can safely repeat them.
+
+## Ownership and Fencing
+
+Every write tied to an attempt is conditional on the job row: the job must be `running`, at this attempt number, held by this worker. A conditional write that does not match writes nothing at all — no completed job, no chain update, no continuation. This is what makes `finish` safe without Queuert holding a lock for the duration of the attempt.
+
+When `finish`'s write misses, `finish` throws and aborts the attempt's `signal`:
+
+| Situation                                                           | Error                          | `signal.reason`             |
+| ------------------------------------------------------------------- | ------------------------------ | --------------------------- |
+| The lease lapsed and the job was reclaimed or acquired by another worker | `JobTakenByAnotherWorkerError` | `"taken_by_another_worker"` |
+| The job was completed elsewhere, e.g. by `client.completeChain`     | `JobAlreadyCompletedError`     | `"already_completed"`       |
+| The job was deleted                                                 | `JobNotFoundError`             | `"not_found"`               |
+
+Let the error propagate: your transaction rolls back and takes your domain writes with it.
+
+Once `finish` has written the job row, your transaction holds that row until it ends: a heartbeat renewal waits for it, and reclaim skips the row, so neither interferes with your commit.
+
+## Errors and Commit Detection
+
+Whether `finish` committed is decided by the database, not by the handler's return value:
+
+- **The handler throws before `finish` commits** (an API call fails, a constraint fires inside your transaction, the transaction fails to commit): your driver rolls the transaction back, and the post-handler check reschedules the job with exponential backoff (default: 10 s → 20 s → 40 s → ... capped at 300 s), recording the error as `lastAttemptError`.
+- **The handler returns without a committed `finish`** (for example `finish` ran inside a savepoint you rolled back): the attempt fails with `Attempt handler returned without a committed finish` and is rescheduled with backoff.
+- **The handler throws after `finish` committed**: the completion stands. The error is recorded for the attempt, but nothing is rolled back or rescheduled. Work you do after your transaction commits is your responsibility.
+
+There is no maximum retry count — jobs retry indefinitely. Use [discriminated unions or compensation patterns](../../guides/error-handling/) to handle permanently failing jobs. See [Job Processing Reliability](../../guides/processing-reliability/) for scenarios with code examples.
+
+## Isolation Levels
+
+You choose the isolation level of every transaction that touches Queuert state — the one you pass to `finish`, and the ones you pass to `client.createChain` and other client methods. Queuert is correct at READ COMMITTED, REPEATABLE READ and SERIALIZABLE; what differs is whether a conflict waits or fails.
+
+| Situation                                                                                              | READ COMMITTED                                                            | REPEATABLE READ / SERIALIZABLE                                             |
+| ------------------------------------------------------------------------------------------------------ | ------------------------------------------------------------------------- | -------------------------------------------------------------------------- |
+| `finish` in a handler while another transaction writes the job row                                     | waits for it, re-checks ownership, and writes nothing if the attempt was lost | serialization error if the job row changed since your transaction's snapshot |
+| Client calls that lock and then check a job (`client.completeChain`, `client.rescheduleJobs`)          | waits, then sees the latest row                                           | serialization error if the row changed since the snapshot                  |
+| Adding a blocker on a chain (`createChain` or `continueWith` with `blockers`) while that chain completes | waits and re-reads; the dependent job ends up correctly `blocked` or `pending` | serialization error on one of the two sides                                |
+
+Both sides of the blocker race write the blocker chain's head row — completing the chain writes it, and adding a blocker writes it too — so the race is a write conflict at every isolation level and a dependent job is never left `blocked` behind a completed chain.
+
+A serialization error is an ordinary database error:
+
+- **In a handler**, it fails your transaction, and the attempt is rescheduled with backoff. You can also retry the transaction inside the handler; `finish` is safe to call again (last call wins).
+- **In client code** (`createChain` with blockers, `completeChain`, ...), retry the transaction, as you must for any transaction at these levels.
+
+When retrying, open a fresh `withTransactionHooks` scope per try, so events buffered by a rolled-back try are discarded with it.
+
+The worker's own statements (acquire, heartbeat, reclaim, the post-handler reschedule) are single autocommit statements, so the session's default isolation level does not change their behaviour.
+
+## SQLite: Hold the Write Lock
+
+SQLite providers share one connection guarded by a process-wide `AsyncRwLock`. The worker's autocommit statements for other attempts run on that connection under the lock. A handler transaction opened **without** the write lock would let those statements run inside it, and rolling it back would undo another attempt's acquisition. Open every transaction you pass to `finish` (or to any client method) while holding the provider's write lock — for example `using _lock = await lock.acquireWrite()` before `BEGIN`, as the provider's own `withTransaction` does. See [SQLite Internals](../sqlite-internals/#asyncrwlock).
+
+## Abort Signal and Reasons
 
 Every attempt handler receives a `signal` (`TypedAbortSignal<JobAbortReason>`) that is aborted when the job should stop. The `signal.reason` distinguishes the cause:
 
-| Reason                      | Meaning                                                                            |
-| --------------------------- | ---------------------------------------------------------------------------------- |
-| `"taken_by_another_worker"` | Another worker acquired the job (attempt expired and was released)                 |
-| `"not_found"`               | The job no longer exists in the database                                           |
-| `"already_completed"`       | The job was already completed                                                      |
+| Reason                      | Meaning                                                                                           |
+| --------------------------- | ------------------------------------------------------------------------------------------------- |
+| `"taken_by_another_worker"` | The attempt's lease lapsed and the job was reclaimed or acquired by another worker                |
+| `"not_found"`               | The job no longer exists in the database                                                          |
+| `"already_completed"`       | The job was already completed                                                                     |
 | `"error"`                   | Renewing the attempt (heartbeat) failed unexpectedly — ownership is uncertain, not confirmed lost |
-| `"worker_stopping"`         | The worker is shutting down — the job is still valid and the attempt is still held |
+| `"worker_stopping"`         | The worker is shutting down — the job is still valid and the attempt is still held                |
 
-The first three reasons indicate the job is no longer owned by this worker, and `"error"` means ownership can no longer be confirmed — in all four cases handlers should stop immediately. `"worker_stopping"` is different: the job remains valid, but the worker is draining, so handlers should check `signal.reason` and wrap up quickly. Every attempt must still end in an outcome: call `complete` (which may `finish({ reschedule })`), or throw so the attempt is rescheduled with backoff. A handler that simply returns without completing fails the attempt.
+The first three reasons indicate the job is no longer owned by this worker, and `"error"` means ownership can no longer be confirmed — in all four cases handlers should stop immediately; a `finish` would fail anyway. Your own committed `finish` never aborts the signal. `"worker_stopping"` is different: the job remains valid, but the worker is draining, so handlers should check `signal.reason` and wrap up quickly. Every attempt must still end in an outcome: commit a `finish` (which may `reschedule`), or throw so the attempt is rescheduled with backoff. A handler that returns without a committed `finish` fails the attempt.
 
 ```typescript
-attemptHandler: async ({ signal, complete }) => {
+attemptHandler: async ({ signal, finish }) => {
   for (const item of items) {
     if (signal.aborted && signal.reason === "worker_stopping") {
-      break; // finish early, complete with partial results
+      break; // stop early, finish with partial results
     }
     await processItem(item);
   }
-  return complete(async ({ finish }) => finish({ output: { processed: items.length } }));
+  return withTransactionHooks(async (transactionHooks) =>
+    db.transaction(async (tx) => finish({ tx, transactionHooks, output: { processed: items.length } })),
+  );
 },
 ```
 
 ## See Also
 
-- [Job Processing Reliability](../../guides/processing-reliability/) — Savepoint protection, automatic rollback
+- [Job Processing Reliability](../../guides/processing-reliability/) — What happens when a handler throws, before and after `finish`
 - [Client API](/queuert/api/core/type-aliases/client/) — Mutation methods, query methods, awaitChain
-- [In-Process Worker](../in-process-worker/) — Worker lifecycle, attempt management, expired attempt reclamation
+- [In-Process Worker](../in-process-worker/) — Worker lifecycle, attempt leases, expired attempt reclamation
 - [Adapters](../adapters/) — StateAdapter context architecture
+- [`showcase-long-running-jobs`](https://github.com/kvet/queuert/tree/main/examples/showcase-long-running-jobs) — Runnable example: long work outside a transaction, then `finish` in your own transaction
 - [`showcase-signals`](https://github.com/kvet/queuert/tree/main/examples/showcase-signals) — Runnable example: `already_completed` via external `completeChain`, `worker_stopping` via graceful shutdown

@@ -67,17 +67,16 @@ const worker = await createInProcessWorker({
     jobTypes,
     processors: {
       send_welcome_email: {
-        attemptHandler: async ({ job, prepare, complete }) => {
-          // Load the user with Prisma inside the job transaction
-          const user = await prepare({ mode: "staged" }, async ({ prisma }) =>
-            prisma.user.findUniqueOrThrow({ where: { id: job.input.userId } }),
-          );
+        attemptHandler: async ({ job, finish }) => {
+          const user = await prisma.user.findUniqueOrThrow({ where: { id: job.input.userId } });
 
           // Simulate sending email (in real app, call email service here)
           console.log(`Sending welcome email to ${user.email} for ${user.name}`);
 
-          return complete(async ({ finish }) =>
-            finish({ output: { sentAt: new Date().toISOString() } }),
+          return withTransactionHooks(async (transactionHooks) =>
+            prisma.$transaction(async (prisma) =>
+              finish({ prisma, transactionHooks, output: { sentAt: new Date().toISOString() } }),
+            ),
           );
         },
       },

@@ -12,6 +12,7 @@ import { type Helpers } from "../setup-helpers.js";
 import {
   type BaseTxContext,
   type StateChain,
+  type StateAttemptFence,
   type StateChainInfo,
   type StateJob,
   type StateJobInfo,
@@ -83,7 +84,12 @@ const prepareJobs = <TEntry extends CommonInput>(
   return { parsed, spanHandles };
 };
 
-const lockBlockerChains = async (
+/**
+ * Writes every blocker chain's head before any other write, failing on a missing chain. Writing
+ * (not only locking) the head is what makes a concurrent completion of the blocker conflict at
+ * every isolation level, so the dependent can never be left `blocked` against a completed chain.
+ */
+const writeBlockerChainHeads = async (
   helpers: Helpers,
   { parsed, txCtx }: { parsed: ParsedEntry[]; txCtx: BaseTxContext },
 ): Promise<void> => {
@@ -95,7 +101,7 @@ const lockBlockerChains = async (
   const blockerChains = await helpers.stateAdapter.getChains({
     txCtx,
     chainIds: blockerChainIds,
-    lock: "exclusive",
+    lock: "write",
   });
   const missingIndex = blockerChains.findIndex((blockerChain) => blockerChain === undefined);
   if (missingIndex !== -1) {
@@ -301,7 +307,7 @@ export const createStateChains = async (
   let createResults: (StateChain & { deduplicated: boolean })[];
   let createdJobs: CreatedJob[];
   try {
-    await lockBlockerChains(helpers, { parsed, txCtx });
+    await writeBlockerChainHeads(helpers, { parsed, txCtx });
     createResults = await helpers.stateAdapter.createJobs({
       txCtx,
       jobs: chains.map((chain, index) => ({
@@ -351,12 +357,14 @@ export const continueStateJob = async (
     job,
     fromJob,
     workerId,
+    fence,
     txCtx,
     transactionHooks,
   }: {
     job: CommonInput;
     fromJob: StateJob;
     workerId: string | null;
+    fence?: StateAttemptFence;
     txCtx: BaseTxContext;
     transactionHooks: TransactionHooks;
   },
@@ -374,7 +382,7 @@ export const continueStateJob = async (
   let completedJob: StateJob;
   let createdJobs: CreatedJob[];
   try {
-    await lockBlockerChains(helpers, { parsed, txCtx });
+    await writeBlockerChainHeads(helpers, { parsed, txCtx });
     const [continued] = await helpers.stateAdapter.continueJobs({
       txCtx,
       completedBy: workerId,
@@ -386,6 +394,7 @@ export const continueStateJob = async (
           schedule: job.schedule,
           traceContext: spanHandles[0]?.getTraceContext() ?? null,
           continueFromId: fromJob.id,
+          fence,
         },
       ],
     });

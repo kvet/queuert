@@ -1,4 +1,4 @@
-import { type UUID, randomUUID } from "node:crypto";
+import { type UUID } from "node:crypto";
 
 import {
   type DataType,
@@ -638,33 +638,6 @@ export const createSqliteStateAdapter = async <
 
     withTransaction: stateProvider.withTransaction,
 
-    withSavepoint:
-      stateProvider.withSavepoint ??
-      (async (txCtx, fn) => {
-        const sp = `queuert_sp_${randomUUID().replace(/-/g, "_")}`;
-        await executeTypedSql({
-          txCtx,
-          sql: applyTemplate(
-            sql(/* sql */ `SAVEPOINT ${sp}`, { readOnly: true, params: [], columns: {} }),
-          ),
-        });
-        try {
-          return await fn(txCtx);
-        } catch (error) {
-          await executeTypedSql({
-            txCtx,
-            sql: applyTemplate(
-              sql(/* sql */ `ROLLBACK TO SAVEPOINT ${sp}`, {
-                readOnly: true,
-                params: [],
-                columns: {},
-              }),
-            ),
-          }).catch(() => {});
-          throw error;
-        }
-      }),
-
     getChains: async ({
       txCtx,
       chainIds,
@@ -672,11 +645,11 @@ export const createSqliteStateAdapter = async <
     }: {
       txCtx?: TTxContext;
       chainIds: TIdType[];
-      lock?: "exclusive";
+      lock?: "exclusive" | "write";
     }) => {
       if (chainIds.length === 0) return [];
       const idsJson = JSON.stringify(chainIds);
-      if (lock === "exclusive" && txCtx) {
+      if (lock !== undefined && txCtx) {
         await executeTypedSql({
           txCtx,
           sql: templateCache.getOrCompute("lockChainHeads", () =>
@@ -980,6 +953,9 @@ RETURNING *
       for (const job of jobs) {
         if (job.id !== undefined) validateId(job.id, "caller");
       }
+      if (new Set(jobs.map((job) => job.continueFromId)).size !== jobs.length) {
+        throw new Error("continueJobs: a batch must not continue the same job twice");
+      }
 
       const entries = jobs.map((job) => ({
         new_id: job.id ?? generateId(),
@@ -989,15 +965,72 @@ RETURNING *
         schedule_after_ms: job.schedule?.afterMs ?? null,
         trace_context: job.traceContext ?? null,
         continue_from_id: job.continueFromId as string,
+        fence_attempt: job.fence?.attempt ?? null,
+        fence_worker_id: job.fence?.workerId ?? null,
       }));
       const payload = JSON.stringify(entries);
 
-      const insertedRows = await executeTypedSql({
+      const completedRows = await executeTypedSql({
         txCtx,
-        sql: templateCache.getOrCompute("insertContinuations", () =>
+        sql: templateCache.getOrCompute("completeContinuedJobs", () =>
           applyTemplate(
             sql(
               `
+WITH input_data AS (
+  SELECT
+    json_extract(je.value, '$.new_id')           AS new_id,
+    json_extract(je.value, '$.continue_from_id') AS continue_from_id,
+    json_extract(je.value, '$.fence_attempt')    AS fence_attempt,
+    json_extract(je.value, '$.fence_worker_id')  AS fence_worker_id
+  FROM json_each(?) AS je
+)
+UPDATE {{table_prefix}}job
+SET status = 'completed',
+  completed_at = datetime('now', 'subsec'),
+  completed_by = ?,
+  continued_to_id = d.new_id,
+  output = NULL,
+  last_attempt_error = NULL,
+  attempt_at = NULL,
+  attempt_by = NULL,
+  attempt_until = NULL
+FROM input_data d
+WHERE {{table_prefix}}job.id = d.continue_from_id
+  AND {{table_prefix}}job.status <> 'completed'
+  AND (
+    d.fence_attempt IS NULL
+    OR (
+      {{table_prefix}}job.status = 'running'
+      AND {{table_prefix}}job.attempt = d.fence_attempt
+      AND {{table_prefix}}job.attempt_by = d.fence_worker_id
+    )
+  )
+RETURNING *, ${chainColumnsReturning("{{table_prefix}}job")}
+`,
+              {
+                id: "completeContinuedJobs",
+                params: [t.string(), t["string?"]()],
+                columns: { ...dbJobColumns, ...dbChainColumns },
+              },
+            ),
+          ),
+        ),
+        params: [payload, completedBy ?? null],
+      });
+
+      const completedFromIds = new Set(completedRows.map((row) => row.id));
+      const completedEntries = entries.filter((entry) =>
+        completedFromIds.has(entry.continue_from_id),
+      );
+      const insertedRows =
+        completedEntries.length === 0
+          ? []
+          : await executeTypedSql({
+              txCtx,
+              sql: templateCache.getOrCompute("insertContinuations", () =>
+                applyTemplate(
+                  sql(
+                    `
 WITH input_data AS (
   SELECT
     je.key                                              AS ord,
@@ -1030,59 +1063,20 @@ SELECT
   ),
   d.trace_context
 FROM input_data d
-JOIN {{table_prefix}}job p ON p.id = d.continue_from_id AND p.status <> 'completed'
+JOIN {{table_prefix}}job p ON p.id = d.continue_from_id AND p.continued_to_id = d.new_id
 ORDER BY d.ord
 RETURNING *
 `,
-              {
-                id: "insertContinuations",
-                params: [t.string()],
-                columns: { ...dbJobColumns },
-              },
-            ),
-          ),
-        ),
-        params: [payload],
-      });
-
-      const completedRows = await executeTypedSql({
-        txCtx,
-        sql: templateCache.getOrCompute("completeContinuedJobs", () =>
-          applyTemplate(
-            sql(
-              `
-WITH input_data AS (
-  SELECT
-    json_extract(je.value, '$.new_id')           AS new_id,
-    json_extract(je.value, '$.continue_from_id') AS continue_from_id
-  FROM json_each(?) AS je
-)
-UPDATE {{table_prefix}}job
-SET status = 'completed',
-  completed_at = datetime('now', 'subsec'),
-  completed_by = ?,
-  continued_to_id = d.new_id,
-  output = NULL,
-  last_attempt_error = NULL,
-  attempt_at = NULL,
-  attempt_by = NULL,
-  attempt_until = NULL
-FROM input_data d
-WHERE {{table_prefix}}job.id = d.continue_from_id
-  AND {{table_prefix}}job.status <> 'completed'
-  AND {{table_prefix}}job.id NOT IN (SELECT new_id FROM input_data)
-RETURNING *, ${chainColumnsReturning("{{table_prefix}}job")}
-`,
-              {
-                id: "completeContinuedJobs",
-                params: [t.string(), t["string?"]()],
-                columns: { ...dbJobColumns, ...dbChainColumns },
-              },
-            ),
-          ),
-        ),
-        params: [payload, completedBy ?? null],
-      });
+                    {
+                      id: "insertContinuations",
+                      params: [t.string()],
+                      columns: { ...dbJobColumns },
+                    },
+                  ),
+                ),
+              ),
+              params: [JSON.stringify(completedEntries)],
+            });
 
       const insertedById = new Map(insertedRows.map((row) => [row.id, row]));
       const completedById = new Map(completedRows.map((row) => [row.id, row]));
@@ -1103,6 +1097,8 @@ RETURNING *, ${chainColumnsReturning("{{table_prefix}}job")}
       const entries = jobs.map((job) => ({
         job_id: job.jobId as string,
         output: job.output !== undefined ? JSON.stringify(job.output) : null,
+        fence_attempt: job.fence?.attempt ?? null,
+        fence_worker_id: job.fence?.workerId ?? null,
       }));
       const payload = JSON.stringify(entries);
 
@@ -1114,14 +1110,18 @@ RETURNING *, ${chainColumnsReturning("{{table_prefix}}job")}
               `
 WITH input_data AS (
   SELECT
-    json_extract(je.value, '$.job_id') AS job_id,
-    json_extract(je.value, '$.output') AS output
+    json_extract(je.value, '$.job_id')          AS job_id,
+    json_extract(je.value, '$.output')          AS output,
+    json_extract(je.value, '$.fence_attempt')   AS fence_attempt,
+    json_extract(je.value, '$.fence_worker_id') AS fence_worker_id
   FROM json_each(?) AS je
 ),
 targets AS (
   SELECT d.job_id, d.output, j.chain_id
   FROM input_data d
   JOIN {{table_prefix}}job j ON j.id = d.job_id AND j.status <> 'completed'
+  WHERE d.fence_attempt IS NULL
+    OR (j.status = 'running' AND j.attempt = d.fence_attempt AND j.attempt_by = d.fence_worker_id)
 ),
 row_effects AS (
   SELECT
@@ -1149,15 +1149,12 @@ SET status = CASE WHEN e.completes_job THEN 'completed' ELSE {{table_prefix}}job
                             THEN datetime('now', 'subsec') ELSE {{table_prefix}}job.chain_completed_at END
 FROM row_effects e
 WHERE {{table_prefix}}job.id = e.id
-RETURNING *, EXISTS (
-  SELECT 1 FROM {{table_prefix}}job_blocker jb
-  WHERE jb.blocked_by_chain_id = {{table_prefix}}job.chain_id
-) AS has_blocking
+RETURNING *
 `,
               {
                 id: "completeJobs",
                 params: [t.string(), t["string?"]()],
-                columns: { ...dbJobColumns, has_blocking: t.number() },
+                columns: { ...dbJobColumns },
               },
             ),
           ),
@@ -1173,7 +1170,6 @@ RETURNING *, EXISTS (
         return {
           ...mapDbJobToStateJob(row),
           chain: mapDbHeadToStateChain(rowById.get(row.chain_id)!),
-          hasBlockedJobs: row.has_blocking === 1,
         };
       });
     },
@@ -1185,6 +1181,8 @@ RETURNING *, EXISTS (
         at: job.schedule?.at?.toISOString().replace("T", " ").replace("Z", "") ?? null,
         after_ms: job.schedule?.afterMs ?? null,
         error: job.error !== undefined ? JSON.stringify(job.error) : null,
+        fence_attempt: job.fence?.attempt ?? null,
+        fence_worker_id: job.fence?.workerId ?? null,
       }));
       const payload = JSON.stringify(entries);
       const rows = await executeTypedSql({
@@ -1198,7 +1196,9 @@ WITH input_data AS (
     json_extract(je.value, '$.job_id')  AS job_id,
     json_extract(je.value, '$.at')       AS at,
     json_extract(je.value, '$.after_ms') AS after_ms,
-    json_extract(je.value, '$.error')    AS error
+    json_extract(je.value, '$.error')    AS error,
+    json_extract(je.value, '$.fence_attempt')   AS fence_attempt,
+    json_extract(je.value, '$.fence_worker_id') AS fence_worker_id
   FROM json_each(?) AS je
 )
 UPDATE {{table_prefix}}job
@@ -1216,6 +1216,14 @@ SET status = CASE WHEN {{table_prefix}}job.status = 'running' THEN 'pending' ELS
 FROM input_data d
 WHERE {{table_prefix}}job.id = d.job_id
   AND {{table_prefix}}job.status <> 'completed'
+  AND (
+    d.fence_attempt IS NULL
+    OR (
+      {{table_prefix}}job.status = 'running'
+      AND {{table_prefix}}job.attempt = d.fence_attempt
+      AND {{table_prefix}}job.attempt_by = d.fence_worker_id
+    )
+  )
 RETURNING *, ${chainColumnsReturning("{{table_prefix}}job")}
 `,
               {
@@ -1377,8 +1385,9 @@ WHERE (id IN (SELECT value FROM json_each(?)) AND chain_index = 0)
       });
     },
 
-    startJobAttempt: async ({ txCtx, typeNames, workerId }) => {
-      const typeNamesJson = JSON.stringify(typeNames);
+    startJobAttempt: async ({ txCtx, timeoutMsByTypeName, workerId }) => {
+      const typeNamesJson = JSON.stringify(Object.keys(timeoutMsByTypeName));
+      const timeoutsJson = JSON.stringify(Object.entries(timeoutMsByTypeName));
       const [result] = await executeTypedSql({
         txCtx,
         sql: templateCache.getOrCompute("startJobAttempt", () =>
@@ -1389,7 +1398,11 @@ UPDATE {{table_prefix}}job
 SET status = 'running',
   attempt = attempt + 1,
   attempt_at = datetime('now', 'subsec'),
-  attempt_by = ?
+  attempt_by = ?,
+  attempt_until = datetime('now', 'subsec', '+' || ((
+    SELECT json_extract(t.value, '$[1]') FROM json_each(?) AS t
+    WHERE json_extract(t.value, '$[0]') = {{table_prefix}}job.type_name
+  ) / 1000.0) || ' seconds')
 WHERE id = (
   SELECT id
   FROM {{table_prefix}}job INDEXED BY {{table_prefix}}job_pending_idx
@@ -1399,26 +1412,21 @@ WHERE id = (
   ORDER BY scheduled_at ASC
   LIMIT 1
 )
-RETURNING *, ${chainColumnsReturning("{{table_prefix}}job")}, EXISTS (
-  SELECT 1 FROM {{table_prefix}}job_blocker jb WHERE jb.job_id = {{table_prefix}}job.id
-) AS has_blockers
+RETURNING *, ${chainColumnsReturning("{{table_prefix}}job")}
 `,
               {
                 id: "startJobAttempt",
-                params: [t.string(), t.string()],
-                columns: { ...dbJobColumns, ...dbChainColumns, has_blockers: t.number() },
+                params: [t.string(), t.string(), t.string()],
+                columns: { ...dbJobColumns, ...dbChainColumns },
               },
             ),
           ),
         ),
-        params: [workerId, typeNamesJson],
+        params: [workerId, timeoutsJson, typeNamesJson],
       });
 
       if (!result) return undefined;
-      return {
-        ...mapDbJobRowToStateJob(result),
-        hasBlockers: result.has_blockers === 1,
-      };
+      return mapDbJobRowToStateJob(result);
     },
     getStartAttemptDelayMs: async ({ txCtx, typeNames }) => {
       const [result] = await executeTypedSql({
@@ -1448,7 +1456,7 @@ LIMIT 1
       });
       return result ? result.delay_ms : null;
     },
-    extendJobAttempt: async ({ txCtx, jobId, workerId, timeoutMs }) => {
+    extendJobAttempt: async ({ txCtx, jobId, fence, timeoutMs }) => {
       const [job] = await executeTypedSql({
         txCtx,
         sql: templateCache.getOrCompute("extendJobAttempt", () =>
@@ -1458,23 +1466,25 @@ LIMIT 1
 UPDATE {{table_prefix}}job
 SET attempt_until = datetime('now', 'subsec', '+' || (? / 1000.0) || ' seconds')
 WHERE id = ?
+  AND status = 'running'
+  AND attempt = ?
   AND attempt_by = ?
 RETURNING *, ${chainColumnsReturning("{{table_prefix}}job")}
 `,
               {
                 id: "extendJobAttempt",
-                params: [t.number(), idDataType, t.string()],
+                params: [t.number(), idDataType, t.number(), t.string()],
                 columns: { ...dbJobColumns, ...dbChainColumns },
               },
             ),
           ),
         ),
-        params: [timeoutMs, jobId, workerId],
+        params: [timeoutMs, jobId, fence.attempt, fence.workerId],
       });
 
       return job ? mapDbJobRowToStateJob(job) : undefined;
     },
-    reclaimExpiredJobAttempt: async ({ txCtx, typeNames, ignoredJobIds }) => {
+    reclaimExpiredJobAttempt: async ({ txCtx, typeNames, ignoredJobIds, lastAttemptError }) => {
       const [job] = await executeTypedSql({
         txCtx,
         sql: templateCache.getOrCompute("reclaimExpiredJobAttempt", () =>
@@ -1483,6 +1493,8 @@ RETURNING *, ${chainColumnsReturning("{{table_prefix}}job")}
               `
 UPDATE {{table_prefix}}job
 SET status = 'pending',
+  last_attempt_at = datetime('now', 'subsec'),
+  last_attempt_error = ?,
   attempt_at = NULL,
   attempt_by = NULL,
   attempt_until = NULL
@@ -1501,13 +1513,17 @@ RETURNING *, ${chainColumnsReturning("{{table_prefix}}job")}
 `,
               {
                 id: "reclaimExpiredJobAttempt",
-                params: [t.string(), t.string()],
+                params: [t.string(), t.string(), t.string()],
                 columns: { ...dbJobColumns, ...dbChainColumns },
               },
             ),
           ),
         ),
-        params: [JSON.stringify(typeNames), JSON.stringify(ignoredJobIds ?? [])],
+        params: [
+          JSON.stringify(lastAttemptError),
+          JSON.stringify(typeNames),
+          JSON.stringify(ignoredJobIds ?? []),
+        ],
       });
       return job ? mapDbJobRowToStateJob(job) : undefined;
     },

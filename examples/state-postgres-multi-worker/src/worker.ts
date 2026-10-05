@@ -2,7 +2,13 @@ import { createPgNotifyAdapter, createPgStateAdapter } from "@queuert/postgres";
 import { createPgPoolNotifyProvider } from "example-notify-postgres-pg/provider";
 import { createPgPoolStateProvider } from "example-state-postgres-pg/provider";
 import { Pool } from "pg";
-import { createClient, createInProcessWorker, createProcessors, defineJobTypes } from "queuert";
+import {
+  createClient,
+  createInProcessWorker,
+  createProcessors,
+  defineJobTypes,
+  withTransactionHooks,
+} from "queuert";
 
 const jobTypes = defineJobTypes<{
   process_order: {
@@ -34,17 +40,13 @@ const worker = await createInProcessWorker({
     jobTypes,
     processors: {
       process_order: {
-        attemptHandler: async ({ job, prepare, complete }) => {
-          // Load the order inside the job transaction
-          const order = await prepare({ mode: "staged" }, async ({ poolClient }) => {
-            const { rows } = await poolClient.query<{ items: string[]; total: number }>(
-              "SELECT items, total FROM orders WHERE id = $1",
-              [job.input.orderId],
-            );
-            const row = rows[0];
-            if (!row) throw new Error(`Order ${job.input.orderId} not found`);
-            return row;
-          });
+        attemptHandler: async ({ job, finish }) => {
+          const { rows } = await pool.query<{ items: string[]; total: number }>(
+            "SELECT items, total FROM orders WHERE id = $1",
+            [job.input.orderId],
+          );
+          const order = rows[0];
+          if (!order) throw new Error(`Order ${job.input.orderId} not found`);
 
           process.send!({
             type: "processing",
@@ -55,13 +57,17 @@ const worker = await createInProcessWorker({
 
           await new Promise((resolve) => setTimeout(resolve, 100 + Math.random() * 200));
 
-          return complete(async ({ finish }) =>
-            finish({
-              output: {
-                processedAt: new Date().toISOString(),
-                workerName,
-              },
-            }),
+          return withTransactionHooks(async (transactionHooks) =>
+            stateAdapter.withTransaction(async (ctx) =>
+              finish({
+                ...ctx,
+                transactionHooks,
+                output: {
+                  processedAt: new Date().toISOString(),
+                  workerName,
+                },
+              }),
+            ),
           );
         },
       },

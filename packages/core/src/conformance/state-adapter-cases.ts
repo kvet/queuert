@@ -1,5 +1,6 @@
 import { type ConformanceGroup } from "./runner.js";
 import { addJobsBlockersGroup } from "./state-adapter-cases/add-jobs-blockers.js";
+import { attemptFenceGroup } from "./state-adapter-cases/attempt-fence.js";
 import { closeGroup } from "./state-adapter-cases/close.js";
 import { completeJobsGroup } from "./state-adapter-cases/complete-jobs.js";
 import { continueJobsGroup } from "./state-adapter-cases/continue-jobs.js";
@@ -23,14 +24,12 @@ import { rescheduleJobsGroup } from "./state-adapter-cases/reschedule-jobs.js";
 import { startJobAttemptGroup } from "./state-adapter-cases/start-job-attempt.js";
 import { type StateConformanceFixture } from "./state-adapter-cases/types.js";
 import { unblockJobsGroup } from "./state-adapter-cases/unblock-jobs.js";
-import { withSavepointGroup } from "./state-adapter-cases/with-savepoint.js";
 import { withTransactionGroup } from "./state-adapter-cases/with-transaction.js";
 
 export { type StateConformanceFixture } from "./state-adapter-cases/types.js";
 
 export const stateAdapterConformanceGroups: ConformanceGroup<StateConformanceFixture>[] = [
   withTransactionGroup,
-  withSavepointGroup,
   getChainsGroup,
   getJobsGroup,
   createJobsGroup,
@@ -41,6 +40,7 @@ export const stateAdapterConformanceGroups: ConformanceGroup<StateConformanceFix
   startJobAttemptGroup,
   extendJobAttemptGroup,
   completeJobsGroup,
+  attemptFenceGroup,
   reclaimExpiredJobAttemptGroup,
   getStartAttemptDelayMsGroup,
   rescheduleJobsGroup,
