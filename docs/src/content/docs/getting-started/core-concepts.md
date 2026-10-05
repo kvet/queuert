@@ -7,7 +7,7 @@ sidebar:
 
 ### Job
 
-An individual unit of work. Jobs have a lifecycle: (`blocked` →) `pending` → `running` → `completed`. Each job belongs to a Job Type and contains typed input/output. Jobs that depend on other chains start as `blocked` and become `pending` when their blockers complete (see [Job Blockers](/queuert/guides/job-blockers/)).
+An individual unit of work. Jobs have a lifecycle: (`blocked` →) `pending` → `running` → `completed`. Each job belongs to a Job Type and contains typed input/output. Jobs that depend on other chains start as `blocked` if any of those chains is still running, and become `pending` when their blockers complete (see [Job Blockers](/queuert/guides/job-blockers/)).
 
 ### Chain
 
@@ -15,7 +15,7 @@ A chain of linked jobs where each job can `continueWith` to the next - just like
 
 ### Job Type
 
-Defines a named job type with its input/output types and attempt handler function. Job types are registered with workers. The attempt handler receives the job and context for completing or continuing the chain.
+Defines a named job type with its input/output types. Job types are registered with the client via `createClient`; their attempt handlers are supplied through `createProcessors` and run by workers. The attempt handler receives the job and context for completing or continuing the chain.
 
 ### State Adapter
 

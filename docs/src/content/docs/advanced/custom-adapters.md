@@ -100,6 +100,7 @@ test("custom validation adapter passes conformance", async () => {
     },
     external: {
       buildWithExternalSlice: () => createMyJobTypes(/* ... */),
+      buildWithExternalSlices: () => createMyJobTypes(/* ... */),
     },
   }));
 });

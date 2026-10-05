@@ -38,26 +38,26 @@ Attribute names follow OpenTelemetry semantic conventions (lowercase, dotted) an
 
 ### Job Lifecycle
 
-| Metric                    | Attributes                                                                             | Description                                                              |
-| ------------------------- | -------------------------------------------------------------------------------------- | ------------------------------------------------------------------------ |
-| `queuert.job.created`     | `queuert.job.type`, `queuert.chain.type`                                               | Job created                                                              |
-| `queuert.job.completed`   | `queuert.job.type`, `queuert.chain.type`, `queuert.worker.id`, `queuert.job.continued` | Job completed. `queuert.worker.id` is omitted for workerless completion. |
-| `queuert.job.blocked`     | `queuert.job.type`, `queuert.chain.type`                                               | Job blocked by incomplete blocker chains                                 |
-| `queuert.job.rescheduled` | `queuert.job.type`, `queuert.chain.type`                                               | Pending job rescheduled by a client                                      |
-| `queuert.job.unblocked`   | `queuert.job.type`, `queuert.chain.type`                                               | Job unblocked after blocker chain completed                              |
+| Metric                    | Attributes                                                        | Description                                                                                           |
+| ------------------------- | ----------------------------------------------------------------- | ----------------------------------------------------------------------------------------------------- |
+| `queuert.job.created`     | `queuert.job.type`, `queuert.chain.type`                          | Job created                                                                                           |
+| `queuert.job.completed`   | `queuert.job.type`, `queuert.chain.type`, `queuert.job.continued` | Job completed (by a worker or workerless). Use `queuert.job.attempt.completed` for per-worker counts. |
+| `queuert.job.blocked`     | `queuert.job.type`, `queuert.chain.type`                          | Job blocked by incomplete blocker chains                                                              |
+| `queuert.job.rescheduled` | `queuert.job.type`, `queuert.chain.type`                          | Job returned to pending: client reschedule, `finish({ reschedule })`, or retry after a failed attempt |
+| `queuert.job.unblocked`   | `queuert.job.type`, `queuert.chain.type`                          | Job unblocked after blocker chain completed                                                           |
 
 ### Attempt Lifecycle
 
-| Metric                                        | Attributes                                                    | Description                                           |
-| --------------------------------------------- | ------------------------------------------------------------- | ----------------------------------------------------- |
-| `queuert.job.attempt.started`                 | `queuert.job.type`, `queuert.chain.type`, `queuert.worker.id` | Worker began processing an attempt                    |
-| `queuert.job.attempt.completed`               | `queuert.job.type`, `queuert.chain.type`, `queuert.worker.id` | Attempt completed successfully                        |
-| `queuert.job.attempt.failed`                  | `queuert.job.type`, `queuert.chain.type`, `queuert.worker.id` | Attempt failed (may retry)                            |
-| `queuert.job.attempt.taken_by_another_worker` | `queuert.job.type`, `queuert.chain.type`, `queuert.worker.id` | Job already claimed by another worker                 |
-| `queuert.job.attempt.already_completed`       | `queuert.job.type`, `queuert.chain.type`, `queuert.worker.id` | Job already completed when worker tried to process it |
-| `queuert.job.attempt.expired`                 | `queuert.job.type`, `queuert.chain.type`, `queuert.worker.id` | Attempt expired before processing finished            |
-| `queuert.job.attempt.reclaimed`               | `queuert.job.type`, `queuert.chain.type`, `queuert.worker.id` | Expired attempt reclaimed for retry                   |
-| `queuert.job.attempt.extended`                | `queuert.job.type`, `queuert.chain.type`, `queuert.worker.id` | Attempt successfully extended during processing       |
+| Metric                                        | Attributes                                                    | Description                                                         |
+| --------------------------------------------- | ------------------------------------------------------------- | ------------------------------------------------------------------- |
+| `queuert.job.attempt.started`                 | `queuert.job.type`, `queuert.chain.type`, `queuert.worker.id` | Worker began processing an attempt                                  |
+| `queuert.job.attempt.completed`               | `queuert.job.type`, `queuert.chain.type`, `queuert.worker.id` | Attempt completed successfully (including `finish({ reschedule })`) |
+| `queuert.job.attempt.failed`                  | `queuert.job.type`, `queuert.chain.type`, `queuert.worker.id` | Attempt failed (may retry)                                          |
+| `queuert.job.attempt.taken_by_another_worker` | `queuert.job.type`, `queuert.chain.type`, `queuert.worker.id` | Job already claimed by another worker                               |
+| `queuert.job.attempt.already_completed`       | `queuert.job.type`, `queuert.chain.type`, `queuert.worker.id` | Job already completed when worker tried to process it               |
+| `queuert.job.attempt.expired`                 | `queuert.job.type`, `queuert.chain.type`, `queuert.worker.id` | Attempt expired before processing finished                          |
+| `queuert.job.attempt.reclaimed`               | `queuert.job.type`, `queuert.chain.type`, `queuert.worker.id` | Expired attempt reclaimed for retry                                 |
+| `queuert.job.attempt.extended`                | `queuert.job.type`, `queuert.chain.type`, `queuert.worker.id` | Attempt successfully extended during processing                     |
 
 Abort reasons are not a counter — they are recorded as an `abort` event on the attempt span; see [Span Events](../otel-tracing/#span-events) in the tracing reference.
 

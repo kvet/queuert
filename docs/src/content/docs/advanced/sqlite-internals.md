@@ -54,7 +54,7 @@ The `{tablePrefix}job` table stores all job state:
 
 Primary key: `id`.
 
-Two CHECK constraints keep chain state on head rows: `chain_status` is set exactly when `chain_index = 0`, and a continuation row (`chain_index > 0`) leaves `chain_completed_at`, `chain_deduplication_key` and `chain_trace_context` NULL.
+The adapter writes the `chain_*` columns only on head rows (`chain_index = 0`); continuation rows leave them NULL.
 
 ### Job Blocker Table
 
@@ -66,6 +66,10 @@ Two CHECK constraints keep chain state on head rows: `chain_status` is set exact
 | `trace_context`       | `TEXT`       | W3C traceparent                  |
 
 Primary key: `(job_id, blocked_by_chain_id, index)`.
+
+### Upgrading from 0.15.x
+
+The job-model schema that follows 0.15.x replaces the job tables, and `migrateToLatest()` upgrades only a database already at **v0.15.1**. Older schemas are refused with an error: upgrade to `@queuert/sqlite` 0.15.1 and run `migrateToLatest()` first. Stop all workers and clients using the database while the upgrade runs. If the imported row counts don't match, the renamed-aside v0.15.1 tables are kept rather than dropped, and the error explains how to recover.
 
 ## Indexes
 

@@ -30,6 +30,7 @@ const jobTypes = defineJobTypes<{
   };
   "sync-to-crm": {
     input: { userId: number; accountId: string };
+    output: { syncedAt: string };
   };
 }>();
 ```

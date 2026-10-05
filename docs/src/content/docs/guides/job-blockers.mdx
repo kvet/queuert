@@ -45,21 +45,23 @@ const jobTypes = defineJobTypes<{
 }>();
 
 // Start with blockers (transactionHooks required — see Transaction Hooks guide)
-const fetchBlockers = await withTransactionHooks(async (transactionHooks) =>
-  client.createChains({
-    transactionHooks,
-    items: [
-      { typeName: "fetch-data", input: { url: "/a" } },
-      { typeName: "fetch-data", input: { url: "/b" } },
-    ],
-  }),
-);
 await withTransactionHooks(async (transactionHooks) =>
-  client.createChain({
-    transactionHooks,
-    typeName: "process-all",
-    input: { ids: ["a", "b", "c"] },
-    blockers: fetchBlockers,
+  stateProvider.withTransaction(async (txCtx) => {
+    const fetchBlockers = await client.createChains({
+      ...txCtx,
+      transactionHooks,
+      items: [
+        { typeName: "fetch-data", input: { url: "/a" } },
+        { typeName: "fetch-data", input: { url: "/b" } },
+      ],
+    });
+    await client.createChain({
+      ...txCtx,
+      transactionHooks,
+      typeName: "process-all",
+      input: { ids: ["a", "b", "c"] },
+      blockers: fetchBlockers,
+    });
   }),
 );
 

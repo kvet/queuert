@@ -76,7 +76,7 @@ Any other error thrown by an `/api/*` handler becomes a `500` with a seroval `{ 
 
 ## Query Performance
 
-Listing queries route to status-specific partial indexes based on the `status` and `orderBy` combination. No special filtering guidance is needed — all status + sort combinations are index-backed.
+Listing queries route to status-specific partial indexes based on the `status` and `orderBy` combination. Each status filter is served by a status-specific partial index; sorts that index doesn't cover (e.g. running jobs by the default `attemptAt`) add a sort step.
 
 ## Frontend
 

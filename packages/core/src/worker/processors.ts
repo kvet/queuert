@@ -54,7 +54,7 @@ export const processorAttemptMiddlewareSymbol: unique symbol = Symbol(
  * Symbol used to carry the slice's middleware tuple type on a processor registry,
  * so the worker can compile-time-check it against `requiredAttemptMiddleware`.
  * The runtime tuple is also stamped per processor under
- * {@link processorAttemptMiddlewareSymbol}; this is purely a type-level carrier.
+ * `processorAttemptMiddlewareSymbol`; this is purely a type-level carrier.
  * @internal
  */
 export const processorsMiddlewareSymbol: unique symbol = Symbol("queuert.processor.middleware");

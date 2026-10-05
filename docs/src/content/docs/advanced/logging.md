@@ -46,12 +46,12 @@ All entries are strongly typed — the `type` field determines the exact shape o
 
 ### Worker Lifecycle
 
-| Type              | Level   | Message                 | Data                       |
-| ----------------- | ------- | ----------------------- | -------------------------- |
-| `worker_started`  | `info`  | Started worker          | `workerId`, `jobTypeNames` |
-| `worker_error`    | `error` | Worker error            | `workerId`, `error`        |
-| `worker_stopping` | `info`  | Stopping worker...      | `workerId`                 |
-| `worker_stopped`  | `info`  | Worker has been stopped | `workerId`                 |
+| Type              | Level   | Message                 | Data                          |
+| ----------------- | ------- | ----------------------- | ----------------------------- |
+| `worker_started`  | `info`  | Started worker          | `workerId`, `jobTypeNames`    |
+| `worker_error`    | `error` | Worker error            | `workerId`; top-level `error` |
+| `worker_stopping` | `info`  | Stopping worker...      | `workerId`                    |
+| `worker_stopped`  | `info`  | Worker has been stopped | `workerId`                    |
 
 ### Job Lifecycle
 
@@ -65,16 +65,18 @@ All entries are strongly typed — the `type` field determines the exact shape o
 
 ### Attempt Lifecycle
 
-| Type                                  | Level   | Message                                 | Data                                                                                                       |
-| ------------------------------------- | ------- | --------------------------------------- | ---------------------------------------------------------------------------------------------------------- |
-| `job_attempt_started`                 | `info`  | Job attempt started                     | `id`, `typeName`, `chainId`, `chainTypeName`, `status`, `attempt`, `workerId`                              |
-| `job_attempt_completed`               | `info`  | Job attempt completed                   | `id`, `typeName`, `chainId`, `chainTypeName`, `status`, `attempt`, `output?`, `continuedWith?`, `workerId` |
-| `job_attempt_failed`                  | `error` | Job attempt failed                      | `id`, `typeName`, `chainId`, `chainTypeName`, `status`, `attempt`, `workerId`, `error`                     |
-| `job_attempt_taken_by_another_worker` | `warn`  | Job taken by another worker             | `id`, `typeName`, `chainId`, `chainTypeName`, `status`, `attempt`, `attemptBy`, `attemptUntil`, `workerId` |
-| `job_attempt_already_completed`       | `warn`  | Job already completed by another worker | `id`, `typeName`, `chainId`, `chainTypeName`, `status`, `attempt`, `completedBy`, `workerId`               |
-| `job_attempt_expired`                 | `warn`  | Job attempt expired                     | `id`, `typeName`, `chainId`, `chainTypeName`, `status`, `attempt`, `attemptBy`, `attemptUntil`, `workerId` |
-| `job_attempt_extended`                | `info`  | Job attempt extended                    | `id`, `typeName`, `chainId`, `chainTypeName`, `status`, `attempt`, `attemptBy`, `attemptUntil`, `workerId` |
-| `job_attempt_reclaimed`               | `info`  | Reclaimed expired job attempt           | `id`, `typeName`, `chainId`, `chainTypeName`, `attemptBy`, `attemptUntil`, `workerId`                      |
+| Type                                  | Level   | Message                                 | Data                                                                                                                                                           |
+| ------------------------------------- | ------- | --------------------------------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `job_attempt_started`                 | `info`  | Job attempt started                     | `id`, `typeName`, `chainId`, `chainTypeName`, `status`, `attempt`, `workerId`                                                                                  |
+| `job_attempt_completed`               | `info`  | Job attempt completed                   | `id`, `typeName`, `chainId`, `chainTypeName`, `status`, `attempt`, `output?`, `continuedWith?`, `workerId`                                                     |
+| `job_attempt_failed`                  | `error` | Job attempt failed                      | `id`, `typeName`, `chainId`, `chainTypeName`, `status`, `attempt`, `workerId`; top-level `error`                                                               |
+| `job_attempt_taken_by_another_worker` | `warn`  | Job taken by another worker             | `id`, `typeName`, `chainId`, `chainTypeName`, `status`, `attempt`, `attemptAt`, `attemptBy`, `attemptUntil`, `workerId`                                        |
+| `job_attempt_already_completed`       | `warn`  | Job already completed by another worker | `id`, `typeName`, `chainId`, `chainTypeName`, `status`, `attempt`, `completedBy`, `workerId`                                                                   |
+| `job_attempt_expired`                 | `warn`  | Job attempt expired                     | `id`, `typeName`, `chainId`, `chainTypeName`, `status`, `attempt`, `attemptAt`, `attemptBy`, `attemptUntil`, `workerId`                                        |
+| `job_attempt_extended`                | `info`  | Job attempt extended                    | `id`, `typeName`, `chainId`, `chainTypeName`, `status`, `attempt`, `attemptAt`, `attemptBy`, `attemptUntil`, `workerId`                                        |
+| `job_attempt_reclaimed`               | `info`  | Reclaimed expired job attempt           | `id`, `typeName`, `chainId`, `chainTypeName`, `status`, `attempt`, `attemptAt`, `attemptBy`, `attemptUntil`, `workerId` (attempt fields are `null`; see below) |
+
+`job_attempt_reclaimed` reports the job as it is after the reclaim: `status` is `pending` and `attemptAt`, `attemptBy`, and `attemptUntil` are `null`, so the entry does not identify the worker that previously held the attempt.
 
 ### Chain Lifecycle
 
@@ -86,16 +88,16 @@ All entries are strongly typed — the `type` field determines the exact shape o
 
 ### Adapter Errors
 
-| Type                   | Level  | Message              | Data                 |
-| ---------------------- | ------ | -------------------- | -------------------- |
-| `notify_adapter_error` | `warn` | Notify adapter error | `operation`, `error` |
-| `state_adapter_error`  | `warn` | State adapter error  | `operation`, `error` |
+| Type                   | Level  | Message              | Data                           |
+| ---------------------- | ------ | -------------------- | ------------------------------ |
+| `notify_adapter_error` | `warn` | Notify adapter error | `operation`; top-level `error` |
+| `state_adapter_error`  | `warn` | State adapter error  | `operation`; top-level `error` |
 
 ### Validation Errors
 
-| Type                        | Level   | Message     | Data                                                     |
-| --------------------------- | ------- | ----------- | -------------------------------------------------------- |
-| `job_type_validation_error` | `error` | _(dynamic)_ | `code`, `typeName`, `error`, plus error-specific details |
+| Type                        | Level   | Message     | Data                                                               |
+| --------------------------- | ------- | ----------- | ------------------------------------------------------------------ |
+| `job_type_validation_error` | `error` | _(dynamic)_ | `code`, `typeName`, plus error-specific details; top-level `error` |
 
 ## Data Shapes
 
@@ -103,6 +105,7 @@ Log entry data fields compose from a few base shapes:
 
 - **JobBasicData** — `id`, `typeName`, `chainId`, `chainTypeName`
 - **JobProcessingData** — extends JobBasicData with `status`, `attempt`
+- **JobAttemptData** — extends JobProcessingData with `attemptAt`, `attemptBy`, `attemptUntil`
 - **ChainBasicData** — `id`, `typeName`
 
 ## Relationship to ObservabilityAdapter

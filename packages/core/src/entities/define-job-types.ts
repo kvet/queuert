@@ -25,18 +25,6 @@ import { type JobTypes, createNoopJobTypes } from "./job-types.js";
  *     output: { done: boolean };
  *   };
  * }>();
- *
- * @example
- * // With JobTypeDefs for better IntelliSense
- * type MyJobDefinitions = JobTypeDefs<{
- *   'process': {
- *     entry: true;
- *     input: { id: string };
- *     output: { result: string };
- *   };
- * }>;
- *
- * const jobTypes = defineJobTypes<MyJobDefinitions>();
  */
 export const defineJobTypes = <
   TJobTypeDefinitions extends BaseJobTypeDefinitions &

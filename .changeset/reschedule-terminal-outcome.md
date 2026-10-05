@@ -10,3 +10,4 @@ Add `finish({ reschedule })` as a non-error rescheduling outcome for attempt han
 - `finish({ reschedule: { afterMs } })` or `finish({ reschedule: { at } })` returns the job to pending as a first-class outcome alongside `{ output }` and `{ continueWith }`.
 - The top-level `rescheduleJob()` helper (called inside an attempt handler, where it throws) and `RescheduleJobError` are removed from the public API. Migrate: `rescheduleJob({ afterMs })` → `return complete(async ({ finish }) => finish({ reschedule: { afterMs } }))`.
 - The attempt span no longer sets the `queuert.attempt.result` attribute; read the outcome from the span status instead (`ERROR` for a failed attempt, `OK` for a completed, continued or rescheduled one).
+- The `queuert.job.completed` metric no longer carries `queuert.worker.id`; use `queuert.job.attempt.completed` for per-worker breakdowns.

@@ -43,7 +43,7 @@ The `job` table stores all job state:
 | `chain_deduplication_key` | `text`                         | **Head rows only.** Key for chain deduplication                     |
 | `chain_trace_context`     | `text`                         | **Head rows only.** W3C traceparent for the chain                   |
 
-Primary key: `id`. Two CHECK constraints tie the chain columns to head rows: a row has a `chain_status` exactly when `chain_index = 0`, and a continuation row (`chain_index > 0`) carries no `chain_completed_at`, `chain_deduplication_key` or `chain_trace_context`.
+Primary key: `id`. The adapter writes the `chain_*` columns only on head rows (`chain_index = 0`); continuation rows leave them null.
 
 Columns are declared `timestamptz → integer → id → text/jsonb` so the fixed-width values sit together and stop paying alignment padding around the `jsonb` payloads.
 
@@ -78,6 +78,12 @@ The `migration_lock` table holds a single-row lease that gives `migrateToLatest(
 | `id`           | `integer`     | Always `1` (single-row constraint)    |
 | `locked_by`    | `text`        | Owner id of the current migration run |
 | `locked_until` | `timestamptz` | Lease expiry (heartbeat-extended)     |
+
+### Upgrading from 0.15.x
+
+The job-model schema that follows 0.15.x replaces the job tables, and `migrateToLatest()` upgrades only a database already at **v0.15.1**. Older schemas are refused with an error: upgrade to `@queuert/postgres` 0.15.1 and run `migrateToLatest()` first.
+
+The upgrade copies chains into new tables while v0.15.1 workers keep running, tracking concurrent changes with triggers. It then takes an `ACCESS EXCLUSIVE` lock to verify the copy and swap the tables; the lock is held for roughly as long as a full scan of the old and new tables (about a second per million jobs), and v0.15.1 workers are blocked meanwhile. If installing the triggers or the swap can't get its lock within 5 seconds (for example because of a long-running transaction), `migrateToLatest()` throws and can be re-run; chains already copied are kept. If the copied row counts don't match, the v0.15.1 tables are left in place and the error explains how to recover.
 
 ## Indexes
 

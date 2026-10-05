@@ -53,7 +53,7 @@ Observability events (metrics, span ends, logs) emitted during the prepare and c
 
 ## Prepare/Complete Pattern
 
-Attempt handlers split processing into phases: `prepare` reads the data the attempt needs, the handler does its work in between, and `complete` writes exactly one outcome — an output that ends the chain, or a continuation that extends it with a successor job. The split is what lets an attempt run atomically in a single transaction or stage long-running work between two.
+Attempt handlers split processing into phases: `prepare` reads the data the attempt needs, the handler does its work in between, and `complete` writes exactly one outcome — an output that ends the chain, a continuation that extends it with a successor job, or a reschedule that returns the job to pending (`finish({ reschedule })`). The split is what lets an attempt run atomically in a single transaction or stage long-running work between two.
 
 ### Auto-Setup (Default)
 
@@ -61,7 +61,7 @@ Most jobs don't need `prepare`. Call `complete` directly and auto-setup infers t
 
 - **Synchronous `complete`** (called immediately, no prior `await`): atomic mode — single transaction wraps everything
 - **Async work before `complete`**: staged mode -- heartbeat active between async work and complete
-- Accessing `prepare` after auto-setup throws: "Prepare cannot be accessed after auto-setup"
+- Accessing `prepare` after auto-setup throws: "prepare cannot be accessed after auto-setup"
 
 See [Processing Modes](../../guides/processing-modes/) for examples and a decision flowchart.
 
@@ -129,10 +129,10 @@ Every attempt handler receives a `signal` (`TypedAbortSignal<JobAbortReason>`) t
 | `"taken_by_another_worker"` | Another worker acquired the job (attempt expired and was released)                 |
 | `"not_found"`               | The job no longer exists in the database                                           |
 | `"already_completed"`       | The job was already completed                                                      |
-| `"error"`                   | An internal error occurred during attempt extension                                |
+| `"error"`                   | Renewing the attempt (heartbeat) failed unexpectedly — ownership is uncertain, not confirmed lost |
 | `"worker_stopping"`         | The worker is shutting down — the job is still valid and the attempt is still held |
 
-The first four reasons indicate the job is no longer owned by this worker — handlers should stop immediately. `"worker_stopping"` is different: the job remains valid, but the worker is draining, so handlers should check `signal.reason` and wrap up quickly. Every attempt must still end in an outcome: call `complete`, or throw so the attempt is rescheduled with backoff. A handler that simply returns without completing fails the attempt.
+The first three reasons indicate the job is no longer owned by this worker, and `"error"` means ownership can no longer be confirmed — in all four cases handlers should stop immediately. `"worker_stopping"` is different: the job remains valid, but the worker is draining, so handlers should check `signal.reason` and wrap up quickly. Every attempt must still end in an outcome: call `complete` (which may `finish({ reschedule })`), or throw so the attempt is rescheduled with backoff. A handler that simply returns without completing fails the attempt.
 
 ```typescript
 attemptHandler: async ({ signal, complete }) => {

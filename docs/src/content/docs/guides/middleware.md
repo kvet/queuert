@@ -64,11 +64,14 @@ Use when you want to load a resource once per attempt and make it available to t
 ```ts
 const loadUser: AttemptMiddleware<typeof stateAdapter, {}, { user: User }> = {
   wrapPrepare: async ({ job, txSql, next }) => {
-    const [user] = await txSql`SELECT * FROM users WHERE id = ${job.input.userId}`;
+    const { userId } = job.input as { userId: string };
+    const [user] = await txSql`SELECT * FROM users WHERE id = ${userId}`;
     return next({ user });
   },
 };
 ```
+
+Middleware is not tied to a job type, so `job.input` is `unknown` — narrow it (or validate it) before use.
 
 The handler invokes the prepare callback explicitly to receive the injected ctx:
 

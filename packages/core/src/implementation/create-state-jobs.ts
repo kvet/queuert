@@ -281,6 +281,15 @@ export const createStateChains = async (
 ): Promise<(StateChain & { deduplicated: boolean })[]> => {
   if (chains.length === 0) return [];
 
+  for (const chain of chains) {
+    const scope: unknown = chain.deduplication?.scope;
+    if (chain.deduplication != null && scope !== "running" && scope !== "any") {
+      throw new TypeError(
+        `Invalid deduplication scope ${JSON.stringify(scope)}: expected "running" or "any" ("incomplete" was renamed to "running")`,
+      );
+    }
+  }
+
   const { parsed, spanHandles } = prepareJobs(helpers, chains, (entry) =>
     helpers.observabilityHelper.startJobSpan({
       chainTypeName: entry.typeName,

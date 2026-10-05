@@ -244,10 +244,10 @@ Deduplicated chain creation stays `UNSET` — see [Deduplication](#deduplication
 
 ### Attempt Result Attributes
 
-| Attribute                      | Type   | Description                                   |
-| ------------------------------ | ------ | --------------------------------------------- |
-| `queuert.rescheduled_at`       | string | ISO 8601 timestamp of next retry (on failure) |
-| `queuert.rescheduled_after_ms` | number | Delay in ms before next retry (on failure)    |
+| Attribute                      | Type   | Description                                                                                   |
+| ------------------------------ | ------ | --------------------------------------------------------------------------------------------- |
+| `queuert.rescheduled_at`       | string | ISO 8601 timestamp of next retry (failed attempts only; not set for `finish({ reschedule })`) |
+| `queuert.rescheduled_after_ms` | number | Delay in ms before next retry (failed attempts only)                                          |
 
 ### Continuation Attributes
 

@@ -7,7 +7,7 @@ sidebar:
 
 import { Arrow, Diagram, Flow, Node, Rows } from "../../../components/diagram";
 
-Deduplication prevents duplicate chains from being created. When you start a chain with a deduplication key, Queuert checks if a chain with that key already exists and returns the existing chain instead of creating a new one.
+Deduplication prevents duplicate chains from being created. When you start a chain with a deduplication key, Queuert checks if a chain of the same type with that key already exists and returns the existing chain instead of creating a new one.
 
 <Diagram label="Three createChain calls with the same key: the first creates chain abc-123; the others match it and return the same chain with deduplicated: true">
   <Rows columns="auto minmax(5rem, auto) auto">
@@ -32,22 +32,28 @@ Deduplication prevents duplicate chains from being created. When you start a cha
 ```ts
 // First call creates the chain
 const chain1 = await withTransactionHooks(async (transactionHooks) =>
-  client.createChain({
-    transactionHooks,
-    typeName: "sync-user",
-    input: { userId: "123" },
-    deduplication: { key: "sync:user:123", scope: "running" },
-  }),
+  stateProvider.withTransaction(async (txCtx) =>
+    client.createChain({
+      ...txCtx,
+      transactionHooks,
+      typeName: "sync-user",
+      input: { userId: "123" },
+      deduplication: { key: "sync:user:123", scope: "running" },
+    }),
+  ),
 );
 
 // Second call with same key returns existing chain
 const chain2 = await withTransactionHooks(async (transactionHooks) =>
-  client.createChain({
-    transactionHooks,
-    typeName: "sync-user",
-    input: { userId: "123" },
-    deduplication: { key: "sync:user:123", scope: "running" },
-  }),
+  stateProvider.withTransaction(async (txCtx) =>
+    client.createChain({
+      ...txCtx,
+      transactionHooks,
+      typeName: "sync-user",
+      input: { userId: "123" },
+      deduplication: { key: "sync:user:123", scope: "running" },
+    }),
+  ),
 );
 
 chain2.deduplicated; // true — returned existing chain
@@ -56,7 +62,7 @@ chain2.id === chain1.id; // true
 
 ## Deduplication Modes
 
-The `scope` option controls what jobs to check for duplicates:
+The required `scope` option (a missing or unknown value throws a `TypeError`) controls what chains to check for duplicates:
 
 - **`running`** -- Only dedup against running chains (allows new chain after previous completes)
 - **`any`** -- Dedup against any existing chain with this key
@@ -64,15 +70,18 @@ The `scope` option controls what jobs to check for duplicates:
 ```ts
 // Only one active health check at a time, but can start new after completion
 await withTransactionHooks(async (transactionHooks) =>
-  client.createChain({
-    transactionHooks,
-    typeName: "health-check",
-    input: { serviceId: "api-server" },
-    deduplication: {
-      key: "health:api-server",
-      scope: "running",
-    },
-  }),
+  stateProvider.withTransaction(async (txCtx) =>
+    client.createChain({
+      ...txCtx,
+      transactionHooks,
+      typeName: "health-check",
+      input: { serviceId: "api-server" },
+      deduplication: {
+        key: "health:api-server",
+        scope: "running",
+      },
+    }),
+  ),
 );
 ```
 
@@ -82,10 +91,11 @@ A recurring chain schedules its next occurrence from its own terminal job. Under
 
 ```ts
 // Inside a processor's complete callback
-return complete(async ({ finish, transactionHooks }) => {
+return complete(async ({ finish, transactionHooks, ...txCtx }) => {
   const completedJob = await finish({ output: { checkedAt: new Date().toISOString() } });
 
   await client.createChain({
+    ...txCtx,
     transactionHooks,
     typeName: "health-check",
     input: { serviceId: job.input.serviceId },

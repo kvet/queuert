@@ -213,7 +213,7 @@ export type ResolvedJob<
   [JobTypeContinuation<TJobTypeDefinitions, TJobTypeName>] extends [never] ? false : true
 >;
 
-/** The `running` {@link ResolvedJob} with its completed blocker chains — the job an attempt handler receives. */
+/** The `running` `ResolvedJob` with its completed blocker chains — the job an attempt handler receives. */
 export type ResolvedRunningJob<
   TJobId,
   TJobTypeDefinitions extends BaseJobTypeDefinitions,
@@ -330,7 +330,7 @@ export type ResolvedChain<
     >
   : never;
 
-/** The `completed` variant of {@link ResolvedChain}, assembled directly rather than `Extract`-ed. */
+/** The `completed` variant of `ResolvedChain`, assembled directly rather than `Extract`-ed. */
 export type ResolvedCompletedChain<
   TJobId,
   TJobTypeDefinitions extends BaseJobTypeDefinitions,
@@ -340,7 +340,7 @@ export type ResolvedCompletedChain<
       CompletedChainFields<ResolvedChainOutput<TJobTypeDefinitions, TJobTypeName>>
   : never;
 
-/** The `running` variant of {@link ResolvedChain}, assembled directly rather than `Extract`-ed. */
+/** The `running` variant of `ResolvedChain`, assembled directly rather than `Extract`-ed. */
 export type ResolvedRunningChain<
   TJobId,
   TJobTypeDefinitions extends BaseJobTypeDefinitions,

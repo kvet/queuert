@@ -139,7 +139,7 @@ export type AttemptCompleteOptions<
 } & { transactionHooks: TransactionHooks } & GetStateAdapterTxContext<TStateAdapter> &
   TCompleteCtx;
 
-/** Complete callback type. Receives {@link AttemptCompleteOptions} and returns the finish result. */
+/** Complete callback type. Receives `AttemptCompleteOptions` and returns the finish result. */
 export type AttemptCompleteCallback<
   TStateAdapter extends StateAdapter<BaseTxContext, any>,
   TJobTypeDefinitions extends BaseJobTypeDefinitions,
@@ -159,7 +159,7 @@ export type AttemptCompleteCallback<
 
 /**
  * Typed complete function provided to the
- * {@link AttemptHandler | attemptHandler}. It opens the completion
+ * `attemptHandler`. It opens the completion
  * transaction; the outcome is chosen inside by passing exactly one outcome
  * to `finish`.
  *
@@ -202,7 +202,7 @@ export type AttemptPrepareCallback<
 
 /**
  * Typed prepare function provided to the
- * {@link AttemptHandler | attemptHandler}. Controls the processing mode and
+ * `attemptHandler`. Controls the processing mode and
  * optionally runs a callback within the prepare transaction.
  */
 export type AttemptPrepare<
@@ -218,7 +218,7 @@ export type AttemptPrepare<
 
 /**
  * Typed step function provided to the
- * {@link AttemptHandler | attemptHandler}. Opens a fresh guarded transaction
+ * `attemptHandler`. Opens a fresh guarded transaction
  * mid-attempt — only valid in staged mode between `prepare` and `complete`.
  */
 export type AttemptStep<
@@ -238,7 +238,7 @@ export type AttemptStep<
  *
  * Processing mode is inferred automatically:
  * - If `complete` is called synchronously (no prior `await`), `prepare` is skipped and the job runs in **atomic** mode (single transaction).
- * - If neither `prepare` nor `complete` is called synchronously, the worker auto-calls `prepare({ mode: "staged" })`.
+ * - If the handler neither accesses `prepare` (destructuring it counts) nor calls `complete` synchronously, the worker auto-calls `prepare({ mode: "staged" })`.
  */
 export type AttemptHandler<
   TStateAdapter extends StateAdapter<BaseTxContext, any>,

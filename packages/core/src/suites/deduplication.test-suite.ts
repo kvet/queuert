@@ -693,4 +693,43 @@ export const deduplicationTestSuite = ({ it }: { it: TestAPI<TestSuiteContext> }
     expect(chainB.deduplicated).toBe(false);
     expect(chainB.id).not.toBe(chainA.id);
   });
+
+  it("rejects a missing or unknown deduplication scope", async ({
+    stateAdapter,
+    notifyAdapter,
+    withTransaction,
+    observabilityAdapter,
+    log,
+    expect,
+  }) => {
+    const jobTypes = defineJobTypes<{
+      test: {
+        entry: true;
+        input: null;
+        output: null;
+      };
+    }>();
+
+    const client = await createClient({
+      stateAdapter,
+      notifyAdapter,
+      observabilityAdapter,
+      log,
+      jobTypes,
+    });
+
+    for (const deduplication of [{ key: "k" }, { key: "k", scope: "incomplete" }]) {
+      await expect(
+        withTransaction(async (txCtx, transactionHooks) =>
+          client.createChain({
+            ...txCtx,
+            transactionHooks,
+            typeName: "test",
+            input: null,
+            deduplication: deduplication as any,
+          }),
+        ),
+      ).rejects.toThrow(/Invalid deduplication scope/);
+    }
+  });
 };

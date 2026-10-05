@@ -1,5 +1,5 @@
 ---
-"queuert": patch
+"queuert": minor
 ---
 
 Reduce the type-checking cost of Queuert's types by roughly 20–40% (fewer instantiations, faster editor feedback and `tsc` runs), and fix the type of a chain's `input`. A chain's `input` was typed as a union of every job input along the chain; it is now the entry job's input, matching the value returned at runtime.

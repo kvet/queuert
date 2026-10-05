@@ -9,10 +9,9 @@ Chains can be deleted using `deleteChains` (plural) or `deleteChain` (singular).
 
 ```ts
 await withTransactionHooks(async (transactionHooks) =>
-  client.deleteChains({
-    transactionHooks,
-    ids: [chain.id],
-  }),
+  stateProvider.withTransaction(async (txCtx) =>
+    client.deleteChains({ ...txCtx, transactionHooks, ids: [chain.id] }),
+  ),
 );
 ```
 
@@ -20,10 +19,9 @@ Use `deleteChain` to target a single chain — it returns the deleted chain or `
 
 ```ts
 await withTransactionHooks(async (transactionHooks) =>
-  client.deleteChain({
-    transactionHooks,
-    id: chain.id,
-  }),
+  stateProvider.withTransaction(async (txCtx) =>
+    client.deleteChain({ ...txCtx, transactionHooks, id: chain.id }),
+  ),
 );
 ```
 
@@ -31,11 +29,15 @@ If a chain is referenced as a blocker by another chain, deletion is rejected unl
 
 ```ts
 await withTransactionHooks(async (transactionHooks) =>
-  client.deleteChains({ transactionHooks, ids: [blockerChain.id] }),
+  stateProvider.withTransaction(async (txCtx) =>
+    client.deleteChains({ ...txCtx, transactionHooks, ids: [blockerChain.id] }),
+  ),
 ); // throws
 
 await withTransactionHooks(async (transactionHooks) =>
-  client.deleteChains({ transactionHooks, ids: [mainChain.id, blockerChain.id] }),
+  stateProvider.withTransaction(async (txCtx) =>
+    client.deleteChains({ ...txCtx, transactionHooks, ids: [mainChain.id, blockerChain.id] }),
+  ),
 ); // ok
 ```
 
@@ -47,10 +49,13 @@ Deletion never follows blocker relationships on its own. To remove a chain toget
 const blockerChains = await client.getJobBlockers({ jobId: reportChain.id });
 
 await withTransactionHooks(async (transactionHooks) =>
-  client.deleteChains({
-    transactionHooks,
-    ids: [reportChain.id, ...blockerChains.map((blocker) => blocker.id)],
-  }),
+  stateProvider.withTransaction(async (txCtx) =>
+    client.deleteChains({
+      ...txCtx,
+      transactionHooks,
+      ids: [reportChain.id, ...blockerChains.map((blocker) => blocker.id)],
+    }),
+  ),
 );
 ```
 

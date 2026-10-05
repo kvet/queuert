@@ -753,7 +753,7 @@ describe("upgrade phases", () => {
       // Every chain is already copied, so the first copy this run makes is a catch-up pass.
       await expect(
         migratorFor(
-          failingProvider(provider, "DELETE FROM public.queuert_job_new WHERE chain_id", 1),
+          failingProvider(provider, "DELETE FROM public.queuert_job_new n WHERE", 1),
         ).migrateToLatest(),
       ).rejects.toThrow(/simulated crash/);
 
@@ -786,6 +786,53 @@ describe("upgrade phases", () => {
       );
       expect(await relations(provider)).toEqual(PREPARED);
       expect(await isLegacyShape(provider)).toBe(true);
+    },
+  );
+
+  it(
+    "recovers from a diverged copy once the new tables are dropped, as the error directs",
+    { timeout: 120_000 },
+    async ({ loaded: { provider, adapter } }) => {
+      const manifest = readManifest();
+      await prepareWith(provider);
+      await query(
+        provider,
+        `INSERT INTO queuert_job_new (id, type_name, chain_id, chain_index)
+         VALUES ($1, 'stray', $1, 0)`,
+        [LEGACY_CHAIN_ID],
+      );
+
+      await expect(adapter.migrateToLatest()).rejects.toThrow(
+        /Upgrade copy diverged: .* Drop the public\.queuert_job_new and public\.queuert_job_blocker_new tables/,
+      );
+      expect(await relations(provider)).toEqual(PREPARED);
+      expect(await isLegacyShape(provider)).toBe(true);
+
+      await query(provider, "DROP TABLE queuert_job_new, queuert_job_blocker_new");
+      // Tracking stays live while the new tables are gone, so a v0.15.1 change made now is kept.
+      await query(provider, `UPDATE queuert_job SET input = '{"recovered": true}' WHERE id = $1`, [
+        manifest.sentinels.pendingJobId,
+      ]);
+
+      expect((await adapter.migrateToLatest()).applied).toEqual(ALL);
+      const final = await counts(provider);
+      expect({ jobs: final.jobs, blockers: final.blockers }).toEqual({
+        jobs: manifest.totalJobs,
+        blockers: manifest.totalBlockers,
+      });
+      expect(await relations(provider)).toEqual(UPGRADED);
+      expect(await adapter.getJobs({ jobIds: [LEGACY_CHAIN_ID] })).toEqual([undefined]);
+      const [job] = await adapter.getJobs({ jobIds: [manifest.sentinels.pendingJobId] });
+      expect(job?.input).toEqual({ recovered: true });
+      const [leftovers] = await query<{ functions: number; triggers: number }>(
+        provider,
+        `SELECT (SELECT count(*)::int FROM pg_proc WHERE proname LIKE 'queuert_upgrade_%') AS functions,
+                (SELECT count(*)::int FROM pg_trigger WHERE tgname = 'queuert_upgrade_track') AS triggers`,
+      );
+      expect(leftovers).toEqual({ functions: 0, triggers: 0 });
+      const indexes = await indexNames(provider);
+      expect(indexes).toContain("queuert_chain_index_idx");
+      expect(indexes).not.toContain("queuert_job_old_chain_index_idx");
     },
   );
 

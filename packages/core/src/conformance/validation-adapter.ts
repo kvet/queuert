@@ -34,7 +34,7 @@ export type ValidationConformanceOptions = {
  *   },
  *   continuations: { buildNominal: () => ..., buildStructural: () => ... },
  *   blockers:      { buildNominal: () => ..., buildStructural: () => ... },
- *   external:      { buildWithExternalSlice: () => ... },
+ *   external:      { buildWithExternalSlice: () => ..., buildWithExternalSlices: () => ... },
  * }));
  * ```
  */

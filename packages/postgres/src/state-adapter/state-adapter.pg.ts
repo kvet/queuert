@@ -421,6 +421,7 @@ const mapDbChainRowToStateChain = (row: DbChainRow): StateChain => ({
  * `migrateToLatest()` method for schema migrations.
  *
  * @param options - PostgreSQL state adapter configuration.
+ * @throws Error if `schema`, `tablePrefix` or `idType` is not a valid SQL identifier.
  */
 export const createPgStateAdapter = async <
   TTxContext extends BaseTxContext,
@@ -455,7 +456,9 @@ export const createPgStateAdapter = async <
   validateId?: (id: TIdType) => boolean;
 }): Promise<
   StateAdapter<TTxContext, TIdType> & {
+    /** Create or upgrade the schema. */
     migrateToLatest: () => Promise<MigrationResult>;
+    /** Delete all job and blocker rows. Intended for tests. */
     truncate: () => Promise<void>;
   }
 > => {
@@ -2192,6 +2195,8 @@ export type PgStateAdapter<
   TTxContext extends BaseTxContext,
   TJobId extends string = UUID,
 > = StateAdapter<TTxContext, TJobId> & {
+  /** Create or upgrade the schema. */
   migrateToLatest: () => Promise<MigrationResult>;
+  /** Delete all job and blocker rows. Intended for tests. */
   truncate: () => Promise<void>;
 };

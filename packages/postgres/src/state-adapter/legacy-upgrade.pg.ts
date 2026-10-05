@@ -226,11 +226,12 @@ CREATE TABLE IF NOT EXISTS {{schema}}.{{table_prefix}}job_blocker_new (
 )`,
   ];
 
-  const newIndexes = [
-    /* sql */ `
+  const newChainIndex = /* sql */ `
 CREATE UNIQUE INDEX IF NOT EXISTS {{table_prefix}}chain_index_idx
 ON {{schema}}.{{table_prefix}}job_new (chain_id, chain_index)
-WHERE chain_index > 0`,
+WHERE chain_index > 0`;
+
+  const newIndexes = [
     /* sql */ `
 CREATE INDEX IF NOT EXISTS {{table_prefix}}chain_deduplication_idx
 ON {{schema}}.{{table_prefix}}job_new (chain_deduplication_key, created_at DESC)
@@ -279,22 +280,28 @@ ON {{schema}}.{{table_prefix}}job_blocker_new (blocked_by_chain_id)`,
     INSERT INTO {{schema}}.{{table_prefix}}upgrade_changed_chain (chain_id) ${chainId}
     ON CONFLICT (chain_id) DO UPDATE SET changed_at = now();`;
 
-  // Built once, in a single transaction: the triggers must be in place before the first chain is
-  // copied, and the presence of job_new is what marks the setup as done.
+  // Built in a single transaction: the triggers must be in place before the first chain is copied,
+  // and the presence of job_new is what marks the setup as done. Every statement tolerates a
+  // previous setup, so dropping job_new and job_blocker_new (as a diverged copy directs) restarts
+  // the copy while the tracking objects stay in place.
   const setupStatements = [
     `SET LOCAL lock_timeout = '${lockTimeoutMs}ms'`,
     // The two v0.15.1 indexes whose names the current schema reuses. v0.15.1 never refers to its
-    // indexes by name at runtime, and they are dropped with their tables.
-    /* sql */ `ALTER INDEX {{schema}}.{{table_prefix}}chain_index_idx RENAME TO {{table_prefix}}job_old_chain_index_idx`,
-    /* sql */ `ALTER INDEX {{schema}}.{{table_prefix}}job_blocker_chain_idx RENAME TO {{table_prefix}}job_blocker_old_chain_idx`,
+    // indexes by name at runtime, and they are dropped with their tables. After a previous setup the
+    // names belong to job_new's indexes, gone with it.
+    /* sql */ `ALTER INDEX IF EXISTS {{schema}}.{{table_prefix}}chain_index_idx RENAME TO {{table_prefix}}job_old_chain_index_idx`,
+    /* sql */ `ALTER INDEX IF EXISTS {{schema}}.{{table_prefix}}job_blocker_chain_idx RENAME TO {{table_prefix}}job_blocker_old_chain_idx`,
     ...newTables,
-    /* sql */ `CREATE TABLE {{schema}}.{{table_prefix}}upgrade_changed_chain (
+    // The one index the copy needs from the start: with it, a chain's rows in job_new are found by
+    // index rather than by scanning everything copied so far.
+    newChainIndex,
+    /* sql */ `CREATE TABLE IF NOT EXISTS {{schema}}.{{table_prefix}}upgrade_changed_chain (
   chain_id {{id_type}} PRIMARY KEY,
   changed_at timestamptz NOT NULL DEFAULT now()
 )`,
     // One function for both tables, told which by its trigger argument: a long prefix would
     // truncate two function names to the same identifier.
-    /* sql */ `CREATE FUNCTION {{schema}}.{{table_prefix}}upgrade_track() RETURNS trigger
+    /* sql */ `CREATE OR REPLACE FUNCTION {{schema}}.{{table_prefix}}upgrade_track() RETURNS trigger
 LANGUAGE plpgsql AS $$
 BEGIN
   IF TG_ARGV[0] = 'job' THEN
@@ -310,10 +317,10 @@ BEGIN
   END IF;
   RETURN NULL;
 END $$`,
-    /* sql */ `CREATE TRIGGER {{table_prefix}}upgrade_track
+    /* sql */ `CREATE OR REPLACE TRIGGER {{table_prefix}}upgrade_track
 AFTER INSERT OR UPDATE OR DELETE ON {{schema}}.{{table_prefix}}job
 FOR EACH ROW EXECUTE FUNCTION {{schema}}.{{table_prefix}}upgrade_track('job')`,
-    /* sql */ `CREATE TRIGGER {{table_prefix}}upgrade_track
+    /* sql */ `CREATE OR REPLACE TRIGGER {{table_prefix}}upgrade_track
 AFTER INSERT OR UPDATE OR DELETE ON {{schema}}.{{table_prefix}}job_blocker
 FOR EACH ROW EXECUTE FUNCTION {{schema}}.{{table_prefix}}upgrade_track('job_blocker')`,
   ].map(statement);
@@ -358,20 +365,26 @@ RETURNING chain_id`,
     ),
   );
 
+  // A chain's rows in job_new: its head, whose id is the chain id, and its continuations. Spelled
+  // out so each half matches an index (the primary key, and the partial chain_index_idx) instead
+  // of scanning job_new.
+  const copiedChainRows = (alias: string) =>
+    `((${alias}.id = ANY($1::{{id_type}}[]) AND ${alias}.chain_index = 0) OR (${alias}.chain_id = ANY($1::{{id_type}}[]) AND ${alias}.chain_index > 0))`;
+
   // A copy replaces the chain wholesale, so copying a chain again (or copying one the v0.15.1
   // engine has since deleted) leaves job_new matching the v0.15.1 tables.
   const removeCopiedBlockersSql = applyTemplate(
     sql(
       /* sql */ `DELETE FROM {{schema}}.{{table_prefix}}job_blocker_new
 WHERE job_id IN (
-  SELECT id FROM {{schema}}.{{table_prefix}}job_new WHERE chain_id = ANY($1::{{id_type}}[]))`,
+  SELECT n.id FROM {{schema}}.{{table_prefix}}job_new n WHERE ${copiedChainRows("n")})`,
       { id: "legacy:blockers:remove", params: [t.array()], columns: {} },
     ),
   );
 
   const removeCopiedJobsSql = applyTemplate(
     sql(
-      /* sql */ `DELETE FROM {{schema}}.{{table_prefix}}job_new WHERE chain_id = ANY($1::{{id_type}}[])`,
+      /* sql */ `DELETE FROM {{schema}}.{{table_prefix}}job_new n WHERE ${copiedChainRows("n")}`,
       { id: "legacy:jobs:remove", params: [t.array()], columns: {} },
     ),
   );
@@ -420,7 +433,7 @@ WHERE o.chain_id = ANY($1::{{id_type}}[])
 SELECT b.job_id, b.blocked_by_chain_id, b."index", b.trace_context
 FROM {{schema}}.{{table_prefix}}job_blocker b
 JOIN {{schema}}.{{table_prefix}}job_new n ON n.id = b.job_id
-WHERE n.chain_id = ANY($1::{{id_type}}[])`,
+WHERE ${copiedChainRows("n")}`,
       { id: "legacy:blockers:copy", params: [t.array()], columns: {} },
     ),
   );

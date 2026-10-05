@@ -151,6 +151,7 @@ export class JobTypeMismatchError extends Error {
   }
 }
 
+/** Thrown when a chain's actual type does not match the expected `typeName`. */
 export class ChainTypeMismatchError extends Error {
   /** The type name that was expected. */
   readonly expectedTypeName: string;

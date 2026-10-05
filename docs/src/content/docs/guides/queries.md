@@ -36,7 +36,8 @@ const sendEmailChains = await client.listChains({
 });
 const nextPage = await client.listChains({
   typeName: "send-email",
-  cursor: sendEmailChains.nextCursor,
+  status: "running",
+  cursor: sendEmailChains.nextCursor ?? undefined,
   limit: 20,
 });
 
@@ -53,7 +54,7 @@ const blockers = await client.getJobBlockers({ jobId });
 const blockedJobs = await client.listBlockedJobs({ chainId });
 ```
 
-All lookup methods accept an optional `typeName` for type narrowing -- the return type narrows to the specified type. If the entity exists but has a different type, `ChainTypeMismatchError` or `JobTypeMismatchError` is thrown.
+`getChain`, `getChains`, `getJob`, `getJobs`, `getJobBlockers`, and `listBlockedJobs` accept an optional `typeName` for type narrowing (`listChainJobs` takes `chainTypeName`) -- the return type narrows to the specified type. If the entity exists but has a different type, `ChainTypeMismatchError` or `JobTypeMismatchError` is thrown. `listChains` and `listJobs` require `typeName` and filter by it.
 
 See [examples/showcase-queries](https://github.com/kvet/queuert/tree/main/examples/showcase-queries) for a complete working example demonstrating single lookups, paginated lists, chain job listing, and blocker queries. See also [Client API](/queuert/api/core/type-aliases/client/) reference and [Dashboard](/queuert/integrations/dashboard/).
 

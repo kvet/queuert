@@ -17,6 +17,5 @@ Read by every `publish-review` agent and by `review-code`.
 - **State adapter factory options for ID generation are aligned**: Both adapters use `generateId` (JS fn) and `validateId` (optional predicate). PG has no `idDefault` (SQL DEFAULT) in favor of JS-side generation for symmetry and to support caller-supplied IDs uniformly.
 - **OTEL `workerError` does not record error details**: Counter attributes should remain low-cardinality per OTEL best practices. Error details are captured via the Log adapter.
 - **`getStartAttemptDelayMs` uses `FOR UPDATE SKIP LOCKED`**: Accepted for now; future cleanup.
-- **`listChains` status filter applies post-join**: Acceptable for dashboard queries with pagination. A denormalized chain status column can be added if performance becomes an issue.
-- **SQLite `createJobs` and `addJobsBlockers` perform per-item queries (O(n) round-trips)**: Accepted SQLite trade-off.
+- **SQLite `createJobs` performs per-item deduplication lookups (O(n) round-trips for deduplicated items)**: Accepted SQLite trade-off; `addJobsBlockers` is batched via `json_each`.
 - **Package READMEs are minimal**: Package READMEs link to the docs site; API documentation lives in TSDoc and the docs site. Do not ask for exports to be documented in READMEs.

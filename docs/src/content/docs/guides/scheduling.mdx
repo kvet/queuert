@@ -15,24 +15,30 @@ Jobs can be scheduled to start at a future time using the `schedule` option. The
   <TabItem label="Relative delay (afterMs)">
     ```ts
     await withTransactionHooks(async (transactionHooks) =>
-      client.createChain({
-        transactionHooks,
-        typeName: "send-reminder",
-        input: { userId: "123" },
-        schedule: { afterMs: 5 * 60 * 1000 }, // 5 minutes from now
-      }),
+      stateProvider.withTransaction(async (txCtx) =>
+        client.createChain({
+          ...txCtx,
+          transactionHooks,
+          typeName: "send-reminder",
+          input: { userId: "123" },
+          schedule: { afterMs: 5 * 60 * 1000 }, // 5 minutes from now
+        }),
+      ),
     );
     ```
   </TabItem>
   <TabItem label="Specific time (at)">
     ```ts
     await withTransactionHooks(async (transactionHooks) =>
-      client.createChain({
-        transactionHooks,
-        typeName: "send-reminder",
-        input: { userId: "123" },
-        schedule: { at: scheduledDate },
-      }),
+      stateProvider.withTransaction(async (txCtx) =>
+        client.createChain({
+          ...txCtx,
+          transactionHooks,
+          typeName: "send-reminder",
+          input: { userId: "123" },
+          schedule: { at: scheduledDate },
+        }),
+      ),
     );
     ```
   </TabItem>
@@ -53,7 +59,7 @@ return complete(async ({ finish }) =>
 ```
 
 <Aside type="tip">
-  Combine `schedule` with `deduplication: { key }` to prevent duplicate future jobs — for example,
+  Combine `schedule` with `deduplication: { key, scope }` to prevent duplicate future jobs — for example,
   ensuring only one reminder is queued per user even if the trigger fires multiple times. See
   [Deduplication](../deduplication/).
 </Aside>
@@ -96,19 +102,21 @@ A scheduled job is just a pending job with a future `scheduledAt`. Use `reschedu
 ```ts
 // Run now
 await withTransactionHooks(async (transactionHooks) =>
-  client.rescheduleJob({
-    transactionHooks,
-    id: jobId,
-  }),
+  stateProvider.withTransaction(async (txCtx) =>
+    client.rescheduleJob({ ...txCtx, transactionHooks, id: jobId }),
+  ),
 );
 
 // Push 30 minutes out
 await withTransactionHooks(async (transactionHooks) =>
-  client.rescheduleJob({
-    transactionHooks,
-    id: jobId,
-    schedule: { afterMs: 30 * 60 * 1000 },
-  }),
+  stateProvider.withTransaction(async (txCtx) =>
+    client.rescheduleJob({
+      ...txCtx,
+      transactionHooks,
+      id: jobId,
+      schedule: { afterMs: 30 * 60 * 1000 },
+    }),
+  ),
 );
 ```
 
@@ -134,11 +142,12 @@ const jobTypes = defineJobTypes<{
   attemptHandler: async ({ job, complete }) => {
     await sendDigestEmail(job.input.userId);
 
-    return complete(async ({ finish, transactionHooks }) => {
+    return complete(async ({ finish, transactionHooks, ...txCtx }) => {
       const completedJob = await finish({ output: { sentAt: new Date().toISOString() } });
 
       if (userStillSubscribed) {
         await client.createChain({
+          ...txCtx,
           transactionHooks,
           typeName: 'daily-digest',
           input: { userId: job.input.userId },

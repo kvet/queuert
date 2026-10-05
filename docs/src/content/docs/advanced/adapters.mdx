@@ -40,7 +40,7 @@ See the [Conformance reference](/queuert/api/conformance/readme/) for the API an
 
 ## Async Factory Pattern
 
-Public-facing adapter factories that may perform I/O are async for consistency. In-process and internal-only factories remain sync since they have no I/O.
+Public-facing adapter factories are async for consistency — including the in-process ones (`createInProcessStateAdapter`, `createInProcessNotifyAdapter`), even though they perform no I/O.
 
 ### Rationale
 
@@ -68,8 +68,9 @@ The context is named `TTxContext` (transaction context) because it's exclusively
 
 ### StateProvider Interface
 
-Users create a `StateProvider` implementation to integrate with their database client. A state provider supplies three capabilities:
+Users create a `StateProvider` implementation to integrate with their database client. A state provider supplies:
 
+- **`transactionConcurrency`** — `"serialized"` or `"concurrent"`; declares whether two `withTransaction` callbacks can run at the same time (e.g. a single SQLite connection is `"serialized"`, a Postgres pool is `"concurrent"`)
 - **`withTransaction`** — wraps a callback in a database transaction, passing the transaction context (`TTxContext`) to the callback
 - **`executeSql`** — executes a SQL string with optional params. When `txCtx` is provided, uses that transaction; when omitted, acquires and releases its own connection
 - **`withSavepoint`** _(optional)_ — runs a callback inside a savepoint within an existing transaction; when omitted, the adapter falls back to a built-in savepoint implementation
@@ -183,13 +184,13 @@ Observability events emitted inside database transactions are buffered and only 
 
 - **Creation**: `chainCreated`, `jobCreated`, `jobBlocked`, and PRODUCER span ends from chain creation and continuation
 - **Completion**: `jobCompleted`, `jobDuration`, `completeJobSpan` (workerless), `chainCompleted`, `chainDuration`, `completeBlockerSpan`, `jobUnblocked`
-- **Worker complete**: `jobAttemptCompleted` and continuation PRODUCER span ends from the complete transaction
+- **Worker complete**: continuation PRODUCER span ends from the complete transaction
 - **Error handling**: `jobAttemptFailed` from the error-handling transaction
 
 **Not buffered** -- events that either need immediate context or occur outside transactions:
 
 - **Span starts**: Need trace context immediately for DB writes that store trace IDs
-- **Events outside transactions**: `jobAttemptStarted`, `jobAttemptDuration`, `jobAttemptExtended`, attempt span ends (these occur outside the guarded transaction)
+- **Events outside transactions**: `jobAttemptStarted`, `jobAttemptDuration`, `jobAttemptExtended`, `jobAttemptCompleted` (emitted once the complete transaction has committed), attempt span ends (these occur outside the guarded transaction)
 - **Read-only observations**: events that observe state without making write claims
 
 ### Self-Cleaning

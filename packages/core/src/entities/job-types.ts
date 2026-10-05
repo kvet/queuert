@@ -11,8 +11,8 @@ export const externalDefinitionsSymbol: unique symbol = Symbol("queuert.external
 export type JobTypeDefinitions<T extends JobTypes<any>> = T[typeof definitionsSymbol];
 
 /**
- * Set of registries produced by {@link createNoopJobTypes} (i.e. via
- * {@link defineJobTypes}). Consulted by {@link mergeJobTypes} to decide
+ * Set of registries produced by `createNoopJobTypes` (i.e. via
+ * {@link defineJobTypes}). Consulted by `mergeJobTypes` to decide
  * whether to fall back to no-op validation when a type name is not
  * owned by any validated slice — without this marker, merged registries
  * would either swallow unknown-type validation errors or misroute them

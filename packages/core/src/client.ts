@@ -194,9 +194,10 @@ type CreateChainsResult<
 /**
  * The public API for managing chains. Created via {@link createClient}.
  *
- * Methods are split into two categories:
- * - **Mutating** — `createChain`, `createChains`, `completeChain`, `deleteChain`, `deleteChains`, `rescheduleJob`, `rescheduleJobs`. Require `transactionHooks` and a transaction context.
- * - **Read-only** — `getChain`, `getChains`, `getJob`, `getJobs`, `listChainTypeNames`, `listJobTypeNames`, `countByChainTypeNames`, `countByJobTypeNames`, `listChains`, `listJobs`, `listChainJobs`, `getJobBlockers`, `listBlockedJobs`, `awaitChain`. Accept an optional transaction context.
+ * Methods are split into three categories:
+ * - **Mutating** — `createChain`, `createChains`, `completeChain`, `deleteChain`, `deleteChains`, `rescheduleJob`, `rescheduleJobs`. Require `transactionHooks` and a transaction context; they throw `Error` if called without the transaction context from `withTransaction`.
+ * - **Read-only** — `getChain`, `getChains`, `getJob`, `getJobs`, `listChainTypeNames`, `listJobTypeNames`, `countByChainTypeNames`, `countByJobTypeNames`, `listChains`, `listJobs`, `listChainJobs`, `getJobBlockers`, `listBlockedJobs`. Accept an optional transaction context.
+ * - **Waiting** — `awaitChain`. Takes no transaction context: it polls outside any transaction and listens for notify adapter events.
  */
 export type Client<
   TJobTypeDefinitions extends BaseJobTypeDefinitions,
@@ -244,6 +245,10 @@ export type Client<
    *
    * @throws {@link InvalidJobIdError} if `id` fails the state adapter's `validateId` check.
    * @throws {@link BlockerLimitExceededError} if the root job declares more blockers than the per-job limit.
+   * @throws {@link ChainNotFoundError} if a blocker chain does not exist.
+   * @throws {@link JobTypeValidationError} if the job type rejects the entry, input, or blockers.
+   * @throws TypeError if `deduplication.scope` is missing or not `"running"` / `"any"`.
+   * @throws The state adapter's own error (e.g. a unique-constraint violation) if a caller-supplied `id` is already taken.
    */
   createChain: <TChainTypeName extends JobTypeEntryNames<TJobTypeDefinitions>>(
     options: CreateChainEntry<TJobId, TJobTypeDefinitions, TChainTypeName> & {
@@ -262,6 +267,10 @@ export type Client<
    *
    * @throws {@link InvalidJobIdError} if any `id` fails the state adapter's `validateId` check.
    * @throws {@link BlockerLimitExceededError} if any root job declares more blockers than the per-job limit.
+   * @throws {@link ChainNotFoundError} if any blocker chain does not exist.
+   * @throws {@link JobTypeValidationError} if a job type rejects an item's entry, input, or blockers.
+   * @throws TypeError if `deduplication.scope` is missing or not `"running"` / `"any"`.
+   * @throws The state adapter's own error (e.g. a unique-constraint violation) if a caller-supplied `id` is already taken.
    */
   createChains: <const TChains extends readonly AnyCreateChainEntry<TJobId, TJobTypeDefinitions>[]>(
     options: {
@@ -490,7 +499,8 @@ export type Client<
   >;
 
   /**
-   * List chains with filtering and cursor-based pagination. Defaults to newest first.
+   * List chains with filtering and cursor-based pagination. Defaults to `orderDirection: "desc"`,
+   * `limit: 50`, and `orderBy: "completedAt"` when `status` is `"completed"`, `"createdAt"` otherwise.
    */
   listChains: <
     TChainTypeName extends JobTypeEntryNames<TJobTypeDefinitions> =
@@ -513,7 +523,9 @@ export type Client<
   ) => Promise<Page<ResolvedChain<TJobId, TJobTypeDefinitions, TChainTypeName>>>;
 
   /**
-   * List jobs with filtering and cursor-based pagination. Defaults to newest first.
+   * List jobs with filtering and cursor-based pagination. Defaults to `orderDirection: "desc"`,
+   * `limit: 50`, and an `orderBy` that follows `status`: `scheduledAt` for blocked/pending,
+   * `attemptAt` for running, `completedAt` for completed, `createdAt` when unfiltered.
    */
   listJobs: <
     TJobTypeName extends JobTypeNames<TJobTypeDefinitions> = JobTypeNames<TJobTypeDefinitions>,

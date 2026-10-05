@@ -2,7 +2,7 @@
 title: Runtime Validation
 description: Add runtime validation with Zod, Valibot, TypeBox, or ArkType.
 sidebar:
-  order: 15
+  order: 20
 ---
 
 `defineJobTypes` gives you compile-time type safety with zero runtime cost. When job inputs come from outside your program — HTTP handlers, dashboards, cross-service cron payloads — TypeScript can't reject a malformed value before your handler runs. `createJobTypes` closes that gap: it accepts validation callbacks that run at every boundary the library touches (entry, input, output, continuation, blockers).
