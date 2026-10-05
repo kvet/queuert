@@ -1,5 +1,103 @@
 # @queuert/postgres
 
+## 0.16.0
+
+### Major Changes
+
+- 24ff428: Rework the attempt's `complete` phase into a callback that decides the outcome via `finish`. The outcome is a plain object — `{ output }` or `{ continueWith: { typeName, input, ... } }`. `finish` writes before it returns, so code after it observes the committed state within the same transaction.
+
+  - Migrate `complete(async () => output)` → `complete(async ({ finish }) => finish({ output }))`.
+  - Migrate `complete(async ({ continueWith }) => continueWith(x))` → `complete(async ({ finish }) => finish({ continueWith: x }))`.
+  - `finish({ output })` returns the completed job; `finish({ continueWith })` returns the completed job with the new job on `continuedTo`.
+  - `client.completeChain`'s `complete` option is renamed `handler`, and the function it receives is renamed `completeJob` to distinguish it from the worker's `complete` (which finishes the current job and takes no job argument). `completeJob(job, callback)` uses the same `finish` vocabulary and unwraps whatever the callback returns: return the `finish({ continueWith })` result and you get the continuation back, so a handler can walk several jobs with `job = await completeJob(job, ...)`; a `finish({ output })` result resolves to the completed job.
+  - The `prepare`, `step` and `complete` spans now record the exception and report `ERROR` status when the phase throws, and the `complete` span is no longer left unended when it does.
+  - The CONSUMER span emitted when a blocker chain completes is renamed from `resolve chain.{type}` to `complete chain.{type}`; update trace queries and alerts that match `resolve chain.*`.
+
+- 24ff428: Remove `excludeChainIds` from `DeduplicationOptions`. It existed for exactly one reason: a recurring chain self-scheduling its next occurrence under `scope: "running"` matched the chain it was completing, because the completion write had not happened yet when the handler ran. The attempt finalization rework removes that ordering — `finish({ output })` and `finish({ continueWith })` write their transition before returning — so a `createChain` placed after the terminal action already sees the chain as completed and cannot match it. Move the scheduling call after `finish(...)` and drop the option; nothing is persisted for it, so no migration is needed. Scheduling the next occurrence from a mid-chain job, or before the terminal action, now matches the still-running chain and suppresses the occurrence — use `scope: "any"` or schedule from the terminal job instead.
+
+  - `deduplication.excludeChainIds` is no longer accepted by `createChain` / `createChains`.
+  - `DeduplicationOptions` loses its type parameter — write `DeduplicationOptions`, not `DeduplicationOptions<string>`.
+  - The "Excluding Chains" section of the deduplication guide is replaced by "Self-Scheduling Recurring Chains", which documents the complete-then-schedule ordering; the cleanup and scheduling guides and the `showcase-scheduling` / `showcase-cleanup` examples follow the same shape.
+
+- dc5a2b8: Remove `windowMs` from `DeduplicationOptions`. It was throttling wearing deduplication's clothes, and lossy throttling at that: a suppressed call reported `deduplicated: true` against a chain that may have completed long ago with different input, so the caller could not tell "already queued" from "dropped". Deduplication now matches on `key` and `scope` alone. There is no replacement — if you need rate limiting, do the time check on your side before calling `createChain`, or use an `any`-scoped key together with a retention policy that deletes old chains. Nothing is persisted for `windowMs`, so no migration is needed.
+
+  - `deduplication.windowMs` is no longer accepted by `createChain` / `createChains` (a type error; the option is ignored at runtime).
+  - The "Time-Windowed Deduplication" section is gone from the deduplication guide, and the `showcase-scheduling` example drops its rate-limiting scenario.
+
+- 7cb4d94: Caller-supplied `id` on `createChain`/`createChains`/`continueWith` is now assignment-only with a hard error on collision. Previously, PostgreSQL and SQLite silently returned the existing row (with `deduplicated: false`), and the in-process adapter silently overwrote it. Now all three adapters reject a duplicate `id` — SQL adapters surface the raw constraint violation, in-process throws before writing. Deduplication is unaffected and stays exclusively with the `deduplication` option.
+
+  - A caller-supplied `id` that collides with an existing job now errors instead of being silently swallowed.
+  - Intra-batch duplicate `id` values in a single `createChains` call error (raw database constraint on SQL adapters).
+  - Generated id collisions from a misconfigured `generateId` also error — `generateId` must return unique values.
+  - `id` remains optional; when omitted, `generateId()` produces the id as before.
+
+- da06e7d: Redesign the job model around the head row: a chain's head row _is_ the chain, and the chain's own facts — type name, status, deduplication key, trace context and completion time — live on that row and are written when the chain ends rather than inferred from its latest job. This is a breaking schema change that replaces the job tables: the database must already be at v0.15.1. On PostgreSQL, `migrateToLatest()` copies the tables while v0.15.1 workers keep running and blocks them only for a final swap that verifies the copy, which takes roughly a second per million jobs; on SQLite, all workers and clients must be stopped while it runs.
+
+  - `ChainStatus` drops `"blocked"` and `"pending"`, leaving `"running" | "completed"`; a chain is running until its tail job completes terminally, and only the `completed` variant of `Chain` carries `output` and `completedAt`. Job status is unchanged (`blocked` stays a job status).
+  - Completed jobs carry `continuedToId`: `null` with `output` when the job ended its chain, the successor's id (and no `output`) when it continued.
+  - The running `Job` variant replaces the optional `leasedBy` / `leasedUntil` with `attemptAt` (when the current attempt started), `attemptBy` and `attemptUntil`.
+  - Lease terminology becomes attempt terminology: `leaseConfig` → `attemptConfig` on processors and worker defaults (`leaseMs` → `timeoutMs`, `renewIntervalMs` → `heartbeatMs`; type `LeaseConfig` → `AttemptConfig`); log events `job_attempt_lease_expired` / `job_attempt_lease_renewed` / `job_reaped` → `job_attempt_expired` / `job_attempt_extended` / `job_attempt_reclaimed`; OTEL metrics `queuert.job.attempt.lease_expired` / `queuert.job.attempt.lease_renewed` / `queuert.job.reaped` → `queuert.job.attempt.expired` / `queuert.job.attempt.extended` / `queuert.job.attempt.reclaimed`.
+  - `listChains`, `listJobs` and `listChainJobs` take flat options with a single `status` string instead of a `filter` object with arrays, and `orderBy` is status-dependent and checked at compile time (e.g. running jobs by `attemptAt` or `attemptUntil`, completed jobs and chains by `completedAt`). `root` is renamed `independent` on `listChains`, `listChainJobs` takes `chainTypeName` instead of `typeName`, its cursors are opaque, and `CreatedAtCursor` is renamed `TimestampWithIdCursor`.
+  - Deduplication `scope` is now required, and `"incomplete"` is renamed `"running"`; a missing `scope` (previously defaulting to `"incomplete"`) or an unknown one now throws a `TypeError` at runtime.
+  - Fix a race where a job created with `blockers` while a blocker chain was being continued in another transaction started as `pending` instead of `blocked`; the blocker check now reads the chain's status from its locked head row ([#4](https://github.com/kvet/queuert/issues/4)).
+  - The dashboard follows the model: the chain status filter offers only running and completed.
+  - Concurrent `migrateToLatest()` calls are safe across processes: PostgreSQL serializes them through a new single-row `{tablePrefix}migration_lock` table (SQLite relies on its single writer).
+  - The migration history collapses to a single `001_initial_schema` migration that fresh installs and upgrades run alike; the 0.15.x records are removed from `{tablePrefix}migration`, and on PostgreSQL the `{tablePrefix}job_status` enum is dropped.
+  - Schema: the job table is rebuilt with chain facts on the head row (`chain_status`, `chain_completed_at`, `chain_deduplication_key`), `continued_to_id` and `attempt_at` added, `leased_*` renamed `attempt_*`, `status` as `text` with a CHECK constraint, and job/blocker foreign keys dropped; indexes are replaced by one partial index per status. See the PostgreSQL and SQLite internals docs for the full layout.
+
+- 23ed227: Anchor every listing query to a single type so it can use a type-specific index, and add type discovery so callers (and the dashboard) can find which types to list. `listChains` and `listJobs` now require a single `typeName` string instead of accepting an optional array.
+
+  - Add `client.listChainTypeNames()` and `client.listJobTypeNames()`, which return a sorted array of the distinct chain and job type names present in the store.
+  - Add `client.countByChainTypeNames()` and `client.countByJobTypeNames()` for per-status counts of the given type names, each capped with a `hasMore` flag.
+  - **Breaking:** `listChains` and `listJobs` require `typeName: string`; the `chainId` and `jobId` filters are removed from both, and `chainTypeName` is removed from `listJobs` — use `listChainJobs({ chainId })` to read the jobs of a specific chain and `getJob`/`getJobs` to fetch jobs by id.
+
+- 63e0378: Remove the `cascade` option from `deleteChains` and `deleteChain`. Cascade deletion, which expanded the requested chains to include the blocker chains they transitively depend on, is no longer supported: callers that relied on `cascade: true` must enumerate the chains to delete explicitly. Collect a chain's blocker chains with `getJobBlockers` and pass them in the same `deleteChains` call as the chain that depends on them (or delete the dependent chain first); deleting a chain that is still a blocker for a job outside the deleted set fails with `BlockerReferenceError` and deletes nothing.
+
+  - `deleteChains({ cascade })` and `deleteChain({ cascade })` are no longer accepted.
+  - The dashboard's delete dialog loses its cascade checkbox and `DELETE /api/chains/:id` no longer honors `?cascade=true`.
+
+- 63e0378: Remove `vacuum()` from both state adapters and drop the SQLite pragma guards. `migrateToLatest()` no longer inspects `PRAGMA foreign_keys` or `PRAGMA auto_vacuum`, and the `checkForeignKeys` and `checkAutoVacuum` options are gone — the SQLite adapter now runs on any database, whatever its pragma settings.
+
+  - `vacuum()` is no longer exposed by `createSqliteStateAdapter()` or `createPgStateAdapter()`; remove the call from cleanup jobs. Space freed by deletions is reused by both engines without it.
+  - `checkForeignKeys` and `checkAutoVacuum` are no longer accepted; remove them from `createSqliteStateAdapter()` calls.
+  - `PRAGMA foreign_keys = ON` and `PRAGMA auto_vacuum = INCREMENTAL` are no longer needed on your connections.
+  - To shrink a database file or rewrite a bloated table, run `VACUUM` (PostgreSQL: `VACUUM FULL`) yourself, out of band — both take heavy locks and are not something a cleanup job should do on every pass.
+
+- c2a4fe0: Add `finish({ reschedule })` as a non-error rescheduling outcome for attempt handlers and delete the `rescheduleJob()` helper exported from `queuert` together with `RescheduleJobError`. A requested reschedule no longer travels the error path — it skips `lastAttemptError`, does not emit `jobAttemptFailed`, and the attempt span ends `ok`.
+
+  - `finish({ reschedule: { afterMs } })` or `finish({ reschedule: { at } })` returns the job to pending as a first-class outcome alongside `{ output }` and `{ continueWith }`.
+  - The top-level `rescheduleJob()` helper (called inside an attempt handler, where it throws) and `RescheduleJobError` are removed from the public API. Migrate: `rescheduleJob({ afterMs })` → `return complete(async ({ finish }) => finish({ reschedule: { afterMs } }))`.
+  - The attempt span no longer sets the `queuert.attempt.result` attribute; read the outcome from the span status instead (`ERROR` for a failed attempt, `OK` for a completed, continued or rescheduled one).
+  - The `queuert.job.completed` metric no longer carries `queuert.worker.id`; use `queuert.job.attempt.completed` for per-worker breakdowns.
+
+### Minor Changes
+
+- Queuert 0.16 rebuilds the job model around the chain's head row and reworks attempt handling around a single `finish` outcome API, with a one-step schema migration from v0.15.1. It also brings faster listing queries, a redesigned dashboard, and a leaner, more consistent public API. This release contains many breaking changes — review the upgrade notes before migrating.
+
+### Patch Changes
+
+- fffc0b3: Drop the `RELEASE SAVEPOINT` round-trip from the built-in savepoint fallback used by the PostgreSQL and SQLite state adapters. A successful savepoint is now simply left open — the surrounding `COMMIT` discards outstanding savepoints anyway — which removes one statement per `prepare` and per `complete` phase of every job attempt. Rollback behaviour is unchanged, and savepoint names stay unique per call so nested savepoints still roll back independently.
+- Updated dependencies [0719785]
+- Updated dependencies [09f353d]
+- Updated dependencies [24ff428]
+- Updated dependencies [a44004b]
+- Updated dependencies [a1e6c1a]
+- Updated dependencies [67833e1]
+- Updated dependencies [24ff428]
+- Updated dependencies [dc5a2b8]
+- Updated dependencies [e7dd362]
+- Updated dependencies [314fe95]
+- Updated dependencies [7cb4d94]
+- Updated dependencies [da06e7d]
+- Updated dependencies [23ed227]
+- Updated dependencies
+- Updated dependencies [63e0378]
+- Updated dependencies [c2a4fe0]
+- Updated dependencies [24ff428]
+- Updated dependencies [ca681b1]
+- Updated dependencies [63aa316]
+  - queuert@0.16.0
+
 ## 0.15.1
 
 ### Patch Changes
