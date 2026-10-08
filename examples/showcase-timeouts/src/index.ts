@@ -77,7 +77,7 @@ const worker = await createInProcessWorker({
     jobTypes,
     processors: {
       "fetch-with-timeout": {
-        attemptHandler: async ({ signal, job, complete }) => {
+        attemptHandler: async ({ signal, job, finish }) => {
           console.log(
             `[fetch-with-timeout] Fetching ${job.input.url} (timeout: ${job.input.timeoutMs}ms)`,
           );
@@ -91,11 +91,17 @@ const worker = await createInProcessWorker({
           try {
             const data = await simulatedFetch(job.input.url, combined, 300);
             console.log(`  Fetch SUCCESS`);
-            return await complete(async ({ finish }) => finish({ output: { data } }));
+            return await withTransactionHooks(async (transactionHooks) =>
+              sql.begin(async (txSql) => finish({ txSql, transactionHooks, output: { data } })),
+            );
           } catch (error) {
             if (error instanceof DOMException && error.name === "AbortError") {
               console.log(`  Fetch TIMED OUT`);
-              return await complete(async ({ finish }) => finish({ output: { timedOut: true } }));
+              return await withTransactionHooks(async (transactionHooks) =>
+                sql.begin(async (txSql) =>
+                  finish({ txSql, transactionHooks, output: { timedOut: true } }),
+                ),
+              );
             }
             throw error;
           } finally {
@@ -107,7 +113,7 @@ const worker = await createInProcessWorker({
       "long-running-job": {
         // Configure shorter attempt timeout for demo (normally you'd use longer values)
         attemptConfig: { timeoutMs: 500, heartbeatMs: 200 },
-        attemptHandler: async ({ job, complete }) => {
+        attemptHandler: async ({ job, finish }) => {
           const attempt = job.attempt;
           console.log(
             `[long-running-job] Task ${job.input.taskId}, attempt ${attempt}, duration ${job.input.durationMs}ms`,
@@ -116,7 +122,11 @@ const worker = await createInProcessWorker({
           await new Promise((r) => setTimeout(r, job.input.durationMs));
 
           console.log(`  Task completed on attempt ${attempt}`);
-          return complete(async ({ finish }) => finish({ output: { completed: true, attempt } }));
+          return withTransactionHooks(async (transactionHooks) =>
+            sql.begin(async (txSql) =>
+              finish({ txSql, transactionHooks, output: { completed: true, attempt } }),
+            ),
+          );
         },
       },
     },

@@ -2,22 +2,23 @@
  * Job Attempt Middleware Showcase
  *
  * A multi-tenant billing worker where every cross-cutting concern lives in
- * middleware instead of being repeated in each handler:
+ * middleware instead of being repeated in each handler. Each one is a
+ * wrapHandler that injects typed context into the handler:
  *
- *   1. loggingMiddleware — wrapHandler: an attempt-scoped logger tagged with
- *      worker, job type and attempt number
- *   2. tenantMiddleware  — wrapPrepare: loads the tenant row inside the prepare
- *      transaction, so every handler starts with a consistent snapshot of it
- *   3. meteringMiddleware — wrapStep + wrapComplete: a `meter()` that records
- *      billable units in the *same* transaction as the job, never double-bills a
- *      retried attempt, and reports to the metrics backend only after commit
+ *   1. loggingMiddleware — an attempt-scoped logger tagged with worker, job
+ *      type and attempt number
+ *   2. tenantMiddleware  — loads the tenant row before the handler runs
+ *   3. meteringMiddleware — a `meter()` that records billable units in the
+ *      transaction the handler passes it, never double-bills a retried attempt,
+ *      and reports to the metrics backend only after commit
  *
  * Scenarios:
  * 1. Happy path: issue-invoice continues with send-receipt; the invoice row,
- *    its usage records and job completion commit together
- * 2. Failed attempt: send-receipt throws after metering from the complete
- *    callback — the savepoint rolls the usage record back and metrics never see
- *    it, while the unit already committed by execute is not billed twice on retry
+ *    its usage record and the continuation commit together
+ * 2. Failed attempt: send-receipt throws after metering inside its finish
+ *    transaction — the transaction rolls the usage record back and metrics never
+ *    see it, while the unit committed earlier in its own transaction is not
+ *    billed twice on retry
  */
 
 import assert from "node:assert/strict";
@@ -42,17 +43,12 @@ const jobTypes = defineJobTypes<{
    * Workflow:
    *   issue-invoice --> send-receipt --> output { delivered }
    *
-   * Middleware nesting for one attempt (wrapPrepare / wrapStep / wrapComplete
-   * bracket the callbacks passed to prepare()/step()/complete(), not the
-   * handler body):
+   * Middleware nesting for one attempt:
    *
-   *   loggingMiddleware.wrapHandler
-   *     handler body starts
-   *       prepare(...)  --> tenantMiddleware.wrapPrepare  --> callback
-   *       step(...)  --> meteringMiddleware.wrapStep  --> callback
-   *       complete(...) --> meteringMiddleware.wrapComplete --> callback
-   *     handler body ends
-   *   loggingMiddleware.wrapHandler
+   *   loggingMiddleware.wrapHandler          --> { log }
+   *     tenantMiddleware.wrapHandler         --> { tenant }
+   *       meteringMiddleware.wrapHandler     --> { meter }
+   *         handler: work, then finish in its own transaction
    */
   "issue-invoice": {
     entry: true;
@@ -127,13 +123,9 @@ const loggingMiddleware: AttemptMiddleware<
   },
 };
 
-const tenantMiddleware: AttemptMiddleware<
-  typeof stateAdapter,
-  Record<string, never>,
-  { tenant: Tenant }
-> = {
-  wrapPrepare: async ({ job, txSql, next }) => {
-    const [row] = await txSql<{ id: string; name: string; billing_email: string }[]>`
+const tenantMiddleware: AttemptMiddleware<typeof stateAdapter, { tenant: Tenant }> = {
+  wrapHandler: async ({ job, next }) => {
+    const [row] = await sql<{ id: string; name: string; billing_email: string }[]>`
       SELECT id, name, billing_email FROM tenant WHERE id = ${tenantIdOf(job)}
     `;
     if (!row) throw new Error(`Unknown tenant ${tenantIdOf(job)}`);
@@ -144,57 +136,47 @@ const tenantMiddleware: AttemptMiddleware<
 const meteringHookKey = Symbol("example.metering");
 const reportedUnits: string[] = [];
 
-type Meter = (unit: string, quantity: number) => Promise<void>;
+type Meter = (
+  tx: { txSql: postgres.TransactionSql; transactionHooks: TransactionHooks },
+  unit: string,
+  quantity: number,
+) => Promise<void>;
 
 /**
  * Records a billable unit in the caller's transaction and queues the metrics
  * report for after commit. `UNIQUE (job_id, unit)` makes a retried attempt
  * re-metering the same unit a no-op, so the tenant is never billed twice.
  */
-const createMeter = (
-  txSql: postgres.TransactionSql,
-  transactionHooks: TransactionHooks,
-  job: { id: string; input: unknown },
-): Meter => {
-  return async (unit, quantity) => {
-    const inserted = await txSql`
-      INSERT INTO usage_record (job_id, tenant_id, unit, quantity)
-      VALUES (${job.id}, ${tenantIdOf(job)}, ${unit}, ${quantity})
-      ON CONFLICT (job_id, unit) DO NOTHING
-      RETURNING id
-    `;
-    if (inserted.length === 0) {
-      console.log(`    · metering: ${unit} already billed by an earlier attempt`);
-      return;
-    }
-    const pending = transactionHooks.getOrInsert<string[]>(meteringHookKey, () => ({
-      state: [],
-      flush: (units) => {
-        reportedUnits.push(...units);
-        console.log(`    · metering: reported after commit — ${units.join(", ")}`);
+const meteringMiddleware: AttemptMiddleware<typeof stateAdapter, { meter: Meter }> = {
+  wrapHandler: async ({ job, next }) =>
+    next({
+      meter: async ({ txSql, transactionHooks }, unit, quantity) => {
+        const inserted = await txSql`
+          INSERT INTO usage_record (job_id, tenant_id, unit, quantity)
+          VALUES (${job.id}, ${tenantIdOf(job)}, ${unit}, ${quantity})
+          ON CONFLICT (job_id, unit) DO NOTHING
+          RETURNING id
+        `;
+        if (inserted.length === 0) {
+          console.log(`    · metering: ${unit} already billed by an earlier attempt`);
+          return;
+        }
+        const pending = transactionHooks.getOrInsert<string[]>(meteringHookKey, () => ({
+          state: [],
+          flush: (units) => {
+            reportedUnits.push(...units);
+            console.log(`    · metering: reported after commit — ${units.join(", ")}`);
+          },
+          checkpoint: (units) => {
+            const mark = units.length;
+            return () => {
+              units.length = mark;
+            };
+          },
+        }));
+        pending.push(unit);
       },
-      checkpoint: (units) => {
-        const mark = units.length;
-        return () => {
-          units.length = mark;
-        };
-      },
-    }));
-    pending.push(unit);
-  };
-};
-
-const meteringMiddleware: AttemptMiddleware<
-  typeof stateAdapter,
-  Record<string, never>,
-  Record<string, never>,
-  { meter: Meter },
-  { meter: Meter }
-> = {
-  wrapStep: async ({ job, txSql, transactionHooks, next }) =>
-    next({ meter: createMeter(txSql, transactionHooks, job) }),
-  wrapComplete: async ({ job, txSql, transactionHooks, next }) =>
-    next({ meter: createMeter(txSql, transactionHooks, job) }),
+    }),
 };
 
 const client = await createClient({
@@ -212,50 +194,53 @@ const worker = await createInProcessWorker({
     backoffConfig: { initialDelayMs: 100, multiplier: 1, maxDelayMs: 100 },
     processors: {
       "issue-invoice": {
-        attemptHandler: async ({ job, log, prepare, complete }) => {
-          const tenant = await prepare({ mode: "staged" }, async ({ tenant }) => tenant);
+        attemptHandler: async ({ job, log, tenant, meter, finish }) => {
           log(`issuing invoice for ${tenant.name}`);
 
           const invoiceId = `inv-${job.id.slice(0, 8)}`;
-          return complete(async ({ finish, txSql, meter }) => {
-            await txSql`
-              INSERT INTO invoice (id, tenant_id, amount_cents)
-              VALUES (${invoiceId}, ${tenant.id}, ${job.input.amountCents})
-              ON CONFLICT (id) DO NOTHING
-            `;
-            await meter("invoice.issued", 1);
+          return withTransactionHooks(async (transactionHooks) =>
+            sql.begin(async (txSql) => {
+              await txSql`
+                INSERT INTO invoice (id, tenant_id, amount_cents)
+                VALUES (${invoiceId}, ${tenant.id}, ${job.input.amountCents})
+                ON CONFLICT (id) DO NOTHING
+              `;
+              await meter({ txSql, transactionHooks }, "invoice.issued", 1);
 
-            return finish({
-              continueWith: {
-                typeName: "send-receipt",
-                input: { tenantId: tenant.id, invoiceId },
-              },
-            });
-          });
+              return finish({
+                txSql,
+                transactionHooks,
+                continueWith: {
+                  typeName: "send-receipt",
+                  input: { tenantId: tenant.id, invoiceId },
+                },
+              });
+            }),
+          );
         },
       },
 
       "send-receipt": {
-        attemptHandler: async ({ job, log, prepare, step, complete }) => {
-          const tenant = await prepare({ mode: "staged" }, async ({ tenant }) => tenant);
-
-          // Rendering is billed from execute: the work is already done, so its
-          // transaction commits immediately and the unit survives a later failure.
-          // Delivery is billed from complete — only a delivered receipt is billable.
-          await step(async ({ meter }) => {
-            await meter("receipt.rendered", 1);
-          });
+        attemptHandler: async ({ job, log, tenant, meter, finish }) => {
+          // Rendering is billed in its own transaction: the work is already done,
+          // so the unit survives a later failure. Delivery is billed in the finish
+          // transaction — only a delivered receipt is billable.
+          await withTransactionHooks(async (transactionHooks) =>
+            sql.begin(async (txSql) => meter({ txSql, transactionHooks }, "receipt.rendered", 1)),
+          );
 
           log(`delivering receipt to ${tenant.billingEmail}`);
 
-          return complete(async ({ finish, meter }) => {
-            await meter("receipt.delivered", 1);
-            if (job.attempt === 1) {
-              log("smtp gateway unavailable — rolling back and retrying");
-              throw new Error("smtp gateway unavailable");
-            }
-            return finish({ output: { delivered: true } });
-          });
+          return withTransactionHooks(async (transactionHooks) =>
+            sql.begin(async (txSql) => {
+              await meter({ txSql, transactionHooks }, "receipt.delivered", 1);
+              if (job.attempt === 1) {
+                log("smtp gateway unavailable — rolling back and retrying");
+                throw new Error("smtp gateway unavailable");
+              }
+              return finish({ txSql, transactionHooks, output: { delivered: true } });
+            }),
+          );
         },
       },
     },
@@ -288,10 +273,10 @@ console.log(`reported to metrics after finish: ${reportedUnits.join(", ")}`);
 assert.deepEqual(result.output, { delivered: true });
 assert.equal(invoices.length, 1);
 
-// The first send-receipt attempt metered "receipt.delivered" and then threw: the
-// savepoint rolled the usage record back and metrics never saw it. The retry
-// billed it once, while "receipt.rendered" — committed by execute before the
-// failure — was deduplicated instead of billed twice.
+// The first send-receipt attempt metered "receipt.delivered" and then threw: its
+// transaction rolled the usage record back and metrics never saw it. The retry
+// billed it once, while "receipt.rendered" — committed in its own transaction
+// before the failure — was deduplicated instead of billed twice.
 assert.deepEqual(
   usage.map((row) => row.unit),
   ["invoice.issued", "receipt.rendered", "receipt.delivered"],

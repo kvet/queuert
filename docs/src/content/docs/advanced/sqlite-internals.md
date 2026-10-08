@@ -99,9 +99,34 @@ The job-model schema that follows 0.15.x replaces the job tables, and `migrateTo
 The adapter adds an application-level `AsyncRwLock` to prevent concurrent write access from async code within the same process while allowing reads to run in parallel. The lock is writer-preference and FIFO to prevent writer starvation: once a writer is queued, new readers wait.
 
 - **Outside a transaction**: Every SQL execution acquires the lock in the mode indicated by `readOnly`
-- **Inside a transaction**: The write lock was already acquired by `withTransaction`, so individual operations skip it
+- **Inside a transaction**: The write lock was already acquired by whoever opened the transaction — `withTransaction`, or your own code (see below) — so individual operations skip it
 
 Custom `SqliteStateProvider` implementations must use `createAsyncRwLock()` to ensure correct serialization.
+
+### Handler transactions must hold the write lock
+
+The worker's own bookkeeping — acquiring a job, renewing an attempt's lease, reclaiming an expired attempt, rescheduling a failed attempt — runs as single autocommit statements on the provider's connection, under the lock, while other attempts' handlers are running. Every transaction you pass to `finish` (or to a client method such as `createChain`) runs on that same connection, so it **must be opened while holding the provider's write lock**:
+
+```ts
+attemptHandler: async ({ job, finish }) => {
+  const sentAt = await sendEmail(job.input.userId);
+
+  return withTransactionHooks(async (transactionHooks) => {
+    using _lock = await lock.acquireWrite();
+    db.exec("BEGIN");
+    try {
+      const result = await finish({ db, transactionHooks, output: { sentAt } });
+      db.exec("COMMIT");
+      return result;
+    } catch (error) {
+      if (db.isTransaction) db.exec("ROLLBACK");
+      throw error;
+    }
+  });
+},
+```
+
+A transaction opened **without** the lock would let other attempts' autocommit statements run inside it, and rolling it back would undo them — for example another attempt's acquisition. The provider's own `withTransaction` acquires the lock the same way, so `stateProvider.withTransaction(async (txCtx) => finish({ ...txCtx, transactionHooks, output }))` is also correct. Queuert ships no helper for this; the `state-sqlite-*` examples show the pattern for each driver.
 
 ## Notifications
 

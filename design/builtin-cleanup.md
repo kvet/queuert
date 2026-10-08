@@ -91,13 +91,13 @@ This leans on both primitives: `getChain({ identity })` to find the running chai
 
 ### Deleting a running schedule is safe
 
-When `configDiffers` and the running chain is currently _executing_, `deleteChain` removes it mid-attempt. The in-flight handler's next `execute`/`complete` fails attempt verification with `JobNotFoundError`; the worker logs one `workerError` and drops the job — **no reschedule, no crash**, and crucially the handler never reaches `complete`, so it does **not** self-reschedule. Batches already deleted are committed and harmless (cleanup is idempotent; the replacement resumes from the oldest remaining chain). The only artifact is a single benign error log, only when config actually changes while a run happens to be executing — rare, and worth a docs note. This is also what makes `unscheduleCleanup` reliably immediate: deleting the chain kills its self-reschedule for free, with no tombstone or completion-time re-check.
+When `configDiffers` and the running chain is currently _executing_, `deleteChain` removes it mid-attempt. The handler's batch deletes run in its own transactions, which are not ownership-fenced ([user-owned-transactions.md](user-owned-transactions.md)), so nothing stops a batch already in flight; instead the worker notices the loss (heartbeat renewal miss or the attempt-lost listener, classified `not_found`) and aborts `signal`, and the scan drops out at its next `signal.aborted` check. The final `finish` is fenced: it misses with `JobNotFoundError` and throws before the self-reschedule `createChain` that shares its transaction, so that transaction rolls back and the deleted schedule does **not** self-reschedule. The post-handler fenced reschedule also misses; the worker logs one `workerError` and drops the job — **no reschedule, no crash**. Batches already deleted (including any that ran before the abort reached the loop) are committed and harmless (cleanup is idempotent; the replacement resumes from the oldest remaining chain). Earlier drafts relied on per-batch attempt verification to stop the scan at once; with unfenced batch transactions the scan stops at the next abort check instead, which deletes at most a few extra batches the replacement would delete anyway. The only artifact is a single benign error log, only when config actually changes while a run happens to be executing — rare, and worth a docs note. This is also what makes `unscheduleCleanup` reliably immediate: deleting the chain kills its self-reschedule for free, with no tombstone or completion-time re-check.
 
 ### The handler
 
 ```ts
 "__queuert/cleanup": {
-  attemptHandler: async ({ signal, job, execute, complete }) => {
+  attemptHandler: async ({ signal, job, finish }) => {
     const { name, typeNames, retentionMs, intervalMs } = job.input;
     const cutoff = new Date(Date.now() - retentionMs);
     let cursor;
@@ -109,24 +109,26 @@ When `configDiffers` and the running chain is currently _executing_, `deleteChai
         ...(cursor ? { cursor } : {}),
       });
       const ids = page.items.filter((c) => c.id !== job.chainId).map((c) => c.id);
-      if (ids.length) await execute(({ transactionHooks, ...tx }) =>
-        client.deleteChains({ ...tx, transactionHooks, ids }));
+      if (ids.length) await withTransactionHooks(async (transactionHooks) =>
+        withTransaction(async (txCtx) =>
+          client.deleteChains({ ...txCtx, transactionHooks, ids })));
       cursor = page.nextCursor;
     } while (cursor && !signal.aborted);
 
-    return finalize(async ({ complete, transactionHooks, ...tx }) => {
-      const completedJob = await complete(null);
-      await client.createChain({ ...tx, transactionHooks,
-        typeName: "__queuert/cleanup", input: job.input,
-        schedule: { afterMs: intervalMs },
-        identity: { key: `__queuert/cleanup:${name}`, scope: "running" } });
-      return completedJob;
-    });
+    return withTransactionHooks(async (transactionHooks) =>
+      withTransaction(async (txCtx) => {
+        const completedJob = await finish({ ...txCtx, transactionHooks, output: null });
+        await client.createChain({ ...txCtx, transactionHooks,
+          typeName: "__queuert/cleanup", input: job.input,
+          schedule: { afterMs: intervalMs },
+          identity: { key: `__queuert/cleanup:${name}`, scope: "running" } });
+        return completedJob;
+      }));
   },
 }
 ```
 
-Each batch deletes in its own `execute` transaction (bounded lock scope, attempt verified per batch). The scan drops out between batches on `signal.aborted`; deletion is idempotent, so the next run resumes from the oldest remaining chain. The self-reschedule creates a **new independent chain** (not `continueWith`, so history does not grow), forwarding `job.input` unchanged so config survives run-to-run. It runs after `complete()` inside `finalize`, so the current chain is already complete when the next one is created — otherwise the still-running chain would collide with its own `running`-scope identity (see [chain-identity.md](chain-identity.md)).
+The built-in has no user database client, so `withTransaction` here is the state adapter's own (`stateAdapter.withTransaction`, which user-owned transactions keeps); this is the built-in acting as a user handler, not worker bookkeeping. Each batch deletes in its own transaction (bounded lock scope). These batch transactions are not ownership-fenced, which is fine because deletion is idempotent; ownership loss reaches the loop through `signal`. The scan drops out between batches on `signal.aborted`, and the next run resumes from the oldest remaining chain. The self-reschedule creates a **new independent chain** (not `continueWith`, so history does not grow), forwarding `job.input` unchanged so config survives run-to-run. It runs after `finish` in the same transaction, so the current chain is already complete when the next one is created, and the two commit or roll back together — otherwise the still-running chain would collide with its own `running`-scope identity (see [chain-identity.md](chain-identity.md)).
 
 ### User setup
 

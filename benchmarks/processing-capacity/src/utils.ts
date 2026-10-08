@@ -18,34 +18,43 @@ export const jobTypes = defineJobTypes<{
     input: { index: number };
     output: { done: true };
   };
+  /*
+   * Fan-in scenario:
+   *   test-job (blocker) --+--> fan-in-job[0]
+   *                        +--> fan-in-job[1]
+   *                        +--> ... fan-in-job[JOB_COUNT - 1]
+   */
+  "fan-in-job": {
+    entry: true;
+    input: { index: number };
+    output: { done: true };
+    blockers: [{ typeName: "test-job" }];
+  };
 }>();
 
 export type BenchmarkStateAdapter = StateAdapter<any, any>;
 
-export type ProcessMode = "atomic" | "staged";
 export type CreateMode = "single" | "batched";
-
-export const defaultCreateModeFor = (processMode: ProcessMode): CreateMode =>
-  processMode === "atomic" ? "batched" : "single";
+export type Scenario = "independent" | "fan-in";
 
 const parseConcurrency = (defaultValue = 10): number => {
   const flag = process.argv.find((a) => a.startsWith("--concurrency="));
   return flag ? parseInt(flag.split("=")[1], 10) : defaultValue;
 };
 
-const parseProcessMode = (defaultValue: ProcessMode = "atomic"): ProcessMode => {
-  const flag = process.argv.find((a) => a.startsWith("--process-mode="));
-  if (!flag) return defaultValue;
+const parseScenario = (): Scenario => {
+  const flag = process.argv.find((a) => a.startsWith("--scenario="));
+  if (!flag) return "independent";
   const value = flag.split("=")[1];
-  if (value !== "atomic" && value !== "staged") {
-    throw new Error(`Invalid --process-mode=${value}, expected "atomic" or "staged"`);
+  if (value !== "independent" && value !== "fan-in") {
+    throw new Error(`Invalid --scenario=${value}, expected "independent" or "fan-in"`);
   }
   return value;
 };
 
-const parseCreateMode = (processMode: ProcessMode): CreateMode => {
+const parseCreateMode = (): CreateMode => {
   const flag = process.argv.find((a) => a.startsWith("--create-mode="));
-  if (!flag) return defaultCreateModeFor(processMode);
+  if (!flag) return "batched";
   const value = flag.split("=")[1];
   if (value !== "single" && value !== "batched") {
     throw new Error(`Invalid --create-mode=${value}, expected "single" or "batched"`);
@@ -78,8 +87,9 @@ export const runBenchmark = async ({
   printHeader(title);
   const withTransaction = stateAdapter.withTransaction;
   const concurrency = parseConcurrency();
-  const processMode = parseProcessMode();
-  const createMode = parseCreateMode(processMode);
+  const scenario = parseScenario();
+  const createMode = parseCreateMode();
+  const processCount = scenario === "fan-in" ? JOB_COUNT + 1 : JOB_COUNT;
 
   const client: Client<any, any> = await createClient({
     stateAdapter,
@@ -95,7 +105,7 @@ export const runBenchmark = async ({
 
   const onCompleted = () => {
     completed++;
-    if (completed - lastProgressMilestone >= PROGRESS_STEP || completed === JOB_COUNT) {
+    if (completed - lastProgressMilestone >= PROGRESS_STEP || completed === processCount) {
       lastProgressMilestone = completed;
       const elapsed = performance.now() - processBegin;
       const rate = completed / (elapsed / 1_000);
@@ -103,7 +113,7 @@ export const runBenchmark = async ({
         `  ${formatNumber(completed).padStart(7)} processed — ${formatDuration(elapsed)} — ${formatNumber(Math.round(rate))} jobs/s`,
       );
     }
-    if (completed === JOB_COUNT) allDone.resolve();
+    if (completed === processCount) allDone.resolve();
     return { done: true as const };
   };
 
@@ -115,14 +125,20 @@ export const runBenchmark = async ({
       jobTypes,
       processors: {
         "test-job": {
-          attemptHandler:
-            processMode === "atomic"
-              ? async ({ complete }) =>
-                  complete(async ({ finish }) => finish({ output: onCompleted() }))
-              : async ({ prepare, complete }) => {
-                  await prepare({ mode: "staged" }, async () => undefined);
-                  return complete(async ({ finish }) => finish({ output: onCompleted() }));
-                },
+          attemptHandler: async ({ finish }) =>
+            withTransactionHooks(async (transactionHooks) =>
+              withTransaction(async (txCtx) =>
+                finish({ ...txCtx, transactionHooks, output: onCompleted() }),
+              ),
+            ),
+        },
+        "fan-in-job": {
+          attemptHandler: async ({ finish }) =>
+            withTransactionHooks(async (transactionHooks) =>
+              withTransaction(async (txCtx) =>
+                finish({ ...txCtx, transactionHooks, output: onCompleted() }),
+              ),
+            ),
         },
       },
     }),
@@ -131,10 +147,30 @@ export const runBenchmark = async ({
   const createLabel =
     createMode === "single" ? "single" : `batched (size ${formatNumber(BATCH_SIZE)})`;
   console.log(
-    `\nConfiguration: ${formatNumber(JOB_COUNT)} jobs, concurrency ${concurrency}, process ${processMode}, create ${createLabel}`,
+    `\nConfiguration: ${formatNumber(JOB_COUNT)} jobs, concurrency ${concurrency}, scenario ${scenario}, create ${createLabel}`,
   );
 
-  console.log(`\nPhase 1: Creating ${formatNumber(JOB_COUNT)} chains (${createLabel})...`);
+  // Fan-in: every dependent is created blocked on the same pending chain, so each
+  // creation writes that chain's head row before inserting its own job.
+  const blocker =
+    scenario === "fan-in"
+      ? await withTransactionHooks(async (transactionHooks) =>
+          withTransaction(async (txCtx) =>
+            client.createChain({
+              ...txCtx,
+              transactionHooks,
+              typeName: "test-job",
+              input: { index: -1 },
+            }),
+          ),
+        )
+      : undefined;
+  const typeName = scenario === "fan-in" ? "fan-in-job" : "test-job";
+  const blockerArgs = blocker ? { blockers: [blocker] } : {};
+
+  console.log(
+    `\nPhase 1: Creating ${formatNumber(JOB_COUNT)} chains (${createLabel}${blocker ? ", all blocked on one chain" : ""})...`,
+  );
   const createBegin = performance.now();
   let lastCreateMilestone = 0;
   const reportCreateProgress = (count: number) => {
@@ -155,8 +191,9 @@ export const runBenchmark = async ({
           client.createChain({
             ...txCtx,
             transactionHooks,
-            typeName: "test-job",
+            typeName,
             input: { index: i },
+            ...blockerArgs,
           }),
         ),
       );
@@ -165,9 +202,9 @@ export const runBenchmark = async ({
   } else {
     for (let i = 0; i < JOB_COUNT; i += BATCH_SIZE) {
       const batchEnd = Math.min(i + BATCH_SIZE, JOB_COUNT);
-      const items: { typeName: "test-job"; input: { index: number } }[] = [];
+      const items: { typeName: string; input: { index: number } }[] = [];
       for (let j = i; j < batchEnd; j++) {
-        items.push({ typeName: "test-job", input: { index: j } });
+        items.push({ typeName, input: { index: j }, ...blockerArgs });
       }
       await withTransactionHooks(async (transactionHooks) =>
         withTransaction(async (txCtx) =>
@@ -188,14 +225,14 @@ export const runBenchmark = async ({
     `\n  Create complete: ${formatDuration(createDuration)} — ${formatNumber(Math.round(createRate))} chains/s`,
   );
 
-  console.log(`\nPhase 2: Processing ${formatNumber(JOB_COUNT)} jobs...`);
+  console.log(`\nPhase 2: Processing ${formatNumber(processCount)} jobs...`);
   processBegin = performance.now();
 
   const stopWorker = await worker.start();
   await allDone.promise;
 
   const processDuration = performance.now() - processBegin;
-  const processRate = JOB_COUNT / (processDuration / 1_000);
+  const processRate = processCount / (processDuration / 1_000);
 
   console.log(
     `\n  Process complete: ${formatDuration(processDuration)} — ${formatNumber(Math.round(processRate))} jobs/s`,
@@ -206,9 +243,9 @@ export const runBenchmark = async ({
   console.log("\n───────────────────────────────────────────────────────────────");
   console.log("  SUMMARY");
   console.log("───────────────────────────────────────────────────────────────");
-  console.log(`  Total jobs:        ${formatNumber(JOB_COUNT)}`);
+  console.log(`  Total jobs:        ${formatNumber(processCount)}`);
   console.log(`  Concurrency:       ${concurrency}`);
-  console.log(`  Process mode:      ${processMode}`);
+  console.log(`  Scenario:          ${scenario}`);
   console.log(`  Create mode:       ${createLabel}`);
   console.log(
     `  Create phase:      ${formatDuration(createDuration).padStart(10)}  (${formatNumber(Math.round(createRate))} chains/s)`,

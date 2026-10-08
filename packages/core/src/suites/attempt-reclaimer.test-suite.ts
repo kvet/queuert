@@ -48,10 +48,14 @@ export const attemptReclaimerTestSuite = ({ it }: { it: TestAPI<TestSuiteContext
         attemptConfig: { timeoutMs: 10, heartbeatMs: 100 },
         processors: {
           test: {
-            attemptHandler: async ({ complete }) => {
-              await sleep(100);
+            attemptHandler: async ({ finish }) => {
+              // The lease lapses after 10ms; the renewal at 100ms extends it to 110ms and
+              // finish at 150ms runs with the lease lapsed again.
+              await sleep(150);
 
-              return complete(async ({ finish }) => finish({ output: null }));
+              return withTransaction(async (txCtx, transactionHooks) =>
+                finish({ ...txCtx, transactionHooks, output: null }),
+              );
             },
           },
         },
@@ -71,6 +75,11 @@ export const attemptReclaimerTestSuite = ({ it }: { it: TestAPI<TestSuiteContext
       await client.awaitChain(chain, completionOptions);
     });
 
+    expect(log).toHaveBeenCalledWith(
+      expect.objectContaining({
+        type: "job_attempt_extended",
+      }),
+    );
     expect(log).toHaveBeenCalledWith(
       expect.objectContaining({
         level: "warn",
@@ -119,7 +128,7 @@ export const attemptReclaimerTestSuite = ({ it }: { it: TestAPI<TestSuiteContext
         attemptConfig,
         processors: {
           test: {
-            attemptHandler: async ({ signal, complete }) => {
+            attemptHandler: async ({ signal, finish }) => {
               if (!failed) {
                 failed = true;
 
@@ -133,7 +142,9 @@ export const attemptReclaimerTestSuite = ({ it }: { it: TestAPI<TestSuiteContext
                 }
               }
 
-              return complete(async ({ finish }) => finish({ output: null }));
+              return withTransaction(async (txCtx, transactionHooks) =>
+                finish({ ...txCtx, transactionHooks, output: null }),
+              );
             },
           },
         },
@@ -150,7 +161,7 @@ export const attemptReclaimerTestSuite = ({ it }: { it: TestAPI<TestSuiteContext
         attemptConfig,
         processors: {
           test: {
-            attemptHandler: async ({ signal, complete }) => {
+            attemptHandler: async ({ signal, finish }) => {
               if (!failed) {
                 failed = true;
 
@@ -164,7 +175,9 @@ export const attemptReclaimerTestSuite = ({ it }: { it: TestAPI<TestSuiteContext
                 }
               }
 
-              return complete(async ({ finish }) => finish({ output: null }));
+              return withTransaction(async (txCtx, transactionHooks) =>
+                finish({ ...txCtx, transactionHooks, output: null }),
+              );
             },
           },
         },
@@ -208,7 +221,7 @@ export const attemptReclaimerTestSuite = ({ it }: { it: TestAPI<TestSuiteContext
     );
   });
 
-  it("reclaims expired attempts on complete", async ({
+  it("reclaims expired attempts on finish", async ({
     stateAdapter,
     notifyAdapter,
     withTransaction,
@@ -248,26 +261,30 @@ export const attemptReclaimerTestSuite = ({ it }: { it: TestAPI<TestSuiteContext
         attemptConfig,
         processors: {
           test: {
-            attemptHandler: async ({ prepare, complete }) => {
-              await prepare({ mode: "staged" });
-
+            attemptHandler: async ({ finish }) => {
               if (!failed) {
                 failed = true;
 
                 jobStarted.resolve();
                 await sleep(attemptConfig.heartbeatMs * 2);
-                await expect(async () =>
-                  complete(async ({ finish }) => finish({ output: null })),
-                ).rejects.toSatisfy(
-                  (error) =>
-                    error instanceof
-                    (notifyAdapter ? JobTakenByAnotherWorkerError : JobAlreadyCompletedError),
+                const finishError = await withTransaction(async (txCtx, transactionHooks) =>
+                  finish({ ...txCtx, transactionHooks, output: null }),
+                ).then(
+                  () => undefined,
+                  (error: unknown) => error,
                 );
+                expect(
+                  finishError instanceof JobTakenByAnotherWorkerError ||
+                    finishError instanceof JobAlreadyCompletedError,
+                ).toBe(true);
                 jobCompleted.resolve();
+                throw new Error("attempt lost", { cause: finishError });
               }
               await sleep(10);
 
-              return complete(async ({ finish }) => finish({ output: null }));
+              return withTransaction(async (txCtx, transactionHooks) =>
+                finish({ ...txCtx, transactionHooks, output: null }),
+              );
             },
           },
         },
@@ -284,161 +301,30 @@ export const attemptReclaimerTestSuite = ({ it }: { it: TestAPI<TestSuiteContext
         attemptConfig,
         processors: {
           test: {
-            attemptHandler: async ({ prepare, complete }) => {
-              await prepare({ mode: "staged" });
-
+            attemptHandler: async ({ finish }) => {
               if (!failed) {
                 failed = true;
 
                 jobStarted.resolve();
                 await sleep(attemptConfig.heartbeatMs * 2);
-                await expect(async () =>
-                  complete(async ({ finish }) => finish({ output: null })),
-                ).rejects.toSatisfy(
-                  (error) =>
-                    error instanceof
-                    (notifyAdapter ? JobTakenByAnotherWorkerError : JobAlreadyCompletedError),
+                const finishError = await withTransaction(async (txCtx, transactionHooks) =>
+                  finish({ ...txCtx, transactionHooks, output: null }),
+                ).then(
+                  () => undefined,
+                  (error: unknown) => error,
                 );
+                expect(
+                  finishError instanceof JobTakenByAnotherWorkerError ||
+                    finishError instanceof JobAlreadyCompletedError,
+                ).toBe(true);
                 jobCompleted.resolve();
+                throw new Error("attempt lost", { cause: finishError });
               }
               await sleep(10);
 
-              return complete(async ({ finish }) => finish({ output: null }));
-            },
-          },
-        },
-      }),
-    });
-
-    const failChain = await withTransaction(async (txCtx, transactionHooks) =>
-      client.createChain({
-        ...txCtx,
-        transactionHooks,
-        typeName: "test",
-        input: null,
-      }),
-    );
-
-    await withWorkers([await worker1.start(), await worker2.start()], async () => {
-      await jobStarted.promise;
-      await sleep(10);
-
-      const successChain = await withTransaction(async (txCtx, transactionHooks) =>
-        client.createChain({
-          ...txCtx,
-          transactionHooks,
-          typeName: "test",
-          input: null,
-        }),
-      );
-
-      await Promise.all([
-        client.awaitChain(successChain, completionOptions),
-        client.awaitChain(failChain, completionOptions),
-      ]);
-
-      await jobCompleted.promise;
-    });
-
-    expect(log).not.toHaveBeenCalledWith(
-      expect.objectContaining({
-        type: "worker_error",
-      }),
-    );
-  });
-
-  it("reclaims expired attempts on step", async ({
-    stateAdapter,
-    notifyAdapter,
-    withTransaction,
-    withWorkers,
-    observabilityAdapter,
-    log,
-    expect,
-  }) => {
-    const jobTypes = defineJobTypes<{
-      test: {
-        entry: true;
-        input: null;
-        output: null;
-      };
-    }>();
-
-    const client = await createClient({
-      stateAdapter,
-      notifyAdapter,
-      observabilityAdapter,
-      log,
-      jobTypes,
-    });
-
-    let failed = false;
-    const jobStarted = Promise.withResolvers<void>();
-    const jobCompleted = Promise.withResolvers<void>();
-    const attemptConfig = { timeoutMs: 10, heartbeatMs: 100 } satisfies AttemptConfig;
-
-    const worker1 = await createInProcessWorker({
-      client,
-      concurrency: 1,
-      pollIntervalMs: attemptConfig.timeoutMs,
-      processors: createProcessors({
-        client,
-        jobTypes,
-        attemptConfig,
-        processors: {
-          test: {
-            attemptHandler: async ({ prepare, step, complete }) => {
-              await prepare({ mode: "staged" });
-
-              if (!failed) {
-                failed = true;
-
-                jobStarted.resolve();
-                await sleep(attemptConfig.heartbeatMs * 2);
-                await expect(async () => step(async () => {})).rejects.toSatisfy(
-                  (error) =>
-                    error instanceof
-                    (notifyAdapter ? JobTakenByAnotherWorkerError : JobAlreadyCompletedError),
-                );
-                jobCompleted.resolve();
-              }
-              await sleep(10);
-
-              return complete(async ({ finish }) => finish({ output: null }));
-            },
-          },
-        },
-      }),
-    });
-
-    const worker2 = await createInProcessWorker({
-      client,
-      concurrency: 1,
-      pollIntervalMs: attemptConfig.timeoutMs,
-      processors: createProcessors({
-        client,
-        jobTypes,
-        attemptConfig,
-        processors: {
-          test: {
-            attemptHandler: async ({ prepare, step, complete }) => {
-              await prepare({ mode: "staged" });
-
-              if (!failed) {
-                failed = true;
-
-                jobStarted.resolve();
-                await sleep(attemptConfig.heartbeatMs * 2);
-                await expect(async () => step(async () => {})).rejects.toSatisfy(
-                  (error) =>
-                    error instanceof
-                    (notifyAdapter ? JobTakenByAnotherWorkerError : JobAlreadyCompletedError),
-                );
-                jobCompleted.resolve();
-              }
-              await sleep(10);
-
-              return complete(async ({ finish }) => finish({ output: null }));
+              return withTransaction(async (txCtx, transactionHooks) =>
+                finish({ ...txCtx, transactionHooks, output: null }),
+              );
             },
           },
         },
@@ -522,7 +408,7 @@ export const attemptReclaimerTestSuite = ({ it }: { it: TestAPI<TestSuiteContext
         attemptConfig,
         processors: {
           test: {
-            attemptHandler: async ({ job, complete }) => {
+            attemptHandler: async ({ job, finish }) => {
               processedJobs.push(job.input.id);
               jobsStarted.resolve();
 
@@ -530,7 +416,9 @@ export const attemptReclaimerTestSuite = ({ it }: { it: TestAPI<TestSuiteContext
 
               expect(job.attempt).toBe(1);
 
-              return complete(async ({ finish }) => finish({ output: { id: job.input.id } }));
+              return withTransaction(async (txCtx, transactionHooks) =>
+                finish({ ...txCtx, transactionHooks, output: { id: job.input.id } }),
+              );
             },
           },
         },
@@ -579,6 +467,109 @@ export const attemptReclaimerTestSuite = ({ it }: { it: TestAPI<TestSuiteContext
     expect(log).not.toHaveBeenCalledWith(
       expect.objectContaining({
         type: "worker_error",
+      }),
+    );
+  });
+
+  it("reclaims an attempt after a crash before the first heartbeat", async ({
+    stateAdapter,
+    notifyAdapter,
+    withTransaction,
+    withWorkers,
+    observabilityAdapter,
+    log,
+    expect,
+  }) => {
+    const jobTypes = defineJobTypes<{
+      test: {
+        entry: true;
+        input: null;
+        output: null;
+      };
+    }>();
+
+    const client = await createClient({
+      stateAdapter,
+      notifyAdapter,
+      observabilityAdapter,
+      log,
+      jobTypes,
+    });
+
+    // The lease is set at acquire, so an attempt that never reaches its first renewal still
+    // expires and is reclaimed.
+    const attemptConfig = { timeoutMs: 50, heartbeatMs: 60_000 } satisfies AttemptConfig;
+    const crashedStarted = Promise.withResolvers<void>();
+    const releaseCrashed = Promise.withResolvers<void>();
+
+    const crashedWorker = await createInProcessWorker({
+      client,
+      concurrency: 1,
+      processors: createProcessors({
+        client,
+        jobTypes,
+        attemptConfig,
+        processors: {
+          test: {
+            attemptHandler: async () => {
+              crashedStarted.resolve();
+              // Simulates a crashed process: the attempt never renews its lease or finishes.
+              await releaseCrashed.promise;
+              throw new Error("crashed");
+            },
+          },
+        },
+      }),
+    });
+
+    let reclaimedAttempt: { attempt: number; lastAttemptError: string | null } | undefined;
+    const recoveringWorker = await createInProcessWorker({
+      client,
+      concurrency: 1,
+      pollIntervalMs: 20,
+      processors: createProcessors({
+        client,
+        jobTypes,
+        attemptConfig,
+        processors: {
+          test: {
+            attemptHandler: async ({ job, finish }) => {
+              reclaimedAttempt = { attempt: job.attempt, lastAttemptError: job.lastAttemptError };
+              return withTransaction(async (txCtx, transactionHooks) =>
+                finish({ ...txCtx, transactionHooks, output: null }),
+              );
+            },
+          },
+        },
+      }),
+    });
+
+    const chain = await withTransaction(async (txCtx, transactionHooks) =>
+      client.createChain({
+        ...txCtx,
+        transactionHooks,
+        typeName: "test",
+        input: null,
+      }),
+    );
+
+    const stopCrashedWorker = await crashedWorker.start();
+    try {
+      await crashedStarted.promise;
+
+      await withWorkers([await recoveringWorker.start()], async () => {
+        await client.awaitChain(chain, completionOptions);
+      });
+    } finally {
+      releaseCrashed.resolve();
+      await stopCrashedWorker();
+    }
+
+    expect(reclaimedAttempt?.attempt).toBe(2);
+    expect(reclaimedAttempt?.lastAttemptError).toContain("JobAttemptExpiredError");
+    expect(log).toHaveBeenCalledWith(
+      expect.objectContaining({
+        type: "job_attempt_reclaimed",
       }),
     );
   });

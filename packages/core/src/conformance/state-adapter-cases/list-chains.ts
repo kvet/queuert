@@ -310,10 +310,18 @@ export const listChainsGroup: ConformanceGroup<StateConformanceFixture> = {
 
         // Start both jobs (oldest first)
         await stateAdapter.withTransaction(async (txCtx) =>
-          stateAdapter.startJobAttempt({ txCtx, workerId: "w1", typeNames: ["task"] }),
+          stateAdapter.startJobAttempt({
+            txCtx,
+            workerId: "w1",
+            timeoutMsByTypeName: { task: 30_000 },
+          }),
         );
         await stateAdapter.withTransaction(async (txCtx) =>
-          stateAdapter.startJobAttempt({ txCtx, workerId: "w1", typeNames: ["task"] }),
+          stateAdapter.startJobAttempt({
+            txCtx,
+            workerId: "w1",
+            timeoutMsByTypeName: { task: 30_000 },
+          }),
         );
 
         // Complete chainB first, then chainA, to get different completedAt order
@@ -375,7 +383,7 @@ export const listChainsGroup: ConformanceGroup<StateConformanceFixture> = {
             stateAdapter.startJobAttempt({
               txCtx,
               workerId: "w1",
-              typeNames: ["task"],
+              timeoutMsByTypeName: { task: 30_000 },
             }),
           );
           await stateAdapter.withTransaction(async (txCtx) =>
@@ -436,7 +444,7 @@ export const listChainsGroup: ConformanceGroup<StateConformanceFixture> = {
             stateAdapter.startJobAttempt({
               txCtx,
               workerId: "w1",
-              typeNames: ["task"],
+              timeoutMsByTypeName: { task: 30_000 },
             }),
           );
           await stateAdapter.withTransaction(async (txCtx) =>
@@ -493,7 +501,11 @@ export const listChainsGroup: ConformanceGroup<StateConformanceFixture> = {
         );
 
         await stateAdapter.withTransaction(async (txCtx) =>
-          stateAdapter.startJobAttempt({ txCtx, workerId: "worker-1", typeNames: ["test-type"] }),
+          stateAdapter.startJobAttempt({
+            txCtx,
+            workerId: "worker-1",
+            timeoutMsByTypeName: { "test-type": 30_000 },
+          }),
         );
         await stateAdapter.withTransaction(async (txCtx) =>
           stateAdapter.completeJobs({
@@ -598,13 +610,25 @@ export const listChainsGroup: ConformanceGroup<StateConformanceFixture> = {
         );
 
         await stateAdapter.withTransaction(async (txCtx) =>
-          stateAdapter.startJobAttempt({ txCtx, workerId: "w1", typeNames: ["task"] }),
+          stateAdapter.startJobAttempt({
+            txCtx,
+            workerId: "w1",
+            timeoutMsByTypeName: { task: 30_000 },
+          }),
         );
         await stateAdapter.withTransaction(async (txCtx) =>
-          stateAdapter.startJobAttempt({ txCtx, workerId: "w1", typeNames: ["task"] }),
+          stateAdapter.startJobAttempt({
+            txCtx,
+            workerId: "w1",
+            timeoutMsByTypeName: { task: 30_000 },
+          }),
         );
         await stateAdapter.withTransaction(async (txCtx) =>
-          stateAdapter.startJobAttempt({ txCtx, workerId: "w1", typeNames: ["task"] }),
+          stateAdapter.startJobAttempt({
+            txCtx,
+            workerId: "w1",
+            timeoutMsByTypeName: { task: 30_000 },
+          }),
         );
 
         const independent = await stateAdapter.listChains({
@@ -655,10 +679,18 @@ export const listChainsGroup: ConformanceGroup<StateConformanceFixture> = {
         );
 
         await stateAdapter.withTransaction(async (txCtx) =>
-          stateAdapter.startJobAttempt({ txCtx, workerId: "w1", typeNames: ["task"] }),
+          stateAdapter.startJobAttempt({
+            txCtx,
+            workerId: "w1",
+            timeoutMsByTypeName: { task: 30_000 },
+          }),
         );
         await stateAdapter.withTransaction(async (txCtx) =>
-          stateAdapter.startJobAttempt({ txCtx, workerId: "w1", typeNames: ["task"] }),
+          stateAdapter.startJobAttempt({
+            txCtx,
+            workerId: "w1",
+            timeoutMsByTypeName: { task: 30_000 },
+          }),
         );
 
         const result = await stateAdapter.listChains({
@@ -690,7 +722,11 @@ export const listChainsGroup: ConformanceGroup<StateConformanceFixture> = {
 
         for (let i = 0; i < 4; i++) {
           await stateAdapter.withTransaction(async (txCtx) =>
-            stateAdapter.startJobAttempt({ txCtx, workerId: "w1", typeNames: ["task"] }),
+            stateAdapter.startJobAttempt({
+              txCtx,
+              workerId: "w1",
+              timeoutMsByTypeName: { task: 30_000 },
+            }),
           );
         }
 
@@ -752,7 +788,11 @@ export const listChainsGroup: ConformanceGroup<StateConformanceFixture> = {
 
         for (const id of [mainChain.id, blockerChain.id, otherChain.id]) {
           await stateAdapter.withTransaction(async (txCtx) =>
-            stateAdapter.startJobAttempt({ txCtx, workerId: "w1", typeNames: ["task"] }),
+            stateAdapter.startJobAttempt({
+              txCtx,
+              workerId: "w1",
+              timeoutMsByTypeName: { task: 30_000 },
+            }),
           );
           await stateAdapter.withTransaction(async (txCtx) =>
             stateAdapter.completeJobs({
@@ -812,7 +852,11 @@ export const listChainsGroup: ConformanceGroup<StateConformanceFixture> = {
 
         for (const id of [mainChain.id, blockerChain.id]) {
           await stateAdapter.withTransaction(async (txCtx) =>
-            stateAdapter.startJobAttempt({ txCtx, workerId: "w1", typeNames: ["task"] }),
+            stateAdapter.startJobAttempt({
+              txCtx,
+              workerId: "w1",
+              timeoutMsByTypeName: { task: 30_000 },
+            }),
           );
           await stateAdapter.withTransaction(async (txCtx) =>
             stateAdapter.completeJobs({
@@ -851,7 +895,11 @@ export const listChainsGroup: ConformanceGroup<StateConformanceFixture> = {
 
         for (let i = 0; i < 4; i++) {
           await stateAdapter.withTransaction(async (txCtx) =>
-            stateAdapter.startJobAttempt({ txCtx, workerId: "w1", typeNames: ["task"] }),
+            stateAdapter.startJobAttempt({
+              txCtx,
+              workerId: "w1",
+              timeoutMsByTypeName: { task: 30_000 },
+            }),
           );
           await stateAdapter.withTransaction(async (txCtx) =>
             stateAdapter.completeJobs({
@@ -909,7 +957,11 @@ export const listChainsGroup: ConformanceGroup<StateConformanceFixture> = {
 
         // Start headA (oldest pending "task")
         await stateAdapter.withTransaction(async (txCtx) =>
-          stateAdapter.startJobAttempt({ txCtx, workerId: "w1", typeNames: ["task"] }),
+          stateAdapter.startJobAttempt({
+            txCtx,
+            workerId: "w1",
+            timeoutMsByTypeName: { task: 30_000 },
+          }),
         );
         const [continuedTailA] = await stateAdapter.withTransaction(async (txCtx) =>
           stateAdapter.continueJobs({
@@ -928,7 +980,11 @@ export const listChainsGroup: ConformanceGroup<StateConformanceFixture> = {
 
         // Start headB (next pending "task")
         await stateAdapter.withTransaction(async (txCtx) =>
-          stateAdapter.startJobAttempt({ txCtx, workerId: "w1", typeNames: ["task"] }),
+          stateAdapter.startJobAttempt({
+            txCtx,
+            workerId: "w1",
+            timeoutMsByTypeName: { task: 30_000 },
+          }),
         );
         await stateAdapter.withTransaction(async (txCtx) =>
           stateAdapter.completeJobs({
@@ -961,7 +1017,11 @@ export const listChainsGroup: ConformanceGroup<StateConformanceFixture> = {
 
         // Now complete chainA's tail — it should appear in completed with a later completedAt
         await stateAdapter.withTransaction(async (txCtx) =>
-          stateAdapter.startJobAttempt({ txCtx, workerId: "w1", typeNames: ["task-step2"] }),
+          stateAdapter.startJobAttempt({
+            txCtx,
+            workerId: "w1",
+            timeoutMsByTypeName: { "task-step2": 30_000 },
+          }),
         );
         await stateAdapter.withTransaction(async (txCtx) =>
           stateAdapter.completeJobs({

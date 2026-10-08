@@ -61,20 +61,21 @@ const worker = await createInProcessWorker({
     jobTypes,
     processors: {
       send_welcome_email: {
-        attemptHandler: async ({ job, prepare, complete }) => {
-          // Load the user with Knex inside the job transaction
-          const user = await prepare({ mode: "staged" }, async ({ trx }) =>
-            trx<{ id: number; name: string; email: string }>("users")
-              .where({ id: job.input.userId })
-              .first(),
-          );
+        attemptHandler: async ({ job, finish }) => {
+          const user = await knex<{ id: number; name: string; email: string }>("users")
+            .where({ id: job.input.userId })
+            .first();
           if (!user) throw new Error(`User ${job.input.userId} not found`);
 
           // Simulate sending email (in real app, call email service here)
           console.log(`Sending welcome email to ${user.email} for ${user.name}`);
 
-          return complete(async ({ finish }) =>
-            finish({ output: { sentAt: new Date().toISOString() } }),
+          // Knex holds its single SQLite connection for the whole transaction, so the
+          // worker's own statements cannot run inside it.
+          return withTransactionHooks(async (transactionHooks) =>
+            knex.transaction(async (trx) =>
+              finish({ trx, transactionHooks, output: { sentAt: new Date().toISOString() } }),
+            ),
           );
         },
       },

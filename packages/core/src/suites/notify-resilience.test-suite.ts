@@ -23,7 +23,7 @@ export const notifyResilienceTestSuite = ({
     const jobTypes = defineJobTypes<{
       test: {
         entry: true;
-        input: { value: number; atomic: boolean };
+        input: { value: number };
         output: { result: number };
       };
     }>();
@@ -58,12 +58,10 @@ export const notifyResilienceTestSuite = ({
         },
         processors: {
           test: {
-            attemptHandler: async ({ job, prepare, complete }) => {
-              await prepare({ mode: job.input.atomic ? "atomic" : "staged" });
-              return complete(async ({ finish }) =>
-                finish({ output: { result: job.input.value * 2 } }),
-              );
-            },
+            attemptHandler: async ({ job, finish }) =>
+              withTransaction(async (txCtx, transactionHooks) =>
+                finish({ ...txCtx, transactionHooks, output: { result: job.input.value * 2 } }),
+              ),
           },
         },
       }),
@@ -77,7 +75,7 @@ export const notifyResilienceTestSuite = ({
           transactionHooks,
           items: Array.from({ length: 20 }, (_, i) => ({
             typeName: "test",
-            input: { value: i, atomic: i % 2 === 0 },
+            input: { value: i },
           })),
         }),
       );

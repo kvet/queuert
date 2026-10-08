@@ -21,6 +21,7 @@ export type TestSuiteContext = {
     cb: (txCtx: { $test: true }, transactionHooks: TransactionHooks) => Promise<T>,
   ) => Promise<T>;
   poisonTransaction: ((txCtx: { $test: true }) => Promise<void>) | undefined;
+  withSavepoint: WithSavepoint | undefined;
   poisonExecute:
     | ((cb: (adapter: StateAdapter<{ $test: true }, string>) => Promise<void>) => Promise<void>)
     | undefined;
@@ -29,6 +30,33 @@ export type TestSuiteContext = {
   log: MockedFunction<Log>;
   observabilityAdapter: ObservabilityAdapter;
 };
+
+/**
+ * Runs `cb` inside a database savepoint paired with a `transactionHooks` savepoint, so a
+ * rollback undoes both the writes and the side effects buffered after the savepoint.
+ */
+export type WithSavepoint = <T>(
+  txCtx: { $test: true },
+  transactionHooks: TransactionHooks,
+  cb: (txCtx: { $test: true }, transactionHooks: TransactionHooks) => Promise<T>,
+) => Promise<T>;
+
+/** Builds a {@link WithSavepoint} from a function that runs one SQL statement in the transaction. */
+export const createSqlWithSavepoint =
+  (executeStatement: (txCtx: { $test: true }, statement: string) => Promise<void>): WithSavepoint =>
+  async (txCtx, transactionHooks, cb) =>
+    transactionHooks.withSavepoint(async (savepointHooks) => {
+      const name = `queuert_test_sp_${crypto.randomUUID().replace(/-/g, "_")}`;
+      await executeStatement(txCtx, `SAVEPOINT ${name}`);
+      try {
+        const result = await cb(txCtx, savepointHooks);
+        await executeStatement(txCtx, `RELEASE SAVEPOINT ${name}`);
+        return result;
+      } catch (error) {
+        await executeStatement(txCtx, `ROLLBACK TO SAVEPOINT ${name}`);
+        throw error;
+      }
+    });
 
 export const extendWithCommon = <
   T extends {

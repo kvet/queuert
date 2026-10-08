@@ -73,9 +73,14 @@ const worker = await createInProcessWorker({
     jobTypes,
     processors: {
       "process-all": {
-        attemptHandler: async ({ job, complete }) => {
-          const results = job.blockers.map((b) => b.output.data);
-          return complete(async ({ finish }) => finish({ output: { results } }));
+        attemptHandler: async ({ getBlockers, finish }) => {
+          const blockers = await getBlockers();
+          const results = blockers.map((b) => b.output.data);
+          return withTransactionHooks(async (transactionHooks) =>
+            stateProvider.withTransaction(async (txCtx) =>
+              finish({ ...txCtx, transactionHooks, output: { results } }),
+            ),
+          );
         },
       },
     },

@@ -1,5 +1,6 @@
-import { createProcessors } from "queuert";
+import { createProcessors, withTransactionHooks } from "queuert";
 
+import { sql } from "./adapters.js";
 import { client } from "./client.js";
 import { notificationJobTypes } from "./slice-notifications-definitions.js";
 
@@ -8,13 +9,15 @@ export const notificationProcessors = createProcessors({
   jobTypes: notificationJobTypes,
   processors: {
     "notifications.send-notification": {
-      attemptHandler: async ({ job, complete }) => {
+      attemptHandler: async ({ job, finish }) => {
         console.log(
           `[notifications.send-notification] Sending ${job.input.channel} to user ${job.input.userId}: "${job.input.message}"`,
         );
 
-        return complete(async ({ finish }) =>
-          finish({ output: { sentAt: new Date().toISOString() } }),
+        return withTransactionHooks(async (transactionHooks) =>
+          sql.begin(async (txSql) =>
+            finish({ txSql, transactionHooks, output: { sentAt: new Date().toISOString() } }),
+          ),
         );
       },
     },

@@ -25,16 +25,6 @@ export type PgStateProvider<TTxContext extends BaseTxContext> = {
   withTransaction: <T>(fn: (txCtx: TTxContext) => Promise<T>) => Promise<T>;
 
   /**
-   * Executes a callback within a savepoint inside an existing transaction.
-   * Creates a savepoint, executes the callback, releases on success,
-   * rolls back to the savepoint on error.
-   *
-   * Optional. When not provided, the adapter uses raw SAVEPOINT SQL via executeSql.
-   * Override when the driver tracks transaction state client-side (e.g. postgres.js).
-   */
-  withSavepoint?: <T>(txCtx: TTxContext, fn: (txCtx: TTxContext) => Promise<T>) => Promise<T>;
-
-  /**
    * Executes a SQL query.
    * When txCtx is provided, uses that transaction connection.
    * When txCtx is omitted, acquires a connection from the pool, executes, and releases.
@@ -45,7 +35,7 @@ export type PgStateProvider<TTxContext extends BaseTxContext> = {
    * MAY use it directly as the prepared-statement name (pg: `query.name = id`) or
    * as a flag to opt into driver-level caching (postgres.js: `prepare: true`).
    * When omitted, the provider must execute the statement unprepared — the
-   * adapter omits `id` for one-off or dynamic SQL (e.g. savepoints).
+   * adapter omits `id` for one-off or dynamic SQL.
    *
    * `paramTypes` / `columnTypes` are type hints for drivers that don't auto-serialize/parse
    * (e.g. postgres.js `unsafe()`). Drivers that handle these natively (e.g. `pg`) can ignore.

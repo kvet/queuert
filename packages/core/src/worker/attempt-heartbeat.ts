@@ -3,24 +3,28 @@ import { sleep } from "../helpers/sleep.js";
 /** Configuration for job attempt timeout and heartbeat frequency. */
 export type AttemptConfig = {
   /**
-   * How long a worker holds a staged attempt before it can be reclaimed. Atomic attempts run in
-   * one transaction and have no deadline. Defaults to `60_000`.
+   * How long a worker holds an attempt before it can be reclaimed, unless the heartbeat
+   * extends it. The lease starts when the job is acquired. Defaults to `60_000`.
    */
   timeoutMs: number;
-  /** How often to extend the attempt deadline of a staged attempt. Defaults to `30_000`. */
+  /** How often to extend the attempt's lease while the handler runs. Defaults to `30_000`. */
   heartbeatMs: number;
 };
 
 export type AttemptHeartbeat = {
-  start: () => Promise<void>;
+  start: () => void;
   stop: () => Promise<void>;
 };
 
+/**
+ * Renews an attempt's lease every `heartbeatMs` until stopped, or until `commitRenewal`
+ * reports there is nothing left to renew by returning `false`.
+ */
 export const createAttemptHeartbeat = ({
   commitRenewal,
   config,
 }: {
-  commitRenewal: (timeoutMs: number) => Promise<void>;
+  commitRenewal: (timeoutMs: number) => Promise<boolean>;
   config: AttemptConfig;
 }): AttemptHeartbeat => {
   const abortController = new AbortController();
@@ -34,12 +38,14 @@ export const createAttemptHeartbeat = ({
       if (abortController.signal.aborted) {
         break;
       }
-      await commitRenewal(config.timeoutMs);
+      if (!(await commitRenewal(config.timeoutMs))) {
+        break;
+      }
     }
   };
 
   return {
-    start: async () => {
+    start: () => {
       loopPromise = runRenewalLoop();
       loopPromise.catch(() => {});
     },

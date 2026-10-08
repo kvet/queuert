@@ -943,18 +943,21 @@ export const createChainsTestSuite = ({ it }: { it: TestAPI<TestSuiteContext> })
           jobTypes,
           processors: {
             blocker: {
-              attemptHandler: async ({ job, complete }) => {
-                return complete(async ({ finish }) =>
-                  finish({ output: { result: job.input.value } }),
+              attemptHandler: async ({ job, finish }) => {
+                return withTransaction(async (txCtx, transactionHooks) =>
+                  finish({ ...txCtx, transactionHooks, output: { result: job.input.value } }),
                 );
               },
             },
             main: {
-              attemptHandler: async ({ job, complete }) => {
-                return complete(async ({ finish }) =>
+              attemptHandler: async ({ getBlockers, finish }) => {
+                const blockers = await getBlockers();
+                return withTransaction(async (txCtx, transactionHooks) =>
                   finish({
+                    ...txCtx,
+                    transactionHooks,
                     output: {
-                      finalResult: job.blockers[0].output.result,
+                      finalResult: blockers[0].output.result,
                     },
                   }),
                 );
@@ -1016,9 +1019,9 @@ export const createChainsTestSuite = ({ it }: { it: TestAPI<TestSuiteContext> })
           jobTypes,
           processors: {
             test: {
-              attemptHandler: async ({ job, complete }) => {
-                return complete(async ({ finish }) =>
-                  finish({ output: { result: job.input.value * 2 } }),
+              attemptHandler: async ({ job, finish }) => {
+                return withTransaction(async (txCtx, transactionHooks) =>
+                  finish({ ...txCtx, transactionHooks, output: { result: job.input.value * 2 } }),
                 );
               },
             },

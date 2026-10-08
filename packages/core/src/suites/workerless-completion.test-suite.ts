@@ -334,9 +334,10 @@ export const workerlessCompletionTestSuite = ({ it }: { it: TestAPI<TestSuiteCon
         jobTypes,
         processors: {
           "process-approved": {
-            attemptHandler: async ({ prepare, complete }) => {
-              await prepare({ mode: "atomic" });
-              return complete(async ({ finish }) => finish({ output: { done: true } }));
+            attemptHandler: async ({ finish }) => {
+              return withTransaction(async (txCtx, transactionHooks) =>
+                finish({ ...txCtx, transactionHooks, output: { done: true } }),
+              );
             },
           },
         },
@@ -541,14 +542,16 @@ export const workerlessCompletionTestSuite = ({ it }: { it: TestAPI<TestSuiteCon
         jobTypes,
         processors: {
           test: {
-            attemptHandler: async ({ signal, complete }) => {
+            attemptHandler: async ({ signal, finish }) => {
               jobStarted.resolve();
 
               await jobCompleted.promise;
 
               try {
                 await expect(
-                  complete(async ({ finish }) => finish({ output: { result: "from-worker" } })),
+                  withTransaction(async (txCtx, transactionHooks) =>
+                    finish({ ...txCtx, transactionHooks, output: { result: "from-worker" } }),
+                  ),
                 ).rejects.toThrow();
 
                 expect(signal.aborted).toBe(true);
@@ -593,6 +596,109 @@ export const workerlessCompletionTestSuite = ({ it }: { it: TestAPI<TestSuiteCon
 
       await processCompleted.promise;
     });
+  });
+
+  it("keeps workers off the chain's current job while the completeChain handler runs", async ({
+    stateAdapter,
+    notifyAdapter,
+    withTransaction,
+    withWorkers,
+    observabilityAdapter,
+    log,
+    expect,
+    skip,
+  }) => {
+    if (stateAdapter.transactionConcurrency === "serialized") return skip();
+
+    const jobTypes = defineJobTypes<{
+      first: {
+        entry: true;
+        input: null;
+        continueWith: { typeName: "second" };
+      };
+      second: {
+        input: null;
+        output: { result: string };
+      };
+    }>();
+
+    const client = await createClient({
+      stateAdapter,
+      notifyAdapter,
+      observabilityAdapter,
+      log,
+      jobTypes,
+    });
+
+    const chain = await withTransaction(async (txCtx, transactionHooks) =>
+      client.createChain({ ...txCtx, transactionHooks, typeName: "first", input: null }),
+    );
+    await withTransaction(async (txCtx, transactionHooks) =>
+      client.completeChain({
+        ...txCtx,
+        transactionHooks,
+        ...chain,
+        handler: async ({ job, completeJob }) => {
+          if (job.typeName !== "first") throw new Error(`unexpected ${job.typeName}`);
+          return completeJob(job, async ({ finish }) =>
+            finish({ continueWith: { typeName: "second", input: null } }),
+          );
+        },
+      }),
+    );
+
+    const workerHandler = vi.fn();
+    const worker = await createInProcessWorker({
+      client,
+      concurrency: 1,
+      processors: createProcessors({
+        client,
+        jobTypes,
+        processors: {
+          second: {
+            attemptHandler: async ({ finish }) => {
+              workerHandler();
+              return withTransaction(async (txCtx, transactionHooks) =>
+                finish({ ...txCtx, transactionHooks, output: { result: "from-worker" } }),
+              );
+            },
+          },
+        },
+      }),
+    });
+
+    const handlerEntered = Promise.withResolvers<void>();
+    const handlerGate = Promise.withResolvers<void>();
+    const completion = withTransaction(async (txCtx, transactionHooks) =>
+      client.completeChain({
+        ...txCtx,
+        transactionHooks,
+        ...chain,
+        handler: async ({ job, completeJob }) => {
+          handlerEntered.resolve();
+          await handlerGate.promise;
+          if (job.typeName !== "second") throw new Error(`unexpected ${job.typeName}`);
+          return completeJob(job, async ({ finish }) =>
+            finish({ output: { result: "from-external" } }),
+          );
+        },
+      }),
+    );
+
+    await handlerEntered.promise;
+    const completedChain = await withWorkers([await worker.start()], async () => {
+      try {
+        await sleep(200);
+        expect(workerHandler).not.toHaveBeenCalled();
+      } finally {
+        handlerGate.resolve();
+      }
+      return completion;
+    });
+
+    expect(workerHandler).not.toHaveBeenCalled();
+    expect(completedChain.status).toBe("completed");
+    expect(completedChain.output).toEqual({ result: "from-external" });
   });
 
   it("correctly narrows chainTypeName in completeChain", async ({

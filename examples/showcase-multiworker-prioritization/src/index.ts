@@ -95,40 +95,46 @@ const urgentWorker = await createInProcessWorker({
     jobTypes,
     processors: {
       "email.transactional": {
-        attemptHandler: async ({ job, complete }) => {
+        attemptHandler: async ({ job, finish }) => {
           await simulateWork(50);
-          return complete(async ({ finish }) => {
-            const elapsedMs = Date.now() - startedAt;
-            completionOrder.push({
-              worker: "urgent",
-              label: `send ${job.input.to}`,
-              elapsedMs,
-            });
-            console.log(`[urgent] send ${job.input.to} done at +${elapsedMs}ms`);
-            return finish({ output: { finishedAt: Date.now() } });
+          const elapsedMs = Date.now() - startedAt;
+          completionOrder.push({
+            worker: "urgent",
+            label: `send ${job.input.to}`,
+            elapsedMs,
           });
+          console.log(`[urgent] send ${job.input.to} done at +${elapsedMs}ms`);
+          return withTransactionHooks(async (transactionHooks) =>
+            sql.begin(async (txSql) =>
+              finish({ txSql, transactionHooks, output: { finishedAt: Date.now() } }),
+            ),
+          );
         },
       },
       "alert.dispatch": {
-        attemptHandler: async ({ job, complete }) => {
+        attemptHandler: async ({ job, finish }) => {
           await simulateWork(50);
-          return complete(async ({ finish }) => {
-            const elapsedMs = Date.now() - startedAt;
-            completionOrder.push({
-              worker: "urgent",
-              label: `dispatch ${job.input.alertId}`,
-              elapsedMs,
-            });
-            console.log(
-              `[urgent] dispatch ${job.input.alertId} done at +${elapsedMs}ms → hands off to bulk worker`,
-            );
-            return finish({
-              continueWith: {
-                typeName: "alert.archive",
-                input: { to: job.input.to, alertId: job.input.alertId },
-              },
-            });
+          const elapsedMs = Date.now() - startedAt;
+          completionOrder.push({
+            worker: "urgent",
+            label: `dispatch ${job.input.alertId}`,
+            elapsedMs,
           });
+          console.log(
+            `[urgent] dispatch ${job.input.alertId} done at +${elapsedMs}ms → hands off to bulk worker`,
+          );
+          return withTransactionHooks(async (transactionHooks) =>
+            sql.begin(async (txSql) =>
+              finish({
+                txSql,
+                transactionHooks,
+                continueWith: {
+                  typeName: "alert.archive",
+                  input: { to: job.input.to, alertId: job.input.alertId },
+                },
+              }),
+            ),
+          );
         },
       },
     },
@@ -144,29 +150,33 @@ const bulkWorker = await createInProcessWorker({
     jobTypes,
     processors: {
       "email.marketing": {
-        attemptHandler: async ({ job, complete }) => {
+        attemptHandler: async ({ job, finish }) => {
           await simulateWork(800);
-          return complete(async ({ finish }) => {
-            const elapsedMs = Date.now() - startedAt;
-            completionOrder.push({ worker: "bulk", label: `send ${job.input.to}`, elapsedMs });
-            console.log(`[bulk  ] send ${job.input.to} done at +${elapsedMs}ms`);
-            return finish({ output: { finishedAt: Date.now() } });
-          });
+          const elapsedMs = Date.now() - startedAt;
+          completionOrder.push({ worker: "bulk", label: `send ${job.input.to}`, elapsedMs });
+          console.log(`[bulk  ] send ${job.input.to} done at +${elapsedMs}ms`);
+          return withTransactionHooks(async (transactionHooks) =>
+            sql.begin(async (txSql) =>
+              finish({ txSql, transactionHooks, output: { finishedAt: Date.now() } }),
+            ),
+          );
         },
       },
       "alert.archive": {
-        attemptHandler: async ({ job, complete }) => {
+        attemptHandler: async ({ job, finish }) => {
           await simulateWork(800);
-          return complete(async ({ finish }) => {
-            const elapsedMs = Date.now() - startedAt;
-            completionOrder.push({
-              worker: "bulk",
-              label: `archive ${job.input.alertId}`,
-              elapsedMs,
-            });
-            console.log(`[bulk  ] archive ${job.input.alertId} done at +${elapsedMs}ms`);
-            return finish({ output: { archivedAt: Date.now() } });
+          const elapsedMs = Date.now() - startedAt;
+          completionOrder.push({
+            worker: "bulk",
+            label: `archive ${job.input.alertId}`,
+            elapsedMs,
           });
+          console.log(`[bulk  ] archive ${job.input.alertId} done at +${elapsedMs}ms`);
+          return withTransactionHooks(async (transactionHooks) =>
+            sql.begin(async (txSql) =>
+              finish({ txSql, transactionHooks, output: { archivedAt: Date.now() } }),
+            ),
+          );
         },
       },
     },

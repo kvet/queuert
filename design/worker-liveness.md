@@ -2,13 +2,15 @@
 
 Move attempt ownership from the job row to the worker. Workers register themselves in the database, hold a single lease that a process-level heartbeat renews, and a job's `attemptBy` is a reference to a live worker row instead of a self-contained per-job deadline.
 
+This builds on [user-owned-transactions.md](user-owned-transactions.md), which lands first. After it, queuert opens no transaction around processing: acquire, heartbeat, reclaim and reschedule-on-error are single autocommit statements, and the only transaction an attempt touches is the user's, passed to `finish`. Liveness replaces that change's per-attempt lease (`attempt_until`, `extendJobAttempt`, `reclaimExpiredJobAttempt`) with a per-worker lease. The `attempt` fence (`status = 'running' AND attempt = N AND attempt_by = workerId`), all-or-nothing fenced writes, commit detection and the miss classifier carry over unchanged. There are no atomic/staged processing modes to account for.
+
 ## Problem
 
-Today liveness is tracked per job. Every running job carries `attempt_until`, every in-flight attempt runs its own heartbeat (`extendJobAttempt` on a timer inside `runJobProcess`), and the worker loop reclaims one expired job per iteration (`reclaimExpiredJobAttempt`).
+Today (after user-owned transactions) liveness is tracked per attempt. `startJobAttempt` sets `attempt_until = now() + <the type's attemptConfig.timeoutMs>` at acquire for every attempt; every in-flight attempt runs its own heartbeat from acquire until the handler ends (`extendJobAttempt`, an autocommit statement fenced on `status = 'running' AND attempt = N AND attempt_by = workerId`); and the worker loop reclaims one expired job per iteration (`reclaimExpiredJobAttempt`, autocommit, stamping `last_attempt_at` and a fixed `JobAttemptExpiredError: …` `last_attempt_error`). A crash always consumes an attempt and is recovered by reclaim.
 
 That has a handful of costs:
 
-- **Write amplification.** A worker with concurrency `N` issues `N` heartbeat transactions per interval, each one an `UPDATE` on a hot job row (plus an index write on `job_running_idx`). The information carried by all of them is identical: "this process is alive".
+- **Write amplification.** A worker with concurrency `N` issues `N` heartbeat statements per interval, each one an `UPDATE` on a hot job row (plus an index write on `job_running_idx`). The information carried by all of them is identical: "this process is alive".
 - **Per-job timeout tuning.** `attemptConfig.timeoutMs` is really "how long may this process be unreachable before we give the job to someone else", but it is configured per processor, so the same process-level fact is expressed once per job type, and a long-running job type has to widen the window for everything it touches.
 - **Self-reclaim races.** Because a worker can reclaim its own jobs, `reclaimExpiredJobAttempt` needs `ignoredJobIds` to exclude the jobs the caller is currently running — a workaround for a question ("is the owner alive?") the job row cannot answer.
 - **No worker inventory.** Nothing in the database knows which workers exist. `attemptBy` is an opaque `name-uuid` string; there is no way to list workers, show them in the dashboard, or tell "crashed" from "never existed".
@@ -22,7 +24,7 @@ One row per live worker process, one lease per worker, one heartbeat per process
 - `job.attempt_by` holds a worker `id`; `job.attempt_until` is dropped.
 - A running job is "live" exactly when its worker's lease is live. Reclamation becomes a worker-level operation: expire the worker, return its jobs to `pending` as a failed attempt, delete the worker row.
 
-Everything else about job processing — `refetchJobLocked`, `JobTakenByAnotherWorkerError`, `listenJobAttemptLost`, backoff — is unchanged.
+Everything else about job processing from user-owned transactions — the `attempt` fence on every attempt-scoped write (`attempt_by` now holds the worker row id), all-or-nothing fenced writes, commit detection by the post-handler fenced reschedule, the miss classifier, `JobTakenByAnotherWorkerError`, `listenJobAttemptLost`, backoff — is unchanged.
 
 ### Schema
 
@@ -54,7 +56,9 @@ No index on `attempt_by`: reclaim of a single worker's jobs is a `WHERE attempt_
 
 ### State adapter surface
 
-Removed: `extendJobAttempt`, `reclaimExpiredJobAttempt`.
+Removed: `extendJobAttempt`, `reclaimExpiredJobAttempt` (in their user-owned-transactions form: fenced autocommit extend, autocommit reclaim). `startJobAttempt` stops setting `attempt_until`, so the per-type timeouts it receives in `timeoutMsByTypeName` are no longer needed.
+
+Like the worker-owned methods after user-owned transactions, the methods below are called by the worker without a transaction (`txCtx` optional, autocommit). Each must therefore be a single statement or otherwise correct without a surrounding transaction; see the reclaim open item under [Claiming under a lease](#claiming-under-a-lease).
 
 Added:
 
@@ -125,7 +129,7 @@ listWorkers: (
 
 `stopWorker` and `reclaimExpiredWorkers` share one primitive so a graceful stop and a crash leave the database in the same shape; the only difference is which rows are selected, and both return the jobs they released. `stopWorker` normally finds nothing to release (the worker drains first), but it must still release rather than delete-and-orphan: a `running` job whose `attempt_by` names a nonexistent worker would never be reclaimed by anything.
 
-Released jobs are written as a failed attempt, not a silent reschedule, which is a behavior change from today's reclaim:
+Released jobs are written as a failed attempt, as user-owned transactions' reclaim already does (it stamps `last_attempt_at` and a `JobAttemptExpiredError: …` `last_attempt_error`). The stamp is load-bearing: commit detection reads `pending`@N with `last_attempt_error IS NULL` as the attempt's own `finish({ reschedule })`, so a release must always set a non-null error. The written shape:
 
 - `status = 'pending'`, `attempt_at = NULL`, `attempt_by = NULL`
 - `last_attempt_at = now()`, `last_attempt_error = 'Worker stopped unexpectedly'` (serialized through the same shape `rescheduleJobs` uses for `error`)
@@ -133,7 +137,7 @@ Released jobs are written as a failed attempt, not a silent reschedule, which is
 
 `reclaimExpiredWorkers` is **not** type-scoped. A worker's jobs are released whether or not the reclaimer processes those types — that is the fix for jobs stranded on a type no live worker handles. The caller therefore has to notify per distinct `typeName` of the returned jobs rather than for its own type list.
 
-`limit` bounds a single transaction. The per-worker job count is bounded by that worker's concurrency, so `limit: 1` (the worker loop's value) updates at most `concurrency` rows.
+`limit` bounds a single call. The per-worker job count is bounded by that worker's concurrency, so `limit: 1` (the worker loop's value) updates at most `concurrency` rows.
 
 ### Claiming under a lease
 
@@ -156,6 +160,8 @@ The `FOR SHARE` is load-bearing, not decoration. Without it, this interleaving o
 3. `W`'s claim commits after the reclaimer's job `UPDATE` ran. `J` is `running`, owned by a worker row that no longer exists.
 
 With `FOR SHARE` on the claim side and `FOR UPDATE SKIP LOCKED` on the reclaim side, the reclaimer's worker-row lock waits for the in-flight claim to commit; its subsequent job `UPDATE` (a new statement, new snapshot under READ COMMITTED) then sees `J` and releases it. SQLite serializes writers, and the in-process adapter runs under its async RW lock, so both get this for free — the lock is a PostgreSQL concern that the conformance suite pins for everyone.
+
+**Open: reclaim must be redesigned as single conditional statements.** The protocol above relies on a queuert-owned transaction on the reclaim side: the `FOR UPDATE SKIP LOCKED` on the worker row, then a second statement (the job `UPDATE` with a fresh snapshot) inside the same transaction, plus the worker-row delete. User-owned transactions removed every queuert-owned transaction from the worker (acquire, heartbeat, reclaim and error reschedule are single autocommit statements), so this two-statement reclaim (and `stopWorker`, which shares the primitive) conflicts with that model. The claim side's `FOR SHARE` gate sits inside the single `startJobAttempt` statement and is not itself the problem. The replacement — closing the claim-vs-reclaim orphan race with single conditional statements — is not designed yet.
 
 A claim that returns `undefined` stays ambiguous ("nothing to do" vs. "lease gone"); the lease heartbeat, not the claim, is what detects loss. Worst case a worker spins through idle iterations until the next heartbeat.
 
@@ -188,11 +194,11 @@ Defaults: `durationMs: 60_000`, `heartbeatMs: 20_000` — three renewal opportun
 
 **start()**
 
-1. `startWorker({ workerId, name, leaseMs })` in its own transaction, then emit `workerStarted`. A failure here fails `start()` — the process has nothing to recover into yet.
+1. `startWorker({ workerId, name, leaseMs })` as an autocommit statement, then emit `workerStarted`. A failure here fails `start()` — the process has nothing to recover into yet.
 2. Start the lease manager.
 3. Run the main loop.
 
-**Lease manager.** Every `heartbeatMs`, `extendWorkerLease` in its own transaction.
+**Lease manager.** Every `heartbeatMs`, `extendWorkerLease` as an autocommit statement.
 
 - Renewed → emit `workerLeaseExtended`, continue.
 - `undefined` → the lease is lost; enter recovery.
@@ -217,7 +223,7 @@ The lease manager keeps renewing throughout the drain, so a long graceful shutdo
 
 **Recovery.** On lease loss:
 
-1. Abort in-flight attempts with the new hard reason `"worker_lease_lost"`, stop filling slots, and drain. Those attempts will mostly fail on their next `refetchJobLocked` with `JobTakenByAnotherWorkerError` (already swallowed by `handleJobHandlerError`) — the abort makes it prompt and explicit rather than a surprise at complete time.
+1. Abort in-flight attempts with the new hard reason `"worker_lease_lost"`, stop filling slots, and drain. Once a reclaimer releases their jobs, their fenced `finish` misses (the job is no longer `running`@N for this worker) and throws `JobTakenByAnotherWorkerError` in the user's transaction, and the post-handler fenced reschedule misses too (already handled by `handleJobHandlerError`) — the abort makes it prompt and explicit rather than a surprise at `finish` time.
 2. Emit `workerLeaseLost`, then `workerStopping`; stop the lease manager. When the drain finishes, emit `workerStopped` — there is no `stopWorker` call to make, because the row is the reclaimer's to delete.
 3. On `recoveryBackoffConfig`, `startWorker` with a **freshly generated** UUID. The old id belongs to a row that a reclaimer owns; reusing it risks colliding with a row that has not been swept yet.
 4. On success, emit `workerStarted` for the new id and resume the main loop.
@@ -226,13 +232,13 @@ The worker never exits on lease loss — a lease is lost to a GC pause or a data
 
 ### Trade-off: hung jobs
 
-Per-job deadlines gave a crude hard timeout: a job that hung past `timeoutMs` was released even if the process was healthy. A process-level lease deliberately gives that up — a live process holds its jobs indefinitely. This is the correct semantics (the job _is_ being worked on, and reclaiming it would duplicate work), but it does mean a deadlocked handler parks a slot until the process is restarted. Real hard timeouts need handler-side cancellation or worker threads, which is already tracked separately in `TODO.md`.
+Per-job deadlines once gave a crude hard timeout: a job that hung past `timeoutMs` was released even if the process was healthy. After user-owned transactions that is already mostly gone — the per-attempt heartbeat renews from acquire until the handler ends, so a hung handler on a live process keeps renewing its lease; only a stalled event loop or an unreachable database lets it lapse. A process-level lease makes this explicit — a live process holds its jobs indefinitely. This is the correct semantics (the job _is_ being worked on, and reclaiming it would duplicate work), but it does mean a deadlocked handler parks a slot until the process is restarted. Real hard timeouts need handler-side cancellation or worker threads, which is already tracked separately in `TODO.md`.
 
 ## Observability
 
 The worker row and the worker process have the same lifetime, so they share one pair of events rather than getting two. `workerStarted` is emitted after `startWorker` commits, `workerStopped` after `stopWorker` commits — no separate `workerRegistered` / `workerDeregistered`.
 
-Removed: `jobAttemptExtended`, `jobAttemptExpired`.
+Removed: `jobAttemptExtended`, `jobAttemptExpired` (user-owned transactions emits the latter from the miss classifier when the lapsed `attempt_until` explains a fence miss; with no `attempt_until`, a miss after a worker release classifies as `taken_by_another_worker`).
 
 Changed:
 
@@ -285,3 +291,4 @@ Out:
 1. **`limit` for `reclaimExpiredWorkers` in the main loop.** `1` keeps iterations short and matches today's one-job-per-iteration behavior. If a deployment restarts fifty workers at once, sweeping is slow (one per loop iteration per live worker). A small constant like `4` is probably better; leaving it at `1` for the prototype and measuring.
 2. **Stale-worker cap.** Nothing bounds the `worker` table if reclamation never runs (e.g. every worker is down). Expired rows are only swept by live workers. That is self-correcting — the table only grows while nothing is processing — but the built-in cleanup design may want to sweep long-expired worker rows too.
 3. **Should `getWorker` be on the public client?** The dashboard needs `listWorkers` through some route; whether individual worker lookup is worth a client method can wait for the dashboard task.
+4. **Reclaim without a queuert-owned transaction.** `reclaimExpiredWorkers` and `stopWorker` as described lock the worker row, update its jobs and delete it in one transaction, and the claim-vs-reclaim safety argument depends on the second statement's fresh snapshot. User-owned transactions forbids queuert-owned transactions in the worker, so both must be redesigned as single conditional statements that still prevent orphaning a job on a deleted worker row. Not designed yet; see [Claiming under a lease](#claiming-under-a-lease).

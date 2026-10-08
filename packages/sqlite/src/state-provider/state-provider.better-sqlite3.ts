@@ -1,5 +1,5 @@
 import type Database from "better-sqlite3";
-import { createAsyncRwLock } from "queuert/internal";
+import { type AsyncRwLock, createAsyncRwLock } from "queuert/internal";
 
 import { type SqliteStateProvider } from "./state-provider.sqlite.js";
 
@@ -7,10 +7,11 @@ export type BetterSqlite3Context = { db: Database.Database };
 
 export const createBetterSqlite3Provider = ({
   db,
+  lock = createAsyncRwLock(),
 }: {
   db: Database.Database;
+  lock?: AsyncRwLock;
 }): SqliteStateProvider<BetterSqlite3Context> => {
-  const lock = createAsyncRwLock();
   const stmtCache = new Map<string, Database.Statement>();
   const prepareCached = (id: string, sql: string): Database.Statement => {
     let stmt = stmtCache.get(id);

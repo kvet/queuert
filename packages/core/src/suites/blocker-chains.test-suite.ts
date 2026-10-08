@@ -56,35 +56,34 @@ export const blockerChainsTestSuite = ({ it }: { it: TestAPI<TestSuiteContext> }
         jobTypes,
         processors: {
           blocker: {
-            attemptHandler: async ({ job, complete }) => {
+            attemptHandler: async ({ job, finish }) => {
               expect(job.chainId).toEqual(blockerChainId);
 
-              return complete(async ({ finish }) =>
+              return withTransaction(async (txCtx, transactionHooks) =>
                 job.input.value < 1
                   ? finish({
+                      ...txCtx,
+                      transactionHooks,
                       continueWith: {
                         typeName: "blocker",
                         input: { value: job.input.value + 1 },
                       },
                     })
-                  : finish({ output: { done: true } }),
+                  : finish({ ...txCtx, transactionHooks, output: { done: true } }),
               );
             },
           },
           main: {
-            attemptHandler: async ({
-              job: {
-                blockers: [blocker],
-                input,
-              },
-              complete,
-            }) => {
+            attemptHandler: async ({ job: { input }, getBlockers, finish }) => {
+              const [blocker] = await getBlockers();
               expectTypeOf<(typeof blocker)["output"]>().toEqualTypeOf<{
                 done: true;
               }>();
 
-              return complete(async ({ finish }) =>
+              return withTransaction(async (txCtx, transactionHooks) =>
                 finish({
+                  ...txCtx,
+                  transactionHooks,
                   output: {
                     finalResult: (blocker.output.done ? 1 : 0) + (input.start ? 1 : 0),
                   },
@@ -165,18 +164,20 @@ export const blockerChainsTestSuite = ({ it }: { it: TestAPI<TestSuiteContext> }
         jobTypes,
         processors: {
           blocker: {
-            attemptHandler: async ({ job, complete }) => {
-              return complete(async ({ finish }) =>
-                finish({ output: { result: job.input.value } }),
+            attemptHandler: async ({ job, finish }) => {
+              return withTransaction(async (txCtx, transactionHooks) =>
+                finish({ ...txCtx, transactionHooks, output: { result: job.input.value } }),
               );
             },
           },
           main: {
-            attemptHandler: async ({ job, complete }) => {
-              const [blocker] = job.blockers;
+            attemptHandler: async ({ getBlockers, finish }) => {
+              const [blocker] = await getBlockers();
 
-              return complete(async ({ finish }) =>
+              return withTransaction(async (txCtx, transactionHooks) =>
                 finish({
+                  ...txCtx,
+                  transactionHooks,
                   output: {
                     finalResult: blocker.output.result,
                   },
@@ -339,15 +340,19 @@ export const blockerChainsTestSuite = ({ it }: { it: TestAPI<TestSuiteContext> }
         jobTypes,
         processors: {
           blocker: {
-            attemptHandler: async ({ complete }) =>
-              complete(async ({ finish }) => finish({ output: null })),
+            attemptHandler: async ({ finish }) =>
+              withTransaction(async (txCtx, transactionHooks) =>
+                finish({ ...txCtx, transactionHooks, output: null }),
+              ),
           },
           starter: {
             backoffConfig: { initialDelayMs: 1, multiplier: 1, maxDelayMs: 1 },
-            attemptHandler: async ({ job, complete }) => {
+            attemptHandler: async ({ job, finish }) => {
               if (job.attempt === 1) {
-                return complete(async ({ finish }) =>
+                return withTransaction(async (txCtx, transactionHooks) =>
                   finish({
+                    ...txCtx,
+                    transactionHooks,
                     continueWith: {
                       typeName: "next",
                       input: null,
@@ -359,12 +364,16 @@ export const blockerChainsTestSuite = ({ it }: { it: TestAPI<TestSuiteContext> }
 
               expect(job.lastAttemptError).toContain("BlockerLimitExceededError");
               expect(job.lastAttemptError).toContain("exceeding the limit of 100");
-              return complete(async ({ finish }) => finish({ output: null }));
+              return withTransaction(async (txCtx, transactionHooks) =>
+                finish({ ...txCtx, transactionHooks, output: null }),
+              );
             },
           },
           next: {
-            attemptHandler: async ({ complete }) =>
-              complete(async ({ finish }) => finish({ output: null })),
+            attemptHandler: async ({ finish }) =>
+              withTransaction(async (txCtx, transactionHooks) =>
+                finish({ ...txCtx, transactionHooks, output: null }),
+              ),
           },
         },
       }),
@@ -423,14 +432,14 @@ export const blockerChainsTestSuite = ({ it }: { it: TestAPI<TestSuiteContext> }
         jobTypes,
         processors: {
           inner: {
-            attemptHandler: async ({ complete }) =>
-              complete(async ({ finish }) => finish({ output: null })),
+            attemptHandler: async ({ finish }) =>
+              withTransaction(async (txCtx, transactionHooks) =>
+                finish({ ...txCtx, transactionHooks, output: null }),
+              ),
           },
           outer: {
-            attemptHandler: async ({ prepare, step, complete }) => {
-              await prepare({ mode: "staged" });
-
-              await step(async ({ transactionHooks, ...txCtx }) => {
+            attemptHandler: async ({ finish }) => {
+              await withTransaction(async (txCtx, transactionHooks) => {
                 childChains.push(
                   await client.createChain({
                     ...txCtx,
@@ -441,7 +450,7 @@ export const blockerChainsTestSuite = ({ it }: { it: TestAPI<TestSuiteContext> }
                 );
               });
 
-              return complete(async ({ finish, transactionHooks, ...txCtx }) => {
+              return withTransaction(async (txCtx, transactionHooks) => {
                 childChains.push(
                   await client.createChain({
                     ...txCtx,
@@ -451,7 +460,7 @@ export const blockerChainsTestSuite = ({ it }: { it: TestAPI<TestSuiteContext> }
                   }),
                 );
 
-                return finish({ output: null });
+                return finish({ ...txCtx, transactionHooks, output: null });
               });
             },
           },
@@ -516,10 +525,11 @@ export const blockerChainsTestSuite = ({ it }: { it: TestAPI<TestSuiteContext> }
         jobTypes,
         processors: {
           test: {
-            attemptHandler: async ({ job, prepare, complete }) => {
-              await prepare({ mode: "atomic" });
-              return complete(async ({ finish }) =>
+            attemptHandler: async ({ job, finish }) => {
+              return withTransaction(async (txCtx, transactionHooks) =>
                 finish({
+                  ...txCtx,
+                  transactionHooks,
                   continueWith: {
                     typeName: "finish",
                     input: { valueNext: job.input.value + 1 },
@@ -540,10 +550,9 @@ export const blockerChainsTestSuite = ({ it }: { it: TestAPI<TestSuiteContext> }
         jobTypes,
         processors: {
           finish: {
-            attemptHandler: async ({ job, prepare, complete }) => {
-              await prepare({ mode: "atomic" });
-              return complete(async ({ finish }) =>
-                finish({ output: { result: job.input.valueNext + 1 } }),
+            attemptHandler: async ({ job, finish }) => {
+              return withTransaction(async (txCtx, transactionHooks) =>
+                finish({ ...txCtx, transactionHooks, output: { result: job.input.valueNext + 1 } }),
               );
             },
           },
@@ -605,18 +614,21 @@ export const blockerChainsTestSuite = ({ it }: { it: TestAPI<TestSuiteContext> }
         jobTypes,
         processors: {
           blocker: {
-            attemptHandler: async ({ job, complete }) => {
-              return complete(async ({ finish }) =>
-                finish({ output: { result: job.input.value } }),
+            attemptHandler: async ({ job, finish }) => {
+              return withTransaction(async (txCtx, transactionHooks) =>
+                finish({ ...txCtx, transactionHooks, output: { result: job.input.value } }),
               );
             },
           },
           main: {
-            attemptHandler: async ({ job, complete }) => {
-              return complete(async ({ finish }) =>
+            attemptHandler: async ({ getBlockers, finish }) => {
+              const blockers = await getBlockers();
+              return withTransaction(async (txCtx, transactionHooks) =>
                 finish({
+                  ...txCtx,
+                  transactionHooks,
                   output: {
-                    finalResult: job.blockers.map((blocker) => blocker.output.result),
+                    finalResult: blockers.map((blocker) => blocker.output.result),
                   },
                 }),
               );
@@ -695,23 +707,24 @@ export const blockerChainsTestSuite = ({ it }: { it: TestAPI<TestSuiteContext> }
         jobTypes,
         processors: {
           blocker: {
-            attemptHandler: async ({ job, prepare, complete }) => {
-              await prepare({ mode: "atomic" });
-              return complete(async ({ finish }) =>
-                finish({ output: { result: job.input.value * 10 } }),
+            attemptHandler: async ({ job, finish }) => {
+              return withTransaction(async (txCtx, transactionHooks) =>
+                finish({ ...txCtx, transactionHooks, output: { result: job.input.value * 10 } }),
               );
             },
           },
           first: {
-            attemptHandler: async ({ job, prepare, complete }) => {
-              await prepare({ mode: "atomic" });
-              return complete(async ({ finish, ...txCtx }) => {
+            attemptHandler: async ({ job, finish }) => {
+              return withTransaction(async (txCtx, transactionHooks) => {
                 const blockerChain = await client.createChain({
                   ...txCtx,
+                  transactionHooks,
                   typeName: "blocker",
                   input: { value: 5 },
                 });
                 return finish({
+                  ...txCtx,
+                  transactionHooks,
                   continueWith: {
                     typeName: "second",
                     input: { fromFirst: job.input.id },
@@ -722,16 +735,14 @@ export const blockerChainsTestSuite = ({ it }: { it: TestAPI<TestSuiteContext> }
             },
           },
           second: {
-            attemptHandler: async ({
-              job: {
-                blockers: [blocker],
-              },
-              prepare,
-              complete,
-            }) => {
-              await prepare({ mode: "atomic" });
-              return complete(async ({ finish }) =>
-                finish({ output: { finalResult: blocker.output.result } }),
+            attemptHandler: async ({ getBlockers, finish }) => {
+              const [blocker] = await getBlockers();
+              return withTransaction(async (txCtx, transactionHooks) =>
+                finish({
+                  ...txCtx,
+                  transactionHooks,
+                  output: { finalResult: blocker.output.result },
+                }),
               );
             },
           },
@@ -793,18 +804,21 @@ export const blockerChainsTestSuite = ({ it }: { it: TestAPI<TestSuiteContext> }
         jobTypes,
         processors: {
           blocker: {
-            attemptHandler: async ({ job, complete }) => {
-              return complete(async ({ finish }) =>
-                finish({ output: { result: job.input.value } }),
+            attemptHandler: async ({ job, finish }) => {
+              return withTransaction(async (txCtx, transactionHooks) =>
+                finish({ ...txCtx, transactionHooks, output: { result: job.input.value } }),
               );
             },
           },
           main: {
-            attemptHandler: async ({ job, complete }) => {
-              return complete(async ({ finish }) =>
+            attemptHandler: async ({ getBlockers, finish }) => {
+              const blockers = await getBlockers();
+              return withTransaction(async (txCtx, transactionHooks) =>
                 finish({
+                  ...txCtx,
+                  transactionHooks,
                   output: {
-                    finalResult: job.blockers.map((blocker) => blocker.output.result),
+                    finalResult: blockers.map((blocker) => blocker.output.result),
                   },
                 }),
               );
@@ -897,18 +911,21 @@ export const blockerChainsTestSuite = ({ it }: { it: TestAPI<TestSuiteContext> }
         jobTypes,
         processors: {
           blocker: {
-            attemptHandler: async ({ job, complete }) => {
-              return complete(async ({ finish }) =>
-                finish({ output: { result: job.input.value } }),
+            attemptHandler: async ({ job, finish }) => {
+              return withTransaction(async (txCtx, transactionHooks) =>
+                finish({ ...txCtx, transactionHooks, output: { result: job.input.value } }),
               );
             },
           },
           main: {
-            attemptHandler: async ({ job, complete }) => {
-              return complete(async ({ finish }) =>
+            attemptHandler: async ({ getBlockers, finish }) => {
+              const blockers = await getBlockers();
+              return withTransaction(async (txCtx, transactionHooks) =>
                 finish({
+                  ...txCtx,
+                  transactionHooks,
                   output: {
-                    finalResult: job.blockers[0].output.result,
+                    finalResult: blockers[0].output.result,
                   },
                 }),
               );
@@ -1005,19 +1022,19 @@ export const blockerChainsTestSuite = ({ it }: { it: TestAPI<TestSuiteContext> }
         jobTypes,
         processors: {
           blocker: {
-            attemptHandler: async ({ complete }) => {
-              return complete(async ({ finish }) => {
+            attemptHandler: async ({ finish }) => {
+              return withTransaction(async (txCtx, transactionHooks) => {
                 readyBlockers++;
                 if (readyBlockers === blockerCount) allBlockersReady.resolve();
                 await releaseBlockers.promise;
-                return finish({ output: null });
+                return finish({ ...txCtx, transactionHooks, output: null });
               });
             },
           },
           main: {
-            attemptHandler: async ({ job, complete }) => {
-              return complete(async ({ finish }) =>
-                finish({ output: { result: job.input.index } }),
+            attemptHandler: async ({ job, finish }) => {
+              return withTransaction(async (txCtx, transactionHooks) =>
+                finish({ ...txCtx, transactionHooks, output: { result: job.input.index } }),
               );
             },
           },
@@ -1107,12 +1124,16 @@ export const blockerChainsTestSuite = ({ it }: { it: TestAPI<TestSuiteContext> }
         jobTypes,
         processors: {
           blocker: {
-            attemptHandler: async ({ complete }) =>
-              complete(async ({ finish }) => finish({ output: null })),
+            attemptHandler: async ({ finish }) =>
+              withTransaction(async (txCtx, transactionHooks) =>
+                finish({ ...txCtx, transactionHooks, output: null }),
+              ),
           },
           main: {
-            attemptHandler: async ({ complete }) =>
-              complete(async ({ finish }) => finish({ output: { done: true as const } })),
+            attemptHandler: async ({ finish }) =>
+              withTransaction(async (txCtx, transactionHooks) =>
+                finish({ ...txCtx, transactionHooks, output: { done: true as const } }),
+              ),
           },
         },
       }),
@@ -1209,15 +1230,19 @@ export const blockerChainsTestSuite = ({ it }: { it: TestAPI<TestSuiteContext> }
         jobTypes,
         processors: {
           blocker: {
-            attemptHandler: async ({ complete }) => {
+            attemptHandler: async ({ finish }) => {
               blockerHeld.resolve();
               await releaseBlocker.promise;
-              return complete(async ({ finish }) => finish({ output: null }));
+              return withTransaction(async (txCtx, transactionHooks) =>
+                finish({ ...txCtx, transactionHooks, output: null }),
+              );
             },
           },
           main: {
-            attemptHandler: async ({ complete }) =>
-              complete(async ({ finish }) => finish({ output: null })),
+            attemptHandler: async ({ finish }) =>
+              withTransaction(async (txCtx, transactionHooks) =>
+                finish({ ...txCtx, transactionHooks, output: null }),
+              ),
           },
         },
       }),

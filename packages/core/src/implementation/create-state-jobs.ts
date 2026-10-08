@@ -12,6 +12,7 @@ import { type Helpers } from "../setup-helpers.js";
 import {
   type BaseTxContext,
   type StateChain,
+  type StateAttemptFence,
   type StateChainInfo,
   type StateJob,
   type StateJobInfo,
@@ -351,12 +352,14 @@ export const continueStateJob = async (
     job,
     fromJob,
     workerId,
+    fence,
     txCtx,
     transactionHooks,
   }: {
     job: CommonInput;
     fromJob: StateJob;
     workerId: string | null;
+    fence?: StateAttemptFence;
     txCtx: BaseTxContext;
     transactionHooks: TransactionHooks;
   },
@@ -386,6 +389,7 @@ export const continueStateJob = async (
           schedule: job.schedule,
           traceContext: spanHandles[0]?.getTraceContext() ?? null,
           continueFromId: fromJob.id,
+          fence,
         },
       ],
     });

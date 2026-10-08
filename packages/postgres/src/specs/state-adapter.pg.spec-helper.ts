@@ -1,6 +1,10 @@
 import { Pool } from "pg";
 import { type StateAdapter } from "queuert";
-import { createFlakyBatchGenerator } from "queuert/testing";
+import {
+  type WithSavepoint,
+  createFlakyBatchGenerator,
+  createSqlWithSavepoint,
+} from "queuert/testing";
 import { type TestAPI, expect } from "vitest";
 
 import { createPgStateAdapter } from "../state-adapter/state-adapter.pg.js";
@@ -24,6 +28,7 @@ export const extendWithStatePg = <
     flakyStateAdapter: StateAdapter<{ $test: true }, string>;
     flakyDbStateAdapter: StateAdapter<{ $test: true }, string> | undefined;
     poisonTransaction: ((txCtx: { $test: true }) => Promise<void>) | undefined;
+    withSavepoint: WithSavepoint | undefined;
     poisonExecute:
       | ((cb: (adapter: StateAdapter<{ $test: true }, string>) => Promise<void>) => Promise<void>)
       | undefined;
@@ -40,6 +45,7 @@ export const extendWithStatePg = <
     flakyStateAdapter: PgPoolStateAdapter;
     flakyDbStateAdapter: PgPoolStateAdapter | undefined;
     poisonTransaction: ((txCtx: { $test: true }) => Promise<void>) | undefined;
+    withSavepoint: WithSavepoint | undefined;
     poisonExecute:
       | ((cb: (adapter: StateAdapter<{ $test: true }, string>) => Promise<void>) => Promise<void>)
       | undefined;
@@ -146,6 +152,17 @@ export const extendWithStatePg = <
         return use(
           await createPgStateAdapter({
             stateProvider: flakyStateProvider,
+          }),
+        );
+      },
+      { scope: "test" },
+    ],
+    withSavepoint: [
+      // oxlint-disable-next-line no-empty-pattern
+      async ({}, use) => {
+        await use(
+          createSqlWithSavepoint(async (txCtx, statement) => {
+            await (txCtx as unknown as PgPoolContext).poolClient.query(statement);
           }),
         );
       },

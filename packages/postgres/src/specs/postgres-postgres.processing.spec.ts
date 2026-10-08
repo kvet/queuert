@@ -3,7 +3,6 @@ import {
   extendWithCommon,
   extendWithResourceLeakDetection,
   processErrorHandlingTestSuite,
-  processModesTestSuite,
   processTestSuite,
   attemptReclaimerTestSuite,
   workerTestSuite,
@@ -23,10 +22,6 @@ it("index");
 
 describe("Process Error Handling", () => {
   processErrorHandlingTestSuite({ it: postgresPostgresIt });
-});
-
-describe("Process Modes", () => {
-  processModesTestSuite({ it: postgresPostgresIt });
 });
 
 describe("Process", () => {

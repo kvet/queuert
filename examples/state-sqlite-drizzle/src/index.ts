@@ -50,6 +50,11 @@ const jobTypes = defineJobTypes<{
 const lock = createAsyncRwLock();
 const stateProvider = createDrizzleSqliteStateProvider({ db: sqlite, lock });
 
+const findUser = async (id: number) => {
+  using _h = await lock.acquireRead();
+  return db.select().from(users).where(eq(users.id, id)).get();
+};
+
 // 6. Create adapters and queuert client/worker
 const stateAdapter = await createSqliteStateAdapter({ stateProvider });
 await stateAdapter.migrateToLatest();
@@ -69,21 +74,37 @@ const worker = await createInProcessWorker({
     jobTypes,
     processors: {
       send_welcome_email: {
-        attemptHandler: async ({ job, prepare, complete }) => {
-          // Load the user inside the job transaction. Drizzle wraps the same
-          // better-sqlite3 connection the adapter runs on, so the query joins
-          // the open transaction.
-          const user = await prepare({ mode: "staged" }, () =>
-            db.select().from(users).where(eq(users.id, job.input.userId)).get(),
-          );
+        attemptHandler: async ({ job, finish }) => {
+          const user = await findUser(job.input.userId);
           if (!user) throw new Error(`User ${job.input.userId} not found`);
 
           // Simulate sending email (in real app, call email service here)
           console.log(`Sending welcome email to ${user.email} for ${user.name}`);
 
-          return complete(async ({ finish }) =>
-            finish({ output: { sentAt: new Date().toISOString() } }),
-          );
+          return withTransactionHooks(async (transactionHooks) => {
+            // The handler's transaction holds the provider's write lock, so the worker's
+            // autocommit statements on this connection cannot run inside it.
+            using _h = await lock.acquireWrite();
+            sqlite.exec("BEGIN");
+            try {
+              const result = await finish({
+                db: sqlite,
+                transactionHooks,
+                output: { sentAt: new Date().toISOString() },
+              });
+              sqlite.exec("COMMIT");
+              return result;
+            } catch (error) {
+              if (sqlite.inTransaction) {
+                try {
+                  sqlite.exec("ROLLBACK");
+                } catch {
+                  // ignore rollback errors
+                }
+              }
+              throw error;
+            }
+          });
         },
       },
     },

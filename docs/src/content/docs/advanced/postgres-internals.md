@@ -110,12 +110,26 @@ The upgrade copies chains into new tables while v0.15.1 workers keep running, tr
 
 ## Row Locking
 
-A chain's head row is its lock: every operation that reads or changes chain state, or depends on the chain continuing to exist, locks the head first. Every site that waits on several row locks orders them by `id`, so concurrent lockers take them in the same order and cannot deadlock. Job acquisition and expired-attempt reclamation scan in `scheduled_at` / `attempt_until` order instead, but use `SKIP LOCKED` and never wait.
+A chain's head row is its lock: every operation that reads or changes chain state, or depends on the chain continuing to exist, locks the head first. Job acquisition is the exception: it changes only the job row and locks only that. Every site that waits on several row locks orders them by `id`, so concurrent lockers take them in the same order and cannot deadlock. Job acquisition and expired-attempt reclamation scan in `scheduled_at` / `attempt_until` order instead, but use `SKIP LOCKED` and never wait.
 
-- **Job acquisition** (`startJobAttempt`) scans pending jobs with `FOR UPDATE OF h, j SKIP LOCKED`, locking the candidate job and its chain head together. The head lock is what lets an atomic-mode worker call `completeJobs` in the same transaction — `completeJobs` requires its caller to hold the head, or a blocker committed in the meantime is missed and its job stays blocked against a completed chain. Because both locks are taken inside the candidate scan, a job whose head another transaction holds (a blocker being added, a client rescheduling the job or completing the chain) is skipped and the next due job is tried; `getStartAttemptDelayMs` applies the same rule, so it never reports a due job that cannot be acquired.
-- **Adding blockers** (`addJobsBlockers`) locks each blocker chain's head before inserting `job_blocker` rows and reading the blocker's status. Only rows whose blocker head it locked are inserted: a head that does not exist — or that a concurrent `deleteChains` removed while it waited on the lock — is reported as a missing blocker and leaves no row behind.
+- **Job acquisition** (`startJobAttempt`) is a single autocommit statement. It scans pending jobs with `FOR UPDATE OF j SKIP LOCKED`, locking only the candidate job, and sets `attempt_until` to now plus the acquired type's timeout (the per-type timeouts are joined in via `unnest`). A job whose row another transaction holds (a client rescheduling it, completing its chain, or deleting it) is skipped and the next due job is tried; `getStartAttemptDelayMs` applies the same rule, so it never reports a due job that cannot be acquired. The chain head is not locked: acquisition does not touch chain state, so a transaction holding the head — for example one adding a blocker on the chain — does not hold back the chain's pending job. `client.completeChain` locks the chain's current job together with its head before running its handler, so a worker cannot acquire that job while the handler runs.
+- **Fenced writes** (`completeJobs`, `continueJobs`, `rescheduleJobs`, `extendJobAttempt` with a `fence`) put the ownership condition — `status = 'running' AND attempt = N AND attempt_by = workerId` — on the job `UPDATE` itself and drive every derived write (the chain head, the continuation insert) from its `RETURNING`. Postgres re-checks the `UPDATE`'s own `WHERE` after waiting on a row lock, so a fenced write that waited on a concurrent writer sees the latest row; a miss writes nothing.
+- **Blocker heads** are locked with `getChains` `lock: "exclusive"` (`FOR UPDATE`) before any other write. Completing a chain writes its head, so adding a blocker and completing the blocker chain wait for each other, and the completer's `unblockJobs` runs as a separate statement with a fresh snapshot that sees the new `job_blocker` rows.
+- **Adding blockers** (`addJobsBlockers`) runs after core has locked the blocker heads, and locks each blocker chain's head before inserting `job_blocker` rows and reading the blocker's status. Only rows whose blocker head it locked are inserted: a head that does not exist — or that a concurrent `deleteChains` removed while it waited on the lock — is reported as a missing blocker and leaves no row behind.
 - **Deleting chains** (`deleteChains`) locks the heads and members of the chains in one statement, then checks for outside `job_blocker` references and deletes in a second one. The second statement takes a fresh snapshot, so it sees any blocker or continuation committed by the transaction it waited on — within a single statement only the locked rows would be rechecked, and a new `job_blocker` row would be missed.
 - **Unblocking** (`unblockJobs`) likewise locks the blocked jobs in one statement and recomputes their blockers in the next.
+
+## Isolation Level
+
+Every transaction that touches Queuert state — the one you pass to `finish`, and the ones you pass to `client.createChain` and other client methods — must run at READ COMMITTED, the PostgreSQL default. REPEATABLE READ and SERIALIZABLE are not supported yet.
+
+At READ COMMITTED, conflicts wait instead of failing:
+
+- **`finish` while another transaction writes the job row** waits for it, re-checks ownership, and writes nothing if the attempt was lost.
+- **Client calls that lock and then check a job** (`client.completeChain`, `client.rescheduleJobs`) wait, then see the latest row.
+- **Adding a blocker on a chain while that chain completes** (`createChain` or `continueWith` with `blockers`) waits on the chain's head row, so the dependent job ends up correctly `blocked` or `pending` (see [Row Locking](#row-locking)).
+
+The worker's own statements (acquire, heartbeat, reclaim, the post-handler reschedule) are single autocommit statements.
 
 ## Notifications (LISTEN/NOTIFY)
 

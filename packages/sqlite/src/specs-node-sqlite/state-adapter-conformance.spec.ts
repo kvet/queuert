@@ -10,6 +10,7 @@ import {
   defineJobTypes,
   withTransactionHooks,
 } from "queuert";
+import { createAsyncRwLock } from "queuert/internal";
 import { stateAdapterConformanceTestSuite, withWorkers } from "queuert/testing";
 import { describe, expectTypeOf, it, vi } from "vitest";
 
@@ -52,7 +53,8 @@ it("infers custom ID types through the full stack", async () => {
   const db = new DatabaseSync(":memory:");
 
   try {
-    const stateProvider = createNodeSqliteProvider({ db });
+    const lock = createAsyncRwLock();
+    const stateProvider = createNodeSqliteProvider({ db, lock });
     const stateAdapter = await createSqliteStateAdapter({
       stateProvider,
       tablePrefix: "myapp_",
@@ -78,6 +80,20 @@ it("infers custom ID types through the full stack", async () => {
       log,
       jobTypes,
     });
+    // Transactions passed to queuert hold the provider's write lock, as SQLite requires.
+    const withTransaction = async <T>(fn: (db: DatabaseSync) => Promise<T>): Promise<T> => {
+      using _h = await lock.acquireWrite();
+      db.exec("BEGIN");
+      try {
+        const result = await fn(db);
+        db.exec("COMMIT");
+        return result;
+      } catch (error) {
+        if (db.isTransaction) db.exec("ROLLBACK");
+        throw error;
+      }
+    };
+
     const worker = await createInProcessWorker({
       client,
       processors: createProcessors({
@@ -85,36 +101,30 @@ it("infers custom ID types through the full stack", async () => {
         jobTypes,
         processors: {
           test: {
-            attemptHandler: async ({ job, complete }) => {
+            attemptHandler: async ({ job, finish }) => {
               expectTypeOf(job.id).toEqualTypeOf<`job.${UUID}`>();
 
-              return complete(async ({ finish }) => finish({ output: { bar: 42 } }));
+              return withTransactionHooks(async (transactionHooks) =>
+                withTransaction(async (db) =>
+                  finish({ db, transactionHooks, output: { bar: 42 } }),
+                ),
+              );
             },
           },
         },
       }),
     });
 
-    const chain = await withTransactionHooks(async (transactionHooks) => {
-      db.exec("BEGIN");
-      try {
-        const result = await client.createChain({
+    const chain = await withTransactionHooks(async (transactionHooks) =>
+      withTransaction(async (db) =>
+        client.createChain({
           db,
           transactionHooks,
           typeName: "test",
           input: { foo: "hello" },
-        });
-        db.exec("COMMIT");
-        return result;
-      } catch (error) {
-        try {
-          db.exec("ROLLBACK");
-        } catch {
-          // ignore
-        }
-        throw error;
-      }
-    });
+        }),
+      ),
+    );
     expectTypeOf(chain.id).toEqualTypeOf<`job.${UUID}`>();
 
     await withWorkers([await worker.start()], async () => {

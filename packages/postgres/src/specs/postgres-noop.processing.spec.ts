@@ -4,7 +4,6 @@ import {
   extendWithNotifyNoop,
   extendWithResourceLeakDetection,
   processErrorHandlingTestSuite,
-  processModesTestSuite,
   processTestSuite,
   attemptReclaimerTestSuite,
   workerTestSuite,
@@ -25,10 +24,6 @@ it("index");
 
 describe("Process Error Handling", () => {
   processErrorHandlingTestSuite({ it: postgresNoopIt });
-});
-
-describe("Process Modes", () => {
-  processModesTestSuite({ it: postgresNoopIt });
 });
 
 describe("Process", () => {

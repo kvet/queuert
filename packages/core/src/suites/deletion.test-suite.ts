@@ -434,12 +434,14 @@ export const deletionTestSuite = ({ it }: { it: TestAPI<TestSuiteContext> }): vo
         jobTypes,
         processors: {
           test: {
-            attemptHandler: async ({ complete }) => {
+            attemptHandler: async ({ finish }) => {
               jobStarted.resolve();
               await sleep(200);
 
               try {
-                return await complete(async ({ finish }) => finish({ output: null }));
+                return await withTransaction(async (txCtx, transactionHooks) =>
+                  finish({ ...txCtx, transactionHooks, output: null }),
+                );
               } catch (error) {
                 processThrown.resolve();
                 throw error;

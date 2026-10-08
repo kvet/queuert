@@ -2,8 +2,11 @@ import { type TestAPI, expectTypeOf } from "vitest";
 
 import { createClient } from "../client.js";
 import { defineJobTypes } from "../entities/define-job-types.js";
+import { JobAlreadyCompletedError } from "../errors.js";
 import { sleep } from "../helpers/sleep.js";
 import { createInProcessWorker } from "../in-process-worker.js";
+import { createSpyStateAdapter } from "../state-adapter/state-adapter.spy.spec-helper.js";
+import { withTransactionHooks } from "../transaction-hooks.js";
 import { createProcessors } from "../worker/create-processors.js";
 import { type TestSuiteContext } from "./spec-context.spec-helper.js";
 
@@ -13,7 +16,7 @@ export const processTestSuite = ({ it }: { it: TestAPI<TestSuiteContext> }): voi
     timeoutMs: 5000,
   };
 
-  it("throws error when prepare, complete, or finish are called incorrectly", async ({
+  it("throws error when finish is called incorrectly", async ({
     stateAdapter,
     notifyAdapter,
     withTransaction,
@@ -23,42 +26,10 @@ export const processTestSuite = ({ it }: { it: TestAPI<TestSuiteContext> }): voi
     expect,
   }) => {
     const jobTypes = defineJobTypes<{
-      "test-prepare-twice": {
+      test: {
         entry: true;
         input: null;
         output: null;
-      };
-      "test-complete-twice": {
-        entry: true;
-        input: null;
-        output: null;
-      };
-      "test-prepare-after-auto-setup": {
-        entry: true;
-        input: null;
-        output: null;
-      };
-      "test-continueWith-twice": {
-        entry: true;
-        input: null;
-        output: null;
-        continueWith: { typeName: "test-next" };
-      };
-      "test-continue-after-complete": {
-        entry: true;
-        input: null;
-        output: null;
-        continueWith: { typeName: "test-next" };
-      };
-      "test-finish-concurrently": {
-        entry: true;
-        input: null;
-        output: null;
-        continueWith: { typeName: "test-next" };
-      };
-      "test-next": {
-        input: { value: number };
-        output: { result: number };
       };
     }>();
 
@@ -69,6 +40,8 @@ export const processTestSuite = ({ it }: { it: TestAPI<TestSuiteContext> }): voi
       log,
       jobTypes,
     });
+
+    let finishAfterHandler: (() => Promise<unknown>) | undefined;
     const worker = await createInProcessWorker({
       client,
       concurrency: 1,
@@ -76,126 +49,59 @@ export const processTestSuite = ({ it }: { it: TestAPI<TestSuiteContext> }): voi
         client,
         jobTypes,
         processors: {
-          "test-prepare-twice": {
-            attemptHandler: async ({ prepare, complete }) => {
-              await prepare({ mode: "atomic" });
-              await expect(prepare({ mode: "atomic" })).rejects.toThrow(
-                "prepare can only be called once",
-              );
-              return complete(async ({ finish }) => finish({ output: null }));
-            },
-          },
-          "test-complete-twice": {
-            attemptHandler: async ({ complete }) => {
-              const result = complete(async ({ finish }) => finish({ output: null }));
-              await expect(
-                complete(async ({ finish }) => finish({ output: null })),
-              ).rejects.toThrow("complete can only be called once");
-              return result;
-            },
-          },
-          "test-prepare-after-auto-setup": {
-            attemptHandler: async (options) => {
-              // Don't access prepare synchronously - auto-setup will run
-              // Use 50ms to ensure auto-setup completes before we continue
-              await sleep(50);
-              // Now try to access prepare after auto-setup
-              expect(() => options.prepare).toThrow("prepare cannot be accessed after auto-setup");
-              return options.complete(async ({ finish }) => finish({ output: null }));
-            },
-          },
-          "test-continueWith-twice": {
-            attemptHandler: async ({ complete }) => {
-              return complete(async ({ finish }) => {
-                const completedJob = await finish({
-                  continueWith: {
-                    typeName: "test-next",
-                    input: { value: 1 },
-                  },
-                });
+          test: {
+            attemptHandler: async ({ finish }) => {
+              const result = await withTransaction(async (txCtx, transactionHooks) => {
                 await expect(
                   finish({
-                    continueWith: {
-                      typeName: "test-next",
-                      input: { value: 2 },
-                    },
+                    ...txCtx,
+                    transactionHooks,
+                    output: null,
+                    ...({ reschedule: { afterMs: 1 } } as object),
                   }),
-                ).rejects.toThrow("finish can only be called once");
-                await expect(finish({ output: null })).rejects.toThrow(
-                  "finish can only be called once",
+                ).rejects.toThrow(
+                  "finish requires exactly one of output, continueWith or reschedule",
                 );
-                return completedJob;
-              });
-            },
-          },
-          "test-continue-after-complete": {
-            attemptHandler: async ({ complete }) => {
-              return complete(async ({ finish }) => {
-                const completedJob = await finish({ output: null });
                 await expect(
-                  finish({ continueWith: { typeName: "test-next", input: { value: 1 } } }),
-                ).rejects.toThrow("finish can only be called once");
-                return completedJob;
+                  // @ts-expect-error transactionHooks is required
+                  finish({ ...txCtx, output: null }),
+                ).rejects.toThrow("finish requires transactionHooks");
+                await expect(
+                  // @ts-expect-error the caller's transaction context is required
+                  finish({ transactionHooks, output: null }),
+                ).rejects.toThrow(
+                  "finish requires a transaction context from the caller's transaction",
+                );
+
+                return finish({ ...txCtx, transactionHooks, output: null });
               });
-            },
-          },
-          "test-finish-concurrently": {
-            attemptHandler: async ({ complete }) => {
-              return complete(async ({ finish }) => {
-                const first = finish({
-                  continueWith: { typeName: "test-next", input: { value: 10 } },
-                });
-                const second = finish({
-                  continueWith: { typeName: "test-next", input: { value: 20 } },
-                });
-                await expect(second).rejects.toThrow("finish can only be called once");
-                return first;
-              });
-            },
-          },
-          "test-next": {
-            attemptHandler: async ({ job, complete }) => {
-              return complete(async ({ finish }) =>
-                finish({ output: { result: job.input.value } }),
-              );
+              finishAfterHandler = async () =>
+                withTransaction(async (txCtx, transactionHooks) =>
+                  finish({ ...txCtx, transactionHooks, output: null }),
+                );
+              return result;
             },
           },
         },
       }),
     });
 
-    const [
-      prepareChain,
-      completeChain,
-      prepareAfterAutoSetupChain,
-      continueWithChain,
-      continueAfterCompleteChain,
-      finishConcurrentlyChain,
-    ] = await withTransaction(async (txCtx, transactionHooks) =>
-      client.createChains({
+    const chain = await withTransaction(async (txCtx, transactionHooks) =>
+      client.createChain({
         ...txCtx,
         transactionHooks,
-        items: [
-          { typeName: "test-prepare-twice", input: null },
-          { typeName: "test-complete-twice", input: null },
-          { typeName: "test-prepare-after-auto-setup", input: null },
-          { typeName: "test-continueWith-twice", input: null },
-          { typeName: "test-continue-after-complete", input: null },
-          { typeName: "test-finish-concurrently", input: null },
-        ],
+        typeName: "test",
+        input: null,
       }),
     );
 
     await withWorkers([await worker.start()], async () => {
-      await Promise.all([
-        client.awaitChain(prepareChain, completionOptions),
-        client.awaitChain(completeChain, completionOptions),
-        client.awaitChain(prepareAfterAutoSetupChain, completionOptions),
-        client.awaitChain(continueWithChain, completionOptions),
-        client.awaitChain(continueAfterCompleteChain, completionOptions),
-        client.awaitChain(finishConcurrentlyChain, completionOptions),
-      ]);
+      await client.awaitChain(chain, completionOptions);
     });
+
+    await expect(finishAfterHandler!()).rejects.toThrow(
+      "finish cannot be called after the attempt handler has ended",
+    );
   });
 
   it("provides attempt information to job process", async ({
@@ -237,7 +143,7 @@ export const processTestSuite = ({ it }: { it: TestAPI<TestSuiteContext> }): voi
         },
         processors: {
           test: {
-            attemptHandler: async ({ job, complete }) => {
+            attemptHandler: async ({ job, finish }) => {
               attempts.push(job.attempt);
 
               expectTypeOf(job.attempt).toEqualTypeOf<number>();
@@ -257,7 +163,9 @@ export const processTestSuite = ({ it }: { it: TestAPI<TestSuiteContext> }): voi
                 throw new Error("Simulated failure");
               }
 
-              return complete(async ({ finish }) => finish({ output: null }));
+              return withTransaction(async (txCtx, transactionHooks) =>
+                finish({ ...txCtx, transactionHooks, output: null }),
+              );
             },
           },
         },
@@ -316,11 +224,13 @@ export const processTestSuite = ({ it }: { it: TestAPI<TestSuiteContext> }): voi
         },
         processors: {
           test: {
-            attemptHandler: async ({ job, complete }) => {
+            attemptHandler: async ({ job, finish }) => {
               if (job.attempt < 2) {
                 throw new Error("Simulated failure");
               }
-              return complete(async ({ finish }) => finish({ output: null }));
+              return withTransaction(async (txCtx, transactionHooks) =>
+                finish({ ...txCtx, transactionHooks, output: null }),
+              );
             },
           },
         },
@@ -383,7 +293,7 @@ export const processTestSuite = ({ it }: { it: TestAPI<TestSuiteContext> }): voi
         },
         processors: {
           test: {
-            attemptHandler: async ({ job, complete }) => {
+            attemptHandler: async ({ job, finish }) => {
               if (job.lastAttemptError) {
                 errors.push(job.lastAttemptError);
               }
@@ -392,7 +302,9 @@ export const processTestSuite = ({ it }: { it: TestAPI<TestSuiteContext> }): voi
                 throw new Error("Unexpected error");
               }
 
-              return complete(async ({ finish }) => finish({ output: null }));
+              return withTransaction(async (txCtx, transactionHooks) =>
+                finish({ ...txCtx, transactionHooks, output: null }),
+              );
             },
           },
         },
@@ -451,7 +363,7 @@ export const processTestSuite = ({ it }: { it: TestAPI<TestSuiteContext> }): voi
         jobTypes,
         processors: {
           test: {
-            attemptHandler: async ({ job, prepare, complete }) => {
+            attemptHandler: async ({ job, finish }) => {
               expectTypeOf(job.typeName).toEqualTypeOf<"test">();
               expectTypeOf(job.input).toEqualTypeOf<{ test: boolean }>();
               expectTypeOf(job.status).toEqualTypeOf<"running">();
@@ -461,20 +373,14 @@ export const processTestSuite = ({ it }: { it: TestAPI<TestSuiteContext> }): voi
               expect(job.id).toBeDefined();
               expect(job.chainId).toEqual(job.id);
 
-              const result = await prepare({ mode: "staged" }, (txCtx) => {
+              return withTransaction(async (txCtx, transactionHooks) => {
                 expectTypeOf(txCtx).toEqualTypeOf<{ $test: true }>();
-                expect(txCtx).toBeDefined();
 
-                return "prepare";
-              });
-              expect(result).toEqual("prepare");
-
-              return complete(async ({ finish, transactionHooks, ...txCtx }) => {
-                expectTypeOf(txCtx).toEqualTypeOf<{ $test: true }>();
-                expect(txCtx).toBeDefined();
-                expect(transactionHooks).toBeDefined();
-
-                const completedJob = await finish({ output: { result: true } });
+                const completedJob = await finish({
+                  ...txCtx,
+                  transactionHooks,
+                  output: { result: true },
+                });
                 expectTypeOf(completedJob.typeName).toEqualTypeOf<"test">();
                 expectTypeOf(completedJob.status).toEqualTypeOf<"completed">();
                 expect(completedJob.typeName).toBe("test");
@@ -521,7 +427,7 @@ export const processTestSuite = ({ it }: { it: TestAPI<TestSuiteContext> }): voi
     }
   });
 
-  it("finish should be visible to reads later in the same callback", async ({
+  it("finish should be visible to reads later in the same transaction", async ({
     stateAdapter,
     notifyAdapter,
     withTransaction,
@@ -563,9 +469,13 @@ export const processTestSuite = ({ it }: { it: TestAPI<TestSuiteContext> }): voi
         jobTypes,
         processors: {
           "output-then-read": {
-            attemptHandler: async ({ job, complete }) =>
-              complete(async ({ finish, ...txCtx }) => {
-                const completedJob = await finish({ output: { done: true } });
+            attemptHandler: async ({ job, finish }) =>
+              withTransaction(async (txCtx, transactionHooks) => {
+                const completedJob = await finish({
+                  ...txCtx,
+                  transactionHooks,
+                  output: { done: true },
+                });
                 expect((await client.getJob({ ...txCtx, id: job.id }))?.status).toBe("completed");
                 expect((await client.getChain({ ...txCtx, id: job.chainId }))?.status).toBe(
                   "completed",
@@ -574,9 +484,11 @@ export const processTestSuite = ({ it }: { it: TestAPI<TestSuiteContext> }): voi
               }),
           },
           "continue-then-read": {
-            attemptHandler: async ({ job, complete }) =>
-              complete(async ({ finish, ...txCtx }) => {
+            attemptHandler: async ({ job, finish }) =>
+              withTransaction(async (txCtx, transactionHooks) => {
                 const completedJob = await finish({
+                  ...txCtx,
+                  transactionHooks,
                   continueWith: { typeName: "tail", input: null },
                 });
                 expect((await client.getJob({ ...txCtx, id: job.id }))?.status).toBe("completed");
@@ -584,8 +496,10 @@ export const processTestSuite = ({ it }: { it: TestAPI<TestSuiteContext> }): voi
               }),
           },
           tail: {
-            attemptHandler: async ({ complete }) =>
-              complete(async ({ finish }) => finish({ output: { done: true } })),
+            attemptHandler: async ({ finish }) =>
+              withTransaction(async (txCtx, transactionHooks) =>
+                finish({ ...txCtx, transactionHooks, output: { done: true } }),
+              ),
           },
         },
       }),
@@ -606,6 +520,730 @@ export const processTestSuite = ({ it }: { it: TestAPI<TestSuiteContext> }): voi
     await withWorkers([await worker.start()], async () => {
       await client.awaitChain(completedChain, completionOptions);
       await client.awaitChain(continuedChain, completionOptions);
+    });
+  });
+
+  const slowBackoff = { initialDelayMs: 60_000, multiplier: 1, maxDelayMs: 60_000 };
+
+  it("rolls back finish with the caller's transaction and reschedules the attempt", async ({
+    stateAdapter,
+    notifyAdapter,
+    withTransaction,
+    withWorkers,
+    observabilityAdapter,
+    log,
+    expect,
+  }) => {
+    const jobTypes = defineJobTypes<{
+      test: { entry: true; input: null; output: null };
+    }>();
+    const client = await createClient({
+      stateAdapter,
+      notifyAdapter,
+      observabilityAdapter,
+      log,
+      jobTypes,
+    });
+    const worker = await createInProcessWorker({
+      client,
+      processors: createProcessors({
+        client,
+        jobTypes,
+        backoffConfig: slowBackoff,
+        processors: {
+          test: {
+            attemptHandler: async ({ finish }) =>
+              withTransaction(async (txCtx, transactionHooks) => {
+                await finish({ ...txCtx, transactionHooks, output: null });
+                throw new Error("rollback after finish");
+              }),
+          },
+        },
+      }),
+    });
+
+    const chain = await withTransaction(async (txCtx, transactionHooks) =>
+      client.createChain({ ...txCtx, transactionHooks, typeName: "test", input: null }),
+    );
+
+    await withWorkers([await worker.start()], async () => {
+      await expect
+        .poll(async () => (await client.getJob({ id: chain.id }))?.status, { timeout: 5000 })
+        .toBe("pending");
+    });
+
+    const job = await client.getJob({ id: chain.id });
+    expect(job?.attempt).toBe(1);
+    expect(job?.lastAttemptError).toContain("rollback after finish");
+  });
+
+  it("keeps a committed finish when the handler throws afterwards", async ({
+    stateAdapter,
+    notifyAdapter,
+    withTransaction,
+    withWorkers,
+    observabilityAdapter,
+    log,
+    expect,
+  }) => {
+    const jobTypes = defineJobTypes<{
+      complete: { entry: true; input: null; output: { done: true } };
+      reschedule: { entry: true; input: null; output: null };
+    }>();
+    const client = await createClient({
+      stateAdapter,
+      notifyAdapter,
+      observabilityAdapter,
+      log,
+      jobTypes,
+    });
+    let rescheduleAttempts = 0;
+    const worker = await createInProcessWorker({
+      client,
+      processors: createProcessors({
+        client,
+        jobTypes,
+        backoffConfig: slowBackoff,
+        processors: {
+          complete: {
+            attemptHandler: async ({ finish }) => {
+              await withTransaction(async (txCtx, transactionHooks) =>
+                finish({ ...txCtx, transactionHooks, output: { done: true } }),
+              );
+              throw new Error("after a committed finish");
+            },
+          },
+          reschedule: {
+            attemptHandler: async ({ finish }) => {
+              rescheduleAttempts++;
+              await withTransaction(async (txCtx, transactionHooks) =>
+                finish({ ...txCtx, transactionHooks, reschedule: { afterMs: 60_000 } }),
+              );
+              throw new Error("after a committed reschedule");
+            },
+          },
+        },
+      }),
+    });
+
+    const [completeChain, rescheduleChain] = await withTransaction(
+      async (txCtx, transactionHooks) =>
+        Promise.all([
+          client.createChain({ ...txCtx, transactionHooks, typeName: "complete", input: null }),
+          client.createChain({ ...txCtx, transactionHooks, typeName: "reschedule", input: null }),
+        ]),
+    );
+
+    await withWorkers([await worker.start()], async () => {
+      const completed = await client.awaitChain(completeChain, completionOptions);
+      expect(completed.output).toEqual({ done: true });
+      await expect.poll(() => rescheduleAttempts, { timeout: 5000 }).toBe(1);
+      await sleep(100);
+    });
+
+    const rescheduled = await client.getJob({ id: rescheduleChain.id });
+    expect(rescheduled?.status).toBe("pending");
+    expect(rescheduled?.lastAttemptError).toBeNull();
+  });
+
+  it("treats a handler that returns without a committed finish as a failed attempt", async ({
+    stateAdapter,
+    notifyAdapter,
+    withTransaction,
+    withWorkers,
+    observabilityAdapter,
+    log,
+    expect,
+  }) => {
+    const jobTypes = defineJobTypes<{
+      test: { entry: true; input: null; output: null };
+    }>();
+    const client = await createClient({
+      stateAdapter,
+      notifyAdapter,
+      observabilityAdapter,
+      log,
+      jobTypes,
+    });
+    const worker = await createInProcessWorker({
+      client,
+      processors: createProcessors({
+        client,
+        jobTypes,
+        backoffConfig: slowBackoff,
+        processors: {
+          test: {
+            // @ts-expect-error the handler must return what finish returned
+            attemptHandler: async () => {},
+          },
+        },
+      }),
+    });
+
+    const chain = await withTransaction(async (txCtx, transactionHooks) =>
+      client.createChain({ ...txCtx, transactionHooks, typeName: "test", input: null }),
+    );
+
+    await withWorkers([await worker.start()], async () => {
+      await expect
+        .poll(async () => (await client.getJob({ id: chain.id }))?.status, { timeout: 5000 })
+        .toBe("pending");
+    });
+
+    const job = await client.getJob({ id: chain.id });
+    expect(job?.lastAttemptError).toContain("Attempt handler returned without a committed finish");
+    expect(log).toHaveBeenCalledWith(expect.objectContaining({ type: "job_attempt_failed" }));
+  });
+
+  it("writes nothing when finish fails validation, so the caller may catch and finish again", async ({
+    stateAdapter,
+    notifyAdapter,
+    withTransaction,
+    withWorkers,
+    observabilityAdapter,
+    log,
+    expect,
+  }) => {
+    const jobTypes = defineJobTypes<{
+      blocker: { entry: true; input: null; output: null };
+      test: { entry: true; input: null; continueWith: { typeName: "next" } };
+      next: { input: null; output: null; blockers: [{ typeName: "blocker" }] };
+    }>();
+    const client = await createClient({
+      stateAdapter,
+      notifyAdapter,
+      observabilityAdapter,
+      log,
+      jobTypes,
+    });
+    let caughtError: unknown;
+    const worker = await createInProcessWorker({
+      client,
+      processors: createProcessors({
+        client,
+        jobTypes,
+        processors: {
+          blocker: {
+            attemptHandler: async ({ finish }) =>
+              withTransaction(async (txCtx, transactionHooks) =>
+                finish({ ...txCtx, transactionHooks, output: null }),
+              ),
+          },
+          test: {
+            attemptHandler: async ({ finish }) =>
+              withTransaction(async (txCtx, transactionHooks) => {
+                try {
+                  await finish({
+                    ...txCtx,
+                    transactionHooks,
+                    continueWith: {
+                      typeName: "next",
+                      input: null,
+                      blockers: [
+                        {
+                          id: crypto.randomUUID(),
+                          typeName: "blocker",
+                          input: null,
+                        } as never,
+                      ],
+                    },
+                  });
+                } catch (error) {
+                  caughtError = error;
+                }
+                const blockerChain = await client.createChain({
+                  ...txCtx,
+                  transactionHooks,
+                  typeName: "blocker",
+                  input: null,
+                });
+                return finish({
+                  ...txCtx,
+                  transactionHooks,
+                  continueWith: { typeName: "next", input: null, blockers: [blockerChain] },
+                });
+              }),
+          },
+          next: {
+            attemptHandler: async ({ finish }) =>
+              withTransaction(async (txCtx, transactionHooks) =>
+                finish({ ...txCtx, transactionHooks, output: null }),
+              ),
+          },
+        },
+      }),
+    });
+
+    const chain = await withTransaction(async (txCtx, transactionHooks) =>
+      client.createChain({ ...txCtx, transactionHooks, typeName: "test", input: null }),
+    );
+
+    await withWorkers([await worker.start()], async () => {
+      await client.awaitChain(chain, completionOptions);
+    });
+
+    expect(caughtError).toBeDefined();
+    const jobs = await client.listChainJobs({ chainId: chain.id });
+    expect(jobs.items.map((job) => job.typeName)).toEqual(["test", "next"]);
+  });
+
+  it("lets the last finish win when the transaction callback is retried", async ({
+    stateAdapter,
+    notifyAdapter,
+    withTransaction,
+    withWorkers,
+    observabilityAdapter,
+    log,
+    expect,
+  }) => {
+    const jobTypes = defineJobTypes<{
+      test: { entry: true; input: null; output: { try: number } };
+    }>();
+    const client = await createClient({
+      stateAdapter,
+      notifyAdapter,
+      observabilityAdapter,
+      log,
+      jobTypes,
+    });
+    const worker = await createInProcessWorker({
+      client,
+      processors: createProcessors({
+        client,
+        jobTypes,
+        processors: {
+          test: {
+            attemptHandler: async ({ finish }) =>
+              withTransactionHooks(async (transactionHooks) => {
+                for (let attempt = 1; ; attempt++) {
+                  try {
+                    return await stateAdapter.withTransaction(async (txCtx) => {
+                      const result = await finish({
+                        ...txCtx,
+                        transactionHooks,
+                        output: { try: attempt },
+                      });
+                      if (attempt === 1) throw new Error("serialization failure");
+                      return result;
+                    });
+                  } catch (error) {
+                    if (attempt > 1) throw error;
+                  }
+                }
+              }),
+          },
+        },
+      }),
+    });
+
+    const chain = await withTransaction(async (txCtx, transactionHooks) =>
+      client.createChain({ ...txCtx, transactionHooks, typeName: "test", input: null }),
+    );
+
+    await withWorkers([await worker.start()], async () => {
+      const completed = await client.awaitChain(chain, completionOptions);
+      expect(completed.output).toEqual({ try: 2 });
+    });
+
+    const completedLogs = log.mock.calls
+      .map((call) => call[0])
+      .filter((entry) => entry.type === "job_completed");
+    expect(completedLogs).toHaveLength(1);
+    expect(completedLogs[0].data).toEqual(expect.objectContaining({ output: { try: 2 } }));
+  });
+
+  it("trusts a committed finish returned by the handler without rescheduling", async ({
+    stateAdapter,
+    notifyAdapter,
+    withTransaction,
+    withWorkers,
+    observabilityAdapter,
+    log,
+    expect,
+  }) => {
+    const jobTypes = defineJobTypes<{
+      test: { entry: true; input: null; output: null };
+    }>();
+    const spyStateAdapter = createSpyStateAdapter(stateAdapter);
+    const client = await createClient({
+      stateAdapter: spyStateAdapter,
+      notifyAdapter,
+      observabilityAdapter,
+      log,
+      jobTypes,
+    });
+    const worker = await createInProcessWorker({
+      client,
+      processors: createProcessors({
+        client,
+        jobTypes,
+        processors: {
+          test: {
+            attemptHandler: async ({ finish }) =>
+              withTransaction(async (txCtx, transactionHooks) =>
+                finish({ ...txCtx, transactionHooks, output: null }),
+              ),
+          },
+        },
+      }),
+    });
+
+    const chain = await withTransaction(async (txCtx, transactionHooks) =>
+      client.createChain({ ...txCtx, transactionHooks, typeName: "test", input: null }),
+    );
+
+    await withWorkers([await worker.start()], async () => {
+      await client.awaitChain(chain, completionOptions);
+    });
+
+    expect(spyStateAdapter.calls.map((call) => call.name)).not.toContain("rescheduleJobs");
+    expect(log).toHaveBeenCalledWith(expect.objectContaining({ type: "job_attempt_completed" }));
+  });
+
+  it("reschedules the attempt when finish rolls back in a savepoint", async ({
+    stateAdapter,
+    notifyAdapter,
+    withTransaction,
+    withSavepoint,
+    withWorkers,
+    observabilityAdapter,
+    log,
+    expect,
+    skip,
+  }) => {
+    if (!withSavepoint) return skip();
+
+    const jobTypes = defineJobTypes<{
+      test: { entry: true; input: null; output: null };
+    }>();
+    const client = await createClient({
+      stateAdapter,
+      notifyAdapter,
+      observabilityAdapter,
+      log,
+      jobTypes,
+    });
+    const worker = await createInProcessWorker({
+      client,
+      processors: createProcessors({
+        client,
+        jobTypes,
+        backoffConfig: slowBackoff,
+        processors: {
+          test: {
+            attemptHandler: async ({ finish }) =>
+              withTransaction(async (txCtx, transactionHooks) => {
+                let receipt: Awaited<ReturnType<typeof finish>> | undefined;
+                try {
+                  await withSavepoint(txCtx, transactionHooks, async (txCtx, transactionHooks) => {
+                    receipt = await finish({ ...txCtx, transactionHooks, output: null });
+                    throw new Error("rollback to savepoint");
+                  });
+                } catch {}
+                return receipt!;
+              }),
+          },
+        },
+      }),
+    });
+
+    const chain = await withTransaction(async (txCtx, transactionHooks) =>
+      client.createChain({ ...txCtx, transactionHooks, typeName: "test", input: null }),
+    );
+
+    await withWorkers([await worker.start()], async () => {
+      await expect
+        .poll(async () => (await client.getJob({ id: chain.id }))?.status, { timeout: 5000 })
+        .toBe("pending");
+    });
+
+    const job = await client.getJob({ id: chain.id });
+    expect(job?.lastAttemptError).toContain("Attempt handler returned without a committed finish");
+    expect(log).not.toHaveBeenCalledWith(expect.objectContaining({ type: "job_completed" }));
+  });
+
+  it("commits the finish made after one rolled back in a savepoint", async ({
+    stateAdapter,
+    notifyAdapter,
+    withTransaction,
+    withSavepoint,
+    withWorkers,
+    observabilityAdapter,
+    log,
+    expect,
+    skip,
+  }) => {
+    if (!withSavepoint) return skip();
+
+    const jobTypes = defineJobTypes<{
+      test: { entry: true; input: null; output: { from: string } };
+    }>();
+    const spyStateAdapter = createSpyStateAdapter(stateAdapter);
+    const client = await createClient({
+      stateAdapter: spyStateAdapter,
+      notifyAdapter,
+      observabilityAdapter,
+      log,
+      jobTypes,
+    });
+    const worker = await createInProcessWorker({
+      client,
+      processors: createProcessors({
+        client,
+        jobTypes,
+        processors: {
+          test: {
+            attemptHandler: async ({ finish }) =>
+              withTransaction(async (txCtx, transactionHooks) => {
+                try {
+                  await withSavepoint(txCtx, transactionHooks, async (txCtx, transactionHooks) => {
+                    await finish({ ...txCtx, transactionHooks, output: { from: "savepoint" } });
+                    throw new Error("rollback to savepoint");
+                  });
+                } catch {}
+                return finish({ ...txCtx, transactionHooks, output: { from: "transaction" } });
+              }),
+          },
+        },
+      }),
+    });
+
+    const chain = await withTransaction(async (txCtx, transactionHooks) =>
+      client.createChain({ ...txCtx, transactionHooks, typeName: "test", input: null }),
+    );
+
+    await withWorkers([await worker.start()], async () => {
+      const completed = await client.awaitChain(chain, completionOptions);
+      expect(completed.output).toEqual({ from: "transaction" });
+    });
+
+    expect(spyStateAdapter.calls.map((call) => call.name)).not.toContain("rescheduleJobs");
+    const completedLogs = log.mock.calls
+      .map((call) => call[0])
+      .filter((entry) => entry.type === "job_completed");
+    expect(completedLogs).toHaveLength(1);
+    expect(completedLogs[0].data).toEqual(
+      expect.objectContaining({ output: { from: "transaction" } }),
+    );
+  });
+
+  it("keeps the attempt alive when a renewal lands after its own committed finish", async ({
+    stateAdapter,
+    notifyAdapter,
+    withTransaction,
+    withWorkers,
+    observabilityAdapter,
+    log,
+    expect,
+  }) => {
+    const jobTypes = defineJobTypes<{
+      test: { entry: true; input: null; output: null };
+    }>();
+    const client = await createClient({
+      stateAdapter,
+      notifyAdapter,
+      observabilityAdapter,
+      log,
+      jobTypes,
+    });
+    let abortedReason: unknown;
+    const worker = await createInProcessWorker({
+      client,
+      processors: createProcessors({
+        client,
+        jobTypes,
+        attemptConfig: { timeoutMs: 1000, heartbeatMs: 20 },
+        processors: {
+          test: {
+            attemptHandler: async ({ signal, finish }) => {
+              const result = await withTransaction(async (txCtx, transactionHooks) => {
+                const finished = await finish({ ...txCtx, transactionHooks, output: null });
+                await sleep(60);
+                return finished;
+              });
+              await sleep(100);
+              abortedReason = signal.reason;
+              return result;
+            },
+          },
+        },
+      }),
+    });
+
+    const chain = await withTransaction(async (txCtx, transactionHooks) =>
+      client.createChain({ ...txCtx, transactionHooks, typeName: "test", input: null }),
+    );
+
+    await withWorkers([await worker.start()], async () => {
+      await client.awaitChain(chain, completionOptions);
+      await expect.poll(() => abortedReason, { timeout: 5000 }).toBeUndefined();
+      await sleep(200);
+    });
+
+    expect(abortedReason).toBeUndefined();
+    expect(log).not.toHaveBeenCalledWith(
+      expect.objectContaining({ type: "job_attempt_taken_by_another_worker" }),
+    );
+  });
+
+  it("fails finish and aborts the signal after a workerless takeover", async ({
+    stateAdapter,
+    notifyAdapter,
+    withTransaction,
+    withWorkers,
+    observabilityAdapter,
+    log,
+    expect,
+  }) => {
+    const jobTypes = defineJobTypes<{
+      test: { entry: true; input: null; output: { by: string } };
+    }>();
+    const client = await createClient({
+      stateAdapter,
+      notifyAdapter,
+      observabilityAdapter,
+      log,
+      jobTypes,
+    });
+    const { promise: started, resolve: onStarted } = Promise.withResolvers<void>();
+    const { promise: takenOver, resolve: onTakenOver } = Promise.withResolvers<void>();
+    let finishError: unknown;
+    let abortReason: unknown;
+    const worker = await createInProcessWorker({
+      client,
+      processors: createProcessors({
+        client,
+        jobTypes,
+        processors: {
+          test: {
+            attemptHandler: async ({ signal, finish }) => {
+              onStarted();
+              await takenOver;
+              try {
+                return await withTransaction(async (txCtx, transactionHooks) =>
+                  finish({ ...txCtx, transactionHooks, output: { by: "worker" } }),
+                );
+              } catch (error) {
+                finishError = error;
+                abortReason = signal.reason;
+                throw error;
+              }
+            },
+          },
+        },
+      }),
+    });
+
+    const chain = await withTransaction(async (txCtx, transactionHooks) =>
+      client.createChain({ ...txCtx, transactionHooks, typeName: "test", input: null }),
+    );
+
+    await withWorkers([await worker.start()], async () => {
+      await started;
+      await withTransaction(async (txCtx, transactionHooks) =>
+        client.completeChain({
+          ...txCtx,
+          transactionHooks,
+          ...chain,
+          handler: async ({ job, completeJob }) =>
+            completeJob(job, async ({ finish }) => finish({ output: { by: "workerless" } })),
+        }),
+      );
+      onTakenOver();
+      const completed = await client.awaitChain(chain, completionOptions);
+      expect(completed.output).toEqual({ by: "workerless" });
+      await expect.poll(() => finishError, { timeout: 5000 }).toBeDefined();
+    });
+
+    expect(finishError).toBeInstanceOf(JobAlreadyCompletedError);
+    expect(abortReason).toBe("already_completed");
+  });
+
+  it("reads blockers on demand, with or without a transaction", async ({
+    stateAdapter,
+    notifyAdapter,
+    withTransaction,
+    withWorkers,
+    observabilityAdapter,
+    log,
+    expect,
+  }) => {
+    const jobTypes = defineJobTypes<{
+      blocker: { entry: true; input: { value: number }; output: { value: number } };
+      test: {
+        entry: true;
+        input: null;
+        output: { sum: number };
+        blockers: [{ typeName: "blocker" }, { typeName: "blocker" }];
+      };
+    }>();
+    const client = await createClient({
+      stateAdapter,
+      notifyAdapter,
+      observabilityAdapter,
+      log,
+      jobTypes,
+    });
+    const worker = await createInProcessWorker({
+      client,
+      processors: createProcessors({
+        client,
+        jobTypes,
+        processors: {
+          blocker: {
+            attemptHandler: async ({ job, finish }) =>
+              withTransaction(async (txCtx, transactionHooks) =>
+                finish({ ...txCtx, transactionHooks, output: { value: job.input.value } }),
+              ),
+          },
+          test: {
+            attemptHandler: async ({ getBlockers, finish }) => {
+              const outside = await getBlockers();
+              return withTransaction(async (txCtx, transactionHooks) => {
+                const inside = await getBlockers(txCtx);
+                expect(inside.map((blocker) => blocker.id)).toEqual(
+                  outside.map((blocker) => blocker.id),
+                );
+                const [first, second] = inside;
+                return finish({
+                  ...txCtx,
+                  transactionHooks,
+                  output: { sum: first.output.value + second.output.value },
+                });
+              });
+            },
+          },
+        },
+      }),
+    });
+
+    const chain = await withTransaction(async (txCtx, transactionHooks) => {
+      const [first, second] = await Promise.all([
+        client.createChain({
+          ...txCtx,
+          transactionHooks,
+          typeName: "blocker",
+          input: { value: 1 },
+        }),
+        client.createChain({
+          ...txCtx,
+          transactionHooks,
+          typeName: "blocker",
+          input: { value: 2 },
+        }),
+      ]);
+      return client.createChain({
+        ...txCtx,
+        transactionHooks,
+        typeName: "test",
+        input: null,
+        blockers: [first, second],
+      });
+    });
+
+    await withWorkers([await worker.start()], async () => {
+      const completed = await client.awaitChain(chain, completionOptions);
+      expect(completed.output).toEqual({ sum: 3 });
     });
   });
 };

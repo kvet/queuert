@@ -62,7 +62,6 @@ import {
   type GetStateAdapterTxContext,
   type StateAdapter,
   type StateChain,
-  type StateJob,
 } from "./state-adapter/state-adapter.js";
 import { type TransactionHooks } from "./transaction-hooks.js";
 import { type AttemptFinishResult, type AttemptOutcome } from "./worker/job-process.types.js";
@@ -1020,10 +1019,18 @@ export const createClient = async <
         return completeResult.continuedTo ?? completeResult;
       };
 
-      const currentJob: StateJob = {
-        ...(stateChain.tail ?? stateChain.head),
-        chain: stateChain,
-      };
+      // Acquisition locks only the job row, so lock the current job now: a worker must not
+      // start it while the handler runs.
+      const [currentJob] = await helpers.stateAdapter.getJobs({
+        txCtx,
+        jobIds: [(stateChain.tail ?? stateChain.head).id],
+        lock: "exclusive",
+      });
+      if (!currentJob) {
+        throw new ChainNotFoundError(`Chain with id ${id} not found`, {
+          chainId: id,
+        });
+      }
       await handler({ job: mapStateJobToJob(currentJob), completeJob });
 
       const [updatedChain] = await helpers.stateAdapter.getChains({

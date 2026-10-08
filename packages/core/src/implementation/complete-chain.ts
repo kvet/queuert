@@ -2,7 +2,11 @@ import { JobNotFoundError } from "../errors.js";
 import { bufferNotifyChainCompletion, bufferNotifyJobScheduled } from "../helpers/notify-hooks.js";
 import { bufferObservabilityEvent } from "../helpers/observability-hooks.js";
 import { type Helpers } from "../setup-helpers.js";
-import { type BaseTxContext, type StateJob } from "../state-adapter/state-adapter.js";
+import {
+  type BaseTxContext,
+  type StateAttemptFence,
+  type StateJob,
+} from "../state-adapter/state-adapter.js";
 import { type TransactionHooks } from "../transaction-hooks.js";
 import { type FinishResult } from "./attempt-outcome.js";
 import { bufferJobCompletedEvents } from "./job-completed-events.js";
@@ -20,12 +24,14 @@ export const completeChain = async (
     txCtx,
     transactionHooks,
     workerId,
+    fence,
   }: {
     job: StateJob;
     output: unknown;
     txCtx: BaseTxContext;
     transactionHooks: TransactionHooks;
     workerId: string | null;
+    fence?: StateAttemptFence;
   },
 ): Promise<FinishResult> => {
   const parsedOutput = helpers.jobTypes.parseOutput(job.typeName, output);
@@ -33,7 +39,7 @@ export const completeChain = async (
   const [completed] = await helpers.stateAdapter.completeJobs({
     txCtx,
     completedBy: workerId,
-    jobs: [{ jobId: job.id, output: parsedOutput }],
+    jobs: [{ jobId: job.id, output: parsedOutput, fence }],
   });
   if (!completed) {
     throw new JobNotFoundError(`Job ${job.id} not found or already completed`, { jobId: job.id });
@@ -51,8 +57,6 @@ export const completeChain = async (
     helpers.observabilityHelper.chainDuration(chain);
   });
   bufferNotifyChainCompletion(transactionHooks, helpers.notifyAdapter, completed);
-
-  if (!completed.hasBlockedJobs) return { job: completed, continuation: null };
 
   const dependentJobs = await helpers.stateAdapter.unblockJobs({
     txCtx,

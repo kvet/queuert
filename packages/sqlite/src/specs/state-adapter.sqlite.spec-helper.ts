@@ -2,7 +2,11 @@ import { type UUID } from "node:crypto";
 
 import Database from "better-sqlite3";
 import { type StateAdapter } from "queuert";
-import { createFlakyBatchGenerator } from "queuert/testing";
+import {
+  type WithSavepoint,
+  createFlakyBatchGenerator,
+  createSqlWithSavepoint,
+} from "queuert/testing";
 import { type TestAPI, expect } from "vitest";
 
 import { createSqliteStateAdapter } from "../state-adapter/state-adapter.sqlite.js";
@@ -23,6 +27,7 @@ export const extendWithStateSqlite = <T>(
     flakyStateAdapter: StateAdapter<{ $test: true }, string>;
     flakyDbStateAdapter: StateAdapter<{ $test: true }, string> | undefined;
     poisonTransaction: ((txCtx: { $test: true }) => Promise<void>) | undefined;
+    withSavepoint: WithSavepoint | undefined;
     poisonExecute:
       | ((cb: (adapter: StateAdapter<{ $test: true }, string>) => Promise<void>) => Promise<void>)
       | undefined;
@@ -39,6 +44,7 @@ export const extendWithStateSqlite = <T>(
     flakyStateAdapter: BetterSqlite3StateAdapter;
     flakyDbStateAdapter: BetterSqlite3StateAdapter | undefined;
     poisonTransaction: ((txCtx: { $test: true }) => Promise<void>) | undefined;
+    withSavepoint: WithSavepoint | undefined;
     poisonExecute:
       | ((cb: (adapter: StateAdapter<{ $test: true }, string>) => Promise<void>) => Promise<void>)
       | undefined;
@@ -127,6 +133,17 @@ export const extendWithStateSqlite = <T>(
         return use(
           await createSqliteStateAdapter({
             stateProvider: flakyStateProvider,
+          }),
+        );
+      },
+      { scope: "test" },
+    ],
+    withSavepoint: [
+      // oxlint-disable-next-line no-empty-pattern
+      async ({}, use) => {
+        await use(
+          createSqlWithSavepoint(async (txCtx, statement) => {
+            (txCtx as unknown as BetterSqlite3Context).db.exec(statement);
           }),
         );
       },

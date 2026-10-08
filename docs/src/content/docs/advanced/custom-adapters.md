@@ -60,6 +60,27 @@ test("custom state adapter passes conformance", async () => {
 
 See the [State adapter examples](/queuert/examples/#state-adapters) for end-to-end integrations across PostgreSQL and SQLite.
 
+### Contract requirements
+
+Queuert opens no transaction around job processing. The worker's own bookkeeping runs as single autocommit statements, and the only transaction an attempt touches is the user's, passed to `finish`. Correctness therefore comes from conditional writes in the adapter, not from locks Queuert holds. The conformance suite checks each of the following.
+
+**The chain head row is the serialization point.** Completing a chain (`completeJobs`) writes its head row. Adding a blocker on a chain locks that head row: before `createJobs` or `continueJobs` with blockers, core calls `getChains({ chainIds, lock: "exclusive", txCtx })`, which must lock each head and return the chains, `undefined` for a missing one. The two sides wait for each other, so a dependent job is never left `blocked` behind a completed chain. `completeJobs` no longer requires its caller to pre-lock the head, and `addJobsBlockers` stays insert-only.
+
+**Fenced writes are all-or-nothing.** `completeJobs`, `continueJobs` and `rescheduleJobs` accept an optional per-job `fence: { attempt, workerId }`, and `extendJobAttempt` requires one. A fenced write matches only `status = 'running' AND attempt = N AND attempt_by = workerId`. A miss returns `undefined` at that position and writes nothing — no job update, no head update, no continuation. Drive every derived write from the `RETURNING` of the fenced job `UPDATE` (for example `WITH done AS (UPDATE job … RETURNING …) UPDATE job h … FROM done`); putting the fence only in a CTE `SELECT` or only on the final statement is not enough. Where one statement cannot do it (SQLite `continueJobs`), run the fenced `UPDATE` first and insert continuations only for the rows it returned. `attempt` must only ever be incremented by `startJobAttempt`, so each acquisition has a unique attempt number.
+
+**Skipping held chains in `startJobAttempt` is an optimisation.** The built-in adapters skip a candidate job whose chain head another transaction holds and try the next one. That avoids waiting, but correctness does not depend on it: an adapter that does not skip held heads is still correct, as long as two parallel callers never receive the same job.
+
+**Signatures:**
+
+- `startJobAttempt({ timeoutMsByTypeName, workerId, txCtx? })` — the keys of `timeoutMsByTypeName` are the type filter; set `attemptUntil` to now plus the acquired job type's timeout. Returns the job with its chain, or `undefined`.
+- `extendJobAttempt({ jobId, fence, timeoutMs, txCtx? })` — returns `undefined` when the fence misses.
+- `reclaimExpiredJobAttempt({ typeNames, ignoredJobIds?, lastAttemptError, txCtx? })` — returns an expired attempt to `pending` and stamps `lastAttemptAt` and `lastAttemptError` with the string core passes.
+- `rescheduleJobs({ jobs: [{ jobId, schedule?, error?, fence? }], txCtx? })`, `completeJobs({ jobs: [{ jobId, output, fence? }], completedBy?, txCtx })`, `continueJobs({ jobs: [{ …, continueFromId, fence? }], completedBy?, txCtx })`.
+- `getChains({ chainIds, lock?: "exclusive", txCtx })` — `lock` requires a `txCtx`.
+- `txCtx` is optional on `startJobAttempt`, `extendJobAttempt`, `reclaimExpiredJobAttempt` and `rescheduleJobs`: without one, run the statement on the adapter's own connection in autocommit.
+
+**Removed:** `withSavepoint` (on the adapter and on state providers), `hasBlockers` on `startJobAttempt`'s result, and `hasBlockedJobs` on `completeJobs`'s result — core now always calls `unblockJobs` after completing a chain.
+
 ## Custom validation adapter
 
 Validation adapters are thin wrappers around schema libraries that produce a `JobTypes` registry. The conformance suite checks that:

@@ -42,13 +42,21 @@ const worker = await createInProcessWorker({
     jobTypes,
     processors: {
       "await-approval": {
-        attemptHandler: async ({ complete }) =>
-          complete(async ({ finish }) => finish({ output: { rejected: true } })),
+        attemptHandler: async ({ finish }) =>
+          withTransactionHooks(async (transactionHooks) =>
+            stateProvider.withTransaction(async (txCtx) =>
+              finish({ ...txCtx, transactionHooks, output: { rejected: true } }),
+            ),
+          ),
       },
       "process-request": {
-        attemptHandler: async ({ job, complete }) => {
+        attemptHandler: async ({ job, finish }) => {
           await doSomethingWith(job.input.requestId);
-          return complete(async ({ finish }) => finish({ output: { processed: true } }));
+          return withTransactionHooks(async (transactionHooks) =>
+            stateProvider.withTransaction(async (txCtx) =>
+              finish({ ...txCtx, transactionHooks, output: { processed: true } }),
+            ),
+          );
         },
       },
     },
@@ -100,4 +108,4 @@ Your handler can also decline: just return without calling `completeJob`. The ch
 
 Internally, `completeChain` locks the current job at the state adapter level, preventing concurrent completion by a worker or another caller. The completed job has `completedBy: null` (no worker identity), distinguishing it from worker-completed jobs.
 
-If a worker is already processing the job when `completeChain` runs, the worker detects the external completion via `JobAlreadyCompletedError`. The worker's abort signal fires with reason `"already_completed"`, and the worker abandons its attempt gracefully.
+If a worker is already processing the job when `completeChain` runs, `completeChain` takes the job over. The worker notices on its next heartbeat or when its `finish` runs: `finish` writes nothing and throws `JobAlreadyCompletedError`, so the handler's transaction rolls back, and the attempt's abort signal fires with reason `"already_completed"`.

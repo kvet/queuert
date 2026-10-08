@@ -142,7 +142,7 @@ export const seedAllStates = async <TTxContext extends BaseTxContext>(
         for (let k = 0; k < indexes.length; k++) {
           const job = await stateAdapter.startJobAttempt({
             txCtx,
-            typeNames: [typeName],
+            timeoutMsByTypeName: { [typeName]: 30_000 },
             workerId: seedConfig.workerId,
           });
           if (!job) break;
@@ -151,7 +151,7 @@ export const seedAllStates = async <TTxContext extends BaseTxContext>(
               (await stateAdapter.extendJobAttempt({
                 txCtx,
                 jobId: job.id,
-                workerId: seedConfig.workerId,
+                fence: { attempt: job.attempt, workerId: seedConfig.workerId },
                 timeoutMs: seedConfig.attemptMs,
               }))!,
             );
@@ -337,7 +337,7 @@ export const seedAllStates = async <TTxContext extends BaseTxContext>(
     await stateAdapter.withTransaction(async (txCtx) => {
       const acquired = await stateAdapter.startJobAttempt({
         txCtx,
-        typeNames: ["seed:chain"],
+        timeoutMsByTypeName: { "seed:chain": 30_000 },
         workerId: seedConfig.workerId,
       });
       if (!acquired) return;
@@ -366,7 +366,7 @@ export const seedAllStates = async <TTxContext extends BaseTxContext>(
       for (let k = 0; k < indexes.length; k++) {
         const job = await stateAdapter.startJobAttempt({
           txCtx,
-          typeNames: ["seed:throwaway:expired"],
+          timeoutMsByTypeName: { "seed:throwaway:expired": 30_000 },
           workerId: seedConfig.workerId,
         });
         if (!job) break;
@@ -374,7 +374,7 @@ export const seedAllStates = async <TTxContext extends BaseTxContext>(
           (await stateAdapter.extendJobAttempt({
             txCtx,
             jobId: job.id,
-            workerId: seedConfig.workerId,
+            fence: { attempt: job.attempt, workerId: seedConfig.workerId },
             timeoutMs: 1,
           }))!,
         );

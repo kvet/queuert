@@ -47,14 +47,18 @@ Jobs can be scheduled to start at a future time using the `schedule` option. The
 The same `schedule` option works with `continueWith` for deferred continuations:
 
 ```ts
-return complete(async ({ finish }) =>
-  finish({
-    continueWith: {
-      typeName: "follow-up",
-      input: { userId: job.input.userId },
-      schedule: { afterMs: 24 * 60 * 60 * 1000 }, // 24 hours later
-    },
-  }),
+return withTransactionHooks(async (transactionHooks) =>
+  stateProvider.withTransaction(async (txCtx) =>
+    finish({
+      ...txCtx,
+      transactionHooks,
+      continueWith: {
+        typeName: "follow-up",
+        input: { userId: job.input.userId },
+        schedule: { afterMs: 24 * 60 * 60 * 1000 }, // 24 hours later
+      },
+    }),
+  ),
 );
 ```
 
@@ -69,13 +73,15 @@ return complete(async ({ finish }) =>
 When a handler needs to defer work without treating it as a failure — for example, a rate-limited API saying "come back later" — use `finish({ reschedule })`:
 
 ```ts
-attemptHandler: async ({ job, complete }) => {
+attemptHandler: async ({ job, finish }) => {
   const response = await fetch(job.input.url);
 
   if (response.status === 429) {
     const retryAfter = parseInt(response.headers.get("Retry-After") || "60", 10);
-    return complete(async ({ finish }) =>
-      finish({ reschedule: { afterMs: retryAfter * 1000 } }),
+    return withTransactionHooks(async (transactionHooks) =>
+      stateProvider.withTransaction(async (txCtx) =>
+        finish({ ...txCtx, transactionHooks, reschedule: { afterMs: retryAfter * 1000 } }),
+      ),
     );
   }
 
@@ -84,15 +90,19 @@ attemptHandler: async ({ job, complete }) => {
   }
 
   const data = await response.json();
-  return complete(async ({ finish }) => finish({ output: { data } }));
+  return withTransactionHooks(async (transactionHooks) =>
+    stateProvider.withTransaction(async (txCtx) =>
+      finish({ ...txCtx, transactionHooks, output: { data } }),
+    ),
+  );
 },
 ```
 
 Because `finish({ reschedule })` is a normal outcome — not an error — the job keeps a clean slate: no `lastAttemptError`, no failure event, no error span. The attempt counter still increments, so backoff reflects total attempts if the job later fails for real.
 
 ```ts
-finish({ reschedule: { afterMs: 30_000 } }); // 30 seconds from now
-finish({ reschedule: { at: new Date("2026-06-15T09:00:00Z") } }); // specific time
+finish({ ...txCtx, transactionHooks, reschedule: { afterMs: 30_000 } }); // 30 seconds from now
+finish({ ...txCtx, transactionHooks, reschedule: { at: new Date("2026-06-15T09:00:00Z") } }); // specific time
 ```
 
 ## Rescheduling Pending Jobs
@@ -139,27 +149,33 @@ const jobTypes = defineJobTypes<{
 
 // In processor — start a new chain with a scheduled delay
 'daily-digest': {
-  attemptHandler: async ({ job, complete }) => {
+  attemptHandler: async ({ job, finish }) => {
     await sendDigestEmail(job.input.userId);
 
-    return complete(async ({ finish, transactionHooks, ...txCtx }) => {
-      const completedJob = await finish({ output: { sentAt: new Date().toISOString() } });
-
-      if (userStillSubscribed) {
-        await client.createChain({
+    return withTransactionHooks(async (transactionHooks) =>
+      stateProvider.withTransaction(async (txCtx) => {
+        const completedJob = await finish({
           ...txCtx,
           transactionHooks,
-          typeName: 'daily-digest',
-          input: { userId: job.input.userId },
-          schedule: { afterMs: 24 * 60 * 60 * 1000 }, // Run again tomorrow
-          deduplication: {
-            key: `digest:${job.input.userId}`,
-            scope: 'running',
-          },
+          output: { sentAt: new Date().toISOString() },
         });
-      }
-      return completedJob;
-    });
+
+        if (userStillSubscribed) {
+          await client.createChain({
+            ...txCtx,
+            transactionHooks,
+            typeName: 'daily-digest',
+            input: { userId: job.input.userId },
+            schedule: { afterMs: 24 * 60 * 60 * 1000 }, // Run again tomorrow
+            deduplication: {
+              key: `digest:${job.input.userId}`,
+              scope: 'running',
+            },
+          });
+        }
+        return completedJob;
+      }),
+    );
   },
 }
 ```

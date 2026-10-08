@@ -4,13 +4,8 @@ import { type Client, createClient } from "../client.js";
 import { defineJobTypes } from "../entities/define-job-types.js";
 import { createInProcessStateAdapter } from "../state-adapter/state-adapter.in-process.js";
 import { type StateAdapter } from "../state-adapter/state-adapter.js";
-import {
-  type AttemptMiddleware,
-  type MergedAttemptHandlerCtx,
-  type MergedCompleteCtx,
-  type MergedPrepareCtx,
-  type MergedStepCtx,
-} from "./attempt-middleware.js";
+import { withTransactionHooks } from "../transaction-hooks.js";
+import { type AttemptMiddleware, type MergedAttemptHandlerCtx } from "./attempt-middleware.js";
 import { createProcessors } from "./create-processors.js";
 
 type Defs = {
@@ -22,12 +17,6 @@ const stateAdapter = await createInProcessStateAdapter();
 const client = await createClient({ stateAdapter, jobTypes });
 
 type W1<C extends Record<string, unknown>> = AttemptMiddleware<any, C>;
-type W4<
-  H extends Record<string, unknown>,
-  P extends Record<string, unknown>,
-  E extends Record<string, unknown>,
-  C extends Record<string, unknown>,
-> = AttemptMiddleware<any, H, P, E, C>;
 
 describe("AttemptMiddleware ctx type inference", () => {
   it("MergedAttemptHandlerCtx distributes across middleware (1, 4, 5, 8)", () => {
@@ -73,18 +62,6 @@ describe("AttemptMiddleware ctx type inference", () => {
     >();
   });
 
-  it("MergedPrepareCtx / MergedStepCtx / MergedCompleteCtx pick only their phase", () => {
-    expectTypeOf<
-      MergedPrepareCtx<readonly [W4<{ h: 1 }, { p: 2 }, { e: 3 }, { c: 4 }>]>
-    >().toEqualTypeOf<{ p: 2 }>();
-    expectTypeOf<
-      MergedStepCtx<readonly [W4<{ h: 1 }, { p: 2 }, { e: 3 }, { c: 4 }>]>
-    >().toEqualTypeOf<{ e: 3 }>();
-    expectTypeOf<
-      MergedCompleteCtx<readonly [W4<{ h: 1 }, { p: 2 }, { e: 3 }, { c: 4 }>]>
-    >().toEqualTypeOf<{ c: 4 }>();
-  });
-
   it("attemptHandler receives merged handler ctx", () => {
     const w1: AttemptMiddleware<any, { traceId: string }> = {
       wrapHandler: async ({ next }) => next({ traceId: "t" }),
@@ -99,87 +76,15 @@ describe("AttemptMiddleware ctx type inference", () => {
       attemptMiddleware: [w1, w2],
       processors: {
         foo: {
-          attemptHandler: async ({ traceId, log, complete }) => {
+          attemptHandler: async ({ traceId, log, finish }) => {
             expectTypeOf(traceId).toEqualTypeOf<string>();
             expectTypeOf(log).toEqualTypeOf<(msg: string) => void>();
-            return complete(async ({ finish }) => finish({ output: { ok: true as const } }));
+            return withTransactionHooks(async (transactionHooks) =>
+              stateAdapter.withTransaction(async (txCtx) =>
+                finish({ ...txCtx, transactionHooks, output: { ok: true as const } }),
+              ),
+            );
           },
-        },
-      },
-    });
-  });
-
-  it("prepareCallback options include prepare ctx alongside txCtx", () => {
-    const w: AttemptMiddleware<any, Record<string, never>, { tag: string }> = {
-      wrapPrepare: async ({ next }) => next({ tag: "t" }),
-    };
-
-    createProcessors({
-      client,
-      jobTypes,
-      attemptMiddleware: [w],
-      processors: {
-        foo: {
-          attemptHandler: async ({ prepare, complete }) => {
-            await prepare({ mode: "atomic" }, async ({ tag }) => {
-              expectTypeOf(tag).toEqualTypeOf<string>();
-            });
-            return complete(async ({ finish }) => finish({ output: { ok: true as const } }));
-          },
-        },
-      },
-    });
-  });
-
-  it("executeCallback options include execute ctx alongside transactionHooks & txCtx", () => {
-    const w: AttemptMiddleware<
-      any,
-      Record<string, never>,
-      Record<string, never>,
-      { meter: (name: string) => void }
-    > = {
-      wrapStep: async ({ next }) => next({ meter: () => {} }),
-    };
-
-    createProcessors({
-      client,
-      jobTypes,
-      attemptMiddleware: [w],
-      processors: {
-        foo: {
-          attemptHandler: async ({ step, complete }) => {
-            await step(async ({ meter, transactionHooks: _t }) => {
-              expectTypeOf(meter).toEqualTypeOf<(name: string) => void>();
-            });
-            return complete(async ({ finish }) => finish({ output: { ok: true as const } }));
-          },
-        },
-      },
-    });
-  });
-
-  it("completeCallback options include complete ctx alongside continueWith & txCtx", () => {
-    const w: AttemptMiddleware<
-      any,
-      Record<string, never>,
-      Record<string, never>,
-      Record<string, never>,
-      { audit: (evt: string) => void }
-    > = {
-      wrapComplete: async ({ next }) => next({ audit: () => {} }),
-    };
-
-    createProcessors({
-      client,
-      jobTypes,
-      attemptMiddleware: [w],
-      processors: {
-        foo: {
-          attemptHandler: async ({ complete }) =>
-            complete(async ({ finish, audit }) => {
-              expectTypeOf(audit).toEqualTypeOf<(evt: string) => void>();
-              return finish({ output: { ok: true as const } });
-            }),
         },
       },
     });
@@ -201,10 +106,14 @@ describe("tuple narrowing without `as const`", () => {
       attemptMiddleware: [traceMw, logMw],
       processors: {
         foo: {
-          attemptHandler: async ({ traceId, log, complete }) => {
+          attemptHandler: async ({ traceId, log, finish }) => {
             expectTypeOf(traceId).toEqualTypeOf<string>();
             expectTypeOf(log).toEqualTypeOf<(msg: string) => void>();
-            return complete(async ({ finish }) => finish({ output: { ok: true as const } }));
+            return withTransactionHooks(async (transactionHooks) =>
+              stateAdapter.withTransaction(async (txCtx) =>
+                finish({ ...txCtx, transactionHooks, output: { ok: true as const } }),
+              ),
+            );
           },
         },
       },
@@ -221,86 +130,37 @@ describe("AttemptMiddleware accepts concrete (non-any) state adapters", () => {
     expectTypeOf<AttemptMiddleware<DbStateAdapter, { trace: string }>>().toBeObject();
   });
 
-  it("wrapPrepare/wrapStep/wrapComplete receive the adapter's txCtx fields", () => {
-    type Tx = { db: { query: (sql: string) => Promise<unknown> } };
-    type DbStateAdapter = StateAdapter<Tx, string>;
-
-    const mwPrepare: AttemptMiddleware<DbStateAdapter> = {
-      wrapPrepare: async ({ db, next }) => {
-        expectTypeOf(db).toEqualTypeOf<Tx["db"]>();
-        return next({});
-      },
-    };
-    const mwExecute: AttemptMiddleware<DbStateAdapter> = {
-      wrapStep: async ({ db, next }) => {
-        expectTypeOf(db).toEqualTypeOf<Tx["db"]>();
-        return next({});
-      },
-    };
-    const mwComplete: AttemptMiddleware<DbStateAdapter> = {
-      wrapComplete: async ({ db, transactionHooks: _t, next }) => {
-        expectTypeOf(db).toEqualTypeOf<Tx["db"]>();
-        return next({});
-      },
-    };
-    void mwPrepare;
-    void mwExecute;
-    void mwComplete;
-  });
-
   it("merges ctx across a multi-element tuple of concrete-adapter middleware", () => {
     type Tx = { db: { query: (sql: string) => Promise<unknown> } };
     type DbStateAdapter = StateAdapter<Tx, string>;
     const dbClient = client as unknown as Client<Defs, DbStateAdapter>;
+    const dbStateAdapter = stateAdapter as unknown as DbStateAdapter;
 
     const traceMw: AttemptMiddleware<DbStateAdapter, { traceId: string }> = {
       wrapHandler: async ({ next }) => next({ traceId: "t" }),
     };
-    const prepareMw: AttemptMiddleware<
-      DbStateAdapter,
-      Record<string, never>,
-      { tenant: string }
-    > = {
-      wrapPrepare: async ({ db, next }) => {
-        expectTypeOf(db).toEqualTypeOf<Tx["db"]>();
+    const tenantMw: AttemptMiddleware<DbStateAdapter, { tenant: string }> = {
+      wrapHandler: async ({ job, next }) => {
+        expectTypeOf(job.id).toEqualTypeOf<string>();
         return next({ tenant: "acme" });
-      },
-    };
-    const outboxMw: AttemptMiddleware<
-      DbStateAdapter,
-      Record<string, never>,
-      Record<string, never>,
-      { emit: (evt: string) => void },
-      { emit: (evt: string) => void }
-    > = {
-      wrapStep: async ({ db, next }) => {
-        expectTypeOf(db).toEqualTypeOf<Tx["db"]>();
-        return next({ emit: () => {} });
-      },
-      wrapComplete: async ({ db, next }) => {
-        expectTypeOf(db).toEqualTypeOf<Tx["db"]>();
-        return next({ emit: () => {} });
       },
     };
 
     createProcessors({
       client: dbClient,
       jobTypes,
-      attemptMiddleware: [traceMw, prepareMw, outboxMw],
+      attemptMiddleware: [traceMw, tenantMw],
       processors: {
         foo: {
-          attemptHandler: async ({ traceId, prepare, step, complete }) => {
+          attemptHandler: async ({ traceId, tenant, finish }) => {
             expectTypeOf(traceId).toEqualTypeOf<string>();
-            await prepare({ mode: "staged" }, async ({ tenant }) => {
-              expectTypeOf(tenant).toEqualTypeOf<string>();
-            });
-            await step(async ({ emit }) => {
-              expectTypeOf(emit).toEqualTypeOf<(evt: string) => void>();
-            });
-            return complete(async ({ finish, emit }) => {
-              expectTypeOf(emit).toEqualTypeOf<(evt: string) => void>();
-              return finish({ output: { ok: true as const } });
-            });
+            expectTypeOf(tenant).toEqualTypeOf<string>();
+            return withTransactionHooks(async (transactionHooks) =>
+              dbStateAdapter.withTransaction(async (txCtx) => {
+                expectTypeOf(txCtx.db).toEqualTypeOf<Tx["db"]>();
+                return finish({ ...txCtx, transactionHooks, output: { ok: true as const } });
+              }),
+            );
           },
         },
       },
@@ -326,10 +186,14 @@ describe("AttemptMiddleware accepts concrete (non-any) state adapters", () => {
       attemptMiddleware: [agnosticMw, concreteMw],
       processors: {
         foo: {
-          attemptHandler: async ({ traceId, log, complete }) => {
+          attemptHandler: async ({ traceId, log, finish }) => {
             expectTypeOf(traceId).toEqualTypeOf<string>();
             expectTypeOf(log).toEqualTypeOf<(msg: string) => void>();
-            return complete(async ({ finish }) => finish({ output: { ok: true as const } }));
+            return withTransactionHooks(async (transactionHooks) =>
+              stateAdapter.withTransaction(async (txCtx) =>
+                finish({ ...txCtx, transactionHooks, output: { ok: true as const } }),
+              ),
+            );
           },
         },
       },
@@ -339,10 +203,11 @@ describe("AttemptMiddleware accepts concrete (non-any) state adapters", () => {
 
 describe("middleware must match the client's state adapter", () => {
   it("rejects middleware typed against a foreign adapter", () => {
-    type PgAdapter = StateAdapter<{ sql: (q: string) => Promise<void> }, string>;
-    const foreignMw: AttemptMiddleware<PgAdapter, Record<string, never>, { tenant: string }> = {
-      wrapPrepare: async ({ sql, next }) => {
-        void sql;
+    type PgJobId = string & { readonly brand: "pg" };
+    type PgAdapter = StateAdapter<{ sql: (q: string) => Promise<void> }, PgJobId>;
+    const foreignMw: AttemptMiddleware<PgAdapter, { tenant: string }> = {
+      wrapHandler: async ({ job, next }) => {
+        void (job.id satisfies PgJobId);
         return next({ tenant: "acme" });
       },
     };
@@ -350,13 +215,17 @@ describe("middleware must match the client's state adapter", () => {
     createProcessors({
       client,
       jobTypes,
-      // @ts-expect-error — middleware is typed for a Postgres-shaped adapter but
-      // the client is in-process; its hooks would destructure an undefined `sql`
+      // @ts-expect-error — middleware is typed for an adapter with branded job ids but the
+      // client is in-process; its wrapHandler would read `job.id` as the wrong type
       attemptMiddleware: [foreignMw],
       processors: {
         foo: {
-          attemptHandler: async ({ complete }) =>
-            complete(async ({ finish }) => finish({ output: { ok: true } })),
+          attemptHandler: async ({ finish }) =>
+            withTransactionHooks(async (transactionHooks) =>
+              stateAdapter.withTransaction(async (txCtx) =>
+                finish({ ...txCtx, transactionHooks, output: { ok: true as const } }),
+              ),
+            ),
         },
       },
     });
@@ -373,13 +242,39 @@ describe("middleware must match the client's state adapter", () => {
       attemptMiddleware: [agnosticMw],
       processors: {
         foo: {
-          attemptHandler: async ({ traceId, complete }) => {
+          attemptHandler: async ({ traceId, finish }) => {
             expectTypeOf(traceId).toEqualTypeOf<string>();
-            return complete(async ({ finish }) => finish({ output: { ok: true as const } }));
+            return withTransactionHooks(async (transactionHooks) =>
+              stateAdapter.withTransaction(async (txCtx) =>
+                finish({ ...txCtx, transactionHooks, output: { ok: true as const } }),
+              ),
+            );
           },
         },
       },
     });
+  });
+});
+
+describe("wrapHandler result", () => {
+  it("passes the handler's finish result through next", () => {
+    type WrapHandler = NonNullable<AttemptMiddleware<any, { traceId: string }>["wrapHandler"]>;
+    const wrapHandler = null as unknown as WrapHandler;
+    type Instantiated = typeof wrapHandler<{ marker: 1 }>;
+    expectTypeOf<ReturnType<Parameters<Instantiated>[0]["next"]>>().toEqualTypeOf<
+      Promise<{ marker: 1 }>
+    >();
+    expectTypeOf<ReturnType<Instantiated>>().toEqualTypeOf<Promise<{ marker: 1 }>>();
+  });
+
+  it("exposes only wrapHandler", () => {
+    expectTypeOf<keyof AttemptMiddleware<any>>().toEqualTypeOf<"wrapHandler">();
+  });
+
+  it("takes the state adapter and the handler ctx as its only type parameters", () => {
+    // @ts-expect-error — AttemptMiddleware has two type parameters
+    type TooMany = AttemptMiddleware<any, { a: 1 }, { b: 2 }>;
+    expectTypeOf<TooMany>().toBeAny();
   });
 });
 
@@ -402,10 +297,14 @@ describe("handler ctx compile-time negatives", () => {
       processors: {
         foo: {
           // @ts-expect-error — 'otherKey' not provided by any middleware
-          attemptHandler: async ({ traceId, otherKey, complete }) => {
+          attemptHandler: async ({ traceId, otherKey, finish }) => {
             void traceId;
             void otherKey;
-            return complete(async ({ finish }) => finish({ output: { ok: true as const } }));
+            return withTransactionHooks(async (transactionHooks) =>
+              stateAdapter.withTransaction(async (txCtx) =>
+                finish({ ...txCtx, transactionHooks, output: { ok: true as const } }),
+              ),
+            );
           },
         },
       },

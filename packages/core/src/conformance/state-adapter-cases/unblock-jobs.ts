@@ -407,14 +407,14 @@ export const unblockJobsGroup: ConformanceGroup<StateConformanceFixture> = {
           stateAdapter.startJobAttempt({
             txCtx,
             workerId: "worker-1",
-            typeNames: ["fairness-main"],
+            timeoutMsByTypeName: { "fairness-main": 30_000 },
           }),
         );
         const second = await stateAdapter.withTransaction(async (txCtx) =>
           stateAdapter.startJobAttempt({
             txCtx,
             workerId: "worker-1",
-            typeNames: ["fairness-main"],
+            timeoutMsByTypeName: { "fairness-main": 30_000 },
           }),
         );
 

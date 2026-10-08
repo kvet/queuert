@@ -1,6 +1,7 @@
 import { type TestAPI, expect } from "vitest";
 
 import { createFlakyBatchGenerator } from "../suites/flaky-test-helper.spec-helper.js";
+import { type WithSavepoint } from "../suites/spec-context.spec-helper.js";
 import {
   type InProcessContext,
   type InProcessStateAdapter,
@@ -16,6 +17,7 @@ export const extendWithStateInProcess = <T>(
     flakyStateAdapter: StateAdapter<{ $test: true }, string>;
     flakyDbStateAdapter: StateAdapter<{ $test: true }, string> | undefined;
     poisonTransaction: ((txCtx: { $test: true }) => Promise<void>) | undefined;
+    withSavepoint: WithSavepoint | undefined;
     poisonExecute:
       | ((cb: (adapter: StateAdapter<{ $test: true }, string>) => Promise<void>) => Promise<void>)
       | undefined;
@@ -26,6 +28,7 @@ export const extendWithStateInProcess = <T>(
     flakyStateAdapter: InProcessStateAdapter;
     flakyDbStateAdapter: InProcessStateAdapter | undefined;
     poisonTransaction: ((txCtx: { $test: true }) => Promise<void>) | undefined;
+    withSavepoint: WithSavepoint | undefined;
     poisonExecute:
       | ((cb: (adapter: StateAdapter<{ $test: true }, string>) => Promise<void>) => Promise<void>)
       | undefined;
@@ -73,10 +76,6 @@ export const extendWithStateInProcess = <T>(
             maybeThrow();
             return stateAdapter.withTransaction(fn);
           },
-          withSavepoint: async (txCtx, fn) => {
-            maybeThrow();
-            return stateAdapter.withSavepoint(txCtx, fn);
-          },
           getChains: wrap(stateAdapter.getChains),
           getJobs: wrap(stateAdapter.getJobs),
           createJobs: wrap(stateAdapter.createJobs),
@@ -112,6 +111,13 @@ export const extendWithStateInProcess = <T>(
         if (queryCount > 5) {
           expect(errorCount).toBeGreaterThan(0);
         }
+      },
+      { scope: "test" },
+    ],
+    withSavepoint: [
+      // oxlint-disable-next-line no-empty-pattern
+      async ({}, use) => {
+        await use(undefined);
       },
       { scope: "test" },
     ],

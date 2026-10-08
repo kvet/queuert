@@ -174,8 +174,10 @@ export const rescheduleJobTestSuite = ({ it }: { it: TestAPI<TestSuiteContext> }
         jobTypes,
         processors: {
           task: {
-            attemptHandler: async ({ job, complete }) =>
-              complete(async ({ finish }) => finish({ output: { result: job.input.value * 2 } })),
+            attemptHandler: async ({ job, finish }) =>
+              withTransaction(async (txCtx, transactionHooks) =>
+                finish({ ...txCtx, transactionHooks, output: { result: job.input.value * 2 } }),
+              ),
           },
         },
       }),
@@ -270,8 +272,10 @@ export const rescheduleJobTestSuite = ({ it }: { it: TestAPI<TestSuiteContext> }
         jobTypes,
         processors: {
           task: {
-            attemptHandler: async ({ complete }) =>
-              complete(async ({ finish }) => finish({ output: { done: true as const } })),
+            attemptHandler: async ({ finish }) =>
+              withTransaction(async (txCtx, transactionHooks) =>
+                finish({ ...txCtx, transactionHooks, output: { done: true as const } }),
+              ),
           },
         },
       }),
@@ -614,8 +618,10 @@ export const rescheduleJobTestSuite = ({ it }: { it: TestAPI<TestSuiteContext> }
         jobTypes,
         processors: {
           task: {
-            attemptHandler: async ({ complete }) =>
-              complete(async ({ finish }) => finish({ output: { done: true as const } })),
+            attemptHandler: async ({ finish }) =>
+              withTransaction(async (txCtx, transactionHooks) =>
+                finish({ ...txCtx, transactionHooks, output: { done: true as const } }),
+              ),
           },
         },
       }),

@@ -78,48 +78,65 @@ const worker = await createInProcessWorker({
     jobTypes,
     processors: {
       "fetch-data": {
-        attemptHandler: async ({ job, complete }) => {
+        attemptHandler: async ({ job, finish }) => {
           console.log(`[fetch-data] Fetching ${job.input.sourceId}`);
-          return complete(async ({ finish }) =>
-            finish({
-              output: {
-                sourceId: job.input.sourceId,
-                data: `Data from ${job.input.sourceId}`,
-              },
-            }),
+          return withTransactionHooks(async (transactionHooks) =>
+            sql.begin(async (txSql) =>
+              finish({
+                txSql,
+                transactionHooks,
+                output: {
+                  sourceId: job.input.sourceId,
+                  data: `Data from ${job.input.sourceId}`,
+                },
+              }),
+            ),
           );
         },
       },
 
       "generate-report": {
-        attemptHandler: async ({ job, complete }) => {
+        attemptHandler: async ({ job, getBlockers, finish }) => {
           console.log(`[generate-report] Generating ${job.input.reportId}`);
-          const summary = job.blockers.map((b) => b.output.data).join(", ");
-          return complete(async ({ finish }) =>
-            finish({
-              continueWith: {
-                typeName: "send-report",
-                input: { reportId: job.input.reportId, summary },
-              },
-            }),
+          const blockers = await getBlockers();
+          const summary = blockers.map((b) => b.output.data).join(", ");
+          return withTransactionHooks(async (transactionHooks) =>
+            sql.begin(async (txSql) =>
+              finish({
+                txSql,
+                transactionHooks,
+                continueWith: {
+                  typeName: "send-report",
+                  input: { reportId: job.input.reportId, summary },
+                },
+              }),
+            ),
           );
         },
       },
 
       "send-report": {
-        attemptHandler: async ({ job, complete }) => {
+        attemptHandler: async ({ job, finish }) => {
           console.log(`[send-report] Sending report ${job.input.reportId}`);
-          return complete(async ({ finish }) =>
-            finish({ output: { sentAt: new Date().toISOString() } }),
+          return withTransactionHooks(async (transactionHooks) =>
+            sql.begin(async (txSql) =>
+              finish({ txSql, transactionHooks, output: { sentAt: new Date().toISOString() } }),
+            ),
           );
         },
       },
 
       "standalone-task": {
-        attemptHandler: async ({ job, complete }) => {
+        attemptHandler: async ({ job, finish }) => {
           console.log(`[standalone-task] Running ${job.input.taskId}`);
-          return complete(async ({ finish }) =>
-            finish({ output: { completedAt: new Date().toISOString() } }),
+          return withTransactionHooks(async (transactionHooks) =>
+            sql.begin(async (txSql) =>
+              finish({
+                txSql,
+                transactionHooks,
+                output: { completedAt: new Date().toISOString() },
+              }),
+            ),
           );
         },
       },

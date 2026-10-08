@@ -75,21 +75,22 @@ const worker = await createInProcessWorker({
     jobTypes,
     processors: {
       send_welcome_email: {
-        attemptHandler: async ({ job, prepare, complete }) => {
-          // Load the user with Kysely inside the job transaction
-          const user = await prepare({ mode: "staged" }, async ({ db }) =>
-            db
-              .selectFrom("users")
-              .selectAll()
-              .where("id", "=", job.input.userId)
-              .executeTakeFirstOrThrow(),
-          );
+        attemptHandler: async ({ job, finish }) => {
+          const user = await db
+            .selectFrom("users")
+            .selectAll()
+            .where("id", "=", job.input.userId)
+            .executeTakeFirstOrThrow();
 
           // Simulate sending email (in real app, call email service here)
           console.log(`Sending welcome email to ${user.email} for ${user.name}`);
 
-          return complete(async ({ finish }) =>
-            finish({ output: { sentAt: new Date().toISOString() } }),
+          return withTransactionHooks(async (transactionHooks) =>
+            db
+              .transaction()
+              .execute(async (db) =>
+                finish({ db, transactionHooks, output: { sentAt: new Date().toISOString() } }),
+              ),
           );
         },
       },

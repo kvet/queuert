@@ -61,6 +61,11 @@ const client = await createClient({
   jobTypes,
 });
 
+const findUser = async (id: number) => {
+  using _h = await lock.acquireRead();
+  return await prisma.user.findUnique({ where: { id } });
+};
+
 // 7. Create and start worker
 const worker = await createInProcessWorker({
   client,
@@ -69,18 +74,21 @@ const worker = await createInProcessWorker({
     jobTypes,
     processors: {
       send_welcome_email: {
-        attemptHandler: async ({ job, prepare, complete }) => {
-          // Load the user with Prisma inside the job transaction
-          const user = await prepare({ mode: "staged" }, async ({ prisma }) =>
-            prisma.user.findUniqueOrThrow({ where: { id: job.input.userId } }),
-          );
+        attemptHandler: async ({ job, finish }) => {
+          const user = await findUser(job.input.userId);
+          if (!user) throw new Error(`User ${job.input.userId} not found`);
 
           // Simulate sending email (in real app, call email service here)
           console.log(`Sending welcome email to ${user.email} for ${user.name}`);
 
-          return complete(async ({ finish }) =>
-            finish({ output: { sentAt: new Date().toISOString() } }),
-          );
+          return withTransactionHooks(async (transactionHooks) => {
+            // The handler's transaction holds the provider's write lock, so the worker's
+            // autocommit statements on this connection cannot run inside it.
+            using _h = await lock.acquireWrite();
+            return await prisma.$transaction(async (prisma) =>
+              finish({ prisma, transactionHooks, output: { sentAt: new Date().toISOString() } }),
+            );
+          });
         },
       },
     },

@@ -38,7 +38,10 @@ export type RunningJobFields = {
   attemptAt: Date;
   /** Worker that owns the current attempt. */
   attemptBy: string;
-  /** Attempt deadline. Null for atomic attempts; set when a staged attempt's prepare commits, then extended by heartbeats. */
+  /**
+   * Attempt lease deadline. Set when the job is acquired (now plus the type's
+   * `attemptConfig.timeoutMs`), then extended by heartbeats while the handler runs.
+   */
   attemptUntil: Date | null;
 };
 

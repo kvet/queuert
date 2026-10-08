@@ -213,16 +213,13 @@ export type ResolvedJob<
   [JobTypeContinuation<TJobTypeDefinitions, TJobTypeName>] extends [never] ? false : true
 >;
 
-/** The `running` `ResolvedJob` with its completed blocker chains — the job an attempt handler receives. */
+/** The `running` `ResolvedJob` — the job an attempt handler receives. */
 export type ResolvedRunningJob<
   TJobId,
   TJobTypeDefinitions extends BaseJobTypeDefinitions,
   TJobTypeName extends string,
   TChainTypeName extends string = JobTypeReachingEntry<TJobTypeDefinitions, TJobTypeName>,
-> = ResolvedJobFields<TJobId, TJobTypeDefinitions, TJobTypeName, TChainTypeName> &
-  RunningJobFields & {
-    blockers: CompletedBlockerChains<TJobId, TJobTypeDefinitions, TJobTypeName>;
-  };
+> = ResolvedJobFields<TJobId, TJobTypeDefinitions, TJobTypeName, TChainTypeName> & RunningJobFields;
 
 /** {@link JobFields} resolved from the definitions for a given job type name. */
 type ResolvedJobFields<

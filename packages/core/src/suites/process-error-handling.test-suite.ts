@@ -2,19 +2,40 @@ import { type TestAPI } from "vitest";
 
 import { createClient } from "../client.js";
 import { defineJobTypes } from "../entities/define-job-types.js";
-import { sleep } from "../helpers/sleep.js";
 import { createInProcessWorker } from "../in-process-worker.js";
-import { createSpyStateAdapter } from "../state-adapter/state-adapter.spy.spec-helper.js";
+import { type StateAdapter } from "../state-adapter/state-adapter.js";
+import {
+  type SpyCall,
+  createSpyStateAdapter,
+} from "../state-adapter/state-adapter.spy.spec-helper.js";
+import { type TransactionHooks, withTransactionHooks } from "../transaction-hooks.js";
 import { createProcessors } from "../worker/create-processors.js";
 import { type TestSuiteContext } from "./spec-context.spec-helper.js";
+
+/** Opens a transaction on the given adapter, so a spy adapter records the handler's writes. */
+const createWithTransaction =
+  (stateAdapter: StateAdapter<{ $test: true }, string>) =>
+  async <T>(
+    cb: (txCtx: { $test: true }, transactionHooks: TransactionHooks) => Promise<T>,
+  ): Promise<T> =>
+    withTransactionHooks(async (transactionHooks) =>
+      stateAdapter.withTransaction(async (txCtx) => cb(txCtx, transactionHooks)),
+    );
+
+/** Drops the worker loop's polling calls, which interleave with attempts nondeterministically. */
+const attemptCalls = (calls: SpyCall[]): SpyCall[] =>
+  calls.filter(
+    (call) => call.name !== "getStartAttemptDelayMs" && call.name !== "reclaimExpiredJobAttempt",
+  );
 
 export const processErrorHandlingTestSuite = ({ it }: { it: TestAPI<TestSuiteContext> }): void => {
   const completionOptions = {
     pollIntervalMs: 100,
     timeoutMs: 5000,
   };
+  const fastBackoff = { initialDelayMs: 1, multiplier: 1, maxDelayMs: 1 };
 
-  it("reschedules when prepare callback throws in atomic mode", async ({
+  it("reschedules when handler throws before opening its transaction", async ({
     stateAdapter,
     notifyAdapter,
     withTransaction,
@@ -24,6 +45,7 @@ export const processErrorHandlingTestSuite = ({ it }: { it: TestAPI<TestSuiteCon
     expect,
   }) => {
     const spyStateAdapter = createSpyStateAdapter(stateAdapter);
+    const withSpyTransaction = createWithTransaction(spyStateAdapter);
 
     const jobTypes = defineJobTypes<{
       test: {
@@ -55,193 +77,14 @@ export const processErrorHandlingTestSuite = ({ it }: { it: TestAPI<TestSuiteCon
         jobTypes,
         processors: {
           test: {
-            backoffConfig: { initialDelayMs: 1, multiplier: 1, maxDelayMs: 1 },
-            attemptHandler: async ({ job, prepare, complete }) => {
-              if (job.attempt > 1) {
-                expect(job.lastAttemptError).toContain("Error: Simulated prepare error");
-              }
-              await prepare({ mode: "atomic" }, async () => {
-                if (job.attempt === 1) {
-                  throw new Error("Simulated prepare error");
-                }
-              });
-              return complete(async ({ finish }) =>
-                finish({ output: { result: job.input.value * 2 } }),
-              );
-            },
-          },
-        },
-      }),
-    });
-
-    const chain = await withTransaction(async (txCtx, transactionHooks) =>
-      client.createChain({
-        ...txCtx,
-        transactionHooks,
-        typeName: "test",
-        input: { value: 10 },
-      }),
-    );
-
-    await withWorkers([await worker.start()], async () => {
-      const completed = await client.awaitChain(chain, completionOptions);
-      expect(completed.output).toEqual({ result: 20 });
-    });
-
-    const expected = [
-      expect.objectContaining({
-        name: "withTransaction",
-        status: "committed",
-        children: [
-          expect.objectContaining({ name: "startJobAttempt" }),
-          expect.objectContaining({ name: "withSavepoint", status: "rolled-back" }),
-          expect.objectContaining({ name: "rescheduleJobs" }),
-        ],
-      }),
-    ];
-    expect(spyStateAdapter.calls.slice(0, expected.length)).toEqual(expected);
-  });
-
-  it("reschedules when prepare callback throws in staged mode", async ({
-    stateAdapter,
-    notifyAdapter,
-    withTransaction,
-    withWorkers,
-    observabilityAdapter,
-    log,
-    expect,
-  }) => {
-    const spyStateAdapter = createSpyStateAdapter(stateAdapter);
-
-    const jobTypes = defineJobTypes<{
-      test: {
-        entry: true;
-        input: { value: number };
-        output: { result: number };
-      };
-    }>();
-
-    const client = await createClient({
-      stateAdapter,
-      notifyAdapter,
-      observabilityAdapter,
-      log,
-      jobTypes,
-    });
-    const workerClient = await createClient({
-      stateAdapter: spyStateAdapter,
-      notifyAdapter,
-      observabilityAdapter,
-      log,
-      jobTypes,
-    });
-    const worker = await createInProcessWorker({
-      client: workerClient,
-      concurrency: 1,
-      processors: createProcessors({
-        client,
-        jobTypes,
-        processors: {
-          test: {
-            backoffConfig: { initialDelayMs: 1, multiplier: 1, maxDelayMs: 1 },
-            attemptHandler: async ({ job, prepare, complete }) => {
-              if (job.attempt > 1) {
-                expect(job.lastAttemptError).toContain("Error: Simulated prepare error");
-              }
-              await prepare({ mode: "staged" }, async () => {
-                if (job.attempt === 1) {
-                  throw new Error("Simulated prepare error");
-                }
-              });
-              return complete(async ({ finish }) =>
-                finish({ output: { result: job.input.value * 2 } }),
-              );
-            },
-          },
-        },
-      }),
-    });
-
-    const chain = await withTransaction(async (txCtx, transactionHooks) =>
-      client.createChain({
-        ...txCtx,
-        transactionHooks,
-        typeName: "test",
-        input: { value: 10 },
-      }),
-    );
-
-    await withWorkers([await worker.start()], async () => {
-      const completed = await client.awaitChain(chain, completionOptions);
-      expect(completed.output).toEqual({ result: 20 });
-    });
-
-    const expected = [
-      expect.objectContaining({
-        name: "withTransaction",
-        status: "committed",
-        children: [
-          expect.objectContaining({ name: "startJobAttempt" }),
-          expect.objectContaining({ name: "withSavepoint", status: "rolled-back" }),
-          expect.objectContaining({ name: "rescheduleJobs" }),
-        ],
-      }),
-    ];
-    expect(spyStateAdapter.calls.slice(0, expected.length)).toEqual(expected);
-  });
-
-  it("reschedules when handler throws between prepare and complete in atomic mode", async ({
-    stateAdapter,
-    notifyAdapter,
-    withTransaction,
-    withWorkers,
-    observabilityAdapter,
-    log,
-    expect,
-  }) => {
-    const spyStateAdapter = createSpyStateAdapter(stateAdapter);
-
-    const jobTypes = defineJobTypes<{
-      test: {
-        entry: true;
-        input: { value: number };
-        output: { result: number };
-      };
-    }>();
-
-    const client = await createClient({
-      stateAdapter,
-      notifyAdapter,
-      observabilityAdapter,
-      log,
-      jobTypes,
-    });
-    const workerClient = await createClient({
-      stateAdapter: spyStateAdapter,
-      notifyAdapter,
-      observabilityAdapter,
-      log,
-      jobTypes,
-    });
-    const worker = await createInProcessWorker({
-      client: workerClient,
-      concurrency: 1,
-      processors: createProcessors({
-        client,
-        jobTypes,
-        processors: {
-          test: {
-            backoffConfig: { initialDelayMs: 1, multiplier: 1, maxDelayMs: 1 },
-            attemptHandler: async ({ job, prepare, complete }) => {
-              if (job.attempt > 1) {
-                expect(job.lastAttemptError).toContain("Error: Simulated process error");
-              }
-              await prepare({ mode: "atomic" });
+            backoffConfig: fastBackoff,
+            attemptHandler: async ({ job, finish }) => {
               if (job.attempt === 1) {
-                throw new Error("Simulated process error");
+                throw new Error("Simulated handler error");
               }
-              return complete(async ({ finish }) =>
-                finish({ output: { result: job.input.value * 2 } }),
+              expect(job.lastAttemptError).toContain("Error: Simulated handler error");
+              return withSpyTransaction(async (txCtx, transactionHooks) =>
+                finish({ ...txCtx, transactionHooks, output: { result: job.input.value * 2 } }),
               );
             },
           },
@@ -263,20 +106,15 @@ export const processErrorHandlingTestSuite = ({ it }: { it: TestAPI<TestSuiteCon
       expect(completed.output).toEqual({ result: 20 });
     });
 
+    // Acquire and the error reschedule are autocommit statements, outside any transaction.
     const expected = [
-      expect.objectContaining({
-        name: "withTransaction",
-        status: "committed",
-        children: [
-          expect.objectContaining({ name: "startJobAttempt" }),
-          expect.objectContaining({ name: "rescheduleJobs" }),
-        ],
-      }),
+      expect.objectContaining({ name: "startJobAttempt", children: [] }),
+      expect.objectContaining({ name: "rescheduleJobs", children: [] }),
     ];
-    expect(spyStateAdapter.calls.slice(0, expected.length)).toEqual(expected);
+    expect(attemptCalls(spyStateAdapter.calls).slice(0, expected.length)).toEqual(expected);
   });
 
-  it("reschedules when handler throws between prepare and complete in staged mode", async ({
+  it("reschedules when handler throws inside its transaction before finish", async ({
     stateAdapter,
     notifyAdapter,
     withTransaction,
@@ -286,6 +124,7 @@ export const processErrorHandlingTestSuite = ({ it }: { it: TestAPI<TestSuiteCon
     expect,
   }) => {
     const spyStateAdapter = createSpyStateAdapter(stateAdapter);
+    const withSpyTransaction = createWithTransaction(spyStateAdapter);
 
     const jobTypes = defineJobTypes<{
       test: {
@@ -317,112 +156,20 @@ export const processErrorHandlingTestSuite = ({ it }: { it: TestAPI<TestSuiteCon
         jobTypes,
         processors: {
           test: {
-            backoffConfig: { initialDelayMs: 1, multiplier: 1, maxDelayMs: 1 },
-            attemptHandler: async ({ job, prepare, complete }) => {
+            backoffConfig: fastBackoff,
+            attemptHandler: async ({ job, finish }) => {
               if (job.attempt > 1) {
-                expect(job.lastAttemptError).toContain("Error: Simulated process error");
+                expect(job.lastAttemptError).toContain("Error: Simulated transaction error");
               }
-              await prepare({ mode: "staged" });
-              await sleep(1);
-              if (job.attempt === 1) {
-                throw new Error("Simulated process error");
-              }
-              return complete(async ({ finish }) =>
-                finish({ output: { result: job.input.value * 2 } }),
-              );
-            },
-          },
-        },
-      }),
-    });
-
-    const chain = await withTransaction(async (txCtx, transactionHooks) =>
-      client.createChain({
-        ...txCtx,
-        transactionHooks,
-        typeName: "test",
-        input: { value: 10 },
-      }),
-    );
-
-    await withWorkers([await worker.start()], async () => {
-      const completed = await client.awaitChain(chain, completionOptions);
-      expect(completed.output).toEqual({ result: 20 });
-    });
-
-    const expected = [
-      expect.objectContaining({
-        name: "withTransaction",
-        status: "committed",
-        children: [
-          expect.objectContaining({ name: "startJobAttempt" }),
-          expect.objectContaining({ name: "extendJobAttempt" }),
-        ],
-      }),
-      expect.objectContaining({
-        name: "withTransaction",
-        status: "committed",
-        children: [
-          expect.objectContaining({ name: "getJobs", args: { lock: "exclusive" } }),
-          expect.objectContaining({ name: "rescheduleJobs" }),
-        ],
-      }),
-    ];
-    expect(spyStateAdapter.calls.slice(0, expected.length)).toEqual(expected);
-  });
-
-  it("reschedules when complete callback throws in atomic mode", async ({
-    stateAdapter,
-    notifyAdapter,
-    withTransaction,
-    withWorkers,
-    observabilityAdapter,
-    log,
-    expect,
-  }) => {
-    const spyStateAdapter = createSpyStateAdapter(stateAdapter);
-
-    const jobTypes = defineJobTypes<{
-      test: {
-        entry: true;
-        input: { value: number };
-        output: { result: number };
-      };
-    }>();
-
-    const client = await createClient({
-      stateAdapter,
-      notifyAdapter,
-      observabilityAdapter,
-      log,
-      jobTypes,
-    });
-    const workerClient = await createClient({
-      stateAdapter: spyStateAdapter,
-      notifyAdapter,
-      observabilityAdapter,
-      log,
-      jobTypes,
-    });
-    const worker = await createInProcessWorker({
-      client: workerClient,
-      concurrency: 1,
-      processors: createProcessors({
-        client,
-        jobTypes,
-        processors: {
-          test: {
-            backoffConfig: { initialDelayMs: 1, multiplier: 1, maxDelayMs: 1 },
-            attemptHandler: async ({ job, prepare, complete }) => {
-              if (job.attempt > 1) {
-                expect(job.lastAttemptError).toContain("Error: Simulated complete error");
-              }
-              await prepare({ mode: "atomic" });
-              return complete(async ({ finish }) => {
+              return withSpyTransaction(async (txCtx, transactionHooks) => {
                 if (job.attempt === 1) {
-                  throw new Error("Simulated complete error");
+                  throw new Error("Simulated transaction error");
                 }
-                return finish({ output: { result: job.input.value * 2 } });
+                return finish({
+                  ...txCtx,
+                  transactionHooks,
+                  output: { result: job.input.value * 2 },
+                });
               });
             },
           },
@@ -445,20 +192,14 @@ export const processErrorHandlingTestSuite = ({ it }: { it: TestAPI<TestSuiteCon
     });
 
     const expected = [
-      expect.objectContaining({
-        name: "withTransaction",
-        status: "committed",
-        children: [
-          expect.objectContaining({ name: "startJobAttempt" }),
-          expect.objectContaining({ name: "withSavepoint", status: "rolled-back" }),
-          expect.objectContaining({ name: "rescheduleJobs" }),
-        ],
-      }),
+      expect.objectContaining({ name: "startJobAttempt", children: [] }),
+      expect.objectContaining({ name: "withTransaction", status: "rolled-back", children: [] }),
+      expect.objectContaining({ name: "rescheduleJobs", children: [] }),
     ];
-    expect(spyStateAdapter.calls.slice(0, expected.length)).toEqual(expected);
+    expect(attemptCalls(spyStateAdapter.calls).slice(0, expected.length)).toEqual(expected);
   });
 
-  it("reschedules when complete callback throws in staged mode", async ({
+  it("reschedules when handler throws inside its transaction after finish", async ({
     stateAdapter,
     notifyAdapter,
     withTransaction,
@@ -467,7 +208,9 @@ export const processErrorHandlingTestSuite = ({ it }: { it: TestAPI<TestSuiteCon
     log,
     expect,
   }) => {
+    let attempts = 0;
     const spyStateAdapter = createSpyStateAdapter(stateAdapter);
+    const withSpyTransaction = createWithTransaction(spyStateAdapter);
 
     const jobTypes = defineJobTypes<{
       test: {
@@ -499,18 +242,22 @@ export const processErrorHandlingTestSuite = ({ it }: { it: TestAPI<TestSuiteCon
         jobTypes,
         processors: {
           test: {
-            backoffConfig: { initialDelayMs: 1, multiplier: 1, maxDelayMs: 1 },
-            attemptHandler: async ({ job, prepare, complete }) => {
+            backoffConfig: fastBackoff,
+            attemptHandler: async ({ job, finish }) => {
+              attempts++;
               if (job.attempt > 1) {
-                expect(job.lastAttemptError).toContain("Error: Simulated complete error");
+                expect(job.lastAttemptError).toContain("Error: Error after finish");
               }
-              await prepare({ mode: "staged" });
-              await sleep(1);
-              return complete(async ({ finish }) => {
+              return withSpyTransaction(async (txCtx, transactionHooks) => {
+                const result = await finish({
+                  ...txCtx,
+                  transactionHooks,
+                  output: { result: job.input.value * 2 },
+                });
                 if (job.attempt === 1) {
-                  throw new Error("Simulated complete error");
+                  throw new Error("Error after finish");
                 }
-                return finish({ output: { result: job.input.value * 2 } });
+                return result;
               });
             },
           },
@@ -532,29 +279,22 @@ export const processErrorHandlingTestSuite = ({ it }: { it: TestAPI<TestSuiteCon
       expect(completed.output).toEqual({ result: 20 });
     });
 
+    expect(attempts).toBe(2);
+
     const expected = [
+      expect.objectContaining({ name: "startJobAttempt", children: [] }),
       expect.objectContaining({
         name: "withTransaction",
-        status: "committed",
-        children: [
-          expect.objectContaining({ name: "startJobAttempt" }),
-          expect.objectContaining({ name: "extendJobAttempt" }),
-        ],
+        status: "rolled-back",
+        children: expect.arrayContaining([expect.objectContaining({ name: "completeJobs" })]),
       }),
-      expect.objectContaining({
-        name: "withTransaction",
-        status: "committed",
-        children: [
-          expect.objectContaining({ name: "getJobs", args: { lock: "exclusive" } }),
-          expect.objectContaining({ name: "withSavepoint", status: "rolled-back" }),
-          expect.objectContaining({ name: "rescheduleJobs" }),
-        ],
-      }),
+      expect.objectContaining({ name: "rescheduleJobs", children: [] }),
     ];
-    expect(spyStateAdapter.calls.slice(0, expected.length)).toEqual(expected);
+    expect(attemptCalls(spyStateAdapter.calls).slice(0, expected.length)).toEqual(expected);
+    expect(log).not.toHaveBeenCalledWith(expect.objectContaining({ type: "worker_error" }));
   });
 
-  it("reschedules when complete callback returns without committing", async ({
+  it("reschedules when handler returns without calling finish", async ({
     stateAdapter,
     notifyAdapter,
     withTransaction,
@@ -587,80 +327,17 @@ export const processErrorHandlingTestSuite = ({ it }: { it: TestAPI<TestSuiteCon
       processors: createProcessors({
         client,
         jobTypes,
-        backoffConfig: { initialDelayMs: 1, multiplier: 1, maxDelayMs: 1 },
+        backoffConfig: fastBackoff,
         processors: {
           test: {
-            attemptHandler: async ({ job, complete }) => {
-              if (job.attempt > 1) {
-                retriedAfterError = job.lastAttemptError;
-              }
-              return complete(async ({ finish }) => {
-                if (job.attempt === 1) {
-                  return undefined as never;
-                }
-                return finish({ output: { done: true } });
-              });
-            },
-          },
-        },
-      }),
-    });
-
-    const chain = await withTransaction(async (txCtx, transactionHooks) =>
-      client.createChain({ ...txCtx, transactionHooks, typeName: "test", input: null }),
-    );
-
-    await withWorkers([await worker.start()], async () => {
-      await client.awaitChain(chain, completionOptions);
-    });
-
-    expect(retriedAfterError).toContain(
-      "finish must be called before the complete callback returns",
-    );
-  });
-
-  it("reschedules when handler returns without completing the attempt", async ({
-    stateAdapter,
-    notifyAdapter,
-    withTransaction,
-    withWorkers,
-    observabilityAdapter,
-    log,
-    expect,
-  }) => {
-    const jobTypes = defineJobTypes<{
-      test: {
-        entry: true;
-        input: null;
-        output: { done: true };
-      };
-    }>();
-
-    const client = await createClient({
-      stateAdapter,
-      notifyAdapter,
-      observabilityAdapter,
-      log,
-      jobTypes,
-    });
-
-    let retriedAfterError: string | null = null;
-
-    const worker = await createInProcessWorker({
-      client,
-      concurrency: 1,
-      processors: createProcessors({
-        client,
-        jobTypes,
-        backoffConfig: { initialDelayMs: 1, multiplier: 1, maxDelayMs: 1 },
-        processors: {
-          test: {
-            attemptHandler: async ({ job, complete }) => {
+            attemptHandler: async ({ job, finish }) => {
               if (job.attempt === 1) {
                 return undefined as never;
               }
               retriedAfterError = job.lastAttemptError;
-              return complete(async ({ finish }) => finish({ output: { done: true } }));
+              return withTransaction(async (txCtx, transactionHooks) =>
+                finish({ ...txCtx, transactionHooks, output: { done: true } }),
+              );
             },
           },
         },
@@ -675,22 +352,24 @@ export const processErrorHandlingTestSuite = ({ it }: { it: TestAPI<TestSuiteCon
       await client.awaitChain(chain, completionOptions);
     });
 
-    expect(retriedAfterError).toContain(
-      "complete must be called before the attempt handler returns",
-    );
+    expect(retriedAfterError).toContain("Attempt handler returned without a committed finish");
   });
 
-  it("reschedules when handler throws after complete in atomic mode", async ({
+  it("recovers when user code poisons its transaction before finish", async ({
     stateAdapter,
     notifyAdapter,
     withTransaction,
+    poisonTransaction,
     withWorkers,
     observabilityAdapter,
     log,
     expect,
+    skip,
   }) => {
-    let attempts = 0;
+    if (!poisonTransaction) return skip();
+
     const spyStateAdapter = createSpyStateAdapter(stateAdapter);
+    const withSpyTransaction = createWithTransaction(spyStateAdapter);
 
     const jobTypes = defineJobTypes<{
       test: {
@@ -722,220 +401,95 @@ export const processErrorHandlingTestSuite = ({ it }: { it: TestAPI<TestSuiteCon
         jobTypes,
         processors: {
           test: {
-            backoffConfig: { initialDelayMs: 1, multiplier: 1, maxDelayMs: 1 },
-            attemptHandler: async ({ job, prepare, complete }) => {
-              attempts++;
-              if (job.attempt > 1) {
-                expect(job.lastAttemptError).toContain("Error: Error after complete");
-              }
-              await prepare({ mode: "atomic" });
-              const result = await complete(async ({ finish }) =>
-                finish({ output: { result: job.input.value * 2 } }),
-              );
+            backoffConfig: fastBackoff,
+            attemptHandler: async ({ job, finish }) =>
+              withSpyTransaction(async (txCtx, transactionHooks) => {
+                await spyStateAdapter.record({ name: "user-work", ...txCtx });
+                if (job.attempt === 1) {
+                  await poisonTransaction(txCtx);
+                }
+                return finish({
+                  ...txCtx,
+                  transactionHooks,
+                  output: { result: job.input.value * 2 },
+                });
+              }),
+          },
+        },
+      }),
+    });
+
+    const chain = await withTransaction(async (txCtx, transactionHooks) =>
+      client.createChain({
+        ...txCtx,
+        transactionHooks,
+        typeName: "test",
+        input: { value: 10 },
+      }),
+    );
+
+    await withWorkers([await worker.start()], async () => {
+      const completed = await client.awaitChain(chain, completionOptions);
+      expect(completed.output).toEqual({ result: 20 });
+    });
+
+    const expected = [
+      expect.objectContaining({ name: "startJobAttempt", children: [] }),
+      expect.objectContaining({
+        name: "withTransaction",
+        status: "rolled-back",
+        children: expect.arrayContaining([expect.objectContaining({ name: "user-work" })]),
+      }),
+      expect.objectContaining({ name: "rescheduleJobs", children: [] }),
+    ];
+    expect(attemptCalls(spyStateAdapter.calls).slice(0, expected.length)).toEqual(expected);
+  });
+
+  it("recovers when user code poisons a separate transaction before finish", async ({
+    stateAdapter,
+    notifyAdapter,
+    withTransaction,
+    poisonTransaction,
+    withWorkers,
+    observabilityAdapter,
+    log,
+    expect,
+    skip,
+  }) => {
+    if (!poisonTransaction) return skip();
+
+    const jobTypes = defineJobTypes<{
+      test: {
+        entry: true;
+        input: { value: number };
+        output: { result: number };
+      };
+    }>();
+
+    const client = await createClient({
+      stateAdapter,
+      notifyAdapter,
+      observabilityAdapter,
+      log,
+      jobTypes,
+    });
+    const worker = await createInProcessWorker({
+      client,
+      concurrency: 1,
+      processors: createProcessors({
+        client,
+        jobTypes,
+        processors: {
+          test: {
+            backoffConfig: fastBackoff,
+            attemptHandler: async ({ job, finish }) => {
               if (job.attempt === 1) {
-                throw new Error("Error after complete");
+                await withTransaction(async (txCtx) => {
+                  await poisonTransaction(txCtx);
+                });
               }
-              return result;
-            },
-          },
-        },
-      }),
-    });
-
-    const chain = await withTransaction(async (txCtx, transactionHooks) =>
-      client.createChain({
-        ...txCtx,
-        transactionHooks,
-        typeName: "test",
-        input: { value: 10 },
-      }),
-    );
-
-    await withWorkers([await worker.start()], async () => {
-      const completed = await client.awaitChain(chain, completionOptions);
-      expect(completed.output).toEqual({ result: 20 });
-    });
-
-    expect(attempts).toBe(2);
-
-    const expected = [
-      expect.objectContaining({
-        name: "withTransaction",
-        status: "committed",
-        children: [
-          expect.objectContaining({ name: "startJobAttempt" }),
-          expect.objectContaining({
-            name: "withSavepoint",
-            status: "rolled-back",
-            children: [expect.objectContaining({ name: "completeJobs" })],
-          }),
-          expect.objectContaining({ name: "rescheduleJobs" }),
-        ],
-      }),
-    ];
-    expect(spyStateAdapter.calls.slice(0, expected.length)).toEqual(expected);
-  });
-
-  it("reschedules when handler throws after complete in staged mode", async ({
-    stateAdapter,
-    notifyAdapter,
-    withTransaction,
-    withWorkers,
-    observabilityAdapter,
-    log,
-    expect,
-  }) => {
-    let attempts = 0;
-    const spyStateAdapter = createSpyStateAdapter(stateAdapter);
-
-    const jobTypes = defineJobTypes<{
-      test: {
-        entry: true;
-        input: { value: number };
-        output: { result: number };
-      };
-    }>();
-
-    const client = await createClient({
-      stateAdapter,
-      notifyAdapter,
-      observabilityAdapter,
-      log,
-      jobTypes,
-    });
-    const workerClient = await createClient({
-      stateAdapter: spyStateAdapter,
-      notifyAdapter,
-      observabilityAdapter,
-      log,
-      jobTypes,
-    });
-    const worker = await createInProcessWorker({
-      client: workerClient,
-      concurrency: 1,
-      processors: createProcessors({
-        client,
-        jobTypes,
-        processors: {
-          test: {
-            backoffConfig: { initialDelayMs: 1, multiplier: 1, maxDelayMs: 1 },
-            attemptHandler: async ({ job, prepare, complete }) => {
-              attempts++;
-              if (job.attempt > 1) {
-                expect(job.lastAttemptError).toContain("Error: Error after complete");
-              }
-              await prepare({ mode: "staged" });
-              await sleep(1);
-              const result = await complete(async ({ finish }) =>
-                finish({ output: { result: job.input.value * 2 } }),
-              );
-              if (job.attempt === 1) {
-                throw new Error("Error after complete");
-              }
-              return result;
-            },
-          },
-        },
-      }),
-    });
-
-    const chain = await withTransaction(async (txCtx, transactionHooks) =>
-      client.createChain({
-        ...txCtx,
-        transactionHooks,
-        typeName: "test",
-        input: { value: 10 },
-      }),
-    );
-
-    await withWorkers([await worker.start()], async () => {
-      const completed = await client.awaitChain(chain, completionOptions);
-      expect(completed.output).toEqual({ result: 20 });
-    });
-
-    expect(attempts).toBe(2);
-
-    const expected = [
-      expect.objectContaining({
-        name: "withTransaction",
-        status: "committed",
-        children: [
-          expect.objectContaining({ name: "startJobAttempt" }),
-          expect.objectContaining({ name: "extendJobAttempt" }),
-        ],
-      }),
-      expect.objectContaining({
-        name: "withTransaction",
-        status: "committed",
-        children: [
-          expect.objectContaining({ name: "getJobs", args: { lock: "exclusive" } }),
-          expect.objectContaining({
-            name: "withSavepoint",
-            status: "rolled-back",
-            children: [expect.objectContaining({ name: "completeJobs" })],
-          }),
-          expect.objectContaining({ name: "rescheduleJobs" }),
-        ],
-      }),
-    ];
-    expect(spyStateAdapter.calls.slice(0, expected.length)).toEqual(expected);
-  });
-
-  it("recovers when user code poisons transaction in prepare callback (atomic mode)", async ({
-    stateAdapter,
-    notifyAdapter,
-    withTransaction,
-    poisonTransaction,
-    withWorkers,
-    observabilityAdapter,
-    log,
-    expect,
-    skip,
-  }) => {
-    if (!poisonTransaction) return skip();
-
-    const spyStateAdapter = createSpyStateAdapter(stateAdapter);
-
-    const jobTypes = defineJobTypes<{
-      test: {
-        entry: true;
-        input: { value: number };
-        output: { result: number };
-      };
-    }>();
-
-    const client = await createClient({
-      stateAdapter,
-      notifyAdapter,
-      observabilityAdapter,
-      log,
-      jobTypes,
-    });
-    const workerClient = await createClient({
-      stateAdapter: spyStateAdapter,
-      notifyAdapter,
-      observabilityAdapter,
-      log,
-      jobTypes,
-    });
-    const worker = await createInProcessWorker({
-      client: workerClient,
-      concurrency: 1,
-      processors: createProcessors({
-        client,
-        jobTypes,
-        processors: {
-          test: {
-            backoffConfig: { initialDelayMs: 1, multiplier: 1, maxDelayMs: 1 },
-            attemptHandler: async ({ job, prepare, complete }) => {
-              await prepare({ mode: "atomic" }, async (prepareCtx) => {
-                await spyStateAdapter.record({ name: "user-preparation", ...prepareCtx });
-                if (job.attempt === 1) {
-                  await poisonTransaction(prepareCtx);
-                }
-              });
-              return complete(async ({ finish }) =>
-                finish({ output: { result: job.input.value * 2 } }),
+              return withTransaction(async (txCtx, transactionHooks) =>
+                finish({ ...txCtx, transactionHooks, output: { result: job.input.value * 2 } }),
               );
             },
           },
@@ -956,315 +510,9 @@ export const processErrorHandlingTestSuite = ({ it }: { it: TestAPI<TestSuiteCon
       const completed = await client.awaitChain(chain, completionOptions);
       expect(completed.output).toEqual({ result: 20 });
     });
-
-    const expected = [
-      expect.objectContaining({
-        name: "withTransaction",
-        status: "committed",
-        children: [
-          expect.objectContaining({ name: "startJobAttempt" }),
-          expect.objectContaining({
-            name: "withSavepoint",
-            status: "rolled-back",
-            children: [expect.objectContaining({ name: "user-preparation" })],
-          }),
-          expect.objectContaining({ name: "rescheduleJobs" }),
-        ],
-      }),
-    ];
-    expect(spyStateAdapter.calls.slice(0, expected.length)).toEqual(expected);
   });
 
-  it("recovers when user code poisons transaction in prepare callback (staged mode)", async ({
-    stateAdapter,
-    notifyAdapter,
-    withTransaction,
-    poisonTransaction,
-    withWorkers,
-    observabilityAdapter,
-    log,
-    expect,
-    skip,
-  }) => {
-    if (!poisonTransaction) return skip();
-
-    const spyStateAdapter = createSpyStateAdapter(stateAdapter);
-
-    const jobTypes = defineJobTypes<{
-      test: {
-        entry: true;
-        input: { value: number };
-        output: { result: number };
-      };
-    }>();
-
-    const client = await createClient({
-      stateAdapter,
-      notifyAdapter,
-      observabilityAdapter,
-      log,
-      jobTypes,
-    });
-    const workerClient = await createClient({
-      stateAdapter: spyStateAdapter,
-      notifyAdapter,
-      observabilityAdapter,
-      log,
-      jobTypes,
-    });
-    const worker = await createInProcessWorker({
-      client: workerClient,
-      concurrency: 1,
-      processors: createProcessors({
-        client,
-        jobTypes,
-        processors: {
-          test: {
-            backoffConfig: { initialDelayMs: 1, multiplier: 1, maxDelayMs: 1 },
-            attemptHandler: async ({ job, prepare, complete }) => {
-              await prepare({ mode: "staged" }, async (prepareCtx) => {
-                await spyStateAdapter.record({ name: "user-preparation", ...prepareCtx });
-                if (job.attempt === 1) {
-                  await poisonTransaction(prepareCtx);
-                }
-              });
-              return complete(async ({ finish }) =>
-                finish({ output: { result: job.input.value * 2 } }),
-              );
-            },
-          },
-        },
-      }),
-    });
-
-    const chain = await withTransaction(async (txCtx, transactionHooks) =>
-      client.createChain({
-        ...txCtx,
-        transactionHooks,
-        typeName: "test",
-        input: { value: 10 },
-      }),
-    );
-
-    await withWorkers([await worker.start()], async () => {
-      const completed = await client.awaitChain(chain, completionOptions);
-      expect(completed.output).toEqual({ result: 20 });
-    });
-
-    const expected = [
-      expect.objectContaining({
-        name: "withTransaction",
-        status: "committed",
-        children: [
-          expect.objectContaining({ name: "startJobAttempt" }),
-          expect.objectContaining({
-            name: "withSavepoint",
-            status: "rolled-back",
-            children: [expect.objectContaining({ name: "user-preparation" })],
-          }),
-          expect.objectContaining({ name: "rescheduleJobs" }),
-        ],
-      }),
-    ];
-    expect(spyStateAdapter.calls.slice(0, expected.length)).toEqual(expected);
-  });
-
-  it("recovers when user code poisons transaction in complete callback (atomic mode)", async ({
-    stateAdapter,
-    notifyAdapter,
-    withTransaction,
-    poisonTransaction,
-    withWorkers,
-    observabilityAdapter,
-    log,
-    expect,
-    skip,
-  }) => {
-    if (!poisonTransaction) return skip();
-
-    const spyStateAdapter = createSpyStateAdapter(stateAdapter);
-
-    const jobTypes = defineJobTypes<{
-      test: {
-        entry: true;
-        input: { value: number };
-        output: { result: number };
-      };
-    }>();
-
-    const client = await createClient({
-      stateAdapter,
-      notifyAdapter,
-      observabilityAdapter,
-      log,
-      jobTypes,
-    });
-    const workerClient = await createClient({
-      stateAdapter: spyStateAdapter,
-      notifyAdapter,
-      observabilityAdapter,
-      log,
-      jobTypes,
-    });
-    const worker = await createInProcessWorker({
-      client: workerClient,
-      concurrency: 1,
-      processors: createProcessors({
-        client,
-        jobTypes,
-        processors: {
-          test: {
-            backoffConfig: { initialDelayMs: 1, multiplier: 1, maxDelayMs: 1 },
-            attemptHandler: async ({ job, prepare, complete }) => {
-              await prepare({ mode: "atomic" });
-              return complete(async ({ finish, ...completeCtx }) => {
-                await spyStateAdapter.record({ name: "user-completion", ...completeCtx });
-                if (job.attempt === 1) {
-                  await poisonTransaction(completeCtx);
-                }
-                return finish({ output: { result: job.input.value * 2 } });
-              });
-            },
-          },
-        },
-      }),
-    });
-
-    const chain = await withTransaction(async (txCtx, transactionHooks) =>
-      client.createChain({
-        ...txCtx,
-        transactionHooks,
-        typeName: "test",
-        input: { value: 10 },
-      }),
-    );
-
-    await withWorkers([await worker.start()], async () => {
-      const completed = await client.awaitChain(chain, completionOptions);
-      expect(completed.output).toEqual({ result: 20 });
-    });
-
-    const expected = [
-      expect.objectContaining({
-        name: "withTransaction",
-        status: "committed",
-        children: [
-          expect.objectContaining({ name: "startJobAttempt" }),
-          expect.objectContaining({
-            name: "withSavepoint",
-            status: "rolled-back",
-            children: [expect.objectContaining({ name: "user-completion" })],
-          }),
-          expect.objectContaining({ name: "rescheduleJobs" }),
-        ],
-      }),
-    ];
-    expect(spyStateAdapter.calls.slice(0, expected.length)).toEqual(expected);
-  });
-
-  it("recovers when user code poisons transaction in complete callback (staged mode)", async ({
-    stateAdapter,
-    notifyAdapter,
-    withTransaction,
-    poisonTransaction,
-    withWorkers,
-    observabilityAdapter,
-    log,
-    expect,
-    skip,
-  }) => {
-    if (!poisonTransaction) return skip();
-
-    const spyStateAdapter = createSpyStateAdapter(stateAdapter);
-
-    const jobTypes = defineJobTypes<{
-      test: {
-        entry: true;
-        input: { value: number };
-        output: { result: number };
-      };
-    }>();
-
-    const client = await createClient({
-      stateAdapter,
-      notifyAdapter,
-      observabilityAdapter,
-      log,
-      jobTypes,
-    });
-    const workerClient = await createClient({
-      stateAdapter: spyStateAdapter,
-      notifyAdapter,
-      observabilityAdapter,
-      log,
-      jobTypes,
-    });
-    const worker = await createInProcessWorker({
-      client: workerClient,
-      concurrency: 1,
-      processors: createProcessors({
-        client,
-        jobTypes,
-        processors: {
-          test: {
-            backoffConfig: { initialDelayMs: 1, multiplier: 1, maxDelayMs: 1 },
-            attemptHandler: async ({ job, prepare, complete }) => {
-              await prepare({ mode: "staged" });
-              await sleep(1);
-              return complete(async ({ finish, ...completeCtx }) => {
-                await spyStateAdapter.record({ name: "user-completion", ...completeCtx });
-                if (job.attempt === 1) {
-                  await poisonTransaction(completeCtx);
-                }
-                return finish({ output: { result: job.input.value * 2 } });
-              });
-            },
-          },
-        },
-      }),
-    });
-
-    const chain = await withTransaction(async (txCtx, transactionHooks) =>
-      client.createChain({
-        ...txCtx,
-        transactionHooks,
-        typeName: "test",
-        input: { value: 10 },
-      }),
-    );
-
-    await withWorkers([await worker.start()], async () => {
-      const completed = await client.awaitChain(chain, completionOptions);
-      expect(completed.output).toEqual({ result: 20 });
-    });
-
-    const expected = [
-      expect.objectContaining({
-        name: "withTransaction",
-        status: "committed",
-        children: [
-          expect.objectContaining({ name: "startJobAttempt" }),
-          expect.objectContaining({ name: "extendJobAttempt" }),
-        ],
-      }),
-      expect.objectContaining({
-        name: "withTransaction",
-        status: "committed",
-        children: [
-          expect.objectContaining({ name: "getJobs", args: { lock: "exclusive" } }),
-          expect.objectContaining({
-            name: "withSavepoint",
-            status: "rolled-back",
-            children: [expect.objectContaining({ name: "user-completion" })],
-          }),
-          expect.objectContaining({ name: "rescheduleJobs" }),
-        ],
-      }),
-    ];
-    expect(spyStateAdapter.calls.slice(0, expected.length)).toEqual(expected);
-  });
-
-  it("rolls back continuation job when handler throws after complete with continueWith (atomic mode)", async ({
+  it("rolls back the continuation when handler throws after finish with continueWith inside its transaction", async ({
     stateAdapter,
     notifyAdapter,
     withTransaction,
@@ -1275,6 +523,7 @@ export const processErrorHandlingTestSuite = ({ it }: { it: TestAPI<TestSuiteCon
   }) => {
     let step1Attempts = 0;
     const spyStateAdapter = createSpyStateAdapter(stateAdapter);
+    const withSpyTransaction = createWithTransaction(spyStateAdapter);
 
     const jobTypes = defineJobTypes<{
       step1: {
@@ -1310,27 +559,27 @@ export const processErrorHandlingTestSuite = ({ it }: { it: TestAPI<TestSuiteCon
         jobTypes,
         processors: {
           step1: {
-            backoffConfig: { initialDelayMs: 1, multiplier: 1, maxDelayMs: 1 },
-            attemptHandler: async ({ job, prepare, complete }) => {
+            backoffConfig: fastBackoff,
+            attemptHandler: async ({ job, finish }) => {
               step1Attempts++;
-              await prepare({ mode: "atomic" });
-              const result = await complete(async ({ finish }) =>
-                finish({
+              return withSpyTransaction(async (txCtx, transactionHooks) => {
+                const result = await finish({
+                  ...txCtx,
+                  transactionHooks,
                   continueWith: { typeName: "step2", input: { value: job.input.value * 2 } },
-                }),
-              );
-              if (job.attempt === 1) {
-                throw new Error("Error after complete with continueWith");
-              }
-              return result;
+                });
+                if (job.attempt === 1) {
+                  throw new Error("Error after finish with continueWith");
+                }
+                return result;
+              });
             },
           },
           step2: {
-            attemptHandler: async ({ job, complete }) => {
-              return complete(async ({ finish }) =>
-                finish({ output: { result: job.input.value } }),
-              );
-            },
+            attemptHandler: async ({ job, finish }) =>
+              withSpyTransaction(async (txCtx, transactionHooks) =>
+                finish({ ...txCtx, transactionHooks, output: { result: job.input.value } }),
+              ),
           },
         },
       }),
@@ -1356,142 +605,18 @@ export const processErrorHandlingTestSuite = ({ it }: { it: TestAPI<TestSuiteCon
     expect(allJobs.items).toHaveLength(2);
 
     const expected = [
+      expect.objectContaining({ name: "startJobAttempt", children: [] }),
       expect.objectContaining({
         name: "withTransaction",
-        status: "committed",
-        children: [
-          expect.objectContaining({ name: "startJobAttempt" }),
-          expect.objectContaining({
-            name: "withSavepoint",
-            status: "rolled-back",
-            children: [expect.objectContaining({ name: "continueJobs" })],
-          }),
-          expect.objectContaining({ name: "rescheduleJobs" }),
-        ],
+        status: "rolled-back",
+        children: expect.arrayContaining([expect.objectContaining({ name: "continueJobs" })]),
       }),
+      expect.objectContaining({ name: "rescheduleJobs", children: [] }),
     ];
-    expect(spyStateAdapter.calls.slice(0, expected.length)).toEqual(expected);
+    expect(attemptCalls(spyStateAdapter.calls).slice(0, expected.length)).toEqual(expected);
   });
 
-  it("rolls back continuation job when handler throws after complete with continueWith (staged mode)", async ({
-    stateAdapter,
-    notifyAdapter,
-    withTransaction,
-    withWorkers,
-    observabilityAdapter,
-    log,
-    expect,
-  }) => {
-    let step1Attempts = 0;
-    const spyStateAdapter = createSpyStateAdapter(stateAdapter);
-
-    const jobTypes = defineJobTypes<{
-      step1: {
-        entry: true;
-        input: { value: number };
-        continueWith: { typeName: "step2" };
-      };
-      step2: {
-        input: { value: number };
-        output: { result: number };
-      };
-    }>();
-
-    const client = await createClient({
-      stateAdapter,
-      notifyAdapter,
-      observabilityAdapter,
-      log,
-      jobTypes,
-    });
-    const workerClient = await createClient({
-      stateAdapter: spyStateAdapter,
-      notifyAdapter,
-      observabilityAdapter,
-      log,
-      jobTypes,
-    });
-    const worker = await createInProcessWorker({
-      client: workerClient,
-      concurrency: 1,
-      processors: createProcessors({
-        client,
-        jobTypes,
-        processors: {
-          step1: {
-            backoffConfig: { initialDelayMs: 1, multiplier: 1, maxDelayMs: 1 },
-            attemptHandler: async ({ job, prepare, complete }) => {
-              step1Attempts++;
-              await prepare({ mode: "staged" });
-              await sleep(1);
-              const result = await complete(async ({ finish }) =>
-                finish({
-                  continueWith: { typeName: "step2", input: { value: job.input.value * 2 } },
-                }),
-              );
-              if (job.attempt === 1) {
-                throw new Error("Error after complete with continueWith");
-              }
-              return result;
-            },
-          },
-          step2: {
-            attemptHandler: async ({ job, complete }) => {
-              return complete(async ({ finish }) =>
-                finish({ output: { result: job.input.value } }),
-              );
-            },
-          },
-        },
-      }),
-    });
-
-    const chain = await withTransaction(async (txCtx, transactionHooks) =>
-      client.createChain({
-        ...txCtx,
-        transactionHooks,
-        typeName: "step1",
-        input: { value: 10 },
-      }),
-    );
-
-    await withWorkers([await worker.start()], async () => {
-      const completed = await client.awaitChain(chain, completionOptions);
-      expect(completed.output).toEqual({ result: 20 });
-    });
-
-    expect(step1Attempts).toBe(2);
-
-    const allJobs = await client.listChainJobs({ chainId: chain.id });
-    expect(allJobs.items).toHaveLength(2);
-
-    const expected = [
-      expect.objectContaining({
-        name: "withTransaction",
-        status: "committed",
-        children: [
-          expect.objectContaining({ name: "startJobAttempt" }),
-          expect.objectContaining({ name: "extendJobAttempt" }),
-        ],
-      }),
-      expect.objectContaining({
-        name: "withTransaction",
-        status: "committed",
-        children: [
-          expect.objectContaining({ name: "getJobs", args: { lock: "exclusive" } }),
-          expect.objectContaining({
-            name: "withSavepoint",
-            status: "rolled-back",
-            children: [expect.objectContaining({ name: "continueJobs" })],
-          }),
-          expect.objectContaining({ name: "rescheduleJobs" }),
-        ],
-      }),
-    ];
-    expect(spyStateAdapter.calls.slice(0, expected.length)).toEqual(expected);
-  });
-
-  it("blocked job remains blocked when blocker handler throws after complete (atomic mode)", async ({
+  it("keeps the dependent blocked when the blocker handler throws after finish inside its transaction", async ({
     stateAdapter,
     notifyAdapter,
     withTransaction,
@@ -1501,6 +626,7 @@ export const processErrorHandlingTestSuite = ({ it }: { it: TestAPI<TestSuiteCon
     expect,
   }) => {
     let blockerAttempts = 0;
+    let dependentStartedBeforeBlockerRetry = false;
 
     const jobTypes = defineJobTypes<{
       blocker: {
@@ -1531,24 +657,32 @@ export const processErrorHandlingTestSuite = ({ it }: { it: TestAPI<TestSuiteCon
         jobTypes,
         processors: {
           blocker: {
-            backoffConfig: { initialDelayMs: 1, multiplier: 1, maxDelayMs: 1 },
-            attemptHandler: async ({ job, prepare, complete }) => {
+            backoffConfig: fastBackoff,
+            attemptHandler: async ({ job, finish }) => {
               blockerAttempts++;
-              await prepare({ mode: "atomic" });
-              const result = await complete(async ({ finish }) =>
-                finish({ output: { done: true as const } }),
-              );
-              if (job.attempt === 1) {
-                throw new Error("Error after blocker complete");
-              }
-              return result;
+              return withTransaction(async (txCtx, transactionHooks) => {
+                const result = await finish({
+                  ...txCtx,
+                  transactionHooks,
+                  output: { done: true as const },
+                });
+                if (job.attempt === 1) {
+                  throw new Error("Error after blocker finish");
+                }
+                return result;
+              });
             },
           },
           dependent: {
-            attemptHandler: async ({ job, complete }) => {
-              const [blocker] = job.blockers;
+            attemptHandler: async ({ getBlockers, finish }) => {
+              if (blockerAttempts < 2) {
+                dependentStartedBeforeBlockerRetry = true;
+              }
+              const [blocker] = await getBlockers();
               expect(blocker.output.done).toBe(true);
-              return complete(async ({ finish }) => finish({ output: { result: "ok" } }));
+              return withTransaction(async (txCtx, transactionHooks) =>
+                finish({ ...txCtx, transactionHooks, output: { result: "ok" } }),
+              );
             },
           },
         },
@@ -1579,97 +713,7 @@ export const processErrorHandlingTestSuite = ({ it }: { it: TestAPI<TestSuiteCon
     });
 
     expect(blockerAttempts).toBe(2);
-  });
-
-  it("blocked job remains blocked when blocker handler throws after complete (staged mode)", async ({
-    stateAdapter,
-    notifyAdapter,
-    withTransaction,
-    withWorkers,
-    observabilityAdapter,
-    log,
-    expect,
-  }) => {
-    let blockerAttempts = 0;
-
-    const jobTypes = defineJobTypes<{
-      blocker: {
-        entry: true;
-        input: { value: number };
-        output: { done: true };
-      };
-      dependent: {
-        entry: true;
-        input: null;
-        output: { result: string };
-        blockers: [{ typeName: "blocker" }];
-      };
-    }>();
-
-    const client = await createClient({
-      stateAdapter,
-      notifyAdapter,
-      observabilityAdapter,
-      log,
-      jobTypes,
-    });
-    const worker = await createInProcessWorker({
-      client,
-      concurrency: 1,
-      processors: createProcessors({
-        client,
-        jobTypes,
-        processors: {
-          blocker: {
-            backoffConfig: { initialDelayMs: 1, multiplier: 1, maxDelayMs: 1 },
-            attemptHandler: async ({ job, prepare, complete }) => {
-              blockerAttempts++;
-              await prepare({ mode: "staged" });
-              await sleep(1);
-              const result = await complete(async ({ finish }) =>
-                finish({ output: { done: true as const } }),
-              );
-              if (job.attempt === 1) {
-                throw new Error("Error after blocker complete");
-              }
-              return result;
-            },
-          },
-          dependent: {
-            attemptHandler: async ({ job, complete }) => {
-              const [blocker] = job.blockers;
-              expect(blocker.output.done).toBe(true);
-              return complete(async ({ finish }) => finish({ output: { result: "ok" } }));
-            },
-          },
-        },
-      }),
-    });
-
-    const blockerChain = await withTransaction(async (txCtx, transactionHooks) =>
-      client.createChain({
-        ...txCtx,
-        transactionHooks,
-        typeName: "blocker",
-        input: { value: 1 },
-      }),
-    );
-    const dependentChain = await withTransaction(async (txCtx, transactionHooks) =>
-      client.createChain({
-        ...txCtx,
-        transactionHooks,
-        typeName: "dependent",
-        input: null,
-        blockers: [blockerChain],
-      }),
-    );
-
-    await withWorkers([await worker.start()], async () => {
-      const completed = await client.awaitChain(dependentChain, completionOptions);
-      expect(completed.output).toEqual({ result: "ok" });
-    });
-
-    expect(blockerAttempts).toBe(2);
+    expect(dependentStartedBeforeBlockerRetry).toBe(false);
   });
 
   it("serializes various error types in lastAttemptError", async ({
@@ -1712,8 +756,8 @@ export const processErrorHandlingTestSuite = ({ it }: { it: TestAPI<TestSuiteCon
         jobTypes,
         processors: {
           test: {
-            backoffConfig: { initialDelayMs: 1, multiplier: 1, maxDelayMs: 1 },
-            attemptHandler: async ({ job, complete }) => {
+            backoffConfig: fastBackoff,
+            attemptHandler: async ({ job, finish }) => {
               if (job.lastAttemptError != null) {
                 recordedErrors.push(job.lastAttemptError);
               }
@@ -1724,7 +768,9 @@ export const processErrorHandlingTestSuite = ({ it }: { it: TestAPI<TestSuiteCon
                 throw errorToThrow;
               }
 
-              return complete(async ({ finish }) => finish({ output: null }));
+              return withTransaction(async (txCtx, transactionHooks) =>
+                finish({ ...txCtx, transactionHooks, output: null }),
+              );
             },
           },
         },
@@ -1757,7 +803,7 @@ export const processErrorHandlingTestSuite = ({ it }: { it: TestAPI<TestSuiteCon
     expect(recordedErrors[2]).toBe("string error");
   });
 
-  it("reschedules when step is called before prepare", async ({
+  it("completes when handler catches an error from its own transaction and then finishes", async ({
     stateAdapter,
     notifyAdapter,
     withTransaction,
@@ -1789,692 +835,16 @@ export const processErrorHandlingTestSuite = ({ it }: { it: TestAPI<TestSuiteCon
         jobTypes,
         processors: {
           test: {
-            backoffConfig: { initialDelayMs: 1, multiplier: 1, maxDelayMs: 1 },
-            attemptHandler: async ({ job, prepare, step, complete }) => {
-              if (job.attempt > 1) {
-                expect(job.lastAttemptError).toContain("step is only valid in staged mode");
-              }
-              if (job.attempt === 1) {
-                await step(async () => {});
-              }
-              await prepare({ mode: "staged" });
-              return complete(async ({ finish }) => finish({ output: null }));
-            },
-          },
-        },
-      }),
-    });
-
-    const chain = await withTransaction(async (txCtx, transactionHooks) =>
-      client.createChain({
-        ...txCtx,
-        transactionHooks,
-        typeName: "test",
-        input: null,
-      }),
-    );
-
-    await withWorkers([await worker.start()], async () => {
-      await client.awaitChain(chain, completionOptions);
-    });
-  });
-
-  it("reschedules when step is called in atomic mode", async ({
-    stateAdapter,
-    notifyAdapter,
-    withTransaction,
-    withWorkers,
-    observabilityAdapter,
-    log,
-    expect,
-  }) => {
-    const jobTypes = defineJobTypes<{
-      test: {
-        entry: true;
-        input: null;
-        output: null;
-      };
-    }>();
-
-    const client = await createClient({
-      stateAdapter,
-      notifyAdapter,
-      observabilityAdapter,
-      log,
-      jobTypes,
-    });
-    const worker = await createInProcessWorker({
-      client,
-      concurrency: 1,
-      processors: createProcessors({
-        client,
-        jobTypes,
-        processors: {
-          test: {
-            backoffConfig: { initialDelayMs: 1, multiplier: 1, maxDelayMs: 1 },
-            attemptHandler: async ({ job, prepare, step, complete }) => {
-              if (job.attempt > 1) {
-                expect(job.lastAttemptError).toContain("step is only valid in staged mode");
-              }
-              await prepare({ mode: "atomic" });
-              if (job.attempt === 1) {
-                await step(async () => {});
-              }
-              return complete(async ({ finish }) => finish({ output: null }));
-            },
-          },
-        },
-      }),
-    });
-
-    const chain = await withTransaction(async (txCtx, transactionHooks) =>
-      client.createChain({
-        ...txCtx,
-        transactionHooks,
-        typeName: "test",
-        input: null,
-      }),
-    );
-
-    await withWorkers([await worker.start()], async () => {
-      await client.awaitChain(chain, completionOptions);
-    });
-  });
-
-  it("reschedules when step is called after complete", async ({
-    stateAdapter,
-    notifyAdapter,
-    withTransaction,
-    withWorkers,
-    observabilityAdapter,
-    log,
-    expect,
-  }) => {
-    const jobTypes = defineJobTypes<{
-      test: {
-        entry: true;
-        input: null;
-        output: null;
-      };
-    }>();
-
-    const client = await createClient({
-      stateAdapter,
-      notifyAdapter,
-      observabilityAdapter,
-      log,
-      jobTypes,
-    });
-    const worker = await createInProcessWorker({
-      client,
-      concurrency: 1,
-      processors: createProcessors({
-        client,
-        jobTypes,
-        processors: {
-          test: {
-            backoffConfig: { initialDelayMs: 1, multiplier: 1, maxDelayMs: 1 },
-            attemptHandler: async ({ job, prepare, step, complete }) => {
-              if (job.attempt > 1) {
-                expect(job.lastAttemptError).toContain("step cannot be called after complete");
-              }
-              await prepare({ mode: "staged" });
-              if (job.attempt === 1) {
-                await complete(async ({ finish }) => finish({ output: null }));
-                await step(async () => {});
-              }
-              return complete(async ({ finish }) => finish({ output: null }));
-            },
-          },
-        },
-      }),
-    });
-
-    const chain = await withTransaction(async (txCtx, transactionHooks) =>
-      client.createChain({
-        ...txCtx,
-        transactionHooks,
-        typeName: "test",
-        input: null,
-      }),
-    );
-
-    await withWorkers([await worker.start()], async () => {
-      await client.awaitChain(chain, completionOptions);
-    });
-  });
-
-  it("reschedules when step callback throws in staged mode", async ({
-    stateAdapter,
-    notifyAdapter,
-    withTransaction,
-    withWorkers,
-    observabilityAdapter,
-    log,
-    expect,
-  }) => {
-    const spyStateAdapter = createSpyStateAdapter(stateAdapter);
-
-    const jobTypes = defineJobTypes<{
-      test: {
-        entry: true;
-        input: { value: number };
-        output: { result: number };
-      };
-    }>();
-
-    const client = await createClient({
-      stateAdapter,
-      notifyAdapter,
-      observabilityAdapter,
-      log,
-      jobTypes,
-    });
-    const workerClient = await createClient({
-      stateAdapter: spyStateAdapter,
-      notifyAdapter,
-      observabilityAdapter,
-      log,
-      jobTypes,
-    });
-    const worker = await createInProcessWorker({
-      client: workerClient,
-      concurrency: 1,
-      processors: createProcessors({
-        client,
-        jobTypes,
-        processors: {
-          test: {
-            backoffConfig: { initialDelayMs: 1, multiplier: 1, maxDelayMs: 1 },
-            attemptHandler: async ({ job, prepare, step, complete }) => {
-              if (job.attempt > 1) {
-                expect(job.lastAttemptError).toContain("Error: Simulated step error");
-              }
-              await prepare({ mode: "staged" });
-              if (job.attempt === 1) {
-                await step(async () => {
-                  throw new Error("Simulated step error");
-                });
-              }
-              return complete(async ({ finish }) =>
-                finish({ output: { result: job.input.value * 2 } }),
-              );
-            },
-          },
-        },
-      }),
-    });
-
-    const chain = await withTransaction(async (txCtx, transactionHooks) =>
-      client.createChain({
-        ...txCtx,
-        transactionHooks,
-        typeName: "test",
-        input: { value: 10 },
-      }),
-    );
-
-    await withWorkers([await worker.start()], async () => {
-      const completed = await client.awaitChain(chain, completionOptions);
-      expect(completed.output).toEqual({ result: 20 });
-    });
-
-    const expected = [
-      expect.objectContaining({
-        name: "withTransaction",
-        status: "committed",
-        children: [
-          expect.objectContaining({ name: "startJobAttempt" }),
-          expect.objectContaining({ name: "extendJobAttempt" }),
-        ],
-      }),
-      expect.objectContaining({
-        name: "withTransaction",
-        status: "rolled-back",
-        children: [expect.objectContaining({ name: "getJobs", args: { lock: "exclusive" } })],
-      }),
-      expect.objectContaining({
-        name: "withTransaction",
-        status: "committed",
-        children: [
-          expect.objectContaining({ name: "getJobs", args: { lock: "exclusive" } }),
-          expect.objectContaining({ name: "rescheduleJobs" }),
-        ],
-      }),
-    ];
-    expect(spyStateAdapter.calls.slice(0, expected.length)).toEqual(expected);
-  });
-
-  it("reschedules when step is called in parallel", async ({
-    stateAdapter,
-    notifyAdapter,
-    withTransaction,
-    withWorkers,
-    observabilityAdapter,
-    log,
-    expect,
-  }) => {
-    const jobTypes = defineJobTypes<{
-      test: {
-        entry: true;
-        input: null;
-        output: null;
-      };
-    }>();
-
-    const client = await createClient({
-      stateAdapter,
-      notifyAdapter,
-      observabilityAdapter,
-      log,
-      jobTypes,
-    });
-    const worker = await createInProcessWorker({
-      client,
-      concurrency: 1,
-      processors: createProcessors({
-        client,
-        jobTypes,
-        processors: {
-          test: {
-            backoffConfig: { initialDelayMs: 1, multiplier: 1, maxDelayMs: 1 },
-            attemptHandler: async ({ job, prepare, step, complete }) => {
-              if (job.attempt > 1) {
-                expect(job.lastAttemptError).toContain("parallel");
-              }
-              await prepare({ mode: "staged" });
-              if (job.attempt === 1) {
-                await step(async () => {
-                  await step(async () => {});
-                });
-              }
-              return complete(async ({ finish }) => finish({ output: null }));
-            },
-          },
-        },
-      }),
-    });
-
-    const chain = await withTransaction(async (txCtx, transactionHooks) =>
-      client.createChain({
-        ...txCtx,
-        transactionHooks,
-        typeName: "test",
-        input: null,
-      }),
-    );
-
-    await withWorkers([await worker.start()], async () => {
-      await client.awaitChain(chain, completionOptions);
-    });
-  });
-
-  it("completes when handler catches a step guard error and then completes", async ({
-    stateAdapter,
-    notifyAdapter,
-    withTransaction,
-    withWorkers,
-    observabilityAdapter,
-    log,
-    expect,
-  }) => {
-    const jobTypes = defineJobTypes<{
-      test: {
-        entry: true;
-        input: null;
-        output: null;
-      };
-    }>();
-
-    const client = await createClient({
-      stateAdapter,
-      notifyAdapter,
-      observabilityAdapter,
-      log,
-      jobTypes,
-    });
-    const worker = await createInProcessWorker({
-      client,
-      concurrency: 1,
-      processors: createProcessors({
-        client,
-        jobTypes,
-        processors: {
-          test: {
-            backoffConfig: { initialDelayMs: 1, multiplier: 1, maxDelayMs: 1 },
-            attemptHandler: async ({ job, prepare, step, complete }) => {
-              expect(job.attempt).toBe(1);
-              await prepare({ mode: "atomic" });
-              await expect(step(async () => {})).rejects.toThrow("only valid in staged mode");
-              return complete(async ({ finish }) => finish({ output: null }));
-            },
-          },
-        },
-      }),
-    });
-
-    const chain = await withTransaction(async (txCtx, transactionHooks) =>
-      client.createChain({
-        ...txCtx,
-        transactionHooks,
-        typeName: "test",
-        input: null,
-      }),
-    );
-
-    await withWorkers([await worker.start()], async () => {
-      await client.awaitChain(chain, completionOptions);
-    });
-  });
-
-  it("completes when handler catches a prepare callback error and then completes", async ({
-    stateAdapter,
-    notifyAdapter,
-    withTransaction,
-    withWorkers,
-    observabilityAdapter,
-    log,
-    expect,
-  }) => {
-    const jobTypes = defineJobTypes<{
-      test: {
-        entry: true;
-        input: null;
-        output: null;
-      };
-    }>();
-
-    const client = await createClient({
-      stateAdapter,
-      notifyAdapter,
-      observabilityAdapter,
-      log,
-      jobTypes,
-    });
-    const worker = await createInProcessWorker({
-      client,
-      concurrency: 1,
-      processors: createProcessors({
-        client,
-        jobTypes,
-        processors: {
-          test: {
-            backoffConfig: { initialDelayMs: 1, multiplier: 1, maxDelayMs: 1 },
-            attemptHandler: async ({ job, prepare, complete }) => {
+            backoffConfig: fastBackoff,
+            attemptHandler: async ({ job, finish }) => {
               expect(job.attempt).toBe(1);
               await expect(
-                prepare({ mode: "atomic" }, async () => {
-                  throw new Error("prepare boom");
+                withTransaction(async () => {
+                  throw new Error("transaction boom");
                 }),
-              ).rejects.toThrow("prepare boom");
-              return complete(async ({ finish }) => finish({ output: null }));
-            },
-          },
-        },
-      }),
-    });
-
-    const chain = await withTransaction(async (txCtx, transactionHooks) =>
-      client.createChain({
-        ...txCtx,
-        transactionHooks,
-        typeName: "test",
-        input: null,
-      }),
-    );
-
-    await withWorkers([await worker.start()], async () => {
-      await client.awaitChain(chain, completionOptions);
-    });
-  });
-
-  it("reschedules when step is called while prepare is running", async ({
-    stateAdapter,
-    notifyAdapter,
-    withTransaction,
-    withWorkers,
-    observabilityAdapter,
-    log,
-    expect,
-  }) => {
-    const jobTypes = defineJobTypes<{
-      test: {
-        entry: true;
-        input: null;
-        output: null;
-      };
-    }>();
-
-    const client = await createClient({
-      stateAdapter,
-      notifyAdapter,
-      observabilityAdapter,
-      log,
-      jobTypes,
-    });
-    const worker = await createInProcessWorker({
-      client,
-      concurrency: 1,
-      processors: createProcessors({
-        client,
-        jobTypes,
-        processors: {
-          test: {
-            backoffConfig: { initialDelayMs: 1, multiplier: 1, maxDelayMs: 1 },
-            attemptHandler: async ({ job, prepare, step, complete }) => {
-              if (job.attempt > 1) {
-                expect(job.lastAttemptError).toContain("prepare is running");
-              }
-              await prepare({ mode: "staged" }, async () => {
-                if (job.attempt === 1) {
-                  await step(async () => {});
-                }
-              });
-              return complete(async ({ finish }) => finish({ output: null }));
-            },
-          },
-        },
-      }),
-    });
-
-    const chain = await withTransaction(async (txCtx, transactionHooks) =>
-      client.createChain({
-        ...txCtx,
-        transactionHooks,
-        typeName: "test",
-        input: null,
-      }),
-    );
-
-    await withWorkers([await worker.start()], async () => {
-      await client.awaitChain(chain, completionOptions);
-    });
-  });
-
-  it("reschedules when complete is called while step is running", async ({
-    stateAdapter,
-    notifyAdapter,
-    withTransaction,
-    withWorkers,
-    observabilityAdapter,
-    log,
-    expect,
-  }) => {
-    const jobTypes = defineJobTypes<{
-      test: {
-        entry: true;
-        input: null;
-        output: null;
-      };
-    }>();
-
-    const client = await createClient({
-      stateAdapter,
-      notifyAdapter,
-      observabilityAdapter,
-      log,
-      jobTypes,
-    });
-    const worker = await createInProcessWorker({
-      client,
-      concurrency: 1,
-      processors: createProcessors({
-        client,
-        jobTypes,
-        processors: {
-          test: {
-            backoffConfig: { initialDelayMs: 1, multiplier: 1, maxDelayMs: 1 },
-            attemptHandler: async ({ job, prepare, step, complete }) => {
-              if (job.attempt > 1) {
-                expect(job.lastAttemptError).toContain(
-                  "complete cannot be called while step is running",
-                );
-              }
-              await prepare({ mode: "staged" });
-              if (job.attempt === 1) {
-                await step(async () => {
-                  await complete(async ({ finish }) => finish({ output: null }));
-                });
-              }
-              return complete(async ({ finish }) => finish({ output: null }));
-            },
-          },
-        },
-      }),
-    });
-
-    const chain = await withTransaction(async (txCtx, transactionHooks) =>
-      client.createChain({
-        ...txCtx,
-        transactionHooks,
-        typeName: "test",
-        input: null,
-      }),
-    );
-
-    await withWorkers([await worker.start()], async () => {
-      await client.awaitChain(chain, completionOptions);
-    });
-  });
-
-  it("reschedules when complete is called while prepare is running", async ({
-    stateAdapter,
-    notifyAdapter,
-    withTransaction,
-    withWorkers,
-    observabilityAdapter,
-    log,
-    expect,
-  }) => {
-    const jobTypes = defineJobTypes<{
-      test: {
-        entry: true;
-        input: null;
-        output: null;
-      };
-    }>();
-
-    const client = await createClient({
-      stateAdapter,
-      notifyAdapter,
-      observabilityAdapter,
-      log,
-      jobTypes,
-    });
-    const worker = await createInProcessWorker({
-      client,
-      concurrency: 1,
-      processors: createProcessors({
-        client,
-        jobTypes,
-        processors: {
-          test: {
-            backoffConfig: { initialDelayMs: 1, multiplier: 1, maxDelayMs: 1 },
-            attemptHandler: async ({ job, prepare, complete }) => {
-              if (job.attempt > 1) {
-                expect(job.lastAttemptError).toContain("prepare is running");
-              }
-              await prepare({ mode: "atomic" }, async () => {
-                if (job.attempt === 1) {
-                  await complete(async ({ finish }) => finish({ output: null }));
-                }
-              });
-              return complete(async ({ finish }) => finish({ output: null }));
-            },
-          },
-        },
-      }),
-    });
-
-    const chain = await withTransaction(async (txCtx, transactionHooks) =>
-      client.createChain({
-        ...txCtx,
-        transactionHooks,
-        typeName: "test",
-        input: null,
-      }),
-    );
-
-    await withWorkers([await worker.start()], async () => {
-      await client.awaitChain(chain, completionOptions);
-    });
-  });
-
-  it("recovers when user code poisons transaction in execute callback", async ({
-    stateAdapter,
-    notifyAdapter,
-    withTransaction,
-    poisonTransaction,
-    withWorkers,
-    observabilityAdapter,
-    log,
-    expect,
-    skip,
-  }) => {
-    if (!poisonTransaction) return skip();
-
-    const spyStateAdapter = createSpyStateAdapter(stateAdapter);
-
-    const jobTypes = defineJobTypes<{
-      test: {
-        entry: true;
-        input: { value: number };
-        output: { result: number };
-      };
-    }>();
-
-    const client = await createClient({
-      stateAdapter,
-      notifyAdapter,
-      observabilityAdapter,
-      log,
-      jobTypes,
-    });
-    const workerClient = await createClient({
-      stateAdapter: spyStateAdapter,
-      notifyAdapter,
-      observabilityAdapter,
-      log,
-      jobTypes,
-    });
-    const worker = await createInProcessWorker({
-      client: workerClient,
-      concurrency: 1,
-      processors: createProcessors({
-        client,
-        jobTypes,
-        processors: {
-          test: {
-            backoffConfig: { initialDelayMs: 1, multiplier: 1, maxDelayMs: 1 },
-            attemptHandler: async ({ job, prepare, step, complete }) => {
-              await prepare({ mode: "staged" });
-              if (job.attempt === 1) {
-                await step(async (txCtx) => {
-                  await poisonTransaction(txCtx);
-                });
-              }
-              return complete(async ({ finish }) =>
-                finish({ output: { result: job.input.value * 2 } }),
+              ).rejects.toThrow("transaction boom");
+              return withTransaction(async (txCtx, transactionHooks) =>
+                finish({ ...txCtx, transactionHooks, output: null }),
               );
             },
           },
@@ -2487,13 +857,14 @@ export const processErrorHandlingTestSuite = ({ it }: { it: TestAPI<TestSuiteCon
         ...txCtx,
         transactionHooks,
         typeName: "test",
-        input: { value: 10 },
+        input: null,
       }),
     );
 
     await withWorkers([await worker.start()], async () => {
-      const completed = await client.awaitChain(chain, completionOptions);
-      expect(completed.output).toEqual({ result: 20 });
+      await client.awaitChain(chain, completionOptions);
     });
+
+    expect(log).not.toHaveBeenCalledWith(expect.objectContaining({ type: "job_attempt_failed" }));
   });
 };

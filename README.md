@@ -61,17 +61,21 @@ const worker = await createInProcessWorker({
     jobTypes,
     processors: {
       "provision-account": {
-        attemptHandler: async ({ job, complete }) => {
+        attemptHandler: async ({ job, finish }) => {
           const accountId = await provisionAccount(job.input.userId);
 
-          return complete(async ({ finish }) =>
-            finish({
-              continueWith: {
-                typeName: "send-welcome-email",
-                input: { userId: job.input.userId, accountId },
-                //      ↑ missing accountId would be a compile error
-              },
-            }),
+          return withTransactionHooks(async (transactionHooks) =>
+            db.transaction(async (tx) =>
+              finish({
+                tx,
+                transactionHooks,
+                continueWith: {
+                  typeName: "send-welcome-email",
+                  input: { userId: job.input.userId, accountId },
+                  //      ↑ missing accountId would be a compile error
+                },
+              }),
+            ),
           );
         },
       },

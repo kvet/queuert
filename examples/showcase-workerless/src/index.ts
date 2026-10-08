@@ -84,29 +84,41 @@ const worker = await createInProcessWorker({
     jobTypes,
     processors: {
       "await-approval": {
-        attemptHandler: async ({ job, complete }) => {
+        attemptHandler: async ({ job, finish }) => {
           console.log(
             `[await-approval] Timeout reached for ${job.input.requestId} - auto-rejecting`,
           );
-          return complete(async ({ finish }) =>
-            finish({ output: { rejected: true, reason: "timeout" } }),
+          return withTransactionHooks(async (transactionHooks) =>
+            sql.begin(async (txSql) =>
+              finish({ txSql, transactionHooks, output: { rejected: true, reason: "timeout" } }),
+            ),
           );
         },
       },
 
       "process-approved": {
-        attemptHandler: async ({ job, complete }) => {
+        attemptHandler: async ({ job, finish }) => {
           console.log(`[process-approved] Processing approved request ${job.input.requestId}`);
-          return complete(async ({ finish }) =>
-            finish({ output: { processed: true, completedAt: new Date().toISOString() } }),
+          return withTransactionHooks(async (transactionHooks) =>
+            sql.begin(async (txSql) =>
+              finish({
+                txSql,
+                transactionHooks,
+                output: { processed: true, completedAt: new Date().toISOString() },
+              }),
+            ),
           );
         },
       },
 
       "pending-action": {
-        attemptHandler: async ({ job, complete }) => {
+        attemptHandler: async ({ job, finish }) => {
           console.log(`[pending-action] Action ${job.input.actionId} expired`);
-          return complete(async ({ finish }) => finish({ output: { expired: true } }));
+          return withTransactionHooks(async (transactionHooks) =>
+            sql.begin(async (txSql) =>
+              finish({ txSql, transactionHooks, output: { expired: true } }),
+            ),
+          );
         },
       },
     },
