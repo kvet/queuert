@@ -55,7 +55,7 @@ The dashboard provides:
 
 - **Overview** -- Totals across all chain and job types, plus the busiest types of each kind
 - **Chain and job types** -- Every type with its per-status counts
-- **Chain and job lists** -- One type at a time, with status tabs, sorting, and input and output previews on every row
+- **Chain and job lists** -- One type at a time, with status and role filters, sorting, and input and output previews on every row
 - **Chain detail** -- The chain's jobs in sequence, the blockers each job waited on, and the jobs in other chains that wait on this chain
 - **Job detail** -- Input, output, the last error, attempt info, and the continuation link
 - **Find by ID** -- Look up any chain or job by ID, across all types
@@ -78,9 +78,9 @@ The home page (`/`). A status panel shows a bar per kind with the totals of ever
 
 ### Chain list
 
-![Chain list with status tabs and input previews](../../../assets/dashboard/chains-list.png)
+![Chain list with the status and role filter bar and input previews](../../../assets/dashboard/chains-list.png)
 
-Lists the chains of one type, newest first by default. Status tabs (All, Running, Completed) show the count of each status; the chain-role switch narrows the list to independent chains or to chains used as blockers; the sort options depend on the selected status. Each row shows the status, chain ID and time, with one-line input and output previews below. More rows load as you scroll.
+Lists the chains of one type, newest first by default; the selector next to the title switches to another chain type. A filter bar holds the status filter (All, Running, Completed, each with its count), the chain-role switch that narrows the list to independent chains or to chains used as blockers, and the sort options, which depend on the selected status. Each row shows the status, chain ID and time, with one-line input and output previews below. More rows load as you scroll.
 
 ### Chain detail
 
@@ -92,9 +92,9 @@ While the chain runs, its header names the current job and that job's status, si
 
 ### Job list
 
-![Job list with status tabs and input previews](../../../assets/dashboard/jobs-list.png)
+![Job list with the status filter bar and input previews](../../../assets/dashboard/jobs-list.png)
 
-Lists the jobs of one type with tabs for All, Blocked, Pending, Running and Completed. Each row links to the job and to its chain (as "#2 of chain-type · chain-id"), and shows one-line input and, for a tail job, output previews. A warning icon marks an unfinished job whose last attempt failed; hover it for the error. Timing, attempts and the full error live on the job's page.
+Lists the jobs of one type, with a filter bar holding the status filter (All, Blocked, Pending, Running and Completed, each with its count) and the sort options. Each row links to the job and to its chain (as "#2 of chain-type · chain-id"), and shows one-line input and, for a tail job, output previews. A warning icon marks an unfinished job whose last attempt failed; hover it for the error. Timing, attempts and the full error live on the job's page.
 
 ### Job detail
 

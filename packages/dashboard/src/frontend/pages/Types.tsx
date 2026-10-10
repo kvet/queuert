@@ -5,6 +5,7 @@ import { TypeRow } from "../rows/TypeRow.js";
 import { createLoader } from "../state/createLoader.js";
 import { useRefresh } from "../state/refresh.js";
 import { EmptyState, ErrorState, SkeletonRows, buttonClass } from "../ui/kit.js";
+import { Select } from "../ui/Select.js";
 import { type AnyStatus } from "../ui/status.js";
 import { type TypeEntry, countOf, loadChainTypes, loadJobTypes, typeListHref } from "./typeData.js";
 
@@ -196,22 +197,20 @@ const TypesPage = (props: { kind: TypeKind }) => {
             /
           </kbd>
         </label>
-        <label class="flex items-center gap-2 text-sm text-fg-muted">
-          Sort
-          <select
-            class="h-9 rounded-xs border border-border-strong bg-surface px-2 text-sm text-fg"
+        <div class="flex items-center gap-2">
+          <span class="text-sm text-fg-muted" aria-hidden="true">
+            Sort
+          </span>
+          <Select
+            label="Sort by"
+            height="md"
             value={sort()}
-            onChange={(event) => {
-              const value = event.currentTarget.value;
+            options={[{ value: "name", label: "Name" }, ...props.kind.sorts]}
+            onChange={(value) => {
               setSearchParams({ sort: value === "name" ? undefined : value }, { replace: true });
             }}
-          >
-            <option value="name">Name</option>
-            <For each={props.kind.sorts}>
-              {(option) => <option value={option.value}>{option.label}</option>}
-            </For>
-          </select>
-        </label>
+          />
+        </div>
       </div>
       <TypeList
         kind={props.kind}

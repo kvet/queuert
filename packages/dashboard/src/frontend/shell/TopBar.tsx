@@ -28,6 +28,7 @@ import {
   SunIcon,
   WarningIcon,
 } from "../ui/icons.js";
+import { Select } from "../ui/Select.js";
 import { openFind } from "./FindDialog.js";
 
 const isMac = (): boolean => /Mac|iPhone|iPad/.test(navigator.userAgent);
@@ -62,24 +63,22 @@ const RefreshControl = () => {
         </Show>
         <span class="hidden tabular-nums sm:inline">{label()}</span>
       </button>
-      <label class="relative flex items-center border-l border-border-strong">
-        <span class="sr-only">Auto-refresh</span>
-        <select
-          class="h-full appearance-none bg-transparent pr-2 pl-2 text-fg-muted hover:bg-surface-2 hover:text-fg"
+      <div class="flex items-stretch border-l border-border-strong">
+        <Select
+          label="Auto-refresh"
+          variant="ghost"
+          height="fill"
+          class="rounded-none"
           value={String(autoRefresh())}
-          onChange={(event) => {
-            setAutoRefresh(Number(event.currentTarget.value) as AutoRefreshSeconds);
+          options={AUTO_REFRESH_OPTIONS.map((seconds) => ({
+            value: String(seconds),
+            label: seconds === 0 ? "Auto: Off" : `Auto: ${seconds}s`,
+          }))}
+          onChange={(value) => {
+            setAutoRefresh(Number(value) as AutoRefreshSeconds);
           }}
-        >
-          <For each={AUTO_REFRESH_OPTIONS}>
-            {(seconds) => (
-              <option value={String(seconds)}>
-                {seconds === 0 ? "Auto: Off" : `Auto: ${seconds}s`}
-              </option>
-            )}
-          </For>
-        </select>
-      </label>
+        />
+      </div>
     </div>
   );
 };

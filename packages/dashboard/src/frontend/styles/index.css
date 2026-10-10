@@ -124,6 +124,68 @@
   }
 }
 
+/*
+ * Native selects (ui/Select.tsx). Where customizable selects are supported, the picker is styled to
+ * match the dashboard's menus; elsewhere the browser's own picker opens under the same button.
+ */
+@layer components {
+  .select {
+    appearance: none;
+    font: inherit;
+  }
+  @supports (appearance: base-select) {
+    .select,
+    .select::picker(select) {
+      appearance: base-select;
+    }
+    /* The base-select button lays its content out as a block; center it like the fallback. */
+    .select {
+      display: inline-flex;
+      align-items: center;
+    }
+    .select::picker-icon {
+      display: none;
+    }
+    .select::picker(select) {
+      margin-block: 4px;
+      max-block-size: 18rem;
+      padding: 4px;
+      border: 1px solid var(--color-border);
+      border-radius: var(--radius-xs);
+      background-color: var(--color-surface);
+      color: var(--color-fg);
+      box-shadow:
+        0 10px 15px -3px rgb(0 0 0 / 0.1),
+        0 4px 6px -4px rgb(0 0 0 / 0.1);
+    }
+    .select option {
+      gap: 1rem;
+      padding: 6px 10px;
+      border-radius: var(--radius-xs);
+      color: var(--color-fg-muted);
+      white-space: nowrap;
+      cursor: pointer;
+    }
+    .select option:is(:hover, :focus-visible) {
+      background-color: var(--color-surface-2);
+      color: var(--color-fg);
+      outline: none;
+    }
+    .select option:checked {
+      color: var(--color-fg);
+      font-weight: 500;
+    }
+    .select option::checkmark {
+      order: 1;
+      margin-inline-start: auto;
+      color: var(--color-accent);
+    }
+    .select-wrap:has(.select:open) .select-chevron {
+      rotate: 180deg;
+    }
+  }
+}
+
 @media (prefers-reduced-motion: reduce) {
   .animate-pulse-ring,
   .animate-spin {

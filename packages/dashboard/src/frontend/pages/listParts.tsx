@@ -1,10 +1,12 @@
-import { A, useLocation, useSearchParams } from "@solidjs/router";
+import { useLocation, useSearchParams } from "@solidjs/router";
 import { For, type JSX, Match, Show, Switch } from "solid-js";
 
+import { basePath } from "../base.js";
 import { type CappedCount, formatCount, formatSum, sumCounts } from "../domain/counts.js";
 import { type createPagedList } from "../state/createPagedList.js";
-import { ArrowDownIcon, ArrowUpIcon, ChevronDownIcon } from "../ui/icons.js";
+import { ArrowDownIcon, ArrowUpIcon } from "../ui/icons.js";
 import { ErrorState, LiveRegion, SkeletonRows, buttonClass } from "../ui/kit.js";
+import { Select } from "../ui/Select.js";
 import { type AnyStatus } from "../ui/status.js";
 import { StatusDot } from "../ui/StatusPill.js";
 import { type TypeKind, TypePicker } from "./Types.js";
@@ -44,31 +46,56 @@ export const ListHeader = (props: { typeName: string; typeNames: string[] | unde
         <h1 class="min-w-0 truncate text-base font-semibold" title={props.typeName}>
           {props.typeName}
         </h1>
-        <label class="relative inline-flex items-center">
-          <span class="sr-only">Switch type</span>
-          <select
-            class="h-8 cursor-pointer appearance-none rounded-xs bg-transparent pr-7 pl-2 text-sm text-fg-muted hover:bg-surface-2 hover:text-fg"
-            value={props.typeName}
-            onChange={(event) => {
-              setSearchParams({ typeName: event.currentTarget.value });
-            }}
-          >
-            <option value={props.typeName} disabled>
-              Switch type
-            </option>
-            <For each={(props.typeNames ?? []).filter((name) => name !== props.typeName)}>
-              {(name) => <option value={name}>{name}</option>}
-            </For>
-          </select>
-          <ChevronDownIcon size={14} class="pointer-events-none absolute right-2 text-fg-muted" />
-        </label>
+        <Select
+          variant="ghost"
+          label="Switch type"
+          placeholder="Switch type"
+          value={undefined}
+          options={(props.typeNames ?? [])
+            .filter((name) => name !== props.typeName)
+            .map((name) => ({ value: name, label: name }))}
+          onChange={(typeName) => {
+            setSearchParams({ typeName });
+          }}
+        />
       </div>
     </div>
   );
 };
 
-/** Switching status drops `orderBy`, since the sort options depend on the status. */
-export const StatusTabs = (props: {
+/** One bordered row of list filters; items wrap onto more lines when the page is narrow. */
+export const FilterBar = (props: { children: JSX.Element }) => (
+  <div class="mb-3 flex flex-wrap items-center gap-x-5 gap-y-2 rounded-xs border border-border py-1.5 pr-1.5 pl-3">
+    {props.children}
+  </div>
+);
+
+/**
+ * A filter bar control with its muted caption (stacked above it on narrow screens); the control
+ * carries its own accessible name.
+ */
+export const FilterGroup = (props: { label: string; children: JSX.Element }) => (
+  <div class="flex max-w-full min-w-0 flex-col items-start gap-1 sm:flex-row sm:items-center sm:gap-2">
+    <span class="shrink-0 text-sm text-fg-muted" aria-hidden="true">
+      {props.label}
+    </span>
+    {props.children}
+  </div>
+);
+
+/** Segmented control: a tinted track whose selected segment (`aria-current`/`aria-pressed`) is filled. */
+export const segmentGroupClass = "flex max-w-full min-w-0 flex-wrap rounded-xs bg-surface-2 p-0.5";
+export const segmentClass =
+  "group inline-flex shrink-0 items-center gap-1.5 whitespace-nowrap rounded-xs px-2.5 py-1 text-sm text-fg-muted hover:text-fg aria-[current=true]:bg-fg aria-[current=true]:font-medium aria-[current=true]:text-bg aria-pressed:bg-fg aria-pressed:font-medium aria-pressed:text-bg";
+const segmentCountClass =
+  "text-fg-subtle tabular-nums group-aria-[current=true]:text-bg group-aria-[current=true]:opacity-75";
+
+/**
+ * Switching status drops `orderBy`, since the sort options depend on the status. Plain anchors
+ * (the router still handles the clicks): `<A>` sets its own `aria-current` from the path alone,
+ * which would mark every status current.
+ */
+export const StatusFilter = (props: {
   base: "/chains" | "/jobs";
   statuses: AnyStatus[];
   selected: string;
@@ -80,41 +107,45 @@ export const StatusTabs = (props: {
     if (status) params.set("status", status);
     else params.delete("status");
     params.delete("orderBy");
-    return `${props.base}?${params}`;
+    return `${basePath}${props.base}?${params}`;
   };
   const countOf = (status: AnyStatus) =>
     props.counts?.find((statusCount) => statusCount.status === status)?.count;
-  const tabClass =
-    "-mb-px inline-flex shrink-0 items-center gap-1.5 border-b-2 px-3 py-2 text-sm aria-[current=page]:border-accent aria-[current=page]:font-medium aria-[current=page]:text-fg border-transparent text-fg-muted hover:text-fg";
 
   return (
-    <nav class="mb-3 flex overflow-x-auto border-b border-border" aria-label="Status">
-      <A href={href()} aria-current={props.selected === "" ? "page" : undefined} class={tabClass}>
-        All
-        <Show when={props.counts}>
-          {(counts) => (
-            <span class="text-fg-subtle tabular-nums">
-              ({formatSum(sumCounts(counts().map((statusCount) => statusCount.count)))})
-            </span>
+    <FilterGroup label="Status">
+      <nav class={segmentGroupClass} aria-label="Status">
+        <a
+          href={href()}
+          aria-current={props.selected === "" ? "true" : undefined}
+          class={segmentClass}
+        >
+          All
+          <Show when={props.counts}>
+            {(counts) => (
+              <span class={segmentCountClass}>
+                ({formatSum(sumCounts(counts().map((statusCount) => statusCount.count)))})
+              </span>
+            )}
+          </Show>
+        </a>
+        <For each={props.statuses}>
+          {(status) => (
+            <a
+              href={href(status)}
+              aria-current={props.selected === status ? "true" : undefined}
+              class={segmentClass}
+            >
+              <StatusDot status={status} />
+              <span class="capitalize">{status}</span>
+              <Show when={countOf(status)}>
+                {(count) => <span class={segmentCountClass}>({formatCount(count())})</span>}
+              </Show>
+            </a>
           )}
-        </Show>
-      </A>
-      <For each={props.statuses}>
-        {(status) => (
-          <A
-            href={href(status)}
-            aria-current={props.selected === status ? "page" : undefined}
-            class={tabClass}
-          >
-            <StatusDot status={status} />
-            <span class="capitalize">{status}</span>
-            <Show when={countOf(status)}>
-              {(count) => <span class="text-fg-subtle tabular-nums">({formatCount(count())})</span>}
-            </Show>
-          </A>
-        )}
-      </For>
-    </nav>
+        </For>
+      </nav>
+    </FilterGroup>
   );
 };
 
@@ -126,21 +157,18 @@ export const SortControls = (props: {
   const [, setSearchParams] = useSearchParams();
   const ascending = () => props.orderDirection === "asc";
   return (
-    <div class="flex items-center gap-1.5">
-      <label class="flex items-center gap-2 text-sm text-fg-muted">
+    <div class="ml-auto flex shrink-0 items-center gap-2">
+      <span class="text-sm text-fg-muted" aria-hidden="true">
         Sort
-        <select
-          class="h-8 rounded-xs border border-border-strong bg-surface px-2 text-sm text-fg"
-          value={props.orderBy}
-          onChange={(event) => {
-            setSearchParams({ orderBy: event.currentTarget.value });
-          }}
-        >
-          <For each={props.options}>
-            {(option) => <option value={option.value}>{option.label}</option>}
-          </For>
-        </select>
-      </label>
+      </span>
+      <Select
+        label="Sort by"
+        value={props.orderBy}
+        options={props.options}
+        onChange={(orderBy) => {
+          setSearchParams({ orderBy });
+        }}
+      />
       <button
         type="button"
         class={`${buttonClass.secondary} h-8 px-2`}

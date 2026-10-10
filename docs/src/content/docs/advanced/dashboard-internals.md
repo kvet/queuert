@@ -88,11 +88,11 @@ The frontend is a SolidJS single-page application built with Vite.
 
 **Chain Types** (`/chains/types`) and **Job Types** (`/jobs/types`) — Every type with its capped per-status counts; a count chip opens the list filtered by that status. The name filter (`search`) and sort (`sort`) live in the URL.
 
-**Chain List** (`/chains?typeName=…`) — The chains of one type, with status tabs, a chain-role switch (`independent`), and a status-dependent sort. Without a `typeName` it shows the chain types as a picker.
+**Chain List** (`/chains?typeName=…`) — The chains of one type, with a filter bar holding the status filter (`status`), a chain-role switch (`independent`), and a status-dependent sort. Without a `typeName` it shows the chain types as a picker.
 
 **Chain Detail** (`/chains/:id`) — The chain's current job and its status next to the chain status while the chain runs, since a running chain may be waiting on a blocked or pending job. The jobs of the chain, oldest first and loaded a page at a time as you scroll, with per-job blockers, each job's input (and, for the tail job, its output) on demand, folded runs of repeated completed jobs, the chain input and output, and the blocked jobs list (jobs in other chains that declared this chain as a blocker, linked to the job). Deleting the chain is refused up front while that list has entries.
 
-**Job List** (`/jobs?typeName=…`) — The jobs of one type, with status tabs and the per-status sort options. Without a `typeName` it shows the job types as a picker.
+**Job List** (`/jobs?typeName=…`) — The jobs of one type, with a filter bar holding the status filter (`status`) and the per-status sort options. Without a `typeName` it shows the job types as a picker.
 
 **Job Detail** (`/jobs/:id`) — The job's details (attempts, timing, the current attempt's worker and deadline, or who completed it), its last error, input, output or continuation, and its blockers. A pending job scheduled in the future gets a "Run now" action.
 

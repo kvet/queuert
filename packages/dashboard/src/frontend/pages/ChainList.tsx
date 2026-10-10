@@ -8,7 +8,17 @@ import { createPagedList } from "../state/createPagedList.js";
 import { useRefresh } from "../state/refresh.js";
 import { EmptyState, buttonClass } from "../ui/kit.js";
 import { CHAIN_STATUSES } from "../ui/status.js";
-import { ListHeader, PagedListBody, SortControls, StatusTabs, TypeGate } from "./listParts.js";
+import {
+  FilterBar,
+  FilterGroup,
+  ListHeader,
+  PagedListBody,
+  SortControls,
+  StatusFilter,
+  TypeGate,
+  segmentClass,
+  segmentGroupClass,
+} from "./listParts.js";
 import { toStatusCounts } from "./typeData.js";
 import { chainKind } from "./Types.js";
 
@@ -71,41 +81,40 @@ const ChainListForType = (props: { typeName: string }) => {
     await Promise.all([typeNames.refetch(), counts.refetch(), list.refresh()]);
   });
 
-  const roleClass = (selected: boolean) =>
-    `px-2.5 py-1 text-sm ${selected ? "bg-fg text-bg font-medium" : "text-fg-muted hover:text-fg"} rounded-xs`;
-
   return (
     <div>
       <ListHeader typeName={props.typeName} typeNames={typeNames.data()} />
-      <StatusTabs
-        base="/chains"
-        statuses={CHAIN_STATUSES}
-        selected={status()}
-        counts={statusCounts()}
-      />
-      <div class="mb-3 flex flex-wrap items-center justify-between gap-2">
-        <div class="flex rounded-xs bg-surface-2 p-0.5" role="group" aria-label="Chain role">
-          <For each={roles}>
-            {(role) => (
-              <button
-                type="button"
-                class={roleClass(independentParam() === role.value)}
-                aria-pressed={independentParam() === role.value}
-                onClick={() => {
-                  setSearchParams({ independent: role.value });
-                }}
-              >
-                {role.label}
-              </button>
-            )}
-          </For>
-        </div>
+      <FilterBar>
+        <StatusFilter
+          base="/chains"
+          statuses={CHAIN_STATUSES}
+          selected={status()}
+          counts={statusCounts()}
+        />
+        <FilterGroup label="Role">
+          <div class={segmentGroupClass} role="group" aria-label="Chain role">
+            <For each={roles}>
+              {(role) => (
+                <button
+                  type="button"
+                  class={segmentClass}
+                  aria-pressed={independentParam() === role.value}
+                  onClick={() => {
+                    setSearchParams({ independent: role.value });
+                  }}
+                >
+                  {role.label}
+                </button>
+              )}
+            </For>
+          </div>
+        </FilterGroup>
         <SortControls
           options={orderByOptions()}
           orderBy={effectiveOrderBy()}
           orderDirection={orderDirection()}
         />
-      </div>
+      </FilterBar>
 
       <PagedListBody
         thing="chains"

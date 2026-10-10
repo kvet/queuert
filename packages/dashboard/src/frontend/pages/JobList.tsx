@@ -8,7 +8,14 @@ import { createPagedList } from "../state/createPagedList.js";
 import { useRefresh } from "../state/refresh.js";
 import { EmptyState, buttonClass } from "../ui/kit.js";
 import { JOB_STATUSES } from "../ui/status.js";
-import { ListHeader, PagedListBody, SortControls, StatusTabs, TypeGate } from "./listParts.js";
+import {
+  FilterBar,
+  ListHeader,
+  PagedListBody,
+  SortControls,
+  StatusFilter,
+  TypeGate,
+} from "./listParts.js";
 import { toStatusCounts } from "./typeData.js";
 import { jobKind } from "./Types.js";
 
@@ -74,19 +81,19 @@ const JobListForType = (props: { typeName: string }) => {
   return (
     <div>
       <ListHeader typeName={props.typeName} typeNames={typeNames.data()} />
-      <StatusTabs
-        base="/jobs"
-        statuses={JOB_STATUSES}
-        selected={status()}
-        counts={statusCounts()}
-      />
-      <div class="mb-3 flex flex-wrap items-center justify-end gap-2">
+      <FilterBar>
+        <StatusFilter
+          base="/jobs"
+          statuses={JOB_STATUSES}
+          selected={status()}
+          counts={statusCounts()}
+        />
         <SortControls
           options={orderByOptions()}
           orderBy={effectiveOrderBy()}
           orderDirection={orderDirection()}
         />
-      </div>
+      </FilterBar>
 
       <PagedListBody
         thing="jobs"
