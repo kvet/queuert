@@ -1,7 +1,12 @@
 import { type AnyChain } from "../entities/chain.js";
 import { type DeduplicationOptions } from "../entities/deduplication.js";
 import { type ScheduleOptions } from "../entities/schedule.js";
-import { BlockerLimitExceededError, ChainNotFoundError, JobNotFoundError } from "../errors.js";
+import {
+  BlockerLimitExceededError,
+  ChainNotFoundError,
+  InvalidJobIdError,
+  JobNotFoundError,
+} from "../errors.js";
 import { bufferNotifyJobScheduled } from "../helpers/notify-hooks.js";
 import {
   bufferObservabilityEvent,
@@ -18,8 +23,6 @@ import {
 } from "../state-adapter/state-adapter.js";
 import { type TransactionHooks } from "../transaction-hooks.js";
 
-const MAX_BLOCKERS_PER_JOB = 100;
-
 type CommonInput = {
   id?: string;
   typeName: string;
@@ -29,6 +32,7 @@ type CommonInput = {
 };
 
 type ParsedEntry = {
+  id: string;
   typeName: string;
   input: unknown;
   blockers: AnyChain[];
@@ -46,13 +50,27 @@ type CreatedJob = {
   blockerSpanHandles: BlockerSpanHandle[];
 };
 
-const assertBlockerLimit = (typeName: string, blockerCount: number): void => {
-  if (blockerCount > MAX_BLOCKERS_PER_JOB) {
+const assertBlockerLimit = (helpers: Helpers, typeName: string, blockerCount: number): void => {
+  const limit = helpers.stateAdapter.config.maxBlockersPerJob;
+  if (blockerCount > limit) {
     throw new BlockerLimitExceededError(
-      `Job "${typeName}" declares ${blockerCount} blockers, exceeding the limit of ${MAX_BLOCKERS_PER_JOB}`,
-      { typeName, count: blockerCount, limit: MAX_BLOCKERS_PER_JOB },
+      `Job "${typeName}" declares ${blockerCount} blockers, exceeding the limit of ${limit}`,
+      { typeName, count: blockerCount, limit },
     );
   }
+};
+
+const resolveJobId = (helpers: Helpers, id: string | undefined): string => {
+  const { generateId, validateId } = helpers.stateAdapter.config;
+  const source = id === undefined ? "generator" : "caller";
+  const resolvedId = id ?? generateId();
+  if (!validateId(resolvedId)) {
+    throw new InvalidJobIdError(
+      `Invalid job ID "${resolvedId}" from ${source} — failed validateId predicate`,
+      { id: resolvedId, source },
+    );
+  }
+  return resolvedId;
 };
 
 const prepareJobs = <TEntry extends CommonInput>(
@@ -62,8 +80,9 @@ const prepareJobs = <TEntry extends CommonInput>(
 ): { parsed: ParsedEntry[]; spanHandles: JobSpanHandle[] } => {
   const parsed: ParsedEntry[] = entries.map((entry) => {
     const blockers = entry.blockers ?? [];
-    assertBlockerLimit(entry.typeName, blockers.length);
+    assertBlockerLimit(helpers, entry.typeName, blockers.length);
     return {
+      id: resolveJobId(helpers, entry.id),
       typeName: entry.typeName,
       input: entry.input,
       blockers,
@@ -305,7 +324,7 @@ export const createStateChains = async (
     createResults = await helpers.stateAdapter.createJobs({
       txCtx,
       jobs: chains.map((chain, index) => ({
-        id: chain.id,
+        id: parsed[index].id,
         typeName: chain.typeName,
         input: parsed[index].parsedInput,
         schedule: chain.schedule,
@@ -380,7 +399,7 @@ export const continueStateJob = async (
       completedBy: workerId,
       jobs: [
         {
-          id: job.id,
+          id: parsed[0].id,
           typeName: job.typeName,
           input: parsed[0].parsedInput,
           schedule: job.schedule,

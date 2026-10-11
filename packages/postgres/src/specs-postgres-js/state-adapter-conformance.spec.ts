@@ -35,6 +35,7 @@ describe("PostgreSQL State Adapter Conformance (postgres.js)", () => {
   const conformanceIt = it.extend<{
     sql: postgres.Sql;
     stateAdapter: StateAdapter<{ $test: true }, string>;
+    transactionConcurrency: "concurrent" | "serialized";
     poisonTransaction: (txCtx: { $test: true }) => Promise<void>;
   }>({
     sql: [
@@ -42,6 +43,13 @@ describe("PostgreSQL State Adapter Conformance (postgres.js)", () => {
         const sql = postgres(postgresConnectionString, { max: 10, onnotice: () => {} });
         await use(sql);
         await sql.end();
+      },
+      { scope: "test" },
+    ],
+    transactionConcurrency: [
+      // oxlint-disable-next-line no-empty-pattern
+      async ({}, use) => {
+        await use("concurrent");
       },
       { scope: "test" },
     ],

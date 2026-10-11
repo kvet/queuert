@@ -10,7 +10,7 @@ export const getStartAttemptDelayMsGroup: ConformanceGroup<StateConformanceFixtu
         await stateAdapter.withTransaction(async (txCtx) =>
           stateAdapter.createJobs({
             txCtx,
-            jobs: [{ typeName: "avail-test", input: null }],
+            jobs: [{ id: stateAdapter.config.generateId(), typeName: "avail-test", input: null }],
           }),
         );
 
@@ -24,7 +24,14 @@ export const getStartAttemptDelayMsGroup: ConformanceGroup<StateConformanceFixtu
         await stateAdapter.withTransaction(async (txCtx) =>
           stateAdapter.createJobs({
             txCtx,
-            jobs: [{ typeName: "future-test", input: null, schedule: { afterMs: 5000 } }],
+            jobs: [
+              {
+                id: stateAdapter.config.generateId(),
+                typeName: "future-test",
+                input: null,
+                schedule: { afterMs: 5000 },
+              },
+            ],
           }),
         );
 
@@ -41,8 +48,13 @@ export const getStartAttemptDelayMsGroup: ConformanceGroup<StateConformanceFixtu
           stateAdapter.createJobs({
             txCtx,
             jobs: [
-              { typeName: "mixed-test", input: null },
-              { typeName: "mixed-test", input: null, schedule: { afterMs: 5000 } },
+              { id: stateAdapter.config.generateId(), typeName: "mixed-test", input: null },
+              {
+                id: stateAdapter.config.generateId(),
+                typeName: "mixed-test",
+                input: null,
+                schedule: { afterMs: 5000 },
+              },
             ],
           }),
         );
@@ -66,14 +78,23 @@ export const getStartAttemptDelayMsGroup: ConformanceGroup<StateConformanceFixtu
         const [blockerChain] = await stateAdapter.withTransaction(async (txCtx) =>
           stateAdapter.createJobs({
             txCtx,
-            jobs: [{ typeName: "delay-blocker", input: null }],
+            jobs: [
+              { id: stateAdapter.config.generateId(), typeName: "delay-blocker", input: null },
+            ],
           }),
         );
 
         const [blockedChain] = await stateAdapter.withTransaction(async (txCtx) =>
           stateAdapter.createJobs({
             txCtx,
-            jobs: [{ typeName: "delay-blocked", input: null, schedule: { afterMs: 5000 } }],
+            jobs: [
+              {
+                id: stateAdapter.config.generateId(),
+                typeName: "delay-blocked",
+                input: null,
+                schedule: { afterMs: 5000 },
+              },
+            ],
           }),
         );
 
@@ -94,8 +115,8 @@ export const getStartAttemptDelayMsGroup: ConformanceGroup<StateConformanceFixtu
     },
     {
       name: "non-transactional getStartAttemptDelayMs does not observe an uncommitted insert",
-      run: async ({ stateAdapter }, expect) => {
-        if (stateAdapter.transactionConcurrency === "serialized") {
+      run: async ({ stateAdapter, transactionConcurrency }, expect) => {
+        if (transactionConcurrency !== "concurrent") {
           expect.skip("requires concurrent transactions");
           return;
         }
@@ -112,7 +133,14 @@ export const getStartAttemptDelayMsGroup: ConformanceGroup<StateConformanceFixtu
           .withTransaction(async (txCtx) => {
             await stateAdapter.createJobs({
               txCtx,
-              jobs: [{ typeName: "iso-next", input: null, schedule: { afterMs: 5000 } }],
+              jobs: [
+                {
+                  id: stateAdapter.config.generateId(),
+                  typeName: "iso-next",
+                  input: null,
+                  schedule: { afterMs: 5000 },
+                },
+              ],
             });
             signalTxReady!();
             await gate;

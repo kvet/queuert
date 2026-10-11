@@ -32,9 +32,9 @@ export const countByJobTypeNamesGroup: ConformanceGroup<StateConformanceFixture>
           stateAdapter.createJobs({
             txCtx,
             jobs: [
-              { typeName: "count-a", input: null },
-              { typeName: "count-a", input: null },
-              { typeName: "count-b", input: null },
+              { id: stateAdapter.config.generateId(), typeName: "count-a", input: null },
+              { id: stateAdapter.config.generateId(), typeName: "count-a", input: null },
+              { id: stateAdapter.config.generateId(), typeName: "count-b", input: null },
             ],
           }),
         );
@@ -72,8 +72,8 @@ export const countByJobTypeNamesGroup: ConformanceGroup<StateConformanceFixture>
           stateAdapter.createJobs({
             txCtx,
             jobs: [
-              { typeName: "count-run", input: null },
-              { typeName: "count-run", input: null },
+              { id: stateAdapter.config.generateId(), typeName: "count-run", input: null },
+              { id: stateAdapter.config.generateId(), typeName: "count-run", input: null },
             ],
           }),
         );
@@ -95,9 +95,9 @@ export const countByJobTypeNamesGroup: ConformanceGroup<StateConformanceFixture>
           stateAdapter.createJobs({
             txCtx,
             jobs: [
-              { typeName: "count-blocker", input: null },
-              { typeName: "count-blocked", input: null },
-              { typeName: "count-blocked", input: null },
+              { id: stateAdapter.config.generateId(), typeName: "count-blocker", input: null },
+              { id: stateAdapter.config.generateId(), typeName: "count-blocked", input: null },
+              { id: stateAdapter.config.generateId(), typeName: "count-blocked", input: null },
             ],
           }),
         );
@@ -122,7 +122,7 @@ export const countByJobTypeNamesGroup: ConformanceGroup<StateConformanceFixture>
         await stateAdapter.withTransaction(async (txCtx) =>
           stateAdapter.createJobs({
             txCtx,
-            jobs: [{ typeName: "count-done", input: null }],
+            jobs: [{ id: stateAdapter.config.generateId(), typeName: "count-done", input: null }],
           }),
         );
 
@@ -157,9 +157,9 @@ export const countByJobTypeNamesGroup: ConformanceGroup<StateConformanceFixture>
           stateAdapter.createJobs({
             txCtx,
             jobs: [
-              { typeName: "count-z", input: null },
-              { typeName: "count-a", input: null },
-              { typeName: "count-a", input: null },
+              { id: stateAdapter.config.generateId(), typeName: "count-z", input: null },
+              { id: stateAdapter.config.generateId(), typeName: "count-a", input: null },
+              { id: stateAdapter.config.generateId(), typeName: "count-a", input: null },
             ],
           }),
         );

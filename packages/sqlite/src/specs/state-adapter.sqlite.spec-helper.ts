@@ -20,6 +20,7 @@ export const extendWithStateSqlite = <T>(
   T & {
     db: Database.Database;
     stateAdapter: StateAdapter<{ $test: true }, string>;
+    transactionConcurrency: "concurrent" | "serialized";
     flakyStateAdapter: StateAdapter<{ $test: true }, string>;
     flakyDbStateAdapter: StateAdapter<{ $test: true }, string> | undefined;
     poisonTransaction: ((txCtx: { $test: true }) => Promise<void>) | undefined;
@@ -36,6 +37,7 @@ export const extendWithStateSqlite = <T>(
     flakyStateProvider: BetterSqlite3Provider;
     flakyDbStateProvider: BetterSqlite3Provider;
     stateAdapter: BetterSqlite3StateAdapter;
+    transactionConcurrency: "concurrent" | "serialized";
     flakyStateAdapter: BetterSqlite3StateAdapter;
     flakyDbStateAdapter: BetterSqlite3StateAdapter | undefined;
     poisonTransaction: ((txCtx: { $test: true }) => Promise<void>) | undefined;
@@ -129,6 +131,13 @@ export const extendWithStateSqlite = <T>(
             stateProvider: flakyStateProvider,
           }),
         );
+      },
+      { scope: "test" },
+    ],
+    transactionConcurrency: [
+      // oxlint-disable-next-line no-empty-pattern
+      async ({}, use) => {
+        await use("serialized");
       },
       { scope: "test" },
     ],

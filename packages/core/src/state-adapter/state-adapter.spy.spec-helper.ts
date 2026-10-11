@@ -66,8 +66,8 @@ export const createSpyStateAdapter = <TTxContext extends BaseTxContext, TJobId e
 
   return {
     calls,
-    transactionConcurrency: stateAdapter.transactionConcurrency,
 
+    config: stateAdapter.config,
     withTransaction: async (fn) => {
       const call = record({ txCtx: undefined, name: "withTransaction" });
       try {

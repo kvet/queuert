@@ -103,6 +103,7 @@ export const seedAllStates = async <TTxContext extends BaseTxContext>(
   { scale = 1 }: { scale?: number } = {},
 ): Promise<SeedSentinels> => {
   const headJob = (typeName: string, index: number, schedule?: { afterMs: number }) => ({
+    id: stateAdapter.config.generateId(),
     typeName,
     input: { index },
     ...(schedule ? { schedule } : {}),
@@ -329,7 +330,7 @@ export const seedAllStates = async <TTxContext extends BaseTxContext>(
   const [longChain] = await stateAdapter.withTransaction(async (txCtx) =>
     stateAdapter.createJobs({
       txCtx,
-      jobs: [{ typeName: "seed:chain", input: { n: 0 } }],
+      jobs: [{ id: stateAdapter.config.generateId(), typeName: "seed:chain", input: { n: 0 } }],
     }),
   );
   let longChainTail = longChain.head;
@@ -344,7 +345,14 @@ export const seedAllStates = async <TTxContext extends BaseTxContext>(
       const [continued] = await stateAdapter.continueJobs({
         txCtx,
         completedBy: seedConfig.workerId,
-        jobs: [{ typeName: "seed:chain", input: { n: step }, continueFromId: acquired.id }],
+        jobs: [
+          {
+            id: stateAdapter.config.generateId(),
+            typeName: "seed:chain",
+            input: { n: step },
+            continueFromId: acquired.id,
+          },
+        ],
       });
       const { continuation } = continued!;
       longChainTail = continuation;
@@ -388,6 +396,7 @@ export const seedAllStates = async <TTxContext extends BaseTxContext>(
     stateAdapter.createJobs({
       txCtx,
       jobs: Array.from({ length: seedConfig.throwawayChains * scale }, (_, i) => ({
+        id: stateAdapter.config.generateId(),
         typeName: "seed:throwaway:chain",
         input: { index: i },
       })),
@@ -398,6 +407,7 @@ export const seedAllStates = async <TTxContext extends BaseTxContext>(
     const blockers = await stateAdapter.createJobs({
       txCtx,
       jobs: Array.from({ length: seedConfig.throwawayUnblockers * scale }, (_, i) => ({
+        id: stateAdapter.config.generateId(),
         typeName: "seed:throwaway:unblocker",
         input: { index: i },
       })),
@@ -405,6 +415,7 @@ export const seedAllStates = async <TTxContext extends BaseTxContext>(
     const targets = await stateAdapter.createJobs({
       txCtx,
       jobs: Array.from({ length: seedConfig.throwawayUnblockers * scale }, (_, i) => ({
+        id: stateAdapter.config.generateId(),
         typeName: "seed:throwaway:unblock-target",
         input: { index: i },
       })),

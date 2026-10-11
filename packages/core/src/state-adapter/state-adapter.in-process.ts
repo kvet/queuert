@@ -2,16 +2,16 @@ import { type DeduplicationOptions } from "../entities/deduplication.js";
 import { type ScheduleOptions } from "../entities/schedule.js";
 import { createAsyncRwLock } from "../helpers/async-rw-lock.js";
 import { type OrderDirection, type Page, type PageParams } from "../pagination.js";
+import { resolveStateAdapterConfig } from "./adapter-config.js";
 import { decodeIdCursor, decodeTimestampWithIdCursor, encodeCursor } from "./cursor.js";
-import { createIdValidator } from "./id-validator.js";
 import {
   type StateAdapter,
   type StateBlockedJob,
-  type StateDependentJob,
   type StateChain,
   type StateChainInfo,
   type StateChainStatus,
   type StateCount,
+  type StateDependentJob,
   type StateJob,
   type StateJobInfo,
 } from "./state-adapter.js";
@@ -59,11 +59,12 @@ const matchesDateRange = (value: Date | null | undefined, from?: Date, to?: Date
 
 const matchesTypeNameFilter = (job: DbJob, typeName: string): boolean => job.typeName === typeName;
 
-const COUNT_CAP = 10_000;
+// ── Count helpers ───────────────────────────────────────────────────
 
-const cappedCount = (count: number): StateCount => ({
-  count: Math.min(count, COUNT_CAP),
-  hasMore: count > COUNT_CAP,
+/** Clamps a count read with `LIMIT countCap + 1` to `countCap`, flagging that more exist. */
+const capCount = (count: number, countCap: number): StateCount => ({
+  count: Math.min(count, countCap),
+  hasMore: count > countCap,
 });
 
 // ── Pagination helpers ──────────────────────────────────────────────
@@ -591,16 +592,48 @@ export type InProcessContext = { inTransaction?: boolean; journal?: JournalEntry
 export type InProcessStateAdapter = StateAdapter<InProcessContext, string>;
 
 /**
- * @param options - Optional ID generation and validation overrides.
+ * @param options - Optional ID generation, validation, and limit overrides.
  */
 export const createInProcessStateAdapter = async ({
   generateId: generateIdOption = () => crypto.randomUUID(),
   validateId: validateIdOption,
+  maxBlockersPerJob: maxBlockersPerJobOption,
+  countCap: countCapOption,
 }: {
+  /**
+   * Function to generate new job IDs. Must return unique values — collisions
+   * are a hard error.
+   *
+   * @defaultValue `() => crypto.randomUUID()`
+   */
   generateId?: () => string;
+  /**
+   * Predicate returning `true` if the ID is acceptable. Core runs it on both generated
+   * and caller-supplied IDs before writing; failures throw `InvalidJobIdError`.
+   */
   validateId?: (id: string) => boolean;
+  /**
+   * Most blocker chains a single job may declare. Declaring more throws
+   * `BlockerLimitExceededError` before any state is written.
+   *
+   * @defaultValue `100`
+   */
+  maxBlockersPerJob?: number;
+  /**
+   * Per-status count at which `countByChainTypeNames` and `countByJobTypeNames` stop
+   * counting and report `hasMore: true`.
+   *
+   * @defaultValue `10_000`
+   */
+  countCap?: number;
 } = {}): Promise<InProcessStateAdapter> => {
-  const { validateId, generateId } = createIdValidator({ generateIdOption, validateIdOption });
+  const config = resolveStateAdapterConfig({
+    generateId: generateIdOption,
+    validateId: validateIdOption,
+    maxBlockersPerJob: maxBlockersPerJobOption,
+    countCap: countCapOption,
+  });
+  const { countCap } = config;
   const idx = new JobIndex();
   const lock = createAsyncRwLock();
   let closed = false;
@@ -676,7 +709,7 @@ export const createInProcessStateAdapter = async ({
   };
 
   const adapter: InProcessStateAdapter = {
-    transactionConcurrency: "serialized",
+    config,
 
     withTransaction: async (fn) => {
       using _h = await lock.acquireWrite();
@@ -721,15 +754,12 @@ export const createInProcessStateAdapter = async ({
 
     createJobs: async ({ txCtx, jobs: jobInputs }) =>
       withWriteLock(txCtx, () => {
-        for (const jobInput of jobInputs) {
-          if (jobInput.id !== undefined) validateId(jobInput.id, "caller");
-        }
         return withAtomicBatch(txCtx, (journal) => {
           const results: (StateChain & { deduplicated: boolean })[] = [];
           for (const jobInput of jobInputs) {
             const {
               typeName,
-              id: providedId,
+              id,
               input,
               schedule,
               chainTraceContext,
@@ -744,8 +774,6 @@ export const createInProcessStateAdapter = async ({
                 continue;
               }
             }
-
-            const id = providedId ?? generateId();
 
             if (idx.jobs.has(id)) {
               throw new Error(`Job id "${id}" already exists`);
@@ -772,9 +800,6 @@ export const createInProcessStateAdapter = async ({
 
     continueJobs: async ({ txCtx, completedBy, jobs: jobInputs }) =>
       withWriteLock(txCtx, () => {
-        for (const jobInput of jobInputs) {
-          if (jobInput.id !== undefined) validateId(jobInput.id, "caller");
-        }
         return withAtomicBatch(txCtx, (journal) => {
           const now = new Date();
           const results: ((StateJob & { continuation: StateJobInfo }) | undefined)[] = [];
@@ -785,7 +810,7 @@ export const createInProcessStateAdapter = async ({
           });
 
           for (const [index, jobInput] of jobInputs.entries()) {
-            const { typeName, id: providedId, input, schedule, traceContext } = jobInput;
+            const { typeName, id, input, schedule, traceContext } = jobInput;
 
             const parent = parents[index];
             if (!parent) {
@@ -797,8 +822,6 @@ export const createInProcessStateAdapter = async ({
             if (idx.findExistingContinuation(parent.chainId, chainIndex)) {
               throw new Error(`Chain "${parent.chainId}" already has a job at index ${chainIndex}`);
             }
-
-            const id = providedId ?? generateId();
 
             if (idx.jobs.has(id)) {
               throw new Error(`Job id "${id}" already exists`);
@@ -1196,17 +1219,17 @@ export const createInProcessStateAdapter = async ({
           const typeCounts = counts.get(headJob.typeName);
           if (!typeCounts) continue;
           if (headJob.chainStatus === "completed") {
-            if (typeCounts.completed <= COUNT_CAP) typeCounts.completed++;
+            if (typeCounts.completed <= countCap) typeCounts.completed++;
           } else {
-            if (typeCounts.running <= COUNT_CAP) typeCounts.running++;
+            if (typeCounts.running <= countCap) typeCounts.running++;
           }
         }
 
         return typeNames.map((name) => {
           const typeCounts = counts.get(name)!;
           return {
-            running: cappedCount(typeCounts.running),
-            completed: cappedCount(typeCounts.completed),
+            running: capCount(typeCounts.running, countCap),
+            completed: capCount(typeCounts.completed, countCap),
           };
         });
       }),
@@ -1224,16 +1247,16 @@ export const createInProcessStateAdapter = async ({
         for (const job of idx.jobs.values()) {
           const typeCounts = counts.get(job.typeName);
           if (!typeCounts) continue;
-          if (typeCounts[job.status] <= COUNT_CAP) typeCounts[job.status]++;
+          if (typeCounts[job.status] <= countCap) typeCounts[job.status]++;
         }
 
         return typeNames.map((name) => {
           const typeCounts = counts.get(name)!;
           return {
-            blocked: cappedCount(typeCounts.blocked),
-            pending: cappedCount(typeCounts.pending),
-            running: cappedCount(typeCounts.running),
-            completed: cappedCount(typeCounts.completed),
+            blocked: capCount(typeCounts.blocked, countCap),
+            pending: capCount(typeCounts.pending, countCap),
+            running: capCount(typeCounts.running, countCap),
+            completed: capCount(typeCounts.completed, countCap),
           };
         });
       }),

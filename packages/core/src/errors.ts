@@ -191,9 +191,9 @@ export class BlockerReferenceError extends Error {
 }
 
 /**
- * Thrown when a job declares more blocker chains than the hard per-job limit
- * allows. The cap is intentional: the `job_blocker` model is not designed to
- * scale to an unbounded number of blockers per job.
+ * Thrown when a job declares more blocker chains than the state adapter's
+ * `maxBlockersPerJob` allows. The limit is configurable but always bounded: the
+ * `job_blocker` model is not designed to scale to an unbounded number of blockers per job.
  */
 export class BlockerLimitExceededError extends Error {
   /** The job type that declared too many blockers. */

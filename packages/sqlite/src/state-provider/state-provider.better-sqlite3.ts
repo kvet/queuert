@@ -22,7 +22,6 @@ export const createBetterSqlite3Provider = ({
   };
 
   return {
-    transactionConcurrency: "serialized",
     withTransaction: async (fn) => {
       using _h = await lock.acquireWrite();
       try {

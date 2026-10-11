@@ -106,6 +106,7 @@ export const stateResilienceTestSuite = ({
     "handles transient database errors gracefully with multiple slots",
     { timeout: 15000 },
     async ({
+      transactionConcurrency,
       flakyStateAdapter,
       stateAdapter,
       notifyAdapter,
@@ -115,7 +116,7 @@ export const stateResilienceTestSuite = ({
       log,
       skip,
     }) => {
-      if (stateAdapter.transactionConcurrency === "serialized") return skip();
+      if (transactionConcurrency === "serialized") return skip();
       const jobTypes = defineJobTypes<{
         test: {
           entry: true;
@@ -198,6 +199,7 @@ export const stateResilienceTestSuite = ({
     "handles transient database errors gracefully with multiple workers",
     { timeout: 15000 },
     async ({
+      transactionConcurrency,
       flakyStateAdapter,
       stateAdapter,
       notifyAdapter,
@@ -207,7 +209,7 @@ export const stateResilienceTestSuite = ({
       log,
       skip,
     }) => {
-      if (stateAdapter.transactionConcurrency === "serialized") return skip();
+      if (transactionConcurrency === "serialized") return skip();
       const jobTypes = defineJobTypes<{
         test: {
           entry: true;
@@ -402,6 +404,7 @@ export const stateResilienceTestSuite = ({
     "handles real database errors gracefully with multiple slots",
     { timeout: 15000 },
     async ({
+      transactionConcurrency,
       flakyDbStateAdapter,
       stateAdapter,
       notifyAdapter,
@@ -412,7 +415,7 @@ export const stateResilienceTestSuite = ({
       skip,
     }) => {
       if (!flakyDbStateAdapter) return skip();
-      if (stateAdapter.transactionConcurrency === "serialized") return skip();
+      if (transactionConcurrency === "serialized") return skip();
 
       const jobTypes = defineJobTypes<{
         test: {
@@ -491,6 +494,7 @@ export const stateResilienceTestSuite = ({
     "handles real database errors gracefully with multiple workers",
     { timeout: 15000 },
     async ({
+      transactionConcurrency,
       flakyDbStateAdapter,
       stateAdapter,
       notifyAdapter,
@@ -501,7 +505,7 @@ export const stateResilienceTestSuite = ({
       skip,
     }) => {
       if (!flakyDbStateAdapter) return skip();
-      if (stateAdapter.transactionConcurrency === "serialized") return skip();
+      if (transactionConcurrency === "serialized") return skip();
 
       const jobTypes = defineJobTypes<{
         test: {

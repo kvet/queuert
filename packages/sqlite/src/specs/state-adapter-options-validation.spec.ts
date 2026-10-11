@@ -3,7 +3,6 @@ import { describe, expect, it } from "vitest";
 import { createSqliteStateAdapter } from "../state-adapter/state-adapter.sqlite.js";
 
 const dummyProvider = {
-  transactionConcurrency: "serialized" as const,
   executeSql: async () => [],
   withTransaction: async <T>(fn: (ctx: any) => Promise<T>) => fn({}),
 };
@@ -63,5 +62,42 @@ describe("SQL identifier validation", () => {
       idType: "INTEGER",
     });
     expect(adapter).toBeDefined();
+  });
+});
+
+describe("limit validation", () => {
+  for (const option of ["maxBlockersPerJob", "countCap"] as const) {
+    for (const value of [0, -1, 1.5, Number.NaN]) {
+      it(`rejects ${option} = ${value}`, async () => {
+        await expect(
+          createSqliteStateAdapter({ stateProvider: dummyProvider, [option]: value }),
+        ).rejects.toThrow(new RegExp(`Invalid ${option}`));
+      });
+    }
+  }
+});
+
+describe("config", () => {
+  it("applies defaults", async () => {
+    const { config } = await createSqliteStateAdapter({ stateProvider: dummyProvider });
+    expect(config.generateId()).toMatch(
+      /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/,
+    );
+    expect(config.validateId(crypto.randomUUID())).toBe(true);
+    expect(config.maxBlockersPerJob).toBe(100);
+    expect(config.countCap).toBe(10_000);
+  });
+
+  it("exposes the configured options", async () => {
+    const generateId = () => `job-${crypto.randomUUID()}`;
+    const validateId = (id: string) => id.startsWith("job-");
+    const { config } = await createSqliteStateAdapter({
+      stateProvider: dummyProvider,
+      generateId,
+      validateId,
+      maxBlockersPerJob: 2,
+      countCap: 3,
+    });
+    expect(config).toEqual({ generateId, validateId, maxBlockersPerJob: 2, countCap: 3 });
   });
 });

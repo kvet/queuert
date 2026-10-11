@@ -70,11 +70,11 @@ The top bar holds the navigation (Overview, Chains, Jobs), **Find by ID** (`⌘K
 
 ![Overview with status bars and the busiest chain and job types](../../../assets/dashboard/overview.png)
 
-The home page (`/`). A status panel shows a bar per kind with the totals of every status across all types — running and completed chains; blocked, pending, running and completed jobs — and two lists show the five chain types with the most running chains and the five job types with the most unfinished jobs. Counts stop at 10,000 per type and status, so a total that includes a capped count is shown as a lower bound (`≥`).
+The home page (`/`). A status panel shows a bar per kind with the totals of every status across all types — running and completed chains; blocked, pending, running and completed jobs — and two lists show the five chain types with the most running chains and the five job types with the most unfinished jobs. Counts stop at the state adapter's [`countCap`](/queuert/integrations/state-adapters/#limits) (10,000 by default) per type and status, so a total that includes a capped count is shown as a lower bound (`≥`).
 
 ### Chain and job types
 
-`/chains/types` and `/jobs/types` list every type as one row: the name, its total, and a chip per status that links to the list filtered by that status. A count shown as `10,000+` is capped. Filter the types by name (press `/` to focus the filter) and sort by name, total, or running count (job types can also sort by waiting = blocked + pending).
+`/chains/types` and `/jobs/types` list every type as one row: the name, its total, and a chip per status that links to the list filtered by that status. A count with a trailing `+` (e.g. `10,000+`) is capped. Filter the types by name (press `/` to focus the filter) and sort by name, total, or running count (job types can also sort by waiting = blocked + pending).
 
 ### Chain list
 

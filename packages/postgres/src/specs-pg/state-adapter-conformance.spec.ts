@@ -35,6 +35,7 @@ describe("PostgreSQL State Adapter Conformance", () => {
   const conformanceIt = it.extend<{
     pool: Pool;
     stateAdapter: StateAdapter<{ $test: true }, string>;
+    transactionConcurrency: "concurrent" | "serialized";
     poisonTransaction: (txCtx: { $test: true }) => Promise<void>;
   }>({
     pool: [
@@ -42,6 +43,13 @@ describe("PostgreSQL State Adapter Conformance", () => {
         const pool = new Pool({ connectionString: postgresConnectionString, idleTimeoutMillis: 0 });
         await use(pool);
         await pool.end();
+      },
+      { scope: "test" },
+    ],
+    transactionConcurrency: [
+      // oxlint-disable-next-line no-empty-pattern
+      async ({}, use) => {
+        await use("concurrent");
       },
       { scope: "test" },
     ],

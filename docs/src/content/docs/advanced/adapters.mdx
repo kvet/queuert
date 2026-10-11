@@ -36,6 +36,10 @@ Because each `create*` factory produces an adapter with the same contract regard
 
 The suite is exposed as a framework-agnostic runner under the `queuert/conformance` subpath. Users wire it into a single `test()` block from their framework of choice; internal Queuert specs go through the same case list via a thin vitest binding so there's no drift between end-user validation and internal coverage.
 
+The suite reads the adapter's `config` as well: it calls `generateId` for the ID of every job it creates and, when `countCap` is small, checks that counts stop at it.
+
+Whether the backing database can run two transactions at once is a property of the test setup, not of the adapter: no runtime code branches on it. The conformance fixture carries it as `transactionConcurrency` (`"concurrent"` for a connection pool, `"serialized"` for a single connection), and cases that need concurrent transactions are skipped for `"serialized"`.
+
 See the [Conformance reference](/queuert/api/conformance/readme/) for the API and the [Custom Adapters](/queuert/advanced/custom-adapters/) guide for a walkthrough.
 
 ## Async Factory Pattern
@@ -66,11 +70,19 @@ The `StateAdapter` type accepts two generic parameters: `TTxContext` (transactio
 
 The context is named `TTxContext` (transaction context) because it's exclusively used within transactions. When you call `withTransaction`, the callback receives a context that represents an active transaction.
 
+### Adapter Config
+
+Every state adapter exposes `config`, a frozen `StateAdapterConfig` with defaults applied. Its values are settings of the storage, so they live on the adapter rather than the client, and every client and worker sharing one adapter agrees on them:
+
+- **`generateId`** — core calls it for every job created without a caller-supplied `id`. `createJobs` and `continueJobs` require an `id` on every job, so adapters never generate IDs themselves
+- **`validateId`** — core runs it on every caller-supplied and generated ID before writing, throwing `InvalidJobIdError` (with `source: "caller"` or `"generator"`) on failure. Adapters never validate IDs
+- **`maxBlockersPerJob`** — core rejects a job declaring more blockers with `BlockerLimitExceededError` before writing
+- **`countCap`** — the adapter bounds each per-type, per-status count in `countByChainTypeNames` / `countByJobTypeNames` at it; callers see the cap through `StateCount.hasMore`
+
 ### StateProvider Interface
 
 Users create a `StateProvider` implementation to integrate with their database client. A state provider supplies:
 
-- **`transactionConcurrency`** — `"serialized"` or `"concurrent"`; declares whether two `withTransaction` callbacks can run at the same time (e.g. a single SQLite connection is `"serialized"`, a Postgres pool is `"concurrent"`)
 - **`withTransaction`** — wraps a callback in a database transaction, passing the transaction context (`TTxContext`) to the callback
 - **`executeSql`** — executes a SQL string with optional params. When `txCtx` is provided, uses that transaction; when omitted, acquires and releases its own connection
 - **`withSavepoint`** _(optional)_ — runs a callback inside a savepoint within an existing transaction; when omitted, the adapter falls back to a built-in savepoint implementation

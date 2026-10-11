@@ -104,7 +104,7 @@ The UI shows only what the API returns, and derives the rest in pure helpers und
 
 - **Job phase** — a job's `status` plus the fields that matter for display: `rescheduledAfterError` (pending with a `lastAttemptError`), `scheduled` / `due` (pending, by `scheduledAt`), `continued` / `tail` (completed, by `continuedToId`). The status pill always shows the real status; the phase only drives parts of job detail and the chain detail sequence. List rows stay minimal: status, ID, chain, a time, and one-line input and output previews, with a warning icon on a job whose last attempt failed. There is no failed state, and no attempt number is ever attached to `lastAttemptError`, because it belongs to _some_ earlier attempt.
 - **Job folding** — three or more consecutive completed jobs of the same type that continued and had no blockers collapse into one item. Re-run over the whole loaded sequence after each page.
-- **Counts** — the per-status counts are capped at 10,000, so a sum that includes a capped count is a lower bound (`≥`), and a capped count itself is shown as `10,000+`.
+- **Counts** — the per-status counts are capped by the state adapter's `countCap` (10,000 by default), so a sum that includes a capped count is a lower bound (`≥`), and a capped count itself is shown with a trailing `+` (e.g. `10,000+`).
 
 ### Refresh
 

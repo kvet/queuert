@@ -22,6 +22,7 @@ export type StateConformanceOptions = {
  *   await adapter.migrateToLatest();
  *   return {
  *     stateAdapter: adapter,
+ *     transactionConcurrency: "concurrent",
  *     reset: async () => adapter.truncate(),
  *     dispose: async () => adapter.close(),
  *   };

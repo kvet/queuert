@@ -1201,6 +1201,81 @@ export const createChainsTestSuite = ({ it }: { it: TestAPI<TestSuiteContext> })
       expect(chains[1].id).toBe(idB);
     });
 
+    it("rejects caller-supplied id that fails validateId", async ({
+      stateAdapter,
+      notifyAdapter,
+      withTransaction,
+      observabilityAdapter,
+      log,
+      expect,
+    }) => {
+      const jobTypes = defineJobTypes<{
+        test: { entry: true; input: null; output: null };
+      }>();
+
+      const client = await createClient({
+        stateAdapter: {
+          ...stateAdapter,
+          config: { ...stateAdapter.config, validateId: (id) => id !== "bad-id" },
+        },
+        notifyAdapter,
+        observabilityAdapter,
+        log,
+        jobTypes,
+      });
+
+      await expect(
+        withTransaction(async (txCtx, transactionHooks) =>
+          client.createChain({
+            ...txCtx,
+            transactionHooks,
+            typeName: "test",
+            id: "bad-id",
+            input: null,
+          }),
+        ),
+      ).rejects.toThrow('Invalid job ID "bad-id" from caller');
+    });
+
+    it("rejects generated id that fails validateId", async ({
+      stateAdapter,
+      notifyAdapter,
+      withTransaction,
+      observabilityAdapter,
+      log,
+      expect,
+    }) => {
+      const jobTypes = defineJobTypes<{
+        test: { entry: true; input: null; output: null };
+      }>();
+
+      const client = await createClient({
+        stateAdapter: {
+          ...stateAdapter,
+          config: {
+            ...stateAdapter.config,
+            generateId: () => "bad-id",
+            validateId: (id) => id !== "bad-id",
+          },
+        },
+        notifyAdapter,
+        observabilityAdapter,
+        log,
+        jobTypes,
+      });
+
+      await expect(
+        withTransaction(async (txCtx, transactionHooks) =>
+          client.createChain({
+            ...txCtx,
+            transactionHooks,
+            typeName: "test",
+            input: null,
+          }),
+        ),
+      ).rejects.toThrow('Invalid job ID "bad-id" from generator');
+    });
+
     it("duplicate caller-supplied id errors", async ({
       stateAdapter,
       generateId,

@@ -8,12 +8,10 @@ import {
   createPgPoolProvider,
 } from "../state-provider/state-provider.pg-pool.js";
 
-export const UUID_PATTERN: RegExp =
-  /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
-
 export type VarianceFixtures = {
   pool: Pool;
   stateAdapter: StateAdapter<{ $test: true }, string>;
+  transactionConcurrency: "concurrent" | "serialized";
   poisonTransaction: (txCtx: { $test: true }) => Promise<void>;
   tableNames: string[];
 };
@@ -25,6 +23,9 @@ export const extendWithVarianceStatePg = <T extends { postgresConnectionString: 
     tablePrefix?: string;
     idType?: string;
     generateId?: () => string;
+    validateId?: (id: string) => boolean;
+    maxBlockersPerJob?: number;
+    countCap?: number;
   },
 ): TestAPI<T & VarianceFixtures> => {
   return api.extend<VarianceFixtures>({
@@ -47,6 +48,13 @@ export const extendWithVarianceStatePg = <T extends { postgresConnectionString: 
         const adapter = await createPgStateAdapter({ stateProvider, ...options });
         await adapter.migrateToLatest();
         return use(adapter as unknown as StateAdapter<{ $test: true }, string>);
+      },
+      { scope: "test" },
+    ],
+    transactionConcurrency: [
+      // oxlint-disable-next-line no-empty-pattern
+      async ({}, use) => {
+        await use("concurrent");
       },
       { scope: "test" },
     ],

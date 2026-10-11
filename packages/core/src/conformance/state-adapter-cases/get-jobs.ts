@@ -14,7 +14,7 @@ export const getJobsGroup: ConformanceGroup<StateConformanceFixture> = {
         const [realChain] = await stateAdapter.withTransaction(async (txCtx) =>
           stateAdapter.createJobs({
             txCtx,
-            jobs: [{ typeName: "lookup-test", input: null }],
+            jobs: [{ id: stateAdapter.config.generateId(), typeName: "lookup-test", input: null }],
           }),
         );
         const nonexistentId =
@@ -29,7 +29,13 @@ export const getJobsGroup: ConformanceGroup<StateConformanceFixture> = {
         const [seedChain] = await stateAdapter.withTransaction(async (txCtx) =>
           stateAdapter.createJobs({
             txCtx,
-            jobs: [{ typeName: "lock-blocking-job", input: { value: 1 } }],
+            jobs: [
+              {
+                id: stateAdapter.config.generateId(),
+                typeName: "lock-blocking-job",
+                input: { value: 1 },
+              },
+            ],
           }),
         );
 
@@ -76,22 +82,29 @@ export const getJobsGroup: ConformanceGroup<StateConformanceFixture> = {
     },
     {
       name: "lock: exclusive on a continuation also locks its chain head",
-      run: async ({ stateAdapter }, expect) => {
-        if (stateAdapter.transactionConcurrency === "serialized") {
+      run: async ({ stateAdapter, transactionConcurrency }, expect) => {
+        if (transactionConcurrency !== "concurrent") {
           expect.skip("requires concurrent transactions");
           return;
         }
         const [headChain] = await stateAdapter.withTransaction(async (txCtx) =>
           stateAdapter.createJobs({
             txCtx,
-            jobs: [{ typeName: "lock-head-chain", input: null }],
+            jobs: [
+              { id: stateAdapter.config.generateId(), typeName: "lock-head-chain", input: null },
+            ],
           }),
         );
         const [continued] = await stateAdapter.withTransaction(async (txCtx) =>
           stateAdapter.continueJobs({
             txCtx,
             jobs: [
-              { typeName: "lock-head-chain-step", input: null, continueFromId: headChain.head.id },
+              {
+                id: stateAdapter.config.generateId(),
+                typeName: "lock-head-chain-step",
+                input: null,
+                continueFromId: headChain.head.id,
+              },
             ],
           }),
         );
@@ -137,8 +150,8 @@ export const getJobsGroup: ConformanceGroup<StateConformanceFixture> = {
     },
     {
       name: "parallel non-transactional reads all return correct results",
-      run: async ({ stateAdapter }, expect) => {
-        if (stateAdapter.transactionConcurrency === "serialized") {
+      run: async ({ stateAdapter, transactionConcurrency }, expect) => {
+        if (transactionConcurrency !== "concurrent") {
           expect.skip("requires concurrent transactions");
           return;
         }
@@ -147,6 +160,7 @@ export const getJobsGroup: ConformanceGroup<StateConformanceFixture> = {
           stateAdapter.createJobs({
             txCtx,
             jobs: Array.from({ length: count }, (_, i) => ({
+              id: stateAdapter.config.generateId(),
               typeName: "parallel-read",
               input: { index: i },
             })),
@@ -164,8 +178,8 @@ export const getJobsGroup: ConformanceGroup<StateConformanceFixture> = {
     },
     {
       name: "non-transactional getJob does not observe an uncommitted insert",
-      run: async ({ stateAdapter }, expect) => {
-        if (stateAdapter.transactionConcurrency === "serialized") {
+      run: async ({ stateAdapter, transactionConcurrency }, expect) => {
+        if (transactionConcurrency !== "concurrent") {
           expect.skip("requires concurrent transactions");
           return;
         }
@@ -183,7 +197,7 @@ export const getJobsGroup: ConformanceGroup<StateConformanceFixture> = {
           .withTransaction(async (txCtx) => {
             const [stateChain] = await stateAdapter.createJobs({
               txCtx,
-              jobs: [{ typeName: "iso-insert", input: null }],
+              jobs: [{ id: stateAdapter.config.generateId(), typeName: "iso-insert", input: null }],
             });
             insertedId = stateChain.head.id;
             signalTxReady!();
@@ -202,15 +216,15 @@ export const getJobsGroup: ConformanceGroup<StateConformanceFixture> = {
     },
     {
       name: "non-transactional getJob does not observe an uncommitted status update",
-      run: async ({ stateAdapter }, expect) => {
-        if (stateAdapter.transactionConcurrency === "serialized") {
+      run: async ({ stateAdapter, transactionConcurrency }, expect) => {
+        if (transactionConcurrency !== "concurrent") {
           expect.skip("requires concurrent transactions");
           return;
         }
         const [seedChain] = await stateAdapter.withTransaction(async (txCtx) =>
           stateAdapter.createJobs({
             txCtx,
-            jobs: [{ typeName: "iso-update", input: null }],
+            jobs: [{ id: stateAdapter.config.generateId(), typeName: "iso-update", input: null }],
           }),
         );
 
@@ -250,15 +264,15 @@ export const getJobsGroup: ConformanceGroup<StateConformanceFixture> = {
     },
     {
       name: "non-transactional getJob does not observe an uncommitted delete",
-      run: async ({ stateAdapter }, expect) => {
-        if (stateAdapter.transactionConcurrency === "serialized") {
+      run: async ({ stateAdapter, transactionConcurrency }, expect) => {
+        if (transactionConcurrency !== "concurrent") {
           expect.skip("requires concurrent transactions");
           return;
         }
         const [seedChain] = await stateAdapter.withTransaction(async (txCtx) =>
           stateAdapter.createJobs({
             txCtx,
-            jobs: [{ typeName: "iso-delete", input: null }],
+            jobs: [{ id: stateAdapter.config.generateId(), typeName: "iso-delete", input: null }],
           }),
         );
 
@@ -291,15 +305,17 @@ export const getJobsGroup: ConformanceGroup<StateConformanceFixture> = {
     },
     {
       name: "locked getJob in a separate transaction does not observe an uncommitted status update",
-      run: async ({ stateAdapter }, expect) => {
-        if (stateAdapter.transactionConcurrency === "serialized") {
+      run: async ({ stateAdapter, transactionConcurrency }, expect) => {
+        if (transactionConcurrency !== "concurrent") {
           expect.skip("requires concurrent transactions");
           return;
         }
         const [seedChain] = await stateAdapter.withTransaction(async (txCtx) =>
           stateAdapter.createJobs({
             txCtx,
-            jobs: [{ typeName: "iso-locked-job", input: null }],
+            jobs: [
+              { id: stateAdapter.config.generateId(), typeName: "iso-locked-job", input: null },
+            ],
           }),
         );
 

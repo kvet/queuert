@@ -26,7 +26,7 @@ export const wrapStateAdapterWithLogging = <
 
   return {
     // Infrastructure methods - pass through without wrapping
-    transactionConcurrency: stateAdapter.transactionConcurrency,
+    config: stateAdapter.config,
     withTransaction: stateAdapter.withTransaction,
     withSavepoint: stateAdapter.withSavepoint,
 

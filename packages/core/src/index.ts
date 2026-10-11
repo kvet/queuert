@@ -55,7 +55,11 @@ export {
   type InProcessContext,
   type InProcessStateAdapter,
 } from "./state-adapter/state-adapter.in-process.js";
-export { type BaseTxContext, type StateAdapter } from "./state-adapter/state-adapter.js";
+export {
+  type BaseTxContext,
+  type StateAdapter,
+  type StateAdapterConfig,
+} from "./state-adapter/state-adapter.js";
 export {
   createTransactionHooks,
   withTransactionHooks,

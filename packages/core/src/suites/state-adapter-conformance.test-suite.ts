@@ -26,10 +26,14 @@ export const stateAdapterConformanceTestSuite = <T extends StateConformanceFixtu
       for (const testCase of group.cases) {
         it(
           testCase.name,
-          async ({ stateAdapter, generateId, generateInvalidId, poisonTransaction, skip }) => {
+          async ({ stateAdapter, transactionConcurrency, poisonTransaction, skip }) => {
             try {
               await testCase.run(
-                { stateAdapter, generateId, generateInvalidId, poisonTransaction },
+                {
+                  stateAdapter,
+                  transactionConcurrency,
+                  poisonTransaction,
+                },
                 defaultExpect,
               );
             } catch (err) {

@@ -17,6 +17,7 @@ test("state-sqlite-bun provider passes state adapter conformance", async () => {
 
     return {
       stateAdapter: adapter,
+      transactionConcurrency: "serialized",
       reset: async () => adapter.truncate(),
       dispose: async () => {
         db.close();

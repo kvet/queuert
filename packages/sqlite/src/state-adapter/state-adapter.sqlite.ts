@@ -23,14 +23,15 @@ import {
   type StateChain,
   type StateChainInfo,
   type StateChainStatus,
+  type StateCount,
   type StateDependentJob,
   type StateJob,
   type StateJobInfo,
   type StateJobStatus,
-  createIdValidator,
   decodeIdCursor,
   decodeTimestampWithIdCursor,
   encodeCursor,
+  resolveStateAdapterConfig,
 } from "queuert/internal";
 
 import { type SqliteStateProvider } from "../state-provider/state-provider.sqlite.js";
@@ -104,6 +105,12 @@ LEFT JOIN {{table_prefix}}job AS tail_job
     SELECT MAX(t.chain_index) FROM {{table_prefix}}job t
     WHERE t.chain_id = ${headAlias}.id AND t.chain_index > 0
   )`;
+
+/** Clamps a count read with `LIMIT countCap + 1` to `countCap`, flagging that more exist. */
+const capCount = (count: number, countCap: number): StateCount => ({
+  count: Math.min(count, countCap),
+  hasMore: count > countCap,
+});
 
 const jobStatusConditions: Record<StateJobStatus, string> = {
   blocked: "j.status = 'blocked'",
@@ -338,7 +345,6 @@ CREATE TABLE IF NOT EXISTS {{table_prefix}}migration (
   };
 };
 
-const COUNT_CAP = 10000;
 const SQL_IDENTIFIER_PATTERN = /^[a-zA-Z_][a-zA-Z0-9_]*$/;
 
 const validateSqlIdentifier = (value: string, name: string): void => {
@@ -498,6 +504,8 @@ export const createSqliteStateAdapter = async <
   idType = "TEXT",
   generateId: generateIdOption = () => crypto.randomUUID() as TIdType,
   validateId: validateIdOption,
+  maxBlockersPerJob: maxBlockersPerJobOption,
+  countCap: countCapOption,
 }: {
   /** SQLite state provider wrapping the database connection. */
   stateProvider: SqliteStateProvider<TTxContext>;
@@ -513,10 +521,24 @@ export const createSqliteStateAdapter = async <
    */
   generateId?: () => TIdType;
   /**
-   * Predicate returning `true` if the ID is acceptable. Runs on both generated
-   * and caller-supplied IDs; failures throw `InvalidJobIdError`.
+   * Predicate returning `true` if the ID is acceptable. Core runs it on both generated
+   * and caller-supplied IDs before writing; failures throw `InvalidJobIdError`.
    */
   validateId?: (id: TIdType) => boolean;
+  /**
+   * Most blocker chains a single job may declare. Declaring more throws
+   * `BlockerLimitExceededError` before any state is written.
+   *
+   * @defaultValue `100`
+   */
+  maxBlockersPerJob?: number;
+  /**
+   * Per-status count at which `countByChainTypeNames` and `countByJobTypeNames` stop
+   * counting and report `hasMore: true`. Higher values cost a longer index scan per count.
+   *
+   * @defaultValue `10_000`
+   */
+  countCap?: number;
 }): Promise<
   StateAdapter<TTxContext, TIdType> & {
     /** Create or upgrade the schema. */
@@ -530,10 +552,13 @@ export const createSqliteStateAdapter = async <
 
   let closed = false;
 
-  const { validateId, generateId } = createIdValidator<TIdType>({
-    generateIdOption,
-    validateIdOption,
+  const config = resolveStateAdapterConfig({
+    generateId: generateIdOption,
+    validateId: validateIdOption,
+    maxBlockersPerJob: maxBlockersPerJobOption,
+    countCap: countCapOption,
   });
+  const { countCap } = config;
 
   const applyTemplate = createTemplateApplier(
     { table_prefix: tablePrefix, id_type: idType },
@@ -634,7 +659,7 @@ export const createSqliteStateAdapter = async <
   };
 
   return {
-    transactionConcurrency: stateProvider.transactionConcurrency,
+    config,
 
     withTransaction: stateProvider.withTransaction,
 
@@ -798,9 +823,6 @@ WHERE j.id IN (SELECT value FROM json_each(?))
     },
 
     createJobs: async ({ txCtx, jobs }) => {
-      for (const job of jobs) {
-        if (job.id !== undefined) validateId(job.id, "caller");
-      }
       const results: (StateChain & { deduplicated: boolean })[] = Array.from({
         length: jobs.length,
       });
@@ -814,7 +836,7 @@ WHERE j.id IN (SELECT value FROM json_each(?))
 
       for (let i = 0; i < jobs.length; i++) {
         const job = jobs[i];
-        const { typeName, id: providedId, input, schedule, chainTraceContext, traceContext } = job;
+        const { typeName, id: newId, input, schedule, chainTraceContext, traceContext } = job;
 
         if (job.deduplication?.key) {
           const deduplicationKey = job.deduplication.key;
@@ -883,7 +905,6 @@ LIMIT 1
           firstIndexByBatchKey.set(batchKey, i);
         }
 
-        const newId = providedId ?? generateId();
         toInsert.push({
           index: i,
           id: newId,
@@ -977,12 +998,9 @@ RETURNING *
 
     continueJobs: async ({ txCtx, completedBy, jobs }) => {
       if (jobs.length === 0) return [];
-      for (const job of jobs) {
-        if (job.id !== undefined) validateId(job.id, "caller");
-      }
 
       const entries = jobs.map((job) => ({
-        new_id: job.id ?? generateId(),
+        new_id: job.id,
         type_name: job.typeName,
         input: job.input !== undefined ? JSON.stringify(job.input) : null,
         scheduled_at: job.schedule?.at?.toISOString().replace("T", " ").replace("Z", "") ?? null,
@@ -1865,12 +1883,12 @@ SELECT
   (SELECT count(*) FROM (
     SELECT 1 FROM {{table_prefix}}job
     WHERE type_name = je.value AND chain_index = 0 AND chain_status = 'running'
-    LIMIT ${COUNT_CAP + 1}
+    LIMIT ${countCap + 1}
   )) AS running_count,
   (SELECT count(*) FROM (
     SELECT 1 FROM {{table_prefix}}job
     WHERE type_name = je.value AND chain_index = 0 AND chain_status = 'completed'
-    LIMIT ${COUNT_CAP + 1}
+    LIMIT ${countCap + 1}
   )) AS completed_count
 FROM json_each(?) AS je
 `,
@@ -1899,14 +1917,8 @@ FROM json_each(?) AS je
             completed: { count: 0, hasMore: false },
           };
         return {
-          running: {
-            count: Math.min(r.running_count, COUNT_CAP),
-            hasMore: r.running_count > COUNT_CAP,
-          },
-          completed: {
-            count: Math.min(r.completed_count, COUNT_CAP),
-            hasMore: r.completed_count > COUNT_CAP,
-          },
+          running: capCount(r.running_count, countCap),
+          completed: capCount(r.completed_count, countCap),
         };
       });
     },
@@ -1922,10 +1934,10 @@ FROM json_each(?) AS je
               /* sql */ `
 SELECT
   je.value AS name,
-  (SELECT count(*) FROM (SELECT 1 FROM {{table_prefix}}job WHERE type_name = je.value AND status = 'blocked' LIMIT ${COUNT_CAP + 1})) AS blocked_count,
-  (SELECT count(*) FROM (SELECT 1 FROM {{table_prefix}}job WHERE type_name = je.value AND status = 'pending' LIMIT ${COUNT_CAP + 1})) AS pending_count,
-  (SELECT count(*) FROM (SELECT 1 FROM {{table_prefix}}job WHERE type_name = je.value AND status = 'running' LIMIT ${COUNT_CAP + 1})) AS running_count,
-  (SELECT count(*) FROM (SELECT 1 FROM {{table_prefix}}job WHERE type_name = je.value AND status = 'completed' LIMIT ${COUNT_CAP + 1})) AS completed_count
+  (SELECT count(*) FROM (SELECT 1 FROM {{table_prefix}}job WHERE type_name = je.value AND status = 'blocked' LIMIT ${countCap + 1})) AS blocked_count,
+  (SELECT count(*) FROM (SELECT 1 FROM {{table_prefix}}job WHERE type_name = je.value AND status = 'pending' LIMIT ${countCap + 1})) AS pending_count,
+  (SELECT count(*) FROM (SELECT 1 FROM {{table_prefix}}job WHERE type_name = je.value AND status = 'running' LIMIT ${countCap + 1})) AS running_count,
+  (SELECT count(*) FROM (SELECT 1 FROM {{table_prefix}}job WHERE type_name = je.value AND status = 'completed' LIMIT ${countCap + 1})) AS completed_count
 FROM json_each(?) AS je
 `,
               {
@@ -1957,22 +1969,10 @@ FROM json_each(?) AS je
             completed: { count: 0, hasMore: false },
           };
         return {
-          blocked: {
-            count: Math.min(r.blocked_count, COUNT_CAP),
-            hasMore: r.blocked_count > COUNT_CAP,
-          },
-          pending: {
-            count: Math.min(r.pending_count, COUNT_CAP),
-            hasMore: r.pending_count > COUNT_CAP,
-          },
-          running: {
-            count: Math.min(r.running_count, COUNT_CAP),
-            hasMore: r.running_count > COUNT_CAP,
-          },
-          completed: {
-            count: Math.min(r.completed_count, COUNT_CAP),
-            hasMore: r.completed_count > COUNT_CAP,
-          },
+          blocked: capCount(r.blocked_count, countCap),
+          pending: capCount(r.pending_count, countCap),
+          running: capCount(r.running_count, countCap),
+          completed: capCount(r.completed_count, countCap),
         };
       });
     },

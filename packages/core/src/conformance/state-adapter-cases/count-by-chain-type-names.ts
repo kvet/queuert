@@ -5,6 +5,46 @@ export const countByChainTypeNamesGroup: ConformanceGroup<StateConformanceFixtur
   name: "countByChainTypeNames",
   cases: [
     {
+      name: "countByChainTypeNames and countByJobTypeNames stop counting at config.countCap",
+      run: async ({ stateAdapter }, expect) => {
+        const { countCap } = stateAdapter.config;
+        if (countCap > 50) {
+          expect.skip("countCap too large to exercise");
+          return;
+        }
+        await stateAdapter.withTransaction(async (txCtx) =>
+          stateAdapter.createJobs({
+            txCtx,
+            jobs: [
+              ...Array.from({ length: countCap + 1 }, () => ({
+                id: stateAdapter.config.generateId(),
+                typeName: "over-cap",
+                input: null,
+              })),
+              ...Array.from({ length: countCap }, () => ({
+                id: stateAdapter.config.generateId(),
+                typeName: "at-cap",
+                input: null,
+              })),
+            ],
+          }),
+        );
+
+        expect(
+          await stateAdapter.countByChainTypeNames({ typeNames: ["over-cap", "at-cap"] }),
+        ).toEqual([
+          { running: { count: countCap, hasMore: true }, completed: { count: 0, hasMore: false } },
+          { running: { count: countCap, hasMore: false }, completed: { count: 0, hasMore: false } },
+        ]);
+
+        const [over, at] = await stateAdapter.countByJobTypeNames({
+          typeNames: ["over-cap", "at-cap"],
+        });
+        expect(over.pending).toEqual({ count: countCap, hasMore: true });
+        expect(at.pending).toEqual({ count: countCap, hasMore: false });
+      },
+    },
+    {
       name: "countByChainTypeNames returns empty array for empty input",
       run: async ({ stateAdapter }, expect) => {
         const result = await stateAdapter.countByChainTypeNames({ typeNames: [] });
@@ -30,9 +70,9 @@ export const countByChainTypeNamesGroup: ConformanceGroup<StateConformanceFixtur
           stateAdapter.createJobs({
             txCtx,
             jobs: [
-              { typeName: "chain-count-a", input: null },
-              { typeName: "chain-count-a", input: null },
-              { typeName: "chain-count-b", input: null },
+              { id: stateAdapter.config.generateId(), typeName: "chain-count-a", input: null },
+              { id: stateAdapter.config.generateId(), typeName: "chain-count-a", input: null },
+              { id: stateAdapter.config.generateId(), typeName: "chain-count-b", input: null },
             ],
           }),
         );
@@ -54,7 +94,7 @@ export const countByChainTypeNamesGroup: ConformanceGroup<StateConformanceFixtur
         await stateAdapter.withTransaction(async (txCtx) =>
           stateAdapter.createJobs({
             txCtx,
-            jobs: [{ typeName: "chain-done", input: null }],
+            jobs: [{ id: stateAdapter.config.generateId(), typeName: "chain-done", input: null }],
           }),
         );
 
@@ -84,9 +124,9 @@ export const countByChainTypeNamesGroup: ConformanceGroup<StateConformanceFixtur
           stateAdapter.createJobs({
             txCtx,
             jobs: [
-              { typeName: "chain-z", input: null },
-              { typeName: "chain-a", input: null },
-              { typeName: "chain-a", input: null },
+              { id: stateAdapter.config.generateId(), typeName: "chain-z", input: null },
+              { id: stateAdapter.config.generateId(), typeName: "chain-a", input: null },
+              { id: stateAdapter.config.generateId(), typeName: "chain-a", input: null },
             ],
           }),
         );

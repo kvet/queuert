@@ -14,7 +14,6 @@ export const createPrismaPgStateProvider = <TPrisma extends PrismaLikeClient>({
   prisma: TPrisma;
 }): PgStateProvider<PrismaPgContext<TPrisma>> => {
   return {
-    transactionConcurrency: "concurrent",
     withTransaction: async (cb) => {
       return prisma.$transaction(async (prisma: TPrisma) => cb({ prisma }));
     },

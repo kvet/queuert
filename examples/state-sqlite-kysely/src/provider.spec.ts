@@ -22,6 +22,7 @@ test("state-sqlite-kysely provider passes state adapter conformance", async () =
 
     return {
       stateAdapter: adapter,
+      transactionConcurrency: "serialized",
       reset: async () => adapter.truncate(),
       dispose: async () => {
         await db.destroy();

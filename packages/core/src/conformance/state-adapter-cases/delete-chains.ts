@@ -14,7 +14,7 @@ export const deleteChainsGroup: ConformanceGroup<StateConformanceFixture> = {
         const [stateChain] = await stateAdapter.withTransaction(async (txCtx) =>
           stateAdapter.createJobs({
             txCtx,
-            jobs: [{ typeName: "delete-test", input: null }],
+            jobs: [{ id: stateAdapter.config.generateId(), typeName: "delete-test", input: null }],
           }),
         );
 
@@ -38,14 +38,14 @@ export const deleteChainsGroup: ConformanceGroup<StateConformanceFixture> = {
         const [chainA] = await stateAdapter.withTransaction(async (txCtx) =>
           stateAdapter.createJobs({
             txCtx,
-            jobs: [{ typeName: "chain-a", input: null }],
+            jobs: [{ id: stateAdapter.config.generateId(), typeName: "chain-a", input: null }],
           }),
         );
 
         const [chainB] = await stateAdapter.withTransaction(async (txCtx) =>
           stateAdapter.createJobs({
             txCtx,
-            jobs: [{ typeName: "chain-b", input: null }],
+            jobs: [{ id: stateAdapter.config.generateId(), typeName: "chain-b", input: null }],
           }),
         );
 
@@ -67,13 +67,20 @@ export const deleteChainsGroup: ConformanceGroup<StateConformanceFixture> = {
         const [stateChain] = await stateAdapter.withTransaction(async (txCtx) =>
           stateAdapter.createJobs({
             txCtx,
-            jobs: [{ typeName: "delete-multi", input: null }],
+            jobs: [{ id: stateAdapter.config.generateId(), typeName: "delete-multi", input: null }],
           }),
         );
         const [continued] = await stateAdapter.withTransaction(async (txCtx) =>
           stateAdapter.continueJobs({
             txCtx,
-            jobs: [{ typeName: "delete-multi-step", continueFromId: stateChain.id, input: null }],
+            jobs: [
+              {
+                id: stateAdapter.config.generateId(),
+                typeName: "delete-multi-step",
+                continueFromId: stateChain.id,
+                input: null,
+              },
+            ],
           }),
         );
         const continuationId = continued!.continuation.id;
@@ -105,8 +112,8 @@ export const deleteChainsGroup: ConformanceGroup<StateConformanceFixture> = {
           stateAdapter.createJobs({
             txCtx,
             jobs: [
-              { typeName: "blocker", input: null },
-              { typeName: "main", input: null },
+              { id: stateAdapter.config.generateId(), typeName: "blocker", input: null },
+              { id: stateAdapter.config.generateId(), typeName: "main", input: null },
             ],
           }),
         );
@@ -146,14 +153,14 @@ export const deleteChainsGroup: ConformanceGroup<StateConformanceFixture> = {
         const [blockerChain] = await stateAdapter.withTransaction(async (txCtx) =>
           stateAdapter.createJobs({
             txCtx,
-            jobs: [{ typeName: "blocker", input: null }],
+            jobs: [{ id: stateAdapter.config.generateId(), typeName: "blocker", input: null }],
           }),
         );
 
         const [mainChain] = await stateAdapter.withTransaction(async (txCtx) =>
           stateAdapter.createJobs({
             txCtx,
-            jobs: [{ typeName: "main", input: null }],
+            jobs: [{ id: stateAdapter.config.generateId(), typeName: "main", input: null }],
           }),
         );
 
@@ -197,14 +204,21 @@ export const deleteChainsGroup: ConformanceGroup<StateConformanceFixture> = {
         const [stateChain] = await stateAdapter.withTransaction(async (txCtx) =>
           stateAdapter.createJobs({
             txCtx,
-            jobs: [{ typeName: "delete-repeated", input: null }],
+            jobs: [
+              { id: stateAdapter.config.generateId(), typeName: "delete-repeated", input: null },
+            ],
           }),
         );
         const [continued] = await stateAdapter.withTransaction(async (txCtx) =>
           stateAdapter.continueJobs({
             txCtx,
             jobs: [
-              { typeName: "delete-repeated:step", continueFromId: stateChain.id, input: null },
+              {
+                id: stateAdapter.config.generateId(),
+                typeName: "delete-repeated:step",
+                continueFromId: stateChain.id,
+                input: null,
+              },
             ],
           }),
         );
@@ -284,9 +298,21 @@ export const deleteChainsGroup: ConformanceGroup<StateConformanceFixture> = {
             stateAdapter.createJobs({
               txCtx,
               jobs: [
-                { typeName: "mixed-delete-blocker", input: null },
-                { typeName: "mixed-delete-main", input: null },
-                { typeName: "mixed-delete-free", input: null },
+                {
+                  id: stateAdapter.config.generateId(),
+                  typeName: "mixed-delete-blocker",
+                  input: null,
+                },
+                {
+                  id: stateAdapter.config.generateId(),
+                  typeName: "mixed-delete-main",
+                  input: null,
+                },
+                {
+                  id: stateAdapter.config.generateId(),
+                  typeName: "mixed-delete-free",
+                  input: null,
+                },
               ],
             }),
         );
@@ -311,14 +337,16 @@ export const deleteChainsGroup: ConformanceGroup<StateConformanceFixture> = {
     },
     {
       name: "reports undefined for a missing id and deletes the rest",
-      run: async ({ stateAdapter, generateId }, expect) => {
+      run: async ({ stateAdapter }, expect) => {
         const [stateChain] = await stateAdapter.withTransaction(async (txCtx) =>
           stateAdapter.createJobs({
             txCtx,
-            jobs: [{ typeName: "delete-missing", input: null }],
+            jobs: [
+              { id: stateAdapter.config.generateId(), typeName: "delete-missing", input: null },
+            ],
           }),
         );
-        const missingId = (generateId ?? (() => crypto.randomUUID()))();
+        const missingId = stateAdapter.config.generateId();
 
         const [deleted, missing] = await stateAdapter.withTransaction(async (txCtx) =>
           stateAdapter.deleteChains({ txCtx, chainIds: [stateChain.id, missingId] }),
@@ -335,7 +363,13 @@ export const deleteChainsGroup: ConformanceGroup<StateConformanceFixture> = {
         const [stateChain] = await stateAdapter.withTransaction(async (txCtx) =>
           stateAdapter.createJobs({
             txCtx,
-            jobs: [{ typeName: "delete-continuation-id", input: null }],
+            jobs: [
+              {
+                id: stateAdapter.config.generateId(),
+                typeName: "delete-continuation-id",
+                input: null,
+              },
+            ],
           }),
         );
         const [continued] = await stateAdapter.withTransaction(async (txCtx) =>
@@ -343,6 +377,7 @@ export const deleteChainsGroup: ConformanceGroup<StateConformanceFixture> = {
             txCtx,
             jobs: [
               {
+                id: stateAdapter.config.generateId(),
                 typeName: "delete-continuation-id:step",
                 continueFromId: stateChain.id,
                 input: null,
@@ -363,8 +398,8 @@ export const deleteChainsGroup: ConformanceGroup<StateConformanceFixture> = {
     },
     {
       name: "sees a blocker reference committed while it waited on the head lock",
-      run: async ({ stateAdapter }, expect) => {
-        if (stateAdapter.transactionConcurrency === "serialized") {
+      run: async ({ stateAdapter, transactionConcurrency }, expect) => {
+        if (transactionConcurrency !== "concurrent") {
           expect.skip("requires concurrent transactions");
           return;
         }
@@ -372,7 +407,13 @@ export const deleteChainsGroup: ConformanceGroup<StateConformanceFixture> = {
         const [blockerChain] = await stateAdapter.withTransaction(async (txCtx) =>
           stateAdapter.createJobs({
             txCtx,
-            jobs: [{ typeName: "late-reference-blocker", input: null }],
+            jobs: [
+              {
+                id: stateAdapter.config.generateId(),
+                typeName: "late-reference-blocker",
+                input: null,
+              },
+            ],
           }),
         );
 
@@ -388,7 +429,13 @@ export const deleteChainsGroup: ConformanceGroup<StateConformanceFixture> = {
         const adderTx = stateAdapter.withTransaction(async (txCtx) => {
           const [blockedChain] = await stateAdapter.createJobs({
             txCtx,
-            jobs: [{ typeName: "late-reference-blocked", input: null }],
+            jobs: [
+              {
+                id: stateAdapter.config.generateId(),
+                typeName: "late-reference-blocked",
+                input: null,
+              },
+            ],
           });
           await stateAdapter.addJobsBlockers({
             txCtx,
@@ -428,8 +475,8 @@ export const deleteChainsGroup: ConformanceGroup<StateConformanceFixture> = {
     },
     {
       name: "deletes a continuation committed while it waited on the head lock",
-      run: async ({ stateAdapter }, expect) => {
-        if (stateAdapter.transactionConcurrency === "serialized") {
+      run: async ({ stateAdapter, transactionConcurrency }, expect) => {
+        if (transactionConcurrency !== "concurrent") {
           expect.skip("requires concurrent transactions");
           return;
         }
@@ -437,7 +484,9 @@ export const deleteChainsGroup: ConformanceGroup<StateConformanceFixture> = {
         const [stateChain] = await stateAdapter.withTransaction(async (txCtx) =>
           stateAdapter.createJobs({
             txCtx,
-            jobs: [{ typeName: "late-continuation", input: null }],
+            jobs: [
+              { id: stateAdapter.config.generateId(), typeName: "late-continuation", input: null },
+            ],
           }),
         );
 
@@ -456,6 +505,7 @@ export const deleteChainsGroup: ConformanceGroup<StateConformanceFixture> = {
             txCtx,
             jobs: [
               {
+                id: stateAdapter.config.generateId(),
                 typeName: "late-continuation:step",
                 input: null,
                 continueFromId: stateChain.head.id,

@@ -148,7 +148,6 @@ const createValidatingProvider = (
 ): SqliteStateProvider<BetterSqlite3Context> => {
   const inner = createBetterSqlite3Provider({ db });
   return {
-    transactionConcurrency: inner.transactionConcurrency,
     withTransaction: inner.withTransaction,
     executeSql: async (args) => {
       const stmt = validateBeforeExecute(db, args);
@@ -164,6 +163,7 @@ describe("SQLite SQL contract", () => {
   const conformanceIt = it.extend<{
     db: Database.Database;
     stateAdapter: StateAdapter<{ $test: true }, string>;
+    transactionConcurrency: "concurrent" | "serialized";
   }>({
     db: [
       // oxlint-disable-next-line no-empty-pattern
@@ -171,6 +171,13 @@ describe("SQLite SQL contract", () => {
         const db = new Database(":memory:");
         await use(db);
         db.close();
+      },
+      { scope: "test" },
+    ],
+    transactionConcurrency: [
+      // oxlint-disable-next-line no-empty-pattern
+      async ({}, use) => {
+        await use("serialized");
       },
       { scope: "test" },
     ],

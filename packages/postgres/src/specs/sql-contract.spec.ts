@@ -233,7 +233,6 @@ const createValidatingProvider = (
   // Serialize: concurrent BEGINs on the shared validation connection would nest illegally.
   let validationQueue: Promise<unknown> = Promise.resolve();
   return {
-    transactionConcurrency: inner.transactionConcurrency,
     withTransaction: inner.withTransaction,
     executeSql: async (args) => {
       const next = validationQueue.then(async () =>
@@ -297,12 +296,20 @@ const it = extendWithResourceLeakDetection(extendWithPostgres(baseIt, import.met
   .extend<{
     pool: Pool;
     stateAdapter: StateAdapter<{ $test: true }, string>;
+    transactionConcurrency: "concurrent" | "serialized";
   }>({
     pool: [
       async ({ postgresConnectionString }, use) => {
         const pool = new Pool({ connectionString: postgresConnectionString, idleTimeoutMillis: 0 });
         await use(pool);
         await pool.end();
+      },
+      { scope: "test" },
+    ],
+    transactionConcurrency: [
+      // oxlint-disable-next-line no-empty-pattern
+      async ({}, use) => {
+        await use("concurrent");
       },
       { scope: "test" },
     ],

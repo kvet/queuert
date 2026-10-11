@@ -24,7 +24,7 @@ const createJob = async (
   const [stateChain] = await stateAdapter.withTransaction(async (txCtx) =>
     stateAdapter.createJobs({
       txCtx,
-      jobs: [{ typeName, input }],
+      jobs: [{ id: stateAdapter.config.generateId(), typeName, input }],
     }),
   );
   return stateChain.head;
@@ -40,7 +40,7 @@ const createContinuation = async (
     stateAdapter.continueJobs({
       txCtx,
       completedBy: "worker-1",
-      jobs: [{ typeName, continueFromId, input }],
+      jobs: [{ id: stateAdapter.config.generateId(), typeName, continueFromId, input }],
     }),
   );
   return continued!.continuation;
@@ -734,7 +734,14 @@ describe("Dashboard API", () => {
       const [stateChain] = await stateAdapter.withTransaction(async (txCtx) =>
         stateAdapter.createJobs({
           txCtx,
-          jobs: [{ typeName: "scheduled-type", input: null, schedule: { afterMs: 60_000 } }],
+          jobs: [
+            {
+              id: stateAdapter.config.generateId(),
+              typeName: "scheduled-type",
+              input: null,
+              schedule: { afterMs: 60_000 },
+            },
+          ],
         }),
       );
 

@@ -853,7 +853,7 @@ export const operationalCoverageGroups: IndexCoverageGroup[] = [
           await stateAdapter.withTransaction(async (txCtx) =>
             stateAdapter.createJobs({
               txCtx,
-              jobs: [{ typeName: "idx:test", input: {} }],
+              jobs: [{ id: stateAdapter.config.generateId(), typeName: "idx:test", input: {} }],
             }),
           );
         },
@@ -867,6 +867,7 @@ export const operationalCoverageGroups: IndexCoverageGroup[] = [
               txCtx,
               jobs: [
                 {
+                  id: stateAdapter.config.generateId(),
                   typeName: "idx:dedup",
                   input: {},
                   deduplication: { key: "idx-dedup-key", scope: "running" },
@@ -899,7 +900,14 @@ export const operationalCoverageGroups: IndexCoverageGroup[] = [
               stateAdapter.continueJobs({
                 txCtx,
                 completedBy: "w-cont",
-                jobs: [{ typeName: "idx:cont", input: {}, continueFromId: acquired.id }],
+                jobs: [
+                  {
+                    id: stateAdapter.config.generateId(),
+                    typeName: "idx:cont",
+                    input: {},
+                    continueFromId: acquired.id,
+                  },
+                ],
               }),
             );
           };
@@ -919,10 +927,7 @@ export const operationalCoverageGroups: IndexCoverageGroup[] = [
             stateAdapter.createJobs({
               txCtx,
               jobs: [
-                {
-                  typeName: "idx:blocker-target",
-                  input: {},
-                },
+                { id: stateAdapter.config.generateId(), typeName: "idx:blocker-target", input: {} },
               ],
             }),
           );
@@ -1119,11 +1124,20 @@ export const operationalCoverageGroups: IndexCoverageGroup[] = [
           const chainId = await stateAdapter.withTransaction(async (txCtx) => {
             const [chain] = await stateAdapter.createJobs({
               txCtx,
-              jobs: [{ typeName: "idx:delete-multi", input: {} }],
+              jobs: [
+                { id: stateAdapter.config.generateId(), typeName: "idx:delete-multi", input: {} },
+              ],
             });
             await stateAdapter.continueJobs({
               txCtx,
-              jobs: [{ typeName: "idx:delete-multi:step", input: {}, continueFromId: chain.id }],
+              jobs: [
+                {
+                  id: stateAdapter.config.generateId(),
+                  typeName: "idx:delete-multi:step",
+                  input: {},
+                  continueFromId: chain.id,
+                },
+              ],
             });
             return chain.id;
           });

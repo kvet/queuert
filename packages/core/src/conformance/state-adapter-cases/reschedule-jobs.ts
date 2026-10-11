@@ -11,7 +11,14 @@ export const rescheduleJobsGroup: ConformanceGroup<StateConformanceFixture> = {
         const [createdChain] = await stateAdapter.withTransaction(async (txCtx) =>
           stateAdapter.createJobs({
             txCtx,
-            jobs: [{ typeName: "trigger-test", input: null, schedule: { at: futureDate } }],
+            jobs: [
+              {
+                id: stateAdapter.config.generateId(),
+                typeName: "trigger-test",
+                input: null,
+                schedule: { at: futureDate },
+              },
+            ],
           }),
         );
 
@@ -38,7 +45,14 @@ export const rescheduleJobsGroup: ConformanceGroup<StateConformanceFixture> = {
         const [createdChain] = await stateAdapter.withTransaction(async (txCtx) =>
           stateAdapter.createJobs({
             txCtx,
-            jobs: [{ typeName: "trigger-acquire", input: null, schedule: { at: futureDate } }],
+            jobs: [
+              {
+                id: stateAdapter.config.generateId(),
+                typeName: "trigger-acquire",
+                input: null,
+                schedule: { at: futureDate },
+              },
+            ],
           }),
         );
 
@@ -74,7 +88,12 @@ export const rescheduleJobsGroup: ConformanceGroup<StateConformanceFixture> = {
           stateAdapter.createJobs({
             txCtx,
             jobs: [
-              { typeName: "trigger-fields", input: { key: "value" }, schedule: { at: futureDate } },
+              {
+                id: stateAdapter.config.generateId(),
+                typeName: "trigger-fields",
+                input: { key: "value" },
+                schedule: { at: futureDate },
+              },
             ],
           }),
         );
@@ -98,9 +117,24 @@ export const rescheduleJobsGroup: ConformanceGroup<StateConformanceFixture> = {
           stateAdapter.createJobs({
             txCtx,
             jobs: [
-              { typeName: "trigger-batch", input: { i: 1 }, schedule: { at: futureDate } },
-              { typeName: "trigger-batch", input: { i: 2 }, schedule: { at: futureDate } },
-              { typeName: "trigger-batch", input: { i: 3 }, schedule: { at: futureDate } },
+              {
+                id: stateAdapter.config.generateId(),
+                typeName: "trigger-batch",
+                input: { i: 1 },
+                schedule: { at: futureDate },
+              },
+              {
+                id: stateAdapter.config.generateId(),
+                typeName: "trigger-batch",
+                input: { i: 2 },
+                schedule: { at: futureDate },
+              },
+              {
+                id: stateAdapter.config.generateId(),
+                typeName: "trigger-batch",
+                input: { i: 3 },
+                schedule: { at: futureDate },
+              },
             ],
           }),
         );
@@ -127,7 +161,14 @@ export const rescheduleJobsGroup: ConformanceGroup<StateConformanceFixture> = {
         const [createdChain] = await stateAdapter.withTransaction(async (txCtx) =>
           stateAdapter.createJobs({
             txCtx,
-            jobs: [{ typeName: "trigger-duplicate", input: null, schedule: { at: futureDate } }],
+            jobs: [
+              {
+                id: stateAdapter.config.generateId(),
+                typeName: "trigger-duplicate",
+                input: null,
+                schedule: { at: futureDate },
+              },
+            ],
           }),
         );
 
@@ -163,7 +204,14 @@ export const rescheduleJobsGroup: ConformanceGroup<StateConformanceFixture> = {
         const [createdChain] = await stateAdapter.withTransaction(async (txCtx) =>
           stateAdapter.createJobs({
             txCtx,
-            jobs: [{ typeName: "trigger-missing", input: null, schedule: { at: futureDate } }],
+            jobs: [
+              {
+                id: stateAdapter.config.generateId(),
+                typeName: "trigger-missing",
+                input: null,
+                schedule: { at: futureDate },
+              },
+            ],
           }),
         );
 
@@ -187,8 +235,18 @@ export const rescheduleJobsGroup: ConformanceGroup<StateConformanceFixture> = {
           stateAdapter.createJobs({
             txCtx,
             jobs: [
-              { typeName: "trigger-not-pending", input: null, schedule: { at: futureDate } },
-              { typeName: "trigger-not-pending", input: null, schedule: { at: futureDate } },
+              {
+                id: stateAdapter.config.generateId(),
+                typeName: "trigger-not-pending",
+                input: null,
+                schedule: { at: futureDate },
+              },
+              {
+                id: stateAdapter.config.generateId(),
+                typeName: "trigger-not-pending",
+                input: null,
+                schedule: { at: futureDate },
+              },
             ],
           }),
         );
@@ -219,7 +277,9 @@ export const rescheduleJobsGroup: ConformanceGroup<StateConformanceFixture> = {
         const [createdChain] = await stateAdapter.withTransaction(async (txCtx) =>
           stateAdapter.createJobs({
             txCtx,
-            jobs: [{ typeName: "resched-fail-test", input: null }],
+            jobs: [
+              { id: stateAdapter.config.generateId(), typeName: "resched-fail-test", input: null },
+            ],
           }),
         );
 
@@ -270,7 +330,13 @@ export const rescheduleJobsGroup: ConformanceGroup<StateConformanceFixture> = {
         const [createdChain] = await stateAdapter.withTransaction(async (txCtx) =>
           stateAdapter.createJobs({
             txCtx,
-            jobs: [{ typeName: "resched-running-test", input: null }],
+            jobs: [
+              {
+                id: stateAdapter.config.generateId(),
+                typeName: "resched-running-test",
+                input: null,
+              },
+            ],
           }),
         );
 
@@ -305,7 +371,9 @@ export const rescheduleJobsGroup: ConformanceGroup<StateConformanceFixture> = {
         const [createdChain] = await stateAdapter.withTransaction(async (txCtx) =>
           stateAdapter.createJobs({
             txCtx,
-            jobs: [{ typeName: "resched-no-attempt", input: null }],
+            jobs: [
+              { id: stateAdapter.config.generateId(), typeName: "resched-no-attempt", input: null },
+            ],
           }),
         );
 
@@ -333,7 +401,7 @@ export const rescheduleJobsGroup: ConformanceGroup<StateConformanceFixture> = {
         const [createdChain] = await stateAdapter.withTransaction(async (txCtx) =>
           stateAdapter.createJobs({
             txCtx,
-            jobs: [{ typeName: "resched-at", input: null }],
+            jobs: [{ id: stateAdapter.config.generateId(), typeName: "resched-at", input: null }],
           }),
         );
 
@@ -359,7 +427,9 @@ export const rescheduleJobsGroup: ConformanceGroup<StateConformanceFixture> = {
         const [createdChain] = await stateAdapter.withTransaction(async (txCtx) =>
           stateAdapter.createJobs({
             txCtx,
-            jobs: [{ typeName: "resched-after", input: null }],
+            jobs: [
+              { id: stateAdapter.config.generateId(), typeName: "resched-after", input: null },
+            ],
           }),
         );
 
@@ -382,6 +452,7 @@ export const rescheduleJobsGroup: ConformanceGroup<StateConformanceFixture> = {
             txCtx,
             jobs: [
               {
+                id: stateAdapter.config.generateId(),
                 typeName: "resched-past",
                 input: null,
                 schedule: { at: new Date(Date.now() + 60_000) },
@@ -410,8 +481,9 @@ export const rescheduleJobsGroup: ConformanceGroup<StateConformanceFixture> = {
           stateAdapter.createJobs({
             txCtx,
             jobs: [
-              { typeName: "resched-blocker", input: null },
+              { id: stateAdapter.config.generateId(), typeName: "resched-blocker", input: null },
               {
+                id: stateAdapter.config.generateId(),
                 typeName: "resched-blocked",
                 input: null,
                 schedule: { at: new Date(Date.now() + 60_000) },
@@ -457,6 +529,7 @@ export const rescheduleJobsGroup: ConformanceGroup<StateConformanceFixture> = {
             txCtx,
             jobs: [
               {
+                id: stateAdapter.config.generateId(),
                 typeName: "resched-now",
                 input: null,
                 schedule: { at: new Date(Date.now() + 60_000) },

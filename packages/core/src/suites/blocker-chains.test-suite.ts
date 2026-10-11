@@ -274,14 +274,21 @@ export const blockerChainsTestSuite = ({ it }: { it: TestAPI<TestSuiteContext> }
           transactionHooks,
           typeName: "main",
           input: null,
-          blockers: Array.from({ length: 101 }, () => blockerChain),
+          blockers: Array.from(
+            { length: stateAdapter.config.maxBlockersPerJob + 1 },
+            () => blockerChain,
+          ),
         }),
       );
       expect.fail("Expected createChain to throw an error due to exceeding blocker limit");
     } catch (error) {
       expect(error).toBeInstanceOf(BlockerLimitExceededError);
-      expect((error as BlockerLimitExceededError).count).toBe(101);
-      expect((error as BlockerLimitExceededError).limit).toBe(100);
+      expect((error as BlockerLimitExceededError).count).toBe(
+        stateAdapter.config.maxBlockersPerJob + 1,
+      );
+      expect((error as BlockerLimitExceededError).limit).toBe(
+        stateAdapter.config.maxBlockersPerJob,
+      );
       expect((error as BlockerLimitExceededError).typeName).toBe("main");
     }
   });
@@ -351,14 +358,19 @@ export const blockerChainsTestSuite = ({ it }: { it: TestAPI<TestSuiteContext> }
                     continueWith: {
                       typeName: "next",
                       input: null,
-                      blockers: Array.from({ length: 101 }, () => blockerChain),
+                      blockers: Array.from(
+                        { length: stateAdapter.config.maxBlockersPerJob + 1 },
+                        () => blockerChain,
+                      ),
                     },
                   }),
                 );
               }
 
               expect(job.lastAttemptError).toContain("BlockerLimitExceededError");
-              expect(job.lastAttemptError).toContain("exceeding the limit of 100");
+              expect(job.lastAttemptError).toContain(
+                `exceeding the limit of ${stateAdapter.config.maxBlockersPerJob}`,
+              );
               return complete(async ({ finish }) => finish({ output: null }));
             },
           },
@@ -958,6 +970,7 @@ export const blockerChainsTestSuite = ({ it }: { it: TestAPI<TestSuiteContext> }
   });
 
   it("unblocks all jobs when multiple shared blocker chains complete concurrently", async ({
+    transactionConcurrency,
     stateAdapter,
     notifyAdapter,
     withTransaction,
@@ -967,7 +980,7 @@ export const blockerChainsTestSuite = ({ it }: { it: TestAPI<TestSuiteContext> }
     expect,
     skip,
   }) => {
-    if (stateAdapter.transactionConcurrency === "serialized") return skip();
+    if (transactionConcurrency === "serialized") return skip();
     const blockerCount = 5;
     const mainCount = 5;
 

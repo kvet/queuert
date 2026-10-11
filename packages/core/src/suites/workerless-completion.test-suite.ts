@@ -279,9 +279,10 @@ export const workerlessCompletionTestSuite = ({ it }: { it: TestAPI<TestSuiteCon
                   continueWith: {
                     typeName: "next",
                     input: null,
-                    blockers: Array.from({ length: 101 }, () => blockerChain) as [
-                      typeof blockerChain,
-                    ],
+                    blockers: Array.from(
+                      { length: stateAdapter.config.maxBlockersPerJob + 1 },
+                      () => blockerChain,
+                    ) as [typeof blockerChain],
                   },
                 }),
               );
@@ -292,8 +293,12 @@ export const workerlessCompletionTestSuite = ({ it }: { it: TestAPI<TestSuiteCon
       expect.fail("Expected continueWith to throw an error due to exceeding blocker limit");
     } catch (error) {
       expect(error).toBeInstanceOf(BlockerLimitExceededError);
-      expect((error as BlockerLimitExceededError).count).toBe(101);
-      expect((error as BlockerLimitExceededError).limit).toBe(100);
+      expect((error as BlockerLimitExceededError).count).toBe(
+        stateAdapter.config.maxBlockersPerJob + 1,
+      );
+      expect((error as BlockerLimitExceededError).limit).toBe(
+        stateAdapter.config.maxBlockersPerJob,
+      );
       expect((error as BlockerLimitExceededError).typeName).toBe("next");
     }
   });
@@ -851,9 +856,10 @@ export const workerlessCompletionTestSuite = ({ it }: { it: TestAPI<TestSuiteCon
                   continueWith: {
                     typeName: "archive",
                     input: { requestId: "req-1" },
-                    blockers: Array.from({ length: 101 }, () => blockerChain) as [
-                      typeof blockerChain,
-                    ],
+                    blockers: Array.from(
+                      { length: stateAdapter.config.maxBlockersPerJob + 1 },
+                      () => blockerChain,
+                    ) as [typeof blockerChain],
                   },
                 }),
               ).rejects.toBeInstanceOf(BlockerLimitExceededError);

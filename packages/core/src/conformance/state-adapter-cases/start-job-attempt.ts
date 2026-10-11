@@ -13,14 +13,26 @@ export const startJobAttemptGroup: ConformanceGroup<StateConformanceFixture> = {
         await stateAdapter.withTransaction(async (txCtx) =>
           stateAdapter.createJobs({
             txCtx,
-            jobs: [{ typeName: "acquire-test", input: { order: 1 } }],
+            jobs: [
+              {
+                id: stateAdapter.config.generateId(),
+                typeName: "acquire-test",
+                input: { order: 1 },
+              },
+            ],
           }),
         );
 
         await stateAdapter.withTransaction(async (txCtx) =>
           stateAdapter.createJobs({
             txCtx,
-            jobs: [{ typeName: "acquire-test", input: { order: 2 } }],
+            jobs: [
+              {
+                id: stateAdapter.config.generateId(),
+                typeName: "acquire-test",
+                input: { order: 2 },
+              },
+            ],
           }),
         );
 
@@ -61,14 +73,14 @@ export const startJobAttemptGroup: ConformanceGroup<StateConformanceFixture> = {
         const [blockerChain] = await stateAdapter.withTransaction(async (txCtx) =>
           stateAdapter.createJobs({
             txCtx,
-            jobs: [{ typeName: "blocked-skip", input: null }],
+            jobs: [{ id: stateAdapter.config.generateId(), typeName: "blocked-skip", input: null }],
           }),
         );
 
         const [mainChain] = await stateAdapter.withTransaction(async (txCtx) =>
           stateAdapter.createJobs({
             txCtx,
-            jobs: [{ typeName: "blocked-skip", input: null }],
+            jobs: [{ id: stateAdapter.config.generateId(), typeName: "blocked-skip", input: null }],
           }),
         );
 
@@ -99,7 +111,7 @@ export const startJobAttemptGroup: ConformanceGroup<StateConformanceFixture> = {
         const [blockerChain] = await stateAdapter.withTransaction(async (txCtx) =>
           stateAdapter.createJobs({
             txCtx,
-            jobs: [{ typeName: "blocked-only", input: null }],
+            jobs: [{ id: stateAdapter.config.generateId(), typeName: "blocked-only", input: null }],
           }),
         );
 
@@ -114,14 +126,20 @@ export const startJobAttemptGroup: ConformanceGroup<StateConformanceFixture> = {
         const [blockedChain] = await stateAdapter.withTransaction(async (txCtx) =>
           stateAdapter.createJobs({
             txCtx,
-            jobs: [{ typeName: "blocked-only", input: { value: "blocked" } }],
+            jobs: [
+              {
+                id: stateAdapter.config.generateId(),
+                typeName: "blocked-only",
+                input: { value: "blocked" },
+              },
+            ],
           }),
         );
 
         const [anotherBlockerChain] = await stateAdapter.withTransaction(async (txCtx) =>
           stateAdapter.createJobs({
             txCtx,
-            jobs: [{ typeName: "blocked-only", input: null }],
+            jobs: [{ id: stateAdapter.config.generateId(), typeName: "blocked-only", input: null }],
           }),
         );
 
@@ -165,7 +183,14 @@ export const startJobAttemptGroup: ConformanceGroup<StateConformanceFixture> = {
         await stateAdapter.withTransaction(async (txCtx) =>
           stateAdapter.createJobs({
             txCtx,
-            jobs: [{ typeName: "future-acquire", input: null, schedule: { afterMs: 60_000 } }],
+            jobs: [
+              {
+                id: stateAdapter.config.generateId(),
+                typeName: "future-acquire",
+                input: null,
+                schedule: { afterMs: 60_000 },
+              },
+            ],
           }),
         );
 
@@ -182,8 +207,8 @@ export const startJobAttemptGroup: ConformanceGroup<StateConformanceFixture> = {
     },
     {
       name: "parallel startJobAttempt calls return distinct jobs (no double-dispatch)",
-      run: async ({ stateAdapter }, expect) => {
-        if (stateAdapter.transactionConcurrency === "serialized") {
+      run: async ({ stateAdapter, transactionConcurrency }, expect) => {
+        if (transactionConcurrency !== "concurrent") {
           expect.skip("requires concurrent transactions");
           return;
         }
@@ -192,6 +217,7 @@ export const startJobAttemptGroup: ConformanceGroup<StateConformanceFixture> = {
           stateAdapter.createJobs({
             txCtx,
             jobs: Array.from({ length: count }, (_, i) => ({
+              id: stateAdapter.config.generateId(),
               typeName: "acquire-concurrency",
               input: { index: i },
             })),
@@ -223,7 +249,14 @@ export const startJobAttemptGroup: ConformanceGroup<StateConformanceFixture> = {
         const [stateChain] = await stateAdapter.withTransaction(async (txCtx) =>
           stateAdapter.createJobs({
             txCtx,
-            jobs: [{ typeName: "acquire-chain", input: null, chainTraceContext: "chain-trace" }],
+            jobs: [
+              {
+                id: stateAdapter.config.generateId(),
+                typeName: "acquire-chain",
+                input: null,
+                chainTraceContext: "chain-trace",
+              },
+            ],
           }),
         );
 
@@ -248,7 +281,13 @@ export const startJobAttemptGroup: ConformanceGroup<StateConformanceFixture> = {
         const [blockerChain] = await stateAdapter.withTransaction(async (txCtx) =>
           stateAdapter.createJobs({
             txCtx,
-            jobs: [{ typeName: "has-blockers-blocker", input: null }],
+            jobs: [
+              {
+                id: stateAdapter.config.generateId(),
+                typeName: "has-blockers-blocker",
+                input: null,
+              },
+            ],
           }),
         );
 
@@ -263,7 +302,7 @@ export const startJobAttemptGroup: ConformanceGroup<StateConformanceFixture> = {
         const [withBlockersChain] = await stateAdapter.withTransaction(async (txCtx) =>
           stateAdapter.createJobs({
             txCtx,
-            jobs: [{ typeName: "has-blockers", input: null }],
+            jobs: [{ id: stateAdapter.config.generateId(), typeName: "has-blockers", input: null }],
           }),
         );
 
@@ -291,7 +330,9 @@ export const startJobAttemptGroup: ConformanceGroup<StateConformanceFixture> = {
         await stateAdapter.withTransaction(async (txCtx) =>
           stateAdapter.createJobs({
             txCtx,
-            jobs: [{ typeName: "has-no-blockers", input: null }],
+            jobs: [
+              { id: stateAdapter.config.generateId(), typeName: "has-no-blockers", input: null },
+            ],
           }),
         );
 
@@ -309,8 +350,8 @@ export const startJobAttemptGroup: ConformanceGroup<StateConformanceFixture> = {
     },
     {
       name: "holds the chain lock implicitly for a single-job chain",
-      run: async ({ stateAdapter }, expect) => {
-        if (stateAdapter.transactionConcurrency === "serialized") {
+      run: async ({ stateAdapter, transactionConcurrency }, expect) => {
+        if (transactionConcurrency !== "concurrent") {
           expect.skip("requires concurrent transactions");
           return;
         }
@@ -318,7 +359,13 @@ export const startJobAttemptGroup: ConformanceGroup<StateConformanceFixture> = {
         const [stateChain] = await stateAdapter.withTransaction(async (txCtx) =>
           stateAdapter.createJobs({
             txCtx,
-            jobs: [{ typeName: "implicit-chain-lock", input: null }],
+            jobs: [
+              {
+                id: stateAdapter.config.generateId(),
+                typeName: "implicit-chain-lock",
+                input: null,
+              },
+            ],
           }),
         );
 
@@ -373,8 +420,8 @@ export const startJobAttemptGroup: ConformanceGroup<StateConformanceFixture> = {
     },
     {
       name: "skips a due job whose chain head is locked and getStartAttemptDelayMs ignores it",
-      run: async ({ stateAdapter }, expect) => {
-        if (stateAdapter.transactionConcurrency === "serialized") {
+      run: async ({ stateAdapter, transactionConcurrency }, expect) => {
+        if (transactionConcurrency !== "concurrent") {
           expect.skip("requires concurrent transactions");
           return;
         }
@@ -382,14 +429,19 @@ export const startJobAttemptGroup: ConformanceGroup<StateConformanceFixture> = {
         const [lockedChain] = await stateAdapter.withTransaction(async (txCtx) =>
           stateAdapter.createJobs({
             txCtx,
-            jobs: [{ typeName: "locked-head", input: null }],
+            jobs: [{ id: stateAdapter.config.generateId(), typeName: "locked-head", input: null }],
           }),
         );
         const [continued] = await stateAdapter.withTransaction(async (txCtx) =>
           stateAdapter.continueJobs({
             txCtx,
             jobs: [
-              { typeName: "locked-head-acquire", input: null, continueFromId: lockedChain.head.id },
+              {
+                id: stateAdapter.config.generateId(),
+                typeName: "locked-head-acquire",
+                input: null,
+                continueFromId: lockedChain.head.id,
+              },
             ],
           }),
         );
@@ -420,7 +472,13 @@ export const startJobAttemptGroup: ConformanceGroup<StateConformanceFixture> = {
           const [otherChain] = await stateAdapter.withTransaction(async (txCtx) =>
             stateAdapter.createJobs({
               txCtx,
-              jobs: [{ typeName: "locked-head-acquire", input: null }],
+              jobs: [
+                {
+                  id: stateAdapter.config.generateId(),
+                  typeName: "locked-head-acquire",
+                  input: null,
+                },
+              ],
             }),
           );
           expect(

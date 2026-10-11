@@ -13,6 +13,7 @@ export const extendWithStateInProcess = <T>(
 ): TestAPI<
   T & {
     stateAdapter: StateAdapter<{ $test: true }, string>;
+    transactionConcurrency: "concurrent" | "serialized";
     flakyStateAdapter: StateAdapter<{ $test: true }, string>;
     flakyDbStateAdapter: StateAdapter<{ $test: true }, string> | undefined;
     poisonTransaction: ((txCtx: { $test: true }) => Promise<void>) | undefined;
@@ -23,6 +24,7 @@ export const extendWithStateInProcess = <T>(
 > => {
   return api.extend<{
     stateAdapter: InProcessStateAdapter;
+    transactionConcurrency: "concurrent" | "serialized";
     flakyStateAdapter: InProcessStateAdapter;
     flakyDbStateAdapter: InProcessStateAdapter | undefined;
     poisonTransaction: ((txCtx: { $test: true }) => Promise<void>) | undefined;
@@ -34,6 +36,13 @@ export const extendWithStateInProcess = <T>(
       // oxlint-disable-next-line no-empty-pattern
       async ({}, use) => {
         await use(await createInProcessStateAdapter());
+      },
+      { scope: "test" },
+    ],
+    transactionConcurrency: [
+      // oxlint-disable-next-line no-empty-pattern
+      async ({}, use) => {
+        await use("serialized");
       },
       { scope: "test" },
     ],
@@ -68,7 +77,7 @@ export const extendWithStateInProcess = <T>(
           }) as unknown as T;
 
         const flakyStateAdapter: InProcessStateAdapter = {
-          transactionConcurrency: stateAdapter.transactionConcurrency,
+          config: stateAdapter.config,
           withTransaction: async (fn) => {
             maybeThrow();
             return stateAdapter.withTransaction(fn);

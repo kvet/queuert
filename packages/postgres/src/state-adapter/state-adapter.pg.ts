@@ -23,14 +23,15 @@ import {
   type StateChain,
   type StateChainInfo,
   type StateChainStatus,
+  type StateCount,
   type StateDependentJob,
   type StateJob,
   type StateJobInfo,
   type StateJobStatus,
-  createIdValidator,
   decodeIdCursor,
   decodeTimestampWithIdCursor,
   encodeCursor,
+  resolveStateAdapterConfig,
 } from "queuert/internal";
 
 import { type PgStateProvider } from "../state-provider/state-provider.pg.js";
@@ -333,7 +334,11 @@ RETURNING 1 AS extended`,
   };
 };
 
-const COUNT_CAP = 10000;
+/** Clamps a count read with `LIMIT countCap + 1` to `countCap`, flagging that more exist. */
+const capCount = (count: number, countCap: number): StateCount => ({
+  count: Math.min(count, countCap),
+  hasMore: count > countCap,
+});
 
 const jobStatusConditions: Record<StateJobStatus, string> = {
   blocked: "j.status = 'blocked'",
@@ -433,6 +438,8 @@ export const createPgStateAdapter = async <
   idType = "uuid",
   generateId: generateIdOption = (() => randomUUID()) as () => TIdType,
   validateId: validateIdOption,
+  maxBlockersPerJob: maxBlockersPerJobOption,
+  countCap: countCapOption,
 }: {
   /** PostgreSQL state provider wrapping the database connection. */
   stateProvider: PgStateProvider<TTxContext>;
@@ -450,10 +457,24 @@ export const createPgStateAdapter = async <
    */
   generateId?: () => TIdType;
   /**
-   * Predicate returning `true` if the ID is acceptable. Runs on both generated
-   * and caller-supplied IDs; failures throw `InvalidJobIdError`.
+   * Predicate returning `true` if the ID is acceptable. Core runs it on both generated
+   * and caller-supplied IDs before writing; failures throw `InvalidJobIdError`.
    */
   validateId?: (id: TIdType) => boolean;
+  /**
+   * Most blocker chains a single job may declare. Declaring more throws
+   * `BlockerLimitExceededError` before any state is written.
+   *
+   * @defaultValue `100`
+   */
+  maxBlockersPerJob?: number;
+  /**
+   * Per-status count at which `countByChainTypeNames` and `countByJobTypeNames` stop
+   * counting and report `hasMore: true`. Higher values cost a longer index scan per count.
+   *
+   * @defaultValue `10_000`
+   */
+  countCap?: number;
 }): Promise<
   StateAdapter<TTxContext, TIdType> & {
     /** Create or upgrade the schema. */
@@ -468,10 +489,13 @@ export const createPgStateAdapter = async <
 
   let closed = false;
 
-  const { validateId, generateId } = createIdValidator<TIdType>({
-    generateIdOption,
-    validateIdOption,
+  const config = resolveStateAdapterConfig({
+    generateId: generateIdOption,
+    validateId: validateIdOption,
+    maxBlockersPerJob: maxBlockersPerJobOption,
+    countCap: countCapOption,
   });
+  const { countCap } = config;
 
   const applyTemplate = createTemplateApplier({
     schema,
@@ -568,7 +592,7 @@ LEFT JOIN LATERAL (
     }) as Promise<InferColumns<TColumns>[]>;
 
   return {
-    transactionConcurrency: stateProvider.transactionConcurrency,
+    config,
 
     withTransaction: stateProvider.withTransaction,
 
@@ -706,10 +730,7 @@ ${locked ? "ORDER BY j.id\nFOR UPDATE OF j" : "WHERE j.id = ANY($1::{{id_type}}[
     createJobs: async ({ txCtx, jobs }) => {
       if (jobs.length === 0) return [];
 
-      for (const job of jobs) {
-        if (job.id !== undefined) validateId(job.id, "caller");
-      }
-      const ids = jobs.map((j) => (j.id ?? generateId()) as string);
+      const ids = jobs.map((j) => j.id as string);
 
       const results = await executeTypedSql({
         txCtx,
@@ -835,10 +856,7 @@ ORDER BY ord
 
     continueJobs: async ({ txCtx, completedBy, jobs }) => {
       if (jobs.length === 0) return [];
-      for (const job of jobs) {
-        if (job.id !== undefined) validateId(job.id, "caller");
-      }
-      const ids = jobs.map((job) => (job.id ?? generateId()) as string);
+      const ids = jobs.map((job) => job.id as string);
 
       const rows = await executeTypedSql({
         txCtx,
@@ -1733,12 +1751,12 @@ SELECT
   (SELECT count(*) FROM (
     SELECT 1 FROM {{schema}}.{{table_prefix}}job
     WHERE type_name = t.name AND chain_index = 0 AND chain_status = 'running'
-    LIMIT ${COUNT_CAP + 1}
+    LIMIT ${countCap + 1}
   ) sub) AS running_cnt,
   (SELECT count(*) FROM (
     SELECT 1 FROM {{schema}}.{{table_prefix}}job
     WHERE type_name = t.name AND chain_index = 0 AND chain_status = 'completed'
-    LIMIT ${COUNT_CAP + 1}
+    LIMIT ${countCap + 1}
   ) sub) AS completed_cnt
 FROM unnest($1::text[]) WITH ORDINALITY AS t(name, ord)
 ORDER BY t.ord
@@ -1768,14 +1786,8 @@ ORDER BY t.ord
             completed: { count: 0, hasMore: false },
           };
         return {
-          running: {
-            count: Math.min(r.running_cnt, COUNT_CAP),
-            hasMore: r.running_cnt > COUNT_CAP,
-          },
-          completed: {
-            count: Math.min(r.completed_cnt, COUNT_CAP),
-            hasMore: r.completed_cnt > COUNT_CAP,
-          },
+          running: capCount(r.running_cnt, countCap),
+          completed: capCount(r.completed_cnt, countCap),
         };
       });
     },
@@ -1791,10 +1803,10 @@ ORDER BY t.ord
               /* sql */ `
 SELECT
   t.name,
-  (SELECT count(*) FROM (SELECT 1 FROM {{schema}}.{{table_prefix}}job WHERE type_name = t.name AND status = 'blocked' LIMIT ${COUNT_CAP + 1}) sub) AS blocked_cnt,
-  (SELECT count(*) FROM (SELECT 1 FROM {{schema}}.{{table_prefix}}job WHERE type_name = t.name AND status = 'pending' LIMIT ${COUNT_CAP + 1}) sub) AS pending_cnt,
-  (SELECT count(*) FROM (SELECT 1 FROM {{schema}}.{{table_prefix}}job WHERE type_name = t.name AND status = 'running' LIMIT ${COUNT_CAP + 1}) sub) AS running_cnt,
-  (SELECT count(*) FROM (SELECT 1 FROM {{schema}}.{{table_prefix}}job WHERE type_name = t.name AND status = 'completed' LIMIT ${COUNT_CAP + 1}) sub) AS completed_cnt
+  (SELECT count(*) FROM (SELECT 1 FROM {{schema}}.{{table_prefix}}job WHERE type_name = t.name AND status = 'blocked' LIMIT ${countCap + 1}) sub) AS blocked_cnt,
+  (SELECT count(*) FROM (SELECT 1 FROM {{schema}}.{{table_prefix}}job WHERE type_name = t.name AND status = 'pending' LIMIT ${countCap + 1}) sub) AS pending_cnt,
+  (SELECT count(*) FROM (SELECT 1 FROM {{schema}}.{{table_prefix}}job WHERE type_name = t.name AND status = 'running' LIMIT ${countCap + 1}) sub) AS running_cnt,
+  (SELECT count(*) FROM (SELECT 1 FROM {{schema}}.{{table_prefix}}job WHERE type_name = t.name AND status = 'completed' LIMIT ${countCap + 1}) sub) AS completed_cnt
 FROM unnest($1::text[]) WITH ORDINALITY AS t(name, ord)
 ORDER BY t.ord
 `,
@@ -1827,22 +1839,10 @@ ORDER BY t.ord
             completed: { count: 0, hasMore: false },
           };
         return {
-          blocked: {
-            count: Math.min(r.blocked_cnt, COUNT_CAP),
-            hasMore: r.blocked_cnt > COUNT_CAP,
-          },
-          pending: {
-            count: Math.min(r.pending_cnt, COUNT_CAP),
-            hasMore: r.pending_cnt > COUNT_CAP,
-          },
-          running: {
-            count: Math.min(r.running_cnt, COUNT_CAP),
-            hasMore: r.running_cnt > COUNT_CAP,
-          },
-          completed: {
-            count: Math.min(r.completed_cnt, COUNT_CAP),
-            hasMore: r.completed_cnt > COUNT_CAP,
-          },
+          blocked: capCount(r.blocked_cnt, countCap),
+          pending: capCount(r.pending_cnt, countCap),
+          running: capCount(r.running_cnt, countCap),
+          completed: capCount(r.completed_cnt, countCap),
         };
       });
     },

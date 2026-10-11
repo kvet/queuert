@@ -15,6 +15,8 @@ import { createFlakyBatchGenerator } from "./flaky-test-helper.spec-helper.js";
 
 export type TestSuiteContext = {
   stateAdapter: StateAdapter<{ $test: true }, string>;
+  /** Whether the database behind `stateAdapter` can run two transactions at once. */
+  transactionConcurrency: "concurrent" | "serialized";
   generateId: () => string;
   notifyAdapter: NotifyAdapter | undefined;
   withTransaction: <T>(
@@ -50,8 +52,8 @@ export const extendWithCommon = <
     >
   >({
     generateId: [
-      async ({}, use) => {
-        await use(() => crypto.randomUUID());
+      async ({ stateAdapter }, use) => {
+        await use(stateAdapter.config.generateId);
       },
       { scope: "test" },
     ],

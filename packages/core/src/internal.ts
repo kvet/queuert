@@ -16,7 +16,7 @@ export {
   type IdCursor,
   type TimestampWithIdCursor,
 } from "./state-adapter/cursor.js";
-export { createIdValidator, type IdValidator } from "./state-adapter/id-validator.js";
+export { resolveStateAdapterConfig } from "./state-adapter/adapter-config.js";
 export {
   type StateBlockedJob,
   type StateDependentJob,

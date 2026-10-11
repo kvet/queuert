@@ -10,7 +10,7 @@ export const extendJobAttemptGroup: ConformanceGroup<StateConformanceFixture> = 
         const [createdChain] = await stateAdapter.withTransaction(async (txCtx) =>
           stateAdapter.createJobs({
             txCtx,
-            jobs: [{ typeName: "attempt-test", input: null }],
+            jobs: [{ id: stateAdapter.config.generateId(), typeName: "attempt-test", input: null }],
           }),
         );
 
@@ -49,7 +49,9 @@ export const extendJobAttemptGroup: ConformanceGroup<StateConformanceFixture> = 
         const [createdChain] = await stateAdapter.withTransaction(async (txCtx) =>
           stateAdapter.createJobs({
             txCtx,
-            jobs: [{ typeName: "re-attempt-test", input: null }],
+            jobs: [
+              { id: stateAdapter.config.generateId(), typeName: "re-attempt-test", input: null },
+            ],
           }),
         );
 
@@ -88,7 +90,9 @@ export const extendJobAttemptGroup: ConformanceGroup<StateConformanceFixture> = 
         const [createdChain] = await stateAdapter.withTransaction(async (txCtx) =>
           stateAdapter.createJobs({
             txCtx,
-            jobs: [{ typeName: "ownership-test", input: null }],
+            jobs: [
+              { id: stateAdapter.config.generateId(), typeName: "ownership-test", input: null },
+            ],
           }),
         );
 

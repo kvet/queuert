@@ -5,18 +5,23 @@ import { type TestAPI } from "vitest";
 import { createSqliteStateAdapter } from "../state-adapter/state-adapter.sqlite.js";
 import { createBetterSqlite3Provider } from "../state-provider/state-provider.better-sqlite3.js";
 
-export const UUID_PATTERN: RegExp =
-  /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
-
 export type VarianceFixtures = {
   db: Database.Database;
   stateAdapter: StateAdapter<{ $test: true }, string>;
+  transactionConcurrency: "concurrent" | "serialized";
   tableNames: string[];
 };
 
 export const extendWithVarianceStateSqlite = <T>(
   api: TestAPI<T>,
-  options: { tablePrefix: string; idType?: string; generateId?: () => string },
+  options: {
+    tablePrefix: string;
+    idType?: string;
+    generateId?: () => string;
+    validateId?: (id: string) => boolean;
+    maxBlockersPerJob?: number;
+    countCap?: number;
+  },
 ): TestAPI<T & VarianceFixtures> => {
   return api.extend<VarianceFixtures>({
     db: [
@@ -34,6 +39,13 @@ export const extendWithVarianceStateSqlite = <T>(
         const adapter = await createSqliteStateAdapter({ stateProvider, ...options });
         await adapter.migrateToLatest();
         return use(adapter as unknown as StateAdapter<{ $test: true }, string>);
+      },
+      { scope: "test" },
+    ],
+    transactionConcurrency: [
+      // oxlint-disable-next-line no-empty-pattern
+      async ({}, use) => {
+        await use("serialized");
       },
       { scope: "test" },
     ],

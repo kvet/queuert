@@ -18,10 +18,10 @@ export const listChainTypeNamesGroup: ConformanceGroup<StateConformanceFixture> 
           stateAdapter.createJobs({
             txCtx,
             jobs: [
-              { typeName: "zebra", input: null },
-              { typeName: "alpha", input: null },
-              { typeName: "zebra", input: null },
-              { typeName: "mid", input: null },
+              { id: stateAdapter.config.generateId(), typeName: "zebra", input: null },
+              { id: stateAdapter.config.generateId(), typeName: "alpha", input: null },
+              { id: stateAdapter.config.generateId(), typeName: "zebra", input: null },
+              { id: stateAdapter.config.generateId(), typeName: "mid", input: null },
             ],
           }),
         );
@@ -36,7 +36,7 @@ export const listChainTypeNamesGroup: ConformanceGroup<StateConformanceFixture> 
         const [headChain] = await stateAdapter.withTransaction(async (txCtx) =>
           stateAdapter.createJobs({
             txCtx,
-            jobs: [{ typeName: "head-type", input: null }],
+            jobs: [{ id: stateAdapter.config.generateId(), typeName: "head-type", input: null }],
           }),
         );
 
@@ -44,7 +44,12 @@ export const listChainTypeNamesGroup: ConformanceGroup<StateConformanceFixture> 
           stateAdapter.continueJobs({
             txCtx,
             jobs: [
-              { typeName: "continuation-type", continueFromId: headChain.head.id, input: null },
+              {
+                id: stateAdapter.config.generateId(),
+                typeName: "continuation-type",
+                continueFromId: headChain.head.id,
+                input: null,
+              },
             ],
           }),
         );

@@ -13,7 +13,6 @@ export const createKnexSqliteStateProvider = ({
   knex: Knex;
 }): SqliteStateProvider<KnexSqliteContext> => {
   return {
-    transactionConcurrency: "serialized",
     withTransaction: async (cb) => knex.transaction(async (trx) => cb({ trx })),
     // `id` not forwarded: knex re-prepares every raw query and exposes no hook
     // to cache statement handles through the dialect. Bypass knex for statement

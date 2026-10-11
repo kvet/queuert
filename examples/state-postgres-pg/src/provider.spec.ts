@@ -18,6 +18,7 @@ test("state-postgres-pg provider passes state adapter conformance", async () => 
 
     return {
       stateAdapter: adapter,
+      transactionConcurrency: "concurrent",
       poisonTransaction: async (txCtx: PgPoolContext) => {
         await txCtx.poolClient.query("SELECT 1 FROM nonexistent_table_queuert_poison_xyz");
       },

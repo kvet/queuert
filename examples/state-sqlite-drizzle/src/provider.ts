@@ -24,7 +24,6 @@ export const createDrizzleSqliteStateProvider = ({
   };
 
   return {
-    transactionConcurrency: "serialized",
     withTransaction: async (fn) => {
       using _h = await lock.acquireWrite();
       try {

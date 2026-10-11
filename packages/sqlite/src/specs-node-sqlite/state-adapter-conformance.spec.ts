@@ -24,6 +24,7 @@ describe("SQLite State Adapter Conformance (node:sqlite)", () => {
   const conformanceIt = it.extend<{
     db: DatabaseSync;
     stateAdapter: StateAdapter<{ $test: true }, string>;
+    transactionConcurrency: "concurrent" | "serialized";
   }>({
     db: [
       // oxlint-disable-next-line no-empty-pattern
@@ -31,6 +32,13 @@ describe("SQLite State Adapter Conformance (node:sqlite)", () => {
         const db = new DatabaseSync(":memory:");
         await use(db);
         db.close();
+      },
+      { scope: "test" },
+    ],
+    transactionConcurrency: [
+      // oxlint-disable-next-line no-empty-pattern
+      async ({}, use) => {
+        await use("serialized");
       },
       { scope: "test" },
     ],

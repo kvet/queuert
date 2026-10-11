@@ -13,7 +13,6 @@ export const createKyselySqliteStateProvider = <TDatabase>({
   db: Kysely<TDatabase>;
 }): SqliteStateProvider<KyselySqliteContext<TDatabase>> => {
   return {
-    transactionConcurrency: "serialized",
     withTransaction: async (cb) => db.transaction().execute(async (txDb) => cb({ db: txDb })),
     // `id` not forwarded: Kysely's better-sqlite3 dialect re-prepares every raw
     // query; no hook to cache through the dialect. Bypass Kysely for statement

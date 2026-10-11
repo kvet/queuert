@@ -11,7 +11,7 @@ export const reclaimExpiredJobAttemptGroup: ConformanceGroup<StateConformanceFix
         const [createdChain] = await stateAdapter.withTransaction(async (txCtx) =>
           stateAdapter.createJobs({
             txCtx,
-            jobs: [{ typeName: "expire-test", input: null }],
+            jobs: [{ id: stateAdapter.config.generateId(), typeName: "expire-test", input: null }],
           }),
         );
 
@@ -50,7 +50,9 @@ export const reclaimExpiredJobAttemptGroup: ConformanceGroup<StateConformanceFix
         const [createdChain] = await stateAdapter.withTransaction(async (txCtx) =>
           stateAdapter.createJobs({
             txCtx,
-            jobs: [{ typeName: "no-expire-test", input: null }],
+            jobs: [
+              { id: stateAdapter.config.generateId(), typeName: "no-expire-test", input: null },
+            ],
           }),
         );
 
@@ -84,14 +86,26 @@ export const reclaimExpiredJobAttemptGroup: ConformanceGroup<StateConformanceFix
         const [chainA] = await stateAdapter.withTransaction(async (txCtx) =>
           stateAdapter.createJobs({
             txCtx,
-            jobs: [{ typeName: "ignore-test", input: { order: "a" } }],
+            jobs: [
+              {
+                id: stateAdapter.config.generateId(),
+                typeName: "ignore-test",
+                input: { order: "a" },
+              },
+            ],
           }),
         );
 
         const [chainB] = await stateAdapter.withTransaction(async (txCtx) =>
           stateAdapter.createJobs({
             txCtx,
-            jobs: [{ typeName: "ignore-test", input: { order: "b" } }],
+            jobs: [
+              {
+                id: stateAdapter.config.generateId(),
+                typeName: "ignore-test",
+                input: { order: "b" },
+              },
+            ],
           }),
         );
 

@@ -42,6 +42,7 @@ test("state-postgres-prisma provider passes state adapter conformance", async ()
 
     return {
       stateAdapter: adapter,
+      transactionConcurrency: "concurrent",
       poisonTransaction: async (txCtx: PrismaPgContext<PrismaLike>) => {
         await txCtx.prisma.$queryRawUnsafe("SELECT 1 FROM nonexistent_table_queuert_poison_xyz");
       },

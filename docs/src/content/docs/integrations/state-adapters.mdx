@@ -80,7 +80,6 @@ A State Provider bridges your database client (Kysely, Drizzle, Prisma, raw driv
 
 - **`withTransaction`** -- Manages connection acquisition and transaction lifecycle. The callback receives a transaction context representing an active transaction.
 - **`executeSql`** -- Executes SQL statements. When a transaction context is provided, uses that connection; when omitted, acquires and releases its own connection from the pool.
-- **`transactionConcurrency`** -- `"concurrent"` or `"serialized"`: whether the provider can run multiple transactions at once.
 
 Each example linked above demonstrates a complete State Provider implementation for its corresponding ORM or driver.
 
@@ -96,6 +95,7 @@ import { runStateAdapterConformance } from "queuert/conformance";
 test("my provider passes state adapter conformance", async () => {
   await runStateAdapterConformance(async () => ({
     stateAdapter,
+    transactionConcurrency: "concurrent", // "serialized" for a single-connection provider such as SQLite
     poisonTransaction,
     reset: async () => { /* truncate tables */ },
     dispose: async () => { /* close connections */ },
@@ -104,6 +104,23 @@ test("my provider passes state adapter conformance", async () => {
 ```
 
 Every example's `src/provider.spec.ts` is a working template. See the [Custom Adapters](/queuert/advanced/custom-adapters/) guide for a full walkthrough and the [Conformance reference](/queuert/api/conformance/readme/) for the complete API.
+
+## Limits
+
+Every state adapter factory accepts two optional limits:
+
+- **`maxBlockersPerJob`** (default `100`) -- the most blocker chains a single job may declare. Declaring more throws `BlockerLimitExceededError`. See [Job Blockers](/queuert/guides/job-blockers/#blocker-limit).
+- **`countCap`** (default `10_000`) -- the per-status count at which `countByChainTypeNames` and `countByJobTypeNames` (and the dashboard's type counts) stop counting and report `hasMore`. A higher cap means a longer index scan per count.
+
+```ts
+const stateAdapter = await createPgStateAdapter({
+  stateProvider,
+  maxBlockersPerJob: 500,
+  countCap: 50_000,
+});
+```
+
+Both must be positive integers; anything else throws when the adapter is created. The resolved values — along with `generateId` and `validateId` — are readable on `stateAdapter.config`.
 
 ## Multi-worker deployment
 

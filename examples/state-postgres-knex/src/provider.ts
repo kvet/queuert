@@ -29,7 +29,6 @@ export const createKnexPgStateProvider = ({
   knex: Knex;
 }): PgStateProvider<KnexPgContext> => {
   return {
-    transactionConcurrency: "concurrent",
     withTransaction: async (cb) => knex.transaction(async (trx) => cb({ trx })),
     // `id` not forwarded: knex has no server-side prepared statement support —
     // every `raw` call is sent unprepared. Bypass knex for prepared statements

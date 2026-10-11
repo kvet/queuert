@@ -51,7 +51,14 @@ describe("deduplication lookup", () => {
     await adapter.withTransaction(async (txCtx) =>
       adapter.createJobs({
         txCtx,
-        jobs: [{ typeName: "t", input: null, deduplication: { key: "k", scope: "running" } }],
+        jobs: [
+          {
+            id: adapter.config.generateId(),
+            typeName: "t",
+            input: null,
+            deduplication: { key: "k", scope: "running" },
+          },
+        ],
       }),
     );
 
@@ -75,8 +82,8 @@ describe("addJobsBlockers", () => {
       adapter.createJobs({
         txCtx,
         jobs: [
-          { typeName: "main", input: null },
-          { typeName: "blocker", input: null },
+          { id: adapter.config.generateId(), typeName: "main", input: null },
+          { id: adapter.config.generateId(), typeName: "blocker", input: null },
         ],
       }),
     );

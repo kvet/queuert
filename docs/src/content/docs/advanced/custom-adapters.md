@@ -34,7 +34,7 @@ See the [Notify adapter examples](/queuert/examples/#notify-adapters) for end-to
 
 ## Custom StateAdapter
 
-Implement the `StateAdapter` type exported from `queuert`. This is a larger interface covering job creation, status transitions, attempt tracking, querying, and migrations. See the [Adapter Architecture](/queuert/advanced/adapters/) doc for the full contract and the [Conformance reference](/queuert/api/conformance/readme/) for what the suite tests.
+Implement the `StateAdapter` type exported from `queuert`. This is a larger interface covering job creation, status transitions, attempt tracking, querying, and migrations. Besides methods, it exposes `config` (a `StateAdapterConfig` with `generateId`, `validateId`, `maxBlockersPerJob`, and `countCap`), which core uses to generate and validate job IDs and enforce the blocker limit — the built-in adapters default to `crypto.randomUUID`, accept-all, `100`, and `10_000`. See the [Adapter Architecture](/queuert/advanced/adapters/) doc for the full contract and the [Conformance reference](/queuert/api/conformance/readme/) for what the suite tests.
 
 ```ts
 import { runStateAdapterConformance } from "queuert/conformance";
@@ -47,6 +47,7 @@ test("custom state adapter passes conformance", async () => {
     const stateAdapter = createMyStateAdapter();
     return {
       stateAdapter,
+      transactionConcurrency: "concurrent",
       reset: async () => {
         /* truncate tables */
       },
@@ -57,6 +58,8 @@ test("custom state adapter passes conformance", async () => {
   });
 }, 300_000);
 ```
+
+`transactionConcurrency` is required: set it to `"concurrent"` when your backend can run two `withTransaction` callbacks at once (a connection pool), so the suite also exercises concurrent-transaction cases, or `"serialized"` for a single-connection backend, which skips them.
 
 See the [State adapter examples](/queuert/examples/#state-adapters) for end-to-end integrations across PostgreSQL and SQLite.
 

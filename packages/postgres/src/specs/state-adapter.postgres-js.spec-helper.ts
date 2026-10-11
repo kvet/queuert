@@ -21,6 +21,7 @@ export const extendWithStatePostgresJs = <
 ): TestAPI<
   T & {
     stateAdapter: StateAdapter<{ $test: true }, string>;
+    transactionConcurrency: "concurrent" | "serialized";
     flakyStateAdapter: StateAdapter<{ $test: true }, string>;
     flakyDbStateAdapter: StateAdapter<{ $test: true }, string> | undefined;
     poisonTransaction: ((txCtx: { $test: true }) => Promise<void>) | undefined;
@@ -37,6 +38,7 @@ export const extendWithStatePostgresJs = <
     flakyStateProvider: PostgresJsProvider;
     flakyDbStateProvider: PostgresJsProvider;
     stateAdapter: PostgresJsStateAdapter;
+    transactionConcurrency: "concurrent" | "serialized";
     flakyStateAdapter: PostgresJsStateAdapter;
     flakyDbStateAdapter: PostgresJsStateAdapter | undefined;
     poisonTransaction: ((txCtx: { $test: true }) => Promise<void>) | undefined;
@@ -129,6 +131,13 @@ export const extendWithStatePostgresJs = <
             stateProvider: flakyStateProvider,
           }),
         );
+      },
+      { scope: "test" },
+    ],
+    transactionConcurrency: [
+      // oxlint-disable-next-line no-empty-pattern
+      async ({}, use) => {
+        await use("concurrent");
       },
       { scope: "test" },
     ],

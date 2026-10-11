@@ -32,7 +32,6 @@ export const createPgPoolStateProvider = ({
   };
 
   return {
-    transactionConcurrency: "concurrent",
     withTransaction: async (cb) => {
       const poolClient = await pool.connect();
       try {

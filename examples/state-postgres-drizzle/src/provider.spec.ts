@@ -20,6 +20,7 @@ test("state-postgres-drizzle provider passes state adapter conformance", async (
 
     return {
       stateAdapter: adapter,
+      transactionConcurrency: "concurrent",
       poisonTransaction: async (txCtx: DrizzlePgContext<Record<string, never>>) => {
         const client = (txCtx.tx as any).session.client;
         await client.query("SELECT 1 FROM nonexistent_table_queuert_poison_xyz");

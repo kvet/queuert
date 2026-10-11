@@ -52,6 +52,32 @@ export type StateDependentJob = StateJobBlockerInfo & { job: StateJob };
 
 export type StateCount = { count: number; hasMore: boolean };
 
+/**
+ * How a state adapter was configured, with defaults applied. Core reads it to generate and
+ * validate job IDs and to enforce the blocker limit before any state is written.
+ *
+ * @typeParam TJobId - The job ID type
+ */
+export type StateAdapterConfig<TJobId extends string> = {
+  /** Generates the ID of a job created without a caller-supplied one. */
+  generateId: () => TJobId;
+  /**
+   * Returns `true` if the ID is acceptable. Core runs it on generated and caller-supplied IDs
+   * and throws `InvalidJobIdError` on failure.
+   */
+  validateId: (id: TJobId) => boolean;
+  /**
+   * Most blocker chains a single job may declare. Core rejects a job declaring more with
+   * `BlockerLimitExceededError`.
+   */
+  maxBlockersPerJob: number;
+  /**
+   * Per-type, per-status count at which `countByChainTypeNames` and `countByJobTypeNames` stop
+   * counting and report `hasMore: true`.
+   */
+  countCap: number;
+};
+
 /** Base type for state adapter contexts. */
 export type BaseTxContext = Record<string, unknown>;
 
@@ -83,8 +109,8 @@ type WriteTxContextParam<TTxContext extends BaseTxContext> = { txCtx: TTxContext
  * @typeParam TJobId - The job ID type
  */
 export type StateAdapter<TTxContext extends BaseTxContext, TJobId extends string> = {
-  /** Whether two `withTransaction` callbacks can run concurrently. */
-  transactionConcurrency: "concurrent" | "serialized";
+  /** How the adapter was configured, with defaults applied. */
+  config: Readonly<StateAdapterConfig<TJobId>>;
 
   /** Executes a callback within a transaction. Commits on success, rolls back on error. */
   withTransaction: <T>(fn: (txCtx: TTxContext) => Promise<T>) => Promise<T>;
@@ -114,7 +140,7 @@ export type StateAdapter<TTxContext extends BaseTxContext, TJobId extends string
     txCtx: TTxContext;
     jobs: {
       typeName: string;
-      id?: TJobId;
+      id: TJobId;
       input: unknown;
       schedule?: ScheduleOptions;
       deduplication?: DeduplicationOptions;
@@ -127,14 +153,14 @@ export type StateAdapter<TTxContext extends BaseTxContext, TJobId extends string
    * Completes each `continueFromId` and inserts its chain successor, linking the two. Each
    * result is the completed predecessor, with its successor under `continuation`. Results are
    * in input order, `undefined` for an id with no matching job or one already completed. A
-   * colliding caller-supplied id or an already taken chain position still throws.
+   * colliding id or an already taken chain position still throws.
    */
   continueJobs: (params: {
     txCtx: TTxContext;
     completedBy?: string | null;
     jobs: {
       typeName: string;
-      id?: TJobId;
+      id: TJobId;
       input: unknown;
       schedule?: ScheduleOptions;
       traceContext?: string | null;
