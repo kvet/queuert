@@ -1,9 +1,9 @@
-import { type AnyChain } from "../entities/chain.js";
 import { type DeduplicationOptions } from "../entities/deduplication.js";
 import { type ScheduleOptions } from "../entities/schedule.js";
 import {
   BlockerLimitExceededError,
   ChainNotFoundError,
+  ChainTypeMismatchError,
   InvalidJobIdError,
   JobNotFoundError,
 } from "../errors.js";
@@ -27,17 +27,19 @@ type CommonInput = {
   id?: string;
   typeName: string;
   input: unknown;
-  blockers?: AnyChain[];
+  blockers?: { id: string; typeName?: string }[];
   schedule?: ScheduleOptions;
 };
 
-type ParsedEntry = {
+type PreparedEntry = {
   id: string;
   typeName: string;
   input: unknown;
-  blockers: AnyChain[];
+  blockers: { id: string; typeName?: string }[];
   parsedInput: unknown;
 };
+
+type ParsedEntry = Omit<PreparedEntry, "blockers"> & { blockers: StateChain[] };
 
 type JobSpanHandle = ReturnType<ObservabilityHelper["startJobSpan"]>;
 type BlockerSpanHandle = ReturnType<ObservabilityHelper["startBlockerSpan"]>;
@@ -77,8 +79,8 @@ const prepareJobs = <TEntry extends CommonInput>(
   helpers: Helpers,
   entries: TEntry[],
   startSpan: (entry: TEntry, index: number) => JobSpanHandle,
-): { parsed: ParsedEntry[]; spanHandles: JobSpanHandle[] } => {
-  const parsed: ParsedEntry[] = entries.map((entry) => {
+): { prepared: PreparedEntry[]; spanHandles: JobSpanHandle[] } => {
+  const prepared: PreparedEntry[] = entries.map((entry) => {
     const blockers = entry.blockers ?? [];
     assertBlockerLimit(helpers, entry.typeName, blockers.length);
     return {
@@ -90,37 +92,50 @@ const prepareJobs = <TEntry extends CommonInput>(
     };
   });
 
-  for (const entry of parsed) {
-    helpers.jobTypes.validateBlockers(
-      entry.typeName,
-      entry.blockers.map((blocker) => ({ typeName: blocker.typeName, input: blocker.input })),
-    );
-  }
-
   const spanHandles = entries.map(startSpan);
 
-  return { parsed, spanHandles };
+  return { prepared, spanHandles };
 };
 
+// Blockers are validated against the stored chains, read under lock, so a caller-built
+// `{ id, typeName }` (or a stale chain object) is never trusted for type or input.
 const lockBlockerChains = async (
   helpers: Helpers,
-  { parsed, txCtx }: { parsed: ParsedEntry[]; txCtx: BaseTxContext },
-): Promise<void> => {
-  const blockerChainIds = [
-    ...new Set(parsed.flatMap((entry) => entry.blockers.map((blocker) => blocker.id))),
-  ];
-  if (blockerChainIds.length === 0) return;
+  { prepared, txCtx }: { prepared: PreparedEntry[]; txCtx: BaseTxContext },
+): Promise<ParsedEntry[]> => {
+  const blockerChainIds = prepared.flatMap((entry) => entry.blockers.map((blocker) => blocker.id));
+  const blockerChains =
+    blockerChainIds.length > 0
+      ? await helpers.stateAdapter.getChains({
+          txCtx,
+          chainIds: blockerChainIds,
+          lock: "exclusive",
+        })
+      : [];
 
-  const blockerChains = await helpers.stateAdapter.getChains({
-    txCtx,
-    chainIds: blockerChainIds,
-    lock: "exclusive",
+  let blockerChainIndex = 0;
+  return prepared.map((entry) => {
+    const blockers = entry.blockers.map((blocker) => {
+      const blockerChain = blockerChains[blockerChainIndex++];
+      if (!blockerChain) {
+        throw new ChainNotFoundError(`Chain with id ${blocker.id} not found`, {
+          chainId: blocker.id,
+        });
+      }
+      if (blocker.typeName !== undefined && blocker.typeName !== blockerChain.typeName) {
+        throw new ChainTypeMismatchError(
+          `Expected blocker chain ${blocker.id} to have type "${blocker.typeName}" but found "${blockerChain.typeName}"`,
+          { expectedTypeName: blocker.typeName, actualTypeName: blockerChain.typeName },
+        );
+      }
+      return blockerChain;
+    });
+    helpers.jobTypes.validateBlockers(
+      entry.typeName,
+      blockers.map((blocker) => ({ typeName: blocker.typeName, input: blocker.head.input })),
+    );
+    return { ...entry, blockers };
   });
-  const missingIndex = blockerChains.findIndex((blockerChain) => blockerChain === undefined);
-  if (missingIndex !== -1) {
-    const chainId = blockerChainIds[missingIndex];
-    throw new ChainNotFoundError(`Chain with id ${chainId} not found`, { chainId });
-  }
 };
 
 const addJobsBlockers = async (
@@ -309,7 +324,7 @@ export const createStateChains = async (
     }
   }
 
-  const { parsed, spanHandles } = prepareJobs(helpers, chains, (entry) =>
+  const { prepared, spanHandles } = prepareJobs(helpers, chains, (entry) =>
     helpers.observabilityHelper.startJobSpan({
       chainTypeName: entry.typeName,
       jobTypeName: entry.typeName,
@@ -317,10 +332,11 @@ export const createStateChains = async (
     }),
   );
 
+  let parsed: ParsedEntry[];
   let createResults: (StateChain & { deduplicated: boolean })[];
   let createdJobs: CreatedJob[];
   try {
-    await lockBlockerChains(helpers, { parsed, txCtx });
+    parsed = await lockBlockerChains(helpers, { prepared, txCtx });
     createResults = await helpers.stateAdapter.createJobs({
       txCtx,
       jobs: chains.map((chain, index) => ({
@@ -380,7 +396,7 @@ export const continueStateJob = async (
     transactionHooks: TransactionHooks;
   },
 ): Promise<{ completedJob: StateJob; continuation: StateJobInfo }> => {
-  const { parsed, spanHandles } = prepareJobs(helpers, [job], () =>
+  const { prepared, spanHandles } = prepareJobs(helpers, [job], () =>
     helpers.observabilityHelper.startJobSpan({
       chainTypeName: fromJob.chain.typeName,
       jobTypeName: job.typeName,
@@ -390,10 +406,11 @@ export const continueStateJob = async (
     }),
   );
 
+  let parsed: ParsedEntry[];
   let completedJob: StateJob;
   let createdJobs: CreatedJob[];
   try {
-    await lockBlockerChains(helpers, { parsed, txCtx });
+    parsed = await lockBlockerChains(helpers, { prepared, txCtx });
     const [continued] = await helpers.stateAdapter.continueJobs({
       txCtx,
       completedBy: workerId,

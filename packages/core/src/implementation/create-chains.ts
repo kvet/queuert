@@ -1,4 +1,4 @@
-import { type AnyChain, type Chain, mapStateChainToChain } from "../entities/chain.js";
+import { type Chain, mapStateChainToChain } from "../entities/chain.js";
 import { type DeduplicationOptions } from "../entities/deduplication.js";
 import { type ScheduleOptions } from "../entities/schedule.js";
 import { type Helpers } from "../setup-helpers.js";
@@ -10,7 +10,7 @@ type ChainInput = {
   typeName: string;
   id?: string;
   input: unknown;
-  blockers?: AnyChain[];
+  blockers?: { id: string; typeName?: string }[];
   deduplication?: DeduplicationOptions;
   schedule?: ScheduleOptions;
 };

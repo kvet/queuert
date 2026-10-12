@@ -1,6 +1,6 @@
 import { type BaseJobTypeDefinitions } from "../entities/job-type.js";
 import {
-  type BlockerChains,
+  type BlockerChainsInput,
   type ContinuedJob,
   type JobTypeContinuation,
   type JobTypeHasBlockers,
@@ -44,7 +44,7 @@ type AttemptContinueWithOutcome<
             schedule?: ScheduleOptions;
           } & (JobTypeHasBlockers<TJobTypeDefinitions, TContinuationTypeName> extends true
             ? {
-                blockers: BlockerChains<
+                blockers: BlockerChainsInput<
                   GetStateAdapterJobId<TStateAdapter>,
                   TJobTypeDefinitions,
                   TContinuationTypeName

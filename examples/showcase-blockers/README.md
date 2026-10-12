@@ -2,7 +2,7 @@
 
 Jobs that depend on other chains completing before they start.
 
-Scenarios: fan-out/fan-in, fixed slots.
+Scenarios: fan-out/fan-in, fixed slots, blocker by ID.
 
 ## Running
 

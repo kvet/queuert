@@ -9,6 +9,7 @@ None
   - [TASK] List chains by identity — `listChains` gains an `identity` filter to page through the full recurrence history of a key
 - [TASK] Built-in cleanup. See `design/builtin-cleanup.md`.
 - [TASK] Enforce json-serializable inputs and outputs (like no Date in job definitions) — see `design/json-serializable-types.md`
+- [TASK] Lost wake-up when attaching blockers — `lockBlockerChains` exclusively locks each blocker chain's head row, and acquisition takes `FOR UPDATE OF h, j SKIP LOCKED`, so a worker woken at that moment skips the chain's pending job and idles until the next poll. User-owned transactions (`feature/user-owned-transactions`) acquire with `FOR UPDATE OF j` only, which fixes it when the pending job is not the head; a pending head job (single-job chain, or a chain still on its first job) is still skipped, so re-notify locked pending blocker heads after commit. Drop the manual re-publish in `examples/showcase-blockers` once fixed. That branch also fixes the example's lock order: today `complete` locks the job/chain head before the processor locks the order, while shipping locks the order first, so the two can deadlock; there `finish` locks the job last.
 - [TASK] Consolidate attempt abort events — we have lots silly API to maintain `JobAbortReason` into `HardJobAbortReason` (error-level: `taken_by_another_worker`, `not_found`, `already_completed`, `error`) and `SoftJobAbortReason` (`worker_stopping`).
 
 # Medium term

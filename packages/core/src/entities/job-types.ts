@@ -119,7 +119,10 @@ export const createJobTypes = <
    * nominal/structural validation. Throw on failure.
    */
   validateContinueWith: (typeName: string, target: ResolvedJobTypeReference) => void;
-  /** Validate blocker references. Receives array of { typeName, input } objects. Throw on failure. */
+  /**
+   * Validate blocker references. Receives { typeName, input } of each stored blocker chain, read
+   * under lock (not the object the caller passed). Throw on failure.
+   */
   validateBlockers: (typeName: string, blockers: readonly ResolvedJobTypeReference[]) => void;
 }): JobTypes<TJobTypeDefinitions, TExternalJobTypeDefinitions> => ({
   getTypeNames: () => options.getTypeNames(),

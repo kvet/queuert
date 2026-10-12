@@ -3,7 +3,7 @@ import { type TestAPI, expectTypeOf } from "vitest";
 import { createClient } from "../client.js";
 import { type Chain } from "../entities/chain.js";
 import { defineJobTypes } from "../entities/define-job-types.js";
-import { BlockerLimitExceededError } from "../errors.js";
+import { BlockerLimitExceededError, ChainTypeMismatchError } from "../errors.js";
 import { sleep } from "../helpers/sleep.js";
 import { createInProcessWorker } from "../in-process-worker.js";
 import { createProcessors } from "../worker/create-processors.js";
@@ -764,6 +764,282 @@ export const blockerChainsTestSuite = ({ it }: { it: TestAPI<TestSuiteContext> }
       const succeededChain = await client.awaitChain(chain, completionOptions);
 
       expect(succeededChain.output).toEqual({ finalResult: 50 });
+    });
+  });
+
+  it("continueWith accepts blockers by id and resolves them from the stored chain", async ({
+    stateAdapter,
+    notifyAdapter,
+    withTransaction,
+    withWorkers,
+    observabilityAdapter,
+    log,
+    expect,
+  }) => {
+    const jobTypes = defineJobTypes<{
+      blocker: {
+        entry: true;
+        input: { value: number };
+        output: { result: number };
+      };
+      other: {
+        entry: true;
+        input: { value: number };
+        output: { result: number };
+      };
+      first: {
+        entry: true;
+        input: { blockerId: string; otherId: string };
+        continueWith: { typeName: "second" };
+      };
+      second: {
+        input: null;
+        output: { sum: number };
+        blockers: [{ typeName: "blocker" }, ...{ typeName: "blocker" | "other" }[]];
+      };
+    }>();
+
+    const client = await createClient({
+      stateAdapter,
+      notifyAdapter,
+      observabilityAdapter,
+      log,
+      jobTypes,
+    });
+    const worker = await createInProcessWorker({
+      client,
+      concurrency: 1,
+      processors: createProcessors({
+        client,
+        jobTypes,
+        processors: {
+          blocker: {
+            attemptHandler: async ({ job, complete }) =>
+              complete(async ({ finish }) => finish({ output: { result: job.input.value } })),
+          },
+          other: {
+            attemptHandler: async ({ job, complete }) =>
+              complete(async ({ finish }) => finish({ output: { result: job.input.value } })),
+          },
+          first: {
+            attemptHandler: async ({ job, complete }) =>
+              complete(async ({ finish }) =>
+                finish({
+                  continueWith: {
+                    typeName: "second",
+                    input: null,
+                    blockers: [{ id: job.input.blockerId }, { id: job.input.otherId }],
+                  },
+                }),
+              ),
+          },
+          second: {
+            attemptHandler: async ({ job, complete }) =>
+              complete(async ({ finish }) =>
+                finish({
+                  output: {
+                    sum: job.blockers.reduce((sum, blocker) => sum + blocker.output.result, 0),
+                  },
+                }),
+              ),
+          },
+        },
+      }),
+    });
+
+    const { blockerChain, otherChain } = await withTransaction(async (txCtx, transactionHooks) => ({
+      blockerChain: await client.createChain({
+        ...txCtx,
+        transactionHooks,
+        typeName: "blocker",
+        input: { value: 1 },
+      }),
+      otherChain: await client.createChain({
+        ...txCtx,
+        transactionHooks,
+        typeName: "other",
+        input: { value: 10 },
+      }),
+    }));
+
+    const mismatchChain = await withTransaction(async (txCtx, transactionHooks) =>
+      client.createChain({
+        ...txCtx,
+        transactionHooks,
+        typeName: "first",
+        input: { blockerId: blockerChain.id, otherId: otherChain.id },
+      }),
+    );
+    await withTransaction(async (txCtx, transactionHooks) =>
+      client.completeChain({
+        ...txCtx,
+        transactionHooks,
+        ...mismatchChain,
+        handler: async ({ job, completeJob }) => {
+          if (job.typeName !== "first") return;
+          await expect(
+            completeJob(job, async ({ finish }) => {
+              const _rejectsWrongSlotType = async () =>
+                finish({
+                  continueWith: {
+                    typeName: "second",
+                    input: null,
+                    // @ts-expect-error the first blocker slot only accepts "blocker"
+                    blockers: [{ id: otherChain.id, typeName: "other" }],
+                  },
+                });
+
+              return finish({
+                continueWith: {
+                  typeName: "second",
+                  input: null,
+                  blockers: [{ id: otherChain.id, typeName: "blocker" }],
+                },
+              });
+            }),
+          ).rejects.toThrow(ChainTypeMismatchError);
+        },
+      }),
+    );
+
+    const chain = await withTransaction(async (txCtx, transactionHooks) =>
+      client.createChain({
+        ...txCtx,
+        transactionHooks,
+        typeName: "first",
+        input: { blockerId: blockerChain.id, otherId: otherChain.id },
+      }),
+    );
+
+    await withWorkers([await worker.start()], async () => {
+      const succeededChain = await client.awaitChain(chain, completionOptions);
+
+      expect(succeededChain.output).toEqual({ sum: 11 });
+    });
+  });
+
+  it("accepts blockers by id and resolves them from the stored chain", async ({
+    stateAdapter,
+    notifyAdapter,
+    withTransaction,
+    withWorkers,
+    observabilityAdapter,
+    log,
+    expect,
+  }) => {
+    const jobTypes = defineJobTypes<{
+      blocker: {
+        entry: true;
+        input: { value: number };
+        output: { result: number };
+      };
+      other: {
+        entry: true;
+        input: { value: number };
+        output: { result: number };
+      };
+      main: {
+        entry: true;
+        input: null;
+        output: { sum: number };
+        blockers: [{ typeName: "blocker" }, ...{ typeName: "blocker" | "other" }[]];
+      };
+    }>();
+
+    const client = await createClient({
+      stateAdapter,
+      notifyAdapter,
+      observabilityAdapter,
+      log,
+      jobTypes,
+    });
+    const worker = await createInProcessWorker({
+      client,
+      concurrency: 1,
+      processors: createProcessors({
+        client,
+        jobTypes,
+        processors: {
+          blocker: {
+            attemptHandler: async ({ job, complete }) =>
+              complete(async ({ finish }) => finish({ output: { result: job.input.value } })),
+          },
+          other: {
+            attemptHandler: async ({ job, complete }) =>
+              complete(async ({ finish }) => finish({ output: { result: job.input.value } })),
+          },
+          main: {
+            attemptHandler: async ({ job, complete }) =>
+              complete(async ({ finish }) =>
+                finish({
+                  output: {
+                    sum: job.blockers.reduce((sum, blocker) => sum + blocker.output.result, 0),
+                  },
+                }),
+              ),
+          },
+        },
+      }),
+    });
+
+    const { blockerChain, otherChain } = await withTransaction(async (txCtx, transactionHooks) => ({
+      blockerChain: await client.createChain({
+        ...txCtx,
+        transactionHooks,
+        typeName: "blocker",
+        input: { value: 1 },
+      }),
+      otherChain: await client.createChain({
+        ...txCtx,
+        transactionHooks,
+        typeName: "other",
+        input: { value: 10 },
+      }),
+    }));
+
+    const chain = await withTransaction(async (txCtx, transactionHooks) =>
+      client.createChain({
+        ...txCtx,
+        transactionHooks,
+        typeName: "main",
+        input: null,
+        blockers: [{ id: blockerChain.id }, { id: otherChain.id, typeName: "other" }, blockerChain],
+      }),
+    );
+
+    type MainBlockers = Parameters<typeof client.createChain<"main">>[0]["blockers"];
+    expectTypeOf<[{ id: string }]>().toExtend<MainBlockers>();
+    expectTypeOf<[typeof blockerChain, typeof otherChain]>().toExtend<MainBlockers>();
+    expectTypeOf<[{ id: string; typeName: "other" }]>().not.toExtend<MainBlockers>();
+
+    await expect(
+      withTransaction(async (txCtx, transactionHooks) =>
+        client.createChain({
+          ...txCtx,
+          transactionHooks,
+          typeName: "main",
+          input: null,
+          blockers: [{ id: otherChain.id, typeName: "blocker" }],
+        }),
+      ),
+    ).rejects.toThrow(ChainTypeMismatchError);
+
+    await expect(
+      withTransaction(async (txCtx, transactionHooks) =>
+        client.createChain({
+          ...txCtx,
+          transactionHooks,
+          typeName: "main",
+          input: null,
+          blockers: [{ ...otherChain, typeName: "blocker" as const }],
+        }),
+      ),
+    ).rejects.toThrow(ChainTypeMismatchError);
+
+    await withWorkers([await worker.start()], async () => {
+      const succeededChain = await client.awaitChain(chain, completionOptions);
+
+      expect(succeededChain.output).toEqual({ sum: 12 });
     });
   });
 

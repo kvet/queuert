@@ -6,6 +6,7 @@
  * Scenarios:
  * 1. Fan-out/Fan-in: Multiple fetch jobs run in parallel, aggregate waits for all
  * 2. Fixed Slots: Job requires exactly two specific prerequisite jobs
+ * 3. Blocker by ID: An order stores its payment chain ID while payment is pending; shipping waits on it by ID
  */
 
 import assert from "node:assert/strict";
@@ -64,6 +65,23 @@ const jobTypes = defineJobTypes<{
     output: { actionId: string; result: string };
     blockers: [{ typeName: "validate-user" }, { typeName: "load-config" }];
   };
+
+  /*
+   * Workflow (blocker by ID):
+   *   capture-payment (ID saved on the order while awaiting_payment) --> ship-order
+   *   ship-order has no blocker once the order is already paid
+   */
+  "capture-payment": {
+    entry: true;
+    input: { orderId: string; amount: number };
+    output: { transactionId: string };
+  };
+  "ship-order": {
+    entry: true;
+    input: { orderId: string };
+    output: { orderId: string; trackingNumber: string };
+    blockers: [...{ typeName: "capture-payment" }[]];
+  };
 }>();
 
 await using pg = await acquirePostgres("postgres:18", import.meta.url);
@@ -74,6 +92,14 @@ const stateAdapter = await createPgStateAdapter({ stateProvider });
 await stateAdapter.migrateToLatest();
 const notifyProvider = createPostgresJsNotifyProvider({ sql });
 const notifyAdapter = await createPgNotifyAdapter({ notifyProvider });
+
+await sql`
+  CREATE TABLE orders (
+    id text PRIMARY KEY,
+    status text NOT NULL,
+    payment_chain_id uuid
+  )
+`;
 
 const client = await createClient({
   stateAdapter,
@@ -157,6 +183,34 @@ const worker = await createInProcessWorker({
           );
         },
       },
+
+      "capture-payment": {
+        attemptHandler: async ({ job, complete }) => {
+          console.log(`[capture-payment] Charging ${job.input.amount} for ${job.input.orderId}`);
+          await new Promise((r) => setTimeout(r, 100));
+          return complete(async ({ finish, txSql }) => {
+            await txSql`
+              UPDATE orders SET status = 'paid', payment_chain_id = NULL
+              WHERE id = ${job.input.orderId}
+            `;
+            return finish({ output: { transactionId: `txn-${job.input.orderId}` } });
+          });
+        },
+      },
+
+      "ship-order": {
+        attemptHandler: async ({ job, complete }) => {
+          console.log(
+            `[ship-order] Shipping ${job.input.orderId} (waited on ${job.blockers.length} payment chain)`,
+          );
+          return complete(async ({ finish, txSql }) => {
+            await txSql`UPDATE orders SET status = 'shipped' WHERE id = ${job.input.orderId}`;
+            return finish({
+              output: { orderId: job.input.orderId, trackingNumber: `track-${job.input.orderId}` },
+            });
+          });
+        },
+      },
     },
   }),
 });
@@ -222,6 +276,61 @@ console.log(`\nResult: "${result2.output.result}"`);
 assert.equal(result2.output.actionId, "action-001");
 assert.ok(result2.output.result.includes("admin"));
 assert.ok(result2.output.result.includes("production"));
+
+// Scenario 3: Blocker by ID
+console.log("\n--- Scenario 3: Blocker by ID ---");
+console.log(
+  "The order stores its payment chain ID while payment is pending; shipping waits on it.\n",
+);
+
+await withTransactionHooks(async (transactionHooks) =>
+  sql.begin(async (txSql) => {
+    const paymentChain = await client.createChain({
+      txSql,
+      transactionHooks,
+      typeName: "capture-payment",
+      input: { orderId: "order-001", amount: 4200 },
+    });
+    await txSql`
+      INSERT INTO orders (id, status, payment_chain_id)
+      VALUES ('order-001', 'awaiting_payment', ${paymentChain.id})
+    `;
+  }),
+);
+
+const shipChain = await withTransactionHooks(async (transactionHooks) =>
+  sql.begin(async (txSql) => {
+    const [order] = await txSql<
+      {
+        id: string;
+        status: "awaiting_payment" | "paid" | "shipped";
+        payment_chain_id: ReturnType<typeof crypto.randomUUID> | null;
+      }[]
+    >`
+      SELECT id, status, payment_chain_id FROM orders WHERE id = 'order-001' FOR UPDATE
+    `;
+    const paymentChainId = order.status === "awaiting_payment" ? order.payment_chain_id : null;
+    return client.createChain({
+      txSql,
+      transactionHooks,
+      typeName: "ship-order",
+      input: { orderId: order.id },
+      blockers: paymentChainId ? [{ id: paymentChainId }] : [],
+    });
+  }),
+);
+
+// TODO: remove once queuert re-wakes blocker chains it locks (see TODO.md). Attaching the blocker
+// locked the pending capture-payment job, so a worker woken at that moment skipped it
+// (SKIP LOCKED) and would idle until its next poll. Re-publish the wake-up after commit.
+await notifyProvider.publish("queuert_sched", "capture-payment");
+
+const result3 = await client.awaitChain(shipChain, { timeoutMs: 10000 });
+console.log(`\nResult: ${result3.output.orderId} shipped as ${result3.output.trackingNumber}`);
+const [shippedOrder] = await sql<
+  { status: string }[]
+>`SELECT status FROM orders WHERE id = 'order-001'`;
+assert.equal(shippedOrder.status, "shipped");
 
 await stopWorker();
 await notifyAdapter.close();

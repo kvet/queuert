@@ -8,6 +8,7 @@ import { type BaseJobTypeDefinitions } from "./entities/job-type.js";
 import { type JobTypes } from "./entities/job-types.js";
 import {
   type BlockerChains,
+  type BlockerChainsInput,
   type JobTypeBlockedNames,
   type JobTypeChainNames,
   type JobTypeEntryNames,
@@ -172,7 +173,7 @@ type CreateChainEntry<
   deduplication?: DeduplicationOptions;
   schedule?: ScheduleOptions;
 } & (JobTypeHasBlockers<TJobTypeDefinitions, TTypeName> extends true
-  ? { blockers: BlockerChains<TJobId, TJobTypeDefinitions, TTypeName> }
+  ? { blockers: BlockerChainsInput<TJobId, TJobTypeDefinitions, TTypeName> }
   : { blockers?: never });
 
 type AnyCreateChainEntry<TJobId, TJobTypeDefinitions extends BaseJobTypeDefinitions> = {
@@ -246,6 +247,7 @@ export type Client<
    * @throws {@link InvalidJobIdError} if `id` fails the state adapter's `validateId` check.
    * @throws {@link BlockerLimitExceededError} if the root job declares more blockers than the per-job limit.
    * @throws {@link ChainNotFoundError} if a blocker chain does not exist.
+   * @throws {@link ChainTypeMismatchError} if a blocker's `typeName` differs from the stored chain's.
    * @throws {@link JobTypeValidationError} if the job type rejects the entry, input, or blockers.
    * @throws TypeError if `deduplication.scope` is missing or not `"running"` / `"any"`.
    * @throws The state adapter's own error (e.g. a unique-constraint violation) if a caller-supplied `id` is already taken.
@@ -268,6 +270,7 @@ export type Client<
    * @throws {@link InvalidJobIdError} if any `id` fails the state adapter's `validateId` check.
    * @throws {@link BlockerLimitExceededError} if any root job declares more blockers than the per-job limit.
    * @throws {@link ChainNotFoundError} if any blocker chain does not exist.
+   * @throws {@link ChainTypeMismatchError} if a blocker's `typeName` differs from the stored chain's.
    * @throws {@link JobTypeValidationError} if a job type rejects an item's entry, input, or blockers.
    * @throws TypeError if `deduplication.scope` is missing or not `"running"` / `"any"`.
    * @throws The state adapter's own error (e.g. a unique-constraint violation) if a caller-supplied `id` is already taken.
@@ -366,6 +369,8 @@ export type Client<
    * @throws {@link ChainTypeMismatchError} if the chain's type does not match `typeName`.
    * @throws {@link JobAlreadyCompletedError} from the inner `completeJob` if the job is already completed.
    * @throws {@link BlockerLimitExceededError} from the inner `finish` if a `continueWith` outcome declares more blockers than the per-job limit.
+   * @throws {@link ChainNotFoundError} from the inner `finish` if a `continueWith` blocker chain does not exist.
+   * @throws {@link ChainTypeMismatchError} from the inner `finish` if a `continueWith` blocker's `typeName` differs from the stored chain's.
    */
   completeChain: <
     TChainTypeName extends JobTypeEntryNames<TJobTypeDefinitions>,
@@ -670,7 +675,7 @@ export const createClient = async <
         schedule?: ScheduleOptions;
       } & (JobTypeHasBlockers<TJobTypeDefinitions, TChainTypeName> extends true
         ? {
-            blockers: BlockerChains<TJobId, TJobTypeDefinitions, TChainTypeName>;
+            blockers: BlockerChainsInput<TJobId, TJobTypeDefinitions, TChainTypeName>;
           }
         : { blockers?: never }) &
         GetStateAdapterTxContext<TStateAdapter>,

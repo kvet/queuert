@@ -250,6 +250,71 @@ export const validationTestSuite = ({ it }: { it: TestAPI<TestSuiteContext> }): 
     ).rejects.toThrow(JobTypeValidationError);
   });
 
+  it("validates blockers against the stored chain, not the passed object", async ({
+    stateAdapter,
+    notifyAdapter,
+    withTransaction,
+    observabilityAdapter,
+    log,
+    expect,
+  }) => {
+    const validatedBlockers: unknown[] = [];
+    const jobTypes = createJobTypes<{
+      main: {
+        entry: true;
+        input: null;
+        output: null;
+        blockers: [{ input: { token: string } }];
+      };
+      auth: { entry: true; input: { token: string }; output: null };
+    }>({
+      getTypeNames: () => ["main", "auth"],
+      validateEntry: () => {},
+      parseInput: (_typeName, input) => input,
+      parseOutput: (_typeName, output) => output,
+      validateContinueWith: () => {},
+      validateBlockers: (_typeName, blockers) => {
+        validatedBlockers.push(...blockers);
+      },
+    });
+    const client = await createClient({
+      stateAdapter,
+      notifyAdapter,
+      observabilityAdapter,
+      log,
+      jobTypes,
+    });
+
+    await withTransaction(async (txCtx, transactionHooks) => {
+      const authChain = await client.createChain({
+        ...txCtx,
+        transactionHooks,
+        typeName: "auth",
+        input: { token: "stored" },
+      });
+      const forgedAuthChain = { ...authChain, input: { token: "forged" } };
+      await client.createChain({
+        ...txCtx,
+        transactionHooks,
+        typeName: "main",
+        input: null,
+        blockers: [forgedAuthChain],
+      });
+      await client.createChain({
+        ...txCtx,
+        transactionHooks,
+        typeName: "main",
+        input: null,
+        blockers: [{ id: authChain.id }],
+      });
+    });
+
+    expect(validatedBlockers).toEqual([
+      { typeName: "auth", input: { token: "stored" } },
+      { typeName: "auth", input: { token: "stored" } },
+    ]);
+  });
+
   it("accepts valid output during worker completion", async ({
     stateAdapter,
     notifyAdapter,

@@ -400,6 +400,37 @@ export type BlockerChains<
         : []
     : [];
 
+type MapBlockersToChainsInput<
+  TJobId,
+  TJobTypeDefinitions extends BaseJobTypeDefinitions,
+  TBlockers extends readonly unknown[],
+> = {
+  [K in keyof TBlockers]: TBlockers[K] extends JobTypeReference
+    ? {
+        id: TJobId;
+        typeName?: ResolveReferenceDistributive<TJobTypeDefinitions, TBlockers[K]> & string;
+      }
+    : never;
+};
+
+/**
+ * What `createChain`, `createChains`, and `continueWith` accept as `blockers`: an `id` per blocker slot, with an
+ * optional `typeName` checked against the slot at compile time. A full {@link Chain} also fits.
+ * Core loads each blocker chain under lock and validates the stored chain, not the passed object.
+ */
+export type BlockerChainsInput<
+  TJobId,
+  TJobTypeDefinitions extends BaseJobTypeDefinitions,
+  TJobTypeName extends string,
+> =
+  JobTypeProperty<TJobTypeDefinitions, TJobTypeName, "blockers"> extends infer TBlockers
+    ? [TBlockers] extends [never]
+      ? []
+      : TBlockers extends readonly unknown[]
+        ? MapBlockersToChainsInput<TJobId, TJobTypeDefinitions, TBlockers>
+        : []
+    : [];
+
 type BlockerRefNames<
   TJobTypeDefinitions extends BaseJobTypeDefinitions,
   TDefEntry,

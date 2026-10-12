@@ -1,4 +1,3 @@
-import { type AnyChain } from "../entities/chain.js";
 import { type JobTypeValidationError } from "../errors.js";
 import { type NotifyAdapter } from "../notify-adapter/notify-adapter.js";
 import {
@@ -90,7 +89,7 @@ export type ObservabilityHelper = {
     stateJob: StateJob,
     options: {
       input: unknown;
-      blockers: AnyChain[];
+      blockers: StateChainInfo[];
     },
   ) => void;
   jobCompleted: (
@@ -98,7 +97,7 @@ export type ObservabilityHelper = {
     options: { output: unknown; continuedWith?: StateJobInfo },
   ) => void;
   jobRescheduled: (stateJob: StateJob) => void;
-  jobBlocked: (stateJob: StateJob, options: { blockedByChains: AnyChain[] }) => void;
+  jobBlocked: (stateJob: StateJob, options: { blockedByChains: StateChainInfo[] }) => void;
   jobUnblocked: (stateJob: StateJob, options: { unblockedByChain: StateChainInfo }) => void;
 
   // job attempt

@@ -85,12 +85,32 @@ const worker = await createInProcessWorker({
 const stop = await worker.start();
 ```
 
+## Passing Blockers by ID
+
+Often the blocker chain was created earlier and only its ID was saved. Think of an entity that works like a state machine: an order in the `awaiting_payment` state stores the ID of the `capture-payment` chain that moves it forward, and that chain clears it when it marks the order `paid`. Shipping locks the order and waits on the stored ID only while payment is still pending:
+
+```ts
+const [order] = await txSql`
+  SELECT id, status, payment_chain_id FROM orders WHERE id = ${orderId} FOR UPDATE
+`;
+
+await client.createChain({
+  txSql,
+  transactionHooks,
+  typeName: "ship-order",
+  input: { orderId: order.id },
+  blockers: order.status === "awaiting_payment" ? [{ id: order.payment_chain_id }] : [],
+});
+```
+
+Only keep the ID while the chain is still running: a completed chain can be removed by [cleanup](/queuert/guides/cleanup/), and a missing blocker chain throws [`ChainNotFoundError`](/queuert/api/core/classes/chainnotfounderror/).
+
 ## Blocker References
 
-The example above uses **nominal references** — `{ typeName: "fetch-data" }`. Blockers also support fixed tuple slots, variadic rest slots, and **structural references** (`{ input: {...} }`) that match any entry job type with a compatible input shape. Blocker outputs are fully typed in the processor based on the reference. See [Job Type References](/queuert/advanced/job-type-references/) for details and examples.
+The first example uses **nominal references** — `{ typeName: "fetch-data" }`. Blockers also support fixed tuple slots, variadic rest slots, and **structural references** (`{ input: {...} }`) that match any entry job type with a compatible input shape. Blocker outputs are fully typed in the processor based on the reference. See [Job Type References](/queuert/advanced/job-type-references/) for details and examples.
 
 ## Blocker Limit
 
 A single job may declare at most **100** blocker chains by default. Declaring more throws [`BlockerLimitExceededError`](/queuert/api/core/classes/blockerlimitexceedederror/) before any state is written. The limit belongs to the state adapter — pass `maxBlockersPerJob` to `createPgStateAdapter`, `createSqliteStateAdapter`, or `createInProcessStateAdapter` to raise or lower it. Keep it bounded: the blocker model is built for fan-in of a bounded set of dependencies, not millions per job.
 
-See [examples/showcase-blockers](https://github.com/kvet/queuert/tree/main/examples/showcase-blockers) for a complete working example demonstrating fan-out/fan-in and fixed blocker slots. See also [Transaction Hooks](../transaction-hooks/) and [Chain Patterns](../chain-patterns/).
+See [examples/showcase-blockers](https://github.com/kvet/queuert/tree/main/examples/showcase-blockers) for a complete working example demonstrating fan-out/fan-in, fixed blocker slots, and blockers by ID. See also [Transaction Hooks](../transaction-hooks/) and [Chain Patterns](../chain-patterns/).

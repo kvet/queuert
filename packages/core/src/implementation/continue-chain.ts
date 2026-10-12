@@ -1,4 +1,3 @@
-import { type AnyChain } from "../entities/chain.js";
 import { type ScheduleOptions } from "../entities/schedule.js";
 import { type Helpers } from "../setup-helpers.js";
 import { type BaseTxContext, type StateJob } from "../state-adapter/state-adapter.js";
@@ -12,7 +11,7 @@ export type AnyContinueWith = {
   id?: string;
   input: unknown;
   schedule?: ScheduleOptions;
-  blockers?: AnyChain[];
+  blockers?: { id: string; typeName?: string }[];
 };
 
 export const continueChain = async (
