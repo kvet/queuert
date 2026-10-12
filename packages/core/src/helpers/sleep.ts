@@ -1,3 +1,25 @@
+const MAX_TIMEOUT_MS = 2_147_483_647;
+
+export const setLongTimeout = (callback: () => void, ms: number): (() => void) => {
+  // Match setTimeout, which fires NaN delays right away; Infinity re-arms forever.
+  const delayMs = Number.isNaN(ms) ? 0 : ms;
+  const deadline = Date.now() + delayMs;
+  let timeoutId: ReturnType<typeof setTimeout>;
+  const arm = (remainingMs: number): void => {
+    if (remainingMs <= MAX_TIMEOUT_MS) {
+      timeoutId = setTimeout(callback, remainingMs);
+      return;
+    }
+    timeoutId = setTimeout(() => {
+      arm(deadline - Date.now());
+    }, MAX_TIMEOUT_MS);
+  };
+  arm(delayMs);
+  return () => {
+    clearTimeout(timeoutId);
+  };
+};
+
 export const sleep = async (
   ms: number,
   { jitterMs = 0, signal }: { jitterMs?: number; signal?: AbortSignal } = {},
@@ -9,11 +31,11 @@ export const sleep = async (
     }
 
     const onAbort = () => {
-      clearTimeout(timeoutId);
+      clearLongTimeout();
       resolve();
     };
 
-    const timeoutId = setTimeout(
+    const clearLongTimeout = setLongTimeout(
       () => {
         signal?.removeEventListener("abort", onAbort);
         resolve();

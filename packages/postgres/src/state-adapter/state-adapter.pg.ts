@@ -797,7 +797,7 @@ inserted_jobs AS (
   SELECT
     ti.id, ti.type_name, ti.chain_id,
     ti.chain_index, 'running', ti.input::jsonb, ti.dedup_key,
-    GREATEST(COALESCE(ti.scheduled_at, now() + (ti.schedule_after_ms || ' milliseconds')::interval, now()), now()),
+    GREATEST(COALESCE(ti.scheduled_at, now() + (ti.schedule_after_ms * interval '1 millisecond'), now()), now()),
     ti.chain_trace_context, ti.trace_context
   FROM to_insert ti
   RETURNING *
@@ -885,7 +885,7 @@ inserted AS (
   INSERT INTO {{schema}}.{{table_prefix}}job (id, type_name, chain_id, chain_index, input, scheduled_at, trace_context)
   SELECT
     pr.new_id, pr.type_name, pr.chain_id, pr.chain_index + 1, pr.input::jsonb,
-    GREATEST(COALESCE(pr.sched_at, now() + (pr.sched_after_ms || ' milliseconds')::interval, now()), now()),
+    GREATEST(COALESCE(pr.sched_at, now() + (pr.sched_after_ms * interval '1 millisecond'), now()), now()),
     pr.trace_context
   FROM parent pr
   RETURNING *
@@ -1056,7 +1056,7 @@ WITH input_data AS (
 updated AS (
   UPDATE {{schema}}.{{table_prefix}}job j
   SET status = CASE WHEN j.status = 'running' THEN 'pending' ELSE j.status END,
-    scheduled_at = GREATEST(COALESCE(d.at, now() + (d.after_ms || ' milliseconds')::interval, now()), now()),
+    scheduled_at = GREATEST(COALESCE(d.at, now() + (d.after_ms * interval '1 millisecond'), now()), now()),
     last_attempt_at = CASE WHEN j.status = 'running' THEN now() ELSE j.last_attempt_at END,
     last_attempt_error = CASE WHEN j.status = 'running' THEN d.error::jsonb ELSE j.last_attempt_error END,
     attempt_at = NULL,
@@ -1322,7 +1322,7 @@ SELECT delay_ms
 FROM (
   SELECT COALESCE(
     (SELECT 0 FROM due LIMIT 1),
-    (SELECT CEIL(EXTRACT(EPOCH FROM (scheduled_at - now())) * 1000)::integer FROM upcoming)
+    (SELECT CEIL(EXTRACT(EPOCH FROM (scheduled_at - now())) * 1000)::double precision FROM upcoming)
   ) AS delay_ms
 ) d
 WHERE delay_ms IS NOT NULL
@@ -1349,7 +1349,7 @@ WHERE delay_ms IS NOT NULL
               `
 WITH updated AS (
   UPDATE {{schema}}.{{table_prefix}}job
-  SET attempt_until = now() + ($3::bigint || ' milliseconds')::interval
+  SET attempt_until = now() + ($3::bigint * interval '1 millisecond')
   WHERE id = $1
     AND attempt_by = $2
   RETURNING *

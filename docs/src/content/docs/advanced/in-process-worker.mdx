@@ -63,6 +63,8 @@ The worker runs a single coordinating loop:
 3. **Wait**: Listen for notification, poll timeout, or slot completion
 4. **Repeat**
 
+If an iteration throws, the worker emits `workerError` and sleeps per `recoveryBackoffConfig` before the next one. The backoff grows only while consecutive iterations keep failing and resets once an iteration completes, so an isolated error long after a past outage gets the initial delay rather than the maximum.
+
 ### Shutdown
 
 On startup, the worker emits a `workerStarted` observability event.

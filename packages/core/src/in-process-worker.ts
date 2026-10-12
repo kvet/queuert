@@ -4,12 +4,12 @@ import { type Client, helpersSymbol } from "./client.js";
 import { type BaseJobTypeDefinitions } from "./entities/job-type.js";
 import { type BackoffConfig } from "./helpers/backoff.js";
 import { type ParallelExecutor, createParallelExecutor } from "./helpers/parallel-executor.js";
+import { withRetry } from "./helpers/retry.js";
 import { raceWithSleep } from "./helpers/sleep.js";
 import {
   type TransactionContext,
   createTransactionContext,
 } from "./helpers/transaction-context.js";
-import { withRetry } from "./internal.js";
 import { type NotifyAdapter } from "./notify-adapter/notify-adapter.js";
 import { type Helpers } from "./setup-helpers.js";
 import {
@@ -390,93 +390,94 @@ export const createInProcessWorker = async <
       const executor = createParallelExecutor(concurrencyValue);
       const jobIdsInProgress = new Set<string>();
 
-      const runWorkerLoop = async () => {
-        while (true) {
-          try {
-            while (executor.idleSlots() > 0) {
-              const result = await performJob({
-                helpers,
-                typeNames,
-                processors,
-                defaultBackoffConfig,
-                defaultAttemptConfig,
-                workerId,
-                stopSignal: stopController.signal,
-              });
-
-              if (!result.stateJob) {
-                break;
-              }
-              jobIdsInProgress.add(result.stateJob.id);
-              void executor.add(async () => {
-                observabilityHelper.jobTypeProcessingChange(1, result.stateJob, workerId);
-                observabilityHelper.jobTypeIdleChange(-1, workerId, typeNames);
-                try {
-                  await result.execute();
-                } catch (error) {
-                  observabilityHelper.workerError({ workerId }, error);
-                } finally {
-                  jobIdsInProgress.delete(result.stateJob.id);
-                  observabilityHelper.jobTypeIdleChange(1, workerId, typeNames);
-                  observabilityHelper.jobTypeProcessingChange(-1, result.stateJob, workerId);
-                }
-              });
-            }
-
-            if (stopController.signal.aborted) {
-              return;
-            }
-
-            if (executor.idleSlots() > 0) {
-              const reclaimed = await stateAdapter.withTransaction(async (txCtx) =>
-                stateAdapter.reclaimExpiredJobAttempt({
-                  txCtx,
-                  typeNames,
-                  ignoredJobIds: Array.from(jobIdsInProgress),
-                }),
-              );
-              if (reclaimed) {
-                observabilityHelper.jobAttemptReclaimed(reclaimed, { workerId });
-
-                try {
-                  await notifyAdapter.provideWakeHint(reclaimed.typeName, 1);
-                  await notifyAdapter.notifyJobScheduled(reclaimed.typeName);
-                } catch {}
-                try {
-                  await notifyAdapter.notifyJobAttemptLost(reclaimed.id);
-                } catch {}
-              }
-
-              if (stopController.signal.aborted) {
-                return;
-              }
-
-              if (reclaimed) {
-                continue;
-              }
-            }
-
-            await waitForNextJob({
-              stateAdapter,
-              notifyAdapter,
+      const runWorkerIteration = async () => {
+        try {
+          while (executor.idleSlots() > 0) {
+            const result = await performJob({
+              helpers,
               typeNames,
-              pollIntervalMs,
-              executor,
-              signal: stopController.signal,
+              processors,
+              defaultBackoffConfig,
+              defaultAttemptConfig,
+              workerId,
+              stopSignal: stopController.signal,
             });
+
+            if (!result.stateJob) {
+              break;
+            }
+            jobIdsInProgress.add(result.stateJob.id);
+            void executor.add(async () => {
+              observabilityHelper.jobTypeProcessingChange(1, result.stateJob, workerId);
+              observabilityHelper.jobTypeIdleChange(-1, workerId, typeNames);
+              try {
+                await result.execute();
+              } catch (error) {
+                observabilityHelper.workerError({ workerId }, error);
+              } finally {
+                jobIdsInProgress.delete(result.stateJob.id);
+                observabilityHelper.jobTypeIdleChange(1, workerId, typeNames);
+                observabilityHelper.jobTypeProcessingChange(-1, result.stateJob, workerId);
+              }
+            });
+          }
+
+          if (stopController.signal.aborted) {
+            return;
+          }
+
+          if (executor.idleSlots() > 0) {
+            const reclaimed = await stateAdapter.withTransaction(async (txCtx) =>
+              stateAdapter.reclaimExpiredJobAttempt({
+                txCtx,
+                typeNames,
+                ignoredJobIds: Array.from(jobIdsInProgress),
+              }),
+            );
+            if (reclaimed) {
+              observabilityHelper.jobAttemptReclaimed(reclaimed, { workerId });
+
+              try {
+                await notifyAdapter.provideWakeHint(reclaimed.typeName, 1);
+                await notifyAdapter.notifyJobScheduled(reclaimed.typeName);
+              } catch {}
+              try {
+                await notifyAdapter.notifyJobAttemptLost(reclaimed.id);
+              } catch {}
+            }
+
             if (stopController.signal.aborted) {
               return;
             }
-          } catch (error) {
-            observabilityHelper.workerError({ workerId }, error);
-            throw error;
+
+            if (reclaimed) {
+              return;
+            }
           }
+
+          await waitForNextJob({
+            stateAdapter,
+            notifyAdapter,
+            typeNames,
+            pollIntervalMs,
+            executor,
+            signal: stopController.signal,
+          });
+        } catch (error) {
+          observabilityHelper.workerError({ workerId }, error);
+          throw error;
         }
       };
 
-      const runWorkerLoopPromise = withRetry(async () => runWorkerLoop(), recoveryBackoffConfig, {
-        signal: stopController.signal,
-      }).catch(() => {});
+      const runWorkerLoop = async () => {
+        while (!stopController.signal.aborted) {
+          await withRetry(runWorkerIteration, recoveryBackoffConfig, {
+            signal: stopController.signal,
+          });
+        }
+      };
+
+      const runWorkerLoopPromise = runWorkerLoop().catch(() => {});
 
       return async () => {
         observabilityHelper.workerStopping({ workerId });

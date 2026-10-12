@@ -445,6 +445,30 @@ export const rescheduleJobsGroup: ConformanceGroup<StateConformanceFixture> = {
       },
     },
     {
+      name: "reschedules with a schedule.afterMs of 30 days",
+      run: async ({ stateAdapter }, expect) => {
+        const thirtyDaysMs = 30 * 24 * 60 * 60 * 1000;
+        const [createdChain] = await stateAdapter.withTransaction(async (txCtx) =>
+          stateAdapter.createJobs({
+            txCtx,
+            jobs: [{ id: stateAdapter.config.generateId(), typeName: "resched-far", input: null }],
+          }),
+        );
+
+        const before = Date.now();
+        const rescheduled = await stateAdapter.withTransaction(async (txCtx) =>
+          stateAdapter.rescheduleJobs({
+            txCtx,
+            jobs: [{ jobId: createdChain.head.id, schedule: { afterMs: thirtyDaysMs } }],
+          }),
+        );
+
+        const diff = rescheduled[0]!.scheduledAt.getTime() - before;
+        expect(diff).toBeGreaterThanOrEqual(thirtyDaysMs - 1000);
+        expect(diff).toBeLessThan(thirtyDaysMs + 1000);
+      },
+    },
+    {
       name: "clamps a past schedule.at to now",
       run: async ({ stateAdapter }, expect) => {
         const [createdChain] = await stateAdapter.withTransaction(async (txCtx) =>

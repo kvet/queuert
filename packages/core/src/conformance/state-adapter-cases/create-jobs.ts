@@ -493,6 +493,30 @@ export const createJobsGroup: ConformanceGroup<StateConformanceFixture> = {
       },
     },
     {
+      name: "schedules with a schedule.afterMs of 30 days",
+      run: async ({ stateAdapter }, expect) => {
+        const thirtyDaysMs = 30 * 24 * 60 * 60 * 1000;
+        const before = Date.now();
+        const [createdChain] = await stateAdapter.withTransaction(async (txCtx) =>
+          stateAdapter.createJobs({
+            txCtx,
+            jobs: [
+              {
+                id: stateAdapter.config.generateId(),
+                typeName: "schedule-far",
+                input: null,
+                schedule: { afterMs: thirtyDaysMs },
+              },
+            ],
+          }),
+        );
+
+        const diff = createdChain.head.scheduledAt.getTime() - before;
+        expect(diff).toBeGreaterThanOrEqual(thirtyDaysMs - 1000);
+        expect(diff).toBeLessThan(thirtyDaysMs + 1000);
+      },
+    },
+    {
       name: "clamps past schedule.at to now (scheduled_at is eligibility floor, never a past lie)",
       run: async ({ stateAdapter }, expect) => {
         const past = new Date(Date.now() - 60 * 60 * 1000);

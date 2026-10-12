@@ -42,6 +42,38 @@ export const continueJobsGroup: ConformanceGroup<StateConformanceFixture> = {
       },
     },
     {
+      name: "schedules the continuation with a schedule.afterMs of 30 days",
+      run: async ({ stateAdapter }, expect) => {
+        const thirtyDaysMs = 30 * 24 * 60 * 60 * 1000;
+        const [headChain] = await stateAdapter.withTransaction(async (txCtx) =>
+          stateAdapter.createJobs({
+            txCtx,
+            jobs: [{ id: stateAdapter.config.generateId(), typeName: "far-head", input: null }],
+          }),
+        );
+
+        const before = Date.now();
+        const [continued] = await stateAdapter.withTransaction(async (txCtx) =>
+          stateAdapter.continueJobs({
+            txCtx,
+            jobs: [
+              {
+                id: stateAdapter.config.generateId(),
+                typeName: "far-child",
+                continueFromId: headChain.head.id,
+                input: null,
+                schedule: { afterMs: thirtyDaysMs },
+              },
+            ],
+          }),
+        );
+
+        const diff = continued!.continuation.scheduledAt.getTime() - before;
+        expect(diff).toBeGreaterThanOrEqual(thirtyDaysMs - 1000);
+        expect(diff).toBeLessThan(thirtyDaysMs + 1000);
+      },
+    },
+    {
       name: "round-trips a scalar JSON input on the continuation",
       run: async ({ stateAdapter }, expect) => {
         const [headChain] = await stateAdapter.withTransaction(async (txCtx) =>

@@ -44,6 +44,42 @@ export const extendJobAttemptGroup: ConformanceGroup<StateConformanceFixture> = 
       },
     },
     {
+      name: "extends attempt by 30 days",
+      run: async ({ stateAdapter }, expect) => {
+        const thirtyDaysMs = 30 * 24 * 60 * 60 * 1000;
+        const [createdChain] = await stateAdapter.withTransaction(async (txCtx) =>
+          stateAdapter.createJobs({
+            txCtx,
+            jobs: [
+              { id: stateAdapter.config.generateId(), typeName: "far-attempt-test", input: null },
+            ],
+          }),
+        );
+
+        await stateAdapter.withTransaction(async (txCtx) =>
+          stateAdapter.startJobAttempt({
+            txCtx,
+            workerId: "worker-1",
+            typeNames: ["far-attempt-test"],
+          }),
+        );
+
+        const before = Date.now();
+        const renewed = await stateAdapter.withTransaction(async (txCtx) =>
+          stateAdapter.extendJobAttempt({
+            txCtx,
+            jobId: createdChain.head.id,
+            workerId: "worker-1",
+            timeoutMs: thirtyDaysMs,
+          }),
+        );
+
+        const diff = renewed!.attemptUntil!.getTime() - before;
+        expect(diff).toBeGreaterThanOrEqual(thirtyDaysMs - 1000);
+        expect(diff).toBeLessThan(thirtyDaysMs + 1000);
+      },
+    },
+    {
       name: "updates attemptUntil on subsequent extensions",
       run: async ({ stateAdapter }, expect) => {
         const [createdChain] = await stateAdapter.withTransaction(async (txCtx) =>

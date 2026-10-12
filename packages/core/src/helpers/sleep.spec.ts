@@ -1,6 +1,6 @@
 import { describe, expect, test, vi } from "vitest";
 
-import { sleep } from "./sleep.js";
+import { setLongTimeout, sleep } from "./sleep.js";
 
 describe("sleep", () => {
   test("resolves after specified duration", async () => {
@@ -71,5 +71,76 @@ describe("sleep", () => {
 
     expect(addSpy).toHaveBeenCalledTimes(1);
     expect(removeSpy).toHaveBeenCalledTimes(1);
+  });
+});
+
+describe("setLongTimeout", () => {
+  test("waits the full delay when it exceeds the 2^31-1 ms timer limit", () => {
+    vi.useFakeTimers();
+    try {
+      const thirtyDaysMs = 30 * 24 * 60 * 60 * 1000;
+      const callback = vi.fn();
+      setLongTimeout(callback, thirtyDaysMs);
+
+      vi.advanceTimersByTime(thirtyDaysMs - 1000);
+      expect(callback).not.toHaveBeenCalled();
+
+      vi.advanceTimersByTime(1000);
+      expect(callback).toHaveBeenCalledTimes(1);
+    } finally {
+      vi.useRealTimers();
+    }
+  });
+
+  test("does not fire once cleared after a re-arm", () => {
+    vi.useFakeTimers();
+    try {
+      const thirtyDaysMs = 30 * 24 * 60 * 60 * 1000;
+      const callback = vi.fn();
+      const clear = setLongTimeout(callback, thirtyDaysMs);
+
+      vi.advanceTimersByTime(25 * 24 * 60 * 60 * 1000);
+      clear();
+      vi.advanceTimersByTime(thirtyDaysMs);
+      expect(callback).not.toHaveBeenCalled();
+    } finally {
+      vi.useRealTimers();
+    }
+  });
+
+  test("fires right away for a NaN delay", () => {
+    vi.useFakeTimers();
+    try {
+      const callback = vi.fn();
+      setLongTimeout(callback, Number.NaN);
+
+      vi.advanceTimersByTime(0);
+      expect(callback).toHaveBeenCalledTimes(1);
+    } finally {
+      vi.useRealTimers();
+    }
+  });
+});
+
+describe("sleep beyond the 2^31-1 ms timer limit", () => {
+  test("resolves when aborted after a re-arm and leaves no timer behind", async () => {
+    vi.useFakeTimers();
+    try {
+      const controller = new AbortController();
+      let resolved = false;
+      const sleeping = sleep(30 * 24 * 60 * 60 * 1000, { signal: controller.signal }).then(() => {
+        resolved = true;
+      });
+
+      await vi.advanceTimersByTimeAsync(25 * 24 * 60 * 60 * 1000);
+      expect(resolved).toBe(false);
+
+      controller.abort();
+      await sleeping;
+      expect(resolved).toBe(true);
+      expect(vi.getTimerCount()).toBe(0);
+    } finally {
+      vi.useRealTimers();
+    }
   });
 });

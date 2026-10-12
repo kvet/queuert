@@ -46,7 +46,7 @@ import {
 } from "./errors.js";
 import { bufferNotifyJobAttemptLost, bufferNotifyJobScheduled } from "./helpers/notify-hooks.js";
 import { bufferObservabilityEvent } from "./helpers/observability-hooks.js";
-import { raceWithSleep } from "./helpers/sleep.js";
+import { raceWithSleep, setLongTimeout } from "./helpers/sleep.js";
 import { type IsUnion } from "./helpers/typescript.js";
 import { createFinishOnce, mapFinishResult } from "./implementation/attempt-outcome.js";
 import { completeChain } from "./implementation/complete-chain.js";
@@ -1100,7 +1100,7 @@ export const createClient = async <
       };
 
       const timeoutController = new AbortController();
-      const timeoutId = setTimeout(() => {
+      const clearTimeoutTimer = setLongTimeout(() => {
         timeoutController.abort(
           new WaitChainTimeoutError(
             `Timeout waiting for chain ${id} to complete after ${timeoutMs}ms`,
@@ -1150,7 +1150,7 @@ export const createClient = async <
           { chainId: id, timeoutMs, cause: signal?.reason },
         );
       } finally {
-        clearTimeout(timeoutId);
+        clearTimeoutTimer();
         await dispose();
       }
     },

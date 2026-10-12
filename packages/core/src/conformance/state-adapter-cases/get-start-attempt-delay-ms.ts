@@ -42,6 +42,30 @@ export const getStartAttemptDelayMsGroup: ConformanceGroup<StateConformanceFixtu
       },
     },
     {
+      name: "returns the full delay for a job scheduled 30 days ahead",
+      run: async ({ stateAdapter }, expect) => {
+        const thirtyDaysMs = 30 * 24 * 60 * 60 * 1000;
+        await stateAdapter.withTransaction(async (txCtx) =>
+          stateAdapter.createJobs({
+            txCtx,
+            jobs: [
+              {
+                id: stateAdapter.config.generateId(),
+                typeName: "far-future-test",
+                input: null,
+                schedule: { at: new Date(Date.now() + thirtyDaysMs) },
+              },
+            ],
+          }),
+        );
+
+        const ms = await stateAdapter.getStartAttemptDelayMs({ typeNames: ["far-future-test"] });
+        expect(typeof ms).toBe("number");
+        expect(ms!).toBeGreaterThan(thirtyDaysMs - 5000);
+        expect(ms!).toBeLessThan(thirtyDaysMs + 1000);
+      },
+    },
+    {
       name: "returns 0 when a ready-now job exists alongside a future-scheduled one",
       run: async ({ stateAdapter }, expect) => {
         await stateAdapter.withTransaction(async (txCtx) =>

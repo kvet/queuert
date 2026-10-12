@@ -603,4 +603,77 @@ export const stateResilienceTestSuite = ({
       });
     },
   );
+
+  it(
+    "resets the recovery backoff once the worker loop recovers",
+    { timeout: 15000 },
+    async ({
+      stateAdapter,
+      notifyAdapter,
+      withTransaction,
+      withWorkers,
+      observabilityAdapter,
+      log,
+    }) => {
+      const jobTypes = defineJobTypes<{
+        test: { entry: true; input: null; output: null };
+      }>();
+
+      let failuresLeft = 2;
+      const { promise: recovered, resolve: onRecovered } = Promise.withResolvers<void>();
+      const flakyStartStateAdapter: typeof stateAdapter = {
+        ...stateAdapter,
+        startJobAttempt: async (params) => {
+          if (failuresLeft > 0) {
+            failuresLeft--;
+            throw new Error("startJobAttempt failed");
+          }
+          const result = await stateAdapter.startJobAttempt(params);
+          onRecovered();
+          return result;
+        },
+      };
+
+      const client = await createClient({
+        stateAdapter,
+        notifyAdapter,
+        observabilityAdapter,
+        log,
+        jobTypes,
+      });
+      const workerClient = await createClient({
+        stateAdapter: flakyStartStateAdapter,
+        notifyAdapter,
+        observabilityAdapter,
+        log,
+        jobTypes,
+      });
+      const worker = await createInProcessWorker({
+        client: workerClient,
+        pollIntervalMs: 100,
+        // Delays of 10ms, 1s, then 60s: only a reset keeps the third failure short.
+        recoveryBackoffConfig: { initialDelayMs: 10, multiplier: 100, maxDelayMs: 60_000 },
+        processors: createProcessors({
+          client,
+          jobTypes,
+          processors: {
+            test: {
+              attemptHandler: async ({ complete }) =>
+                complete(async ({ finish }) => finish({ output: null })),
+            },
+          },
+        }),
+      });
+
+      await withWorkers([await worker.start()], async () => {
+        await recovered;
+
+        failuresLeft = 1;
+        const chain = await withTransaction(async (txCtx, transactionHooks) =>
+          client.createChain({ ...txCtx, transactionHooks, typeName: "test", input: null }),
+        );
+        await client.awaitChain(chain, { pollIntervalMs: 100, timeoutMs: 5000 });
+      });
+    },
+  );
 };
