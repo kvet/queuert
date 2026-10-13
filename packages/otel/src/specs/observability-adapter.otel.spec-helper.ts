@@ -62,6 +62,30 @@ const spanStatusMap: Record<string, SpanStatusCode> = {
   ERROR: SpanStatusCode.ERROR,
 };
 
+// Metric attributes must have bounded values; IDs (job, chain, worker) belong on spans only
+const allowedMetricAttributes = new Set([
+  "queuert.job.type",
+  "queuert.chain.type",
+  "queuert.job.continued",
+  "queuert.adapter.operation",
+]);
+
+const expectBoundedMetricAttributes = (
+  lastExport: ReturnType<InMemoryMetricExporter["getMetrics"]>[number] | undefined,
+): void => {
+  const unexpected = new Set<string>();
+  for (const scope of lastExport?.scopeMetrics ?? []) {
+    for (const m of scope.metrics) {
+      for (const p of m.dataPoints) {
+        for (const key of Object.keys(p.attributes)) {
+          if (!allowedMetricAttributes.has(key)) unexpected.add(`${m.descriptor.name}: ${key}`);
+        }
+      }
+    }
+  }
+  expect([...unexpected]).toEqual([]);
+};
+
 type ExpectedEvent = {
   name: string;
   attributes?: Record<string, unknown>;
@@ -162,6 +186,7 @@ export const extendWithObservabilityOtel = <T extends Record<string, unknown>>(
         await use(async (expected) => {
           await _otelReader.forceFlush();
           const lastExport = _otelExporter.getMetrics().at(-1);
+          expectBoundedMetricAttributes(lastExport);
 
           // Collect actual metric counts (excluding gauges)
           const gaugeNames = new Set([
@@ -202,6 +227,7 @@ export const extendWithObservabilityOtel = <T extends Record<string, unknown>>(
         await use(async (expected) => {
           await _otelReader.forceFlush();
           const lastExport = _otelExporter.getMetrics().at(-1);
+          expectBoundedMetricAttributes(lastExport);
 
           // Collect actual histogram counts
           const actualCounts = new Map<string, number>();
@@ -251,6 +277,7 @@ export const extendWithObservabilityOtel = <T extends Record<string, unknown>>(
 
           // Collect actual cumulative values from OTEL
           const lastExport = _otelExporter.getMetrics().at(-1);
+          expectBoundedMetricAttributes(lastExport);
           const actualCumulative = new Map<string, number>();
           const gaugeNames = new Set([
             methodToMetricName.jobTypeIdleChange,

@@ -137,17 +137,17 @@ export const createOtelObservabilityAdapter = async ({
   };
 
   return {
-    workerStarted: ({ workerId }) => {
-      workerStartedCounter?.add(1, { "queuert.worker.id": workerId });
+    workerStarted: () => {
+      workerStartedCounter?.add(1);
     },
-    workerError: ({ workerId }) => {
-      workerErrorCounter?.add(1, { "queuert.worker.id": workerId });
+    workerError: () => {
+      workerErrorCounter?.add(1);
     },
-    workerStopping: ({ workerId }) => {
-      workerStoppingCounter?.add(1, { "queuert.worker.id": workerId });
+    workerStopping: () => {
+      workerStoppingCounter?.add(1);
     },
-    workerStopped: ({ workerId }) => {
-      workerStoppedCounter?.add(1, { "queuert.worker.id": workerId });
+    workerStopped: () => {
+      workerStoppedCounter?.add(1);
     },
 
     chainCreated: ({ typeName }) => {
@@ -192,60 +192,52 @@ export const createOtelObservabilityAdapter = async ({
       });
     },
 
-    jobAttemptStarted: ({ typeName, chainTypeName, workerId }) => {
+    jobAttemptStarted: ({ typeName, chainTypeName }) => {
       jobAttemptStartedCounter?.add(1, {
         "queuert.job.type": typeName,
         "queuert.chain.type": chainTypeName,
-        "queuert.worker.id": workerId,
       });
     },
-    jobAttemptTakenByAnotherWorker: ({ typeName, chainTypeName, workerId }) => {
+    jobAttemptTakenByAnotherWorker: ({ typeName, chainTypeName }) => {
       jobAttemptTakenByAnotherWorkerCounter?.add(1, {
         "queuert.job.type": typeName,
         "queuert.chain.type": chainTypeName,
-        "queuert.worker.id": workerId,
       });
     },
-    jobAttemptAlreadyCompleted: ({ typeName, chainTypeName, workerId }) => {
+    jobAttemptAlreadyCompleted: ({ typeName, chainTypeName }) => {
       jobAttemptAlreadyCompletedCounter?.add(1, {
         "queuert.job.type": typeName,
         "queuert.chain.type": chainTypeName,
-        "queuert.worker.id": workerId,
       });
     },
-    jobAttemptExpired: ({ typeName, chainTypeName, workerId }) => {
+    jobAttemptExpired: ({ typeName, chainTypeName }) => {
       jobAttemptExpiredCounter?.add(1, {
         "queuert.job.type": typeName,
         "queuert.chain.type": chainTypeName,
-        "queuert.worker.id": workerId,
       });
     },
-    jobAttemptExtended: ({ typeName, chainTypeName, workerId }) => {
+    jobAttemptExtended: ({ typeName, chainTypeName }) => {
       jobAttemptExtendedCounter?.add(1, {
         "queuert.job.type": typeName,
         "queuert.chain.type": chainTypeName,
-        "queuert.worker.id": workerId,
       });
     },
-    jobAttemptReclaimed: ({ typeName, chainTypeName, workerId }) => {
+    jobAttemptReclaimed: ({ typeName, chainTypeName }) => {
       jobAttemptReclaimedCounter?.add(1, {
         "queuert.job.type": typeName,
         "queuert.chain.type": chainTypeName,
-        "queuert.worker.id": workerId,
       });
     },
-    jobAttemptFailed: ({ typeName, chainTypeName, workerId }) => {
+    jobAttemptFailed: ({ typeName, chainTypeName }) => {
       jobAttemptFailedCounter?.add(1, {
         "queuert.job.type": typeName,
         "queuert.chain.type": chainTypeName,
-        "queuert.worker.id": workerId,
       });
     },
-    jobAttemptCompleted: ({ typeName, chainTypeName, workerId }) => {
+    jobAttemptCompleted: ({ typeName, chainTypeName }) => {
       jobAttemptCompletedCounter?.add(1, {
         "queuert.job.type": typeName,
         "queuert.chain.type": chainTypeName,
-        "queuert.worker.id": workerId,
       });
     },
 
@@ -266,25 +258,18 @@ export const createOtelObservabilityAdapter = async ({
         "queuert.chain.type": chainTypeName,
       });
     },
-    jobAttemptDuration: ({ typeName, chainTypeName, workerId, durationMs }) => {
+    jobAttemptDuration: ({ typeName, chainTypeName, durationMs }) => {
       jobAttemptDurationHistogram?.record(durationMs / 1000, {
         "queuert.job.type": typeName,
         "queuert.chain.type": chainTypeName,
-        "queuert.worker.id": workerId,
       });
     },
 
-    jobTypeIdleChange: ({ delta, typeName, workerId }) => {
-      jobTypeIdleGauge?.add(delta, {
-        "queuert.job.type": typeName,
-        "queuert.worker.id": workerId,
-      });
+    jobTypeIdleChange: ({ delta, typeName }) => {
+      jobTypeIdleGauge?.add(delta, { "queuert.job.type": typeName });
     },
-    jobTypeProcessingChange: ({ delta, typeName, workerId }) => {
-      jobTypeProcessingGauge?.add(delta, {
-        "queuert.job.type": typeName,
-        "queuert.worker.id": workerId,
-      });
+    jobTypeProcessingChange: ({ delta, typeName }) => {
+      jobTypeProcessingGauge?.add(delta, { "queuert.job.type": typeName });
     },
 
     startJobSpan(data) {
