@@ -38,7 +38,7 @@ export const CopyButton = (props: { text: string; label: string; class?: string 
       }}
     >
       <Show when={copied()} fallback={<CopyIcon size={13} />}>
-        <CheckIcon size={13} class="text-status-completed-fg" />
+        <CheckIcon size={13} class="text-accent-fg" />
       </Show>
     </button>
   );

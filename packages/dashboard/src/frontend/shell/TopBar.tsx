@@ -161,13 +161,13 @@ export const TopBar = () => {
           onClick={openFind}
         >
           <SearchIcon size={14} />
-          <span class="flex-1 truncate">Find chains or jobs by ID…</span>
+          <span class="flex-1 truncate">Find by ID or type…</span>
           <kbd class="rounded-xs border border-border px-1 text-[11px]">{shortcut()}</kbd>
         </button>
         <button
           type="button"
           class="inline-flex size-8 items-center justify-center rounded-xs text-fg-muted hover:bg-surface-2 hover:text-fg lg:hidden"
-          aria-label="Find chains or jobs by ID"
+          aria-label="Find by ID or type"
           onClick={openFind}
         >
           <SearchIcon />

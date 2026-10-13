@@ -54,11 +54,26 @@ export const loadJobTypes = async (signal: AbortSignal): Promise<TypeEntry<JobSt
 
 export const countOf = <TStatus extends string>(
   entry: TypeEntry<TStatus>,
-  statuses: TStatus[],
+  statuses: readonly TStatus[],
 ): number =>
   entry.counts
     .filter((statusCount) => statuses.includes(statusCount.status))
     .reduce((sum, statusCount) => sum + statusCount.count.count, 0);
+
+/**
+ * Keeps only the counts of `statuses` on each entry and drops the entries left with nothing in
+ * them, so a type with no chains or jobs in those statuses is not listed.
+ */
+export const narrowToStatuses = <TStatus extends string>(
+  entries: TypeEntry<TStatus>[],
+  statuses: readonly TStatus[],
+): TypeEntry<TStatus>[] =>
+  entries
+    .map((entry) => ({
+      typeName: entry.typeName,
+      counts: entry.counts.filter((statusCount) => statuses.includes(statusCount.status)),
+    }))
+    .filter((entry) => entry.counts.some((statusCount) => statusCount.count.count > 0));
 
 export const typeListHref = (
   base: "/chains" | "/jobs",

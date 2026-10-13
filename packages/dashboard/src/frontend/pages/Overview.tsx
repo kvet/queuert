@@ -1,6 +1,5 @@
 import { A } from "@solidjs/router";
-import { type ChainStatus, type JobStatus } from "queuert";
-import { For, Match, Show, Switch } from "solid-js";
+import { For, Match, Show, Switch, createMemo } from "solid-js";
 
 import { type CappedCount, formatSum, sumCounts } from "../domain/counts.js";
 import { TypeRow } from "../rows/TypeRow.js";
@@ -14,10 +13,7 @@ import { type TypeKind, chainKind, jobKind } from "./Types.js";
 
 const TOP = 5;
 
-const statusSum = <TStatus extends string>(
-  entries: TypeEntry<TStatus>[],
-  status: TStatus,
-): CappedCount =>
+const statusSum = (entries: TypeEntry<AnyStatus>[], status: AnyStatus): CappedCount =>
   sumCounts(
     entries.flatMap((entry) =>
       entry.counts
@@ -26,20 +22,15 @@ const statusSum = <TStatus extends string>(
     ),
   );
 
-const byThenName =
-  <TStatus extends string>(key: (entry: TypeEntry<TStatus>) => number) =>
-  (a: TypeEntry<TStatus>, b: TypeEntry<TStatus>) =>
-    key(b) - key(a) || a.typeName.localeCompare(b.typeName);
-
 /**
  * One kind (chains or jobs) as a stacked bar of its status totals plus a legend with every status,
  * zeros included, so the totals always add up.
  */
-const StatusBreakdown = <TStatus extends AnyStatus>(props: {
+const StatusBreakdown = (props: {
   label: string;
   href: string;
-  statuses: TStatus[];
-  entries: TypeEntry<TStatus>[];
+  statuses: AnyStatus[];
+  entries: TypeEntry<AnyStatus>[];
 }) => {
   const totals = () =>
     props.statuses.map((status) => ({ status, count: statusSum(props.entries, status) }));
@@ -84,36 +75,62 @@ const StatusBreakdown = <TStatus extends AnyStatus>(props: {
   );
 };
 
-const TopTypes = (props: { kind: TypeKind; entries: TypeEntry<AnyStatus>[] }) => (
-  <Card
-    title={props.kind.title}
-    bodyClass=""
-    actions={
-      <Show when={props.entries.length > 0}>
-        <A href={`${props.kind.base}/types`} class={linkClass}>
-          All {props.entries.length} →
-        </A>
-      </Show>
-    }
-  >
-    <Show
-      when={props.entries.length > 0}
-      fallback={<p class="px-4 py-6 text-sm text-fg-muted">No {props.kind.noun} types yet</p>}
+const orList = new Intl.ListFormat("en", { type: "disjunction" });
+
+/**
+ * The kind's types with the most work in `statuses`, busiest first. Types with none are left out;
+ * each row shows a chip for every status the type has, completed included.
+ */
+const TopTypes = (props: {
+  kind: TypeKind;
+  statuses: AnyStatus[];
+  entries: TypeEntry<AnyStatus>[];
+}) => {
+  const busiest = createMemo(() => {
+    const statuses = props.statuses;
+    return props.entries
+      .filter((entry) => countOf(entry, statuses) > 0)
+      .sort(
+        (a, b) =>
+          countOf(b, statuses) - countOf(a, statuses) || a.typeName.localeCompare(b.typeName),
+      );
+  });
+
+  return (
+    <Card
+      title={props.kind.title}
+      bodyClass=""
+      actions={
+        <Show when={props.entries.length > 0}>
+          <A href={`${props.kind.base}/types`} class={linkClass}>
+            All {props.entries.length} →
+          </A>
+        </Show>
+      }
     >
-      <ul class="divide-y divide-border">
-        <For each={props.entries.slice(0, TOP)}>
-          {(entry) => (
-            <TypeRow
-              typeName={entry.typeName}
-              counts={entry.counts}
-              href={(status) => typeListHref(props.kind.base, entry.typeName, status)}
-            />
-          )}
-        </For>
-      </ul>
-    </Show>
-  </Card>
-);
+      <Show
+        when={busiest().length > 0}
+        fallback={
+          <p class="px-4 py-6 text-sm text-fg-muted">
+            No {orList.format(props.statuses)} {props.kind.noun}s
+          </p>
+        }
+      >
+        <ul class="divide-y divide-border">
+          <For each={busiest().slice(0, TOP)}>
+            {(entry) => (
+              <TypeRow
+                typeName={entry.typeName}
+                counts={entry.counts}
+                href={(status) => typeListHref(props.kind.base, entry.typeName, status)}
+              />
+            )}
+          </For>
+        </ul>
+      </Show>
+    </Card>
+  );
+};
 
 export const Overview = () => {
   const data = createLoader(
@@ -124,15 +141,6 @@ export const Overview = () => {
     },
   );
   useRefresh(data.refetch);
-
-  const sortedChains = () =>
-    [...(data.data()?.chains ?? [])].sort(
-      byThenName<ChainStatus>((entry) => countOf(entry, ["running"])),
-    );
-  const sortedJobs = () =>
-    [...(data.data()?.jobs ?? [])].sort(
-      byThenName<JobStatus>((entry) => countOf(entry, ["blocked", "pending", "running"])),
-    );
 
   return (
     <div>
@@ -178,8 +186,12 @@ export const Overview = () => {
                 />
               </Card>
               <div class="grid gap-6 lg:grid-cols-2">
-                <TopTypes kind={chainKind} entries={sortedChains()} />
-                <TopTypes kind={jobKind} entries={sortedJobs()} />
+                <TopTypes kind={chainKind} statuses={["running"]} entries={loaded().chains} />
+                <TopTypes
+                  kind={jobKind}
+                  statuses={["blocked", "pending", "running"]}
+                  entries={loaded().jobs}
+                />
               </div>
             </>
           )}

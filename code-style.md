@@ -337,8 +337,8 @@ When making changes:
 
 ### Dashboard Screenshots
 
-`docs/src/content/docs/integrations/dashboard.mdx` embeds five screenshots from `docs/src/assets/dashboard/`. Every visible dashboard change regenerates all five in the same change, and the prose and alt text next to each image are updated to match. Capture them from the `examples/dashboard` example (run `start` to populate, then `dashboard`) with Playwright, using exactly these settings so the set stays consistent:
+`docs/src/content/docs/integrations/dashboard.mdx` embeds six screenshots from `docs/src/assets/dashboard/`. Every visible dashboard change regenerates all six in the same change, and the prose and alt text next to each image are updated to match. Capture them from the `examples/dashboard` example (run `start` to populate, then `dashboard`) with Playwright, using exactly these settings so the set stays consistent:
 
 - Viewport 800×640, device scale factor 1, the viewport only (never a full-page capture)
 - Light color scheme and reduced motion, so the running-status pulse doesn't show up mid-animation
-- Views: `overview.png` (`/`), `chains-list.png` (`/chains?typeName=greet`), `chain-detail.png` (a `process-with-blockers` chain), `jobs-list.png` (`/jobs?typeName=greet`), `job-detail.png` (a `might-fail` job)
+- Views: `overview.png` (`/`), `chains-list.png` (`/chains?typeName=greet`), `chain-detail.png` (a `process-with-blockers` chain), `jobs-list.png` (`/jobs?typeName=greet`), `job-detail.png` (a `might-fail` job), `find.png` (`/` with the find dialog open and `order` typed)

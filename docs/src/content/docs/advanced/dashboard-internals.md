@@ -84,11 +84,11 @@ The frontend is a SolidJS single-page application built with Vite.
 
 ### Views
 
-**Overview** (`/`) — For chains and for jobs, a stacked bar of the totals per status across all types with every status listed, and the five busiest types of each kind: chain types by running chains, job types by unfinished (blocked, pending and running) jobs.
+**Overview** (`/`) — For chains and for jobs, a stacked bar of the totals per status across all types with every status listed, and the five busiest types of each kind: chain types by running chains, job types by unfinished (blocked, pending and running) jobs. Types with none of that work are left out, and each row shows a chip for every status with a non-zero count.
 
-**Chain Types** (`/chains/types`) and **Job Types** (`/jobs/types`) — Every type with its capped per-status counts; a count chip opens the list filtered by that status. The name filter (`search`) and sort (`sort`) live in the URL.
+**Chain Types** (`/chains/types`) and **Job Types** (`/jobs/types`) — Every type by name, with a chip for each non-zero capped per-status count; a chip opens the list filtered by that status. The status filter (`status`, the same control as the lists, counting the types with anything in each status) narrows the page to the types with that status and shows only its chip.
 
-**Chain List** (`/chains?typeName=…`) — The chains of one type, with a filter bar holding the status filter (`status`), a chain-role switch (`independent`), and a status-dependent sort. Without a `typeName` it shows the chain types as a picker.
+**Chain List** (`/chains?typeName=…`) — The chains of one type, with a filter bar holding the status filter (`status`), and a chain-role select (`independent`) next to the status-dependent sort. Without a `typeName` it shows the chain types as a picker.
 
 **Chain Detail** (`/chains/:id`) — The chain's current job and its status next to the chain status while the chain runs, since a running chain may be waiting on a blocked or pending job. The jobs of the chain, oldest first and loaded a page at a time as you scroll, with per-job blockers, each job's input (and, for the tail job, its output) on demand, folded runs of repeated completed jobs, the chain input and output, and the blocked jobs list (jobs in other chains that declared this chain as a blocker, linked to the job). Deleting the chain is refused up front while that list has entries.
 
@@ -96,7 +96,7 @@ The frontend is a SolidJS single-page application built with Vite.
 
 **Job Detail** (`/jobs/:id`) — The job's details (attempts, timing, the current attempt's worker and deadline, or who completed it), its last error, input, output or continuation, and its blockers. A pending job scheduled in the future gets a "Run now" action.
 
-**Find** (`/find?ids=…`) — The chains and jobs matching up to 100 IDs, across all types. Old `/chains?ids=` and `/jobs?ids=` links redirect here.
+**Find** (`/find?ids=…`) — The chains and jobs matching up to 100 IDs, across all types. Old `/chains?ids=` and `/jobs?ids=` links redirect here. The `⌘K` dialog in the top bar also suggests up to five chain types and five job types by name; `↓` moves into them, and picking one, or pressing `Enter` when the text is no chain or job ID, opens that type's list.
 
 ### Derived State
 
@@ -104,6 +104,7 @@ The UI shows only what the API returns, and derives the rest in pure helpers und
 
 - **Job phase** — a job's `status` plus the fields that matter for display: `rescheduledAfterError` (pending with a `lastAttemptError`), `scheduled` / `due` (pending, by `scheduledAt`), `continued` / `tail` (completed, by `continuedToId`). The status pill always shows the real status; the phase only drives parts of job detail and the chain detail sequence. List rows stay minimal: status, ID, chain, a time, and one-line input and output previews, with a warning icon on a job whose last attempt failed. There is no failed state, and no attempt number is ever attached to `lastAttemptError`, because it belongs to _some_ earlier attempt.
 - **Job folding** — three or more consecutive completed jobs of the same type that continued and had no blockers collapse into one item. Re-run over the whole loaded sequence after each page.
+- **Type matching** — fzf-style (v1 algorithm) scoring of type names for the find dialog: whitespace-separated terms must all match with their letters in order, in any term order, case-insensitively unless a term has an uppercase letter; ranked by score (word-start and consecutive-letter bonuses, gap penalties), then the shorter name, then input order.
 - **Counts** — the per-status counts are capped by the state adapter's `countCap` (10,000 by default), so a sum that includes a capped count is a lower bound (`≥`), and a capped count itself is shown with a trailing `+` (e.g. `10,000+`).
 
 ### Refresh

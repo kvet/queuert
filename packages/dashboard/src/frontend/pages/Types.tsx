@@ -1,37 +1,34 @@
 import { useSearchParams } from "@solidjs/router";
-import { For, Match, Switch, createMemo, onCleanup } from "solid-js";
+import { For, Match, Switch, createMemo } from "solid-js";
 
 import { TypeRow } from "../rows/TypeRow.js";
 import { createLoader } from "../state/createLoader.js";
 import { useRefresh } from "../state/refresh.js";
 import { EmptyState, ErrorState, SkeletonRows, buttonClass } from "../ui/kit.js";
-import { Select } from "../ui/Select.js";
-import { type AnyStatus } from "../ui/status.js";
-import { type TypeEntry, countOf, loadChainTypes, loadJobTypes, typeListHref } from "./typeData.js";
+import { type AnyStatus, CHAIN_STATUSES, JOB_STATUSES } from "../ui/status.js";
+import { FilterBar, StatusFilter } from "./filters.js";
+import {
+  type TypeEntry,
+  loadChainTypes,
+  loadJobTypes,
+  narrowToStatuses,
+  typeListHref,
+} from "./typeData.js";
 
 export type TypeKind = {
   noun: "chain" | "job";
   title: string;
   base: "/chains" | "/jobs";
   load: (signal: AbortSignal) => Promise<TypeEntry<AnyStatus>[]>;
-  sorts: { value: string; label: string; key: (entry: TypeEntry<AnyStatus>) => number }[];
+  statuses: AnyStatus[];
 };
-
-const sharedSorts: TypeKind["sorts"] = [
-  {
-    value: "total",
-    label: "Total",
-    key: (entry) => entry.counts.reduce((sum, statusCount) => sum + statusCount.count.count, 0),
-  },
-  { value: "running", label: "Running", key: (entry) => countOf(entry, ["running"]) },
-];
 
 export const chainKind: TypeKind = {
   noun: "chain",
   title: "Chain types",
   base: "/chains",
   load: loadChainTypes,
-  sorts: sharedSorts,
+  statuses: CHAIN_STATUSES,
 };
 
 export const jobKind: TypeKind = {
@@ -39,14 +36,7 @@ export const jobKind: TypeKind = {
   title: "Job types",
   base: "/jobs",
   load: loadJobTypes,
-  sorts: [
-    ...sharedSorts,
-    {
-      value: "waiting",
-      label: "Waiting",
-      key: (entry) => countOf(entry, ["blocked", "pending"]),
-    },
-  ],
+  statuses: JOB_STATUSES,
 };
 
 const TypeList = (props: {
@@ -55,8 +45,9 @@ const TypeList = (props: {
   loading: boolean;
   error: unknown;
   onRetry: () => void;
-  query?: string;
-  onClearQuery?: () => void;
+  /** The selected status, when it is not All; an empty list then offers to show all. */
+  status?: AnyStatus;
+  onShowAll?: () => void;
 }) => {
   return (
     <Switch>
@@ -72,19 +63,17 @@ const TypeList = (props: {
           <SkeletonRows />
         </div>
       </Match>
-      <Match when={props.entries?.length === 0 && !props.query}>
-        <EmptyState title={`No ${props.kind.noun} types found`} />
+      <Match when={props.entries?.length === 0 && props.status}>
+        {(status) => (
+          <EmptyState title={`No ${status()} ${props.kind.noun}s`}>
+            <button type="button" class={buttonClass.secondary} onClick={() => props.onShowAll?.()}>
+              Show all
+            </button>
+          </EmptyState>
+        )}
       </Match>
       <Match when={props.entries?.length === 0}>
-        <EmptyState title={`No types match '${props.query}'`}>
-          <button
-            type="button"
-            class={buttonClass.secondary}
-            onClick={() => props.onClearQuery?.()}
-          >
-            Clear
-          </button>
-        </EmptyState>
+        <EmptyState title={`No ${props.kind.noun} types found`} />
       </Match>
       <Match when={props.entries}>
         {(entries) => (
@@ -123,15 +112,9 @@ export const TypePicker = (props: { kind: TypeKind }) => {
   );
 };
 
-const isTyping = (target: EventTarget | null) =>
-  target instanceof HTMLElement &&
-  (target.isContentEditable || ["INPUT", "TEXTAREA", "SELECT"].includes(target.tagName));
-
 const TypesPage = (props: { kind: TypeKind }) => {
   const [searchParams, setSearchParams] = useSearchParams();
-  const search = () => (searchParams.search ?? "") as string;
-  const sort = () => (searchParams.sort ?? "name") as string;
-  let filterInput!: HTMLInputElement;
+  const status = () => props.kind.statuses.find((option) => option === searchParams.status);
 
   const types = createLoader(
     () => true,
@@ -139,31 +122,29 @@ const TypesPage = (props: { kind: TypeKind }) => {
   );
   useRefresh(types.refetch);
 
-  const onSlash = (event: KeyboardEvent) => {
-    if (event.key !== "/" || event.metaKey || event.ctrlKey || event.altKey) return;
-    if (isTyping(event.target) || document.querySelector("dialog[open]")) return;
-    event.preventDefault();
-    filterInput.focus();
-  };
-  document.addEventListener("keydown", onSlash);
-  onCleanup(() => {
-    document.removeEventListener("keydown", onSlash);
+  const narrowed = createMemo(() => {
+    const all = types.data();
+    const selected = status();
+    return all && selected ? narrowToStatuses(all, [selected]) : all;
   });
 
-  const visible = createMemo(() => {
+  const typeCounts = createMemo(() => {
     const all = types.data();
     if (!all) return undefined;
-    const query = search().trim().toLowerCase();
-    const filtered = query
-      ? all.filter((entry) => entry.typeName.toLowerCase().includes(query))
-      : all;
-    const sorter = props.kind.sorts.find((option) => option.value === sort());
-    const byName = (a: TypeEntry<AnyStatus>, b: TypeEntry<AnyStatus>) =>
-      a.typeName.localeCompare(b.typeName);
-    return [...filtered].sort(
-      sorter ? (a, b) => sorter.key(b) - sorter.key(a) || byName(a, b) : byName,
-    );
+    return {
+      all: { count: all.length, hasMore: false },
+      byStatus: props.kind.statuses.map((option) => ({
+        status: option,
+        count: { count: narrowToStatuses(all, [option]).length, hasMore: false },
+      })),
+    };
   });
+
+  const visible = createMemo(() =>
+    narrowed()
+      ?.slice()
+      .sort((a, b) => a.typeName.localeCompare(b.typeName)),
+  );
 
   return (
     <div>
@@ -171,56 +152,28 @@ const TypesPage = (props: { kind: TypeKind }) => {
         <h1 class="text-base font-semibold">
           {props.kind.title}{" "}
           <span class="text-sm font-normal text-fg-muted tabular-nums">
-            {types.data()?.length ?? ""}
+            {narrowed()?.length ?? ""}
           </span>
         </h1>
       </div>
-      <div class="mb-4 flex flex-wrap items-center gap-2">
-        <label class="relative min-w-0 flex-1 basis-56">
-          <span class="sr-only">Filter types</span>
-          <input
-            ref={(el) => {
-              filterInput = el;
-            }}
-            type="search"
-            class="h-9 w-full rounded-xs border border-border-strong bg-surface px-3 pr-8 text-sm placeholder:text-fg-subtle"
-            placeholder="Filter types"
-            value={search()}
-            onInput={(event) => {
-              setSearchParams(
-                { search: event.currentTarget.value || undefined },
-                { replace: true },
-              );
-            }}
-          />
-          <kbd class="pointer-events-none absolute top-1/2 right-2 -translate-y-1/2 rounded-xs border border-border px-1 text-[11px] text-fg-subtle">
-            /
-          </kbd>
-        </label>
-        <div class="flex items-center gap-2">
-          <span class="text-sm text-fg-muted" aria-hidden="true">
-            Sort
-          </span>
-          <Select
-            label="Sort by"
-            height="md"
-            value={sort()}
-            options={[{ value: "name", label: "Name" }, ...props.kind.sorts]}
-            onChange={(value) => {
-              setSearchParams({ sort: value === "name" ? undefined : value }, { replace: true });
-            }}
-          />
-        </div>
-      </div>
+      <FilterBar>
+        <StatusFilter
+          path={`${props.kind.base}/types`}
+          statuses={props.kind.statuses}
+          selected={status() ?? ""}
+          counts={typeCounts()?.byStatus}
+          allCount={typeCounts()?.all}
+        />
+      </FilterBar>
       <TypeList
         kind={props.kind}
         entries={visible()}
         loading={types.loading()}
         error={types.error()}
         onRetry={types.retry}
-        query={search().trim()}
-        onClearQuery={() => {
-          setSearchParams({ search: undefined }, { replace: true });
+        status={status()}
+        onShowAll={() => {
+          setSearchParams({ status: undefined });
         }}
       />
     </div>

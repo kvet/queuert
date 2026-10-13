@@ -31,9 +31,9 @@
   --color-status-running-bg: #dbeafe;
   --color-status-running-fg: #1e40af;
   --color-status-running-dot: #3b82f6;
-  --color-status-completed-bg: #d1fae5;
-  --color-status-completed-fg: #065f46;
-  --color-status-completed-dot: #059669;
+  --color-status-completed-bg: #e4e4e7;
+  --color-status-completed-fg: #3f3f46;
+  --color-status-completed-dot: #a1a1aa;
 
   --color-error-bg: #fef2f2;
   --color-error-border: #fecaca;
@@ -78,9 +78,9 @@
   --color-status-running-bg: #172554;
   --color-status-running-fg: #93c5fd;
   --color-status-running-dot: #60a5fa;
-  --color-status-completed-bg: #022c22;
-  --color-status-completed-fg: #6ee7b7;
-  --color-status-completed-dot: #34d399;
+  --color-status-completed-bg: #27272a;
+  --color-status-completed-fg: #d4d4d8;
+  --color-status-completed-dot: #71717a;
 
   --color-error-bg: #450a0a;
   --color-error-border: #7f1d1d;

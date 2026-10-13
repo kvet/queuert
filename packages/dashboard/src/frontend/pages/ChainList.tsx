@@ -1,5 +1,5 @@
 import { useSearchParams } from "@solidjs/router";
-import { For, Match, Switch, createMemo } from "solid-js";
+import { Match, Switch, createMemo } from "solid-js";
 
 import { PAGE_SIZE, countByChainTypeNames, listChainTypeNames, listChains } from "../api.js";
 import { ChainRow } from "../rows/ChainRow.js";
@@ -7,23 +7,15 @@ import { createLoader } from "../state/createLoader.js";
 import { createPagedList } from "../state/createPagedList.js";
 import { useRefresh } from "../state/refresh.js";
 import { EmptyState, buttonClass } from "../ui/kit.js";
+import { Select } from "../ui/Select.js";
 import { CHAIN_STATUSES } from "../ui/status.js";
-import {
-  FilterBar,
-  FilterGroup,
-  ListHeader,
-  PagedListBody,
-  SortControls,
-  StatusFilter,
-  TypeGate,
-  segmentClass,
-  segmentGroupClass,
-} from "./listParts.js";
+import { FilterBar, SortControls, StatusFilter } from "./filters.js";
+import { ListHeader, PagedListBody, TypeGate } from "./listParts.js";
 import { toStatusCounts } from "./typeData.js";
 import { chainKind } from "./Types.js";
 
 const roles = [
-  { value: undefined, label: "All" },
+  { value: "", label: "All" },
   { value: "true", label: "Independent" },
   { value: "false", label: "Used as blocker" },
 ] as const;
@@ -86,34 +78,31 @@ const ChainListForType = (props: { typeName: string }) => {
       <ListHeader typeName={props.typeName} typeNames={typeNames.data()} />
       <FilterBar>
         <StatusFilter
-          base="/chains"
+          path="/chains"
           statuses={CHAIN_STATUSES}
           selected={status()}
           counts={statusCounts()}
         />
-        <FilterGroup label="Role">
-          <div class={segmentGroupClass} role="group" aria-label="Chain role">
-            <For each={roles}>
-              {(role) => (
-                <button
-                  type="button"
-                  class={segmentClass}
-                  aria-pressed={independentParam() === role.value}
-                  onClick={() => {
-                    setSearchParams({ independent: role.value });
-                  }}
-                >
-                  {role.label}
-                </button>
-              )}
-            </For>
+        <div class="ml-auto flex flex-wrap items-center gap-x-5 gap-y-2">
+          <div class="flex shrink-0 items-center gap-2">
+            <span class="text-sm text-fg-muted" aria-hidden="true">
+              Role
+            </span>
+            <Select
+              label="Chain role"
+              value={independentParam() ?? ""}
+              options={roles}
+              onChange={(value) => {
+                setSearchParams({ independent: value || undefined });
+              }}
+            />
           </div>
-        </FilterGroup>
-        <SortControls
-          options={orderByOptions()}
-          orderBy={effectiveOrderBy()}
-          orderDirection={orderDirection()}
-        />
+          <SortControls
+            options={orderByOptions()}
+            orderBy={effectiveOrderBy()}
+            orderDirection={orderDirection()}
+          />
+        </div>
       </FilterBar>
 
       <PagedListBody

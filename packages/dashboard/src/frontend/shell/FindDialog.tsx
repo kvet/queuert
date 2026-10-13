@@ -1,5 +1,5 @@
 import { useNavigate } from "@solidjs/router";
-import { For, Match, Show, Switch, createSignal } from "solid-js";
+import { For, Match, Show, Switch, createMemo, createSignal } from "solid-js";
 
 import {
   type UnknownChain,
@@ -7,8 +7,12 @@ import {
   errorMessage,
   getChainsByIds,
   getJobsByIds,
+  listChainTypeNames,
+  listJobTypeNames,
 } from "../api.js";
 import { MAX_IDS, parseIdList } from "../domain/ids.js";
+import { matchTypeNames } from "../domain/typeMatch.js";
+import { createLoader } from "../state/createLoader.js";
 import { Dialog, buttonClass } from "../ui/kit.js";
 import { StatusPill } from "../ui/StatusPill.js";
 
@@ -33,9 +37,16 @@ export const handleFindShortcut = (event: KeyboardEvent): void => {
 
 type Choice = { kind: "chain"; chain: UnknownChain } | { kind: "job"; job: UnknownJob };
 
+type TypeSuggestion = { kind: "chain" | "job"; typeName: string };
+
+const TYPE_SUGGESTIONS = 5;
+
 /**
- * Find by ID. One ID resolves in place: a lone chain or job navigates straight to it, and an ID
- * that is both (a chain and its job #1 share an ID) offers the two. Several IDs go to `/find`.
+ * Find by ID or type name. One ID resolves in place: a lone chain or job navigates straight to it,
+ * and an ID that is both (a chain and its job #1 share an ID) offers the two. Several IDs go to
+ * `/find`. While the text could be a type name, matching chain and job types are listed below;
+ * ArrowDown moves into them and picking one opens that type's list. Enter opens the top type when
+ * no chain or job has the text as its ID, or when the text is several words that match a type.
  */
 export const FindDialog = () => {
   const navigate = useNavigate();
@@ -45,9 +56,38 @@ export const FindDialog = () => {
   const [choices, setChoices] = createSignal<Choice[]>([]);
   const [active, setActive] = createSignal(0);
   let choiceList: HTMLUListElement | undefined;
+  let suggestionList: HTMLUListElement | undefined;
+  let input: HTMLTextAreaElement | undefined;
   let controller: AbortController | null = null;
 
   const parsed = () => parseIdList(text());
+
+  const typeNames = createLoader(
+    () => findOpen(),
+    async (_, signal) => {
+      const [chains, jobs] = await Promise.all([
+        listChainTypeNames({ signal }),
+        listJobTypeNames({ signal }),
+      ]);
+      return { chains, jobs };
+    },
+  );
+  // Text with commas or new lines is an ID list, not a type name.
+  const suggestions = createMemo((): TypeSuggestion[] => {
+    const names = typeNames.data();
+    if (!names || choices().length > 0 || /[,\n]/.test(text())) return [];
+    return [
+      ...matchTypeNames(names.chains, text(), TYPE_SUGGESTIONS).map((typeName) => ({
+        kind: "chain" as const,
+        typeName,
+      })),
+      ...matchTypeNames(names.jobs, text(), TYPE_SUGGESTIONS).map((typeName) => ({
+        kind: "job" as const,
+        typeName,
+      })),
+    ];
+  });
+  const suggestionButtons = () => [...(suggestionList?.querySelectorAll("button") ?? [])];
 
   const close = () => {
     setFindOpen(false);
@@ -63,9 +103,21 @@ export const FindDialog = () => {
     navigate(choice.kind === "chain" ? `/chains/${choice.chain.id}` : `/jobs/${choice.job.id}`);
   };
 
+  const goToType = (suggestion: TypeSuggestion) => {
+    close();
+    navigate(
+      `${suggestion.kind === "chain" ? "/chains" : "/jobs"}?typeName=${encodeURIComponent(suggestion.typeName)}`,
+    );
+  };
+
   const submit = async () => {
     const { ids } = parsed();
     if (ids.length === 0) return;
+    // Several words that match a type are a type search, not an ID list.
+    if (ids.length > 1 && suggestions().length > 0) {
+      goToType(suggestions()[0]);
+      return;
+    }
     if (ids.length > 1) {
       close();
       navigate(`/find?ids=${encodeURIComponent(ids.join(","))}`);
@@ -87,7 +139,10 @@ export const FindDialog = () => {
         ...chains.items.map((chain) => ({ kind: "chain" as const, chain })),
         ...jobs.items.map((job) => ({ kind: "job" as const, job })),
       ];
-      if (found.length === 0) setMessage({ text: "No chain or job with this ID", error: false });
+      const topSuggestion = suggestions()[0];
+      if (found.length === 0 && topSuggestion) goToType(topSuggestion);
+      else if (found.length === 0)
+        setMessage({ text: "No chain or job with this ID", error: false });
       else if (found.length === 1) go(found[0]);
       else {
         setChoices(found);
@@ -108,7 +163,7 @@ export const FindDialog = () => {
   };
 
   return (
-    <Dialog open={findOpen()} onClose={close} title="Find chains or jobs by ID" class="mt-[12vh]">
+    <Dialog open={findOpen()} onClose={close} title="Find by ID or type" class="mt-[12vh]">
       <div data-find-dialog>
         <form
           onSubmit={(event) => {
@@ -117,14 +172,17 @@ export const FindDialog = () => {
           }}
         >
           <label class="sr-only" for="find-ids">
-            Chain or job IDs
+            Chain or job IDs, or a type name
           </label>
           <textarea
+            ref={(element) => {
+              input = element;
+            }}
             id="find-ids"
             autofocus
             rows={2}
             class="w-full resize-y rounded-xs border border-border-strong bg-surface px-3 py-2 font-mono text-sm placeholder:text-fg-subtle"
-            placeholder="Paste one or more IDs — separated by commas, spaces or new lines"
+            placeholder="Paste IDs (separated by commas, spaces or new lines) or type a type name"
             value={text()}
             onInput={(event) => {
               setText(event.currentTarget.value);
@@ -132,6 +190,11 @@ export const FindDialog = () => {
               setChoices([]);
             }}
             onKeyDown={(event) => {
+              if (event.key === "ArrowDown" && suggestions().length > 0) {
+                event.preventDefault();
+                suggestionButtons()[0]?.focus();
+                return;
+              }
               if (event.key === "Enter" && !event.shiftKey) {
                 event.preventDefault();
                 void submit();
@@ -142,6 +205,9 @@ export const FindDialog = () => {
             <Switch fallback={<span>Enter to search · Shift+Enter for a new line</span>}>
               <Match when={parsed().overLimit}>
                 <span class="text-error-fg">Max {MAX_IDS} IDs</span>
+              </Match>
+              <Match when={suggestions().length > 0}>
+                <span>Enter to open the top type or a matching ID · ↓ to pick a type</span>
               </Match>
               <Match when={parsed().ids.length > 1}>
                 <span>{parsed().ids.length} IDs · Enter to list them all</span>
@@ -167,6 +233,45 @@ export const FindDialog = () => {
               {message().text}
             </p>
           )}
+        </Show>
+
+        <Show when={suggestions().length > 0}>
+          <ul
+            ref={(element) => {
+              suggestionList = element;
+            }}
+            class="mt-3 flex flex-col gap-1"
+            aria-label="Matching types"
+            onKeyDown={(event) => {
+              if (event.key !== "ArrowDown" && event.key !== "ArrowUp") return;
+              event.preventDefault();
+              const buttons = suggestionButtons();
+              const index = buttons.indexOf(event.target as HTMLButtonElement);
+              if (event.key === "ArrowUp" && index <= 0) input?.focus();
+              else
+                buttons[(index + (event.key === "ArrowDown" ? 1 : -1)) % buttons.length]?.focus();
+            }}
+          >
+            <For each={suggestions()}>
+              {(suggestion) => (
+                <li>
+                  <button
+                    type="button"
+                    class="flex w-full items-center gap-2 rounded-xs border border-border px-3 py-2 text-left text-sm hover:bg-surface-2 focus:border-accent focus:outline-none"
+                    onClick={() => {
+                      goToType(suggestion);
+                    }}
+                  >
+                    <span class="shrink-0 text-fg-muted">
+                      {suggestion.kind === "chain" ? "Chain type" : "Job type"}
+                    </span>
+                    <span class="text-fg-subtle">·</span>
+                    <span class="truncate font-medium">{suggestion.typeName}</span>
+                  </button>
+                </li>
+              )}
+            </For>
+          </ul>
         </Show>
 
         <Show when={choices().length > 0}>
