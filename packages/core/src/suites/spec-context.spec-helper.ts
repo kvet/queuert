@@ -23,6 +23,8 @@ export type TestSuiteContext = {
     cb: (txCtx: { $test: true }, transactionHooks: TransactionHooks) => Promise<T>,
   ) => Promise<T>;
   poisonTransaction: ((txCtx: { $test: true }) => Promise<void>) | undefined;
+  /** Runs `fn` with a real context of the adapter's driver that is not inside a transaction. */
+  withNonTransactionContext: <T>(fn: (txCtx: { $test: true }) => Promise<T>) => Promise<T>;
   poisonExecute:
     | ((cb: (adapter: StateAdapter<{ $test: true }, string>) => Promise<void>) => Promise<void>)
     | undefined;

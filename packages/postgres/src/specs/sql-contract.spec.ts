@@ -234,6 +234,7 @@ const createValidatingProvider = (
   let validationQueue: Promise<unknown> = Promise.resolve();
   return {
     withTransaction: inner.withTransaction,
+    isTransaction: inner.isTransaction,
     executeSql: async (args) => {
       const next = validationQueue.then(async () =>
         validateInline(validationClient, args, formatType, enumTypes),

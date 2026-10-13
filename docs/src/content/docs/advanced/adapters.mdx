@@ -84,6 +84,7 @@ Every state adapter exposes `config`, a frozen `StateAdapterConfig` with default
 Users create a `StateProvider` implementation to integrate with their database client. A state provider supplies:
 
 - **`withTransaction`** — wraps a callback in a database transaction, passing the transaction context (`TTxContext`) to the callback
+- **`isTransaction`** — reports whether a context is inside an open transaction. The client calls it before every mutating method and rejects a context that fails it, because a pool or autocommit connection would commit each statement of a multi-statement write on its own and release `lock: "exclusive"` locks immediately. It must be synchronous and must not query the database: read the driver's own transaction state (Kysely `db.isTransaction`, Knex `trx.isTransaction`, pg `client.getTransactionStatus()`, better-sqlite3 `db.inTransaction`, node:sqlite `db.isTransaction`, Drizzle `tx instanceof PgTransaction`, a Prisma interactive-transaction client lacking `$connect`)
 - **`executeSql`** — executes a SQL string with optional params. When `txCtx` is provided, uses that transaction; when omitted, acquires and releases its own connection
 - **`withSavepoint`** _(optional)_ — runs a callback inside a savepoint within an existing transaction; when omitted, the adapter falls back to a built-in savepoint implementation
 - **`close`** _(optional)_ — only needed when the provider owns resources beyond the caller-supplied client/pool

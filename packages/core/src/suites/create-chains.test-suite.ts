@@ -5,6 +5,7 @@ import { defineJobTypes } from "../entities/define-job-types.js";
 import { ChainNotFoundError } from "../errors.js";
 import { createInProcessWorker } from "../in-process-worker.js";
 import { createInProcessNotifyAdapter } from "../notify-adapter/notify-adapter.in-process.js";
+import { withTransactionHooks } from "../transaction-hooks.js";
 import { createProcessors } from "../worker/create-processors.js";
 import { type TestSuiteContext } from "./spec-context.spec-helper.js";
 
@@ -407,6 +408,43 @@ export const createChainsTestSuite = ({ it }: { it: TestAPI<TestSuiteContext> })
         // @ts-expect-error missing txCtx
         client.createChain({ typeName: "test", input: { value: 1 } }),
       ).rejects.toThrow("requires a transaction context");
+    });
+
+    it("throws when the context is not in a transaction", async ({
+      stateAdapter,
+      notifyAdapter,
+      withNonTransactionContext,
+      observabilityAdapter,
+      log,
+      expect,
+    }) => {
+      const jobTypes = defineJobTypes<{
+        test: { entry: true; input: { value: number }; output: null };
+      }>();
+
+      const client = await createClient({
+        stateAdapter,
+        notifyAdapter,
+        observabilityAdapter,
+        log,
+        jobTypes,
+      });
+
+      await withNonTransactionContext(async (txCtx) =>
+        withTransactionHooks(async (transactionHooks) => {
+          await expect(
+            client.createChain({
+              ...txCtx,
+              transactionHooks,
+              typeName: "test",
+              input: { value: 1 },
+            }),
+          ).rejects.toThrow("not in a transaction");
+        }),
+      );
+
+      const chains = await client.listChains({ typeName: "test" });
+      expect(chains.items).toHaveLength(0);
     });
 
     it("rejects wrong input type at compile time", async ({
@@ -1062,6 +1100,42 @@ export const createChainsTestSuite = ({ it }: { it: TestAPI<TestSuiteContext> })
           items: [{ typeName: "test", input: { value: 1 } }],
         }),
       ).rejects.toThrow("requires a transaction context");
+    });
+
+    it("throws when the context is not in a transaction", async ({
+      stateAdapter,
+      notifyAdapter,
+      withNonTransactionContext,
+      observabilityAdapter,
+      log,
+      expect,
+    }) => {
+      const jobTypes = defineJobTypes<{
+        test: { entry: true; input: { value: number }; output: null };
+      }>();
+
+      const client = await createClient({
+        stateAdapter,
+        notifyAdapter,
+        observabilityAdapter,
+        log,
+        jobTypes,
+      });
+
+      await withNonTransactionContext(async (txCtx) =>
+        withTransactionHooks(async (transactionHooks) => {
+          await expect(
+            client.createChains({
+              ...txCtx,
+              transactionHooks,
+              items: [{ typeName: "test", input: { value: 1 } }],
+            }),
+          ).rejects.toThrow("not in a transaction");
+        }),
+      );
+
+      const chains = await client.listChains({ typeName: "test" });
+      expect(chains.items).toHaveLength(0);
     });
 
     it("rejects non-entry type name in batch at compile time", async ({

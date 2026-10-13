@@ -9,6 +9,7 @@ import {
 } from "../errors.js";
 import { sleep } from "../helpers/sleep.js";
 import { createInProcessWorker } from "../in-process-worker.js";
+import { withTransactionHooks } from "../transaction-hooks.js";
 import { createProcessors } from "../worker/create-processors.js";
 import { type TestSuiteContext } from "./spec-context.spec-helper.js";
 
@@ -692,6 +693,50 @@ export const workerlessCompletionTestSuite = ({ it }: { it: TestAPI<TestSuiteCon
           completeJob(job, async ({ finish }) => finish({ output: { result: 84 } })),
       }),
     ).rejects.toThrow("requires a transaction context");
+  });
+
+  it("completeChain throws when the context is not in a transaction", async ({
+    stateAdapter,
+    notifyAdapter,
+    withTransaction,
+    withNonTransactionContext,
+    observabilityAdapter,
+    log,
+    expect,
+  }) => {
+    const jobTypes = defineJobTypes<{
+      test: { entry: true; input: { value: number }; output: { result: number } };
+    }>();
+
+    const client = await createClient({
+      stateAdapter,
+      notifyAdapter,
+      observabilityAdapter,
+      log,
+      jobTypes,
+    });
+
+    const chain = await withTransaction(async (txCtx, transactionHooks) =>
+      client.createChain({ ...txCtx, transactionHooks, typeName: "test", input: { value: 42 } }),
+    );
+
+    await withNonTransactionContext(async (txCtx) =>
+      withTransactionHooks(async (transactionHooks) => {
+        await expect(
+          client.completeChain({
+            ...txCtx,
+            transactionHooks,
+            typeName: "test",
+            id: chain.id,
+            handler: async ({ job, completeJob }) =>
+              completeJob(job, async ({ finish }) => finish({ output: { result: 84 } })),
+          }),
+        ).rejects.toThrow("not in a transaction");
+      }),
+    );
+
+    const job = await client.getJob({ id: chain.id });
+    expect(job!.status).toBe("pending");
   });
 
   it("completeChain throws on typeName mismatch", async ({

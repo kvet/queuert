@@ -33,6 +33,7 @@ test("state-sqlite-prisma provider passes state adapter conformance", async () =
     return {
       stateAdapter: adapter,
       transactionConcurrency: "serialized",
+      withNonTransactionContext: async (fn) => fn({ prisma }),
       reset: async () => adapter.truncate(),
       dispose: async () => {
         await prisma.$disconnect();

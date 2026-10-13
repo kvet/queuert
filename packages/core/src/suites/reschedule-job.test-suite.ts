@@ -9,6 +9,7 @@ import {
   JobsNotReschedulableError,
 } from "../errors.js";
 import { createInProcessWorker } from "../in-process-worker.js";
+import { withTransactionHooks } from "../transaction-hooks.js";
 import { createProcessors } from "../worker/create-processors.js";
 import { type TestSuiteContext } from "./spec-context.spec-helper.js";
 
@@ -330,6 +331,54 @@ export const rescheduleJobTestSuite = ({ it }: { it: TestAPI<TestSuiteContext> }
       // @ts-expect-error missing txCtx
       client.rescheduleJob({ id: chain.id }),
     ).rejects.toThrow("requires a transaction context");
+  });
+
+  it("rescheduleJob throws when the context is not in a transaction", async ({
+    stateAdapter,
+    notifyAdapter,
+    withTransaction,
+    withNonTransactionContext,
+    observabilityAdapter,
+    log,
+    expect,
+  }) => {
+    const jobTypes = defineJobTypes<{
+      task: { entry: true; input: null; output: null };
+    }>();
+
+    const client = await createClient({
+      stateAdapter,
+      notifyAdapter,
+      observabilityAdapter,
+      log,
+      jobTypes,
+    });
+
+    const chain = await withTransaction(async (txCtx, transactionHooks) =>
+      client.createChain({
+        ...txCtx,
+        transactionHooks,
+        typeName: "task",
+        input: null,
+        schedule: { afterMs: 60_000 },
+      }),
+    );
+
+    await withNonTransactionContext(async (txCtx) =>
+      withTransactionHooks(async (transactionHooks) => {
+        await expect(
+          client.rescheduleJob({
+            ...txCtx,
+            transactionHooks,
+            id: chain.id,
+            schedule: { afterMs: 0 },
+          }),
+        ).rejects.toThrow("not in a transaction");
+      }),
+    );
+
+    const job = await client.getJob({ id: chain.id });
+    expect(job!.scheduledAt.getTime()).toBeGreaterThan(Date.now() + 30_000);
   });
 
   it("throws JobNotReschedulableError for blocked job", async ({
@@ -692,5 +741,53 @@ export const rescheduleJobTestSuite = ({ it }: { it: TestAPI<TestSuiteContext> }
       // @ts-expect-error missing txCtx
       client.rescheduleJobs({ ids: [chain.id] }),
     ).rejects.toThrow("requires a transaction context");
+  });
+
+  it("rescheduleJobs throws when the context is not in a transaction", async ({
+    stateAdapter,
+    notifyAdapter,
+    withTransaction,
+    withNonTransactionContext,
+    observabilityAdapter,
+    log,
+    expect,
+  }) => {
+    const jobTypes = defineJobTypes<{
+      task: { entry: true; input: null; output: null };
+    }>();
+
+    const client = await createClient({
+      stateAdapter,
+      notifyAdapter,
+      observabilityAdapter,
+      log,
+      jobTypes,
+    });
+
+    const chain = await withTransaction(async (txCtx, transactionHooks) =>
+      client.createChain({
+        ...txCtx,
+        transactionHooks,
+        typeName: "task",
+        input: null,
+        schedule: { afterMs: 60_000 },
+      }),
+    );
+
+    await withNonTransactionContext(async (txCtx) =>
+      withTransactionHooks(async (transactionHooks) => {
+        await expect(
+          client.rescheduleJobs({
+            ...txCtx,
+            transactionHooks,
+            ids: [chain.id],
+            schedule: { afterMs: 0 },
+          }),
+        ).rejects.toThrow("not in a transaction");
+      }),
+    );
+
+    const job = await client.getJob({ id: chain.id });
+    expect(job!.scheduledAt.getTime()).toBeGreaterThan(Date.now() + 30_000);
   });
 };

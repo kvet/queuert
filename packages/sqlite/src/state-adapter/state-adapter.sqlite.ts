@@ -663,6 +663,8 @@ export const createSqliteStateAdapter = async <
 
     withTransaction: stateProvider.withTransaction,
 
+    isTransaction: stateProvider.isTransaction,
+
     withSavepoint:
       stateProvider.withSavepoint ??
       (async (txCtx, fn) => {

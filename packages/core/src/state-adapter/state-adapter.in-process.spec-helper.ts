@@ -17,6 +17,7 @@ export const extendWithStateInProcess = <T>(
     flakyStateAdapter: StateAdapter<{ $test: true }, string>;
     flakyDbStateAdapter: StateAdapter<{ $test: true }, string> | undefined;
     poisonTransaction: ((txCtx: { $test: true }) => Promise<void>) | undefined;
+    withNonTransactionContext: <T>(fn: (txCtx: { $test: true }) => Promise<T>) => Promise<T>;
     poisonExecute:
       | ((cb: (adapter: StateAdapter<{ $test: true }, string>) => Promise<void>) => Promise<void>)
       | undefined;
@@ -28,6 +29,7 @@ export const extendWithStateInProcess = <T>(
     flakyStateAdapter: InProcessStateAdapter;
     flakyDbStateAdapter: InProcessStateAdapter | undefined;
     poisonTransaction: ((txCtx: { $test: true }) => Promise<void>) | undefined;
+    withNonTransactionContext: <T>(fn: (txCtx: { $test: true }) => Promise<T>) => Promise<T>;
     poisonExecute:
       | ((cb: (adapter: StateAdapter<{ $test: true }, string>) => Promise<void>) => Promise<void>)
       | undefined;
@@ -82,6 +84,7 @@ export const extendWithStateInProcess = <T>(
             maybeThrow();
             return stateAdapter.withTransaction(fn);
           },
+          isTransaction: stateAdapter.isTransaction,
           withSavepoint: async (txCtx, fn) => {
             maybeThrow();
             return stateAdapter.withSavepoint(txCtx, fn);
@@ -128,6 +131,16 @@ export const extendWithStateInProcess = <T>(
       // oxlint-disable-next-line no-empty-pattern
       async ({}, use) => {
         await use(undefined);
+      },
+      { scope: "test" },
+    ],
+    withNonTransactionContext: [
+      // oxlint-disable-next-line no-empty-pattern
+      async ({}, use) => {
+        await use(async (fn) => {
+          const inProcessCtx: InProcessContext = { inTransaction: false };
+          return fn(inProcessCtx as unknown as { $test: true });
+        });
       },
       { scope: "test" },
     ],

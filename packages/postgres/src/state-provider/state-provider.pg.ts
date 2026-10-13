@@ -19,6 +19,15 @@ export type PgStateProvider<TTxContext extends BaseTxContext> = {
   withTransaction: <T>(fn: (txCtx: TTxContext) => Promise<T>) => Promise<T>;
 
   /**
+   * Whether `txCtx` is inside an open transaction. Queuert rejects mutating client calls whose
+   * context fails this check, since a pool or autocommit connection would commit each of their
+   * statements separately. Must be synchronous and must not query the database — read the
+   * driver's own transaction state instead (e.g. Kysely `db.isTransaction`, Knex
+   * `trx.isTransaction`, pg `client.getTransactionStatus()`, better-sqlite3 `db.inTransaction`).
+   */
+  isTransaction: (txCtx: TTxContext) => boolean;
+
+  /**
    * Executes a callback within a savepoint inside an existing transaction.
    * Creates a savepoint, executes the callback, releases on success,
    * rolls back to the savepoint on error.

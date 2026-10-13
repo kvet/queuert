@@ -35,12 +35,10 @@ export const createPostgresJsProvider = ({ sql }: { sql: postgres.Sql }): Postgr
   };
 
   return {
-    withTransaction: async (fn) => {
-      return sql.begin(async (txSql) => fn({ txSql }) as any);
-    },
-    withSavepoint: async (txCtx, fn) => {
-      return txCtx.txSql.savepoint(async (savepointSql) => fn({ txSql: savepointSql }) as any);
-    },
+    withTransaction: async (fn) => sql.begin(async (txSql) => fn({ txSql }) as any),
+    isTransaction: (txCtx) => typeof txCtx.txSql.savepoint === "function",
+    withSavepoint: async (txCtx, fn) =>
+      txCtx.txSql.savepoint(async (savepointSql) => fn({ txSql: savepointSql }) as any),
     executeSql: async ({ txCtx, id, sql: query, params, paramTypes }) => {
       const sqlClient = txCtx?.txSql ?? sql;
       const prepare = id !== undefined;

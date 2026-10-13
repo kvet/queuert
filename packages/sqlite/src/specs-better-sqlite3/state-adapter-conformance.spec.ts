@@ -26,6 +26,7 @@ describe("SQLite State Adapter Conformance", () => {
     db: Database.Database;
     stateAdapter: StateAdapter<{ $test: true }, string>;
     transactionConcurrency: "concurrent" | "serialized";
+    withNonTransactionContext: <T>(fn: (txCtx: { $test: true }) => Promise<T>) => Promise<T>;
   }>({
     db: [
       // oxlint-disable-next-line no-empty-pattern
@@ -49,6 +50,12 @@ describe("SQLite State Adapter Conformance", () => {
         const adapter = await createSqliteStateAdapter({ stateProvider, tablePrefix });
         await adapter.migrateToLatest();
         return use(adapter as unknown as StateAdapter<{ $test: true }, string>);
+      },
+      { scope: "test" },
+    ],
+    withNonTransactionContext: [
+      async ({ db }, use) => {
+        await use(async (fn) => fn({ db } as unknown as { $test: true }));
       },
       { scope: "test" },
     ],

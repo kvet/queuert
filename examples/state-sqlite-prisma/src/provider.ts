@@ -19,6 +19,7 @@ export const createPrismaSqliteStateProvider = <TPrisma extends PrismaLikeClient
       using _h = await lock.acquireWrite();
       return await prisma.$transaction(async (prisma: TPrisma) => cb({ prisma }));
     },
+    isTransaction: (txCtx) => !("$connect" in txCtx.prisma),
     // `id` not forwarded: Prisma's engine caches plans by SQL text per connection.
     executeSql: async ({ txCtx, sql, params, columnTypes, readOnly }) => {
       const runQuery = async (): Promise<unknown[]> => {

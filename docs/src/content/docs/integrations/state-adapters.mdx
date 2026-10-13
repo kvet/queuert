@@ -79,6 +79,7 @@ State adapters abstract database operations for job persistence. They handle job
 A State Provider bridges your database client (Kysely, Drizzle, Prisma, raw drivers, etc.) with the state adapter. You implement a simple interface that provides transaction handling and SQL execution:
 
 - **`withTransaction`** -- Manages connection acquisition and transaction lifecycle. The callback receives a transaction context representing an active transaction.
+- **`isTransaction`** -- Reports whether a context is inside an open transaction, from the driver's own state and without a query. Mutating client methods reject a context that fails it, so passing a pool or the root ORM handle instead of the transaction throws instead of autocommitting each statement.
 - **`executeSql`** -- Executes SQL statements. When a transaction context is provided, uses that connection; when omitted, acquires and releases its own connection from the pool.
 
 Each example linked above demonstrates a complete State Provider implementation for its corresponding ORM or driver.
@@ -97,6 +98,7 @@ test("my provider passes state adapter conformance", async () => {
     stateAdapter,
     transactionConcurrency: "concurrent", // "serialized" for a single-connection provider such as SQLite
     poisonTransaction,
+    withNonTransactionContext: async (fn) => fn({ db }), // root handle, not a transaction
     reset: async () => { /* truncate tables */ },
     dispose: async () => { /* close connections */ },
   }));
