@@ -66,12 +66,18 @@ prompt: |
      List user-facing changes that no pending changeset covers.
   6. **Suggested release summary** — one or two sentences, user-facing. The per-change
      notes already live in the pending changesets; do not repeat them.
+  7. **Related GitHub issues** — list open issues this release addresses. Check commit
+     messages and changesets for issue references (`#123`, `fixes #123`), then search open
+     issues for matching topics: `gh issue list --repo kvet/queuert --state open --limit 100`.
+     For each, give the number, title, the commit(s) that address it, and whether it is
+     fully or only partly addressed.
 ```
 
 2. Present the agent's analysis to the user. **Ask the user**:
    - What version bump they want (suggest the agent's recommendation as default)
    - Whether the suggested release summary is good, or if they want to adjust it
    - How to handle any user-facing change not covered by a pending changeset (add one, or confirm it is internal)
+   - Which of the related issues to close after the release (suggest only the fully addressed ones)
 
 3. Create the changeset file at `.changeset/release-<version>.md`. All packages are linked and must be listed together:
 
@@ -102,6 +108,14 @@ Verify all packages were bumped to the expected version:
 ```bash
 ls packages/*/package.json | xargs -I {} sh -c 'echo "--- {}"; grep "\"version\"" {}'
 ```
+
+**Pre-1.0 major bumps**: While packages are below `1.0.0`, a `major` changeset makes changesets jump to `1.0.0`. We do not want that. Breaking changes before 1.0 bump the minor instead (e.g. `0.16.x` → `0.17.0`). If the bump went to `1.0.0` and the user did not ask for 1.0, rewrite the versions by hand to `0.<minor+1>.0`:
+
+- the `"version"` field in every `packages/*/package.json`
+- cross-package dependency ranges that changesets updated to `1.0.0`
+- the new heading in every `packages/*/CHANGELOG.md`
+
+Then re-run the verify command above and grep for any leftover `1.0.0` (excluding `node_modules`). Use the rewritten version everywhere below (commit, tag, GitHub release).
 
 ### Step 4: Format
 
@@ -175,3 +189,13 @@ npm view queuert versions --json | tail -5
 ```
 
 If it fails, check logs with `gh run view <run-id> --log-failed` and help the user debug.
+
+### Step 8: Close Addressed Issues
+
+Only after the publish succeeds, close the issues the user approved in Step 2. Leave a comment pointing to the release:
+
+```bash
+gh issue close <number> --repo kvet/queuert --reason completed --comment "Addressed in [v<version>](https://github.com/kvet/queuert/releases/tag/v<version>)."
+```
+
+Do not close partly addressed issues. Instead, ask the user if they want a comment that notes what shipped and what is left.
