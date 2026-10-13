@@ -1,13 +1,17 @@
+import { isPositiveFinite } from "../helpers/number.js";
 import { sleep } from "../helpers/sleep.js";
 
 /** Configuration for job attempt timeout and heartbeat frequency. */
 export type AttemptConfig = {
   /**
    * How long a worker holds a staged attempt before it can be reclaimed. Atomic attempts run in
-   * one transaction and have no deadline. Defaults to `60_000`.
+   * one transaction and have no deadline. Must be finite and positive. Defaults to `60_000`.
    */
   timeoutMs: number;
-  /** How often to extend the attempt deadline of a staged attempt. Defaults to `30_000`. */
+  /**
+   * How often to extend the attempt deadline of a staged attempt. Must be finite and positive.
+   * Defaults to `30_000`.
+   */
   heartbeatMs: number;
 };
 
@@ -48,4 +52,24 @@ export const createAttemptHeartbeat = ({
       await loopPromise?.catch(() => {});
     },
   };
+};
+
+/** Lists every invalid field of an attempt config, each prefixed with `name`. */
+export const attemptConfigViolations = (
+  name: string,
+  config: AttemptConfig | undefined,
+): string[] => {
+  if (config === undefined) return [];
+  const violations: string[] = [];
+  if (!isPositiveFinite(config.timeoutMs)) {
+    violations.push(
+      `${name}.timeoutMs must be a positive finite number (got ${String(config.timeoutMs)})`,
+    );
+  }
+  if (!isPositiveFinite(config.heartbeatMs)) {
+    violations.push(
+      `${name}.heartbeatMs must be a positive finite number (got ${String(config.heartbeatMs)})`,
+    );
+  }
+  return violations;
 };

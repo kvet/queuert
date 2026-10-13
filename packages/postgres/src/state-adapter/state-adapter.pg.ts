@@ -754,7 +754,7 @@ input_data AS (
   FROM unnest(
     $2::text[],
     $3::text[], $4::text[], $5::text[],
-    $6::timestamptz[], $7::bigint[],
+    $6::timestamptz[], $7::double precision[],
     $8::text[], $9::text[]
   ) WITH ORDINALITY AS raw(
     type_name,
@@ -868,7 +868,7 @@ WITH input_data AS (
   SELECT new_id, type_name, input, sched_at, sched_after_ms, trace_context, continue_from_id
   FROM unnest(
     $1::{{id_type}}[], $2::text[], $3::text[],
-    $4::timestamptz[], $5::bigint[],
+    $4::timestamptz[], $5::double precision[],
     $6::text[], $7::{{id_type}}[]
   ) AS t(
     new_id, type_name, input, sched_at, sched_after_ms,
@@ -1051,7 +1051,7 @@ RETURNING j.*, e.has_blocking
               `
 WITH input_data AS (
   SELECT job_id, at, after_ms, error
-  FROM unnest($1::{{id_type}}[], $2::timestamptz[], $3::bigint[], $4::text[]) AS t(job_id, at, after_ms, error)
+  FROM unnest($1::{{id_type}}[], $2::timestamptz[], $3::double precision[], $4::text[]) AS t(job_id, at, after_ms, error)
 ),
 updated AS (
   UPDATE {{schema}}.{{table_prefix}}job j
@@ -1349,7 +1349,7 @@ WHERE delay_ms IS NOT NULL
               `
 WITH updated AS (
   UPDATE {{schema}}.{{table_prefix}}job
-  SET attempt_until = now() + ($3::bigint * interval '1 millisecond')
+  SET attempt_until = now() + ($3::double precision * interval '1 millisecond')
   WHERE id = $1
     AND attempt_by = $2
   RETURNING *

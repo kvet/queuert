@@ -517,6 +517,30 @@ export const createJobsGroup: ConformanceGroup<StateConformanceFixture> = {
       },
     },
     {
+      name: "schedules with a fractional schedule.afterMs",
+      run: async ({ stateAdapter }, expect) => {
+        const fractionalMs = 60_000.5;
+        const before = Date.now();
+        const [createdChain] = await stateAdapter.withTransaction(async (txCtx) =>
+          stateAdapter.createJobs({
+            txCtx,
+            jobs: [
+              {
+                id: stateAdapter.config.generateId(),
+                typeName: "schedule-fractional",
+                input: null,
+                schedule: { afterMs: fractionalMs },
+              },
+            ],
+          }),
+        );
+
+        const diff = createdChain.head.scheduledAt.getTime() - before;
+        expect(diff).toBeGreaterThanOrEqual(fractionalMs - 1000);
+        expect(diff).toBeLessThan(fractionalMs + 1000);
+      },
+    },
+    {
       name: "clamps past schedule.at to now (scheduled_at is eligibility floor, never a past lie)",
       run: async ({ stateAdapter }, expect) => {
         const past = new Date(Date.now() - 60 * 60 * 1000);

@@ -80,6 +80,46 @@ export const extendJobAttemptGroup: ConformanceGroup<StateConformanceFixture> = 
       },
     },
     {
+      name: "extends attempt by a fractional timeoutMs",
+      run: async ({ stateAdapter }, expect) => {
+        const fractionalMs = 60_000.5;
+        const [createdChain] = await stateAdapter.withTransaction(async (txCtx) =>
+          stateAdapter.createJobs({
+            txCtx,
+            jobs: [
+              {
+                id: stateAdapter.config.generateId(),
+                typeName: "fractional-attempt-test",
+                input: null,
+              },
+            ],
+          }),
+        );
+
+        await stateAdapter.withTransaction(async (txCtx) =>
+          stateAdapter.startJobAttempt({
+            txCtx,
+            workerId: "worker-1",
+            typeNames: ["fractional-attempt-test"],
+          }),
+        );
+
+        const before = Date.now();
+        const renewed = await stateAdapter.withTransaction(async (txCtx) =>
+          stateAdapter.extendJobAttempt({
+            txCtx,
+            jobId: createdChain.head.id,
+            workerId: "worker-1",
+            timeoutMs: fractionalMs,
+          }),
+        );
+
+        const diff = renewed!.attemptUntil!.getTime() - before;
+        expect(diff).toBeGreaterThanOrEqual(fractionalMs - 1000);
+        expect(diff).toBeLessThan(fractionalMs + 1000);
+      },
+    },
+    {
       name: "updates attemptUntil on subsequent extensions",
       run: async ({ stateAdapter }, expect) => {
         const [createdChain] = await stateAdapter.withTransaction(async (txCtx) =>

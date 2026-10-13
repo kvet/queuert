@@ -113,10 +113,11 @@ Example with defaults: 10s → 20s → 40s → 80s → 160s → 300s → 300s...
 
 See [Job Processing](../job-processing/) for details on error handling and abort signals.
 
+`createInProcessWorker` validates every `recoveryBackoffConfig`, `backoffConfig` and `attemptConfig` passed to it, including unused `defaults`, and throws a `TypeError` listing each invalid field. `initialDelayMs` must be finite and non-negative, `maxDelayMs` non-negative (`Infinity` means no cap), and `multiplier`, `timeoutMs` and `heartbeatMs` finite and positive. Fractional values are allowed.
+
 ## Client-Based Construction
 
 `createInProcessWorker` accepts a `client` instance and extracts infrastructure (`stateAdapter`, `notifyAdapter`, `observabilityAdapter`, `jobTypes`, `log`) from it internally. Worker-specific options (`processors`, `workerName`, `concurrency`, `pollIntervalMs`, `recoveryBackoffConfig`, `defaults`, `requiredAttemptMiddleware`) remain separate parameters. The top-level `recoveryBackoffConfig` controls the worker's own main loop retry behavior (e.g., recovery from database connection errors). Per-attempt configuration — `backoffConfig`, `attemptConfig`, `attemptMiddleware` — lives on the processor registry; the worker-level `defaults.backoffConfig` / `defaults.attemptConfig` provide a fallback for processors that don't set their own (resolution order: processor → registry → worker `defaults` → library default). `requiredAttemptMiddleware` enforces that every slice merged into the worker includes a fixed set of middleware instances as an in-order subsequence — useful for guaranteeing cross-cutting concerns like auth or tracing are present on every slice. The worker only enforces presence; slices continue to run their own middleware chains.
-
 This is purely a construction convenience — no lifecycle coupling is introduced. The client and worker remain independent after construction.
 
 ## Extensibility

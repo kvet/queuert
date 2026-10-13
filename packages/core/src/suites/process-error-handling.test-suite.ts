@@ -2496,4 +2496,66 @@ export const processErrorHandlingTestSuite = ({ it }: { it: TestAPI<TestSuiteCon
       expect(completed.output).toEqual({ result: 20 });
     });
   });
+
+  it("reschedules with fractional backoff delays", async ({
+    stateAdapter,
+    notifyAdapter,
+    withTransaction,
+    withWorkers,
+    observabilityAdapter,
+    log,
+    expect,
+  }) => {
+    const jobTypes = defineJobTypes<{
+      test: {
+        entry: true;
+        input: { value: number };
+        output: { result: number };
+      };
+    }>();
+
+    const client = await createClient({
+      stateAdapter,
+      notifyAdapter,
+      observabilityAdapter,
+      log,
+      jobTypes,
+    });
+    const worker = await createInProcessWorker({
+      client,
+      concurrency: 1,
+      processors: createProcessors({
+        client,
+        jobTypes,
+        processors: {
+          test: {
+            // 1.5 ms, then 2.25 ms
+            backoffConfig: { initialDelayMs: 1.5, multiplier: 1.5, maxDelayMs: 10 },
+            attemptHandler: async ({ job, complete }) => {
+              if (job.attempt < 3) {
+                throw new Error(`Simulated error on attempt ${job.attempt}`);
+              }
+              return complete(async ({ finish }) =>
+                finish({ output: { result: job.input.value * 2 } }),
+              );
+            },
+          },
+        },
+      }),
+    });
+
+    const chain = await withTransaction(async (txCtx, transactionHooks) =>
+      client.createChain({
+        ...txCtx,
+        transactionHooks,
+        typeName: "test",
+        input: { value: 10 },
+      }),
+    );
+
+    await withWorkers([await worker.start()], async () => {
+      const completed = await client.awaitChain(chain, completionOptions);
+      expect(completed.output).toEqual({ result: 20 });
+    });
+  });
 };

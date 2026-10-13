@@ -1,7 +1,8 @@
+import { isPositiveSafeInteger } from "../helpers/number.js";
 import { type StateAdapterConfig } from "./state-adapter.js";
 
 const assertPositiveInteger = (value: number, name: string): void => {
-  if (!Number.isSafeInteger(value) || value < 1) {
+  if (!isPositiveSafeInteger(value)) {
     throw new Error(`Invalid ${name}: expected a positive integer, got ${String(value)}`);
   }
 };

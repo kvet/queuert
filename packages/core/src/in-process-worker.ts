@@ -2,7 +2,7 @@ import { randomUUID } from "node:crypto";
 
 import { type Client, helpersSymbol } from "./client.js";
 import { type BaseJobTypeDefinitions } from "./entities/job-type.js";
-import { type BackoffConfig } from "./helpers/backoff.js";
+import { type BackoffConfig, backoffConfigViolations } from "./helpers/backoff.js";
 import { type ParallelExecutor, createParallelExecutor } from "./helpers/parallel-executor.js";
 import { withRetry } from "./helpers/retry.js";
 import { raceWithSleep } from "./helpers/sleep.js";
@@ -17,7 +17,7 @@ import {
   type StateAdapter,
   type StateJob,
 } from "./state-adapter/state-adapter.js";
-import { type AttemptConfig } from "./worker/attempt-heartbeat.js";
+import { type AttemptConfig, attemptConfigViolations } from "./worker/attempt-heartbeat.js";
 import {
   type AnyAttemptMiddleware,
   type AttemptMiddleware,
@@ -262,6 +262,9 @@ export type InProcessWorkerDefaults = {
  * precedence is processor > worker `defaults` > built-in defaults.
  *
  * @param options - Worker configuration.
+ * @throws {TypeError} When `workerName` is malformed, or when `recoveryBackoffConfig`,
+ * `defaults` or any processor's `backoffConfig` / `attemptConfig` holds an invalid value;
+ * the message lists every invalid field.
  */
 export const createInProcessWorker = async <
   TJobTypeDefinitions extends BaseJobTypeDefinitions,
@@ -370,6 +373,26 @@ export const createInProcessWorker = async <
     timeoutMs: 60_000,
     heartbeatMs: 30_000,
   };
+  const configViolations = [
+    ...backoffConfigViolations("recoveryBackoffConfig", recoveryBackoffConfig),
+    ...backoffConfigViolations("defaults.backoffConfig", defaultBackoffConfig),
+    ...attemptConfigViolations("defaults.attemptConfig", defaultAttemptConfig),
+    ...typeNames.flatMap((typeName) => [
+      ...backoffConfigViolations(
+        `processors["${typeName}"].backoffConfig`,
+        processors[typeName].backoffConfig,
+      ),
+      ...attemptConfigViolations(
+        `processors["${typeName}"].attemptConfig`,
+        processors[typeName].attemptConfig,
+      ),
+    ]),
+  ];
+  if (configViolations.length > 0) {
+    throw new TypeError(
+      `createInProcessWorker: invalid configuration:\n${configViolations.map((v) => `  - ${v}`).join("\n")}`,
+    );
+  }
   const concurrencyValue = concurrency ?? 1;
   if (workerName !== undefined && !/^[A-Za-z0-9._-]+$/.test(workerName)) {
     throw new TypeError(

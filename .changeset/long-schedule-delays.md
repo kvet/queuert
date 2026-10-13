@@ -9,3 +9,4 @@ Schedules, attempt timeouts, and `awaitChain` timeouts longer than about 24.8 da
 - PostgreSQL: a pending job scheduled more than about 24.8 days ahead no longer makes `getStartAttemptDelayMs` fail with "integer out of range" on every idle worker cycle ([#6](https://github.com/kvet/queuert/issues/6)).
 - The worker's `recoveryBackoffConfig` backoff now resets once the loop recovers, so an isolated error later on waits the initial delay, not the maximum ([#6](https://github.com/kvet/queuert/issues/6)).
 - `awaitChain` with a `timeoutMs` above 2^31-1 ms no longer times out almost immediately.
+- PostgreSQL: fractional millisecond delays (`schedule: { afterMs }`, retry backoff with a non-integer `multiplier` such as `1.5`, attempt `timeoutMs`) no longer fail with "invalid input syntax for type bigint".

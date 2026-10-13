@@ -74,6 +74,40 @@ export const continueJobsGroup: ConformanceGroup<StateConformanceFixture> = {
       },
     },
     {
+      name: "schedules the continuation with a fractional schedule.afterMs",
+      run: async ({ stateAdapter }, expect) => {
+        const fractionalMs = 60_000.5;
+        const [headChain] = await stateAdapter.withTransaction(async (txCtx) =>
+          stateAdapter.createJobs({
+            txCtx,
+            jobs: [
+              { id: stateAdapter.config.generateId(), typeName: "fractional-head", input: null },
+            ],
+          }),
+        );
+
+        const before = Date.now();
+        const [continued] = await stateAdapter.withTransaction(async (txCtx) =>
+          stateAdapter.continueJobs({
+            txCtx,
+            jobs: [
+              {
+                id: stateAdapter.config.generateId(),
+                typeName: "fractional-child",
+                continueFromId: headChain.head.id,
+                input: null,
+                schedule: { afterMs: fractionalMs },
+              },
+            ],
+          }),
+        );
+
+        const diff = continued!.continuation.scheduledAt.getTime() - before;
+        expect(diff).toBeGreaterThanOrEqual(fractionalMs - 1000);
+        expect(diff).toBeLessThan(fractionalMs + 1000);
+      },
+    },
+    {
       name: "round-trips a scalar JSON input on the continuation",
       run: async ({ stateAdapter }, expect) => {
         const [headChain] = await stateAdapter.withTransaction(async (txCtx) =>
