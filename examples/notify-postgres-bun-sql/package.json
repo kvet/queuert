@@ -1,8 +1,8 @@
 {
-  "name": "example-state-sqlite-bun",
+  "name": "example-notify-postgres-bun-sql",
   "version": "0.0.1",
   "private": true,
-  "description": "An example demonstrating the SQLite state adapter with Bun's built-in bun:sqlite module.",
+  "description": "An example demonstrating the PostgreSQL notify adapter with Bun's built-in SQL client.",
   "license": "MIT",
   "author": "kvet",
   "repository": {
@@ -19,7 +19,8 @@
     "typecheck": "tsc --noEmit"
   },
   "devDependencies": {
-    "@queuert/sqlite": "workspace:*",
+    "@queuert/postgres": "workspace:*",
+    "@queuert/testcontainers": "workspace:*",
     "@queuert/tsconfig": "workspace:*",
     "@types/bun": "1.4.3",
     "bun": "1.4.3",

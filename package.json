@@ -12,7 +12,7 @@
     "fmt:check": "oxfmt --check",
     "test": "vitest --run && pnpm test:bun",
     "test:ci": "vitest --run --retry=2 --maxWorkers=$(($(nproc) - 2)) && pnpm test:bun",
-    "test:bun": "pnpm --filter example-state-sqlite-bun test",
+    "test:bun": "pnpm --filter example-state-sqlite-bun-sqlite --filter example-state-sqlite-bun-sql --filter example-state-postgres-bun-sql --filter example-notify-postgres-bun-sql --filter example-notify-redis-bun test",
     "typecheck": "pnpm -r --reporter=append-only typecheck",
     "benchmarks": "pnpm --filter './benchmarks/*' --workspace-concurrency=1 --reporter=append-only start",
     "examples": "pnpm --filter './examples/*' --reporter=append-only start",

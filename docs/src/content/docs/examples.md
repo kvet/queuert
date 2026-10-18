@@ -15,25 +15,27 @@ How to connect Queuert to your database using different ORMs and drivers.
 
 | Example                                                                                                       | ORM / Driver                          |
 | ------------------------------------------------------------------------------------------------------------- | ------------------------------------- |
-| [state-postgres-kysely](https://github.com/kvet/queuert/tree/main/examples/state-postgres-kysely)             | Kysely                                |
-| [state-postgres-knex](https://github.com/kvet/queuert/tree/main/examples/state-postgres-knex)                 | Knex                                  |
-| [state-postgres-drizzle](https://github.com/kvet/queuert/tree/main/examples/state-postgres-drizzle)           | Drizzle ORM                           |
-| [state-postgres-prisma](https://github.com/kvet/queuert/tree/main/examples/state-postgres-prisma)             | Prisma                                |
 | [state-postgres-pg](https://github.com/kvet/queuert/tree/main/examples/state-postgres-pg)                     | pg (node-postgres)                    |
 | [state-postgres-postgres-js](https://github.com/kvet/queuert/tree/main/examples/state-postgres-postgres-js)   | postgres.js                           |
+| [state-postgres-drizzle](https://github.com/kvet/queuert/tree/main/examples/state-postgres-drizzle)           | Drizzle ORM                           |
+| [state-postgres-kysely](https://github.com/kvet/queuert/tree/main/examples/state-postgres-kysely)             | Kysely                                |
+| [state-postgres-prisma](https://github.com/kvet/queuert/tree/main/examples/state-postgres-prisma)             | Prisma                                |
+| [state-postgres-knex](https://github.com/kvet/queuert/tree/main/examples/state-postgres-knex)                 | Knex                                  |
+| [state-postgres-bun-sql](https://github.com/kvet/queuert/tree/main/examples/state-postgres-bun-sql)           | Bun.SQL                               |
 | [state-postgres-multi-worker](https://github.com/kvet/queuert/tree/main/examples/state-postgres-multi-worker) | Multiple workers sharing one database |
 
 ### SQLite
 
 | Example                                                                                                       | ORM / Driver   |
 | ------------------------------------------------------------------------------------------------------------- | -------------- |
-| [state-sqlite-node](https://github.com/kvet/queuert/tree/main/examples/state-sqlite-node)                     | node:sqlite    |
-| [state-sqlite-bun](https://github.com/kvet/queuert/tree/main/examples/state-sqlite-bun)                       | bun:sqlite     |
 | [state-sqlite-better-sqlite3](https://github.com/kvet/queuert/tree/main/examples/state-sqlite-better-sqlite3) | better-sqlite3 |
-| [state-sqlite-kysely](https://github.com/kvet/queuert/tree/main/examples/state-sqlite-kysely)                 | Kysely         |
-| [state-sqlite-knex](https://github.com/kvet/queuert/tree/main/examples/state-sqlite-knex)                     | Knex           |
+| [state-sqlite-node-sqlite](https://github.com/kvet/queuert/tree/main/examples/state-sqlite-node-sqlite)       | node:sqlite    |
 | [state-sqlite-drizzle](https://github.com/kvet/queuert/tree/main/examples/state-sqlite-drizzle)               | Drizzle ORM    |
+| [state-sqlite-kysely](https://github.com/kvet/queuert/tree/main/examples/state-sqlite-kysely)                 | Kysely         |
 | [state-sqlite-prisma](https://github.com/kvet/queuert/tree/main/examples/state-sqlite-prisma)                 | Prisma         |
+| [state-sqlite-knex](https://github.com/kvet/queuert/tree/main/examples/state-sqlite-knex)                     | Knex           |
+| [state-sqlite-bun-sqlite](https://github.com/kvet/queuert/tree/main/examples/state-sqlite-bun-sqlite)         | bun:sqlite     |
+| [state-sqlite-bun-sql](https://github.com/kvet/queuert/tree/main/examples/state-sqlite-bun-sql)               | Bun.SQL        |
 
 ## Notify Adapters
 
@@ -41,13 +43,15 @@ How to set up real-time job notifications between client and workers.
 
 | Example                                                                                                               | Transport                              |
 | --------------------------------------------------------------------------------------------------------------------- | -------------------------------------- |
-| [notify-redis-redis](https://github.com/kvet/queuert/tree/main/examples/notify-redis-redis)                           | Redis (node-redis)                     |
 | [notify-redis-ioredis](https://github.com/kvet/queuert/tree/main/examples/notify-redis-ioredis)                       | Redis (ioredis)                        |
-| [notify-redis-cluster-node-redis](https://github.com/kvet/queuert/tree/main/examples/notify-redis-cluster-node-redis) | Redis Cluster (node-redis)             |
 | [notify-redis-cluster-ioredis](https://github.com/kvet/queuert/tree/main/examples/notify-redis-cluster-ioredis)       | Redis Cluster (ioredis)                |
-| [notify-nats-nats](https://github.com/kvet/queuert/tree/main/examples/notify-nats-nats)                               | NATS                                   |
+| [notify-redis-redis](https://github.com/kvet/queuert/tree/main/examples/notify-redis-redis)                           | Redis (node-redis)                     |
+| [notify-redis-cluster-node-redis](https://github.com/kvet/queuert/tree/main/examples/notify-redis-cluster-node-redis) | Redis Cluster (node-redis)             |
+| [notify-redis-bun](https://github.com/kvet/queuert/tree/main/examples/notify-redis-bun)                               | Redis (Bun Redis)                      |
 | [notify-postgres-pg](https://github.com/kvet/queuert/tree/main/examples/notify-postgres-pg)                           | PostgreSQL LISTEN/NOTIFY (pg)          |
 | [notify-postgres-postgres-js](https://github.com/kvet/queuert/tree/main/examples/notify-postgres-postgres-js)         | PostgreSQL LISTEN/NOTIFY (postgres.js) |
+| [notify-postgres-bun-sql](https://github.com/kvet/queuert/tree/main/examples/notify-postgres-bun-sql)                 | PostgreSQL LISTEN/NOTIFY (Bun.SQL)     |
+| [notify-nats-nats](https://github.com/kvet/queuert/tree/main/examples/notify-nats-nats)                               | NATS                                   |
 
 ## Patterns & Features
 

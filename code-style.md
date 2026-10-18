@@ -253,18 +253,20 @@ State examples showcase different database client integrations with the same dat
 ```
 state-postgres-pg           # node-postgres (pg)
 state-postgres-postgres-js  # postgres.js
-state-postgres-prisma       # Prisma
 state-postgres-drizzle      # Drizzle ORM
 state-postgres-kysely       # Kysely
+state-postgres-prisma       # Prisma
 state-postgres-knex         # Knex
+state-postgres-bun-sql      # Bun.SQL
 
-state-sqlite-node           # node:sqlite
-state-sqlite-bun            # bun:sqlite
 state-sqlite-better-sqlite3 # better-sqlite3
-state-sqlite-prisma         # Prisma
+state-sqlite-node-sqlite    # node:sqlite
 state-sqlite-drizzle        # Drizzle ORM
 state-sqlite-kysely         # Kysely
+state-sqlite-prisma         # Prisma
 state-sqlite-knex           # Knex
+state-sqlite-bun-sqlite     # bun:sqlite
+state-sqlite-bun-sql        # Bun.SQL
 
 ```
 
@@ -275,10 +277,12 @@ Each implements a state provider (`PgStateProvider` or `SqliteStateProvider`) wi
 Notify examples showcase different pub/sub client integrations:
 
 ```
-notify-redis-redis           # node-redis
 notify-redis-ioredis         # ioredis
+notify-redis-redis           # node-redis
+notify-redis-bun             # Bun Redis
 notify-postgres-pg           # pg (node-postgres)
 notify-postgres-postgres-js  # postgres-js
+notify-postgres-bun-sql      # Bun.SQL
 ```
 
 Redis examples implement a `RedisNotifyProvider` with `publish`, `subscribe`, and `eval` methods. PostgreSQL examples implement a `PgNotifyProvider` with `publish` and `subscribe` methods using PostgreSQL's LISTEN/NOTIFY.

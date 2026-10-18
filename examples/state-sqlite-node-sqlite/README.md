@@ -6,7 +6,7 @@ SQLite state storage via `@queuert/sqlite` using Node's built-in `node:sqlite` m
 
 ```bash
 pnpm install
-pnpm --filter example-state-sqlite-node start
+pnpm --filter example-state-sqlite-node-sqlite start
 ```
 
 Requires Node.js ≥ 22.13.0.

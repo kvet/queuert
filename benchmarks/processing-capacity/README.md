@@ -17,7 +17,7 @@ pnpm start                                # all benchmarks, both modes
 # State axis (in-process notify)
 pnpm start:state-in-process               # in-process state
 pnpm start:state-sqlite-better-sqlite3    # SQLite state via better-sqlite3
-pnpm start:state-sqlite-node              # SQLite state via node:sqlite
+pnpm start:state-sqlite-node-sqlite       # SQLite state via node:sqlite
 pnpm start:state-postgres-postgres-js     # PostgreSQL state via postgres-js
 pnpm start:state-postgres-pg              # PostgreSQL state via pg
 

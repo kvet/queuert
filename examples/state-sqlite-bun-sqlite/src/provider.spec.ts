@@ -6,7 +6,7 @@ import { runStateAdapterConformance } from "queuert/conformance";
 
 import { createBunSqliteStateProvider } from "./provider.js";
 
-test("state-sqlite-bun provider passes state adapter conformance", async () => {
+test("state-sqlite-bun-sqlite provider passes state adapter conformance", async () => {
   await runStateAdapterConformance(async () => {
     const db = new Database(":memory:");
 

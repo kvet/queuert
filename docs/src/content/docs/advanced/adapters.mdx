@@ -165,7 +165,7 @@ All `listen*` methods accept a callback and return a dispose function. Subscript
 Both `StateAdapter` and `NotifyAdapter` expose `close(): Promise<void>`. The contract:
 
 - **Idempotent** — calling `close()` a second time is a no-op.
-- **Cascades into the provider when defined** — `adapter.close()` invokes `provider.close?.()`. Provider `close` is optional, so pass-through providers (postgres.js state, `pg.Pool` state, `better-sqlite3`/`node:sqlite` state, postgres.js notify, user-owned redis clients) simply omit it. Only providers that own resources beyond the caller-supplied client/pool (e.g. the `pg.Pool` notify provider with its dedicated LISTEN client) need to implement it.
+- **Cascades into the provider when defined** — `adapter.close()` invokes `provider.close?.()`. Provider `close` is optional, so pass-through providers (postgres.js state, `pg.Pool` state, Bun.SQL state, `better-sqlite3`/`node:sqlite`/`bun:sqlite` state, postgres.js notify, Bun.SQL notify, user-owned redis clients) simply omit it. Only providers that own resources beyond the caller-supplied client/pool (e.g. the `pg.Pool` notify provider with its dedicated LISTEN client) need to implement it.
 - **Force-tears shared listeners** — `NotifyAdapter.close()` tears down the pg/redis/nats shared-listener multiplex regardless of remaining callbacks, waits for any in-flight `subscribe` to complete, then releases the provider's dedicated LISTEN/subscribe client.
 - **Post-close behavior** — after close, `notify*`/`listen*`/`publish`/`subscribe` reject. Previously returned unsubscribe functions are safe to call (no-op).
 

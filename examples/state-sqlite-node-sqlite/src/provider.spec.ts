@@ -6,7 +6,7 @@ import { test } from "vitest";
 
 import { createNodeSqliteStateProvider } from "./provider.js";
 
-test("state-sqlite-node provider passes state adapter conformance", async () => {
+test("state-sqlite-node-sqlite provider passes state adapter conformance", async () => {
   await runStateAdapterConformance(async () => {
     const db = new DatabaseSync(":memory:");
 

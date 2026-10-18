@@ -10,7 +10,7 @@ const benchmarkModules: Record<string, string> = {
   "state-postgres-postgres-js": "state-postgres-postgres-js.ts",
   "state-postgres-pg": "state-postgres-pg.ts",
   "state-sqlite-better-sqlite3": "state-sqlite-better-sqlite3.ts",
-  "state-sqlite-node": "state-sqlite-node.ts",
+  "state-sqlite-node-sqlite": "state-sqlite-node-sqlite.ts",
   "state-in-process": "state-in-process.ts",
   "notify-redis-redis": "notify-redis-redis.ts",
   "notify-redis-ioredis": "notify-redis-ioredis.ts",

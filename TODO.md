@@ -27,10 +27,6 @@ None
   - [TASK] No multi-worker example
   - [TASK] Promote transactions via a dedicated sentinel table (like migration lock in PG) to prevent WAL contention
 - [EPIC] MySQL/MariaDB adapter
-- [EPIC] Test against bun and its built-in postgres, redis clients
-  - [TASK] postgres-state example
-  - [TASK] postgres-notify example
-  - [TASK] redis-notify example
 
 # Long term
 

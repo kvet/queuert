@@ -1,0 +1,30 @@
+{
+  "name": "example-state-postgres-bun-sql",
+  "version": "0.0.1",
+  "private": true,
+  "description": "An example demonstrating the PostgreSQL state adapter with Bun's built-in SQL client.",
+  "license": "MIT",
+  "author": "kvet",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/kvet/queuert.git"
+  },
+  "type": "module",
+  "exports": {
+    "./provider": "./src/provider.ts"
+  },
+  "scripts": {
+    "start": "bun run --bun src/index.ts",
+    "test": "bun test",
+    "typecheck": "tsc --noEmit"
+  },
+  "devDependencies": {
+    "@queuert/postgres": "workspace:*",
+    "@queuert/testcontainers": "workspace:*",
+    "@queuert/tsconfig": "workspace:*",
+    "@queuert/typed-sql": "workspace:*",
+    "@types/bun": "1.4.3",
+    "bun": "1.4.3",
+    "queuert": "workspace:*"
+  }
+}
