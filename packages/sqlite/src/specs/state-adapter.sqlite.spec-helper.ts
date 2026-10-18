@@ -24,6 +24,7 @@ export const extendWithStateSqlite = <T>(
     flakyStateAdapter: StateAdapter<{ $test: true }, string>;
     flakyDbStateAdapter: StateAdapter<{ $test: true }, string> | undefined;
     poisonTransaction: ((txCtx: { $test: true }) => Promise<void>) | undefined;
+    withNonTransactionContext: <T>(fn: (txCtx: { $test: true }) => Promise<T>) => Promise<T>;
     poisonExecute:
       | ((cb: (adapter: StateAdapter<{ $test: true }, string>) => Promise<void>) => Promise<void>)
       | undefined;
@@ -41,6 +42,7 @@ export const extendWithStateSqlite = <T>(
     flakyStateAdapter: BetterSqlite3StateAdapter;
     flakyDbStateAdapter: BetterSqlite3StateAdapter | undefined;
     poisonTransaction: ((txCtx: { $test: true }) => Promise<void>) | undefined;
+    withNonTransactionContext: <T>(fn: (txCtx: { $test: true }) => Promise<T>) => Promise<T>;
     poisonExecute:
       | ((cb: (adapter: StateAdapter<{ $test: true }, string>) => Promise<void>) => Promise<void>)
       | undefined;
@@ -145,6 +147,15 @@ export const extendWithStateSqlite = <T>(
       // oxlint-disable-next-line no-empty-pattern
       async ({}, use) => {
         await use(undefined);
+      },
+      { scope: "test" },
+    ],
+    withNonTransactionContext: [
+      async ({ db }, use) => {
+        await use(async (fn) => {
+          const sqliteCtx: BetterSqlite3Context = { db };
+          return fn(sqliteCtx as unknown as { $test: true });
+        });
       },
       { scope: "test" },
     ],

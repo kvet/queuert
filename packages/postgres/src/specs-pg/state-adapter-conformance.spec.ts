@@ -37,6 +37,7 @@ describe("PostgreSQL State Adapter Conformance", () => {
     stateAdapter: StateAdapter<{ $test: true }, string>;
     transactionConcurrency: "concurrent" | "serialized";
     poisonTransaction: (txCtx: { $test: true }) => Promise<void>;
+    withNonTransactionContext: <T>(fn: (txCtx: { $test: true }) => Promise<T>) => Promise<T>;
   }>({
     pool: [
       async ({ postgresConnectionString }, use) => {
@@ -76,6 +77,20 @@ describe("PostgreSQL State Adapter Conformance", () => {
         await use(async (txCtx: { $test: true }) => {
           const pgCtx = txCtx as unknown as PgPoolContext;
           await pgCtx.poolClient.query("SELECT 1 FROM nonexistent_table_queuert_poison_xyz");
+        });
+      },
+      { scope: "test" },
+    ],
+    withNonTransactionContext: [
+      async ({ pool }, use) => {
+        await use(async (fn) => {
+          const poolClient = await pool.connect();
+          try {
+            const pgCtx: PgPoolContext = { poolClient };
+            return await fn(pgCtx as unknown as { $test: true });
+          } finally {
+            poolClient.release();
+          }
         });
       },
       { scope: "test" },

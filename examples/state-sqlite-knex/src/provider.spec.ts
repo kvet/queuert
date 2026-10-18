@@ -20,6 +20,7 @@ test("state-sqlite-knex provider passes state adapter conformance", async () => 
     return {
       stateAdapter: adapter,
       transactionConcurrency: "serialized",
+      withNonTransactionContext: async (fn) => fn({ trx: knex }),
       reset: async () => adapter.truncate(),
       dispose: async () => {
         await knex.destroy();

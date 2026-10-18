@@ -5,8 +5,6 @@ import { type CompletedChain } from "../entities/chain.js";
 import { defineJobTypes } from "../entities/define-job-types.js";
 import { InvalidJobIdError } from "../errors.js";
 import { createInProcessWorker } from "../in-process-worker.js";
-import { createInProcessNotifyAdapter } from "../notify-adapter/notify-adapter.in-process.js";
-import { createInProcessStateAdapter } from "../state-adapter/state-adapter.in-process.js";
 import { createProcessors } from "../worker/create-processors.js";
 import { type TestSuiteContext } from "./spec-context.spec-helper.js";
 
@@ -847,20 +845,28 @@ export const chainsTestSuite = ({ it }: { it: TestAPI<TestSuiteContext> }): void
   });
 
   it("continueWith rejects caller-supplied id that fails validateId", async ({
+    stateAdapter,
+    notifyAdapter,
     withTransaction,
+    withWorkers,
+    observabilityAdapter,
+    log,
   }) => {
-    const stateAdapter = await createInProcessStateAdapter({
-      generateId: () => `ok-${crypto.randomUUID()}`,
-      validateId: (id) => id.startsWith("ok-"),
-    });
-    const notifyAdapter = await createInProcessNotifyAdapter();
-
     const jobTypes = defineJobTypes<{
       step1: { entry: true; input: null; continueWith: { typeName: "step2" } };
       step2: { input: null; output: null };
     }>();
 
-    const client = await createClient({ stateAdapter, notifyAdapter, jobTypes });
+    const client = await createClient({
+      stateAdapter: {
+        ...stateAdapter,
+        config: { ...stateAdapter.config, validateId: (id) => id !== "bad-id" },
+      },
+      notifyAdapter,
+      observabilityAdapter,
+      log,
+      jobTypes,
+    });
 
     let continueWithError: unknown;
     const worker = await createInProcessWorker({
@@ -895,16 +901,13 @@ export const chainsTestSuite = ({ it }: { it: TestAPI<TestSuiteContext> }): void
       client.createChain({ ...txCtx, transactionHooks, typeName: "step1", input: null }),
     );
 
-    const stop = await worker.start();
-    try {
+    await withWorkers([await worker.start()], async () => {
       const start = Date.now();
       // oxlint-disable-next-line no-unmodified-loop-condition
       while (!continueWithError && Date.now() - start < 5000) {
         await new Promise((r) => setTimeout(r, 25));
       }
-    } finally {
-      await stop();
-    }
+    });
 
     expect(continueWithError).toBeInstanceOf(InvalidJobIdError);
     expect((continueWithError as InvalidJobIdError).source).toBe("caller");

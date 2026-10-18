@@ -6,6 +6,7 @@ import { defineJobTypes } from "../entities/define-job-types.js";
 import { BlockerReferenceError } from "../errors.js";
 import { sleep } from "../helpers/sleep.js";
 import { createInProcessWorker } from "../in-process-worker.js";
+import { withTransactionHooks } from "../transaction-hooks.js";
 import { createProcessors } from "../worker/create-processors.js";
 import { type TestSuiteContext } from "./spec-context.spec-helper.js";
 
@@ -654,6 +655,41 @@ export const deletionTestSuite = ({ it }: { it: TestAPI<TestSuiteContext> }): vo
     ).rejects.toThrow("requires a transaction context");
   });
 
+  it("deleteChains throws when the context is not in a transaction", async ({
+    stateAdapter,
+    notifyAdapter,
+    withTransaction,
+    withNonTransactionContext,
+    observabilityAdapter,
+    log,
+  }) => {
+    const jobTypes = defineJobTypes<{
+      test: { entry: true; input: null; output: null };
+    }>();
+
+    const client = await createClient({
+      stateAdapter,
+      notifyAdapter,
+      observabilityAdapter,
+      log,
+      jobTypes,
+    });
+
+    const chain = await withTransaction(async (txCtx, transactionHooks) =>
+      client.createChain({ ...txCtx, transactionHooks, typeName: "test", input: null }),
+    );
+
+    await withNonTransactionContext(async (txCtx) =>
+      withTransactionHooks(async (transactionHooks) => {
+        await expect(
+          client.deleteChains({ ...txCtx, transactionHooks, ids: [chain.id] }),
+        ).rejects.toThrow("not in a transaction");
+      }),
+    );
+
+    expect(await client.getChain({ id: chain.id, typeName: "test" })).toBeDefined();
+  });
+
   it("deleteChain deletes a single chain and returns it", async ({
     stateAdapter,
     notifyAdapter,
@@ -803,5 +839,40 @@ export const deletionTestSuite = ({ it }: { it: TestAPI<TestSuiteContext> }): vo
       // @ts-expect-error missing txCtx
       client.deleteChain({ id: chain.id }),
     ).rejects.toThrow("requires a transaction context");
+  });
+
+  it("deleteChain throws when the context is not in a transaction", async ({
+    stateAdapter,
+    notifyAdapter,
+    withTransaction,
+    withNonTransactionContext,
+    observabilityAdapter,
+    log,
+  }) => {
+    const jobTypes = defineJobTypes<{
+      test: { entry: true; input: null; output: null };
+    }>();
+
+    const client = await createClient({
+      stateAdapter,
+      notifyAdapter,
+      observabilityAdapter,
+      log,
+      jobTypes,
+    });
+
+    const chain = await withTransaction(async (txCtx, transactionHooks) =>
+      client.createChain({ ...txCtx, transactionHooks, typeName: "test", input: null }),
+    );
+
+    await withNonTransactionContext(async (txCtx) =>
+      withTransactionHooks(async (transactionHooks) => {
+        await expect(
+          client.deleteChain({ ...txCtx, transactionHooks, id: chain.id }),
+        ).rejects.toThrow("not in a transaction");
+      }),
+    );
+
+    expect(await client.getChain({ id: chain.id, typeName: "test" })).toBeDefined();
   });
 };

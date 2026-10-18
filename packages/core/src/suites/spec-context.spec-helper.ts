@@ -15,7 +15,6 @@ import { createFlakyBatchGenerator } from "./flaky-test-helper.spec-helper.js";
 
 export type TestSuiteContext = {
   stateAdapter: StateAdapter<{ $test: true }, string>;
-  /** Whether the database behind `stateAdapter` can run two transactions at once. */
   transactionConcurrency: "concurrent" | "serialized";
   generateId: () => string;
   notifyAdapter: NotifyAdapter | undefined;
@@ -23,6 +22,7 @@ export type TestSuiteContext = {
     cb: (txCtx: { $test: true }, transactionHooks: TransactionHooks) => Promise<T>,
   ) => Promise<T>;
   poisonTransaction: ((txCtx: { $test: true }) => Promise<void>) | undefined;
+  withNonTransactionContext: <T>(fn: (txCtx: { $test: true }) => Promise<T>) => Promise<T>;
   poisonExecute:
     | ((cb: (adapter: StateAdapter<{ $test: true }, string>) => Promise<void>) => Promise<void>)
     | undefined;

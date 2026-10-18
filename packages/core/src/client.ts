@@ -79,9 +79,17 @@ type AnyWorkerlessOutcome = { output: unknown } | { continueWith: AnyContinueWit
 const normalizeTxCtx = <T extends Record<string, unknown>>(rest: T): T | undefined =>
   Object.keys(rest).length > 0 ? rest : undefined;
 
-const requireTxCtx = <T extends Record<string, unknown>>(rest: T): T => {
+const requireTxCtx = <T extends Record<string, unknown>>(
+  stateAdapter: StateAdapter<any, any>,
+  rest: T,
+): T => {
   if (Object.keys(rest).length === 0) {
     throw new Error("This client method requires a transaction context from withTransaction");
+  }
+  if (!stateAdapter.isTransaction(rest)) {
+    throw new Error(
+      "This client method requires a transaction context inside an open transaction; the provided context is not in a transaction",
+    );
   }
   return rest;
 };
@@ -196,7 +204,7 @@ type CreateChainsResult<
  * The public API for managing chains. Created via {@link createClient}.
  *
  * Methods are split into three categories:
- * - **Mutating** — `createChain`, `createChains`, `completeChain`, `deleteChain`, `deleteChains`, `rescheduleJob`, `rescheduleJobs`. Require `transactionHooks` and a transaction context; they throw `Error` if called without the transaction context from `withTransaction`.
+ * - **Mutating** — `createChain`, `createChains`, `completeChain`, `deleteChain`, `deleteChains`, `rescheduleJob`, `rescheduleJobs`. Require `transactionHooks` and a transaction context; they throw `Error` if called without a transaction context, or with one the state adapter's `isTransaction` reports as outside an open transaction.
  * - **Read-only** — `getChain`, `getChains`, `getJob`, `getJobs`, `listChainTypeNames`, `listJobTypeNames`, `countByChainTypeNames`, `countByJobTypeNames`, `listChains`, `listJobs`, `listChainJobs`, `getJobBlockers`, `listBlockedJobs`. Accept an optional transaction context.
  * - **Waiting** — `awaitChain`. Takes no transaction context: it polls outside any transaction and listens for notify adapter events.
  */
@@ -686,7 +694,7 @@ export const createClient = async <
     > => {
       const { input, id, typeName, deduplication, schedule, blockers, transactionHooks, ...rest } =
         options;
-      const txCtx = requireTxCtx(rest);
+      const txCtx = requireTxCtx(helpers.stateAdapter, rest);
       const [result] = await createChains(helpers, {
         chains: [{ typeName, id, input, deduplication, schedule, blockers }],
         txCtx,
@@ -706,7 +714,7 @@ export const createClient = async <
       } & GetStateAdapterTxContext<TStateAdapter>,
     ): Promise<CreateChainsResult<TJobId, TJobTypeDefinitions, TChains>> => {
       const { items, transactionHooks, ...rest } = options;
-      const txCtx = requireTxCtx(rest);
+      const txCtx = requireTxCtx(helpers.stateAdapter, rest);
       return (await createChains(helpers, {
         chains: items,
         txCtx,
@@ -743,7 +751,7 @@ export const createClient = async <
       } & GetStateAdapterTxContext<TStateAdapter>,
     ): Promise<ResolvedChain<TJobId, TJobTypeDefinitions, TEntryName>[]> => {
       const { ids, transactionHooks, ...rest } = options;
-      const txCtx = requireTxCtx(rest);
+      const txCtx = requireTxCtx(helpers.stateAdapter, rest);
 
       const verdicts = await helpers.stateAdapter.deleteChains({
         txCtx,
@@ -834,7 +842,7 @@ export const createClient = async <
       } & GetStateAdapterTxContext<TStateAdapter>,
     ): Promise<ResolvedJob<TJobId, TJobTypeDefinitions, TJobTypeName>[]> => {
       const { ids, schedule, transactionHooks, ...rest } = options;
-      const txCtx = requireTxCtx(rest);
+      const txCtx = requireTxCtx(helpers.stateAdapter, rest);
 
       if (ids.length === 0) return [];
       const existingJobs = await helpers.stateAdapter.getJobs({
@@ -917,7 +925,7 @@ export const createClient = async <
       } & GetStateAdapterTxContext<TStateAdapter>,
     ): Promise<TResult> => {
       const { id, typeName, handler, transactionHooks, ...rest } = options;
-      const txCtx = requireTxCtx(rest);
+      const txCtx = requireTxCtx(helpers.stateAdapter, rest);
       const stateChains = await helpers.stateAdapter.getChains({
         txCtx,
         chainIds: [id],

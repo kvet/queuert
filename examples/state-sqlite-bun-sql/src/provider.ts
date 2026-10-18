@@ -17,6 +17,7 @@ export const createBunSqlSqliteStateProvider = ({
       using _h = await lock.acquireWrite();
       return await sql.begin(async (txSql) => fn({ txSql }));
     },
+    isTransaction: (txCtx) => typeof txCtx.txSql.savepoint === "function",
     withSavepoint: async (txCtx, fn) =>
       // `SavepointSQL` is typed without `savepoint()`, but it supports nesting at runtime.
       txCtx.txSql.savepoint(async (spSql) => fn({ txSql: spSql as TransactionSQL })),

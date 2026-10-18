@@ -43,6 +43,7 @@ export const createNodeSqliteStateProvider = ({
         throw error;
       }
     },
+    isTransaction: (txCtx) => txCtx.db.isTransaction,
     executeSql: async ({ txCtx, id, sql, params, columnTypes, readOnly }) => {
       const run = (): unknown[] => {
         const database = txCtx?.db ?? db;

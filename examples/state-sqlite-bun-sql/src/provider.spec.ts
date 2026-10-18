@@ -18,6 +18,7 @@ test("state-sqlite-bun-sql provider passes state adapter conformance", async () 
     return {
       stateAdapter: adapter,
       transactionConcurrency: "serialized",
+      withNonTransactionContext: async (fn) => fn({ txSql: sql }),
       reset: async () => adapter.truncate(),
       dispose: async () => {
         await sql.close();

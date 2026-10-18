@@ -30,6 +30,7 @@ export const createKnexPgStateProvider = ({
 }): PgStateProvider<KnexPgContext> => {
   return {
     withTransaction: async (cb) => knex.transaction(async (trx) => cb({ trx })),
+    isTransaction: (txCtx) => txCtx.trx.isTransaction === true,
     // `id` not forwarded: knex has no server-side prepared statement support —
     // every `raw` call is sent unprepared. Bypass knex for prepared statements
     // (see state-postgres-pg).

@@ -20,6 +20,7 @@ test("state-postgres-bun-sql provider passes state adapter conformance", async (
     return {
       stateAdapter: adapter,
       transactionConcurrency: "concurrent",
+      withNonTransactionContext: async (fn) => fn({ txSql: sql }),
       poisonTransaction: async (txCtx: BunSqlContext) => {
         await txCtx.txSql.unsafe("SELECT 1 FROM nonexistent_table_queuert_poison_xyz");
       },

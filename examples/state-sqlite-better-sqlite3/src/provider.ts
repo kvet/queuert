@@ -42,6 +42,7 @@ export const createBetterSqlite3StateProvider = ({
         throw error;
       }
     },
+    isTransaction: (txCtx) => txCtx.db.inTransaction,
     executeSql: async ({ txCtx, id, sql, params, columnTypes, readOnly }) => {
       const run = (): unknown[] => {
         const database = txCtx?.db ?? db;

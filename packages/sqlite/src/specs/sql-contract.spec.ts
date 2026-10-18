@@ -149,6 +149,7 @@ const createValidatingProvider = (
   const inner = createBetterSqlite3Provider({ db });
   return {
     withTransaction: inner.withTransaction,
+    isTransaction: inner.isTransaction,
     executeSql: async (args) => {
       const stmt = validateBeforeExecute(db, args);
       const rows = await inner.executeSql(args);

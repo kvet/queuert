@@ -23,6 +23,7 @@ test("state-postgres-kysely provider passes state adapter conformance", async ()
     return {
       stateAdapter: adapter,
       transactionConcurrency: "concurrent",
+      withNonTransactionContext: async (fn) => fn({ db }),
       poisonTransaction: async (txCtx: KyselyPgContext<Database>) => {
         await txCtx.db.executeQuery(
           CompiledQuery.raw("SELECT 1 FROM nonexistent_table_queuert_poison_xyz"),

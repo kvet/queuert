@@ -23,6 +23,7 @@ test("state-postgres-knex provider passes state adapter conformance", async () =
     return {
       stateAdapter: adapter,
       transactionConcurrency: "concurrent",
+      withNonTransactionContext: async (fn) => fn({ trx: knex }),
       poisonTransaction: async (txCtx: KnexPgContext) => {
         await txCtx.trx.raw("SELECT 1 FROM nonexistent_table_queuert_poison_xyz");
       },

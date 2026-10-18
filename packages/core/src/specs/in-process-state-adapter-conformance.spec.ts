@@ -12,6 +12,7 @@ describe("In-Process State Adapter Conformance", () => {
   const conformanceIt = it.extend<{
     stateAdapter: StateAdapter<{ $test: true }, string>;
     transactionConcurrency: "concurrent" | "serialized";
+    withNonTransactionContext: <T>(fn: (txCtx: { $test: true }) => Promise<T>) => Promise<T>;
   }>({
     transactionConcurrency: [
       // oxlint-disable-next-line no-empty-pattern
@@ -26,6 +27,13 @@ describe("In-Process State Adapter Conformance", () => {
         await use(
           (await createInProcessStateAdapter()) as unknown as StateAdapter<{ $test: true }, string>,
         );
+      },
+      { scope: "test" },
+    ],
+    withNonTransactionContext: [
+      // oxlint-disable-next-line no-empty-pattern
+      async ({}, use) => {
+        await use(async (fn) => fn({} as { $test: true }));
       },
       { scope: "test" },
     ],

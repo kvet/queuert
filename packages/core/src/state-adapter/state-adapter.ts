@@ -115,6 +115,12 @@ export type StateAdapter<TTxContext extends BaseTxContext, TJobId extends string
   /** Executes a callback within a transaction. Commits on success, rolls back on error. */
   withTransaction: <T>(fn: (txCtx: TTxContext) => Promise<T>) => Promise<T>;
 
+  /**
+   * Whether `txCtx` is inside an open transaction. Must be synchronous and must not query the
+   * database.
+   */
+  isTransaction: (txCtx: TTxContext) => boolean;
+
   /** Wraps a callback in a savepoint. Rolls back to the savepoint on error and re-throws. */
   withSavepoint: <T>(txCtx: TTxContext, fn: (txCtx: TTxContext) => Promise<T>) => Promise<T>;
 

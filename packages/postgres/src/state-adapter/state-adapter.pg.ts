@@ -595,6 +595,8 @@ LEFT JOIN LATERAL (
 
     withTransaction: stateProvider.withTransaction,
 
+    isTransaction: stateProvider.isTransaction,
+
     withSavepoint:
       stateProvider.withSavepoint ??
       (async (txCtx, fn) => {
