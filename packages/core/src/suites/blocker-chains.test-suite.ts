@@ -1,4 +1,4 @@
-import { type TestAPI, expectTypeOf } from "vitest";
+import { type TestAPI, expect, expectTypeOf } from "vitest";
 
 import { createClient } from "../client.js";
 import { type Chain } from "../entities/chain.js";
@@ -22,7 +22,6 @@ export const blockerChainsTestSuite = ({ it }: { it: TestAPI<TestSuiteContext> }
     withWorkers,
     observabilityAdapter,
     log,
-    expect,
   }) => {
     const jobTypes = defineJobTypes<{
       blocker: {
@@ -134,7 +133,6 @@ export const blockerChainsTestSuite = ({ it }: { it: TestAPI<TestSuiteContext> }
     withWorkers,
     observabilityAdapter,
     log,
-    expect,
   }) => {
     const jobTypes = defineJobTypes<{
       blocker: {
@@ -234,7 +232,6 @@ export const blockerChainsTestSuite = ({ it }: { it: TestAPI<TestSuiteContext> }
     withTransaction,
     observabilityAdapter,
     log,
-    expect,
   }) => {
     const jobTypes = defineJobTypes<{
       blocker: {
@@ -300,7 +297,6 @@ export const blockerChainsTestSuite = ({ it }: { it: TestAPI<TestSuiteContext> }
     withWorkers,
     observabilityAdapter,
     log,
-    expect,
   }) => {
     const jobTypes = defineJobTypes<{
       blocker: {
@@ -403,7 +399,6 @@ export const blockerChainsTestSuite = ({ it }: { it: TestAPI<TestSuiteContext> }
     withWorkers,
     observabilityAdapter,
     log,
-    expect,
   }) => {
     const jobTypes = defineJobTypes<{
       inner: {
@@ -498,7 +493,6 @@ export const blockerChainsTestSuite = ({ it }: { it: TestAPI<TestSuiteContext> }
     withWorkers,
     observabilityAdapter,
     log,
-    expect,
   }) => {
     const jobTypes = defineJobTypes<{
       test: {
@@ -586,7 +580,6 @@ export const blockerChainsTestSuite = ({ it }: { it: TestAPI<TestSuiteContext> }
     withWorkers,
     observabilityAdapter,
     log,
-    expect,
   }) => {
     const jobTypes = defineJobTypes<{
       blocker: {
@@ -672,7 +665,6 @@ export const blockerChainsTestSuite = ({ it }: { it: TestAPI<TestSuiteContext> }
     withWorkers,
     observabilityAdapter,
     log,
-    expect,
   }) => {
     const jobTypes = defineJobTypes<{
       blocker: {
@@ -774,7 +766,6 @@ export const blockerChainsTestSuite = ({ it }: { it: TestAPI<TestSuiteContext> }
     withWorkers,
     observabilityAdapter,
     log,
-    expect,
   }) => {
     const jobTypes = defineJobTypes<{
       blocker: {
@@ -925,7 +916,6 @@ export const blockerChainsTestSuite = ({ it }: { it: TestAPI<TestSuiteContext> }
     withWorkers,
     observabilityAdapter,
     log,
-    expect,
   }) => {
     const jobTypes = defineJobTypes<{
       blocker: {
@@ -1050,7 +1040,6 @@ export const blockerChainsTestSuite = ({ it }: { it: TestAPI<TestSuiteContext> }
     withWorkers,
     observabilityAdapter,
     log,
-    expect,
   }) => {
     const jobTypes = defineJobTypes<{
       blocker: {
@@ -1154,7 +1143,6 @@ export const blockerChainsTestSuite = ({ it }: { it: TestAPI<TestSuiteContext> }
     withWorkers,
     observabilityAdapter,
     log,
-    expect,
   }) => {
     const jobTypes = defineJobTypes<{
       blocker: {
@@ -1253,7 +1241,6 @@ export const blockerChainsTestSuite = ({ it }: { it: TestAPI<TestSuiteContext> }
     withWorkers,
     observabilityAdapter,
     log,
-    expect,
     skip,
   }) => {
     if (transactionConcurrency === "serialized") return skip();
@@ -1364,7 +1351,6 @@ export const blockerChainsTestSuite = ({ it }: { it: TestAPI<TestSuiteContext> }
     withWorkers,
     observabilityAdapter,
     log,
-    expect,
   }) => {
     const jobTypes = defineJobTypes<{
       blocker: {
@@ -1443,7 +1429,6 @@ export const blockerChainsTestSuite = ({ it }: { it: TestAPI<TestSuiteContext> }
     withWorkers,
     observabilityAdapter,
     log,
-    expect,
   }) => {
     const jobTypes = defineJobTypes<{
       blocker: {

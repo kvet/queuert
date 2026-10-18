@@ -1,4 +1,4 @@
-import { type TestAPI } from "vitest";
+import { type TestAPI, expect } from "vitest";
 
 import { createClient } from "../client.js";
 import { defineJobTypes } from "../entities/define-job-types.js";
@@ -22,7 +22,6 @@ export const attemptReclaimerTestSuite = ({ it }: { it: TestAPI<TestSuiteContext
     withWorkers,
     observabilityAdapter,
     log,
-    expect,
   }) => {
     const jobTypes = defineJobTypes<{
       test: {
@@ -86,7 +85,6 @@ export const attemptReclaimerTestSuite = ({ it }: { it: TestAPI<TestSuiteContext
     withWorkers,
     observabilityAdapter,
     log,
-    expect,
   }) => {
     const jobTypes = defineJobTypes<{
       test: {
@@ -213,7 +211,6 @@ export const attemptReclaimerTestSuite = ({ it }: { it: TestAPI<TestSuiteContext
     withWorkers,
     observabilityAdapter,
     log,
-    expect,
   }) => {
     const jobTypes = defineJobTypes<{
       test: {
@@ -352,7 +349,6 @@ export const attemptReclaimerTestSuite = ({ it }: { it: TestAPI<TestSuiteContext
     withWorkers,
     observabilityAdapter,
     log,
-    expect,
   }) => {
     const jobTypes = defineJobTypes<{
       test: {
@@ -487,7 +483,6 @@ export const attemptReclaimerTestSuite = ({ it }: { it: TestAPI<TestSuiteContext
     withWorkers,
     observabilityAdapter,
     log,
-    expect,
   }) => {
     const jobTypes = defineJobTypes<{
       test: {

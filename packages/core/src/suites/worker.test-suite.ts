@@ -1,4 +1,4 @@
-import { type TestAPI } from "vitest";
+import { type TestAPI, expect } from "vitest";
 
 import { createClient } from "../client.js";
 import { type Chain } from "../entities/chain.js";
@@ -76,7 +76,6 @@ export const workerTestSuite = ({ it }: { it: TestAPI<TestSuiteContext> }): void
     withWorkers,
     observabilityAdapter,
     log,
-    expect,
   }) => {
     const processedTypes: string[] = [];
 
@@ -205,7 +204,6 @@ export const workerTestSuite = ({ it }: { it: TestAPI<TestSuiteContext> }): void
     withWorkers,
     observabilityAdapter,
     log,
-    expect,
   }) => {
     const processedJobs: number[] = [];
 
@@ -271,7 +269,6 @@ export const workerTestSuite = ({ it }: { it: TestAPI<TestSuiteContext> }): void
     withWorkers,
     observabilityAdapter,
     log,
-    expect,
   }) => {
     const order: string[] = [];
     const observed: { trace?: string; audit?: string; jobTypeName?: string }[] = [];
@@ -348,7 +345,6 @@ export const workerTestSuite = ({ it }: { it: TestAPI<TestSuiteContext> }): void
     withWorkers,
     observabilityAdapter,
     log,
-    expect,
   }) => {
     const order: string[] = [];
     const observedPrepareCtx: { tag: string }[] = [];
@@ -418,7 +414,6 @@ export const workerTestSuite = ({ it }: { it: TestAPI<TestSuiteContext> }): void
     withWorkers,
     observabilityAdapter,
     log,
-    expect,
   }) => {
     const order: string[] = [];
     const observedCompleteCtx: { tag: string }[] = [];
@@ -493,7 +488,6 @@ export const workerTestSuite = ({ it }: { it: TestAPI<TestSuiteContext> }): void
     withWorkers,
     observabilityAdapter,
     log,
-    expect,
   }) => {
     const order: string[] = [];
     const observedExecuteCtx: { tag: string }[] = [];
@@ -571,7 +565,6 @@ export const workerTestSuite = ({ it }: { it: TestAPI<TestSuiteContext> }): void
     withWorkers,
     observabilityAdapter,
     log,
-    expect,
   }) => {
     const order: string[] = [];
 
@@ -665,7 +658,6 @@ export const workerTestSuite = ({ it }: { it: TestAPI<TestSuiteContext> }): void
     withTransaction,
     observabilityAdapter,
     log,
-    expect,
   }) => {
     const { promise: handlerStarted, resolve: onHandlerStarted } = Promise.withResolvers<void>();
 
@@ -734,7 +726,6 @@ export const workerTestSuite = ({ it }: { it: TestAPI<TestSuiteContext> }): void
     withTransaction,
     observabilityAdapter,
     log,
-    expect,
   }) => {
     const handlerStarted = Promise.withResolvers<void>();
     const handlerAborted = Promise.withResolvers<void>();
@@ -821,7 +812,6 @@ export const workerTestSuite = ({ it }: { it: TestAPI<TestSuiteContext> }): void
     withWorkers,
     observabilityAdapter,
     log,
-    expect,
   }) => {
     const jobTypes = defineJobTypes<{
       slow: {

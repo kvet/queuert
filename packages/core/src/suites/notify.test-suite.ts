@@ -1,4 +1,4 @@
-import { type TestAPI } from "vitest";
+import { type TestAPI, expect } from "vitest";
 
 import { createClient } from "../client.js";
 import { defineJobTypes } from "../entities/define-job-types.js";
@@ -15,7 +15,6 @@ export const notifyTestSuite = ({ it }: { it: TestAPI<TestSuiteContext> }): void
     log,
     withWorkers,
     withTransaction,
-    expect,
   }) => {
     const jobTypes = defineJobTypes<{
       test: {
@@ -76,7 +75,6 @@ export const notifyTestSuite = ({ it }: { it: TestAPI<TestSuiteContext> }): void
     log,
     withWorkers,
     withTransaction,
-    expect,
   }) => {
     const jobTypes = defineJobTypes<{
       test: {
@@ -146,7 +144,6 @@ export const notifyTestSuite = ({ it }: { it: TestAPI<TestSuiteContext> }): void
     log,
     withWorkers,
     withTransaction,
-    expect,
   }) => {
     const jobTypes = defineJobTypes<{
       blocker: {
@@ -237,7 +234,6 @@ export const notifyTestSuite = ({ it }: { it: TestAPI<TestSuiteContext> }): void
     log,
     withWorkers,
     withTransaction,
-    expect,
   }) => {
     const jobTypes = defineJobTypes<{
       step1: {
@@ -326,7 +322,6 @@ export const notifyTestSuite = ({ it }: { it: TestAPI<TestSuiteContext> }): void
     log,
     withWorkers,
     withTransaction,
-    expect,
   }) => {
     const jobTypes = defineJobTypes<{
       test: {
@@ -406,7 +401,6 @@ export const notifyTestSuite = ({ it }: { it: TestAPI<TestSuiteContext> }): void
     log,
     withWorkers,
     withTransaction,
-    expect,
   }) => {
     const jobTypes = defineJobTypes<{
       test: {

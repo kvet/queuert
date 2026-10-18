@@ -12,7 +12,7 @@ import {
   extendWithNotifyInProcess,
   extendWithStateInProcess,
 } from "queuert/testing";
-import { it as baseIt, describe, expectTypeOf } from "vitest";
+import { it as baseIt, describe, expect, expectTypeOf } from "vitest";
 
 import { extendWithObservabilityOtel } from "./observability-adapter.otel.spec-helper.js";
 
@@ -35,7 +35,6 @@ describe("Metrics", () => {
     log,
     expectMetrics,
     expectHistograms,
-    expect,
   }) => {
     const jobTypes = defineJobTypes<{
       test: {
@@ -560,7 +559,6 @@ describe("Metrics", () => {
     observabilityAdapter,
     log,
     getMetricNames,
-    expect,
   }) => {
     const jobTypes = defineJobTypes<{
       test: { entry: true; input: null; output: null };
@@ -613,7 +611,6 @@ describe("Metrics", () => {
     observabilityAdapter,
     log,
     getMetricNames,
-    expect,
   }) => {
     const jobTypes = defineJobTypes<{
       test: { entry: true; input: null; output: null };
@@ -666,7 +663,6 @@ describe("Metrics", () => {
     observabilityAdapter,
     log,
     getMetricNames,
-    expect,
   }) => {
     const jobTypes = defineJobTypes<{
       test: { entry: true; input: null; output: null };
@@ -777,7 +773,6 @@ describe("Metrics", () => {
     observabilityAdapter,
     log,
     getMetricNames,
-    expect,
   }) => {
     const jobTypes = defineJobTypes<{
       test: { entry: true; input: null; output: null };
@@ -850,7 +845,6 @@ describe("Metrics", () => {
     observabilityAdapter,
     log,
     getMetricNames,
-    expect,
   }) => {
     const jobTypes = defineJobTypes<{
       test: { entry: true; input: null; output: null };
@@ -995,7 +989,6 @@ describe("Metrics", () => {
     observabilityAdapter,
     log,
     expectMetrics,
-    expect,
   }) => {
     const jobTypes = defineJobTypes<{
       test: { entry: true; input: null; output: null };
@@ -2234,7 +2227,6 @@ describe("Spans", () => {
     observabilityAdapter,
     log,
     expectSpans,
-    expect,
   }) => {
     const jobTypes = defineJobTypes<{
       "awaiting-approval": {
@@ -2414,7 +2406,6 @@ describe("Gauges", () => {
     observabilityAdapter,
     log,
     expectGauges,
-    expect,
   }) => {
     const processedTypes: string[] = [];
 
@@ -2526,7 +2517,6 @@ describe("Rollback", () => {
     log,
     getMetricNames,
     expectSpans,
-    expect,
   }) => {
     const jobTypes = defineJobTypes<{
       test: { entry: true; input: null; output: null };
@@ -2568,7 +2558,6 @@ describe("Rollback", () => {
     log,
     getMetricNames,
     expectSpans,
-    expect,
   }) => {
     const jobTypes = defineJobTypes<{
       blocker: { entry: true; input: null; output: null };

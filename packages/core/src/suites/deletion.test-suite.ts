@@ -1,4 +1,4 @@
-import { type TestAPI } from "vitest";
+import { type TestAPI, expect } from "vitest";
 
 import { createClient } from "../client.js";
 import { type Chain } from "../entities/chain.js";
@@ -16,7 +16,6 @@ export const deletionTestSuite = ({ it }: { it: TestAPI<TestSuiteContext> }): vo
     withTransaction,
     observabilityAdapter,
     log,
-    expect,
   }) => {
     const jobTypes = defineJobTypes<{
       test: {
@@ -74,7 +73,6 @@ export const deletionTestSuite = ({ it }: { it: TestAPI<TestSuiteContext> }): vo
     withTransaction,
     observabilityAdapter,
     log,
-    expect,
   }) => {
     const jobTypes = defineJobTypes<{
       step1: {
@@ -148,7 +146,6 @@ export const deletionTestSuite = ({ it }: { it: TestAPI<TestSuiteContext> }): vo
     withTransaction,
     observabilityAdapter,
     log,
-    expect,
   }) => {
     const jobTypes = defineJobTypes<{
       blocker: { entry: true; input: null; output: null };
@@ -219,7 +216,6 @@ export const deletionTestSuite = ({ it }: { it: TestAPI<TestSuiteContext> }): vo
     withWorkers,
     observabilityAdapter,
     log,
-    expect,
   }) => {
     const jobTypes = defineJobTypes<{
       test: {
@@ -302,7 +298,6 @@ export const deletionTestSuite = ({ it }: { it: TestAPI<TestSuiteContext> }): vo
     withTransaction,
     observabilityAdapter,
     log,
-    expect,
   }) => {
     const jobTypes = defineJobTypes<{
       blocker: {
@@ -405,7 +400,6 @@ export const deletionTestSuite = ({ it }: { it: TestAPI<TestSuiteContext> }): vo
     withWorkers,
     observabilityAdapter,
     log,
-    expect,
   }) => {
     const jobTypes = defineJobTypes<{
       test: {
@@ -494,7 +488,6 @@ export const deletionTestSuite = ({ it }: { it: TestAPI<TestSuiteContext> }): vo
     withTransaction,
     observabilityAdapter,
     log,
-    expect,
   }) => {
     const jobTypes = defineJobTypes<{
       test: {
@@ -552,7 +545,6 @@ export const deletionTestSuite = ({ it }: { it: TestAPI<TestSuiteContext> }): vo
     withTransaction,
     observabilityAdapter,
     log,
-    expect,
   }) => {
     const jobTypes = defineJobTypes<{
       blocker: {
@@ -630,7 +622,6 @@ export const deletionTestSuite = ({ it }: { it: TestAPI<TestSuiteContext> }): vo
     withTransaction,
     observabilityAdapter,
     log,
-    expect,
   }) => {
     const jobTypes = defineJobTypes<{
       test: {
@@ -669,7 +660,6 @@ export const deletionTestSuite = ({ it }: { it: TestAPI<TestSuiteContext> }): vo
     withTransaction,
     observabilityAdapter,
     log,
-    expect,
   }) => {
     const jobTypes = defineJobTypes<{
       test: { entry: true; input: { value: number }; output: null };
@@ -713,7 +703,6 @@ export const deletionTestSuite = ({ it }: { it: TestAPI<TestSuiteContext> }): vo
     withTransaction,
     observabilityAdapter,
     log,
-    expect,
   }) => {
     const jobTypes = defineJobTypes<{
       test: { entry: true; input: null; output: null };
@@ -744,7 +733,6 @@ export const deletionTestSuite = ({ it }: { it: TestAPI<TestSuiteContext> }): vo
     withTransaction,
     observabilityAdapter,
     log,
-    expect,
   }) => {
     const jobTypes = defineJobTypes<{
       blocker: { entry: true; input: null; output: null };
@@ -794,7 +782,6 @@ export const deletionTestSuite = ({ it }: { it: TestAPI<TestSuiteContext> }): vo
     withTransaction,
     observabilityAdapter,
     log,
-    expect,
   }) => {
     const jobTypes = defineJobTypes<{
       test: { entry: true; input: null; output: null };

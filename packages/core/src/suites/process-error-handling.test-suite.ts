@@ -1,4 +1,4 @@
-import { type TestAPI } from "vitest";
+import { type TestAPI, expect } from "vitest";
 
 import { createClient } from "../client.js";
 import { defineJobTypes } from "../entities/define-job-types.js";
@@ -21,7 +21,6 @@ export const processErrorHandlingTestSuite = ({ it }: { it: TestAPI<TestSuiteCon
     withWorkers,
     observabilityAdapter,
     log,
-    expect,
   }) => {
     const spyStateAdapter = createSpyStateAdapter(stateAdapter);
 
@@ -109,7 +108,6 @@ export const processErrorHandlingTestSuite = ({ it }: { it: TestAPI<TestSuiteCon
     withWorkers,
     observabilityAdapter,
     log,
-    expect,
   }) => {
     const spyStateAdapter = createSpyStateAdapter(stateAdapter);
 
@@ -197,7 +195,6 @@ export const processErrorHandlingTestSuite = ({ it }: { it: TestAPI<TestSuiteCon
     withWorkers,
     observabilityAdapter,
     log,
-    expect,
   }) => {
     const spyStateAdapter = createSpyStateAdapter(stateAdapter);
 
@@ -283,7 +280,6 @@ export const processErrorHandlingTestSuite = ({ it }: { it: TestAPI<TestSuiteCon
     withWorkers,
     observabilityAdapter,
     log,
-    expect,
   }) => {
     const spyStateAdapter = createSpyStateAdapter(stateAdapter);
 
@@ -378,7 +374,6 @@ export const processErrorHandlingTestSuite = ({ it }: { it: TestAPI<TestSuiteCon
     withWorkers,
     observabilityAdapter,
     log,
-    expect,
   }) => {
     const spyStateAdapter = createSpyStateAdapter(stateAdapter);
 
@@ -465,7 +460,6 @@ export const processErrorHandlingTestSuite = ({ it }: { it: TestAPI<TestSuiteCon
     withWorkers,
     observabilityAdapter,
     log,
-    expect,
   }) => {
     const spyStateAdapter = createSpyStateAdapter(stateAdapter);
 
@@ -561,7 +555,6 @@ export const processErrorHandlingTestSuite = ({ it }: { it: TestAPI<TestSuiteCon
     withWorkers,
     observabilityAdapter,
     log,
-    expect,
   }) => {
     const jobTypes = defineJobTypes<{
       test: {
@@ -626,7 +619,6 @@ export const processErrorHandlingTestSuite = ({ it }: { it: TestAPI<TestSuiteCon
     withWorkers,
     observabilityAdapter,
     log,
-    expect,
   }) => {
     const jobTypes = defineJobTypes<{
       test: {
@@ -687,7 +679,6 @@ export const processErrorHandlingTestSuite = ({ it }: { it: TestAPI<TestSuiteCon
     withWorkers,
     observabilityAdapter,
     log,
-    expect,
   }) => {
     let attempts = 0;
     const spyStateAdapter = createSpyStateAdapter(stateAdapter);
@@ -783,7 +774,6 @@ export const processErrorHandlingTestSuite = ({ it }: { it: TestAPI<TestSuiteCon
     withWorkers,
     observabilityAdapter,
     log,
-    expect,
   }) => {
     let attempts = 0;
     const spyStateAdapter = createSpyStateAdapter(stateAdapter);
@@ -889,7 +879,6 @@ export const processErrorHandlingTestSuite = ({ it }: { it: TestAPI<TestSuiteCon
     withWorkers,
     observabilityAdapter,
     log,
-    expect,
     skip,
   }) => {
     if (!poisonTransaction) return skip();
@@ -983,7 +972,6 @@ export const processErrorHandlingTestSuite = ({ it }: { it: TestAPI<TestSuiteCon
     withWorkers,
     observabilityAdapter,
     log,
-    expect,
     skip,
   }) => {
     if (!poisonTransaction) return skip();
@@ -1077,7 +1065,6 @@ export const processErrorHandlingTestSuite = ({ it }: { it: TestAPI<TestSuiteCon
     withWorkers,
     observabilityAdapter,
     log,
-    expect,
     skip,
   }) => {
     if (!poisonTransaction) return skip();
@@ -1170,7 +1157,6 @@ export const processErrorHandlingTestSuite = ({ it }: { it: TestAPI<TestSuiteCon
     withWorkers,
     observabilityAdapter,
     log,
-    expect,
     skip,
   }) => {
     if (!poisonTransaction) return skip();
@@ -1271,7 +1257,6 @@ export const processErrorHandlingTestSuite = ({ it }: { it: TestAPI<TestSuiteCon
     withWorkers,
     observabilityAdapter,
     log,
-    expect,
   }) => {
     let step1Attempts = 0;
     const spyStateAdapter = createSpyStateAdapter(stateAdapter);
@@ -1380,7 +1365,6 @@ export const processErrorHandlingTestSuite = ({ it }: { it: TestAPI<TestSuiteCon
     withWorkers,
     observabilityAdapter,
     log,
-    expect,
   }) => {
     let step1Attempts = 0;
     const spyStateAdapter = createSpyStateAdapter(stateAdapter);
@@ -1498,7 +1482,6 @@ export const processErrorHandlingTestSuite = ({ it }: { it: TestAPI<TestSuiteCon
     withWorkers,
     observabilityAdapter,
     log,
-    expect,
   }) => {
     let blockerAttempts = 0;
 
@@ -1588,7 +1571,6 @@ export const processErrorHandlingTestSuite = ({ it }: { it: TestAPI<TestSuiteCon
     withWorkers,
     observabilityAdapter,
     log,
-    expect,
   }) => {
     let blockerAttempts = 0;
 
@@ -1679,7 +1661,6 @@ export const processErrorHandlingTestSuite = ({ it }: { it: TestAPI<TestSuiteCon
     withWorkers,
     observabilityAdapter,
     log,
-    expect,
   }) => {
     const errorsByAttempt: Record<number, unknown> = {
       1: new Error("plain error"),
@@ -1764,7 +1745,6 @@ export const processErrorHandlingTestSuite = ({ it }: { it: TestAPI<TestSuiteCon
     withWorkers,
     observabilityAdapter,
     log,
-    expect,
   }) => {
     const jobTypes = defineJobTypes<{
       test: {
@@ -1826,7 +1806,6 @@ export const processErrorHandlingTestSuite = ({ it }: { it: TestAPI<TestSuiteCon
     withWorkers,
     observabilityAdapter,
     log,
-    expect,
   }) => {
     const jobTypes = defineJobTypes<{
       test: {
@@ -1888,7 +1867,6 @@ export const processErrorHandlingTestSuite = ({ it }: { it: TestAPI<TestSuiteCon
     withWorkers,
     observabilityAdapter,
     log,
-    expect,
   }) => {
     const jobTypes = defineJobTypes<{
       test: {
@@ -1951,7 +1929,6 @@ export const processErrorHandlingTestSuite = ({ it }: { it: TestAPI<TestSuiteCon
     withWorkers,
     observabilityAdapter,
     log,
-    expect,
   }) => {
     const spyStateAdapter = createSpyStateAdapter(stateAdapter);
 
@@ -2052,7 +2029,6 @@ export const processErrorHandlingTestSuite = ({ it }: { it: TestAPI<TestSuiteCon
     withWorkers,
     observabilityAdapter,
     log,
-    expect,
   }) => {
     const jobTypes = defineJobTypes<{
       test: {
@@ -2116,7 +2092,6 @@ export const processErrorHandlingTestSuite = ({ it }: { it: TestAPI<TestSuiteCon
     withWorkers,
     observabilityAdapter,
     log,
-    expect,
   }) => {
     const jobTypes = defineJobTypes<{
       test: {
@@ -2174,7 +2149,6 @@ export const processErrorHandlingTestSuite = ({ it }: { it: TestAPI<TestSuiteCon
     withWorkers,
     observabilityAdapter,
     log,
-    expect,
   }) => {
     const jobTypes = defineJobTypes<{
       test: {
@@ -2235,7 +2209,6 @@ export const processErrorHandlingTestSuite = ({ it }: { it: TestAPI<TestSuiteCon
     withWorkers,
     observabilityAdapter,
     log,
-    expect,
   }) => {
     const jobTypes = defineJobTypes<{
       test: {
@@ -2298,7 +2271,6 @@ export const processErrorHandlingTestSuite = ({ it }: { it: TestAPI<TestSuiteCon
     withWorkers,
     observabilityAdapter,
     log,
-    expect,
   }) => {
     const jobTypes = defineJobTypes<{
       test: {
@@ -2364,7 +2336,6 @@ export const processErrorHandlingTestSuite = ({ it }: { it: TestAPI<TestSuiteCon
     withWorkers,
     observabilityAdapter,
     log,
-    expect,
   }) => {
     const jobTypes = defineJobTypes<{
       test: {
@@ -2428,7 +2399,6 @@ export const processErrorHandlingTestSuite = ({ it }: { it: TestAPI<TestSuiteCon
     withWorkers,
     observabilityAdapter,
     log,
-    expect,
     skip,
   }) => {
     if (!poisonTransaction) return skip();
@@ -2504,7 +2474,6 @@ export const processErrorHandlingTestSuite = ({ it }: { it: TestAPI<TestSuiteCon
     withWorkers,
     observabilityAdapter,
     log,
-    expect,
   }) => {
     const jobTypes = defineJobTypes<{
       test: {

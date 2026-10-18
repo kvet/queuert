@@ -1,4 +1,4 @@
-import { type TestAPI, expectTypeOf } from "vitest";
+import { type TestAPI, expect, expectTypeOf } from "vitest";
 
 import { createClient } from "../client.js";
 import { defineJobTypes } from "../entities/define-job-types.js";
@@ -20,7 +20,6 @@ export const processTestSuite = ({ it }: { it: TestAPI<TestSuiteContext> }): voi
     withWorkers,
     observabilityAdapter,
     log,
-    expect,
   }) => {
     const jobTypes = defineJobTypes<{
       "test-prepare-twice": {
@@ -205,7 +204,6 @@ export const processTestSuite = ({ it }: { it: TestAPI<TestSuiteContext> }): voi
     withWorkers,
     observabilityAdapter,
     log,
-    expect,
   }) => {
     const jobTypes = defineJobTypes<{
       test: {
@@ -286,7 +284,6 @@ export const processTestSuite = ({ it }: { it: TestAPI<TestSuiteContext> }): voi
     withWorkers,
     observabilityAdapter,
     log,
-    expect,
   }) => {
     const jobTypes = defineJobTypes<{
       test: {
@@ -351,7 +348,6 @@ export const processTestSuite = ({ it }: { it: TestAPI<TestSuiteContext> }): voi
     withWorkers,
     observabilityAdapter,
     log,
-    expect,
   }) => {
     const jobTypes = defineJobTypes<{
       test: {
@@ -425,7 +421,6 @@ export const processTestSuite = ({ it }: { it: TestAPI<TestSuiteContext> }): voi
     withWorkers,
     observabilityAdapter,
     log,
-    expect,
   }) => {
     const jobTypes = defineJobTypes<{
       test: {
@@ -528,7 +523,6 @@ export const processTestSuite = ({ it }: { it: TestAPI<TestSuiteContext> }): voi
     withWorkers,
     observabilityAdapter,
     log,
-    expect,
   }) => {
     const jobTypes = defineJobTypes<{
       "output-then-read": {

@@ -755,7 +755,6 @@ describe("Logging", () => {
     withWorkers,
     observabilityAdapter,
     log,
-    expect,
   }) => {
     const jobTypes = defineJobTypes<{
       test: { entry: true; input: null; output: null };
@@ -816,7 +815,6 @@ describe("Logging", () => {
     withWorkers,
     observabilityAdapter,
     log,
-    expect,
   }) => {
     const jobTypes = defineJobTypes<{
       test: { entry: true; input: null; output: null };
@@ -878,7 +876,6 @@ describe("Logging", () => {
     withWorkers,
     observabilityAdapter,
     log,
-    expect,
   }) => {
     const jobTypes = defineJobTypes<{
       test: { entry: true; input: null; output: null };
@@ -988,7 +985,6 @@ describe("Logging", () => {
     withWorkers,
     observabilityAdapter,
     log,
-    expect,
   }) => {
     const jobTypes = defineJobTypes<{
       test: { entry: true; input: null; output: null };
@@ -1062,7 +1058,6 @@ describe("Logging", () => {
     withWorkers,
     observabilityAdapter,
     log,
-    expect,
   }) => {
     const jobTypes = defineJobTypes<{
       test: { entry: true; input: null; output: null };
@@ -1135,7 +1130,6 @@ describe("Logging rollback", () => {
     withTransaction,
     observabilityAdapter,
     log,
-    expect,
   }) => {
     const jobTypes = defineJobTypes<{
       test: { entry: true; input: null; output: null };
@@ -1167,7 +1161,6 @@ describe("Logging rollback", () => {
     withTransaction,
     observabilityAdapter,
     log,
-    expect,
   }) => {
     const jobTypes = defineJobTypes<{
       blocker: { entry: true; input: null; output: null };
@@ -1218,7 +1211,6 @@ describe("Logging rollback", () => {
     withTransaction,
     observabilityAdapter,
     log,
-    expect,
   }) => {
     const jobTypes = defineJobTypes<{
       test: { entry: true; input: null; output: { result: number } };
@@ -1265,7 +1257,6 @@ describe("Logging rollback", () => {
     withWorkers,
     observabilityAdapter,
     log,
-    expect,
   }) => {
     const jobTypes = defineJobTypes<{
       test: { entry: true; input: null; output: null };
@@ -1343,7 +1334,6 @@ describe("Logging rollback", () => {
     withWorkers,
     observabilityAdapter,
     log,
-    expect,
   }) => {
     const jobTypes = defineJobTypes<{
       test: { entry: true; input: null; output: null };
@@ -1420,7 +1410,6 @@ describe("Logging rollback", () => {
     withWorkers,
     observabilityAdapter,
     log,
-    expect,
   }) => {
     const jobTypes = defineJobTypes<{
       linear: {
@@ -1504,7 +1493,6 @@ describe("Logging rollback", () => {
     withWorkers,
     observabilityAdapter,
     log,
-    expect,
   }) => {
     const jobTypes = defineJobTypes<{
       test: { entry: true; input: null; output: null };
@@ -1602,7 +1590,6 @@ describe("Logging rollback", () => {
     withTransaction,
     observabilityAdapter,
     log,
-    expect,
   }) => {
     const jobTypes = defineJobTypes<{
       test: { entry: true; input: null; output: { result: number } };
@@ -1706,7 +1693,6 @@ describe("Logging rollback", () => {
     withWorkers,
     observabilityAdapter,
     log,
-    expect,
   }) => {
     const jobTypes = defineJobTypes<{
       linear: {

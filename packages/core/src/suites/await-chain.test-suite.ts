@@ -1,4 +1,4 @@
-import { type TestAPI } from "vitest";
+import { type TestAPI, expect } from "vitest";
 
 import { createClient } from "../client.js";
 import { defineJobTypes } from "../entities/define-job-types.js";
@@ -14,7 +14,6 @@ export const awaitChainTestSuite = ({ it }: { it: TestAPI<TestSuiteContext> }): 
     withTransaction,
     observabilityAdapter,
     log,
-    expect,
   }) => {
     const jobTypes = defineJobTypes<{
       test: {
@@ -64,7 +63,6 @@ export const awaitChainTestSuite = ({ it }: { it: TestAPI<TestSuiteContext> }): 
     withTransaction,
     observabilityAdapter,
     log,
-    expect,
   }) => {
     const jobTypes = defineJobTypes<{
       test: {
@@ -120,7 +118,6 @@ export const awaitChainTestSuite = ({ it }: { it: TestAPI<TestSuiteContext> }): 
     withTransaction,
     observabilityAdapter,
     log,
-    expect,
   }) => {
     const jobTypes = defineJobTypes<{
       test: {
@@ -160,7 +157,6 @@ export const awaitChainTestSuite = ({ it }: { it: TestAPI<TestSuiteContext> }): 
     withTransaction,
     observabilityAdapter,
     log,
-    expect,
   }) => {
     const jobTypes = defineJobTypes<{
       test: {
@@ -194,7 +190,6 @@ export const awaitChainTestSuite = ({ it }: { it: TestAPI<TestSuiteContext> }): 
     notifyAdapter,
     observabilityAdapter,
     log,
-    expect,
   }) => {
     const jobTypes = defineJobTypes<{
       test: {
@@ -224,7 +219,6 @@ export const awaitChainTestSuite = ({ it }: { it: TestAPI<TestSuiteContext> }): 
     withTransaction,
     observabilityAdapter,
     log,
-    expect,
   }) => {
     const jobTypes = defineJobTypes<{
       order: { entry: true; input: { amount: number }; output: { receipt: string } };

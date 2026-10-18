@@ -169,6 +169,7 @@ export const createClient = async ({
 - Test all relevant phases: `prepare`, `process`, `complete`
 - Prefer descriptive test names that match what's being tested
 - To enable verbose logging when debugging tests, run with `DEBUG=1` environment variable
+- **Import `expect` from `vitest`**: Use the module-level `import { expect } from "vitest"` and don't destructure `expect` from the test context. Tests here run sequentially and use no snapshots, so the test-scoped `expect` adds nothing but a line in every parameter list. Reach for the context `expect` only in a test that runs with `.concurrent` or asserts snapshots, where Vitest needs it to attribute results to the right test. The conformance `expect` in `packages/core/src/conformance/expect.ts` is a separate runner-agnostic shim and is unaffected.
 
 ### Test Suites
 
@@ -177,11 +178,11 @@ Test suites are reusable test collections exported as functions. They receive Vi
 ```typescript
 // Define a test suite
 export const myFeatureTestSuite = ({ it }: { it: TestAPI<TestSuiteContext> }): void => {
-  it("does something", async ({ stateAdapter, withTransaction, expect }) => {
+  it("does something", async ({ stateAdapter, withTransaction }) => {
     // test implementation
   });
 
-  it("does something else", async ({ stateAdapter, expect }) => {
+  it("does something else", async ({ stateAdapter }) => {
     // test implementation
   });
 };

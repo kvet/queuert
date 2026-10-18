@@ -1,4 +1,4 @@
-import { type TestAPI } from "vitest";
+import { type TestAPI, expect } from "vitest";
 
 import { createClient } from "../client.js";
 import { defineJobTypes } from "../entities/define-job-types.js";
@@ -21,7 +21,6 @@ export const processModesTestSuite = ({ it }: { it: TestAPI<TestSuiteContext> })
     withWorkers,
     observabilityAdapter,
     log,
-    expect,
   }) => {
     const spyStateAdapter = createSpyStateAdapter(stateAdapter);
 
@@ -107,7 +106,6 @@ export const processModesTestSuite = ({ it }: { it: TestAPI<TestSuiteContext> })
     withWorkers,
     observabilityAdapter,
     log,
-    expect,
   }) => {
     const spyStateAdapter = createSpyStateAdapter(stateAdapter);
 
@@ -210,7 +208,6 @@ export const processModesTestSuite = ({ it }: { it: TestAPI<TestSuiteContext> })
     withWorkers,
     observabilityAdapter,
     log,
-    expect,
   }) => {
     const spyStateAdapter = createSpyStateAdapter(stateAdapter);
 
@@ -305,7 +302,6 @@ export const processModesTestSuite = ({ it }: { it: TestAPI<TestSuiteContext> })
     withWorkers,
     observabilityAdapter,
     log,
-    expect,
   }) => {
     const spyStateAdapter = createSpyStateAdapter(stateAdapter);
 
@@ -408,7 +404,6 @@ export const processModesTestSuite = ({ it }: { it: TestAPI<TestSuiteContext> })
     withWorkers,
     observabilityAdapter,
     log,
-    expect,
   }) => {
     const spyStateAdapter = createSpyStateAdapter(stateAdapter);
 
@@ -503,7 +498,6 @@ export const processModesTestSuite = ({ it }: { it: TestAPI<TestSuiteContext> })
     withWorkers,
     observabilityAdapter,
     log,
-    expect,
   }) => {
     const spyStateAdapter = createSpyStateAdapter(stateAdapter);
 
@@ -598,7 +592,6 @@ export const processModesTestSuite = ({ it }: { it: TestAPI<TestSuiteContext> })
     withWorkers,
     observabilityAdapter,
     log,
-    expect,
   }) => {
     const spyStateAdapter = createSpyStateAdapter(stateAdapter);
 
@@ -685,7 +678,6 @@ export const processModesTestSuite = ({ it }: { it: TestAPI<TestSuiteContext> })
     withWorkers,
     observabilityAdapter,
     log,
-    expect,
   }) => {
     const spyStateAdapter = createSpyStateAdapter(stateAdapter);
 
@@ -793,7 +785,6 @@ export const processModesTestSuite = ({ it }: { it: TestAPI<TestSuiteContext> })
     withWorkers,
     observabilityAdapter,
     log,
-    expect,
   }) => {
     const jobTypes = defineJobTypes<{
       "execute-return": {
@@ -853,7 +844,6 @@ export const processModesTestSuite = ({ it }: { it: TestAPI<TestSuiteContext> })
     withWorkers,
     observabilityAdapter,
     log,
-    expect,
   }) => {
     const spyStateAdapter = createSpyStateAdapter(stateAdapter);
 
@@ -934,7 +924,6 @@ export const processModesTestSuite = ({ it }: { it: TestAPI<TestSuiteContext> })
     withWorkers,
     observabilityAdapter,
     log,
-    expect,
   }) => {
     const jobTypes = defineJobTypes<{
       "execute-hooks": {
@@ -1016,7 +1005,6 @@ export const processModesTestSuite = ({ it }: { it: TestAPI<TestSuiteContext> })
     withWorkers,
     observabilityAdapter,
     log,
-    expect,
   }) => {
     const spyStateAdapter = createSpyStateAdapter(stateAdapter);
 
@@ -1124,7 +1112,6 @@ export const processModesTestSuite = ({ it }: { it: TestAPI<TestSuiteContext> })
     withWorkers,
     observabilityAdapter,
     log,
-    expect,
   }) => {
     const spyStateAdapter = createSpyStateAdapter(stateAdapter);
 

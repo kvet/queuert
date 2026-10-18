@@ -1,4 +1,4 @@
-import { type TestAPI } from "vitest";
+import { type TestAPI, expect } from "vitest";
 
 import { createClient } from "../client.js";
 import { defineJobTypes } from "../entities/define-job-types.js";
@@ -19,7 +19,6 @@ export const rescheduleJobTestSuite = ({ it }: { it: TestAPI<TestSuiteContext> }
     withTransaction,
     observabilityAdapter,
     log,
-    expect,
   }) => {
     const jobTypes = defineJobTypes<{
       report: {
@@ -69,7 +68,6 @@ export const rescheduleJobTestSuite = ({ it }: { it: TestAPI<TestSuiteContext> }
     withTransaction,
     observabilityAdapter,
     log,
-    expect,
   }) => {
     const jobTypes = defineJobTypes<{
       task: { entry: true; input: null; output: null };
@@ -107,7 +105,6 @@ export const rescheduleJobTestSuite = ({ it }: { it: TestAPI<TestSuiteContext> }
     withTransaction,
     observabilityAdapter,
     log,
-    expect,
   }) => {
     const jobTypes = defineJobTypes<{
       task: { entry: true; input: null; output: null };
@@ -148,7 +145,6 @@ export const rescheduleJobTestSuite = ({ it }: { it: TestAPI<TestSuiteContext> }
     withWorkers,
     observabilityAdapter,
     log,
-    expect,
   }) => {
     const jobTypes = defineJobTypes<{
       task: {
@@ -212,7 +208,6 @@ export const rescheduleJobTestSuite = ({ it }: { it: TestAPI<TestSuiteContext> }
     withTransaction,
     observabilityAdapter,
     log,
-    expect,
   }) => {
     const jobTypes = defineJobTypes<{
       task: { entry: true; input: null; output: null };
@@ -248,7 +243,6 @@ export const rescheduleJobTestSuite = ({ it }: { it: TestAPI<TestSuiteContext> }
     withWorkers,
     observabilityAdapter,
     log,
-    expect,
   }) => {
     const jobTypes = defineJobTypes<{
       task: { entry: true; input: null; output: { done: true } };
@@ -298,7 +292,6 @@ export const rescheduleJobTestSuite = ({ it }: { it: TestAPI<TestSuiteContext> }
     withTransaction,
     observabilityAdapter,
     log,
-    expect,
   }) => {
     const jobTypes = defineJobTypes<{
       report: {
@@ -338,7 +331,6 @@ export const rescheduleJobTestSuite = ({ it }: { it: TestAPI<TestSuiteContext> }
     withTransaction,
     observabilityAdapter,
     log,
-    expect,
   }) => {
     const jobTypes = defineJobTypes<{
       blocker: { entry: true; input: null; output: null };
@@ -387,7 +379,6 @@ export const rescheduleJobTestSuite = ({ it }: { it: TestAPI<TestSuiteContext> }
     withTransaction,
     observabilityAdapter,
     log,
-    expect,
   }) => {
     const jobTypes = defineJobTypes<{
       task: { entry: true; input: null; output: null };
@@ -425,7 +416,6 @@ export const rescheduleJobTestSuite = ({ it }: { it: TestAPI<TestSuiteContext> }
     withTransaction,
     observabilityAdapter,
     log,
-    expect,
   }) => {
     const jobTypes = defineJobTypes<{
       task: { entry: true; input: { value: number }; output: null };
@@ -472,7 +462,6 @@ export const rescheduleJobTestSuite = ({ it }: { it: TestAPI<TestSuiteContext> }
     withTransaction,
     observabilityAdapter,
     log,
-    expect,
   }) => {
     const jobTypes = defineJobTypes<{
       task: { entry: true; input: { value: number }; output: null };
@@ -515,7 +504,6 @@ export const rescheduleJobTestSuite = ({ it }: { it: TestAPI<TestSuiteContext> }
     withTransaction,
     observabilityAdapter,
     log,
-    expect,
   }) => {
     const jobTypes = defineJobTypes<{
       task: { entry: true; input: null; output: null };
@@ -542,7 +530,6 @@ export const rescheduleJobTestSuite = ({ it }: { it: TestAPI<TestSuiteContext> }
     withTransaction,
     observabilityAdapter,
     log,
-    expect,
   }) => {
     const jobTypes = defineJobTypes<{
       task: { entry: true; input: { value: number }; output: null };
@@ -592,7 +579,6 @@ export const rescheduleJobTestSuite = ({ it }: { it: TestAPI<TestSuiteContext> }
     withWorkers,
     observabilityAdapter,
     log,
-    expect,
   }) => {
     const jobTypes = defineJobTypes<{
       task: { entry: true; input: { value: number }; output: { done: true } };
@@ -664,7 +650,6 @@ export const rescheduleJobTestSuite = ({ it }: { it: TestAPI<TestSuiteContext> }
     withTransaction,
     observabilityAdapter,
     log,
-    expect,
   }) => {
     const jobTypes = defineJobTypes<{
       task: { entry: true; input: null; output: null };

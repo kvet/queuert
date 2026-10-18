@@ -1,4 +1,4 @@
-import { type TestAPI, assert } from "vitest";
+import { type TestAPI, assert, expect } from "vitest";
 
 import { createClient } from "../client.js";
 import { type BaseJobTypeDefinitions } from "../entities/job-type.js";
@@ -126,7 +126,7 @@ const completionOptions = {
 };
 
 export const validationTestSuite = ({ it }: { it: TestAPI<TestSuiteContext> }): void => {
-  it("getTypeNames returns registered type names", ({ expect }) => {
+  it("getTypeNames returns registered type names", () => {
     expect(simpleJobTypes.getTypeNames()).toEqual(["main"]);
     expect(continuationJobTypes.getTypeNames()).toEqual(expect.arrayContaining(["step1", "step2"]));
     expect(blockerJobTypes.getTypeNames()).toEqual(expect.arrayContaining(["main", "auth"]));
@@ -138,7 +138,6 @@ export const validationTestSuite = ({ it }: { it: TestAPI<TestSuiteContext> }): 
     withTransaction,
     observabilityAdapter,
     log,
-    expect,
   }) => {
     const client = await createClient({
       stateAdapter,
@@ -169,7 +168,6 @@ export const validationTestSuite = ({ it }: { it: TestAPI<TestSuiteContext> }): 
     withTransaction,
     observabilityAdapter,
     log,
-    expect,
   }) => {
     const client = await createClient({
       stateAdapter,
@@ -198,7 +196,6 @@ export const validationTestSuite = ({ it }: { it: TestAPI<TestSuiteContext> }): 
     withTransaction,
     observabilityAdapter,
     log,
-    expect,
   }) => {
     const client = await createClient({
       stateAdapter,
@@ -227,7 +224,6 @@ export const validationTestSuite = ({ it }: { it: TestAPI<TestSuiteContext> }): 
     withTransaction,
     observabilityAdapter,
     log,
-    expect,
   }) => {
     const client = await createClient({
       stateAdapter,
@@ -256,7 +252,6 @@ export const validationTestSuite = ({ it }: { it: TestAPI<TestSuiteContext> }): 
     withTransaction,
     observabilityAdapter,
     log,
-    expect,
   }) => {
     const validatedBlockers: unknown[] = [];
     const jobTypes = createJobTypes<{
@@ -322,7 +317,6 @@ export const validationTestSuite = ({ it }: { it: TestAPI<TestSuiteContext> }): 
     withWorkers,
     observabilityAdapter,
     log,
-    expect,
   }) => {
     const client = await createClient({
       stateAdapter,
@@ -368,7 +362,6 @@ export const validationTestSuite = ({ it }: { it: TestAPI<TestSuiteContext> }): 
     withWorkers,
     observabilityAdapter,
     log,
-    expect,
   }) => {
     const validationFailed = Promise.withResolvers<unknown>();
 
@@ -425,7 +418,6 @@ export const validationTestSuite = ({ it }: { it: TestAPI<TestSuiteContext> }): 
     withWorkers,
     observabilityAdapter,
     log,
-    expect,
   }) => {
     const client = await createClient({
       stateAdapter,
@@ -477,7 +469,6 @@ export const validationTestSuite = ({ it }: { it: TestAPI<TestSuiteContext> }): 
     withWorkers,
     observabilityAdapter,
     log,
-    expect,
   }) => {
     const validationFailed = Promise.withResolvers<unknown>();
 
@@ -536,7 +527,6 @@ export const validationTestSuite = ({ it }: { it: TestAPI<TestSuiteContext> }): 
     withTransaction,
     observabilityAdapter,
     log,
-    expect,
   }) => {
     const client = await createClient({
       stateAdapter,
@@ -575,7 +565,6 @@ export const validationTestSuite = ({ it }: { it: TestAPI<TestSuiteContext> }): 
     withTransaction,
     observabilityAdapter,
     log,
-    expect,
   }) => {
     const client = await createClient({
       stateAdapter,
@@ -617,7 +606,6 @@ export const validationTestSuite = ({ it }: { it: TestAPI<TestSuiteContext> }): 
     withWorkers,
     observabilityAdapter,
     log,
-    expect,
   }) => {
     const client = await createClient({
       stateAdapter,
@@ -685,7 +673,6 @@ export const validationTestSuite = ({ it }: { it: TestAPI<TestSuiteContext> }): 
     withTransaction,
     observabilityAdapter,
     log,
-    expect,
   }) => {
     const client = await createClient({
       stateAdapter,

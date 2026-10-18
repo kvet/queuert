@@ -1,4 +1,4 @@
-import { type TestAPI, assert } from "vitest";
+import { type TestAPI, assert, expect } from "vitest";
 
 import { createClient } from "../client.js";
 import { defineJobTypes } from "../entities/define-job-types.js";
@@ -11,7 +11,6 @@ export const deduplicationTestSuite = ({ it }: { it: TestAPI<TestSuiteContext> }
     withTransaction,
     observabilityAdapter,
     log,
-    expect,
   }) => {
     const jobTypes = defineJobTypes<{
       test: {
@@ -103,7 +102,6 @@ export const deduplicationTestSuite = ({ it }: { it: TestAPI<TestSuiteContext> }
     withTransaction,
     log,
     observabilityAdapter,
-    expect,
   }) => {
     const jobTypes = defineJobTypes<{
       step1: {
@@ -198,7 +196,6 @@ export const deduplicationTestSuite = ({ it }: { it: TestAPI<TestSuiteContext> }
     withTransaction,
     log,
     observabilityAdapter,
-    expect,
   }) => {
     const jobTypes = defineJobTypes<{
       test: {
@@ -270,7 +267,6 @@ export const deduplicationTestSuite = ({ it }: { it: TestAPI<TestSuiteContext> }
     withTransaction,
     log,
     observabilityAdapter,
-    expect,
   }) => {
     const jobTypes = defineJobTypes<{
       test: {
@@ -384,7 +380,6 @@ export const deduplicationTestSuite = ({ it }: { it: TestAPI<TestSuiteContext> }
     withTransaction,
     observabilityAdapter,
     log,
-    expect,
   }) => {
     const jobTypes = defineJobTypes<{
       typeA: {
@@ -435,7 +430,6 @@ export const deduplicationTestSuite = ({ it }: { it: TestAPI<TestSuiteContext> }
     withTransaction,
     observabilityAdapter,
     log,
-    expect,
   }) => {
     const jobTypes = defineJobTypes<{
       test: {
@@ -490,7 +484,6 @@ export const deduplicationTestSuite = ({ it }: { it: TestAPI<TestSuiteContext> }
     withTransaction,
     observabilityAdapter,
     log,
-    expect,
   }) => {
     const jobTypes = defineJobTypes<{
       test: {
@@ -549,7 +542,6 @@ export const deduplicationTestSuite = ({ it }: { it: TestAPI<TestSuiteContext> }
     withTransaction,
     log,
     observabilityAdapter,
-    expect,
   }) => {
     const jobTypes = defineJobTypes<{
       test: {
@@ -647,7 +639,6 @@ export const deduplicationTestSuite = ({ it }: { it: TestAPI<TestSuiteContext> }
     withTransaction,
     observabilityAdapter,
     log,
-    expect,
   }) => {
     const jobTypes = defineJobTypes<{
       typeA: {
@@ -700,7 +691,6 @@ export const deduplicationTestSuite = ({ it }: { it: TestAPI<TestSuiteContext> }
     withTransaction,
     observabilityAdapter,
     log,
-    expect,
   }) => {
     const jobTypes = defineJobTypes<{
       test: {

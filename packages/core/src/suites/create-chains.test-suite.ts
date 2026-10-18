@@ -1,4 +1,4 @@
-import { type TestAPI, describe, onTestFinished, vi } from "vitest";
+import { type TestAPI, describe, expect, onTestFinished, vi } from "vitest";
 
 import { createClient } from "../client.js";
 import { defineJobTypes } from "../entities/define-job-types.js";
@@ -21,7 +21,6 @@ export const createChainsTestSuite = ({ it }: { it: TestAPI<TestSuiteContext> })
       withTransaction,
       observabilityAdapter,
       log,
-      expect,
     }) => {
       const jobTypes = defineJobTypes<{
         test: { entry: true; input: { value: number }; output: null };
@@ -58,7 +57,6 @@ export const createChainsTestSuite = ({ it }: { it: TestAPI<TestSuiteContext> })
       withTransaction,
       observabilityAdapter,
       log,
-      expect,
     }) => {
       const jobTypes = defineJobTypes<{
         test: { entry: true; input: { value: number }; output: null };
@@ -103,7 +101,6 @@ export const createChainsTestSuite = ({ it }: { it: TestAPI<TestSuiteContext> })
       withTransaction,
       observabilityAdapter,
       log,
-      expect,
     }) => {
       const jobTypes = defineJobTypes<{
         dependency: { entry: true; input: null; output: null };
@@ -154,7 +151,6 @@ export const createChainsTestSuite = ({ it }: { it: TestAPI<TestSuiteContext> })
       withTransaction,
       observabilityAdapter,
       log,
-      expect,
     }) => {
       const jobTypes = defineJobTypes<{
         dependency: { entry: true; input: null; output: null };
@@ -216,7 +212,6 @@ export const createChainsTestSuite = ({ it }: { it: TestAPI<TestSuiteContext> })
       withTransaction,
       observabilityAdapter,
       log,
-      expect,
     }) => {
       const jobTypes = defineJobTypes<{
         dependency: {
@@ -355,7 +350,6 @@ export const createChainsTestSuite = ({ it }: { it: TestAPI<TestSuiteContext> })
       withTransaction,
       observabilityAdapter,
       log,
-      expect,
     }) => {
       const jobTypes = defineJobTypes<{
         test: { entry: true; input: null; output: null };
@@ -389,7 +383,6 @@ export const createChainsTestSuite = ({ it }: { it: TestAPI<TestSuiteContext> })
       notifyAdapter,
       observabilityAdapter,
       log,
-      expect,
     }) => {
       const jobTypes = defineJobTypes<{
         test: { entry: true; input: { value: number }; output: null };
@@ -512,7 +505,6 @@ export const createChainsTestSuite = ({ it }: { it: TestAPI<TestSuiteContext> })
       withTransaction,
       observabilityAdapter,
       log,
-      expect,
     }) => {
       const jobTypes = defineJobTypes<{
         test: { entry: true; input: { value: number }; output: null };
@@ -549,7 +541,6 @@ export const createChainsTestSuite = ({ it }: { it: TestAPI<TestSuiteContext> })
       withTransaction,
       observabilityAdapter,
       log,
-      expect,
     }) => {
       const jobTypes = defineJobTypes<{
         test: { entry: true; input: { value: number }; output: { result: number } };
@@ -595,7 +586,6 @@ export const createChainsTestSuite = ({ it }: { it: TestAPI<TestSuiteContext> })
       withTransaction,
       observabilityAdapter,
       log,
-      expect,
     }) => {
       const jobTypes = defineJobTypes<{
         test: { entry: true; input: { value: number }; output: null };
@@ -626,7 +616,6 @@ export const createChainsTestSuite = ({ it }: { it: TestAPI<TestSuiteContext> })
       withTransaction,
       observabilityAdapter,
       log,
-      expect,
     }) => {
       const jobTypes = defineJobTypes<{
         test: { entry: true; input: { value: number }; output: null };
@@ -682,7 +671,6 @@ export const createChainsTestSuite = ({ it }: { it: TestAPI<TestSuiteContext> })
       withTransaction,
       observabilityAdapter,
       log,
-      expect,
     }) => {
       const jobTypes = defineJobTypes<{
         dependency: { entry: true; input: null; output: null };
@@ -746,7 +734,6 @@ export const createChainsTestSuite = ({ it }: { it: TestAPI<TestSuiteContext> })
       withTransaction,
       observabilityAdapter,
       log,
-      expect,
     }) => {
       const jobTypes = defineJobTypes<{
         test: { entry: true; input: { value: number }; output: null };
@@ -787,7 +774,6 @@ export const createChainsTestSuite = ({ it }: { it: TestAPI<TestSuiteContext> })
       withTransaction,
       observabilityAdapter,
       log,
-      expect,
     }) => {
       const jobTypes = defineJobTypes<{
         typeA: { entry: true; input: { a: number }; output: null };
@@ -826,7 +812,6 @@ export const createChainsTestSuite = ({ it }: { it: TestAPI<TestSuiteContext> })
       withTransaction,
       observabilityAdapter,
       log,
-      expect,
     }) => {
       const jobTypes = defineJobTypes<{
         dependency: { entry: true; input: null; output: null };
@@ -884,7 +869,6 @@ export const createChainsTestSuite = ({ it }: { it: TestAPI<TestSuiteContext> })
       withWorkers,
       observabilityAdapter,
       log,
-      expect,
     }) => {
       const jobTypes = defineJobTypes<{
         blocker: {
@@ -982,7 +966,6 @@ export const createChainsTestSuite = ({ it }: { it: TestAPI<TestSuiteContext> })
       withWorkers,
       observabilityAdapter,
       log,
-      expect,
     }) => {
       const jobTypes = defineJobTypes<{
         test: { entry: true; input: { value: number }; output: { result: number } };
@@ -1042,7 +1025,6 @@ export const createChainsTestSuite = ({ it }: { it: TestAPI<TestSuiteContext> })
       notifyAdapter,
       observabilityAdapter,
       log,
-      expect,
     }) => {
       const jobTypes = defineJobTypes<{
         test: { entry: true; input: { value: number }; output: null };
@@ -1170,7 +1152,6 @@ export const createChainsTestSuite = ({ it }: { it: TestAPI<TestSuiteContext> })
       withTransaction,
       observabilityAdapter,
       log,
-      expect,
     }) => {
       const jobTypes = defineJobTypes<{
         test: { entry: true; input: { value: number }; output: null };
@@ -1207,7 +1188,6 @@ export const createChainsTestSuite = ({ it }: { it: TestAPI<TestSuiteContext> })
       withTransaction,
       observabilityAdapter,
       log,
-      expect,
     }) => {
       const jobTypes = defineJobTypes<{
         test: { entry: true; input: null; output: null };
@@ -1243,7 +1223,6 @@ export const createChainsTestSuite = ({ it }: { it: TestAPI<TestSuiteContext> })
       withTransaction,
       observabilityAdapter,
       log,
-      expect,
     }) => {
       const jobTypes = defineJobTypes<{
         test: { entry: true; input: null; output: null };
@@ -1283,7 +1262,6 @@ export const createChainsTestSuite = ({ it }: { it: TestAPI<TestSuiteContext> })
       withTransaction,
       observabilityAdapter,
       log,
-      expect,
     }) => {
       const jobTypes = defineJobTypes<{
         test: { entry: true; input: null; output: null };

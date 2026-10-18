@@ -1,4 +1,4 @@
-import { type TestAPI, expectTypeOf } from "vitest";
+import { type TestAPI, expect, expectTypeOf } from "vitest";
 
 import { createClient } from "../client.js";
 import { type CompletedChain } from "../entities/chain.js";
@@ -23,7 +23,6 @@ export const chainsTestSuite = ({ it }: { it: TestAPI<TestSuiteContext> }): void
     withWorkers,
     observabilityAdapter,
     log,
-    expect,
   }) => {
     const jobTypes = defineJobTypes<{
       linear: {
@@ -165,7 +164,6 @@ export const chainsTestSuite = ({ it }: { it: TestAPI<TestSuiteContext> }): void
     withWorkers,
     observabilityAdapter,
     log,
-    expect,
   }) => {
     const jobTypes = defineJobTypes<{
       main: {
@@ -292,7 +290,6 @@ export const chainsTestSuite = ({ it }: { it: TestAPI<TestSuiteContext> }): void
     withWorkers,
     observabilityAdapter,
     log,
-    expect,
   }) => {
     const jobTypes = defineJobTypes<{
       main: {
@@ -429,7 +426,6 @@ export const chainsTestSuite = ({ it }: { it: TestAPI<TestSuiteContext> }): void
     withWorkers,
     observabilityAdapter,
     log,
-    expect,
   }) => {
     const jobTypes = defineJobTypes<{
       loop: {
@@ -505,7 +501,6 @@ export const chainsTestSuite = ({ it }: { it: TestAPI<TestSuiteContext> }): void
     withWorkers,
     observabilityAdapter,
     log,
-    expect,
   }) => {
     const jobTypes = defineJobTypes<{
       start: {
@@ -609,7 +604,6 @@ export const chainsTestSuite = ({ it }: { it: TestAPI<TestSuiteContext> }): void
     withWorkers,
     observabilityAdapter,
     log,
-    expect,
   }) => {
     const jobTypes = defineJobTypes<{
       entryA: { entry: true; input: { fromA: true }; continueWith: { typeName: "shared" } };
@@ -697,7 +691,6 @@ export const chainsTestSuite = ({ it }: { it: TestAPI<TestSuiteContext> }): void
     withWorkers,
     observabilityAdapter,
     log,
-    expect,
   }) => {
     const jobTypes = defineJobTypes<{
       parent: {
@@ -804,7 +797,6 @@ export const chainsTestSuite = ({ it }: { it: TestAPI<TestSuiteContext> }): void
     withWorkers,
     observabilityAdapter,
     log,
-    expect,
   }) => {
     const jobTypes = defineJobTypes<{
       step1: { entry: true; input: null; continueWith: { typeName: "step2" } };
@@ -855,7 +847,6 @@ export const chainsTestSuite = ({ it }: { it: TestAPI<TestSuiteContext> }): void
   });
 
   it("continueWith rejects caller-supplied id that fails validateId", async ({
-    expect,
     withTransaction,
   }) => {
     const stateAdapter = await createInProcessStateAdapter({
@@ -928,7 +919,6 @@ export const chainsTestSuite = ({ it }: { it: TestAPI<TestSuiteContext> }): void
     withWorkers,
     observabilityAdapter,
     log,
-    expect,
   }) => {
     const jobTypes = defineJobTypes<{
       step1: { entry: true; input: null; continueWith: { typeName: "step2" } };
