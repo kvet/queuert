@@ -44,7 +44,7 @@
   "scripts": {
     "prepublishOnly": "pnpm build",
     "build": "tsdown",
-    "typecheck": "! tsc --noEmit 2>&1 | grep -v 'TS4023' | grep 'error TS'",
+    "typecheck": "tsc --noEmit",
     "test": "vitest --run"
   },
   "devDependencies": {
