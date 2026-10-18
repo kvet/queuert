@@ -7,7 +7,7 @@
  * 1. Single Job: Basic chain with one job → one chain span, one job span, one attempt span
  * 2. Continuations: Linear chain of jobs → chain span contains multiple sequential job spans
  * 3. Blockers: Fan-out/fan-in pattern → chain span shows parallel blocker jobs with links
- * 4. Execute: Batched transactions → attempt span shows prepare, step ×2, complete
+ * 4. Staged: Batched user transactions → attempt span shows prepare, complete
  * 5. Retries: Job fails then succeeds → job span contains multiple attempt spans
  * 6. Workerless Completion: Job completed externally → CONSUMER job span without attempt spans
  */
@@ -98,16 +98,14 @@ const jobTypes = defineJobTypes<{
   };
 
   /*
-   * Scenario 4 - Execute (batched transactions):
-   *   batch-process → prepare, step ×2, complete
+   * Scenario 4 - Staged processing:
+   *   batch-process → prepare, one user transaction per item, complete
    *
    * Trace structure:
    *   chain-span
    *     └─ job-span (batch-process)
    *          └─ attempt-span #1
    *               ├─ prepare
-   *               ├─ step (batch 1)
-   *               ├─ step (batch 2)
    *               └─ complete
    */
   "batch-process": {
@@ -260,13 +258,17 @@ const worker = await createInProcessWorker({
         },
       },
 
-      // Scenario 4: Batched execute transactions
+      // Scenario 4: Staged processing
       "batch-process": {
-        attemptHandler: async ({ job, prepare, step, complete }) => {
+        attemptHandler: async ({ job, prepare, complete }) => {
           await prepare({ mode: "staged" });
           let total = 0;
           for (const item of job.input.items) {
-            total += await step(async () => {
+            // TODO: check that this worker still owns the job before the batch commits, once
+            // queuert offers an ownership check for user transactions (see TODO.md).
+            total += await stateAdapter.withTransaction(async (txCtx) => {
+              // Stands in for a batch of domain reads and writes.
+              await client.getChain({ ...txCtx, id: job.chainId });
               await new Promise((r) => setTimeout(r, 30));
               return item * 2;
             });
@@ -351,10 +353,10 @@ const blockerChain = await withTransactionHooks(async (transactionHooks) =>
 const blockerResult = await client.awaitChain(blockerChain, { timeoutMs: 10000 });
 console.log("Result:", blockerResult.output);
 
-// Scenario 4: Execute (batched transactions)
-console.log("\n--- Scenario 4: Execute ---");
+// Scenario 4: Staged processing
+console.log("\n--- Scenario 4: Staged ---");
 console.log(
-  "Staged handler with two execute() calls. Attempt span shows prepare, 2× step, complete.\n",
+  "Staged handler running one transaction per item. Attempt span shows prepare, complete.\n",
 );
 const batchChain = await withTransactionHooks(async (transactionHooks) =>
   stateAdapter.withTransaction(async (ctx) =>

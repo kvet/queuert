@@ -217,7 +217,7 @@ The lease manager keeps renewing throughout the drain, so a long graceful shutdo
 
 **Recovery.** On lease loss:
 
-1. Hard-abort in-flight attempts with a lease-lost error (later `step` / `complete` calls rethrow it), stop filling slots, and drain. The abort makes the loss prompt and explicit rather than a surprise at the next `refetchJobLocked`, and the worker discards those attempts.
+1. Hard-abort in-flight attempts with a lease-lost error (a later `complete` call rethrows it), stop filling slots, and drain. The abort makes the loss prompt and explicit rather than a surprise at the next `refetchJobLocked`, and the worker discards those attempts.
 2. Emit `workerLeaseLost`, then `workerStopping`; stop the lease manager. When the drain finishes, emit `workerStopped` — there is no `stopWorker` call to make, because the row is the reclaimer's to delete.
 3. On `recoveryBackoffConfig`, `startWorker` with a **freshly generated** UUID. The old id belongs to a row that a reclaimer owns; reusing it risks colliding with a row that has not been swept yet.
 4. On success, emit `workerStarted` for the new id and resume the main loop.

@@ -5,7 +5,7 @@ sidebar:
   order: 2
 ---
 
-import { Arrow, Diagram, Flow, Group, Loop, Node } from "../../../components/diagram";
+import { Arrow, Diagram, Flow, Group, Node } from "../../../components/diagram";
 
 ## Atomic Mode
 
@@ -81,61 +81,7 @@ Use staged mode when you need to do work **between** two transactions — typica
 }
 ```
 
-### Intermediate Transactions with `step`
-
-<Diagram label="Staged mode with step: prepare, then one step transaction per batch, then complete, each in its own transaction">
-  <Group title="attempt">
-    <Flow>
-      <Group title="transaction" dashed>
-        <Node tone="blue" sub="read">prepare()</Node>
-      </Group>
-      <Arrow />
-      <Loop label="repeat per batch">
-        <Group title="transaction" dashed>
-          <Node sub="one batch">step()</Node>
-        </Group>
-      </Loop>
-      <Arrow />
-      <Group title="transaction" dashed>
-        <Node tone="green" sub="write · commit">complete()</Node>
-      </Group>
-    </Flow>
-  </Group>
-</Diagram>
-
-Within staged mode, `step` lets you perform **multiple independent transactions** between `prepare` and `complete` — typically for batched work or checkpointed aggregation:
-
-```ts
-'aggregate-metrics': {
-  attemptHandler: async ({ job, step, complete }) => {
-    let totalProcessed = 0;
-    let cursor;
-
-    do {
-      const batch = await step(async ({ txSql }) => {
-        const rows = await txSql`
-          SELECT id, value FROM raw_events
-          WHERE processed = false
-          ORDER BY id LIMIT 500
-        `;
-        if (rows.length > 0) {
-          await txSql`
-            UPDATE raw_events SET processed = true
-            WHERE id = ANY(${rows.map(r => r.id)})
-          `;
-        }
-        return { count: rows.length, nextCursor: rows.at(-1)?.id };
-      });
-      totalProcessed += batch.count;
-      cursor = batch.count === 500 ? batch.nextCursor : undefined;
-    } while (cursor);
-
-    return complete(async ({ finish }) => finish({ output: { totalProcessed } }));
-  },
-}
-```
-
-Each `step` call opens a fresh guarded transaction (attempt verified), runs the callback, commits, and flushes hooks. If `prepare` hasn't been called, `step` automatically enters staged mode.
+{/* TODO: document batched transactional work in staged mode (user-opened transactions between prepare and complete, idempotency, checking `signal.aborted` between batches) once the ownership check for user transactions lands (see TODO.md). */}
 
 ## When to Use What
 
@@ -144,8 +90,7 @@ Do you need to call an external API or do long-running
 work between reading and writing?
   ├── No  → Just call complete() directly (auto-setup atomic)
   └── Yes → Use prepare({ mode: "staged" })
-            ├── Single external call → Read in prepare, do external work, write in complete
-            └── Batched transactional work → Use step() between prepare and complete
+            └── Read in prepare, do the work, write in complete
 ```
 
 In practice, explicit `prepare` with a fixed mode is rarely needed. `prepare({ mode: "atomic" })` does the same thing as calling `complete` directly but with extra ceremony. The main reason to use explicit `prepare` is when the mode is **dynamic** — determined at runtime based on job input or application state.

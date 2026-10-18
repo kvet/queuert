@@ -10,7 +10,6 @@ import {
   type AttemptMiddleware,
   type MergedAttemptHandlerCtx,
   type MergedCompleteCtx,
-  type MergedStepCtx,
   type MergedPrepareCtx,
 } from "./attempt-middleware.js";
 import {
@@ -68,7 +67,7 @@ export const createProcessors = <
     : `Error: client is missing required job types: ${Exclude<keyof TJobTypeDefinitions & string, keyof TClientJobTypeDefinitions & string>}`;
   jobTypes: JobTypes<TJobTypeDefinitions, TExternalJobTypeDefinitions>;
   attemptMiddleware?: TAttemptMiddleware &
-    readonly AttemptMiddleware<TStateAdapter, any, any, any, any>[];
+    readonly AttemptMiddleware<TStateAdapter, any, any, any>[];
   backoffConfig?: BackoffConfig;
   attemptConfig?: AttemptConfig;
   processors: {
@@ -78,7 +77,6 @@ export const createProcessors = <
       K,
       MergedAttemptHandlerCtx<TAttemptMiddleware>,
       MergedPrepareCtx<TAttemptMiddleware>,
-      MergedStepCtx<TAttemptMiddleware>,
       MergedCompleteCtx<TAttemptMiddleware>
     >;
   } & Record<Exclude<TProcessors, keyof TJobTypeDefinitions & string>, never>;
@@ -86,10 +84,7 @@ export const createProcessors = <
   const middleware = options.attemptMiddleware ?? [];
   const stampedProcessors: Record<string, unknown> = {};
   for (const [typeName, processor] of Object.entries(
-    options.processors as Record<
-      string,
-      InProcessWorkerProcessor<any, any, any, any, any, any, any>
-    >,
+    options.processors as Record<string, InProcessWorkerProcessor<any, any, any, any, any, any>>,
   )) {
     stampedProcessors[typeName] = Object.assign(
       {},

@@ -80,12 +80,11 @@ export type SpanHandle = {
   end: (failure?: { error: unknown }) => void;
 };
 
-/** Handle for managing a job attempt span, including prepare/step/complete sub-spans. */
+/** Handle for managing a job attempt span, including prepare/complete sub-spans. */
 export type JobAttemptSpanHandle = {
   getChainTraceContext: () => string;
   getTraceContext: () => string;
   startPrepare: () => SpanHandle;
-  startStep: () => SpanHandle;
   startComplete: () => SpanHandle;
   end: (result: JobAttemptSpanResult) => void;
 };

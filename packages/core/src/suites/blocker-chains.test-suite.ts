@@ -434,19 +434,19 @@ export const blockerChainsTestSuite = ({ it }: { it: TestAPI<TestSuiteContext> }
               complete(async ({ finish }) => finish({ output: null })),
           },
           outer: {
-            attemptHandler: async ({ prepare, step, complete }) => {
+            attemptHandler: async ({ prepare, complete }) => {
               await prepare({ mode: "staged" });
 
-              await step(async ({ transactionHooks, ...txCtx }) => {
-                childChains.push(
-                  await client.createChain({
+              childChains.push(
+                await withTransaction(async (txCtx, transactionHooks) =>
+                  client.createChain({
                     ...txCtx,
                     transactionHooks,
                     typeName: "inner",
                     input: null,
                   }),
-                );
-              });
+                ),
+              );
 
               return complete(async ({ finish, transactionHooks, ...txCtx }) => {
                 childChains.push(

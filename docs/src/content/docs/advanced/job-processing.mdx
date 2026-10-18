@@ -72,9 +72,7 @@ For more control, call `prepare` explicitly:
 - **Atomic mode**: Prepare and complete run in the same transaction. Rarely needed since calling `complete` directly achieves the same result with less ceremony.
 - **Staged mode**: Prepare runs in one transaction, long-running work happens outside, then complete runs in another transaction. The worker automatically extends the attempt between phases. Implement the processing phase idempotently as it may retry if the worker crashes.
 
-### Intermediate Transactions with `step`
-
-Handlers can call `step` to perform intermediate transactional work — each call opens a fresh guarded transaction with attempt verification. This is useful for batched operations like bulk deletes where holding a single long-lived transaction would be impractical. If `prepare` hasn't been called, `step` automatically enters staged mode. `step` is not reachable once `complete` has started — work that must observe the terminal transition belongs inside the complete transaction. See [Processing Modes — Step](../../guides/processing-modes/#intermediate-transactions-with-step).
+{/* TODO: explain that transactions the handler opens between prepare and complete are not checked against attempt ownership, and link the ownership check for user transactions once it lands (see TODO.md). */}
 
 ## Error Recovery and Savepoints
 
@@ -122,7 +120,7 @@ See [Job Processing Reliability](../../guides/processing-reliability/) for per-p
 
 ### Abort Signal
 
-Every attempt handler receives a `signal` that aborts when the worker is stopping, when the attempt is lost (taken by another worker, deleted, or completed externally), or when ownership can no longer be confirmed (the heartbeat failed). On abort, stop working and call `complete` — with partial output or `finish({ reschedule })` — or throw to reschedule with backoff. In the last two cases, `step` and `complete` throw and the worker discards the attempt. A handler that returns without completing fails the attempt.
+Every attempt handler receives a `signal` that aborts when the worker is stopping, when the attempt is lost (taken by another worker, deleted, or completed externally), or when ownership can no longer be confirmed (the heartbeat failed). On abort, stop working and call `complete` — with partial output or `finish({ reschedule })` — or throw to reschedule with backoff. In the last two cases, `complete` throws and the worker discards the attempt. A handler that returns without completing fails the attempt.
 
 ```typescript
 attemptHandler: async ({ signal, complete }) => {

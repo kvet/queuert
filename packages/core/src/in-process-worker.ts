@@ -32,7 +32,7 @@ import {
 } from "./worker/processors.js";
 
 /** Per-processor runtime stamp carrying the middleware tuple of the originating slice. @internal */
-type StampedProcessor = InProcessWorkerProcessor<any, any, any, any, any, any, any> & {
+type StampedProcessor = InProcessWorkerProcessor<any, any, any, any, any, any> & {
   readonly [processorAttemptMiddlewareSymbol]: readonly AnyAttemptMiddleware[];
 };
 
@@ -310,7 +310,7 @@ export const createInProcessWorker = async <
    * Same adapter guard as `createProcessors`'s `attemptMiddleware`.
    */
   requiredAttemptMiddleware?: TRequiredAttemptMiddleware &
-    readonly AttemptMiddleware<TStateAdapter, any, any, any, any>[];
+    readonly AttemptMiddleware<TStateAdapter, any, any, any>[];
   /** A single `Processors` from {@link createProcessors}, or an array of slices to merge. */
   processors: [
     ExtraProcessorTypeNames<WorkerProcessorDefs<TProcessorsInput>, TJobTypeDefinitions>,

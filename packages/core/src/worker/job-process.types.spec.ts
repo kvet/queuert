@@ -13,7 +13,6 @@ import {
   type AttemptFinish,
   type AttemptHandler,
   type AttemptPrepare,
-  type AttemptStep,
 } from "./job-process.types.js";
 
 type LinearDefs = {
@@ -70,7 +69,6 @@ type TerminalDefs = {
 };
 
 declare const prepare: AttemptPrepare<InProcessStateAdapter>;
-declare const step: AttemptStep<InProcessStateAdapter>;
 declare const complete: AttemptComplete<InProcessStateAdapter, LinearDefs, "entry", "entry">;
 
 declare const linearCommit: AttemptFinish<InProcessStateAdapter, LinearDefs, "entry", "entry">;
@@ -110,24 +108,6 @@ describe("AttemptPrepare", () => {
       // @ts-expect-error mode is "atomic" | "staged"
       prepare({ mode: "eager" }),
     ).toBeFunction();
-  });
-});
-
-const stepSync = async () => step(() => ({ done: true }));
-const stepAsync = async () => step(async () => 7);
-
-describe("AttemptStep", () => {
-  it("returns the awaited callback result", () => {
-    expectTypeOf<Awaited<ReturnType<typeof stepSync>>>().toEqualTypeOf<{ done: boolean }>();
-  });
-
-  it("unwraps a promise returned by the callback", () => {
-    expectTypeOf<Awaited<ReturnType<typeof stepAsync>>>().toEqualTypeOf<number>();
-  });
-
-  it("exposes transactionHooks to the callback", () => {
-    type CallbackOptions = Parameters<Parameters<typeof step<void>>[0]>[0];
-    expectTypeOf<CallbackOptions>().toHaveProperty("transactionHooks");
   });
 });
 
@@ -379,7 +359,6 @@ describe("AttemptHandler", () => {
     "entry",
     Record<string, unknown>,
     Record<string, unknown>,
-    Record<string, unknown>,
     Record<string, unknown>
   >;
   type Options = Parameters<Handler>[0];
@@ -392,9 +371,8 @@ describe("AttemptHandler", () => {
     expectTypeOf<Options["job"]["input"]>().toEqualTypeOf<{ value: number }>();
   });
 
-  it("exposes prepare, step and complete", () => {
+  it("exposes prepare and complete", () => {
     expectTypeOf<Options["prepare"]>().toEqualTypeOf<AttemptPrepare<InProcessStateAdapter>>();
-    expectTypeOf<Options["step"]>().toEqualTypeOf<AttemptStep<InProcessStateAdapter>>();
     expectTypeOf<Options["complete"]>().toEqualTypeOf<
       AttemptComplete<InProcessStateAdapter, LinearDefs, "entry", "entry">
     >();

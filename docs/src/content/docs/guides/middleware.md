@@ -7,16 +7,15 @@ sidebar:
 
 `AttemptMiddleware` wraps a **job attempt** — the unit of work that includes the prepare phase, the handler, and the complete phase. Middleware lets you add cross-cutting logic (tracing spans, contextual loggers, audit trails, shared resources) without touching each individual handler.
 
-A middleware has four optional hooks, each wrapping a different phase:
+A middleware has three optional hooks, each wrapping a different phase:
 
 | Hook           | Wraps                               | Injects ctx into          |
 | -------------- | ----------------------------------- | ------------------------- |
 | `wrapHandler`  | the whole attempt handler           | `attemptHandler` options  |
 | `wrapPrepare`  | the user-supplied prepare callback  | prepare-callback options  |
-| `wrapStep`     | each user-supplied step callback    | step-callback options     |
 | `wrapComplete` | the user-supplied complete callback | complete-callback options |
 
-All four accept a `next(ctx)` call that yields the inner layer. The object passed to `next` is merged into the callback options for that phase, and its type flows into the handler signature.
+All three accept a `next(ctx)` call that yields the inner layer. The object passed to `next` is merged into the callback options for that phase, and its type flows into the handler signature.
 
 See the [Worker reference](/queuert/api/core/type-aliases/attemptmiddleware/) for the full type definition.
 
@@ -86,28 +85,6 @@ attemptHandler: async ({ prepare, complete }) => {
 };
 ```
 
-### `wrapStep` — wrap intermediate transactions
-
-Use to inject context into each `step` call — metrics recorders, progress trackers, shared resources that need the transaction context. The middleware runs inside each `step` transaction.
-
-```ts
-const metrics: AttemptMiddleware<typeof stateAdapter, {}, {}, { metrics: Metrics }> = {
-  wrapStep: async ({ job, txSql, next }) => {
-    const metrics = new Metrics(job.id, txSql);
-    return next({ metrics });
-  },
-};
-```
-
-Inside the handler, `metrics` is typed on the step callback:
-
-```ts
-await step(async ({ metrics }) => {
-  metrics.record("batch-processed", batch.length);
-  // ...
-});
-```
-
 ### `wrapComplete` — inject helpers used during complete
 
 Use to inject helpers that are only meaningful in the complete transaction — audit recorders, usage meters, post-commit notifiers.
@@ -115,7 +92,6 @@ Use to inject helpers that are only meaningful in the complete transaction — a
 ```ts
 const audit: AttemptMiddleware<
   typeof stateAdapter,
-  {},
   {},
   {},
   { audit: (event: string) => Promise<void> }
