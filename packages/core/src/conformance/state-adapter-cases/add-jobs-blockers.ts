@@ -55,7 +55,6 @@ export const addJobsBlockersGroup: ConformanceGroup<StateConformanceFixture> = {
         await stateAdapter.withTransaction(async (txCtx) =>
           stateAdapter.completeJobs({
             txCtx,
-            completedBy: null,
             jobs: [{ jobId: blockerChain.head.id, output: null }],
           }),
         );
@@ -180,7 +179,6 @@ export const addJobsBlockersGroup: ConformanceGroup<StateConformanceFixture> = {
         await stateAdapter.withTransaction(async (txCtx) =>
           stateAdapter.completeJobs({
             txCtx,
-            completedBy: "test",
             jobs: [{ jobId: completedBlockerChain.head.id, output: null }],
           }),
         );

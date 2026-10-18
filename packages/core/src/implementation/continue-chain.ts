@@ -1,6 +1,10 @@
 import { type ScheduleOptions } from "../entities/schedule.js";
 import { type Helpers } from "../setup-helpers.js";
-import { type BaseTxContext, type StateJob } from "../state-adapter/state-adapter.js";
+import {
+  type BaseTxContext,
+  type StateAttemptFence,
+  type StateJob,
+} from "../state-adapter/state-adapter.js";
 import { type TransactionHooks } from "../transaction-hooks.js";
 import { type FinishResult } from "./attempt-outcome.js";
 import { continueStateJob } from "./create-state-jobs.js";
@@ -21,13 +25,13 @@ export const continueChain = async (
     continueWith,
     txCtx,
     transactionHooks,
-    workerId,
+    fence,
   }: {
     fromJob: StateJob;
     continueWith: AnyContinueWith;
     txCtx: BaseTxContext;
     transactionHooks: TransactionHooks;
-    workerId: string | null;
+    fence: StateAttemptFence | null;
   },
 ): Promise<FinishResult> => {
   helpers.jobTypes.validateContinueWith(fromJob.typeName, {
@@ -44,7 +48,7 @@ export const continueChain = async (
       schedule: continueWith.schedule,
     },
     fromJob,
-    workerId,
+    fence,
     txCtx,
     transactionHooks,
   });

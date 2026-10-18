@@ -855,7 +855,7 @@ ORDER BY ord
       }));
     },
 
-    continueJobs: async ({ txCtx, completedBy, jobs }) => {
+    continueJobs: async ({ txCtx, jobs }) => {
       if (jobs.length === 0) return [];
       const ids = jobs.map((job) => job.id as string);
 
@@ -866,55 +866,57 @@ ORDER BY ord
             sql(
               `
 WITH input_data AS (
-  SELECT new_id, type_name, input, sched_at, sched_after_ms, trace_context, continue_from_id
+  SELECT new_id, type_name, input, sched_at, sched_after_ms, trace_context, continue_from_id,
+    fence_attempt, fence_worker_id
   FROM unnest(
     $1::{{id_type}}[], $2::text[], $3::text[],
     $4::timestamptz[], $5::double precision[],
-    $6::text[], $7::{{id_type}}[]
+    $6::text[], $7::{{id_type}}[],
+    $8::integer[], $9::text[]
   ) AS t(
     new_id, type_name, input, sched_at, sched_after_ms,
-    trace_context, continue_from_id
+    trace_context, continue_from_id,
+    fence_attempt, fence_worker_id
   )
-),
-parent AS (
-  SELECT d.*, p.chain_id, p.chain_index
-  FROM input_data d
-  JOIN {{schema}}.{{table_prefix}}job p
-    ON p.id = d.continue_from_id AND p.status <> 'completed'
-),
-inserted AS (
-  INSERT INTO {{schema}}.{{table_prefix}}job (id, type_name, chain_id, chain_index, input, scheduled_at, trace_context)
-  SELECT
-    pr.new_id, pr.type_name, pr.chain_id, pr.chain_index + 1, pr.input::jsonb,
-    GREATEST(COALESCE(pr.sched_at, now() + (pr.sched_after_ms * interval '1 millisecond'), now()), now()),
-    pr.trace_context
-  FROM parent pr
-  RETURNING *
 ),
 completed AS (
   UPDATE {{schema}}.{{table_prefix}}job j
   SET status = 'completed',
     completed_at = now(),
-    completed_by = $8,
-    continued_to_id = pr.new_id,
+    completed_by = d.fence_worker_id,
+    continued_to_id = d.new_id,
     output = NULL,
     last_attempt_error = NULL,
     attempt_at = NULL,
     attempt_by = NULL,
     attempt_until = NULL
-  FROM parent pr
-  WHERE j.id = pr.continue_from_id
+  FROM input_data d
+  WHERE j.id = d.continue_from_id
     AND j.status <> 'completed'
-  RETURNING j.*, pr.new_id
+    AND (
+      d.fence_attempt IS NULL
+      OR (j.status = 'running' AND j.attempt = d.fence_attempt AND j.attempt_by = d.fence_worker_id)
+    )
+  RETURNING j.*
+),
+inserted AS (
+  INSERT INTO {{schema}}.{{table_prefix}}job (id, type_name, chain_id, chain_index, input, scheduled_at, trace_context)
+  SELECT
+    d.new_id, d.type_name, c.chain_id, c.chain_index + 1, d.input::jsonb,
+    GREATEST(COALESCE(d.sched_at, now() + (d.sched_after_ms * interval '1 millisecond'), now()), now()),
+    d.trace_context
+  FROM input_data d
+  JOIN completed c ON c.id = d.continue_from_id
+  RETURNING *
 )
 SELECT
-  c.new_id             AS continuation_id,
+  c.continued_to_id    AS continuation_id,
   row_to_json(c)       AS job_row,
   row_to_json(h)       AS head_job,
   row_to_json(i)       AS continuation_row
 FROM completed c
 JOIN {{schema}}.{{table_prefix}}job h ON h.id = c.chain_id
-JOIN inserted i ON i.id = c.new_id
+JOIN inserted i ON i.id = c.continued_to_id
 `,
               {
                 id: "continueJobs",
@@ -926,7 +928,8 @@ JOIN inserted i ON i.id = c.new_id
                   t.array<number | null>(),
                   t.array<string | null>(),
                   t.array(),
-                  t["string?"](),
+                  t.array<number | null>(),
+                  t.array<string | null>(),
                 ],
                 columns: {
                   continuation_id: idDataType,
@@ -946,7 +949,8 @@ JOIN inserted i ON i.id = c.new_id
           jobs.map((job) => job.schedule?.afterMs ?? null),
           jobs.map((job) => job.traceContext ?? null),
           jobs.map((job) => job.continueFromId),
-          completedBy ?? null,
+          jobs.map((job) => job.fence?.attempt ?? null),
+          jobs.map((job) => job.fence?.workerId ?? null),
         ],
       });
 
@@ -963,7 +967,7 @@ JOIN inserted i ON i.id = c.new_id
       });
     },
 
-    completeJobs: async ({ txCtx, completedBy, jobs }) => {
+    completeJobs: async ({ txCtx, jobs }) => {
       if (jobs.length === 0) return [];
 
       const rows = await executeTypedSql({
@@ -973,50 +977,64 @@ JOIN inserted i ON i.id = c.new_id
             sql(
               `
 WITH input_data AS (
-  SELECT job_id, output
-  FROM unnest($1::{{id_type}}[], $2::text[]) AS t(job_id, output)
+  SELECT job_id, output, fence_attempt, fence_worker_id
+  FROM unnest($1::{{id_type}}[], $2::text[], $3::integer[], $4::text[])
+    AS t(job_id, output, fence_attempt, fence_worker_id)
 ),
-targets AS (
-  SELECT d.job_id, d.output, j.chain_id
+done AS (
+  UPDATE {{schema}}.{{table_prefix}}job j
+  SET status = 'completed',
+    last_attempt_error = NULL,
+    attempt_at = NULL,
+    attempt_by = NULL,
+    attempt_until = NULL,
+    completed_at = now(),
+    completed_by = d.fence_worker_id,
+    output = d.output::jsonb,
+    chain_status = CASE WHEN j.id = j.chain_id THEN 'completed' ELSE j.chain_status END,
+    chain_completed_at = CASE WHEN j.id = j.chain_id AND j.chain_completed_at IS NULL
+                              THEN now() ELSE j.chain_completed_at END
   FROM input_data d
-  JOIN {{schema}}.{{table_prefix}}job j ON j.id = d.job_id AND j.status <> 'completed'
+  WHERE j.id = d.job_id
+    AND j.status <> 'completed'
+    AND (
+      d.fence_attempt IS NULL
+      OR (j.status = 'running' AND j.attempt = d.fence_attempt AND j.attempt_by = d.fence_worker_id)
+    )
+  RETURNING j.*
 ),
-row_effects AS (
-  SELECT
-    ids.id,
-    (SELECT tg.output FROM targets tg WHERE tg.job_id = ids.id) AS output,
-    EXISTS (SELECT 1 FROM targets tg WHERE tg.job_id = ids.id) AS completes_job,
-    EXISTS (SELECT 1 FROM targets tg WHERE tg.chain_id = ids.id) AS completes_chain,
-    EXISTS (
-      SELECT 1 FROM {{schema}}.{{table_prefix}}job_blocker jb
-      WHERE jb.blocked_by_chain_id = ids.id
-    ) AS has_blocking
-  FROM (
-    SELECT job_id AS id FROM targets
-    UNION
-    SELECT chain_id AS id FROM targets
-  ) ids
+head_done AS (
+  UPDATE {{schema}}.{{table_prefix}}job h
+  SET chain_status = 'completed',
+    chain_completed_at = COALESCE(h.chain_completed_at, now())
+  WHERE h.id IN (SELECT chain_id FROM done WHERE chain_id <> id)
+    AND h.id NOT IN (SELECT id FROM done)
+  RETURNING h.*
 )
-UPDATE {{schema}}.{{table_prefix}}job j
-SET status = CASE WHEN e.completes_job THEN 'completed' ELSE j.status END,
-  last_attempt_error = CASE WHEN e.completes_job THEN NULL ELSE j.last_attempt_error END,
-  attempt_at = CASE WHEN e.completes_job THEN NULL ELSE j.attempt_at END,
-  attempt_by = CASE WHEN e.completes_job THEN NULL ELSE j.attempt_by END,
-  attempt_until = CASE WHEN e.completes_job THEN NULL ELSE j.attempt_until END,
-  completed_at = CASE WHEN e.completes_job THEN now() ELSE j.completed_at END,
-  completed_by = CASE WHEN e.completes_job THEN $3 ELSE j.completed_by END,
-  output = CASE WHEN e.completes_job THEN e.output::jsonb ELSE j.output END,
-  chain_status = CASE WHEN e.completes_chain THEN 'completed' ELSE j.chain_status END,
-  chain_completed_at = CASE WHEN e.completes_chain AND j.chain_completed_at IS NULL
-                            THEN now() ELSE j.chain_completed_at END
-FROM row_effects e
-WHERE j.id = e.id
-RETURNING j.*, e.has_blocking
+SELECT
+  row_to_json(d) AS job_row,
+  COALESCE(row_to_json(hd), row_to_json(dh)) AS head_job,
+  EXISTS (
+    SELECT 1 FROM {{schema}}.{{table_prefix}}job_blocker jb
+    WHERE jb.blocked_by_chain_id = d.chain_id
+  ) AS has_blocking
+FROM done d
+LEFT JOIN head_done hd ON hd.id = d.chain_id
+LEFT JOIN done dh ON dh.id = d.chain_id
 `,
               {
                 id: "completeJobs",
-                params: [t.array(), t.array<string | null>(), t["string?"]()],
-                columns: { ...dbJobColumns, has_blocking: t.boolean() },
+                params: [
+                  t.array(),
+                  t.array<string | null>(),
+                  t.array<number | null>(),
+                  t.array<string | null>(),
+                ],
+                columns: {
+                  job_row: t.json<DbJob>(),
+                  head_job: t.json<DbJob>(),
+                  has_blocking: t.boolean(),
+                },
               },
             ),
           ),
@@ -1024,20 +1042,20 @@ RETURNING j.*, e.has_blocking
         params: [
           jobs.map((job) => job.jobId as string),
           jobs.map((job) => (job.output !== undefined ? JSON.stringify(job.output) : null)),
-          completedBy ?? null,
+          jobs.map((job) => job.fence?.attempt ?? null),
+          jobs.map((job) => job.fence?.workerId ?? null),
         ],
       });
 
-      const rowById = new Map(rows.map((row) => [row.id, row]));
+      const rowById = new Map(rows.map((row) => [row.job_row.id, row]));
 
       return jobs.map((job) => {
         const row = rowById.get(job.jobId);
         if (!row) return undefined;
-        const head = rowById.get(row.chain_id)!;
         return {
-          ...mapDbJobToStateJobInfo(row),
-          chain: mapDbHeadToStateChainInfo(head),
-          hasBlockedJobs: head.has_blocking,
+          ...mapDbJobToStateJobInfo(row.job_row),
+          chain: mapDbHeadToStateChainInfo(row.head_job),
+          hasBlockedJobs: row.has_blocking,
         };
       });
     },
@@ -1051,8 +1069,9 @@ RETURNING j.*, e.has_blocking
             sql(
               `
 WITH input_data AS (
-  SELECT job_id, at, after_ms, error
-  FROM unnest($1::{{id_type}}[], $2::timestamptz[], $3::double precision[], $4::text[]) AS t(job_id, at, after_ms, error)
+  SELECT job_id, at, after_ms, error, fence_attempt, fence_worker_id
+  FROM unnest($1::{{id_type}}[], $2::timestamptz[], $3::double precision[], $4::text[], $5::integer[], $6::text[])
+    AS t(job_id, at, after_ms, error, fence_attempt, fence_worker_id)
 ),
 updated AS (
   UPDATE {{schema}}.{{table_prefix}}job j
@@ -1066,6 +1085,10 @@ updated AS (
   FROM input_data d
   WHERE j.id = d.job_id
     AND j.status <> 'completed'
+    AND (
+      d.fence_attempt IS NULL
+      OR (j.status = 'running' AND j.attempt = d.fence_attempt AND j.attempt_by = d.fence_worker_id)
+    )
   RETURNING j.*
 )
 SELECT u.*, ${chainColumnsSelect("h")}
@@ -1079,6 +1102,8 @@ JOIN {{schema}}.{{table_prefix}}job h ON h.id = u.chain_id
                   t.array<string | null>(),
                   t.array<string | null>(),
                   t.array<string | null>(),
+                  t.array<number | null>(),
+                  t.array<string | null>(),
                 ],
                 columns: { ...dbJobColumns, ...dbChainColumns },
               },
@@ -1090,6 +1115,8 @@ JOIN {{schema}}.{{table_prefix}}job h ON h.id = u.chain_id
           jobs.map((job) => job.schedule?.at?.toISOString() ?? null),
           jobs.map((job) => (job.schedule?.afterMs != null ? String(job.schedule.afterMs) : null)),
           jobs.map((job) => (job.error !== undefined ? JSON.stringify(job.error) : null)),
+          jobs.map((job) => job.fence?.attempt ?? null),
+          jobs.map((job) => job.fence?.workerId ?? null),
         ],
       });
       const rowById = new Map(rows.map((row) => [row.id, row]));
@@ -1341,7 +1368,7 @@ WHERE delay_ms IS NOT NULL
       return result ? result.delay_ms : null;
     },
 
-    extendJobAttempt: async ({ txCtx, jobId, workerId, timeoutMs }) => {
+    extendJobAttempt: async ({ txCtx, jobId, fence, timeoutMs }) => {
       const [job] = await executeTypedSql({
         txCtx,
         sql: templateCache.getOrCompute("extendJobAttempt", () =>
@@ -1352,6 +1379,8 @@ WITH updated AS (
   UPDATE {{schema}}.{{table_prefix}}job
   SET attempt_until = now() + ($3::double precision * interval '1 millisecond')
   WHERE id = $1
+    AND status = 'running'
+    AND attempt = $4
     AND attempt_by = $2
   RETURNING *
 )
@@ -1361,13 +1390,13 @@ JOIN {{schema}}.{{table_prefix}}job h ON h.id = u.chain_id
 `,
               {
                 id: "extendJobAttempt",
-                params: [idDataType, t.string(), t.number()],
+                params: [idDataType, t.string(), t.number(), t.number()],
                 columns: { ...dbJobColumns, ...dbChainColumns },
               },
             ),
           ),
         ),
-        params: [jobId, workerId, timeoutMs],
+        params: [jobId, fence.workerId, timeoutMs, fence.attempt],
       });
 
       return job ? mapDbJobRowToStateJob(job) : undefined;

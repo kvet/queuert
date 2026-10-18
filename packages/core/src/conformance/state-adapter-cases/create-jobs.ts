@@ -250,7 +250,6 @@ export const createJobsGroup: ConformanceGroup<StateConformanceFixture> = {
         await stateAdapter.withTransaction(async (txCtx) =>
           stateAdapter.completeJobs({
             txCtx,
-            completedBy: null,
             jobs: [{ jobId: firstChain.head.id, output: null }],
           }),
         );
@@ -289,7 +288,6 @@ export const createJobsGroup: ConformanceGroup<StateConformanceFixture> = {
         await stateAdapter.withTransaction(async (txCtx) =>
           stateAdapter.completeJobs({
             txCtx,
-            completedBy: null,
             jobs: [{ jobId: anyFirstChain.head.id, output: null }],
           }),
         );
@@ -333,7 +331,6 @@ export const createJobsGroup: ConformanceGroup<StateConformanceFixture> = {
           await stateAdapter.startJobAttempt({ txCtx, workerId: "worker-1", typeNames: ["step1"] });
           const [continued] = await stateAdapter.continueJobs({
             txCtx,
-            completedBy: "w",
             jobs: [
               {
                 id: stateAdapter.config.generateId(),
@@ -367,7 +364,6 @@ export const createJobsGroup: ConformanceGroup<StateConformanceFixture> = {
         await stateAdapter.withTransaction(async (txCtx) =>
           stateAdapter.completeJobs({
             txCtx,
-            completedBy: "w",
             jobs: [{ jobId: step2.id, output: null }],
           }),
         );
@@ -410,7 +406,6 @@ export const createJobsGroup: ConformanceGroup<StateConformanceFixture> = {
         await stateAdapter.withTransaction(async (txCtx) =>
           stateAdapter.completeJobs({
             txCtx,
-            completedBy: "w",
             jobs: [{ jobId: firstChain.head.id, output: null }],
           }),
         );

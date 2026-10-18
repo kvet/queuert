@@ -17,7 +17,6 @@ export const continueJobsGroup: ConformanceGroup<StateConformanceFixture> = {
         const [completedResult] = await stateAdapter.withTransaction(async (txCtx) =>
           stateAdapter.continueJobs({
             txCtx,
-            completedBy: "worker-1",
             jobs: [
               {
                 id: stateAdapter.config.generateId(),
@@ -38,7 +37,7 @@ export const continueJobsGroup: ConformanceGroup<StateConformanceFixture> = {
         expect(childJob.status).toBe("pending");
         expect(completedResult!.chain.status).toBe("running");
         expect(completedResult!.completedAt).not.toBeNull();
-        expect(completedResult!.completedBy).toBe("worker-1");
+        expect(completedResult!.completedBy).toBeNull();
       },
     },
     {
@@ -158,7 +157,7 @@ export const continueJobsGroup: ConformanceGroup<StateConformanceFixture> = {
           stateAdapter.extendJobAttempt({
             txCtx,
             jobId: headChain.head.id,
-            workerId: "worker-1",
+            fence: { attempt: 1, workerId: "worker-1" },
             timeoutMs: 10_000,
           }),
         );
@@ -223,7 +222,6 @@ export const continueJobsGroup: ConformanceGroup<StateConformanceFixture> = {
         await stateAdapter.withTransaction(async (txCtx) =>
           stateAdapter.completeJobs({
             txCtx,
-            completedBy: null,
             jobs: [{ jobId: headChain.head.id, output: { done: true } }],
           }),
         );
@@ -692,6 +690,153 @@ export const continueJobsGroup: ConformanceGroup<StateConformanceFixture> = {
             }),
           ),
         ).rejects.toThrow();
+      },
+    },
+    {
+      name: "continues a running job whose fence matches its attempt",
+      run: async ({ stateAdapter }, expect) => {
+        await stateAdapter.withTransaction(async (txCtx) =>
+          stateAdapter.createJobs({
+            txCtx,
+            jobs: [
+              {
+                id: stateAdapter.config.generateId(),
+                typeName: "continue-fence-match",
+                input: null,
+              },
+            ],
+          }),
+        );
+        const job = await stateAdapter.withTransaction(async (txCtx) =>
+          stateAdapter.startJobAttempt({
+            txCtx,
+            workerId: "worker-1",
+            typeNames: ["continue-fence-match"],
+          }),
+        );
+
+        const [continued] = await stateAdapter.withTransaction(async (txCtx) =>
+          stateAdapter.continueJobs({
+            txCtx,
+            jobs: [
+              {
+                id: stateAdapter.config.generateId(),
+                typeName: "continue-fence-match:next",
+                input: null,
+                continueFromId: job!.id,
+                fence: { attempt: job!.attempt, workerId: "worker-1" },
+              },
+            ],
+          }),
+        );
+
+        expect(continued!.status).toBe("completed");
+        expect(continued!.completedBy).toBe("worker-1");
+        expect(continued!.continuedToId).toBe(continued!.continuation.id);
+      },
+    },
+    {
+      name: "reports an undefined result for a fence of another worker, inserting no successor",
+      run: async ({ stateAdapter }, expect) => {
+        const [createdChain] = await stateAdapter.withTransaction(async (txCtx) =>
+          stateAdapter.createJobs({
+            txCtx,
+            jobs: [
+              {
+                id: stateAdapter.config.generateId(),
+                typeName: "continue-fence-other",
+                input: null,
+              },
+            ],
+          }),
+        );
+        const job = await stateAdapter.withTransaction(async (txCtx) =>
+          stateAdapter.startJobAttempt({
+            txCtx,
+            workerId: "worker-1",
+            typeNames: ["continue-fence-other"],
+          }),
+        );
+        const [before] = await stateAdapter.getJobs({ jobIds: [createdChain.head.id] });
+
+        const [continued] = await stateAdapter.withTransaction(async (txCtx) =>
+          stateAdapter.continueJobs({
+            txCtx,
+            jobs: [
+              {
+                id: stateAdapter.config.generateId(),
+                typeName: "continue-fence-other:next",
+                input: null,
+                continueFromId: job!.id,
+                fence: { attempt: job!.attempt, workerId: "worker-2" },
+              },
+            ],
+          }),
+        );
+
+        expect(continued).toBeUndefined();
+        const [after] = await stateAdapter.getJobs({ jobIds: [createdChain.head.id] });
+        expect(after).toEqual(before);
+        const chainJobs = await stateAdapter.listChainJobs({
+          chainId: createdChain.id,
+          orderDirection: "asc",
+          page: { limit: 10 },
+        });
+        expect(chainJobs.items).toHaveLength(1);
+      },
+    },
+    {
+      name: "reports an undefined result for a fence on an attempt the same worker has since replaced",
+      run: async ({ stateAdapter }, expect) => {
+        const [createdChain] = await stateAdapter.withTransaction(async (txCtx) =>
+          stateAdapter.createJobs({
+            txCtx,
+            jobs: [
+              {
+                id: stateAdapter.config.generateId(),
+                typeName: "continue-fence-replaced",
+                input: null,
+              },
+            ],
+          }),
+        );
+        const job = await stateAdapter.withTransaction(async (txCtx) =>
+          stateAdapter.startJobAttempt({
+            txCtx,
+            workerId: "worker-1",
+            typeNames: ["continue-fence-replaced"],
+          }),
+        );
+        await stateAdapter.withTransaction(async (txCtx) =>
+          stateAdapter.rescheduleJobs({ txCtx, jobs: [{ jobId: job!.id }] }),
+        );
+        await stateAdapter.withTransaction(async (txCtx) =>
+          stateAdapter.startJobAttempt({
+            txCtx,
+            workerId: "worker-1",
+            typeNames: ["continue-fence-replaced"],
+          }),
+        );
+        const [before] = await stateAdapter.getJobs({ jobIds: [createdChain.head.id] });
+
+        const [continued] = await stateAdapter.withTransaction(async (txCtx) =>
+          stateAdapter.continueJobs({
+            txCtx,
+            jobs: [
+              {
+                id: stateAdapter.config.generateId(),
+                typeName: "continue-fence-replaced:next",
+                input: null,
+                continueFromId: job!.id,
+                fence: { attempt: job!.attempt, workerId: "worker-1" },
+              },
+            ],
+          }),
+        );
+
+        expect(continued).toBeUndefined();
+        const [after] = await stateAdapter.getJobs({ jobIds: [createdChain.head.id] });
+        expect(after).toEqual(before);
       },
     },
   ],

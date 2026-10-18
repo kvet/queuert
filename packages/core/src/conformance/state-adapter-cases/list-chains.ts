@@ -323,7 +323,6 @@ export const listChainsGroup: ConformanceGroup<StateConformanceFixture> = {
         await stateAdapter.withTransaction(async (txCtx) =>
           stateAdapter.completeJobs({
             txCtx,
-            completedBy: "w1",
             jobs: [{ jobId: chainB.id, output: null }],
           }),
         );
@@ -332,7 +331,6 @@ export const listChainsGroup: ConformanceGroup<StateConformanceFixture> = {
         await stateAdapter.withTransaction(async (txCtx) =>
           stateAdapter.completeJobs({
             txCtx,
-            completedBy: "w1",
             jobs: [{ jobId: chainA.id, output: null }],
           }),
         );
@@ -384,7 +382,6 @@ export const listChainsGroup: ConformanceGroup<StateConformanceFixture> = {
           await stateAdapter.withTransaction(async (txCtx) =>
             stateAdapter.completeJobs({
               txCtx,
-              completedBy: "w1",
               jobs: [{ jobId: id, output: null }],
             }),
           );
@@ -445,7 +442,6 @@ export const listChainsGroup: ConformanceGroup<StateConformanceFixture> = {
           await stateAdapter.withTransaction(async (txCtx) =>
             stateAdapter.completeJobs({
               txCtx,
-              completedBy: "w1",
               jobs: [{ jobId: id, output: null }],
             }),
           );
@@ -501,7 +497,6 @@ export const listChainsGroup: ConformanceGroup<StateConformanceFixture> = {
         await stateAdapter.withTransaction(async (txCtx) =>
           stateAdapter.completeJobs({
             txCtx,
-            completedBy: "w1",
             jobs: [{ jobId: chain1.id, output: null }],
           }),
         );
@@ -760,7 +755,6 @@ export const listChainsGroup: ConformanceGroup<StateConformanceFixture> = {
           await stateAdapter.withTransaction(async (txCtx) =>
             stateAdapter.completeJobs({
               txCtx,
-              completedBy: "w1",
               jobs: [{ jobId: id, output: null }],
             }),
           );
@@ -820,7 +814,6 @@ export const listChainsGroup: ConformanceGroup<StateConformanceFixture> = {
           await stateAdapter.withTransaction(async (txCtx) =>
             stateAdapter.completeJobs({
               txCtx,
-              completedBy: "w1",
               jobs: [{ jobId: id, output: null }],
             }),
           );
@@ -859,7 +852,6 @@ export const listChainsGroup: ConformanceGroup<StateConformanceFixture> = {
           await stateAdapter.withTransaction(async (txCtx) =>
             stateAdapter.completeJobs({
               txCtx,
-              completedBy: "w1",
               jobs: [{ jobId: chainIds[i], output: null }],
             }),
           );
@@ -917,7 +909,6 @@ export const listChainsGroup: ConformanceGroup<StateConformanceFixture> = {
         const [continuedTailA] = await stateAdapter.withTransaction(async (txCtx) =>
           stateAdapter.continueJobs({
             txCtx,
-            completedBy: "w1",
             jobs: [
               {
                 id: stateAdapter.config.generateId(),
@@ -937,7 +928,6 @@ export const listChainsGroup: ConformanceGroup<StateConformanceFixture> = {
         await stateAdapter.withTransaction(async (txCtx) =>
           stateAdapter.completeJobs({
             txCtx,
-            completedBy: "w1",
             jobs: [{ jobId: chainB.head.id, output: null }],
           }),
         );
@@ -970,7 +960,6 @@ export const listChainsGroup: ConformanceGroup<StateConformanceFixture> = {
         await stateAdapter.withTransaction(async (txCtx) =>
           stateAdapter.completeJobs({
             txCtx,
-            completedBy: "w1",
             jobs: [{ jobId: tailA.id, output: null }],
           }),
         );

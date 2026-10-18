@@ -255,7 +255,6 @@ export const rescheduleJobsGroup: ConformanceGroup<StateConformanceFixture> = {
         await stateAdapter.withTransaction(async (txCtx) =>
           stateAdapter.completeJobs({
             txCtx,
-            completedBy: null,
             jobs: [{ jobId: toComplete.id, output: null }],
           }),
         );
@@ -295,7 +294,7 @@ export const rescheduleJobsGroup: ConformanceGroup<StateConformanceFixture> = {
           stateAdapter.extendJobAttempt({
             txCtx,
             jobId: createdChain.head.id,
-            workerId: "worker-1",
+            fence: { attempt: 1, workerId: "worker-1" },
             timeoutMs: 10_000,
           }),
         );
@@ -309,6 +308,7 @@ export const rescheduleJobsGroup: ConformanceGroup<StateConformanceFixture> = {
                 jobId: createdChain.head.id,
                 schedule: { afterMs: 5000 },
                 error: "transient failure",
+                fence: { attempt: 1, workerId: "worker-1" },
               },
             ],
           }),
@@ -595,6 +595,100 @@ export const rescheduleJobsGroup: ConformanceGroup<StateConformanceFixture> = {
 
         expect(rescheduled[0]!.scheduledAt.getTime()).toBeGreaterThanOrEqual(before - 1000);
         expect(rescheduled[0]!.scheduledAt.getTime()).toBeLessThanOrEqual(Date.now() + 1000);
+      },
+    },
+    {
+      name: "reports an undefined result for a fence of another worker",
+      run: async ({ stateAdapter }, expect) => {
+        const [createdChain] = await stateAdapter.withTransaction(async (txCtx) =>
+          stateAdapter.createJobs({
+            txCtx,
+            jobs: [
+              {
+                id: stateAdapter.config.generateId(),
+                typeName: "resched-fence-other",
+                input: null,
+              },
+            ],
+          }),
+        );
+        const job = await stateAdapter.withTransaction(async (txCtx) =>
+          stateAdapter.startJobAttempt({
+            txCtx,
+            workerId: "worker-1",
+            typeNames: ["resched-fence-other"],
+          }),
+        );
+        const [before] = await stateAdapter.getJobs({ jobIds: [createdChain.head.id] });
+
+        const [rescheduled] = await stateAdapter.withTransaction(async (txCtx) =>
+          stateAdapter.rescheduleJobs({
+            txCtx,
+            jobs: [
+              {
+                jobId: job!.id,
+                error: "boom",
+                fence: { attempt: job!.attempt, workerId: "worker-2" },
+              },
+            ],
+          }),
+        );
+
+        expect(rescheduled).toBeUndefined();
+        const [after] = await stateAdapter.getJobs({ jobIds: [createdChain.head.id] });
+        expect(after).toEqual(before);
+      },
+    },
+    {
+      name: "reports an undefined result for a fence on an attempt the same worker has since replaced",
+      run: async ({ stateAdapter }, expect) => {
+        const [createdChain] = await stateAdapter.withTransaction(async (txCtx) =>
+          stateAdapter.createJobs({
+            txCtx,
+            jobs: [
+              {
+                id: stateAdapter.config.generateId(),
+                typeName: "resched-fence-replaced",
+                input: null,
+              },
+            ],
+          }),
+        );
+        const job = await stateAdapter.withTransaction(async (txCtx) =>
+          stateAdapter.startJobAttempt({
+            txCtx,
+            workerId: "worker-1",
+            typeNames: ["resched-fence-replaced"],
+          }),
+        );
+        await stateAdapter.withTransaction(async (txCtx) =>
+          stateAdapter.rescheduleJobs({ txCtx, jobs: [{ jobId: job!.id }] }),
+        );
+        await stateAdapter.withTransaction(async (txCtx) =>
+          stateAdapter.startJobAttempt({
+            txCtx,
+            workerId: "worker-1",
+            typeNames: ["resched-fence-replaced"],
+          }),
+        );
+        const [before] = await stateAdapter.getJobs({ jobIds: [createdChain.head.id] });
+
+        const [rescheduled] = await stateAdapter.withTransaction(async (txCtx) =>
+          stateAdapter.rescheduleJobs({
+            txCtx,
+            jobs: [
+              {
+                jobId: job!.id,
+                error: "boom",
+                fence: { attempt: job!.attempt, workerId: "worker-1" },
+              },
+            ],
+          }),
+        );
+
+        expect(rescheduled).toBeUndefined();
+        const [after] = await stateAdapter.getJobs({ jobIds: [createdChain.head.id] });
+        expect(after).toEqual(before);
       },
     },
   ],

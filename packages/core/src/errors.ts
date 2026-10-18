@@ -19,7 +19,7 @@ export class InvalidJobIdError extends Error {
   }
 }
 
-/** Thrown when a job's attempt is held by another worker. */
+/** Thrown when the job's current attempt is not the one this worker holds. */
 export class JobTakenByAnotherWorkerError extends Error {
   /** The job that was contested. */
   readonly jobId: string;

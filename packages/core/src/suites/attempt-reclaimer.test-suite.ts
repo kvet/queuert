@@ -342,6 +342,110 @@ export const attemptReclaimerTestSuite = ({ it }: { it: TestAPI<TestSuiteContext
     );
   });
 
+  it("rejects complete from a slot whose attempt another slot of the same worker re-acquired", async ({
+    stateAdapter,
+    notifyAdapter,
+    withTransaction,
+    withWorkers,
+    observabilityAdapter,
+    log,
+  }) => {
+    const jobTypes = defineJobTypes<{
+      test: {
+        entry: true;
+        input: null;
+        output: null;
+      };
+    }>();
+
+    const client = await createClient({
+      stateAdapter,
+      notifyAdapter,
+      observabilityAdapter,
+      log,
+      jobTypes,
+    });
+
+    const attemptConfig = { timeoutMs: 10, heartbeatMs: 1000 } satisfies AttemptConfig;
+    const firstStarted = Promise.withResolvers<void>();
+    const releaseFirst = Promise.withResolvers<void>();
+    const secondStarted = Promise.withResolvers<void>();
+    const releaseSecond = Promise.withResolvers<void>();
+    const firstRejected = Promise.withResolvers<void>();
+    let attempts = 0;
+
+    const worker = await createInProcessWorker({
+      client,
+      concurrency: 2,
+      pollIntervalMs: 10,
+      processors: createProcessors({
+        client,
+        jobTypes,
+        attemptConfig,
+        processors: {
+          test: {
+            attemptHandler: async ({ prepare, complete }) => {
+              await prepare({ mode: "staged" });
+              attempts += 1;
+
+              if (attempts === 1) {
+                firstStarted.resolve();
+                await releaseFirst.promise;
+                const completion = complete(async ({ finish }) => finish({ output: null }));
+                await expect(completion).rejects.toThrow(JobTakenByAnotherWorkerError);
+                firstRejected.resolve();
+                return completion;
+              }
+
+              secondStarted.resolve();
+              await releaseSecond.promise;
+              return complete(async ({ finish }) => finish({ output: null }));
+            },
+          },
+        },
+      }),
+    });
+
+    const reclaimer = await createInProcessWorker({
+      client,
+      concurrency: 1,
+      pollIntervalMs: 10,
+      processors: createProcessors({
+        client,
+        jobTypes,
+        attemptConfig,
+        processors: {
+          test: {
+            attemptHandler: async ({ complete }) =>
+              complete(async ({ finish }) => finish({ reschedule: { afterMs: 100 } })),
+          },
+        },
+      }),
+    });
+
+    const chain = await withTransaction(async (txCtx, transactionHooks) =>
+      client.createChain({
+        ...txCtx,
+        transactionHooks,
+        typeName: "test",
+        input: null,
+      }),
+    );
+
+    await withWorkers([await worker.start()], async () => {
+      await firstStarted.promise;
+      await withWorkers([await reclaimer.start()], async () => {
+        await secondStarted.promise;
+      });
+
+      releaseFirst.resolve();
+      await firstRejected.promise;
+
+      releaseSecond.resolve();
+      await client.awaitChain(chain, completionOptions);
+    });
+  });
+
   it("does not reclaim its own in-progress attempts with concurrent slots", async ({
     stateAdapter,
     notifyAdapter,

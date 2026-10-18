@@ -23,7 +23,7 @@ export const reclaimExpiredJobAttemptGroup: ConformanceGroup<StateConformanceFix
           stateAdapter.extendJobAttempt({
             txCtx,
             jobId: createdChain.head.id,
-            workerId: "worker-1",
+            fence: { attempt: 1, workerId: "worker-1" },
             timeoutMs: 1,
           }),
         );
@@ -68,7 +68,7 @@ export const reclaimExpiredJobAttemptGroup: ConformanceGroup<StateConformanceFix
           stateAdapter.extendJobAttempt({
             txCtx,
             jobId: createdChain.head.id,
-            workerId: "worker-1",
+            fence: { attempt: 1, workerId: "worker-1" },
             timeoutMs: 60_000,
           }),
         );
@@ -120,7 +120,7 @@ export const reclaimExpiredJobAttemptGroup: ConformanceGroup<StateConformanceFix
           stateAdapter.extendJobAttempt({
             txCtx,
             jobId: chainA.head.id,
-            workerId: "worker-1",
+            fence: { attempt: 1, workerId: "worker-1" },
             timeoutMs: 1,
           }),
         );
@@ -128,7 +128,7 @@ export const reclaimExpiredJobAttemptGroup: ConformanceGroup<StateConformanceFix
           stateAdapter.extendJobAttempt({
             txCtx,
             jobId: chainB.head.id,
-            workerId: "worker-1",
+            fence: { attempt: 1, workerId: "worker-1" },
             timeoutMs: 1,
           }),
         );

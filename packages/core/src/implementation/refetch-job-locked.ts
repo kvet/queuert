@@ -37,7 +37,7 @@ export const refetchJobLocked = async (
     });
   }
 
-  if (fetched.attemptBy !== workerId) {
+  if (fetched.attemptBy !== workerId || fetched.attempt !== job.attempt) {
     helpers.observabilityHelper.jobAttemptTakenByAnotherWorker(fetched, { workerId });
     throw new JobTakenByAnotherWorkerError(`Job taken by another worker`, {
       jobId: fetched.id,

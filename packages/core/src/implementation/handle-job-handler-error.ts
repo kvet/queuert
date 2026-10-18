@@ -8,7 +8,11 @@ import { type BackoffConfig, calculateBackoffMs } from "../helpers/backoff.js";
 import { bufferObservabilityEvent } from "../helpers/observability-hooks.js";
 import { serializeError } from "../helpers/serialize-error.js";
 import { type Helpers } from "../setup-helpers.js";
-import { type BaseTxContext, type StateJob } from "../state-adapter/state-adapter.js";
+import {
+  type BaseTxContext,
+  type StateAttemptFence,
+  type StateJob,
+} from "../state-adapter/state-adapter.js";
 import { type TransactionHooks } from "../transaction-hooks.js";
 
 export const handleJobHandlerError = async (
@@ -19,14 +23,14 @@ export const handleJobHandlerError = async (
     txCtx,
     transactionHooks,
     backoffConfig,
-    workerId,
+    fence,
   }: {
     stateJob: StateJob;
     error: unknown;
     txCtx: BaseTxContext;
     transactionHooks: TransactionHooks;
     backoffConfig: BackoffConfig;
-    workerId: string;
+    fence: StateAttemptFence;
   },
 ): Promise<{
   schedule?: ScheduleOptions;
@@ -46,7 +50,7 @@ export const handleJobHandlerError = async (
 
   const [rescheduledJob] = await helpers.stateAdapter.rescheduleJobs({
     txCtx,
-    jobs: [{ jobId: stateJob.id, schedule, error: errorString }],
+    jobs: [{ jobId: stateJob.id, schedule, error: errorString, fence }],
   });
   if (rescheduledJob === undefined) {
     throw new JobNotFoundError(`Job ${stateJob.id} not found or already completed`, {
@@ -57,7 +61,7 @@ export const handleJobHandlerError = async (
   bufferObservabilityEvent(transactionHooks, () => {
     helpers.observabilityHelper.jobRescheduled(rescheduledJob);
     helpers.observabilityHelper.jobAttemptFailed(stateJob, {
-      workerId,
+      workerId: fence.workerId,
       error,
     });
   });

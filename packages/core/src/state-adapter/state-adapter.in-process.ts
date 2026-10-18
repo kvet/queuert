@@ -6,6 +6,7 @@ import { resolveStateAdapterConfig } from "./adapter-config.js";
 import { decodeIdCursor, decodeTimestampWithIdCursor, encodeCursor } from "./cursor.js";
 import {
   type StateAdapter,
+  type StateAttemptFence,
   type StateBlockedJob,
   type StateChain,
   type StateChainInfo,
@@ -42,6 +43,9 @@ const blockerKey = (blockedByChainId: string, index: number): string =>
 const isCompleted = (job: DbJob): boolean => job.status === "completed";
 const isRunning = (job: DbJob): boolean => job.status === "running";
 const isPending = (job: DbJob): boolean => job.status === "pending";
+const matchesFence = (job: DbJob, fence: StateAttemptFence | undefined): boolean =>
+  fence === undefined ||
+  (isRunning(job) && job.attempt === fence.attempt && job.attemptBy === fence.workerId);
 
 const matchesChainStatus = (headJob: DbJob, status?: string): boolean =>
   status === undefined || headJob.chainStatus === status;
@@ -800,7 +804,7 @@ export const createInProcessStateAdapter = async ({
         });
       }),
 
-    continueJobs: async ({ txCtx, completedBy, jobs: jobInputs }) =>
+    continueJobs: async ({ txCtx, jobs: jobInputs }) =>
       withWriteLock(txCtx, () => {
         return withAtomicBatch(txCtx, (journal) => {
           const now = new Date();
@@ -808,7 +812,9 @@ export const createInProcessStateAdapter = async ({
 
           const parents = jobInputs.map((jobInput) => {
             const parent = idx.jobs.get(jobInput.continueFromId);
-            return !parent || isCompleted(parent) ? undefined : parent;
+            return !parent || isCompleted(parent) || !matchesFence(parent, jobInput.fence)
+              ? undefined
+              : parent;
           });
 
           for (const [index, jobInput] of jobInputs.entries()) {
@@ -850,7 +856,7 @@ export const createInProcessStateAdapter = async ({
               continuedToId: id,
               status: "completed",
               completedAt: now,
-              completedBy: completedBy ?? null,
+              completedBy: jobInput.fence?.workerId ?? null,
               output: null,
               lastAttemptError: null,
             };
@@ -863,13 +869,13 @@ export const createInProcessStateAdapter = async ({
         });
       }),
 
-    completeJobs: async ({ txCtx, completedBy, jobs: jobInputs }) =>
+    completeJobs: async ({ txCtx, jobs: jobInputs }) =>
       withWriteLock(txCtx, () => {
         const journal = txCtx?.journal;
         const now = new Date();
-        return jobInputs.map(({ jobId, output }) => {
+        return jobInputs.map(({ jobId, output, fence }) => {
           const job = idx.jobs.get(jobId);
-          if (!job || isCompleted(job)) return undefined;
+          if (!job || isCompleted(job) || !matchesFence(job, fence)) return undefined;
 
           const updatedJob: DbJob = {
             ...job,
@@ -879,7 +885,7 @@ export const createInProcessStateAdapter = async ({
             output: output ?? null,
             status: "completed",
             completedAt: now,
-            completedBy: completedBy ?? null,
+            completedBy: fence?.workerId ?? null,
             lastAttemptError: null,
             ...(job.id === job.chainId
               ? { chainStatus: "completed" as const, chainCompletedAt: now }
@@ -914,13 +920,13 @@ export const createInProcessStateAdapter = async ({
         const now = new Date();
         const results: (StateJob | undefined)[] = [];
         const resultById = new Map<string, StateJob | undefined>();
-        for (const { jobId, schedule, error } of jobs) {
+        for (const { jobId, schedule, error, fence } of jobs) {
           if (resultById.has(jobId)) {
             results.push(resultById.get(jobId));
             continue;
           }
           const job = idx.jobs.get(jobId);
-          if (!job || isCompleted(job)) {
+          if (!job || isCompleted(job) || !matchesFence(job, fence)) {
             resultById.set(jobId, undefined);
             results.push(undefined);
             continue;
@@ -1027,11 +1033,11 @@ export const createInProcessStateAdapter = async ({
         return Math.max(0, nextScheduledAt - now);
       }),
 
-    extendJobAttempt: async ({ txCtx, jobId, workerId, timeoutMs }) =>
+    extendJobAttempt: async ({ txCtx, jobId, fence, timeoutMs }) =>
       withWriteLock(txCtx, () => {
         const journal = txCtx?.journal;
         const job = idx.jobs.get(jobId);
-        if (!job || job.attemptBy !== workerId) return undefined;
+        if (!job || !matchesFence(job, fence)) return undefined;
 
         const updatedJob: DbJob = { ...job, attemptUntil: new Date(Date.now() + timeoutMs) };
         idx.writeJob(journal, job, updatedJob);

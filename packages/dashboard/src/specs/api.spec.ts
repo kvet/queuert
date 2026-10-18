@@ -39,7 +39,6 @@ const createContinuation = async (
   const [continued] = await stateAdapter.withTransaction(async (txCtx) =>
     stateAdapter.continueJobs({
       txCtx,
-      completedBy: "worker-1",
       jobs: [{ id: stateAdapter.config.generateId(), typeName, continueFromId, input }],
     }),
   );
@@ -62,7 +61,6 @@ const completeJob = async (
   stateAdapter.withTransaction(async (txCtx) =>
     stateAdapter.completeJobs({
       txCtx,
-      completedBy: "worker-1",
       jobs: [{ jobId, output }],
     }),
   );

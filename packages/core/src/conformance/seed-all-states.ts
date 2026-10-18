@@ -152,18 +152,18 @@ export const seedAllStates = async <TTxContext extends BaseTxContext>(
               (await stateAdapter.extendJobAttempt({
                 txCtx,
                 jobId: job.id,
-                workerId: seedConfig.workerId,
+                fence: { attempt: job.attempt, workerId: seedConfig.workerId },
                 timeoutMs: seedConfig.attemptMs,
               }))!,
             );
           } else if (mode === "completed") {
             const completed = await stateAdapter.completeJobs({
               txCtx,
-              completedBy: seedConfig.workerId,
               jobs: [
                 {
                   jobId: job.id,
                   output: { ok: true, index: (job.input as { index: number }).index },
+                  fence: { attempt: job.attempt, workerId: seedConfig.workerId },
                 },
               ],
             });
@@ -344,13 +344,13 @@ export const seedAllStates = async <TTxContext extends BaseTxContext>(
       if (!acquired) return;
       const [continued] = await stateAdapter.continueJobs({
         txCtx,
-        completedBy: seedConfig.workerId,
         jobs: [
           {
             id: stateAdapter.config.generateId(),
             typeName: "seed:chain",
             input: { n: step },
             continueFromId: acquired.id,
+            fence: { attempt: acquired.attempt, workerId: seedConfig.workerId },
           },
         ],
       });
@@ -382,7 +382,7 @@ export const seedAllStates = async <TTxContext extends BaseTxContext>(
           (await stateAdapter.extendJobAttempt({
             txCtx,
             jobId: job.id,
-            workerId: seedConfig.workerId,
+            fence: { attempt: job.attempt, workerId: seedConfig.workerId },
             timeoutMs: 1,
           }))!,
         );
