@@ -35,13 +35,13 @@
     "@changesets/cli": "3.0.3",
     "@changesets/config": "4.0.1",
     "@types/node": "22.20.5",
-    "oxfmt": "0.71.0",
-    "oxlint": "1.86.0",
-    "oxlint-tsgolint": "7.0.2003",
-    "tsdown": "0.23.0",
+    "oxfmt": "0.73.0",
+    "oxlint": "1.88.0",
+    "oxlint-tsgolint": "7.0.2004",
+    "tsdown": "0.23.1",
     "tsx": "4.23.15",
     "typescript": "7.0.2",
-    "vitest": "5.0.3"
+    "vitest": "5.0.5"
   },
   "engines": {
     "node": ">=22"

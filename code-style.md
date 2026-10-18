@@ -35,7 +35,6 @@ Public exports should not include the package name as a prefix. Since imports al
 ```typescript
 // Good - context from import is sufficient
 import { createClient, createInProcessWorker, Client } from "queuert";
-
 // Bad - redundant prefix
 import { createQueuertClient, createQueuertInProcessWorker, QueuertClient } from "queuert";
 ```

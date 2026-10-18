@@ -19,7 +19,7 @@
   },
   "devDependencies": {
     "@queuert/tsconfig": "workspace:*",
-    "@testcontainers/postgresql": "12.2.0",
+    "@testcontainers/postgresql": "12.2.1",
     "@types/better-sqlite3": "9.6.0",
     "@types/pg": "8.23.1"
   }

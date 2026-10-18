@@ -23,7 +23,7 @@
     "@queuert/tsconfig": "workspace:*",
     "@types/better-sqlite3": "9.6.0",
     "better-sqlite3": "13.0.3",
-    "drizzle-orm": "0.45.3",
+    "drizzle-orm": "0.45.4",
     "queuert": "workspace:*"
   }
 }

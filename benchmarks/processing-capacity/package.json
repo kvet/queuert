@@ -41,9 +41,9 @@
   },
   "devDependencies": {
     "@queuert/tsconfig": "workspace:*",
-    "@testcontainers/nats": "12.2.0",
-    "@testcontainers/postgresql": "12.2.0",
-    "@testcontainers/redis": "12.2.0",
+    "@testcontainers/nats": "12.2.1",
+    "@testcontainers/postgresql": "12.2.1",
+    "@testcontainers/redis": "12.2.1",
     "@types/better-sqlite3": "9.6.0",
     "@types/pg": "8.23.1"
   }
