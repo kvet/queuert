@@ -22,12 +22,14 @@
     "version": "changeset version",
     "docs:dev": "pnpm --filter @queuert/docs dev",
     "docs:build": "pnpm --filter @queuert/docs build",
-    "docs:preview": "pnpm --filter @queuert/docs preview"
+    "docs:preview": "pnpm --filter @queuert/docs preview",
+    "prepare": "husky"
   },
   "devDependencies": {
     "@changesets/cli": "3.0.3",
     "@changesets/config": "4.0.1",
     "@types/node": "22.20.5",
+    "husky": "9.1.7",
     "oxfmt": "0.73.0",
     "oxlint": "1.88.0",
     "oxlint-tsgolint": "7.0.2004",

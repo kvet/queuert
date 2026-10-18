@@ -1,0 +1,5 @@
+if git interpret-trailers --parse "$1" | grep -iqE '^co-authored-by:'; then
+  echo "commit-msg: Co-authored-by trailers are not allowed:" >&2
+  git interpret-trailers --parse "$1" | grep -iE '^co-authored-by:' >&2
+  exit 1
+fi

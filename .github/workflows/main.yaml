@@ -30,6 +30,38 @@ jobs:
       - name: Typecheck
         run: pnpm typecheck
 
+  commit-trailers:
+    name: Commit Trailers
+    runs-on: ubuntu-latest
+
+    timeout-minutes: 2
+
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Reject co-author trailers
+        env:
+          PR_BASE: ${{ github.event.pull_request.base.sha }}
+          PR_HEAD: ${{ github.event.pull_request.head.sha }}
+          PUSH_BEFORE: ${{ github.event.before }}
+          PUSH_AFTER: ${{ github.event.after }}
+        run: |
+          if [ -n "$PR_BASE" ]; then
+            range="$PR_BASE..$PR_HEAD"
+          elif [ -z "$PUSH_BEFORE" ] || [ "$PUSH_BEFORE" = "0000000000000000000000000000000000000000" ]; then
+            range="$PUSH_AFTER -1"
+          else
+            range="$PUSH_BEFORE..$PUSH_AFTER"
+          fi
+          offenders=$(git log --format='%h %(trailers:only,unfold,separator=%x20|%x20)' $range | grep -i 'co-authored-by:' || true)
+          if [ -n "$offenders" ]; then
+            echo "::error::Commits with Co-authored-by trailers are not allowed:"
+            echo "$offenders"
+            exit 1
+          fi
+
   test:
     needs: [check]
 
@@ -144,6 +176,7 @@ jobs:
     needs:
       [
         check,
+        commit-trailers,
         test,
         examples,
         benchmark-memory-footprint,
