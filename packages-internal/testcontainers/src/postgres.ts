@@ -64,11 +64,7 @@ export const acquirePostgres = async (
 
   return {
     connectionString: baseUri.replace("base_database_for_tests", normalizedId),
-    [Symbol.asyncDispose]: async () => {
-      await withAdminClient(async (client) => {
-        await client.query(`DROP DATABASE IF EXISTS "${normalizedId}" WITH (FORCE);`);
-      });
-    },
+    [Symbol.asyncDispose]: async () => {},
   };
 };
 
