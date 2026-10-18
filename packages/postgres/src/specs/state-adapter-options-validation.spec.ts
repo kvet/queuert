@@ -3,8 +3,9 @@ import { describe, expect, it } from "vitest";
 import { createPgStateAdapter } from "../state-adapter/state-adapter.pg.js";
 
 const dummyProvider = {
-  executeSql: async () => [],
   withTransaction: async <T>(fn: (ctx: any) => Promise<T>) => fn({}),
+  isTransaction: () => true,
+  executeSql: async () => [],
 };
 
 it("index");

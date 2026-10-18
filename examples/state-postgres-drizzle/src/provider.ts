@@ -1,7 +1,7 @@
 import { type PgStateProvider } from "@queuert/postgres";
 import { type ExtractTablesWithRelations } from "drizzle-orm";
 import { type NodePgDatabase, type NodePgQueryResultHKT } from "drizzle-orm/node-postgres";
-import { type PgTransaction } from "drizzle-orm/pg-core";
+import { PgTransaction } from "drizzle-orm/pg-core";
 
 export type DrizzlePgTransaction<TSchema extends Record<string, unknown>> = PgTransaction<
   NodePgQueryResultHKT,
@@ -25,9 +25,8 @@ export const createDrizzlePgStateProvider = <TSchema extends Record<string, unkn
   prepareStatements?: boolean;
 }): PgStateProvider<DrizzlePgContext<TSchema>> => {
   return {
-    withTransaction: async (cb) => {
-      return db.transaction(async (tx) => cb({ tx }));
-    },
+    withTransaction: async (cb) => db.transaction(async (tx) => cb({ tx })),
+    isTransaction: (txCtx) => txCtx.tx instanceof PgTransaction,
     executeSql: async ({ txCtx, id, sql, params }) => {
       // Inside transaction: access Drizzle's internal pg client
       // Outside transaction (migrations): use db.$client (the pool)

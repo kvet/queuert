@@ -19,6 +19,7 @@ test("state-postgres-postgres-js provider passes state adapter conformance", asy
     return {
       stateAdapter: adapter,
       transactionConcurrency: "concurrent",
+      withNonTransactionContext: async (fn) => fn({ txSql: sql }),
       poisonTransaction: async (txCtx: PostgresJsContext) => {
         await txCtx.txSql.unsafe("SELECT 1 FROM nonexistent_table_queuert_poison_xyz");
       },

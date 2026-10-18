@@ -20,6 +20,12 @@ export type StateConformanceFixture = {
    */
   poisonTransaction?: (txCtx: any) => Promise<void>;
   /**
+   * Runs the callback with a context of the adapter's shape that is not inside a transaction
+   * (e.g. a pool client with no `BEGIN`, or the root ORM handle), so the suite can verify
+   * `isTransaction` rejects it. Cases that need it are skipped when omitted.
+   */
+  withNonTransactionContext?: <T>(fn: (txCtx: any) => Promise<T>) => Promise<T>;
+  /**
    * Called before each conformance case to restore a clean state. Typically
    * `() => adapter.truncate()`. Consumed by the runner — cases ignore it.
    */

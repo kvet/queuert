@@ -46,6 +46,10 @@ export const createPgPoolStateProvider = ({
         poolClient.release();
       }
     },
+    isTransaction: (txCtx) => {
+      const status = txCtx.poolClient.getTransactionStatus();
+      return status === "T" || status === "E";
+    },
     executeSql: async ({ txCtx, id, sql, params }) => {
       if (txCtx) return exec(txCtx.poolClient, id, sql, params);
       const poolClient = await pool.connect();

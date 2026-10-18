@@ -21,15 +21,6 @@ export const createPgPoolProvider = ({ pool }: { pool: Pool }): PgPoolProvider =
   };
 
   return {
-    executeSql: async ({ txCtx, id, sql, params }) => {
-      if (txCtx) return exec(txCtx.poolClient, id, sql, params);
-      const poolClient = await pool.connect();
-      try {
-        return await exec(poolClient, id, sql, params);
-      } finally {
-        poolClient.release();
-      }
-    },
     withTransaction: async (fn) => {
       const poolClient = await pool.connect();
       try {
@@ -40,6 +31,19 @@ export const createPgPoolProvider = ({ pool }: { pool: Pool }): PgPoolProvider =
       } catch (error) {
         await poolClient.query("ROLLBACK").catch(() => {});
         throw error;
+      } finally {
+        poolClient.release();
+      }
+    },
+    isTransaction: (txCtx) => {
+      const status = txCtx.poolClient.getTransactionStatus();
+      return status === "T" || status === "E";
+    },
+    executeSql: async ({ txCtx, id, sql, params }) => {
+      if (txCtx) return exec(txCtx.poolClient, id, sql, params);
+      const poolClient = await pool.connect();
+      try {
+        return await exec(poolClient, id, sql, params);
       } finally {
         poolClient.release();
       }

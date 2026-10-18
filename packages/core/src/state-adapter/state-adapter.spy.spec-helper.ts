@@ -83,6 +83,7 @@ export const createSpyStateAdapter = <TTxContext extends BaseTxContext, TJobId e
         throw error;
       }
     },
+    isTransaction: (txCtx) => stateAdapter.isTransaction(txCtx),
     withSavepoint: async (txCtx, fn) => {
       const call = record({ txCtx, name: "withSavepoint" });
       const spyRef = Symbol();

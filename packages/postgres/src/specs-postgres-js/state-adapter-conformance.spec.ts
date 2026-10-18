@@ -37,6 +37,7 @@ describe("PostgreSQL State Adapter Conformance (postgres.js)", () => {
     stateAdapter: StateAdapter<{ $test: true }, string>;
     transactionConcurrency: "concurrent" | "serialized";
     poisonTransaction: (txCtx: { $test: true }) => Promise<void>;
+    withNonTransactionContext: <T>(fn: (txCtx: { $test: true }) => Promise<T>) => Promise<T>;
   }>({
     sql: [
       async ({ postgresConnectionString }, use) => {
@@ -73,6 +74,12 @@ describe("PostgreSQL State Adapter Conformance (postgres.js)", () => {
           const pgCtx = txCtx as unknown as PostgresJsContext;
           await pgCtx.txSql.unsafe("SELECT 1 FROM nonexistent_table_queuert_poison_xyz");
         });
+      },
+      { scope: "test" },
+    ],
+    withNonTransactionContext: [
+      async ({ sql }, use) => {
+        await use(async (fn) => fn({ txSql: sql } as unknown as { $test: true }));
       },
       { scope: "test" },
     ],

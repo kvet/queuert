@@ -12,6 +12,7 @@ import { getChainsGroup } from "./state-adapter-cases/get-chains.js";
 import { getJobBlockersGroup } from "./state-adapter-cases/get-job-blockers.js";
 import { getJobsGroup } from "./state-adapter-cases/get-jobs.js";
 import { getStartAttemptDelayMsGroup } from "./state-adapter-cases/get-start-attempt-delay-ms.js";
+import { isTransactionGroup } from "./state-adapter-cases/is-transaction.js";
 import { listBlockedJobsGroup } from "./state-adapter-cases/list-blocked-jobs.js";
 import { listChainJobsGroup } from "./state-adapter-cases/list-chain-jobs.js";
 import { listChainTypeNamesGroup } from "./state-adapter-cases/list-chain-type-names.js";
@@ -30,6 +31,7 @@ export { type StateConformanceFixture } from "./state-adapter-cases/types.js";
 
 export const stateAdapterConformanceGroups: ConformanceGroup<StateConformanceFixture>[] = [
   withTransactionGroup,
+  isTransactionGroup,
   withSavepointGroup,
   getChainsGroup,
   getJobsGroup,

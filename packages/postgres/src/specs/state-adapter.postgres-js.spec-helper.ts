@@ -25,6 +25,7 @@ export const extendWithStatePostgresJs = <
     flakyStateAdapter: StateAdapter<{ $test: true }, string>;
     flakyDbStateAdapter: StateAdapter<{ $test: true }, string> | undefined;
     poisonTransaction: ((txCtx: { $test: true }) => Promise<void>) | undefined;
+    withNonTransactionContext: <T>(fn: (txCtx: { $test: true }) => Promise<T>) => Promise<T>;
     poisonExecute:
       | ((cb: (adapter: StateAdapter<{ $test: true }, string>) => Promise<void>) => Promise<void>)
       | undefined;
@@ -42,6 +43,7 @@ export const extendWithStatePostgresJs = <
     flakyStateAdapter: PostgresJsStateAdapter;
     flakyDbStateAdapter: PostgresJsStateAdapter | undefined;
     poisonTransaction: ((txCtx: { $test: true }) => Promise<void>) | undefined;
+    withNonTransactionContext: <T>(fn: (txCtx: { $test: true }) => Promise<T>) => Promise<T>;
     poisonExecute:
       | ((cb: (adapter: StateAdapter<{ $test: true }, string>) => Promise<void>) => Promise<void>)
       | undefined;
@@ -148,6 +150,12 @@ export const extendWithStatePostgresJs = <
           const pgCtx = txCtx as unknown as PostgresJsContext;
           await pgCtx.txSql.unsafe("SELECT 1 FROM nonexistent_table_queuert_poison_xyz");
         });
+      },
+      { scope: "test" },
+    ],
+    withNonTransactionContext: [
+      async ({ sql }, use) => {
+        await use(async (fn) => fn({ txSql: sql } as unknown as { $test: true }));
       },
       { scope: "test" },
     ],

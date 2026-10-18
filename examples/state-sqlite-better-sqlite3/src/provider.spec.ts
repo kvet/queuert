@@ -17,6 +17,7 @@ test("state-sqlite-better-sqlite3 provider passes state adapter conformance", as
     return {
       stateAdapter: adapter,
       transactionConcurrency: "serialized",
+      withNonTransactionContext: async (fn) => fn({ db }),
       reset: async () => adapter.truncate(),
       dispose: async () => {
         db.close();

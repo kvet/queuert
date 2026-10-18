@@ -724,6 +724,8 @@ export const createInProcessStateAdapter = async ({
       }
     },
 
+    isTransaction: (txCtx) => txCtx.inTransaction === true,
+
     withSavepoint: async (txCtx, fn) => {
       if (!txCtx.journal) throw new Error("withSavepoint called outside a transaction");
       const journal = txCtx.journal;

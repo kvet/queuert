@@ -25,6 +25,7 @@ export const extendWithStatePg = <
     flakyStateAdapter: StateAdapter<{ $test: true }, string>;
     flakyDbStateAdapter: StateAdapter<{ $test: true }, string> | undefined;
     poisonTransaction: ((txCtx: { $test: true }) => Promise<void>) | undefined;
+    withNonTransactionContext: <T>(fn: (txCtx: { $test: true }) => Promise<T>) => Promise<T>;
     poisonExecute:
       | ((cb: (adapter: StateAdapter<{ $test: true }, string>) => Promise<void>) => Promise<void>)
       | undefined;
@@ -42,6 +43,7 @@ export const extendWithStatePg = <
     flakyStateAdapter: PgPoolStateAdapter;
     flakyDbStateAdapter: PgPoolStateAdapter | undefined;
     poisonTransaction: ((txCtx: { $test: true }) => Promise<void>) | undefined;
+    withNonTransactionContext: <T>(fn: (txCtx: { $test: true }) => Promise<T>) => Promise<T>;
     poisonExecute:
       | ((cb: (adapter: StateAdapter<{ $test: true }, string>) => Promise<void>) => Promise<void>)
       | undefined;
@@ -166,6 +168,20 @@ export const extendWithStatePg = <
         await use(async (txCtx: { $test: true }) => {
           const pgCtx = txCtx as unknown as PgPoolContext;
           await pgCtx.poolClient.query("SELECT 1 FROM nonexistent_table_queuert_poison_xyz");
+        });
+      },
+      { scope: "test" },
+    ],
+    withNonTransactionContext: [
+      async ({ statePool }, use) => {
+        await use(async (fn) => {
+          const poolClient = await statePool.connect();
+          try {
+            const pgCtx: PgPoolContext = { poolClient };
+            return await fn(pgCtx as unknown as { $test: true });
+          } finally {
+            poolClient.release();
+          }
         });
       },
       { scope: "test" },
