@@ -7,17 +7,11 @@ import { test } from "vitest";
 import { createNodeRedisClusterNotifyProvider } from "./provider.js";
 
 test("notify-redis-cluster-node-redis provider passes notify adapter conformance", async () => {
-  await using rc = await acquireRedisCluster("grokzen/redis-cluster:7.0.10");
+  await using rc = await acquireRedisCluster("redis:8");
 
   await runNotifyAdapterConformance(async () => {
-    const cluster = createCluster({
-      rootNodes: rc.rootNodes,
-      nodeAddressMap: rc.nodeAddressMap,
-    }) as RedisClusterType;
-    const subscribeCluster = createCluster({
-      rootNodes: rc.rootNodes,
-      nodeAddressMap: rc.nodeAddressMap,
-    }) as RedisClusterType;
+    const cluster = createCluster({ rootNodes: rc.rootNodes }) as RedisClusterType;
+    const subscribeCluster = createCluster({ rootNodes: rc.rootNodes }) as RedisClusterType;
     await cluster.connect();
     await subscribeCluster.connect();
 

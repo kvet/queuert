@@ -14,22 +14,16 @@ import { createNodeRedisClusterNotifyProvider } from "./provider.js";
 
 // 1. Start a Redis Cluster using testcontainers
 console.log("Starting Redis Cluster...");
-await using rc = await acquireRedisCluster("grokzen/redis-cluster:7.0.10");
+await using rc = await acquireRedisCluster("redis:8");
 
 // 2. Create Redis Cluster connections
-const cluster = createCluster({
-  rootNodes: rc.rootNodes,
-  nodeAddressMap: rc.nodeAddressMap,
-}) as RedisClusterType;
+const cluster = createCluster({ rootNodes: rc.rootNodes }) as RedisClusterType;
 cluster.on("error", (err) => {
   console.error("Redis Cluster Error", err);
 });
 await cluster.connect();
 
-const subscribeCluster = createCluster({
-  rootNodes: rc.rootNodes,
-  nodeAddressMap: rc.nodeAddressMap,
-}) as RedisClusterType;
+const subscribeCluster = createCluster({ rootNodes: rc.rootNodes }) as RedisClusterType;
 subscribeCluster.on("error", (err) => {
   console.error("Redis Cluster Subscription Error", err);
 });

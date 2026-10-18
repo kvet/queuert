@@ -14,24 +14,17 @@ import { createIoredisClusterNotifyProvider } from "./provider.js";
 
 // 1. Start a Redis Cluster using testcontainers
 console.log("Starting Redis Cluster...");
-await using rc = await acquireRedisCluster("grokzen/redis-cluster:7.0.10");
+await using rc = await acquireRedisCluster("redis:8");
 
-const startupNodes = rc.rootNodes.map((node) => {
-  const url = new URL(node.url);
-  return { host: url.hostname, port: Number(url.port) };
-});
-const natMap = (address: string) => {
-  const result = rc.nodeAddressMap(address);
-  return result ?? null;
-};
+const startupNodes = rc.rootNodes.map((node) => node.url);
 
 // 2. Create Redis Cluster connections
-const cluster = new Cluster(startupNodes, { natMap });
+const cluster = new Cluster(startupNodes);
 cluster.on("error", (err: Error) => {
   console.error("Redis Cluster Error", err);
 });
 
-const subscribeCluster = new Cluster(startupNodes, { natMap });
+const subscribeCluster = new Cluster(startupNodes);
 subscribeCluster.on("error", (err: Error) => {
   console.error("Redis Cluster Subscription Error", err);
 });

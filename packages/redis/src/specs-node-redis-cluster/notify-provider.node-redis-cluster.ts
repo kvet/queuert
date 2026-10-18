@@ -9,14 +9,23 @@ export const createNodeRedisClusterNotifyProvider = ({
   cluster: RedisClusterType;
   subscribeCluster: RedisClusterType;
 }): RedisNotifyProvider => {
-  // node-redis cluster tears down its shared pub/sub socket on
-  // last-unsubscribe, which crashes with "The client is closed" when another
-  // subscribe/unsubscribe is in flight. Serialize to prevent that.
-  let chain: Promise<unknown> = Promise.resolve();
-  const run = async <R>(fn: () => Promise<R>): Promise<R> => {
-    const next = chain.then(fn, fn);
-    chain = next.catch(() => undefined);
-    return next;
+  // Workaround for duplicate deliveries. Redis Cluster forwards PUBLISH to every node over the
+  // cluster bus, but Redis does not set TCP_NODELAY on the bus connections a node opens, so
+  // back-to-back messages can reach some nodes ~40ms late (Nagle + delayed ACK; fixed in Valkey by
+  // https://github.com/valkey-io/valkey/pull/1763, still present in Redis 8). node-redis closes its
+  // pub/sub connection when the last channel is unsubscribed and reopens it on a random node, so a
+  // resubscribe can land on a node that delivers a late copy of a message already received. A
+  // subscription that is never removed keeps the connection, and its node, for the provider's
+  // lifetime.
+  const pinChannel = "queuert:pubsub-pin";
+  const pinListener = (): void => {};
+  let pinned: Promise<void> | undefined;
+  const pinPubSubConnection = async (): Promise<void> => {
+    pinned ??= subscribeCluster.subscribe(pinChannel, pinListener).catch((error: unknown) => {
+      pinned = undefined;
+      throw error;
+    });
+    await pinned;
   };
 
   return {
@@ -24,13 +33,24 @@ export const createNodeRedisClusterNotifyProvider = ({
       await cluster.publish(channel, message);
     },
     subscribe: async (channel, onMessage) => {
-      await run(async () => subscribeCluster.subscribe(channel, onMessage));
+      await pinPubSubConnection();
+      await subscribeCluster.subscribe(channel, onMessage);
       return async () => {
-        await run(async () => subscribeCluster.unsubscribe(channel));
+        await subscribeCluster.unsubscribe(channel);
       };
     },
     eval: async (script, keys, args) => {
       return cluster.eval(script, { keys, arguments: args });
+    },
+    close: async () => {
+      if (!pinned) return;
+      const pin = pinned;
+      pinned = undefined;
+      const wasPinned = await pin.then(
+        () => true,
+        () => false,
+      );
+      if (wasPinned) await subscribeCluster.unsubscribe(pinChannel, pinListener);
     },
   };
 };

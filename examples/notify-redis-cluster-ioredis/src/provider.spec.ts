@@ -7,20 +7,13 @@ import { test } from "vitest";
 import { createIoredisClusterNotifyProvider } from "./provider.js";
 
 test("notify-redis-cluster-ioredis provider passes notify adapter conformance", async () => {
-  await using rc = await acquireRedisCluster("grokzen/redis-cluster:7.0.10");
+  await using rc = await acquireRedisCluster("redis:8");
 
   await runNotifyAdapterConformance(async () => {
-    const startupNodes = rc.rootNodes.map((node) => {
-      const url = new URL(node.url);
-      return { host: url.hostname, port: Number(url.port) };
-    });
-    const natMap = (address: string) => {
-      const result = rc.nodeAddressMap(address);
-      return result ?? null;
-    };
+    const startupNodes = rc.rootNodes.map((node) => node.url);
 
-    const cluster = new Cluster(startupNodes, { natMap });
-    const subscribeCluster = new Cluster(startupNodes, { natMap });
+    const cluster = new Cluster(startupNodes);
+    const subscribeCluster = new Cluster(startupNodes);
 
     const notifyProvider = createIoredisClusterNotifyProvider({ cluster, subscribeCluster });
     const notifyAdapter = await createRedisNotifyAdapter({
