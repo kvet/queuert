@@ -7,6 +7,6 @@ Scenarios: graceful shutdown where the handler stops on `signal` and completes w
 ## Running
 
 ```bash
-bun install
-bun run --filter example-showcase-signals start
+pnpm install
+pnpm --filter example-showcase-signals start
 ```

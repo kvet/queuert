@@ -701,7 +701,7 @@ if (compilerArg === "ts6") {
 }
 
 if (compilers.length === 0) {
-  console.error("No TypeScript compiler found. Run `bun install` in benchmarks/type-complexity.");
+  console.error("No TypeScript compiler found. Run `pnpm install` in benchmarks/type-complexity.");
   process.exit(1);
 }
 
@@ -790,9 +790,9 @@ const runBenchmark = (
 console.log("Queuert Type Complexity Benchmark");
 
 try {
-  execSync("bun run --filter queuert build", { cwd: projectRoot, stdio: "pipe" });
+  execSync("pnpm --filter queuert build", { cwd: projectRoot, stdio: "pipe" });
 } catch {
-  console.error("Failed to build queuert. Run `bun run --filter queuert build` manually.");
+  console.error("Failed to build queuert. Run `pnpm --filter queuert build` manually.");
   process.exit(1);
 }
 

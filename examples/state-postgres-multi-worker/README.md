@@ -5,8 +5,8 @@ Multiple workers sharing the same PostgreSQL database for distributed job proces
 ## Running
 
 ```bash
-bun install
-bun run --filter example-state-postgres-multi-worker start
+pnpm install
+pnpm --filter example-state-postgres-multi-worker start
 ```
 
 Requires Docker (uses testcontainers to start PostgreSQL).

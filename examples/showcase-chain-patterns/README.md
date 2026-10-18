@@ -7,6 +7,6 @@ Scenarios: linear, branched, loops, go-to.
 ## Running
 
 ```bash
-bun install
-bun run --filter example-showcase-chain-patterns start
+pnpm install
+pnpm --filter example-showcase-chain-patterns start
 ```

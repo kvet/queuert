@@ -5,6 +5,6 @@ Custom validation adapter backed by Zod — covers nominal (by type name) and st
 ## Running
 
 ```bash
-bun install
-bun run --filter example-validation-zod start
+pnpm install
+pnpm --filter example-validation-zod start
 ```

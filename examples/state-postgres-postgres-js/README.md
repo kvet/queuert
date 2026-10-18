@@ -5,8 +5,8 @@ PostgreSQL state storage via `@queuert/postgres` with postgres.js — atomic job
 ## Running
 
 ```bash
-bun install
-bun run --filter example-state-postgres-postgres-js start
+pnpm install
+pnpm --filter example-state-postgres-postgres-js start
 ```
 
 Requires Docker (uses testcontainers to start PostgreSQL).

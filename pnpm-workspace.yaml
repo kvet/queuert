@@ -1,0 +1,24 @@
+packages:
+  - "benchmarks/*"
+  - "docs"
+  - "examples/*"
+  - "packages-internal/*"
+  - "packages/*"
+
+# Save dependencies with exact versions (no ^ or ~ range prefixes)
+saveExact: true
+
+# Only install package versions published at least 1 day ago (in minutes).
+# Mitigates supply-chain attacks where a compromised version is pulled from the
+# registry shortly after release.
+minimumReleaseAge: 1440
+
+allowBuilds:
+  "@prisma/engines": true
+  better-sqlite3: true
+  bun: true
+  cpu-features: false
+  esbuild: true
+  prisma: true
+  protobufjs: false
+  ssh2: false

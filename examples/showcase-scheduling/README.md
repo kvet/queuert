@@ -7,6 +7,6 @@ Scenarios: loop chains with scheduled delays, idempotent scheduling via deduplic
 ## Running
 
 ```bash
-bun install
-bun run --filter example-showcase-scheduling start
+pnpm install
+pnpm --filter example-showcase-scheduling start
 ```

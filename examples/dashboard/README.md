@@ -5,13 +5,13 @@
 ## Running
 
 ```bash
-bun install
+pnpm install
 
 # Terminal 1 — start the dashboard
-bun run --filter example-dashboard dashboard
+pnpm --filter example-dashboard dashboard
 
 # Terminal 2 — populate jobs (single jobs, continuations, blockers, retries)
-bun run --filter example-dashboard start
+pnpm --filter example-dashboard start
 ```
 
 Open http://localhost:3333.

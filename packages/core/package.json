@@ -50,7 +50,7 @@
     }
   },
   "scripts": {
-    "prepublishOnly": "bun run build",
+    "prepublishOnly": "pnpm build",
     "build": "tsdown",
     "typecheck": "tsc --noEmit",
     "test": "vitest --run"

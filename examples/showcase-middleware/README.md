@@ -13,8 +13,8 @@ The second scenario fails the first `send-receipt` attempt after metering: the s
 ## Running
 
 ```bash
-bun install
-bun run --filter example-showcase-middleware start
+pnpm install
+pnpm --filter example-showcase-middleware start
 ```
 
 See the [Middleware guide](../../docs/src/content/docs/guides/middleware.md) for a task-oriented walkthrough.

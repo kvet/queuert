@@ -7,8 +7,8 @@ Knex's `raw` only binds `?` placeholders and rejects a mismatched binding count,
 ## Running
 
 ```bash
-bun install
-bun run --filter example-state-postgres-knex start
+pnpm install
+pnpm --filter example-state-postgres-knex start
 ```
 
 Requires Docker (uses testcontainers to start PostgreSQL).

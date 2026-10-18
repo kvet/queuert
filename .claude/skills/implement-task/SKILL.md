@@ -63,7 +63,7 @@ Read the verdict critically. If the agent says `VIABLE` but its own evidence sho
 
 Repeat up to **3** iterations:
 
-1. **Implement.** Write code and tests (per `CLAUDE.md`: all changes require tests). Follow the design doc's decisions literally — where you deviate, record why; an undocumented deviation is what the validator exists to catch. Run the targeted tests you touched (`bun vitest run packages/.../some.spec.ts`), not the full check suite.
+1. **Implement.** Write code and tests (per `CLAUDE.md`: all changes require tests). Follow the design doc's decisions literally — where you deviate, record why; an undocumented deviation is what the validator exists to catch. Run the targeted tests you touched (`pnpm vitest run packages/.../some.spec.ts`), not the full check suite.
 2. **Validate.** Launch **one** `general-purpose` agent with `.claude/agents/implement-task/implementation-validator.md`. It gets the design doc paths, the task text, and the diff scope — never your reasoning about the code. It checks one thing the Phase 4 reviewers cannot, because they never read the design: whether the code matches the design and holds the invariants the design asserts. It returns findings graded `BLOCKER` / `CONCERN` / `NIT`, plus a `DESIGN_GAP` list.
 3. **Decide.**
    - Any `DESIGN_GAP` → bail with a gap report (include what was already implemented).
@@ -74,7 +74,7 @@ If 3 iterations end with blockers still open, stop and report the standing block
 
 ## Phase 4 — Review loop
 
-Before the first round, run `bun run fmt`, then `bun run check > /tmp/implement-task-check.log 2>&1`. Verify it via the vitest `Test Files` / `Tests` summary lines, the typecheck exit-code lines, and the final exit code — never by grepping for "error"/"fail" (the examples emit those as legitimate output). Do not re-run `check` to re-filter its output; read the log file.
+Before the first round, run `pnpm fmt`, then `pnpm check > /tmp/implement-task-check.log 2>&1`. Verify it via the vitest `Test Files` / `Tests` summary lines, the typecheck exit-code lines, and the final exit code — never by grepping for "error"/"fail" (the examples emit those as legitimate output). Do not re-run `check` to re-filter its output; read the log file.
 
 Then repeat up to **3** rounds:
 
@@ -86,7 +86,7 @@ Then repeat up to **3** rounds:
    - Fix CONCERN / SHOULD REVIEW findings whose cost is proportionate to the change.
    - Skip SUGGESTION / NIT findings that expand scope beyond the task — say so, don't silently drop them.
    - A finding that exposes an unanswered design decision is a `DESIGN_GAP` → bail.
-3. Re-run `bun run fmt` and `bun run check` after applying fixes.
+3. Re-run `pnpm fmt` and `pnpm check` after applying fixes.
 4. Exit the loop early when a round produces no finding you chose to act on.
 
 Reviewers are advisory, not authoritative. Push back in the report on findings that misread the design — and say which design decision they misread.
@@ -95,7 +95,7 @@ Reviewers are advisory, not authoritative. Push back in the report on findings t
 
 1. Write a `.changeset/<short-name>.md` entry if the change touches the public surface, runtime behavior, or persisted state (see `CLAUDE.md` for the bar and the one-paragraph cap). Internal refactors, tests, and doc-only edits are exempt.
 2. Remove the completed item from `TODO.md`. If the item was one bullet of an `[EPIC]`, remove just that bullet; delete the epic only when its last child is gone. Delete any `[REF]` bullet the entry declares superseded by the completed work.
-3. Confirm `bun run check` passed from the log, and say so plainly — or report the failures with their output.
+3. Confirm `pnpm check` passed from the log, and say so plainly — or report the failures with their output.
 4. Do not commit unless asked.
 
 ## Report format
@@ -123,7 +123,7 @@ Reviewers are advisory, not authoritative. Push back in the report on findings t
 
 ## Verification
 
-[bun run check result: test-file/test counts, typecheck exit codes, final exit code]
+[pnpm check result: test-file/test counts, typecheck exit codes, final exit code]
 ```
 
 ## Gap report format

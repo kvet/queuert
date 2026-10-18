@@ -5,8 +5,8 @@ SQLite state storage via `@queuert/sqlite` using Bun's built-in [`bun:sqlite`](h
 ## Running
 
 ```bash
-bun install
-bun run --filter example-state-sqlite-bun start
+pnpm install
+pnpm --filter example-state-sqlite-bun start
 ```
 
 Requires [Bun](https://bun.com).

@@ -5,8 +5,8 @@ PostgreSQL LISTEN/NOTIFY via `@queuert/postgres` with the pg (node-postgres) cli
 ## Running
 
 ```bash
-bun install
-bun run --filter example-notify-postgres-pg start
+pnpm install
+pnpm --filter example-notify-postgres-pg start
 ```
 
 Requires Docker (uses testcontainers to start PostgreSQL).

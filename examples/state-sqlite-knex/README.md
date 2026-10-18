@@ -5,6 +5,6 @@ SQLite state storage via `@queuert/sqlite` with Knex — atomic job creation ins
 ## Running
 
 ```bash
-bun install
-bun run --filter example-state-sqlite-knex start
+pnpm install
+pnpm --filter example-state-sqlite-knex start
 ```

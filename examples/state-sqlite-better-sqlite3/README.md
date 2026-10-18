@@ -5,6 +5,6 @@ SQLite state storage via `@queuert/sqlite` with the better-sqlite3 driver — at
 ## Running
 
 ```bash
-bun install
-bun run --filter example-state-sqlite-better-sqlite3 start
+pnpm install
+pnpm --filter example-state-sqlite-better-sqlite3 start
 ```

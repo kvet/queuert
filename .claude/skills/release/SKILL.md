@@ -100,7 +100,7 @@ prompt: |
 Run changeset version:
 
 ```bash
-bun run version
+pnpm run version
 ```
 
 Verify all packages were bumped to the expected version:
@@ -122,7 +122,7 @@ Then re-run the verify command above and grep for any leftover `1.0.0` (excludin
 Changeset-generated changelogs may have formatting issues. Run the formatter:
 
 ```bash
-bun run fmt
+pnpm fmt
 ```
 
 ### Step 5: Commit, Merge, Tag, and Push

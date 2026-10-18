@@ -42,7 +42,7 @@
     }
   },
   "scripts": {
-    "prepublishOnly": "bun run build",
+    "prepublishOnly": "pnpm build",
     "build": "tsdown",
     "typecheck": "! tsc --noEmit 2>&1 | grep -v 'TS4023' | grep 'error TS'",
     "test": "vitest --run"

@@ -5,6 +5,6 @@ Winston integration for structured logging, with per-job contextual loggers inje
 ## Running
 
 ```bash
-bun install
-bun run --filter example-log-winston start
+pnpm install
+pnpm --filter example-log-winston start
 ```

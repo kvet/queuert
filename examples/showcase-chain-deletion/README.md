@@ -7,6 +7,6 @@ Scenarios: simple deletion, blocker safety, co-deletion.
 ## Running
 
 ```bash
-bun install
-bun run --filter example-showcase-chain-deletion start
+pnpm install
+pnpm --filter example-showcase-chain-deletion start
 ```

@@ -5,9 +5,9 @@ SQLite state storage via `@queuert/sqlite` with Prisma ORM — atomic job creati
 ## Running
 
 ```bash
-bun install
-bun run --filter example-state-sqlite-prisma prisma:generate
-bun run --filter example-state-sqlite-prisma start
+pnpm install
+pnpm --filter example-state-sqlite-prisma prisma:generate
+pnpm --filter example-state-sqlite-prisma start
 ```
 
 `prisma:generate` is required before the first run to generate Prisma's TypeScript client.

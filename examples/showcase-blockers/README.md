@@ -7,6 +7,6 @@ Scenarios: fan-out/fan-in, fixed slots, blocker by ID.
 ## Running
 
 ```bash
-bun install
-bun run --filter example-showcase-blockers start
+pnpm install
+pnpm --filter example-showcase-blockers start
 ```

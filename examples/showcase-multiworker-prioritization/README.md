@@ -7,6 +7,6 @@ Scenarios: reserved capacity (urgent worker isolated from bulk backlog), cross-w
 ## Running
 
 ```bash
-bun install
-bun run --filter example-showcase-multiworker-prioritization start
+pnpm install
+pnpm --filter example-showcase-multiworker-prioritization start
 ```

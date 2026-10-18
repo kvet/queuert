@@ -129,7 +129,7 @@ export const createDashboard = async <
     // Static assets + SPA fallback
     const assets = await loadAssets();
     if (!assets)
-      return new Response("Dashboard assets not built. Run `bun run build` first.", {
+      return new Response("Dashboard assets not built. Run `pnpm build` first.", {
         status: 503,
       });
 

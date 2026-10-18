@@ -11,7 +11,7 @@
   },
   "type": "module",
   "scripts": {
-    "dashboard": "bun run --filter '@queuert/dashboard' build && tsx src/dashboard.ts",
+    "dashboard": "pnpm --filter '@queuert/dashboard' build && tsx src/dashboard.ts",
     "start": "tsx src/populator.ts",
     "typecheck": "tsc --noEmit"
   },

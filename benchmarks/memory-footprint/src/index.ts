@@ -3,15 +3,6 @@
  *
  * Measures memory footprint of Queuert components across different adapters.
  * Each measurement runs in a separate child process for complete isolation.
- *
- * Usage:
- *   bun run start                    # Run all adapter measurements
- *   bun run start:state-postgres     # Run PostgreSQL state adapter measurement
- *   bun run start:state-sqlite       # Run SQLite state adapter measurement
- *   bun run start:notify-redis       # Run Redis notify adapter measurement
- *   bun run start:notify-postgres    # Run PostgreSQL notify adapter measurement
- *   bun run start:notify-nats        # Run NATS notify adapter measurement
- *   bun run start:otel               # Run OpenTelemetry observability adapter measurement
  */
 
 import { spawn } from "node:child_process";
@@ -87,7 +78,7 @@ async function main(): Promise<void> {
   } else if (args.includes("--dashboard")) {
     toRun = ["dashboard"];
   } else {
-    console.log("\nUsage: bun run start:<measurement>");
+    console.log("\nUsage: pnpm start:<measurement>");
     console.log("\nAvailable measurements:");
     for (const name of Object.keys(measurementModules)) {
       console.log(`  --${name}`);

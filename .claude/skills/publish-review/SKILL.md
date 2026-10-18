@@ -29,7 +29,7 @@ git diff --name-only $BASE..HEAD -- 'packages/otel/**' 'packages/core/src/observ
 
 ## Step 2: Start benchmarks
 
-Run `bun run benchmarks > <scratchpad>/benchmarks.log 2>&1` with `run_in_background: true`. You compare it against `docs/src/content/docs/benchmarks.md` yourself in Step 4 — no agent needed.
+Run `pnpm benchmarks > <scratchpad>/benchmarks.log 2>&1` with `run_in_background: true`. You compare it against `docs/src/content/docs/benchmarks.md` yourself in Step 4 — no agent needed.
 
 ## Step 3: Launch agents
 

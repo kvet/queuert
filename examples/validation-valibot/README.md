@@ -5,6 +5,6 @@ Custom validation adapter backed by Valibot — covers nominal (by type name) an
 ## Running
 
 ```bash
-bun install
-bun run --filter example-validation-valibot start
+pnpm install
+pnpm --filter example-validation-valibot start
 ```

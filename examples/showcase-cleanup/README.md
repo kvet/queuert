@@ -5,6 +5,6 @@ Automatic cleanup of completed chains implemented as a Queuert job type — batc
 ## Running
 
 ```bash
-bun install
-bun run --filter example-showcase-cleanup start
+pnpm install
+pnpm --filter example-showcase-cleanup start
 ```

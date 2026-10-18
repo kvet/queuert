@@ -28,7 +28,7 @@ jobs:
       - uses: ./.github/actions/setup-repo
 
       - name: Build docs
-        run: bun run docs:build
+        run: pnpm docs:build
         env:
           GITHUB_TOKEN: ${{ github.token }}
 

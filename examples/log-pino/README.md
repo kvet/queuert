@@ -5,6 +5,6 @@ Pino integration for structured logging, with per-job contextual loggers injecte
 ## Running
 
 ```bash
-bun install
-bun run --filter example-log-pino start
+pnpm install
+pnpm --filter example-log-pino start
 ```

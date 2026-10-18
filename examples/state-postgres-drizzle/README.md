@@ -5,8 +5,8 @@ PostgreSQL state storage via `@queuert/postgres` with Drizzle ORM — atomic job
 ## Running
 
 ```bash
-bun install
-bun run --filter example-state-postgres-drizzle start
+pnpm install
+pnpm --filter example-state-postgres-drizzle start
 ```
 
 Requires Docker (uses testcontainers to start PostgreSQL).

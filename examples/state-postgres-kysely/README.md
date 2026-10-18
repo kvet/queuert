@@ -5,8 +5,8 @@ PostgreSQL state storage via `@queuert/postgres` with Kysely — atomic job crea
 ## Running
 
 ```bash
-bun install
-bun run --filter example-state-postgres-kysely start
+pnpm install
+pnpm --filter example-state-postgres-kysely start
 ```
 
 Requires Docker (uses testcontainers to start PostgreSQL).

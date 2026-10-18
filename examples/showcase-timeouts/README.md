@@ -7,6 +7,6 @@ Scenarios: cooperative timeout via `AbortController` composed with the job signa
 ## Running
 
 ```bash
-bun install
-bun run --filter example-showcase-timeouts start
+pnpm install
+pnpm --filter example-showcase-timeouts start
 ```

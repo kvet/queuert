@@ -5,6 +5,6 @@ SQLite state storage via `@queuert/sqlite` with Kysely — atomic job creation i
 ## Running
 
 ```bash
-bun install
-bun run --filter example-state-sqlite-kysely start
+pnpm install
+pnpm --filter example-state-sqlite-kysely start
 ```

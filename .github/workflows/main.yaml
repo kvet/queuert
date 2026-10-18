@@ -19,16 +19,16 @@ jobs:
       - uses: ./.github/actions/setup-repo
 
       - name: Format check
-        run: bun run fmt:check
+        run: pnpm fmt:check
 
       - name: Lint
-        run: bun run lint
+        run: pnpm lint
 
       - name: Build
-        run: bun run build
+        run: pnpm build
 
       - name: Typecheck
-        run: bun run typecheck
+        run: pnpm typecheck
 
   test:
     needs: [check]
@@ -46,7 +46,7 @@ jobs:
       - uses: ./.github/actions/setup-repo
 
       - name: Test
-        run: bun run test:ci
+        run: pnpm test:ci
 
   examples:
     needs: [check]
@@ -64,7 +64,7 @@ jobs:
       - uses: ./.github/actions/setup-repo
 
       - name: Examples
-        run: bun run examples
+        run: pnpm examples
 
   benchmark-memory-footprint:
     needs: [check]
@@ -82,7 +82,7 @@ jobs:
       - uses: ./.github/actions/setup-repo
 
       - name: Memory Footprint
-        run: bun run --filter './benchmarks/memory-footprint' start
+        run: pnpm --filter './benchmarks/memory-footprint' start
 
   benchmark-processing-capacity:
     needs: [check]
@@ -100,7 +100,7 @@ jobs:
       - uses: ./.github/actions/setup-repo
 
       - name: Processing Capacity
-        run: bun run --filter './benchmarks/processing-capacity' start
+        run: pnpm --filter './benchmarks/processing-capacity' start
 
   benchmark-query-performance:
     needs: [check]
@@ -118,7 +118,7 @@ jobs:
       - uses: ./.github/actions/setup-repo
 
       - name: Query Performance
-        run: bun run --filter './benchmarks/query-performance' start
+        run: pnpm --filter './benchmarks/query-performance' start
 
   benchmark-type-complexity:
     needs: [check]
@@ -136,7 +136,7 @@ jobs:
       - uses: ./.github/actions/setup-repo
 
       - name: Type Complexity
-        run: bun run --filter './benchmarks/type-complexity' start
+        run: pnpm --filter './benchmarks/type-complexity' start
 
   # PR CHECKS
 

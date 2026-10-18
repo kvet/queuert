@@ -7,6 +7,6 @@ Scenarios: approval workflow (external API completes the job), deferred start wi
 ## Running
 
 ```bash
-bun install
-bun run --filter example-showcase-workerless start
+pnpm install
+pnpm --filter example-showcase-workerless start
 ```

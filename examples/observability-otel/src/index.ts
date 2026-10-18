@@ -293,7 +293,7 @@ const stopWorker = await worker.start();
 
 // Run all scenarios
 console.log("\n=== OpenTelemetry Observability Showcase ===\n");
-console.log("Optional: Run `bun run tui` in another terminal to view traces\n");
+console.log("Optional: Run `pnpm tui` in another terminal to view traces\n");
 
 // Scenario 1: Single Job
 console.log("--- Scenario 1: Single Job ---");

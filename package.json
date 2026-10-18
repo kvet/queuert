@@ -4,32 +4,25 @@
   "keywords": [],
   "license": "MIT",
   "author": "kvet",
-  "workspaces": [
-    "benchmarks/*",
-    "docs",
-    "examples/*",
-    "packages-internal/*",
-    "packages/*"
-  ],
   "type": "module",
   "scripts": {
-    "build": "bun run --filter './packages/*' build",
+    "build": "pnpm --filter './packages/*' --reporter=append-only build",
     "lint": "oxlint --type-aware",
     "fmt": "oxlint --type-aware --fix && oxfmt",
     "fmt:check": "oxfmt --check",
-    "test": "vitest --run && bun run test:bun",
-    "test:ci": "vitest --run --retry=2 --maxWorkers=$(($(nproc) - 2)) && bun run test:bun",
-    "test:bun": "bun run --filter example-state-sqlite-bun test",
-    "typecheck": "bun run --filter '*' typecheck",
-    "benchmarks": "bun run --filter './benchmarks/*' --sequential start",
-    "examples": "bun run --filter './examples/*' start",
-    "check": "bun run fmt:check && bun run typecheck && bun run build && bun run test && bun run examples",
+    "test": "vitest --run && pnpm test:bun",
+    "test:ci": "vitest --run --retry=2 --maxWorkers=$(($(nproc) - 2)) && pnpm test:bun",
+    "test:bun": "pnpm --filter example-state-sqlite-bun test",
+    "typecheck": "pnpm -r --reporter=append-only typecheck",
+    "benchmarks": "pnpm --filter './benchmarks/*' --workspace-concurrency=1 --reporter=append-only start",
+    "examples": "pnpm --filter './examples/*' --reporter=append-only start",
+    "check": "pnpm fmt:check && pnpm typecheck && pnpm build && pnpm test && pnpm examples",
     "modules:clean": "rm -rf $(find . -name node_modules -type d)",
     "changeset": "changeset",
     "version": "changeset version",
-    "docs:dev": "bun run --filter @queuert/docs dev",
-    "docs:build": "bun run --filter @queuert/docs build",
-    "docs:preview": "bun run --filter @queuert/docs preview"
+    "docs:dev": "pnpm --filter @queuert/docs dev",
+    "docs:build": "pnpm --filter @queuert/docs build",
+    "docs:preview": "pnpm --filter @queuert/docs preview"
   },
   "devDependencies": {
     "@changesets/cli": "3.0.3",
@@ -45,5 +38,6 @@
   },
   "engines": {
     "node": ">=22"
-  }
+  },
+  "packageManager": "pnpm@12.14.0"
 }

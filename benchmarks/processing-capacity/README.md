@@ -12,26 +12,26 @@ The pairing is layout-only — create mode and process mode are independent in p
 Each adapter has one script per provider example, so you can compare driver implementations head-to-head on identical hardware. By default each adapter runs both modes; flags can override.
 
 ```bash
-bun run start                                # all benchmarks, both modes
+pnpm start                                # all benchmarks, both modes
 
 # State axis (in-process notify)
-bun run start:state-in-process               # in-process state
-bun run start:state-sqlite-better-sqlite3    # SQLite state via better-sqlite3
-bun run start:state-sqlite-node              # SQLite state via node:sqlite
-bun run start:state-postgres-postgres-js     # PostgreSQL state via postgres-js
-bun run start:state-postgres-pg              # PostgreSQL state via pg
+pnpm start:state-in-process               # in-process state
+pnpm start:state-sqlite-better-sqlite3    # SQLite state via better-sqlite3
+pnpm start:state-sqlite-node              # SQLite state via node:sqlite
+pnpm start:state-postgres-postgres-js     # PostgreSQL state via postgres-js
+pnpm start:state-postgres-pg              # PostgreSQL state via pg
 
 # Notify axis (in-process state)
-bun run start:notify-in-process              # in-process notify
-bun run start:notify-redis-redis             # Redis notify via node-redis
-bun run start:notify-redis-ioredis           # Redis notify via ioredis
-bun run start:notify-postgres-pg             # PostgreSQL notify via pg
-bun run start:notify-postgres-postgres-js    # PostgreSQL notify via postgres-js
-bun run start:notify-nats-nats               # NATS notify via nats
+pnpm start:notify-in-process              # in-process notify
+pnpm start:notify-redis-redis             # Redis notify via node-redis
+pnpm start:notify-redis-ioredis           # Redis notify via ioredis
+pnpm start:notify-postgres-pg             # PostgreSQL notify via pg
+pnpm start:notify-postgres-postgres-js    # PostgreSQL notify via postgres-js
+pnpm start:notify-nats-nats               # NATS notify via nats
 
-bun run start --state-sqlite-better-sqlite3 --concurrency=20            # custom concurrency
-bun run start --state-sqlite-better-sqlite3 --process-mode=atomic       # single process mode
-bun run start --state-sqlite-better-sqlite3 --create-mode=single        # override pairing
+pnpm start --state-sqlite-better-sqlite3 --concurrency=20            # custom concurrency
+pnpm start --state-sqlite-better-sqlite3 --process-mode=atomic       # single process mode
+pnpm start --state-sqlite-better-sqlite3 --create-mode=single        # override pairing
 ```
 
 Default per run: 5,000 jobs, concurrency 10, batch size 100. Both modes run by default → 10,000 chains created total per adapter. Container-based runs require Docker.

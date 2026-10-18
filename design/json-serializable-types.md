@@ -258,7 +258,7 @@ This is a **major** version bump.
 
 ## Implementation plan
 
-Phased so each phase ends with a green `bun run check`. Each phase is a single PR-sized unit.
+Phased so each phase ends with a green `pnpm check`. Each phase is a single PR-sized unit.
 
 ### Phase 1 — Core API surface (registry only)
 
@@ -325,9 +325,9 @@ Goal: replace `parseInput`/`parseOutput` with the four batch async codec methods
 
 ### Phase 7 — Final validation
 
-- [ ] `bun run fmt`, `bun run check` (redirected to a file per CLAUDE.md).
+- [ ] `pnpm fmt`, `pnpm check` (redirected to a file per CLAUDE.md).
 - [ ] Cross-check the type-complexity benchmark output against the pre-change baseline.
-- [ ] Smoke-test all examples (covered by `bun run examples` in `bun run check`).
+- [ ] Smoke-test all examples (covered by `pnpm examples` in `pnpm check`).
 
 ### Out of scope for this change
 

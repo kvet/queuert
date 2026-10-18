@@ -5,13 +5,13 @@ TypeScript type-checking cost across chain topologies and scales. Generates a se
 ## Running
 
 ```bash
-bun run start       # both compilers
-bun run start ts6   # TypeScript 6 only
-bun run start ts7   # TypeScript 7 only
-bun run start ts7 --filter=merge   # only scenarios whose name or family matches
+pnpm start       # both compilers
+pnpm start ts6   # TypeScript 6 only
+pnpm start ts7   # TypeScript 7 only
+pnpm start ts7 --filter=merge   # only scenarios whose name or family matches
 ```
 
-Each scenario runs 3 times; the best result is reported. Generated scenario files are kept for inspection. Run `bun install` first so both `typescript-6` and `typescript-7` are present.
+Each scenario runs 3 times; the best result is reported. Generated scenario files are kept for inspection. Run `pnpm install` first so both `typescript-6` and `typescript-7` are present.
 
 ## Scenarios
 

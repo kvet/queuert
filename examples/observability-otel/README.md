@@ -14,17 +14,17 @@ brew install ymtdzzz/tap/otel-tui
 ## Running
 
 ```bash
-bun install
+pnpm install
 
 # Terminal 1 — start otel-tui (OTLP receiver)
-bun run --filter example-observability-otel tui
+pnpm --filter example-observability-otel tui
 
 # Terminal 2 — run the example
-bun run --filter example-observability-otel start
+pnpm --filter example-observability-otel start
 ```
 
 For console output instead of otel-tui:
 
 ```bash
-bun run --filter example-observability-otel start:console
+pnpm --filter example-observability-otel start:console
 ```

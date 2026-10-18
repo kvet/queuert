@@ -14,16 +14,17 @@ inputs:
 runs:
   using: composite
   steps:
-    - uses: oven-sh/setup-bun@v2
-      name: Install bun
+    - uses: pnpm/action-setup@v6.1.0
+      name: Install pnpm
 
     - name: Install Node.js
       uses: actions/setup-node@v4
       with:
+        cache: pnpm
         node-version: ${{ inputs.node-version }}
         node-version-file: ${{ inputs.node-version == '' && '.nvmrc' || '' }}
         registry-url: ${{ inputs.registry-url || '' }}
 
     - name: Install dependencies
       shell: bash
-      run: bun install --frozen-lockfile
+      run: pnpm install --frozen-lockfile

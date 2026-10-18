@@ -27,8 +27,8 @@ config.cache.json
 # prisma
 **/generated/prisma
 
-# bun
-bun-debug.log*
+# pnpm
+pnpm-debug.log*
 
 # dist
 dist

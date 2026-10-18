@@ -216,11 +216,11 @@ Every test file uses `.spec.ts` — both unit tests colocated next to the module
 ## Commands
 
 ```bash
-bun run fmt        # Format code (run before checks)
-bun run lint       # Run linter
-bun run typecheck  # Run type checking
-bun run test       # Run tests
-bun run check      # Run all checks together
+pnpm fmt        # Format code (run before checks)
+pnpm lint       # Run linter
+pnpm typecheck  # Run type checking
+pnpm test       # Run tests
+pnpm check      # Run all checks together
 ```
 
 ## Examples

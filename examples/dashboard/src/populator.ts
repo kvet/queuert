@@ -3,7 +3,6 @@
  *
  * Populates the shared SQLite database for the dashboard to display
  *
- * Usage: bun run start
  * Then open http://localhost:3333 to view results in the dashboard.
  */
 

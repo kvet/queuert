@@ -5,6 +5,6 @@ SQLite state storage via `@queuert/sqlite` with Drizzle ORM — atomic job creat
 ## Running
 
 ```bash
-bun install
-bun run --filter example-state-sqlite-drizzle start
+pnpm install
+pnpm --filter example-state-sqlite-drizzle start
 ```

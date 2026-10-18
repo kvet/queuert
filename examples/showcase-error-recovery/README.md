@@ -7,6 +7,6 @@ Scenarios: CHECK constraint violation inside complete, handler throws after `awa
 ## Running
 
 ```bash
-bun install
-bun run --filter example-showcase-error-recovery start
+pnpm install
+pnpm --filter example-showcase-error-recovery start
 ```

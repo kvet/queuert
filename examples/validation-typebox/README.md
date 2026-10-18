@@ -5,6 +5,6 @@ Custom validation adapter backed by TypeBox — covers nominal (by type name) an
 ## Running
 
 ```bash
-bun install
-bun run --filter example-validation-typebox start
+pnpm install
+pnpm --filter example-validation-typebox start
 ```

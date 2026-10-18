@@ -7,6 +7,6 @@ Scenarios: basic awaiting, parallel awaiting, timeout handling, abort signal.
 ## Running
 
 ```bash
-bun install
-bun run --filter example-showcase-chain-awaiting start
+pnpm install
+pnpm --filter example-showcase-chain-awaiting start
 ```

@@ -7,6 +7,6 @@ Scenarios: auto-setup atomic (just `complete()`), staged mode (`prepare()` aroun
 ## Running
 
 ```bash
-bun install
-bun run --filter example-showcase-processing-modes start
+pnpm install
+pnpm --filter example-showcase-processing-modes start
 ```

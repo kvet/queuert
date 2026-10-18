@@ -7,6 +7,6 @@ Scenarios: single lookups with type narrowing, batch lookups, type discovery, pe
 ## Running
 
 ```bash
-bun install
-bun run --filter example-showcase-queries start
+pnpm install
+pnpm --filter example-showcase-queries start
 ```
