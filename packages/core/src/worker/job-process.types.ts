@@ -208,24 +208,9 @@ export type AttemptPrepare<
 };
 
 /**
- * Typed step function provided to the
- * `attemptHandler`. Opens a fresh guarded transaction
- * mid-attempt — only valid in staged mode between `prepare` and `complete`.
- */
-export type AttemptStep<
-  TStateAdapter extends StateAdapter<BaseTxContext, any>,
-  TStepCtx = Record<string, unknown>,
-> = <T>(
-  stepCallback: (
-    options: { transactionHooks: TransactionHooks } & GetStateAdapterTxContext<TStateAdapter> &
-      TStepCtx,
-  ) => T | Promise<T>,
-) => Promise<Awaited<T>>;
-
-/**
  * Handler function called for each job attempt.
  *
- * Receives `signal` (aborts when the worker is stopping or the attempt is lost), `job` (the running job with blockers), `prepare` (transaction setup), `step` (mid-attempt transactions), and `complete` (the final phase).
+ * Receives `signal` (aborts when the worker is stopping or the attempt is lost), `job` (the running job with blockers), `prepare` (transaction setup), and `complete` (the final phase).
  *
  * Processing mode is inferred automatically:
  * - If `complete` is called synchronously (no prior `await`), `prepare` is skipped and the job runs in **atomic** mode (single transaction).
@@ -238,7 +223,6 @@ export type AttemptHandler<
   TChainTypeName extends string,
   THandlerCtx,
   TPrepareCtx,
-  TStepCtx,
   TCompleteCtx,
 > = (
   processOptions: {
@@ -250,7 +234,6 @@ export type AttemptHandler<
       TChainTypeName
     >;
     prepare: AttemptPrepare<TStateAdapter, TPrepareCtx>;
-    step: AttemptStep<TStateAdapter, TStepCtx>;
     complete: AttemptComplete<
       TStateAdapter,
       TJobTypeDefinitions,

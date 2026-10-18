@@ -100,4 +100,4 @@ Your handler can also decline: just return without calling `completeJob`. The ch
 
 Internally, `completeChain` locks the current job at the state adapter level, preventing concurrent completion by a worker or another caller. The completed job has `completedBy: null` (no worker identity), distinguishing it from worker-completed jobs.
 
-If a worker is already processing the job when `completeChain` runs, the worker detects the external completion via `JobAlreadyCompletedError`. The worker's abort signal fires, any later `step` or `complete` in the handler throws `JobAlreadyCompletedError`, and the worker abandons its attempt gracefully.
+If a worker is already processing the job when `completeChain` runs, the worker detects the external completion via `JobAlreadyCompletedError`. The worker's abort signal fires, a later `complete` in the handler throws `JobAlreadyCompletedError`, and the worker abandons its attempt gracefully.

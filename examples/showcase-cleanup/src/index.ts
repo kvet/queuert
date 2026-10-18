@@ -71,7 +71,7 @@ const cleanupProcessorRegistry = createProcessors({
   jobTypes: cleanupJobTypes,
   processors: {
     "queuert.cleanup": {
-      attemptHandler: async ({ job, signal, step, complete }) => {
+      attemptHandler: async ({ job, signal, complete }) => {
         const cutoffDate = new Date(Date.now() - CLEANUP_RETENTION_MS);
         let deletedChainCount = 0;
 
@@ -106,12 +106,16 @@ const cleanupProcessorRegistry = createProcessors({
               );
 
               if (chainsToDelete.length > 0) {
-                const deleted = await step(async ({ txSql, transactionHooks }) =>
-                  client.deleteChains({
-                    txSql,
-                    transactionHooks,
-                    ids: chainsToDelete.map((chain) => chain.id),
-                  }),
+                // TODO: check that this worker still owns the job before the batch commits, once
+                // queuert offers an ownership check for user transactions (see TODO.md).
+                const deleted = await withTransactionHooks(async (transactionHooks) =>
+                  sql.begin(async (txSql) =>
+                    client.deleteChains({
+                      txSql,
+                      transactionHooks,
+                      ids: chainsToDelete.map((chain) => chain.id),
+                    }),
+                  ),
                 );
                 deletedChainCount += deleted.length;
                 roundDeletedCount += deleted.length;

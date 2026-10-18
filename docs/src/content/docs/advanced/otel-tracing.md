@@ -24,7 +24,6 @@ PRODUCER: create chain.{type}          ← Chain published (ends immediately)
 │   │
 │   ├── CONSUMER: start job-attempt.{type}    ← Worker processes attempt (has duration)
 │   │   ├── INTERNAL: prepare
-│   │   ├── INTERNAL: step                    ← One per step() call (optional, repeatable)
 │   │   └── INTERNAL: complete
 │   │
 │   └── CONSUMER: start job-attempt.{type}    ← Retry attempt
@@ -49,7 +48,6 @@ Span kinds use OpenTelemetry's PRODUCER/CONSUMER/INTERNAL semantics. The chain h
 | **complete chain.{type}**    | CONSUMER | Blocker chain completes                          | Immediately             | ~0ms             |
 | **start job-attempt.{type}** | CONSUMER | Worker claims job                                | Attempt completes/fails | Processing time  |
 | **prepare**                  | INTERNAL | `prepare()` called                               | `prepare()` returns     | Transaction time |
-| **step**                     | INTERNAL | `step()` called (repeatable)                     | `step()` returns        | Transaction time |
 | **complete**                 | INTERNAL | `complete()` called                              | `complete()` returns    | Transaction time |
 | **complete job.{type}**      | CONSUMER | Workerless completion                            | Immediately             | ~0ms             |
 | **complete chain.{type}**    | CONSUMER | Final job completes                              | Immediately             | ~0ms             |
@@ -205,7 +203,7 @@ PRODUCER create chain.process-user [0ms] ─────────────
 
 The attempt span is set to `OK` when the attempt completes and to `ERROR` (with the exception recorded) when it fails.
 
-Phase spans (`prepare`, `step`, `complete`) follow the same rule independently: if the phase throws, its span records the exception, sets `ERROR`, and still ends. A phase that returns normally leaves its status `UNSET`.
+Phase spans (`prepare`, `complete`) follow the same rule independently: if the phase throws, its span records the exception, sets `ERROR`, and still ends. A phase that returns normally leaves its status `UNSET`.
 
 Deduplicated chain creation stays `UNSET` — see [Deduplication](#deduplication).
 
@@ -232,12 +230,6 @@ Deduplicated chain creation stays `UNSET` — see [Deduplication](#deduplication
 | Attribute           | Type   | Description                      |
 | ------------------- | ------ | -------------------------------- |
 | `queuert.worker.id` | string | Worker ID processing the attempt |
-
-### Phase Attributes
-
-| Attribute            | Type   | Description                                     |
-| -------------------- | ------ | ----------------------------------------------- |
-| `queuert.step.index` | number | Zero-based index of the step within the attempt |
 
 ### Attempt Result Attributes
 

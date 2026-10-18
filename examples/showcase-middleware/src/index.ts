@@ -8,16 +8,16 @@
  *      worker, job type and attempt number
  *   2. tenantMiddleware  — wrapPrepare: loads the tenant row inside the prepare
  *      transaction, so every handler starts with a consistent snapshot of it
- *   3. meteringMiddleware — wrapStep + wrapComplete: a `meter()` that records
- *      billable units in the *same* transaction as the job, never double-bills a
- *      retried attempt, and reports to the metrics backend only after commit
+ *   3. meteringMiddleware — wrapComplete: a `meter()` that records billable
+ *      units in the *same* transaction as the job, so a failed attempt bills
+ *      nothing, and reports to the metrics backend only after commit
  *
  * Scenarios:
  * 1. Happy path: issue-invoice continues with send-receipt; the invoice row,
  *    its usage records and job completion commit together
  * 2. Failed attempt: send-receipt throws after metering from the complete
  *    callback — the savepoint rolls the usage record back and metrics never see
- *    it, while the unit already committed by execute is not billed twice on retry
+ *    it; the retry bills the unit exactly once
  */
 
 import assert from "node:assert/strict";
@@ -42,14 +42,12 @@ const jobTypes = defineJobTypes<{
    * Workflow:
    *   issue-invoice --> send-receipt --> output { delivered }
    *
-   * Middleware nesting for one attempt (wrapPrepare / wrapStep / wrapComplete
-   * bracket the callbacks passed to prepare()/step()/complete(), not the
-   * handler body):
+   * Middleware nesting for one attempt (wrapPrepare / wrapComplete bracket the
+   * callbacks passed to prepare()/complete(), not the handler body):
    *
    *   loggingMiddleware.wrapHandler
    *     handler body starts
    *       prepare(...)  --> tenantMiddleware.wrapPrepare  --> callback
-   *       step(...)  --> meteringMiddleware.wrapStep  --> callback
    *       complete(...) --> meteringMiddleware.wrapComplete --> callback
    *     handler body ends
    *   loggingMiddleware.wrapHandler
@@ -94,8 +92,7 @@ await sql`
     job_id UUID NOT NULL,
     tenant_id TEXT NOT NULL,
     unit TEXT NOT NULL,
-    quantity INTEGER NOT NULL,
-    UNIQUE (job_id, unit)
+    quantity INTEGER NOT NULL
   )
 `;
 await sql`INSERT INTO tenant (id, name, billing_email) VALUES ('acme', 'Acme Inc', 'billing@acme.example')`;
@@ -148,8 +145,8 @@ type Meter = (unit: string, quantity: number) => Promise<void>;
 
 /**
  * Records a billable unit in the caller's transaction and queues the metrics
- * report for after commit. `UNIQUE (job_id, unit)` makes a retried attempt
- * re-metering the same unit a no-op, so the tenant is never billed twice.
+ * report for after commit. The record commits atomically with the job, so a
+ * failed attempt bills nothing and reports nothing.
  */
 const createMeter = (
   txSql: postgres.TransactionSql,
@@ -157,16 +154,10 @@ const createMeter = (
   job: { id: string; input: unknown },
 ): Meter => {
   return async (unit, quantity) => {
-    const inserted = await txSql`
+    await txSql`
       INSERT INTO usage_record (job_id, tenant_id, unit, quantity)
       VALUES (${job.id}, ${tenantIdOf(job)}, ${unit}, ${quantity})
-      ON CONFLICT (job_id, unit) DO NOTHING
-      RETURNING id
     `;
-    if (inserted.length === 0) {
-      console.log(`    · metering: ${unit} already billed by an earlier attempt`);
-      return;
-    }
     const pending = transactionHooks.getOrInsert<string[]>(meteringHookKey, () => ({
       state: [],
       flush: (units) => {
@@ -188,11 +179,8 @@ const meteringMiddleware: AttemptMiddleware<
   typeof stateAdapter,
   Record<string, never>,
   Record<string, never>,
-  { meter: Meter },
   { meter: Meter }
 > = {
-  wrapStep: async ({ job, txSql, transactionHooks, next }) =>
-    next({ meter: createMeter(txSql, transactionHooks, job) }),
   wrapComplete: async ({ job, txSql, transactionHooks, next }) =>
     next({ meter: createMeter(txSql, transactionHooks, job) }),
 };
@@ -236,16 +224,10 @@ const worker = await createInProcessWorker({
       },
 
       "send-receipt": {
-        attemptHandler: async ({ job, log, prepare, step, complete }) => {
+        attemptHandler: async ({ job, log, prepare, complete }) => {
           const tenant = await prepare({ mode: "staged" }, async ({ tenant }) => tenant);
 
-          // Rendering is billed from execute: the work is already done, so its
-          // transaction commits immediately and the unit survives a later failure.
           // Delivery is billed from complete — only a delivered receipt is billable.
-          await step(async ({ meter }) => {
-            await meter("receipt.rendered", 1);
-          });
-
           log(`delivering receipt to ${tenant.billingEmail}`);
 
           return complete(async ({ finish, meter }) => {
@@ -290,13 +272,12 @@ assert.equal(invoices.length, 1);
 
 // The first send-receipt attempt metered "receipt.delivered" and then threw: the
 // savepoint rolled the usage record back and metrics never saw it. The retry
-// billed it once, while "receipt.rendered" — committed by execute before the
-// failure — was deduplicated instead of billed twice.
+// billed it once.
 assert.deepEqual(
   usage.map((row) => row.unit),
-  ["invoice.issued", "receipt.rendered", "receipt.delivered"],
+  ["invoice.issued", "receipt.delivered"],
 );
-assert.deepEqual(reportedUnits, ["invoice.issued", "receipt.rendered", "receipt.delivered"]);
+assert.deepEqual(reportedUnits, ["invoice.issued", "receipt.delivered"]);
 
 await stopWorker();
 await notifyAdapter.close();

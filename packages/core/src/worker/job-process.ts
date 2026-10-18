@@ -34,7 +34,6 @@ import {
   runCompleteMiddlewareChain,
   runHandlerMiddlewareChain,
   runPrepareMiddlewareChain,
-  runStepMiddlewareChain,
 } from "./attempt-middleware.js";
 import {
   type AttemptComplete,
@@ -51,7 +50,6 @@ export type {
   AttemptPrepare,
   AttemptPrepareCallback,
   AttemptPrepareOptions,
-  AttemptStep,
 } from "./job-process.types.js";
 
 type AnyWorkerOutcome =
@@ -76,7 +74,6 @@ export const runJobProcess = async ({
     BaseJobTypeDefinitions,
     string,
     string,
-    Record<string, unknown>,
     Record<string, unknown>,
     Record<string, unknown>,
     Record<string, unknown>
@@ -281,53 +278,6 @@ export const runJobProcess = async ({
       }
     }) as AttemptPrepare<StateAdapter<BaseTxContext, any>>;
 
-    let stepRunning = false;
-    const step = async <T>(
-      stepCallback: (
-        options: { transactionHooks: TransactionHooks } & BaseTxContext,
-      ) => T | Promise<T>,
-    ): Promise<Awaited<T>> => {
-      if (stepRunning) {
-        throw new Error("step cannot be called in parallel");
-      }
-      stepRunning = true;
-      try {
-        await ensureStagedPrepare();
-        await autoPreparePromise;
-        if (prepareRunning) {
-          throw new Error("step cannot be called while prepare is running");
-        }
-        if (prepareTransactionContext.status === "pending") {
-          throw new Error("step is only valid in staged mode");
-        }
-        if (completeCalled) {
-          throw new Error("step cannot be called after complete");
-        }
-        const stepSpan = attemptSpanHandle?.startStep();
-        try {
-          const stepResult = await (runInGuardedTransaction(async (txCtx, transactionHooks) =>
-            runStepMiddlewareChain(
-              attemptMiddleware,
-              { job: runningJob, transactionHooks, txCtx },
-              async (stepCtx) =>
-                stepCallback({
-                  ...stepCtx,
-                  transactionHooks,
-                  ...txCtx,
-                }),
-            ),
-          ) as Promise<Awaited<T>>);
-          stepSpan?.end();
-          return stepResult;
-        } catch (error) {
-          stepSpan?.end({ error });
-          throw error;
-        }
-      } finally {
-        stepRunning = false;
-      }
-    };
-
     let completeCalled = false;
     let completeSavepointContext: SavepointContext<BaseTxContext> | undefined;
     const complete = (async (
@@ -344,9 +294,6 @@ export const runJobProcess = async ({
       await autoPreparePromise;
       if (prepareRunning) {
         throw new Error("complete cannot be called while prepare is running");
-      }
-      if (stepRunning) {
-        throw new Error("complete cannot be called while step is running");
       }
       await disposeAttemptLostListener?.();
       await attemptHeartbeat.stop();
@@ -475,7 +422,6 @@ export const runJobProcess = async ({
               }
               return prepare;
             },
-            step,
             complete,
           });
           attemptPromise.catch(() => {});

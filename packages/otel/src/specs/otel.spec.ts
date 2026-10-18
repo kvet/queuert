@@ -1278,91 +1278,6 @@ describe("Spans", () => {
     ]);
   });
 
-  it("tracks execute spans with index attribute", async ({
-    stateAdapter,
-    notifyAdapter,
-    withTransaction,
-    withWorkers,
-    observabilityAdapter,
-    log,
-    expectSpans,
-  }) => {
-    const jobTypes = defineJobTypes<{
-      test: {
-        entry: true;
-        input: null;
-        output: null;
-      };
-    }>();
-
-    const client = await createClient({
-      stateAdapter,
-      notifyAdapter,
-      observabilityAdapter,
-      log,
-      jobTypes,
-    });
-    const worker = await createInProcessWorker({
-      client,
-      concurrency: 1,
-      processors: createProcessors({
-        client,
-        jobTypes,
-        processors: {
-          test: {
-            attemptHandler: async ({ prepare, step, complete }) => {
-              await prepare({ mode: "staged" });
-              await step(async () => {});
-              await step(async () => {});
-              return complete(async ({ finish }) => finish({ output: null }));
-            },
-          },
-        },
-      }),
-    });
-
-    const chain = await withTransactionHooks(async (transactionHooks) =>
-      withTransaction(async (txCtx) =>
-        client.createChain({
-          ...txCtx,
-          transactionHooks,
-          typeName: "test",
-          input: null,
-        }),
-      ),
-    );
-
-    await withWorkers([await worker.start()], async () => {
-      await client.awaitChain(chain, completionOptions);
-    });
-
-    await expectSpans([
-      { name: "create chain.test", kind: "PRODUCER" },
-      { name: "create job.test", kind: "PRODUCER", parentName: "create chain.test" },
-      { name: "prepare", kind: "INTERNAL", parentName: "start job-attempt.test" },
-      {
-        name: "step",
-        kind: "INTERNAL",
-        parentName: "start job-attempt.test",
-        attributes: { "queuert.step.index": 0 },
-      },
-      {
-        name: "step",
-        kind: "INTERNAL",
-        parentName: "start job-attempt.test",
-        attributes: { "queuert.step.index": 1 },
-      },
-      { name: "complete", kind: "INTERNAL", parentName: "start job-attempt.test" },
-      {
-        name: "complete chain.test",
-        kind: "CONSUMER",
-        parentName: "start job-attempt.test",
-        links: 1,
-      },
-      { name: "start job-attempt.test", kind: "CONSUMER", parentName: "create job.test" },
-    ]);
-  });
-
   it("tracks error status on prepare span when prepare fails", async ({
     stateAdapter,
     notifyAdapter,
@@ -1449,7 +1364,7 @@ describe("Spans", () => {
     ]);
   });
 
-  it("tracks error status on step span when step fails", async ({
+  it("tracks error status on prepare span when prepare throws undefined", async ({
     stateAdapter,
     notifyAdapter,
     withTransaction,
@@ -1478,98 +1393,8 @@ describe("Spans", () => {
         backoffConfig: { initialDelayMs: 10, multiplier: 1, maxDelayMs: 10 },
         processors: {
           test: {
-            attemptHandler: async ({ job, prepare, step, complete }) => {
-              await prepare({ mode: "staged" });
-              await step(async () => {
-                if (job.attempt < 2) {
-                  throw new Error("step failed");
-                }
-              });
-              return complete(async ({ finish }) => finish({ output: null }));
-            },
-          },
-        },
-      }),
-    });
-
-    const chain = await withTransactionHooks(async (transactionHooks) =>
-      withTransaction(async (txCtx) =>
-        client.createChain({ ...txCtx, transactionHooks, typeName: "test", input: null }),
-      ),
-    );
-
-    await withWorkers([await worker.start()], async () => {
-      await client.awaitChain(chain, completionOptions);
-    });
-
-    await expectSpans([
-      { name: "create chain.test", kind: "PRODUCER" },
-      { name: "create job.test", kind: "PRODUCER", parentName: "create chain.test" },
-      // Attempt 1: step callback throws
-      { name: "prepare", kind: "INTERNAL", parentName: "start job-attempt.test", status: "UNSET" },
-      {
-        name: "step",
-        kind: "INTERNAL",
-        parentName: "start job-attempt.test",
-        status: "ERROR",
-      },
-      {
-        name: "start job-attempt.test",
-        kind: "CONSUMER",
-        parentName: "create job.test",
-        status: "ERROR",
-      },
-      // Attempt 2: succeeds
-      { name: "prepare", kind: "INTERNAL", parentName: "start job-attempt.test", status: "UNSET" },
-      { name: "step", kind: "INTERNAL", parentName: "start job-attempt.test", status: "UNSET" },
-      { name: "complete", kind: "INTERNAL", parentName: "start job-attempt.test", status: "UNSET" },
-      {
-        name: "complete chain.test",
-        kind: "CONSUMER",
-        parentName: "start job-attempt.test",
-        links: 1,
-      },
-      {
-        name: "start job-attempt.test",
-        kind: "CONSUMER",
-        parentName: "create job.test",
-        status: "OK",
-      },
-    ]);
-  });
-
-  it("tracks error status on step span when step throws undefined", async ({
-    stateAdapter,
-    notifyAdapter,
-    withTransaction,
-    withWorkers,
-    observabilityAdapter,
-    log,
-    expectSpans,
-  }) => {
-    const jobTypes = defineJobTypes<{
-      test: { entry: true; input: null; output: null };
-    }>();
-
-    const client = await createClient({
-      stateAdapter,
-      notifyAdapter,
-      observabilityAdapter,
-      log,
-      jobTypes,
-    });
-    const worker = await createInProcessWorker({
-      client,
-      concurrency: 1,
-      processors: createProcessors({
-        client,
-        jobTypes,
-        backoffConfig: { initialDelayMs: 10, multiplier: 1, maxDelayMs: 10 },
-        processors: {
-          test: {
-            attemptHandler: async ({ job, prepare, step, complete }) => {
-              await prepare({ mode: "staged" });
-              await step(async () => {
+            attemptHandler: async ({ job, prepare, complete }) => {
+              await prepare({ mode: "staged" }, async () => {
                 if (job.attempt < 2) {
                   // oxlint-disable-next-line only-throw-error -- intentional non-error throw
                   throw undefined;
@@ -1595,9 +1420,8 @@ describe("Spans", () => {
     await expectSpans([
       { name: "create chain.test", kind: "PRODUCER" },
       { name: "create job.test", kind: "PRODUCER", parentName: "create chain.test" },
-      { name: "prepare", kind: "INTERNAL", parentName: "start job-attempt.test", status: "UNSET" },
       {
-        name: "step",
+        name: "prepare",
         kind: "INTERNAL",
         parentName: "start job-attempt.test",
         status: "ERROR",
@@ -1609,7 +1433,6 @@ describe("Spans", () => {
         status: "ERROR",
       },
       { name: "prepare", kind: "INTERNAL", parentName: "start job-attempt.test", status: "UNSET" },
-      { name: "step", kind: "INTERNAL", parentName: "start job-attempt.test", status: "UNSET" },
       { name: "complete", kind: "INTERNAL", parentName: "start job-attempt.test", status: "UNSET" },
       {
         name: "complete chain.test",

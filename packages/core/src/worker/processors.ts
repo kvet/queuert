@@ -13,7 +13,6 @@ export type InProcessWorkerProcessor<
   TJobTypeName extends string,
   THandlerCtx,
   TPrepareCtx,
-  TStepCtx,
   TCompleteCtx,
 > = {
   /** Handler function called for each job attempt */
@@ -24,7 +23,6 @@ export type InProcessWorkerProcessor<
     JobTypeReachingEntry<TJobTypeDefinitions, TJobTypeName>,
     THandlerCtx,
     TPrepareCtx,
-    TStepCtx,
     TCompleteCtx
   >;
   /** Per-job-type backoff configuration (overrides registry/worker defaults) */
@@ -79,7 +77,6 @@ export type Processors<
   TAttemptMiddleware extends readonly AnyAttemptMiddleware[] = readonly AnyAttemptMiddleware[],
 > = {
   readonly [K in JobTypeNames<TJobTypeDefinitions>]: InProcessWorkerProcessor<
-    any,
     any,
     any,
     any,

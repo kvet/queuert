@@ -74,7 +74,7 @@ The OTEL adapter serializes `SpanContext` objects to this format for storage and
 
 3. **Continuation** (`continueWith`): Reads origin job's `traceContext`, creates new PRODUCER job span as child. Inherits `chainTraceContext` from origin (chain context stays the same). New job gets its own `traceContext`.
 
-4. **Worker processing**: Reads job's `traceContext` from database, creates CONSUMER attempt span as child. All processing spans (prepare, step, complete) are children of the attempt span.
+4. **Worker processing**: Reads job's `traceContext` from database, creates CONSUMER attempt span as child. All processing spans (prepare, complete) are children of the attempt span.
 
 5. **Blocker resolution** (`unblockJobs`): Reads PRODUCER span context from `job_blocker` table, creates CONSUMER `complete chain` span as child of the PRODUCER — linking across processes and time. A blocker chain that is already completed when the dependent chain is created gets its CONSUMER span immediately, during creation.
 
@@ -126,5 +126,5 @@ The buffering mechanism is shared with notification events (`notifyJobScheduled`
 - [OTEL Tracing](../otel-tracing/) — Span hierarchy and attributes
 - [Adapter Architecture](../adapters/) — Transactional buffering design
 - [Chain Model](../chain-model/) — Chain identity and continuation model
-- [Job Processing](../job-processing/) — Prepare/step/complete pattern
+- [Job Processing](../job-processing/) — Prepare/complete pattern
 - [In-Process Worker](../in-process-worker/) — Worker lifecycle and attempt handling
