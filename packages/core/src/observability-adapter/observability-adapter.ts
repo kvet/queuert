@@ -1,6 +1,5 @@
 import { type NotifyAdapter } from "../notify-adapter/notify-adapter.js";
 import { type StateAdapter } from "../state-adapter/state-adapter.js";
-import { type JobAbortReason } from "../worker/job-process.js";
 import {
   type ChainBasicData,
   type JobAttemptData,
@@ -88,7 +87,6 @@ export type JobAttemptSpanHandle = {
   startPrepare: () => SpanHandle;
   startStep: () => SpanHandle;
   startComplete: () => SpanHandle;
-  recordAbort: (reason: JobAbortReason) => void;
   end: (result: JobAttemptSpanResult) => void;
 };
 

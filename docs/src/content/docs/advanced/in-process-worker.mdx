@@ -72,11 +72,11 @@ On startup, the worker emits a `workerStarted` observability event.
 Calling `stop()` triggers graceful shutdown:
 
 1. Emit the `workerStopping` observability event
-2. Signal abort controller — in-flight jobs receive `"worker_stopping"` on their `signal`, and the main loop stops spawning new slots
+2. Signal abort controller — in-flight jobs see their `signal` abort, and the main loop stops spawning new slots
 3. Wait for the main loop to exit, then for all in-flight handlers to finish (complete or throw)
 4. Emit the `workerStopped` observability event
 
-The `"worker_stopping"` abort reason is cooperative: handlers that check `signal.aborted` and `signal.reason` can distinguish a worker shutdown from a hard abort (e.g. `"taken_by_another_worker"`) and choose to wrap up gracefully instead of abandoning work immediately.
+Stopping is cooperative: the attempt is still held, so handlers that check `signal.aborted` can wrap up and still call `complete` (with partial output or `finish({ reschedule })`) instead of abandoning work.
 
 ## Worker Identity
 
@@ -148,4 +148,4 @@ The worker design emphasizes:
 
 - [Job Processing](../job-processing/) — Prepare/complete pattern, abort signals, timeouts
 - [Adapters](../adapters/) — Notification optimization, state provider design
-- [`showcase-signals`](https://github.com/kvet/queuert/tree/main/examples/showcase-signals) — Runnable example: graceful shutdown via `worker_stopping`, external completion via `already_completed`
+- [`showcase-signals`](https://github.com/kvet/queuert/tree/main/examples/showcase-signals) — Runnable example: graceful shutdown with partial results, external completion via `completeChain`

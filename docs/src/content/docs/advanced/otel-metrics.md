@@ -58,8 +58,6 @@ Attribute names follow OpenTelemetry semantic conventions (lowercase, dotted) an
 | `queuert.job.attempt.reclaimed`               | `queuert.job.type`, `queuert.chain.type` | Expired attempt reclaimed for retry                                 |
 | `queuert.job.attempt.extended`                | `queuert.job.type`, `queuert.chain.type` | Attempt successfully extended during processing                     |
 
-Abort reasons are not a counter — they are recorded as an `abort` event on the attempt span; see [Span Events](../otel-tracing/#span-events) in the tracing reference.
-
 ### Chain Lifecycle
 
 | Metric                    | Attributes           | Description     |

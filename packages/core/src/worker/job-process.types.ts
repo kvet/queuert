@@ -11,7 +11,6 @@ import {
 } from "../entities/job-types.resolvers.js";
 import { type AnyJob } from "../entities/job.js";
 import { type ScheduleOptions } from "../entities/schedule.js";
-import { type TypedAbortSignal } from "../helpers/abort.js";
 import {
   type BaseTxContext,
   type GetStateAdapterJobId,
@@ -19,14 +18,6 @@ import {
   type StateAdapter,
 } from "../state-adapter/state-adapter.js";
 import { type TransactionHooks } from "../transaction-hooks.js";
-
-/** Reasons a job attempt's signal can be aborted. */
-export type JobAbortReason =
-  | "taken_by_another_worker"
-  | "error"
-  | "not_found"
-  | "already_completed"
-  | "worker_stopping";
 
 type AttemptContinueWithOutcome<
   TStateAdapter extends StateAdapter<BaseTxContext, any>,
@@ -234,7 +225,7 @@ export type AttemptStep<
 /**
  * Handler function called for each job attempt.
  *
- * Receives `signal` (abort signal), `job` (the running job with blockers), `prepare` (transaction setup), `step` (mid-attempt transactions), and `complete` (the final phase).
+ * Receives `signal` (aborts when the worker is stopping or the attempt is lost), `job` (the running job with blockers), `prepare` (transaction setup), `step` (mid-attempt transactions), and `complete` (the final phase).
  *
  * Processing mode is inferred automatically:
  * - If `complete` is called synchronously (no prior `await`), `prepare` is skipped and the job runs in **atomic** mode (single transaction).
@@ -251,7 +242,7 @@ export type AttemptHandler<
   TCompleteCtx,
 > = (
   processOptions: {
-    signal: TypedAbortSignal<JobAbortReason>;
+    signal: AbortSignal;
     job: ResolvedRunningJob<
       GetStateAdapterJobId<TStateAdapter>,
       TJobTypeDefinitions,

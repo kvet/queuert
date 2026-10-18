@@ -253,7 +253,7 @@ export const deletionTestSuite = ({ it }: { it: TestAPI<TestSuiteContext> }): vo
 
               await sleep(5000, { signal });
 
-              expect(signal.reason).toBe("not_found");
+              expect(signal.aborted).toBe(true);
               jobDeleted.resolve();
 
               throw new Error();

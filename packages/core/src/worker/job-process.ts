@@ -8,7 +8,6 @@ import {
   JobNotFoundError,
   JobTakenByAnotherWorkerError,
 } from "../errors.js";
-import { type TypedAbortController } from "../helpers/abort.js";
 import { type BackoffConfig } from "../helpers/backoff.js";
 import { bufferNotifyJobScheduled } from "../helpers/notify-hooks.js";
 import { bufferObservabilityEvent } from "../helpers/observability-hooks.js";
@@ -41,7 +40,6 @@ import {
   type AttemptComplete,
   type AttemptHandler,
   type AttemptPrepare,
-  type JobAbortReason,
 } from "./job-process.types.js";
 
 export type {
@@ -54,7 +52,6 @@ export type {
   AttemptPrepareCallback,
   AttemptPrepareOptions,
   AttemptStep,
-  JobAbortReason,
 } from "./job-process.types.js";
 
 type AnyWorkerOutcome =
@@ -94,16 +91,19 @@ export const runJobProcess = async ({
 }): Promise<void> => {
   let completeTransactionContext: TransactionContext<BaseTxContext> | null = null;
 
-  const abortController = new AbortController() as TypedAbortController<JobAbortReason>;
+  const abortController = new AbortController();
+  let hardAbortError: { error: unknown } | null = null;
+  const hardAbort = (error: unknown) => {
+    hardAbortError ??= { error };
+    abortController.abort();
+  };
 
   let cleanupStopListener: (() => void) | null = null;
   if (stopSignal.aborted) {
-    abortController.abort("worker_stopping");
+    abortController.abort();
   } else {
     const onStop = () => {
-      if (!abortController.signal.aborted) {
-        abortController.abort("worker_stopping");
-      }
+      abortController.abort();
     };
     stopSignal.addEventListener("abort", onStop, { once: true });
     cleanupStopListener = () => {
@@ -112,23 +112,10 @@ export const runJobProcess = async ({
     abortController.signal.addEventListener("abort", () => cleanupStopListener?.(), { once: true });
   }
   const throwIfHardAborted = () => {
-    if (!abortController.signal.aborted || !abortController.signal.reason) return;
-    if (abortController.signal.reason === "worker_stopping") return;
-    if (abortController.signal.reason === "already_completed") {
-      throw new JobAlreadyCompletedError("Job already completed (signal aborted)", {
-        jobId: stateJob.id,
-      });
+    if (hardAbortError !== null) {
+      // oxlint-disable-next-line typescript/only-throw-error -- re-throwing the error that aborted the attempt
+      throw hardAbortError.error;
     }
-    if (abortController.signal.reason === "not_found") {
-      throw new JobNotFoundError("Job not found (signal aborted)", { jobId: stateJob.id });
-    }
-    if (abortController.signal.reason === "taken_by_another_worker") {
-      throw new JobTakenByAnotherWorkerError("Job taken by another worker (signal aborted)", {
-        jobId: stateJob.id,
-        workerId,
-      });
-    }
-    throw new Error(`Job processing aborted: ${abortController.signal.reason}`);
   };
   const refetchJobLocked = async (txCtx: BaseTxContext) => {
     throwIfHardAborted();
@@ -138,16 +125,12 @@ export const runJobProcess = async ({
       job: stateJob,
       workerId,
     }).catch((error: unknown) => {
-      if (!abortController.signal.aborted) {
-        if (error instanceof JobNotFoundError) {
-          abortController.abort("not_found");
-        }
-        if (error instanceof JobAlreadyCompletedError) {
-          abortController.abort("already_completed");
-        }
-        if (error instanceof JobTakenByAnotherWorkerError) {
-          abortController.abort("taken_by_another_worker");
-        }
+      if (
+        error instanceof JobNotFoundError ||
+        error instanceof JobAlreadyCompletedError ||
+        error instanceof JobTakenByAnotherWorkerError
+      ) {
+        hardAbort(error);
       }
       throw error;
     });
@@ -191,6 +174,7 @@ export const runJobProcess = async ({
         await runInGuardedTransaction(async (txCtx) => extendAttempt(txCtx, timeoutMs));
         helpers.observabilityHelper.jobAttemptExtended(stateJob, { workerId });
       } catch (error) {
+        hardAbort(error);
         if (
           error instanceof JobTakenByAnotherWorkerError ||
           error instanceof JobNotFoundError ||
@@ -198,7 +182,6 @@ export const runJobProcess = async ({
         ) {
           return;
         }
-        abortController.abort("error");
         throw error;
       }
     },
@@ -237,24 +220,6 @@ export const runJobProcess = async ({
       chainTraceContext: stateJob.chain.traceContext,
       traceContext: stateJob.traceContext,
     });
-
-    let cleanupAbortListener: (() => void) | null = null;
-    if (attemptSpanHandle) {
-      const recordAbort = () => {
-        const reason = abortController.signal.reason;
-        if (reason) {
-          attemptSpanHandle.recordAbort(reason);
-        }
-      };
-      if (abortController.signal.aborted) {
-        recordAbort();
-      } else {
-        abortController.signal.addEventListener("abort", recordAbort, { once: true });
-        cleanupAbortListener = () => {
-          abortController.signal.removeEventListener("abort", recordAbort);
-        };
-      }
-    }
 
     let prepareAccessed = false;
     let prepareCalled = false;
@@ -302,7 +267,7 @@ export const runJobProcess = async ({
             disposeAttemptLostListener = await helpers.notifyAdapter.listenJobAttemptLost(
               stateJob.id,
               () => {
-                if (!abortController.signal.aborted) {
+                if (hardAbortError === null) {
                   void runInGuardedTransaction(async () => Promise.resolve()).catch(() => {});
                 }
               },
@@ -586,8 +551,6 @@ export const runJobProcess = async ({
 
         attemptSpanHandle?.end({ status: "failed", error });
       }
-    } finally {
-      cleanupAbortListener?.();
     }
   };
 

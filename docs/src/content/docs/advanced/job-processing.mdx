@@ -120,29 +120,19 @@ On any unhandled error the job is rescheduled with exponential backoff (default:
 
 See [Job Processing Reliability](../../guides/processing-reliability/) for per-phase error scenarios with code examples.
 
-### Abort Signal and Reasons
+### Abort Signal
 
-Every attempt handler receives a `signal` (`TypedAbortSignal<JobAbortReason>`) that is aborted when the job should stop. The `signal.reason` distinguishes the cause:
-
-| Reason                      | Meaning                                                                            |
-| --------------------------- | ---------------------------------------------------------------------------------- |
-| `"taken_by_another_worker"` | Another worker acquired the job (attempt expired and was released)                 |
-| `"not_found"`               | The job no longer exists in the database                                           |
-| `"already_completed"`       | The job was already completed                                                      |
-| `"error"`                   | Renewing the attempt (heartbeat) failed unexpectedly — ownership is uncertain, not confirmed lost |
-| `"worker_stopping"`         | The worker is shutting down — the job is still valid and the attempt is still held |
-
-The first three reasons indicate the job is no longer owned by this worker, and `"error"` means ownership can no longer be confirmed — in all four cases handlers should stop immediately. `"worker_stopping"` is different: the job remains valid, but the worker is draining, so handlers should check `signal.reason` and wrap up quickly. Every attempt must still end in an outcome: call `complete` (which may `finish({ reschedule })`), or throw so the attempt is rescheduled with backoff. A handler that simply returns without completing fails the attempt.
+Every attempt handler receives a `signal` that aborts when the worker is stopping, when the attempt is lost (taken by another worker, deleted, or completed externally), or when ownership can no longer be confirmed (the heartbeat failed). On abort, stop working and call `complete` — with partial output or `finish({ reschedule })` — or throw to reschedule with backoff. In the last two cases, `step` and `complete` throw and the worker discards the attempt. A handler that returns without completing fails the attempt.
 
 ```typescript
 attemptHandler: async ({ signal, complete }) => {
+  let processed = 0;
   for (const item of items) {
-    if (signal.aborted && signal.reason === "worker_stopping") {
-      break; // finish early, complete with partial results
-    }
+    if (signal.aborted) break;
     await processItem(item);
+    processed++;
   }
-  return complete(async ({ finish }) => finish({ output: { processed: items.length } }));
+  return complete(async ({ finish }) => finish({ output: { processed } }));
 },
 ```
 
@@ -152,4 +142,4 @@ attemptHandler: async ({ signal, complete }) => {
 - [Client API](/queuert/api/core/type-aliases/client/) — Mutation methods, query methods, awaitChain
 - [In-Process Worker](../in-process-worker/) — Worker lifecycle, attempt management, expired attempt reclamation
 - [Adapters](../adapters/) — StateAdapter context architecture
-- [`showcase-signals`](https://github.com/kvet/queuert/tree/main/examples/showcase-signals) — Runnable example: `already_completed` via external `completeChain`, `worker_stopping` via graceful shutdown
+- [`showcase-signals`](https://github.com/kvet/queuert/tree/main/examples/showcase-signals) — Runnable example: external completion via `completeChain`, graceful shutdown with partial results

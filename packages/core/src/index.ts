@@ -36,7 +36,6 @@ export {
   WaitChainTimeoutError,
   type JobTypeValidationErrorCode,
 } from "./errors.js";
-export { type TypedAbortSignal } from "./helpers/abort.js";
 export { type BackoffConfig } from "./helpers/backoff.js";
 export { type RetryConfig } from "./helpers/retry.js";
 export {
@@ -71,5 +70,4 @@ export {
 export { type AttemptConfig } from "./worker/attempt-heartbeat.js";
 export { type AttemptMiddleware } from "./worker/attempt-middleware.js";
 export { createProcessors } from "./worker/create-processors.js";
-export { type JobAbortReason } from "./worker/job-process.js";
 export { type Processors } from "./worker/processors.js";

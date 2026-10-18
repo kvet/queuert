@@ -7,14 +7,13 @@ import {
 } from "../entities/job-types.resolvers.js";
 import { type InProcessStateAdapter } from "../state-adapter/state-adapter.in-process.js";
 import {
-  type AttemptFinish,
   type AttemptComplete,
   type AttemptCompleteCallback,
   type AttemptCompleteOptions,
+  type AttemptFinish,
   type AttemptHandler,
   type AttemptPrepare,
   type AttemptStep,
-  type JobAbortReason,
 } from "./job-process.types.js";
 
 type LinearDefs = {
@@ -391,10 +390,6 @@ describe("AttemptHandler", () => {
 
   it("resolves job.input to the job type input", () => {
     expectTypeOf<Options["job"]["input"]>().toEqualTypeOf<{ value: number }>();
-  });
-
-  it("types the abort signal reasons", () => {
-    expectTypeOf<Options["signal"]["reason"]>().toEqualTypeOf<JobAbortReason | undefined>();
   });
 
   it("exposes prepare, step and complete", () => {

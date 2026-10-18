@@ -25,7 +25,6 @@ PRODUCER: create chain.{type}          ← Chain published (ends immediately)
 │   ├── CONSUMER: start job-attempt.{type}    ← Worker processes attempt (has duration)
 │   │   ├── INTERNAL: prepare
 │   │   ├── INTERNAL: step                    ← One per step() call (optional, repeatable)
-│   │   ├── EVENT: abort                      ← Signal aborted (if interrupted)
 │   │   └── INTERNAL: complete
 │   │
 │   └── CONSUMER: start job-attempt.{type}    ← Retry attempt
@@ -54,8 +53,6 @@ Span kinds use OpenTelemetry's PRODUCER/CONSUMER/INTERNAL semantics. The chain h
 | **complete**                 | INTERNAL | `complete()` called                              | `complete()` returns    | Transaction time |
 | **complete job.{type}**      | CONSUMER | Workerless completion                            | Immediately             | ~0ms             |
 | **complete chain.{type}**    | CONSUMER | Final job completes                              | Immediately             | ~0ms             |
-
-The attempt span may also carry an **`abort` event** — see [Span Events](#span-events).
 
 ## Blocker Relationships
 
@@ -263,18 +260,6 @@ Deduplicated chain creation stays `UNSET` — see [Deduplication](#deduplication
 | `queuert.blocker.chain.id`   | string | Blocker chain ID                           |
 | `queuert.blocker.chain.type` | string | Blocker chain type name                    |
 | `queuert.blocker.index`      | number | Index of the blocker in the blockers array |
-
-## Span Events
-
-Events are point-in-time records on a span, separate from span attributes — query them via the span's event list, not its attribute set.
-
-### Abort Event
-
-Recorded on the attempt span at the moment the job's abort signal fires, giving operators the exact timestamp and reason for the interruption.
-
-| Event   | Event Attribute        | Type   | Description                                                                                                            |
-| ------- | ---------------------- | ------ | ---------------------------------------------------------------------------------------------------------------------- |
-| `abort` | `queuert.abort.reason` | string | Why the signal was aborted: `worker_stopping`, `taken_by_another_worker`, `already_completed`, `not_found`, or `error` |
 
 ## See Also
 

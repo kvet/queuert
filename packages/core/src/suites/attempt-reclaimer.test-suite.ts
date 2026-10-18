@@ -128,7 +128,6 @@ export const attemptReclaimerTestSuite = ({ it }: { it: TestAPI<TestSuiteContext
                   await sleep(attemptConfig.heartbeatMs * 2, { signal });
                 } finally {
                   expect(signal.aborted).toBe(true);
-                  expect(signal.reason).toBeOneOf(["already_completed", "taken_by_another_worker"]);
                   jobCompleted.resolve();
                 }
               }
@@ -159,7 +158,6 @@ export const attemptReclaimerTestSuite = ({ it }: { it: TestAPI<TestSuiteContext
                   await sleep(attemptConfig.heartbeatMs * 2, { signal });
                 } finally {
                   expect(signal.aborted).toBe(true);
-                  expect(signal.reason).toBeOneOf(["already_completed", "taken_by_another_worker"]);
                   jobCompleted.resolve();
                 }
               }

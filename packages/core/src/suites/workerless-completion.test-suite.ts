@@ -554,10 +554,9 @@ export const workerlessCompletionTestSuite = ({ it }: { it: TestAPI<TestSuiteCon
               try {
                 await expect(
                   complete(async ({ finish }) => finish({ output: { result: "from-worker" } })),
-                ).rejects.toThrow();
+                ).rejects.toThrow(JobAlreadyCompletedError);
 
                 expect(signal.aborted).toBe(true);
-                expect(signal.reason).toBe("already_completed");
 
                 throw new Error();
               } finally {

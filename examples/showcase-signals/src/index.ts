@@ -4,8 +4,8 @@
  * Demonstrates abort signal patterns for cooperative job processing.
  *
  * Scenarios:
- * 1. External Completion: Handler detects already_completed when completeChain is called externally
- * 2. Worker Stopping: Handler detects worker_stopping and wraps up gracefully
+ * 1. External Completion: completeChain is called externally; the handler stops and the worker discards its attempt
+ * 2. Worker Stopping: the worker stops mid-batch; the handler completes with partial results
  */
 
 import assert from "node:assert/strict";
@@ -66,10 +66,7 @@ const processors = createProcessors({
 
         for (let i = 0; i < job.input.maxPolls; i++) {
           if (signal.aborted) {
-            console.log(`  Signal aborted: ${signal.reason} — stopping poll loop`);
-            if (signal.reason === "already_completed") {
-              throw new Error("Job completed externally");
-            }
+            console.log("  Signal aborted — stopping poll loop");
             break;
           }
 
@@ -96,9 +93,9 @@ const processors = createProcessors({
 
         let processed = 0;
         for (let i = 0; i < job.input.itemCount; i++) {
-          if (signal.aborted && signal.reason === "worker_stopping") {
+          if (signal.aborted) {
             console.log(
-              `  Worker stopping — wrapping up after ${processed}/${job.input.itemCount} items`,
+              `  Signal aborted — wrapping up after ${processed}/${job.input.itemCount} items`,
             );
             break;
           }
@@ -137,7 +134,7 @@ const batchStarted = async () =>
   });
 
 // Scenario 1: External completion via completeChain
-console.log("\n--- Scenario 1: External Completion (already_completed) ---");
+console.log("\n--- Scenario 1: External Completion ---");
 console.log("Handler is waiting when completeChain is called externally.\n");
 
 const externalTask = await withTransactionHooks(async (transactionHooks) =>
@@ -185,8 +182,8 @@ assert.equal(externalResult.output.source, "external");
 
 await stopWorker1();
 
-// Scenario 2: Worker stopping signal
-console.log("\n--- Scenario 2: Worker Stopping Signal ---");
+// Scenario 2: Worker stopping
+console.log("\n--- Scenario 2: Worker Stopping ---");
 console.log("Worker stops while batch job is running. Handler wraps up gracefully.\n");
 
 const batch = await withTransactionHooks(async (transactionHooks) =>

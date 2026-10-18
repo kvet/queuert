@@ -421,10 +421,6 @@ export const createOtelObservabilityAdapter = async ({
           );
         },
 
-        recordAbort(reason) {
-          attemptSpan.addEvent("abort", { "queuert.abort.reason": reason });
-        },
-
         end(result) {
           if (result.status === "failed") {
             attemptSpan.recordException(toException(result.error));

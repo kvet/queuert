@@ -208,7 +208,7 @@ Defaults: `durationMs: 60_000`, `heartbeatMs: 20_000` — three renewal opportun
 
 **stop()**
 
-1. Emit `workerStopping` and abort the stop signal — in-flight attempts see `"worker_stopping"`.
+1. Emit `workerStopping` and abort the stop signal — in-flight attempts see their `signal` abort.
 2. Stop filling; drain the executor.
 3. Stop the lease manager.
 4. `stopWorker`, releasing anything still held (normally nothing), then emit `workerStopped`.
@@ -217,7 +217,7 @@ The lease manager keeps renewing throughout the drain, so a long graceful shutdo
 
 **Recovery.** On lease loss:
 
-1. Abort in-flight attempts with the new hard reason `"worker_lease_lost"`, stop filling slots, and drain. Those attempts will mostly fail on their next `refetchJobLocked` with `JobTakenByAnotherWorkerError` (already swallowed by `handleJobHandlerError`) — the abort makes it prompt and explicit rather than a surprise at complete time.
+1. Hard-abort in-flight attempts with a lease-lost error (later `step` / `complete` calls rethrow it), stop filling slots, and drain. The abort makes the loss prompt and explicit rather than a surprise at the next `refetchJobLocked`, and the worker discards those attempts.
 2. Emit `workerLeaseLost`, then `workerStopping`; stop the lease manager. When the drain finishes, emit `workerStopped` — there is no `stopWorker` call to make, because the row is the reclaimer's to delete.
 3. On `recoveryBackoffConfig`, `startWorker` with a **freshly generated** UUID. The old id belongs to a row that a reclaimer owns; reusing it risks colliding with a row that has not been swept yet.
 4. On success, emit `workerStarted` for the new id and resume the main loop.
@@ -261,7 +261,6 @@ Breaking, all bundled into one changeset:
 - `listJobs` / `client.listJobs` lose `orderBy: "attemptUntil"` for `status: "running"`; `attemptAt` and `createdAt` remain. The dashboard's running-jobs view switches to `attemptAt`.
 - `createProcessors({ attemptConfig })` and `createInProcessWorker({ defaults: { attemptConfig } })` removed, replaced by `createInProcessWorker({ lease })`. `AttemptConfig` and `createAttemptHeartbeat` are deleted.
 - `StateAdapter` loses `extendJobAttempt` / `reclaimExpiredJobAttempt` and gains `startWorker`, `stopWorker`, `getWorker`, `extendWorkerLease`, `reclaimExpiredWorkers`, `listWorkers` — a breaking change for any custom adapter.
-- New `JobAbortReason` member `"worker_lease_lost"` (hard/error-level, so it also lands in the `HardJobAbortReason` split tracked in `TODO.md`).
 
 ## Prototype scope
 

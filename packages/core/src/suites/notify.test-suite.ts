@@ -361,7 +361,6 @@ export const notifyTestSuite = ({ it }: { it: TestAPI<TestSuiteContext> }): void
 
               await sleep(1000, { signal });
               expect(signal.aborted).toBe(true);
-              expect(signal.reason).toBe("already_completed");
               jobCompleted.resolve();
 
               throw new Error();
@@ -453,7 +452,6 @@ export const notifyTestSuite = ({ it }: { it: TestAPI<TestSuiteContext> }): void
 
                 await sleep(2000, { signal });
                 expect(signal.aborted).toBe(true);
-                expect(signal.reason).toBe("taken_by_another_worker");
                 jobCompleted.resolve();
 
                 throw new Error();

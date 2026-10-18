@@ -2,7 +2,7 @@
 
 Abort signal patterns for job processing.
 
-Scenarios: graceful shutdown via `worker_stopping` signal reason; external completion via `completeChain` triggering `already_completed` on a running handler.
+Scenarios: graceful shutdown where the handler stops on `signal` and completes with partial results; external completion via `completeChain` where the running handler stops and the worker discards its attempt.
 
 ## Running
 

@@ -74,7 +74,7 @@ The OTEL adapter serializes `SpanContext` objects to this format for storage and
 
 3. **Continuation** (`continueWith`): Reads origin job's `traceContext`, creates new PRODUCER job span as child. Inherits `chainTraceContext` from origin (chain context stays the same). New job gets its own `traceContext`.
 
-4. **Worker processing**: Reads job's `traceContext` from database, creates CONSUMER attempt span as child. All processing spans (prepare, step, complete) are children of the attempt span. When a job's abort signal fires, a `recordAbort` event is recorded on the attempt span with the abort reason (e.g., `worker_stopping`, `taken_by_another_worker`).
+4. **Worker processing**: Reads job's `traceContext` from database, creates CONSUMER attempt span as child. All processing spans (prepare, step, complete) are children of the attempt span.
 
 5. **Blocker resolution** (`unblockJobs`): Reads PRODUCER span context from `job_blocker` table, creates CONSUMER `complete chain` span as child of the PRODUCER — linking across processes and time. A blocker chain that is already completed when the dependent chain is created gets its CONSUMER span immediately, during creation.
 
@@ -109,7 +109,7 @@ Events representing write claims inside transactions:
 Events that need immediate context or occur outside transactions:
 
 - **Span starts**: Must happen before the database write that stores the trace context
-- **Events outside transactions**: `jobAttemptStarted`, `jobAttemptDuration`, `jobAttemptExtended`, `recordAbort`, attempt span ends
+- **Events outside transactions**: `jobAttemptStarted`, `jobAttemptDuration`, `jobAttemptExtended`, attempt span ends
 - **Read-only observations**: Events that observe state without claiming writes
 
 ### Self-Cleaning via Savepoints

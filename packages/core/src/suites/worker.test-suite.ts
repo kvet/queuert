@@ -3,11 +3,11 @@ import { type TestAPI } from "vitest";
 import { createClient } from "../client.js";
 import { type Chain } from "../entities/chain.js";
 import { defineJobTypes } from "../entities/define-job-types.js";
+import { JobAlreadyCompletedError } from "../errors.js";
 import { sleep } from "../helpers/sleep.js";
 import { createInProcessWorker } from "../in-process-worker.js";
 import { type AttemptMiddleware } from "../worker/attempt-middleware.js";
 import { createProcessors } from "../worker/create-processors.js";
-import { type JobAbortReason } from "../worker/job-process.js";
 import { type TestSuiteContext } from "./spec-context.spec-helper.js";
 
 export const workerTestSuite = ({ it }: { it: TestAPI<TestSuiteContext> }): void => {
@@ -659,7 +659,7 @@ export const workerTestSuite = ({ it }: { it: TestAPI<TestSuiteContext> }): void
     ]);
   });
 
-  it("aborts in-flight job signal with worker_stopping when worker stops", async ({
+  it("aborts in-flight job signal when worker stops and still allows step and complete", async ({
     stateAdapter,
     notifyAdapter,
     withTransaction,
@@ -667,8 +667,6 @@ export const workerTestSuite = ({ it }: { it: TestAPI<TestSuiteContext> }): void
     log,
     expect,
   }) => {
-    let observedAborted = false;
-    let observedReason: JobAbortReason | undefined;
     const { promise: handlerStarted, resolve: onHandlerStarted } = Promise.withResolvers<void>();
 
     const jobTypes = defineJobTypes<{
@@ -690,7 +688,7 @@ export const workerTestSuite = ({ it }: { it: TestAPI<TestSuiteContext> }): void
         jobTypes,
         processors: {
           test: {
-            attemptHandler: async ({ signal, complete }) => {
+            attemptHandler: async ({ signal, step, complete }) => {
               onHandlerStarted();
               await new Promise<void>((resolve) => {
                 if (signal.aborted) {
@@ -705,8 +703,7 @@ export const workerTestSuite = ({ it }: { it: TestAPI<TestSuiteContext> }): void
                   { once: true },
                 );
               });
-              observedAborted = signal.aborted;
-              observedReason = signal.reason;
+              await step(async () => {});
               return complete(async ({ finish }) => finish({ output: null }));
             },
           },
@@ -714,7 +711,7 @@ export const workerTestSuite = ({ it }: { it: TestAPI<TestSuiteContext> }): void
       }),
     });
 
-    await withTransaction(async (txCtx, transactionHooks) =>
+    const chain = await withTransaction(async (txCtx, transactionHooks) =>
       client.createChain({
         ...txCtx,
         transactionHooks,
@@ -727,8 +724,94 @@ export const workerTestSuite = ({ it }: { it: TestAPI<TestSuiteContext> }): void
     await handlerStarted;
     await stop();
 
-    expect(observedAborted).toBe(true);
-    expect(observedReason).toBe("worker_stopping");
+    const completedChain = await client.awaitChain(chain, completionOptions);
+    expect(completedChain.status).toBe("completed");
+  });
+
+  it("throws from complete when the attempt is lost after the worker stops", async ({
+    stateAdapter,
+    notifyAdapter,
+    withTransaction,
+    observabilityAdapter,
+    log,
+    expect,
+  }) => {
+    const handlerStarted = Promise.withResolvers<void>();
+    const handlerAborted = Promise.withResolvers<void>();
+    const chainCompletedExternally = Promise.withResolvers<void>();
+
+    const jobTypes = defineJobTypes<{
+      test: { entry: true; input: null; output: { source: string } };
+    }>();
+
+    const client = await createClient({
+      stateAdapter,
+      notifyAdapter,
+      observabilityAdapter,
+      log,
+      jobTypes,
+    });
+    const worker = await createInProcessWorker({
+      client,
+      concurrency: 1,
+      processors: createProcessors({
+        client,
+        jobTypes,
+        processors: {
+          test: {
+            attemptHandler: async ({ signal, complete }) => {
+              handlerStarted.resolve();
+              await new Promise<void>((resolve) => {
+                signal.addEventListener(
+                  "abort",
+                  () => {
+                    resolve();
+                  },
+                  { once: true },
+                );
+              });
+              handlerAborted.resolve();
+              await chainCompletedExternally.promise;
+
+              await expect(
+                complete(async ({ finish }) => finish({ output: { source: "worker" } })),
+              ).rejects.toThrow(JobAlreadyCompletedError);
+              throw new Error("attempt lost");
+            },
+          },
+        },
+      }),
+    });
+
+    const chain = await withTransaction(async (txCtx, transactionHooks) =>
+      client.createChain({
+        ...txCtx,
+        transactionHooks,
+        typeName: "test",
+        input: null,
+      }),
+    );
+
+    const stop = await worker.start();
+    await handlerStarted.promise;
+    const stopped = stop();
+    await handlerAborted.promise;
+
+    await withTransaction(async (txCtx, transactionHooks) =>
+      client.completeChain({
+        ...txCtx,
+        transactionHooks,
+        ...chain,
+        handler: async ({ job, completeJob }) => {
+          await completeJob(job, async ({ finish }) => finish({ output: { source: "external" } }));
+        },
+      }),
+    );
+    chainCompletedExternally.resolve();
+    await stopped;
+
+    const completedChain = await client.awaitChain(chain, completionOptions);
+    expect(completedChain.output).toEqual({ source: "external" });
   });
 
   it("does not poll for a start delay while every slot is busy", async ({
