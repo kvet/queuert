@@ -79,12 +79,6 @@ The `migration_lock` table holds a single-row lease that gives `migrateToLatest(
 | `locked_by`    | `text`        | Owner id of the current migration run |
 | `locked_until` | `timestamptz` | Lease expiry (heartbeat-extended)     |
 
-### Upgrading from 0.15.x
-
-The job-model schema that follows 0.15.x replaces the job tables, and `migrateToLatest()` upgrades only a database already at **v0.15.1**. Older schemas are refused with an error: upgrade to `@queuert/postgres` 0.15.1 and run `migrateToLatest()` first.
-
-The upgrade copies chains into new tables while v0.15.1 workers keep running, tracking concurrent changes with triggers. It then takes an `ACCESS EXCLUSIVE` lock to verify the copy and swap the tables; the lock is held for roughly as long as a full scan of the old and new tables (about a second per million jobs), and v0.15.1 workers are blocked meanwhile. If installing the triggers or the swap can't get its lock within 5 seconds (for example because of a long-running transaction), `migrateToLatest()` throws and can be re-run; chains already copied are kept. If the copied row counts don't match, the v0.15.1 tables are left in place and the error explains how to recover.
-
 ## Indexes
 
 ### Job Table

@@ -35,7 +35,6 @@ import {
 } from "queuert/internal";
 
 import { type PgStateProvider } from "../state-provider/state-provider.pg.js";
-import { createLegacyUpgrade } from "./legacy-upgrade.pg.js";
 
 type DbJob = {
   id: string;
@@ -2162,7 +2161,6 @@ ORDER BY t.ord
       createMigrator<TTxContext>({
         migrations,
         store: createMigrationStore(stateProvider, applyTemplate),
-        before: createLegacyUpgrade(stateProvider, applyTemplate, idDataType).upgrade,
       }).migrateToLatest(),
 
     truncate: async () => {

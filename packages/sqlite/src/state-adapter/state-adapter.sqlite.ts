@@ -35,7 +35,6 @@ import {
 } from "queuert/internal";
 
 import { type SqliteStateProvider } from "../state-provider/state-provider.sqlite.js";
-import { createLegacyUpgrade } from "./legacy-upgrade.sqlite.js";
 
 const jobColumns = [
   "created_at",
@@ -2263,15 +2262,11 @@ FROM json_each(?) AS je
       return { items, nextCursor };
     },
 
-    migrateToLatest: async () => {
-      const legacy = createLegacyUpgrade(stateProvider, applyTemplate, idDataType);
-      return createMigrator<TTxContext>({
+    migrateToLatest: async () =>
+      createMigrator<TTxContext>({
         migrations,
         store: createMigrationStore(stateProvider, applyTemplate),
-        before: legacy.renameLegacySchemaAside,
-        after: legacy.importLegacySchema,
-      }).migrateToLatest();
-    },
+      }).migrateToLatest(),
 
     truncate: async () => {
       await stateProvider.withTransaction(async (txCtx) => {

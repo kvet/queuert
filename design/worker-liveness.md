@@ -26,7 +26,7 @@ Everything else about job processing — `refetchJobLocked`, `JobTakenByAnotherW
 
 ### Schema
 
-Part of `001_initial_schema` in both adapters — pre-1.0, no incremental migration. Existing databases go through the same `legacy-upgrade` import path, which simply stops carrying `attempt_until` over.
+Part of `001_initial_schema` in both adapters — pre-1.0, no incremental migration.
 
 ```sql
 CREATE TABLE IF NOT EXISTS {{schema}}.{{table_prefix}}worker (
@@ -267,7 +267,7 @@ Breaking, all bundled into one changeset:
 In:
 
 - Core: `StateAdapter` surface, in-process adapter, worker lifecycle (start / lease manager / recovery / stop), observability events, error and abort plumbing.
-- PostgreSQL and SQLite adapters: schema, the six methods, the `startJobAttempt` lease gate, legacy-upgrade and fast-seed fixups.
+- PostgreSQL and SQLite adapters: schema, the six methods, the `startJobAttempt` lease gate, fast-seed fixups.
 - Conformance: delete `extend-job-attempt.ts` and `reclaim-expired-job-attempt.ts`; add `worker-lifecycle.ts` (start / get / extend / list / stop, including the "expired lease cannot renew" case and "stop releases a still-held job") and `reclaim-expired-workers.ts` (releases across types, marks the failed attempt, deletes the worker row, returns the released jobs, respects `limit`, and the claim-vs-reclaim race).
 - Suites: `attempt-reclaimer.test-suite.ts` becomes `worker-liveness.test-suite.ts` — a killed worker's jobs get picked up by another, a long job survives its lease window while the heartbeat runs, recovery starts a new worker and resumes, stop removes the worker row.
 - Docs: `advanced/in-process-worker.md` (lifecycle, reclamation), `advanced/adapters.md` (txCtx method lists), `advanced/postgres-internals.md` / `sqlite-internals.md` (schema), `advanced/logging.md` (events). Changeset covering core + postgres + sqlite + dashboard.
