@@ -25,6 +25,7 @@ import { type Helpers } from "../setup-helpers.js";
 import {
   type BaseTxContext,
   type StateAdapter,
+  type StateAttemptFence,
   type StateJob,
 } from "../state-adapter/state-adapter.js";
 import { type TransactionHooks, withTransactionHooks } from "../transaction-hooks.js";
@@ -87,6 +88,7 @@ export const runJobProcess = async ({
   stopSignal: AbortSignal;
 }): Promise<void> => {
   let completeTransactionContext: TransactionContext<BaseTxContext> | null = null;
+  const fence: StateAttemptFence = { attempt: stateJob.attempt, workerId };
 
   const abortController = new AbortController();
   let hardAbortError: { error: unknown } | null = null;
@@ -155,7 +157,7 @@ export const runJobProcess = async ({
     const extended = await helpers.stateAdapter.extendJobAttempt({
       txCtx,
       jobId: stateJob.id,
-      workerId,
+      fence,
       timeoutMs,
     });
     if (!extended) {
@@ -320,7 +322,7 @@ export const runJobProcess = async ({
               if ("reschedule" in outcome) {
                 const [rescheduledJob] = await helpers.stateAdapter.rescheduleJobs({
                   txCtx,
-                  jobs: [{ jobId: stateJob.id, schedule: outcome.reschedule }],
+                  jobs: [{ jobId: stateJob.id, schedule: outcome.reschedule, fence }],
                 });
                 if (rescheduledJob === undefined) {
                   throw new JobNotFoundError(`Job ${stateJob.id} not found or already completed`, {
@@ -343,7 +345,7 @@ export const runJobProcess = async ({
                       output: outcome.output,
                       txCtx,
                       transactionHooks,
-                      workerId,
+                      fence,
                     })
                   : await continueChain(helpers, {
                       fromJob: {
@@ -359,7 +361,7 @@ export const runJobProcess = async ({
                       continueWith: outcome.continueWith,
                       txCtx,
                       transactionHooks,
-                      workerId,
+                      fence,
                     });
               finishOnce.succeed(finishResult);
               return mapFinishResult(finishResult);
@@ -477,7 +479,7 @@ export const runJobProcess = async ({
               txCtx,
               transactionHooks,
               backoffConfig,
-              workerId,
+              fence,
             }),
           ),
         );

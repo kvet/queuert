@@ -899,13 +899,13 @@ export const operationalCoverageGroups: IndexCoverageGroup[] = [
             await stateAdapter.withTransaction(async (txCtx) =>
               stateAdapter.continueJobs({
                 txCtx,
-                completedBy: "w-cont",
                 jobs: [
                   {
                     id: stateAdapter.config.generateId(),
                     typeName: "idx:cont",
                     input: {},
                     continueFromId: acquired.id,
+                    fence: { attempt: acquired.attempt, workerId: "w-cont" },
                   },
                 ],
               }),
@@ -1008,7 +1008,7 @@ export const operationalCoverageGroups: IndexCoverageGroup[] = [
             stateAdapter.extendJobAttempt({
               txCtx,
               jobId: sentinels.running.jobId,
-              workerId: "seed-worker",
+              fence: { attempt: 1, workerId: "seed-worker" },
               timeoutMs: 60_000,
             }),
           );
@@ -1036,8 +1036,13 @@ export const operationalCoverageGroups: IndexCoverageGroup[] = [
             await stateAdapter.withTransaction(async (txCtx) =>
               stateAdapter.completeJobs({
                 txCtx,
-                completedBy: "w-ok",
-                jobs: [{ jobId: acquired.id, output: { ok: true } }],
+                jobs: [
+                  {
+                    jobId: acquired.id,
+                    output: { ok: true },
+                    fence: { attempt: acquired.attempt, workerId: "w-ok" },
+                  },
+                ],
               }),
             );
           };

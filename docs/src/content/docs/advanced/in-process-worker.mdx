@@ -80,7 +80,7 @@ Stopping is cooperative: the attempt is still held, so handlers that check `sign
 
 ## Worker Identity
 
-Each worker has a unique identity (a random UUID, prefixed with the optional `workerName` option when set) stored in `attemptBy`. The worker tracks active jobs internally and routes abort signals by job ID—no per-slot identity is needed.
+Each worker has a unique identity (a random UUID, prefixed with the optional `workerName` option when set) stored in `attemptBy`. The worker tracks active jobs internally and routes abort signals by job ID—no per-slot identity is needed: the worker checks the job's `attempt` as well as `attemptBy` before each write, so a slot whose attempt was reclaimed and re-acquired by another slot of the same worker fails with `JobTakenByAnotherWorkerError`.
 
 ## Expired Attempt Reclamation
 

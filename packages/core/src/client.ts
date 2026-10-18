@@ -994,14 +994,14 @@ export const createClient = async <
                     output: outcome.output,
                     txCtx,
                     transactionHooks,
-                    workerId: null,
+                    fence: null,
                   })
                 : await continueChain(helpers, {
                     fromJob: stateJob,
                     continueWith: outcome.continueWith,
                     txCtx,
                     transactionHooks,
-                    workerId: null,
+                    fence: null,
                   });
             finishOnce.succeed(finishResult);
             return mapFinishResult(finishResult);

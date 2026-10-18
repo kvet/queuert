@@ -16,7 +16,6 @@ export const withSavepointGroup: ConformanceGroup<StateConformanceFixture> = {
           await stateAdapter.withSavepoint(txCtx, async (spTxCtx) => {
             await stateAdapter.completeJobs({
               txCtx: spTxCtx,
-              completedBy: null,
               jobs: [{ jobId: results[0].head.id, output: { done: true } }],
             });
           });
@@ -42,7 +41,6 @@ export const withSavepointGroup: ConformanceGroup<StateConformanceFixture> = {
             .withSavepoint(txCtx, async (spTxCtx) => {
               await stateAdapter.completeJobs({
                 txCtx: spTxCtx,
-                completedBy: null,
                 jobs: [{ jobId: results[0].head.id, output: { done: true } }],
               });
               throw new Error("simulated failure");
@@ -126,7 +124,6 @@ export const withSavepointGroup: ConformanceGroup<StateConformanceFixture> = {
           await stateAdapter.withSavepoint(txCtx, async (spTxCtx) => {
             await stateAdapter.completeJobs({
               txCtx: spTxCtx,
-              completedBy: null,
               jobs: [{ jobId, output: { step: 1 } }],
             });
 

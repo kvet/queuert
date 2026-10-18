@@ -17,6 +17,7 @@ import { type Helpers } from "../setup-helpers.js";
 import {
   type BaseTxContext,
   type StateChain,
+  type StateAttemptFence,
   type StateChainInfo,
   type StateJob,
   type StateJobInfo,
@@ -385,13 +386,13 @@ export const continueStateJob = async (
   {
     job,
     fromJob,
-    workerId,
+    fence,
     txCtx,
     transactionHooks,
   }: {
     job: CommonInput;
     fromJob: StateJob;
-    workerId: string | null;
+    fence: StateAttemptFence | null;
     txCtx: BaseTxContext;
     transactionHooks: TransactionHooks;
   },
@@ -413,7 +414,6 @@ export const continueStateJob = async (
     parsed = await lockBlockerChains(helpers, { prepared, txCtx });
     const [continued] = await helpers.stateAdapter.continueJobs({
       txCtx,
-      completedBy: workerId,
       jobs: [
         {
           id: parsed[0].id,
@@ -422,6 +422,7 @@ export const continueStateJob = async (
           schedule: job.schedule,
           traceContext: spanHandles[0]?.getTraceContext() ?? null,
           continueFromId: fromJob.id,
+          fence: fence ?? undefined,
         },
       ],
     });

@@ -33,7 +33,6 @@ export const unblockJobsGroup: ConformanceGroup<StateConformanceFixture> = {
         await stateAdapter.withTransaction(async (txCtx) =>
           stateAdapter.completeJobs({
             txCtx,
-            completedBy: null,
             jobs: [{ jobId: blockerChain.head.id, output: null }],
           }),
         );
@@ -89,7 +88,6 @@ export const unblockJobsGroup: ConformanceGroup<StateConformanceFixture> = {
         await stateAdapter.withTransaction(async (txCtx) =>
           stateAdapter.completeJobs({
             txCtx,
-            completedBy: null,
             jobs: [{ jobId: blockerChain.head.id, output: null }],
           }),
         );
@@ -145,7 +143,6 @@ export const unblockJobsGroup: ConformanceGroup<StateConformanceFixture> = {
         await stateAdapter.withTransaction(async (txCtx) =>
           stateAdapter.completeJobs({
             txCtx,
-            completedBy: null,
             jobs: [{ jobId: blockerAChain.head.id, output: null }],
           }),
         );
@@ -291,7 +288,6 @@ export const unblockJobsGroup: ConformanceGroup<StateConformanceFixture> = {
         await stateAdapter.withTransaction(async (txCtx) =>
           stateAdapter.completeJobs({
             txCtx,
-            completedBy: null,
             jobs: [{ jobId: blockerChain.head.id, output: null }],
           }),
         );
@@ -347,7 +343,6 @@ export const unblockJobsGroup: ConformanceGroup<StateConformanceFixture> = {
         await stateAdapter.withTransaction(async (txCtx) =>
           stateAdapter.completeJobs({
             txCtx,
-            completedBy: null,
             jobs: [{ jobId: blockerChain.head.id, output: null }],
           }),
         );
@@ -418,7 +413,6 @@ export const unblockJobsGroup: ConformanceGroup<StateConformanceFixture> = {
         await stateAdapter.withTransaction(async (txCtx) =>
           stateAdapter.completeJobs({
             txCtx,
-            completedBy: null,
             jobs: [{ jobId: blockerChain.head.id, output: null }],
           }),
         );
@@ -530,7 +524,6 @@ export const unblockJobsGroup: ConformanceGroup<StateConformanceFixture> = {
           stateAdapter.withTransaction(async (txCtx) => {
             await stateAdapter.completeJobs({
               txCtx,
-              completedBy: "race-test",
               jobs: [{ jobId: blockerJobId, output: null }],
             });
             await stateAdapter.unblockJobs({ txCtx, blockedByChainId: chainId });
@@ -610,7 +603,6 @@ export const unblockJobsGroup: ConformanceGroup<StateConformanceFixture> = {
               await release.promise;
               await stateAdapter.completeJobs({
                 txCtx,
-                completedBy: "race-test",
                 jobs: [{ jobId: blocker.id, output: null }],
               });
               await stateAdapter.unblockJobs({ txCtx, blockedByChainId: blocker.chainId });
@@ -659,7 +651,6 @@ export const unblockJobsGroup: ConformanceGroup<StateConformanceFixture> = {
         await stateAdapter.withTransaction(async (txCtx) =>
           stateAdapter.completeJobs({
             txCtx,
-            completedBy: null,
             jobs: [{ jobId: mainChain.head.id, output: "done" }],
           }),
         );
@@ -670,7 +661,6 @@ export const unblockJobsGroup: ConformanceGroup<StateConformanceFixture> = {
         await stateAdapter.withTransaction(async (txCtx) =>
           stateAdapter.completeJobs({
             txCtx,
-            completedBy: null,
             jobs: [{ jobId: blockerChain.head.id, output: null }],
           }),
         );

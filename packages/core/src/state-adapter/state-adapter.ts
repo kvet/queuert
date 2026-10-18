@@ -81,22 +81,14 @@ export type StateAdapterConfig<TJobId extends string> = {
 /** Base type for state adapter contexts. */
 export type BaseTxContext = Record<string, unknown>;
 
-/**
- * Read-only methods take an optional `txCtx` — omitting it lets the adapter run on
- * its own connection. Mutating methods require one: they must be committed or rolled
- * back together with the caller's other writes.
- */
 type ReadTxContextParam<TTxContext extends BaseTxContext> = { txCtx?: TTxContext };
-
-/**
- * A write-intent lock only lasts as long as the transaction that took it, so `lock`
- * requires a `txCtx`. With one, any `lock` value passes — no narrowing needed.
- */
 type LockTxContextParam<TTxContext extends BaseTxContext> =
   | { lock?: "exclusive"; txCtx: TTxContext }
   | { lock?: undefined; txCtx?: TTxContext };
-
 type WriteTxContextParam<TTxContext extends BaseTxContext> = { txCtx: TTxContext };
+
+/** Matches only a `running` job in exactly this attempt, held by this worker. */
+export type StateAttemptFence = { attempt: number; workerId: string };
 
 /**
  * Abstracts database operations for job persistence.
@@ -158,12 +150,11 @@ export type StateAdapter<TTxContext extends BaseTxContext, TJobId extends string
   /**
    * Completes each `continueFromId` and inserts its chain successor, linking the two. Each
    * result is the completed predecessor, with its successor under `continuation`. Results are
-   * in input order, `undefined` for an id with no matching job or one already completed. A
-   * colliding id or an already taken chain position still throws.
+   * in input order, `undefined` for an id with no matching job, one already completed, or one
+   * that misses its `fence`. A colliding id or an already taken chain position still throws.
    */
   continueJobs: (params: {
     txCtx: TTxContext;
-    completedBy?: string | null;
     jobs: {
       typeName: string;
       id: TJobId;
@@ -171,14 +162,15 @@ export type StateAdapter<TTxContext extends BaseTxContext, TJobId extends string
       schedule?: ScheduleOptions;
       traceContext?: string | null;
       continueFromId: TJobId;
+      fence?: StateAttemptFence;
     }[];
   }) => Promise<((StateJob & { continuation: StateJobInfo }) | undefined)[]>;
 
   /**
    * Completes each job with its terminal output, ending its chain and setting the chain's
-   * `completedAt`. Results are in input order, `undefined` for an id with no matching job or
-   * one already completed. `hasBlockedJobs` reports whether any job depends on the chain,
-   * gating `unblockJobs`.
+   * `completedAt`. Results are in input order, `undefined` for an id with no matching job, one
+   * already completed, or one that misses its `fence`. `hasBlockedJobs` reports whether any
+   * job depends on the chain, gating `unblockJobs`.
    *
    * The caller must already hold each chain's head row — take it with
    * `getJobs({ lock: "exclusive" })` earlier in the same transaction, or a blocker committed
@@ -186,17 +178,18 @@ export type StateAdapter<TTxContext extends BaseTxContext, TJobId extends string
    */
   completeJobs: (
     params: {
-      completedBy?: string | null;
       jobs: {
         jobId: TJobId;
         output: unknown;
+        fence?: StateAttemptFence;
       }[];
     } & WriteTxContextParam<TTxContext>,
   ) => Promise<((StateJob & { hasBlockedJobs: boolean }) | undefined)[]>;
 
   /**
    * Returns jobs to pending, clearing any running attempt. A blocked job keeps its
-   * `blocked` status and only moves its `scheduledAt`. Skips completed and missing ids.
+   * `blocked` status and only moves its `scheduledAt`. Skips ids that are missing, completed, or
+   * miss their `fence`.
    */
   rescheduleJobs: (
     params: {
@@ -204,6 +197,7 @@ export type StateAdapter<TTxContext extends BaseTxContext, TJobId extends string
         jobId: TJobId;
         schedule?: ScheduleOptions;
         error?: string;
+        fence?: StateAttemptFence;
       }[];
     } & WriteTxContextParam<TTxContext>,
   ) => Promise<(StateJob | undefined)[]>;
@@ -233,13 +227,13 @@ export type StateAdapter<TTxContext extends BaseTxContext, TJobId extends string
   ) => Promise<number | null>;
 
   /**
-   * Extends a running job attempt's deadline. Returns `undefined` when no job with this
-   * id holds an attempt by this worker — it is gone, or the attempt is someone else's.
+   * Extends a running job attempt's deadline. Returns `undefined` when the job misses the
+   * `fence`.
    */
   extendJobAttempt: (
     params: {
       jobId: TJobId;
-      workerId: string;
+      fence: StateAttemptFence;
       timeoutMs: number;
     } & WriteTxContextParam<TTxContext>,
   ) => Promise<StateJob | undefined>;

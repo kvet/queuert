@@ -261,7 +261,6 @@ export const withTransactionGroup: ConformanceGroup<StateConformanceFixture> = {
             });
             await stateAdapter.completeJobs({
               txCtx,
-              completedBy: "worker-1",
               jobs: [{ jobId: aChain.head.id, output: { ok: true } }],
             });
             await stateAdapter.deleteChains({ txCtx, chainIds: [bChain.head.chainId] });
@@ -335,7 +334,6 @@ export const withTransactionGroup: ConformanceGroup<StateConformanceFixture> = {
             await stateAdapter.getJobs({ txCtx, jobIds: [tailId], lock: "exclusive" });
             const [completed] = await stateAdapter.completeJobs({
               txCtx,
-              completedBy: null,
               jobs: [{ jobId: tailId, output: { ok: true } }],
             });
             expect(completed?.chain.status).toBe("completed");
