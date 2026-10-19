@@ -18,7 +18,7 @@ export const extendJobAttemptGroup: ConformanceGroup<StateConformanceFixture> = 
           stateAdapter.startJobAttempt({
             txCtx,
             workerId: "worker-1",
-            typeNames: ["attempt-test"],
+            timeoutMsByTypeName: { "attempt-test": 30_000 },
           }),
         );
         expect(acquired!.attemptAt).toBeInstanceOf(Date);
@@ -60,7 +60,7 @@ export const extendJobAttemptGroup: ConformanceGroup<StateConformanceFixture> = 
           stateAdapter.startJobAttempt({
             txCtx,
             workerId: "worker-1",
-            typeNames: ["far-attempt-test"],
+            timeoutMsByTypeName: { "far-attempt-test": 30_000 },
           }),
         );
 
@@ -100,7 +100,7 @@ export const extendJobAttemptGroup: ConformanceGroup<StateConformanceFixture> = 
           stateAdapter.startJobAttempt({
             txCtx,
             workerId: "worker-1",
-            typeNames: ["fractional-attempt-test"],
+            timeoutMsByTypeName: { "fractional-attempt-test": 30_000 },
           }),
         );
 
@@ -135,7 +135,7 @@ export const extendJobAttemptGroup: ConformanceGroup<StateConformanceFixture> = 
           stateAdapter.startJobAttempt({
             txCtx,
             workerId: "worker-1",
-            typeNames: ["re-attempt-test"],
+            timeoutMsByTypeName: { "re-attempt-test": 30_000 },
           }),
         );
 
@@ -176,7 +176,7 @@ export const extendJobAttemptGroup: ConformanceGroup<StateConformanceFixture> = 
           stateAdapter.startJobAttempt({
             txCtx,
             workerId: "worker-1",
-            typeNames: ["ownership-test"],
+            timeoutMsByTypeName: { "ownership-test": 30_000 },
           }),
         );
 
@@ -214,7 +214,7 @@ export const extendJobAttemptGroup: ConformanceGroup<StateConformanceFixture> = 
           stateAdapter.startJobAttempt({
             txCtx,
             workerId: "worker-1",
-            typeNames: ["extend-fence-replaced"],
+            timeoutMsByTypeName: { "extend-fence-replaced": 30_000 },
           }),
         );
         await stateAdapter.withTransaction(async (txCtx) =>
@@ -224,7 +224,7 @@ export const extendJobAttemptGroup: ConformanceGroup<StateConformanceFixture> = 
           stateAdapter.startJobAttempt({
             txCtx,
             workerId: "worker-1",
-            typeNames: ["extend-fence-replaced"],
+            timeoutMsByTypeName: { "extend-fence-replaced": 30_000 },
           }),
         );
         const [before] = await stateAdapter.getJobs({ jobIds: [createdChain.head.id] });
@@ -262,7 +262,7 @@ export const extendJobAttemptGroup: ConformanceGroup<StateConformanceFixture> = 
           stateAdapter.startJobAttempt({
             txCtx,
             workerId: "worker-1",
-            typeNames: ["extend-fence-completed"],
+            timeoutMsByTypeName: { "extend-fence-completed": 30_000 },
           }),
         );
         await stateAdapter.withTransaction(async (txCtx) =>

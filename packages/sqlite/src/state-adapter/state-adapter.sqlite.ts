@@ -1431,8 +1431,8 @@ WHERE (id IN (SELECT value FROM json_each(?)) AND chain_index = 0)
       });
     },
 
-    startJobAttempt: async ({ txCtx, typeNames, workerId }) => {
-      const typeNamesJson = JSON.stringify(typeNames);
+    startJobAttempt: async ({ txCtx, timeoutMsByTypeName, workerId }) => {
+      const timeoutsJson = JSON.stringify(timeoutMsByTypeName);
       const [result] = await executeTypedSql({
         txCtx,
         sql: templateCache.getOrCompute("startJobAttempt", () =>
@@ -1443,11 +1443,14 @@ UPDATE {{table_prefix}}job
 SET status = 'running',
   attempt = attempt + 1,
   attempt_at = datetime('now', 'subsec'),
-  attempt_by = ?
+  attempt_by = ?,
+  attempt_until = datetime('now', 'subsec', '+' || ((
+    SELECT t.value FROM json_each(?) AS t WHERE t.key = {{table_prefix}}job.type_name
+  ) / 1000.0) || ' seconds')
 WHERE id = (
   SELECT id
   FROM {{table_prefix}}job INDEXED BY {{table_prefix}}job_pending_idx
-  WHERE type_name IN (SELECT value FROM json_each(?))
+  WHERE type_name IN (SELECT key FROM json_each(?))
     AND status = 'pending'
     AND scheduled_at <= datetime('now', 'subsec')
   ORDER BY scheduled_at ASC
@@ -1459,13 +1462,13 @@ RETURNING *, ${chainColumnsReturning("{{table_prefix}}job")}, EXISTS (
 `,
               {
                 id: "startJobAttempt",
-                params: [t.string(), t.string()],
+                params: [t.string(), t.string(), t.string()],
                 columns: { ...dbJobColumns, ...dbChainColumns, has_blockers: t.number() },
               },
             ),
           ),
         ),
-        params: [workerId, typeNamesJson],
+        params: [workerId, timeoutsJson, timeoutsJson],
       });
 
       if (!result) return undefined;

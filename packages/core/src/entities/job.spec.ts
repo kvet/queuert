@@ -78,6 +78,6 @@ describe("mapStateJobToJob", () => {
 
     expectTypeOf(job.attemptAt).toEqualTypeOf<Date>();
     expectTypeOf(job.attemptBy).toEqualTypeOf<string>();
-    expectTypeOf(job.attemptUntil).toEqualTypeOf<Date | null>();
+    expectTypeOf(job.attemptUntil).toEqualTypeOf<Date>();
   });
 });

@@ -147,7 +147,7 @@ worker_lease AS (
 )
 ```
 
-and the `UPDATE` is additionally gated on `EXISTS (SELECT 1 FROM worker_lease)`.
+and the `UPDATE` is additionally gated on `EXISTS (SELECT 1 FROM worker_lease)`. With `attempt_until` gone, `startJobAttempt` needs no per-type timeouts, so its `timeoutMsByTypeName` param goes back to `typeNames`.
 
 The `FOR SHARE` is load-bearing, not decoration. Without it, this interleaving orphans a job:
 

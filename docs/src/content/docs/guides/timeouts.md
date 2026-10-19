@@ -36,7 +36,7 @@ const worker = await createInProcessWorker({
 const stop = await worker.start();
 ```
 
-For hard timeouts, configure `attemptConfig` in the job type processor -- if a job doesn't complete or extend the attempt in time, the attempt expires and is released for retry:
+For hard timeouts, configure `attemptConfig` in the job type processor. The attempt's lease runs `timeoutMs` from acquire, and in staged mode the worker's heartbeat renews it every `heartbeatMs`; if the lease is not renewed in time (the worker crashed or stalled), the attempt expires and is released for retry:
 
 ```ts
 const worker = await createInProcessWorker({

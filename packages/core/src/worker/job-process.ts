@@ -256,9 +256,6 @@ export const runJobProcess = async ({
         }
 
         if (config.mode === "staged") {
-          await prepareTransactionContext.run(async (txCtx) =>
-            extendAttempt(txCtx, attemptConfig.timeoutMs),
-          );
           await prepareTransactionContext.resolve();
 
           await attemptHeartbeat.start();

@@ -4,8 +4,9 @@ import { sleep } from "../helpers/sleep.js";
 /** Configuration for job attempt timeout and heartbeat frequency. */
 export type AttemptConfig = {
   /**
-   * How long a worker holds a staged attempt before it can be reclaimed. Atomic attempts run in
-   * one transaction and have no deadline. Must be finite and positive. Defaults to `60_000`.
+   * How long a worker holds a staged attempt before it can be reclaimed, counted from acquire
+   * and renewed by the heartbeat. An atomic attempt's lease stays uncommitted inside its one
+   * transaction, so it is never reclaimed. Must be finite and positive. Defaults to `60_000`.
    */
   timeoutMs: number;
   /**

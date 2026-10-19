@@ -43,7 +43,7 @@ export const mapStateJobToJob = (stateJob: StateJob): AnyJob => {
         status: "running",
         attemptAt: stateJob.attemptAt!,
         attemptBy: stateJob.attemptBy!,
-        attemptUntil: stateJob.attemptUntil,
+        attemptUntil: stateJob.attemptUntil!,
       };
     case "blocked":
       return { ...base, status: "blocked" };

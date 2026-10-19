@@ -27,7 +27,7 @@ export const completeJobsGroup: ConformanceGroup<StateConformanceFixture> = {
           stateAdapter.startJobAttempt({
             txCtx,
             workerId: "worker-1",
-            typeNames: ["complete-test"],
+            timeoutMsByTypeName: { "complete-test": 30_000 },
           }),
         );
 
@@ -216,7 +216,7 @@ export const completeJobsGroup: ConformanceGroup<StateConformanceFixture> = {
           stateAdapter.startJobAttempt({
             txCtx,
             workerId: "worker-1",
-            typeNames: ["double-complete-test"],
+            timeoutMsByTypeName: { "double-complete-test": 30_000 },
           }),
         );
 
@@ -278,7 +278,7 @@ export const completeJobsGroup: ConformanceGroup<StateConformanceFixture> = {
           stateAdapter.startJobAttempt({
             txCtx,
             workerId: "worker-1",
-            typeNames: ["complete-clears-error"],
+            timeoutMsByTypeName: { "complete-clears-error": 30_000 },
           }),
         );
 
@@ -300,7 +300,7 @@ export const completeJobsGroup: ConformanceGroup<StateConformanceFixture> = {
           stateAdapter.startJobAttempt({
             txCtx,
             workerId: "worker-1",
-            typeNames: ["complete-clears-error"],
+            timeoutMsByTypeName: { "complete-clears-error": 30_000 },
           }),
         );
 
@@ -590,7 +590,7 @@ export const completeJobsGroup: ConformanceGroup<StateConformanceFixture> = {
           stateAdapter.startJobAttempt({
             txCtx,
             workerId: "worker-1",
-            typeNames: ["complete-fence-other"],
+            timeoutMsByTypeName: { "complete-fence-other": 30_000 },
           }),
         );
         const jobIds = [continued!.continuation.id, headChain.head.id];
@@ -632,7 +632,7 @@ export const completeJobsGroup: ConformanceGroup<StateConformanceFixture> = {
           stateAdapter.startJobAttempt({
             txCtx,
             workerId: "worker-1",
-            typeNames: ["complete-fence-replaced"],
+            timeoutMsByTypeName: { "complete-fence-replaced": 30_000 },
           }),
         );
         await stateAdapter.withTransaction(async (txCtx) =>
@@ -642,7 +642,7 @@ export const completeJobsGroup: ConformanceGroup<StateConformanceFixture> = {
           stateAdapter.startJobAttempt({
             txCtx,
             workerId: "worker-1",
-            typeNames: ["complete-fence-replaced"],
+            timeoutMsByTypeName: { "complete-fence-replaced": 30_000 },
           }),
         );
         const [before] = await stateAdapter.getJobs({ jobIds: [createdChain.head.id] });

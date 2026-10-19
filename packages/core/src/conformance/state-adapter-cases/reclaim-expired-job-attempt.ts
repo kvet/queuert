@@ -16,7 +16,11 @@ export const reclaimExpiredJobAttemptGroup: ConformanceGroup<StateConformanceFix
         );
 
         const acquired = await stateAdapter.withTransaction(async (txCtx) =>
-          stateAdapter.startJobAttempt({ txCtx, workerId: "worker-1", typeNames: ["expire-test"] }),
+          stateAdapter.startJobAttempt({
+            txCtx,
+            workerId: "worker-1",
+            timeoutMsByTypeName: { "expire-test": 30_000 },
+          }),
         );
         expect(acquired!.lastAttemptAt).toBeNull();
         expect(acquired!.lastAttemptError).toBeNull();
@@ -74,7 +78,7 @@ export const reclaimExpiredJobAttemptGroup: ConformanceGroup<StateConformanceFix
           stateAdapter.startJobAttempt({
             txCtx,
             workerId: "worker-1",
-            typeNames: ["no-expire-test"],
+            timeoutMsByTypeName: { "no-expire-test": 30_000 },
           }),
         );
 
@@ -128,10 +132,18 @@ export const reclaimExpiredJobAttemptGroup: ConformanceGroup<StateConformanceFix
         );
 
         await stateAdapter.withTransaction(async (txCtx) =>
-          stateAdapter.startJobAttempt({ txCtx, workerId: "worker-1", typeNames: ["ignore-test"] }),
+          stateAdapter.startJobAttempt({
+            txCtx,
+            workerId: "worker-1",
+            timeoutMsByTypeName: { "ignore-test": 30_000 },
+          }),
         );
         await stateAdapter.withTransaction(async (txCtx) =>
-          stateAdapter.startJobAttempt({ txCtx, workerId: "worker-1", typeNames: ["ignore-test"] }),
+          stateAdapter.startJobAttempt({
+            txCtx,
+            workerId: "worker-1",
+            timeoutMsByTypeName: { "ignore-test": 30_000 },
+          }),
         );
 
         await stateAdapter.withTransaction(async (txCtx) =>

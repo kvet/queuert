@@ -890,7 +890,7 @@ export const operationalCoverageGroups: IndexCoverageGroup[] = [
           const acquired = await stateAdapter.withTransaction(async (txCtx) =>
             stateAdapter.startJobAttempt({
               txCtx,
-              typeNames: ["seed:throwaway:pending"],
+              timeoutMsByTypeName: { "seed:throwaway:pending": 60_000 },
               workerId: "w-cont",
             }),
           );
@@ -988,7 +988,7 @@ export const operationalCoverageGroups: IndexCoverageGroup[] = [
           await stateAdapter.withTransaction(async (txCtx) =>
             stateAdapter.startJobAttempt({
               txCtx,
-              typeNames: ["seed:throwaway:pending"],
+              timeoutMsByTypeName: { "seed:throwaway:pending": 60_000 },
               workerId: "w-idx",
             }),
           );
@@ -1027,7 +1027,7 @@ export const operationalCoverageGroups: IndexCoverageGroup[] = [
           const acquired = await stateAdapter.withTransaction(async (txCtx) =>
             stateAdapter.startJobAttempt({
               txCtx,
-              typeNames: ["seed:throwaway:pending"],
+              timeoutMsByTypeName: { "seed:throwaway:pending": 60_000 },
               workerId: "w-ok",
             }),
           );
