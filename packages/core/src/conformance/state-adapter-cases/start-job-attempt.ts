@@ -40,7 +40,7 @@ export const startJobAttemptGroup: ConformanceGroup<StateConformanceFixture> = {
           stateAdapter.startJobAttempt({
             txCtx,
             workerId: "worker-1",
-            typeNames: ["acquire-test"],
+            timeoutMsByTypeName: { "acquire-test": 30_000 },
           }),
         );
 
@@ -60,7 +60,7 @@ export const startJobAttemptGroup: ConformanceGroup<StateConformanceFixture> = {
           stateAdapter.startJobAttempt({
             txCtx,
             workerId: "worker-1",
-            typeNames: ["nonexistent-type"],
+            timeoutMsByTypeName: { "nonexistent-type": 30_000 },
           }),
         );
 
@@ -97,7 +97,7 @@ export const startJobAttemptGroup: ConformanceGroup<StateConformanceFixture> = {
           stateAdapter.startJobAttempt({
             txCtx,
             workerId: "worker-1",
-            typeNames: ["blocked-skip"],
+            timeoutMsByTypeName: { "blocked-skip": 30_000 },
           }),
         );
 
@@ -158,7 +158,7 @@ export const startJobAttemptGroup: ConformanceGroup<StateConformanceFixture> = {
           stateAdapter.startJobAttempt({
             txCtx,
             workerId: "worker-1",
-            typeNames: ["blocked-only"],
+            timeoutMsByTypeName: { "blocked-only": 30_000 },
           }),
         );
 
@@ -169,7 +169,7 @@ export const startJobAttemptGroup: ConformanceGroup<StateConformanceFixture> = {
           stateAdapter.startJobAttempt({
             txCtx,
             workerId: "worker-1",
-            typeNames: ["blocked-only"],
+            timeoutMsByTypeName: { "blocked-only": 30_000 },
           }),
         );
 
@@ -197,7 +197,7 @@ export const startJobAttemptGroup: ConformanceGroup<StateConformanceFixture> = {
           stateAdapter.startJobAttempt({
             txCtx,
             workerId: "worker-1",
-            typeNames: ["future-acquire"],
+            timeoutMsByTypeName: { "future-acquire": 30_000 },
           }),
         );
 
@@ -229,7 +229,7 @@ export const startJobAttemptGroup: ConformanceGroup<StateConformanceFixture> = {
               stateAdapter.startJobAttempt({
                 txCtx,
                 workerId: "worker-1",
-                typeNames: ["acquire-concurrency"],
+                timeoutMsByTypeName: { "acquire-concurrency": 30_000 },
               }),
             ),
           ),
@@ -263,7 +263,7 @@ export const startJobAttemptGroup: ConformanceGroup<StateConformanceFixture> = {
           stateAdapter.startJobAttempt({
             txCtx,
             workerId: "worker-1",
-            typeNames: ["acquire-chain"],
+            timeoutMsByTypeName: { "acquire-chain": 30_000 },
           }),
         );
 
@@ -317,7 +317,7 @@ export const startJobAttemptGroup: ConformanceGroup<StateConformanceFixture> = {
           stateAdapter.startJobAttempt({
             txCtx,
             workerId: "worker-1",
-            typeNames: ["has-blockers"],
+            timeoutMsByTypeName: { "has-blockers": 30_000 },
           }),
         );
 
@@ -338,12 +338,52 @@ export const startJobAttemptGroup: ConformanceGroup<StateConformanceFixture> = {
           stateAdapter.startJobAttempt({
             txCtx,
             workerId: "worker-1",
-            typeNames: ["has-no-blockers"],
+            timeoutMsByTypeName: { "has-no-blockers": 30_000 },
           }),
         );
 
         expect(acquiredWithoutBlockers).toBeDefined();
         expect(acquiredWithoutBlockers!.hasBlockers).toBe(false);
+      },
+    },
+    {
+      name: "sets attemptUntil from the acquired job type's timeout",
+      run: async ({ stateAdapter }, expect) => {
+        await stateAdapter.withTransaction(async (txCtx) =>
+          stateAdapter.createJobs({
+            txCtx,
+            jobs: [
+              { id: stateAdapter.config.generateId(), typeName: "lease-short", input: null },
+              { id: stateAdapter.config.generateId(), typeName: "lease-long", input: null },
+            ],
+          }),
+        );
+
+        const timeoutMsByTypeName = { "lease-short": 10_000, "lease-long": 120_000 };
+        for (let i = 0; i < 2; i++) {
+          await stateAdapter.withTransaction(async (txCtx) => {
+            const before = Date.now();
+            const acquired = await stateAdapter.startJobAttempt({
+              txCtx,
+              workerId: "worker-1",
+              timeoutMsByTypeName,
+            });
+            const after = Date.now();
+
+            const timeoutMs =
+              timeoutMsByTypeName[acquired!.typeName as keyof typeof timeoutMsByTypeName];
+            expect(acquired!.attemptUntil).toBeInstanceOf(Date);
+            expect(acquired!.attemptUntil!.getTime()).toBeGreaterThanOrEqual(
+              before + timeoutMs - 1_000,
+            );
+            expect(acquired!.attemptUntil!.getTime()).toBeLessThanOrEqual(
+              after + timeoutMs + 1_000,
+            );
+
+            const [stored] = await stateAdapter.getJobs({ txCtx, jobIds: [acquired!.id] });
+            expect(stored!.attemptUntil!.getTime()).toBe(acquired!.attemptUntil!.getTime());
+          });
+        }
       },
     },
     {
@@ -380,7 +420,7 @@ export const startJobAttemptGroup: ConformanceGroup<StateConformanceFixture> = {
           const acquired = await stateAdapter.startJobAttempt({
             txCtx,
             workerId: "worker-1",
-            typeNames: ["implicit-chain-lock"],
+            timeoutMsByTypeName: { "implicit-chain-lock": 30_000 },
           });
           try {
             expect(acquired?.id).toBe(stateChain.head.id);
@@ -487,7 +527,7 @@ export const startJobAttemptGroup: ConformanceGroup<StateConformanceFixture> = {
             stateAdapter.startJobAttempt({
               txCtx,
               workerId: "worker-1",
-              typeNames: ["locked-head-acquire"],
+              timeoutMsByTypeName: { "locked-head-acquire": 30_000 },
             }),
           );
           expect(acquired?.id).toBe(otherChain.head.id);
@@ -500,7 +540,7 @@ export const startJobAttemptGroup: ConformanceGroup<StateConformanceFixture> = {
           stateAdapter.startJobAttempt({
             txCtx,
             workerId: "worker-1",
-            typeNames: ["locked-head-acquire"],
+            timeoutMsByTypeName: { "locked-head-acquire": 30_000 },
           }),
         );
         expect(acquiredAfterRelease?.id).toBe(lockedHeadJob.id);

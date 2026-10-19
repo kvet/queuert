@@ -987,14 +987,14 @@ export const createInProcessStateAdapter = async ({
         return result;
       }),
 
-    startJobAttempt: async ({ txCtx, typeNames, workerId }) =>
+    startJobAttempt: async ({ txCtx, timeoutMsByTypeName, workerId }) =>
       withWriteLock(txCtx, () => {
         const journal = txCtx?.journal;
         const now = new Date();
         const nowMs = now.getTime();
 
         let bestJob: DbJob | undefined;
-        for (const typeName of typeNames) {
+        for (const typeName of Object.keys(timeoutMsByTypeName)) {
           const candidate = idx.pendingByType.get(typeName)?.first();
           if (!candidate) continue;
           if (candidate.scheduledAt.getTime() > nowMs) continue;
@@ -1009,6 +1009,7 @@ export const createInProcessStateAdapter = async ({
           attempt: bestJob.attempt + 1,
           attemptAt: now,
           attemptBy: workerId,
+          attemptUntil: new Date(nowMs + timeoutMsByTypeName[bestJob.typeName]),
         };
         idx.writeJob(journal, bestJob, updatedJob);
         return { ...jobView(updatedJob), hasBlockers: idx.jobBlockers.has(updatedJob.id) };

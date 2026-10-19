@@ -174,7 +174,7 @@ describe("ResolvedRunningJob", () => {
   it("is the running variant with attempt fields", () => {
     expectTypeOf<Result["status"]>().toEqualTypeOf<"running">();
     expectTypeOf<Result["attemptBy"]>().toEqualTypeOf<string>();
-    expectTypeOf<Result["attemptUntil"]>().toEqualTypeOf<Date | null>();
+    expectTypeOf<Result["attemptUntil"]>().toEqualTypeOf<Date>();
   });
 
   it("defaults the chain type name to the reaching entry", () => {

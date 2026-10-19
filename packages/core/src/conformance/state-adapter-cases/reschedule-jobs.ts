@@ -60,7 +60,7 @@ export const rescheduleJobsGroup: ConformanceGroup<StateConformanceFixture> = {
           stateAdapter.startJobAttempt({
             txCtx,
             workerId: "worker-1",
-            typeNames: ["trigger-acquire"],
+            timeoutMsByTypeName: { "trigger-acquire": 30_000 },
           }),
         );
         expect(beforeTrigger).toBeUndefined();
@@ -73,7 +73,7 @@ export const rescheduleJobsGroup: ConformanceGroup<StateConformanceFixture> = {
           stateAdapter.startJobAttempt({
             txCtx,
             workerId: "worker-1",
-            typeNames: ["trigger-acquire"],
+            timeoutMsByTypeName: { "trigger-acquire": 30_000 },
           }),
         );
         expect(afterTrigger).toBeDefined();
@@ -286,7 +286,7 @@ export const rescheduleJobsGroup: ConformanceGroup<StateConformanceFixture> = {
           stateAdapter.startJobAttempt({
             txCtx,
             workerId: "worker-1",
-            typeNames: ["resched-fail-test"],
+            timeoutMsByTypeName: { "resched-fail-test": 30_000 },
           }),
         );
 
@@ -344,7 +344,7 @@ export const rescheduleJobsGroup: ConformanceGroup<StateConformanceFixture> = {
           stateAdapter.startJobAttempt({
             txCtx,
             workerId: "worker-1",
-            typeNames: ["resched-running-test"],
+            timeoutMsByTypeName: { "resched-running-test": 30_000 },
           }),
         );
 
@@ -616,7 +616,7 @@ export const rescheduleJobsGroup: ConformanceGroup<StateConformanceFixture> = {
           stateAdapter.startJobAttempt({
             txCtx,
             workerId: "worker-1",
-            typeNames: ["resched-fence-other"],
+            timeoutMsByTypeName: { "resched-fence-other": 30_000 },
           }),
         );
         const [before] = await stateAdapter.getJobs({ jobIds: [createdChain.head.id] });
@@ -658,7 +658,7 @@ export const rescheduleJobsGroup: ConformanceGroup<StateConformanceFixture> = {
           stateAdapter.startJobAttempt({
             txCtx,
             workerId: "worker-1",
-            typeNames: ["resched-fence-replaced"],
+            timeoutMsByTypeName: { "resched-fence-replaced": 30_000 },
           }),
         );
         await stateAdapter.withTransaction(async (txCtx) =>
@@ -668,7 +668,7 @@ export const rescheduleJobsGroup: ConformanceGroup<StateConformanceFixture> = {
           stateAdapter.startJobAttempt({
             txCtx,
             workerId: "worker-1",
-            typeNames: ["resched-fence-replaced"],
+            timeoutMsByTypeName: { "resched-fence-replaced": 30_000 },
           }),
         );
         const [before] = await stateAdapter.getJobs({ jobIds: [createdChain.head.id] });

@@ -1253,7 +1253,8 @@ SELECT
       });
     },
 
-    startJobAttempt: async ({ txCtx, typeNames, workerId }) => {
+    startJobAttempt: async ({ txCtx, timeoutMsByTypeName, workerId }) => {
+      const typeNames = Object.keys(timeoutMsByTypeName);
       const [result] = await executeTypedSql({
         txCtx,
         sql: templateCache.getOrCompute("startJobAttempt", () =>
@@ -1261,8 +1262,12 @@ SELECT
             sql(
               `
 WITH acquired_job AS (
-  SELECT j.id
-  FROM (SELECT type_name FROM unnest($1::text[]) AS u(type_name) ORDER BY random()) AS t
+  SELECT j.id, t.timeout_ms
+  FROM (
+    SELECT type_name, timeout_ms
+    FROM unnest($1::text[], $3::double precision[]) AS u(type_name, timeout_ms)
+    ORDER BY random()
+  ) AS t
   CROSS JOIN LATERAL (
     SELECT j.id
     FROM {{schema}}.{{table_prefix}}job h
@@ -1277,13 +1282,15 @@ WITH acquired_job AS (
   LIMIT 1
 ),
 updated AS (
-  UPDATE {{schema}}.{{table_prefix}}job
+  UPDATE {{schema}}.{{table_prefix}}job AS job
   SET status = 'running',
-    attempt = attempt + 1,
+    attempt = job.attempt + 1,
     attempt_at = now(),
-    attempt_by = $2
-  WHERE id = (SELECT id FROM acquired_job)
-  RETURNING *
+    attempt_by = $2,
+    attempt_until = now() + (a.timeout_ms * interval '1 millisecond')
+  FROM acquired_job a
+  WHERE job.id = a.id
+  RETURNING job.*
 )
 SELECT
   u.*,
@@ -1296,13 +1303,13 @@ JOIN {{schema}}.{{table_prefix}}job h ON h.id = u.chain_id
 `,
               {
                 id: "startJobAttempt",
-                params: [t.array(), t.string()],
+                params: [t.array(), t.string(), t.array<number>()],
                 columns: { ...dbJobColumns, ...dbChainColumns, has_blockers: t.boolean() },
               },
             ),
           ),
         ),
-        params: [typeNames, workerId],
+        params: [typeNames, workerId, typeNames.map((typeName) => timeoutMsByTypeName[typeName])],
       });
 
       if (!result) return undefined;

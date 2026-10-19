@@ -12,7 +12,7 @@ type Defs = {
 };
 
 describe("createInProcessWorker defaults", () => {
-  it("applies worker-level backoffConfig fallback when processor has none", async () => {
+  it("applies worker-level backoffConfig and attemptConfig fallbacks when processor has none", async () => {
     const jobTypes = defineJobTypes<Defs>();
     const stateAdapter = await createInProcessStateAdapter();
     const client = await createClient({ stateAdapter, jobTypes });
@@ -22,6 +22,7 @@ describe("createInProcessWorker defaults", () => {
       client,
       defaults: {
         backoffConfig: { initialDelayMs: 1, multiplier: 1, maxDelayMs: 1 },
+        attemptConfig: { timeoutMs: 45_000, heartbeatMs: 10_000 },
       },
       processors: createProcessors({
         client,
@@ -29,6 +30,7 @@ describe("createInProcessWorker defaults", () => {
         processors: {
           foo: {
             attemptHandler: async ({ job, complete }) => {
+              expect(job.attemptUntil.getTime() - job.attemptAt.getTime()).toBe(45_000);
               attempts.push(job.attempt);
               if (job.attempt < 3) throw new Error("retry");
               return complete(async ({ finish }) => finish({ output: null }));
@@ -50,7 +52,7 @@ describe("createInProcessWorker defaults", () => {
     expect(attempts).toEqual([1, 2, 3]);
   });
 
-  it("processor-level backoffConfig wins over worker-level default", async () => {
+  it("processor-level backoffConfig and attemptConfig win over worker-level defaults", async () => {
     const jobTypes = defineJobTypes<Defs>();
     const stateAdapter = await createInProcessStateAdapter();
     const client = await createClient({ stateAdapter, jobTypes });
@@ -62,6 +64,7 @@ describe("createInProcessWorker defaults", () => {
       client,
       defaults: {
         backoffConfig: { initialDelayMs: 5_000, multiplier: 1, maxDelayMs: 5_000 },
+        attemptConfig: { timeoutMs: 45_000, heartbeatMs: 10_000 },
       },
       processors: createProcessors({
         client,
@@ -69,7 +72,9 @@ describe("createInProcessWorker defaults", () => {
         processors: {
           foo: {
             backoffConfig: { initialDelayMs: 1, multiplier: 1, maxDelayMs: 1 },
+            attemptConfig: { timeoutMs: 15_000, heartbeatMs: 5_000 },
             attemptHandler: async ({ job, complete }) => {
+              expect(job.attemptUntil.getTime() - job.attemptAt.getTime()).toBe(15_000);
               const now = Date.now();
               if (lastAt !== null) delaysBetweenAttempts.push(now - lastAt);
               lastAt = now;

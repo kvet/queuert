@@ -213,12 +213,17 @@ export type StateAdapter<TTxContext extends BaseTxContext, TJobId extends string
   ) => Promise<(StateChain | StateBlockedJob[] | undefined)[]>;
 
   /**
-   * Atomically selects a pending job and starts an attempt, returning it with its
-   * chain. Two parallel callers must never receive the same job — locked rows must
-   * be skipped, not waited on. `hasBlockers` gates `getJobBlockers`.
+   * Atomically selects a pending job of one of the `timeoutMsByTypeName` keys and starts an
+   * attempt: increments `attempt`, sets `attemptBy`, and sets `attemptUntil` to now plus the
+   * acquired type's timeout. Returns it with its chain. Two parallel callers must never receive
+   * the same job — locked rows must be skipped, not waited on. `hasBlockers` gates
+   * `getJobBlockers`.
    */
   startJobAttempt: (
-    params: { typeNames: string[]; workerId: string } & WriteTxContextParam<TTxContext>,
+    params: {
+      timeoutMsByTypeName: Record<string, number>;
+      workerId: string;
+    } & WriteTxContextParam<TTxContext>,
   ) => Promise<(StateJob & { hasBlockers: boolean }) | undefined>;
 
   /** Ms until a pending job of these types can be attempted: 0 if due now, null if none. */

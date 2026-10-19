@@ -271,10 +271,7 @@ export const processModesTestSuite = ({ it }: { it: TestAPI<TestSuiteContext> })
       expect.objectContaining({
         name: "withTransaction",
         status: "committed",
-        children: [
-          expect.objectContaining({ name: "startJobAttempt" }),
-          expect.objectContaining({ name: "extendJobAttempt" }),
-        ],
+        children: [expect.objectContaining({ name: "startJobAttempt" })],
       }),
       expect.objectContaining({
         name: "withTransaction",
@@ -375,7 +372,6 @@ export const processModesTestSuite = ({ it }: { it: TestAPI<TestSuiteContext> })
             status: "committed",
             children: [expect.objectContaining({ name: "user-preparation" })],
           }),
-          expect.objectContaining({ name: "extendJobAttempt" }),
         ],
       }),
       expect.objectContaining({
@@ -467,10 +463,7 @@ export const processModesTestSuite = ({ it }: { it: TestAPI<TestSuiteContext> })
       expect.objectContaining({
         name: "withTransaction",
         status: "committed",
-        children: [
-          expect.objectContaining({ name: "startJobAttempt" }),
-          expect.objectContaining({ name: "extendJobAttempt" }),
-        ],
+        children: [expect.objectContaining({ name: "startJobAttempt" })],
       }),
       expect.objectContaining({
         name: "withTransaction",

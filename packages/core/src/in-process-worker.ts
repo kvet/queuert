@@ -106,7 +106,7 @@ const waitForNextJob = async ({
 
 const performJob = async ({
   helpers,
-  typeNames,
+  timeoutMsByTypeName,
   processors,
   defaultBackoffConfig,
   defaultAttemptConfig,
@@ -114,7 +114,7 @@ const performJob = async ({
   stopSignal,
 }: {
   helpers: Helpers;
-  typeNames: string[];
+  timeoutMsByTypeName: Record<string, number>;
   processors: Record<string, StampedProcessor>;
   defaultBackoffConfig: BackoffConfig;
   defaultAttemptConfig: AttemptConfig;
@@ -130,7 +130,7 @@ const performJob = async ({
     stateJob = await prepareTransactionContext.run(async (txCtx) =>
       helpers.stateAdapter.startJobAttempt({
         txCtx,
-        typeNames,
+        timeoutMsByTypeName,
         workerId,
       }),
     );
@@ -417,6 +417,12 @@ export const createInProcessWorker = async <
     );
   }
   const workerId = workerName ? `${workerName}-${randomUUID()}` : randomUUID();
+  const timeoutMsByTypeName = Object.fromEntries(
+    typeNames.map((typeName) => [
+      typeName,
+      (processors[typeName].attemptConfig ?? defaultAttemptConfig).timeoutMs,
+    ]),
+  );
 
   return {
     start: async (): Promise<() => Promise<void>> => {
@@ -435,7 +441,7 @@ export const createInProcessWorker = async <
           while (executor.idleSlots() > 0) {
             const result = await performJob({
               helpers,
-              typeNames,
+              timeoutMsByTypeName,
               processors,
               defaultBackoffConfig,
               defaultAttemptConfig,

@@ -75,7 +75,11 @@ export const listJobsGroup: ConformanceGroup<StateConformanceFixture> = {
         );
 
         await stateAdapter.withTransaction(async (txCtx) =>
-          stateAdapter.startJobAttempt({ txCtx, workerId: "worker-1", typeNames: ["test-type"] }),
+          stateAdapter.startJobAttempt({
+            txCtx,
+            workerId: "worker-1",
+            timeoutMsByTypeName: { "test-type": 30_000 },
+          }),
         );
         await stateAdapter.withTransaction(async (txCtx) =>
           stateAdapter.completeJobs({
@@ -114,7 +118,7 @@ export const listJobsGroup: ConformanceGroup<StateConformanceFixture> = {
           stateAdapter.startJobAttempt({
             txCtx,
             workerId: "worker-1",
-            typeNames: ["pending-type"],
+            timeoutMsByTypeName: { "pending-type": 30_000 },
           }),
         );
 
@@ -149,7 +153,7 @@ export const listJobsGroup: ConformanceGroup<StateConformanceFixture> = {
           stateAdapter.startJobAttempt({
             txCtx,
             workerId: "worker-1",
-            typeNames: ["running-type"],
+            timeoutMsByTypeName: { "running-type": 30_000 },
           }),
         );
 
@@ -256,14 +260,14 @@ export const listJobsGroup: ConformanceGroup<StateConformanceFixture> = {
           stateAdapter.startJobAttempt({
             txCtx,
             workerId: "worker-1",
-            typeNames: ["completed-mixed"],
+            timeoutMsByTypeName: { "completed-mixed": 30_000 },
           }),
         );
         await stateAdapter.withTransaction(async (txCtx) =>
           stateAdapter.startJobAttempt({
             txCtx,
             workerId: "worker-1",
-            typeNames: ["completed-mixed"],
+            timeoutMsByTypeName: { "completed-mixed": 30_000 },
           }),
         );
 
@@ -325,10 +329,18 @@ export const listJobsGroup: ConformanceGroup<StateConformanceFixture> = {
         );
 
         await stateAdapter.withTransaction(async (txCtx) =>
-          stateAdapter.startJobAttempt({ txCtx, workerId: "w1", typeNames: ["sort-complete"] }),
+          stateAdapter.startJobAttempt({
+            txCtx,
+            workerId: "w1",
+            timeoutMsByTypeName: { "sort-complete": 30_000 },
+          }),
         );
         await stateAdapter.withTransaction(async (txCtx) =>
-          stateAdapter.startJobAttempt({ txCtx, workerId: "w1", typeNames: ["sort-complete"] }),
+          stateAdapter.startJobAttempt({
+            txCtx,
+            workerId: "w1",
+            timeoutMsByTypeName: { "sort-complete": 30_000 },
+          }),
         );
         await stateAdapter.withTransaction(async (txCtx) =>
           stateAdapter.completeJobs({
@@ -383,11 +395,19 @@ export const listJobsGroup: ConformanceGroup<StateConformanceFixture> = {
         );
 
         await stateAdapter.withTransaction(async (txCtx) =>
-          stateAdapter.startJobAttempt({ txCtx, workerId: "w1", typeNames: ["sort-running"] }),
+          stateAdapter.startJobAttempt({
+            txCtx,
+            workerId: "w1",
+            timeoutMsByTypeName: { "sort-running": 30_000 },
+          }),
         );
         await sleep(5);
         await stateAdapter.withTransaction(async (txCtx) =>
-          stateAdapter.startJobAttempt({ txCtx, workerId: "w1", typeNames: ["sort-running"] }),
+          stateAdapter.startJobAttempt({
+            txCtx,
+            workerId: "w1",
+            timeoutMsByTypeName: { "sort-running": 30_000 },
+          }),
         );
 
         const byCreatedAt = await stateAdapter.listJobs({
@@ -488,7 +508,7 @@ export const listJobsGroup: ConformanceGroup<StateConformanceFixture> = {
             stateAdapter.startJobAttempt({
               txCtx,
               workerId: "w1",
-              typeNames: ["page-type"],
+              timeoutMsByTypeName: { "page-type": 30_000 },
             }),
           );
           await stateAdapter.withTransaction(async (txCtx) =>
@@ -702,7 +722,7 @@ export const listJobsGroup: ConformanceGroup<StateConformanceFixture> = {
           stateAdapter.startJobAttempt({
             txCtx,
             workerId: "worker-1",
-            typeNames: ["sort-until"],
+            timeoutMsByTypeName: { "sort-until": 30_000 },
           }),
         );
         await sleep(5);
@@ -710,7 +730,7 @@ export const listJobsGroup: ConformanceGroup<StateConformanceFixture> = {
           stateAdapter.startJobAttempt({
             txCtx,
             workerId: "worker-1",
-            typeNames: ["sort-until"],
+            timeoutMsByTypeName: { "sort-until": 30_000 },
           }),
         );
 
@@ -763,7 +783,11 @@ export const listJobsGroup: ConformanceGroup<StateConformanceFixture> = {
         );
 
         await stateAdapter.withTransaction(async (txCtx) =>
-          stateAdapter.startJobAttempt({ txCtx, workerId: "w1", typeNames: ["multi-step"] }),
+          stateAdapter.startJobAttempt({
+            txCtx,
+            workerId: "w1",
+            timeoutMsByTypeName: { "multi-step": 30_000 },
+          }),
         );
         const [continuedTail] = await stateAdapter.withTransaction(async (txCtx) =>
           stateAdapter.continueJobs({
@@ -804,7 +828,11 @@ export const listJobsGroup: ConformanceGroup<StateConformanceFixture> = {
         // Complete the tail and verify both jobs appear correctly
         await sleep(5);
         await stateAdapter.withTransaction(async (txCtx) =>
-          stateAdapter.startJobAttempt({ txCtx, workerId: "w1", typeNames: ["multi-step"] }),
+          stateAdapter.startJobAttempt({
+            txCtx,
+            workerId: "w1",
+            timeoutMsByTypeName: { "multi-step": 30_000 },
+          }),
         );
         await stateAdapter.withTransaction(async (txCtx) =>
           stateAdapter.completeJobs({
