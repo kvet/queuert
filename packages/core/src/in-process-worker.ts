@@ -2,9 +2,11 @@ import { randomUUID } from "node:crypto";
 
 import { type Client, helpersSymbol } from "./client.js";
 import { type BaseJobTypeDefinitions } from "./entities/job-type.js";
+import { JobAttemptExpiredError } from "./errors.js";
 import { type BackoffConfig, backoffConfigViolations } from "./helpers/backoff.js";
 import { type ParallelExecutor, createParallelExecutor } from "./helpers/parallel-executor.js";
 import { withRetry } from "./helpers/retry.js";
+import { serializeError } from "./helpers/serialize-error.js";
 import { raceWithSleep } from "./helpers/sleep.js";
 import {
   type TransactionContext,
@@ -470,6 +472,12 @@ export const createInProcessWorker = async <
                 txCtx,
                 typeNames,
                 ignoredJobIds: Array.from(jobIdsInProgress),
+                lastAttemptError: serializeError(
+                  new JobAttemptExpiredError(
+                    "Job attempt lease expired before the holding worker renewed it",
+                    { reclaimedBy: workerId },
+                  ),
+                ),
               }),
             );
             if (reclaimed) {

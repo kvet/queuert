@@ -17,7 +17,9 @@ export type JobFields<TJobId, TJobTypeName, TChainTypeName, TInput> = {
   scheduledAt: Date;
   /** Number of processing attempts so far. */
   attempt: number;
+  /** When the last failed or reclaimed attempt ended. */
   lastAttemptAt: Date | null;
+  /** Serialized error of the last failed or reclaimed attempt. */
   lastAttemptError: string | null;
 };
 

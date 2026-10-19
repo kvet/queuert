@@ -1044,7 +1044,7 @@ export const createInProcessStateAdapter = async ({
         return jobView(updatedJob);
       }),
 
-    reclaimExpiredJobAttempt: async ({ txCtx, typeNames, ignoredJobIds }) =>
+    reclaimExpiredJobAttempt: async ({ txCtx, typeNames, ignoredJobIds, lastAttemptError }) =>
       withWriteLock(txCtx, () => {
         const journal = txCtx?.journal;
         const now = Date.now();
@@ -1075,6 +1075,8 @@ export const createInProcessStateAdapter = async ({
           attemptBy: null,
           attemptUntil: null,
           attemptAt: null,
+          lastAttemptAt: new Date(now),
+          lastAttemptError,
         };
         idx.writeJob(journal, candidateJob, updatedJob);
         return jobView(updatedJob);

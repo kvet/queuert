@@ -32,8 +32,8 @@ The `job` table stores all job state:
 | `completed_at`            | `timestamptz`                  | When the job completed (null until completed)                       |
 | `completed_by`            | `text`                         | Worker ID that completed the job (null for workerless)              |
 | `attempt`                 | `integer`                      | Number of processing attempts (starts at 0)                         |
-| `last_attempt_at`         | `timestamptz`                  | When the last attempt started                                       |
-| `last_attempt_error`      | `jsonb`                        | Error from last failed attempt                                      |
+| `last_attempt_at`         | `timestamptz`                  | When the last failed attempt ended                                  |
+| `last_attempt_error`      | `jsonb`                        | Error from the last failed or reclaimed attempt                     |
 | `attempt_at`              | `timestamptz`                  | When the current attempt started (null when idle)                   |
 | `attempt_by`              | `text`                         | Worker ID holding the current attempt                               |
 | `attempt_until`           | `timestamptz`                  | Attempt expiry time                                                 |

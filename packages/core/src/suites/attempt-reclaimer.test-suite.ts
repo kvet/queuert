@@ -117,7 +117,11 @@ export const attemptReclaimerTestSuite = ({ it }: { it: TestAPI<TestSuiteContext
         attemptConfig,
         processors: {
           test: {
-            attemptHandler: async ({ signal, complete }) => {
+            attemptHandler: async ({ job, signal, complete }) => {
+              if (job.attempt === 2) {
+                expect(job.lastAttemptError).toMatch(/^JobAttemptExpiredError: /);
+                expect(job.lastAttemptError).toContain('"reclaimedBy"');
+              }
               if (!failed) {
                 failed = true;
 
@@ -147,7 +151,11 @@ export const attemptReclaimerTestSuite = ({ it }: { it: TestAPI<TestSuiteContext
         attemptConfig,
         processors: {
           test: {
-            attemptHandler: async ({ signal, complete }) => {
+            attemptHandler: async ({ job, signal, complete }) => {
+              if (job.attempt === 2) {
+                expect(job.lastAttemptError).toMatch(/^JobAttemptExpiredError: /);
+                expect(job.lastAttemptError).toContain('"reclaimedBy"');
+              }
               if (!failed) {
                 failed = true;
 

@@ -79,6 +79,21 @@ export class ChainNotFoundError extends Error {
   }
 }
 
+/**
+ * Recorded as a job's `lastAttemptError` when a worker reclaims its attempt because the attempt
+ * lease expired before the holding worker renewed it.
+ */
+export class JobAttemptExpiredError extends Error {
+  /** The worker that reclaimed the attempt. */
+  readonly reclaimedBy: string;
+
+  constructor(message: string, options: { reclaimedBy: string; cause?: unknown }) {
+    super(message, options.cause !== undefined ? { cause: options.cause } : undefined);
+    this.name = "JobAttemptExpiredError";
+    this.reclaimedBy = options.reclaimedBy;
+  }
+}
+
 /** Thrown when attempting to complete an already-completed job. */
 export class JobAlreadyCompletedError extends Error {
   /** The job that was already completed. */

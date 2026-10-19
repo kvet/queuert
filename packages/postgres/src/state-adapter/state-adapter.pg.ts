@@ -1402,7 +1402,7 @@ JOIN {{schema}}.{{table_prefix}}job h ON h.id = u.chain_id
       return job ? mapDbJobRowToStateJob(job) : undefined;
     },
 
-    reclaimExpiredJobAttempt: async ({ txCtx, typeNames, ignoredJobIds }) => {
+    reclaimExpiredJobAttempt: async ({ txCtx, typeNames, ignoredJobIds, lastAttemptError }) => {
       const [job] = await executeTypedSql({
         txCtx,
         sql: templateCache.getOrCompute("reclaimExpiredJobAttempt", () =>
@@ -1429,6 +1429,8 @@ WITH job_to_unlock AS (
 updated AS (
   UPDATE {{schema}}.{{table_prefix}}job as job
   SET status = 'pending',
+    last_attempt_at = now(),
+    last_attempt_error = $3::text::jsonb,
     attempt_at = NULL,
     attempt_by = NULL,
     attempt_until = NULL
@@ -1442,13 +1444,13 @@ JOIN {{schema}}.{{table_prefix}}job h ON h.id = u.chain_id
 `,
               {
                 id: "reclaimExpiredJobAttempt",
-                params: [t.array(), t.array()],
+                params: [t.array(), t.array(), t.string()],
                 columns: { ...dbJobColumns, ...dbChainColumns },
               },
             ),
           ),
         ),
-        params: [typeNames, ignoredJobIds ?? []],
+        params: [typeNames, ignoredJobIds ?? [], JSON.stringify(lastAttemptError)],
       });
       return job ? mapDbJobRowToStateJob(job) : undefined;
     },
