@@ -25,6 +25,7 @@ export {
   HookNotRegisteredError,
   InvalidJobIdError,
   JobAlreadyCompletedError,
+  JobAttemptExpiredError,
   JobNotFoundError,
   JobNotReschedulableError,
   JobsNotFoundError,

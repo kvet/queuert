@@ -6,7 +6,7 @@ export const reclaimExpiredJobAttemptGroup: ConformanceGroup<StateConformanceFix
   name: "reclaimExpiredJobAttempt",
   cases: [
     {
-      name: "removes expired attempt and resets job to pending",
+      name: "resets an expired attempt to pending and stamps the last-attempt fields",
       run: async ({ stateAdapter }, expect) => {
         const [createdChain] = await stateAdapter.withTransaction(async (txCtx) =>
           stateAdapter.createJobs({
@@ -15,9 +15,11 @@ export const reclaimExpiredJobAttemptGroup: ConformanceGroup<StateConformanceFix
           }),
         );
 
-        await stateAdapter.withTransaction(async (txCtx) =>
+        const acquired = await stateAdapter.withTransaction(async (txCtx) =>
           stateAdapter.startJobAttempt({ txCtx, workerId: "worker-1", typeNames: ["expire-test"] }),
         );
+        expect(acquired!.lastAttemptAt).toBeNull();
+        expect(acquired!.lastAttemptError).toBeNull();
 
         await stateAdapter.withTransaction(async (txCtx) =>
           stateAdapter.extendJobAttempt({
@@ -30,18 +32,30 @@ export const reclaimExpiredJobAttemptGroup: ConformanceGroup<StateConformanceFix
 
         await sleep(10);
 
+        const before = Date.now();
         const expired = await stateAdapter.withTransaction(async (txCtx) =>
-          stateAdapter.reclaimExpiredJobAttempt({ txCtx, typeNames: ["expire-test"] }),
+          stateAdapter.reclaimExpiredJobAttempt({
+            txCtx,
+            typeNames: ["expire-test"],
+            lastAttemptError: "JobAttemptExpiredError: test",
+          }),
         );
 
         expect(expired).toBeDefined();
         expect(expired!.id).toBe(createdChain.head.id);
         expect(expired!.status).toBe("pending");
+        expect(expired!.attempt).toBe(1);
         expect(expired!.completedAt).toBeNull();
         expect(expired!.attemptAt).toBeNull();
         expect(expired!.attemptBy).toBeNull();
         expect(expired!.attemptUntil).toBeNull();
-        expect(expired!.attemptAt).toBeNull();
+        expect(expired!.lastAttemptError).toBe("JobAttemptExpiredError: test");
+        expect(expired!.lastAttemptAt).toBeInstanceOf(Date);
+        expect(expired!.lastAttemptAt!.getTime()).toBeGreaterThanOrEqual(before - 1_000);
+
+        const [stored] = await stateAdapter.getJobs({ jobIds: [createdChain.head.id] });
+        expect(stored!.lastAttemptError).toBe("JobAttemptExpiredError: test");
+        expect(stored!.lastAttemptAt!.getTime()).toBe(expired!.lastAttemptAt!.getTime());
       },
     },
     {
@@ -74,7 +88,11 @@ export const reclaimExpiredJobAttemptGroup: ConformanceGroup<StateConformanceFix
         );
 
         const expired = await stateAdapter.withTransaction(async (txCtx) =>
-          stateAdapter.reclaimExpiredJobAttempt({ txCtx, typeNames: ["no-expire-test"] }),
+          stateAdapter.reclaimExpiredJobAttempt({
+            txCtx,
+            typeNames: ["no-expire-test"],
+            lastAttemptError: "JobAttemptExpiredError: test",
+          }),
         );
 
         expect(expired).toBeUndefined();
@@ -140,6 +158,7 @@ export const reclaimExpiredJobAttemptGroup: ConformanceGroup<StateConformanceFix
             txCtx,
             typeNames: ["ignore-test"],
             ignoredJobIds: [chainA.head.id],
+            lastAttemptError: "JobAttemptExpiredError: test",
           }),
         );
 

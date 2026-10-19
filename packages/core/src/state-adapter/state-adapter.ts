@@ -238,11 +238,15 @@ export type StateAdapter<TTxContext extends BaseTxContext, TJobId extends string
     } & WriteTxContextParam<TTxContext>,
   ) => Promise<StateJob | undefined>;
 
-  /** Releases an expired job attempt back to the pending pool. */
+  /**
+   * Releases an expired job attempt back to the pending pool, setting `lastAttemptAt` to now and
+   * `lastAttemptError` to the given error, as a reschedule after a handler error does.
+   */
   reclaimExpiredJobAttempt: (
     params: {
       typeNames: string[];
       ignoredJobIds?: TJobId[];
+      lastAttemptError: string;
     } & WriteTxContextParam<TTxContext>,
   ) => Promise<StateJob | undefined>;
 

@@ -128,7 +128,7 @@ listWorkers: (
 Released jobs are written as a failed attempt, not a silent reschedule, which is a behavior change from today's reclaim:
 
 - `status = 'pending'`, `attempt_at = NULL`, `attempt_by = NULL`
-- `last_attempt_at = now()`, `last_attempt_error = 'Worker stopped unexpectedly'` (serialized through the same shape `rescheduleJobs` uses for `error`)
+- `last_attempt_at = now()`, `last_attempt_error` = a serialized error passed by the reclaiming worker, as `reclaimExpiredJobAttempt` takes today (`JobAttemptExpiredError`, or a dedicated error for a stopped worker)
 - `scheduled_at = now()` — no backoff. The job never got to run; the failure is the worker's, not the job's. `attempt` was already incremented by `startJobAttempt`, so a crash-looping worker still exhausts nothing but attempt count, which is the honest record.
 
 `reclaimExpiredWorkers` is **not** type-scoped. A worker's jobs are released whether or not the reclaimer processes those types — that is the fix for jobs stranded on a type no live worker handles. The caller therefore has to notify per distinct `typeName` of the returned jobs rather than for its own type list.

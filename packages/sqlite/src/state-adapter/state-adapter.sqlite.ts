@@ -1530,7 +1530,7 @@ RETURNING *, ${chainColumnsReturning("{{table_prefix}}job")}
 
       return job ? mapDbJobRowToStateJob(job) : undefined;
     },
-    reclaimExpiredJobAttempt: async ({ txCtx, typeNames, ignoredJobIds }) => {
+    reclaimExpiredJobAttempt: async ({ txCtx, typeNames, ignoredJobIds, lastAttemptError }) => {
       const [job] = await executeTypedSql({
         txCtx,
         sql: templateCache.getOrCompute("reclaimExpiredJobAttempt", () =>
@@ -1539,6 +1539,8 @@ RETURNING *, ${chainColumnsReturning("{{table_prefix}}job")}
               `
 UPDATE {{table_prefix}}job
 SET status = 'pending',
+  last_attempt_at = datetime('now', 'subsec'),
+  last_attempt_error = ?,
   attempt_at = NULL,
   attempt_by = NULL,
   attempt_until = NULL
@@ -1557,13 +1559,17 @@ RETURNING *, ${chainColumnsReturning("{{table_prefix}}job")}
 `,
               {
                 id: "reclaimExpiredJobAttempt",
-                params: [t.string(), t.string()],
+                params: [t.string(), t.string(), t.string()],
                 columns: { ...dbJobColumns, ...dbChainColumns },
               },
             ),
           ),
         ),
-        params: [JSON.stringify(typeNames), JSON.stringify(ignoredJobIds ?? [])],
+        params: [
+          JSON.stringify(lastAttemptError),
+          JSON.stringify(typeNames),
+          JSON.stringify(ignoredJobIds ?? []),
+        ],
       });
       return job ? mapDbJobRowToStateJob(job) : undefined;
     },
