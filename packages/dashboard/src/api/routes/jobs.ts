@@ -115,8 +115,8 @@ export const handleJobReschedule = async (
 ): Promise<Response> => {
   try {
     const { stateAdapter } = client[helpersSymbol];
-    const job = await stateAdapter.withTransaction(async (txCtx) =>
-      withTransactionHooks(async (transactionHooks) =>
+    const job = await withTransactionHooks(async (transactionHooks) =>
+      stateAdapter.withTransaction(async (txCtx) =>
         client.rescheduleJob({ id: jobId, transactionHooks, ...txCtx }),
       ),
     );

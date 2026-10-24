@@ -1,4 +1,9 @@
-import { createClient, createInProcessStateAdapter, defineJobTypes } from "queuert";
+import {
+  createClient,
+  createInProcessNotifyAdapter,
+  createInProcessStateAdapter,
+  defineJobTypes,
+} from "queuert";
 import { deserialize } from "seroval";
 import { describe, expect, it } from "vitest";
 
@@ -752,6 +757,41 @@ describe("Dashboard API", () => {
 
       expect(res.status).toBe(200);
       expect(body.job.id).toBe(stateChain.head.id);
+    });
+
+    it("notifies workers only after the reschedule commits", async () => {
+      const events: string[] = [];
+      const innerStateAdapter = await createInProcessStateAdapter();
+      const stateAdapter: typeof innerStateAdapter = {
+        ...innerStateAdapter,
+        withTransaction: async (fn) => {
+          const result = await innerStateAdapter.withTransaction(fn);
+          events.push("commit");
+          return result;
+        },
+      };
+      const innerNotifyAdapter = await createInProcessNotifyAdapter();
+      const client = await createClient({
+        stateAdapter,
+        notifyAdapter: {
+          ...innerNotifyAdapter,
+          notifyJobScheduled: async (typeName) => {
+            events.push("notify");
+            return innerNotifyAdapter.notifyJobScheduled(typeName);
+          },
+        },
+        jobTypes: defineJobTypes(),
+      });
+      const dashboard = await createDashboard({ client });
+      const job = await createJob(stateAdapter, "test-type", null);
+      events.length = 0;
+
+      const res = await dashboard.fetch(
+        new Request(`http://test/api/jobs/${job.id}/reschedule`, { method: "POST" }),
+      );
+
+      expect(res.status).toBe(200);
+      expect(events).toEqual(["commit", "notify"]);
     });
 
     it("returns 404 for missing job", async () => {
