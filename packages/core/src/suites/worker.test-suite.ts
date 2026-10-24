@@ -8,6 +8,7 @@ import { sleep } from "../helpers/sleep.js";
 import { createInProcessWorker } from "../in-process-worker.js";
 import { type AttemptMiddleware } from "../worker/attempt-middleware.js";
 import { createProcessors } from "../worker/create-processors.js";
+import { omitProcessors, pickProcessors } from "../worker/pick-processors.js";
 import { type TestSuiteContext } from "./spec-context.spec-helper.js";
 
 export const workerTestSuite = ({ it }: { it: TestAPI<TestSuiteContext> }): void => {
@@ -141,6 +142,123 @@ export const workerTestSuite = ({ it }: { it: TestAPI<TestSuiteContext> }): void
       expect(processedTypes).toContain("sms");
       expect(processedTypes).toHaveLength(2);
     });
+  });
+
+  it("splits registries across workers with pickProcessors and omitProcessors", async ({
+    stateAdapter,
+    notifyAdapter,
+    withTransaction,
+    withWorkers,
+    observabilityAdapter,
+    log,
+  }) => {
+    const processed: string[] = [];
+
+    const imageJobTypes = defineJobTypes<{
+      "images.resize": { entry: true; input: null; output: null };
+      "images.notify": { entry: true; input: null; output: null };
+    }>();
+    const billingJobTypes = defineJobTypes<{
+      "billing.charge": { entry: true; input: null; output: null };
+    }>();
+
+    const client = await createClient({
+      stateAdapter,
+      notifyAdapter,
+      observabilityAdapter,
+      log,
+      jobTypes: [imageJobTypes, billingJobTypes],
+    });
+
+    const traceMiddleware: AttemptMiddleware<any, { trace: string }> = {
+      wrapHandler: async ({ next }) => next({ trace: "trace-1" }),
+    };
+    const imageProcessors = createProcessors({
+      client,
+      jobTypes: imageJobTypes,
+      attemptMiddleware: [traceMiddleware],
+      processors: {
+        "images.resize": {
+          attemptHandler: async ({ job, trace, complete }) => {
+            processed.push(`${job.typeName}:${trace}`);
+            return complete(async ({ finish }) => finish({ output: null }));
+          },
+        },
+        "images.notify": {
+          attemptHandler: async ({ job, trace, complete }) => {
+            processed.push(`${job.typeName}:${trace}`);
+            return complete(async ({ finish }) => finish({ output: null }));
+          },
+        },
+      },
+    });
+    const billingProcessors = createProcessors({
+      client,
+      jobTypes: billingJobTypes,
+      processors: {
+        "billing.charge": {
+          attemptHandler: async ({ job, complete }) => {
+            processed.push(job.typeName);
+            return complete(async ({ finish }) => finish({ output: null }));
+          },
+        },
+      },
+    });
+
+    const dedicatedWorker = await createInProcessWorker({
+      client,
+      processors: [
+        pickProcessors(imageProcessors, ["images.resize"]),
+        pickProcessors(billingProcessors, ["billing.charge"]),
+      ],
+    });
+    const restWorker = await createInProcessWorker({
+      client,
+      processors: omitProcessors(imageProcessors, ["images.resize"]),
+    });
+
+    const [resizeChain, chargeChain, notifyChain] = await withTransaction(
+      async (txCtx, transactionHooks) =>
+        Promise.all([
+          client.createChain({
+            ...txCtx,
+            transactionHooks,
+            typeName: "images.resize",
+            input: null,
+          }),
+          client.createChain({
+            ...txCtx,
+            transactionHooks,
+            typeName: "billing.charge",
+            input: null,
+          }),
+          client.createChain({
+            ...txCtx,
+            transactionHooks,
+            typeName: "images.notify",
+            input: null,
+          }),
+        ]),
+    );
+
+    await withWorkers([await restWorker.start()], async () => {
+      await client.awaitChain(notifyChain, completionOptions);
+    });
+    expect(processed).toEqual(["images.notify:trace-1"]);
+    expect((await client.getChain({ id: resizeChain.id }))?.status).toBe("running");
+    expect((await client.getChain({ id: chargeChain.id }))?.status).toBe("running");
+
+    await withWorkers([await dedicatedWorker.start()], async () => {
+      await Promise.all([
+        client.awaitChain(resizeChain, completionOptions),
+        client.awaitChain(chargeChain, completionOptions),
+      ]);
+    });
+    expect(processed.toSorted()).toEqual([
+      "billing.charge",
+      "images.notify:trace-1",
+      "images.resize:trace-1",
+    ]);
   });
 
   it("picks up job that is added while it is online", async ({

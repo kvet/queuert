@@ -69,8 +69,10 @@ export type ProcessorMiddlewareTuple<T extends Processors> = T[typeof processors
  * A processor registry that bundles processor implementations with their
  * type definitions and middleware tuple via phantom symbol properties.
  *
- * Created via {@link createProcessors}. Pass an array of slices to
- * `createInProcessWorker` to merge multiple slices into one worker.
+ * Created via {@link createProcessors}, or narrowed from an existing registry with
+ * {@link pickProcessors} / {@link omitProcessors}. Pass an array of slices to
+ * `createInProcessWorker` to merge multiple slices into one worker; slices must not share
+ * job types.
  */
 export type Processors<
   TJobTypeDefinitions extends BaseJobTypeDefinitions = BaseJobTypeDefinitions,

@@ -127,6 +127,32 @@ const worker = await createInProcessWorker({
 
 See [Feature Slices](../slices/) for organizing job types and processors into independent modules.
 
+### Splitting a Registry
+
+When one `createProcessors` registry (`appProcessors` below) holds the processors for every job type, split it across workers with `pickProcessors` and `omitProcessors`. `pickProcessors` keeps only the listed job types; `omitProcessors` keeps everything else, so the two together cover every job type. Each processor keeps its handler, its slice's middleware chain, and its `backoffConfig` / `attemptConfig`:
+
+```ts
+import { omitProcessors, pickProcessors } from "queuert";
+
+const imageJobTypeNames = ["images.resize", "images.transcode"] as const;
+
+const imageWorker = await createInProcessWorker({
+  client,
+  workerName: "image-worker",
+  concurrency: 1,
+  processors: pickProcessors(appProcessors, imageJobTypeNames),
+});
+
+const defaultWorker = await createInProcessWorker({
+  client,
+  workerName: "default-worker",
+  concurrency: 100,
+  processors: omitProcessors(appProcessors, imageJobTypeNames),
+});
+```
+
+Job type names are type-checked against the registry, and both functions throw on a name the registry has no processor for. Neither accepts a selection that leaves no processors. To pick from several slices, pick from each one and pass the results as an array: `processors: [pickProcessors(orderProcessors, [...]), pickProcessors(billingProcessors, [...])]`.
+
 ## See Also
 
 - [examples/state-postgres-multi-worker](https://github.com/kvet/queuert/tree/main/examples/state-postgres-multi-worker) — multiple workers sharing a PostgreSQL database

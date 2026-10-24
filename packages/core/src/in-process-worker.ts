@@ -24,7 +24,11 @@ import {
   type IsAttemptMiddlewareSubsequence,
 } from "./worker/attempt-middleware.js";
 import { runJobProcess } from "./worker/job-process.js";
-import { type MergedProcessorDefinitions, mergeProcessors } from "./worker/merge-processors.js";
+import {
+  type MergedProcessorDefinitions,
+  type ValidatedProcessorSlices,
+  mergeProcessors,
+} from "./worker/merge-processors.js";
 import {
   type InProcessWorkerProcessor,
   type Processors,
@@ -265,6 +269,7 @@ export type InProcessWorkerDefaults = {
  * @throws {TypeError} When `workerName` is malformed, or when `recoveryBackoffConfig`,
  * `defaults` or any processor's `backoffConfig` / `attemptConfig` holds an invalid value;
  * the message lists every invalid field.
+ * @throws {@link DuplicateJobTypeError} if slices in a `processors` array share job types.
  */
 export const createInProcessWorker = async <
   TJobTypeDefinitions extends BaseJobTypeDefinitions,
@@ -311,18 +316,28 @@ export const createInProcessWorker = async <
    */
   requiredAttemptMiddleware?: TRequiredAttemptMiddleware &
     readonly AttemptMiddleware<TStateAdapter, any, any, any, any>[];
-  /** A single `Processors` from {@link createProcessors}, or an array of slices to merge. */
+  /**
+   * A single `Processors` (from {@link createProcessors}, {@link pickProcessors} or
+   * {@link omitProcessors}), or an array of slices to merge. Slices must not share job types:
+   * an overlap is a type error when the array's length is known at compile time, and throws
+   * {@link DuplicateJobTypeError} at runtime.
+   */
   processors: [
     ExtraProcessorTypeNames<WorkerProcessorDefs<TProcessorsInput>, TJobTypeDefinitions>,
   ] extends [never]
-    ? ValidateRequiredMiddleware<TProcessorsInput, TRequiredAttemptMiddleware>
+    ? ValidateRequiredMiddleware<TProcessorsInput, TRequiredAttemptMiddleware> &
+        (TProcessorsInput extends readonly Processors[]
+          ? number extends TProcessorsInput["length"]
+            ? unknown
+            : ValidatedProcessorSlices<TProcessorsInput>
+          : unknown)
     : `Error: processors contain job types unknown to the client: ${ExtraProcessorTypeNames<WorkerProcessorDefs<TProcessorsInput>, TJobTypeDefinitions> & string}`;
 }): Promise<InProcessWorker> => {
   const merged = Array.isArray(processorsOption)
     ? processorsOption.length === 1
       ? (processorsOption[0] as Processors)
-      : // ValidatedProcessorSlices duplicate-check is enforced at the createInProcessWorker signature;
-        // internal cast bypasses it since the input is already validated.
+      : // ValidatedProcessorSlices duplicate-check is enforced at the createInProcessWorker signature
+        // for fixed-length arrays only; mergeProcessors re-checks at runtime either way.
         mergeProcessors(processorsOption as never)
     : (processorsOption as unknown as Processors);
 

@@ -11,7 +11,11 @@ import { createInProcessStateAdapter } from "./state-adapter/state-adapter.in-pr
 import { withTransactionHooks } from "./transaction-hooks.js";
 import { createProcessors } from "./worker/create-processors.js";
 import { mergeProcessors } from "./worker/merge-processors.js";
-import { type ProcessorDefinitions, processorsDefinitionsSymbol } from "./worker/processors.js";
+import {
+  type ProcessorDefinitions,
+  type Processors,
+  processorsDefinitionsSymbol,
+} from "./worker/processors.js";
 
 type OrderDefs = {
   "orders.create": { entry: true; input: { userId: string }; output: { orderId: string } };
@@ -750,6 +754,30 @@ describe("createInProcessWorker with partial processor registries", () => {
       // @ts-expect-error — processor jobTypes contains job types not known to the client
       processors: unrelatedProcessors,
     });
+  });
+
+  it("rejects overlapping slices in the processors array", async () => {
+    await expect(
+      createInProcessWorker({
+        client,
+        // @ts-expect-error — "orders.create" and "orders.fulfill" are in both slices
+        processors: [orderProcessors, orderProcessors],
+      }),
+    ).rejects.toThrow(DuplicateJobTypeError);
+  });
+
+  it("leaves overlap checks of variable-length arrays to runtime", async () => {
+    const slices: Processors[] = [orderProcessors, notificationProcessors];
+    const includeNotifications = slices.length > 1;
+
+    await createInProcessWorker({ client, processors: slices });
+    await createInProcessWorker({
+      client,
+      processors: [orderProcessors, ...(includeNotifications ? [notificationProcessors] : [])],
+    });
+    await expect(
+      createInProcessWorker({ client, processors: [...slices, orderProcessors] }),
+    ).rejects.toThrow(DuplicateJobTypeError);
   });
 
   it("still accepts a fully merged processor jobTypes", async () => {

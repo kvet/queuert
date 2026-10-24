@@ -86,6 +86,8 @@ Both fields accept a single slice or an array of slices. When an array is passed
 - **`createClient` / `jobTypes`** — overlapping type names produce a TypeScript error at compile time; validated registries with overlapping `getTypeNames()` throw `DuplicateJobTypeError` at runtime.
 - **`createInProcessWorker` / `processors`** — overlapping processor keys produce a TypeScript error at compile time and throw `DuplicateJobTypeError` at runtime.
 
+To run a slice's job types on different workers, split its registry with `pickProcessors` / `omitProcessors` — see [Splitting a Registry](../horizontal-scaling/#splitting-a-registry).
+
 ## Cross-Slice References
 
 When a slice needs to reference job types from another slice — for example, declaring a blocker from the notifications domain — use the optional `TExternal` type parameter on `defineJobTypes`:
@@ -136,6 +138,6 @@ notifications.send-notification
 
 ## See Also
 
-- [Utilities](/queuert/api/core/readme/) — API reference for `defineJobTypes`, `createJobTypes`, `createProcessors`
+- [Utilities](/queuert/api/core/readme/) — API reference for `defineJobTypes`, `createJobTypes`, `createProcessors`, `pickProcessors`, `omitProcessors`
 - [Chain Patterns](../chain-patterns/) — continuation references and patterns
 - [showcase-slices example](https://github.com/kvet/queuert/blob/main/examples/showcase-slices/src/index.ts) — full runnable example

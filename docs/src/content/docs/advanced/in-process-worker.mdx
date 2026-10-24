@@ -130,7 +130,7 @@ A single worker can handle multiple job types. Slots poll all registered types a
 
 Handler middleware hook into one or more job processing phases via `wrapHandler`, `wrapPrepare`, `wrapStep`, and `wrapComplete`. Each hook can inject typed context into the inner handler/callback through `next(ctx)`. Middleware compose as an onion: the first middleware's "before" runs outermost. Middleware enable cross-cutting concerns like contextual logging, audit trails, tracing spans, and resource injection.
 
-Middleware are declared on the processor registry via `createProcessors({ attemptMiddleware: [...] })`. Handler signatures inside that registry auto-infer their typed context from the middleware tuple. When multiple slices are passed as an array to `createInProcessWorker`, each processor keeps its slice's middleware chain.
+Middleware are declared on the processor registry via `createProcessors({ attemptMiddleware: [...] })`. Handler signatures inside that registry auto-infer their typed context from the middleware tuple. When multiple slices are passed as an array to `createInProcessWorker`, each processor keeps its slice's middleware chain. The same holds for registries narrowed with `pickProcessors` / `omitProcessors`. Slices in the array must not share job types: an overlap fails type-checking when the array's length is known at compile time, and throws `DuplicateJobTypeError` at runtime.
 
 To share middleware across multiple registries, list them inline at each `createProcessors` call — the tuple inference narrows without requiring `as const`. Each slice's middleware chain is the runtime source of truth; the worker simply dispatches to whichever processor matches the job's typeName.
 

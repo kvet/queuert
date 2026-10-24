@@ -70,4 +70,5 @@ export {
 export { type AttemptConfig } from "./worker/attempt-heartbeat.js";
 export { type AttemptMiddleware } from "./worker/attempt-middleware.js";
 export { createProcessors } from "./worker/create-processors.js";
+export { omitProcessors, pickProcessors } from "./worker/pick-processors.js";
 export { type Processors } from "./worker/processors.js";
