@@ -329,6 +329,14 @@ Examples should follow these conventions for clarity and readability:
 - **No obvious comments**: Users are smart
 - **Workflow visualization**: Examples with job chains should include ASCII workflow diagrams as comments inside the `defineJobTypes` generic, directly above the relevant job type definitions
 
+### Guides and Examples Stay in Sync
+
+Each guide in `docs/src/content/docs/guides/` links the example that demonstrates it. The example is the source of truth for correctness because it runs in `pnpm examples`; the guide is the source of truth for teaching:
+
+- **Every pattern the guide teaches is runnable in the example**: if a guide section shows something the example does not do, add it to the example (within its single purpose) or drop it from the guide.
+- **Guide snippets may stay generic**: they don't have to be excerpts of the example. Use names and values that read well in prose, and leave out demo scaffolding (hardcoded IDs, forced failures, shortened timeouts, assertions).
+- **Change both together**: a change to an example that alters a pattern a guide teaches updates the guide, and a guide edit that changes a pattern updates the example. The same holds for the example's `README.md`.
+
 ## Documentation Updates
 
 When making changes:
