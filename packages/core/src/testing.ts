@@ -50,7 +50,7 @@ export {
 } from "./state-adapter/state-adapter.spy.spec-helper.js";
 
 // Worker Test Helper
-export { withWorkers } from "./helpers/with-workers.js";
+export { withWorkers } from "@queuert/helpers";
 
 // Migration fixture seeding
 export { seedAllStates, seedConfig, type SeedSentinels } from "./conformance/seed-all-states.js";

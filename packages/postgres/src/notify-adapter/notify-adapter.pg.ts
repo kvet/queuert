@@ -1,5 +1,5 @@
+import { createSharedListener } from "@queuert/helpers";
 import { type NotifyAdapter } from "queuert";
-import { createSharedListener } from "queuert/internal";
 
 import { type PgNotifyProvider } from "../notify-provider/notify-provider.pg.js";
 

@@ -1,8 +1,8 @@
+import { sleep } from "@queuert/helpers";
 import { describe, expect, test } from "vitest";
 
 import { type TransactionHooks, createTransactionHooks } from "../transaction-hooks.js";
 import { createSavepointContext } from "./savepoint-context.js";
-import { sleep } from "./sleep.js";
 
 const mockParentRun =
   <TTxCtx>(txCtx: TTxCtx, transactionHooks: TransactionHooks) =>

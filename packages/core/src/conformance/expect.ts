@@ -1,6 +1,7 @@
 import assert from "node:assert/strict";
 
-import { sleep } from "../helpers/sleep.js";
+import { sleep } from "@queuert/helpers";
+
 import { SkipSignalError } from "./skip-signal-error.js";
 
 /**

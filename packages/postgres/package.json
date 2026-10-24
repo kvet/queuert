@@ -52,6 +52,7 @@
     "test": "vitest --run"
   },
   "devDependencies": {
+    "@queuert/helpers": "workspace:*",
     "@queuert/testcontainers": "workspace:*",
     "@queuert/tsconfig": "workspace:*",
     "@queuert/typed-sql": "workspace:*",

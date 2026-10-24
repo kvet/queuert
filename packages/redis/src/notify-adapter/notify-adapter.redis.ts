@@ -1,5 +1,5 @@
+import { createSharedListener } from "@queuert/helpers";
 import { type NotifyAdapter } from "queuert";
-import { createSharedListener } from "queuert/internal";
 
 import { type RedisNotifyProvider } from "../notify-provider/notify-provider.redis.js";
 import { CONSUME_WAKE_HINT_SCRIPT, PROVIDE_WAKE_HINT_SCRIPT } from "./lua.js";

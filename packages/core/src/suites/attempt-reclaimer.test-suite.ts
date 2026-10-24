@@ -1,9 +1,9 @@
+import { sleep } from "@queuert/helpers";
 import { type TestAPI, expect } from "vitest";
 
 import { createClient } from "../client.js";
 import { defineJobTypes } from "../entities/define-job-types.js";
 import { JobAlreadyCompletedError, JobTakenByAnotherWorkerError } from "../errors.js";
-import { sleep } from "../helpers/sleep.js";
 import { createInProcessWorker } from "../in-process-worker.js";
 import { type AttemptConfig } from "../worker/attempt-heartbeat.js";
 import { createProcessors } from "../worker/create-processors.js";

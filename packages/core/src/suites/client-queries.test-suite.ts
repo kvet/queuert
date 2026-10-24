@@ -1,9 +1,9 @@
+import { sleep } from "@queuert/helpers";
 import { type TestAPI, describe, expect, expectTypeOf } from "vitest";
 
 import { createClient } from "../client.js";
 import { defineJobTypes } from "../entities/define-job-types.js";
 import { ChainTypeMismatchError, JobTypeMismatchError } from "../errors.js";
-import { sleep } from "../helpers/sleep.js";
 import { createInProcessWorker } from "../in-process-worker.js";
 import { createProcessors } from "../worker/create-processors.js";
 import { type TestSuiteContext } from "./spec-context.spec-helper.js";

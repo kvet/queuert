@@ -1,3 +1,4 @@
+import { sleep } from "@queuert/helpers";
 import { type TestAPI, expect, expectTypeOf, vi } from "vitest";
 
 import { createClient } from "../client.js";
@@ -7,7 +8,6 @@ import {
   ChainTypeMismatchError,
   JobAlreadyCompletedError,
 } from "../errors.js";
-import { sleep } from "../helpers/sleep.js";
 import { createInProcessWorker } from "../in-process-worker.js";
 import { withTransactionHooks } from "../transaction-hooks.js";
 import { createProcessors } from "../worker/create-processors.js";

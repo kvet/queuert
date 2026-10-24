@@ -1,5 +1,5 @@
+import { createAsyncRwLock } from "@queuert/helpers";
 import type Database from "better-sqlite3";
-import { createAsyncRwLock } from "queuert/internal";
 
 import { type SqliteStateProvider } from "./state-provider.sqlite.js";
 

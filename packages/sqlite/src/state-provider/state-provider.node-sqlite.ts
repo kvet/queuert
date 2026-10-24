@@ -1,6 +1,6 @@
 import { type DatabaseSync, type SQLInputValue, type StatementSync } from "node:sqlite";
 
-import { createAsyncRwLock } from "queuert/internal";
+import { createAsyncRwLock } from "@queuert/helpers";
 
 import { type SqliteStateProvider } from "./state-provider.sqlite.js";
 

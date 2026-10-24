@@ -1,5 +1,6 @@
+import { sleep } from "@queuert/helpers";
+
 import { type BackoffConfig, calculateBackoffMs } from "./backoff.js";
-import { sleep } from "./sleep.js";
 
 /** Retry configuration. Extends {@link BackoffConfig} with an optional maximum number of attempts. */
 export type RetryConfig = BackoffConfig & { maxAttempts?: number };

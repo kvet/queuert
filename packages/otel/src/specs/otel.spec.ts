@@ -1,3 +1,4 @@
+import { sleep } from "@queuert/helpers";
 import {
   type NotifyAdapter,
   createClient,
@@ -6,7 +7,6 @@ import {
   defineJobTypes,
   withTransactionHooks,
 } from "queuert";
-import { sleep } from "queuert/internal";
 import {
   extendWithCommon,
   extendWithNotifyInProcess,

@@ -1,6 +1,6 @@
+import { createSharedListener, type SharedListenerOpen } from "@queuert/helpers";
 import { type KV, type NatsConnection } from "nats";
 import { type NotifyAdapter } from "queuert";
-import { createSharedListener, type SharedListenerOpen } from "queuert/internal";
 
 const decoder = new TextDecoder();
 const encoder = new TextEncoder();

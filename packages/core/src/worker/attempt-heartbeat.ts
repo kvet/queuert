@@ -1,5 +1,4 @@
-import { isPositiveFinite } from "../helpers/number.js";
-import { sleep } from "../helpers/sleep.js";
+import { isPositiveFinite, sleep } from "@queuert/helpers";
 
 /** Configuration for job attempt timeout and heartbeat frequency. */
 export type AttemptConfig = {

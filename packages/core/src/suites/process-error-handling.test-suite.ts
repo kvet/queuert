@@ -1,8 +1,8 @@
+import { sleep } from "@queuert/helpers";
 import { type TestAPI, expect } from "vitest";
 
 import { createClient } from "../client.js";
 import { defineJobTypes } from "../entities/define-job-types.js";
-import { sleep } from "../helpers/sleep.js";
 import { createInProcessWorker } from "../in-process-worker.js";
 import { createSpyStateAdapter } from "../state-adapter/state-adapter.spy.spec-helper.js";
 import { createProcessors } from "../worker/create-processors.js";
