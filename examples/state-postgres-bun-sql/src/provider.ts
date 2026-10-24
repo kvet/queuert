@@ -42,9 +42,6 @@ export const createBunSqlStateProvider = ({
   return {
     withTransaction: async (cb) => sql.begin(async (txSql) => cb({ txSql })),
     isTransaction: (txCtx) => typeof txCtx.txSql.savepoint === "function",
-    withSavepoint: async (txCtx, fn) =>
-      // `SavepointSQL` is typed without `savepoint()`, but it supports nesting at runtime.
-      txCtx.txSql.savepoint(async (spSql) => fn({ txSql: spSql as TransactionSQL })),
     executeSql: async ({ txCtx, sql: query, params, paramTypes }) => {
       const client = txCtx?.txSql ?? sql;
       const serialized = (params ?? []).map((value, i) => serializeParam(value, paramTypes[i]));

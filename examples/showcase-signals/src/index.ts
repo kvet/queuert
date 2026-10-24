@@ -74,13 +74,17 @@ const processors = createProcessors({
           await processItem();
         }
 
-        return complete(async ({ finish }) =>
-          finish({
-            output: {
-              source: "handler",
-              result: "completed-by-handler",
-            },
-          }),
+        return withTransactionHooks(async (transactionHooks) =>
+          sql.begin(async (txSql) =>
+            complete({
+              txSql,
+              transactionHooks,
+              output: {
+                source: "handler",
+                result: "completed-by-handler",
+              },
+            }),
+          ),
         );
       },
     },
@@ -107,31 +111,28 @@ const processors = createProcessors({
           }
         }
 
-        return complete(async ({ finish }) =>
-          finish({
-            output: {
-              processed,
-              total: job.input.itemCount,
-              interrupted: processed < job.input.itemCount,
-            },
-          }),
+        return withTransactionHooks(async (transactionHooks) =>
+          sql.begin(async (txSql) =>
+            complete({
+              txSql,
+              transactionHooks,
+              output: {
+                processed,
+                total: job.input.itemCount,
+                interrupted: processed < job.input.itemCount,
+              },
+            }),
+          ),
         );
       },
     },
   },
 });
 
-let onExternalResultStarted: () => void;
-const externalResultStarted = async () =>
-  new Promise<void>((resolve) => {
-    onExternalResultStarted = resolve;
-  });
+const { promise: externalResultStarted, resolve: onExternalResultStarted } =
+  Promise.withResolvers<void>();
 
-let onBatchStarted: () => void;
-const batchStarted = async () =>
-  new Promise<void>((resolve) => {
-    onBatchStarted = resolve;
-  });
+const { promise: batchStarted, resolve: onBatchStarted } = Promise.withResolvers<void>();
 
 // Scenario 1: External completion via completeChain
 console.log("\n--- Scenario 1: External Completion ---");
@@ -148,11 +149,10 @@ const externalTask = await withTransactionHooks(async (transactionHooks) =>
   ),
 );
 
-const started1 = externalResultStarted();
 const worker1 = await createInProcessWorker({ client, processors });
 const stopWorker1 = await worker1.start();
 
-await started1;
+await externalResultStarted;
 await new Promise((r) => setTimeout(r, 100));
 
 console.log(`Completing chain externally...`);
@@ -163,8 +163,8 @@ await withTransactionHooks(async (transactionHooks) =>
       transactionHooks,
       ...externalTask,
       handler: async ({ job, completeJob }) => {
-        await completeJob(job, async ({ finish }) =>
-          finish({
+        await completeJob(job, async ({ complete }) =>
+          complete({
             output: {
               source: "external",
               result: "completed-via-api",
@@ -197,11 +197,10 @@ const batch = await withTransactionHooks(async (transactionHooks) =>
   ),
 );
 
-const started2 = batchStarted();
 const worker2 = await createInProcessWorker({ client, processors });
 const stopWorker2 = await worker2.start();
 
-await started2;
+await batchStarted;
 await new Promise((r) => setTimeout(r, 200));
 
 console.log(`Stopping worker...`);

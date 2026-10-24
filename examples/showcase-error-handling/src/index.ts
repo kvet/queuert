@@ -48,7 +48,7 @@ const jobTypes = defineJobTypes<{
   "charge-card": {
     entry: true;
     input: { orderId: string; amount: number };
-    continueWith: { typeName: "ship-order" | "refund-charge" };
+    continueWith: { typeName: "ship-order" };
   };
   "ship-order": {
     input: { orderId: string; chargeId: string };
@@ -107,14 +107,26 @@ const worker = await createInProcessWorker({
 
           if (job.input.amount > 1000) {
             console.log(`  Payment FAILED: Amount exceeds limit`);
-            return complete(async ({ finish }) =>
-              finish({ output: { success: false, error: "Amount exceeds limit" } }),
+            return withTransactionHooks(async (transactionHooks) =>
+              sql.begin(async (txSql) =>
+                complete({
+                  txSql,
+                  transactionHooks,
+                  output: { success: false, error: "Amount exceeds limit" },
+                }),
+              ),
             );
           }
 
           console.log(`  Payment SUCCESS`);
-          return complete(async ({ finish }) =>
-            finish({ output: { success: true, transactionId: `txn_${Date.now()}` } }),
+          return withTransactionHooks(async (transactionHooks) =>
+            sql.begin(async (txSql) =>
+              complete({
+                txSql,
+                transactionHooks,
+                output: { success: true, transactionId: `txn_${Date.now()}` },
+              }),
+            ),
           );
         },
       },
@@ -125,13 +137,17 @@ const worker = await createInProcessWorker({
           const chargeId = `ch_${Date.now()}`;
           console.log(`  Charge successful: ${chargeId}`);
 
-          return complete(async ({ finish }) =>
-            finish({
-              continueWith: {
-                typeName: "ship-order",
-                input: { orderId: job.input.orderId, chargeId },
-              },
-            }),
+          return withTransactionHooks(async (transactionHooks) =>
+            sql.begin(async (txSql) =>
+              complete({
+                txSql,
+                transactionHooks,
+                continueWith: {
+                  typeName: "ship-order",
+                  input: { orderId: job.input.orderId, chargeId },
+                },
+              }),
+            ),
           );
         },
       },
@@ -142,18 +158,26 @@ const worker = await createInProcessWorker({
 
           if (shipmentShouldFail) {
             console.log(`  Shipping FAILED - continuing to refund`);
-            return complete(async ({ finish }) =>
-              finish({
-                continueWith: {
-                  typeName: "refund-charge",
-                  input: { chargeId: job.input.chargeId, reason: "shipping_failed" },
-                },
-              }),
+            return withTransactionHooks(async (transactionHooks) =>
+              sql.begin(async (txSql) =>
+                complete({
+                  txSql,
+                  transactionHooks,
+                  continueWith: {
+                    typeName: "refund-charge",
+                    input: { chargeId: job.input.chargeId, reason: "shipping_failed" },
+                  },
+                }),
+              ),
             );
           }
 
           console.log(`  Shipping SUCCESS`);
-          return complete(async ({ finish }) => finish({ output: { shipped: true } }));
+          return withTransactionHooks(async (transactionHooks) =>
+            sql.begin(async (txSql) =>
+              complete({ txSql, transactionHooks, output: { shipped: true } }),
+            ),
+          );
         },
       },
 
@@ -162,7 +186,11 @@ const worker = await createInProcessWorker({
           console.log(`[refund-charge] Refunding ${job.input.chargeId} (${job.input.reason})`);
           const refundId = `rf_${Date.now()}`;
           console.log(`  Refund successful: ${refundId}`);
-          return complete(async ({ finish }) => finish({ output: { refunded: true, refundId } }));
+          return withTransactionHooks(async (transactionHooks) =>
+            sql.begin(async (txSql) =>
+              complete({ txSql, transactionHooks, output: { refunded: true, refundId } }),
+            ),
+          );
         },
       },
 
@@ -179,8 +207,14 @@ const worker = await createInProcessWorker({
           }
 
           console.log(`  API call SUCCESS`);
-          return complete(async ({ finish }) =>
-            finish({ output: { data: `Response from ${job.input.endpoint}` } }),
+          return withTransactionHooks(async (transactionHooks) =>
+            sql.begin(async (txSql) =>
+              complete({
+                txSql,
+                transactionHooks,
+                output: { data: `Response from ${job.input.endpoint}` },
+              }),
+            ),
           );
         },
       },

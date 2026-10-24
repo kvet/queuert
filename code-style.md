@@ -172,7 +172,7 @@ export const createClient = async ({
 ### General Guidelines
 
 - Embed small verification tests into existing related tests rather than creating separate ones
-- Test all relevant phases: `prepare`, `process`, `complete`
+- Test the relevant outcomes of an attempt: work before the transaction, `complete` committed, `complete` rolled back, and errors before and after the commit
 - Prefer descriptive test names that match what's being tested
 - To enable verbose logging when debugging tests, run with `DEBUG=1` environment variable
 - **Import `expect` from `vitest`**: Use the module-level `import { expect } from "vitest"` and don't destructure `expect` from the test context. Tests here run sequentially and use no snapshots, so the test-scoped `expect` adds nothing but a line in every parameter list. Reach for the context `expect` only in a test that runs with `.concurrent` or asserts snapshots, where Vitest needs it to attribute results to the right test. The conformance `expect` in `packages/core/src/conformance/expect.ts` is a separate runner-agnostic shim and is unaffected.

@@ -33,7 +33,11 @@ describe("createInProcessWorker defaults", () => {
               expect(job.attemptUntil.getTime() - job.attemptAt.getTime()).toBe(45_000);
               attempts.push(job.attempt);
               if (job.attempt < 3) throw new Error("retry");
-              return complete(async ({ finish }) => finish({ output: null }));
+              return withTransactionHooks(async (transactionHooks) =>
+                stateAdapter.withTransaction(async (txCtx) =>
+                  complete({ ...txCtx, transactionHooks, output: null }),
+                ),
+              );
             },
           },
         },
@@ -79,7 +83,11 @@ describe("createInProcessWorker defaults", () => {
               if (lastAt !== null) delaysBetweenAttempts.push(now - lastAt);
               lastAt = now;
               if (job.attempt < 2) throw new Error("retry");
-              return complete(async ({ finish }) => finish({ output: null }));
+              return withTransactionHooks(async (transactionHooks) =>
+                stateAdapter.withTransaction(async (txCtx) =>
+                  complete({ ...txCtx, transactionHooks, output: null }),
+                ),
+              );
             },
           },
         },
@@ -114,7 +122,11 @@ describe("createInProcessWorker workerName validation", () => {
         processors: {
           foo: {
             attemptHandler: async ({ complete }) =>
-              complete(async ({ finish }) => finish({ output: null })),
+              withTransactionHooks(async (transactionHooks) =>
+                stateAdapter.withTransaction(async (txCtx) =>
+                  complete({ ...txCtx, transactionHooks, output: null }),
+                ),
+              ),
           },
         },
       }),

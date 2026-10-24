@@ -111,8 +111,8 @@ export const deletionTestSuite = ({ it }: { it: TestAPI<TestSuiteContext> }): vo
         ...chain,
         handler: async ({ job, completeJob }) => {
           if (job.typeName === "step1") {
-            await completeJob(job, async ({ finish }) =>
-              finish({ continueWith: { typeName: "step2", input: { continued: true } } }),
+            await completeJob(job, async ({ complete }) =>
+              complete({ continueWith: { typeName: "step2", input: { continued: true } } }),
             );
           }
         },
@@ -184,7 +184,7 @@ export const deletionTestSuite = ({ it }: { it: TestAPI<TestSuiteContext> }): vo
         transactionHooks,
         ...blockerChain,
         handler: async ({ job, completeJob }) =>
-          completeJob(job, async ({ finish }) => finish({ output: null })),
+          completeJob(job, async ({ complete }) => complete({ output: null })),
       }),
     );
     await withTransaction(async (txCtx, transactionHooks) =>
@@ -193,7 +193,7 @@ export const deletionTestSuite = ({ it }: { it: TestAPI<TestSuiteContext> }): vo
         transactionHooks,
         ...mainChain,
         handler: async ({ job, completeJob }) =>
-          completeJob(job, async ({ finish }) => finish({ output: null })),
+          completeJob(job, async ({ complete }) => complete({ output: null })),
       }),
     );
     const completedMain = await client.getChain({ id: mainChain.id, typeName: "main" });
@@ -434,7 +434,9 @@ export const deletionTestSuite = ({ it }: { it: TestAPI<TestSuiteContext> }): vo
               await sleep(200);
 
               try {
-                return await complete(async ({ finish }) => finish({ output: null }));
+                return await withTransaction(async (txCtx, transactionHooks) =>
+                  complete({ ...txCtx, transactionHooks, output: null }),
+                );
               } catch (error) {
                 processThrown.resolve();
                 throw error;

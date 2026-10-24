@@ -16,12 +16,8 @@ import {
 } from "./log.js";
 import {
   type BlockerSpanHandle,
-  type BlockerSpanInputData,
-  type CompleteBlockerSpanData,
   type JobAttemptSpanHandle,
-  type JobAttemptSpanInputData,
   type JobSpanHandle,
-  type JobSpanInputData,
   type ObservabilityAdapter,
 } from "./observability-adapter.js";
 
@@ -88,7 +84,6 @@ export type ObservabilityHelper = {
   jobCreated: (
     stateJob: StateJob,
     options: {
-      input: unknown;
       blockers: StateChainInfo[];
     },
   ) => void;
@@ -123,8 +118,6 @@ export type ObservabilityHelper = {
   jobTypeValidationError: (error: JobTypeValidationError) => void;
 
   // histograms
-  chainDuration: (stateChain: StateChainInfo) => void;
-  jobDuration: (stateJob: StateJob) => void;
   jobAttemptDuration: (
     stateJob: StateJob,
     options: { durationMs: number; workerId: string },
@@ -139,14 +132,20 @@ export type ObservabilityHelper = {
   ) => void;
 
   // tracing
-  startJobSpan: (data: JobSpanInputData) => JobSpanHandle | undefined;
-  startAttemptSpan: (data: JobAttemptSpanInputData) => JobAttemptSpanHandle | undefined;
+  startJobSpan: (typeName: string, fromJob: StateJob | null) => JobSpanHandle | undefined;
+  startAttemptSpan: (
+    stateJob: StateJob,
+    options: { workerId: string },
+  ) => JobAttemptSpanHandle | undefined;
   completeJobSpan: (
     stateJob: StateJob,
     options: { continuedWith?: StateJobInfo; chainCompleted: boolean },
   ) => void;
-  startBlockerSpan: (data: BlockerSpanInputData) => BlockerSpanHandle | undefined;
-  completeBlockerSpan: (data: CompleteBlockerSpanData) => void;
+  startBlockerSpan: (
+    stateJob: StateJob,
+    options: { jobTraceContext: string; blockerChain: StateChainInfo; blockerIndex: number },
+  ) => BlockerSpanHandle | undefined;
+  completeBlockerSpan: (traceContext: string, blockerChain: StateChainInfo) => void;
 };
 
 const noopLog: Log = () => {};
@@ -217,6 +216,10 @@ export const createObservabilityHelper = ({
       data,
     });
     adapter.chainCompleted(data);
+    if (stateChain.completedAt) {
+      const durationMs = stateChain.completedAt.getTime() - stateChain.createdAt.getTime();
+      adapter.chainDuration({ ...mapStateChainToChainData(stateChain), durationMs });
+    }
   },
   chainDeleted(stateChain) {
     const data = mapStateChainToChainData(stateChain);
@@ -233,7 +236,7 @@ export const createObservabilityHelper = ({
   jobCreated(stateJob, options) {
     const data = {
       ...mapStateJobToJobBasicData(stateJob),
-      input: options.input,
+      input: stateJob.input,
       blockers: options.blockers.map(mapStateChainToChainData),
       scheduledAt: stateJob.scheduledAt,
     };
@@ -256,6 +259,10 @@ export const createObservabilityHelper = ({
       data,
     });
     adapter.jobCompleted(data);
+    if (stateJob.completedAt) {
+      const durationMs = stateJob.completedAt.getTime() - stateJob.createdAt.getTime();
+      adapter.jobDuration({ ...mapStateJobToJobProcessingData(stateJob), durationMs });
+    }
   },
   jobRescheduled(stateJob) {
     const data = {
@@ -440,18 +447,6 @@ export const createObservabilityHelper = ({
   },
 
   // histograms
-  chainDuration(stateChain) {
-    if (stateChain.completedAt) {
-      const durationMs = stateChain.completedAt.getTime() - stateChain.createdAt.getTime();
-      adapter.chainDuration({ ...mapStateChainToChainData(stateChain), durationMs });
-    }
-  },
-  jobDuration(stateJob) {
-    if (stateJob.completedAt) {
-      const durationMs = stateJob.completedAt.getTime() - stateJob.createdAt.getTime();
-      adapter.jobDuration({ ...mapStateJobToJobProcessingData(stateJob), durationMs });
-    }
-  },
   jobAttemptDuration(stateJob, options) {
     adapter.jobAttemptDuration({
       ...mapStateJobToJobProcessingData(stateJob),
@@ -475,28 +470,56 @@ export const createObservabilityHelper = ({
   },
 
   // tracing
-  startJobSpan: (data) => {
+  startJobSpan: (typeName, fromJob) => {
     try {
-      return adapter.startJobSpan(data);
+      return adapter.startJobSpan(
+        fromJob === null
+          ? { chainTypeName: typeName, jobTypeName: typeName, isChainHead: true }
+          : {
+              chainTypeName: fromJob.chain.typeName,
+              jobTypeName: typeName,
+              isChainHead: false,
+              originChainTraceContext: fromJob.chain.traceContext,
+              originTraceContext: fromJob.traceContext,
+            },
+      );
     } catch {
       return undefined;
     }
   },
-  startBlockerSpan: (data) => {
+  startBlockerSpan: (stateJob, { jobTraceContext, blockerChain, blockerIndex }) => {
     try {
-      return adapter.startBlockerSpan(data);
+      return adapter.startBlockerSpan({
+        chainId: stateJob.chain.id,
+        chainTypeName: stateJob.chain.typeName,
+        jobId: stateJob.id,
+        jobTypeName: stateJob.typeName,
+        jobTraceContext,
+        blockerChainId: blockerChain.id,
+        blockerChainTypeName: blockerChain.typeName,
+        blockerIndex,
+      });
     } catch {
       return undefined;
     }
   },
-  completeBlockerSpan: (data) => {
+  completeBlockerSpan: (traceContext, blockerChain) => {
     try {
-      adapter.completeBlockerSpan(data);
+      adapter.completeBlockerSpan({ traceContext, blockerChainTypeName: blockerChain.typeName });
     } catch {}
   },
-  startAttemptSpan: (data) => {
+  startAttemptSpan: (stateJob, { workerId }) => {
     try {
-      return adapter.startAttemptSpan(data);
+      return adapter.startAttemptSpan({
+        chainId: stateJob.chain.id,
+        chainTypeName: stateJob.chain.typeName,
+        jobId: stateJob.id,
+        jobTypeName: stateJob.typeName,
+        attempt: stateJob.attempt,
+        workerId,
+        chainTraceContext: stateJob.chain.traceContext,
+        traceContext: stateJob.traceContext,
+      });
     } catch {
       return undefined;
     }

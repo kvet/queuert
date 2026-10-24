@@ -4,7 +4,7 @@
  * Demonstrates deleting chains with blocker safety.
  *
  * Scenarios:
- * 1. Simple Deletion: Delete a completed chain
+ * 1. Simple Deletion: Delete a completed chain, then delete it again (idempotent)
  * 2. Blocker Safety: Deletion rejected when chain is referenced as a blocker
  * 3. Co-deletion: Delete a chain together with its blocker chains, collected with getJobBlockers
  */
@@ -80,13 +80,17 @@ const worker = await createInProcessWorker({
       "fetch-data": {
         attemptHandler: async ({ job, complete }) => {
           console.log(`[fetch-data] Fetching ${job.input.sourceId}`);
-          return complete(async ({ finish }) =>
-            finish({
-              output: {
-                sourceId: job.input.sourceId,
-                data: `Data from ${job.input.sourceId}`,
-              },
-            }),
+          return withTransactionHooks(async (transactionHooks) =>
+            sql.begin(async (txSql) =>
+              complete({
+                txSql,
+                transactionHooks,
+                output: {
+                  sourceId: job.input.sourceId,
+                  data: `Data from ${job.input.sourceId}`,
+                },
+              }),
+            ),
           );
         },
       },
@@ -95,13 +99,17 @@ const worker = await createInProcessWorker({
         attemptHandler: async ({ job, complete }) => {
           console.log(`[generate-report] Generating ${job.input.reportId}`);
           const summary = job.blockers.map((b) => b.output.data).join(", ");
-          return complete(async ({ finish }) =>
-            finish({
-              continueWith: {
-                typeName: "send-report",
-                input: { reportId: job.input.reportId, summary },
-              },
-            }),
+          return withTransactionHooks(async (transactionHooks) =>
+            sql.begin(async (txSql) =>
+              complete({
+                txSql,
+                transactionHooks,
+                continueWith: {
+                  typeName: "send-report",
+                  input: { reportId: job.input.reportId, summary },
+                },
+              }),
+            ),
           );
         },
       },
@@ -109,8 +117,10 @@ const worker = await createInProcessWorker({
       "send-report": {
         attemptHandler: async ({ job, complete }) => {
           console.log(`[send-report] Sending report ${job.input.reportId}`);
-          return complete(async ({ finish }) =>
-            finish({ output: { sentAt: new Date().toISOString() } }),
+          return withTransactionHooks(async (transactionHooks) =>
+            sql.begin(async (txSql) =>
+              complete({ txSql, transactionHooks, output: { sentAt: new Date().toISOString() } }),
+            ),
           );
         },
       },
@@ -118,8 +128,14 @@ const worker = await createInProcessWorker({
       "standalone-task": {
         attemptHandler: async ({ job, complete }) => {
           console.log(`[standalone-task] Running ${job.input.taskId}`);
-          return complete(async ({ finish }) =>
-            finish({ output: { completedAt: new Date().toISOString() } }),
+          return withTransactionHooks(async (transactionHooks) =>
+            sql.begin(async (txSql) =>
+              complete({
+                txSql,
+                transactionHooks,
+                output: { completedAt: new Date().toISOString() },
+              }),
+            ),
           );
         },
       },
@@ -160,6 +176,21 @@ console.log(`Deleted ${deleted.length} chain(s)`);
 console.log(`  Chain "${deleted[0].typeName}" (status: ${deleted[0].status})`);
 assert.equal(deleted.length, 1);
 assert.equal(deleted[0].typeName, "standalone-task");
+
+const deletedAgain = await withTransactionHooks(async (transactionHooks) =>
+  sql.begin(async (txSql) =>
+    client.deleteChain({
+      txSql,
+      transactionHooks,
+      id: standalone.id,
+    }),
+  ),
+);
+
+console.log(
+  `Deleting it again with deleteChain: ${deletedAgain === undefined ? "already gone" : deletedAgain.id}`,
+);
+assert.equal(deletedAgain, undefined);
 
 // Scenario 2: Blocker safety — deletion rejected
 console.log("\n--- Scenario 2: Blocker Safety ---");

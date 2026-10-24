@@ -71,6 +71,11 @@ export const acquirePostgres = async (
 export const extendWithPostgres = <T>(
   api: TestAPI<T>,
   reuseId: string,
+  {
+    expectedTestContexts = 1,
+  }: {
+    expectedTestContexts?: number;
+  } = {},
 ): TestAPI<
   T & {
     postgresConnectionString: string;
@@ -105,9 +110,11 @@ export const extendWithPostgres = <T>(
         await client.query(`DROP DATABASE IF EXISTS "${datname}" WITH (FORCE);`);
       }
 
-      await client.query(
-        `CREATE DATABASE "${normalizedReuseId}_0" WITH OWNER "${container.getUsername()}" TEMPLATE template0`,
-      );
+      for (let i = 0; i < expectedTestContexts; i++) {
+        await client.query(
+          `CREATE DATABASE "${normalizedReuseId}_${i}" WITH OWNER "${container.getUsername()}" TEMPLATE template0`,
+        );
+      }
     });
   }, 60_000);
 
@@ -119,7 +126,7 @@ export const extendWithPostgres = <T>(
       async ({}, use) => {
         const dbName = `${normalizedReuseId}_${contextCount++}`;
 
-        if (contextCount > 1) {
+        if (contextCount > expectedTestContexts) {
           await withClient(container.getConnectionUri(), async (client) => {
             await client.query(
               `CREATE DATABASE "${dbName}" WITH OWNER "${container.getUsername()}" TEMPLATE template0`,

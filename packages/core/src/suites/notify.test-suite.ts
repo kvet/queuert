@@ -41,8 +41,8 @@ export const notifyTestSuite = ({ it }: { it: TestAPI<TestSuiteContext> }): void
           test: {
             attemptHandler: async ({ job, complete }) => {
               await sleep(50);
-              return complete(async ({ finish }) =>
-                finish({ output: { result: job.input.value } }),
+              return withTransaction(async (txCtx, transactionHooks) =>
+                complete({ ...txCtx, transactionHooks, output: { result: job.input.value } }),
               );
             },
           },
@@ -103,8 +103,8 @@ export const notifyTestSuite = ({ it }: { it: TestAPI<TestSuiteContext> }): void
             test: {
               attemptHandler: async ({ job, complete }) => {
                 await sleep(50);
-                return complete(async ({ finish }) =>
-                  finish({ output: { result: job.input.value } }),
+                return withTransaction(async (txCtx, transactionHooks) =>
+                  complete({ ...txCtx, transactionHooks, output: { result: job.input.value } }),
                 );
               },
             },
@@ -176,7 +176,9 @@ export const notifyTestSuite = ({ it }: { it: TestAPI<TestSuiteContext> }): void
           blocker: {
             attemptHandler: async ({ complete }) => {
               await sleep(25);
-              return complete(async ({ finish }) => finish({ output: { allowed: true } }));
+              return withTransaction(async (txCtx, transactionHooks) =>
+                complete({ ...txCtx, transactionHooks, output: { allowed: true } }),
+              );
             },
           },
         },
@@ -192,7 +194,9 @@ export const notifyTestSuite = ({ it }: { it: TestAPI<TestSuiteContext> }): void
           main: {
             attemptHandler: async ({ complete }) => {
               await sleep(25);
-              return complete(async ({ finish }) => finish({ output: { done: true } }));
+              return withTransaction(async (txCtx, transactionHooks) =>
+                complete({ ...txCtx, transactionHooks, output: { done: true } }),
+              );
             },
           },
         },
@@ -264,8 +268,10 @@ export const notifyTestSuite = ({ it }: { it: TestAPI<TestSuiteContext> }): void
           step1: {
             attemptHandler: async ({ complete }) => {
               await sleep(25);
-              return complete(async ({ finish }) =>
-                finish({
+              return withTransaction(async (txCtx, transactionHooks) =>
+                complete({
+                  ...txCtx,
+                  transactionHooks,
                   continueWith: {
                     typeName: "step2",
                     input: null,
@@ -287,7 +293,9 @@ export const notifyTestSuite = ({ it }: { it: TestAPI<TestSuiteContext> }): void
           step2: {
             attemptHandler: async ({ complete }) => {
               await sleep(25);
-              return complete(async ({ finish }) => finish({ output: { finished: true } }));
+              return withTransaction(async (txCtx, transactionHooks) =>
+                complete({ ...txCtx, transactionHooks, output: { finished: true } }),
+              );
             },
           },
         },
@@ -350,8 +358,7 @@ export const notifyTestSuite = ({ it }: { it: TestAPI<TestSuiteContext> }): void
         jobTypes,
         processors: {
           test: {
-            attemptHandler: async ({ signal, prepare }) => {
-              await prepare({ mode: "staged" });
+            attemptHandler: async ({ signal }) => {
               jobStarted.resolve();
 
               await sleep(1000, { signal });
@@ -383,8 +390,8 @@ export const notifyTestSuite = ({ it }: { it: TestAPI<TestSuiteContext> }): void
           transactionHooks,
           ...chain,
           handler: async ({ job, completeJob }) => {
-            return completeJob(job, async ({ finish }) =>
-              finish({ output: { result: "from-external" } }),
+            return completeJob(job, async ({ complete }) =>
+              complete({ output: { result: "from-external" } }),
             );
           },
         }),
@@ -430,15 +437,13 @@ export const notifyTestSuite = ({ it }: { it: TestAPI<TestSuiteContext> }): void
           jobTypes,
           processors: {
             test: {
-              attemptHandler: async ({ signal, job, prepare, complete }) => {
-                await prepare({ mode: "staged" });
-
+              attemptHandler: async ({ signal, job, complete }) => {
                 if (job.attempt > 1) {
                   await jobCompleted.promise;
                   await sleep(10);
 
-                  return complete(async ({ finish }) =>
-                    finish({ output: { result: "recovered" } }),
+                  return withTransaction(async (txCtx, transactionHooks) =>
+                    complete({ ...txCtx, transactionHooks, output: { result: "recovered" } }),
                   );
                 }
 
@@ -474,6 +479,84 @@ export const notifyTestSuite = ({ it }: { it: TestAPI<TestSuiteContext> }): void
       });
 
       await jobCompleted.promise;
+    });
+  });
+
+  it("wakes an idle worker for a retry after a failed attempt", async ({
+    stateAdapter,
+    notifyAdapter,
+    observabilityAdapter,
+    log,
+    withWorkers,
+    withTransaction,
+  }) => {
+    const jobTypes = defineJobTypes<{
+      test: {
+        entry: true;
+        input: null;
+        output: { result: string };
+      };
+    }>();
+
+    const client = await createClient({
+      stateAdapter,
+      notifyAdapter,
+      observabilityAdapter,
+      log,
+      jobTypes,
+    });
+
+    const firstAttemptStarted = Promise.withResolvers<void>();
+    const gate = Promise.withResolvers<void>();
+
+    const processors = createProcessors({
+      client,
+      jobTypes,
+      processors: {
+        test: {
+          attemptHandler: async ({ job, complete }) => {
+            if (job.attempt === 1) {
+              firstAttemptStarted.resolve();
+              await gate.promise;
+              throw new Error("first attempt fails");
+            }
+
+            return withTransaction(async (txCtx, transactionHooks) =>
+              complete({ ...txCtx, transactionHooks, output: { result: "retried" } }),
+            );
+          },
+          backoffConfig: { initialDelayMs: 10, multiplier: 1, maxDelayMs: 10 },
+        },
+      },
+    });
+    const failingWorker = await createInProcessWorker({ client, concurrency: 1, processors });
+    const idleWorker = await createInProcessWorker({
+      client,
+      concurrency: 1,
+      pollIntervalMs: 10_000,
+      processors,
+    });
+
+    const stopFailingWorker = await failingWorker.start();
+    const chain = await withTransaction(async (txCtx, transactionHooks) =>
+      client.createChain({
+        ...txCtx,
+        transactionHooks,
+        typeName: "test",
+        input: null,
+      }),
+    );
+    await firstAttemptStarted.promise;
+
+    // Started while the only job is running, so once settled it waits the full poll interval.
+    await withWorkers([await idleWorker.start()], async () => {
+      await sleep(100);
+
+      const stopping = stopFailingWorker();
+      gate.resolve();
+      await stopping;
+
+      await client.awaitChain(chain, { timeoutMs: 2000, pollIntervalMs: 50 });
     });
   });
 };

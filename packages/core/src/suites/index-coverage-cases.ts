@@ -1064,7 +1064,7 @@ export const operationalCoverageGroups: IndexCoverageGroup[] = [
               typeNames: ["seed:throwaway:expired"],
               ignoredJobIds: [],
               lastAttemptError:
-                "JobAttemptExpiredError: the attempt lease expired before the worker renewed it",
+                "JobAttemptExpiredError: Job attempt expired before the holding worker extended it",
             }),
           );
         },

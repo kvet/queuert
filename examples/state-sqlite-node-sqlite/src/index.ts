@@ -57,22 +57,43 @@ const worker = await createInProcessWorker({
     jobTypes,
     processors: {
       send_welcome_email: {
-        attemptHandler: async ({ job, prepare, complete }) => {
-          // Load the user with node:sqlite inside the job transaction
-          const user = await prepare({ mode: "staged" }, ({ db }) => {
-            const row = db
+        attemptHandler: async ({ job, complete }) => {
+          let user: { id: number; name: string; email: string } | undefined;
+          {
+            using _h = await lock.acquireRead();
+            user = db
               .prepare("SELECT id, name, email FROM users WHERE id = ?")
               .get(job.input.userId) as { id: number; name: string; email: string } | undefined;
-            if (!row) throw new Error(`User ${job.input.userId} not found`);
-            return row;
-          });
+          }
+          if (!user) throw new Error(`User ${job.input.userId} not found`);
 
           // Simulate sending email (in real app, call email service here)
           console.log(`Sending welcome email to ${user.email} for ${user.name}`);
 
-          return complete(async ({ finish }) =>
-            finish({ output: { sentAt: new Date().toISOString() } }),
-          );
+          return withTransactionHooks(async (transactionHooks) => {
+            // The handler's transaction holds the provider's write lock, so the worker's
+            // autocommit statements on this connection cannot run inside it.
+            using _h = await lock.acquireWrite();
+            db.exec("BEGIN");
+            try {
+              const result = await complete({
+                db,
+                transactionHooks,
+                output: { sentAt: new Date().toISOString() },
+              });
+              db.exec("COMMIT");
+              return result;
+            } catch (error) {
+              if (db.isTransaction) {
+                try {
+                  db.exec("ROLLBACK");
+                } catch {
+                  // ignore rollback errors
+                }
+              }
+              throw error;
+            }
+          });
         },
       },
     },

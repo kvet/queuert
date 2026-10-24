@@ -9,6 +9,7 @@ import {
   createInProcessStateAdapter,
   type InProcessStateAdapter,
 } from "../state-adapter/state-adapter.in-process.js";
+import { withTransactionHooks } from "../transaction-hooks.js";
 import { createProcessors } from "./create-job-type-processors.js";
 import {
   type ProcessorDefinitions,
@@ -48,15 +49,27 @@ const imageProcessors = createProcessors({
   processors: {
     "images.resize": {
       attemptHandler: async ({ job, complete }) =>
-        complete(async ({ finish }) => finish({ output: { url: job.input.url } })),
+        withTransactionHooks(async (transactionHooks) =>
+          stateAdapter.withTransaction(async (txCtx) =>
+            complete({ ...txCtx, transactionHooks, output: { url: job.input.url } }),
+          ),
+        ),
     },
     "images.transcode": {
       attemptHandler: async ({ job, complete }) =>
-        complete(async ({ finish }) => finish({ output: { url: job.input.url } })),
+        withTransactionHooks(async (transactionHooks) =>
+          stateAdapter.withTransaction(async (txCtx) =>
+            complete({ ...txCtx, transactionHooks, output: { url: job.input.url } }),
+          ),
+        ),
     },
     "images.notify": {
       attemptHandler: async ({ complete }) =>
-        complete(async ({ finish }) => finish({ output: null })),
+        withTransactionHooks(async (transactionHooks) =>
+          stateAdapter.withTransaction(async (txCtx) =>
+            complete({ ...txCtx, transactionHooks, output: null }),
+          ),
+        ),
     },
   },
 });
@@ -67,7 +80,11 @@ const billingProcessors = createProcessors({
   processors: {
     "billing.charge": {
       attemptHandler: async ({ complete }) =>
-        complete(async ({ finish }) => finish({ output: null })),
+        withTransactionHooks(async (transactionHooks) =>
+          stateAdapter.withTransaction(async (txCtx) =>
+            complete({ ...txCtx, transactionHooks, output: null }),
+          ),
+        ),
     },
   },
 });

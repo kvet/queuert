@@ -3,16 +3,12 @@ import { type StateAdapter } from "queuert";
 import { type TestAPI } from "vitest";
 
 import { createPgStateAdapter } from "../state-adapter/state-adapter.pg.js";
-import {
-  type PgPoolContext,
-  createPgPoolProvider,
-} from "../state-provider/state-provider.pg-pool.js";
+import { createPgPoolProvider } from "../state-provider/state-provider.pg-pool.js";
 
 export type VarianceFixtures = {
   pool: Pool;
   stateAdapter: StateAdapter<{ $test: true }, string>;
   transactionConcurrency: "concurrent" | "serialized";
-  poisonTransaction: (txCtx: { $test: true }) => Promise<void>;
   tableNames: string[];
 };
 
@@ -55,16 +51,6 @@ export const extendWithVarianceStatePg = <T extends { postgresConnectionString: 
       // oxlint-disable-next-line no-empty-pattern
       async ({}, use) => {
         await use("concurrent");
-      },
-      { scope: "test" },
-    ],
-    poisonTransaction: [
-      // oxlint-disable-next-line no-empty-pattern
-      async ({}, use) => {
-        await use(async (txCtx: { $test: true }) => {
-          const pgCtx = txCtx as unknown as PgPoolContext;
-          await pgCtx.poolClient.query("SELECT 1 FROM nonexistent_table_queuert_poison_xyz");
-        });
       },
       { scope: "test" },
     ],

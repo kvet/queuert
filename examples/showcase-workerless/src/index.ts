@@ -88,8 +88,10 @@ const worker = await createInProcessWorker({
           console.log(
             `[await-approval] Timeout reached for ${job.input.requestId} - auto-rejecting`,
           );
-          return complete(async ({ finish }) =>
-            finish({ output: { rejected: true, reason: "timeout" } }),
+          return withTransactionHooks(async (transactionHooks) =>
+            sql.begin(async (txSql) =>
+              complete({ txSql, transactionHooks, output: { rejected: true, reason: "timeout" } }),
+            ),
           );
         },
       },
@@ -97,8 +99,14 @@ const worker = await createInProcessWorker({
       "process-approved": {
         attemptHandler: async ({ job, complete }) => {
           console.log(`[process-approved] Processing approved request ${job.input.requestId}`);
-          return complete(async ({ finish }) =>
-            finish({ output: { processed: true, completedAt: new Date().toISOString() } }),
+          return withTransactionHooks(async (transactionHooks) =>
+            sql.begin(async (txSql) =>
+              complete({
+                txSql,
+                transactionHooks,
+                output: { processed: true, completedAt: new Date().toISOString() },
+              }),
+            ),
           );
         },
       },
@@ -106,7 +114,11 @@ const worker = await createInProcessWorker({
       "pending-action": {
         attemptHandler: async ({ job, complete }) => {
           console.log(`[pending-action] Action ${job.input.actionId} expired`);
-          return complete(async ({ finish }) => finish({ output: { expired: true } }));
+          return withTransactionHooks(async (transactionHooks) =>
+            sql.begin(async (txSql) =>
+              complete({ txSql, transactionHooks, output: { expired: true } }),
+            ),
+          );
         },
       },
     },
@@ -141,8 +153,8 @@ await withTransactionHooks(async (transactionHooks) =>
       ...approval1,
       handler: async ({ job, completeJob }) => {
         if (job.typeName !== "await-approval") return;
-        return completeJob(job, async ({ finish }) =>
-          finish({
+        return completeJob(job, async ({ complete }) =>
+          complete({
             continueWith: {
               typeName: "process-approved",
               input: { requestId: job.input.requestId },
@@ -184,8 +196,8 @@ const result2 = await withTransactionHooks(async (transactionHooks) =>
       ...approval2,
       handler: async ({ job, completeJob }) => {
         if (job.typeName !== "await-approval") throw new Error(`Unexpected job ${job.typeName}`);
-        return completeJob(job, async ({ finish }) =>
-          finish({ output: { rejected: true, reason: "manager_denied" } }),
+        return completeJob(job, async ({ complete }) =>
+          complete({ output: { rejected: true, reason: "manager_denied" } }),
         );
       },
     }),
@@ -220,8 +232,8 @@ const result3 = await withTransactionHooks(async (transactionHooks) =>
       transactionHooks,
       ...action,
       handler: async ({ job, completeJob }) =>
-        completeJob(job, async ({ finish }) =>
-          finish({ output: { completed: true, result: "User clicked confirm" } }),
+        completeJob(job, async ({ complete }) =>
+          complete({ output: { completed: true, result: "User clicked confirm" } }),
         ),
     }),
   ),

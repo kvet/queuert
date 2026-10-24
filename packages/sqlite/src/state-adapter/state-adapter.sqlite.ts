@@ -1,4 +1,4 @@
-import { type UUID, randomUUID } from "node:crypto";
+import { type UUID } from "node:crypto";
 
 import {
   type DataType,
@@ -664,33 +664,6 @@ export const createSqliteStateAdapter = async <
 
     isTransaction: stateProvider.isTransaction,
 
-    withSavepoint:
-      stateProvider.withSavepoint ??
-      (async (txCtx, fn) => {
-        const sp = `queuert_sp_${randomUUID().replace(/-/g, "_")}`;
-        await executeTypedSql({
-          txCtx,
-          sql: applyTemplate(
-            sql(/* sql */ `SAVEPOINT ${sp}`, { readOnly: true, params: [], columns: {} }),
-          ),
-        });
-        try {
-          return await fn(txCtx);
-        } catch (error) {
-          await executeTypedSql({
-            txCtx,
-            sql: applyTemplate(
-              sql(/* sql */ `ROLLBACK TO SAVEPOINT ${sp}`, {
-                readOnly: true,
-                params: [],
-                columns: {},
-              }),
-            ),
-          }).catch(() => {});
-          throw error;
-        }
-      }),
-
     getChains: async ({
       txCtx,
       chainIds,
@@ -1191,15 +1164,12 @@ SET status = CASE WHEN e.completes_job THEN 'completed' ELSE {{table_prefix}}job
                             THEN datetime('now', 'subsec') ELSE {{table_prefix}}job.chain_completed_at END
 FROM row_effects e
 WHERE {{table_prefix}}job.id = e.id
-RETURNING *, EXISTS (
-  SELECT 1 FROM {{table_prefix}}job_blocker jb
-  WHERE jb.blocked_by_chain_id = {{table_prefix}}job.chain_id
-) AS has_blocking
+RETURNING *
 `,
               {
                 id: "completeJobs",
                 params: [t.string()],
-                columns: { ...dbJobColumns, has_blocking: t.number() },
+                columns: { ...dbJobColumns },
               },
             ),
           ),
@@ -1215,7 +1185,6 @@ RETURNING *, EXISTS (
         return {
           ...mapDbJobToStateJob(row),
           chain: mapDbHeadToStateChain(rowById.get(row.chain_id)!),
-          hasBlockedJobs: row.has_blocking === 1,
         };
       });
     },
@@ -1752,66 +1721,37 @@ ORDER BY b."index" ASC
     },
 
     unblockJobs: async ({ txCtx, blockedByChainId }) => {
-      const readyJobs = await executeTypedSql({
+      await executeTypedSql({
         txCtx,
-        sql: templateCache.getOrCompute("findReadyJobs", () =>
+        sql: templateCache.getOrCompute("scheduleBlockedJobs", () =>
           applyTemplate(
             sql(
               `
-WITH direct_blocked AS (
-  SELECT DISTINCT jb.job_id
-  FROM {{table_prefix}}job_blocker jb
-  WHERE jb.blocked_by_chain_id = ?
-),
-blockers_status AS (
-  SELECT
-    jb.job_id,
-    h.chain_status = 'completed' AS blocker_complete
-  FROM {{table_prefix}}job_blocker jb
-  LEFT JOIN {{table_prefix}}job h ON h.id = jb.blocked_by_chain_id
-  WHERE jb.job_id IN (SELECT job_id FROM direct_blocked)
-)
-SELECT job_id
-FROM blockers_status
-GROUP BY job_id
-HAVING MIN(CASE WHEN blocker_complete = 1 THEN 1 ELSE 0 END) = 1
+UPDATE {{table_prefix}}job
+SET status = 'pending',
+  scheduled_at = MAX(scheduled_at, datetime('now', 'subsec'))
+WHERE status = 'blocked'
+  AND id IN (
+    SELECT jb.job_id FROM {{table_prefix}}job_blocker jb WHERE jb.blocked_by_chain_id = ?
+  )
+  AND NOT EXISTS (
+    SELECT 1
+    FROM {{table_prefix}}job_blocker jb
+    LEFT JOIN {{table_prefix}}job h ON h.id = jb.blocked_by_chain_id
+    WHERE jb.job_id = {{table_prefix}}job.id
+      AND h.chain_status IS NOT 'completed'
+  )
 `,
               {
-                id: "findReadyJobs",
+                id: "scheduleBlockedJobs",
                 params: [idDataType],
-                columns: { job_id: idDataType },
-                readOnly: true,
+                columns: {},
               },
             ),
           ),
         ),
         params: [blockedByChainId],
       });
-
-      const readyJobIds = readyJobs.map((r) => r.job_id);
-      if (readyJobIds.length > 0) {
-        await executeTypedSql({
-          txCtx,
-          sql: templateCache.getOrCompute("scheduleBlockedJobs", () =>
-            applyTemplate(
-              sql(
-                `
-UPDATE {{table_prefix}}job
-SET status = 'pending',
-  scheduled_at = MAX(scheduled_at, datetime('now', 'subsec'))
-WHERE id IN (SELECT value FROM json_each(?)) AND status = 'blocked'
-`,
-                {
-                  id: "scheduleBlockedJobs",
-                  params: [t.string()],
-                  columns: {},
-                },
-              ),
-            ),
-          ),
-          params: [JSON.stringify(readyJobIds)],
-        });
-      }
 
       const blockerRows = await executeTypedSql({
         txCtx,

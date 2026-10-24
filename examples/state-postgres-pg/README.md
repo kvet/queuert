@@ -1,6 +1,6 @@
 # PostgreSQL State Adapter (pg)
 
-PostgreSQL state storage via `@queuert/postgres` with the pg (node-postgres) driver — atomic job creation inside application transactions.
+PostgreSQL state storage via `@queuert/postgres` with the pg (node-postgres) driver — job creation and completion inside application transactions.
 
 ## Running
 

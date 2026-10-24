@@ -25,9 +25,12 @@ import {
   createPgPoolProvider,
 } from "../state-provider/state-provider.pg-pool.js";
 
-const it = extendWithResourceLeakDetection(extendWithPostgres(baseIt, import.meta.url), {
-  additionalAllowedTypes: TESTCONTAINERS_RESOURCE_TYPES,
-});
+const it = extendWithResourceLeakDetection(
+  extendWithPostgres(baseIt, import.meta.url, { expectedTestContexts: 2 }),
+  {
+    additionalAllowedTypes: TESTCONTAINERS_RESOURCE_TYPES,
+  },
+);
 
 it("index");
 
@@ -36,7 +39,6 @@ describe("PostgreSQL State Adapter Conformance", () => {
     pool: Pool;
     stateAdapter: StateAdapter<{ $test: true }, string>;
     transactionConcurrency: "concurrent" | "serialized";
-    poisonTransaction: (txCtx: { $test: true }) => Promise<void>;
     withNonTransactionContext: <T>(fn: (txCtx: { $test: true }) => Promise<T>) => Promise<T>;
   }>({
     pool: [
@@ -68,16 +70,6 @@ describe("PostgreSQL State Adapter Conformance", () => {
         const adapter = await createPgStateAdapter({ stateProvider });
         await adapter.migrateToLatest();
         return use(adapter as unknown as StateAdapter<{ $test: true }, string>);
-      },
-      { scope: "test" },
-    ],
-    poisonTransaction: [
-      // oxlint-disable-next-line no-empty-pattern
-      async ({}, use) => {
-        await use(async (txCtx: { $test: true }) => {
-          const pgCtx = txCtx as unknown as PgPoolContext;
-          await pgCtx.poolClient.query("SELECT 1 FROM nonexistent_table_queuert_poison_xyz");
-        });
       },
       { scope: "test" },
     ],
@@ -134,23 +126,6 @@ it("infers custom ID types through the full stack", async ({ postgresConnectionS
       log,
       jobTypes,
     });
-    const worker = await createInProcessWorker({
-      client,
-      processors: createProcessors({
-        client,
-        jobTypes,
-        processors: {
-          test: {
-            attemptHandler: async ({ job, complete }) => {
-              expectTypeOf(job.id).toEqualTypeOf<`job.${UUID}`>();
-
-              return complete(async ({ finish }) => finish({ output: { bar: 42 } }));
-            },
-          },
-        },
-      }),
-    });
-
     const withTransaction = async <T>(fn: (poolClient: PoolClient) => Promise<T>): Promise<T> => {
       const poolClient = await pool.connect();
       try {
@@ -165,6 +140,27 @@ it("infers custom ID types through the full stack", async ({ postgresConnectionS
         poolClient.release();
       }
     };
+
+    const worker = await createInProcessWorker({
+      client,
+      processors: createProcessors({
+        client,
+        jobTypes,
+        processors: {
+          test: {
+            attemptHandler: async ({ job, complete }) => {
+              expectTypeOf(job.id).toEqualTypeOf<`job.${UUID}`>();
+
+              return withTransactionHooks(async (transactionHooks) =>
+                withTransaction(async (poolClient) =>
+                  complete({ poolClient, transactionHooks, output: { bar: 42 } }),
+                ),
+              );
+            },
+          },
+        },
+      }),
+    });
 
     const chain = await withTransactionHooks(async (transactionHooks) =>
       withTransaction(async (poolClient) =>

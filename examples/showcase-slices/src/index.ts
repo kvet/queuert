@@ -54,8 +54,8 @@ assert.ok(orderResult.output.fulfilledAt);
 
 // ---------------------------------------------------------------------------
 // Pattern 2: Fire-and-forget
-// The order processor starts a notification as a side-effect within its
-// complete callback. The notification runs independently — the order chain
+// The order processor starts a notification as a side-effect within the
+// transaction it passes to `complete`. The notification runs independently — the order chain
 // doesn't wait for it.
 // ---------------------------------------------------------------------------
 

@@ -1,9 +1,11 @@
-import { type StateJob } from "../state-adapter/state-adapter.js";
+import { type StateJob, type StateJobInfo } from "../state-adapter/state-adapter.js";
 import { type AnyJob } from "./job.types.js";
 
 export type * from "./job.types.js";
 
-export const mapStateJobToJob = (stateJob: StateJob): AnyJob => {
+export const mapStateJobToJob = (
+  stateJob: StateJob & { continuation?: StateJobInfo },
+): AnyJob & { continuedTo?: AnyJob } => {
   const base = {
     id: stateJob.id,
     chainId: stateJob.chainId,
@@ -16,6 +18,9 @@ export const mapStateJobToJob = (stateJob: StateJob): AnyJob => {
     attempt: stateJob.attempt,
     lastAttemptAt: stateJob.lastAttemptAt,
     lastAttemptError: stateJob.lastAttemptError,
+    ...(stateJob.continuation && {
+      continuedTo: mapStateJobToJob({ ...stateJob.continuation, chain: stateJob.chain }),
+    }),
   };
 
   switch (stateJob.status) {

@@ -18,7 +18,25 @@ const completedChain = await client.awaitChain(
 console.log(completedChain.output); // Typed output from the final job
 ```
 
-Throws `WaitChainTimeoutError` on timeout. Supports an `AbortSignal` for cancellation.
+`awaitChain` takes the chain (or any `{ id }`) and options: `timeoutMs` is required, `pollIntervalMs` sets how often the database is polled between notifications (default 15 seconds), and `signal` accepts an `AbortSignal`. It runs outside any transaction, so several chains can be awaited concurrently:
+
+```ts
+const completedChains = await Promise.all(
+  chains.map(async (chain) => client.awaitChain(chain, { timeoutMs: 30_000 })),
+);
+```
+
+Both a timeout and an abort throw `WaitChainTimeoutError`:
+
+```ts
+try {
+  await client.awaitChain({ id: chainId }, { timeoutMs: 30_000, signal: request.signal });
+} catch (error) {
+  if (error instanceof WaitChainTimeoutError) {
+    /* timed out or aborted */
+  }
+}
+```
 
 <Diagram label="awaitChain polls the database and listens for a completion notification at the same time; it returns the output when the chain completes, or throws on timeout or abort">
   <Flow>

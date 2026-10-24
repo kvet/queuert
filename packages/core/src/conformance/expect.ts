@@ -48,8 +48,8 @@ export type Expect = {
   fail: (message: string) => never;
   /**
    * Mark the current case as skipped rather than passed or failed. Useful when
-   * a case requires an optional capability (e.g., `poisonTransaction`) that
-   * does not apply to the backend under test.
+   * a case requires an optional fixture capability (e.g., `withNonTransactionContext`)
+   * that the backend under test does not provide.
    */
   skip: (reason: string) => never;
 };

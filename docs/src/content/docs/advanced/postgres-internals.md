@@ -102,14 +102,9 @@ The `migration_lock` table holds a single-row lease that gives `migrateToLatest(
 | ----------------------- | ----------------------- | ------------------ |
 | `job_blocker_chain_idx` | `(blocked_by_chain_id)` | Blocker resolution |
 
-## Row Locking
+## Isolation Level
 
-A chain's head row is its lock: every operation that reads or changes chain state, or depends on the chain continuing to exist, locks the head first. Every site that waits on several row locks orders them by `id`, so concurrent lockers take them in the same order and cannot deadlock. Job acquisition and expired-attempt reclamation scan in `scheduled_at` / `attempt_until` order instead, but use `SKIP LOCKED` and never wait.
-
-- **Job acquisition** (`startJobAttempt`) scans pending jobs with `FOR UPDATE OF h, j SKIP LOCKED`, locking the candidate job and its chain head together. The head lock is what lets an atomic-mode worker call `completeJobs` in the same transaction — `completeJobs` requires its caller to hold the head, or a blocker committed in the meantime is missed and its job stays blocked against a completed chain. Because both locks are taken inside the candidate scan, a job whose head another transaction holds (a blocker being added, a client rescheduling the job or completing the chain) is skipped and the next due job is tried; `getStartAttemptDelayMs` applies the same rule, so it never reports a due job that cannot be acquired.
-- **Adding blockers** (`addJobsBlockers`) locks each blocker chain's head before inserting `job_blocker` rows and reading the blocker's status. Only rows whose blocker head it locked are inserted: a head that does not exist — or that a concurrent `deleteChains` removed while it waited on the lock — is reported as a missing blocker and leaves no row behind.
-- **Deleting chains** (`deleteChains`) locks the heads and members of the chains in one statement, then checks for outside `job_blocker` references and deletes in a second one. The second statement takes a fresh snapshot, so it sees any blocker or continuation committed by the transaction it waited on — within a single statement only the locked rows would be rechecked, and a new `job_blocker` row would be missed.
-- **Unblocking** (`unblockJobs`) likewise locks the blocked jobs in one statement and recomputes their blockers in the next.
+Queuert supports only READ COMMITTED, PostgreSQL's default isolation level. This covers every transaction Queuert writes in, including the ones you pass to `complete` and to client methods. Its conditional and multi-statement writes — such as `unblockJobs` locking the blocked jobs and then recomputing their blockers — rely on each statement taking a fresh snapshot after it waits on a row lock.
 
 ## Notifications (LISTEN/NOTIFY)
 

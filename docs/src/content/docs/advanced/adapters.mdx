@@ -68,7 +68,7 @@ This principle ensures predictable performance and proper atomicity.
 
 The `StateAdapter` type accepts two generic parameters: `TTxContext` (transaction context containing database client/session info) and `TJobId` (the job ID type for input parameters).
 
-The context is named `TTxContext` (transaction context) because it's exclusively used within transactions. When you call `withTransaction`, the callback receives a context that represents an active transaction.
+The context is named `TTxContext` (transaction context) because it represents an active transaction: the one your own database client opened (and passed to `client.createChain` or a handler's `complete`), or one opened by `withTransaction`. Queuert itself opens transactions only for migrations and in test helpers — never around job processing.
 
 ### Adapter Config
 
@@ -86,16 +86,16 @@ Users create a `StateProvider` implementation to integrate with their database c
 - **`withTransaction`** — wraps a callback in a database transaction, passing the transaction context (`TTxContext`) to the callback
 - **`isTransaction`** — reports whether a context is inside an open transaction. The client calls it before every mutating method and rejects a context that fails it, because a pool or autocommit connection would commit each statement of a multi-statement write on its own and release `lock: "exclusive"` locks immediately. It must be synchronous and must not query the database: read the driver's own transaction state (Kysely `db.isTransaction`, Knex `trx.isTransaction`, pg `client.getTransactionStatus()`, better-sqlite3 `db.inTransaction`, node:sqlite `db.isTransaction`, postgres.js and Bun.SQL `typeof tx.savepoint === "function"`, Drizzle `tx instanceof PgTransaction`, a Prisma interactive-transaction client lacking `$connect`)
 - **`executeSql`** — executes a SQL string with optional params. When `txCtx` is provided, uses that transaction; when omitted, acquires and releases its own connection
-- **`withSavepoint`** _(optional)_ — runs a callback inside a savepoint within an existing transaction; when omitted, the adapter falls back to a built-in savepoint implementation
 - **`close`** _(optional)_ — only needed when the provider owns resources beyond the caller-supplied client/pool
 
 ### txCtx Semantics
 
 Whether `txCtx` is optional depends on what the method does:
 
-- **Mutating methods require it** (`createJobs`, `continueJobs`, `addJobsBlockers`, `unblockJobs`, `startJobAttempt`, `extendJobAttempt`, `completeJobs`, `reclaimExpiredJobAttempt`, `rescheduleJobs`, `deleteChains`). A write is never standalone in practice — it has to commit or roll back together with the caller's other writes, including the notify and observability side effects buffered on `transactionHooks`. The type enforces this, so a missing `txCtx` is a compile error rather than a silently auto-committed write.
+- **Multi-statement mutating methods require it** (`createJobs`, `continueJobs`, `addJobsBlockers`, `unblockJobs`, `completeJobs`, `deleteChains`). These writes have to commit or roll back together with the caller's other writes, including the notify and observability side effects buffered on `transactionHooks`. The type enforces this, so a missing `txCtx` is a compile error rather than a silently auto-committed write.
+- **Single-statement worker writes leave it optional** (`startJobAttempt`, `extendJobAttempt`, `reclaimExpiredJobAttempt`, `rescheduleJobs`). The worker runs them without a transaction, in autocommit; `rescheduleJobs` also joins a caller's transaction when given one (`client.rescheduleJobs`, `complete({ reschedule })`).
 - **Read-only methods leave it optional** (`getChains`, `getJobs`, `getJobBlockers`, `getStartAttemptDelayMs`, `listJobTypeNames`, `listChainTypeNames`, `countByJobTypeNames`, `countByChainTypeNames`, `listChains`, `listJobs`, `listChainJobs`, `listBlockedJobs`). With a `txCtx` the read joins the caller's transaction and sees its uncommitted writes; without one the adapter acquires its own connection, executes, and releases.
-- **`lock: "exclusive"` requires it.** `getChains` and `getJobs` don't mutate rows, but a write-intent lock only lasts as long as the transaction that took it, so the parameter type pairs `lock` with a mandatory `txCtx`. `getChains` locks each chain's head row; `getJobs` locks each job **and its chain's head row**, in a consistent id order. `completeJobs` relies on that head lock already being held — take it with `getJobs({ lock: "exclusive" })` earlier in the same transaction, or a blocker committed in the meantime is missed and its job stays blocked against a completed chain.
+- **`lock: "exclusive"` requires it.** `getChains` and `getJobs` don't mutate rows, but a write-intent lock only lasts as long as the transaction that took it, so the parameter type pairs `lock` with a mandatory `txCtx`. `getChains` locks each chain's head row; `getJobs` locks each job **and its chain's head row**, in a consistent id order.
 
 ### Attempt Fence
 
@@ -201,18 +201,17 @@ Observability events emitted inside database transactions are buffered and only 
 
 - **Creation**: `chainCreated`, `jobCreated`, `jobBlocked`, and PRODUCER span ends from chain creation and continuation
 - **Completion**: `jobCompleted`, `jobDuration`, `completeJobSpan` (workerless), `chainCompleted`, `chainDuration`, `completeBlockerSpan`, `jobUnblocked`
-- **Worker complete**: continuation PRODUCER span ends from the complete transaction
-- **Error handling**: `jobAttemptFailed` from the error-handling transaction
+- **Worker `complete`**: the completion events above, `jobRescheduled` for `complete({ reschedule })`, and continuation PRODUCER span ends — buffered into the `transactionHooks` the handler passes to `complete`
 
 **Not buffered** -- events that either need immediate context or occur outside transactions:
 
 - **Span starts**: Need trace context immediately for DB writes that store trace IDs
-- **Events outside transactions**: `jobAttemptStarted`, `jobAttemptDuration`, `jobAttemptExtended`, `jobAttemptCompleted` (emitted once the complete transaction has committed), attempt span ends (these occur outside the guarded transaction)
+- **Worker-side events**: `jobAttemptStarted`, `jobAttemptDuration`, `jobAttemptExtended`, `jobAttemptCompleted` (emitted once the worker has confirmed the `complete` committed), `jobAttemptFailed` and `jobRescheduled` for a failed attempt, `jobAttemptReclaimed`, attempt span ends. The worker's own writes are single autocommit statements, so these are emitted directly
 - **Read-only observations**: events that observe state without making write claims
 
 ### Self-Cleaning
 
-Each transactional phase runs inside a savepoint, so buffered observability events roll back with the writes when the phase throws -- partial events from a failed operation never accumulate in the buffer. The `checkpoint` callback on each hook definition captures the buffer position, and the savepoint restores it on rollback.
+When the transaction rolls back, everything buffered on its `transactionHooks` is discarded. `complete` succeeds at most once per `transactionHooks`, so reusing one `transactionHooks` across retried transactions is rejected once `complete` succeeded; a retried transaction opens its own `withTransactionHooks`. For partial rollback inside one transaction, user code can use `transactionHooks.withSavepoint`: the `checkpoint` callback on each hook definition captures the buffer position, and the savepoint restores it on rollback.
 
 ## See Also
 

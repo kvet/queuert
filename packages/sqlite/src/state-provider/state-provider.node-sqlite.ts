@@ -1,6 +1,6 @@
 import { type DatabaseSync, type SQLInputValue, type StatementSync } from "node:sqlite";
 
-import { createAsyncRwLock } from "@queuert/helpers";
+import { type AsyncRwLock, createAsyncRwLock } from "@queuert/helpers";
 
 import { type SqliteStateProvider } from "./state-provider.sqlite.js";
 
@@ -8,10 +8,11 @@ export type NodeSqliteContext = { db: DatabaseSync };
 
 export const createNodeSqliteProvider = ({
   db,
+  lock = createAsyncRwLock(),
 }: {
   db: DatabaseSync;
+  lock?: AsyncRwLock;
 }): SqliteStateProvider<NodeSqliteContext> => {
-  const lock = createAsyncRwLock();
   const stmtCache = new Map<string, StatementSync>();
   const prepareCached = (id: string, sql: string): StatementSync => {
     let stmt = stmtCache.get(id);

@@ -20,14 +20,14 @@ import { it as baseIt, describe, expectTypeOf, vi } from "vitest";
 import { createPgNotifyAdapter } from "../notify-adapter/notify-adapter.pg.js";
 import { createPostgresJsNotifyProvider } from "../notify-provider/notify-provider.postgres-js.js";
 import { createPgStateAdapter } from "../state-adapter/state-adapter.pg.js";
-import {
-  type PostgresJsContext,
-  createPostgresJsProvider,
-} from "../state-provider/state-provider.postgres-js.js";
+import { createPostgresJsProvider } from "../state-provider/state-provider.postgres-js.js";
 
-const it = extendWithResourceLeakDetection(extendWithPostgres(baseIt, import.meta.url), {
-  additionalAllowedTypes: TESTCONTAINERS_RESOURCE_TYPES,
-});
+const it = extendWithResourceLeakDetection(
+  extendWithPostgres(baseIt, import.meta.url, { expectedTestContexts: 2 }),
+  {
+    additionalAllowedTypes: TESTCONTAINERS_RESOURCE_TYPES,
+  },
+);
 
 it("index");
 
@@ -36,7 +36,6 @@ describe("PostgreSQL State Adapter Conformance (postgres.js)", () => {
     sql: postgres.Sql;
     stateAdapter: StateAdapter<{ $test: true }, string>;
     transactionConcurrency: "concurrent" | "serialized";
-    poisonTransaction: (txCtx: { $test: true }) => Promise<void>;
     withNonTransactionContext: <T>(fn: (txCtx: { $test: true }) => Promise<T>) => Promise<T>;
   }>({
     sql: [
@@ -64,16 +63,6 @@ describe("PostgreSQL State Adapter Conformance (postgres.js)", () => {
         const adapter = await createPgStateAdapter({ stateProvider });
         await adapter.migrateToLatest();
         return use(adapter as unknown as StateAdapter<{ $test: true }, string>);
-      },
-      { scope: "test" },
-    ],
-    poisonTransaction: [
-      // oxlint-disable-next-line no-empty-pattern
-      async ({}, use) => {
-        await use(async (txCtx: { $test: true }) => {
-          const pgCtx = txCtx as unknown as PostgresJsContext;
-          await pgCtx.txSql.unsafe("SELECT 1 FROM nonexistent_table_queuert_poison_xyz");
-        });
       },
       { scope: "test" },
     ],
@@ -132,7 +121,11 @@ it("infers custom ID types through the full stack", async ({ postgresConnectionS
             attemptHandler: async ({ job, complete }) => {
               expectTypeOf(job.id).toEqualTypeOf<`job.${UUID}`>();
 
-              return complete(async ({ finish }) => finish({ output: { bar: 42 } }));
+              return withTransactionHooks(async (transactionHooks) =>
+                sql.begin(async (txSql) =>
+                  complete({ txSql, transactionHooks, output: { bar: 42 } }),
+                ),
+              );
             },
           },
         },

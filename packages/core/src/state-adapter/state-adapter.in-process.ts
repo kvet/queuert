@@ -441,8 +441,8 @@ class JobIndex {
     if (journal) journal.push({ kind: "blocker", jobId, key, prev, next });
   }
 
-  rollbackTo(journal: JournalEntry[], target: number): void {
-    while (journal.length > target) {
+  rollback(journal: JournalEntry[]): void {
+    while (journal.length > 0) {
       const entry = journal.pop()!;
       if (entry.kind === "job") {
         if (entry.next) this.removeJob(entry.next);
@@ -672,7 +672,7 @@ export const createInProcessStateAdapter = async ({
     try {
       result = fn(batchJournal);
     } catch (error) {
-      idx.rollbackTo(batchJournal, 0);
+      idx.rollback(batchJournal);
       throw error;
     }
     const journal = txCtx?.journal;
@@ -724,24 +724,12 @@ export const createInProcessStateAdapter = async ({
       try {
         return await fn(txCtx);
       } catch (error) {
-        idx.rollbackTo(journal, 0);
+        idx.rollback(journal);
         throw error;
       }
     },
 
     isTransaction: (txCtx) => txCtx.inTransaction === true,
-
-    withSavepoint: async (txCtx, fn) => {
-      if (!txCtx.journal) throw new Error("withSavepoint called outside a transaction");
-      const journal = txCtx.journal;
-      const start = journal.length;
-      try {
-        return await fn(txCtx);
-      } catch (error) {
-        idx.rollbackTo(journal, start);
-        throw error;
-      }
-    },
 
     getChains: async ({ txCtx, chainIds }) =>
       withReadLock(txCtx, () =>
@@ -871,48 +859,43 @@ export const createInProcessStateAdapter = async ({
       }),
 
     completeJobs: async ({ txCtx, jobs: jobInputs }) =>
-      withWriteLock(txCtx, () => {
-        const journal = txCtx?.journal;
-        const now = new Date();
-        return jobInputs.map(({ jobId, output, fence }) => {
-          const job = idx.jobs.get(jobId);
-          if (!job || isCompleted(job) || !matchesFence(job, fence)) return undefined;
+      withWriteLock(txCtx, () =>
+        withAtomicBatch(txCtx, (journal) => {
+          const now = new Date();
+          return jobInputs.map(({ jobId, output, fence }) => {
+            const job = idx.jobs.get(jobId);
+            if (!job || isCompleted(job) || !matchesFence(job, fence)) return undefined;
 
-          const updatedJob: DbJob = {
-            ...job,
-            attemptAt: null,
-            attemptBy: null,
-            attemptUntil: null,
-            output: output ?? null,
-            status: "completed",
-            completedAt: now,
-            completedBy: fence?.workerId ?? null,
-            lastAttemptError: null,
-            ...(job.id === job.chainId
-              ? { chainStatus: "completed" as const, chainCompletedAt: now }
-              : {}),
-          };
-          idx.writeJob(journal, job, updatedJob);
-
-          let head = updatedJob;
-          if (job.id !== job.chainId) {
-            const headJob = idx.jobs.get(job.chainId);
-            if (!headJob) throw new Error(`Chain ${job.chainId} not found`);
-            head = {
-              ...headJob,
-              chainStatus: "completed",
-              chainCompletedAt: headJob.chainCompletedAt ?? now,
+            const updatedJob: DbJob = {
+              ...job,
+              attemptAt: null,
+              attemptBy: null,
+              attemptUntil: null,
+              output: output ?? null,
+              status: "completed",
+              completedAt: now,
+              completedBy: fence?.workerId ?? null,
+              lastAttemptError: null,
+              ...(job.id === job.chainId
+                ? { chainStatus: "completed" as const, chainCompletedAt: now }
+                : {}),
             };
-            idx.writeJob(journal, headJob, head);
-          }
+            idx.writeJob(journal, job, updatedJob);
 
-          const blocking = idx.blockedByChain.get(job.chainId);
-          return {
-            ...jobView(updatedJob),
-            hasBlockedJobs: blocking !== undefined && blocking.size > 0,
-          };
-        });
-      }),
+            if (job.id !== job.chainId) {
+              const headJob = idx.jobs.get(job.chainId);
+              if (!headJob) throw new Error(`Chain ${job.chainId} not found`);
+              idx.writeJob(journal, headJob, {
+                ...headJob,
+                chainStatus: "completed",
+                chainCompletedAt: headJob.chainCompletedAt ?? now,
+              });
+            }
+
+            return jobView(updatedJob);
+          });
+        }),
+      ),
 
     rescheduleJobs: async ({ txCtx, jobs }) =>
       withWriteLock(txCtx, () => {

@@ -16,9 +16,9 @@ export type ConformanceGroup<TContext> = {
 export type ConformanceResult = {
   name: string;
   /**
-   * `"skip"` when the case declines to run — for example, a state adapter that
-   * omits `poisonTransaction` for a backend that cannot poison mid-transaction
-   * (SQLite). `skipReason` carries the explanation and `error` is left unset.
+   * `"skip"` when the case declines to run — for example, a state adapter fixture
+   * that omits the optional `withNonTransactionContext` the case needs.
+   * `skipReason` carries the explanation and `error` is left unset.
    */
   status: "pass" | "fail" | "skip";
   error?: Error;

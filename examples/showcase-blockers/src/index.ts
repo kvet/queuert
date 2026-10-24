@@ -117,13 +117,17 @@ const worker = await createInProcessWorker({
         attemptHandler: async ({ job, complete }) => {
           console.log(`[fetch-source] Fetching ${job.input.sourceId}...`);
           await new Promise((r) => setTimeout(r, 100));
-          return complete(async ({ finish }) =>
-            finish({
-              output: {
-                sourceId: job.input.sourceId,
-                data: `Data from ${job.input.sourceId}`,
-              },
-            }),
+          return withTransactionHooks(async (transactionHooks) =>
+            sql.begin(async (txSql) =>
+              complete({
+                txSql,
+                transactionHooks,
+                output: {
+                  sourceId: job.input.sourceId,
+                  data: `Data from ${job.input.sourceId}`,
+                },
+              }),
+            ),
           );
         },
       },
@@ -136,14 +140,18 @@ const worker = await createInProcessWorker({
             console.log(`  - ${blocker.output.sourceId}: "${blocker.output.data}"`);
           }
 
-          return complete(async ({ finish }) =>
-            finish({
-              output: {
-                reportId: job.input.reportId,
-                totalSources: job.blockers.length,
-                combinedData: job.blockers.map((b) => b.output.data).join(" | "),
-              },
-            }),
+          return withTransactionHooks(async (transactionHooks) =>
+            sql.begin(async (txSql) =>
+              complete({
+                txSql,
+                transactionHooks,
+                output: {
+                  reportId: job.input.reportId,
+                  totalSources: job.blockers.length,
+                  combinedData: job.blockers.map((b) => b.output.data).join(" | "),
+                },
+              }),
+            ),
           );
         },
       },
@@ -151,8 +159,14 @@ const worker = await createInProcessWorker({
       "validate-user": {
         attemptHandler: async ({ job, complete }) => {
           console.log(`[validate-user] Validating ${job.input.userId}`);
-          return complete(async ({ finish }) =>
-            finish({ output: { userId: job.input.userId, role: "admin" } }),
+          return withTransactionHooks(async (transactionHooks) =>
+            sql.begin(async (txSql) =>
+              complete({
+                txSql,
+                transactionHooks,
+                output: { userId: job.input.userId, role: "admin" },
+              }),
+            ),
           );
         },
       },
@@ -160,8 +174,14 @@ const worker = await createInProcessWorker({
       "load-config": {
         attemptHandler: async ({ job, complete }) => {
           console.log(`[load-config] Loading ${job.input.configKey}`);
-          return complete(async ({ finish }) =>
-            finish({ output: { configKey: job.input.configKey, value: "production" } }),
+          return withTransactionHooks(async (transactionHooks) =>
+            sql.begin(async (txSql) =>
+              complete({
+                txSql,
+                transactionHooks,
+                output: { configKey: job.input.configKey, value: "production" },
+              }),
+            ),
           );
         },
       },
@@ -173,13 +193,17 @@ const worker = await createInProcessWorker({
             `[perform-action] User: ${userBlocker.output.role}, Config: ${configBlocker.output.value}`,
           );
 
-          return complete(async ({ finish }) =>
-            finish({
-              output: {
-                actionId: job.input.actionId,
-                result: `Completed by ${userBlocker.output.role} with ${configBlocker.output.value}`,
-              },
-            }),
+          return withTransactionHooks(async (transactionHooks) =>
+            sql.begin(async (txSql) =>
+              complete({
+                txSql,
+                transactionHooks,
+                output: {
+                  actionId: job.input.actionId,
+                  result: `Completed by ${userBlocker.output.role} with ${configBlocker.output.value}`,
+                },
+              }),
+            ),
           );
         },
       },
@@ -188,13 +212,19 @@ const worker = await createInProcessWorker({
         attemptHandler: async ({ job, complete }) => {
           console.log(`[capture-payment] Charging ${job.input.amount} for ${job.input.orderId}`);
           await new Promise((r) => setTimeout(r, 100));
-          return complete(async ({ finish, txSql }) => {
-            await txSql`
-              UPDATE orders SET status = 'paid', payment_chain_id = NULL
-              WHERE id = ${job.input.orderId}
-            `;
-            return finish({ output: { transactionId: `txn-${job.input.orderId}` } });
-          });
+          return withTransactionHooks(async (transactionHooks) =>
+            sql.begin(async (txSql) => {
+              await txSql`
+                UPDATE orders SET status = 'paid', payment_chain_id = NULL
+                WHERE id = ${job.input.orderId}
+              `;
+              return complete({
+                txSql,
+                transactionHooks,
+                output: { transactionId: `txn-${job.input.orderId}` },
+              });
+            }),
+          );
         },
       },
 
@@ -203,12 +233,19 @@ const worker = await createInProcessWorker({
           console.log(
             `[ship-order] Shipping ${job.input.orderId} (waited on ${job.blockers.length} payment chain)`,
           );
-          return complete(async ({ finish, txSql }) => {
-            await txSql`UPDATE orders SET status = 'shipped' WHERE id = ${job.input.orderId}`;
-            return finish({
-              output: { orderId: job.input.orderId, trackingNumber: `track-${job.input.orderId}` },
-            });
-          });
+          return withTransactionHooks(async (transactionHooks) =>
+            sql.begin(async (txSql) => {
+              await txSql`UPDATE orders SET status = 'shipped' WHERE id = ${job.input.orderId}`;
+              return complete({
+                txSql,
+                transactionHooks,
+                output: {
+                  orderId: job.input.orderId,
+                  trackingNumber: `track-${job.input.orderId}`,
+                },
+              });
+            }),
+          );
         },
       },
     },

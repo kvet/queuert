@@ -87,7 +87,11 @@ const cleanupProcessorRegistry = createProcessors({
             do {
               if (signal.aborted) {
                 console.log("[queuert.cleanup] Received abort signal, rescheduling");
-                return complete(async ({ finish }) => finish({ reschedule: { afterMs: 0 } }));
+                return withTransactionHooks(async (transactionHooks) =>
+                  sql.begin(async (txSql) =>
+                    complete({ txSql, transactionHooks, reschedule: { afterMs: 0 } }),
+                  ),
+                );
               }
 
               const page = await client.listChains({
@@ -106,8 +110,6 @@ const cleanupProcessorRegistry = createProcessors({
               );
 
               if (chainsToDelete.length > 0) {
-                // TODO: check that this worker still owns the job before the batch commits, once
-                // queuert offers an ownership check for user transactions (see TODO.md).
                 const deleted = await withTransactionHooks(async (transactionHooks) =>
                   sql.begin(async (txSql) =>
                     client.deleteChains({
@@ -128,23 +130,25 @@ const cleanupProcessorRegistry = createProcessors({
 
         console.log(`[queuert.cleanup] Deleted ${deletedChainCount} chain(s)`);
 
-        return complete(async ({ finish, txSql, transactionHooks }) => {
-          const completedJob = await finish({ output: null });
+        return withTransactionHooks(async (transactionHooks) =>
+          sql.begin(async (txSql) => {
+            const completedJob = await complete({ txSql, transactionHooks, output: null });
 
-          await client.createChain({
-            txSql,
-            transactionHooks,
-            typeName: "queuert.cleanup",
-            input: null,
-            schedule: { afterMs: CLEANUP_INTERVAL_MS },
-            deduplication: {
-              key: "queuert.cleanup",
-              scope: "running",
-            },
-          });
+            await client.createChain({
+              txSql,
+              transactionHooks,
+              typeName: "queuert.cleanup",
+              input: null,
+              schedule: { afterMs: CLEANUP_INTERVAL_MS },
+              deduplication: {
+                key: "queuert.cleanup",
+                scope: "running",
+              },
+            });
 
-          return completedJob;
-        });
+            return completedJob;
+          }),
+        );
       },
     },
   },
@@ -161,8 +165,14 @@ const worker = await createInProcessWorker({
         "work.process": {
           attemptHandler: async ({ job, complete }) => {
             console.log(`[work.process] Processing task #${job.input.taskId}`);
-            return complete(async ({ finish }) =>
-              finish({ output: { processedAt: new Date().toISOString() } }),
+            return withTransactionHooks(async (transactionHooks) =>
+              sql.begin(async (txSql) =>
+                complete({
+                  txSql,
+                  transactionHooks,
+                  output: { processedAt: new Date().toISOString() },
+                }),
+              ),
             );
           },
         },

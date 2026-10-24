@@ -264,8 +264,8 @@ export const createChainsTestSuite = ({ it }: { it: TestAPI<TestSuiteContext> })
           ...dep,
           handler: async ({ job, completeJob }) => {
             if (job.typeName === "dependency") {
-              await completeJob(job, async ({ finish }) =>
-                finish({ continueWith: { typeName: "dependencyStep", input: null } }),
+              await completeJob(job, async ({ complete }) =>
+                complete({ continueWith: { typeName: "dependencyStep", input: null } }),
               );
             }
           },
@@ -320,8 +320,8 @@ export const createChainsTestSuite = ({ it }: { it: TestAPI<TestSuiteContext> })
           handler: async ({ job, completeJob }) => {
             if (job.typeName !== "start") return;
             await expect(
-              completeJob(job, async ({ finish }) =>
-                finish({
+              completeJob(job, async ({ complete }) =>
+                complete({
                   continueWith: {
                     typeName: "startStep",
                     input: null,
@@ -972,15 +972,17 @@ export const createChainsTestSuite = ({ it }: { it: TestAPI<TestSuiteContext> })
           processors: {
             blocker: {
               attemptHandler: async ({ job, complete }) => {
-                return complete(async ({ finish }) =>
-                  finish({ output: { result: job.input.value } }),
+                return withTransaction(async (txCtx, transactionHooks) =>
+                  complete({ ...txCtx, transactionHooks, output: { result: job.input.value } }),
                 );
               },
             },
             main: {
               attemptHandler: async ({ job, complete }) => {
-                return complete(async ({ finish }) =>
-                  finish({
+                return withTransaction(async (txCtx, transactionHooks) =>
+                  complete({
+                    ...txCtx,
+                    transactionHooks,
                     output: {
                       finalResult: job.blockers[0].output.result,
                     },
@@ -1044,8 +1046,8 @@ export const createChainsTestSuite = ({ it }: { it: TestAPI<TestSuiteContext> })
           processors: {
             test: {
               attemptHandler: async ({ job, complete }) => {
-                return complete(async ({ finish }) =>
-                  finish({ output: { result: job.input.value * 2 } }),
+                return withTransaction(async (txCtx, transactionHooks) =>
+                  complete({ ...txCtx, transactionHooks, output: { result: job.input.value * 2 } }),
                 );
               },
             },

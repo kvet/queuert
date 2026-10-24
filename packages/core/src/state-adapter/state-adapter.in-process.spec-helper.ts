@@ -18,8 +18,8 @@ export const extendWithStateInProcess = <T>(
     flakyDbStateAdapter: StateAdapter<{ $test: true }, string> | undefined;
     poisonTransaction: ((txCtx: { $test: true }) => Promise<void>) | undefined;
     withNonTransactionContext: <T>(fn: (txCtx: { $test: true }) => Promise<T>) => Promise<T>;
-    poisonExecute:
-      | ((cb: (adapter: StateAdapter<{ $test: true }, string>) => Promise<void>) => Promise<void>)
+    withSavepoint:
+      | (<T>(txCtx: { $test: true }, fn: (txCtx: { $test: true }) => Promise<T>) => Promise<T>)
       | undefined;
   }
 > => {
@@ -30,8 +30,8 @@ export const extendWithStateInProcess = <T>(
     flakyDbStateAdapter: InProcessStateAdapter | undefined;
     poisonTransaction: ((txCtx: { $test: true }) => Promise<void>) | undefined;
     withNonTransactionContext: <T>(fn: (txCtx: { $test: true }) => Promise<T>) => Promise<T>;
-    poisonExecute:
-      | ((cb: (adapter: StateAdapter<{ $test: true }, string>) => Promise<void>) => Promise<void>)
+    withSavepoint:
+      | (<T>(txCtx: { $test: true }, fn: (txCtx: { $test: true }) => Promise<T>) => Promise<T>)
       | undefined;
   }>({
     stateAdapter: [
@@ -85,10 +85,6 @@ export const extendWithStateInProcess = <T>(
             return stateAdapter.withTransaction(fn);
           },
           isTransaction: stateAdapter.isTransaction,
-          withSavepoint: async (txCtx, fn) => {
-            maybeThrow();
-            return stateAdapter.withSavepoint(txCtx, fn);
-          },
           getChains: wrap(stateAdapter.getChains),
           getJobs: wrap(stateAdapter.getJobs),
           createJobs: wrap(stateAdapter.createJobs),
@@ -127,6 +123,13 @@ export const extendWithStateInProcess = <T>(
       },
       { scope: "test" },
     ],
+    withSavepoint: [
+      // oxlint-disable-next-line no-empty-pattern
+      async ({}, use) => {
+        await use(undefined);
+      },
+      { scope: "test" },
+    ],
     poisonTransaction: [
       // oxlint-disable-next-line no-empty-pattern
       async ({}, use) => {
@@ -145,13 +148,6 @@ export const extendWithStateInProcess = <T>(
       { scope: "test" },
     ],
     flakyDbStateAdapter: [
-      // oxlint-disable-next-line no-empty-pattern
-      async ({}, use) => {
-        await use(undefined);
-      },
-      { scope: "test" },
-    ],
-    poisonExecute: [
       // oxlint-disable-next-line no-empty-pattern
       async ({}, use) => {
         await use(undefined);

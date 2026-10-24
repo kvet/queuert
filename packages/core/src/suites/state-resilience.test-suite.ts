@@ -5,6 +5,7 @@ import { createInProcessWorker } from "../in-process-worker.js";
 import { createProcessors } from "../job-type-processors/create-job-type-processors.js";
 import { defineJobTypes } from "../job-types/define-job-types.js";
 import { type StateAdapter } from "../state-adapter/state-adapter.js";
+import { withTransactionHooks } from "../transaction-hooks.js";
 import { type TestSuiteContext } from "./spec-context.spec-helper.js";
 
 export const stateResilienceTestSuite = ({
@@ -31,7 +32,7 @@ export const stateResilienceTestSuite = ({
       const jobTypes = defineJobTypes<{
         test: {
           entry: true;
-          input: { value: number; atomic: boolean };
+          input: { value: number };
           output: { result: number };
         };
       }>();
@@ -74,12 +75,16 @@ export const stateResilienceTestSuite = ({
           },
           processors: {
             test: {
-              attemptHandler: async ({ job, prepare, complete }) => {
-                await prepare({ mode: job.input.atomic ? "atomic" : "staged" });
-                return complete(async ({ finish }) =>
-                  finish({ output: { result: job.input.value * 2 } }),
-                );
-              },
+              attemptHandler: async ({ job, complete }) =>
+                withTransactionHooks(async (transactionHooks) =>
+                  flakyStateAdapter.withTransaction(async (txCtx) =>
+                    complete({
+                      ...txCtx,
+                      transactionHooks,
+                      output: { result: job.input.value * 2 },
+                    }),
+                  ),
+                ),
             },
           },
         }),
@@ -91,7 +96,7 @@ export const stateResilienceTestSuite = ({
           transactionHooks,
           items: Array.from({ length: 20 }, (_, i) => ({
             typeName: "test",
-            input: { value: i, atomic: i % 2 === 0 },
+            input: { value: i },
           })),
         }),
       );
@@ -120,7 +125,7 @@ export const stateResilienceTestSuite = ({
       const jobTypes = defineJobTypes<{
         test: {
           entry: true;
-          input: { value: number; atomic: boolean };
+          input: { value: number };
           output: { result: number };
         };
       }>();
@@ -143,10 +148,8 @@ export const stateResilienceTestSuite = ({
         client: flakyWorkerClient,
         concurrency: 5,
         // Short poll interval so the worker retries promptly after a transient error.
-        // When the complete phase hits a flaky-adapter error and the error handler's
-        // withTransaction also fails, the job stays "acquired" with a short attempt.
-        // The worker must re-poll before the expired attempt is reclaimed, so pollIntervalMs
-        // needs to be low enough to beat the attempt expiry window.
+        // When complete hits a flaky-adapter error and the fenced reschedule also fails, the job
+        // stays running until its short attempt timeout expires and the worker reclaims it on a re-poll.
         pollIntervalMs: 250,
         recoveryBackoffConfig: {
           initialDelayMs: 1,
@@ -167,12 +170,16 @@ export const stateResilienceTestSuite = ({
           },
           processors: {
             test: {
-              attemptHandler: async ({ job, prepare, complete }) => {
-                await prepare({ mode: job.input.atomic ? "atomic" : "staged" });
-                return complete(async ({ finish }) =>
-                  finish({ output: { result: job.input.value * 2 } }),
-                );
-              },
+              attemptHandler: async ({ job, complete }) =>
+                withTransactionHooks(async (transactionHooks) =>
+                  flakyStateAdapter.withTransaction(async (txCtx) =>
+                    complete({
+                      ...txCtx,
+                      transactionHooks,
+                      output: { result: job.input.value * 2 },
+                    }),
+                  ),
+                ),
             },
           },
         }),
@@ -184,7 +191,7 @@ export const stateResilienceTestSuite = ({
           transactionHooks,
           items: Array.from({ length: 20 }, (_, i) => ({
             typeName: "test",
-            input: { value: i, atomic: i % 2 === 0 },
+            input: { value: i },
           })),
         }),
       );
@@ -213,7 +220,7 @@ export const stateResilienceTestSuite = ({
       const jobTypes = defineJobTypes<{
         test: {
           entry: true;
-          input: { value: number; atomic: boolean };
+          input: { value: number };
           output: { result: number };
         };
       }>();
@@ -241,10 +248,8 @@ export const stateResilienceTestSuite = ({
           maxDelayMs: 1,
         },
         // Short poll interval so the worker retries promptly after a transient error.
-        // When the complete phase hits a flaky-adapter error and the error handler's
-        // withTransaction also fails, the job stays "acquired" with a short attempt.
-        // The worker must re-poll before the expired attempt is reclaimed, so pollIntervalMs
-        // needs to be low enough to beat the attempt expiry window.
+        // When complete hits a flaky-adapter error and the fenced reschedule also fails, the job
+        // stays running until its short attempt timeout expires and the worker reclaims it on a re-poll.
         pollIntervalMs: 100,
       };
       const registryConfig = {
@@ -266,12 +271,16 @@ export const stateResilienceTestSuite = ({
           ...registryConfig,
           processors: {
             test: {
-              attemptHandler: async ({ job, prepare, complete }) => {
-                await prepare({ mode: job.input.atomic ? "atomic" : "staged" });
-                return complete(async ({ finish }) =>
-                  finish({ output: { result: job.input.value * 2 } }),
-                );
-              },
+              attemptHandler: async ({ job, complete }) =>
+                withTransactionHooks(async (transactionHooks) =>
+                  flakyStateAdapter.withTransaction(async (txCtx) =>
+                    complete({
+                      ...txCtx,
+                      transactionHooks,
+                      output: { result: job.input.value * 2 },
+                    }),
+                  ),
+                ),
             },
           },
         }),
@@ -284,12 +293,16 @@ export const stateResilienceTestSuite = ({
           ...registryConfig,
           processors: {
             test: {
-              attemptHandler: async ({ job, prepare, complete }) => {
-                await prepare({ mode: job.input.atomic ? "atomic" : "staged" });
-                return complete(async ({ finish }) =>
-                  finish({ output: { result: job.input.value * 2 } }),
-                );
-              },
+              attemptHandler: async ({ job, complete }) =>
+                withTransactionHooks(async (transactionHooks) =>
+                  flakyStateAdapter.withTransaction(async (txCtx) =>
+                    complete({
+                      ...txCtx,
+                      transactionHooks,
+                      output: { result: job.input.value * 2 },
+                    }),
+                  ),
+                ),
             },
           },
         }),
@@ -301,7 +314,7 @@ export const stateResilienceTestSuite = ({
           transactionHooks,
           items: Array.from({ length: 20 }, (_, i) => ({
             typeName: "test",
-            input: { value: i, atomic: i % 2 === 0 },
+            input: { value: i },
           })),
         }),
       );
@@ -330,7 +343,7 @@ export const stateResilienceTestSuite = ({
       const jobTypes = defineJobTypes<{
         test: {
           entry: true;
-          input: { value: number; atomic: boolean };
+          input: { value: number };
           output: { result: number };
         };
       }>();
@@ -372,12 +385,16 @@ export const stateResilienceTestSuite = ({
           },
           processors: {
             test: {
-              attemptHandler: async ({ job, prepare, complete }) => {
-                await prepare({ mode: job.input.atomic ? "atomic" : "staged" });
-                return complete(async ({ finish }) =>
-                  finish({ output: { result: job.input.value * 2 } }),
-                );
-              },
+              attemptHandler: async ({ job, complete }) =>
+                withTransactionHooks(async (transactionHooks) =>
+                  flakyDbStateAdapter.withTransaction(async (txCtx) =>
+                    complete({
+                      ...txCtx,
+                      transactionHooks,
+                      output: { result: job.input.value * 2 },
+                    }),
+                  ),
+                ),
             },
           },
         }),
@@ -389,7 +406,7 @@ export const stateResilienceTestSuite = ({
           transactionHooks,
           items: Array.from({ length: 20 }, (_, i) => ({
             typeName: "test",
-            input: { value: i, atomic: i % 2 === 0 },
+            input: { value: i },
           })),
         }),
       );
@@ -420,7 +437,7 @@ export const stateResilienceTestSuite = ({
       const jobTypes = defineJobTypes<{
         test: {
           entry: true;
-          input: { value: number; atomic: boolean };
+          input: { value: number };
           output: { result: number };
         };
       }>();
@@ -462,12 +479,16 @@ export const stateResilienceTestSuite = ({
           },
           processors: {
             test: {
-              attemptHandler: async ({ job, prepare, complete }) => {
-                await prepare({ mode: job.input.atomic ? "atomic" : "staged" });
-                return complete(async ({ finish }) =>
-                  finish({ output: { result: job.input.value * 2 } }),
-                );
-              },
+              attemptHandler: async ({ job, complete }) =>
+                withTransactionHooks(async (transactionHooks) =>
+                  flakyDbStateAdapter.withTransaction(async (txCtx) =>
+                    complete({
+                      ...txCtx,
+                      transactionHooks,
+                      output: { result: job.input.value * 2 },
+                    }),
+                  ),
+                ),
             },
           },
         }),
@@ -479,7 +500,7 @@ export const stateResilienceTestSuite = ({
           transactionHooks,
           items: Array.from({ length: 20 }, (_, i) => ({
             typeName: "test",
-            input: { value: i, atomic: i % 2 === 0 },
+            input: { value: i },
           })),
         }),
       );
@@ -510,7 +531,7 @@ export const stateResilienceTestSuite = ({
       const jobTypes = defineJobTypes<{
         test: {
           entry: true;
-          input: { value: number; atomic: boolean };
+          input: { value: number };
           output: { result: number };
         };
       }>();
@@ -558,12 +579,16 @@ export const stateResilienceTestSuite = ({
           ...registryConfig,
           processors: {
             test: {
-              attemptHandler: async ({ job, prepare, complete }) => {
-                await prepare({ mode: job.input.atomic ? "atomic" : "staged" });
-                return complete(async ({ finish }) =>
-                  finish({ output: { result: job.input.value * 2 } }),
-                );
-              },
+              attemptHandler: async ({ job, complete }) =>
+                withTransactionHooks(async (transactionHooks) =>
+                  flakyDbStateAdapter.withTransaction(async (txCtx) =>
+                    complete({
+                      ...txCtx,
+                      transactionHooks,
+                      output: { result: job.input.value * 2 },
+                    }),
+                  ),
+                ),
             },
           },
         }),
@@ -576,12 +601,16 @@ export const stateResilienceTestSuite = ({
           ...registryConfig,
           processors: {
             test: {
-              attemptHandler: async ({ job, prepare, complete }) => {
-                await prepare({ mode: job.input.atomic ? "atomic" : "staged" });
-                return complete(async ({ finish }) =>
-                  finish({ output: { result: job.input.value * 2 } }),
-                );
-              },
+              attemptHandler: async ({ job, complete }) =>
+                withTransactionHooks(async (transactionHooks) =>
+                  flakyDbStateAdapter.withTransaction(async (txCtx) =>
+                    complete({
+                      ...txCtx,
+                      transactionHooks,
+                      output: { result: job.input.value * 2 },
+                    }),
+                  ),
+                ),
             },
           },
         }),
@@ -593,7 +622,7 @@ export const stateResilienceTestSuite = ({
           transactionHooks,
           items: Array.from({ length: 20 }, (_, i) => ({
             typeName: "test",
-            input: { value: i, atomic: i % 2 === 0 },
+            input: { value: i },
           })),
         }),
       );
@@ -659,7 +688,9 @@ export const stateResilienceTestSuite = ({
           processors: {
             test: {
               attemptHandler: async ({ complete }) =>
-                complete(async ({ finish }) => finish({ output: null })),
+                withTransaction(async (txCtx, transactionHooks) =>
+                  complete({ ...txCtx, transactionHooks, output: null }),
+                ),
             },
           },
         }),

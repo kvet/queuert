@@ -162,6 +162,54 @@ export const validationTestSuite = ({ it }: { it: TestAPI<TestSuiteContext> }): 
     expect(chain.input).toEqual({ value: 42 });
   });
 
+  it("reports the parsed input when a chain is created", async ({
+    stateAdapter,
+    notifyAdapter,
+    withTransaction,
+    observabilityAdapter,
+    log,
+  }) => {
+    const client = await createClient({
+      stateAdapter,
+      notifyAdapter,
+      observabilityAdapter,
+      log,
+      jobTypes: createJobTypes<{
+        main: { entry: true; input: { value: number }; output: null };
+      }>({
+        getTypeNames: () => ["main"],
+        validateEntry: () => {},
+        parseInput: (_typeName, input) => ({ ...(input as object), parsed: true }),
+        parseOutput: (_typeName, output) => output,
+        validateContinueWith: () => {},
+        validateBlockers: () => {},
+      }),
+    });
+
+    const chain = await withTransaction(async (txCtx, transactionHooks) =>
+      client.createChain({
+        ...txCtx,
+        transactionHooks,
+        typeName: "main",
+        input: { value: 42 },
+      }),
+    );
+
+    expect(chain.input).toEqual({ value: 42, parsed: true });
+    expect(log).toHaveBeenCalledWith(
+      expect.objectContaining({
+        type: "chain_created",
+        data: expect.objectContaining({ input: { value: 42, parsed: true } }),
+      }),
+    );
+    expect(log).toHaveBeenCalledWith(
+      expect.objectContaining({
+        type: "job_created",
+        data: expect.objectContaining({ input: { value: 42, parsed: true } }),
+      }),
+    );
+  });
+
   it("rejects non-entry type at chain start", async ({
     stateAdapter,
     notifyAdapter,
@@ -334,7 +382,9 @@ export const validationTestSuite = ({ it }: { it: TestAPI<TestSuiteContext> }): 
         processors: {
           main: {
             attemptHandler: async ({ complete }) =>
-              complete(async ({ finish }) => finish({ output: { result: 84 } })),
+              withTransaction(async (txCtx, transactionHooks) =>
+                complete({ ...txCtx, transactionHooks, output: { result: 84 } }),
+              ),
           },
         },
       }),
@@ -382,9 +432,9 @@ export const validationTestSuite = ({ it }: { it: TestAPI<TestSuiteContext> }): 
           main: {
             attemptHandler: async ({ complete }) => {
               try {
-                return await complete(async ({ finish }) =>
+                return await withTransaction(async (txCtx, transactionHooks) =>
                   // @ts-expect-error testing runtime validation
-                  finish({ output: { result: "not-a-number" } }),
+                  complete({ ...txCtx, transactionHooks, output: { result: "not-a-number" } }),
                 );
               } catch (error) {
                 validationFailed.resolve(error);
@@ -435,13 +485,19 @@ export const validationTestSuite = ({ it }: { it: TestAPI<TestSuiteContext> }): 
         processors: {
           step1: {
             attemptHandler: async ({ complete }) =>
-              complete(async ({ finish }) =>
-                finish({ continueWith: { typeName: "step2", input: { data: 1 } } }),
+              withTransaction(async (txCtx, transactionHooks) =>
+                complete({
+                  ...txCtx,
+                  transactionHooks,
+                  continueWith: { typeName: "step2", input: { data: 1 } },
+                }),
               ),
           },
           step2: {
             attemptHandler: async ({ complete }) =>
-              complete(async ({ finish }) => finish({ output: { result: 42 } })),
+              withTransaction(async (txCtx, transactionHooks) =>
+                complete({ ...txCtx, transactionHooks, output: { result: 42 } }),
+              ),
           },
         },
       }),
@@ -489,8 +545,12 @@ export const validationTestSuite = ({ it }: { it: TestAPI<TestSuiteContext> }): 
           step1: {
             attemptHandler: async ({ complete }) => {
               try {
-                return await complete(async ({ finish }) =>
-                  finish({ continueWith: { typeName: "step2", input: { data: 1 } } }),
+                return await withTransaction(async (txCtx, transactionHooks) =>
+                  complete({
+                    ...txCtx,
+                    transactionHooks,
+                    continueWith: { typeName: "step2", input: { data: 1 } },
+                  }),
                 );
               } catch (error) {
                 validationFailed.resolve(error);
@@ -500,7 +560,9 @@ export const validationTestSuite = ({ it }: { it: TestAPI<TestSuiteContext> }): 
           },
           step2: {
             attemptHandler: async ({ complete }) =>
-              complete(async ({ finish }) => finish({ output: { result: 1 } })),
+              withTransaction(async (txCtx, transactionHooks) =>
+                complete({ ...txCtx, transactionHooks, output: { result: 1 } }),
+              ),
           },
         },
       }),
@@ -551,7 +613,7 @@ export const validationTestSuite = ({ it }: { it: TestAPI<TestSuiteContext> }): 
         transactionHooks,
         ...chain,
         handler: async ({ job, completeJob }) =>
-          completeJob(job, async ({ finish }) => finish({ output: { result: 84 } })),
+          completeJob(job, async ({ complete }) => complete({ output: { result: 84 } })),
       }),
     );
 
@@ -590,9 +652,9 @@ export const validationTestSuite = ({ it }: { it: TestAPI<TestSuiteContext> }): 
           transactionHooks,
           ...chain,
           handler: async ({ job, completeJob }) =>
-            completeJob(job, async ({ finish }) =>
+            completeJob(job, async ({ complete }) =>
               // @ts-expect-error testing runtime validation
-              finish({ output: { result: "not-a-number" } }),
+              complete({ output: { result: "not-a-number" } }),
             ),
         }),
       ),
@@ -623,7 +685,9 @@ export const validationTestSuite = ({ it }: { it: TestAPI<TestSuiteContext> }): 
         processors: {
           step2: {
             attemptHandler: async ({ complete }) =>
-              complete(async ({ finish }) => finish({ output: { result: 42 } })),
+              withTransaction(async (txCtx, transactionHooks) =>
+                complete({ ...txCtx, transactionHooks, output: { result: 42 } }),
+              ),
           },
         },
       }),
@@ -645,8 +709,8 @@ export const validationTestSuite = ({ it }: { it: TestAPI<TestSuiteContext> }): 
         ...chain,
         handler: async ({ job, completeJob }) => {
           if (job.typeName === "step1") {
-            await completeJob(job, async ({ finish }) =>
-              finish({ continueWith: { typeName: "step2", input: { data: 1 } } }),
+            await completeJob(job, async ({ complete }) =>
+              complete({ continueWith: { typeName: "step2", input: { data: 1 } } }),
             );
           }
         },
@@ -700,8 +764,8 @@ export const validationTestSuite = ({ it }: { it: TestAPI<TestSuiteContext> }): 
           id: chain.id,
           handler: async ({ job, completeJob }) => {
             if (job.typeName === "step1") {
-              await completeJob(job, async ({ finish }) =>
-                finish({ continueWith: { typeName: "step2", input: { data: 1 } } }),
+              await completeJob(job, async ({ complete }) =>
+                complete({ continueWith: { typeName: "step2", input: { data: 1 } } }),
               );
             }
           },

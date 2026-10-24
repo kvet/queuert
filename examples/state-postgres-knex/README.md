@@ -1,6 +1,6 @@
 # PostgreSQL State Adapter (Knex)
 
-PostgreSQL state storage via `@queuert/postgres` with Knex — atomic job creation inside application transactions.
+PostgreSQL state storage via `@queuert/postgres` with Knex — job creation and completion inside application transactions.
 
 Knex's `raw` only binds `?` placeholders and rejects a mismatched binding count, so the provider rewrites the adapter's `$n` placeholders before handing the statement over. See `src/provider.ts`.
 

@@ -5,6 +5,7 @@ export {
   type SharedListenerOpen,
 } from "./shared-listener.js";
 export { raceWithSleep, setLongTimeout, sleep } from "./sleep.js";
+export { createCallOnce } from "./call-once.js";
 export {
   isNonNegative,
   isNonNegativeFinite,

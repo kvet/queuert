@@ -61,9 +61,9 @@ export const workerlessCompletionTestSuite = ({ it }: { it: TestAPI<TestSuiteCon
           expect(job.status).toEqual("pending");
           expect(job.input).toEqual({ value: 42 });
 
-          return completeJob(job, async ({ finish, transactionHooks }) => {
+          return completeJob(job, async ({ complete, transactionHooks }) => {
             expect(transactionHooks).toBeDefined();
-            return finish({ output: { result: 84 } });
+            return complete({ output: { result: 84 } });
           });
         },
       }),
@@ -121,8 +121,8 @@ export const workerlessCompletionTestSuite = ({ it }: { it: TestAPI<TestSuiteCon
         ...chain,
         handler: async ({ job, completeJob }) => {
           if (job.typeName === "awaiting-approval") {
-            job = await completeJob(job, async ({ finish }) => {
-              return finish({
+            job = await completeJob(job, async ({ complete }) => {
+              return complete({
                 continueWith: {
                   typeName: "process-approved",
                   input: { approved: true },
@@ -130,9 +130,9 @@ export const workerlessCompletionTestSuite = ({ it }: { it: TestAPI<TestSuiteCon
               });
             });
             expectTypeOf<(typeof job)["typeName"]>().toEqualTypeOf<"process-approved">();
-            return completeJob(job, async ({ finish }) => finish({ output: { done: true } }));
+            return completeJob(job, async ({ complete }) => complete({ output: { done: true } }));
           }
-          return completeJob(job, async ({ finish }) => finish({ output: { done: true } }));
+          return completeJob(job, async ({ complete }) => complete({ output: { done: true } }));
         },
       }),
     );
@@ -188,24 +188,26 @@ export const workerlessCompletionTestSuite = ({ it }: { it: TestAPI<TestSuiteCon
         ...chain,
         handler: async ({ job, completeJob }) => {
           if (false as boolean) {
-            // @ts-expect-error finish({ output: ... }) rejects un-narrowed union job types
-            void completeJob(job, async ({ finish }) => finish({ output: { result: "done" } }));
+            // @ts-expect-error complete({ output: ... }) rejects un-narrowed union job types
+            void completeJob(job, async ({ complete }) => complete({ output: { result: "done" } }));
           }
 
           if (job.typeName === "start") {
-            job = await completeJob(job, async ({ finish }) =>
-              finish({ continueWith: { typeName: "step-a", input: { valueA: 42 } } }),
+            job = await completeJob(job, async ({ complete }) =>
+              complete({ continueWith: { typeName: "step-a", input: { valueA: 42 } } }),
             );
           }
 
           if (job.typeName === "step-a") {
-            job = await completeJob(job, async ({ finish }) =>
-              finish({ continueWith: { typeName: "step-b", input: { valueB: true } } }),
+            job = await completeJob(job, async ({ complete }) =>
+              complete({ continueWith: { typeName: "step-b", input: { valueB: true } } }),
             );
           }
 
           if (job.typeName === "step-b") {
-            return completeJob(job, async ({ finish }) => finish({ output: { result: "done" } }));
+            return completeJob(job, async ({ complete }) =>
+              complete({ output: { result: "done" } }),
+            );
           }
         },
       }),
@@ -272,8 +274,8 @@ export const workerlessCompletionTestSuite = ({ it }: { it: TestAPI<TestSuiteCon
           ...starterChain,
           handler: async ({ job, completeJob }) => {
             if (job.typeName === "starter") {
-              return completeJob(job, async ({ finish }) =>
-                finish({
+              return completeJob(job, async ({ complete }) =>
+                complete({
                   continueWith: {
                     typeName: "next",
                     input: null,
@@ -336,9 +338,10 @@ export const workerlessCompletionTestSuite = ({ it }: { it: TestAPI<TestSuiteCon
         jobTypes,
         processors: {
           "process-approved": {
-            attemptHandler: async ({ prepare, complete }) => {
-              await prepare({ mode: "atomic" });
-              return complete(async ({ finish }) => finish({ output: { done: true } }));
+            attemptHandler: async ({ complete }) => {
+              return withTransaction(async (txCtx, transactionHooks) =>
+                complete({ ...txCtx, transactionHooks, output: { done: true } }),
+              );
             },
           },
         },
@@ -365,8 +368,8 @@ export const workerlessCompletionTestSuite = ({ it }: { it: TestAPI<TestSuiteCon
         ...chain,
         handler: async ({ job, completeJob }) => {
           if (job.typeName === "awaiting-approval") {
-            job = await completeJob(job, async ({ finish }) => {
-              return finish({
+            job = await completeJob(job, async ({ complete }) => {
+              return complete({
                 continueWith: {
                   typeName: "process-approved",
                   input: { approved: true },
@@ -425,12 +428,12 @@ export const workerlessCompletionTestSuite = ({ it }: { it: TestAPI<TestSuiteCon
         transactionHooks,
         ...chain,
         handler: async ({ job, completeJob }) => {
-          const completed = await completeJob(job, async ({ finish }) =>
-            finish({ output: { result: false } }),
+          const completed = await completeJob(job, async ({ complete }) =>
+            complete({ output: { result: false } }),
           );
 
           await expect(
-            completeJob(job, async ({ finish }) => finish({ output: { result: true } })),
+            completeJob(job, async ({ complete }) => complete({ output: { result: true } })),
           ).rejects.toThrow(JobAlreadyCompletedError);
 
           return completed;
@@ -445,7 +448,9 @@ export const workerlessCompletionTestSuite = ({ it }: { it: TestAPI<TestSuiteCon
           transactionHooks,
           ...chain,
           handler: async ({ job, completeJob }) => {
-            return completeJob(job, async ({ finish }) => finish({ output: { result: false } }));
+            return completeJob(job, async ({ complete }) =>
+              complete({ output: { result: false } }),
+            );
           },
         }),
       ),
@@ -547,7 +552,9 @@ export const workerlessCompletionTestSuite = ({ it }: { it: TestAPI<TestSuiteCon
 
               try {
                 await expect(
-                  complete(async ({ finish }) => finish({ output: { result: "from-worker" } })),
+                  withTransaction(async (txCtx, transactionHooks) =>
+                    complete({ ...txCtx, transactionHooks, output: { result: "from-worker" } }),
+                  ),
                 ).rejects.toThrow(JobAlreadyCompletedError);
 
                 expect(signal.aborted).toBe(true);
@@ -581,8 +588,8 @@ export const workerlessCompletionTestSuite = ({ it }: { it: TestAPI<TestSuiteCon
           transactionHooks,
           ...chain,
           handler: async ({ job, completeJob }) => {
-            await completeJob(job, async ({ finish }) =>
-              finish({ output: { result: "from-external" } }),
+            await completeJob(job, async ({ complete }) =>
+              complete({ output: { result: "from-external" } }),
             );
           },
         }),
@@ -591,6 +598,94 @@ export const workerlessCompletionTestSuite = ({ it }: { it: TestAPI<TestSuiteCon
 
       await processCompleted.promise;
     });
+  });
+
+  it("skips the current job in workers while the completeChain handler runs", async ({
+    stateAdapter,
+    notifyAdapter,
+    withTransaction,
+    withWorkers,
+    observabilityAdapter,
+    log,
+    skip,
+    transactionConcurrency,
+  }) => {
+    if (transactionConcurrency === "serialized") return skip();
+
+    const jobTypes = defineJobTypes<{
+      first: { entry: true; input: null; continueWith: { typeName: "second" } };
+      second: { input: null; output: null };
+    }>();
+
+    const client = await createClient({
+      stateAdapter,
+      notifyAdapter,
+      observabilityAdapter,
+      log,
+      jobTypes,
+    });
+
+    // The current job must not be the head, which the chain lock already covers. See "Decouple
+    // chain from jobs" in TODO.md.
+    const chain = await withTransaction(async (txCtx, transactionHooks) =>
+      client.createChain({ ...txCtx, transactionHooks, typeName: "first", input: null }),
+    );
+    await withTransaction(async (txCtx, transactionHooks) =>
+      client.completeChain({
+        ...txCtx,
+        transactionHooks,
+        ...chain,
+        handler: async ({ job, completeJob }) => {
+          if (job.typeName !== "first") throw new Error(`unexpected ${job.typeName}`);
+          return completeJob(job, async ({ complete }) =>
+            complete({ continueWith: { typeName: "second", input: null } }),
+          );
+        },
+      }),
+    );
+
+    const secondAttempted = vi.fn();
+    const worker = await createInProcessWorker({
+      client,
+      concurrency: 1,
+      processors: createProcessors({
+        client,
+        jobTypes,
+        processors: {
+          second: {
+            attemptHandler: async () => {
+              secondAttempted();
+              throw new Error("acquired the job locked by completeChain");
+            },
+          },
+        },
+      }),
+    });
+
+    const handlerEntered = Promise.withResolvers<void>();
+    const handlerGate = Promise.withResolvers<void>();
+    const completion = withTransaction(async (txCtx, transactionHooks) =>
+      client.completeChain({
+        ...txCtx,
+        transactionHooks,
+        ...chain,
+        handler: async ({ job, completeJob }) => {
+          handlerEntered.resolve();
+          await handlerGate.promise;
+          if (job.typeName !== "second") throw new Error(`unexpected ${job.typeName}`);
+          return completeJob(job, async ({ complete }) => complete({ output: null }));
+        },
+      }),
+    );
+
+    try {
+      await handlerEntered.promise;
+      await withWorkers([await worker.start()], async () => sleep(100));
+      expect(secondAttempted).not.toHaveBeenCalled();
+    } finally {
+      handlerGate.resolve();
+      await completion;
+    }
   });
 
   it("correctly narrows chainTypeName in completeChain", async ({
@@ -628,15 +723,15 @@ export const workerlessCompletionTestSuite = ({ it }: { it: TestAPI<TestSuiteCon
           expect(job.chainTypeName).toBe("entryA");
 
           if (job.typeName === "entryA") {
-            job = await completeJob(job, async ({ finish }) =>
-              finish({ continueWith: { typeName: "shared", input: null } }),
+            job = await completeJob(job, async ({ complete }) =>
+              complete({ continueWith: { typeName: "shared", input: null } }),
             );
           }
 
           expectTypeOf(job.chainTypeName).toEqualTypeOf<"entryA">();
           expect(job.chainTypeName).toBe("entryA");
 
-          return completeJob(job, async ({ finish }) => finish({ output: { done: true } }));
+          return completeJob(job, async ({ complete }) => complete({ output: { done: true } }));
         },
       }),
     );
@@ -680,7 +775,7 @@ export const workerlessCompletionTestSuite = ({ it }: { it: TestAPI<TestSuiteCon
         typeName: "test",
         id: chain.id,
         handler: async ({ job, completeJob }) =>
-          completeJob(job, async ({ finish }) => finish({ output: { result: 84 } })),
+          completeJob(job, async ({ complete }) => complete({ output: { result: 84 } })),
       }),
     ).rejects.toThrow("requires a transaction context");
     await withTransaction(async (txCtx) => {
@@ -691,7 +786,7 @@ export const workerlessCompletionTestSuite = ({ it }: { it: TestAPI<TestSuiteCon
           typeName: "test",
           id: chain.id,
           handler: async ({ job, completeJob }) =>
-            completeJob(job, async ({ finish }) => finish({ output: { result: 84 } })),
+            completeJob(job, async ({ complete }) => complete({ output: { result: 84 } })),
         }),
       ).rejects.toThrow("completeChain requires transactionHooks");
     });
@@ -730,7 +825,7 @@ export const workerlessCompletionTestSuite = ({ it }: { it: TestAPI<TestSuiteCon
             typeName: "test",
             id: chain.id,
             handler: async ({ job, completeJob }) =>
-              completeJob(job, async ({ finish }) => finish({ output: { result: 84 } })),
+              completeJob(job, async ({ complete }) => complete({ output: { result: 84 } })),
           }),
         ).rejects.toThrow("not in a transaction");
       }),
@@ -777,7 +872,7 @@ export const workerlessCompletionTestSuite = ({ it }: { it: TestAPI<TestSuiteCon
           typeName: "notification",
           id: chain.id,
           handler: async ({ job, completeJob }) =>
-            completeJob(job, async ({ finish }) => finish({ output: { sent: true } })),
+            completeJob(job, async ({ complete }) => complete({ output: { sent: true } })),
         }),
       ),
     ).rejects.toThrow(ChainTypeMismatchError);
@@ -827,12 +922,12 @@ export const workerlessCompletionTestSuite = ({ it }: { it: TestAPI<TestSuiteCon
         ...chain,
         handler: async ({ job, completeJob }) => {
           if (job.typeName !== "review") throw new Error("unexpected job type");
-          return completeJob(job, async ({ finish }) => {
-            const completedJob = await finish({ output: { approved: true } });
+          return completeJob(job, async ({ complete }) => {
+            const completedJob = await complete({ output: { approved: true } });
 
             await expect(
-              finish({ continueWith: { typeName: "archive", input: { requestId: "req-1" } } }),
-            ).rejects.toThrow("finish can only be called once");
+              complete({ continueWith: { typeName: "archive", input: { requestId: "req-1" } } }),
+            ).rejects.toThrow("complete can only be called once");
 
             return completedJob;
           });
@@ -844,7 +939,7 @@ export const workerlessCompletionTestSuite = ({ it }: { it: TestAPI<TestSuiteCon
     expect(completedChain.output).toEqual({ approved: true });
   });
 
-  it("re-throws a swallowed finish failure instead of committing half of it", async ({
+  it("re-throws a swallowed complete failure instead of committing half of it", async ({
     stateAdapter,
     notifyAdapter,
     withTransaction,
@@ -893,9 +988,9 @@ export const workerlessCompletionTestSuite = ({ it }: { it: TestAPI<TestSuiteCon
           ...chain,
           handler: async ({ job, completeJob }) => {
             if (job.typeName !== "review") throw new Error("unexpected job type");
-            return completeJob(job, async ({ finish }) => {
+            return completeJob(job, async ({ complete }) => {
               await expect(
-                finish({
+                complete({
                   continueWith: {
                     typeName: "archive",
                     input: { requestId: "req-1" },
@@ -907,7 +1002,7 @@ export const workerlessCompletionTestSuite = ({ it }: { it: TestAPI<TestSuiteCon
                 }),
               ).rejects.toBeInstanceOf(BlockerLimitExceededError);
 
-              return finish({ output: { approved: false } });
+              return complete({ output: { approved: false } });
             });
           },
         }),

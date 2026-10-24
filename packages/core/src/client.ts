@@ -1,5 +1,9 @@
-import { raceWithSleep, setLongTimeout, type IsUnion } from "@queuert/helpers";
+import { raceWithSleep, setLongTimeout, createCallOnce, type IsUnion } from "@queuert/helpers";
 
+import {
+  type AttemptCompleteResult,
+  type AttemptOutcome,
+} from "./attempt/attempt-handler.types.js";
 import {
   type ChainFields,
   type CompletedChainFields,
@@ -25,25 +29,22 @@ import {
   JobsNotReschedulableError,
   WaitChainTimeoutError,
 } from "./errors.js";
-import { createFinishOnce, mapFinishResult } from "./implementation/attempt-outcome.js";
-import { completeChain } from "./implementation/complete-chain.js";
-import { continueChain } from "./implementation/continue-chain.js";
-import { createChains } from "./implementation/create-chains.js";
+import { completeChain, continueChain, createChains, rescheduleJobs } from "./implementation.js";
 import { type BaseJobTypeDefinitions } from "./job-types/job-type.js";
 import { type JobTypes } from "./job-types/job-types.js";
 import {
-  type AnyNewJob,
   type BlockerChains,
   type JobTypeBlockedNames,
   type JobTypeChainNames,
   type JobTypeEntryNames,
   type JobTypeNames,
   type JobTypeProperty,
+  type NewChain,
+  type AnyNewJob,
   type ResolvedChain,
-  type ResolvedRunningChain,
   type ResolvedChainJobs,
   type ResolvedJob,
-  type NewChain,
+  type ResolvedRunningChain,
 } from "./job-types/job-types.resolvers.js";
 import {
   type JobTypesDefinitions,
@@ -51,10 +52,7 @@ import {
   mergeJobTypes,
 } from "./job-types/merge-job-types.js";
 import { type NotifyAdapter } from "./notify-adapter/notify-adapter.js";
-import {
-  bufferNotifyJobAttemptLost,
-  bufferNotifyJobScheduled,
-} from "./notify-adapter/notify-hooks.js";
+import { bufferNotifyJobAttemptLost } from "./notify-adapter/notify-hooks.js";
 import { type Log } from "./observability-adapter/log.js";
 import { type ObservabilityAdapter } from "./observability-adapter/observability-adapter.js";
 import { bufferObservabilityEvent } from "./observability-adapter/observability-hooks.js";
@@ -66,10 +64,10 @@ import {
   type StateAdapter,
   type StateChain,
   type StateJob,
+  type StateJobInfo,
 } from "./state-adapter/state-adapter.js";
 import { normalizeTxCtx, requireTxCtx } from "./state-adapter/tx-context.js";
 import { type TransactionHooks, requireTransactionHooks } from "./transaction-hooks.js";
-import { type AttemptFinishResult, type AttemptOutcome } from "./worker/job-process.types.js";
 
 /**
  * @internal Used by `createInProcessWorker` and `createDashboard` to access
@@ -85,10 +83,16 @@ type ChainCompleteOptions<
   TJobTypeName extends string,
   TChainTypeName extends string,
 > = {
-  finish: <TOutcome extends AttemptOutcome<TStateAdapter, TJobTypeDefinitions, TJobTypeName>>(
+  complete: <TOutcome extends AttemptOutcome<TStateAdapter, TJobTypeDefinitions, TJobTypeName>>(
     outcome: TOutcome,
   ) => Promise<
-    AttemptFinishResult<TStateAdapter, TJobTypeDefinitions, TJobTypeName, TChainTypeName, TOutcome>
+    AttemptCompleteResult<
+      TStateAdapter,
+      TJobTypeDefinitions,
+      TJobTypeName,
+      TChainTypeName,
+      TOutcome
+    >
   >;
   transactionHooks: TransactionHooks;
 } & GetStateAdapterTxContext<TStateAdapter>;
@@ -330,22 +334,22 @@ export type Client<
    * the current job and a `completeJob` function to the `handler`. The handler
    * may decline (return without calling `completeJob`); when it does complete,
    * the callback passes exactly one outcome — `{ output }` or
-   * `{ continueWith: {...} }` — to `finish`, which writes it before it returns.
+   * `{ continueWith: {...} }` — to `complete`, which writes it before it returns.
    *
    * `completeJob` resolves to the continuation when the outcome continued the
    * chain, so several jobs can be walked in a row:
    *
    * ```ts
-   * job = await completeJob(job, async ({ finish }) =>
-   *   finish({ continueWith: { typeName: "step-a", input: { valueA: 42 } } }));
+   * job = await completeJob(job, async ({ complete }) =>
+   *   complete({ continueWith: { typeName: "step-a", input: { valueA: 42 } } }));
    * ```
    *
    * @throws {@link ChainNotFoundError} if the chain does not exist.
    * @throws {@link ChainTypeMismatchError} if the chain's type does not match `typeName`.
    * @throws {@link JobAlreadyCompletedError} from the inner `completeJob` if the job is already completed.
-   * @throws {@link BlockerLimitExceededError} from the inner `finish` if a `continueWith` outcome declares more blockers than the per-job limit.
-   * @throws {@link ChainNotFoundError} from the inner `finish` if a `continueWith` blocker chain does not exist.
-   * @throws {@link ChainTypeMismatchError} from the inner `finish` if a `continueWith` blocker's `typeName` differs from the stored chain's.
+   * @throws {@link BlockerLimitExceededError} from the inner `complete` if a `continueWith` outcome declares more blockers than the per-job limit.
+   * @throws {@link ChainNotFoundError} from the inner `complete` if a `continueWith` blocker chain does not exist.
+   * @throws {@link ChainTypeMismatchError} from the inner `complete` if a `continueWith` blocker's `typeName` differs from the stored chain's.
    */
   completeChain: <
     TChainTypeName extends JobTypeEntryNames<TJobTypeDefinitions>,
@@ -850,8 +854,9 @@ export const createClient = async <
         );
       }
 
-      const rescheduledOrMissing = await helpers.stateAdapter.rescheduleJobs({
+      const rescheduledOrMissing = await rescheduleJobs(helpers, {
         txCtx,
+        transactionHooks,
         jobs: ids.map((id: TJobId) => ({ jobId: id, schedule })),
       });
       const rescheduled = rescheduledOrMissing.map((stateJob, index) => {
@@ -863,12 +868,6 @@ export const createClient = async <
         return stateJob;
       });
 
-      for (const stateJob of rescheduled) {
-        bufferNotifyJobScheduled(transactionHooks, helpers.notifyAdapter, stateJob);
-        bufferObservabilityEvent(transactionHooks, () => {
-          helpers.observabilityHelper.jobRescheduled(stateJob);
-        });
-      }
       return rescheduled.map(
         (stateJob) =>
           mapStateJobToJob(stateJob) as ResolvedJob<TJobId, TJobTypeDefinitions, TJobTypeName>,
@@ -915,11 +914,20 @@ export const createClient = async <
 
       assertChainTypeName(stateChain, { chainId: String(id), typeName });
 
+      const [currentJob] = await helpers.stateAdapter.getJobs({
+        txCtx,
+        jobIds: [(stateChain.tail ?? stateChain.head).id],
+        lock: "exclusive",
+      });
+      if (!currentJob) {
+        throw new Error(`Current job of chain ${id} not found under the chain lock`);
+      }
+
       const completeJob = async (
         job: AnyJob,
         completeCallback: (
           options: {
-            finish: (outcome: AnyWorkerlessOutcome) => Promise<AnyJob & { continuedTo?: AnyJob }>;
+            complete: (outcome: AnyWorkerlessOutcome) => Promise<AnyJob & { continuedTo?: AnyJob }>;
             transactionHooks: TransactionHooks;
           } & BaseTxContext,
         ) => Promise<AnyJob & { continuedTo?: AnyJob }>,
@@ -934,7 +942,7 @@ export const createClient = async <
         const [stateJob] = await helpers.stateAdapter.getJobs({
           txCtx,
           jobIds: [job.id],
-          lock: "exclusive",
+          lock: job.id === currentJob.id ? undefined : "exclusive",
         });
         if (!stateJob) {
           throw new JobNotFoundError(`Job ${job.id} not found`, { jobId: job.id });
@@ -947,13 +955,12 @@ export const createClient = async <
         }
 
         const wasRunning = stateJob.status === "running";
-        const finishOnce = createFinishOnce();
-        const finish = async (
-          outcome: AnyWorkerlessOutcome,
-        ): Promise<AnyJob & { continuedTo?: AnyJob }> => {
-          finishOnce.begin();
-          try {
-            const finishResult =
+        const completeOnce = createCallOnce(
+          "complete",
+          async (
+            outcome: AnyWorkerlessOutcome,
+          ): Promise<StateJob & { continuation?: StateJobInfo }> => {
+            const written =
               "output" in outcome
                 ? await completeChain(helpers, {
                     job: stateJob,
@@ -963,46 +970,43 @@ export const createClient = async <
                     fence: null,
                   })
                 : await continueChain(helpers, {
-                    fromJob: stateJob,
+                    job: stateJob,
                     continueWith: outcome.continueWith,
                     txCtx,
                     transactionHooks,
                     fence: null,
                   });
-            finishOnce.succeed(finishResult);
-            return mapFinishResult(finishResult);
-          } catch (error) {
-            finishOnce.fail(error);
-            throw error;
-          }
-        };
+            if (written === undefined) {
+              throw new JobNotFoundError(`Job ${job.id} not found or already completed`, {
+                jobId: job.id,
+              });
+            }
+            return written;
+          },
+        );
 
-        const completeResult = await completeCallback({
+        const callbackResult = await completeCallback({
           transactionHooks,
-          finish,
+          complete: async (outcome) => mapStateJobToJob(await completeOnce.call(outcome)),
           ...txCtx,
         });
 
-        const finished = finishOnce.requireFinished(
-          "finish must be called before the completeJob callback returns",
+        const { continuation, ...finishedJob } = completeOnce.requireResult(
+          "complete must be called before the completeJob callback returns",
         );
         bufferObservabilityEvent(transactionHooks, () => {
-          helpers.observabilityHelper.completeJobSpan(finished.job, {
-            continuedWith: finished.continuation ?? undefined,
-            chainCompleted: finished.continuation === null,
+          helpers.observabilityHelper.completeJobSpan(finishedJob, {
+            continuedWith: continuation,
+            chainCompleted: continuation === undefined,
           });
         });
         if (wasRunning) {
           bufferNotifyJobAttemptLost(transactionHooks, helpers.notifyAdapter, job.id);
         }
 
-        return completeResult.continuedTo ?? completeResult;
+        return callbackResult.continuedTo ?? callbackResult;
       };
 
-      const currentJob: StateJob = {
-        ...(stateChain.tail ?? stateChain.head),
-        chain: stateChain,
-      };
       await handler({ job: mapStateJobToJob(currentJob), completeJob });
 
       const [updatedChain] = await helpers.stateAdapter.getChains({

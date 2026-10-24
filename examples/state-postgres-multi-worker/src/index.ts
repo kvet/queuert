@@ -4,9 +4,9 @@ import { fileURLToPath } from "node:url";
 
 import { createPgNotifyAdapter, createPgStateAdapter } from "@queuert/postgres";
 import { acquirePostgres } from "@queuert/testcontainers";
-import { createPgPoolNotifyProvider } from "example-notify-postgres-pg/provider";
-import { createPgPoolStateProvider } from "example-state-postgres-pg/provider";
-import { Pool } from "pg";
+import { createPostgresJsNotifyProvider } from "example-notify-postgres-postgres-js/provider";
+import { createPostgresJsStateProvider } from "example-state-postgres-postgres-js/provider";
+import postgres from "postgres";
 import { createClient, defineJobTypes, withTransactionHooks } from "queuert";
 
 // ============================================================================
@@ -54,21 +54,21 @@ const jobTypes = defineJobTypes<{
 console.log("Starting PostgreSQL container...");
 await using pg = await acquirePostgres("postgres:18", import.meta.url);
 
-const pool = new Pool({ connectionString: pg.connectionString, max: 10 });
+const sql = postgres(pg.connectionString, { max: 10 });
 
-await pool.query(`
+await sql`
   CREATE TABLE IF NOT EXISTS orders (
     id TEXT PRIMARY KEY,
     items TEXT[] NOT NULL,
     total INTEGER NOT NULL
-  );
-`);
+  )
+`;
 
-const stateProvider = createPgPoolStateProvider({ pool });
+const stateProvider = createPostgresJsStateProvider({ sql });
 const stateAdapter = await createPgStateAdapter({ stateProvider });
 await stateAdapter.migrateToLatest();
 
-const notifyProvider = createPgPoolNotifyProvider({ pool });
+const notifyProvider = createPostgresJsNotifyProvider({ sql });
 const notifyAdapter = await createPgNotifyAdapter({ notifyProvider });
 
 const client = await createClient({
@@ -135,17 +135,13 @@ const orders = Array.from({ length: JOBS_TO_PROCESS }, (_, i) => {
 // Orders and their jobs are created in one transaction — workers only ever see
 // orders that were committed
 const chains = await withTransactionHooks(async (transactionHooks) =>
-  stateAdapter.withTransaction(async (ctx) => {
+  sql.begin(async (txSql) => {
     for (const order of orders) {
-      await ctx.poolClient.query("INSERT INTO orders (id, items, total) VALUES ($1, $2, $3)", [
-        order.id,
-        order.items,
-        order.total,
-      ]);
+      await txSql`INSERT INTO orders (id, items, total) VALUES (${order.id}, ${order.items}, ${order.total})`;
     }
 
     return client.createChains({
-      ...ctx,
+      txSql,
       transactionHooks,
       items: orders.map((order) => ({
         typeName: "process_order" as const,
@@ -197,5 +193,5 @@ const stopPromises = processes.map(
 await Promise.all(stopPromises);
 await notifyAdapter.close();
 await stateAdapter.close();
-await pool.end();
+await sql.end();
 console.log("Done!");

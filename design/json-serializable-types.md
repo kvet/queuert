@@ -54,7 +54,7 @@ Rules:
 - Single-item call sites pass `[item]` and unwrap; the four codec methods are batch-only by contract.
 - `encodeInputs`/`encodeOutputs` validate the runtime form. Failures throw, wrapped as `JobTypeValidationError`.
 - `decodeInputs`/`decodeOutputs` validate the persisted form (defends against corruption / schema drift). Failures throw, wrapped as `JobTypeValidationError`.
-- `validateContinueWith` and `validateBlockers` operate on **runtime** form. Encoding happens afterwards in the `createStateJobs` pipeline.
+- `validateContinueWith` and `validateBlockers` operate on **runtime** form. Encoding happens afterwards, where `prepareJobs` in `packages/core/src/implementation.ts` parses inputs today.
 - **Heterogeneous batches**: items in a batch may have mixed `typeName`s. This matters for read paths — `listJobs` / `listChainJobs` / dashboard list endpoints decode a page of mixed-type rows in a single codec call, which is load-bearing for KMS-style outer codecs that operate on `string` ciphertext regardless of `typeName` (one `BatchDecrypt` per page, not one per type). Validator-only adapters that _don't_ need the global batching can use a small inline `perTypeName` helper (see ergonomics below) so they don't pay a dispatch-boilerplate tax.
 
 ### End-to-end flow
@@ -231,30 +231,28 @@ This is a **major** version bump.
 
 ## Files (touch list)
 
-| File                                                               | Role                                                                                                                                           |
-| ------------------------------------------------------------------ | ---------------------------------------------------------------------------------------------------------------------------------------------- |
-| `packages/core/src/job-types/job-types.ts`                         | `JobTypesOptions`, `JobTypes`, `createJobTypes`, `createNoopJobTypes` — primary API change; both wrappers run `isJsonSerializable` post-encode |
-| `packages/core/src/entities/json-serializable.ts` (new)            | `JsonSerializable` type, `isJsonSerializable` runtime check, `EnsureJsonSerializable<T>` utility                                               |
-| `packages/core/src/entities/define-job-type-registry.ts`           | `defineJobTypes` constrains `input`/`output` to `JsonSerializable` at the type level                                                           |
-| `packages/core/src/job-types/job-type.ts`                          | `BaseJobTypeDefinition` — semantic clarification (runtime type); stays `unknown` in core                                                       |
-| `packages/core/src/job-types/job-type.validation.ts`               | `ValidateJobType` — keep `NoVoidOrUndefined`; `JsonSerializable` constraint applied in `defineJobTypes` and validator adapters                 |
-| `packages/core/src/job-types/merge-job-types.ts`                   | Group items by owning slice; route fallback (mixed-merge unknown types) through internal noop registry so JsonSerializable check still fires   |
-| `packages/core/src/entities/job.ts`                                | `mapStateJobToJob` → async/batch variant                                                                                                       |
-| `packages/core/src/implementation/create-state-jobs.ts`            | Call `encodeInputs` after validate                                                                                                             |
-| `packages/core/src/implementation/finish-job.ts`                   | Call `encodeOutputs`                                                                                                                           |
-| `packages/core/src/implementation/continue-with.ts`                | Validate runtime form (unchanged); decode after pickup elsewhere                                                                               |
-| `packages/core/src/worker/job-process.ts`                          | `decodeInputs` on pickup; mapping decoded job for handler                                                                                      |
-| `packages/core/src/client.ts`                                      | All read methods batch-decode pages                                                                                                            |
-| `packages/core/src/observability-adapter/observability-adapter.ts` | Document encoded form; no signature change today                                                                                               |
-| `examples/validation-zod/src/zod-adapter.ts`                       | Identity codecs                                                                                                                                |
-| `examples/codec-zod/` (new)                                        | Bidirectional codec showcase                                                                                                                   |
-| `examples/codec-encrypted/` (new, optional)                        | KMS-style wrapper showcase                                                                                                                     |
-| `packages/core/src/job-types/job-types.spec.ts`                    | Update for new contract                                                                                                                        |
-| `packages/core/src/conformance/validation-adapter.spec.ts`         | Update conformance for codec API                                                                                                               |
-| `packages/core/src/client.merge.spec.ts`                           | Update routing tests                                                                                                                           |
-| `benchmarks/type-complexity/`                                      | Re-measure after type changes                                                                                                                  |
-| `docs/src/content/docs/advanced/`                                  | Reference docs update                                                                                                                          |
-| `.changeset/codec-job-types.md`                                    | Major changeset across affected packages                                                                                                       |
+| File                                                               | Role                                                                                                                                                                                   |
+| ------------------------------------------------------------------ | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `packages/core/src/job-types/job-types.ts`                         | `JobTypesOptions`, `JobTypes`, `createJobTypes`, `createNoopJobTypes` — primary API change; both wrappers run `isJsonSerializable` post-encode                                         |
+| `packages/core/src/entities/json-serializable.ts` (new)            | `JsonSerializable` type, `isJsonSerializable` runtime check, `EnsureJsonSerializable<T>` utility                                                                                       |
+| `packages/core/src/entities/define-job-type-registry.ts`           | `defineJobTypes` constrains `input`/`output` to `JsonSerializable` at the type level                                                                                                   |
+| `packages/core/src/job-types/job-type.ts`                          | `BaseJobTypeDefinition` — semantic clarification (runtime type); stays `unknown` in core                                                                                               |
+| `packages/core/src/job-types/job-type.validation.ts`               | `ValidateJobType` — keep `NoVoidOrUndefined`; `JsonSerializable` constraint applied in `defineJobTypes` and validator adapters                                                         |
+| `packages/core/src/job-types/merge-job-types.ts`                   | Group items by owning slice; route fallback (mixed-merge unknown types) through internal noop registry so JsonSerializable check still fires                                           |
+| `packages/core/src/entities/job.ts`                                | `mapStateJobToJob` → async/batch variant                                                                                                                                               |
+| `packages/core/src/implementation.ts`                              | `prepareJobs` (used by `createChains`, `continueChain`): call `encodeInputs` after validate; `completeChain`: call `encodeOutputs`; `continueChain`: validate runtime form (unchanged) |
+| `packages/core/src/attempt/attempt-handler.ts`                     | `decodeInputs` on pickup; mapping decoded job for handler                                                                                                                              |
+| `packages/core/src/client.ts`                                      | All read methods batch-decode pages                                                                                                                                                    |
+| `packages/core/src/observability-adapter/observability-adapter.ts` | Document encoded form; no signature change today                                                                                                                                       |
+| `examples/validation-zod/src/zod-adapter.ts`                       | Identity codecs                                                                                                                                                                        |
+| `examples/codec-zod/` (new)                                        | Bidirectional codec showcase                                                                                                                                                           |
+| `examples/codec-encrypted/` (new, optional)                        | KMS-style wrapper showcase                                                                                                                                                             |
+| `packages/core/src/job-types/job-types.spec.ts`                    | Update for new contract                                                                                                                                                                |
+| `packages/core/src/conformance/validation-adapter.spec.ts`         | Update conformance for codec API                                                                                                                                                       |
+| `packages/core/src/client.merge.spec.ts`                           | Update routing tests                                                                                                                                                                   |
+| `benchmarks/type-complexity/`                                      | Re-measure after type changes                                                                                                                                                          |
+| `docs/src/content/docs/advanced/`                                  | Reference docs update                                                                                                                                                                  |
+| `.changeset/codec-job-types.md`                                    | Major changeset across affected packages                                                                                                                                               |
 
 ## Implementation plan
 
@@ -281,9 +279,9 @@ Goal: replace `parseInput`/`parseOutput` with the four batch async codec methods
 
 ### Phase 2 — Write paths (encode)
 
-- [ ] [packages/core/src/implementation/create-state-jobs.ts](../packages/core/src/implementation/create-state-jobs.ts): collect all to-be-created jobs in a single batch and call `encodeInputs` once. Replace the per-job `parseInput` call. Preserve order when assigning encoded values back to `createJobParams`.
-- [ ] [packages/core/src/implementation/finish-job.ts](../packages/core/src/implementation/finish-job.ts): replace `parseOutput` with `encodeOutputs([{typeName, value: output}])`.
-- [ ] [packages/core/src/implementation/continue-with.ts](../packages/core/src/implementation/continue-with.ts): no change to `validateContinueWith` (still runtime form). Encoding happens via the downstream `createStateJobs` call.
+- [ ] [packages/core/src/implementation.ts](../packages/core/src/implementation.ts) `prepareJobs`: collect all to-be-created jobs in a single batch and call `encodeInputs` once. Replace the per-job `parseInput` call. Preserve order when assigning encoded values back to the prepared items that `createChains` and `continueChain` pass to the state adapter.
+- [ ] [packages/core/src/implementation.ts](../packages/core/src/implementation.ts) `completeChain`: replace `parseOutput` with `encodeOutputs([{typeName, value: output}])`.
+- [ ] [packages/core/src/implementation.ts](../packages/core/src/implementation.ts) `continueChain`: no change to `validateContinueWith` (still runtime form). Encoding happens in the `prepareJobs` call that follows it.
 - [ ] Tests: write-side encode happens exactly once per batch; encode failures surface as `JobTypeValidationError`; multi-job creates produce a single `encodeInputs` call.
 
 ### Phase 3 — Read paths (decode)
@@ -293,10 +291,10 @@ Goal: replace `parseInput`/`parseOutput` with the four batch async codec methods
   2. Awaits both.
   3. Maps decoded values back onto each job in original order.
      Single-job sites call it with `[job]` and unwrap.
-- [ ] Update all 8 callers (per inventory):
-  - `packages/core/src/client.ts` — `reschedule` (line 629), `getJob` (919), `listJobs` (1004), `listChainJobs` (1045), `listBlockedJobs` (1120). All already async.
-  - `packages/core/src/implementation/continue-with.ts` (line 62).
-  - `packages/core/src/worker/job-process.ts` (lines 368, 531).
+- [ ] Update all callers:
+  - `packages/core/src/client.ts` — `rescheduleJobs`, `completeChain`, `getJob`, `listJobs`, `listChainJobs`, `listBlockedJobs`. All already async.
+  - `packages/core/src/implementation.ts` — `createChains` (maps the created chain).
+  - `packages/core/src/attempt/attempt-handler.ts` — the running job passed to the handler, and the job returned by `complete`.
 - [ ] Worker pickup specifically: ensure `decodeInputs` is called between `startJobAttempt` and handler invocation; runtime input is what the handler sees and what continues into `continueWith` flows.
 - [ ] `getChain`/`listChains` paths: if they surface job-shaped data, batch-decode that page too. Audit during implementation.
 - [ ] Tests:

@@ -1,5 +1,5 @@
 import { sleep } from "@queuert/helpers";
-import { type TestAPI, expect } from "vitest";
+import { type TestAPI, expect, expectTypeOf } from "vitest";
 
 import { type AttemptMiddleware } from "../attempt-middleware/attempt-middleware.js";
 import { createClient } from "../client.js";
@@ -49,7 +49,9 @@ export const workerTestSuite = ({ it }: { it: TestAPI<TestSuiteContext> }): void
         processors: {
           test: {
             attemptHandler: async ({ job, complete }) => {
-              return complete(async ({ finish }) => finish({ output: { result: job.input.test } }));
+              return withTransaction(async (txCtx, transactionHooks) =>
+                complete({ ...txCtx, transactionHooks, output: { result: job.input.test } }),
+              );
             },
           },
         },
@@ -102,13 +104,17 @@ export const workerTestSuite = ({ it }: { it: TestAPI<TestSuiteContext> }): void
           email: {
             attemptHandler: async ({ complete }) => {
               processedTypes.push("email");
-              return complete(async ({ finish }) => finish({ output: { sent: true } }));
+              return withTransaction(async (txCtx, transactionHooks) =>
+                complete({ ...txCtx, transactionHooks, output: { sent: true } }),
+              );
             },
           },
           sms: {
             attemptHandler: async ({ complete }) => {
               processedTypes.push("sms");
-              return complete(async ({ finish }) => finish({ output: { sent: true } }));
+              return withTransaction(async (txCtx, transactionHooks) =>
+                complete({ ...txCtx, transactionHooks, output: { sent: true } }),
+              );
             },
           },
         },
@@ -181,13 +187,17 @@ export const workerTestSuite = ({ it }: { it: TestAPI<TestSuiteContext> }): void
         "images.resize": {
           attemptHandler: async ({ job, trace, complete }) => {
             processed.push(`${job.typeName}:${trace}`);
-            return complete(async ({ finish }) => finish({ output: null }));
+            return withTransaction(async (txCtx, transactionHooks) =>
+              complete({ ...txCtx, transactionHooks, output: null }),
+            );
           },
         },
         "images.notify": {
           attemptHandler: async ({ job, trace, complete }) => {
             processed.push(`${job.typeName}:${trace}`);
-            return complete(async ({ finish }) => finish({ output: null }));
+            return withTransaction(async (txCtx, transactionHooks) =>
+              complete({ ...txCtx, transactionHooks, output: null }),
+            );
           },
         },
       },
@@ -199,7 +209,9 @@ export const workerTestSuite = ({ it }: { it: TestAPI<TestSuiteContext> }): void
         "billing.charge": {
           attemptHandler: async ({ job, complete }) => {
             processed.push(job.typeName);
-            return complete(async ({ finish }) => finish({ output: null }));
+            return withTransaction(async (txCtx, transactionHooks) =>
+              complete({ ...txCtx, transactionHooks, output: null }),
+            );
           },
         },
       },
@@ -294,7 +306,9 @@ export const workerTestSuite = ({ it }: { it: TestAPI<TestSuiteContext> }): void
         processors: {
           test: {
             attemptHandler: async ({ job, complete }) => {
-              return complete(async ({ finish }) => finish({ output: { result: job.input.test } }));
+              return withTransaction(async (txCtx, transactionHooks) =>
+                complete({ ...txCtx, transactionHooks, output: { result: job.input.test } }),
+              );
             },
           },
         },
@@ -352,7 +366,9 @@ export const workerTestSuite = ({ it }: { it: TestAPI<TestSuiteContext> }): void
               processedJobs.push(job.input.jobNumber);
               await sleep(10);
 
-              return complete(async ({ finish }) => finish({ output: { success: true } }));
+              return withTransaction(async (txCtx, transactionHooks) =>
+                complete({ ...txCtx, transactionHooks, output: { success: true } }),
+              );
             },
           },
         },
@@ -430,9 +446,13 @@ export const workerTestSuite = ({ it }: { it: TestAPI<TestSuiteContext> }): void
         processors: {
           test: {
             attemptHandler: async ({ trace, audit, complete }) => {
+              expectTypeOf(trace).toEqualTypeOf<string>();
+              expectTypeOf(audit).toEqualTypeOf<string>();
               order.push("process");
               observed.push({ trace, audit });
-              return complete(async ({ finish }) => finish({ output: null }));
+              return withTransaction(async (txCtx, transactionHooks) =>
+                complete({ ...txCtx, transactionHooks, output: null }),
+              );
             },
           },
         },
@@ -456,149 +476,7 @@ export const workerTestSuite = ({ it }: { it: TestAPI<TestSuiteContext> }): void
     expect(observed).toEqual([{ jobTypeName: "test" }, { trace: "trace-1", audit: "audit-1" }]);
   });
 
-  it("calls wrapPrepare around the prepare callback with typed ctx", async ({
-    stateAdapter,
-    notifyAdapter,
-    withTransaction,
-    withWorkers,
-    observabilityAdapter,
-    log,
-  }) => {
-    const order: string[] = [];
-    const observedPrepareCtx: { tag: string }[] = [];
-
-    const jobTypes = defineJobTypes<{
-      test: { entry: true; input: { value: number }; output: null };
-    }>();
-
-    const client = await createClient({
-      stateAdapter,
-      notifyAdapter,
-      observabilityAdapter,
-      log,
-      jobTypes,
-    });
-
-    const prepareMiddleware: AttemptMiddleware<any, Record<string, never>, { tag: string }> = {
-      wrapPrepare: async ({ next }) => {
-        order.push("prepare-wrap-before");
-        const result = await next({ tag: "prep" });
-        order.push("prepare-wrap-after");
-        return result;
-      },
-    };
-    const worker = await createInProcessWorker({
-      client,
-      concurrency: 1,
-      processors: createProcessors({
-        client,
-        jobTypes,
-        attemptMiddleware: [prepareMiddleware],
-        processors: {
-          test: {
-            attemptHandler: async ({ prepare, complete }) => {
-              await prepare({ mode: "atomic" }, async ({ tag }) => {
-                order.push("prepare-callback");
-                observedPrepareCtx.push({ tag });
-              });
-              return complete(async ({ finish }) => finish({ output: null }));
-            },
-          },
-        },
-      }),
-    });
-
-    const chain = await withTransaction(async (txCtx, transactionHooks) =>
-      client.createChain({
-        ...txCtx,
-        transactionHooks,
-        typeName: "test",
-        input: { value: 1 },
-      }),
-    );
-
-    await withWorkers([await worker.start()], async () => {
-      await client.awaitChain(chain, completionOptions);
-    });
-
-    expect(order).toEqual(["prepare-wrap-before", "prepare-callback", "prepare-wrap-after"]);
-    expect(observedPrepareCtx).toEqual([{ tag: "prep" }]);
-  });
-
-  it("calls wrapComplete around the complete callback with typed ctx", async ({
-    stateAdapter,
-    notifyAdapter,
-    withTransaction,
-    withWorkers,
-    observabilityAdapter,
-    log,
-  }) => {
-    const order: string[] = [];
-    const observedCompleteCtx: { tag: string }[] = [];
-
-    const jobTypes = defineJobTypes<{
-      test: { entry: true; input: { value: number }; output: null };
-    }>();
-
-    const client = await createClient({
-      stateAdapter,
-      notifyAdapter,
-      observabilityAdapter,
-      log,
-      jobTypes,
-    });
-
-    const completeMiddleware: AttemptMiddleware<
-      any,
-      Record<string, never>,
-      Record<string, never>,
-      { tag: string }
-    > = {
-      wrapComplete: async ({ next }) => {
-        order.push("complete-wrap-before");
-        const result = await next({ tag: "complete" });
-        order.push("complete-wrap-after");
-        return result;
-      },
-    };
-    const worker = await createInProcessWorker({
-      client,
-      concurrency: 1,
-      processors: createProcessors({
-        client,
-        jobTypes,
-        attemptMiddleware: [completeMiddleware],
-        processors: {
-          test: {
-            attemptHandler: async ({ complete }) =>
-              complete(async ({ finish, tag }) => {
-                order.push("complete-callback");
-                observedCompleteCtx.push({ tag });
-                return finish({ output: null });
-              }),
-          },
-        },
-      }),
-    });
-
-    const chain = await withTransaction(async (txCtx, transactionHooks) =>
-      client.createChain({
-        ...txCtx,
-        transactionHooks,
-        typeName: "test",
-        input: { value: 1 },
-      }),
-    );
-
-    await withWorkers([await worker.start()], async () => {
-      await client.awaitChain(chain, completionOptions);
-    });
-
-    expect(order).toEqual(["complete-wrap-before", "complete-callback", "complete-wrap-after"]);
-    expect(observedCompleteCtx).toEqual([{ tag: "complete" }]);
-  });
-
-  it("surfaces callback failures to wrapHandler, wrapPrepare and wrapComplete", async ({
+  it("surfaces handler failures to wrapHandler", async ({
     stateAdapter,
     notifyAdapter,
     withTransaction,
@@ -620,10 +498,6 @@ export const workerTestSuite = ({ it }: { it: TestAPI<TestSuiteContext> }): void
       jobTypes,
     });
 
-    const recordFailure = (phase: string) => async (error: unknown) => {
-      order.push(`${phase}-caught:${(error as Error).message}`);
-      throw error;
-    };
     const failureMiddleware: AttemptMiddleware<any> = {
       wrapHandler: async ({ next }) => {
         try {
@@ -635,8 +509,6 @@ export const workerTestSuite = ({ it }: { it: TestAPI<TestSuiteContext> }): void
           throw error;
         }
       },
-      wrapPrepare: async ({ next }) => next({}).catch(recordFailure("prepare")),
-      wrapComplete: async ({ next }) => next({}).catch(recordFailure("complete")),
     };
     const worker = await createInProcessWorker({
       client,
@@ -648,14 +520,12 @@ export const workerTestSuite = ({ it }: { it: TestAPI<TestSuiteContext> }): void
         processors: {
           test: {
             backoffConfig: { initialDelayMs: 1, multiplier: 1, maxDelayMs: 1 },
-            attemptHandler: async ({ job, prepare, complete }) => {
-              await prepare({ mode: "staged" }, async () => {
-                if (job.attempt === 1) throw new Error("prepare-failure");
-              });
+            attemptHandler: async ({ job, complete }) => {
+              if (job.attempt === 1) throw new Error("handler-failure");
 
-              return complete(async ({ finish }) => {
-                if (job.attempt === 2) throw new Error("complete-failure");
-                return finish({ output: null });
+              return withTransaction(async (txCtx, transactionHooks) => {
+                if (job.attempt === 2) throw new Error("transaction-failure");
+                return complete({ ...txCtx, transactionHooks, output: null });
               });
             },
           },
@@ -677,10 +547,8 @@ export const workerTestSuite = ({ it }: { it: TestAPI<TestSuiteContext> }): void
     });
 
     expect(order).toEqual([
-      "prepare-caught:prepare-failure",
-      "handler-caught:prepare-failure",
-      "complete-caught:complete-failure",
-      "handler-caught:complete-failure",
+      "handler-caught:handler-failure",
+      "handler-caught:transaction-failure",
       "handler-resolved",
     ]);
   });
@@ -728,7 +596,9 @@ export const workerTestSuite = ({ it }: { it: TestAPI<TestSuiteContext> }): void
                   { once: true },
                 );
               });
-              return complete(async ({ finish }) => finish({ output: null }));
+              return withTransaction(async (txCtx, transactionHooks) =>
+                complete({ ...txCtx, transactionHooks, output: null }),
+              );
             },
           },
         },
@@ -797,7 +667,9 @@ export const workerTestSuite = ({ it }: { it: TestAPI<TestSuiteContext> }): void
               await chainCompletedExternally.promise;
 
               await expect(
-                complete(async ({ finish }) => finish({ output: { source: "worker" } })),
+                withTransaction(async (txCtx, transactionHooks) =>
+                  complete({ ...txCtx, transactionHooks, output: { source: "worker" } }),
+                ),
               ).rejects.toThrow(JobAlreadyCompletedError);
               throw new Error("attempt lost");
             },
@@ -826,7 +698,9 @@ export const workerTestSuite = ({ it }: { it: TestAPI<TestSuiteContext> }): void
         transactionHooks,
         ...chain,
         handler: async ({ job, completeJob }) => {
-          await completeJob(job, async ({ finish }) => finish({ output: { source: "external" } }));
+          await completeJob(job, async ({ complete }) =>
+            complete({ output: { source: "external" } }),
+          );
         },
       }),
     );
@@ -877,11 +751,12 @@ export const workerTestSuite = ({ it }: { it: TestAPI<TestSuiteContext> }): void
         jobTypes,
         processors: {
           slow: {
-            attemptHandler: async ({ complete }) =>
-              complete(async ({ finish }) => {
-                await sleep(200);
-                return finish({ output: null });
-              }),
+            attemptHandler: async ({ complete }) => {
+              await sleep(200);
+              return withTransaction(async (txCtx, transactionHooks) =>
+                complete({ ...txCtx, transactionHooks, output: null }),
+              );
+            },
           },
         },
       }),

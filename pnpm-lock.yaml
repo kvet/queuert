@@ -887,6 +887,31 @@ importers:
         specifier: workspace:*
         version: link:../../packages-internal/tsconfig
 
+  examples/showcase-long-running-jobs:
+    dependencies:
+      '@queuert/postgres':
+        specifier: workspace:*
+        version: link:../../packages/postgres
+      example-notify-postgres-postgres-js:
+        specifier: workspace:*
+        version: link:../notify-postgres-postgres-js
+      example-state-postgres-postgres-js:
+        specifier: workspace:*
+        version: link:../state-postgres-postgres-js
+      postgres:
+        specifier: 3.4.9
+        version: 3.4.9
+      queuert:
+        specifier: workspace:*
+        version: link:../../packages/core
+    devDependencies:
+      '@queuert/testcontainers':
+        specifier: workspace:*
+        version: link:../../packages-internal/testcontainers
+      '@queuert/tsconfig':
+        specifier: workspace:*
+        version: link:../../packages-internal/tsconfig
+
   examples/showcase-middleware:
     dependencies:
       '@queuert/postgres':
@@ -913,31 +938,6 @@ importers:
         version: link:../../packages-internal/tsconfig
 
   examples/showcase-multiworker-prioritization:
-    dependencies:
-      '@queuert/postgres':
-        specifier: workspace:*
-        version: link:../../packages/postgres
-      example-notify-postgres-postgres-js:
-        specifier: workspace:*
-        version: link:../notify-postgres-postgres-js
-      example-state-postgres-postgres-js:
-        specifier: workspace:*
-        version: link:../state-postgres-postgres-js
-      postgres:
-        specifier: 3.4.9
-        version: 3.4.9
-      queuert:
-        specifier: workspace:*
-        version: link:../../packages/core
-    devDependencies:
-      '@queuert/testcontainers':
-        specifier: workspace:*
-        version: link:../../packages-internal/testcontainers
-      '@queuert/tsconfig':
-        specifier: workspace:*
-        version: link:../../packages-internal/tsconfig
-
-  examples/showcase-processing-modes:
     dependencies:
       '@queuert/postgres':
         specifier: workspace:*
@@ -1216,18 +1216,15 @@ importers:
       '@queuert/tsconfig':
         specifier: workspace:*
         version: link:../../packages-internal/tsconfig
-      '@types/pg':
-        specifier: 8.23.1
-        version: 8.23.1
-      example-notify-postgres-pg:
+      example-notify-postgres-postgres-js:
         specifier: workspace:*
-        version: link:../notify-postgres-pg
-      example-state-postgres-pg:
+        version: link:../notify-postgres-postgres-js
+      example-state-postgres-postgres-js:
         specifier: workspace:*
-        version: link:../state-postgres-pg
-      pg:
-        specifier: 8.23.1
-        version: 8.23.1
+        version: link:../state-postgres-postgres-js
+      postgres:
+        specifier: 3.4.9
+        version: 3.4.9
       queuert:
         specifier: workspace:*
         version: link:../../packages/core

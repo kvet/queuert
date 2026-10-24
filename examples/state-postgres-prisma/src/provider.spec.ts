@@ -8,7 +8,7 @@ import { acquirePostgres } from "@queuert/testcontainers";
 import { runStateAdapterConformance } from "queuert/conformance";
 import { test } from "vitest";
 
-import { type PrismaPgContext, createPrismaPgStateProvider } from "./provider.js";
+import { createPrismaPgStateProvider } from "./provider.js";
 
 const EXAMPLE_DIR = dirname(dirname(fileURLToPath(import.meta.url)));
 
@@ -44,9 +44,6 @@ test("state-postgres-prisma provider passes state adapter conformance", async ()
       stateAdapter: adapter,
       transactionConcurrency: "concurrent",
       withNonTransactionContext: async (fn) => fn({ prisma }),
-      poisonTransaction: async (txCtx: PrismaPgContext<PrismaLike>) => {
-        await txCtx.prisma.$queryRawUnsafe("SELECT 1 FROM nonexistent_table_queuert_poison_xyz");
-      },
       reset: async () => adapter.truncate(),
       dispose: async () => {
         await prisma.$disconnect();

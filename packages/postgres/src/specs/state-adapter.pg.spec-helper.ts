@@ -26,8 +26,8 @@ export const extendWithStatePg = <
     flakyDbStateAdapter: StateAdapter<{ $test: true }, string> | undefined;
     poisonTransaction: ((txCtx: { $test: true }) => Promise<void>) | undefined;
     withNonTransactionContext: <T>(fn: (txCtx: { $test: true }) => Promise<T>) => Promise<T>;
-    poisonExecute:
-      | ((cb: (adapter: StateAdapter<{ $test: true }, string>) => Promise<void>) => Promise<void>)
+    withSavepoint:
+      | (<T>(txCtx: { $test: true }, fn: (txCtx: { $test: true }) => Promise<T>) => Promise<T>)
       | undefined;
   }
 > => {
@@ -44,8 +44,8 @@ export const extendWithStatePg = <
     flakyDbStateAdapter: PgPoolStateAdapter | undefined;
     poisonTransaction: ((txCtx: { $test: true }) => Promise<void>) | undefined;
     withNonTransactionContext: <T>(fn: (txCtx: { $test: true }) => Promise<T>) => Promise<T>;
-    poisonExecute:
-      | ((cb: (adapter: StateAdapter<{ $test: true }, string>) => Promise<void>) => Promise<void>)
+    withSavepoint:
+      | (<T>(txCtx: { $test: true }, fn: (txCtx: { $test: true }) => Promise<T>) => Promise<T>)
       | undefined;
   }>({
     statePool: [
@@ -162,6 +162,24 @@ export const extendWithStatePg = <
       },
       { scope: "test" },
     ],
+    withSavepoint: [
+      // oxlint-disable-next-line no-empty-pattern
+      async ({}, use) => {
+        await use(async (txCtx, fn) => {
+          const { poolClient } = txCtx as unknown as PgPoolContext;
+          await poolClient.query("SAVEPOINT queuert_test");
+          try {
+            const result = await fn(txCtx);
+            await poolClient.query("RELEASE SAVEPOINT queuert_test");
+            return result;
+          } catch (error) {
+            await poolClient.query("ROLLBACK TO SAVEPOINT queuert_test");
+            throw error;
+          }
+        });
+      },
+      { scope: "test" },
+    ],
     poisonTransaction: [
       // oxlint-disable-next-line no-empty-pattern
       async ({}, use) => {
@@ -233,49 +251,6 @@ export const extendWithStatePg = <
             stateProvider: flakyDbStateProvider,
           }),
         );
-      },
-      { scope: "test" },
-    ],
-    poisonExecute: [
-      async ({ stateProvider }, use) => {
-        let poisoned = false;
-
-        const poisonableProvider: typeof stateProvider = {
-          ...stateProvider,
-          executeSql: async ({ txCtx, sql, params, paramTypes, columnTypes, readOnly }) => {
-            if (poisoned && !txCtx) {
-              return stateProvider.executeSql({
-                txCtx,
-                sql: "SELECT 1 FROM nonexistent_table_queuert_poison_xyz",
-                params: [],
-                paramTypes: {},
-                columnTypes: {},
-                readOnly: true,
-              });
-            }
-            return stateProvider.executeSql({
-              txCtx,
-              sql,
-              params,
-              paramTypes,
-              columnTypes,
-              readOnly,
-            });
-          },
-        };
-
-        const poisonedAdapter = await createPgStateAdapter({
-          stateProvider: poisonableProvider,
-        });
-
-        await use(async (cb: (adapter: StateAdapter<{ $test: true }, string>) => Promise<void>) => {
-          poisoned = true;
-          try {
-            await cb(poisonedAdapter as unknown as StateAdapter<{ $test: true }, string>);
-          } finally {
-            poisoned = false;
-          }
-        });
       },
       { scope: "test" },
     ],

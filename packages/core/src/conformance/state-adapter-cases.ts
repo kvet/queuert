@@ -24,7 +24,6 @@ import { rescheduleJobsGroup } from "./state-adapter-cases/reschedule-jobs.js";
 import { startJobAttemptGroup } from "./state-adapter-cases/start-job-attempt.js";
 import { type StateConformanceFixture } from "./state-adapter-cases/types.js";
 import { unblockJobsGroup } from "./state-adapter-cases/unblock-jobs.js";
-import { withSavepointGroup } from "./state-adapter-cases/with-savepoint.js";
 import { withTransactionGroup } from "./state-adapter-cases/with-transaction.js";
 
 export { type StateConformanceFixture } from "./state-adapter-cases/types.js";
@@ -32,7 +31,6 @@ export { type StateConformanceFixture } from "./state-adapter-cases/types.js";
 export const stateAdapterConformanceGroups: ConformanceGroup<StateConformanceFixture>[] = [
   withTransactionGroup,
   isTransactionGroup,
-  withSavepointGroup,
   getChainsGroup,
   getJobsGroup,
   createJobsGroup,

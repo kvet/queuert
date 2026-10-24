@@ -2,6 +2,19 @@ import { type TransactionHooks } from "../transaction-hooks.js";
 
 type Callback = () => void | Promise<void>;
 
+const runCallbacks = async (callbacks: Callback[]): Promise<void> => {
+  let firstError: unknown;
+  for (const callback of callbacks) {
+    try {
+      await callback();
+    } catch (error) {
+      firstError ??= error;
+    }
+  }
+  // oxlint-disable-next-line typescript/only-throw-error -- re-throwing caught error
+  if (firstError) throw firstError;
+};
+
 const observabilityCommitKey = Symbol("queuert.observability.commit");
 
 export const bufferObservabilityEvent = (
@@ -11,18 +24,7 @@ export const bufferObservabilityEvent = (
   transactionHooks
     .getOrInsert<Callback[]>(observabilityCommitKey, () => ({
       state: [],
-      flush: async (cbs) => {
-        let firstError: unknown;
-        for (const cb of cbs) {
-          try {
-            await cb();
-          } catch (error) {
-            firstError ??= error;
-          }
-        }
-        // oxlint-disable-next-line typescript/only-throw-error -- re-throwing caught error
-        if (firstError) throw firstError;
-      },
+      flush: runCallbacks,
       checkpoint: (state) => {
         const mark = state.length;
         return () => {
@@ -43,18 +45,7 @@ export const bufferObservabilityRollback = (
     .getOrInsert<Callback[]>(observabilityRollbackKey, () => ({
       state: [],
       flush: () => {},
-      discard: async (cbs) => {
-        let firstError: unknown;
-        for (const cb of cbs) {
-          try {
-            await cb();
-          } catch (error) {
-            firstError ??= error;
-          }
-        }
-        // oxlint-disable-next-line typescript/only-throw-error -- re-throwing caught error
-        if (firstError) throw firstError;
-      },
+      discard: runCallbacks,
       checkpoint: (state) => {
         const mark = state.length;
         return () => {

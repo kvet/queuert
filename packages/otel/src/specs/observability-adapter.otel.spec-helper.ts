@@ -216,7 +216,7 @@ export const extendWithObservabilityOtel = <T extends Record<string, unknown>>(
 
           // Note: We only verify counts here, not attribute details.
           // The test expectations use ObservabilityAdapter method args which don't map 1:1
-          // to OTEL attributes (e.g., typeName -> chainTypeName, rescheduledAfterMs not stored).
+          // to OTEL attributes (e.g., typeName -> chainTypeName)).
           // Attribute verification should be done via unit tests on the adapter itself.
         });
       },

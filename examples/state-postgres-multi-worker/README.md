@@ -1,6 +1,6 @@
 # PostgreSQL State Adapter (Multi-Worker)
 
-Multiple workers sharing the same PostgreSQL database for distributed job processing — demonstrates attempt-based coordination and fair job distribution across workers.
+Three worker processes (forked from the main process) share the same PostgreSQL database and compete for jobs — the main process creates orders and their chains in one transaction, and each order is processed by whichever worker acquires its job first.
 
 ## Running
 

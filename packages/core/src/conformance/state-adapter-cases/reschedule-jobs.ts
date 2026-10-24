@@ -691,5 +691,39 @@ export const rescheduleJobsGroup: ConformanceGroup<StateConformanceFixture> = {
         expect(after).toEqual(before);
       },
     },
+    {
+      name: "reschedules without a txCtx, committing on its own",
+      run: async ({ stateAdapter }, expect) => {
+        const [createdChain] = await stateAdapter.withTransaction(async (txCtx) =>
+          stateAdapter.createJobs({
+            txCtx,
+            jobs: [
+              { id: stateAdapter.config.generateId(), typeName: "resched-autocommit", input: null },
+            ],
+          }),
+        );
+        const acquired = await stateAdapter.startJobAttempt({
+          workerId: "worker-1",
+          timeoutMsByTypeName: { "resched-autocommit": 30_000 },
+        });
+
+        const [rescheduled] = await stateAdapter.rescheduleJobs({
+          jobs: [
+            {
+              jobId: createdChain.head.id,
+              schedule: { afterMs: 60_000 },
+              error: "boom",
+              fence: { attempt: acquired!.attempt, workerId: "worker-1" },
+            },
+          ],
+        });
+        expect(rescheduled!.status).toBe("pending");
+
+        const [stored] = await stateAdapter.getJobs({ jobIds: [createdChain.head.id] });
+        expect(stored!.status).toBe("pending");
+        expect(stored!.lastAttemptError).toBe("boom");
+        expect(stored!.attemptBy).toBeNull();
+      },
+    },
   ],
 };

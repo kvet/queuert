@@ -52,7 +52,11 @@ it("should work end-to-end with NATS notify adapter", async ({ natsConnectionOpt
       processors: {
         test: {
           attemptHandler: async ({ complete }) => {
-            return complete(async ({ finish }) => finish({ output: { processed: true } }));
+            return withTransactionHooks(async (transactionHooks) =>
+              stateAdapter.withTransaction(async (txCtx) =>
+                complete({ ...txCtx, transactionHooks, output: { processed: true } }),
+              ),
+            );
           },
         },
       },
@@ -110,8 +114,10 @@ it("should work end-to-end without JetStream KV", async ({ natsConnectionOptions
       processors: {
         test: {
           attemptHandler: async ({ job, complete }) => {
-            return complete(async ({ finish }) =>
-              finish({ output: { doubled: job.input.value * 2 } }),
+            return withTransactionHooks(async (transactionHooks) =>
+              stateAdapter.withTransaction(async (txCtx) =>
+                complete({ ...txCtx, transactionHooks, output: { doubled: job.input.value * 2 } }),
+              ),
             );
           },
         },

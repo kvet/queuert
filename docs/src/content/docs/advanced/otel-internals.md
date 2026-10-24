@@ -74,7 +74,7 @@ The OTEL adapter serializes `SpanContext` objects to this format for storage and
 
 3. **Continuation** (`continueWith`): Reads origin job's `traceContext`, creates new PRODUCER job span as child. Inherits `chainTraceContext` from origin (chain context stays the same). New job gets its own `traceContext`.
 
-4. **Worker processing**: Reads job's `traceContext` from database, creates CONSUMER attempt span as child. All processing spans (prepare, complete) are children of the attempt span.
+4. **Worker processing**: Reads job's `traceContext` from database, creates CONSUMER attempt span as child. The attempt span is the only span for the attempt; it covers the whole handler.
 
 5. **Blocker resolution** (`unblockJobs`): Reads PRODUCER span context from `job_blocker` table, creates CONSUMER `complete chain` span as child of the PRODUCER — linking across processes and time. A blocker chain that is already completed when the dependent chain is created gets its CONSUMER span immediately, during creation.
 
@@ -101,20 +101,19 @@ Events representing write claims inside transactions:
 
 - **Creation**: `chainCreated`, `jobCreated`, `jobBlocked`, PRODUCER span ends
 - **Completion**: `jobCompleted`, `jobDuration`, `completeJobSpan`, `chainCompleted`, `chainDuration`, `completeBlockerSpan`, `jobUnblocked`
-- **Worker complete**: `jobAttemptCompleted`, continuation PRODUCER span ends
-- **Error handling**: `jobAttemptFailed`
+- **Worker `complete`**: the completion events above, `jobRescheduled` for `complete({ reschedule })`, continuation PRODUCER span ends — buffered into the `transactionHooks` the handler passes to `complete`, so they are released only after the handler's own transaction commits
 
 ### Not Buffered
 
 Events that need immediate context or occur outside transactions:
 
 - **Span starts**: Must happen before the database write that stores the trace context
-- **Events outside transactions**: `jobAttemptStarted`, `jobAttemptDuration`, `jobAttemptExtended`, attempt span ends
+- **Worker-side events**: `jobAttemptStarted`, `jobAttemptDuration`, `jobAttemptExtended`, `jobAttemptCompleted`, `jobAttemptFailed`, `jobRescheduled` after a failed attempt, `jobAttemptReclaimed`, attempt span ends. The worker's own writes (acquire, heartbeat, reclaim, the fallback reschedule after a failed attempt) are single autocommit statements, so their events are emitted directly once the statement returns
 - **Read-only observations**: Events that observe state without claiming writes
 
-### Self-Cleaning via Savepoints
+### `complete` events
 
-Each transactional phase runs inside a savepoint, so buffered observability events roll back automatically when it fails. The `TransactionHooks` system captures a checkpoint of the buffer position before the phase opens. If the phase throws, the savepoint restores the buffer to its checkpoint — partial events from a failed operation are discarded without affecting events from earlier successful operations in the same transaction.
+`complete` buffers its events on the caller's `transactionHooks`, so they are released only when those hooks flush. It succeeds at most once per `transactionHooks`, so each flush releases at most one successful call's events. A `TransactionHooks.withSavepoint` rollback drops the events of a call made inside it.
 
 ### TransactionHooks
 
@@ -126,5 +125,5 @@ The buffering mechanism is shared with notification events (`notifyJobScheduled`
 - [OTEL Tracing](../otel-tracing/) — Span hierarchy and attributes
 - [Adapter Architecture](../adapters/) — Transactional buffering design
 - [Chain Model](../chain-model/) — Chain identity and continuation model
-- [Job Processing](../job-processing/) — Prepare/complete pattern
+- [Job Processing](../job-processing/) — Attempt lifecycle and `complete`
 - [In-Process Worker](../in-process-worker/) — Worker lifecycle and attempt handling

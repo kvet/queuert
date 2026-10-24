@@ -1,19 +1,15 @@
 import { describe, expectTypeOf, it } from "vitest";
 
 import {
+  type CompletedBlockerChains,
   type ContinuedJob,
   type OutputJob,
   type RescheduledJob,
 } from "../job-types/job-types.resolvers.js";
 import { type InProcessStateAdapter } from "../state-adapter/state-adapter.in-process.js";
-import {
-  type AttemptComplete,
-  type AttemptCompleteCallback,
-  type AttemptCompleteOptions,
-  type AttemptFinish,
-  type AttemptHandler,
-  type AttemptPrepare,
-} from "./job-process.types.js";
+import { type StateAdapter } from "../state-adapter/state-adapter.js";
+import { type TransactionHooks } from "../transaction-hooks.js";
+import { type AttemptComplete, type AttemptHandler } from "./attempt-handler.types.js";
 
 type LinearDefs = {
   entry: {
@@ -68,67 +64,59 @@ type TerminalDefs = {
   };
 };
 
-declare const prepare: AttemptPrepare<InProcessStateAdapter>;
-declare const complete: AttemptComplete<InProcessStateAdapter, LinearDefs, "entry", "entry">;
+type BlockerDefs = {
+  blocker: {
+    entry: true;
+    input: { id: string };
+    output: { fetched: number };
+  };
+  main: {
+    entry: true;
+    input: null;
+    output: { total: number };
+    blockers: [{ typeName: "blocker" }];
+  };
+};
 
-declare const linearCommit: AttemptFinish<InProcessStateAdapter, LinearDefs, "entry", "entry">;
-declare const branchingCommit: AttemptFinish<InProcessStateAdapter, BranchingDefs, "root", "root">;
-declare const sharedCommit: AttemptFinish<InProcessStateAdapter, SharedInputDefs, "root", "root">;
-declare const terminalCommit: AttemptFinish<
-  InProcessStateAdapter,
+// A transaction context with a required field, as real database adapters have.
+type ClientContext = { client: { query: (sql: string) => Promise<unknown> } };
+type ClientStateAdapter = StateAdapter<ClientContext, string>;
+
+declare const txCtx: ClientContext;
+declare const transactionHooks: TransactionHooks;
+declare const tx: ClientContext & { transactionHooks: TransactionHooks };
+type Tx = typeof tx;
+
+declare const linearCommit: AttemptComplete<ClientStateAdapter, LinearDefs, "entry", "entry">;
+declare const branchingCommit: AttemptComplete<ClientStateAdapter, BranchingDefs, "root", "root">;
+declare const sharedCommit: AttemptComplete<ClientStateAdapter, SharedInputDefs, "root", "root">;
+declare const terminalCommit: AttemptComplete<
+  ClientStateAdapter,
   TerminalDefs,
   "terminal",
   "terminal"
 >;
-
-const prepareBare = async () => prepare({ mode: "staged" });
-const prepareWithCallback = async () => prepare({ mode: "atomic" }, () => 42);
-const prepareWithAsyncCallback = async () => prepare({ mode: "staged" }, async () => "value");
-
-describe("AttemptPrepare", () => {
-  it("returns void when called without a callback", () => {
-    expectTypeOf<Awaited<ReturnType<typeof prepareBare>>>().toBeVoid();
-  });
-
-  it("returns the awaited callback result when called with a callback", () => {
-    expectTypeOf<Awaited<ReturnType<typeof prepareWithCallback>>>().toEqualTypeOf<number>();
-  });
-
-  it("unwraps a promise returned by the callback", () => {
-    expectTypeOf<Awaited<ReturnType<typeof prepareWithAsyncCallback>>>().toEqualTypeOf<string>();
-  });
-
-  it("exposes the transaction context to the callback", () => {
-    type CallbackOptions = Parameters<Parameters<typeof prepare<void>>[1]>[0];
-    expectTypeOf<CallbackOptions>().toHaveProperty("tx");
-  });
-
-  it("rejects an unknown mode", () => {
-    expectTypeOf(async () =>
-      // @ts-expect-error mode is "atomic" | "staged"
-      prepare({ mode: "eager" }),
-    ).toBeFunction();
-  });
-});
 
 type LinearOutcome = Parameters<typeof linearCommit>[0];
 type BranchingOutcome = Parameters<typeof branchingCommit>[0];
 type SharedOutcome = Parameters<typeof sharedCommit>[0];
 type TerminalOutcome = Parameters<typeof terminalCommit>[0];
 
-const commitOutput = async () => terminalCommit({ output: { y: "done" } });
+const commitOutput = async () => terminalCommit({ ...tx, output: { y: "done" } });
 const commitContinue = async () =>
-  linearCommit({ continueWith: { typeName: "step", input: { stepValue: true } } });
+  linearCommit({ ...tx, continueWith: { typeName: "step", input: { stepValue: true } } });
 
 declare const branchBInput: { b: string };
 
-describe("AttemptFinish", () => {
+describe("AttemptComplete", () => {
   describe("outcome parameter", () => {
     it("is a single parameter offering both discriminants", () => {
-      expectTypeOf<{ output: { result: string } }>().toExtend<LinearOutcome>();
-      expectTypeOf<{
-        continueWith: { typeName: "step"; input: { stepValue: boolean } };
-      }>().toExtend<LinearOutcome>();
+      expectTypeOf<{ output: { result: string } } & Tx>().toExtend<LinearOutcome>();
+      expectTypeOf<
+        {
+          continueWith: { typeName: "step"; input: { stepValue: boolean } };
+        } & Tx
+      >().toExtend<LinearOutcome>();
     });
 
     it("keeps one entry per continuation so typeName narrows input", () => {
@@ -145,6 +133,28 @@ describe("AttemptFinish", () => {
       expectTypeOf<
         Extract<BranchingOutcome, { continueWith: unknown }>["continueWith"]["typeName"]
       >().toEqualTypeOf<"branchA" | "branchB">();
+    });
+  });
+
+  describe("transaction requirement", () => {
+    it("accepts the transaction context and transactionHooks spread alongside the outcome", () => {
+      expectTypeOf(async () =>
+        terminalCommit({ ...txCtx, transactionHooks, output: { y: "done" } }),
+      ).toBeFunction();
+    });
+
+    it("rejects a call without the transaction context", () => {
+      expectTypeOf(async () =>
+        // @ts-expect-error complete must run inside the caller's transaction
+        terminalCommit({ transactionHooks, output: { y: "done" } }),
+      ).toBeFunction();
+    });
+
+    it("rejects a call without transactionHooks", () => {
+      expectTypeOf(async () =>
+        // @ts-expect-error complete buffers its events in the caller's transactionHooks
+        terminalCommit({ ...txCtx, output: { y: "done" } }),
+      ).toBeFunction();
     });
   });
 
@@ -169,28 +179,35 @@ describe("AttemptFinish", () => {
 
   describe("computed continuations", () => {
     it("accepts a computed continueWith value spanning several continuations", () => {
-      expectTypeOf<{
-        continueWith:
-          | { typeName: "branchA"; input: { a: number } }
-          | { typeName: "branchB"; input: { b: string } };
-      }>().toExtend<BranchingOutcome>();
+      expectTypeOf<
+        {
+          continueWith:
+            | { typeName: "branchA"; input: { a: number } }
+            | { typeName: "branchB"; input: { b: string } };
+        } & Tx
+      >().toExtend<BranchingOutcome>();
     });
 
     it("accepts a union typeName when the continuations agree on input", () => {
-      expectTypeOf<{
-        continueWith: { typeName: "left" | "right"; input: { shared: number } };
-      }>().toExtend<SharedOutcome>();
+      expectTypeOf<
+        {
+          continueWith: { typeName: "left" | "right"; input: { shared: number } };
+        } & Tx
+      >().toExtend<SharedOutcome>();
     });
 
     it("rejects a union typeName when the continuations disagree on input", () => {
-      expectTypeOf<{
-        continueWith: { typeName: "branchA" | "branchB"; input: { a: number } };
-      }>().not.toExtend<BranchingOutcome>();
+      expectTypeOf<
+        {
+          continueWith: { typeName: "branchA" | "branchB"; input: { a: number } };
+        } & Tx
+      >().not.toExtend<BranchingOutcome>();
     });
 
     it("rejects a typeName that stays a union at the call site", () => {
       expectTypeOf(async (flag: boolean) =>
         branchingCommit({
+          ...tx,
           // @ts-expect-error typeName must resolve to a single continuation
           continueWith: { typeName: flag ? "branchA" : "branchB", input: { a: 1 } },
         }),
@@ -219,14 +236,14 @@ describe("AttemptFinish", () => {
     it("rejects a continueWith outcome on a terminal job type", () => {
       expectTypeOf(async () =>
         // @ts-expect-error "terminal" declares no continuation
-        terminalCommit({ continueWith: { typeName: "terminal", input: { x: 1 } } }),
+        terminalCommit({ ...tx, continueWith: { typeName: "terminal", input: { x: 1 } } }),
       ).toBeFunction();
     });
 
     it("rejects an output outcome on a job type with no output", () => {
       expectTypeOf(async () =>
         // @ts-expect-error "root" declares no output
-        branchingCommit({ output: { done: true } }),
+        branchingCommit({ ...tx, output: { done: true } }),
       ).toBeFunction();
     });
   });
@@ -255,9 +272,9 @@ describe("AttemptFinish", () => {
 
     it("narrows the continued job per branch", () => {
       const commitBranchA = async () =>
-        branchingCommit({ continueWith: { typeName: "branchA", input: { a: 1 } } });
+        branchingCommit({ ...tx, continueWith: { typeName: "branchA", input: { a: 1 } } });
       const commitBranchB = async () =>
-        branchingCommit({ continueWith: { typeName: "branchB", input: { b: "x" } } });
+        branchingCommit({ ...tx, continueWith: { typeName: "branchB", input: { b: "x" } } });
       expectTypeOf<
         Awaited<ReturnType<typeof commitBranchA>>["continuedTo"]["input"]
       >().toEqualTypeOf<{ a: number }>();
@@ -271,97 +288,39 @@ describe("AttemptFinish", () => {
     it("rejects an unknown continuation type name", () => {
       expectTypeOf(async () =>
         // @ts-expect-error "nope" is not a continuation of "entry"
-        linearCommit({ continueWith: { typeName: "nope", input: { stepValue: true } } }),
+        linearCommit({ ...tx, continueWith: { typeName: "nope", input: { stepValue: true } } }),
       ).toBeFunction();
     });
 
     it("rejects a continuation input that does not match the target type", () => {
       expectTypeOf(async () =>
         // @ts-expect-error "step" requires { stepValue: boolean }
-        linearCommit({ continueWith: { typeName: "step", input: { a: 1 } } }),
+        linearCommit({ ...tx, continueWith: { typeName: "step", input: { a: 1 } } }),
       ).toBeFunction();
     });
 
     it("rejects a typeName paired with another continuation's input", () => {
       expectTypeOf(async () =>
         // @ts-expect-error "branchA" requires { a: number }
-        branchingCommit({ continueWith: { typeName: "branchA", input: branchBInput } }),
+        branchingCommit({ ...tx, continueWith: { typeName: "branchA", input: branchBInput } }),
       ).toBeFunction();
     });
 
     it("rejects an output that does not match the job type", () => {
       expectTypeOf(async () =>
         // @ts-expect-error "terminal" outputs { y: string }
-        terminalCommit({ output: { y: 123 } }),
+        terminalCommit({ ...tx, output: { y: 123 } }),
       ).toBeFunction();
     });
   });
 });
 
-const completeContinuing = async () =>
-  complete(async ({ finish }) =>
-    finish({ continueWith: { typeName: "step", input: { stepValue: true } } }),
-  );
-
-describe("AttemptComplete", () => {
-  it("passes the finish result through as its own return type", () => {
-    expectTypeOf<Awaited<ReturnType<typeof completeContinuing>>>().toEqualTypeOf<
-      Awaited<ReturnType<typeof commitContinue>>
-    >();
-  });
-
-  it("leaves property access on the committed job unaffected", () => {
-    type Result = Awaited<ReturnType<typeof completeContinuing>>;
-    expectTypeOf<Result["status"]>().toEqualTypeOf<"completed">();
-    expectTypeOf<Result["continuedTo"]["typeName"]>().toEqualTypeOf<"step">();
-  });
-
-  it("rejects a callback that returns something other than a job", () => {
-    expectTypeOf(async () =>
-      // @ts-expect-error the callback must return what finish handed back
-      complete(async () => ({ status: "running" })),
-    ).toBeFunction();
-  });
-
-  it("rejects a hand-built object that is not a whole completed job", () => {
-    expectTypeOf(async () =>
-      // @ts-expect-error a bare status literal is not a job
-      complete(async () => ({ status: "completed" as const, continuedTo: undefined })),
-    ).toBeFunction();
-  });
-
-  it("exposes finish and the transaction context to the callback", () => {
-    type Options = AttemptCompleteOptions<InProcessStateAdapter, LinearDefs, "entry", "entry">;
-    expectTypeOf<Options>().toHaveProperty("finish");
-    expectTypeOf<Options>().toHaveProperty("transactionHooks");
-    expectTypeOf<Options>().toHaveProperty("tx");
-  });
-
-  it("types the callback as receiving those options", () => {
-    type Callback = AttemptCompleteCallback<
-      InProcessStateAdapter,
-      LinearDefs,
-      "entry",
-      "entry",
-      never
-    >;
-    expectTypeOf<Parameters<Callback>[0]>().toEqualTypeOf<
-      AttemptCompleteOptions<InProcessStateAdapter, LinearDefs, "entry", "entry">
-    >();
-  });
-});
-
 describe("AttemptHandler", () => {
-  type Handler = AttemptHandler<
-    InProcessStateAdapter,
-    LinearDefs,
-    "entry",
-    "entry",
-    Record<string, unknown>,
-    Record<string, unknown>,
-    Record<string, unknown>
-  >;
+  type Handler = AttemptHandler<InProcessStateAdapter, LinearDefs, "entry", "entry", unknown>;
   type Options = Parameters<Handler>[0];
+
+  type BlockedHandler = AttemptHandler<InProcessStateAdapter, BlockerDefs, "main", "main", unknown>;
+  type BlockedOptions = Parameters<BlockedHandler>[0];
 
   it("narrows job.status to running", () => {
     expectTypeOf<Options["job"]["status"]>().toEqualTypeOf<"running">();
@@ -371,21 +330,31 @@ describe("AttemptHandler", () => {
     expectTypeOf<Options["job"]["input"]>().toEqualTypeOf<{ value: number }>();
   });
 
-  it("exposes prepare and complete", () => {
-    expectTypeOf<Options["prepare"]>().toEqualTypeOf<AttemptPrepare<InProcessStateAdapter>>();
+  it("exposes complete", () => {
     expectTypeOf<Options["complete"]>().toEqualTypeOf<
       AttemptComplete<InProcessStateAdapter, LinearDefs, "entry", "entry">
     >();
   });
 
-  it("accepts what complete returned", () => {
-    expectTypeOf<Awaited<ReturnType<typeof completeContinuing>>>().toExtend<
-      Awaited<ReturnType<Handler>>
-    >();
+  it("exposes only signal, job and complete", () => {
+    expectTypeOf<keyof Options>().toEqualTypeOf<"signal" | "job" | "complete">();
+    expectTypeOf<keyof BlockedOptions>().toEqualTypeOf<"signal" | "job" | "complete">();
   });
 
-  it("does not accept a running job", () => {
-    expectTypeOf<Extract<Options["job"], { status: "running" }>>().not.toExtend<
+  it("resolves job.blockers to the completed blocker chains in declaration order", () => {
+    type Blockers = BlockedOptions["job"]["blockers"];
+    expectTypeOf<Blockers>().toEqualTypeOf<CompletedBlockerChains<string, BlockerDefs, "main">>();
+    expectTypeOf<Blockers[0]["typeName"]>().toEqualTypeOf<"blocker">();
+    expectTypeOf<Blockers[0]["status"]>().toEqualTypeOf<"completed">();
+    expectTypeOf<Blockers[0]["output"]>().toEqualTypeOf<{ fetched: number }>();
+    expectTypeOf<Options["job"]["blockers"]>().toEqualTypeOf<[]>();
+  });
+
+  it("accepts a handler that returns what complete returned", () => {
+    const handler: Handler = async ({ complete }) =>
+      complete({ ...tx, continueWith: { typeName: "step", input: { stepValue: true } } });
+    expectTypeOf(handler).toBeFunction();
+    expectTypeOf<Awaited<ReturnType<typeof commitContinue>>>().toExtend<
       Awaited<ReturnType<Handler>>
     >();
   });
@@ -395,24 +364,58 @@ describe("AttemptHandler", () => {
       Awaited<ReturnType<Handler>>
     >();
   });
-});
 
-describe("AttemptFinish variance", () => {
-  it("is invariant in the definitions and job type name", () => {
-    expectTypeOf<AttemptFinish<InProcessStateAdapter, LinearDefs, "entry", "entry">>().not.toExtend<
-      AttemptFinish<InProcessStateAdapter, LinearDefs, "step", "entry">
-    >();
-    expectTypeOf<AttemptFinish<InProcessStateAdapter, LinearDefs, "entry", "entry">>().not.toExtend<
-      AttemptFinish<InProcessStateAdapter, BranchingDefs, "root", "entry">
+  it("rejects a handler that does not return the `complete` result", () => {
+    // @ts-expect-error the handler must return what complete returned
+    const missing: Handler = async ({ complete }) => {
+      await complete({ ...tx, output: { result: "x" } });
+    };
+    expectTypeOf(missing).toBeFunction();
+  });
+
+  it("does not accept a running job", () => {
+    expectTypeOf<Extract<Options["job"], { status: "running" }>>().not.toExtend<
+      Awaited<ReturnType<Handler>>
     >();
   });
 
+  it("rejects a hand-built object that is not a whole completed job", () => {
+    // @ts-expect-error a bare status literal is not a job
+    const handBuilt: Handler = async () => ({
+      status: "completed" as const,
+      continuedTo: undefined,
+    });
+    expectTypeOf(handBuilt).toBeFunction();
+  });
+
+  it("merges the middleware ctx into the handler options", () => {
+    type CtxHandler = AttemptHandler<
+      InProcessStateAdapter,
+      LinearDefs,
+      "entry",
+      "entry",
+      { traceId: string }
+    >;
+    expectTypeOf<Parameters<CtxHandler>[0]["traceId"]>().toEqualTypeOf<string>();
+  });
+});
+
+describe("AttemptComplete variance", () => {
+  it("is invariant in the definitions and job type name", () => {
+    expectTypeOf<
+      AttemptComplete<InProcessStateAdapter, LinearDefs, "entry", "entry">
+    >().not.toExtend<AttemptComplete<InProcessStateAdapter, LinearDefs, "step", "entry">>();
+    expectTypeOf<
+      AttemptComplete<InProcessStateAdapter, LinearDefs, "entry", "entry">
+    >().not.toExtend<AttemptComplete<InProcessStateAdapter, BranchingDefs, "root", "entry">>();
+  });
+
   it("is covariant in the chain type name", () => {
-    expectTypeOf<AttemptFinish<InProcessStateAdapter, LinearDefs, "entry", "entry">>().toExtend<
-      AttemptFinish<InProcessStateAdapter, LinearDefs, "entry", string>
+    expectTypeOf<AttemptComplete<InProcessStateAdapter, LinearDefs, "entry", "entry">>().toExtend<
+      AttemptComplete<InProcessStateAdapter, LinearDefs, "entry", string>
     >();
-    expectTypeOf<AttemptFinish<InProcessStateAdapter, LinearDefs, "entry", string>>().not.toExtend<
-      AttemptFinish<InProcessStateAdapter, LinearDefs, "entry", "entry">
-    >();
+    expectTypeOf<
+      AttemptComplete<InProcessStateAdapter, LinearDefs, "entry", string>
+    >().not.toExtend<AttemptComplete<InProcessStateAdapter, LinearDefs, "entry", "entry">>();
   });
 });

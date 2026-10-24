@@ -41,8 +41,10 @@ export type JobSpanResult =
 
 /** Handle for managing a job span's lifecycle and trace context. */
 export type JobSpanHandle = {
-  getChainTraceContext: () => string;
-  getTraceContext: () => string;
+  /** Serialized trace context of the job's chain. */
+  chainTraceContext: string;
+  /** Serialized trace context of the job span. */
+  traceContext: string;
   end: (result: JobSpanResult) => void;
 };
 
@@ -68,24 +70,10 @@ export type JobAttemptSpanResult =
   | {
       status: "failed";
       error: unknown;
-      rescheduledAt?: Date;
-      rescheduledAfterMs?: number;
     };
 
-/**
- * Handle for ending a span. Pass `{ error }` when the spanned operation threw —
- * the box distinguishes a thrown `undefined` from a successful completion.
- */
-export type SpanHandle = {
-  end: (failure?: { error: unknown }) => void;
-};
-
-/** Handle for managing a job attempt span, including prepare/complete sub-spans. */
+/** Handle for managing a job attempt span. */
 export type JobAttemptSpanHandle = {
-  getChainTraceContext: () => string;
-  getTraceContext: () => string;
-  startPrepare: () => SpanHandle;
-  startComplete: () => SpanHandle;
   end: (result: JobAttemptSpanResult) => void;
 };
 
@@ -115,7 +103,8 @@ export type BlockerSpanInputData = {
 
 /** Handle for managing a blocker dependency span. */
 export type BlockerSpanHandle = {
-  getTraceContext: () => string;
+  /** Serialized trace context of the blocker span. */
+  traceContext: string;
   end: (data: { blockerChainTraceContext: string | null }) => void;
 };
 

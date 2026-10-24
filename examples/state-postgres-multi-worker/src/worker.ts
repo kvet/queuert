@@ -1,8 +1,14 @@
 import { createPgNotifyAdapter, createPgStateAdapter } from "@queuert/postgres";
-import { createPgPoolNotifyProvider } from "example-notify-postgres-pg/provider";
-import { createPgPoolStateProvider } from "example-state-postgres-pg/provider";
-import { Pool } from "pg";
-import { createClient, createInProcessWorker, createProcessors, defineJobTypes } from "queuert";
+import { createPostgresJsNotifyProvider } from "example-notify-postgres-postgres-js/provider";
+import { createPostgresJsStateProvider } from "example-state-postgres-postgres-js/provider";
+import postgres from "postgres";
+import {
+  createClient,
+  createInProcessWorker,
+  createProcessors,
+  defineJobTypes,
+  withTransactionHooks,
+} from "queuert";
 
 const jobTypes = defineJobTypes<{
   process_order: {
@@ -15,12 +21,12 @@ const jobTypes = defineJobTypes<{
 const connectionString = process.env.CONNECTION_STRING!;
 const workerName = process.env.WORKER_NAME!;
 
-const pool = new Pool({ connectionString, max: 5 });
+const sql = postgres(connectionString, { max: 5 });
 
-const stateProvider = createPgPoolStateProvider({ pool });
+const stateProvider = createPostgresJsStateProvider({ sql });
 const stateAdapter = await createPgStateAdapter({ stateProvider });
 
-const notifyProvider = createPgPoolNotifyProvider({ pool });
+const notifyProvider = createPostgresJsNotifyProvider({ sql });
 const notifyAdapter = await createPgNotifyAdapter({ notifyProvider });
 
 const client = await createClient({ stateAdapter, notifyAdapter, jobTypes });
@@ -34,17 +40,11 @@ const worker = await createInProcessWorker({
     jobTypes,
     processors: {
       process_order: {
-        attemptHandler: async ({ job, prepare, complete }) => {
-          // Load the order inside the job transaction
-          const order = await prepare({ mode: "staged" }, async ({ poolClient }) => {
-            const { rows } = await poolClient.query<{ items: string[]; total: number }>(
-              "SELECT items, total FROM orders WHERE id = $1",
-              [job.input.orderId],
-            );
-            const row = rows[0];
-            if (!row) throw new Error(`Order ${job.input.orderId} not found`);
-            return row;
-          });
+        attemptHandler: async ({ job, complete }) => {
+          const [order] = await sql<{ items: string[]; total: number }[]>`
+            SELECT items, total FROM orders WHERE id = ${job.input.orderId}
+          `;
+          if (!order) throw new Error(`Order ${job.input.orderId} not found`);
 
           process.send!({
             type: "processing",
@@ -55,13 +55,17 @@ const worker = await createInProcessWorker({
 
           await new Promise((resolve) => setTimeout(resolve, 100 + Math.random() * 200));
 
-          return complete(async ({ finish }) =>
-            finish({
-              output: {
-                processedAt: new Date().toISOString(),
-                workerName,
-              },
-            }),
+          return withTransactionHooks(async (transactionHooks) =>
+            sql.begin(async (txSql) =>
+              complete({
+                txSql,
+                transactionHooks,
+                output: {
+                  processedAt: new Date().toISOString(),
+                  workerName,
+                },
+              }),
+            ),
           );
         },
       },
@@ -78,7 +82,7 @@ process.on("message", (msg) => {
       await stop();
       await notifyAdapter.close();
       await stateAdapter.close();
-      await pool.end();
+      await sql.end();
       process.send!({ type: "stopped" });
       process.exit(0);
     })();

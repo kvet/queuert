@@ -29,7 +29,6 @@ export const wrapStateAdapterWithLogging = <
     config: stateAdapter.config,
     withTransaction: stateAdapter.withTransaction,
     isTransaction: stateAdapter.isTransaction,
-    withSavepoint: stateAdapter.withSavepoint,
 
     // Operation methods - wrap with error logging
     getChains: wrap("getChains", stateAdapter.getChains),

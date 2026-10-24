@@ -32,16 +32,6 @@ const isValidTraceparent = (value: unknown): value is string =>
 const toException = (error: unknown): Error | string =>
   error instanceof Error ? error : String(error);
 
-const createSubSpanHandle = (span: Span) => ({
-  end: (failure?: { error: unknown }) => {
-    if (failure) {
-      span.recordException(toException(failure.error));
-      span.setStatus({ code: SpanStatusCode.ERROR });
-    }
-    span.end();
-  },
-});
-
 /**
  * Creates an OpenTelemetry-based ObservabilityAdapter.
  *
@@ -320,8 +310,8 @@ export const createOtelObservabilityAdapter = async ({
       const jobTraceContext = serializeSpanContext(jobSpan.spanContext());
 
       return {
-        getChainTraceContext: () => chainTraceContext,
-        getTraceContext: () => jobTraceContext,
+        chainTraceContext,
+        traceContext: jobTraceContext,
         end(result) {
           if (result.status === "created") {
             // Set chain ID on both chain span (if new chain) and job span
@@ -391,34 +381,10 @@ export const createOtelObservabilityAdapter = async ({
       const attemptCtx = trace.setSpan(context.active(), attemptSpan);
 
       return {
-        getChainTraceContext: () => chainTraceContext,
-        getTraceContext: () => traceContext,
-
-        startPrepare() {
-          return createSubSpanHandle(
-            tracer.startSpan("prepare", { kind: SpanKind.INTERNAL }, attemptCtx),
-          );
-        },
-
-        startComplete() {
-          return createSubSpanHandle(
-            tracer.startSpan("complete", { kind: SpanKind.INTERNAL }, attemptCtx),
-          );
-        },
-
         end(result) {
           if (result.status === "failed") {
             attemptSpan.recordException(toException(result.error));
             attemptSpan.setStatus({ code: SpanStatusCode.ERROR });
-            if (result.rescheduledAt) {
-              attemptSpan.setAttribute(
-                "queuert.rescheduled_at",
-                result.rescheduledAt.toISOString(),
-              );
-            }
-            if (result.rescheduledAfterMs !== undefined) {
-              attemptSpan.setAttribute("queuert.rescheduled_after_ms", result.rescheduledAfterMs);
-            }
           } else {
             attemptSpan.setStatus({ code: SpanStatusCode.OK });
 
@@ -475,7 +441,7 @@ export const createOtelObservabilityAdapter = async ({
       const producerTraceparent = serializeSpanContext(producerSpan.spanContext());
 
       return {
-        getTraceContext: () => producerTraceparent,
+        traceContext: producerTraceparent,
         end: (endData: { blockerChainTraceContext: string | null }) => {
           if (isValidTraceparent(endData.blockerChainTraceContext)) {
             producerSpan.addLink({

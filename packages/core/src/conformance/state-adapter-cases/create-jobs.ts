@@ -855,48 +855,6 @@ export const createJobsGroup: ConformanceGroup<StateConformanceFixture> = {
       },
     },
     {
-      name: "persists nothing from a batch whose caller-supplied id collides, even if the caller commits",
-      run: async ({ stateAdapter }, expect) => {
-        const nextId = stateAdapter.config.generateId;
-        const takenId = nextId();
-        await stateAdapter.withTransaction(async (txCtx) =>
-          stateAdapter.createJobs({
-            txCtx,
-            jobs: [{ typeName: "atomic-batch-existing", id: takenId, input: null }],
-          }),
-        );
-
-        const batches = [
-          { freshId: nextId(), collidingId: takenId },
-          { freshId: nextId(), collidingId: undefined },
-        ];
-        for (const { freshId, collidingId } of batches) {
-          let createRejected = false;
-          await stateAdapter
-            .withTransaction(async (txCtx) => {
-              createRejected = await stateAdapter
-                .createJobs({
-                  txCtx,
-                  jobs: [
-                    { typeName: "atomic-batch", id: freshId, input: null },
-                    { typeName: "atomic-batch", id: collidingId ?? freshId, input: null },
-                  ],
-                })
-                .then(
-                  () => false,
-                  () => true,
-                );
-            })
-            .catch(() => {
-              // A driver may refuse to commit a transaction in which a statement failed.
-            });
-
-          expect(createRejected).toBe(true);
-          expect(await stateAdapter.getJobs({ jobIds: [freshId] })).toEqual([undefined]);
-        }
-      },
-    },
-    {
       name: "intra-batch duplicate caller-supplied id errors",
       run: async ({ stateAdapter }, expect) => {
         const userId = stateAdapter.config.generateId();

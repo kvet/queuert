@@ -68,7 +68,7 @@ export {
   type TransactionHooksHandle,
   type TransactionHooksSavepoint,
 } from "./transaction-hooks.js";
-export { type AttemptConfig } from "./worker/attempt-heartbeat.js";
+export { type AttemptConfig } from "./attempt/attempt-config.js";
 export { type AttemptMiddleware } from "./attempt-middleware/attempt-middleware.js";
 export { createProcessors } from "./job-type-processors/create-job-type-processors.js";
 export { omitProcessors, pickProcessors } from "./job-type-processors/pick-job-type-processors.js";

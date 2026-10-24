@@ -48,7 +48,11 @@ const cleanupProcessorRegistry = createProcessors({
 
             do {
               if (signal.aborted) {
-                return complete(async ({ finish }) => finish({ reschedule: { afterMs: 0 } }));
+                return withTransactionHooks(async (transactionHooks) =>
+                  stateProvider.withTransaction(async (txCtx) =>
+                    complete({ ...txCtx, transactionHooks, reschedule: { afterMs: 0 } }),
+                  ),
+                );
               }
 
               const page = await client.listChains({
@@ -85,23 +89,25 @@ const cleanupProcessorRegistry = createProcessors({
           }
         } while (!signal.aborted && roundDeletedCount > 0);
 
-        return complete(async ({ finish, transactionHooks, ...txCtx }) => {
-          const completedJob = await finish({ output: null });
+        return withTransactionHooks(async (transactionHooks) =>
+          stateProvider.withTransaction(async (txCtx) => {
+            const completedJob = await complete({ ...txCtx, transactionHooks, output: null });
 
-          await client.createChain({
-            ...txCtx,
-            transactionHooks,
-            typeName: "queuert.cleanup",
-            input: null,
-            schedule: { afterMs: CLEANUP_INTERVAL_MS },
-            deduplication: {
-              key: "queuert.cleanup",
-              scope: "running",
-            },
-          });
+            await client.createChain({
+              ...txCtx,
+              transactionHooks,
+              typeName: "queuert.cleanup",
+              input: null,
+              schedule: { afterMs: CLEANUP_INTERVAL_MS },
+              deduplication: {
+                key: "queuert.cleanup",
+                scope: "running",
+              },
+            });
 
-          return completedJob;
-        });
+            return completedJob;
+          }),
+        );
       },
     },
   },
@@ -118,7 +124,7 @@ Key patterns used:
 - **Batched transactions** — each batch of deletions runs in its own short transaction, so the handler never holds a single long-lived transaction. Deleting chains is idempotent, so a batch that commits before the attempt is lost is safe to repeat
 - **Graceful shutdown** — checks `signal.aborted` before each batch; when the worker is stopping, reschedules the job immediately so a fresh worker can resume cleanup
 - **`deduplication`** with `scope: "running"` — ensures only one cleanup chain is active at a time
-- **Complete before scheduling** — `finish({ output: null })` applies the completion inside the complete transaction, so the next run is created against an already-completed chain and does not deduplicate against the one finishing
+- **Complete before scheduling** — `complete({ output: null })` applies the completion inside the same transaction, so the next run is created against an already-completed chain and does not deduplicate against the one finishing
 - **`schedule`** — defers the next run by `CLEANUP_INTERVAL_MS`
 
 <!-- TODO: batches are not checked against attempt ownership and may commit after the attempt is lost; revisit the "Batched transactions" bullet once the ownership check for user transactions lands (see TODO.md). -->

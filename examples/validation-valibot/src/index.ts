@@ -97,13 +97,17 @@ const worker = await createInProcessWorker({
           console.log(`Fetching data from ${job.input.url}`);
           const data = { items: [1, 2, 3], source: job.input.url };
 
-          return complete(async ({ finish }) =>
-            finish({
-              continueWith: {
-                typeName: "process-data",
-                input: { data },
-              },
-            }),
+          return withTransactionHooks(async (transactionHooks) =>
+            stateAdapter.withTransaction(async (ctx) =>
+              complete({
+                ...ctx,
+                transactionHooks,
+                continueWith: {
+                  typeName: "process-data",
+                  input: { data },
+                },
+              }),
+            ),
           );
         },
       },
@@ -112,13 +116,17 @@ const worker = await createInProcessWorker({
           console.log("Processing data:", job.input.data);
           const data = job.input.data as { items: number[] };
 
-          return complete(async ({ finish }) =>
-            finish({
-              output: {
-                processed: true,
-                itemCount: data.items?.length ?? 0,
-              },
-            }),
+          return withTransactionHooks(async (transactionHooks) =>
+            stateAdapter.withTransaction(async (ctx) =>
+              complete({
+                ...ctx,
+                transactionHooks,
+                output: {
+                  processed: true,
+                  itemCount: data.items?.length ?? 0,
+                },
+              }),
+            ),
           );
         },
       },
@@ -127,18 +135,27 @@ const worker = await createInProcessWorker({
           console.log(`Processing batch ${job.input.batchId}`);
           console.log("Blockers completed:", job.blockers.length);
 
-          return complete(async ({ finish }) => finish({ output: { success: true } }));
+          return withTransactionHooks(async (transactionHooks) =>
+            stateAdapter.withTransaction(async (ctx) =>
+              complete({ ...ctx, transactionHooks, output: { success: true } }),
+            ),
+          );
         },
       },
       auth: {
         attemptHandler: async ({ job, complete }) => {
           console.log(`Authenticating with token: ${job.input.token.substring(0, 8)}...`);
-          return complete(async ({ finish }) =>
-            finish({
-              output: {
-                userId: `user-${job.input.token.substring(0, 4)}`,
-              },
-            }),
+
+          return withTransactionHooks(async (transactionHooks) =>
+            stateAdapter.withTransaction(async (ctx) =>
+              complete({
+                ...ctx,
+                transactionHooks,
+                output: {
+                  userId: `user-${job.input.token.substring(0, 4)}`,
+                },
+              }),
+            ),
           );
         },
       },
