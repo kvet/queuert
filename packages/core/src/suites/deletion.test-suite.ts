@@ -617,7 +617,7 @@ export const deletionTestSuite = ({ it }: { it: TestAPI<TestSuiteContext> }): vo
     expect(deletedChains).toHaveLength(3);
   });
 
-  it("throws when called without transaction context", async ({
+  it("throws when called without transaction context or transactionHooks", async ({
     stateAdapter,
     notifyAdapter,
     withTransaction,
@@ -653,6 +653,12 @@ export const deletionTestSuite = ({ it }: { it: TestAPI<TestSuiteContext> }): vo
       // @ts-expect-error missing txCtx
       client.deleteChains({ ids: [chain.id] }),
     ).rejects.toThrow("requires a transaction context");
+    await withTransaction(async (txCtx) => {
+      await expect(
+        // @ts-expect-error missing transactionHooks
+        client.deleteChains({ ...txCtx, ids: [chain.id] }),
+      ).rejects.toThrow("deleteChains requires transactionHooks");
+    });
   });
 
   it("deleteChains throws when the context is not in a transaction", async ({
@@ -812,7 +818,7 @@ export const deletionTestSuite = ({ it }: { it: TestAPI<TestSuiteContext> }): vo
     ).rejects.toThrow(BlockerReferenceError);
   });
 
-  it("deleteChain throws when called without transaction context", async ({
+  it("deleteChain throws when called without transaction context or transactionHooks", async ({
     stateAdapter,
     notifyAdapter,
     withTransaction,
@@ -839,6 +845,12 @@ export const deletionTestSuite = ({ it }: { it: TestAPI<TestSuiteContext> }): vo
       // @ts-expect-error missing txCtx
       client.deleteChain({ id: chain.id }),
     ).rejects.toThrow("requires a transaction context");
+    await withTransaction(async (txCtx) => {
+      await expect(
+        // @ts-expect-error missing transactionHooks
+        client.deleteChain({ ...txCtx, id: chain.id }),
+      ).rejects.toThrow("deleteChains requires transactionHooks");
+    });
   });
 
   it("deleteChain throws when the context is not in a transaction", async ({

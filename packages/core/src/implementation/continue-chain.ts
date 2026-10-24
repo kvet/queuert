@@ -1,4 +1,4 @@
-import { type ScheduleOptions } from "../entities/schedule.js";
+import { type AnyNewJob } from "../job-types/job-types.resolvers.js";
 import { type Helpers } from "../setup-helpers.js";
 import {
   type BaseTxContext,
@@ -10,14 +10,6 @@ import { type FinishResult } from "./attempt-outcome.js";
 import { continueStateJob } from "./create-state-jobs.js";
 import { bufferJobCompletedEvents } from "./job-completed-events.js";
 
-export type AnyContinueWith = {
-  typeName: string;
-  id?: string;
-  input: unknown;
-  schedule?: ScheduleOptions;
-  blockers?: { id: string; typeName?: string }[];
-};
-
 export const continueChain = async (
   helpers: Helpers,
   {
@@ -28,7 +20,7 @@ export const continueChain = async (
     fence,
   }: {
     fromJob: StateJob;
-    continueWith: AnyContinueWith;
+    continueWith: AnyNewJob;
     txCtx: BaseTxContext;
     transactionHooks: TransactionHooks;
     fence: StateAttemptFence | null;

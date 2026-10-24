@@ -20,6 +20,7 @@ import {
   type CompletedChainFields,
   type RunningChainFields,
 } from "../entities/chain.types.js";
+import { type DeduplicationOptions } from "../entities/deduplication.js";
 import {
   type CompletedJobFields,
   type ContinuedJobFields,
@@ -29,6 +30,7 @@ import {
   type RunningJobFields,
   type TerminalJobFields,
 } from "../entities/job.js";
+import { type ScheduleOptions } from "../entities/schedule.js";
 import {
   type BaseJobTypeDefinitions,
   type JobTypeReference,
@@ -430,6 +432,38 @@ export type BlockerChainsInput<
         ? MapBlockersToChainsInput<TJobId, TJobTypeDefinitions, TBlockers>
         : []
     : [];
+
+export type NewJob<
+  TJobId,
+  TJobTypeDefinitions extends BaseJobTypeDefinitions,
+  TJobTypeName extends string,
+> = {
+  typeName: TJobTypeName;
+  id?: TJobId;
+  input: JobTypeProperty<TJobTypeDefinitions, TJobTypeName, "input">;
+  schedule?: ScheduleOptions;
+} & (JobTypeHasBlockers<TJobTypeDefinitions, TJobTypeName> extends true
+  ? { blockers: BlockerChainsInput<TJobId, TJobTypeDefinitions, TJobTypeName> }
+  : { blockers?: never });
+
+export type NewChain<
+  TJobId,
+  TJobTypeDefinitions extends BaseJobTypeDefinitions,
+  TChainTypeName extends JobTypeEntryNames<TJobTypeDefinitions> =
+    JobTypeEntryNames<TJobTypeDefinitions>,
+> = {
+  [TName in TChainTypeName]: NewJob<TJobId, TJobTypeDefinitions, TName> & {
+    deduplication?: DeduplicationOptions;
+  };
+}[TChainTypeName];
+
+export type AnyNewJob = {
+  typeName: string;
+  id?: string;
+  input: unknown;
+  schedule?: ScheduleOptions;
+  blockers?: { id: string; typeName?: string }[];
+};
 
 type BlockerRefNames<
   TJobTypeDefinitions extends BaseJobTypeDefinitions,

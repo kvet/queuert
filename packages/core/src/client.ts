@@ -5,7 +5,6 @@ import {
   type CompletedChainFields,
   mapStateChainToChain,
 } from "./entities/chain.js";
-import { type DeduplicationOptions } from "./entities/deduplication.js";
 import {
   type AnyJob,
   type CompletedJob,
@@ -28,23 +27,23 @@ import {
 } from "./errors.js";
 import { createFinishOnce, mapFinishResult } from "./implementation/attempt-outcome.js";
 import { completeChain } from "./implementation/complete-chain.js";
-import { type AnyContinueWith, continueChain } from "./implementation/continue-chain.js";
+import { continueChain } from "./implementation/continue-chain.js";
 import { createChains } from "./implementation/create-chains.js";
 import { type BaseJobTypeDefinitions } from "./job-types/job-type.js";
 import { type JobTypes } from "./job-types/job-types.js";
 import {
+  type AnyNewJob,
   type BlockerChains,
-  type BlockerChainsInput,
   type JobTypeBlockedNames,
   type JobTypeChainNames,
   type JobTypeEntryNames,
-  type JobTypeHasBlockers,
   type JobTypeNames,
   type JobTypeProperty,
   type ResolvedChain,
   type ResolvedRunningChain,
   type ResolvedChainJobs,
   type ResolvedJob,
+  type NewChain,
 } from "./job-types/job-types.resolvers.js";
 import {
   type JobTypesDefinitions,
@@ -68,7 +67,8 @@ import {
   type StateChain,
   type StateJob,
 } from "./state-adapter/state-adapter.js";
-import { type TransactionHooks } from "./transaction-hooks.js";
+import { normalizeTxCtx, requireTxCtx } from "./state-adapter/tx-context.js";
+import { type TransactionHooks, requireTransactionHooks } from "./transaction-hooks.js";
 import { type AttemptFinishResult, type AttemptOutcome } from "./worker/job-process.types.js";
 
 /**
@@ -77,25 +77,7 @@ import { type AttemptFinishResult, type AttemptOutcome } from "./worker/job-proc
  */
 export const helpersSymbol: unique symbol = Symbol("queuert.helpers");
 
-type AnyWorkerlessOutcome = { output: unknown } | { continueWith: AnyContinueWith };
-
-const normalizeTxCtx = <T extends Record<string, unknown>>(rest: T): T | undefined =>
-  Object.keys(rest).length > 0 ? rest : undefined;
-
-const requireTxCtx = <T extends Record<string, unknown>>(
-  stateAdapter: StateAdapter<any, any>,
-  rest: T,
-): T => {
-  if (Object.keys(rest).length === 0) {
-    throw new Error("This client method requires a transaction context from withTransaction");
-  }
-  if (!stateAdapter.isTransaction(rest)) {
-    throw new Error(
-      "This client method requires a transaction context inside an open transaction; the provided context is not in a transaction",
-    );
-  }
-  return rest;
-};
+type AnyWorkerlessOutcome = { output: unknown } | { continueWith: AnyNewJob };
 
 type ChainCompleteOptions<
   TStateAdapter extends StateAdapter<any, any>,
@@ -173,24 +155,6 @@ type CompleteChainResultFromHandler<
   ? CompleteChainResult<TJobId, TJobTypeDefinitions, TChainTypeName, TReturn>
   : never;
 
-type CreateChainEntry<
-  TJobId,
-  TJobTypeDefinitions extends BaseJobTypeDefinitions,
-  TTypeName extends JobTypeEntryNames<TJobTypeDefinitions>,
-> = {
-  typeName: TTypeName;
-  id?: TJobId;
-  input: JobTypeProperty<TJobTypeDefinitions, TTypeName, "input">;
-  deduplication?: DeduplicationOptions;
-  schedule?: ScheduleOptions;
-} & (JobTypeHasBlockers<TJobTypeDefinitions, TTypeName> extends true
-  ? { blockers: BlockerChainsInput<TJobId, TJobTypeDefinitions, TTypeName> }
-  : { blockers?: never });
-
-type AnyCreateChainEntry<TJobId, TJobTypeDefinitions extends BaseJobTypeDefinitions> = {
-  [TN in JobTypeEntryNames<TJobTypeDefinitions>]: CreateChainEntry<TJobId, TJobTypeDefinitions, TN>;
-}[JobTypeEntryNames<TJobTypeDefinitions>];
-
 type CreateChainsResult<
   TJobId,
   TJobTypeDefinitions extends BaseJobTypeDefinitions,
@@ -264,7 +228,7 @@ export type Client<
    * @throws The state adapter's own error (e.g. a unique-constraint violation) if a caller-supplied `id` is already taken.
    */
   createChain: <TChainTypeName extends JobTypeEntryNames<TJobTypeDefinitions>>(
-    options: CreateChainEntry<TJobId, TJobTypeDefinitions, TChainTypeName> & {
+    options: NewChain<TJobId, TJobTypeDefinitions, TChainTypeName> & {
       transactionHooks: TransactionHooks;
     } & GetStateAdapterTxContext<TStateAdapter>,
   ) => Promise<
@@ -286,7 +250,7 @@ export type Client<
    * @throws TypeError if `deduplication.scope` is missing or not `"running"` / `"any"`.
    * @throws The state adapter's own error (e.g. a unique-constraint violation) if a caller-supplied `id` is already taken.
    */
-  createChains: <const TChains extends readonly AnyCreateChainEntry<TJobId, TJobTypeDefinitions>[]>(
+  createChains: <const TChains extends readonly NewChain<TJobId, TJobTypeDefinitions>[]>(
     options: {
       items: TChains;
       transactionHooks: TransactionHooks;
@@ -624,6 +588,20 @@ export type Client<
   ) => Promise<Page<TBlockedJob>>;
 };
 
+const assertChainTypeName = (
+  stateChain: { typeName: string } | undefined,
+  { chainId, typeName }: { chainId: string; typeName: string | undefined },
+): void => {
+  if (!typeName || stateChain === undefined || stateChain.typeName === typeName) return;
+  throw new ChainTypeMismatchError(
+    `Expected chain ${chainId} to have type "${typeName}" but found "${stateChain.typeName}"`,
+    {
+      expectedTypeName: typeName,
+      actualTypeName: stateChain.typeName,
+    },
+  );
+};
+
 /**
  * Create a new Queuert client.
  *
@@ -677,19 +655,9 @@ export const createClient = async <
     [helpersSymbol]: helpers,
 
     createChain: async <TChainTypeName extends JobTypeEntryNames<TJobTypeDefinitions>>(
-      options: {
-        typeName: TChainTypeName;
-        id?: TJobId;
-        input: JobTypeProperty<TJobTypeDefinitions, TChainTypeName, "input">;
+      options: NewChain<TJobId, TJobTypeDefinitions, TChainTypeName> & {
         transactionHooks: TransactionHooks;
-        deduplication?: DeduplicationOptions;
-        schedule?: ScheduleOptions;
-      } & (JobTypeHasBlockers<TJobTypeDefinitions, TChainTypeName> extends true
-        ? {
-            blockers: BlockerChainsInput<TJobId, TJobTypeDefinitions, TChainTypeName>;
-          }
-        : { blockers?: never }) &
-        GetStateAdapterTxContext<TStateAdapter>,
+      } & GetStateAdapterTxContext<TStateAdapter>,
     ): Promise<
       ResolvedChain<TJobId, TJobTypeDefinitions, TChainTypeName> & {
         deduplicated: boolean;
@@ -697,7 +665,8 @@ export const createClient = async <
     > => {
       const { input, id, typeName, deduplication, schedule, blockers, transactionHooks, ...rest } =
         options;
-      const txCtx = requireTxCtx(helpers.stateAdapter, rest);
+      const txCtx = requireTxCtx(helpers.stateAdapter, rest, "createChain");
+      requireTransactionHooks(transactionHooks, "createChain");
       const [result] = await createChains(helpers, {
         chains: [{ typeName, id, input, deduplication, schedule, blockers }],
         txCtx,
@@ -708,16 +677,15 @@ export const createClient = async <
       };
     },
 
-    createChains: async <
-      const TChains extends readonly AnyCreateChainEntry<TJobId, TJobTypeDefinitions>[],
-    >(
+    createChains: async <const TChains extends readonly NewChain<TJobId, TJobTypeDefinitions>[]>(
       options: {
         items: TChains;
         transactionHooks: TransactionHooks;
       } & GetStateAdapterTxContext<TStateAdapter>,
     ): Promise<CreateChainsResult<TJobId, TJobTypeDefinitions, TChains>> => {
       const { items, transactionHooks, ...rest } = options;
-      const txCtx = requireTxCtx(helpers.stateAdapter, rest);
+      const txCtx = requireTxCtx(helpers.stateAdapter, rest, "createChains");
+      requireTransactionHooks(transactionHooks, "createChains");
       return (await createChains(helpers, {
         chains: items,
         txCtx,
@@ -754,7 +722,8 @@ export const createClient = async <
       } & GetStateAdapterTxContext<TStateAdapter>,
     ): Promise<ResolvedChain<TJobId, TJobTypeDefinitions, TEntryName>[]> => {
       const { ids, transactionHooks, ...rest } = options;
-      const txCtx = requireTxCtx(helpers.stateAdapter, rest);
+      const txCtx = requireTxCtx(helpers.stateAdapter, rest, "deleteChains");
+      requireTransactionHooks(transactionHooks, "deleteChains");
 
       const verdicts = await helpers.stateAdapter.deleteChains({
         txCtx,
@@ -845,7 +814,8 @@ export const createClient = async <
       } & GetStateAdapterTxContext<TStateAdapter>,
     ): Promise<ResolvedJob<TJobId, TJobTypeDefinitions, TJobTypeName>[]> => {
       const { ids, schedule, transactionHooks, ...rest } = options;
-      const txCtx = requireTxCtx(helpers.stateAdapter, rest);
+      const txCtx = requireTxCtx(helpers.stateAdapter, rest, "rescheduleJobs");
+      requireTransactionHooks(transactionHooks, "rescheduleJobs");
 
       if (ids.length === 0) return [];
       const existingJobs = await helpers.stateAdapter.getJobs({
@@ -928,7 +898,8 @@ export const createClient = async <
       } & GetStateAdapterTxContext<TStateAdapter>,
     ): Promise<TResult> => {
       const { id, typeName, handler, transactionHooks, ...rest } = options;
-      const txCtx = requireTxCtx(helpers.stateAdapter, rest);
+      const txCtx = requireTxCtx(helpers.stateAdapter, rest, "completeChain");
+      requireTransactionHooks(transactionHooks, "completeChain");
       const stateChains = await helpers.stateAdapter.getChains({
         txCtx,
         chainIds: [id],
@@ -942,15 +913,7 @@ export const createClient = async <
         });
       }
 
-      if (stateChain.typeName !== typeName) {
-        throw new ChainTypeMismatchError(
-          `Expected chain ${String(id)} to have type "${typeName}" but found "${stateChain.typeName}"`,
-          {
-            expectedTypeName: typeName,
-            actualTypeName: stateChain.typeName,
-          },
-        );
-      }
+      assertChainTypeName(stateChain, { chainId: String(id), typeName });
 
       const completeJob = async (
         job: AnyJob,
@@ -1077,8 +1040,6 @@ export const createClient = async <
       const { id, typeName } = chain;
       const { timeoutMs, pollIntervalMs = 15_000, signal } = options;
 
-      let typeValidated = !typeName;
-
       const checkChain = async () => {
         const [stateChain] = await helpers.stateAdapter.getChains({
           chainIds: [id],
@@ -1089,18 +1050,7 @@ export const createClient = async <
           });
         }
 
-        if (!typeValidated) {
-          if (stateChain.typeName !== typeName) {
-            throw new ChainTypeMismatchError(
-              `Expected chain ${String(id)} to have type "${typeName}" but found "${stateChain.typeName}"`,
-              {
-                expectedTypeName: typeName!,
-                actualTypeName: stateChain.typeName,
-              },
-            );
-          }
-          typeValidated = true;
-        }
+        assertChainTypeName(stateChain, { chainId: String(id), typeName });
 
         const mapped = mapStateChainToChain(stateChain);
         return mapped.status === "completed"
@@ -1202,19 +1152,9 @@ export const createClient = async <
         chainIds: ids,
       });
 
-      if (typeName) {
-        const mismatch = stateChains.find((s) => s && s.typeName !== typeName);
-        if (mismatch) {
-          const idx = stateChains.indexOf(mismatch);
-          throw new ChainTypeMismatchError(
-            `Expected chain ${String(ids[idx])} to have type "${typeName}" but found "${mismatch.typeName}"`,
-            {
-              expectedTypeName: typeName,
-              actualTypeName: mismatch.typeName,
-            },
-          );
-        }
-      }
+      stateChains.forEach((stateChain, index) => {
+        assertChainTypeName(stateChain, { chainId: String(ids[index]), typeName });
+      });
 
       return stateChains.map((stateChain) => {
         if (!stateChain) return undefined;
@@ -1456,15 +1396,7 @@ export const createClient = async <
           txCtx,
           chainIds: [chainId],
         });
-        if (stateChain && stateChain.typeName !== chainTypeName) {
-          throw new ChainTypeMismatchError(
-            `Expected chain ${String(chainId)} to have type "${chainTypeName}" but found "${stateChain.typeName}"`,
-            {
-              expectedTypeName: chainTypeName,
-              actualTypeName: stateChain.typeName,
-            },
-          );
-        }
+        assertChainTypeName(stateChain, { chainId: String(chainId), typeName: chainTypeName });
       }
 
       const result = await helpers.stateAdapter.listChainJobs({
@@ -1547,15 +1479,7 @@ export const createClient = async <
           txCtx,
           chainIds: [chainId],
         });
-        if (stateChain && stateChain.typeName !== typeName) {
-          throw new ChainTypeMismatchError(
-            `Expected chain ${String(chainId)} to have type "${typeName}" but found "${stateChain.typeName}"`,
-            {
-              expectedTypeName: typeName,
-              actualTypeName: stateChain.typeName,
-            },
-          );
-        }
+        assertChainTypeName(stateChain, { chainId: String(chainId), typeName });
       }
 
       const stateJobPage = await helpers.stateAdapter.listBlockedJobs({

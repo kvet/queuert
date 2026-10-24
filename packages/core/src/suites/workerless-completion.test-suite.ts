@@ -642,7 +642,7 @@ export const workerlessCompletionTestSuite = ({ it }: { it: TestAPI<TestSuiteCon
     );
   });
 
-  it("completeChain throws when called without transaction context", async ({
+  it("completeChain throws when called without transaction context or transactionHooks", async ({
     stateAdapter,
     notifyAdapter,
     withTransaction,
@@ -683,6 +683,18 @@ export const workerlessCompletionTestSuite = ({ it }: { it: TestAPI<TestSuiteCon
           completeJob(job, async ({ finish }) => finish({ output: { result: 84 } })),
       }),
     ).rejects.toThrow("requires a transaction context");
+    await withTransaction(async (txCtx) => {
+      await expect(
+        // @ts-expect-error missing transactionHooks
+        client.completeChain({
+          ...txCtx,
+          typeName: "test",
+          id: chain.id,
+          handler: async ({ job, completeJob }) =>
+            completeJob(job, async ({ finish }) => finish({ output: { result: 84 } })),
+        }),
+      ).rejects.toThrow("completeChain requires transactionHooks");
+    });
   });
 
   it("completeChain throws when the context is not in a transaction", async ({

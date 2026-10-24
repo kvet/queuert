@@ -194,3 +194,12 @@ export const withTransactionHooks = async <T>(
     throw error;
   }
 };
+
+export const requireTransactionHooks = (
+  transactionHooks: TransactionHooks | undefined,
+  caller: string,
+): void => {
+  if (transactionHooks === undefined) {
+    throw new Error(`${caller} requires transactionHooks`);
+  }
+};

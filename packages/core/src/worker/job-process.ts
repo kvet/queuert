@@ -20,11 +20,11 @@ import {
 } from "../helpers/transaction-context.js";
 import { createFinishOnce, mapFinishResult } from "../implementation/attempt-outcome.js";
 import { completeChain } from "../implementation/complete-chain.js";
-import { type AnyContinueWith, continueChain } from "../implementation/continue-chain.js";
+import { continueChain } from "../implementation/continue-chain.js";
 import { handleJobHandlerError } from "../implementation/handle-job-handler-error.js";
 import { refetchJobLocked as refetchJobLockedImpl } from "../implementation/refetch-job-locked.js";
 import { type BaseJobTypeDefinitions } from "../job-types/job-type.js";
-import { type ResolvedRunningJob } from "../job-types/job-types.resolvers.js";
+import { type AnyNewJob, type ResolvedRunningJob } from "../job-types/job-types.resolvers.js";
 import { bufferNotifyJobScheduled } from "../notify-adapter/notify-hooks.js";
 import { bufferObservabilityEvent } from "../observability-adapter/observability-hooks.js";
 import { type Helpers } from "../setup-helpers.js";
@@ -55,7 +55,7 @@ export type {
 
 type AnyWorkerOutcome =
   | { output: unknown }
-  | { continueWith: AnyContinueWith }
+  | { continueWith: AnyNewJob }
   | { reschedule: ScheduleOptions };
 
 export const runJobProcess = async ({

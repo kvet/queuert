@@ -287,7 +287,7 @@ export const rescheduleJobTestSuite = ({ it }: { it: TestAPI<TestSuiteContext> }
     ).rejects.toThrow(JobNotReschedulableError);
   });
 
-  it("throws when called without transaction context", async ({
+  it("throws when called without transaction context or transactionHooks", async ({
     stateAdapter,
     notifyAdapter,
     withTransaction,
@@ -324,6 +324,12 @@ export const rescheduleJobTestSuite = ({ it }: { it: TestAPI<TestSuiteContext> }
       // @ts-expect-error missing txCtx
       client.rescheduleJob({ id: chain.id }),
     ).rejects.toThrow("requires a transaction context");
+    await withTransaction(async (txCtx) => {
+      await expect(
+        // @ts-expect-error missing transactionHooks
+        client.rescheduleJob({ ...txCtx, id: chain.id }),
+      ).rejects.toThrow("rescheduleJobs requires transactionHooks");
+    });
   });
 
   it("rescheduleJob throws when the context is not in a transaction", async ({
@@ -692,7 +698,7 @@ export const rescheduleJobTestSuite = ({ it }: { it: TestAPI<TestSuiteContext> }
     expect(pendingJob!.scheduledAt.getTime()).toBeGreaterThan(Date.now() + 30_000);
   });
 
-  it("rescheduleJobs throws when called without transaction context", async ({
+  it("rescheduleJobs throws when called without transaction context or transactionHooks", async ({
     stateAdapter,
     notifyAdapter,
     withTransaction,
@@ -725,6 +731,12 @@ export const rescheduleJobTestSuite = ({ it }: { it: TestAPI<TestSuiteContext> }
       // @ts-expect-error missing txCtx
       client.rescheduleJobs({ ids: [chain.id] }),
     ).rejects.toThrow("requires a transaction context");
+    await withTransaction(async (txCtx) => {
+      await expect(
+        // @ts-expect-error missing transactionHooks
+        client.rescheduleJobs({ ...txCtx, ids: [chain.id] }),
+      ).rejects.toThrow("rescheduleJobs requires transactionHooks");
+    });
   });
 
   it("rescheduleJobs throws when the context is not in a transaction", async ({

@@ -2,11 +2,10 @@ import { type AnyJob } from "../entities/job.js";
 import { type ScheduleOptions } from "../entities/schedule.js";
 import { type BaseJobTypeDefinitions } from "../job-types/job-type.js";
 import {
-  type BlockerChainsInput,
   type ContinuedJob,
   type JobTypeContinuation,
-  type JobTypeHasBlockers,
   type JobTypeProperty,
+  type NewJob,
   type OutputJob,
   type RescheduledJob,
   type ResolvedRunningJob,
@@ -28,20 +27,11 @@ type AttemptContinueWithOutcome<
     ? never
     : {
         continueWith: {
-          [TContinuationTypeName in JobTypeContinuation<TJobTypeDefinitions, TJobTypeName>]: {
-            typeName: TContinuationTypeName;
-            id?: GetStateAdapterJobId<TStateAdapter>;
-            input: JobTypeProperty<TJobTypeDefinitions, TContinuationTypeName, "input">;
-            schedule?: ScheduleOptions;
-          } & (JobTypeHasBlockers<TJobTypeDefinitions, TContinuationTypeName> extends true
-            ? {
-                blockers: BlockerChainsInput<
-                  GetStateAdapterJobId<TStateAdapter>,
-                  TJobTypeDefinitions,
-                  TContinuationTypeName
-                >;
-              }
-            : { blockers?: never });
+          [TContinuationTypeName in JobTypeContinuation<TJobTypeDefinitions, TJobTypeName>]: NewJob<
+            GetStateAdapterJobId<TStateAdapter>,
+            TJobTypeDefinitions,
+            TContinuationTypeName
+          >;
         }[JobTypeContinuation<TJobTypeDefinitions, TJobTypeName>];
       };
 

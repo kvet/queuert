@@ -379,9 +379,10 @@ export const createChainsTestSuite = ({ it }: { it: TestAPI<TestSuiteContext> })
       expect(scheduledJob!.status).toBe("pending");
     });
 
-    it("throws when called without transaction context", async ({
+    it("throws when called without transaction context or transactionHooks", async ({
       stateAdapter,
       notifyAdapter,
+      withTransaction,
       observabilityAdapter,
       log,
     }) => {
@@ -401,6 +402,12 @@ export const createChainsTestSuite = ({ it }: { it: TestAPI<TestSuiteContext> })
         // @ts-expect-error missing txCtx
         client.createChain({ typeName: "test", input: { value: 1 } }),
       ).rejects.toThrow("requires a transaction context");
+      await withTransaction(async (txCtx) => {
+        await expect(
+          // @ts-expect-error missing transactionHooks
+          client.createChain({ ...txCtx, typeName: "test", input: { value: 1 } }),
+        ).rejects.toThrow("createChain requires transactionHooks");
+      });
     });
 
     it("throws when the context is not in a transaction", async ({
@@ -1057,9 +1064,10 @@ export const createChainsTestSuite = ({ it }: { it: TestAPI<TestSuiteContext> })
       });
     });
 
-    it("throws when called without transaction context", async ({
+    it("throws when called without transaction context or transactionHooks", async ({
       stateAdapter,
       notifyAdapter,
+      withTransaction,
       observabilityAdapter,
       log,
     }) => {
@@ -1081,6 +1089,12 @@ export const createChainsTestSuite = ({ it }: { it: TestAPI<TestSuiteContext> })
           items: [{ typeName: "test", input: { value: 1 } }],
         }),
       ).rejects.toThrow("requires a transaction context");
+      await withTransaction(async (txCtx) => {
+        await expect(
+          // @ts-expect-error missing transactionHooks
+          client.createChains({ ...txCtx, items: [{ typeName: "test", input: { value: 1 } }] }),
+        ).rejects.toThrow("createChains requires transactionHooks");
+      });
     });
 
     it("throws when the context is not in a transaction", async ({
