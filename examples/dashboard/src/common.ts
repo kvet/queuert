@@ -109,6 +109,21 @@ const stateProvider = createBetterSqlite3StateProvider({ db, lock });
 export const stateAdapter = await createSqliteStateAdapter({ stateProvider });
 await stateAdapter.migrateToLatest();
 
+export const withTransaction = async <T>(
+  fn: (ctx: { db: typeof db }) => Promise<T>,
+): Promise<T> => {
+  using _h = await lock.acquireWrite();
+  db.exec("BEGIN");
+  try {
+    const result = await fn({ db });
+    db.exec("COMMIT");
+    return result;
+  } catch (error) {
+    if (db.inTransaction) db.exec("ROLLBACK");
+    throw error;
+  }
+};
+
 export const notifyAdapter = await createInProcessNotifyAdapter();
 
 export const client = await createClient({ stateAdapter, notifyAdapter, jobTypes });

@@ -1,4 +1,9 @@
-import { createClient, createInProcessStateAdapter, defineJobTypes } from "queuert";
+import {
+  createClient,
+  createInProcessNotifyAdapter,
+  createInProcessStateAdapter,
+  defineJobTypes,
+} from "queuert";
 import { deserialize } from "seroval";
 import { describe, expect, it } from "vitest";
 
@@ -49,13 +54,10 @@ const startAttempt = async (
   stateAdapter: Awaited<ReturnType<typeof createInProcessStateAdapter>>,
   typeName: string,
 ) =>
-  stateAdapter.withTransaction(async (txCtx) =>
-    stateAdapter.startJobAttempt({
-      txCtx,
-      workerId: "worker-1",
-      timeoutMsByTypeName: { [typeName]: 30_000 },
-    }),
-  );
+  stateAdapter.startJobAttempt({
+    workerId: "worker-1",
+    timeoutMsByTypeName: { [typeName]: 60_000 },
+  });
 
 const completeJob = async (
   stateAdapter: Awaited<ReturnType<typeof createInProcessStateAdapter>>,
@@ -754,6 +756,41 @@ describe("Dashboard API", () => {
       expect(body.job.id).toBe(stateChain.head.id);
     });
 
+    it("notifies workers only after the reschedule commits", async () => {
+      const events: string[] = [];
+      const innerStateAdapter = await createInProcessStateAdapter();
+      const stateAdapter: typeof innerStateAdapter = {
+        ...innerStateAdapter,
+        withTransaction: async (fn) => {
+          const result = await innerStateAdapter.withTransaction(fn);
+          events.push("commit");
+          return result;
+        },
+      };
+      const innerNotifyAdapter = await createInProcessNotifyAdapter();
+      const client = await createClient({
+        stateAdapter,
+        notifyAdapter: {
+          ...innerNotifyAdapter,
+          notifyJobScheduled: async (typeName) => {
+            events.push("notify");
+            return innerNotifyAdapter.notifyJobScheduled(typeName);
+          },
+        },
+        jobTypes: defineJobTypes(),
+      });
+      const dashboard = await createDashboard({ client });
+      const job = await createJob(stateAdapter, "test-type", null);
+      events.length = 0;
+
+      const res = await dashboard.fetch(
+        new Request(`http://test/api/jobs/${job.id}/reschedule`, { method: "POST" }),
+      );
+
+      expect(res.status).toBe(200);
+      expect(events).toEqual(["commit", "notify"]);
+    });
+
     it("returns 404 for missing job", async () => {
       const { request } = await createTestDashboard();
       const res = await request("/api/jobs/nonexistent/reschedule", { method: "POST" });
@@ -764,13 +801,10 @@ describe("Dashboard API", () => {
       const { request, stateAdapter } = await createTestDashboard();
       const job = await createJob(stateAdapter, "test-type", null);
 
-      await stateAdapter.withTransaction(async (txCtx) =>
-        stateAdapter.startJobAttempt({
-          txCtx,
-          workerId: "test-worker",
-          timeoutMsByTypeName: { "test-type": 30_000 },
-        }),
-      );
+      await stateAdapter.startJobAttempt({
+        workerId: "test-worker",
+        timeoutMsByTypeName: { "test-type": 60_000 },
+      });
 
       const res = await request(`/api/jobs/${job.id}/reschedule`, { method: "POST" });
       const body = await parseBody(res);

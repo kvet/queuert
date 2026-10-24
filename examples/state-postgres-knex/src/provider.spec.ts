@@ -4,7 +4,7 @@ import knexFactory from "knex";
 import { runStateAdapterConformance } from "queuert/conformance";
 import { test } from "vitest";
 
-import { type KnexPgContext, createKnexPgStateProvider } from "./provider.js";
+import { createKnexPgStateProvider } from "./provider.js";
 
 test("state-postgres-knex provider passes state adapter conformance", async () => {
   await using pg = await acquirePostgres("postgres:18", import.meta.url);
@@ -24,9 +24,6 @@ test("state-postgres-knex provider passes state adapter conformance", async () =
       stateAdapter: adapter,
       transactionConcurrency: "concurrent",
       withNonTransactionContext: async (fn) => fn({ trx: knex }),
-      poisonTransaction: async (txCtx: KnexPgContext) => {
-        await txCtx.trx.raw("SELECT 1 FROM nonexistent_table_queuert_poison_xyz");
-      },
       reset: async () => adapter.truncate(),
       dispose: async () => {
         await knex.destroy();

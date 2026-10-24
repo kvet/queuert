@@ -1,3 +1,5 @@
+import { sleep } from "@queuert/helpers";
+
 import { type ConformanceGroup } from "../runner.js";
 import { type StateConformanceFixture } from "./types.js";
 
@@ -25,7 +27,7 @@ export const extendJobAttemptGroup: ConformanceGroup<StateConformanceFixture> = 
         expect(acquired!.attemptBy).toBe("worker-1");
 
         const before = Date.now();
-        const renewed = await stateAdapter.withTransaction(async (txCtx) =>
+        const extended = await stateAdapter.withTransaction(async (txCtx) =>
           stateAdapter.extendJobAttempt({
             txCtx,
             jobId: createdChain.head.id,
@@ -34,13 +36,13 @@ export const extendJobAttemptGroup: ConformanceGroup<StateConformanceFixture> = 
           }),
         );
 
-        expect(renewed!.attemptBy).toBe("worker-1");
-        expect(renewed!.attemptUntil).toBeInstanceOf(Date);
-        expect(renewed!.attemptUntil!.getTime()).toBeGreaterThanOrEqual(before + 9_000);
-        expect(renewed!.attemptUntil!.getTime()).toBeLessThan(before + 11_000);
-        expect(renewed!.attemptAt).toBeInstanceOf(Date);
-        expect(renewed!.completedAt).toBeNull();
-        expect(renewed!.attemptAt!.getTime()).toBe(acquired!.attemptAt!.getTime());
+        expect(extended!.attemptBy).toBe("worker-1");
+        expect(extended!.attemptUntil).toBeInstanceOf(Date);
+        expect(extended!.attemptUntil!.getTime()).toBeGreaterThanOrEqual(before + 9_000);
+        expect(extended!.attemptUntil!.getTime()).toBeLessThan(before + 11_000);
+        expect(extended!.attemptAt).toBeInstanceOf(Date);
+        expect(extended!.completedAt).toBeNull();
+        expect(extended!.attemptAt!.getTime()).toBe(acquired!.attemptAt!.getTime());
       },
     },
     {
@@ -65,7 +67,7 @@ export const extendJobAttemptGroup: ConformanceGroup<StateConformanceFixture> = 
         );
 
         const before = Date.now();
-        const renewed = await stateAdapter.withTransaction(async (txCtx) =>
+        const extended = await stateAdapter.withTransaction(async (txCtx) =>
           stateAdapter.extendJobAttempt({
             txCtx,
             jobId: createdChain.head.id,
@@ -74,7 +76,7 @@ export const extendJobAttemptGroup: ConformanceGroup<StateConformanceFixture> = 
           }),
         );
 
-        const diff = renewed!.attemptUntil!.getTime() - before;
+        const diff = extended!.attemptUntil!.getTime() - before;
         expect(diff).toBeGreaterThanOrEqual(thirtyDaysMs - 1000);
         expect(diff).toBeLessThan(thirtyDaysMs + 1000);
       },
@@ -105,7 +107,7 @@ export const extendJobAttemptGroup: ConformanceGroup<StateConformanceFixture> = 
         );
 
         const before = Date.now();
-        const renewed = await stateAdapter.withTransaction(async (txCtx) =>
+        const extended = await stateAdapter.withTransaction(async (txCtx) =>
           stateAdapter.extendJobAttempt({
             txCtx,
             jobId: createdChain.head.id,
@@ -114,7 +116,7 @@ export const extendJobAttemptGroup: ConformanceGroup<StateConformanceFixture> = 
           }),
         );
 
-        const diff = renewed!.attemptUntil!.getTime() - before;
+        const diff = extended!.attemptUntil!.getTime() - before;
         expect(diff).toBeGreaterThanOrEqual(fractionalMs - 1000);
         expect(diff).toBeLessThan(fractionalMs + 1000);
       },
@@ -158,6 +160,39 @@ export const extendJobAttemptGroup: ConformanceGroup<StateConformanceFixture> = 
         );
 
         expect(second!.attemptUntil!.getTime()).toBeGreaterThan(first!.attemptUntil!.getTime());
+      },
+    },
+    {
+      name: "extends an attempt whose deadline has passed",
+      run: async ({ stateAdapter }, expect) => {
+        const [createdChain] = await stateAdapter.withTransaction(async (txCtx) =>
+          stateAdapter.createJobs({
+            txCtx,
+            jobs: [
+              {
+                id: stateAdapter.config.generateId(),
+                typeName: "lapsed-attempt-test",
+                input: null,
+              },
+            ],
+          }),
+        );
+        const acquired = await stateAdapter.startJobAttempt({
+          workerId: "worker-1",
+          timeoutMsByTypeName: { "lapsed-attempt-test": 1 },
+        });
+        await sleep(50);
+        expect(acquired!.attemptUntil!.getTime()).toBeLessThan(Date.now());
+
+        const before = Date.now();
+        const extended = await stateAdapter.extendJobAttempt({
+          jobId: createdChain.head.id,
+          fence: { attempt: acquired!.attempt, workerId: "worker-1" },
+          timeoutMs: 10_000,
+        });
+
+        expect(extended!.attemptBy).toBe("worker-1");
+        expect(extended!.attemptUntil!.getTime()).toBeGreaterThanOrEqual(before + 9_000);
       },
     },
     {
@@ -279,6 +314,35 @@ export const extendJobAttemptGroup: ConformanceGroup<StateConformanceFixture> = 
         );
 
         expect(extended).toBeUndefined();
+      },
+    },
+    {
+      name: "extends without a txCtx, committing the new deadline on its own",
+      run: async ({ stateAdapter }, expect) => {
+        const [createdChain] = await stateAdapter.withTransaction(async (txCtx) =>
+          stateAdapter.createJobs({
+            txCtx,
+            jobs: [
+              { id: stateAdapter.config.generateId(), typeName: "extend-autocommit", input: null },
+            ],
+          }),
+        );
+        const acquired = await stateAdapter.startJobAttempt({
+          workerId: "worker-1",
+          timeoutMsByTypeName: { "extend-autocommit": 1_000 },
+        });
+
+        const extended = await stateAdapter.extendJobAttempt({
+          jobId: createdChain.head.id,
+          fence: { attempt: acquired!.attempt, workerId: "worker-1" },
+          timeoutMs: 60_000,
+        });
+        expect(extended!.attemptUntil!.getTime()).toBeGreaterThan(
+          acquired!.attemptUntil!.getTime(),
+        );
+
+        const [stored] = await stateAdapter.getJobs({ jobIds: [createdChain.head.id] });
+        expect(stored!.attemptUntil!.getTime()).toBe(extended!.attemptUntil!.getTime());
       },
     },
   ],

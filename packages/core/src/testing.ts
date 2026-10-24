@@ -14,7 +14,6 @@ export {
 export { notifyResilienceTestSuite } from "./suites/notify-resilience.test-suite.js";
 export { notifyTestSuite } from "./suites/notify.test-suite.js";
 export { processErrorHandlingTestSuite } from "./suites/process-error-handling.test-suite.js";
-export { processModesTestSuite } from "./suites/process-modes.test-suite.js";
 export { processTestSuite } from "./suites/process.test-suite.js";
 export { rescheduleJobTestSuite } from "./suites/reschedule-job.test-suite.js";
 export { schedulingTestSuite } from "./suites/scheduling.test-suite.js";
@@ -50,7 +49,7 @@ export {
 } from "./state-adapter/state-adapter.spy.spec-helper.js";
 
 // Worker Test Helper
-export { withWorkers } from "./helpers/with-workers.js";
+export { withWorkers } from "@queuert/helpers";
 
 // Migration fixture seeding
 export { seedAllStates, seedConfig, type SeedSentinels } from "./conformance/seed-all-states.js";

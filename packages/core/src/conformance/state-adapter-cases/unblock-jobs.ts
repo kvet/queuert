@@ -1,5 +1,9 @@
+import { sleep } from "@queuert/helpers";
+
 import { type ConformanceGroup } from "../runner.js";
 import { type StateConformanceFixture } from "./types.js";
+
+const LOCK_BLOCK_OBSERVATION_MS = 100;
 
 export const unblockJobsGroup: ConformanceGroup<StateConformanceFixture> = {
   name: "unblockJobs",
@@ -484,64 +488,194 @@ export const unblockJobsGroup: ConformanceGroup<StateConformanceFixture> = {
       },
     },
     {
-      name: "starting a chain blocked by a concurrently-completing chain does not strand it as blocked",
+      name: "unblocks a dependent whose blocker was added before the chain completed, without a caller pre-lock",
       run: async ({ stateAdapter, transactionConcurrency }, expect) => {
-        if (transactionConcurrency !== "concurrent") {
-          expect.skip("requires concurrent transactions");
-          return;
-        }
-        const count = 20;
-
-        const blockerJobs = await stateAdapter.withTransaction(async (txCtx) =>
+        const [{ id: chainId }] = await stateAdapter.withTransaction(async (txCtx) =>
           stateAdapter.createJobs({
             txCtx,
-            jobs: Array.from({ length: count }, (_, index) => ({
-              id: stateAdapter.config.generateId(),
-              typeName: "race-blocker",
-              input: { index },
-            })),
+            jobs: [
+              { id: stateAdapter.config.generateId(), typeName: "race-add-first", input: null },
+            ],
           }),
         );
-        const createChainBlockedBy = async (
-          blockerChainId: string,
-          index: number,
-        ): Promise<string> =>
-          stateAdapter.withTransaction(async (txCtx) => {
-            const [mainChain] = await stateAdapter.createJobs({
-              txCtx,
-              jobs: [
-                { id: stateAdapter.config.generateId(), typeName: "race-main", input: { index } },
-              ],
-            });
-            const [result] = await stateAdapter.addJobsBlockers({
-              txCtx,
-              jobBlockers: [{ jobId: mainChain.head.id, blockedByChainIds: [blockerChainId] }],
-            });
-            return result.id;
-          });
-
-        const completeBlockerChain = async (blockerJobId: string, chainId: string): Promise<void> =>
-          stateAdapter.withTransaction(async (txCtx) => {
-            await stateAdapter.completeJobs({
-              txCtx,
-              jobs: [{ jobId: blockerJobId, output: null }],
-            });
-            await stateAdapter.unblockJobs({ txCtx, blockedByChainId: chainId });
-          });
-
-        const mainJobIds = await Promise.all(
-          blockerJobs.flatMap((blockerJob, i) => [
-            createChainBlockedBy(blockerJob.head.chainId, i),
-            completeBlockerChain(blockerJob.head.id, blockerJob.head.chainId).then(() => undefined),
-          ]),
-        ).then((results) => results.filter((id): id is string => id !== undefined));
-
-        const finalStates = await Promise.all(
-          mainJobIds.map(async (jobId) => stateAdapter.getJobs({ jobIds: [jobId] })),
+        // Completing the tail writes the chain head as a separate row.
+        const [continued] = await stateAdapter.withTransaction(async (txCtx) =>
+          stateAdapter.continueJobs({
+            txCtx,
+            jobs: [
+              {
+                id: stateAdapter.config.generateId(),
+                typeName: "race-add-first:step",
+                input: null,
+                continueFromId: chainId,
+              },
+            ],
+          }),
         );
+        const tailId = continued!.continuation.id;
 
-        const stranded = finalStates.filter(([job]) => job?.status === "blocked");
-        expect(stranded).toHaveLength(0);
+        const addBlocker = async (txCtx: unknown, onAdded?: () => Promise<void>) => {
+          const [blockerChain] = await stateAdapter.getChains({
+            txCtx,
+            chainIds: [chainId],
+            lock: "exclusive",
+          });
+          expect(blockerChain!.status).toBe("running");
+          const [dependent] = await stateAdapter.createJobs({
+            txCtx,
+            jobs: [
+              {
+                id: stateAdapter.config.generateId(),
+                typeName: "race-add-first:dependent",
+                input: null,
+              },
+            ],
+          });
+          const [blocked] = await stateAdapter.addJobsBlockers({
+            txCtx,
+            jobBlockers: [{ jobId: dependent.id, blockedByChainIds: [chainId] }],
+          });
+          expect(blocked.status).toBe("blocked");
+          await onAdded?.();
+          return dependent;
+        };
+        const completeChain = async (txCtx: unknown) => {
+          const [completed] = await stateAdapter.completeJobs({
+            txCtx,
+            jobs: [{ jobId: tailId, output: null }],
+          });
+          const unblocked = await stateAdapter.unblockJobs({ txCtx, blockedByChainId: chainId });
+          return { completed, unblocked };
+        };
+
+        let dependentId: string;
+        let unblockedIds: string[];
+        if (transactionConcurrency === "serialized") {
+          const dependent = await stateAdapter.withTransaction(async (txCtx) => addBlocker(txCtx));
+          const { completed, unblocked } = await stateAdapter.withTransaction(completeChain);
+          expect(completed).toBeDefined();
+          dependentId = dependent.id;
+          unblockedIds = unblocked.map((entry) => entry.job.id);
+        } else {
+          const added = Promise.withResolvers<void>();
+          const adderGate = Promise.withResolvers<void>();
+          const adderTx = stateAdapter.withTransaction(async (txCtx) =>
+            addBlocker(txCtx, async () => {
+              added.resolve();
+              await adderGate.promise;
+            }),
+          );
+          await added.promise;
+          const completerTx = stateAdapter.withTransaction(completeChain);
+          await sleep(LOCK_BLOCK_OBSERVATION_MS);
+          adderGate.resolve();
+          const dependent = await adderTx;
+          const { completed, unblocked } = await completerTx;
+          expect(completed).toBeDefined();
+          dependentId = dependent.id;
+          unblockedIds = unblocked.map((entry) => entry.job.id);
+        }
+
+        expect(unblockedIds).toEqual([dependentId]);
+        const [dependent] = await stateAdapter.getJobs({ jobIds: [dependentId] });
+        expect(dependent!.status).toBe("pending");
+        const [chain] = await stateAdapter.getChains({ chainIds: [chainId] });
+        expect(chain!.status).toBe("completed");
+      },
+    },
+    {
+      name: "leaves a dependent pending when its blocker completed before the blocker was added, without a caller pre-lock",
+      run: async ({ stateAdapter, transactionConcurrency }, expect) => {
+        const [{ id: chainId }] = await stateAdapter.withTransaction(async (txCtx) =>
+          stateAdapter.createJobs({
+            txCtx,
+            jobs: [
+              {
+                id: stateAdapter.config.generateId(),
+                typeName: "race-complete-first",
+                input: null,
+              },
+            ],
+          }),
+        );
+        // Completing the tail writes the chain head as a separate row.
+        const [continued] = await stateAdapter.withTransaction(async (txCtx) =>
+          stateAdapter.continueJobs({
+            txCtx,
+            jobs: [
+              {
+                id: stateAdapter.config.generateId(),
+                typeName: "race-complete-first:step",
+                input: null,
+                continueFromId: chainId,
+              },
+            ],
+          }),
+        );
+        const tailId = continued!.continuation.id;
+
+        const addBlocker = async (txCtx: unknown) => {
+          const [blockerChain] = await stateAdapter.getChains({
+            txCtx,
+            chainIds: [chainId],
+            lock: "exclusive",
+          });
+          expect(blockerChain!.status).toBe("completed");
+          const [dependent] = await stateAdapter.createJobs({
+            txCtx,
+            jobs: [
+              {
+                id: stateAdapter.config.generateId(),
+                typeName: "race-complete-first:dependent",
+                input: null,
+              },
+            ],
+          });
+          const [withBlockers] = await stateAdapter.addJobsBlockers({
+            txCtx,
+            jobBlockers: [{ jobId: dependent.id, blockedByChainIds: [chainId] }],
+          });
+          expect(withBlockers.status).toBe("pending");
+          return dependent;
+        };
+        const completeChain = async (txCtx: unknown, onCompleted?: () => Promise<void>) => {
+          const [completed] = await stateAdapter.completeJobs({
+            txCtx,
+            jobs: [{ jobId: tailId, output: null }],
+          });
+          expect(completed).toBeDefined();
+          const unblocked = await stateAdapter.unblockJobs({ txCtx, blockedByChainId: chainId });
+          expect(unblocked).toEqual([]);
+          await onCompleted?.();
+        };
+
+        let dependentId: string;
+        if (transactionConcurrency === "serialized") {
+          await stateAdapter.withTransaction(async (txCtx) => completeChain(txCtx));
+          const dependent = await stateAdapter.withTransaction(addBlocker);
+          dependentId = dependent.id;
+        } else {
+          const completedSignal = Promise.withResolvers<void>();
+          const completerGate = Promise.withResolvers<void>();
+          const completerTx = stateAdapter.withTransaction(async (txCtx) =>
+            completeChain(txCtx, async () => {
+              completedSignal.resolve();
+              await completerGate.promise;
+            }),
+          );
+          await completedSignal.promise;
+          const adderTx = stateAdapter.withTransaction(addBlocker);
+          await sleep(LOCK_BLOCK_OBSERVATION_MS);
+          completerGate.resolve();
+          await completerTx;
+          const dependent = await adderTx;
+          dependentId = dependent.id;
+        }
+
+        const [dependent] = await stateAdapter.getJobs({ jobIds: [dependentId] });
+        expect(dependent!.status).toBe("pending");
+        const blockers = await stateAdapter.getJobBlockers({ jobId: dependentId });
+        expect(blockers.map((blocker) => blocker.id)).toEqual([chainId]);
       },
     },
     {

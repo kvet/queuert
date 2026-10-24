@@ -1,5 +1,5 @@
-import { type JobTypes } from "./entities/job-types.js";
-import { wrapJobTypesWithLogging } from "./entities/job-types.wrapper.logging.js";
+import { type JobTypes } from "./job-types/job-types.js";
+import { wrapJobTypesWithLogging } from "./job-types/job-types.wrapper.logging.js";
 import { type NotifyAdapter } from "./notify-adapter/notify-adapter.js";
 import { createNoopNotifyAdapter } from "./notify-adapter/notify-adapter.noop.js";
 import { wrapNotifyAdapterWithLogging } from "./notify-adapter/notify-adapter.wrapper.logging.js";

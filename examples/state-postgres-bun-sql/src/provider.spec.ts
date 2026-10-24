@@ -5,7 +5,7 @@ import { acquirePostgres } from "@queuert/testcontainers";
 import { SQL } from "bun";
 import { runStateAdapterConformance } from "queuert/conformance";
 
-import { type BunSqlContext, createBunSqlStateProvider } from "./provider.js";
+import { createBunSqlStateProvider } from "./provider.js";
 
 test("state-postgres-bun-sql provider passes state adapter conformance", async () => {
   await using pg = await acquirePostgres("postgres:18", import.meta.url);
@@ -21,9 +21,6 @@ test("state-postgres-bun-sql provider passes state adapter conformance", async (
       stateAdapter: adapter,
       transactionConcurrency: "concurrent",
       withNonTransactionContext: async (fn) => fn({ txSql: sql }),
-      poisonTransaction: async (txCtx: BunSqlContext) => {
-        await txCtx.txSql.unsafe("SELECT 1 FROM nonexistent_table_queuert_poison_xyz");
-      },
       reset: async () => adapter.truncate(),
       dispose: async () => {
         await sql.close();

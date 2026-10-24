@@ -4,14 +4,14 @@
   "private": true,
   "type": "module",
   "scripts": {
-    "start": "node --expose-gc --import=tsx src/index.ts --all",
-    "start:state-postgres": "node --expose-gc --import=tsx src/index.ts --state-postgres",
-    "start:state-sqlite": "node --expose-gc --import=tsx src/index.ts --state-sqlite",
-    "start:notify-redis": "node --expose-gc --import=tsx src/index.ts --notify-redis",
-    "start:notify-postgres": "node --expose-gc --import=tsx src/index.ts --notify-postgres",
-    "start:notify-nats": "node --expose-gc --import=tsx src/index.ts --notify-nats",
-    "start:otel": "node --expose-gc --import=tsx src/index.ts --otel",
-    "start:dashboard": "node --expose-gc --import=tsx src/index.ts --dashboard",
+    "start": "node --expose-gc --no-flush-bytecode --import=tsx src/index.ts --all",
+    "start:state-postgres": "node --expose-gc --no-flush-bytecode --import=tsx src/index.ts --state-postgres",
+    "start:state-sqlite": "node --expose-gc --no-flush-bytecode --import=tsx src/index.ts --state-sqlite",
+    "start:notify-redis": "node --expose-gc --no-flush-bytecode --import=tsx src/index.ts --notify-redis",
+    "start:notify-postgres": "node --expose-gc --no-flush-bytecode --import=tsx src/index.ts --notify-postgres",
+    "start:notify-nats": "node --expose-gc --no-flush-bytecode --import=tsx src/index.ts --notify-nats",
+    "start:otel": "node --expose-gc --no-flush-bytecode --import=tsx src/index.ts --otel",
+    "start:dashboard": "node --expose-gc --no-flush-bytecode --import=tsx src/index.ts --dashboard",
     "typecheck": "tsc --noEmit"
   },
   "dependencies": {

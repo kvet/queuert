@@ -1,8 +1,5 @@
-import { sleep } from "../../helpers/sleep.js";
 import { type ConformanceGroup } from "../runner.js";
 import { type StateConformanceFixture } from "./types.js";
-
-const LOCK_BLOCK_OBSERVATION_MS = 100;
 
 export const startJobAttemptGroup: ConformanceGroup<StateConformanceFixture> = {
   name: "startJobAttempt",
@@ -313,13 +310,10 @@ export const startJobAttemptGroup: ConformanceGroup<StateConformanceFixture> = {
           }),
         );
 
-        const acquiredWithBlockers = await stateAdapter.withTransaction(async (txCtx) =>
-          stateAdapter.startJobAttempt({
-            txCtx,
-            workerId: "worker-1",
-            timeoutMsByTypeName: { "has-blockers": 30_000 },
-          }),
-        );
+        const acquiredWithBlockers = await stateAdapter.startJobAttempt({
+          workerId: "worker-1",
+          timeoutMsByTypeName: { "has-blockers": 30_000 },
+        });
 
         expect(acquiredWithBlockers).toBeDefined();
         expect(acquiredWithBlockers!.id).toBe(withBlockersChain.head.id);
@@ -334,130 +328,17 @@ export const startJobAttemptGroup: ConformanceGroup<StateConformanceFixture> = {
           }),
         );
 
-        const acquiredWithoutBlockers = await stateAdapter.withTransaction(async (txCtx) =>
-          stateAdapter.startJobAttempt({
-            txCtx,
-            workerId: "worker-1",
-            timeoutMsByTypeName: { "has-no-blockers": 30_000 },
-          }),
-        );
+        const acquiredWithoutBlockers = await stateAdapter.startJobAttempt({
+          workerId: "worker-1",
+          timeoutMsByTypeName: { "has-no-blockers": 30_000 },
+        });
 
         expect(acquiredWithoutBlockers).toBeDefined();
         expect(acquiredWithoutBlockers!.hasBlockers).toBe(false);
       },
     },
     {
-      name: "sets attemptUntil from the acquired job type's timeout",
-      run: async ({ stateAdapter }, expect) => {
-        await stateAdapter.withTransaction(async (txCtx) =>
-          stateAdapter.createJobs({
-            txCtx,
-            jobs: [
-              { id: stateAdapter.config.generateId(), typeName: "lease-short", input: null },
-              { id: stateAdapter.config.generateId(), typeName: "lease-long", input: null },
-            ],
-          }),
-        );
-
-        const timeoutMsByTypeName = { "lease-short": 10_000, "lease-long": 120_000 };
-        for (let i = 0; i < 2; i++) {
-          await stateAdapter.withTransaction(async (txCtx) => {
-            const before = Date.now();
-            const acquired = await stateAdapter.startJobAttempt({
-              txCtx,
-              workerId: "worker-1",
-              timeoutMsByTypeName,
-            });
-            const after = Date.now();
-
-            const timeoutMs =
-              timeoutMsByTypeName[acquired!.typeName as keyof typeof timeoutMsByTypeName];
-            expect(acquired!.attemptUntil).toBeInstanceOf(Date);
-            expect(acquired!.attemptUntil!.getTime()).toBeGreaterThanOrEqual(
-              before + timeoutMs - 1_000,
-            );
-            expect(acquired!.attemptUntil!.getTime()).toBeLessThanOrEqual(
-              after + timeoutMs + 1_000,
-            );
-
-            const [stored] = await stateAdapter.getJobs({ txCtx, jobIds: [acquired!.id] });
-            expect(stored!.attemptUntil!.getTime()).toBe(acquired!.attemptUntil!.getTime());
-          });
-        }
-      },
-    },
-    {
-      name: "holds the chain lock implicitly for a single-job chain",
-      run: async ({ stateAdapter, transactionConcurrency }, expect) => {
-        if (transactionConcurrency !== "concurrent") {
-          expect.skip("requires concurrent transactions");
-          return;
-        }
-
-        const [stateChain] = await stateAdapter.withTransaction(async (txCtx) =>
-          stateAdapter.createJobs({
-            txCtx,
-            jobs: [
-              {
-                id: stateAdapter.config.generateId(),
-                typeName: "implicit-chain-lock",
-                input: null,
-              },
-            ],
-          }),
-        );
-
-        let releaseHolder: (() => void) | undefined;
-        const holderGate = new Promise<void>((r) => {
-          releaseHolder = r;
-        });
-        let signalAcquired: (() => void) | undefined;
-        const jobAcquired = new Promise<void>((r) => {
-          signalAcquired = r;
-        });
-
-        const holderTx = stateAdapter.withTransaction(async (txCtx) => {
-          const acquired = await stateAdapter.startJobAttempt({
-            txCtx,
-            workerId: "worker-1",
-            timeoutMsByTypeName: { "implicit-chain-lock": 30_000 },
-          });
-          try {
-            expect(acquired?.id).toBe(stateChain.head.id);
-          } finally {
-            signalAcquired!();
-          }
-          await holderGate;
-        });
-
-        await jobAcquired;
-
-        let chainLockTaken = false;
-        const waiterTx = stateAdapter
-          .withTransaction(async (txCtx) =>
-            stateAdapter.getChains({
-              txCtx,
-              chainIds: [stateChain.head.chainId],
-              lock: "exclusive",
-            }),
-          )
-          .then((chains) => {
-            chainLockTaken = true;
-            return chains;
-          });
-
-        await sleep(LOCK_BLOCK_OBSERVATION_MS);
-        expect(chainLockTaken).toBe(false);
-
-        releaseHolder!();
-        await holderTx;
-
-        const [observed] = await waiterTx;
-        expect(observed!.head.attemptBy).toBe("worker-1");
-      },
-    },
-    {
-      name: "skips a due job whose chain head is locked and getStartAttemptDelayMs ignores it",
+      name: "acquires a due job while only its chain head is locked",
       run: async ({ stateAdapter, transactionConcurrency }, expect) => {
         if (transactionConcurrency !== "concurrent") {
           expect.skip("requires concurrent transactions");
@@ -483,7 +364,7 @@ export const startJobAttemptGroup: ConformanceGroup<StateConformanceFixture> = {
             ],
           }),
         );
-        const lockedHeadJob = continued!.continuation;
+        const continuation = continued!.continuation;
 
         let signalHeadLocked: (() => void) | undefined;
         const headLocked = new Promise<void>((r) => {
@@ -505,45 +386,170 @@ export const startJobAttemptGroup: ConformanceGroup<StateConformanceFixture> = {
         try {
           expect(
             await stateAdapter.getStartAttemptDelayMs({ typeNames: ["locked-head-acquire"] }),
+          ).toBe(0);
+
+          const acquired = await stateAdapter.startJobAttempt({
+            workerId: "worker-1",
+            timeoutMsByTypeName: { "locked-head-acquire": 30_000 },
+          });
+          expect(acquired?.id).toBe(continuation.id);
+        } finally {
+          releaseHead!();
+          await lockerTx;
+        }
+      },
+    },
+    {
+      name: "skips a due job whose row is locked and getStartAttemptDelayMs ignores it",
+      run: async ({ stateAdapter, transactionConcurrency }, expect) => {
+        if (transactionConcurrency === "serialized") {
+          expect.skip("requires concurrent transactions");
+          return;
+        }
+
+        const [lockedChain] = await stateAdapter.withTransaction(async (txCtx) =>
+          stateAdapter.createJobs({
+            txCtx,
+            jobs: [{ id: stateAdapter.config.generateId(), typeName: "locked-job", input: null }],
+          }),
+        );
+
+        let signalJobLocked: (() => void) | undefined;
+        const jobLocked = new Promise<void>((r) => {
+          signalJobLocked = r;
+        });
+        let releaseJob: (() => void) | undefined;
+        const jobGate = new Promise<void>((r) => {
+          releaseJob = r;
+        });
+
+        const lockerTx = stateAdapter.withTransaction(async (txCtx) => {
+          await stateAdapter.getJobs({ txCtx, jobIds: [lockedChain.head.id], lock: "exclusive" });
+          signalJobLocked!();
+          await jobGate;
+        });
+
+        await jobLocked;
+
+        try {
+          expect(
+            await stateAdapter.getStartAttemptDelayMs({ typeNames: ["locked-job"] }),
           ).toBeNull();
 
           const [otherChain] = await stateAdapter.withTransaction(async (txCtx) =>
             stateAdapter.createJobs({
               txCtx,
-              jobs: [
-                {
-                  id: stateAdapter.config.generateId(),
-                  typeName: "locked-head-acquire",
-                  input: null,
-                },
-              ],
+              jobs: [{ id: stateAdapter.config.generateId(), typeName: "locked-job", input: null }],
             }),
           );
-          expect(
-            await stateAdapter.getStartAttemptDelayMs({ typeNames: ["locked-head-acquire"] }),
-          ).toBe(0);
+          expect(await stateAdapter.getStartAttemptDelayMs({ typeNames: ["locked-job"] })).toBe(0);
 
-          const acquired = await stateAdapter.withTransaction(async (txCtx) =>
-            stateAdapter.startJobAttempt({
-              txCtx,
-              workerId: "worker-1",
-              timeoutMsByTypeName: { "locked-head-acquire": 30_000 },
-            }),
-          );
+          const acquired = await stateAdapter.startJobAttempt({
+            workerId: "worker-1",
+            timeoutMsByTypeName: { "locked-job": 30_000 },
+          });
           expect(acquired?.id).toBe(otherChain.head.id);
         } finally {
-          releaseHead!();
+          releaseJob!();
           await lockerTx;
         }
 
-        const acquiredAfterRelease = await stateAdapter.withTransaction(async (txCtx) =>
-          stateAdapter.startJobAttempt({
+        const acquiredAfterRelease = await stateAdapter.startJobAttempt({
+          workerId: "worker-1",
+          timeoutMsByTypeName: { "locked-job": 30_000 },
+        });
+        expect(acquiredAfterRelease?.id).toBe(lockedChain.head.id);
+      },
+    },
+    {
+      name: "sets attemptUntil from the acquired job type's timeout",
+      run: async ({ stateAdapter }, expect) => {
+        await stateAdapter.withTransaction(async (txCtx) =>
+          stateAdapter.createJobs({
             txCtx,
-            workerId: "worker-1",
-            timeoutMsByTypeName: { "locked-head-acquire": 30_000 },
+            jobs: [
+              { id: stateAdapter.config.generateId(), typeName: "timeout-short", input: null },
+              { id: stateAdapter.config.generateId(), typeName: "timeout-long", input: null },
+            ],
           }),
         );
-        expect(acquiredAfterRelease?.id).toBe(lockedHeadJob.id);
+
+        const timeoutMsByTypeName = { "timeout-short": 10_000, "timeout-long": 120_000 };
+        const before = Date.now();
+        const first = await stateAdapter.startJobAttempt({
+          workerId: "worker-1",
+          timeoutMsByTypeName,
+        });
+        const second = await stateAdapter.startJobAttempt({
+          workerId: "worker-1",
+          timeoutMsByTypeName,
+        });
+        const after = Date.now();
+
+        const acquired = [first!, second!].sort((a, b) => a.typeName.localeCompare(b.typeName));
+        expect(acquired.map((job) => job.typeName)).toEqual(["timeout-long", "timeout-short"]);
+        for (const job of acquired) {
+          const timeoutMs = timeoutMsByTypeName[job.typeName as keyof typeof timeoutMsByTypeName];
+          expect(job.attemptUntil).toBeInstanceOf(Date);
+          expect(job.attemptUntil!.getTime()).toBeGreaterThanOrEqual(before + timeoutMs - 1_000);
+          expect(job.attemptUntil!.getTime()).toBeLessThanOrEqual(after + timeoutMs + 1_000);
+        }
+
+        const stored = await stateAdapter.getJobs({ jobIds: acquired.map((job) => job.id) });
+        expect(stored.map((job) => job!.attemptUntil!.getTime())).toEqual(
+          acquired.map((job) => job.attemptUntil!.getTime()),
+        );
+      },
+    },
+    {
+      name: "only acquires jobs of the timeoutMsByTypeName keys",
+      run: async ({ stateAdapter }, expect) => {
+        await stateAdapter.withTransaction(async (txCtx) =>
+          stateAdapter.createJobs({
+            txCtx,
+            jobs: [
+              { id: stateAdapter.config.generateId(), typeName: "timeout-other", input: null },
+            ],
+          }),
+        );
+
+        const acquired = await stateAdapter.startJobAttempt({
+          workerId: "worker-1",
+          timeoutMsByTypeName: { "timeout-unrelated": 10_000 },
+        });
+        expect(acquired).toBeUndefined();
+      },
+    },
+    {
+      name: "acquires without a txCtx, committing the attempt on its own",
+      run: async ({ stateAdapter }, expect) => {
+        const [createdChain] = await stateAdapter.withTransaction(async (txCtx) =>
+          stateAdapter.createJobs({
+            txCtx,
+            jobs: [
+              { id: stateAdapter.config.generateId(), typeName: "acquire-autocommit", input: null },
+            ],
+          }),
+        );
+
+        const acquired = await stateAdapter.startJobAttempt({
+          workerId: "worker-1",
+          timeoutMsByTypeName: { "acquire-autocommit": 30_000 },
+        });
+        expect(acquired!.id).toBe(createdChain.head.id);
+        expect(acquired!.status).toBe("running");
+        expect(acquired!.attempt).toBe(1);
+
+        const [stored] = await stateAdapter.getJobs({ jobIds: [createdChain.head.id] });
+        expect(stored!.status).toBe("running");
+        expect(stored!.attempt).toBe(1);
+        expect(stored!.attemptBy).toBe("worker-1");
+
+        const again = await stateAdapter.startJobAttempt({
+          workerId: "worker-2",
+          timeoutMsByTypeName: { "acquire-autocommit": 30_000 },
+        });
+        expect(again).toBeUndefined();
       },
     },
   ],

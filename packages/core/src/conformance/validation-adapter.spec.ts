@@ -1,8 +1,8 @@
 import { describe, expect, it } from "vitest";
 
-import { type BaseJobTypeDefinitions } from "../entities/job-type.js";
-import { type JobTypes, createJobTypes } from "../entities/job-types.js";
-import { type JobTypesDefinitions } from "../entities/merge-job-types.js";
+import { type BaseJobTypeDefinitions } from "../job-types/job-type.js";
+import { type JobTypes, createJobTypes } from "../job-types/job-types.js";
+import { type JobTypesDefinitions } from "../job-types/merge-job-types.js";
 import { ConformanceError } from "./runner.js";
 import {
   type ValidationConformanceFixture,

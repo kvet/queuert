@@ -4,7 +4,7 @@ import { Pool } from "pg";
 import { runStateAdapterConformance } from "queuert/conformance";
 import { test } from "vitest";
 
-import { type PgPoolContext, createPgPoolStateProvider } from "./provider.js";
+import { createPgPoolStateProvider } from "./provider.js";
 
 test("state-postgres-pg provider passes state adapter conformance", async () => {
   await using pg = await acquirePostgres("postgres:18", import.meta.url);
@@ -26,9 +26,6 @@ test("state-postgres-pg provider passes state adapter conformance", async () => 
         } finally {
           poolClient.release();
         }
-      },
-      poisonTransaction: async (txCtx: PgPoolContext) => {
-        await txCtx.poolClient.query("SELECT 1 FROM nonexistent_table_queuert_poison_xyz");
       },
       reset: async () => adapter.truncate(),
       dispose: async () => {

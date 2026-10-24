@@ -1,12 +1,12 @@
 import { type TestAPI, describe, expect, onTestFinished, vi } from "vitest";
 
 import { createClient } from "../client.js";
-import { defineJobTypes } from "../entities/define-job-types.js";
 import { ChainNotFoundError } from "../errors.js";
 import { createInProcessWorker } from "../in-process-worker.js";
+import { createProcessors } from "../job-type-processors/create-job-type-processors.js";
+import { defineJobTypes } from "../job-types/define-job-types.js";
 import { createInProcessNotifyAdapter } from "../notify-adapter/notify-adapter.in-process.js";
 import { withTransactionHooks } from "../transaction-hooks.js";
-import { createProcessors } from "../worker/create-processors.js";
 import { type TestSuiteContext } from "./spec-context.spec-helper.js";
 
 export const createChainsTestSuite = ({ it }: { it: TestAPI<TestSuiteContext> }): void => {
@@ -264,8 +264,8 @@ export const createChainsTestSuite = ({ it }: { it: TestAPI<TestSuiteContext> })
           ...dep,
           handler: async ({ job, completeJob }) => {
             if (job.typeName === "dependency") {
-              await completeJob(job, async ({ finish }) =>
-                finish({ continueWith: { typeName: "dependencyStep", input: null } }),
+              await completeJob(job, async ({ complete }) =>
+                complete({ continueWith: { typeName: "dependencyStep", input: null } }),
               );
             }
           },
@@ -320,8 +320,8 @@ export const createChainsTestSuite = ({ it }: { it: TestAPI<TestSuiteContext> })
           handler: async ({ job, completeJob }) => {
             if (job.typeName !== "start") return;
             await expect(
-              completeJob(job, async ({ finish }) =>
-                finish({
+              completeJob(job, async ({ complete }) =>
+                complete({
                   continueWith: {
                     typeName: "startStep",
                     input: null,
@@ -965,15 +965,17 @@ export const createChainsTestSuite = ({ it }: { it: TestAPI<TestSuiteContext> })
           processors: {
             blocker: {
               attemptHandler: async ({ job, complete }) => {
-                return complete(async ({ finish }) =>
-                  finish({ output: { result: job.input.value } }),
+                return withTransaction(async (txCtx, transactionHooks) =>
+                  complete({ ...txCtx, transactionHooks, output: { result: job.input.value } }),
                 );
               },
             },
             main: {
               attemptHandler: async ({ job, complete }) => {
-                return complete(async ({ finish }) =>
-                  finish({
+                return withTransaction(async (txCtx, transactionHooks) =>
+                  complete({
+                    ...txCtx,
+                    transactionHooks,
                     output: {
                       finalResult: job.blockers[0].output.result,
                     },
@@ -1037,8 +1039,8 @@ export const createChainsTestSuite = ({ it }: { it: TestAPI<TestSuiteContext> })
           processors: {
             test: {
               attemptHandler: async ({ job, complete }) => {
-                return complete(async ({ finish }) =>
-                  finish({ output: { result: job.input.value * 2 } }),
+                return withTransaction(async (txCtx, transactionHooks) =>
+                  complete({ ...txCtx, transactionHooks, output: { result: job.input.value * 2 } }),
                 );
               },
             },

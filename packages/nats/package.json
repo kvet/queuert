@@ -49,6 +49,7 @@
     "test": "vitest --run"
   },
   "devDependencies": {
+    "@queuert/helpers": "workspace:*",
     "@queuert/testcontainers": "workspace:*",
     "@queuert/tsconfig": "workspace:*",
     "nats": "2.29.3",

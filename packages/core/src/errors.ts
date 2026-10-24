@@ -81,7 +81,7 @@ export class ChainNotFoundError extends Error {
 
 /**
  * Recorded as a job's `lastAttemptError` when a worker reclaims its attempt because the attempt
- * lease expired before the holding worker renewed it.
+ * expired before the holding worker extended it.
  */
 export class JobAttemptExpiredError extends Error {
   /** The worker that reclaimed the attempt. */

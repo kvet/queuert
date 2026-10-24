@@ -1,8 +1,8 @@
 import { type TestAPI, expect } from "vitest";
 
 import { createClient } from "../client.js";
-import { defineJobTypes } from "../entities/define-job-types.js";
 import { ChainTypeMismatchError, WaitChainTimeoutError } from "../errors.js";
+import { defineJobTypes } from "../job-types/define-job-types.js";
 import { type TestSuiteContext } from "./spec-context.spec-helper.js";
 
 export const awaitChainTestSuite = ({ it }: { it: TestAPI<TestSuiteContext> }): void => {
@@ -41,7 +41,7 @@ export const awaitChainTestSuite = ({ it }: { it: TestAPI<TestSuiteContext> }): 
         transactionHooks,
         ...chain,
         handler: async ({ job, completeJob }) => {
-          return completeJob(job, async ({ finish }) => finish({ output: { result: "done" } }));
+          return completeJob(job, async ({ complete }) => complete({ output: { result: "done" } }));
         },
       }),
     );
@@ -102,7 +102,7 @@ export const awaitChainTestSuite = ({ it }: { it: TestAPI<TestSuiteContext> }): 
         transactionHooks,
         ...chain,
         handler: async ({ job, completeJob }) =>
-          completeJob(job, async ({ finish }) => finish({ output: { result: "done" } })),
+          completeJob(job, async ({ complete }) => complete({ output: { result: "done" } })),
       }),
     );
 

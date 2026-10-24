@@ -1,5 +1,6 @@
 import { type UUID } from "node:crypto";
 
+import { createAsyncRwLock } from "@queuert/helpers";
 import Database from "better-sqlite3";
 import {
   type StateAdapter,
@@ -67,7 +68,8 @@ describe("SQLite State Adapter Conformance", () => {
 const typeInferenceIt = extendWithStateSqlite(it);
 
 typeInferenceIt("infers custom ID types through the full stack", async ({ db }) => {
-  const stateProvider = createBetterSqlite3Provider({ db });
+  const lock = createAsyncRwLock();
+  const stateProvider = createBetterSqlite3Provider({ db, lock });
   const stateAdapter = await createSqliteStateAdapter({
     stateProvider,
     tablePrefix: "myapp_",
@@ -93,6 +95,20 @@ typeInferenceIt("infers custom ID types through the full stack", async ({ db }) 
     log,
     jobTypes,
   });
+
+  const withTransaction = async <T>(fn: (txDb: typeof db) => Promise<T>): Promise<T> => {
+    using _h = await lock.acquireWrite();
+    db.exec("BEGIN");
+    try {
+      const result = await fn(db);
+      db.exec("COMMIT");
+      return result;
+    } catch (error) {
+      if (db.inTransaction) db.exec("ROLLBACK");
+      throw error;
+    }
+  };
+
   const worker = await createInProcessWorker({
     client,
     processors: createProcessors({
@@ -103,25 +119,16 @@ typeInferenceIt("infers custom ID types through the full stack", async ({ db }) 
           attemptHandler: async ({ job, complete }) => {
             expectTypeOf(job.id).toEqualTypeOf<`job.${UUID}`>();
 
-            return complete(async ({ finish }) => finish({ output: { bar: 42 } }));
+            return withTransactionHooks(async (transactionHooks) =>
+              withTransaction(async (db) =>
+                complete({ db, transactionHooks, output: { bar: 42 } }),
+              ),
+            );
           },
         },
       },
     }),
   });
-
-  const outerDb = db;
-  const withTransaction = async <T>(fn: (db: typeof outerDb) => Promise<T>): Promise<T> => {
-    db.exec("BEGIN");
-    try {
-      const result = await fn(outerDb);
-      db.exec("COMMIT");
-      return result;
-    } catch (error) {
-      db.exec("ROLLBACK");
-      throw error;
-    }
-  };
 
   const chain = await withTransactionHooks(async (transactionHooks) =>
     withTransaction(async (db) =>

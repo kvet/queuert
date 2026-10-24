@@ -8,7 +8,7 @@ Read by every `publish-review` agent and by `review-code`.
 - **`createClient` is async but performs no I/O**: Reserves the right to add async initialization later.
 - **`createInProcessWorker` is async but performs no I/O**: Reserves the right to add async initialization later.
 - **`helpersSymbol` exported publicly but marked `@internal`**: Required by `@queuert/dashboard` and `createInProcessWorker`. The `@internal` annotation is a convention, not enforcement.
-- **`createAsyncRwLock` re-exported from `@queuert/sqlite` via `queuert/internal`**: SQLite users need this for transaction serialization.
+- **`createAsyncRwLock` re-exported from `@queuert/sqlite` via the private `@queuert/helpers` package (inlined at build)**: SQLite users need this for transaction serialization.
 - **`HookNotRegisteredError` does not accept `cause`**: This error is never caused by another error.
 - **Notify adapter channel prefix uses different separators**: Each adapter uses its transport's idiomatic separator (`:` for Redis, `_` for PG, `.` for NATS).
 - **NATS notify adapter uses `subjectPrefix` while PG and Redis use `channelPrefix`**: Each adapter uses its transport's idiomatic terminology.

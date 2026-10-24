@@ -1,6 +1,6 @@
+import { sleep } from "@queuert/helpers";
 import { describe, expect, it } from "vitest";
 
-import { sleep } from "../helpers/sleep.js";
 import {
   ConformanceError,
   type ConformanceGroup,

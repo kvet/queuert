@@ -1,6 +1,11 @@
+import { serializeError } from "@queuert/helpers";
+
+import {
+  type AnyAttemptMiddleware,
+  runHandlerMiddlewareChain,
+} from "../attempt-middleware/attempt-middleware.js";
+import { type BackoffConfig, calculateBackoffMs } from "../entities/backoff.js";
 import { type AnyChain, type CompletedChain, mapStateChainToChain } from "../entities/chain.js";
-import { type BaseJobTypeDefinitions } from "../entities/job-type.js";
-import { type ResolvedRunningJob } from "../entities/job-types.resolvers.js";
 import { mapStateJobToJob } from "../entities/job.js";
 import { type ScheduleOptions } from "../entities/schedule.js";
 import {
@@ -8,60 +13,331 @@ import {
   JobNotFoundError,
   JobTakenByAnotherWorkerError,
 } from "../errors.js";
-import { type BackoffConfig } from "../helpers/backoff.js";
-import { bufferNotifyJobScheduled } from "../helpers/notify-hooks.js";
-import { bufferObservabilityEvent } from "../helpers/observability-hooks.js";
-import { type SavepointContext, createSavepointContext } from "../helpers/savepoint-context.js";
 import {
-  type TransactionContext,
-  createTransactionContext,
-} from "../helpers/transaction-context.js";
-import { createFinishOnce, mapFinishResult } from "../implementation/attempt-outcome.js";
-import { completeChain } from "../implementation/complete-chain.js";
-import { type AnyContinueWith, continueChain } from "../implementation/continue-chain.js";
-import { handleJobHandlerError } from "../implementation/handle-job-handler-error.js";
-import { refetchJobLocked as refetchJobLockedImpl } from "../implementation/refetch-job-locked.js";
+  type AnyContinueWith,
+  completeOrContinueChain,
+  rescheduleJobs,
+} from "../implementation.js";
+import { type BaseJobTypeDefinitions } from "../job-types/job-type.js";
+import { type ResolvedRunningJob } from "../job-types/job-types.resolvers.js";
+import { type ObservabilityHelper } from "../observability-adapter/observability-helper.js";
+import { bufferObservabilityEvent } from "../observability-adapter/observability-hooks.js";
 import { type Helpers } from "../setup-helpers.js";
 import {
   type BaseTxContext,
   type StateAdapter,
   type StateAttemptFence,
   type StateJob,
+  type StateJobInfo,
 } from "../state-adapter/state-adapter.js";
-import { type TransactionHooks, withTransactionHooks } from "../transaction-hooks.js";
-import { type AttemptConfig, createAttemptHeartbeat } from "./attempt-heartbeat.js";
-import {
-  type AnyAttemptMiddleware,
-  runCompleteMiddlewareChain,
-  runHandlerMiddlewareChain,
-  runPrepareMiddlewareChain,
-} from "./attempt-middleware.js";
-import {
-  type AttemptComplete,
-  type AttemptHandler,
-  type AttemptPrepare,
-} from "./job-process.types.js";
+import { requireTxCtx } from "../state-adapter/tx-context.js";
+import { type TransactionHooks, createTransactionHooks } from "../transaction-hooks.js";
+import { type AttemptConfig } from "./attempt-heartbeat.js";
+import { type AttemptOwnership, startAttemptOwnership } from "./attempt-ownership.js";
+import { type AttemptHandler } from "./job-process.types.js";
 
-export type {
-  AttemptComplete,
-  AttemptCompleteCallback,
-  AttemptCompleteOptions,
-  AttemptFinish,
-  AttemptHandler,
-  AttemptPrepare,
-  AttemptPrepareCallback,
-  AttemptPrepareOptions,
-} from "./job-process.types.js";
+// A successful `complete` returns a receipt. It is committed once the caller's hooks flush with
+// it, which proves its transaction committed when the hooks wrap the transaction. A handler that
+// returns a committed receipt needs no database check.
+type CompleteResult = StateJob & { continuation?: StateJobInfo };
+type CompleteCall = { result: CompleteResult; receipt: object };
 
-type AnyWorkerOutcome =
-  | { output: unknown }
-  | { continueWith: AnyContinueWith }
-  | { reschedule: ScheduleOptions };
+type AttemptSpanHandle = ReturnType<ObservabilityHelper["startAttemptSpan"]>;
+
+type AnyAttemptHandler = AttemptHandler<
+  StateAdapter<BaseTxContext, any>,
+  BaseJobTypeDefinitions,
+  string,
+  string,
+  Record<string, unknown>
+>;
+
+const startAttempt = (
+  helpers: Helpers,
+  { stateJob, workerId }: { stateJob: StateJob; workerId: string },
+): { tracedJob: StateJob; span: AttemptSpanHandle; startTime: number } => {
+  const startTime = Date.now();
+  helpers.observabilityHelper.jobAttemptStarted(stateJob, { workerId });
+  const span = helpers.observabilityHelper.startAttemptSpan({
+    chainId: stateJob.chain.id,
+    chainTypeName: stateJob.chain.typeName,
+    jobId: stateJob.id,
+    jobTypeName: stateJob.typeName,
+    attempt: stateJob.attempt,
+    workerId,
+    chainTraceContext: stateJob.chain.traceContext,
+    traceContext: stateJob.traceContext,
+  });
+
+  // Carries the attempt span's trace context, so a continuation's job span descends from it.
+  const tracedJob: StateJob = {
+    ...stateJob,
+    traceContext: span?.getTraceContext() ?? stateJob.traceContext,
+    chain: {
+      ...stateJob.chain,
+      traceContext: span?.getChainTraceContext() ?? stateJob.chain.traceContext,
+    },
+  };
+
+  return { tracedJob, span, startTime };
+};
+
+const createComplete = (
+  helpers: Helpers,
+  {
+    tracedJob,
+    workerId,
+    fence,
+    ownership,
+  }: {
+    tracedJob: StateJob;
+    workerId: string;
+    fence: StateAttemptFence;
+    ownership: AttemptOwnership;
+  },
+): {
+  complete: (options: Record<string, unknown>) => Promise<object>;
+  close: () => void;
+  committedCall: () => CompleteCall | null;
+  lastWrite: () => CompleteResult | null;
+} => {
+  let closed = false;
+  // The latest successful `complete` write, set before its transaction commits.
+  let lastWrite = null as CompleteResult | null;
+  let committedCall = null as CompleteCall | null;
+
+  // One successful call per caller's hooks scope; a hooks savepoint rollback clears it again.
+  const completeHookKey = Symbol("queuert.complete");
+  const getCompleteSlot = (transactionHooks: TransactionHooks) =>
+    transactionHooks.getOrInsert(completeHookKey, () => ({
+      state: { call: null as CompleteCall | null },
+      checkpoint: (state) => {
+        const call = state.call;
+        return () => {
+          state.call = call;
+        };
+      },
+      flush: (state) => {
+        if (state.call === null) return;
+        committedCall = state.call;
+        void ownership.stopHeartbeat();
+      },
+    }));
+
+  // Reads why a fenced `complete` write missed and returns the matching error. The loss is
+  // reported once, however many calls miss.
+  let lossReported = false;
+  const readLossError = async (txCtx: BaseTxContext): Promise<Error> => {
+    const [job] = await helpers.stateAdapter.getJobs({ txCtx, jobIds: [tracedJob.id] });
+    ownership.abort();
+    const report = !lossReported;
+    lossReported = true;
+    if (report) ownership.reportExpiredLease();
+    if (!job) {
+      return new JobNotFoundError(`Job not found`, { jobId: tracedJob.id });
+    }
+    if (job.completedAt !== null) {
+      if (report) helpers.observabilityHelper.jobAttemptAlreadyCompleted(job, { workerId });
+      return new JobAlreadyCompletedError("Job is already completed", { jobId: tracedJob.id });
+    }
+    if (report) helpers.observabilityHelper.jobAttemptTakenByAnotherWorker(job, { workerId });
+    return new JobTakenByAnotherWorkerError(`Job taken by another worker`, {
+      jobId: tracedJob.id,
+      workerId,
+      attemptBy: job.attemptBy,
+    });
+  };
+
+  const complete = async (options: Record<string, unknown>) => {
+    if (closed) {
+      throw new Error("complete cannot be called after the attempt handler has ended");
+    }
+    const {
+      transactionHooks,
+      output: _output,
+      continueWith: _continueWith,
+      reschedule: _reschedule,
+      ...txCtxFields
+    } = options as { transactionHooks?: TransactionHooks } & Record<string, unknown>;
+    const outcomeCount =
+      Number("output" in options) +
+      Number("continueWith" in options) +
+      Number("reschedule" in options);
+    if (outcomeCount !== 1) {
+      throw new Error("complete requires exactly one of output, continueWith or reschedule");
+    }
+    if (transactionHooks === undefined) {
+      throw new Error("complete requires transactionHooks");
+    }
+    const txCtx = requireTxCtx(helpers.stateAdapter, txCtxFields, "complete");
+
+    const completeSlot = getCompleteSlot(transactionHooks);
+    if (completeSlot.call !== null) {
+      throw new Error(
+        "complete already succeeded with these transactionHooks; a retried transaction needs its own withTransactionHooks",
+      );
+    }
+
+    ownership.reportExpiredLease();
+
+    const result: CompleteResult | undefined =
+      "reschedule" in options
+        ? (
+            await rescheduleJobs(helpers, {
+              txCtx,
+              transactionHooks,
+              jobs: [
+                { jobId: tracedJob.id, schedule: options.reschedule as ScheduleOptions, fence },
+              ],
+            })
+          )[0]
+        : await completeOrContinueChain(helpers, {
+            job: tracedJob,
+            outcome: options as { output: unknown } | { continueWith: AnyContinueWith },
+            txCtx,
+            transactionHooks,
+            fence,
+          });
+    if (result === undefined) {
+      throw await readLossError(txCtx);
+    }
+
+    lastWrite = result;
+    ownership.markCompleteWritten();
+    completeSlot.call = { result, receipt: mapStateJobToJob(result) };
+    return completeSlot.call.receipt;
+  };
+
+  return {
+    complete,
+    close: () => {
+      closed = true;
+    },
+    committedCall: () => committedCall,
+    lastWrite: () => lastWrite,
+  };
+};
+
+const runAttemptHandler = async ({
+  helpers,
+  attemptHandler,
+  attemptMiddleware,
+  stateJob,
+  workerId,
+  signal,
+  complete,
+}: {
+  helpers: Helpers;
+  attemptHandler: AnyAttemptHandler;
+  attemptMiddleware: readonly AnyAttemptMiddleware[] | undefined;
+  stateJob: StateJob & { hasBlockers: boolean };
+  workerId: string;
+  signal: AbortSignal;
+  complete: (options: Record<string, unknown>) => Promise<object>;
+}): Promise<{ status: "returned"; value: unknown } | { status: "threw"; error: unknown }> => {
+  try {
+    const blockerChains = stateJob.hasBlockers
+      ? await helpers.stateAdapter.getJobBlockers({ jobId: stateJob.id })
+      : [];
+    const runningJob = {
+      ...mapStateJobToJob(stateJob),
+      blockers: blockerChains.map(mapStateChainToChain) as CompletedChain<AnyChain>[],
+    } as ResolvedRunningJob<any, any, any, any>;
+    const value = await runHandlerMiddlewareChain(
+      attemptMiddleware,
+      { job: runningJob, workerId },
+      async (handlerCtx) =>
+        attemptHandler({
+          ...handlerCtx,
+          signal,
+          job: runningJob,
+          complete: complete as any,
+        }),
+    );
+    return { status: "returned", value };
+  } catch (error) {
+    return { status: "threw", error };
+  }
+};
+
+const reportAttemptCompleted = (
+  helpers: Helpers,
+  {
+    stateJob,
+    workerId,
+    span,
+    finished,
+  }: { stateJob: StateJob; workerId: string; span: AttemptSpanHandle; finished: CompleteResult },
+): void => {
+  helpers.observabilityHelper.jobAttemptCompleted(stateJob, {
+    output: finished.output,
+    continuedWith: finished.continuation,
+    workerId,
+  });
+  span?.end({
+    status: "completed",
+    continuedWith: finished.continuation
+      ? { jobId: finished.continuation.id, jobTypeName: finished.continuation.typeName }
+      : undefined,
+    chainCompleted:
+      finished.completedAt !== null && finished.continuedToId === null
+        ? { output: finished.output }
+        : undefined,
+  });
+};
+
+// A fenced reschedule only matches while the attempt still owns the job, so it misses exactly when
+// a `complete` committed or the attempt was lost; it is also the safety net for hooks that flushed
+// before a COMMIT that then failed. Returns whether the job was rescheduled.
+const rescheduleFailedAttempt = async (
+  helpers: Helpers,
+  {
+    stateJob,
+    workerId,
+    span,
+    fence,
+    backoffConfig,
+    failure,
+  }: {
+    stateJob: StateJob;
+    workerId: string;
+    span: AttemptSpanHandle;
+    fence: StateAttemptFence;
+    backoffConfig: BackoffConfig;
+    failure: unknown;
+  },
+): Promise<boolean> => {
+  const { transactionHooks, flush } = createTransactionHooks();
+  let rescheduledJob: StateJob | undefined;
+  try {
+    [rescheduledJob] = await rescheduleJobs(helpers, {
+      jobs: [
+        {
+          jobId: stateJob.id,
+          schedule: { afterMs: calculateBackoffMs(stateJob.attempt, backoffConfig) },
+          error: serializeError(failure),
+          fence,
+        },
+      ],
+      transactionHooks,
+    });
+  } catch (rescheduleError) {
+    span?.end({ status: "failed", error: failure });
+    throw rescheduleError;
+  }
+  if (!rescheduledJob) return false;
+
+  bufferObservabilityEvent(transactionHooks, () => {
+    helpers.observabilityHelper.jobAttemptFailed(stateJob, { workerId, error: failure });
+    span?.end({ status: "failed", error: failure });
+  });
+  await flush();
+  return true;
+};
 
 export const runJobProcess = async ({
   helpers,
   attemptHandler,
-  prepareTransactionContext,
   stateJob,
   backoffConfig,
   attemptConfig,
@@ -70,16 +346,7 @@ export const runJobProcess = async ({
   stopSignal,
 }: {
   helpers: Helpers;
-  attemptHandler: AttemptHandler<
-    StateAdapter<BaseTxContext, any>,
-    BaseJobTypeDefinitions,
-    string,
-    string,
-    Record<string, unknown>,
-    Record<string, unknown>,
-    Record<string, unknown>
-  >;
-  prepareTransactionContext: TransactionContext<BaseTxContext>;
+  attemptHandler: AnyAttemptHandler;
   stateJob: StateJob & { hasBlockers: boolean };
   backoffConfig: BackoffConfig;
   attemptConfig: AttemptConfig;
@@ -87,421 +354,70 @@ export const runJobProcess = async ({
   attemptMiddleware?: readonly AnyAttemptMiddleware[];
   stopSignal: AbortSignal;
 }): Promise<void> => {
-  let completeTransactionContext: TransactionContext<BaseTxContext> | null = null;
   const fence: StateAttemptFence = { attempt: stateJob.attempt, workerId };
-
-  const abortController = new AbortController();
-  let hardAbortError: { error: unknown } | null = null;
-  const hardAbort = (error: unknown) => {
-    hardAbortError ??= { error };
-    abortController.abort();
-  };
-
-  let cleanupStopListener: (() => void) | null = null;
-  if (stopSignal.aborted) {
-    abortController.abort();
-  } else {
-    const onStop = () => {
-      abortController.abort();
-    };
-    stopSignal.addEventListener("abort", onStop, { once: true });
-    cleanupStopListener = () => {
-      stopSignal.removeEventListener("abort", onStop);
-    };
-    abortController.signal.addEventListener("abort", () => cleanupStopListener?.(), { once: true });
-  }
-  const throwIfHardAborted = () => {
-    if (hardAbortError !== null) {
-      // oxlint-disable-next-line typescript/only-throw-error -- re-throwing the error that aborted the attempt
-      throw hardAbortError.error;
-    }
-  };
-  const refetchJobLocked = async (txCtx: BaseTxContext) => {
-    throwIfHardAborted();
-
-    await refetchJobLockedImpl(helpers, {
-      txCtx,
-      job: stateJob,
-      workerId,
-    }).catch((error: unknown) => {
-      if (
-        error instanceof JobNotFoundError ||
-        error instanceof JobAlreadyCompletedError ||
-        error instanceof JobTakenByAnotherWorkerError
-      ) {
-        hardAbort(error);
-      }
-      throw error;
-    });
-  };
-  const runInGuardedTransaction = async <T>(
-    cb: (txCtx: BaseTxContext, transactionHooks: TransactionHooks) => Promise<T>,
-  ): Promise<T> => {
-    throwIfHardAborted();
-
-    if (prepareTransactionContext.status === "pending") {
-      return prepareTransactionContext.run(cb);
-    }
-    if (completeTransactionContext && completeTransactionContext.status === "pending") {
-      return completeTransactionContext.run(cb);
-    }
-
-    return withTransactionHooks(async (transactionHooks) =>
-      helpers.stateAdapter.withTransaction(async (txCtx) => {
-        await refetchJobLocked(txCtx);
-        return cb(txCtx, transactionHooks);
-      }),
-    );
-  };
-  const extendAttempt = async (txCtx: BaseTxContext, timeoutMs: number): Promise<void> => {
-    const extended = await helpers.stateAdapter.extendJobAttempt({
-      txCtx,
-      jobId: stateJob.id,
-      fence,
-      timeoutMs,
-    });
-    if (!extended) {
-      throw new JobTakenByAnotherWorkerError(`Job taken by another worker`, {
-        jobId: stateJob.id,
-        workerId,
-      });
-    }
-  };
-  const attemptHeartbeat = createAttemptHeartbeat({
-    commitRenewal: async (timeoutMs: number) => {
-      try {
-        await runInGuardedTransaction(async (txCtx) => extendAttempt(txCtx, timeoutMs));
-        helpers.observabilityHelper.jobAttemptExtended(stateJob, { workerId });
-      } catch (error) {
-        hardAbort(error);
-        if (
-          error instanceof JobTakenByAnotherWorkerError ||
-          error instanceof JobNotFoundError ||
-          error instanceof JobAlreadyCompletedError
-        ) {
-          return;
-        }
-        throw error;
-      }
-    },
-    config: attemptConfig,
+  const ownership = await startAttemptOwnership(helpers, {
+    stateJob,
+    fence,
+    workerId,
+    attemptConfig,
+    stopSignal,
   });
-  let disposeAttemptLostListener: (() => Promise<void>) | null = null;
+  const { tracedJob, span, startTime } = startAttempt(helpers, { stateJob, workerId });
+  const completion = createComplete(helpers, { tracedJob, workerId, fence, ownership });
 
-  const blockerChains = stateJob.hasBlockers
-    ? await prepareTransactionContext.run(async (txCtx) =>
-        helpers.stateAdapter.getJobBlockers({ txCtx, jobId: stateJob.id }),
-      )
-    : [];
-  const runningJob = {
-    ...mapStateJobToJob(stateJob),
-    blockers: blockerChains.map(mapStateChainToChain) as CompletedChain<AnyChain>[],
-  } as ResolvedRunningJob<any, any, any, any>;
+  const handlerResult = await runAttemptHandler({
+    helpers,
+    attemptHandler,
+    attemptMiddleware,
+    stateJob,
+    workerId,
+    signal: ownership.signal,
+    complete: completion.complete,
+  });
 
-  const runJobAttempt = async () => {
-    const attemptStartTime = Date.now();
-    const finishOnce = createFinishOnce();
-    const emitAttemptDuration = () => {
-      helpers.observabilityHelper.jobAttemptDuration(stateJob, {
-        durationMs: Date.now() - attemptStartTime,
-        workerId,
-      });
-    };
+  completion.close();
+  await ownership.release();
 
-    helpers.observabilityHelper.jobAttemptStarted(stateJob, { workerId });
-    const attemptSpanHandle = helpers.observabilityHelper.startAttemptSpan({
-      chainId: stateJob.chain.id,
-      chainTypeName: stateJob.chain.typeName,
-      jobId: stateJob.id,
-      jobTypeName: stateJob.typeName,
-      attempt: stateJob.attempt,
-      workerId,
-      chainTraceContext: stateJob.chain.traceContext,
-      traceContext: stateJob.traceContext,
-    });
+  helpers.observabilityHelper.jobAttemptDuration(stateJob, {
+    durationMs: Date.now() - startTime,
+    workerId,
+  });
 
-    let prepareAccessed = false;
-    let prepareCalled = false;
-    let prepareRunning = false;
-    const prepare = (async <T>(
-      config: { mode: "atomic" | "staged" },
-      prepareCallback?: (options: BaseTxContext) => T | Promise<T>,
-    ) => {
-      if (prepareCalled) {
-        throw new Error("prepare can only be called once");
-      }
-      prepareCalled = true;
-      prepareRunning = true;
+  const committed = completion.committedCall();
+  if (
+    handlerResult.status === "returned" &&
+    committed !== null &&
+    handlerResult.value === committed.receipt
+  ) {
+    reportAttemptCompleted(helpers, { stateJob, workerId, span, finished: committed.result });
+    return;
+  }
 
-      try {
-        const prepareSpan = attemptSpanHandle?.startPrepare();
-        let callbackOutput: T | undefined;
-        try {
-          callbackOutput = await prepareTransactionContext.run(async (txCtx) =>
-            prepareCallback
-              ? helpers.stateAdapter.withSavepoint(txCtx, async (innerTxCtx) =>
-                  runPrepareMiddlewareChain(
-                    attemptMiddleware,
-                    { job: runningJob, txCtx: innerTxCtx },
-                    async (prepareCtx) =>
-                      prepareCallback({ ...prepareCtx, ...innerTxCtx } as BaseTxContext),
-                  ),
-                )
-              : undefined,
-          );
-          prepareSpan?.end();
-        } catch (error) {
-          prepareSpan?.end({ error });
-          throw error;
-        }
+  // Anything else fails the attempt. A thrown `null` or `undefined` is replaced too, so the
+  // recorded error is never empty.
+  const thrown = handlerResult.status === "threw" ? handlerResult.error : undefined;
+  const failure =
+    thrown ?? new Error("Attempt handler returned without a committed `complete` call");
+  const rescheduled = await rescheduleFailedAttempt(helpers, {
+    stateJob,
+    workerId,
+    span,
+    fence,
+    backoffConfig,
+    failure,
+  });
+  if (rescheduled) return;
 
-        if (config.mode === "staged") {
-          await prepareTransactionContext.resolve();
-
-          await attemptHeartbeat.start();
-          try {
-            disposeAttemptLostListener = await helpers.notifyAdapter.listenJobAttemptLost(
-              stateJob.id,
-              () => {
-                if (hardAbortError === null) {
-                  void runInGuardedTransaction(async () => Promise.resolve()).catch(() => {});
-                }
-              },
-            );
-          } catch {}
-        }
-
-        return callbackOutput;
-      } finally {
-        prepareRunning = false;
-      }
-    }) as AttemptPrepare<StateAdapter<BaseTxContext, any>>;
-
-    let completeCalled = false;
-    let completeSavepointContext: SavepointContext<BaseTxContext> | undefined;
-    const complete = (async (
-      completeCallback: (
-        options: {
-          finish: (outcome: AnyWorkerOutcome) => Promise<unknown>;
-        } & { transactionHooks: TransactionHooks } & BaseTxContext,
-      ) => unknown,
-    ) => {
-      if (completeCalled) {
-        throw new Error("complete can only be called once");
-      }
-      completeCalled = true;
-      await autoPreparePromise;
-      if (prepareRunning) {
-        throw new Error("complete cannot be called while prepare is running");
-      }
-      await disposeAttemptLostListener?.();
-      await attemptHeartbeat.stop();
-      const completeSpan = attemptSpanHandle?.startComplete();
-      try {
-        if (prepareTransactionContext.status !== "pending") {
-          completeTransactionContext = await createTransactionContext(
-            helpers.stateAdapter.withTransaction,
-          );
-          await completeTransactionContext.run(async (txCtx) => {
-            await refetchJobLocked(txCtx);
-          });
-        }
-
-        completeSavepointContext = await createSavepointContext(
-          async (cb) => runInGuardedTransaction(cb),
-          helpers.stateAdapter.withSavepoint,
-        );
-
-        const result = await completeSavepointContext.run(async (txCtx, transactionHooks) => {
-          const finish = async (outcome: AnyWorkerOutcome) => {
-            finishOnce.begin();
-            try {
-              if ("reschedule" in outcome) {
-                const [rescheduledJob] = await helpers.stateAdapter.rescheduleJobs({
-                  txCtx,
-                  jobs: [{ jobId: stateJob.id, schedule: outcome.reschedule, fence }],
-                });
-                if (rescheduledJob === undefined) {
-                  throw new JobNotFoundError(`Job ${stateJob.id} not found or already completed`, {
-                    jobId: stateJob.id,
-                  });
-                }
-                bufferNotifyJobScheduled(transactionHooks, helpers.notifyAdapter, rescheduledJob);
-                bufferObservabilityEvent(transactionHooks, () => {
-                  helpers.observabilityHelper.jobRescheduled(rescheduledJob);
-                });
-                const finishResult = { job: rescheduledJob, continuation: null };
-                finishOnce.succeed(finishResult);
-                return mapFinishResult(finishResult);
-              }
-
-              const finishResult =
-                "output" in outcome
-                  ? await completeChain(helpers, {
-                      job: stateJob,
-                      output: outcome.output,
-                      txCtx,
-                      transactionHooks,
-                      fence,
-                    })
-                  : await continueChain(helpers, {
-                      fromJob: {
-                        ...stateJob,
-                        traceContext: attemptSpanHandle?.getTraceContext() ?? stateJob.traceContext,
-                        chain: {
-                          ...stateJob.chain,
-                          traceContext:
-                            attemptSpanHandle?.getChainTraceContext() ??
-                            stateJob.chain.traceContext,
-                        },
-                      },
-                      continueWith: outcome.continueWith,
-                      txCtx,
-                      transactionHooks,
-                      fence,
-                    });
-              finishOnce.succeed(finishResult);
-              return mapFinishResult(finishResult);
-            } catch (error) {
-              finishOnce.fail(error);
-              throw error;
-            }
-          };
-
-          const completeResult = await runCompleteMiddlewareChain(
-            attemptMiddleware,
-            { job: runningJob, transactionHooks, txCtx },
-            async (completeCtx) =>
-              completeCallback({
-                ...completeCtx,
-                finish,
-                transactionHooks,
-                ...txCtx,
-              }),
-          );
-
-          finishOnce.requireFinished("finish must be called before the complete callback returns");
-          return completeResult;
-        });
-
-        completeSpan?.end();
-        return result;
-      } catch (error) {
-        completeSpan?.end({ error });
-        throw error;
-      }
-    }) as AttemptComplete<StateAdapter<BaseTxContext, any>, BaseJobTypeDefinitions, string, string>;
-
-    let autoSetupDone = false;
-    let autoPreparePromise: Promise<void> | null = null;
-
-    const ensureStagedPrepare = async () => {
-      if (!prepareAccessed && !prepareCalled && !completeCalled) {
-        autoPreparePromise = prepare({ mode: "staged" });
-        await autoPreparePromise;
-        autoSetupDone = true;
-      }
-    };
-
-    try {
-      await runHandlerMiddlewareChain(
-        attemptMiddleware,
-        { job: runningJob, workerId },
-        async (handlerCtx) => {
-          const attemptPromise = attemptHandler({
-            ...handlerCtx,
-            signal: abortController.signal,
-            job: runningJob,
-            get prepare() {
-              if (autoSetupDone) {
-                throw new Error("prepare cannot be accessed after auto-setup");
-              }
-              if (!prepareAccessed) {
-                prepareAccessed = true;
-              }
-              return prepare;
-            },
-            complete,
-          });
-          attemptPromise.catch(() => {});
-
-          await ensureStagedPrepare();
-
-          await attemptPromise;
-        },
-      );
-
-      const finished = finishOnce.requireFinished(
-        "complete must be called before the attempt handler returns",
-      );
-
-      await completeSavepointContext?.resolve();
-      await prepareTransactionContext.resolve();
-      await completeTransactionContext?.resolve();
-
-      emitAttemptDuration();
-
-      helpers.observabilityHelper.jobAttemptCompleted(stateJob, {
-        output: finished.job.output,
-        continuedWith: finished.continuation ?? undefined,
-        workerId,
-      });
-      attemptSpanHandle?.end({
-        status: "completed",
-        continuedWith: finished.continuation
-          ? {
-              jobId: finished.continuation.id,
-              jobTypeName: finished.continuation.typeName,
-            }
-          : undefined,
-        chainCompleted:
-          finished.continuation || !finished.job.completedAt
-            ? undefined
-            : { output: finished.job.output },
-      });
-    } catch (error) {
-      await disposeAttemptLostListener?.();
-      await attemptHeartbeat.stop();
-
-      await completeSavepointContext?.reject(error);
-
-      emitAttemptDuration();
-
-      try {
-        const errorResult = await runInGuardedTransaction(async (txCtx, transactionHooks) =>
-          transactionHooks.withSavepoint(async () =>
-            handleJobHandlerError(helpers, {
-              stateJob,
-              error,
-              txCtx,
-              transactionHooks,
-              backoffConfig,
-              fence,
-            }),
-          ),
-        );
-
-        await prepareTransactionContext.resolve();
-        await completeTransactionContext?.resolve();
-
-        attemptSpanHandle?.end({
-          status: "failed",
-          error,
-          rescheduledAt: errorResult.schedule?.at,
-          rescheduledAfterMs: errorResult.schedule?.afterMs,
-        });
-      } catch (innerError) {
-        await prepareTransactionContext.reject(innerError);
-        await completeTransactionContext?.reject(innerError);
-
-        attemptSpanHandle?.end({ status: "failed", error });
-      }
-    }
-  };
-
-  try {
-    await runJobAttempt();
-  } finally {
-    cleanupStopListener?.();
+  // The attempt no longer holds the job, so a `complete` write it made is the one that
+  // committed, even when its hooks were discarded.
+  const finished = completion.committedCall()?.result ?? completion.lastWrite();
+  if (finished === null) {
+    span?.end({ status: "failed", error: failure });
+    return;
+  }
+  reportAttemptCompleted(helpers, { stateJob, workerId, span, finished });
+  if (handlerResult.status === "threw") {
+    // oxlint-disable-next-line typescript/only-throw-error -- re-throwing the handler's error after its committed complete, for the worker to record
+    throw handlerResult.error;
   }
 };

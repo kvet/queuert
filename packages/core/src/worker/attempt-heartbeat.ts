@@ -1,37 +1,34 @@
-import { isPositiveFinite } from "../helpers/number.js";
-import { sleep } from "../helpers/sleep.js";
+import { sleep, isPositiveFinite } from "@queuert/helpers";
 
 /** Configuration for job attempt timeout and heartbeat frequency. */
 export type AttemptConfig = {
   /**
-   * How long a worker holds a staged attempt before it can be reclaimed, counted from acquire
-   * and renewed by the heartbeat. An atomic attempt's lease stays uncommitted inside its one
-   * transaction, so it is never reclaimed. Must be finite and positive. Defaults to `60_000`.
+   * How long a worker holds an attempt before it can be reclaimed, unless the heartbeat
+   * extends it. The timeout starts when the job is acquired. Must be finite and positive.
+   * Defaults to `60_000`.
    */
   timeoutMs: number;
   /**
-   * How often to extend the attempt deadline of a staged attempt. Must be finite and positive.
-   * Defaults to `30_000`.
+   * How often to extend the attempt while the handler runs. Must be finite and
+   * positive. Defaults to `30_000`.
    */
   heartbeatMs: number;
 };
 
-export type AttemptHeartbeat = {
-  start: () => Promise<void>;
-  stop: () => Promise<void>;
-};
-
+/**
+ * Extends an attempt every `heartbeatMs` from creation until stopped, or until `extend`
+ * reports there is nothing left to extend by returning `false`.
+ */
 export const createAttemptHeartbeat = ({
-  commitRenewal,
+  extend,
   config,
 }: {
-  commitRenewal: (timeoutMs: number) => Promise<void>;
+  extend: (timeoutMs: number) => Promise<boolean>;
   config: AttemptConfig;
-}): AttemptHeartbeat => {
+}): { stop: () => Promise<void> } => {
   const abortController = new AbortController();
-  let loopPromise: Promise<void> | undefined;
 
-  const runRenewalLoop = async () => {
+  const runExtensionLoop = async () => {
     while (!abortController.signal.aborted) {
       await sleep(config.heartbeatMs, {
         signal: abortController.signal,
@@ -39,18 +36,17 @@ export const createAttemptHeartbeat = ({
       if (abortController.signal.aborted) {
         break;
       }
-      await commitRenewal(config.timeoutMs);
+      if (!(await extend(config.timeoutMs))) {
+        break;
+      }
     }
   };
+  const loopPromise = runExtensionLoop().catch(() => {});
 
   return {
-    start: async () => {
-      loopPromise = runRenewalLoop();
-      loopPromise.catch(() => {});
-    },
     stop: async () => {
       abortController.abort();
-      await loopPromise?.catch(() => {});
+      await loopPromise;
     },
   };
 };

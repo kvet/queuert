@@ -53,21 +53,25 @@ const worker = await createInProcessWorker({
     jobTypes,
     processors: {
       send_welcome_email: {
-        attemptHandler: async ({ job, prepare, complete }) => {
-          // Load the user with Bun.SQL inside the job transaction
-          const user = await prepare({ mode: "staged" }, async ({ txSql }) => {
-            const [row]: { id: number; name: string; email: string }[] = await txSql`
-              SELECT id, name, email FROM users WHERE id = ${job.input.userId}
-            `;
-            if (!row) throw new Error(`User ${job.input.userId} not found`);
-            return row;
-          });
+        attemptHandler: async ({ job, complete }) => {
+          let user: { id: number; name: string; email: string } | undefined;
+          {
+            using _h = await lock.acquireRead();
+            [user] = await sql`SELECT id, name, email FROM users WHERE id = ${job.input.userId}`;
+          }
+          if (!user) throw new Error(`User ${job.input.userId} not found`);
 
+          // Simulate sending email (in real app, call email service here)
           console.log(`Sending welcome email to ${user.email} for ${user.name}`);
 
-          return complete(async ({ finish }) =>
-            finish({ output: { sentAt: new Date().toISOString() } }),
-          );
+          return withTransactionHooks(async (transactionHooks) => {
+            // The handler's transaction holds the provider's write lock, so the worker's
+            // autocommit statements on this connection cannot run inside it.
+            using _h = await lock.acquireWrite();
+            return await sql.begin(async (txSql) =>
+              complete({ txSql, transactionHooks, output: { sentAt: new Date().toISOString() } }),
+            );
+          });
         },
       },
     },

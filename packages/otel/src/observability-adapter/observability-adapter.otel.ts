@@ -32,16 +32,6 @@ const isValidTraceparent = (value: unknown): value is string =>
 const toException = (error: unknown): Error | string =>
   error instanceof Error ? error : String(error);
 
-const createSubSpanHandle = (span: Span) => ({
-  end: (failure?: { error: unknown }) => {
-    if (failure) {
-      span.recordException(toException(failure.error));
-      span.setStatus({ code: SpanStatusCode.ERROR });
-    }
-    span.end();
-  },
-});
-
 /**
  * Creates an OpenTelemetry-based ObservabilityAdapter.
  *
@@ -394,31 +384,10 @@ export const createOtelObservabilityAdapter = async ({
         getChainTraceContext: () => chainTraceContext,
         getTraceContext: () => traceContext,
 
-        startPrepare() {
-          return createSubSpanHandle(
-            tracer.startSpan("prepare", { kind: SpanKind.INTERNAL }, attemptCtx),
-          );
-        },
-
-        startComplete() {
-          return createSubSpanHandle(
-            tracer.startSpan("complete", { kind: SpanKind.INTERNAL }, attemptCtx),
-          );
-        },
-
         end(result) {
           if (result.status === "failed") {
             attemptSpan.recordException(toException(result.error));
             attemptSpan.setStatus({ code: SpanStatusCode.ERROR });
-            if (result.rescheduledAt) {
-              attemptSpan.setAttribute(
-                "queuert.rescheduled_at",
-                result.rescheduledAt.toISOString(),
-              );
-            }
-            if (result.rescheduledAfterMs !== undefined) {
-              attemptSpan.setAttribute("queuert.rescheduled_after_ms", result.rescheduledAfterMs);
-            }
           } else {
             attemptSpan.setStatus({ code: SpanStatusCode.OK });
 

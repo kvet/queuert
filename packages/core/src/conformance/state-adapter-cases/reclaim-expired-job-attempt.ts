@@ -1,4 +1,5 @@
-import { sleep } from "../../helpers/sleep.js";
+import { sleep } from "@queuert/helpers";
+
 import { type ConformanceGroup } from "../runner.js";
 import { type StateConformanceFixture } from "./types.js";
 
@@ -176,6 +177,41 @@ export const reclaimExpiredJobAttemptGroup: ConformanceGroup<StateConformanceFix
 
         expect(expired).toBeDefined();
         expect(expired!.id).toBe(chainB.head.id);
+      },
+    },
+    {
+      name: "reclaims without a txCtx, committing the release on its own",
+      run: async ({ stateAdapter }, expect) => {
+        const [createdChain] = await stateAdapter.withTransaction(async (txCtx) =>
+          stateAdapter.createJobs({
+            txCtx,
+            jobs: [
+              { id: stateAdapter.config.generateId(), typeName: "reclaim-autocommit", input: null },
+            ],
+          }),
+        );
+        await stateAdapter.startJobAttempt({
+          workerId: "worker-1",
+          timeoutMsByTypeName: { "reclaim-autocommit": 1 },
+        });
+        await sleep(10);
+
+        const reclaimed = await stateAdapter.reclaimExpiredJobAttempt({
+          typeNames: ["reclaim-autocommit"],
+          lastAttemptError: "JobAttemptExpiredError: test",
+        });
+        expect(reclaimed!.id).toBe(createdChain.head.id);
+
+        const [stored] = await stateAdapter.getJobs({ jobIds: [createdChain.head.id] });
+        expect(stored!.status).toBe("pending");
+        expect(stored!.attemptBy).toBeNull();
+
+        const reacquired = await stateAdapter.startJobAttempt({
+          workerId: "worker-2",
+          timeoutMsByTypeName: { "reclaim-autocommit": 30_000 },
+        });
+        expect(reacquired!.id).toBe(createdChain.head.id);
+        expect(reacquired!.attempt).toBe(2);
       },
     },
   ],

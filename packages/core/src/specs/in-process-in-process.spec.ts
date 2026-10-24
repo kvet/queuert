@@ -8,7 +8,6 @@ import { chainsTestSuite } from "../suites/chains.test-suite.js";
 import { createChainsTestSuite } from "../suites/create-chains.test-suite.js";
 import { notifyTestSuite } from "../suites/notify.test-suite.js";
 import { processErrorHandlingTestSuite } from "../suites/process-error-handling.test-suite.js";
-import { processModesTestSuite } from "../suites/process-modes.test-suite.js";
 import { processTestSuite } from "../suites/process.test-suite.js";
 import { rescheduleJobTestSuite } from "../suites/reschedule-job.test-suite.js";
 import { schedulingTestSuite } from "../suites/scheduling.test-suite.js";
@@ -30,10 +29,6 @@ it("index");
 
 describe("Process Error Handling", () => {
   processErrorHandlingTestSuite({ it: inProcessInProcessIt });
-});
-
-describe("Process Modes", () => {
-  processModesTestSuite({ it: inProcessInProcessIt });
 });
 
 describe("Process", () => {

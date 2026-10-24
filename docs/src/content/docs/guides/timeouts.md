@@ -1,11 +1,11 @@
 ---
 title: Timeouts
-description: Cooperative and hard timeouts for job processing.
+description: Cooperative timeouts and the attempt timeout.
 sidebar:
   order: 8
 ---
 
-For cooperative timeouts, combine `AbortSignal.timeout()` with the provided `signal`:
+For cooperative timeouts, combine a per-job `AbortController` with the provided `signal` and pass the combined signal to the work:
 
 ```ts
 const worker = await createInProcessWorker({
@@ -23,7 +23,9 @@ const worker = await createInProcessWorker({
           try {
             const response = await fetch(job.input.url, { signal: combined });
             const data = await response.json();
-            return complete(async ({ finish }) => finish({ output: { data } }));
+            return await withTransactionHooks(async (transactionHooks) =>
+              sql.begin(async (txSql) => complete({ txSql, transactionHooks, output: { data } })),
+            );
           } finally {
             clearTimeout(timer);
           }
@@ -36,7 +38,7 @@ const worker = await createInProcessWorker({
 const stop = await worker.start();
 ```
 
-For hard timeouts, configure `attemptConfig` in the job type processor. The attempt's lease runs `timeoutMs` from acquire, and in staged mode the worker's heartbeat renews it every `heartbeatMs`; if the lease is not renewed in time (the worker crashed or stalled), the attempt expires and is released for retry:
+`attemptConfig` is not a runtime limit: it is the attempt's timeout. The worker sets `attemptUntil` when it acquires the job and its heartbeat extends it every `heartbeatMs` while the handler runs, so a handler may run far longer than `timeoutMs`. The attempt only expires when the worker stops extending it — it crashed, its event loop stalled, or it lost its database connection — and then another worker reclaims the job and starts a new attempt. Use the cooperative `signal` pattern above for real runtime limits.
 
 ```ts
 const worker = await createInProcessWorker({
@@ -46,7 +48,7 @@ const worker = await createInProcessWorker({
     jobTypes,
     processors: {
       "long-running-job": {
-        attemptConfig: { timeoutMs: 300_000, heartbeatMs: 60_000 }, // 5 min timeout
+        attemptConfig: { timeoutMs: 300_000, heartbeatMs: 60_000 }, // reclaimed 5 min after the worker stops extending
         attemptHandler: async ({ job, complete }) => { ... },
       },
     },
@@ -54,4 +56,4 @@ const worker = await createInProcessWorker({
 });
 ```
 
-See [examples/showcase-timeouts](https://github.com/kvet/queuert/tree/main/examples/showcase-timeouts) for a complete working example demonstrating cooperative timeouts and hard timeouts via attempt expiry. See also [Error Handling](../error-handling/) and [In-Process Worker](/queuert/advanced/in-process-worker/) reference.
+See [examples/showcase-timeouts](https://github.com/kvet/queuert/tree/main/examples/showcase-timeouts) for a complete working example demonstrating cooperative timeouts and the attempt timeout, and [examples/showcase-long-running-jobs](https://github.com/kvet/queuert/tree/main/examples/showcase-long-running-jobs) for work that outlasts `timeoutMs` while the heartbeat extends the attempt. See also [Error Handling](../error-handling/) and [In-Process Worker](/queuert/advanced/in-process-worker/) reference.

@@ -6,7 +6,7 @@ Headline numbers live in the [Benchmarks docs page](../../docs/src/content/docs/
 
 ## Methodology
 
-Each benchmark runs in its own child process (`node --expose-gc`) and follows this pattern:
+Each benchmark runs in its own child process (`node --expose-gc --no-flush-bytecode`, so V8 does not drop compiled code mid-measurement) and follows this pattern:
 
 1. **Bring up infrastructure** (containers, driver clients, OTel providers, …) — anything that lives outside queuert's lifecycle.
 2. **Warmup run.** Build queuert adapters, process 100 jobs, close everything. Discarded — its job is to JIT-compile queuert code paths, the measurement helpers (`measureMemory`, `diffMemory`, `formatBytes`), the console.log call chain, and trigger lazy module loads in transitive dependencies (e.g. `protobufjs` schemas pulled in by `testcontainers`). The warmup uses the same context shape as the measured run, with stdout suppressed at the `process.stdout.write` level so the full code path fires.

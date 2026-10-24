@@ -98,11 +98,17 @@ const worker = await createInProcessWorker({
         attemptHandler: async ({ job, log, complete }) => {
           // `log` is already bound to this job's context
           log.info("Starting to process greeting");
+          log.info("Generating greeting", { name: job.input.name });
 
-          return complete(async ({ finish }) => {
-            log.info("Generating greeting", { name: job.input.name });
-            return finish({ output: { greeting: `Hello, ${job.input.name}!` } });
-          });
+          return withTransactionHooks(async (transactionHooks) =>
+            stateAdapter.withTransaction(async (ctx) =>
+              complete({
+                ...ctx,
+                transactionHooks,
+                output: { greeting: `Hello, ${job.input.name}!` },
+              }),
+            ),
+          );
         },
       },
       "might-fail": {
@@ -114,10 +120,13 @@ const worker = await createInProcessWorker({
             throw new Error("Simulated failure for demonstration");
           }
 
-          return complete(async ({ finish }) => {
-            log.info("Job succeeded");
-            return finish({ output: { success: true as const } });
-          });
+          log.info("Job succeeded");
+
+          return withTransactionHooks(async (transactionHooks) =>
+            stateAdapter.withTransaction(async (ctx) =>
+              complete({ ...ctx, transactionHooks, output: { success: true as const } }),
+            ),
+          );
         },
         backoffConfig: { initialDelayMs: 100, maxDelayMs: 100 },
       },

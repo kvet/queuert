@@ -166,7 +166,7 @@ export const createClient = async ({
 ### General Guidelines
 
 - Embed small verification tests into existing related tests rather than creating separate ones
-- Test all relevant phases: `prepare`, `process`, `complete`
+- Test the relevant outcomes of an attempt: work before the transaction, `complete` committed, `complete` rolled back, and errors before and after the commit
 - Prefer descriptive test names that match what's being tested
 - To enable verbose logging when debugging tests, run with `DEBUG=1` environment variable
 - **Import `expect` from `vitest`**: Use the module-level `import { expect } from "vitest"` and don't destructure `expect` from the test context. Tests here run sequentially and use no snapshots, so the test-scoped `expect` adds nothing but a line in every parameter list. Reach for the context `expect` only in a test that runs with `.concurrent` or asserts snapshots, where Vitest needs it to attribute results to the right test. The conformance `expect` in `packages/core/src/conformance/expect.ts` is a separate runner-agnostic shim and is unaffected.
@@ -205,7 +205,7 @@ describe("MyFeature", () => {
 
 **Spec files** (`*.spec.ts`):
 
-Every test file uses `.spec.ts` — both unit tests colocated next to the module they cover (`helpers/backoff.spec.ts`, `entities/chain.spec.ts`) and adapter-parameterized specs in a `specs/` directory. Do not use `.test.ts`.
+Every test file uses `.spec.ts` — both unit tests colocated next to the module they cover (`entities/backoff.spec.ts`, `entities/chain.spec.ts`) and adapter-parameterized specs in a `specs/` directory. Do not use `.test.ts`.
 
 - `packages/core/src/specs/` - Running with in-process adapters
 - `packages/postgres/src/specs/` - Running with PostgreSQL adapter
@@ -328,6 +328,14 @@ Examples should follow these conventions for clarity and readability:
 - **Simple patterns**: Prefer straightforward code over abstraction layers — examples should be copy-paste friendly
 - **No obvious comments**: Users are smart
 - **Workflow visualization**: Examples with job chains should include ASCII workflow diagrams as comments inside the `defineJobTypes` generic, directly above the relevant job type definitions
+
+### Guides and Examples Stay in Sync
+
+Each guide in `docs/src/content/docs/guides/` links the example that demonstrates it. The example is the source of truth for correctness because it runs in `pnpm examples`; the guide is the source of truth for teaching:
+
+- **Every pattern the guide teaches is runnable in the example**: if a guide section shows something the example does not do, add it to the example (within its single purpose) or drop it from the guide.
+- **Guide snippets may stay generic**: they don't have to be excerpts of the example. Use names and values that read well in prose, and leave out demo scaffolding (hardcoded IDs, forced failures, shortened timeouts, assertions).
+- **Change both together**: a change to an example that alters a pattern a guide teaches updates the guide, and a guide edit that changes a pattern updates the example. The same holds for the example's `README.md`.
 
 ## Documentation Updates
 

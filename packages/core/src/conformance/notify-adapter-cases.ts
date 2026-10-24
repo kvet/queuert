@@ -1,4 +1,5 @@
-import { raceWithSleep, sleep } from "../helpers/sleep.js";
+import { raceWithSleep, sleep } from "@queuert/helpers";
+
 import { type NotifyAdapter } from "../notify-adapter/notify-adapter.js";
 import { type ConformanceGroup } from "./runner.js";
 

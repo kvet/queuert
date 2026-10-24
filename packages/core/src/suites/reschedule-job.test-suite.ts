@@ -1,7 +1,6 @@
 import { type TestAPI, expect } from "vitest";
 
 import { createClient } from "../client.js";
-import { defineJobTypes } from "../entities/define-job-types.js";
 import {
   JobNotFoundError,
   JobNotReschedulableError,
@@ -9,8 +8,9 @@ import {
   JobsNotReschedulableError,
 } from "../errors.js";
 import { createInProcessWorker } from "../in-process-worker.js";
+import { createProcessors } from "../job-type-processors/create-job-type-processors.js";
+import { defineJobTypes } from "../job-types/define-job-types.js";
 import { withTransactionHooks } from "../transaction-hooks.js";
-import { createProcessors } from "../worker/create-processors.js";
 import { type TestSuiteContext } from "./spec-context.spec-helper.js";
 
 export const rescheduleJobTestSuite = ({ it }: { it: TestAPI<TestSuiteContext> }): void => {
@@ -172,7 +172,9 @@ export const rescheduleJobTestSuite = ({ it }: { it: TestAPI<TestSuiteContext> }
         processors: {
           task: {
             attemptHandler: async ({ job, complete }) =>
-              complete(async ({ finish }) => finish({ output: { result: job.input.value * 2 } })),
+              withTransaction(async (txCtx, transactionHooks) =>
+                complete({ ...txCtx, transactionHooks, output: { result: job.input.value * 2 } }),
+              ),
           },
         },
       }),
@@ -266,7 +268,9 @@ export const rescheduleJobTestSuite = ({ it }: { it: TestAPI<TestSuiteContext> }
         processors: {
           task: {
             attemptHandler: async ({ complete }) =>
-              complete(async ({ finish }) => finish({ output: { done: true as const } })),
+              withTransaction(async (txCtx, transactionHooks) =>
+                complete({ ...txCtx, transactionHooks, output: { done: true as const } }),
+              ),
           },
         },
       }),
@@ -649,7 +653,9 @@ export const rescheduleJobTestSuite = ({ it }: { it: TestAPI<TestSuiteContext> }
         processors: {
           task: {
             attemptHandler: async ({ complete }) =>
-              complete(async ({ finish }) => finish({ output: { done: true as const } })),
+              withTransaction(async (txCtx, transactionHooks) =>
+                complete({ ...txCtx, transactionHooks, output: { done: true as const } }),
+              ),
           },
         },
       }),

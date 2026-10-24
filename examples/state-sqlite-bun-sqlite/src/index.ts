@@ -54,23 +54,45 @@ const worker = await createInProcessWorker({
     jobTypes,
     processors: {
       send_welcome_email: {
-        attemptHandler: async ({ job, prepare, complete }) => {
-          // Load the user with bun:sqlite inside the job transaction
-          const user = await prepare({ mode: "staged" }, ({ db }) => {
-            const row = db
+        attemptHandler: async ({ job, complete }) => {
+          let user: { id: number; name: string; email: string } | null;
+          {
+            using _h = await lock.acquireRead();
+            user = db
               .query<{ id: number; name: string; email: string }, [number]>(
                 "SELECT id, name, email FROM users WHERE id = ?",
               )
               .get(job.input.userId);
-            if (!row) throw new Error(`User ${job.input.userId} not found`);
-            return row;
-          });
+          }
+          if (!user) throw new Error(`User ${job.input.userId} not found`);
 
+          // Simulate sending email (in real app, call email service here)
           console.log(`Sending welcome email to ${user.email} for ${user.name}`);
 
-          return complete(async ({ finish }) =>
-            finish({ output: { sentAt: new Date().toISOString() } }),
-          );
+          return withTransactionHooks(async (transactionHooks) => {
+            // The handler's transaction holds the provider's write lock, so the worker's
+            // autocommit statements on this connection cannot run inside it.
+            using _h = await lock.acquireWrite();
+            db.run("BEGIN");
+            try {
+              const result = await complete({
+                db,
+                transactionHooks,
+                output: { sentAt: new Date().toISOString() },
+              });
+              db.run("COMMIT");
+              return result;
+            } catch (error) {
+              if (db.inTransaction) {
+                try {
+                  db.run("ROLLBACK");
+                } catch {
+                  // ignore rollback errors
+                }
+              }
+              throw error;
+            }
+          });
         },
       },
     },

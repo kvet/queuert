@@ -95,7 +95,7 @@ Primary key: `(job_id, blocked_by_chain_id, index)`.
 The adapter adds an application-level `AsyncRwLock` to prevent concurrent write access from async code within the same process while allowing reads to run in parallel. The lock is writer-preference and FIFO to prevent writer starvation: once a writer is queued, new readers wait.
 
 - **Outside a transaction**: Every SQL execution acquires the lock in the mode indicated by `readOnly`
-- **Inside a transaction**: The write lock was already acquired by `withTransaction`, so individual operations skip it
+- **Inside a transaction**: The write lock was already acquired by whoever opened the transaction — `withTransaction`, or your own code (see below) — so individual operations skip it
 
 Custom `SqliteStateProvider` implementations must use `createAsyncRwLock()` to ensure correct serialization.
 

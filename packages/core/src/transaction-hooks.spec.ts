@@ -4,7 +4,7 @@ import { HookNotRegisteredError } from "./errors.js";
 import {
   bufferObservabilityEvent as bufferOnCommit,
   bufferObservabilityRollback as bufferOnRollback,
-} from "./helpers/observability-hooks.js";
+} from "./observability-adapter/observability-hooks.js";
 import { createTransactionHooks, withTransactionHooks } from "./transaction-hooks.js";
 
 const arrayHook = (initial: string[] = []) => ({

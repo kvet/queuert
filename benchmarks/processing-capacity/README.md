@@ -1,18 +1,17 @@
 # Processing Capacity Benchmark
 
-Job throughput along two independent axes: state adapter (with the in-process notify default) and notify adapter (with the in-process state default). Measures two phases — create (chains/s) and process (jobs/s) — and runs each adapter twice across orthogonal modes:
+Job throughput along two independent axes: state adapter (with the in-process notify default) and notify adapter (with the in-process state default). Each adapter runs six scenarios, each in a separate child process for isolation:
 
-- **Atomic run** — creates chains via `createChains` (batched, size 100), processes them atomically.
-- **Staged run** — creates chains via `createChain` (single), processes them in staged mode.
-
-The pairing is layout-only — create mode and process mode are independent in production. Folding them into one run per pair avoids doubling wall-clock while exposing all four numbers (single/batched create, atomic/staged process). Each run executes in a separate child process for isolation.
+- **Single creation** (`create-single`) — 5,000 chains created via `createChain`, one per transaction (chains/s).
+- **Batched creation** (`create-batched`) — 5,000 chains created via `createChains` in batches of 100 (chains/s).
+- **Completion at concurrency 1, 2, 4 and 8** (`complete-concurrency-1`, `-2`, `-4`, `-8`) — 5,000 chains are seeded (batched, not measured), then a worker with that many slots completes them; each handler opens its own transaction and calls `complete` in it (jobs/s).
 
 ## Running
 
-Each adapter has one script per provider example, so you can compare driver implementations head-to-head on identical hardware. By default each adapter runs both modes; flags can override.
+Each adapter has one script per provider example, so you can compare driver implementations head-to-head on identical hardware. By default each adapter runs all six scenarios; flags can override.
 
 ```bash
-pnpm start                                # all benchmarks, both modes
+pnpm start                                # all benchmarks, all six scenarios
 
 # State axis (in-process notify)
 pnpm start:state-in-process               # in-process state
@@ -29,9 +28,7 @@ pnpm start:notify-postgres-pg             # PostgreSQL notify via pg
 pnpm start:notify-postgres-postgres-js    # PostgreSQL notify via postgres-js
 pnpm start:notify-nats-nats               # NATS notify via nats
 
-pnpm start --state-sqlite-better-sqlite3 --concurrency=20            # custom concurrency
-pnpm start --state-sqlite-better-sqlite3 --process-mode=atomic       # single process mode
-pnpm start --state-sqlite-better-sqlite3 --create-mode=single        # override pairing
+pnpm start --state-sqlite-better-sqlite3 --scenario=create-single    # one scenario
 ```
 
-Default per run: 5,000 jobs, concurrency 10, batch size 100. Both modes run by default → 10,000 chains created total per adapter. Container-based runs require Docker.
+Defaults: 5,000 chains per scenario, batch size 100. Container-based runs require Docker.

@@ -1,11 +1,11 @@
+import { sleep } from "@queuert/helpers";
 import { type TestAPI, describe, expect, expectTypeOf } from "vitest";
 
 import { createClient } from "../client.js";
-import { defineJobTypes } from "../entities/define-job-types.js";
 import { ChainTypeMismatchError, JobTypeMismatchError } from "../errors.js";
-import { sleep } from "../helpers/sleep.js";
 import { createInProcessWorker } from "../in-process-worker.js";
-import { createProcessors } from "../worker/create-processors.js";
+import { createProcessors } from "../job-type-processors/create-job-type-processors.js";
+import { defineJobTypes } from "../job-types/define-job-types.js";
 import { type TestSuiteContext } from "./spec-context.spec-helper.js";
 
 export const clientQueriesTestSuite = ({ it: baseIt }: { it: TestAPI<TestSuiteContext> }): void => {
@@ -456,8 +456,8 @@ export const clientQueriesTestSuite = ({ it: baseIt }: { it: TestAPI<TestSuiteCo
           ...order,
           handler: async ({ job, completeJob }) => {
             if (job.typeName === "order") {
-              return completeJob(job, async ({ finish }) =>
-                finish({
+              return completeJob(job, async ({ complete }) =>
+                complete({
                   continueWith: { typeName: "order_fulfill", input: { orderId: "o1" } },
                 }),
               );
@@ -533,8 +533,8 @@ export const clientQueriesTestSuite = ({ it: baseIt }: { it: TestAPI<TestSuiteCo
           ...order,
           handler: async ({ job, completeJob }) => {
             if (job.typeName === "order") {
-              return completeJob(job, async ({ finish }) =>
-                finish({
+              return completeJob(job, async ({ complete }) =>
+                complete({
                   continueWith: { typeName: "order_fulfill", input: { orderId: "o1" } },
                 }),
               );
@@ -618,11 +618,15 @@ export const clientQueriesTestSuite = ({ it: baseIt }: { it: TestAPI<TestSuiteCo
           processors: {
             task_a: {
               attemptHandler: async ({ complete }) =>
-                complete(async ({ finish }) => finish({ output: null })),
+                withTransaction(async (txCtx, transactionHooks) =>
+                  complete({ ...txCtx, transactionHooks, output: null }),
+                ),
             },
             task_b: {
               attemptHandler: async ({ complete }) =>
-                complete(async ({ finish }) => finish({ output: null })),
+                withTransaction(async (txCtx, transactionHooks) =>
+                  complete({ ...txCtx, transactionHooks, output: null }),
+                ),
             },
           },
         }),
@@ -727,11 +731,15 @@ export const clientQueriesTestSuite = ({ it: baseIt }: { it: TestAPI<TestSuiteCo
           processors: {
             task_a: {
               attemptHandler: async ({ complete }) =>
-                complete(async ({ finish }) => finish({ output: null })),
+                withTransaction(async (txCtx, transactionHooks) =>
+                  complete({ ...txCtx, transactionHooks, output: null }),
+                ),
             },
             task_b: {
               attemptHandler: async ({ complete }) =>
-                complete(async ({ finish }) => finish({ output: null })),
+                withTransaction(async (txCtx, transactionHooks) =>
+                  complete({ ...txCtx, transactionHooks, output: null }),
+                ),
             },
           },
         }),
@@ -989,11 +997,15 @@ export const clientQueriesTestSuite = ({ it: baseIt }: { it: TestAPI<TestSuiteCo
           processors: {
             task_a: {
               attemptHandler: async ({ complete }) =>
-                complete(async ({ finish }) => finish({ output: null })),
+                withTransaction(async (txCtx, transactionHooks) =>
+                  complete({ ...txCtx, transactionHooks, output: null }),
+                ),
             },
             task_b: {
               attemptHandler: async ({ complete }) =>
-                complete(async ({ finish }) => finish({ output: null })),
+                withTransaction(async (txCtx, transactionHooks) =>
+                  complete({ ...txCtx, transactionHooks, output: null }),
+                ),
             },
           },
         }),
@@ -1280,11 +1292,15 @@ export const clientQueriesTestSuite = ({ it: baseIt }: { it: TestAPI<TestSuiteCo
           processors: {
             job_a: {
               attemptHandler: async ({ complete }) =>
-                complete(async ({ finish }) => finish({ output: null })),
+                withTransaction(async (txCtx, transactionHooks) =>
+                  complete({ ...txCtx, transactionHooks, output: null }),
+                ),
             },
             job_b: {
               attemptHandler: async ({ complete }) =>
-                complete(async ({ finish }) => finish({ output: null })),
+                withTransaction(async (txCtx, transactionHooks) =>
+                  complete({ ...txCtx, transactionHooks, output: null }),
+                ),
             },
           },
         }),
@@ -1428,10 +1444,14 @@ export const clientQueriesTestSuite = ({ it: baseIt }: { it: TestAPI<TestSuiteCo
           processors: {
             step: {
               attemptHandler: async ({ job, complete }) =>
-                complete(async ({ finish }) =>
+                withTransaction(async (txCtx, transactionHooks) =>
                   job.input.n < 2
-                    ? finish({ continueWith: { typeName: "step", input: { n: job.input.n + 1 } } })
-                    : finish({ output: { done: true } }),
+                    ? complete({
+                        ...txCtx,
+                        transactionHooks,
+                        continueWith: { typeName: "step", input: { n: job.input.n + 1 } },
+                      })
+                    : complete({ ...txCtx, transactionHooks, output: { done: true } }),
                 ),
             },
           },
@@ -1501,10 +1521,14 @@ export const clientQueriesTestSuite = ({ it: baseIt }: { it: TestAPI<TestSuiteCo
           processors: {
             step: {
               attemptHandler: async ({ job, complete }) =>
-                complete(async ({ finish }) =>
+                withTransaction(async (txCtx, transactionHooks) =>
                   job.input.n < 1
-                    ? finish({ continueWith: { typeName: "step", input: { n: job.input.n + 1 } } })
-                    : finish({ output: { done: true } }),
+                    ? complete({
+                        ...txCtx,
+                        transactionHooks,
+                        continueWith: { typeName: "step", input: { n: job.input.n + 1 } },
+                      })
+                    : complete({ ...txCtx, transactionHooks, output: { done: true } }),
                 ),
             },
           },
@@ -1569,10 +1593,14 @@ export const clientQueriesTestSuite = ({ it: baseIt }: { it: TestAPI<TestSuiteCo
           processors: {
             step: {
               attemptHandler: async ({ job, complete }) =>
-                complete(async ({ finish }) =>
+                withTransaction(async (txCtx, transactionHooks) =>
                   job.input.n < 2
-                    ? finish({ continueWith: { typeName: "step", input: { n: job.input.n + 1 } } })
-                    : finish({ output: { done: true } }),
+                    ? complete({
+                        ...txCtx,
+                        transactionHooks,
+                        continueWith: { typeName: "step", input: { n: job.input.n + 1 } },
+                      })
+                    : complete({ ...txCtx, transactionHooks, output: { done: true } }),
                 ),
             },
           },
@@ -1811,11 +1839,15 @@ export const clientQueriesTestSuite = ({ it: baseIt }: { it: TestAPI<TestSuiteCo
           processors: {
             dep: {
               attemptHandler: async ({ complete }) =>
-                complete(async ({ finish }) => finish({ output: { ok: true } })),
+                withTransaction(async (txCtx, transactionHooks) =>
+                  complete({ ...txCtx, transactionHooks, output: { ok: true } }),
+                ),
             },
             main: {
               attemptHandler: async ({ complete }) =>
-                complete(async ({ finish }) => finish({ output: { result: "done" } })),
+                withTransaction(async (txCtx, transactionHooks) =>
+                  complete({ ...txCtx, transactionHooks, output: { result: "done" } }),
+                ),
             },
           },
         }),
@@ -2084,15 +2116,19 @@ export const clientQueriesTestSuite = ({ it: baseIt }: { it: TestAPI<TestSuiteCo
           processors: {
             task: {
               attemptHandler: async ({ job, complete }) =>
-                complete(async ({ finish }) =>
-                  finish({
+                withTransaction(async (txCtx, transactionHooks) =>
+                  complete({
+                    ...txCtx,
+                    transactionHooks,
                     continueWith: { typeName: "task_next", input: { n: job.input.n + 1 } },
                   }),
                 ),
             },
             task_next: {
               attemptHandler: async ({ job, complete }) =>
-                complete(async ({ finish }) => finish({ output: { final: job.input.n * 10 } })),
+                withTransaction(async (txCtx, transactionHooks) =>
+                  complete({ ...txCtx, transactionHooks, output: { final: job.input.n * 10 } }),
+                ),
             },
           },
         }),
@@ -2165,11 +2201,15 @@ export const clientQueriesTestSuite = ({ it: baseIt }: { it: TestAPI<TestSuiteCo
           processors: {
             dep: {
               attemptHandler: async ({ complete }) =>
-                complete(async ({ finish }) => finish({ output: { ok: true } })),
+                withTransaction(async (txCtx, transactionHooks) =>
+                  complete({ ...txCtx, transactionHooks, output: { ok: true } }),
+                ),
             },
             main: {
               attemptHandler: async ({ complete }) =>
-                complete(async ({ finish }) => finish({ output: { result: "done" } })),
+                withTransaction(async (txCtx, transactionHooks) =>
+                  complete({ ...txCtx, transactionHooks, output: { result: "done" } }),
+                ),
             },
           },
         }),

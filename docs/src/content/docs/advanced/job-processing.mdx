@@ -1,6 +1,6 @@
 ---
 title: Job Processing
-description: Prepare/complete pattern, atomic and staged modes.
+description: How an attempt runs, finishing in your own transaction, and ownership fencing.
 sidebar:
   order: 4
 ---
@@ -9,7 +9,7 @@ import { Arrow, Diagram, Flow, Group, Node, Rows } from "../../../components/dia
 
 ## Overview
 
-This document describes how Queuert processes jobs: transactional design, prepare/complete pattern, and timeout philosophy.
+This document describes how Queuert processes jobs: the transactional design, how an attempt runs from acquisition to `complete`, and how ownership is enforced without holding locks.
 
 ## Transactional Design
 
@@ -41,86 +41,87 @@ await withTransactionHooks(async (transactionHooks) =>
 
 ### Extending to Job Processing
 
-The same transactional principle extends to job processing through the prepare/complete pattern:
+The same principle extends to job processing. Queuert opens no transaction around an attempt: the handler does its work — reads, external API calls, long computations — and then opens its own transaction, writes its domain changes, and calls `complete` inside it. The outcome (an output that completes the chain, a `continueWith` that adds the next job, or a reschedule) commits or rolls back together with those domain writes.
 
-- **Prepare phase**: Read application state within a transaction
-- **Processing phase**: Perform side-effects (API calls, file operations) outside the transaction
-- **Complete phase**: Write results back within a transaction
+```typescript
+attemptHandler: async ({ job, complete }) => {
+  const { paymentId } = await paymentAPI.charge(job.input.amount);
 
-This ensures that job outputs and continuations are also created atomically with any state changes they produce.
+  return withTransactionHooks(async (transactionHooks) =>
+    db.transaction(async (tx) => {
+      await tx.orders.update({ where: { id: job.input.orderId }, data: { paymentId } });
+      return complete({ tx, transactionHooks, output: { paymentId } });
+    }),
+  );
+},
+```
 
-Observability events (metrics, span ends, logs) emitted during the prepare and complete phases are transactional — they are buffered and only flushed after the transaction commits. If the transaction rolls back, no observability events leak out.
+Observability events and notifications produced by `complete` are buffered in `transactionHooks` and released only after your transaction commits. If it rolls back, nothing leaks out.
 
-## Prepare/Complete Pattern
+## The Attempt Lifecycle
 
-Attempt handlers split processing into phases: `prepare` reads the data the attempt needs, the handler does its work in between, and `complete` writes exactly one outcome — an output that ends the chain, a continuation that extends it with a successor job, or a reschedule that returns the job to pending (`finish({ reschedule })`). The split is what lets an attempt run atomically in a single transaction or stage long-running work between two.
-
-### Auto-Setup (Default)
-
-Most jobs don't need `prepare`. Call `complete` directly and auto-setup infers the mode:
-
-- **Synchronous `complete`** (called immediately, no prior `await`): atomic mode — single transaction wraps everything
-- **Async work before `complete`**: staged mode -- heartbeat active between async work and complete
-- Accessing `prepare` after auto-setup throws: "prepare cannot be accessed after auto-setup"
-
-See [Processing Modes](../../guides/processing-modes/) for examples and a decision flowchart.
-
-### Explicit Modes
-
-For more control, call `prepare` explicitly:
-
-- **Atomic mode**: Prepare and complete run in the same transaction. Rarely needed since calling `complete` directly achieves the same result with less ceremony.
-- **Staged mode**: Prepare runs in one transaction, long-running work happens outside, then complete runs in another transaction. The worker automatically extends the attempt between phases. Implement the processing phase idempotently as it may retry if the worker crashes.
-
-{/* TODO: explain that transactions the handler opens between prepare and complete are not checked against attempt ownership, and link the ownership check for user transactions once it lands (see TODO.md). */}
-
-## Error Recovery and Savepoints
-
-Both the `prepare` and `complete` callbacks run inside database savepoints. This is the mechanism that keeps jobs safe when user code throws.
-
-### Why Savepoints
-
-A naive approach would run user callbacks directly inside the job's transaction. The problem: if user code throws after executing partial SQL, the transaction is **poisoned** — most databases reject further statements on a transaction that has seen an error. The engine couldn't even reschedule the job because the reschedule SQL would fail on the same broken transaction.
-
-Savepoints solve this. A savepoint is a checkpoint within a transaction. If code inside the savepoint throws, the database rolls back to that checkpoint — undoing the partial work — while the outer transaction remains healthy. The engine can then reschedule the job and commit normally.
-
-### How It Works
-
-<Diagram label="Each callback runs in a savepoint inside its transaction: a throw rolls back to the savepoint, and the job is rescheduled with backoff; on success the outcome commits">
+<Diagram label="An attempt: acquire and heartbeat are single statements; the handler's work runs outside any transaction; complete() commits inside the handler's own transaction; afterwards the worker trusts the result complete() returned or runs one fenced reschedule">
   <Flow direction="column">
-    <Group title="transaction · acquires the job" dashed>
-      <Group title="savepoint · prepare callback" tone="amber" dashed>
-        <Node sub="throws? roll back to the savepoint">your SQL</Node>
-      </Group>
+    <Node tone="blue" sub="single statement · sets attemptUntil">acquire</Node>
+    <Arrow />
+    <Group title="attempt handler · heartbeat extends the attempt until complete() commits or the handler ends">
+      <Flow direction="column">
+        <Node variant="ghost" sub="no transaction held">your work</Node>
+        <Arrow />
+        <Group title="your transaction" dashed>
+          <Node tone="green" sub={"your domain writes\ncomplete({ ...txCtx, transactionHooks, outcome })"}>commit</Node>
+        </Group>
+      </Flow>
     </Group>
     <Arrow />
-    <Node variant="ghost" sub="the attempt auto-extends between transactions">async work · staged mode only</Node>
-    <Arrow />
-    <Group title="transaction · completes the job" dashed>
-      <Group title="savepoint · complete callback" tone="amber" dashed>
-        <Node sub={"commit writes the outcome\nthrows? roll back to the savepoint"}>your SQL</Node>
-      </Group>
-    </Group>
+    <Node sub="returned complete() result · else one fenced reschedule">commit detection</Node>
     <Rows spine columns="minmax(5.5rem, auto) auto">
       <Flow>
-        <Arrow label="success" tone="green" />
-        <Node tone="green" variant="solid">commit</Node>
+        <Arrow label="complete() committed" tone="green" />
+        <Node tone="green" variant="solid">attempt completed</Node>
       </Flow>
       <Flow>
-        <Arrow label="error" tone="red" />
+        <Arrow label="no committed complete() call" tone="red" />
         <Node tone="red" sub="exponential backoff">reschedule</Node>
       </Flow>
     </Rows>
   </Flow>
 </Diagram>
 
-On any unhandled error the job is rescheduled with exponential backoff (default: 10 s → 20 s → 40 s → ... capped at 300 s). There is no maximum retry count — jobs retry indefinitely. Use [discriminated unions or compensation patterns](../../guides/error-handling/) to handle permanently failing jobs.
+1. **Acquire.** The worker starts an attempt and sets its `attemptUntil`.
+2. **Heartbeat.** The worker extends the attempt every `attemptConfig.heartbeatMs` until the handler ends or its `complete` commits; see [In-Process Worker](../in-process-worker/#attempt-timeout-and-heartbeat).
+3. **Handler.** Your handler does its work, then opens a transaction, calls `complete` in it, and returns what `complete` returned.
+4. **Commit detection.** The worker records the attempt as completed if the handler returned a committed `complete` result, and otherwise fails it; see [Errors and Commit Detection](#errors-and-commit-detection).
 
-See [Job Processing Reliability](../../guides/processing-reliability/) for per-phase error scenarios with code examples.
+## `complete`
 
-### Abort Signal
+`complete` ends the attempt. Whether the job ends up completed depends on the outcome you pass. It takes your transaction context and `transactionHooks` spread alongside exactly one outcome — the same convention as `client.createChain`:
 
-Every attempt handler receives a `signal` that aborts when the worker is stopping, when the attempt is lost (taken by another worker, deleted, or completed externally), or when ownership can no longer be confirmed (the heartbeat failed). On abort, stop working and call `complete` — with partial output or `finish({ reschedule })` — or throw to reschedule with backoff. In the last two cases, `complete` throws and the worker discards the attempt. A handler that returns without completing fails the attempt.
+- `complete({ ...txCtx, transactionHooks, output })` — completes the job and its chain, and unblocks jobs waiting on the chain.
+- `complete({ ...txCtx, transactionHooks, continueWith: { typeName, input, blockers?, schedule? } })` — completes the job and adds the next job to the chain.
+- `complete({ ...txCtx, transactionHooks, reschedule: { afterMs } | { at } })` — returns the job to pending without counting the attempt as failed.
+
+The transaction context and `transactionHooks` are required. `complete` performs several writes (for example completing the chain and unblocking its dependents), so it always needs your transaction. It throws if the state adapter's `isTransaction` reports the context as outside an open transaction, for example when you pass a pool or the root ORM handle. On PostgreSQL the transaction must run at READ COMMITTED, the default; see [Postgres Internals](../postgres-internals/#isolation-level).
+
+**The handler must return what `complete` returned.** The handler's return type is the finished job, so forgetting `complete` is a compile error. Return it out of your transaction and hooks callbacks: `return withTransactionHooks(async (transactionHooks) => db.transaction(async (tx) => complete({ tx, transactionHooks, output })))`. The type only proves `complete` was called; whether it committed is decided by [commit detection](#errors-and-commit-detection).
+
+**One successful `complete` per `transactionHooks`.** A second successful call with the same `transactionHooks` throws, so a loop that retries your transaction must open `withTransactionHooks` inside the loop, once per try. A call that threw before writing (for example a validation error), or one rolled back by `transactionHooks.withSavepoint`, does not count, so you can catch the error and call `complete` again. `complete` cannot be called after the handler has ended.
+
+## Ownership and Fencing
+
+Every write tied to an attempt is conditional on the job row: the job must be `running`, at this attempt number, held by this worker. A conditional write that does not match writes nothing at all — no completed job, no chain update, no continuation. This is what makes `complete` safe without Queuert holding a lock for the duration of the attempt.
+
+When `complete`'s write misses, `complete` writes nothing, throws and aborts the attempt's `signal`; let the error propagate so your transaction rolls back with it.
+
+## Errors and Commit Detection
+
+The handler returns what `complete` returned. That result counts as committed once your `transactionHooks` flush — right after COMMIT when `withTransactionHooks` wraps your transaction — so a successful attempt needs no extra database round-trip. Anything else — the handler threw, returned nothing, or returned a result that did not commit — fails the attempt: the worker runs one reschedule fenced on the attempt, which retries the job with backoff while the attempt still owns it and matches nothing if a `complete` committed or the attempt was lost. An error thrown after a committed `complete` does not roll the completion back; it is reported as a `workerError`.
+
+See [Job Processing Reliability](../../guides/processing-reliability/) for each scenario with code examples, and [Error Handling](../../guides/error-handling/) for handling permanently failing jobs.
+
+## Abort Signal
+
+Every attempt handler receives a `signal` that aborts when the worker is stopping, when the attempt is lost (taken by another worker, deleted, or completed externally), or when ownership can no longer be confirmed (the heartbeat failed). Your own committed `complete` never aborts it. On abort, stop working and commit a `complete` — with partial output or `{ reschedule }` — or throw to reschedule with backoff. If the attempt was lost, `complete` writes nothing and throws. A handler that returns without a committed `complete` fails the attempt.
 
 ```typescript
 attemptHandler: async ({ signal, complete }) => {
@@ -130,14 +131,17 @@ attemptHandler: async ({ signal, complete }) => {
     await processItem(item);
     processed++;
   }
-  return complete(async ({ finish }) => finish({ output: { processed } }));
+  return withTransactionHooks(async (transactionHooks) =>
+    db.transaction(async (tx) => complete({ tx, transactionHooks, output: { processed } })),
+  );
 },
 ```
 
 ## See Also
 
-- [Job Processing Reliability](../../guides/processing-reliability/) — Savepoint protection, automatic rollback
+- [Job Processing Reliability](../../guides/processing-reliability/) — What happens when a handler throws, before and after `complete`
 - [Client API](/queuert/api/core/type-aliases/client/) — Mutation methods, query methods, awaitChain
-- [In-Process Worker](../in-process-worker/) — Worker lifecycle, attempt management, expired attempt reclamation
+- [In-Process Worker](../in-process-worker/) — Worker lifecycle, attempt timeouts, expired attempt reclamation
 - [Adapters](../adapters/) — StateAdapter context architecture
+- [`showcase-long-running-jobs`](https://github.com/kvet/queuert/tree/main/examples/showcase-long-running-jobs) — Runnable example: long work outside a transaction, then `complete` in your own transaction
 - [`showcase-signals`](https://github.com/kvet/queuert/tree/main/examples/showcase-signals) — Runnable example: external completion via `completeChain`, graceful shutdown with partial results

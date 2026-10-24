@@ -1,7 +1,7 @@
 import { type TestAPI, assert, expect } from "vitest";
 
 import { createClient } from "../client.js";
-import { defineJobTypes } from "../entities/define-job-types.js";
+import { defineJobTypes } from "../job-types/define-job-types.js";
 import { type TestSuiteContext } from "./spec-context.spec-helper.js";
 
 export const deduplicationTestSuite = ({ it }: { it: TestAPI<TestSuiteContext> }): void => {
@@ -64,8 +64,8 @@ export const deduplicationTestSuite = ({ it }: { it: TestAPI<TestSuiteContext> }
         transactionHooks,
         ...chain1,
         handler: async ({ job, completeJob }) => {
-          return completeJob(job, async ({ finish }) =>
-            finish({ output: { result: job.input.value } }),
+          return completeJob(job, async ({ complete }) =>
+            complete({ output: { result: job.input.value } }),
           );
         },
       }),
@@ -77,8 +77,8 @@ export const deduplicationTestSuite = ({ it }: { it: TestAPI<TestSuiteContext> }
         transactionHooks,
         ...chain3,
         handler: async ({ job, completeJob }) => {
-          return completeJob(job, async ({ finish }) =>
-            finish({ output: { result: job.input.value } }),
+          return completeJob(job, async ({ complete }) =>
+            complete({ output: { result: job.input.value } }),
           );
         },
       }),
@@ -142,8 +142,8 @@ export const deduplicationTestSuite = ({ it }: { it: TestAPI<TestSuiteContext> }
         ...chain1,
         handler: async ({ job, completeJob }) => {
           if (job.typeName === "step1") {
-            await completeJob(job, async ({ finish }) =>
-              finish({ continueWith: { typeName: "step2", input: { continued: true } } }),
+            await completeJob(job, async ({ complete }) =>
+              complete({ continueWith: { typeName: "step2", input: { continued: true } } }),
             );
           }
         },
@@ -170,7 +170,7 @@ export const deduplicationTestSuite = ({ it }: { it: TestAPI<TestSuiteContext> }
         ...chain1,
         handler: async ({ job, completeJob }) => {
           if (job.typeName === "step2") {
-            return completeJob(job, async ({ finish }) => finish({ output: { result: 42 } }));
+            return completeJob(job, async ({ complete }) => complete({ output: { result: 42 } }));
           }
         },
       }),
@@ -229,7 +229,7 @@ export const deduplicationTestSuite = ({ it }: { it: TestAPI<TestSuiteContext> }
         transactionHooks,
         ...chain1,
         handler: async ({ job, completeJob }) => {
-          return completeJob(job, async ({ finish }) => finish({ output: { result: 1 } }));
+          return completeJob(job, async ({ complete }) => complete({ output: { result: 1 } }));
         },
       }),
     );
@@ -301,8 +301,8 @@ export const deduplicationTestSuite = ({ it }: { it: TestAPI<TestSuiteContext> }
         transactionHooks,
         ...allChain1,
         handler: async ({ job, completeJob }) => {
-          await completeJob(job, async ({ finish }) =>
-            finish({ output: { result: job.input.value } }),
+          await completeJob(job, async ({ complete }) =>
+            complete({ output: { result: job.input.value } }),
           );
         },
       }),
@@ -338,8 +338,8 @@ export const deduplicationTestSuite = ({ it }: { it: TestAPI<TestSuiteContext> }
         transactionHooks,
         ...completedChain1,
         handler: async ({ job, completeJob }) => {
-          await completeJob(job, async ({ finish }) =>
-            finish({ output: { result: job.input.value } }),
+          await completeJob(job, async ({ complete }) =>
+            complete({ output: { result: job.input.value } }),
           );
         },
       }),
@@ -364,8 +364,8 @@ export const deduplicationTestSuite = ({ it }: { it: TestAPI<TestSuiteContext> }
         transactionHooks,
         ...completedChain2,
         handler: async ({ job, completeJob }) => {
-          return completeJob(job, async ({ finish }) =>
-            finish({ output: { result: job.input.value } }),
+          return completeJob(job, async ({ complete }) =>
+            complete({ output: { result: job.input.value } }),
           );
         },
       }),
@@ -576,8 +576,8 @@ export const deduplicationTestSuite = ({ it }: { it: TestAPI<TestSuiteContext> }
         transactionHooks,
         ...anyChain,
         handler: async ({ job, completeJob }) => {
-          await completeJob(job, async ({ finish }) =>
-            finish({ output: { result: job.input.value } }),
+          await completeJob(job, async ({ complete }) =>
+            complete({ output: { result: job.input.value } }),
           );
         },
       }),
@@ -600,8 +600,8 @@ export const deduplicationTestSuite = ({ it }: { it: TestAPI<TestSuiteContext> }
         transactionHooks,
         ...incompleteChain,
         handler: async ({ job, completeJob }) => {
-          await completeJob(job, async ({ finish }) =>
-            finish({ output: { result: job.input.value } }),
+          await completeJob(job, async ({ complete }) =>
+            complete({ output: { result: job.input.value } }),
           );
         },
       }),

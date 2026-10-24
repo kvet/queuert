@@ -55,13 +55,17 @@ const worker = await createInProcessWorker({
           await new Promise((r) => setTimeout(r, 500));
           const rowCount = Math.floor(Math.random() * 1000) + 100;
           console.log(`Report generated with ${rowCount} rows`);
-          return complete(async ({ finish }) =>
-            finish({
-              output: {
-                reportId: `RPT-${Date.now()}`,
-                rowCount,
-              },
-            }),
+          return withTransactionHooks(async (transactionHooks) =>
+            stateAdapter.withTransaction(async (ctx) =>
+              complete({
+                ...ctx,
+                transactionHooks,
+                output: {
+                  reportId: `RPT-${Date.now()}`,
+                  rowCount,
+                },
+              }),
+            ),
           );
         },
       },

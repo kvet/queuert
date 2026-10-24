@@ -26,16 +26,6 @@ export type SqliteStateProvider<TTxContext extends BaseTxContext> = {
   isTransaction: (txCtx: TTxContext) => boolean;
 
   /**
-   * Executes a callback within a savepoint inside an existing transaction.
-   * Creates a savepoint, executes the callback, releases on success,
-   * rolls back to the savepoint on error.
-   *
-   * Optional. When not provided, the adapter uses raw SAVEPOINT SQL via executeSql.
-   * Override when the driver tracks transaction state client-side.
-   */
-  withSavepoint?: <T>(txCtx: TTxContext, fn: (txCtx: TTxContext) => Promise<T>) => Promise<T>;
-
-  /**
    * Executes a SQL query.
    * When txCtx is provided, uses that transaction connection.
    * When txCtx is omitted, acquires a connection, executes, and releases.
@@ -44,7 +34,7 @@ export type SqliteStateProvider<TTxContext extends BaseTxContext> = {
    * the resolved SQL within this provider instance (the adapter folds template
    * variants like `tablePrefix` into the suffix), so providers MAY cache prepared
    * statement handles by `id` alone. When omitted, the provider must execute the
-   * statement unprepared — the adapter omits `id` for one-off or dynamic SQL (e.g. savepoints).
+   * statement unprepared — the adapter omits `id` for one-off or dynamic SQL.
    *
    * When `columnTypes` is non-empty the query returns rows; when empty the query is
    * a mutation and the provider may return an empty array.

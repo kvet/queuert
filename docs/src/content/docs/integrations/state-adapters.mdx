@@ -15,7 +15,9 @@ State adapters abstract database operations for job persistence. They handle job
 
     Recommended for production. Supports horizontal scaling with database-level locking
     (`FOR UPDATE SKIP LOCKED`), writeable CTEs for atomic batch operations, and all Queuert
-    features including concurrent multi-worker deployments.
+    features including concurrent multi-worker deployments. Transactions you pass to `complete` or
+    to client methods must run at READ COMMITTED, the PostgreSQL default — see
+    [Postgres Internals](/queuert/advanced/postgres-internals/#isolation-level).
 
     ```bash
     npm install @queuert/postgres
@@ -39,7 +41,10 @@ State adapters abstract database operations for job persistence. They handle job
 
     Suitable for local development, CLI tools, and embedded applications. SQLite's exclusive
     transaction locking model serializes all writes, so batch operations use sequential queries
-    within a single transaction rather than writeable CTEs.
+    within a single transaction rather than writeable CTEs. Transactions you pass to `complete` or
+    to client methods must be serialized with the worker's own statements the way the provider's
+    `withTransaction` is, for example by holding its `AsyncRwLock` write lock — see
+    [SQLite Internals](/queuert/advanced/sqlite-internals/#asyncrwlock).
 
     ```bash
     npm install @queuert/sqlite
@@ -99,7 +104,6 @@ test("my provider passes state adapter conformance", async () => {
   await runStateAdapterConformance(async () => ({
     stateAdapter,
     transactionConcurrency: "concurrent", // "serialized" for a single-connection provider such as SQLite
-    poisonTransaction,
     withNonTransactionContext: async (fn) => fn({ db }), // root handle, not a transaction
     reset: async () => { /* truncate tables */ },
     dispose: async () => { /* close connections */ },

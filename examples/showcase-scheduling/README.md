@@ -2,7 +2,7 @@
 
 Recurring job patterns without external cron.
 
-Scenarios: loop chains with scheduled delays, idempotent scheduling via deduplication, triggering a future-scheduled job early.
+Scenarios: recurring jobs that start a new chain with a scheduled delay, deduplication of recurring job instances, triggering a future-scheduled job early with `rescheduleJob`, and rescheduling from a handler with `complete({ reschedule })`.
 
 ## Running
 

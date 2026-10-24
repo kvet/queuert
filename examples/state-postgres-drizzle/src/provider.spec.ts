@@ -5,7 +5,7 @@ import { Pool } from "pg";
 import { runStateAdapterConformance } from "queuert/conformance";
 import { test } from "vitest";
 
-import { type DrizzlePgContext, createDrizzlePgStateProvider } from "./provider.js";
+import { createDrizzlePgStateProvider } from "./provider.js";
 
 test("state-postgres-drizzle provider passes state adapter conformance", async () => {
   await using pg = await acquirePostgres("postgres:18", import.meta.url);
@@ -22,10 +22,6 @@ test("state-postgres-drizzle provider passes state adapter conformance", async (
       stateAdapter: adapter,
       transactionConcurrency: "concurrent",
       withNonTransactionContext: async (fn) => fn({ tx: db }),
-      poisonTransaction: async (txCtx: DrizzlePgContext<Record<string, never>>) => {
-        const client = (txCtx.tx as any).session.client;
-        await client.query("SELECT 1 FROM nonexistent_table_queuert_poison_xyz");
-      },
       reset: async () => adapter.truncate(),
       dispose: async () => {
         await pool.end();

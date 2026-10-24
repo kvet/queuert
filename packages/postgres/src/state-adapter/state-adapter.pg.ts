@@ -597,33 +597,6 @@ LEFT JOIN LATERAL (
 
     isTransaction: stateProvider.isTransaction,
 
-    withSavepoint:
-      stateProvider.withSavepoint ??
-      (async (txCtx, fn) => {
-        const sp = `queuert_sp_${randomUUID().replace(/-/g, "_")}`;
-        await executeTypedSql({
-          txCtx,
-          sql: applyTemplate(
-            sql(/* sql */ `SAVEPOINT ${sp}`, { readOnly: true, params: [], columns: {} }),
-          ),
-        });
-        try {
-          return await fn(txCtx);
-        } catch (error) {
-          await executeTypedSql({
-            txCtx,
-            sql: applyTemplate(
-              sql(/* sql */ `ROLLBACK TO SAVEPOINT ${sp}`, {
-                readOnly: true,
-                params: [],
-                columns: {},
-              }),
-            ),
-          }).catch(() => {});
-          throw error;
-        }
-      }),
-
     getChains: async ({
       txCtx,
       chainIds,
@@ -1008,16 +981,11 @@ head_done AS (
   SET chain_status = 'completed',
     chain_completed_at = COALESCE(h.chain_completed_at, now())
   WHERE h.id IN (SELECT chain_id FROM done WHERE chain_id <> id)
-    AND h.id NOT IN (SELECT id FROM done)
   RETURNING h.*
 )
 SELECT
   row_to_json(d) AS job_row,
-  COALESCE(row_to_json(hd), row_to_json(dh)) AS head_job,
-  EXISTS (
-    SELECT 1 FROM {{schema}}.{{table_prefix}}job_blocker jb
-    WHERE jb.blocked_by_chain_id = d.chain_id
-  ) AS has_blocking
+  COALESCE(row_to_json(hd), row_to_json(dh)) AS head_job
 FROM done d
 LEFT JOIN head_done hd ON hd.id = d.chain_id
 LEFT JOIN done dh ON dh.id = d.chain_id
@@ -1030,11 +998,7 @@ LEFT JOIN done dh ON dh.id = d.chain_id
                   t.array<number | null>(),
                   t.array<string | null>(),
                 ],
-                columns: {
-                  job_row: t.json<DbJob>(),
-                  head_job: t.json<DbJob>(),
-                  has_blocking: t.boolean(),
-                },
+                columns: { job_row: t.json<DbJob>(), head_job: t.json<DbJob>() },
               },
             ),
           ),
@@ -1055,7 +1019,6 @@ LEFT JOIN done dh ON dh.id = d.chain_id
         return {
           ...mapDbJobToStateJobInfo(row.job_row),
           chain: mapDbHeadToStateChainInfo(row.head_job),
-          hasBlockedJobs: row.has_blocking,
         };
       });
     },
@@ -1270,14 +1233,13 @@ WITH acquired_job AS (
   ) AS t
   CROSS JOIN LATERAL (
     SELECT j.id
-    FROM {{schema}}.{{table_prefix}}job h
-    JOIN {{schema}}.{{table_prefix}}job j ON h.id = j.chain_id
+    FROM {{schema}}.{{table_prefix}}job j
     WHERE j.type_name = t.type_name
       AND j.status = 'pending'
       AND j.scheduled_at <= now()
     ORDER BY j.scheduled_at ASC
     LIMIT 1
-    FOR UPDATE OF h, j SKIP LOCKED
+    FOR UPDATE OF j SKIP LOCKED
   ) j
   LIMIT 1
 ),
@@ -1324,17 +1286,16 @@ JOIN {{schema}}.{{table_prefix}}job h ON h.id = u.chain_id
               `
 WITH due AS (
   SELECT j.id
-  FROM (SELECT type_name FROM unnest($1::text[]) AS u(type_name) ORDER BY random()) AS t
+  FROM unnest($1::text[]) AS t(type_name)
   CROSS JOIN LATERAL (
     SELECT j.id
-    FROM {{schema}}.{{table_prefix}}job h
-    JOIN {{schema}}.{{table_prefix}}job j ON h.id = j.chain_id
+    FROM {{schema}}.{{table_prefix}}job j
     WHERE j.type_name = t.type_name
       AND j.status = 'pending'
       AND j.scheduled_at <= now()
     ORDER BY j.scheduled_at ASC
     LIMIT 1
-    FOR UPDATE OF h, j SKIP LOCKED
+    FOR UPDATE OF j SKIP LOCKED
   ) j
   LIMIT 1
 ),
@@ -1602,33 +1563,42 @@ ORDER BY b.index ASC
     },
 
     unblockJobs: async ({ txCtx, blockedByChainId }) => {
-      await executeTypedSql({
+      const [lockResult] = await executeTypedSql({
         txCtx,
         sql: templateCache.getOrCompute("lockBlockedJobs", () =>
           applyTemplate(
             sql(
               `
-SELECT j.id
-FROM {{schema}}.{{table_prefix}}job j
-WHERE j.id IN (
-  SELECT DISTINCT jb.job_id
-  FROM {{schema}}.{{table_prefix}}job_blocker jb
-  WHERE jb.blocked_by_chain_id = $1
+WITH locked AS (
+  SELECT j.id
+  FROM {{schema}}.{{table_prefix}}job j
+  WHERE j.id IN (
+    SELECT DISTINCT jb.job_id
+    FROM {{schema}}.{{table_prefix}}job_blocker jb
+    WHERE jb.blocked_by_chain_id = $1
+  )
+  AND j.status = 'blocked'
+  ORDER BY j.id
+  FOR UPDATE
 )
-AND j.status = 'blocked'
-ORDER BY j.id
-FOR UPDATE
+SELECT
+  (SELECT count(*)::int FROM locked) AS locked_count,
+  EXISTS (
+    SELECT 1 FROM {{schema}}.{{table_prefix}}job_blocker jb
+    WHERE jb.blocked_by_chain_id = $1
+  ) AS has_dependents
 `,
               {
                 id: "lockBlockedJobs",
                 params: [idDataType],
-                columns: { id: idDataType },
+                columns: { locked_count: t.number(), has_dependents: t.boolean() },
               },
             ),
           ),
         ),
         params: [blockedByChainId],
       });
+      if (!lockResult.has_dependents) return [];
 
       const [result] = await executeTypedSql({
         txCtx,
@@ -1636,32 +1606,23 @@ FOR UPDATE
           applyTemplate(
             sql(
               `
-WITH direct_blocked AS (
-  SELECT DISTINCT jb.job_id
-  FROM {{schema}}.{{table_prefix}}job_blocker jb
-  WHERE jb.blocked_by_chain_id = $1
-),
-blockers_status AS (
-  SELECT
-    jb.job_id,
-    jb.blocked_by_chain_id,
-    (h.chain_status = 'completed') AS blocker_complete
-  FROM {{schema}}.{{table_prefix}}job_blocker jb
-  LEFT JOIN {{schema}}.{{table_prefix}}job h ON h.id = jb.blocked_by_chain_id
-  WHERE jb.job_id IN (SELECT job_id FROM direct_blocked)
-),
-ready_jobs AS (
-  SELECT job_id
-  FROM blockers_status
-  GROUP BY job_id
-  HAVING bool_and(COALESCE(blocker_complete, false))
-),
-updated AS (
+WITH updated AS (
   UPDATE {{schema}}.{{table_prefix}}job j
   SET status = 'pending',
     scheduled_at = GREATEST(j.scheduled_at, now())
-  WHERE j.id IN (SELECT job_id FROM ready_jobs)
+  WHERE j.id IN (
+      SELECT jb.job_id
+      FROM {{schema}}.{{table_prefix}}job_blocker jb
+      WHERE jb.blocked_by_chain_id = $1
+    )
     AND j.status = 'blocked'
+    AND NOT EXISTS (
+      SELECT 1
+      FROM {{schema}}.{{table_prefix}}job_blocker jb
+      LEFT JOIN {{schema}}.{{table_prefix}}job h ON h.id = jb.blocked_by_chain_id
+      WHERE jb.job_id = j.id
+        AND h.chain_status IS DISTINCT FROM 'completed'
+    )
   RETURNING j.*
 ),
 blocker_rows AS (

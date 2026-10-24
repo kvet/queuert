@@ -43,6 +43,7 @@ const runningStateJob = {
   attempt: 1,
   attemptAt: new Date("2026-01-01T00:00:30Z"),
   attemptBy: "worker-1",
+  attemptUntil: new Date("2026-01-01T00:01:30Z"),
 };
 
 describe("mapStateJobToJob", () => {
@@ -70,10 +71,10 @@ describe("mapStateJobToJob", () => {
     if (job.status !== "running") throw new Error("expected a running job");
     expect(job.attemptAt).toEqual(runningStateJob.attemptAt);
     expect(job.attemptBy).toBe("worker-1");
-    expect(job.attemptUntil).toBeNull();
+    expect(job.attemptUntil).toEqual(runningStateJob.attemptUntil);
   });
 
-  it("types attemptAt/attemptBy as non-null and attemptUntil as nullable", () => {
+  it("types the attempt triplet as non-null", () => {
     const job = {} as Extract<AnyJob, { status: "running" }>;
 
     expectTypeOf(job.attemptAt).toEqualTypeOf<Date>();

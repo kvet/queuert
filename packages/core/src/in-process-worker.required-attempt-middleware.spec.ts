@@ -1,14 +1,15 @@
 import { describe, expect, it } from "vitest";
 
+import { type AttemptMiddleware } from "./attempt-middleware/attempt-middleware.js";
 import { createClient } from "./client.js";
-import { defineJobTypes } from "./entities/define-job-types.js";
 import { createInProcessWorker } from "./in-process-worker.js";
+import { createProcessors } from "./job-type-processors/create-job-type-processors.js";
+import { defineJobTypes } from "./job-types/define-job-types.js";
 import {
   type InProcessStateAdapter,
   createInProcessStateAdapter,
 } from "./state-adapter/state-adapter.in-process.js";
-import { type AttemptMiddleware } from "./worker/attempt-middleware.js";
-import { createProcessors } from "./worker/create-processors.js";
+import { withTransactionHooks } from "./transaction-hooks.js";
 
 type Defs = {
   foo: { entry: true; input: null; output: null };
@@ -52,7 +53,11 @@ describe("createInProcessWorker requiredAttemptMiddleware", () => {
         processors: {
           foo: {
             attemptHandler: async ({ complete }) =>
-              complete(async ({ finish }) => finish({ output: null })),
+              withTransactionHooks(async (transactionHooks) =>
+                stateAdapter.withTransaction(async (txCtx) =>
+                  complete({ ...txCtx, transactionHooks, output: null }),
+                ),
+              ),
           },
         },
       }),
@@ -77,7 +82,11 @@ describe("createInProcessWorker requiredAttemptMiddleware", () => {
         processors: {
           foo: {
             attemptHandler: async ({ complete }) =>
-              complete(async ({ finish }) => finish({ output: null })),
+              withTransactionHooks(async (transactionHooks) =>
+                stateAdapter.withTransaction(async (txCtx) =>
+                  complete({ ...txCtx, transactionHooks, output: null }),
+                ),
+              ),
           },
         },
       }),
@@ -105,7 +114,11 @@ describe("createInProcessWorker requiredAttemptMiddleware", () => {
           processors: {
             foo: {
               attemptHandler: async ({ complete }) =>
-                complete(async ({ finish }) => finish({ output: null })),
+                withTransactionHooks(async (transactionHooks) =>
+                  stateAdapter.withTransaction(async (txCtx) =>
+                    complete({ ...txCtx, transactionHooks, output: null }),
+                  ),
+                ),
             },
           },
         }),
@@ -131,7 +144,11 @@ describe("createInProcessWorker requiredAttemptMiddleware", () => {
           processors: {
             foo: {
               attemptHandler: async ({ complete }) =>
-                complete(async ({ finish }) => finish({ output: null })),
+                withTransactionHooks(async (transactionHooks) =>
+                  stateAdapter.withTransaction(async (txCtx) =>
+                    complete({ ...txCtx, transactionHooks, output: null }),
+                  ),
+                ),
             },
           },
         }),
@@ -165,7 +182,11 @@ describe("createInProcessWorker requiredAttemptMiddleware", () => {
           processors: {
             foo: {
               attemptHandler: async ({ complete }) =>
-                complete(async ({ finish }) => finish({ output: null })),
+                withTransactionHooks(async (transactionHooks) =>
+                  stateAdapter.withTransaction(async (txCtx) =>
+                    complete({ ...txCtx, transactionHooks, output: null }),
+                  ),
+                ),
             },
           },
         }),
@@ -189,7 +210,11 @@ describe("createInProcessWorker requiredAttemptMiddleware", () => {
       processors: {
         foo: {
           attemptHandler: async ({ complete }) =>
-            complete(async ({ finish }) => finish({ output: null })),
+            withTransactionHooks(async (transactionHooks) =>
+              stateAdapter.withTransaction(async (txCtx) =>
+                complete({ ...txCtx, transactionHooks, output: null }),
+              ),
+            ),
         },
       },
     });
@@ -200,7 +225,11 @@ describe("createInProcessWorker requiredAttemptMiddleware", () => {
       processors: {
         bar: {
           attemptHandler: async ({ complete }) =>
-            complete(async ({ finish }) => finish({ output: null })),
+            withTransactionHooks(async (transactionHooks) =>
+              stateAdapter.withTransaction(async (txCtx) =>
+                complete({ ...txCtx, transactionHooks, output: null }),
+              ),
+            ),
         },
       },
     });
@@ -234,7 +263,11 @@ describe("createInProcessWorker requiredAttemptMiddleware", () => {
         processors: {
           foo: {
             attemptHandler: async ({ complete }) =>
-              complete(async ({ finish }) => finish({ output: null })),
+              withTransactionHooks(async (transactionHooks) =>
+                stateAdapter.withTransaction(async (txCtx) =>
+                  complete({ ...txCtx, transactionHooks, output: null }),
+                ),
+              ),
           },
         },
       }),
@@ -270,7 +303,11 @@ describe("createInProcessWorker requiredAttemptMiddleware", () => {
           processors: {
             foo: {
               attemptHandler: async ({ complete }) =>
-                complete(async ({ finish }) => finish({ output: null })),
+                withTransactionHooks(async (transactionHooks) =>
+                  stateAdapter.withTransaction(async (txCtx) =>
+                    complete({ ...txCtx, transactionHooks, output: null }),
+                  ),
+                ),
             },
           },
         }),
@@ -291,7 +328,11 @@ describe("createInProcessWorker requiredAttemptMiddleware", () => {
         processors: {
           foo: {
             attemptHandler: async ({ complete }) =>
-              complete(async ({ finish }) => finish({ output: null })),
+              withTransactionHooks(async (transactionHooks) =>
+                stateAdapter.withTransaction(async (txCtx) =>
+                  complete({ ...txCtx, transactionHooks, output: null }),
+                ),
+              ),
           },
         },
       }),

@@ -10,3 +10,5 @@ Scenarios: approval workflow (external API completes the job), deferred start wi
 pnpm install
 pnpm --filter example-showcase-workerless start
 ```
+
+Requires Docker (uses testcontainers to start PostgreSQL).

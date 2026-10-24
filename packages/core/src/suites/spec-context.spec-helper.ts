@@ -23,8 +23,8 @@ export type TestSuiteContext = {
   ) => Promise<T>;
   poisonTransaction: ((txCtx: { $test: true }) => Promise<void>) | undefined;
   withNonTransactionContext: <T>(fn: (txCtx: { $test: true }) => Promise<T>) => Promise<T>;
-  poisonExecute:
-    | ((cb: (adapter: StateAdapter<{ $test: true }, string>) => Promise<void>) => Promise<void>)
+  withSavepoint:
+    | (<T>(txCtx: { $test: true }, fn: (txCtx: { $test: true }) => Promise<T>) => Promise<T>)
     | undefined;
   flakyDbStateAdapter: StateAdapter<{ $test: true }, string> | undefined;
   withWorkers: <T>(workers: (() => Promise<void>)[], cb: () => Promise<T>) => Promise<T>;

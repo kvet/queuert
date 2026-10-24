@@ -1,113 +1,134 @@
 ---
 title: Job Processing Reliability
-description: How Queuert keeps jobs safe when errors occur — savepoints, transaction poisoning protection, automatic rollback, and rescheduling.
+description: How Queuert keeps jobs safe when errors occur — transactional completion, automatic rollback, and rescheduling.
 sidebar:
   order: 3
 ---
 
-When your code throws during job processing, the engine catches the error, rolls back any partial work, and reschedules the job with backoff. This happens automatically — no defensive error handling is needed inside your callbacks.
+When your code throws during job processing, your transaction rolls back any partial work and the worker reschedules the job with backoff. This happens automatically — no defensive error handling is needed inside your handler.
 
-This guide covers the engine's safety guarantees. For user-level error strategies (discriminated unions, compensation, rescheduling), see [Error Handling](../error-handling/). For the architectural overview of savepoints and transaction poisoning, see [Job Processing](/queuert/advanced/job-processing/#error-recovery-and-savepoints).
+This guide covers the engine's safety guarantees. For user-level error strategies (discriminated unions, compensation, rescheduling), see [Error Handling](../error-handling/). For the architectural overview, see [Job Processing](/queuert/advanced/job-processing/#errors-and-commit-detection).
 
 ## The Short Version
 
-1. Both `prepare` and `complete` callbacks run inside **database savepoints**.
-2. If a callback throws, the savepoint **rolls back** any partial SQL it executed.
-3. The outer transaction stays healthy, so the engine can **reschedule** the job with exponential backoff.
-4. This works regardless of _where_ the error occurs — in `prepare`, between phases, in `complete`, or after `finish` has already committed its transition.
+1. Your handler opens a transaction with your database client and calls `complete` inside it.
+2. If anything throws before that transaction commits, your database client **rolls back** your SQL together with the job's completion.
+3. If no `complete` committed, the worker **reschedules** the job with exponential backoff.
+4. This works regardless of _where_ the error occurs — before your transaction or inside it. Once `complete` has committed, the outcome stands.
 
 The rest of this page walks through each scenario with code examples.
 
-## Error in Prepare Callback
+## Error Before the Transaction
 
-The `prepare` callback runs inside a savepoint. If it throws, the savepoint rolls back and the job is rescheduled using the processor's `backoffConfig` (or the default exponential backoff).
+Work before your transaction — reads, external API calls — runs without a transaction. If it throws, nothing was written and the job is rescheduled using the processor's `backoffConfig` (or the default exponential backoff).
 
 ```ts
 'charge-payment': {
   backoffConfig: { initialDelayMs: 1000, multiplier: 2, maxDelayMs: 60_000 },
-  attemptHandler: async ({ job, prepare, complete }) => {
-    const order = await prepare({ mode: "staged" }, async ({ txSql }) => {
-      // If this throws (constraint violation, missing row, etc.),
-      // the savepoint rolls back and the job retries after backoff
-      const [row] = await txSql`SELECT * FROM orders WHERE id = ${job.input.orderId}`;
-      if (!row) throw new Error("Order not found");
-      return row;
-    });
+  attemptHandler: async ({ job, complete }) => {
+    // If this throws (missing row, etc.), the job retries after backoff
+    const [order] = await sql`SELECT * FROM orders WHERE id = ${job.input.orderId}`;
+    if (!order) throw new Error("Order not found");
 
     const { paymentId } = await paymentAPI.charge(order.amount);
 
-    return complete(async ({ finish, txSql }) => {
-      await txSql`UPDATE orders SET payment_id = ${paymentId} WHERE id = ${order.id}`;
-      return finish({ output: { paymentId } });
-    });
+    return withTransactionHooks(async (transactionHooks) =>
+      sql.begin(async (txSql) => {
+        await txSql`UPDATE orders SET payment_id = ${paymentId} WHERE id = ${order.id}`;
+        return complete({ txSql, transactionHooks, output: { paymentId } });
+      }),
+    );
   },
 }
 ```
 
-In **atomic mode**, the prepare savepoint rolls back within the same transaction that acquired the job, and the reschedule commits in that transaction. In **staged mode**, the behavior is the same — the prepare transaction has not committed yet, so the rollback + reschedule happen in one transaction.
+Because the external call runs before the transaction, a retry runs it again. Make external side effects idempotent (for example with an idempotency key derived from the job id).
 
-## Error in Complete Callback
+## Error Inside the Transaction
 
-The `complete` callback also runs inside a savepoint. If it throws, the savepoint rolls back — undoing any SQL the callback executed, the job completion, and any continuation jobs created via `continueWith` — and the job is rescheduled with backoff.
+If your transaction callback throws, your database client rolls the transaction back — undoing any SQL you executed, the job completion, and any continuation jobs created via `continueWith` — and the job is rescheduled with backoff.
 
 ```ts
 'transfer-funds': {
-  attemptHandler: async ({ job, complete }) => {
-    return complete(async ({ finish, txSql }) => {
-      // If the CHECK constraint fires, the savepoint rolls back
-      // and the job is rescheduled — no corrupted state
-      await txSql`UPDATE accounts SET balance = balance - ${job.input.amount}
-                WHERE id = ${job.input.fromId}`;
-      await txSql`UPDATE accounts SET balance = balance + ${job.input.amount}
-                WHERE id = ${job.input.toId}`;
-      return finish({ output: { transferred: true } });
-    });
-  },
+  attemptHandler: async ({ job, complete }) =>
+    withTransactionHooks(async (transactionHooks) =>
+      sql.begin(async (txSql) => {
+        // If the CHECK constraint fires, the transaction rolls back
+        // and the job is rescheduled — no corrupted state
+        await txSql`UPDATE accounts SET balance = balance - ${job.input.amount}
+                  WHERE id = ${job.input.fromId}`;
+        await txSql`UPDATE accounts SET balance = balance + ${job.input.amount}
+                  WHERE id = ${job.input.toId}`;
+        return complete({ txSql, transactionHooks, output: { transferred: true } });
+      }),
+    ),
 }
 ```
 
-> **Tip:** The outer transaction — which holds the job attempt — commits successfully with the reschedule, even though the savepoint rolled back. The job returns to pending status and retries after backoff.
+The same holds for a throw after `complete` returned but before the transaction commits: the completion is part of your transaction, so it rolls back together with your writes.
 
-## Error Between Prepare and Complete
+## Intermediate Transactions
 
-In **staged mode**, if an error occurs after `prepare` commits but before `complete` runs (typically a failed external API call), the job is rescheduled with backoff. Since prepare already committed, its side-effects persist — the complete phase retries in a fresh transaction on the next attempt.
+A handler can commit work in its own transactions before the one that calls `complete`. Those transactions are not tied to the attempt: if an error occurs after one commits (typically a failed external API call), the job is rescheduled with backoff, its side-effects persist, and the next attempt runs it again.
 
 ```ts
 'sync-external': {
-  attemptHandler: async ({ job, prepare, complete }) => {
-    const data = await prepare({ mode: "staged" }, async ({ txSql }) => {
-      return (await txSql`SELECT * FROM items WHERE id = ${job.input.id}`)[0];
+  attemptHandler: async ({ job, complete }) => {
+    const data = await sql.begin(async (txSql) => {
+      const [item] = await txSql`SELECT * FROM items WHERE id = ${job.input.id} FOR UPDATE`;
+      await txSql`UPDATE items SET sync_started_at = now() WHERE id = ${item.id}`;
+      return item;
     });
-    // Prepare committed. If the API call below throws, the job retries
-    // and prepare runs again in a new transaction.
+    // That transaction committed. If the API call below throws, the job retries
+    // and the transaction above runs again on the next attempt.
 
     const externalId = await externalAPI.sync(data); // may throw
 
-    return complete(async ({ finish, txSql }) => {
-      await txSql`UPDATE items SET external_id = ${externalId} WHERE id = ${data.id}`;
-      return finish({ output: { externalId } });
-    });
+    return withTransactionHooks(async (transactionHooks) =>
+      sql.begin(async (txSql) => {
+        await txSql`UPDATE items SET external_id = ${externalId} WHERE id = ${data.id}`;
+        return complete({ txSql, transactionHooks, output: { externalId } });
+      }),
+    );
   },
 }
 ```
 
-In **atomic mode**, prepare and complete share the same transaction, so any error between them rolls back the entire transaction (including prepare's work) and reschedules.
+> **Note:** Intermediate transactions commit even if the attempt is later lost to another worker. Design them so that their side-effects are safe to keep when the job retries.
 
-## Error After Settling
+## Error After `complete` Committed
 
-The savepoint wraps the **entire** `complete` callback, not just the part before `finish`. `finish` applies the transition inline — SQL you run after `await finish(...)` already sees the finished job — but the savepoint is released only once the callback returns successfully. So if you throw after `finish`, everything the savepoint wrapped rolls back atomically: the transition itself, blocked-job resolution, continuation jobs, and any SQL you ran. The job is rescheduled as if the commit never happened.
+Once the transaction that called `complete` has committed, the outcome is final. If the handler throws afterwards, the error is reported as a worker error (`workerError`), but the completion is not rolled back and the job is not rescheduled.
 
-> **Note:** In **staged mode**, prepare's committed work persists across retries. Design your staged handlers so that prepare's side-effects are safe to keep when the complete phase retries.
+```ts
+'notify-account': {
+  attemptHandler: async ({ job, complete }) => {
+    const result = await withTransactionHooks(async (transactionHooks) =>
+      sql.begin(async (txSql) =>
+        complete({ txSql, transactionHooks, output: { notified: true } }),
+      ),
+    );
+
+    // A throw here does not undo the completion
+    await notificationAPI.send(job.input.accountId);
+
+    return result;
+  },
+}
+```
+
+Keep work that must succeed for the job to count as done inside the transaction (or before it). Work after the commit is your responsibility.
 
 ## What This Means in Practice
 
-- **Any unhandled error → reschedule with backoff.** Whether the error occurs in `prepare`, between phases, in `complete`, or after `finish` — the job is always rescheduled. Backoff follows the processor's `backoffConfig` or the default (10s → 20s → 40s → ... → 300s cap).
-- **No corrupted state.** Savepoints ensure that partial SQL work inside callbacks is never committed when an error occurs.
-- **No orphaned continuations.** If `continueWith` was called inside `complete` and the callback throws afterward, both the continuation job and the transition are rolled back.
+- **Any unhandled error before the commit → reschedule with backoff.** Whether the error occurs before your transaction or inside it — the job is always rescheduled. Backoff follows the processor's `backoffConfig` or the default (10s → 20s → 40s → ... → 300s cap). A handler that returns without a committed `complete` is rescheduled the same way.
+- **No corrupted state.** Your transaction ensures that partial SQL work is never committed when an error occurs.
+- **No orphaned continuations.** If `complete` was called with `continueWith` and the transaction throws afterward, both the continuation job and the completion are rolled back.
 - **Blocked jobs stay blocked.** If a blocker job's completion is rolled back, dependent jobs remain correctly blocked.
-- **No defensive `try/catch` needed.** Let exceptions propagate naturally inside `prepare` and `complete` callbacks — the engine handles them.
+- **No lost-attempt writes.** `complete` only writes while this attempt still owns the job. If the attempt expired and another worker took the job, or the job was completed or deleted elsewhere, `complete` writes nothing and throws (`JobTakenByAnotherWorkerError`, `JobAlreadyCompletedError` or `JobNotFoundError`), so your transaction rolls back.
+- **No defensive `try/catch` needed.** Let exceptions propagate naturally — the worker handles them.
 - **Jobs retry indefinitely.** There is no maximum retry count. Use [discriminated unions or compensation patterns](../error-handling/) to handle permanently failing jobs.
 
 ## See Also
 
-See [examples/showcase-error-recovery](https://github.com/kvet/queuert/tree/main/examples/showcase-error-recovery) for a complete working example. See also [Error Handling](../error-handling/) for user-level error strategy, [Processing Modes](../processing-modes/) for atomic vs. staged mode details, and [Job Processing](/queuert/advanced/job-processing/) reference.
+See [examples/showcase-error-recovery](https://github.com/kvet/queuert/tree/main/examples/showcase-error-recovery) for a complete working example. See also [Error Handling](../error-handling/) for user-level error strategy, [Timeouts](../timeouts/) for attempt timeouts, and [Job Processing](/queuert/advanced/job-processing/) reference.

@@ -1,11 +1,11 @@
 import { createPgStateAdapter } from "@queuert/postgres";
 import { acquirePostgres } from "@queuert/testcontainers";
-import { CompiledQuery, Kysely, PostgresDialect } from "kysely";
+import { Kysely, PostgresDialect } from "kysely";
 import { Pool } from "pg";
 import { runStateAdapterConformance } from "queuert/conformance";
 import { test } from "vitest";
 
-import { type KyselyPgContext, createKyselyPgStateProvider } from "./provider.js";
+import { createKyselyPgStateProvider } from "./provider.js";
 
 type Database = Record<string, never>;
 
@@ -24,11 +24,6 @@ test("state-postgres-kysely provider passes state adapter conformance", async ()
       stateAdapter: adapter,
       transactionConcurrency: "concurrent",
       withNonTransactionContext: async (fn) => fn({ db }),
-      poisonTransaction: async (txCtx: KyselyPgContext<Database>) => {
-        await txCtx.db.executeQuery(
-          CompiledQuery.raw("SELECT 1 FROM nonexistent_table_queuert_poison_xyz"),
-        );
-      },
       reset: async () => adapter.truncate(),
       dispose: async () => {
         await db.destroy();

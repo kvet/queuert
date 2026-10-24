@@ -1,7 +1,7 @@
 import { describe, expectTypeOf, it } from "vitest";
 
 import { type Client, createClient } from "./client.js";
-import { defineJobTypes } from "./entities/define-job-types.js";
+import { defineJobTypes } from "./job-types/define-job-types.js";
 import { createInProcessStateAdapter } from "./state-adapter/state-adapter.in-process.js";
 import { type BaseTxContext, type StateAdapter } from "./state-adapter/state-adapter.js";
 

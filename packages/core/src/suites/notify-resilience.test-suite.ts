@@ -1,10 +1,10 @@
 import { type TestAPI } from "vitest";
 
 import { createClient } from "../client.js";
-import { defineJobTypes } from "../entities/define-job-types.js";
 import { createInProcessWorker } from "../in-process-worker.js";
+import { createProcessors } from "../job-type-processors/create-job-type-processors.js";
+import { defineJobTypes } from "../job-types/define-job-types.js";
 import { type NotifyAdapter } from "../notify-adapter/notify-adapter.js";
-import { createProcessors } from "../worker/create-processors.js";
 import { type TestSuiteContext } from "./spec-context.spec-helper.js";
 
 export const notifyResilienceTestSuite = ({
@@ -23,7 +23,7 @@ export const notifyResilienceTestSuite = ({
     const jobTypes = defineJobTypes<{
       test: {
         entry: true;
-        input: { value: number; atomic: boolean };
+        input: { value: number };
         output: { result: number };
       };
     }>();
@@ -58,12 +58,10 @@ export const notifyResilienceTestSuite = ({
         },
         processors: {
           test: {
-            attemptHandler: async ({ job, prepare, complete }) => {
-              await prepare({ mode: job.input.atomic ? "atomic" : "staged" });
-              return complete(async ({ finish }) =>
-                finish({ output: { result: job.input.value * 2 } }),
-              );
-            },
+            attemptHandler: async ({ job, complete }) =>
+              withTransaction(async (txCtx, transactionHooks) =>
+                complete({ ...txCtx, transactionHooks, output: { result: job.input.value * 2 } }),
+              ),
           },
         },
       }),
@@ -77,7 +75,7 @@ export const notifyResilienceTestSuite = ({
           transactionHooks,
           items: Array.from({ length: 20 }, (_, i) => ({
             typeName: "test",
-            input: { value: i, atomic: i % 2 === 0 },
+            input: { value: i },
           })),
         }),
       );

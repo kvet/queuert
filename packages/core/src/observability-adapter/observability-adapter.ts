@@ -68,24 +68,12 @@ export type JobAttemptSpanResult =
   | {
       status: "failed";
       error: unknown;
-      rescheduledAt?: Date;
-      rescheduledAfterMs?: number;
     };
 
-/**
- * Handle for ending a span. Pass `{ error }` when the spanned operation threw —
- * the box distinguishes a thrown `undefined` from a successful completion.
- */
-export type SpanHandle = {
-  end: (failure?: { error: unknown }) => void;
-};
-
-/** Handle for managing a job attempt span, including prepare/complete sub-spans. */
+/** Handle for managing a job attempt span. */
 export type JobAttemptSpanHandle = {
   getChainTraceContext: () => string;
   getTraceContext: () => string;
-  startPrepare: () => SpanHandle;
-  startComplete: () => SpanHandle;
   end: (result: JobAttemptSpanResult) => void;
 };
 

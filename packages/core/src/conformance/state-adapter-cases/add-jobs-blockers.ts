@@ -1,4 +1,5 @@
-import { sleep } from "../../helpers/sleep.js";
+import { sleep } from "@queuert/helpers";
+
 import { type StateChain } from "../../state-adapter/state-adapter.js";
 import { type ConformanceGroup } from "../runner.js";
 import { type StateConformanceFixture } from "./types.js";

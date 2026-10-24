@@ -71,7 +71,11 @@ await runDoubleRunBenchmark<Infra>({
           processors: {
             "test-job": {
               attemptHandler: async ({ complete }) =>
-                complete(async ({ finish }) => finish({ output: { processed: true } })),
+                withTransactionHooks(async (transactionHooks) =>
+                  stateAdapter.withTransaction(async (ctx) =>
+                    complete({ ...ctx, transactionHooks, output: { processed: true } }),
+                  ),
+                ),
             },
           },
         }),

@@ -1,4 +1,5 @@
-import { isPositiveSafeInteger } from "../helpers/number.js";
+import { isPositiveSafeInteger } from "@queuert/helpers";
+
 import { type StateAdapterConfig } from "./state-adapter.js";
 
 const assertPositiveInteger = (value: number, name: string): void => {

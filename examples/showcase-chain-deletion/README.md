@@ -2,7 +2,7 @@
 
 Deleting chains with blocker safety checks.
 
-Scenarios: simple deletion, blocker safety, co-deletion.
+Scenarios: simple deletion (and idempotent re-deletion with `deleteChain`), blocker safety, co-deletion.
 
 ## Running
 

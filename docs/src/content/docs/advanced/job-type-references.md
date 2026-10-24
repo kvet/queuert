@@ -144,8 +144,14 @@ const processors = createProcessors({
         const [auth, validate] = job.blockers;
         // auth.output is { userId: string }
         // validate.output is { valid: boolean }
-        return complete(async ({ finish }) =>
-          finish({ output: { done: auth.output.userId !== "" && validate.output.valid } }),
+        return withTransactionHooks(async (transactionHooks) =>
+          db.transaction(async (tx) =>
+            complete({
+              tx,
+              transactionHooks,
+              output: { done: auth.output.userId !== "" && validate.output.valid },
+            }),
+          ),
         );
       },
     },
@@ -172,4 +178,4 @@ When using validation libraries (Zod, Valibot, etc.), references are validated a
 - [Chain Patterns](/queuert/guides/chain-patterns/) — Continuation patterns (linear, branched, loops, go-to)
 - [Job Blockers](/queuert/guides/job-blockers/) — Fan-out/fan-in dependencies
 - [Chain Model](../chain-model/) — Chain structure, Promise analogy
-- [Job Processing](../job-processing/) — Prepare/complete pattern
+- [Job Processing](../job-processing/) — Handler lifecycle, `complete`, and attempt timeouts

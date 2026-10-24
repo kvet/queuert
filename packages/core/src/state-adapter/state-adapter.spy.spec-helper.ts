@@ -2,7 +2,6 @@ import { type BaseTxContext, type StateAdapter } from "./state-adapter.js";
 
 export type SpyCall = {
   name: string;
-  args?: Record<string, unknown>;
   children: SpyCall[];
   status?: "committed" | "rolled-back";
 };
@@ -15,38 +14,14 @@ export type SpyStateAdapter<TTxContext extends BaseTxContext, TJobId extends str
   record: (args: { name: string } & TTxContext) => Promise<SpyCall>;
 };
 
-const RECORDED_ARGS = ["lock"] as const;
-
-const pickRecordedArgs = (params: unknown): Record<string, unknown> | undefined => {
-  if (!params || typeof params !== "object") return undefined;
-  const picked: Record<string, unknown> = {};
-  let hasAny = false;
-  for (const key of RECORDED_ARGS) {
-    const value = (params as Record<string, unknown>)[key];
-    if (value !== undefined) {
-      picked[key] = value;
-      hasAny = true;
-    }
-  }
-  return hasAny ? picked : undefined;
-};
-
 export const createSpyStateAdapter = <TTxContext extends BaseTxContext, TJobId extends string>(
   stateAdapter: StateAdapter<TTxContext, TJobId>,
 ): SpyStateAdapter<TTxContext, TJobId> => {
   const calls: SpyCall[] = [];
   const weakMap = new WeakMap<symbol, SpyCall>();
 
-  const record = ({
-    txCtx,
-    name,
-    args,
-  }: {
-    txCtx?: TTxContext;
-    name: string;
-    args?: Record<string, unknown>;
-  }): SpyCall => {
-    const call: SpyCall = { name, children: [], ...(args ? { args } : {}) };
+  const record = ({ txCtx, name }: { txCtx?: TTxContext; name: string }): SpyCall => {
+    const call: SpyCall = { name, children: [] };
     const spyRef = (txCtx as TTxContext & { spyRef?: symbol })?.spyRef;
     if (spyRef && weakMap.has(spyRef)) {
       const parent = weakMap.get(spyRef)!;
@@ -60,7 +35,7 @@ export const createSpyStateAdapter = <TTxContext extends BaseTxContext, TJobId e
   const wrap = <T extends (...args: never[]) => Promise<unknown>>(name: string, fn: T): T =>
     (async (...args: unknown[]) => {
       const params = args[0] as { txCtx?: TTxContext };
-      record({ txCtx: params?.txCtx, name, args: pickRecordedArgs(params) });
+      record({ txCtx: params?.txCtx, name });
       return fn(...(args as Parameters<T>));
     }) as unknown as T;
 
@@ -84,21 +59,6 @@ export const createSpyStateAdapter = <TTxContext extends BaseTxContext, TJobId e
       }
     },
     isTransaction: (txCtx) => stateAdapter.isTransaction(txCtx),
-    withSavepoint: async (txCtx, fn) => {
-      const call = record({ txCtx, name: "withSavepoint" });
-      const spyRef = Symbol();
-      weakMap.set(spyRef, call);
-      try {
-        const result = await stateAdapter.withSavepoint(txCtx, async (innerTxCtx) =>
-          fn({ ...innerTxCtx, spyRef }),
-        );
-        call.status = "committed";
-        return result;
-      } catch (error) {
-        call.status = "rolled-back";
-        throw error;
-      }
-    },
     getChains: wrap("getChains", stateAdapter.getChains),
     getJobs: wrap("getJobs", stateAdapter.getJobs),
     createJobs: wrap("createJobs", stateAdapter.createJobs),

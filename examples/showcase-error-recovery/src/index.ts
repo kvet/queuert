@@ -4,10 +4,11 @@
  * Demonstrates Queuert's engine-level error recovery guarantees.
  *
  * Scenarios:
- * 1. Constraint Violation in Complete: CHECK fires, savepoint rolls back, job retries
- * 2. Error After Complete: Handler throws after await finish({ output: ... }), completion is rolled back
- * 3. Error Between Prepare and Complete (Staged): External call fails, job retries
- * 4. lastAttemptError Inspection: Previous error available on retry with serialization
+ * 1. Constraint Violation: CHECK fires in the handler's transaction, complete rolls back with it, job retries
+ * 2. Error After Complete: Handler throws inside its transaction after complete, everything rolls back, job retries
+ * 3. Error After Commit: Handler throws after its transaction committed, the completion is kept
+ * 4. Error Before the Transaction: External call fails, nothing was written, job retries
+ * 5. lastAttemptError Inspection: Previous error available on retry with serialization
  */
 
 import assert from "node:assert/strict";
@@ -27,9 +28,9 @@ import {
 
 const jobTypes = defineJobTypes<{
   /*
-   * Scenario 1: Constraint violation in complete
+   * Scenario 1: Constraint violation
    *   transfer-funds --> output { transferred }
-   *   (CHECK constraint on balance >= 0 fires, savepoint rolls back, job retries)
+   *   (CHECK constraint on balance >= 0 fires, the transaction rolls back, job retries)
    */
   "transfer-funds": {
     entry: true;
@@ -40,7 +41,7 @@ const jobTypes = defineJobTypes<{
   /*
    * Scenario 2: Error after complete
    *   credit-account --> output { credited }
-   *   (Handler throws after await finish({ output: ... }), completion is rolled back)
+   *   (Handler throws inside its transaction after complete, credit and completion roll back)
    */
   "credit-account": {
     entry: true;
@@ -49,9 +50,20 @@ const jobTypes = defineJobTypes<{
   };
 
   /*
-   * Scenario 3: Error between prepare and complete (staged)
+   * Scenario 3: Error after commit
+   *   notify-account --> output { notified }
+   *   (Handler throws after its transaction committed, the completion is kept)
+   */
+  "notify-account": {
+    entry: true;
+    input: { accountId: number };
+    output: { notified: true };
+  };
+
+  /*
+   * Scenario 4: Error before the transaction
    *   external-transfer --> output { confirmed }
-   *   (External API call fails between phases, prepare committed, job retries)
+   *   (External API call fails before the handler opens its transaction, job retries)
    */
   "external-transfer": {
     entry: true;
@@ -60,7 +72,7 @@ const jobTypes = defineJobTypes<{
   };
 
   /*
-   * Scenario 4: lastAttemptError inspection
+   * Scenario 5: lastAttemptError inspection
    *   flaky-job --> output { attempt }
    *   (Throws different error types, inspects lastAttemptError on retry)
    */
@@ -113,12 +125,14 @@ const worker = await createInProcessWorker({
             `  [transfer-funds] Attempt ${job.attempt}: transferring $${job.input.amount}`,
           );
 
-          return complete(async ({ finish, txSql }) => {
-            await txSql`UPDATE accounts SET balance = balance - ${job.input.amount} WHERE id = ${job.input.fromAccountId}`;
-            await txSql`UPDATE accounts SET balance = balance + ${job.input.amount} WHERE id = ${job.input.toAccountId}`;
-            console.log(`  Transfer committed`);
-            return finish({ output: { transferred: true } });
-          });
+          return withTransactionHooks(async (transactionHooks) =>
+            sql.begin(async (txSql) => {
+              await txSql`UPDATE accounts SET balance = balance - ${job.input.amount} WHERE id = ${job.input.fromAccountId}`;
+              await txSql`UPDATE accounts SET balance = balance + ${job.input.amount} WHERE id = ${job.input.toAccountId}`;
+              console.log(`  Transfer committed`);
+              return complete({ txSql, transactionHooks, output: { transferred: true } });
+            }),
+          );
         },
       },
 
@@ -127,14 +141,40 @@ const worker = await createInProcessWorker({
         attemptHandler: async ({ job, complete }) => {
           console.log(`  [credit-account] Attempt ${job.attempt}: crediting $${job.input.amount}`);
 
-          const result = await complete(async ({ finish, txSql }) => {
-            await txSql`UPDATE accounts SET balance = balance + ${job.input.amount} WHERE id = ${job.input.accountId}`;
-            console.log(`  Credit committed (will be rolled back if handler throws)`);
-            return finish({ output: { credited: true } });
-          });
+          return withTransactionHooks(async (transactionHooks) =>
+            sql.begin(async (txSql) => {
+              await txSql`UPDATE accounts SET balance = balance + ${job.input.amount} WHERE id = ${job.input.accountId}`;
+              const result = await complete({
+                txSql,
+                transactionHooks,
+                output: { credited: true },
+              });
+
+              if (job.attempt === 1) {
+                console.log(`  Throwing after complete, before the transaction commits`);
+                throw new Error("Crash after complete");
+              }
+
+              return result;
+            }),
+          );
+        },
+      },
+
+      "notify-account": {
+        backoffConfig: { initialDelayMs: 1, multiplier: 1, maxDelayMs: 1 },
+        attemptHandler: async ({ job, complete }) => {
+          console.log(`  [notify-account] Attempt ${job.attempt}`);
+
+          const result = await withTransactionHooks(async (transactionHooks) =>
+            sql.begin(async (txSql) =>
+              complete({ txSql, transactionHooks, output: { notified: true } }),
+            ),
+          );
 
           if (job.attempt === 1) {
-            throw new Error("Post-complete crash");
+            console.log(`  Completion committed, now throwing`);
+            throw new Error(`Notification for account ${job.input.accountId} failed after commit`);
           }
 
           return result;
@@ -143,17 +183,13 @@ const worker = await createInProcessWorker({
 
       "external-transfer": {
         backoffConfig: { initialDelayMs: 1, multiplier: 1, maxDelayMs: 1 },
-        attemptHandler: async ({ job, prepare, complete }) => {
+        attemptHandler: async ({ job, complete }) => {
           console.log(`  [external-transfer] Attempt ${job.attempt}`);
 
-          const account = await prepare({ mode: "staged" }, async ({ txSql }) => {
-            const rows = await txSql<
-              { id: number; balance: number }[]
-            >`SELECT id, balance FROM accounts WHERE id = ${job.input.accountId}`;
-            const row = rows[0];
-            console.log(`  Prepare: read account ${row.id}, balance $${row.balance}`);
-            return row;
-          });
+          const [account] = await sql<
+            { id: number; balance: number }[]
+          >`SELECT id, balance FROM accounts WHERE id = ${job.input.accountId}`;
+          console.log(`  Read account ${account.id}, balance $${account.balance}`);
 
           console.log(`  Calling external API...`);
           if (externalApiShouldFail) {
@@ -162,11 +198,13 @@ const worker = await createInProcessWorker({
           }
           console.log(`  External API succeeded`);
 
-          return complete(async ({ finish, txSql }) => {
-            await txSql`UPDATE accounts SET balance = balance + ${job.input.amount} WHERE id = ${account.id}`;
-            console.log(`  Complete: credited $${job.input.amount} to account ${account.id}`);
-            return finish({ output: { confirmed: true } });
-          });
+          return withTransactionHooks(async (transactionHooks) =>
+            sql.begin(async (txSql) => {
+              await txSql`UPDATE accounts SET balance = balance + ${job.input.amount} WHERE id = ${account.id}`;
+              console.log(`  Credited $${job.input.amount} to account ${account.id}`);
+              return complete({ txSql, transactionHooks, output: { confirmed: true } });
+            }),
+          );
         },
       },
 
@@ -187,7 +225,11 @@ const worker = await createInProcessWorker({
             throw { code: "VALIDATION", detail: "missing field" };
           }
 
-          return complete(async ({ finish }) => finish({ output: { attempt: job.attempt } }));
+          return withTransactionHooks(async (transactionHooks) =>
+            sql.begin(async (txSql) =>
+              complete({ txSql, transactionHooks, output: { attempt: job.attempt } }),
+            ),
+          );
         },
       },
     },
@@ -196,10 +238,10 @@ const worker = await createInProcessWorker({
 
 const stopWorker = await worker.start();
 
-// Scenario 1: Constraint violation in complete
-console.log("\n--- Scenario 1: Constraint Violation in Complete ---");
+// Scenario 1: Constraint violation
+console.log("\n--- Scenario 1: Constraint Violation ---");
 console.log(
-  "Transfer $200 from Bob (balance $50). CHECK fires, savepoint rolls back, job retries.\n",
+  "Transfer $200 from Bob (balance $50). CHECK fires, the transaction rolls back, job retries.\n",
 );
 
 const transfer = await withTransactionHooks(async (transactionHooks) =>
@@ -231,7 +273,7 @@ assert.equal(Number(bob1.balance), 100);
 // Scenario 2: Error after complete
 console.log("\n--- Scenario 2: Error After Complete ---");
 console.log(
-  "Credit $50 to Alice. Handler crashes after finish({ output: ... }), completion is rolled back.\n",
+  "Credit $50 to Alice. Handler throws after complete inside its transaction, credit and completion roll back.\n",
 );
 
 const credit = await withTransactionHooks(async (transactionHooks) =>
@@ -253,9 +295,30 @@ const [alice2] = await sql<{ balance: string }[]>`SELECT balance FROM accounts W
 console.log(`Alice's balance: $${alice2.balance} (should be $350, not $400)`);
 assert.equal(Number(alice2.balance), 350);
 
-// Scenario 3: Error between prepare and complete (staged)
-console.log("\n--- Scenario 3: Error Between Prepare and Complete (Staged) ---");
-console.log("External API fails between phases. Prepare committed, job retries.\n");
+// Scenario 3: Error after commit
+console.log("\n--- Scenario 3: Error After Commit ---");
+console.log("Handler throws after its transaction committed. The completion is kept.\n");
+
+const notify = await withTransactionHooks(async (transactionHooks) =>
+  sql.begin(async (txSql) =>
+    client.createChain({
+      txSql,
+      transactionHooks,
+      typeName: "notify-account",
+      input: { accountId: 1 },
+    }),
+  ),
+);
+
+const notifyResult = await client.awaitChain(notify, { timeoutMs: 5000 });
+const notifyJob = await client.getJob({ id: notify.id });
+console.log(`Completed on attempt ${notifyJob?.attempt}`);
+assert.deepStrictEqual(notifyResult.output, { notified: true });
+assert.equal(notifyJob?.attempt, 1);
+
+// Scenario 4: Error before the transaction
+console.log("\n--- Scenario 4: Error Before the Transaction ---");
+console.log("External API fails before the handler opens its transaction. Job retries.\n");
 
 externalApiShouldFail = true;
 const externalTransfer = await withTransactionHooks(async (transactionHooks) =>
@@ -277,8 +340,8 @@ const [bob3] = await sql<{ balance: string }[]>`SELECT balance FROM accounts WHE
 console.log(`Bob's balance: $${bob3.balance} (should be $125)`);
 assert.equal(Number(bob3.balance), 125);
 
-// Scenario 4: lastAttemptError inspection
-console.log("\n--- Scenario 4: lastAttemptError Inspection ---");
+// Scenario 5: lastAttemptError inspection
+console.log("\n--- Scenario 5: lastAttemptError Inspection ---");
 console.log("Job throws different error types, inspects lastAttemptError on retry.\n");
 
 const flakyChain = await withTransactionHooks(async (transactionHooks) =>

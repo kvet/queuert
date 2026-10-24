@@ -1,4 +1,6 @@
-import { type BaseJobTypeDefinitions } from "../entities/job-type.js";
+import { type AnyJob } from "../entities/job.js";
+import { type ScheduleOptions } from "../entities/schedule.js";
+import { type BaseJobTypeDefinitions } from "../job-types/job-type.js";
 import {
   type BlockerChainsInput,
   type ContinuedJob,
@@ -8,11 +10,8 @@ import {
   type OutputJob,
   type RescheduledJob,
   type ResolvedRunningJob,
-} from "../entities/job-types.resolvers.js";
-import { type AnyJob } from "../entities/job.js";
-import { type ScheduleOptions } from "../entities/schedule.js";
+} from "../job-types/job-types.resolvers.js";
 import {
-  type BaseTxContext,
   type GetStateAdapterJobId,
   type GetStateAdapterTxContext,
   type StateAdapter,
@@ -20,7 +19,7 @@ import {
 import { type TransactionHooks } from "../transaction-hooks.js";
 
 type AttemptContinueWithOutcome<
-  TStateAdapter extends StateAdapter<BaseTxContext, any>,
+  TStateAdapter extends StateAdapter<any, any>,
   TJobTypeDefinitions extends BaseJobTypeDefinitions,
   TJobTypeName extends string,
 > =
@@ -57,9 +56,9 @@ type AttemptOutputOutcome<
 
 type AttemptRescheduleOutcome = { reschedule: ScheduleOptions };
 
-/** Every outcome `finish` accepts, as a single union. */
+/** Every outcome `complete` accepts, as a single union. */
 export type AttemptOutcome<
-  TStateAdapter extends StateAdapter<BaseTxContext, any>,
+  TStateAdapter extends StateAdapter<any, any>,
   TJobTypeDefinitions extends BaseJobTypeDefinitions,
   TJobTypeName extends string,
 > =
@@ -68,8 +67,8 @@ export type AttemptOutcome<
   | AttemptRescheduleOutcome;
 
 /** Resolves the committed job shape from the outcome's discriminant key.*/
-export type AttemptFinishResult<
-  TStateAdapter extends StateAdapter<BaseTxContext, any>,
+export type AttemptCompleteResult<
+  TStateAdapter extends StateAdapter<any, any>,
   TJobTypeDefinitions extends BaseJobTypeDefinitions,
   TJobTypeName extends string,
   TChainTypeName extends string,
@@ -97,133 +96,63 @@ export type AttemptFinishResult<
       >;
 
 /**
- * Commits an outcome. The only effectful call inside the complete callback — it
- * writes before it returns, so code running after it, still inside the
- * completion transaction, observes the committed state.
+ * Commits an outcome inside the caller's transaction. Takes the transaction context and the
+ * `transactionHooks` of that transaction, spread alongside exactly one outcome key — the same
+ * convention as `client.createChain`.
  *
- * The return shape is determined by the outcome's discriminant key, never on
- * the user's data.
+ * Every write is conditional on this attempt still owning the job; if it does not, nothing is
+ * written and `complete` throws, so the caller's transaction rolls back. Validation runs before
+ * the first write, so a caught error never leaves a partial write behind.
+ *
+ * `complete` ends the attempt, not necessarily the job: with `output` the job is completed, with
+ * `continueWith` the job is completed and the chain moves on, and with `reschedule` the job goes
+ * back to `pending` for a later attempt.
+ *
+ * `complete` succeeds at most once per `transactionHooks`; a retried transaction needs its own
+ * `withTransactionHooks`. A call that threw before writing or was rolled back by
+ * `transactionHooks.withSavepoint` does not count. Its events are released through
+ * `transactionHooks` once the caller's transaction commits.
+ *
+ * The return shape is determined by the outcome's discriminant key, never on the user's data.
+ *
+ * @throws {@link JobTakenByAnotherWorkerError} if the attempt expired and the job was
+ * reclaimed or acquired by another attempt.
+ * @throws {@link JobAlreadyCompletedError} if the job was completed elsewhere, for example by
+ * `client.completeChain`.
+ * @throws {@link JobNotFoundError} if the job was deleted.
+ * @throws {@link ChainNotFoundError} if a `continueWith` blocker chain does not exist.
  */
-// The variance annotations restate what TypeScript measures for these parameters
-// and spare it that measurement (~1k instantiations per program). `TStateAdapter`
-// measures as bivariant, which no annotation can express, so it stays unannotated.
-export type AttemptFinish<
-  TStateAdapter extends StateAdapter<BaseTxContext, any>,
+export type AttemptComplete<
+  TStateAdapter extends StateAdapter<any, any>,
   in out TJobTypeDefinitions extends BaseJobTypeDefinitions,
   in out TJobTypeName extends string,
   out TChainTypeName extends string,
 > = <TOutcome extends AttemptOutcome<TStateAdapter, TJobTypeDefinitions, TJobTypeName>>(
-  outcome: TOutcome,
+  options: TOutcome & {
+    transactionHooks: TransactionHooks;
+  } & GetStateAdapterTxContext<TStateAdapter>,
 ) => Promise<
-  AttemptFinishResult<TStateAdapter, TJobTypeDefinitions, TJobTypeName, TChainTypeName, TOutcome>
+  AttemptCompleteResult<TStateAdapter, TJobTypeDefinitions, TJobTypeName, TChainTypeName, TOutcome>
 >;
-
-/** Options passed to the complete callback: the finish function and the transaction context. */
-export type AttemptCompleteOptions<
-  TStateAdapter extends StateAdapter<BaseTxContext, any>,
-  TJobTypeDefinitions extends BaseJobTypeDefinitions,
-  TJobTypeName extends string,
-  TChainTypeName extends string,
-  TCompleteCtx = Record<string, unknown>,
-> = {
-  finish: AttemptFinish<TStateAdapter, TJobTypeDefinitions, TJobTypeName, TChainTypeName>;
-} & { transactionHooks: TransactionHooks } & GetStateAdapterTxContext<TStateAdapter> &
-  TCompleteCtx;
-
-/** Complete callback type. Receives `AttemptCompleteOptions` and returns the finish result. */
-export type AttemptCompleteCallback<
-  TStateAdapter extends StateAdapter<BaseTxContext, any>,
-  TJobTypeDefinitions extends BaseJobTypeDefinitions,
-  TJobTypeName extends string,
-  TChainTypeName extends string,
-  TResult,
-  TCompleteCtx = Record<string, unknown>,
-> = (
-  completeOptions: AttemptCompleteOptions<
-    TStateAdapter,
-    TJobTypeDefinitions,
-    TJobTypeName,
-    TChainTypeName,
-    TCompleteCtx
-  >,
-) => Promise<TResult>;
-
-/**
- * Typed complete function provided to the
- * `attemptHandler`. It opens the completion
- * transaction; the outcome is chosen inside by passing exactly one outcome
- * to `finish`.
- *
- * `finish` writes before it returns, so code running after it —
- * still inside the same transaction — observes the committed job.
- */
-export type AttemptComplete<
-  TStateAdapter extends StateAdapter<BaseTxContext, any>,
-  TJobTypeDefinitions extends BaseJobTypeDefinitions,
-  TJobTypeName extends string,
-  TChainTypeName extends string,
-  TCompleteCtx = Record<string, unknown>,
-> = <TResult extends Exclude<AnyJob, { status: "running" }>>(
-  completeCallback: AttemptCompleteCallback<
-    TStateAdapter,
-    TJobTypeDefinitions,
-    TJobTypeName,
-    TChainTypeName,
-    TResult,
-    TCompleteCtx
-  >,
-) => Promise<TResult>;
-
-/**
- * Configuration for the prepare phase.
- *
- * - `"atomic"` — prepare and complete run in the same transaction.
- * - `"staged"` — prepare commits first, then complete runs in a new transaction with attempt extension.
- */
-export type AttemptPrepareOptions = { mode: "atomic" | "staged" };
-
-/** Callback executed during the prepare phase within the transaction. */
-export type AttemptPrepareCallback<
-  TStateAdapter extends StateAdapter<BaseTxContext, any>,
-  T,
-  TPrepareCtx = Record<string, unknown>,
-> = (
-  prepareCallbackOptions: GetStateAdapterTxContext<TStateAdapter> & TPrepareCtx,
-) => T | Promise<T>;
-
-/**
- * Typed prepare function provided to the
- * `attemptHandler`. Controls the processing mode and
- * optionally runs a callback within the prepare transaction.
- */
-export type AttemptPrepare<
-  TStateAdapter extends StateAdapter<BaseTxContext, any>,
-  TPrepareCtx = Record<string, unknown>,
-> = {
-  (config: AttemptPrepareOptions): Promise<void>;
-  <T>(
-    config: AttemptPrepareOptions,
-    prepareCallback: AttemptPrepareCallback<TStateAdapter, T, TPrepareCtx>,
-  ): Promise<Awaited<T>>;
-};
 
 /**
  * Handler function called for each job attempt.
  *
- * Receives `signal` (aborts when the worker is stopping or the attempt is lost), `job` (the running job with blockers), `prepare` (transaction setup), and `complete` (the final phase).
+ * Receives `signal` (aborts when the worker is stopping or the attempt is lost), `job` (the
+ * running job with its completed blocker chains) and `complete` (commits the outcome inside the
+ * caller's transaction). Do the work, then open a transaction and call `complete` inside it. The handler must return what
+ * `complete` returned.
  *
- * Processing mode is inferred automatically:
- * - If `complete` is called synchronously (no prior `await`), `prepare` is skipped and the job runs in **atomic** mode (single transaction).
- * - If the handler neither accesses `prepare` (destructuring it counts) nor calls `complete` synchronously, the worker auto-calls `prepare({ mode: "staged" })`.
+ * A returned `complete` result whose transaction committed completes the attempt without another
+ * database call. Anything else — a throw before `complete` committed, no `complete`, or a `complete`
+ * that rolled back — counts as a failed attempt, and the job is rescheduled with backoff.
  */
 export type AttemptHandler<
-  TStateAdapter extends StateAdapter<BaseTxContext, any>,
+  TStateAdapter extends StateAdapter<any, any>,
   TJobTypeDefinitions extends BaseJobTypeDefinitions,
   TJobTypeName extends string,
   TChainTypeName extends string,
   THandlerCtx,
-  TPrepareCtx,
-  TCompleteCtx,
 > = (
   processOptions: {
     signal: AbortSignal;
@@ -233,13 +162,6 @@ export type AttemptHandler<
       TJobTypeName,
       TChainTypeName
     >;
-    prepare: AttemptPrepare<TStateAdapter, TPrepareCtx>;
-    complete: AttemptComplete<
-      TStateAdapter,
-      TJobTypeDefinitions,
-      TJobTypeName,
-      TChainTypeName,
-      TCompleteCtx
-    >;
+    complete: AttemptComplete<TStateAdapter, TJobTypeDefinitions, TJobTypeName, TChainTypeName>;
   } & THandlerCtx,
 ) => Promise<Exclude<AnyJob, { status: "running" }>>;

@@ -5,7 +5,7 @@
  *
  * Scenarios:
  * 1. Cooperative Timeout: Using AbortController with the job signal
- * 2. Hard Timeout: Using attemptConfig for automatic job reclamation
+ * 2. Attempt Timeout: Using attemptConfig (reclaimed if the worker stops extending)
  */
 
 import assert from "node:assert/strict";
@@ -31,7 +31,7 @@ const jobTypes = defineJobTypes<{
     output: { data: string } | { timedOut: true };
   };
 
-  // Job demonstrating hard timeout via attempt config
+  // Job demonstrating the attempt timeout via attempt config
   "long-running-job": {
     entry: true;
     input: { taskId: string; durationMs: number };
@@ -91,11 +91,17 @@ const worker = await createInProcessWorker({
           try {
             const data = await simulatedFetch(job.input.url, combined, 300);
             console.log(`  Fetch SUCCESS`);
-            return await complete(async ({ finish }) => finish({ output: { data } }));
+            return await withTransactionHooks(async (transactionHooks) =>
+              sql.begin(async (txSql) => complete({ txSql, transactionHooks, output: { data } })),
+            );
           } catch (error) {
             if (error instanceof DOMException && error.name === "AbortError") {
               console.log(`  Fetch TIMED OUT`);
-              return await complete(async ({ finish }) => finish({ output: { timedOut: true } }));
+              return await withTransactionHooks(async (transactionHooks) =>
+                sql.begin(async (txSql) =>
+                  complete({ txSql, transactionHooks, output: { timedOut: true } }),
+                ),
+              );
             }
             throw error;
           } finally {
@@ -116,7 +122,11 @@ const worker = await createInProcessWorker({
           await new Promise((r) => setTimeout(r, job.input.durationMs));
 
           console.log(`  Task completed on attempt ${attempt}`);
-          return complete(async ({ finish }) => finish({ output: { completed: true, attempt } }));
+          return withTransactionHooks(async (transactionHooks) =>
+            sql.begin(async (txSql) =>
+              complete({ txSql, transactionHooks, output: { completed: true, attempt } }),
+            ),
+          );
         },
       },
     },
@@ -161,9 +171,9 @@ const result2 = await client.awaitChain(fetch2, { timeoutMs: 5000 });
 console.log(`Result: ${JSON.stringify(result2.output)}`);
 assert.ok("timedOut" in result2.output);
 
-// Scenario 2: Hard timeout via attempt config (completes in time)
-console.log("\n--- Scenario 2: Hard Timeout via Attempt Config ---");
-console.log("Job with attemptConfig completes within attempt period.\n");
+// Scenario 2: Attempt timeout via attempt config (completes while the attempt is extended)
+console.log("\n--- Scenario 2: Attempt Timeout via Attempt Config ---");
+console.log("Job with attemptConfig completes while the heartbeat extends the attempt.\n");
 
 const longChain = await withTransactionHooks(async (transactionHooks) =>
   sql.begin(async (txSql) =>
