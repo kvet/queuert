@@ -7,15 +7,30 @@ import {
   raceWithSleep,
 } from "@queuert/helpers";
 
+import {
+  type AnyAttemptMiddleware,
+  type AttemptMiddleware,
+  type IsAttemptMiddlewareSubsequence,
+} from "./attempt-middleware/attempt-middleware.js";
 import { type Client, helpersSymbol } from "./client.js";
-import { type BaseJobTypeDefinitions } from "./entities/job-type.js";
+import { type BackoffConfig, backoffConfigViolations } from "./entities/backoff.js";
+import { withRetry } from "./entities/retry.js";
 import { JobAttemptExpiredError } from "./errors.js";
-import { type BackoffConfig, backoffConfigViolations } from "./helpers/backoff.js";
-import { withRetry } from "./helpers/retry.js";
 import {
   type TransactionContext,
   createTransactionContext,
 } from "./helpers/transaction-context.js";
+import {
+  type InProcessWorkerProcessor,
+  type Processors,
+  processorAttemptMiddlewareSymbol,
+} from "./job-type-processors/job-type-processors.js";
+import {
+  type MergedProcessorDefinitions,
+  type ValidatedProcessorSlices,
+  mergeProcessors,
+} from "./job-type-processors/merge-job-type-processors.js";
+import { type BaseJobTypeDefinitions } from "./job-types/job-type.js";
 import { type NotifyAdapter } from "./notify-adapter/notify-adapter.js";
 import { type Helpers } from "./setup-helpers.js";
 import {
@@ -24,22 +39,7 @@ import {
   type StateJob,
 } from "./state-adapter/state-adapter.js";
 import { type AttemptConfig, attemptConfigViolations } from "./worker/attempt-heartbeat.js";
-import {
-  type AnyAttemptMiddleware,
-  type AttemptMiddleware,
-  type IsAttemptMiddlewareSubsequence,
-} from "./worker/attempt-middleware.js";
 import { runJobProcess } from "./worker/job-process.js";
-import {
-  type MergedProcessorDefinitions,
-  type ValidatedProcessorSlices,
-  mergeProcessors,
-} from "./worker/merge-processors.js";
-import {
-  type InProcessWorkerProcessor,
-  type Processors,
-  processorAttemptMiddlewareSymbol,
-} from "./worker/processors.js";
 
 /** Per-processor runtime stamp carrying the middleware tuple of the originating slice. @internal */
 type StampedProcessor = InProcessWorkerProcessor<any, any, any, any, any, any> & {

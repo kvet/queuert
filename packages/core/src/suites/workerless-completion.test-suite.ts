@@ -2,15 +2,15 @@ import { sleep } from "@queuert/helpers";
 import { type TestAPI, expect, expectTypeOf, vi } from "vitest";
 
 import { createClient } from "../client.js";
-import { defineJobTypes } from "../entities/define-job-types.js";
 import {
   BlockerLimitExceededError,
   ChainTypeMismatchError,
   JobAlreadyCompletedError,
 } from "../errors.js";
 import { createInProcessWorker } from "../in-process-worker.js";
+import { createProcessors } from "../job-type-processors/create-job-type-processors.js";
+import { defineJobTypes } from "../job-types/define-job-types.js";
 import { withTransactionHooks } from "../transaction-hooks.js";
-import { createProcessors } from "../worker/create-processors.js";
 import { type TestSuiteContext } from "./spec-context.spec-helper.js";
 
 export const workerlessCompletionTestSuite = ({ it }: { it: TestAPI<TestSuiteContext> }): void => {

@@ -2,10 +2,10 @@ import { sleep } from "@queuert/helpers";
 import { type TestAPI, describe, expect, expectTypeOf } from "vitest";
 
 import { createClient } from "../client.js";
-import { defineJobTypes } from "../entities/define-job-types.js";
 import { ChainTypeMismatchError, JobTypeMismatchError } from "../errors.js";
 import { createInProcessWorker } from "../in-process-worker.js";
-import { createProcessors } from "../worker/create-processors.js";
+import { createProcessors } from "../job-type-processors/create-job-type-processors.js";
+import { defineJobTypes } from "../job-types/define-job-types.js";
 import { type TestSuiteContext } from "./spec-context.spec-helper.js";
 
 export const clientQueriesTestSuite = ({ it: baseIt }: { it: TestAPI<TestSuiteContext> }): void => {

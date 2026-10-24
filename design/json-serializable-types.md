@@ -96,7 +96,7 @@ The asymmetry is the right one: TS catches it where TS knows the shape (each ada
 
 ### Merge-job-types routing
 
-Three modes today (line numbers from [packages/core/src/entities/merge-job-types.ts](../packages/core/src/entities/merge-job-types.ts)):
+Three modes today (line numbers from [packages/core/src/job-types/merge-job-types.ts](../packages/core/src/job-types/merge-job-types.ts)):
 
 1. **All-noop** (line 102-108): produces a fresh noop registry. Identity through, JsonSerializable check still applies.
 2. **All-validated** (line 139-142): strict routing; unknown typeName throws `UnknownJobTypeError`.
@@ -233,12 +233,12 @@ This is a **major** version bump.
 
 | File                                                               | Role                                                                                                                                           |
 | ------------------------------------------------------------------ | ---------------------------------------------------------------------------------------------------------------------------------------------- |
-| `packages/core/src/entities/job-types.ts`                          | `JobTypesOptions`, `JobTypes`, `createJobTypes`, `createNoopJobTypes` — primary API change; both wrappers run `isJsonSerializable` post-encode |
+| `packages/core/src/job-types/job-types.ts`                         | `JobTypesOptions`, `JobTypes`, `createJobTypes`, `createNoopJobTypes` — primary API change; both wrappers run `isJsonSerializable` post-encode |
 | `packages/core/src/entities/json-serializable.ts` (new)            | `JsonSerializable` type, `isJsonSerializable` runtime check, `EnsureJsonSerializable<T>` utility                                               |
 | `packages/core/src/entities/define-job-type-registry.ts`           | `defineJobTypes` constrains `input`/`output` to `JsonSerializable` at the type level                                                           |
-| `packages/core/src/entities/job-type.ts`                           | `BaseJobTypeDefinition` — semantic clarification (runtime type); stays `unknown` in core                                                       |
-| `packages/core/src/entities/job-type.validation.ts`                | `ValidateJobType` — keep `NoVoidOrUndefined`; `JsonSerializable` constraint applied in `defineJobTypes` and validator adapters                 |
-| `packages/core/src/entities/merge-job-types.ts`                    | Group items by owning slice; route fallback (mixed-merge unknown types) through internal noop registry so JsonSerializable check still fires   |
+| `packages/core/src/job-types/job-type.ts`                          | `BaseJobTypeDefinition` — semantic clarification (runtime type); stays `unknown` in core                                                       |
+| `packages/core/src/job-types/job-type.validation.ts`               | `ValidateJobType` — keep `NoVoidOrUndefined`; `JsonSerializable` constraint applied in `defineJobTypes` and validator adapters                 |
+| `packages/core/src/job-types/merge-job-types.ts`                   | Group items by owning slice; route fallback (mixed-merge unknown types) through internal noop registry so JsonSerializable check still fires   |
 | `packages/core/src/entities/job.ts`                                | `mapStateJobToJob` → async/batch variant                                                                                                       |
 | `packages/core/src/implementation/create-state-jobs.ts`            | Call `encodeInputs` after validate                                                                                                             |
 | `packages/core/src/implementation/finish-job.ts`                   | Call `encodeOutputs`                                                                                                                           |
@@ -249,7 +249,7 @@ This is a **major** version bump.
 | `examples/validation-zod/src/zod-adapter.ts`                       | Identity codecs                                                                                                                                |
 | `examples/codec-zod/` (new)                                        | Bidirectional codec showcase                                                                                                                   |
 | `examples/codec-encrypted/` (new, optional)                        | KMS-style wrapper showcase                                                                                                                     |
-| `packages/core/src/entities/job-types.spec.ts`                     | Update for new contract                                                                                                                        |
+| `packages/core/src/job-types/job-types.spec.ts`                    | Update for new contract                                                                                                                        |
 | `packages/core/src/conformance/validation-adapter.spec.ts`         | Update conformance for codec API                                                                                                               |
 | `packages/core/src/client.merge.spec.ts`                           | Update routing tests                                                                                                                           |
 | `benchmarks/type-complexity/`                                      | Re-measure after type changes                                                                                                                  |
@@ -265,17 +265,17 @@ Phased so each phase ends with a green `pnpm check`. Each phase is a single PR-s
 Goal: replace `parseInput`/`parseOutput` with the four batch async codec methods inside the registry, with no consumers updated yet (compile errors expected outside this phase's files; gate with a temporary `parseInput`/`parseOutput` shim if necessary to keep intermediate commits compiling).
 
 - [ ] Add `packages/core/src/entities/json-serializable.ts`: `JsonSerializable` type, `EnsureJsonSerializable<T>` utility, and `isJsonSerializable(value): true | { path: string }` runtime check (recursive walk; rejects `Date`, `Map`, `Set`, class instances, `NaN`/`Infinity`, `bigint`, functions, symbols). Export from package root. Unit tests cover each rejection class plus deep-nesting paths.
-- [ ] Update `JobTypesOptions` and `JobTypes` in [packages/core/src/entities/job-types.ts](../packages/core/src/entities/job-types.ts): remove `parseInput`/`parseOutput`, add the four batch async codec methods. Wrap each call so that:
+- [ ] Update `JobTypesOptions` and `JobTypes` in [packages/core/src/job-types/job-types.ts](../packages/core/src/job-types/job-types.ts): remove `parseInput`/`parseOutput`, add the four batch async codec methods. Wrap each call so that:
   1. Adapter-thrown errors are wrapped as `JobTypeValidationError` per item (preserve item index, `typeName`, and original cause).
   2. After `encodeInputs`/`encodeOutputs` returns, every value is checked with `isJsonSerializable`; failures throw `JobTypeValidationError` with the offending path.
 - [ ] Update `createNoopJobTypes`: identity codec methods that go through the same wrapper (so `defineJobTypes` users get the runtime check for free).
 - [ ] Update `defineJobTypes` ([packages/core/src/entities/define-job-type-registry.ts](../packages/core/src/entities/define-job-type-registry.ts)) to constrain its `input`/`output` generics to `JsonSerializable` at the type level. Compile-error message points users at validator adapters with codecs.
-- [ ] Update `mergeJobTypes` ([packages/core/src/entities/merge-job-types.ts](../packages/core/src/entities/merge-job-types.ts)) for the four codec methods:
+- [ ] Update `mergeJobTypes` ([packages/core/src/job-types/merge-job-types.ts](../packages/core/src/job-types/merge-job-types.ts)) for the four codec methods:
   - All-noop mode: unchanged — returns a fresh noop registry.
   - All-validated and mixed modes: group `items` by owning slice (using `typeNameMap`), call each slice's batch method with its subset, stitch results back to original input order.
   - Mixed-mode fallback for unknown types: synthesize one internal `createNoopJobTypes()` instance held by the merge closure; route the fallback subset through it (replaces today's inline `() => input`). This preserves the JsonSerializable check on every encoded value, including unknowns in noop-tolerant merges.
   - All-validated unknown-type behavior unchanged: `UnknownJobTypeError`.
-- [ ] Update `packages/core/src/entities/job-types.spec.ts` for the new contract; add tests for: heterogeneous batches; per-item error wrapping with index/typeName; async error propagation; `isJsonSerializable` enforcement on identity (noop) encoders; `defineJobTypes` type-level rejection of `Date`-bearing definitions.
+- [ ] Update `packages/core/src/job-types/job-types.spec.ts` for the new contract; add tests for: heterogeneous batches; per-item error wrapping with index/typeName; async error propagation; `isJsonSerializable` enforcement on identity (noop) encoders; `defineJobTypes` type-level rejection of `Date`-bearing definitions.
 - [ ] Update `packages/core/src/client.merge.spec.ts` to cover: mixed-merge unknown-type fallback now JsonSerializable-checked; heterogeneous batch grouping/stitching preserves order across multiple slices.
 - [ ] Update `packages/core/src/conformance/validation-adapter.spec.ts` to drive the four batch methods through every adapter under test.
 

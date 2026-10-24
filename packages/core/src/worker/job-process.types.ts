@@ -1,4 +1,6 @@
-import { type BaseJobTypeDefinitions } from "../entities/job-type.js";
+import { type AnyJob } from "../entities/job.js";
+import { type ScheduleOptions } from "../entities/schedule.js";
+import { type BaseJobTypeDefinitions } from "../job-types/job-type.js";
 import {
   type BlockerChainsInput,
   type ContinuedJob,
@@ -8,9 +10,7 @@ import {
   type OutputJob,
   type RescheduledJob,
   type ResolvedRunningJob,
-} from "../entities/job-types.resolvers.js";
-import { type AnyJob } from "../entities/job.js";
-import { type ScheduleOptions } from "../entities/schedule.js";
+} from "../job-types/job-types.resolvers.js";
 import {
   type BaseTxContext,
   type GetStateAdapterJobId,

@@ -1,24 +1,24 @@
-import { type Client } from "../client.js";
-import { type BaseJobTypeDefinitions } from "../entities/job-type.js";
-import { type JobTypes } from "../entities/job-types.js";
-import { type JobTypeNames } from "../entities/job-types.resolvers.js";
-import { type BackoffConfig } from "../helpers/backoff.js";
-import { type StateAdapter } from "../state-adapter/state-adapter.js";
-import { type AttemptConfig } from "./attempt-heartbeat.js";
 import {
   type AnyAttemptMiddleware,
   type AttemptMiddleware,
   type MergedAttemptHandlerCtx,
   type MergedCompleteCtx,
   type MergedPrepareCtx,
-} from "./attempt-middleware.js";
+} from "../attempt-middleware/attempt-middleware.js";
+import { type Client } from "../client.js";
+import { type BackoffConfig } from "../entities/backoff.js";
+import { type BaseJobTypeDefinitions } from "../job-types/job-type.js";
+import { type JobTypes } from "../job-types/job-types.js";
+import { type JobTypeNames } from "../job-types/job-types.resolvers.js";
+import { type StateAdapter } from "../state-adapter/state-adapter.js";
+import { type AttemptConfig } from "../worker/attempt-heartbeat.js";
 import {
   type InProcessWorkerProcessor,
   type Processors,
   processorAttemptMiddlewareSymbol,
   processorsDefinitionsSymbol,
   processorsMiddlewareSymbol,
-} from "./processors.js";
+} from "./job-type-processors.js";
 
 /** Merged definitions: union of own + external defs for typing handler continueWith / blockers. */
 type MergedDefs<

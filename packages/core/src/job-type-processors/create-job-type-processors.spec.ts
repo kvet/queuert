@@ -1,9 +1,9 @@
 import { describe, expect, it } from "vitest";
 
 import { createClient } from "../client.js";
-import { defineJobTypes } from "../entities/define-job-types.js";
+import { defineJobTypes } from "../job-types/define-job-types.js";
 import { createInProcessStateAdapter } from "../state-adapter/state-adapter.in-process.js";
-import { createProcessors } from "./create-processors.js";
+import { createProcessors } from "./create-job-type-processors.js";
 
 type Defs = {
   foo: { entry: true; input: { v: number }; output: { ok: true } };

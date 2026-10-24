@@ -1,15 +1,15 @@
 import { describe, expect, expectTypeOf, it, vi } from "vitest";
 
-import { defineJobTypes } from "./entities/define-job-types.js";
-import { type BaseJobTypeDefinitions } from "./entities/job-type.js";
-import { type JobTypeDefinitions, createJobTypes } from "./entities/job-types.js";
+import { DuplicateJobTypeError, JobTypeValidationError, UnknownJobTypeError } from "./errors.js";
+import { defineJobTypes } from "./job-types/define-job-types.js";
+import { type BaseJobTypeDefinitions } from "./job-types/job-type.js";
+import { type JobTypeDefinitions, createJobTypes } from "./job-types/job-types.js";
 import {
   type JobTypeContinuation,
   type JobTypeEntryNames,
   type JobTypeProperty,
-} from "./entities/job-types.resolvers.js";
-import { mergeJobTypes } from "./entities/merge-job-types.js";
-import { DuplicateJobTypeError, JobTypeValidationError, UnknownJobTypeError } from "./errors.js";
+} from "./job-types/job-types.resolvers.js";
+import { mergeJobTypes } from "./job-types/merge-job-types.js";
 
 const createValidatedRegistry = <T extends BaseJobTypeDefinitions>(typeNames: string[]) => {
   const knownTypes = new Set(typeNames);

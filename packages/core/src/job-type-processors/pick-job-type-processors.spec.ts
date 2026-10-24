@@ -1,22 +1,22 @@
 import { describe, expect, expectTypeOf, it } from "vitest";
 
+import { type AttemptMiddleware } from "../attempt-middleware/attempt-middleware.js";
 import { createClient } from "../client.js";
-import { defineJobTypes } from "../entities/define-job-types.js";
 import { DuplicateJobTypeError } from "../errors.js";
 import { createInProcessWorker } from "../in-process-worker.js";
+import { defineJobTypes } from "../job-types/define-job-types.js";
 import {
   createInProcessStateAdapter,
   type InProcessStateAdapter,
 } from "../state-adapter/state-adapter.in-process.js";
-import { type AttemptMiddleware } from "./attempt-middleware.js";
-import { createProcessors } from "./create-processors.js";
-import { omitProcessors, pickProcessors } from "./pick-processors.js";
+import { createProcessors } from "./create-job-type-processors.js";
 import {
   type ProcessorDefinitions,
   type ProcessorMiddlewareTuple,
   processorAttemptMiddlewareSymbol,
   processorsMiddlewareSymbol,
-} from "./processors.js";
+} from "./job-type-processors.js";
+import { omitProcessors, pickProcessors } from "./pick-job-type-processors.js";
 
 type ImageDefs = {
   "images.resize": { entry: true; input: { url: string }; output: { url: string } };

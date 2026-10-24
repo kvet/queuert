@@ -1,5 +1,5 @@
-import { type JobTypes } from "../entities/job-types.js";
 import { JobTypeValidationError } from "../errors.js";
+import { type JobTypes } from "../job-types/job-types.js";
 import { type ConformanceGroup } from "./runner.js";
 
 /**

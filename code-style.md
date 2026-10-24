@@ -205,7 +205,7 @@ describe("MyFeature", () => {
 
 **Spec files** (`*.spec.ts`):
 
-Every test file uses `.spec.ts` — both unit tests colocated next to the module they cover (`helpers/backoff.spec.ts`, `entities/chain.spec.ts`) and adapter-parameterized specs in a `specs/` directory. Do not use `.test.ts`.
+Every test file uses `.spec.ts` — both unit tests colocated next to the module they cover (`entities/backoff.spec.ts`, `entities/chain.spec.ts`) and adapter-parameterized specs in a `specs/` directory. Do not use `.test.ts`.
 
 - `packages/core/src/specs/` - Running with in-process adapters
 - `packages/postgres/src/specs/` - Running with PostgreSQL adapter

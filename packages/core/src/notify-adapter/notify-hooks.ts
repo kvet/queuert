@@ -1,6 +1,6 @@
-import { type NotifyAdapter } from "../notify-adapter/notify-adapter.js";
 import { type StateJob } from "../state-adapter/state-adapter.js";
 import { type TransactionHooks } from "../transaction-hooks.js";
+import { type NotifyAdapter } from "./notify-adapter.js";
 
 const notifyJobScheduledKey = Symbol("queuert.notifyJobScheduled");
 const notifyChainCompletedKey = Symbol("queuert.notifyChainCompleted");

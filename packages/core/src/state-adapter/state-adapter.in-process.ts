@@ -1,8 +1,8 @@
 import { createAsyncRwLock } from "@queuert/helpers";
 
 import { type DeduplicationOptions } from "../entities/deduplication.js";
+import { type OrderDirection, type Page, type PageParams } from "../entities/pagination.js";
 import { type ScheduleOptions } from "../entities/schedule.js";
-import { type OrderDirection, type Page, type PageParams } from "../pagination.js";
 import { resolveStateAdapterConfig } from "./adapter-config.js";
 import { decodeIdCursor, decodeTimestampWithIdCursor, encodeCursor } from "./cursor.js";
 import {

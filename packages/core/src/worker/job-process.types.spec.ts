@@ -4,7 +4,7 @@ import {
   type ContinuedJob,
   type OutputJob,
   type RescheduledJob,
-} from "../entities/job-types.resolvers.js";
+} from "../job-types/job-types.resolvers.js";
 import { type InProcessStateAdapter } from "../state-adapter/state-adapter.in-process.js";
 import {
   type AttemptComplete,

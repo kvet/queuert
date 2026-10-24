@@ -1,6 +1,6 @@
 export { helpersSymbol } from "./client.js";
 
-export { type OrderDirection } from "./pagination.js";
+export { type OrderDirection } from "./entities/pagination.js";
 export { resolveStateAdapterConfig } from "./state-adapter/adapter-config.js";
 export {
   decodeIdCursor,

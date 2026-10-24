@@ -1,10 +1,10 @@
-import { type BaseJobTypeDefinitions } from "../entities/job-type.js";
 import { DuplicateJobTypeError } from "../errors.js";
+import { type BaseJobTypeDefinitions } from "../job-types/job-type.js";
 import {
   type ProcessorDefinitions,
   type Processors,
   processorsDefinitionsSymbol,
-} from "./processors.js";
+} from "./job-type-processors.js";
 
 /**
  * Collect definitions from a tuple of processor slices as a UNION (4-at-a-time

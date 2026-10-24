@@ -1,12 +1,12 @@
-import { type BaseJobTypeDefinitions } from "../entities/job-type.js";
-import { type JobTypeNames } from "../entities/job-types.resolvers.js";
+import { type BaseJobTypeDefinitions } from "../job-types/job-type.js";
+import { type JobTypeNames } from "../job-types/job-types.resolvers.js";
 import {
   type ProcessorDefinitions,
   type ProcessorMiddlewareTuple,
   type Processors,
   processorsDefinitionsSymbol,
   processorsMiddlewareSymbol,
-} from "./processors.js";
+} from "./job-type-processors.js";
 
 const selectProcessors = (
   functionName: string,

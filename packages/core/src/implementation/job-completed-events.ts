@@ -1,4 +1,4 @@
-import { bufferObservabilityEvent } from "../helpers/observability-hooks.js";
+import { bufferObservabilityEvent } from "../observability-adapter/observability-hooks.js";
 import { type Helpers } from "../setup-helpers.js";
 import { type StateJob, type StateJobInfo } from "../state-adapter/state-adapter.js";
 import { type TransactionHooks } from "../transaction-hooks.js";

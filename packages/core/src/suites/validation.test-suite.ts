@@ -1,11 +1,11 @@
 import { type TestAPI, assert, expect } from "vitest";
 
 import { createClient } from "../client.js";
-import { type BaseJobTypeDefinitions } from "../entities/job-type.js";
-import { createJobTypes } from "../entities/job-types.js";
 import { JobTypeValidationError } from "../errors.js";
 import { createInProcessWorker } from "../in-process-worker.js";
-import { createProcessors } from "../worker/create-processors.js";
+import { createProcessors } from "../job-type-processors/create-job-type-processors.js";
+import { type BaseJobTypeDefinitions } from "../job-types/job-type.js";
+import { createJobTypes } from "../job-types/job-types.js";
 import { type TestSuiteContext } from "./spec-context.spec-helper.js";
 
 // --- Mini schema adapter (mirrors real adapter pattern) ---

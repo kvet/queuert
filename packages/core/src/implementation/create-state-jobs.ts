@@ -7,12 +7,12 @@ import {
   InvalidJobIdError,
   JobNotFoundError,
 } from "../errors.js";
-import { bufferNotifyJobScheduled } from "../helpers/notify-hooks.js";
+import { bufferNotifyJobScheduled } from "../notify-adapter/notify-hooks.js";
+import { type ObservabilityHelper } from "../observability-adapter/observability-helper.js";
 import {
   bufferObservabilityEvent,
   bufferObservabilityRollback,
-} from "../helpers/observability-hooks.js";
-import { type ObservabilityHelper } from "../observability-adapter/observability-helper.js";
+} from "../observability-adapter/observability-hooks.js";
 import { type Helpers } from "../setup-helpers.js";
 import {
   type BaseTxContext,

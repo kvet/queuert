@@ -1,7 +1,8 @@
 import { describe, expectTypeOf, it } from "vitest";
 
 import { type Client, createClient } from "../client.js";
-import { defineJobTypes } from "../entities/define-job-types.js";
+import { createProcessors } from "../job-type-processors/create-job-type-processors.js";
+import { defineJobTypes } from "../job-types/define-job-types.js";
 import { createInProcessStateAdapter } from "../state-adapter/state-adapter.in-process.js";
 import { type StateAdapter } from "../state-adapter/state-adapter.js";
 import {
@@ -10,7 +11,6 @@ import {
   type MergedCompleteCtx,
   type MergedPrepareCtx,
 } from "./attempt-middleware.js";
-import { createProcessors } from "./create-processors.js";
 
 type Defs = {
   foo: { entry: true; input: { v: number }; output: { ok: true } };

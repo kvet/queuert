@@ -1,6 +1,9 @@
 import { JobNotFoundError } from "../errors.js";
-import { bufferNotifyChainCompletion, bufferNotifyJobScheduled } from "../helpers/notify-hooks.js";
-import { bufferObservabilityEvent } from "../helpers/observability-hooks.js";
+import {
+  bufferNotifyChainCompletion,
+  bufferNotifyJobScheduled,
+} from "../notify-adapter/notify-hooks.js";
+import { bufferObservabilityEvent } from "../observability-adapter/observability-hooks.js";
 import { type Helpers } from "../setup-helpers.js";
 import {
   type BaseTxContext,

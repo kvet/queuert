@@ -1,20 +1,20 @@
 export { createClient, type Client } from "./client.js";
 export { type Chain, type ChainStatus, type CompletedChain } from "./entities/chain.js";
 export { type DeduplicationOptions } from "./entities/deduplication.js";
-export { defineJobTypes } from "./entities/define-job-types.js";
+export { defineJobTypes } from "./job-types/define-job-types.js";
 export {
   type BaseJobTypeDefinition,
   type BaseJobTypeDefinitions,
   type JobTypeReference,
-} from "./entities/job-type.js";
+} from "./job-types/job-type.js";
 export {
   type JobTypeDefinitionErrors,
   type ValidatedJobTypeDefinitions,
-} from "./entities/job-type.validation.js";
-export { createJobTypes, type JobTypeDefinitions, type JobTypes } from "./entities/job-types.js";
-export { type JobTypeEntryNames, type JobTypeNames } from "./entities/job-types.resolvers.js";
+} from "./job-types/job-type.validation.js";
+export { createJobTypes, type JobTypeDefinitions, type JobTypes } from "./job-types/job-types.js";
+export { type JobTypeEntryNames, type JobTypeNames } from "./job-types/job-types.resolvers.js";
 export { type CompletedJob, type Job, type JobStatus } from "./entities/job.js";
-export { type JobTypesDefinitions } from "./entities/merge-job-types.js";
+export { type JobTypesDefinitions } from "./job-types/merge-job-types.js";
 export { type ScheduleOptions } from "./entities/schedule.js";
 export {
   BlockerLimitExceededError,
@@ -37,8 +37,8 @@ export {
   WaitChainTimeoutError,
   type JobTypeValidationErrorCode,
 } from "./errors.js";
-export { type BackoffConfig } from "./helpers/backoff.js";
-export { type RetryConfig } from "./helpers/retry.js";
+export { type BackoffConfig } from "./entities/backoff.js";
+export { type RetryConfig } from "./entities/retry.js";
 export {
   createInProcessWorker,
   type InProcessWorker,
@@ -49,7 +49,7 @@ export { type NotifyAdapter } from "./notify-adapter/notify-adapter.js";
 export { createConsoleLog } from "./observability-adapter/log.console.js";
 export { type Log } from "./observability-adapter/log.js";
 export { type ObservabilityAdapter } from "./observability-adapter/observability-adapter.js";
-export { type OrderDirection, type Page } from "./pagination.js";
+export { type OrderDirection, type Page } from "./entities/pagination.js";
 export {
   createInProcessStateAdapter,
   type InProcessContext,
@@ -69,7 +69,7 @@ export {
   type TransactionHooksSavepoint,
 } from "./transaction-hooks.js";
 export { type AttemptConfig } from "./worker/attempt-heartbeat.js";
-export { type AttemptMiddleware } from "./worker/attempt-middleware.js";
-export { createProcessors } from "./worker/create-processors.js";
-export { omitProcessors, pickProcessors } from "./worker/pick-processors.js";
-export { type Processors } from "./worker/processors.js";
+export { type AttemptMiddleware } from "./attempt-middleware/attempt-middleware.js";
+export { createProcessors } from "./job-type-processors/create-job-type-processors.js";
+export { omitProcessors, pickProcessors } from "./job-type-processors/pick-job-type-processors.js";
+export { type Processors } from "./job-type-processors/job-type-processors.js";

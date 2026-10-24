@@ -19,13 +19,7 @@ import {
   type ChainFields,
   type CompletedChainFields,
   type RunningChainFields,
-} from "./chain.types.js";
-import {
-  type BaseJobTypeDefinitions,
-  type JobTypeReference,
-  type NominalJobTypeReference,
-  type StructuralJobTypeReference,
-} from "./job-type.js";
+} from "../entities/chain.types.js";
 import {
   type CompletedJobFields,
   type ContinuedJobFields,
@@ -34,7 +28,13 @@ import {
   type PendingJobFields,
   type RunningJobFields,
   type TerminalJobFields,
-} from "./job.js";
+} from "../entities/job.js";
+import {
+  type BaseJobTypeDefinitions,
+  type JobTypeReference,
+  type NominalJobTypeReference,
+  type StructuralJobTypeReference,
+} from "./job-type.js";
 
 // ─── Distributive accessors ───
 

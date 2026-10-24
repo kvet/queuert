@@ -1,5 +1,5 @@
-import { type BaseJobTypeDefinitions } from "../entities/job-type.js";
-import { type ResolvedRunningJob } from "../entities/job-types.resolvers.js";
+import { type BaseJobTypeDefinitions } from "../job-types/job-type.js";
+import { type ResolvedRunningJob } from "../job-types/job-types.resolvers.js";
 import {
   type BaseTxContext,
   type GetStateAdapterJobId,

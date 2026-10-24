@@ -1,13 +1,13 @@
 import { serializeError } from "@queuert/helpers";
 
+import { type BackoffConfig, calculateBackoffMs } from "../entities/backoff.js";
 import { type ScheduleOptions } from "../entities/schedule.js";
 import {
   JobAlreadyCompletedError,
   JobNotFoundError,
   JobTakenByAnotherWorkerError,
 } from "../errors.js";
-import { type BackoffConfig, calculateBackoffMs } from "../helpers/backoff.js";
-import { bufferObservabilityEvent } from "../helpers/observability-hooks.js";
+import { bufferObservabilityEvent } from "../observability-adapter/observability-hooks.js";
 import { type Helpers } from "../setup-helpers.js";
 import {
   type BaseTxContext,

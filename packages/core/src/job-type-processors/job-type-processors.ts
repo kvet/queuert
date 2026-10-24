@@ -1,10 +1,10 @@
-import { type BaseJobTypeDefinitions } from "../entities/job-type.js";
-import { type JobTypeNames, type JobTypeReachingEntry } from "../entities/job-types.resolvers.js";
-import { type BackoffConfig } from "../helpers/backoff.js";
+import { type AnyAttemptMiddleware } from "../attempt-middleware/attempt-middleware.js";
+import { type BackoffConfig } from "../entities/backoff.js";
+import { type BaseJobTypeDefinitions } from "../job-types/job-type.js";
+import { type JobTypeNames, type JobTypeReachingEntry } from "../job-types/job-types.resolvers.js";
 import { type StateAdapter } from "../state-adapter/state-adapter.js";
-import { type AttemptConfig } from "./attempt-heartbeat.js";
-import { type AnyAttemptMiddleware } from "./attempt-middleware.js";
-import { type AttemptHandler } from "./job-process.js";
+import { type AttemptConfig } from "../worker/attempt-heartbeat.js";
+import { type AttemptHandler } from "../worker/job-process.js";
 
 /** Configuration for processing a single job type. */
 export type InProcessWorkerProcessor<

@@ -1,21 +1,21 @@
 import { describe, expect, expectTypeOf, it } from "vitest";
 
 import { createClient } from "./client.js";
-import { defineJobTypes } from "./entities/define-job-types.js";
-import { type JobTypeDefinitions } from "./entities/job-types.js";
-import { type JobTypeProperty } from "./entities/job-types.resolvers.js";
-import { mergeJobTypes } from "./entities/merge-job-types.js";
 import { DuplicateJobTypeError } from "./errors.js";
 import { createInProcessWorker } from "./in-process-worker.js";
-import { createInProcessStateAdapter } from "./state-adapter/state-adapter.in-process.js";
-import { withTransactionHooks } from "./transaction-hooks.js";
-import { createProcessors } from "./worker/create-processors.js";
-import { mergeProcessors } from "./worker/merge-processors.js";
+import { createProcessors } from "./job-type-processors/create-job-type-processors.js";
 import {
   type ProcessorDefinitions,
   type Processors,
   processorsDefinitionsSymbol,
-} from "./worker/processors.js";
+} from "./job-type-processors/job-type-processors.js";
+import { mergeProcessors } from "./job-type-processors/merge-job-type-processors.js";
+import { defineJobTypes } from "./job-types/define-job-types.js";
+import { type JobTypeDefinitions } from "./job-types/job-types.js";
+import { type JobTypeProperty } from "./job-types/job-types.resolvers.js";
+import { mergeJobTypes } from "./job-types/merge-job-types.js";
+import { createInProcessStateAdapter } from "./state-adapter/state-adapter.in-process.js";
+import { withTransactionHooks } from "./transaction-hooks.js";
 
 type OrderDefs = {
   "orders.create": { entry: true; input: { userId: string }; output: { orderId: string } };

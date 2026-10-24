@@ -3,10 +3,10 @@ import { type TestAPI, expect, expectTypeOf } from "vitest";
 
 import { createClient } from "../client.js";
 import { type Chain } from "../entities/chain.js";
-import { defineJobTypes } from "../entities/define-job-types.js";
 import { BlockerLimitExceededError, ChainTypeMismatchError } from "../errors.js";
 import { createInProcessWorker } from "../in-process-worker.js";
-import { createProcessors } from "../worker/create-processors.js";
+import { createProcessors } from "../job-type-processors/create-job-type-processors.js";
+import { defineJobTypes } from "../job-types/define-job-types.js";
 import { type TestSuiteContext } from "./spec-context.spec-helper.js";
 
 export const blockerChainsTestSuite = ({ it }: { it: TestAPI<TestSuiteContext> }): void => {

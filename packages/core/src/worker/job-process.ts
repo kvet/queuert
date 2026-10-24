@@ -1,6 +1,11 @@
+import {
+  type AnyAttemptMiddleware,
+  runCompleteMiddlewareChain,
+  runHandlerMiddlewareChain,
+  runPrepareMiddlewareChain,
+} from "../attempt-middleware/attempt-middleware.js";
+import { type BackoffConfig } from "../entities/backoff.js";
 import { type AnyChain, type CompletedChain, mapStateChainToChain } from "../entities/chain.js";
-import { type BaseJobTypeDefinitions } from "../entities/job-type.js";
-import { type ResolvedRunningJob } from "../entities/job-types.resolvers.js";
 import { mapStateJobToJob } from "../entities/job.js";
 import { type ScheduleOptions } from "../entities/schedule.js";
 import {
@@ -8,9 +13,6 @@ import {
   JobNotFoundError,
   JobTakenByAnotherWorkerError,
 } from "../errors.js";
-import { type BackoffConfig } from "../helpers/backoff.js";
-import { bufferNotifyJobScheduled } from "../helpers/notify-hooks.js";
-import { bufferObservabilityEvent } from "../helpers/observability-hooks.js";
 import { type SavepointContext, createSavepointContext } from "../helpers/savepoint-context.js";
 import {
   type TransactionContext,
@@ -21,6 +23,10 @@ import { completeChain } from "../implementation/complete-chain.js";
 import { type AnyContinueWith, continueChain } from "../implementation/continue-chain.js";
 import { handleJobHandlerError } from "../implementation/handle-job-handler-error.js";
 import { refetchJobLocked as refetchJobLockedImpl } from "../implementation/refetch-job-locked.js";
+import { type BaseJobTypeDefinitions } from "../job-types/job-type.js";
+import { type ResolvedRunningJob } from "../job-types/job-types.resolvers.js";
+import { bufferNotifyJobScheduled } from "../notify-adapter/notify-hooks.js";
+import { bufferObservabilityEvent } from "../observability-adapter/observability-hooks.js";
 import { type Helpers } from "../setup-helpers.js";
 import {
   type BaseTxContext,
@@ -30,12 +36,6 @@ import {
 } from "../state-adapter/state-adapter.js";
 import { type TransactionHooks, withTransactionHooks } from "../transaction-hooks.js";
 import { type AttemptConfig, createAttemptHeartbeat } from "./attempt-heartbeat.js";
-import {
-  type AnyAttemptMiddleware,
-  runCompleteMiddlewareChain,
-  runHandlerMiddlewareChain,
-  runPrepareMiddlewareChain,
-} from "./attempt-middleware.js";
 import {
   type AttemptComplete,
   type AttemptHandler,
