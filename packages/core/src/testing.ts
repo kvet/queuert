@@ -59,3 +59,4 @@ export {
   observabilityCoverageGroups,
   operationalCoverageGroups,
 } from "./suites/index-coverage-cases.js";
+export { syncModeTestSuite } from "./suites/sync-mode.test-suite.js";

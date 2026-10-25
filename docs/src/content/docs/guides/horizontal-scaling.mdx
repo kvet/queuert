@@ -42,7 +42,7 @@ The simplest approach: deploy the same worker configuration on multiple machines
 
 ```ts
 // Process A (e.g., machine-1)
-const workerA = await createInProcessWorker({
+const workerA = createInProcessWorker({
   client,
   workerName: "worker-a",
   concurrency: 10,
@@ -50,7 +50,7 @@ const workerA = await createInProcessWorker({
 });
 
 // Process B (e.g., machine-2)
-const workerB = await createInProcessWorker({
+const workerB = createInProcessWorker({
   client,
   workerName: "worker-b",
   concurrency: 10,
@@ -68,14 +68,14 @@ For CPU-heavy work, spawn each worker in its own thread so they get true paralle
 
 ```ts title="image-worker-thread.ts"
 // Each thread runs independently with its own database connection
-const stateAdapter = await createPgStateAdapter({ stateProvider });
-const client = await createClient({
+const stateAdapter = createPgStateAdapter({ stateProvider });
+const client = createClient({
   stateAdapter,
   notifyAdapter,
   jobTypes: imageJobTypes,
 });
 
-const worker = await createInProcessWorker({
+const worker = createInProcessWorker({
   client,
   workerName: `image-worker-${threadId}`,
   concurrency: 1,
@@ -99,7 +99,7 @@ for (let i = 0; i < 10; i++) {
 }
 
 // Lightweight async I/O — single worker in main thread, high concurrency
-const notificationWorker = await createInProcessWorker({
+const notificationWorker = createInProcessWorker({
   client,
   workerName: "notification-worker",
   concurrency: 100,
@@ -119,7 +119,7 @@ This works because chains are stored in the database, not in worker memory. A ch
 You can also combine slices when a single worker should handle multiple domains:
 
 ```ts
-const worker = await createInProcessWorker({
+const worker = createInProcessWorker({
   client,
   processors: [orderProcessors, notificationProcessors],
 });
@@ -136,14 +136,14 @@ import { omitProcessors, pickProcessors } from "queuert";
 
 const imageJobTypeNames = ["images.resize", "images.transcode"] as const;
 
-const imageWorker = await createInProcessWorker({
+const imageWorker = createInProcessWorker({
   client,
   workerName: "image-worker",
   concurrency: 1,
   processors: pickProcessors(appProcessors, imageJobTypeNames),
 });
 
-const defaultWorker = await createInProcessWorker({
+const defaultWorker = createInProcessWorker({
   client,
   workerName: "default-worker",
   concurrency: 100,

@@ -152,7 +152,7 @@ type StateAdapterErrorLogEntry = LogEntry<
   "state_adapter_error",
   "warn",
   "State adapter error",
-  { operation: keyof StateAdapter<any, any> },
+  { operation: keyof StateAdapter<any, any, any> },
   unknown
 >;
 

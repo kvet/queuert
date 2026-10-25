@@ -21,11 +21,12 @@ Queuert uses a two-layer abstraction for external integrations:
 The factory transforms a provider into an adapter:
 
 ```
-PgStateProvider      → createPgStateAdapter()        → StateAdapter
-SqliteStateProvider  → createSqliteStateAdapter()    → StateAdapter
-PgNotifyProvider     → createPgNotifyAdapter()       → NotifyAdapter
-RedisNotifyProvider  → createRedisNotifyAdapter()    → NotifyAdapter
-                       createNatsNotifyAdapter()     → NotifyAdapter
+PgStateProvider      → createPgStateAdapter()           → StateAdapter
+SqliteStateProvider  → createSyncSqliteStateAdapter()   → StateAdapter (sync drivers)
+SqliteStateProvider  → createAsyncSqliteStateAdapter()  → StateAdapter (async drivers)
+PgNotifyProvider     → createPgNotifyAdapter()          → NotifyAdapter
+RedisNotifyProvider  → createRedisNotifyAdapter()       → NotifyAdapter
+                       createNatsNotifyAdapter()        → NotifyAdapter
 ```
 
 This separation keeps driver-specific code isolated in the provider while the adapter layer remains database-agnostic. Users only implement the provider; they never implement the adapter interface directly.

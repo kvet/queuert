@@ -28,14 +28,14 @@ export const notifyResilienceTestSuite = ({
       };
     }>();
 
-    const client = await createClient({
+    const client = createClient({
       stateAdapter,
       notifyAdapter: flakyNotifyAdapter,
       observabilityAdapter,
       log,
       jobTypes,
     });
-    const worker = await createInProcessWorker({
+    const worker = createInProcessWorker({
       client,
       concurrency: 1,
       recoveryBackoffConfig: {
@@ -59,7 +59,7 @@ export const notifyResilienceTestSuite = ({
         processors: {
           test: {
             attemptHandler: async ({ job, complete }) =>
-              withTransaction(async (txCtx, transactionHooks) =>
+              withTransaction((txCtx, transactionHooks) =>
                 complete({ ...txCtx, transactionHooks, output: { result: job.input.value * 2 } }),
               ),
           },
@@ -69,7 +69,7 @@ export const notifyResilienceTestSuite = ({
 
     await withWorkers([await worker.start()], async () => {
       // at least one notify pushes worker to process jobs
-      const chains = await withTransaction(async (txCtx, transactionHooks) =>
+      const chains = await withTransaction((txCtx, transactionHooks) =>
         client.createChains({
           ...txCtx,
           transactionHooks,

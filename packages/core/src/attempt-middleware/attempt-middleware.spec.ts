@@ -13,8 +13,8 @@ type Defs = {
 };
 const jobTypes = defineJobTypes<Defs>();
 
-const stateAdapter = await createInProcessStateAdapter();
-const client = await createClient({ stateAdapter, jobTypes });
+const stateAdapter = createInProcessStateAdapter();
+const client = createClient({ stateAdapter, jobTypes });
 
 type W1<C extends Record<string, unknown>> = AttemptMiddleware<any, C>;
 

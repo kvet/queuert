@@ -1,4 +1,4 @@
-import { createAsyncRwLock, createSqliteStateAdapter } from "@queuert/sqlite";
+import { createSyncSqliteStateAdapter } from "@queuert/sqlite";
 import Database from "better-sqlite3";
 import { createBetterSqlite3StateProvider } from "example-state-sqlite-better-sqlite3/provider";
 
@@ -6,9 +6,9 @@ import { runBenchmark } from "./utils.js";
 
 const db = new Database(":memory:");
 
-const stateProvider = createBetterSqlite3StateProvider({ db, lock: createAsyncRwLock() });
-const stateAdapter = await createSqliteStateAdapter({ stateProvider });
-await stateAdapter.migrateToLatest();
+const stateProvider = createBetterSqlite3StateProvider({ db });
+const stateAdapter = createSyncSqliteStateAdapter({ stateProvider });
+stateAdapter.migrateToLatest();
 console.log("SQLite ready (in-memory).");
 
 await runBenchmark({

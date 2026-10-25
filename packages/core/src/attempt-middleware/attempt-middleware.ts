@@ -2,7 +2,7 @@ import { type BaseJobTypeDefinitions } from "../job-types/job-type.js";
 import { type ResolvedRunningJob } from "../job-types/job-types.resolvers.js";
 import { type GetStateAdapterJobId, type StateAdapter } from "../state-adapter/state-adapter.js";
 
-type RunningJob<TStateAdapter extends StateAdapter<any, any>> = ResolvedRunningJob<
+type RunningJob<TStateAdapter extends StateAdapter<any, any, any>> = ResolvedRunningJob<
   GetStateAdapterJobId<TStateAdapter>,
   BaseJobTypeDefinitions,
   string,
@@ -21,7 +21,7 @@ type RunningJob<TStateAdapter extends StateAdapter<any, any>> = ResolvedRunningJ
  * outermost. Each `next(ctx)` accumulates ctx for inner layers.
  */
 export type AttemptMiddleware<
-  TStateAdapter extends StateAdapter<any, any>,
+  TStateAdapter extends StateAdapter<any, any, any>,
   THandlerCtx extends Record<string, unknown> = Record<string, unknown>,
 > = {
   wrapHandler: <T>(opts: {
@@ -35,14 +35,14 @@ export type AttemptMiddleware<
  * Wildcard {@link AttemptMiddleware} used wherever a middleware tuple is
  * constrained.
  *
- * The state adapter slot is `StateAdapter<any, any>` rather than `any`: with a
+ * The state adapter slot is `StateAdapter<any, any, any>` rather than `any`: with a
  * bare `any`, `GetStateAdapterJobId` resolves to its branch union (`string`)
  * instead of `any`, which makes middleware typed with a *concrete* adapter fail
  * assignability to the wildcard — silently collapsing the merged ctx of
  * multi-element tuples to `unknown`.
  * @internal
  */
-export type AnyAttemptMiddleware = AttemptMiddleware<StateAdapter<any, any>, any>;
+export type AnyAttemptMiddleware = AttemptMiddleware<StateAdapter<any, any, any>, any>;
 
 /** Merge handler ctx from a tuple of {@link AttemptMiddleware}s. */
 export type MergedAttemptHandlerCtx<T extends readonly AnyAttemptMiddleware[]> =

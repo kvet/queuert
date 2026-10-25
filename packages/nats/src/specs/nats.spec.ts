@@ -21,13 +21,13 @@ it("should work end-to-end with NATS notify adapter", async ({ natsConnectionOpt
   const js = nc.jetstream();
   const kv = await js.views.kv(`queuert_e2e_test_${crypto.randomUUID()}`, { ttl: 60_000 });
 
-  const notifyAdapter = await createNatsNotifyAdapter({
+  const notifyAdapter = createNatsNotifyAdapter({
     nc,
     kv,
     subjectPrefix: `queuert.e2e.${crypto.randomUUID()}`,
   });
 
-  const stateAdapter = await createInProcessStateAdapter();
+  const stateAdapter = createInProcessStateAdapter();
 
   const log = vi.fn();
   const jobTypes = defineJobTypes<{
@@ -38,13 +38,13 @@ it("should work end-to-end with NATS notify adapter", async ({ natsConnectionOpt
     };
   }>();
 
-  const client = await createClient({
+  const client = createClient({
     stateAdapter,
     notifyAdapter,
     log,
     jobTypes,
   });
-  const worker = await createInProcessWorker({
+  const worker = createInProcessWorker({
     client,
     processors: createProcessors({
       client,
@@ -84,12 +84,12 @@ it("should work end-to-end with NATS notify adapter", async ({ natsConnectionOpt
 it("should work end-to-end without JetStream KV", async ({ natsConnectionOptions }) => {
   const nc = await connect(natsConnectionOptions);
 
-  const notifyAdapter = await createNatsNotifyAdapter({
+  const notifyAdapter = createNatsNotifyAdapter({
     nc,
     subjectPrefix: `queuert.e2e.nokv.${crypto.randomUUID()}`,
   });
 
-  const stateAdapter = await createInProcessStateAdapter();
+  const stateAdapter = createInProcessStateAdapter();
 
   const log = vi.fn();
   const jobTypes = defineJobTypes<{
@@ -100,13 +100,13 @@ it("should work end-to-end without JetStream KV", async ({ natsConnectionOptions
     };
   }>();
 
-  const client = await createClient({
+  const client = createClient({
     stateAdapter,
     notifyAdapter,
     log,
     jobTypes,
   });
-  const worker = await createInProcessWorker({
+  const worker = createInProcessWorker({
     client,
     processors: createProcessors({
       client,

@@ -1,4 +1,6 @@
-import { type BaseTxContext, type StateAdapter } from "./state-adapter.js";
+import { runOperation } from "@queuert/helpers";
+
+import { type BaseTxContext, type StateAdapter, type StateAdapterMode } from "./state-adapter.js";
 
 export type SpyCall = {
   name: string;
@@ -7,17 +9,22 @@ export type SpyCall = {
   result?: unknown;
 };
 
-export type SpyStateAdapter<TTxContext extends BaseTxContext, TJobId extends string> = StateAdapter<
-  TTxContext,
-  TJobId
-> & {
+export type SpyStateAdapter<
+  TTxContext extends BaseTxContext,
+  TJobId extends string,
+  TMode extends StateAdapterMode = "async",
+> = StateAdapter<TTxContext, TJobId, TMode> & {
   calls: SpyCall[];
   record: (args: { name: string } & TTxContext) => Promise<SpyCall>;
 };
 
-export const createSpyStateAdapter = <TTxContext extends BaseTxContext, TJobId extends string>(
-  stateAdapter: StateAdapter<TTxContext, TJobId>,
-): SpyStateAdapter<TTxContext, TJobId> => {
+export const createSpyStateAdapter = <
+  TTxContext extends BaseTxContext,
+  TJobId extends string,
+  TMode extends StateAdapterMode,
+>(
+  stateAdapter: StateAdapter<TTxContext, TJobId, TMode>,
+): SpyStateAdapter<TTxContext, TJobId, TMode> => {
   const calls: SpyCall[] = [];
   const weakMap = new WeakMap<symbol, SpyCall>();
 
@@ -33,33 +40,38 @@ export const createSpyStateAdapter = <TTxContext extends BaseTxContext, TJobId e
     return call;
   };
 
-  const wrap = <T extends (...args: never[]) => Promise<unknown>>(name: string, fn: T): T =>
-    (async (...args: unknown[]) => {
+  const wrap = <T extends (...args: never[]) => unknown>(name: string, fn: T): T =>
+    ((...args: unknown[]) => {
       const params = args[0] as { txCtx?: TTxContext };
       const call = record({ txCtx: params?.txCtx, name });
-      call.result = await fn(...(args as Parameters<T>));
-      return call.result;
+      return runOperation(stateAdapter.mode, function* () {
+        call.result = yield fn(...(args as Parameters<T>));
+        return call.result;
+      });
     }) as unknown as T;
 
   return {
     calls,
 
     config: stateAdapter.config,
-    withTransaction: async (fn) => {
+    mode: stateAdapter.mode,
+    withTransaction: ((fn: (txCtx: TTxContext) => unknown) => {
       const call = record({ txCtx: undefined, name: "withTransaction" });
-      try {
-        const result = await stateAdapter.withTransaction(async (txCtx) => {
-          const spyRef = Symbol();
-          weakMap.set(spyRef, call);
-          return fn({ ...txCtx, spyRef });
-        });
-        call.status = "committed";
-        return result;
-      } catch (error) {
-        call.status = "rolled-back";
-        throw error;
-      }
-    },
+      return runOperation(stateAdapter.mode, function* () {
+        try {
+          const result: unknown = yield stateAdapter.withTransaction((txCtx) => {
+            const spyRef = Symbol("queuert.spy");
+            weakMap.set(spyRef, call);
+            return fn({ ...txCtx, spyRef }) as never;
+          });
+          call.status = "committed";
+          return result;
+        } catch (error) {
+          call.status = "rolled-back";
+          throw error;
+        }
+      });
+    }) as StateAdapter<TTxContext, TJobId, TMode>["withTransaction"],
     isTransaction: (txCtx) => stateAdapter.isTransaction(txCtx),
     getChains: wrap("getChains", stateAdapter.getChains),
     getJobs: wrap("getJobs", stateAdapter.getJobs),

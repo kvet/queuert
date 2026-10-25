@@ -116,7 +116,8 @@ export const handleJobReschedule = async (
   try {
     const { stateAdapter } = client[helpersSymbol];
     const job = await withTransactionHooks(async (transactionHooks) =>
-      stateAdapter.withTransaction(async (txCtx) =>
+      // oxlint-disable-next-line typescript/promise-function-async -- the callback returns a value in sync mode and a promise in async mode
+      stateAdapter.withTransaction((txCtx) =>
         client.rescheduleJob({ id: jobId, transactionHooks, ...txCtx }),
       ),
     );

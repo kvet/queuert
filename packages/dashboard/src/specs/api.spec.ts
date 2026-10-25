@@ -11,10 +11,10 @@ import { createDashboard } from "../api/dashboard.js";
 
 const parseBody = async (res: Response) => deserialize<any>(await res.text());
 
-const createTestDashboard = async (basePath?: string) => {
-  const stateAdapter = await createInProcessStateAdapter();
-  const client = await createClient({ stateAdapter, jobTypes: defineJobTypes() });
-  const dashboard = await createDashboard({ client, basePath });
+const createTestDashboard = (basePath?: string) => {
+  const stateAdapter = createInProcessStateAdapter();
+  const client = createClient({ stateAdapter, jobTypes: defineJobTypes() });
+  const dashboard = createDashboard({ client, basePath });
   const prefix = basePath ?? "";
   const request = async (path: string, init?: RequestInit) =>
     dashboard.fetch(new Request(`http://test${prefix}${path}`, init));
@@ -83,8 +83,8 @@ const UUID_PATTERN = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{
  * too, which stands in for an unreachable database; `failures.reschedule` makes rescheduling a
  * valid ID throw, which stands in for a transient database error.
  */
-const createUuidStrictDashboard = async () => {
-  const inner = await createInProcessStateAdapter();
+const createUuidStrictDashboard = () => {
+  const inner = createInProcessStateAdapter();
   const failures = { probe: false, reschedule: false };
   const assertUuids = (ids: string[]) => {
     const malformed = ids.find((id) => !UUID_PATTERN.test(id));
@@ -120,8 +120,8 @@ const createUuidStrictDashboard = async () => {
       return inner.listChainTypeNames(params);
     },
   };
-  const client = await createClient({ stateAdapter, jobTypes: defineJobTypes() });
-  const dashboard = await createDashboard({ client });
+  const client = createClient({ stateAdapter, jobTypes: defineJobTypes() });
+  const dashboard = createDashboard({ client });
   const request = async (path: string, init?: RequestInit) =>
     dashboard.fetch(new Request(`http://test${path}`, init));
   return { request, stateAdapter: inner, failures };
@@ -130,7 +130,7 @@ const createUuidStrictDashboard = async () => {
 describe("Dashboard API", () => {
   describe("GET /api/chains", () => {
     it("returns empty list when no chains exist", async () => {
-      const { request } = await createTestDashboard();
+      const { request } = createTestDashboard();
       const res = await request("/api/chains");
       const body = await parseBody(res);
 
@@ -140,7 +140,7 @@ describe("Dashboard API", () => {
     });
 
     it("returns chains as serialized chain objects", async () => {
-      const { request, stateAdapter } = await createTestDashboard();
+      const { request, stateAdapter } = createTestDashboard();
       const root = await createJob(stateAdapter, "test-type", { key: "value" });
 
       const res = await request("/api/chains?typeName=test-type");
@@ -152,7 +152,7 @@ describe("Dashboard API", () => {
     });
 
     it("returns chain with continuation", async () => {
-      const { request, stateAdapter } = await createTestDashboard();
+      const { request, stateAdapter } = createTestDashboard();
       const root = await createJob(stateAdapter, "chain-type", { step: 1 });
       await createContinuation(stateAdapter, "chain-step2", root.id, {
         step: 2,
@@ -167,7 +167,7 @@ describe("Dashboard API", () => {
     });
 
     it("preserves Date objects via seroval", async () => {
-      const { request, stateAdapter } = await createTestDashboard();
+      const { request, stateAdapter } = createTestDashboard();
       await createJob(stateAdapter, "test", null);
 
       const res = await request("/api/chains?typeName=test");
@@ -177,7 +177,7 @@ describe("Dashboard API", () => {
     });
 
     it("respects limit param", async () => {
-      const { request, stateAdapter } = await createTestDashboard();
+      const { request, stateAdapter } = createTestDashboard();
       for (let i = 0; i < 5; i++) {
         await createJob(stateAdapter, "test-type", null);
       }
@@ -190,7 +190,7 @@ describe("Dashboard API", () => {
     });
 
     it("filters by independent=true, independent=false, or neither", async () => {
-      const { request, stateAdapter } = await createTestDashboard();
+      const { request, stateAdapter } = createTestDashboard();
       const blockerChain = await createJob(stateAdapter, "test-type", null);
       const mainChain = await createJob(stateAdapter, "test-type", null);
 
@@ -218,7 +218,7 @@ describe("Dashboard API", () => {
     });
 
     it("filters by chain status", async () => {
-      const { request, stateAdapter } = await createTestDashboard();
+      const { request, stateAdapter } = createTestDashboard();
       const running = await createJob(stateAdapter, "running-type", null);
       const done = await createJob(stateAdapter, "done-type", null);
 
@@ -237,7 +237,7 @@ describe("Dashboard API", () => {
     });
 
     it("falls back to the default orderBy for unknown or status-incompatible values", async () => {
-      const { request, stateAdapter } = await createTestDashboard();
+      const { request, stateAdapter } = createTestDashboard();
       await createJob(stateAdapter, "test-type", null);
 
       for (const orderBy of ["bogus", "completedAt", "id; DROP TABLE job"]) {
@@ -252,7 +252,7 @@ describe("Dashboard API", () => {
 
   describe("GET /api/chains/:chainId", () => {
     it("returns chain detail with jobs", async () => {
-      const { request, stateAdapter } = await createTestDashboard();
+      const { request, stateAdapter } = createTestDashboard();
       const root = await createJob(stateAdapter, "chain-type", { step: 1 });
       await createContinuation(stateAdapter, "chain-step2", root.id, {
         step: 2,
@@ -269,7 +269,7 @@ describe("Dashboard API", () => {
     });
 
     it("returns the tail job as currentJob even when it is past the first page", async () => {
-      const { request, stateAdapter } = await createTestDashboard();
+      const { request, stateAdapter } = createTestDashboard();
       const root = await createJob(stateAdapter, "chain-type", { step: 1 });
       const step2 = await createContinuation(stateAdapter, "chain-step2", root.id, { step: 2 });
 
@@ -281,7 +281,7 @@ describe("Dashboard API", () => {
     });
 
     it("returns a null currentJob for a completed chain", async () => {
-      const { request, stateAdapter } = await createTestDashboard();
+      const { request, stateAdapter } = createTestDashboard();
       const root = await createJob(stateAdapter, "completed-type", null);
       await startAttempt(stateAdapter, "completed-type");
       await completeJob(stateAdapter, root.id, { output: null });
@@ -293,7 +293,7 @@ describe("Dashboard API", () => {
     });
 
     it("returns 404 for missing chain", async () => {
-      const { request } = await createTestDashboard();
+      const { request } = createTestDashboard();
       const res = await request("/api/chains/nonexistent");
       expect(res.status).toBe(404);
     });
@@ -301,7 +301,7 @@ describe("Dashboard API", () => {
 
   describe("GET /api/chains/:chainId/jobs", () => {
     it("paginates the chain job sequence with a cursor", async () => {
-      const { request, stateAdapter } = await createTestDashboard();
+      const { request, stateAdapter } = createTestDashboard();
       const root = await createJob(stateAdapter, "chain-type", { step: 1 });
       await createContinuation(stateAdapter, "chain-step2", root.id, {
         step: 2,
@@ -325,7 +325,7 @@ describe("Dashboard API", () => {
 
   describe("GET /api/chains/:chainId/blocking", () => {
     it("returns jobs blocked by chain", async () => {
-      const { request, stateAdapter } = await createTestDashboard();
+      const { request, stateAdapter } = createTestDashboard();
       const blockerChain = await createJob(stateAdapter, "blocker-type", null);
       const blockedJob = await createJob(stateAdapter, "blocked-type", null);
 
@@ -345,7 +345,7 @@ describe("Dashboard API", () => {
     });
 
     it("paginates blocked jobs with a cursor", async () => {
-      const { request, stateAdapter } = await createTestDashboard();
+      const { request, stateAdapter } = createTestDashboard();
       const blockerChain = await createJob(stateAdapter, "blocker-type", null);
       const blocked1 = await createJob(stateAdapter, "blocked-type", null);
       const blocked2 = await createJob(stateAdapter, "blocked-type", null);
@@ -378,7 +378,7 @@ describe("Dashboard API", () => {
 
   describe("DELETE /api/chains/:chainId", () => {
     it("deletes a chain and returns deleted entries", async () => {
-      const { request, stateAdapter } = await createTestDashboard();
+      const { request, stateAdapter } = createTestDashboard();
       const root = await createJob(stateAdapter, "test-type", null);
 
       const res = await request(`/api/chains/${root.chainId}`, { method: "DELETE" });
@@ -393,13 +393,13 @@ describe("Dashboard API", () => {
     });
 
     it("returns 404 for missing chain", async () => {
-      const { request } = await createTestDashboard();
+      const { request } = createTestDashboard();
       const res = await request("/api/chains/nonexistent", { method: "DELETE" });
       expect(res.status).toBe(404);
     });
 
     it("returns 409 when chain is a blocker", async () => {
-      const { request, stateAdapter } = await createTestDashboard();
+      const { request, stateAdapter } = createTestDashboard();
       const blockerChain = await createJob(stateAdapter, "blocker-type", null);
       const blockedJob = await createJob(stateAdapter, "blocked-type", null);
 
@@ -420,7 +420,7 @@ describe("Dashboard API", () => {
 
   describe("GET /api/chain-types", () => {
     it("returns empty array when no chains exist", async () => {
-      const { request } = await createTestDashboard();
+      const { request } = createTestDashboard();
       const res = await request("/api/chain-types");
 
       expect(res.status).toBe(200);
@@ -428,7 +428,7 @@ describe("Dashboard API", () => {
     });
 
     it("returns distinct chain type names sorted alphabetically", async () => {
-      const { request, stateAdapter } = await createTestDashboard();
+      const { request, stateAdapter } = createTestDashboard();
       await createJob(stateAdapter, "beta-type", null);
       await createJob(stateAdapter, "alpha-type", null);
       await createJob(stateAdapter, "beta-type", null);
@@ -441,7 +441,7 @@ describe("Dashboard API", () => {
 
   describe("GET /api/chain-types/counts", () => {
     it("returns empty array when no typeNames given", async () => {
-      const { request } = await createTestDashboard();
+      const { request } = createTestDashboard();
       const res = await request("/api/chain-types/counts");
 
       expect(res.status).toBe(200);
@@ -449,7 +449,7 @@ describe("Dashboard API", () => {
     });
 
     it("returns per-status counts for each requested type name", async () => {
-      const { request, stateAdapter } = await createTestDashboard();
+      const { request, stateAdapter } = createTestDashboard();
       await createJob(stateAdapter, "type-a", null);
       const done = await createJob(stateAdapter, "type-b", null);
       await startAttempt(stateAdapter, "type-b");
@@ -469,7 +469,7 @@ describe("Dashboard API", () => {
 
   describe("GET /api/chains/by-ids", () => {
     it("returns empty list when no ids given", async () => {
-      const { request } = await createTestDashboard();
+      const { request } = createTestDashboard();
       const res = await request("/api/chains/by-ids");
       const body = await parseBody(res);
 
@@ -478,7 +478,7 @@ describe("Dashboard API", () => {
     });
 
     it("returns chains matching the given ids", async () => {
-      const { request, stateAdapter } = await createTestDashboard();
+      const { request, stateAdapter } = createTestDashboard();
       const a = await createJob(stateAdapter, "type-a", null);
       await createJob(stateAdapter, "type-b", null);
       const c = await createJob(stateAdapter, "type-c", null);
@@ -493,7 +493,7 @@ describe("Dashboard API", () => {
     });
 
     it("skips non-existent ids", async () => {
-      const { request, stateAdapter } = await createTestDashboard();
+      const { request, stateAdapter } = createTestDashboard();
       const a = await createJob(stateAdapter, "type-a", null);
 
       const body = await parseBody(
@@ -507,7 +507,7 @@ describe("Dashboard API", () => {
 
   describe("GET /api/jobs", () => {
     it("returns empty list when no jobs exist", async () => {
-      const { request } = await createTestDashboard();
+      const { request } = createTestDashboard();
       const res = await request("/api/jobs");
       const body = await parseBody(res);
 
@@ -516,7 +516,7 @@ describe("Dashboard API", () => {
     });
 
     it("returns jobs across chains", async () => {
-      const { request, stateAdapter } = await createTestDashboard();
+      const { request, stateAdapter } = createTestDashboard();
       await createJob(stateAdapter, "test-type", null);
       await createJob(stateAdapter, "test-type", null);
 
@@ -527,7 +527,7 @@ describe("Dashboard API", () => {
     });
 
     it("filters by each job status alias", async () => {
-      const { request, stateAdapter } = await createTestDashboard();
+      const { request, stateAdapter } = createTestDashboard();
       const pending = await createJob(stateAdapter, "pending-type", null);
       const blockerChain = await createJob(stateAdapter, "blocker-type", null);
       const blocked = await createJob(stateAdapter, "blocked-type", null);
@@ -582,7 +582,7 @@ describe("Dashboard API", () => {
     });
 
     it("falls back to the default orderBy per status branch", async () => {
-      const { request, stateAdapter } = await createTestDashboard();
+      const { request, stateAdapter } = createTestDashboard();
       await createJob(stateAdapter, "test-type", null);
 
       for (const query of [
@@ -599,7 +599,7 @@ describe("Dashboard API", () => {
 
   describe("GET /api/job-types", () => {
     it("returns empty array when no jobs exist", async () => {
-      const { request } = await createTestDashboard();
+      const { request } = createTestDashboard();
       const res = await request("/api/job-types");
 
       expect(res.status).toBe(200);
@@ -607,7 +607,7 @@ describe("Dashboard API", () => {
     });
 
     it("returns distinct job type names sorted alphabetically", async () => {
-      const { request, stateAdapter } = await createTestDashboard();
+      const { request, stateAdapter } = createTestDashboard();
       const root = await createJob(stateAdapter, "root-type", null);
       await createContinuation(stateAdapter, "cont-type", root.id, null);
 
@@ -619,7 +619,7 @@ describe("Dashboard API", () => {
 
   describe("GET /api/job-types/counts", () => {
     it("returns empty array when no typeNames given", async () => {
-      const { request } = await createTestDashboard();
+      const { request } = createTestDashboard();
       const res = await request("/api/job-types/counts");
 
       expect(res.status).toBe(200);
@@ -627,7 +627,7 @@ describe("Dashboard API", () => {
     });
 
     it("returns per-status counts for each requested type name", async () => {
-      const { request, stateAdapter } = await createTestDashboard();
+      const { request, stateAdapter } = createTestDashboard();
       await createJob(stateAdapter, "type-a", null);
       const blockerChain = await createJob(stateAdapter, "type-b", null);
       await startAttempt(stateAdapter, "type-b");
@@ -654,7 +654,7 @@ describe("Dashboard API", () => {
 
   describe("GET /api/jobs/by-ids", () => {
     it("returns empty list when no ids given", async () => {
-      const { request } = await createTestDashboard();
+      const { request } = createTestDashboard();
       const res = await request("/api/jobs/by-ids");
       const body = await parseBody(res);
 
@@ -663,7 +663,7 @@ describe("Dashboard API", () => {
     });
 
     it("returns jobs matching the given ids", async () => {
-      const { request, stateAdapter } = await createTestDashboard();
+      const { request, stateAdapter } = createTestDashboard();
       const a = await createJob(stateAdapter, "type-a", null);
       await createJob(stateAdapter, "type-b", null);
       const c = await createJob(stateAdapter, "type-c", null);
@@ -676,7 +676,7 @@ describe("Dashboard API", () => {
     });
 
     it("skips non-existent ids", async () => {
-      const { request, stateAdapter } = await createTestDashboard();
+      const { request, stateAdapter } = createTestDashboard();
       const a = await createJob(stateAdapter, "type-a", null);
 
       const body = await parseBody(await request(`/api/jobs/by-ids?ids=${a.id},nonexistent`));
@@ -688,7 +688,7 @@ describe("Dashboard API", () => {
 
   describe("GET /api/jobs/:jobId", () => {
     it("returns job with blockers", async () => {
-      const { request, stateAdapter } = await createTestDashboard();
+      const { request, stateAdapter } = createTestDashboard();
       const job = await createJob(stateAdapter, "test-type", { key: "value" });
 
       const res = await request(`/api/jobs/${job.id}`);
@@ -700,7 +700,7 @@ describe("Dashboard API", () => {
     });
 
     it("returns continuation for job in chain", async () => {
-      const { request, stateAdapter } = await createTestDashboard();
+      const { request, stateAdapter } = createTestDashboard();
       const root = await createJob(stateAdapter, "chain-type", { step: 1 });
       const cont = await createContinuation(stateAdapter, "chain-step2", root.id, { step: 2 });
 
@@ -715,7 +715,7 @@ describe("Dashboard API", () => {
     });
 
     it("returns null continuation for last job in chain", async () => {
-      const { request, stateAdapter } = await createTestDashboard();
+      const { request, stateAdapter } = createTestDashboard();
       const root = await createJob(stateAdapter, "chain-type", { step: 1 });
       const cont = await createContinuation(stateAdapter, "chain-step2", root.id, { step: 2 });
 
@@ -727,7 +727,7 @@ describe("Dashboard API", () => {
     });
 
     it("returns 404 for missing job", async () => {
-      const { request } = await createTestDashboard();
+      const { request } = createTestDashboard();
       const res = await request("/api/jobs/nonexistent");
       expect(res.status).toBe(404);
     });
@@ -735,7 +735,7 @@ describe("Dashboard API", () => {
 
   describe("POST /api/jobs/:jobId/reschedule", () => {
     it("reschedules a pending future-scheduled job to now", async () => {
-      const { request, stateAdapter } = await createTestDashboard();
+      const { request, stateAdapter } = createTestDashboard();
       const [stateChain] = await stateAdapter.withTransaction(async (txCtx) =>
         stateAdapter.createJobs({
           txCtx,
@@ -759,7 +759,7 @@ describe("Dashboard API", () => {
 
     it("notifies workers only after the reschedule commits", async () => {
       const events: string[] = [];
-      const innerStateAdapter = await createInProcessStateAdapter();
+      const innerStateAdapter = createInProcessStateAdapter();
       const stateAdapter: typeof innerStateAdapter = {
         ...innerStateAdapter,
         withTransaction: async (fn) => {
@@ -768,8 +768,8 @@ describe("Dashboard API", () => {
           return result;
         },
       };
-      const innerNotifyAdapter = await createInProcessNotifyAdapter();
-      const client = await createClient({
+      const innerNotifyAdapter = createInProcessNotifyAdapter();
+      const client = createClient({
         stateAdapter,
         notifyAdapter: {
           ...innerNotifyAdapter,
@@ -780,7 +780,7 @@ describe("Dashboard API", () => {
         },
         jobTypes: defineJobTypes(),
       });
-      const dashboard = await createDashboard({ client });
+      const dashboard = createDashboard({ client });
       const job = await createJob(stateAdapter, "test-type", null);
       events.length = 0;
 
@@ -793,13 +793,13 @@ describe("Dashboard API", () => {
     });
 
     it("returns 404 for missing job", async () => {
-      const { request } = await createTestDashboard();
+      const { request } = createTestDashboard();
       const res = await request("/api/jobs/nonexistent/reschedule", { method: "POST" });
       expect(res.status).toBe(404);
     });
 
     it("returns 409 for non-pending job", async () => {
-      const { request, stateAdapter } = await createTestDashboard();
+      const { request, stateAdapter } = createTestDashboard();
       const job = await createJob(stateAdapter, "test-type", null);
 
       await stateAdapter.startJobAttempts({
@@ -834,7 +834,7 @@ describe("Dashboard API", () => {
     ];
 
     it.for(malformed)("drops a cursor with %s", async ([, payload]) => {
-      const { request, stateAdapter } = await createTestDashboard();
+      const { request, stateAdapter } = createTestDashboard();
       await createJob(stateAdapter, "test-type", null);
 
       const res = await request(
@@ -846,7 +846,7 @@ describe("Dashboard API", () => {
     });
 
     it("drops a cursor that is not valid base64url JSON", async () => {
-      const { request, stateAdapter } = await createTestDashboard();
+      const { request, stateAdapter } = createTestDashboard();
       await createJob(stateAdapter, "test-type", null);
 
       const res = await request("/api/chains?typeName=test-type&cursor=not-a-cursor");
@@ -856,7 +856,7 @@ describe("Dashboard API", () => {
     });
 
     it("drops a cursor issued for a different orderBy instead of failing", async () => {
-      const { request, stateAdapter } = await createTestDashboard();
+      const { request, stateAdapter } = createTestDashboard();
       const first = await createJob(stateAdapter, "test-type", null);
       const second = await createJob(stateAdapter, "test-type", null);
       await startAttempt(stateAdapter, "test-type");
@@ -880,7 +880,7 @@ describe("Dashboard API", () => {
     });
 
     it("drops a timestampWithId cursor on the chain jobs route", async () => {
-      const { request, stateAdapter } = await createTestDashboard();
+      const { request, stateAdapter } = createTestDashboard();
       const root = await createJob(stateAdapter, "chain-type", null);
       const cursor = encodeRawCursor({
         type: "timestampWithId",
@@ -896,7 +896,7 @@ describe("Dashboard API", () => {
     });
 
     it("drops an id cursor on the blocking route", async () => {
-      const { request, stateAdapter } = await createTestDashboard();
+      const { request, stateAdapter } = createTestDashboard();
       const blockerChain = await createJob(stateAdapter, "blocker-type", null);
       const blockedJob = await createJob(stateAdapter, "blocked-type", null);
       await stateAdapter.withTransaction(async (txCtx) =>
@@ -915,7 +915,7 @@ describe("Dashboard API", () => {
     });
 
     it("drops a malformed cursor on the jobs route", async () => {
-      const { request, stateAdapter } = await createTestDashboard();
+      const { request, stateAdapter } = createTestDashboard();
       await createJob(stateAdapter, "test-type", null);
 
       const res = await request(
@@ -928,7 +928,7 @@ describe("Dashboard API", () => {
 
   describe("malformed IDs and errors", () => {
     it("returns only the valid items when by-ids mixes valid and malformed IDs", async () => {
-      const { request, stateAdapter } = await createUuidStrictDashboard();
+      const { request, stateAdapter } = createUuidStrictDashboard();
       const job = await createJob(stateAdapter, "type-a", null);
 
       const chainsRes = await request(`/api/chains/by-ids?ids=${job.chainId},junk`);
@@ -943,7 +943,7 @@ describe("Dashboard API", () => {
     });
 
     it("returns an empty list when by-ids has only malformed IDs", async () => {
-      const { request } = await createUuidStrictDashboard();
+      const { request } = createUuidStrictDashboard();
 
       const chainsRes = await request("/api/chains/by-ids?ids=junk,also-junk");
       const jobsRes = await request("/api/jobs/by-ids?ids=junk");
@@ -955,7 +955,7 @@ describe("Dashboard API", () => {
     });
 
     it("returns 500 when by-ids lookups fail and the database probe fails too", async () => {
-      const { request, failures } = await createUuidStrictDashboard();
+      const { request, failures } = createUuidStrictDashboard();
       failures.probe = true;
 
       const res = await request("/api/chains/by-ids?ids=junk");
@@ -966,7 +966,7 @@ describe("Dashboard API", () => {
     });
 
     it("returns 404 for chain detail, job detail and actions with a malformed ID", async () => {
-      const { request } = await createUuidStrictDashboard();
+      const { request } = createUuidStrictDashboard();
 
       const chainRes = await request("/api/chains/junk");
       const jobRes = await request("/api/jobs/junk");
@@ -989,7 +989,7 @@ describe("Dashboard API", () => {
     });
 
     it("returns 500 when rescheduling a malformed ID and the database probe fails too", async () => {
-      const { request, failures } = await createUuidStrictDashboard();
+      const { request, failures } = createUuidStrictDashboard();
       failures.probe = true;
 
       const res = await request("/api/jobs/junk/reschedule", { method: "POST" });
@@ -999,7 +999,7 @@ describe("Dashboard API", () => {
     });
 
     it("returns 500 when rescheduling an existing job fails for a non-ID reason", async () => {
-      const { request, stateAdapter, failures } = await createUuidStrictDashboard();
+      const { request, stateAdapter, failures } = createUuidStrictDashboard();
       const job = await createJob(stateAdapter, "type-a", null);
       failures.reschedule = true;
 
@@ -1010,7 +1010,7 @@ describe("Dashboard API", () => {
     });
 
     it("rejects more than 100 IDs with 400", async () => {
-      const { request } = await createTestDashboard();
+      const { request } = createTestDashboard();
       const ids = Array.from({ length: 101 }, (_, i) => `id-${i}`).join(",");
 
       const chainsRes = await request(`/api/chains/by-ids?ids=${ids}`);
@@ -1022,7 +1022,7 @@ describe("Dashboard API", () => {
     });
 
     it("counts IDs after de-duplication against the 100 ID limit", async () => {
-      const { request } = await createTestDashboard();
+      const { request } = createTestDashboard();
       const ids = [...Array.from({ length: 100 }, (_, i) => `id-${i}`), "id-0"].join(",");
 
       const res = await request(`/api/chains/by-ids?ids=${ids}`);
@@ -1031,7 +1031,7 @@ describe("Dashboard API", () => {
     });
 
     it("returns 404 for an unknown API path or method", async () => {
-      const { request, stateAdapter } = await createTestDashboard();
+      const { request, stateAdapter } = createTestDashboard();
       const job = await createJob(stateAdapter, "type-a", null);
 
       const unknownRes = await request("/api/unknown");
@@ -1048,7 +1048,7 @@ describe("Dashboard API", () => {
     });
 
     it("returns a seroval error body with status 500 when a handler throws", async () => {
-      const { request, failures } = await createUuidStrictDashboard();
+      const { request, failures } = createUuidStrictDashboard();
       failures.probe = true;
 
       const res = await request("/api/chain-types");
@@ -1062,7 +1062,7 @@ describe("Dashboard API", () => {
 
   describe("sub-path mounting", () => {
     it("routes API calls correctly with basePath", async () => {
-      const { request, stateAdapter } = await createTestDashboard("/internal/queuert");
+      const { request, stateAdapter } = createTestDashboard("/internal/queuert");
       const job = await createJob(stateAdapter, "test-type", { key: "value" });
 
       const chainsRes = await request("/api/chains");
@@ -1082,9 +1082,9 @@ describe("Dashboard API", () => {
     });
 
     it("returns 404 for requests outside basePath", async () => {
-      const dashboard = await createDashboard({
-        client: await createClient({
-          stateAdapter: await createInProcessStateAdapter(),
+      const dashboard = createDashboard({
+        client: createClient({
+          stateAdapter: createInProcessStateAdapter(),
           jobTypes: defineJobTypes(),
         }),
         basePath: "/internal/queuert",
@@ -1094,9 +1094,9 @@ describe("Dashboard API", () => {
     });
 
     it("returns 404 for paths that share a prefix with basePath", async () => {
-      const dashboard = await createDashboard({
-        client: await createClient({
-          stateAdapter: await createInProcessStateAdapter(),
+      const dashboard = createDashboard({
+        client: createClient({
+          stateAdapter: createInProcessStateAdapter(),
           jobTypes: defineJobTypes(),
         }),
         basePath: "/app",

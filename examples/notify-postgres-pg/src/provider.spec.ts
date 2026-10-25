@@ -12,7 +12,7 @@ test("notify-postgres-pg provider passes notify adapter conformance", async () =
   await runNotifyAdapterConformance(async () => {
     const pool = new Pool({ connectionString: pg.connectionString, max: 10 });
     const notifyProvider = createPgPoolNotifyProvider({ pool });
-    const notifyAdapter = await createPgNotifyAdapter({
+    const notifyAdapter = createPgNotifyAdapter({
       notifyProvider,
       channelPrefix: `qrt_spec_${Date.now()}_${Math.random().toString(36).slice(2)}`,
     });

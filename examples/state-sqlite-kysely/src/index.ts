@@ -1,4 +1,4 @@
-import { createSqliteStateAdapter } from "@queuert/sqlite";
+import { createAsyncSqliteStateAdapter } from "@queuert/sqlite";
 import BetterSqlite3 from "better-sqlite3";
 import { type Generated, Kysely, SqliteDialect, sql } from "kysely";
 import {
@@ -49,21 +49,21 @@ const jobTypes = defineJobTypes<{
 const stateProvider = createKyselySqliteStateProvider({ db });
 
 // 6. Create adapters and queuert client/worker
-const stateAdapter = await createSqliteStateAdapter({
+const stateAdapter = createAsyncSqliteStateAdapter({
   stateProvider,
 });
 await stateAdapter.migrateToLatest();
 
-const notifyAdapter = await createInProcessNotifyAdapter();
+const notifyAdapter = createInProcessNotifyAdapter();
 
-const client = await createClient({
+const client = createClient({
   stateAdapter,
   notifyAdapter,
   jobTypes,
 });
 
 // 7. Create worker with job type processors
-const worker = await createInProcessWorker({
+const worker = createInProcessWorker({
   client,
   processors: createProcessors({
     client,

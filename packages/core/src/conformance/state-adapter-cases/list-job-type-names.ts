@@ -1,4 +1,5 @@
 import { type ConformanceGroup } from "../runner.js";
+import { transaction } from "../transaction.js";
 import { type StateConformanceFixture } from "./types.js";
 
 export const listJobTypeNamesGroup: ConformanceGroup<StateConformanceFixture> = {
@@ -14,7 +15,7 @@ export const listJobTypeNamesGroup: ConformanceGroup<StateConformanceFixture> = 
     {
       name: "listJobTypeNames returns distinct type names",
       run: async ({ stateAdapter }, expect) => {
-        await stateAdapter.withTransaction(async (txCtx) =>
+        await transaction(stateAdapter, (txCtx) =>
           stateAdapter.createJobs({
             txCtx,
             jobs: [
@@ -33,14 +34,14 @@ export const listJobTypeNamesGroup: ConformanceGroup<StateConformanceFixture> = 
     {
       name: "listJobTypeNames includes continuation job type names",
       run: async ({ stateAdapter }, expect) => {
-        const [headChain] = await stateAdapter.withTransaction(async (txCtx) =>
+        const [headChain] = await transaction(stateAdapter, (txCtx) =>
           stateAdapter.createJobs({
             txCtx,
             jobs: [{ id: stateAdapter.config.generateId(), typeName: "head-type", input: null }],
           }),
         );
 
-        await stateAdapter.withTransaction(async (txCtx) =>
+        await transaction(stateAdapter, (txCtx) =>
           stateAdapter.continueJobs({
             txCtx,
             jobs: [

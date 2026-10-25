@@ -1552,6 +1552,10 @@ importers:
   packages-internal/tsconfig: {}
 
   packages-internal/typed-sql:
+    dependencies:
+      '@queuert/helpers':
+        specifier: workspace:*
+        version: link:../helpers
     devDependencies:
       '@queuert/tsconfig':
         specifier: workspace:*

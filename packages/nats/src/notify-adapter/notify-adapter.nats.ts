@@ -73,7 +73,7 @@ const tryDecrementHint = async (kv: KV, key: string): Promise<boolean> => {
  * @param options - NATS notify adapter configuration.
  * @experimental
  */
-export const createNatsNotifyAdapter = async ({
+export const createNatsNotifyAdapter = ({
   nc,
   kv,
   subjectPrefix = "queuert",
@@ -84,7 +84,7 @@ export const createNatsNotifyAdapter = async ({
   kv?: KV;
   /** Prefix for all NATS subject names. @defaultValue `"queuert"` */
   subjectPrefix?: string;
-}): Promise<NotifyAdapter> => {
+}): NotifyAdapter => {
   const jobScheduledSubject = `${subjectPrefix}.sched`;
   const chainCompletedSubject = `${subjectPrefix}.chainc`;
   const attemptLostSubject = `${subjectPrefix}.atls`;

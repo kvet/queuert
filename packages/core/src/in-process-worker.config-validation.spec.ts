@@ -10,10 +10,10 @@ type Defs = {
   foo: { entry: true; input: null; output: null };
 };
 
-const setup = async () => {
+const setup = () => {
   const jobTypes = defineJobTypes<Defs>();
-  const stateAdapter = await createInProcessStateAdapter();
-  const client = await createClient({ stateAdapter, jobTypes });
+  const stateAdapter = createInProcessStateAdapter();
+  const client = createClient({ stateAdapter, jobTypes });
   return { jobTypes, client };
 };
 
@@ -24,9 +24,9 @@ describe("createInProcessWorker config validation", () => {
     ["zero", 0],
     ["negative", -1],
   ])("rejects a %s defaults.attemptConfig.timeoutMs", async (_, timeoutMs) => {
-    const { jobTypes, client } = await setup();
+    const { jobTypes, client } = setup();
 
-    await expect(
+    expect(() =>
       createInProcessWorker({
         client,
         defaults: { attemptConfig: { timeoutMs, heartbeatMs: 1000 } },
@@ -36,29 +36,34 @@ describe("createInProcessWorker config validation", () => {
           processors: { foo: { attemptHandler: async () => undefined as never } },
         }),
       }),
-    ).rejects.toThrow(
+    ).toThrow(
       `defaults.attemptConfig.timeoutMs must be a positive finite number (got ${String(timeoutMs)})`,
     );
   });
 
   it("names the processor and every invalid field", async () => {
-    const { jobTypes, client } = await setup();
+    const { jobTypes, client } = setup();
 
-    const error = await createInProcessWorker({
-      client,
-      recoveryBackoffConfig: { initialDelayMs: -1, maxDelayMs: 1000 },
-      processors: createProcessors({
+    let error: unknown;
+    try {
+      createInProcessWorker({
         client,
-        jobTypes,
-        processors: {
-          foo: {
-            backoffConfig: { initialDelayMs: 1000, maxDelayMs: Number.NaN, multiplier: 0 },
-            attemptConfig: { timeoutMs: 1000, heartbeatMs: Number.POSITIVE_INFINITY },
-            attemptHandler: async () => undefined as never,
+        recoveryBackoffConfig: { initialDelayMs: -1, maxDelayMs: 1000 },
+        processors: createProcessors({
+          client,
+          jobTypes,
+          processors: {
+            foo: {
+              backoffConfig: { initialDelayMs: 1000, maxDelayMs: Number.NaN, multiplier: 0 },
+              attemptConfig: { timeoutMs: 1000, heartbeatMs: Number.POSITIVE_INFINITY },
+              attemptHandler: async () => undefined as never,
+            },
           },
-        },
-      }),
-    }).catch((error: unknown) => error);
+        }),
+      });
+    } catch (caught) {
+      error = caught;
+    }
 
     expect(error).toBeInstanceOf(TypeError);
     expect((error as TypeError).message).toBe(
@@ -73,9 +78,9 @@ describe("createInProcessWorker config validation", () => {
   });
 
   it("accepts fractional delays, an uncapped maxDelayMs and a heartbeat longer than the timeout", async () => {
-    const { jobTypes, client } = await setup();
+    const { jobTypes, client } = setup();
 
-    const worker = await createInProcessWorker({
+    const worker = createInProcessWorker({
       client,
       recoveryBackoffConfig: { initialDelayMs: 0, maxDelayMs: 1000.5, multiplier: 1.5 },
       defaults: {

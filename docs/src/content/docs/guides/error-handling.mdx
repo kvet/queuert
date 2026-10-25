@@ -76,7 +76,7 @@ const jobTypes = defineJobTypes<{
 When a job throws an error, it's automatically rescheduled with exponential backoff:
 
 ```ts
-const worker = await createInProcessWorker({
+const worker = createInProcessWorker({
   client,
   processors: createProcessors({
     client,

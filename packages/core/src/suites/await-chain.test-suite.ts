@@ -23,7 +23,7 @@ export const awaitChainTestSuite = ({ it }: { it: TestAPI<TestSuiteContext> }): 
       };
     }>();
 
-    const client = await createClient({
+    const client = createClient({
       stateAdapter,
       notifyAdapter,
       observabilityAdapter,
@@ -31,17 +31,17 @@ export const awaitChainTestSuite = ({ it }: { it: TestAPI<TestSuiteContext> }): 
       jobTypes,
     });
 
-    const chain = await withTransaction(async (txCtx, transactionHooks) =>
+    const chain = await withTransaction((txCtx, transactionHooks) =>
       client.createChain({ ...txCtx, transactionHooks, typeName: "test", input: null }),
     );
 
-    await withTransaction(async (txCtx, transactionHooks) =>
+    await withTransaction((txCtx, transactionHooks) =>
       client.completeChain({
         ...txCtx,
         transactionHooks,
         ...chain,
-        handler: async ({ job, completeJob }) => {
-          return completeJob(job, async ({ complete }) => complete({ output: { result: "done" } }));
+        handler: ({ job, completeJob }) => {
+          return completeJob(job, ({ complete }) => complete({ output: { result: "done" } }));
         },
       }),
     );
@@ -72,7 +72,7 @@ export const awaitChainTestSuite = ({ it }: { it: TestAPI<TestSuiteContext> }): 
       };
     }>();
 
-    const client = await createClient({
+    const client = createClient({
       stateAdapter,
       notifyAdapter,
       observabilityAdapter,
@@ -80,7 +80,7 @@ export const awaitChainTestSuite = ({ it }: { it: TestAPI<TestSuiteContext> }): 
       jobTypes,
     });
 
-    const chain = await withTransaction(async (txCtx, transactionHooks) =>
+    const chain = await withTransaction((txCtx, transactionHooks) =>
       client.createChain({ ...txCtx, transactionHooks, typeName: "test", input: null }),
     );
 
@@ -96,13 +96,13 @@ export const awaitChainTestSuite = ({ it }: { it: TestAPI<TestSuiteContext> }): 
 
     // Complete the chain after the awaiter has installed its timer.
     await new Promise((resolve) => setImmediate(resolve));
-    await withTransaction(async (txCtx, transactionHooks) =>
+    await withTransaction((txCtx, transactionHooks) =>
       client.completeChain({
         ...txCtx,
         transactionHooks,
         ...chain,
-        handler: async ({ job, completeJob }) =>
-          completeJob(job, async ({ complete }) => complete({ output: { result: "done" } })),
+        handler: ({ job, completeJob }) =>
+          completeJob(job, ({ complete }) => complete({ output: { result: "done" } })),
       }),
     );
 
@@ -127,7 +127,7 @@ export const awaitChainTestSuite = ({ it }: { it: TestAPI<TestSuiteContext> }): 
       };
     }>();
 
-    const client = await createClient({
+    const client = createClient({
       stateAdapter,
       notifyAdapter,
       observabilityAdapter,
@@ -135,13 +135,13 @@ export const awaitChainTestSuite = ({ it }: { it: TestAPI<TestSuiteContext> }): 
       jobTypes,
     });
 
-    const chain = await withTransaction(async (txCtx, transactionHooks) =>
+    const chain = await withTransaction((txCtx, transactionHooks) =>
       client.createChain({ ...txCtx, transactionHooks, typeName: "test", input: null }),
     );
 
     const fastSignal = AbortSignal.timeout(1);
     const slowSignal = AbortSignal.timeout(100);
-    await expect(
+    await expect(async () =>
       client.awaitChain(chain, {
         signal: fastSignal,
         timeoutMs: 5000,
@@ -166,7 +166,7 @@ export const awaitChainTestSuite = ({ it }: { it: TestAPI<TestSuiteContext> }): 
       };
     }>();
 
-    const client = await createClient({
+    const client = createClient({
       stateAdapter,
       notifyAdapter,
       observabilityAdapter,
@@ -174,11 +174,11 @@ export const awaitChainTestSuite = ({ it }: { it: TestAPI<TestSuiteContext> }): 
       jobTypes,
     });
 
-    const chain = await withTransaction(async (txCtx, transactionHooks) =>
+    const chain = await withTransaction((txCtx, transactionHooks) =>
       client.createChain({ ...txCtx, transactionHooks, typeName: "test", input: null }),
     );
 
-    await expect(
+    await expect(async () =>
       client.awaitChain(chain, {
         timeoutMs: 1,
       }),
@@ -199,7 +199,7 @@ export const awaitChainTestSuite = ({ it }: { it: TestAPI<TestSuiteContext> }): 
       };
     }>();
 
-    const client = await createClient({
+    const client = createClient({
       stateAdapter,
       notifyAdapter,
       observabilityAdapter,
@@ -208,7 +208,7 @@ export const awaitChainTestSuite = ({ it }: { it: TestAPI<TestSuiteContext> }): 
     });
 
     const nonExistentId = crypto.randomUUID();
-    await expect(
+    await expect(async () =>
       client.awaitChain({ typeName: "test", id: nonExistentId }, { timeoutMs: 5000 }),
     ).rejects.toThrow(`Chain with id ${nonExistentId} not found`);
   });
@@ -225,7 +225,7 @@ export const awaitChainTestSuite = ({ it }: { it: TestAPI<TestSuiteContext> }): 
       notification: { entry: true; input: { message: string }; output: { sent: boolean } };
     }>();
 
-    const client = await createClient({
+    const client = createClient({
       stateAdapter,
       notifyAdapter,
       observabilityAdapter,
@@ -233,7 +233,7 @@ export const awaitChainTestSuite = ({ it }: { it: TestAPI<TestSuiteContext> }): 
       jobTypes,
     });
 
-    const chain = await withTransaction(async (txCtx, transactionHooks) =>
+    const chain = await withTransaction((txCtx, transactionHooks) =>
       client.createChain({
         ...txCtx,
         transactionHooks,
@@ -242,7 +242,7 @@ export const awaitChainTestSuite = ({ it }: { it: TestAPI<TestSuiteContext> }): 
       }),
     );
 
-    await expect(
+    await expect(async () =>
       client.awaitChain({ typeName: "notification", id: chain.id }, { timeoutMs: 1000 }),
     ).rejects.toThrow(ChainTypeMismatchError);
   });

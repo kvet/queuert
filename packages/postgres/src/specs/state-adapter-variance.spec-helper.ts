@@ -41,7 +41,7 @@ export const extendWithVarianceStatePg = <T extends { postgresConnectionString: 
         client.release();
 
         const stateProvider = createPgPoolProvider({ pool });
-        const adapter = await createPgStateAdapter({ stateProvider, ...options });
+        const adapter = createPgStateAdapter({ stateProvider, ...options });
         await adapter.migrateToLatest();
         return use(adapter as unknown as StateAdapter<{ $test: true }, string>);
       },

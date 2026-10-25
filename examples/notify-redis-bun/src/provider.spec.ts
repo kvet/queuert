@@ -17,7 +17,7 @@ test("notify-redis-bun provider passes notify adapter conformance", async () => 
     await subscribeClient.connect();
 
     const notifyProvider = createBunRedisNotifyProvider({ client, subscribeClient });
-    const notifyAdapter = await createRedisNotifyAdapter({
+    const notifyAdapter = createRedisNotifyAdapter({
       notifyProvider,
       channelPrefix: `queuert:spec:${Date.now()}:${Math.random().toString(36).slice(2)}`,
     });

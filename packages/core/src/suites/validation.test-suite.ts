@@ -1,3 +1,4 @@
+import { unwrap } from "@queuert/helpers";
 import { type TestAPI, assert, expect } from "vitest";
 
 import { createClient } from "../client.js";
@@ -139,7 +140,7 @@ export const validationTestSuite = ({ it }: { it: TestAPI<TestSuiteContext> }): 
     observabilityAdapter,
     log,
   }) => {
-    const client = await createClient({
+    const client = createClient({
       stateAdapter,
       notifyAdapter,
       observabilityAdapter,
@@ -147,7 +148,7 @@ export const validationTestSuite = ({ it }: { it: TestAPI<TestSuiteContext> }): 
       jobTypes: simpleJobTypes,
     });
 
-    const chain = await withTransaction(async (txCtx, transactionHooks) =>
+    const chain = await withTransaction((txCtx, transactionHooks) =>
       client.createChain({
         ...txCtx,
         transactionHooks,
@@ -169,7 +170,7 @@ export const validationTestSuite = ({ it }: { it: TestAPI<TestSuiteContext> }): 
     observabilityAdapter,
     log,
   }) => {
-    const client = await createClient({
+    const client = createClient({
       stateAdapter,
       notifyAdapter,
       observabilityAdapter,
@@ -186,7 +187,7 @@ export const validationTestSuite = ({ it }: { it: TestAPI<TestSuiteContext> }): 
       }),
     });
 
-    const chain = await withTransaction(async (txCtx, transactionHooks) =>
+    const chain = await withTransaction((txCtx, transactionHooks) =>
       client.createChain({
         ...txCtx,
         transactionHooks,
@@ -217,7 +218,7 @@ export const validationTestSuite = ({ it }: { it: TestAPI<TestSuiteContext> }): 
     observabilityAdapter,
     log,
   }) => {
-    const client = await createClient({
+    const client = createClient({
       stateAdapter,
       notifyAdapter,
       observabilityAdapter,
@@ -226,7 +227,7 @@ export const validationTestSuite = ({ it }: { it: TestAPI<TestSuiteContext> }): 
     });
 
     await expect(
-      withTransaction(async (txCtx, transactionHooks) =>
+      withTransaction((txCtx, transactionHooks) =>
         client.createChain({
           ...txCtx,
           transactionHooks,
@@ -245,7 +246,7 @@ export const validationTestSuite = ({ it }: { it: TestAPI<TestSuiteContext> }): 
     observabilityAdapter,
     log,
   }) => {
-    const client = await createClient({
+    const client = createClient({
       stateAdapter,
       notifyAdapter,
       observabilityAdapter,
@@ -254,7 +255,7 @@ export const validationTestSuite = ({ it }: { it: TestAPI<TestSuiteContext> }): 
     });
 
     await expect(
-      withTransaction(async (txCtx, transactionHooks) =>
+      withTransaction((txCtx, transactionHooks) =>
         client.createChain({
           ...txCtx,
           transactionHooks,
@@ -273,7 +274,7 @@ export const validationTestSuite = ({ it }: { it: TestAPI<TestSuiteContext> }): 
     observabilityAdapter,
     log,
   }) => {
-    const client = await createClient({
+    const client = createClient({
       stateAdapter,
       notifyAdapter,
       observabilityAdapter,
@@ -282,7 +283,7 @@ export const validationTestSuite = ({ it }: { it: TestAPI<TestSuiteContext> }): 
     });
 
     await expect(
-      withTransaction(async (txCtx, transactionHooks) =>
+      withTransaction((txCtx, transactionHooks) =>
         // @ts-expect-error testing runtime validation - no blockers
         client.createChain({
           ...txCtx,
@@ -295,9 +296,9 @@ export const validationTestSuite = ({ it }: { it: TestAPI<TestSuiteContext> }): 
   });
 
   it("validates blockers against the stored chain, not the passed object", async ({
+    withTransactionOperation,
     stateAdapter,
     notifyAdapter,
-    withTransaction,
     observabilityAdapter,
     log,
   }) => {
@@ -320,7 +321,7 @@ export const validationTestSuite = ({ it }: { it: TestAPI<TestSuiteContext> }): 
         validatedBlockers.push(...blockers);
       },
     });
-    const client = await createClient({
+    const client = createClient({
       stateAdapter,
       notifyAdapter,
       observabilityAdapter,
@@ -328,28 +329,34 @@ export const validationTestSuite = ({ it }: { it: TestAPI<TestSuiteContext> }): 
       jobTypes,
     });
 
-    await withTransaction(async (txCtx, transactionHooks) => {
-      const authChain = await client.createChain({
-        ...txCtx,
-        transactionHooks,
-        typeName: "auth",
-        input: { token: "stored" },
-      });
+    await withTransactionOperation(function* (txCtx, transactionHooks) {
+      const authChain = yield* unwrap(
+        client.createChain({
+          ...txCtx,
+          transactionHooks,
+          typeName: "auth",
+          input: { token: "stored" },
+        }),
+      );
       const forgedAuthChain = { ...authChain, input: { token: "forged" } };
-      await client.createChain({
-        ...txCtx,
-        transactionHooks,
-        typeName: "main",
-        input: null,
-        blockers: [forgedAuthChain],
-      });
-      await client.createChain({
-        ...txCtx,
-        transactionHooks,
-        typeName: "main",
-        input: null,
-        blockers: [{ id: authChain.id }],
-      });
+      yield* unwrap(
+        client.createChain({
+          ...txCtx,
+          transactionHooks,
+          typeName: "main",
+          input: null,
+          blockers: [forgedAuthChain],
+        }),
+      );
+      yield* unwrap(
+        client.createChain({
+          ...txCtx,
+          transactionHooks,
+          typeName: "main",
+          input: null,
+          blockers: [{ id: authChain.id }],
+        }),
+      );
     });
 
     expect(validatedBlockers).toEqual([
@@ -366,14 +373,14 @@ export const validationTestSuite = ({ it }: { it: TestAPI<TestSuiteContext> }): 
     observabilityAdapter,
     log,
   }) => {
-    const client = await createClient({
+    const client = createClient({
       stateAdapter,
       notifyAdapter,
       observabilityAdapter,
       log,
       jobTypes: simpleJobTypes,
     });
-    const worker = await createInProcessWorker({
+    const worker = createInProcessWorker({
       client,
       concurrency: 1,
       processors: createProcessors({
@@ -382,7 +389,7 @@ export const validationTestSuite = ({ it }: { it: TestAPI<TestSuiteContext> }): 
         processors: {
           main: {
             attemptHandler: async ({ complete }) =>
-              withTransaction(async (txCtx, transactionHooks) =>
+              withTransaction((txCtx, transactionHooks) =>
                 complete({ ...txCtx, transactionHooks, output: { result: 84 } }),
               ),
           },
@@ -390,7 +397,7 @@ export const validationTestSuite = ({ it }: { it: TestAPI<TestSuiteContext> }): 
       }),
     });
 
-    const chain = await withTransaction(async (txCtx, transactionHooks) =>
+    const chain = await withTransaction((txCtx, transactionHooks) =>
       client.createChain({
         ...txCtx,
         transactionHooks,
@@ -415,14 +422,14 @@ export const validationTestSuite = ({ it }: { it: TestAPI<TestSuiteContext> }): 
   }) => {
     const validationFailed = Promise.withResolvers<unknown>();
 
-    const client = await createClient({
+    const client = createClient({
       stateAdapter,
       notifyAdapter,
       observabilityAdapter,
       log,
       jobTypes: simpleJobTypes,
     });
-    const worker = await createInProcessWorker({
+    const worker = createInProcessWorker({
       client,
       concurrency: 1,
       processors: createProcessors({
@@ -432,7 +439,7 @@ export const validationTestSuite = ({ it }: { it: TestAPI<TestSuiteContext> }): 
           main: {
             attemptHandler: async ({ complete }) => {
               try {
-                return await withTransaction(async (txCtx, transactionHooks) =>
+                return await withTransaction((txCtx, transactionHooks) =>
                   // @ts-expect-error testing runtime validation
                   complete({ ...txCtx, transactionHooks, output: { result: "not-a-number" } }),
                 );
@@ -446,7 +453,7 @@ export const validationTestSuite = ({ it }: { it: TestAPI<TestSuiteContext> }): 
       }),
     });
 
-    await withTransaction(async (txCtx, transactionHooks) =>
+    await withTransaction((txCtx, transactionHooks) =>
       client.createChain({
         ...txCtx,
         transactionHooks,
@@ -469,14 +476,14 @@ export const validationTestSuite = ({ it }: { it: TestAPI<TestSuiteContext> }): 
     observabilityAdapter,
     log,
   }) => {
-    const client = await createClient({
+    const client = createClient({
       stateAdapter,
       notifyAdapter,
       observabilityAdapter,
       log,
       jobTypes: continuationJobTypes,
     });
-    const worker = await createInProcessWorker({
+    const worker = createInProcessWorker({
       client,
       concurrency: 1,
       processors: createProcessors({
@@ -485,7 +492,7 @@ export const validationTestSuite = ({ it }: { it: TestAPI<TestSuiteContext> }): 
         processors: {
           step1: {
             attemptHandler: async ({ complete }) =>
-              withTransaction(async (txCtx, transactionHooks) =>
+              withTransaction((txCtx, transactionHooks) =>
                 complete({
                   ...txCtx,
                   transactionHooks,
@@ -495,7 +502,7 @@ export const validationTestSuite = ({ it }: { it: TestAPI<TestSuiteContext> }): 
           },
           step2: {
             attemptHandler: async ({ complete }) =>
-              withTransaction(async (txCtx, transactionHooks) =>
+              withTransaction((txCtx, transactionHooks) =>
                 complete({ ...txCtx, transactionHooks, output: { result: 42 } }),
               ),
           },
@@ -503,7 +510,7 @@ export const validationTestSuite = ({ it }: { it: TestAPI<TestSuiteContext> }): 
       }),
     });
 
-    const chain = await withTransaction(async (txCtx, transactionHooks) =>
+    const chain = await withTransaction((txCtx, transactionHooks) =>
       client.createChain({
         ...txCtx,
         transactionHooks,
@@ -528,14 +535,14 @@ export const validationTestSuite = ({ it }: { it: TestAPI<TestSuiteContext> }): 
   }) => {
     const validationFailed = Promise.withResolvers<unknown>();
 
-    const client = await createClient({
+    const client = createClient({
       stateAdapter,
       notifyAdapter,
       observabilityAdapter,
       log,
       jobTypes: continuationNoFollowUpJobTypes,
     });
-    const worker = await createInProcessWorker({
+    const worker = createInProcessWorker({
       client,
       concurrency: 1,
       processors: createProcessors({
@@ -545,7 +552,7 @@ export const validationTestSuite = ({ it }: { it: TestAPI<TestSuiteContext> }): 
           step1: {
             attemptHandler: async ({ complete }) => {
               try {
-                return await withTransaction(async (txCtx, transactionHooks) =>
+                return await withTransaction((txCtx, transactionHooks) =>
                   complete({
                     ...txCtx,
                     transactionHooks,
@@ -560,7 +567,7 @@ export const validationTestSuite = ({ it }: { it: TestAPI<TestSuiteContext> }): 
           },
           step2: {
             attemptHandler: async ({ complete }) =>
-              withTransaction(async (txCtx, transactionHooks) =>
+              withTransaction((txCtx, transactionHooks) =>
                 complete({ ...txCtx, transactionHooks, output: { result: 1 } }),
               ),
           },
@@ -568,7 +575,7 @@ export const validationTestSuite = ({ it }: { it: TestAPI<TestSuiteContext> }): 
       }),
     });
 
-    await withTransaction(async (txCtx, transactionHooks) =>
+    await withTransaction((txCtx, transactionHooks) =>
       client.createChain({
         ...txCtx,
         transactionHooks,
@@ -590,7 +597,7 @@ export const validationTestSuite = ({ it }: { it: TestAPI<TestSuiteContext> }): 
     observabilityAdapter,
     log,
   }) => {
-    const client = await createClient({
+    const client = createClient({
       stateAdapter,
       notifyAdapter,
       observabilityAdapter,
@@ -598,7 +605,7 @@ export const validationTestSuite = ({ it }: { it: TestAPI<TestSuiteContext> }): 
       jobTypes: simpleJobTypes,
     });
 
-    const chain = await withTransaction(async (txCtx, transactionHooks) =>
+    const chain = await withTransaction((txCtx, transactionHooks) =>
       client.createChain({
         ...txCtx,
         transactionHooks,
@@ -607,13 +614,13 @@ export const validationTestSuite = ({ it }: { it: TestAPI<TestSuiteContext> }): 
       }),
     );
 
-    const completedChain = await withTransaction(async (txCtx, transactionHooks) =>
+    const completedChain = await withTransaction((txCtx, transactionHooks) =>
       client.completeChain({
         ...txCtx,
         transactionHooks,
         ...chain,
-        handler: async ({ job, completeJob }) =>
-          completeJob(job, async ({ complete }) => complete({ output: { result: 84 } })),
+        handler: ({ job, completeJob }) =>
+          completeJob(job, ({ complete }) => complete({ output: { result: 84 } })),
       }),
     );
 
@@ -628,7 +635,7 @@ export const validationTestSuite = ({ it }: { it: TestAPI<TestSuiteContext> }): 
     observabilityAdapter,
     log,
   }) => {
-    const client = await createClient({
+    const client = createClient({
       stateAdapter,
       notifyAdapter,
       observabilityAdapter,
@@ -636,7 +643,7 @@ export const validationTestSuite = ({ it }: { it: TestAPI<TestSuiteContext> }): 
       jobTypes: simpleJobTypes,
     });
 
-    const chain = await withTransaction(async (txCtx, transactionHooks) =>
+    const chain = await withTransaction((txCtx, transactionHooks) =>
       client.createChain({
         ...txCtx,
         transactionHooks,
@@ -646,13 +653,13 @@ export const validationTestSuite = ({ it }: { it: TestAPI<TestSuiteContext> }): 
     );
 
     await expect(
-      withTransaction(async (txCtx, transactionHooks) =>
+      withTransaction((txCtx, transactionHooks) =>
         client.completeChain({
           ...txCtx,
           transactionHooks,
           ...chain,
-          handler: async ({ job, completeJob }) =>
-            completeJob(job, async ({ complete }) =>
+          handler: ({ job, completeJob }) =>
+            completeJob(job, ({ complete }) =>
               // @ts-expect-error testing runtime validation
               complete({ output: { result: "not-a-number" } }),
             ),
@@ -662,6 +669,7 @@ export const validationTestSuite = ({ it }: { it: TestAPI<TestSuiteContext> }): 
   });
 
   it("accepts valid continueWith during workerless completion", async ({
+    runInMode,
     stateAdapter,
     notifyAdapter,
     withTransaction,
@@ -669,14 +677,14 @@ export const validationTestSuite = ({ it }: { it: TestAPI<TestSuiteContext> }): 
     observabilityAdapter,
     log,
   }) => {
-    const client = await createClient({
+    const client = createClient({
       stateAdapter,
       notifyAdapter,
       observabilityAdapter,
       log,
       jobTypes: continuationJobTypes,
     });
-    const worker = await createInProcessWorker({
+    const worker = createInProcessWorker({
       client,
       concurrency: 1,
       processors: createProcessors({
@@ -685,7 +693,7 @@ export const validationTestSuite = ({ it }: { it: TestAPI<TestSuiteContext> }): 
         processors: {
           step2: {
             attemptHandler: async ({ complete }) =>
-              withTransaction(async (txCtx, transactionHooks) =>
+              withTransaction((txCtx, transactionHooks) =>
                 complete({ ...txCtx, transactionHooks, output: { result: 42 } }),
               ),
           },
@@ -693,7 +701,7 @@ export const validationTestSuite = ({ it }: { it: TestAPI<TestSuiteContext> }): 
       }),
     });
 
-    const chain = await withTransaction(async (txCtx, transactionHooks) =>
+    const chain = await withTransaction((txCtx, transactionHooks) =>
       client.createChain({
         ...txCtx,
         transactionHooks,
@@ -702,18 +710,21 @@ export const validationTestSuite = ({ it }: { it: TestAPI<TestSuiteContext> }): 
       }),
     );
 
-    const partialChain = await withTransaction(async (txCtx, transactionHooks) =>
+    const partialChain = await withTransaction((txCtx, transactionHooks) =>
       client.completeChain({
         ...txCtx,
         transactionHooks,
         ...chain,
-        handler: async ({ job, completeJob }) => {
-          if (job.typeName === "step1") {
-            await completeJob(job, async ({ complete }) =>
-              complete({ continueWith: { typeName: "step2", input: { data: 1 } } }),
-            );
-          }
-        },
+        handler: ({ job, completeJob }) =>
+          runInMode(function* () {
+            if (job.typeName === "step1") {
+              yield* unwrap(
+                completeJob(job, ({ complete }) =>
+                  complete({ continueWith: { typeName: "step2", input: { data: 1 } } }),
+                ),
+              );
+            }
+          }),
       }),
     );
 
@@ -732,13 +743,14 @@ export const validationTestSuite = ({ it }: { it: TestAPI<TestSuiteContext> }): 
   });
 
   it("rejects invalid continueWith during workerless completion", async ({
+    runInMode,
     stateAdapter,
     notifyAdapter,
     withTransaction,
     observabilityAdapter,
     log,
   }) => {
-    const client = await createClient({
+    const client = createClient({
       stateAdapter,
       notifyAdapter,
       observabilityAdapter,
@@ -746,7 +758,7 @@ export const validationTestSuite = ({ it }: { it: TestAPI<TestSuiteContext> }): 
       jobTypes: continuationNoFollowUpJobTypes,
     });
 
-    const chain = await withTransaction(async (txCtx, transactionHooks) =>
+    const chain = await withTransaction((txCtx, transactionHooks) =>
       client.createChain({
         ...txCtx,
         transactionHooks,
@@ -756,19 +768,22 @@ export const validationTestSuite = ({ it }: { it: TestAPI<TestSuiteContext> }): 
     );
 
     await expect(
-      withTransaction(async (txCtx, transactionHooks) =>
+      withTransaction((txCtx, transactionHooks) =>
         client.completeChain({
           ...txCtx,
           transactionHooks,
           typeName: "step1",
           id: chain.id,
-          handler: async ({ job, completeJob }) => {
-            if (job.typeName === "step1") {
-              await completeJob(job, async ({ complete }) =>
-                complete({ continueWith: { typeName: "step2", input: { data: 1 } } }),
-              );
-            }
-          },
+          handler: ({ job, completeJob }) =>
+            runInMode(function* () {
+              if (job.typeName === "step1") {
+                yield* unwrap(
+                  completeJob(job, ({ complete }) =>
+                    complete({ continueWith: { typeName: "step2", input: { data: 1 } } }),
+                  ),
+                );
+              }
+            }),
         }),
       ),
     ).rejects.toThrow(JobTypeValidationError);

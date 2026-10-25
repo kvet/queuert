@@ -40,7 +40,7 @@ await runDoubleRunBenchmark<Record<string, never>>({
     );
 
     const stopWorker = await step("After creating worker", async () => {
-      const worker = await createInProcessWorker({
+      const worker = createInProcessWorker({
         client,
         processors: createProcessors({
           client,

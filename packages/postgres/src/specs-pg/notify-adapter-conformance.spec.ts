@@ -21,7 +21,7 @@ describe("PostgreSQL Notify Adapter Conformance - Default Channel Prefix", () =>
         });
 
         const notifyProvider = createPgPoolNotifyProvider({ pool });
-        const notifyAdapter = await createPgNotifyAdapter({ notifyProvider });
+        const notifyAdapter = createPgNotifyAdapter({ notifyProvider });
 
         await use(notifyAdapter);
 
@@ -45,7 +45,7 @@ describe("PostgreSQL Notify Adapter Conformance - Custom Channel Prefix", () => 
         });
 
         const notifyProvider = createPgPoolNotifyProvider({ pool });
-        const notifyAdapter = await createPgNotifyAdapter({
+        const notifyAdapter = createPgNotifyAdapter({
           notifyProvider,
           channelPrefix: "myapp_notifications",
         });

@@ -16,7 +16,7 @@ test("notify-redis-cluster-ioredis provider passes notify adapter conformance", 
     const subscribeCluster = new Cluster(startupNodes);
 
     const notifyProvider = createIoredisClusterNotifyProvider({ cluster, subscribeCluster });
-    const notifyAdapter = await createRedisNotifyAdapter({
+    const notifyAdapter = createRedisNotifyAdapter({
       notifyProvider,
       channelPrefix: `queuert:spec:${Date.now()}:${Math.random().toString(36).slice(2)}`,
     });

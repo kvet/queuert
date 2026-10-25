@@ -44,21 +44,21 @@ const jobTypes = defineJobTypes<{
 const stateProvider = createKnexPgStateProvider({ knex });
 
 // 6. Create adapters and queuert client/worker
-const stateAdapter = await createPgStateAdapter({
+const stateAdapter = createPgStateAdapter({
   stateProvider,
 });
 await stateAdapter.migrateToLatest();
 
-const notifyAdapter = await createInProcessNotifyAdapter();
+const notifyAdapter = createInProcessNotifyAdapter();
 
-const client = await createClient({
+const client = createClient({
   stateAdapter,
   notifyAdapter,
   jobTypes,
 });
 
 // 7. Create worker with job type processors
-const worker = await createInProcessWorker({
+const worker = createInProcessWorker({
   client,
   processors: createProcessors({
     client,

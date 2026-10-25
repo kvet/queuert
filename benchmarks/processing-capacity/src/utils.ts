@@ -25,8 +25,8 @@ const jobTypes = defineJobTypes<{
 }>();
 
 type BenchmarkContext = {
-  client: Client<any, any>;
-  withTransaction: StateAdapter<any, any>["withTransaction"];
+  client: Client<any, StateAdapter<any, any, any>>;
+  withTransaction: StateAdapter<any, any, any>["withTransaction"];
 };
 
 type Measurement = { count: number; durationMs: number; drained: boolean };
@@ -39,7 +39,8 @@ const createChainsForWindow =
     while (performance.now() - begin < WINDOW_MS) {
       const start = count;
       await withTransactionHooks(async (transactionHooks) =>
-        withTransaction(async (txCtx) =>
+        // oxlint-disable-next-line typescript/promise-function-async -- the callback returns a value in sync mode and a promise in async mode
+        withTransaction((txCtx) =>
           batchSize === 1
             ? client.createChain({
                 ...txCtx,
@@ -69,7 +70,8 @@ const seedChains = async ({ client, withTransaction }: BenchmarkContext): Promis
       input: { index: start + i },
     }));
     await withTransactionHooks(async (transactionHooks) =>
-      withTransaction(async (txCtx) => client.createChains({ ...txCtx, transactionHooks, items })),
+      // oxlint-disable-next-line typescript/promise-function-async -- the callback returns a value in sync mode and a promise in async mode
+      withTransaction((txCtx) => client.createChains({ ...txCtx, transactionHooks, items })),
     );
   }
 };
@@ -94,7 +96,7 @@ const completeChainsForWindow =
       measured.resolve();
     };
 
-    const worker = await createInProcessWorker({
+    const worker = createInProcessWorker({
       client,
       concurrency,
       processors: createProcessors({
@@ -104,7 +106,8 @@ const completeChainsForWindow =
           "test-job": {
             attemptHandler: async ({ complete }) => {
               const result = await withTransactionHooks(async (transactionHooks) =>
-                withTransaction(async (txCtx) =>
+                // oxlint-disable-next-line typescript/promise-function-async -- the callback returns a value in sync mode and a promise in async mode
+                withTransaction((txCtx) =>
                   complete({ ...txCtx, transactionHooks, output: { done: true } }),
                 ),
               );
@@ -205,12 +208,12 @@ export const runBenchmark = async ({
   notifyAdapter,
 }: {
   title: string;
-  stateAdapter: StateAdapter<any, any>;
+  stateAdapter: StateAdapter<any, any, any>;
   notifyAdapter?: NotifyAdapter;
 }): Promise<void> => {
   const name = parseScenarioName();
   const scenario = scenarios[name];
-  const client = await createClient({ stateAdapter, notifyAdapter, jobTypes });
+  const client = createClient({ stateAdapter, notifyAdapter, jobTypes });
   const context: BenchmarkContext = { client, withTransaction: stateAdapter.withTransaction };
 
   console.log(`\n${title} — ${name}`);

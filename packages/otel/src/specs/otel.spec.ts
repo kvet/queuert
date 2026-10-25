@@ -45,14 +45,14 @@ describe("Metrics", () => {
       };
     }>();
 
-    const client = await createClient({
+    const client = createClient({
       stateAdapter,
       notifyAdapter,
       observabilityAdapter,
       log,
       jobTypes,
     });
-    const worker = await createInProcessWorker({
+    const worker = createInProcessWorker({
       client,
       workerName: "worker",
       concurrency: 1,
@@ -122,14 +122,14 @@ describe("Metrics", () => {
       };
     }>();
 
-    const client = await createClient({
+    const client = createClient({
       stateAdapter,
       notifyAdapter,
       observabilityAdapter,
       log,
       jobTypes,
     });
-    const worker = await createInProcessWorker({
+    const worker = createInProcessWorker({
       client,
       concurrency: 1,
       processors: createProcessors({
@@ -201,14 +201,14 @@ describe("Metrics", () => {
       };
     }>();
 
-    const client = await createClient({
+    const client = createClient({
       stateAdapter,
       notifyAdapter,
       observabilityAdapter,
       log,
       jobTypes,
     });
-    const worker = await createInProcessWorker({
+    const worker = createInProcessWorker({
       client,
       concurrency: 1,
       processors: createProcessors({
@@ -286,14 +286,14 @@ describe("Metrics", () => {
       };
     }>();
 
-    const client = await createClient({
+    const client = createClient({
       stateAdapter,
       notifyAdapter,
       observabilityAdapter,
       log,
       jobTypes,
     });
-    const worker = await createInProcessWorker({
+    const worker = createInProcessWorker({
       client,
       concurrency: 1,
       processors: createProcessors({
@@ -408,14 +408,14 @@ describe("Metrics", () => {
       };
     }>();
 
-    const client = await createClient({
+    const client = createClient({
       stateAdapter,
       notifyAdapter,
       observabilityAdapter,
       log,
       jobTypes,
     });
-    const worker = await createInProcessWorker({
+    const worker = createInProcessWorker({
       client,
       concurrency: 1,
       processors: createProcessors({
@@ -522,7 +522,7 @@ describe("Metrics", () => {
       };
     }>();
 
-    const client = await createClient({
+    const client = createClient({
       stateAdapter,
       notifyAdapter,
       observabilityAdapter,
@@ -571,7 +571,7 @@ describe("Metrics", () => {
       test: { entry: true; input: null; output: null };
     }>();
 
-    const client = await createClient({
+    const client = createClient({
       stateAdapter,
       notifyAdapter,
       observabilityAdapter,
@@ -584,7 +584,7 @@ describe("Metrics", () => {
     const jobCompleted = Promise.withResolvers<void>();
     const attemptConfig = { timeoutMs: 10, heartbeatMs: 100 };
 
-    const worker1 = await createInProcessWorker({
+    const worker1 = createInProcessWorker({
       client,
       concurrency: 1,
       pollIntervalMs: attemptConfig.timeoutMs,
@@ -612,7 +612,7 @@ describe("Metrics", () => {
         },
       }),
     });
-    const worker2 = await createInProcessWorker({
+    const worker2 = createInProcessWorker({
       client,
       concurrency: 1,
       pollIntervalMs: attemptConfig.timeoutMs,
@@ -678,7 +678,7 @@ describe("Metrics", () => {
       test: { entry: true; input: null; output: { by: string } };
     }>();
 
-    const client = await createClient({
+    const client = createClient({
       stateAdapter,
       notifyAdapter,
       observabilityAdapter,
@@ -688,7 +688,7 @@ describe("Metrics", () => {
     const started = Promise.withResolvers<void>();
     const takenOver = Promise.withResolvers<void>();
     const attemptEnded = Promise.withResolvers<void>();
-    const worker = await createInProcessWorker({
+    const worker = createInProcessWorker({
       client,
       concurrency: 1,
       processors: createProcessors({
@@ -757,7 +757,7 @@ describe("Metrics", () => {
       test: { entry: true; input: null; output: null };
     }>();
 
-    const client = await createClient({
+    const client = createClient({
       stateAdapter,
       notifyAdapter,
       observabilityAdapter,
@@ -766,7 +766,7 @@ describe("Metrics", () => {
     });
     const started = Promise.withResolvers<void>();
     const deleted = Promise.withResolvers<void>();
-    const worker = await createInProcessWorker({
+    const worker = createInProcessWorker({
       client,
       concurrency: 1,
       processors: createProcessors({
@@ -823,14 +823,14 @@ describe("Metrics", () => {
       test: { entry: true; input: null; output: null };
     }>();
 
-    const client = await createClient({
+    const client = createClient({
       stateAdapter,
       notifyAdapter,
       observabilityAdapter,
       log,
       jobTypes,
     });
-    const worker = await createInProcessWorker({
+    const worker = createInProcessWorker({
       client,
       concurrency: 1,
       processors: createProcessors({
@@ -894,21 +894,21 @@ describe("Metrics", () => {
       },
     };
 
-    const client = await createClient({
+    const client = createClient({
       stateAdapter,
       notifyAdapter,
       observabilityAdapter,
       log,
       jobTypes,
     });
-    const workerClient = await createClient({
+    const workerClient = createClient({
       stateAdapter: erroringStateAdapter,
       notifyAdapter,
       observabilityAdapter,
       log,
       jobTypes,
     });
-    const worker = await createInProcessWorker({
+    const worker = createInProcessWorker({
       client: workerClient,
       concurrency: 1,
       recoveryBackoffConfig: { initialDelayMs: 10, multiplier: 1, maxDelayMs: 10 },
@@ -961,14 +961,14 @@ describe("Metrics", () => {
       },
     };
 
-    const client = await createClient({
+    const client = createClient({
       stateAdapter,
       notifyAdapter: failingNotifyAdapter,
       observabilityAdapter,
       log,
       jobTypes,
     });
-    const worker = await createInProcessWorker({
+    const worker = createInProcessWorker({
       client,
       concurrency: 1,
       pollIntervalMs: 100,
@@ -1014,7 +1014,7 @@ describe("Metrics", () => {
       test: { entry: true; input: null; output: null };
     }>();
 
-    const client = await createClient({
+    const client = createClient({
       stateAdapter,
       notifyAdapter,
       observabilityAdapter,
@@ -1049,7 +1049,7 @@ describe("Metrics", () => {
       test: { entry: true; input: null; output: null };
     }>();
 
-    const client = await createClient({
+    const client = createClient({
       stateAdapter,
       notifyAdapter,
       observabilityAdapter,
@@ -1090,7 +1090,7 @@ describe("Metrics", () => {
       test: { entry: true; input: null; output: null };
     }>();
 
-    const client = await createClient({
+    const client = createClient({
       stateAdapter,
       notifyAdapter,
       observabilityAdapter,
@@ -1141,14 +1141,14 @@ describe("Spans", () => {
       };
     }>();
 
-    const client = await createClient({
+    const client = createClient({
       stateAdapter,
       notifyAdapter,
       observabilityAdapter,
       log,
       jobTypes,
     });
-    const worker = await createInProcessWorker({
+    const worker = createInProcessWorker({
       client,
       concurrency: 1,
       processors: createProcessors({
@@ -1209,14 +1209,14 @@ describe("Spans", () => {
       };
     }>();
 
-    const client = await createClient({
+    const client = createClient({
       stateAdapter,
       notifyAdapter,
       observabilityAdapter,
       log,
       jobTypes,
     });
-    const worker = await createInProcessWorker({
+    const worker = createInProcessWorker({
       client,
       concurrency: 1,
       processors: createProcessors({
@@ -1298,14 +1298,14 @@ describe("Spans", () => {
       };
     }>();
 
-    const client = await createClient({
+    const client = createClient({
       stateAdapter,
       notifyAdapter,
       observabilityAdapter,
       log,
       jobTypes,
     });
-    const worker = await createInProcessWorker({
+    const worker = createInProcessWorker({
       client,
       concurrency: 1,
       processors: createProcessors({
@@ -1392,14 +1392,14 @@ describe("Spans", () => {
       };
     }>();
 
-    const client = await createClient({
+    const client = createClient({
       stateAdapter,
       notifyAdapter,
       observabilityAdapter,
       log,
       jobTypes,
     });
-    const worker = await createInProcessWorker({
+    const worker = createInProcessWorker({
       client,
       concurrency: 1,
       processors: createProcessors({
@@ -1518,15 +1518,15 @@ describe("Spans", () => {
       };
     }>();
 
-    const untracedClient = await createClient({ stateAdapter, notifyAdapter, log, jobTypes });
-    const client = await createClient({
+    const untracedClient = createClient({ stateAdapter, notifyAdapter, log, jobTypes });
+    const client = createClient({
       stateAdapter,
       notifyAdapter,
       observabilityAdapter,
       log,
       jobTypes,
     });
-    const worker = await createInProcessWorker({
+    const worker = createInProcessWorker({
       client,
       concurrency: 1,
       processors: createProcessors({
@@ -1605,14 +1605,14 @@ describe("Spans", () => {
       second: { input: null; output: null };
     }>();
 
-    const client = await createClient({
+    const client = createClient({
       stateAdapter,
       notifyAdapter,
       observabilityAdapter,
       log,
       jobTypes,
     });
-    const worker = await createInProcessWorker({
+    const worker = createInProcessWorker({
       client,
       concurrency: 1,
       processors: createProcessors({
@@ -1694,14 +1694,14 @@ describe("Spans", () => {
       };
     }>();
 
-    const client = await createClient({
+    const client = createClient({
       stateAdapter,
       notifyAdapter,
       observabilityAdapter,
       log,
       jobTypes,
     });
-    const worker = await createInProcessWorker({
+    const worker = createInProcessWorker({
       client,
       concurrency: 1,
       processors: createProcessors({
@@ -1826,14 +1826,14 @@ describe("Spans", () => {
       };
     }>();
 
-    const client = await createClient({
+    const client = createClient({
       stateAdapter,
       notifyAdapter,
       observabilityAdapter,
       log,
       jobTypes,
     });
-    const worker = await createInProcessWorker({
+    const worker = createInProcessWorker({
       client,
       concurrency: 1,
       processors: createProcessors({
@@ -1950,7 +1950,7 @@ describe("Spans", () => {
       };
     }>();
 
-    const client = await createClient({
+    const client = createClient({
       stateAdapter,
       notifyAdapter,
       observabilityAdapter,
@@ -2034,7 +2034,7 @@ describe("Spans", () => {
       test: { entry: true; input: { value: number }; output: null };
     }>();
 
-    const client = await createClient({
+    const client = createClient({
       stateAdapter,
       notifyAdapter,
       observabilityAdapter,
@@ -2103,7 +2103,7 @@ describe("Spans", () => {
       };
     }>();
 
-    const client = await createClient({
+    const client = createClient({
       stateAdapter,
       notifyAdapter,
       observabilityAdapter,
@@ -2172,7 +2172,7 @@ describe("Spans", () => {
       };
     }>();
 
-    const client = await createClient({
+    const client = createClient({
       stateAdapter,
       notifyAdapter,
       observabilityAdapter,
@@ -2228,7 +2228,7 @@ describe("Spans", () => {
       };
     }>();
 
-    const client = await createClient({
+    const client = createClient({
       stateAdapter,
       notifyAdapter,
       observabilityAdapter,
@@ -2321,14 +2321,14 @@ describe("Gauges", () => {
       };
     }>();
 
-    const client = await createClient({
+    const client = createClient({
       stateAdapter,
       notifyAdapter,
       observabilityAdapter,
       log,
       jobTypes,
     });
-    const worker = await createInProcessWorker({
+    const worker = createInProcessWorker({
       client,
       concurrency: 1,
       processors: createProcessors({
@@ -2398,14 +2398,14 @@ describe("Gauges", () => {
       sms: { entry: true; input: { phone: string }; output: { sent: boolean } };
     }>();
 
-    const client = await createClient({
+    const client = createClient({
       stateAdapter,
       notifyAdapter,
       observabilityAdapter,
       log,
       jobTypes,
     });
-    const worker = await createInProcessWorker({
+    const worker = createInProcessWorker({
       client,
       concurrency: 1,
       processors: createProcessors({
@@ -2506,7 +2506,7 @@ describe("Rollback", () => {
       test: { entry: true; input: null; output: null };
     }>();
 
-    const client = await createClient({
+    const client = createClient({
       stateAdapter,
       notifyAdapter,
       observabilityAdapter,
@@ -2551,7 +2551,7 @@ describe("Rollback", () => {
       };
     }>();
 
-    const client = await createClient({
+    const client = createClient({
       stateAdapter,
       notifyAdapter,
       observabilityAdapter,
@@ -2609,7 +2609,7 @@ describe("Rollback", () => {
       test: { entry: true; input: null; output: { result: number } };
     }>();
 
-    const client = await createClient({
+    const client = createClient({
       stateAdapter,
       notifyAdapter,
       observabilityAdapter,
@@ -2665,21 +2665,21 @@ describe("Rollback", () => {
       },
     };
 
-    const client = await createClient({
+    const client = createClient({
       stateAdapter,
       notifyAdapter,
       observabilityAdapter,
       log,
       jobTypes,
     });
-    const workerClient = await createClient({
+    const workerClient = createClient({
       stateAdapter: erroringStateAdapter,
       notifyAdapter,
       observabilityAdapter,
       log,
       jobTypes,
     });
-    const worker = await createInProcessWorker({
+    const worker = createInProcessWorker({
       client: workerClient,
       concurrency: 1,
       pollIntervalMs: 100,
@@ -2749,21 +2749,21 @@ describe("Rollback", () => {
       },
     };
 
-    const client = await createClient({
+    const client = createClient({
       stateAdapter,
       notifyAdapter,
       observabilityAdapter,
       log,
       jobTypes,
     });
-    const workerClient = await createClient({
+    const workerClient = createClient({
       stateAdapter: erroringStateAdapter,
       notifyAdapter,
       observabilityAdapter,
       log,
       jobTypes,
     });
-    const worker = await createInProcessWorker({
+    const worker = createInProcessWorker({
       client: workerClient,
       concurrency: 1,
       pollIntervalMs: 50,
@@ -2834,7 +2834,7 @@ describe("Rollback", () => {
       };
     }>();
 
-    const client = await createClient({
+    const client = createClient({
       stateAdapter,
       notifyAdapter,
       observabilityAdapter,
@@ -2843,7 +2843,7 @@ describe("Rollback", () => {
     });
 
     let throwOnce = true;
-    const worker = await createInProcessWorker({
+    const worker = createInProcessWorker({
       client,
       concurrency: 1,
       pollIntervalMs: 100,
@@ -2936,21 +2936,21 @@ describe("Rollback", () => {
       },
     };
 
-    const client = await createClient({
+    const client = createClient({
       stateAdapter,
       notifyAdapter,
       observabilityAdapter,
       log,
       jobTypes,
     });
-    const workerClient = await createClient({
+    const workerClient = createClient({
       stateAdapter: erroringStateAdapter,
       notifyAdapter,
       observabilityAdapter,
       log,
       jobTypes,
     });
-    const worker = await createInProcessWorker({
+    const worker = createInProcessWorker({
       client: workerClient,
       concurrency: 1,
       pollIntervalMs: 100,
@@ -3041,14 +3041,14 @@ describe("Rollback", () => {
       },
     };
 
-    const client = await createClient({
+    const client = createClient({
       stateAdapter,
       notifyAdapter,
       observabilityAdapter,
       log,
       jobTypes,
     });
-    const erroringClient = await createClient({
+    const erroringClient = createClient({
       stateAdapter: erroringStateAdapter,
       notifyAdapter,
       observabilityAdapter,
@@ -3141,21 +3141,21 @@ describe("Rollback", () => {
       },
     };
 
-    const client = await createClient({
+    const client = createClient({
       stateAdapter,
       notifyAdapter,
       observabilityAdapter,
       log,
       jobTypes,
     });
-    const workerClient = await createClient({
+    const workerClient = createClient({
       stateAdapter: erroringStateAdapter,
       notifyAdapter,
       observabilityAdapter,
       log,
       jobTypes,
     });
-    const worker = await createInProcessWorker({
+    const worker = createInProcessWorker({
       client: workerClient,
       concurrency: 1,
       pollIntervalMs: 100,
@@ -3225,7 +3225,7 @@ describe("Rollback", () => {
       test: { entry: true; input: null; output: null };
     }>();
 
-    const client = await createClient({
+    const client = createClient({
       stateAdapter,
       notifyAdapter,
       observabilityAdapter,
@@ -3274,7 +3274,7 @@ describe("Rollback", () => {
       };
     }>();
 
-    const client = await createClient({
+    const client = createClient({
       stateAdapter,
       notifyAdapter,
       observabilityAdapter,
@@ -3283,7 +3283,7 @@ describe("Rollback", () => {
     });
 
     let throwOnce = true;
-    const worker = await createInProcessWorker({
+    const worker = createInProcessWorker({
       client,
       concurrency: 1,
       pollIntervalMs: 100,
@@ -3388,7 +3388,7 @@ describe("Rollback", () => {
       other: { entry: true; input: null; output: null };
     }>();
 
-    const client = await createClient({
+    const client = createClient({
       stateAdapter,
       notifyAdapter,
       observabilityAdapter,
@@ -3397,7 +3397,7 @@ describe("Rollback", () => {
     });
 
     let throwOnce = true;
-    const worker = await createInProcessWorker({
+    const worker = createInProcessWorker({
       client,
       concurrency: 1,
       pollIntervalMs: 100,

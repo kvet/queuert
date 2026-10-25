@@ -293,7 +293,7 @@ RETURNING 1 AS extended`,
         await exec({ txCtx, sql: createMigrationLockTableSql });
       });
     },
-    runInTransaction: stateProvider.withTransaction,
+    runInTransaction: async (fn) => stateProvider.withTransaction(async (txCtx) => fn(txCtx)),
     getAppliedMigrationNames: async (txCtx) => {
       const applied = await exec({ txCtx, sql: getAppliedMigrationsSql });
       return applied.map((m) => m.name);
@@ -429,7 +429,7 @@ const mapDbChainRowToStateChain = (row: DbChainRow): StateChain => ({
  * @param options - PostgreSQL state adapter configuration.
  * @throws Error if `schema`, `tablePrefix` or `idType` is not a valid SQL identifier.
  */
-export const createPgStateAdapter = async <
+export const createPgStateAdapter = <
   TTxContext extends BaseTxContext,
   TIdType extends string = UUID,
 >({
@@ -476,14 +476,12 @@ export const createPgStateAdapter = async <
    * @defaultValue `10_000`
    */
   countCap?: number;
-}): Promise<
-  StateAdapter<TTxContext, TIdType> & {
-    /** Create or upgrade the schema. */
-    migrateToLatest: () => Promise<MigrationResult>;
-    /** Delete all job and blocker rows. Intended for tests. */
-    truncate: () => Promise<void>;
-  }
-> => {
+}): StateAdapter<TTxContext, TIdType> & {
+  /** Create or upgrade the schema. */
+  migrateToLatest: () => Promise<MigrationResult>;
+  /** Delete all job and blocker rows. Intended for tests. */
+  truncate: () => Promise<void>;
+} => {
   validateSqlIdentifier(schema, "schema");
   validateSqlIdentifier(tablePrefix, "tablePrefix");
   validateSqlIdentifier(idType, "idType");
@@ -594,6 +592,7 @@ LEFT JOIN LATERAL (
 
   return {
     config,
+    mode: "async",
 
     withTransaction: stateProvider.withTransaction,
 

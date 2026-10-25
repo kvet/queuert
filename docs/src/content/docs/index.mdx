@@ -73,7 +73,7 @@ const jobTypes = defineJobTypes<{
 Start the chain _inside_ your DB transaction. If the transaction rolls back, the chain is never created.
 
 ```ts
-const client = await createClient({ stateAdapter, jobTypes });
+const client = createClient({ stateAdapter, jobTypes });
 
 await withTransactionHooks(async (transactionHooks) =>
   db.transaction(async (tx) => {
@@ -93,7 +93,7 @@ await withTransactionHooks(async (transactionHooks) =>
 Each handler continues with the next step. The compiler enforces that `continueWith` matches the declared next type's input.
 
 ```ts
-const worker = await createInProcessWorker({
+const worker = createInProcessWorker({
   client,
   processors: createProcessors({
     client,

@@ -258,7 +258,7 @@ const it = extendWithResourceLeakDetection(extendWithPostgres(baseIt, import.met
     validationClient: [
       async ({ postgresConnectionString }, use) => {
         const setupPool = new Pool({ connectionString: postgresConnectionString });
-        const setupAdapter = await createPgStateAdapter({
+        const setupAdapter = createPgStateAdapter({
           stateProvider: createPgPoolProvider({ pool: setupPool }),
         });
         await setupAdapter.migrateToLatest();
@@ -322,7 +322,7 @@ const it = extendWithResourceLeakDetection(extendWithPostgres(baseIt, import.met
           formatType,
           enumTypes,
         );
-        const adapter = await createPgStateAdapter({ stateProvider });
+        const adapter = createPgStateAdapter({ stateProvider });
         await adapter.migrateToLatest();
         await adapter.truncate();
         await use(adapter as unknown as StateAdapter<{ $test: true }, string>);

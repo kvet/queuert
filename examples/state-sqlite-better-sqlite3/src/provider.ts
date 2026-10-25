@@ -1,20 +1,19 @@
-import { type AsyncRwLock, type SqliteStateProvider } from "@queuert/sqlite";
+import { type SqliteStateProvider } from "@queuert/sqlite";
 import type Database from "better-sqlite3";
 
 export type BetterSqlite3Context = { db: Database.Database };
 
 export const createBetterSqlite3StateProvider = ({
   db,
-  lock,
 }: {
   db: Database.Database;
-  lock: AsyncRwLock;
-}): SqliteStateProvider<BetterSqlite3Context> => {
+}): SqliteStateProvider<BetterSqlite3Context, "sync"> => {
   // The adapter folds template variants (e.g. table prefix) into `id`, so
   // it uniquely identifies the resolved SQL within this provider — keying
   // the prepared-statement cache by `id` is sufficient.
   const stmtCache = new Map<string, Database.Statement>();
-  const prepareCached = (id: string, sql: string): Database.Statement => {
+  const prepare = (id: string | undefined, sql: string): Database.Statement => {
+    if (id === undefined) return db.prepare(sql);
     let stmt = stmtCache.get(id);
     if (!stmt) {
       stmt = db.prepare(sql);
@@ -24,45 +23,23 @@ export const createBetterSqlite3StateProvider = ({
   };
 
   return {
-    withTransaction: async (fn) => {
-      using _h = await lock.acquireWrite();
-      try {
-        db.exec("BEGIN");
-        const result = await fn({ db });
-        db.exec("COMMIT");
-        return result;
-      } catch (error) {
-        if (db.inTransaction) {
-          try {
-            db.exec("ROLLBACK");
-          } catch {
-            // ignore rollback errors
-          }
-        }
-        throw error;
-      }
-    },
+    withTransaction: (fn) => db.transaction(() => fn({ db }))(),
     isTransaction: (txCtx) => txCtx.db.inTransaction,
-    executeSql: async ({ txCtx, id, sql, params, columnTypes, readOnly }) => {
-      const run = (): unknown[] => {
-        const database = txCtx?.db ?? db;
-        const prepare = (): Database.Statement =>
-          id !== undefined ? prepareCached(id, sql) : database.prepare(sql);
-        if (Object.keys(columnTypes).length > 0) {
-          return prepare().all(...(params ?? []));
-        }
-        if (params && params.length > 0) {
-          prepare().run(...params);
-        } else {
-          database.exec(sql);
-        }
-        return [] as unknown[];
-      };
-      if (txCtx) return run();
-      using _h = readOnly ? await lock.acquireRead() : await lock.acquireWrite();
-      return run();
+    executeSql: ({ txCtx, id, sql, params, columnTypes }) => {
+      // Nothing can interleave with a synchronous transaction, so the provider takes no lock. An
+      // autocommit statement that finds a transaction open means a BEGIN was held across an await.
+      if (!txCtx && db.inTransaction) {
+        throw new Error("An autocommit statement found a transaction open on the connection");
+      }
+      if (Object.keys(columnTypes).length > 0) return prepare(id, sql).all(...params);
+      if (params.length > 0) {
+        prepare(id, sql).run(...params);
+      } else {
+        db.exec(sql);
+      }
+      return [];
     },
-    close: async () => {
+    close: () => {
       stmtCache.clear();
     },
   };

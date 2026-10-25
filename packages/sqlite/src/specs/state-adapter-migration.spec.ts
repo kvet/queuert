@@ -6,7 +6,7 @@ import { join } from "node:path";
 import Database from "better-sqlite3";
 import { it as baseIt, describe, expect } from "vitest";
 
-import { createSqliteStateAdapter } from "../state-adapter/state-adapter.sqlite.js";
+import { createAsyncSqliteStateAdapter } from "../state-adapter/state-adapter.sqlite.js";
 import {
   type BetterSqlite3Context,
   createBetterSqlite3Provider,
@@ -19,7 +19,7 @@ const ALL = [INSTALL];
 type Provider = SqliteStateProvider<BetterSqlite3Context>;
 type Db = {
   provider: Provider;
-  adapter: Awaited<ReturnType<typeof createSqliteStateAdapter<BetterSqlite3Context, string>>>;
+  adapter: Awaited<ReturnType<typeof createAsyncSqliteStateAdapter<BetterSqlite3Context, string>>>;
 };
 
 const ROW_RESULT: Record<string, "string"> = { _: "string" };
@@ -39,7 +39,7 @@ const it = baseIt.extend<{ fresh: Db }>({
     const db = new Database(path);
     db.pragma("journal_mode = WAL");
     const provider = createBetterSqlite3Provider({ db });
-    const adapter = await createSqliteStateAdapter({
+    const adapter = createAsyncSqliteStateAdapter({
       stateProvider: provider,
       generateId: (): string => randomUUID(),
     });

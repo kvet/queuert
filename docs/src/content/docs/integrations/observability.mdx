@@ -23,7 +23,7 @@ Queuert provides an OpenTelemetry adapter for metrics collection. Configure your
    import { createOtelObservabilityAdapter } from "@queuert/otel";
    import { metrics, trace } from "@opentelemetry/api";
 
-   const observabilityAdapter = await createOtelObservabilityAdapter({
+   const observabilityAdapter = createOtelObservabilityAdapter({
      meter: metrics.getMeter("my-app"), // Optional — metrics disabled if omitted
      tracer: trace.getTracer("my-app"), // Optional — tracing disabled if omitted
    });
@@ -32,7 +32,7 @@ Queuert provides an OpenTelemetry adapter for metrics collection. Configure your
 3. Pass the adapter when creating your client:
 
    ```ts
-   const client = await createClient({
+   const client = createClient({
      stateAdapter,
      jobTypes,
      observabilityAdapter,

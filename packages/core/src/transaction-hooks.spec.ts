@@ -222,6 +222,48 @@ describe("withTransactionHooks", () => {
     expect(result).toBe(42);
   });
 
+  test("returns a synchronous callback's result directly after flushing its hooks", () => {
+    const flush = vi.fn();
+    const key = Symbol("test");
+
+    const result = withTransactionHooks((hooks) => {
+      hooks.set(key, { state: "data", flush });
+      return 42;
+    });
+
+    expect(result).toBe(42);
+    expect(flush).toHaveBeenCalledWith("data");
+  });
+
+  test("throws synchronously and discards hooks when a synchronous callback throws", () => {
+    const flush = vi.fn();
+    const discard = vi.fn();
+    const key = Symbol("test");
+
+    expect(() =>
+      withTransactionHooks((hooks) => {
+        hooks.set(key, { state: "data", flush, discard });
+        throw new Error("transaction failed");
+      }),
+    ).toThrow("transaction failed");
+
+    expect(flush).not.toHaveBeenCalled();
+    expect(discard).toHaveBeenCalledWith("data");
+  });
+
+  test("a synchronous callback rejects a hook whose flush returns a promise", () => {
+    const syncFlush = vi.fn();
+
+    expect(() =>
+      withTransactionHooks((hooks) => {
+        hooks.set(Symbol("sync"), { state: "sync", flush: syncFlush });
+        hooks.set(Symbol("async"), { state: "async", flush: async () => {} });
+        return 42;
+      }),
+    ).toThrow("requires synchronous hooks");
+    expect(syncFlush).toHaveBeenCalledWith("sync");
+  });
+
   test("propagates callback error", async () => {
     const error = new Error("boom");
     await expect(

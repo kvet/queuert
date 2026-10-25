@@ -8,7 +8,7 @@ sidebar:
 For cooperative timeouts, combine a per-job `AbortController` with the provided `signal` and pass the combined signal to the work:
 
 ```ts
-const worker = await createInProcessWorker({
+const worker = createInProcessWorker({
   client,
   processors: createProcessors({
     client,
@@ -41,7 +41,7 @@ const stop = await worker.start();
 `attemptConfig` is not a runtime limit: it is the attempt's timeout. The worker sets `attemptUntil` when it acquires the job and its heartbeat extends it every `heartbeatMs` while the handler runs, so a handler may run far longer than `timeoutMs`. The attempt only expires when the worker stops extending it — it crashed, its event loop stalled, or it lost its database connection — and then another worker reclaims the job and starts a new attempt. Use the cooperative `signal` pattern above for real runtime limits.
 
 ```ts
-const worker = await createInProcessWorker({
+const worker = createInProcessWorker({
   client,
   processors: createProcessors({
     client,

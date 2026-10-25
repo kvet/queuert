@@ -1,3 +1,5 @@
+import { type Operation } from "@queuert/helpers";
+
 import { type Chain, mapStateChainToChain } from "./entities/chain.js";
 import { type DeduplicationOptions } from "./entities/deduplication.js";
 import { type ScheduleOptions } from "./entities/schedule.js";
@@ -103,16 +105,16 @@ const requireBlockerChain = (
   return blockerChain;
 };
 
-const lockBlockerChains = async <TItem extends { entry: AnyNewJob }>(
+const lockBlockerChains = function* <TItem extends { entry: AnyNewJob }>(
   helpers: Helpers,
   { items, txCtx }: { items: TItem[]; txCtx: BaseTxContext },
-): Promise<(TItem & { blockerChains: StateChain[] })[]> => {
+): Operation<(TItem & { blockerChains: StateChain[] })[]> {
   const blockerChainIds = items.flatMap((item) =>
     (item.entry.blockers ?? []).map((blocker) => blocker.id),
   );
   const blockerChains =
     blockerChainIds.length > 0
-      ? await helpers.stateAdapter.getChains({
+      ? yield* helpers.state.getChains({
           txCtx,
           chainIds: blockerChainIds,
           lock: "exclusive",
@@ -135,10 +137,10 @@ const lockBlockerChains = async <TItem extends { entry: AnyNewJob }>(
   });
 };
 
-const addJobsBlockers = async <TItem extends CreatedJob>(
+const addJobsBlockers = function* <TItem extends CreatedJob>(
   helpers: Helpers,
   { items, txCtx }: { items: TItem[]; txCtx: BaseTxContext },
-): Promise<(TItem & { blockerSpans: BlockerSpan[] })[]> => {
+): Operation<(TItem & { blockerSpans: BlockerSpan[] })[]> {
   const isBlocked = (item: TItem) => !item.deduplicated && item.blockerChains.length > 0;
 
   const itemsWithBlockerSpans = items.map((item) => {
@@ -161,7 +163,7 @@ const addJobsBlockers = async <TItem extends CreatedJob>(
   const blockedItems = itemsWithBlockerSpans.filter(isBlocked);
   if (blockedItems.length === 0) return itemsWithBlockerSpans;
 
-  const updatedRows = await helpers.stateAdapter.addJobsBlockers({
+  const updatedRows = yield* helpers.state.addJobsBlockers({
     txCtx,
     jobBlockers: blockedItems.map((item) => ({
       jobId: item.job.id,
@@ -246,7 +248,7 @@ const reportCreatedJobs = (
   }
 };
 
-export const createChains = async (
+export const createChains = function* (
   helpers: Helpers,
   {
     chains,
@@ -257,7 +259,7 @@ export const createChains = async (
     txCtx: BaseTxContext;
     transactionHooks: TransactionHooks;
   },
-): Promise<(Chain<string, string, unknown, unknown> & { deduplicated: boolean })[]> => {
+): Operation<(Chain<string, string, unknown, unknown> & { deduplicated: boolean })[]> {
   if (chains.length === 0) return [];
 
   for (const chain of chains) {
@@ -274,8 +276,8 @@ export const createChains = async (
 
   const prepared = prepareJobs(helpers, chains, null);
   try {
-    const locked = await lockBlockerChains(helpers, { items: prepared, txCtx });
-    const createdChains = await helpers.stateAdapter.createJobs({
+    const locked = yield* lockBlockerChains(helpers, { items: prepared, txCtx });
+    const createdChains = yield* helpers.state.createJobs({
       txCtx,
       jobs: locked.map((item) => ({
         id: item.id,
@@ -287,7 +289,7 @@ export const createChains = async (
         deduplication: item.entry.deduplication,
       })),
     });
-    const created = await addJobsBlockers(helpers, {
+    const created = yield* addJobsBlockers(helpers, {
       txCtx,
       items: locked.map((item, index) => {
         const createdChain = createdChains[index];
@@ -310,7 +312,7 @@ export const createChains = async (
   }
 };
 
-export const completeChain = async (
+export const completeChain = function* (
   helpers: Helpers,
   {
     job,
@@ -325,10 +327,10 @@ export const completeChain = async (
     transactionHooks: TransactionHooks;
     fence: StateAttemptFence | null;
   },
-): Promise<StateJob | undefined> => {
+): Operation<StateJob | undefined> {
   const parsedOutput = helpers.jobTypes.parseOutput(job.typeName, output);
 
-  const [completed] = await helpers.stateAdapter.completeJobs({
+  const [completed] = yield* helpers.state.completeJobs({
     txCtx,
     jobs: [{ jobId: job.id, output: parsedOutput, fence: fence ?? undefined }],
   });
@@ -343,7 +345,7 @@ export const completeChain = async (
   });
   bufferNotifyChainCompletion(transactionHooks, helpers.notifyAdapter, completed);
 
-  const dependentJobs = await helpers.stateAdapter.unblockJobs({
+  const dependentJobs = yield* helpers.state.unblockJobs({
     txCtx,
     blockedByChainId: chain.id,
   });
@@ -371,7 +373,7 @@ export const completeChain = async (
   return completed;
 };
 
-export const continueChain = async (
+export const continueChain = function* (
   helpers: Helpers,
   {
     job,
@@ -386,7 +388,7 @@ export const continueChain = async (
     transactionHooks: TransactionHooks;
     fence: StateAttemptFence | null;
   },
-): Promise<(StateJob & { continuation: StateJobInfo }) | undefined> => {
+): Operation<(StateJob & { continuation: StateJobInfo }) | undefined> {
   helpers.jobTypes.validateContinueWith(job.typeName, {
     typeName: continueWith.typeName,
     input: continueWith.input,
@@ -395,8 +397,8 @@ export const continueChain = async (
   const prepared = prepareJobs(helpers, [continueWith], job);
   const [{ jobSpan }] = prepared;
   try {
-    const locked = await lockBlockerChains(helpers, { items: prepared, txCtx });
-    const [continued] = await helpers.stateAdapter.continueJobs({
+    const locked = yield* lockBlockerChains(helpers, { items: prepared, txCtx });
+    const [continued] = yield* helpers.state.continueJobs({
       txCtx,
       jobs: locked.map((item) => ({
         id: item.id,
@@ -415,7 +417,7 @@ export const continueChain = async (
       jobSpan?.end({ status: "error", error });
       return undefined;
     }
-    const created = await addJobsBlockers(helpers, {
+    const created = yield* addJobsBlockers(helpers, {
       txCtx,
       items: locked.map((item) => ({
         ...item,
@@ -442,7 +444,7 @@ export const continueChain = async (
   }
 };
 
-export const rescheduleJobs = async (
+export const rescheduleJobs = function* (
   helpers: Helpers,
   {
     jobs,
@@ -458,8 +460,8 @@ export const rescheduleJobs = async (
     txCtx?: BaseTxContext;
     transactionHooks: TransactionHooks;
   },
-): Promise<(StateJob | undefined)[]> => {
-  const rescheduledJobs = await helpers.stateAdapter.rescheduleJobs({ txCtx, jobs });
+): Operation<(StateJob | undefined)[]> {
+  const rescheduledJobs = yield* helpers.state.rescheduleJobs({ txCtx, jobs });
 
   for (const job of rescheduledJobs) {
     if (job === undefined) continue;

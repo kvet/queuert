@@ -1,4 +1,4 @@
-import { serializeError } from "@queuert/helpers";
+import { type Operation, runOperation, serializeError } from "@queuert/helpers";
 
 import {
   type AnyAttemptMiddleware,
@@ -52,8 +52,8 @@ const createComplete = (
 
   const completeHookKey = Symbol("queuert.complete");
 
-  const readLossError = async (txCtx: BaseTxContext): Promise<Error> => {
-    const [job] = await helpers.stateAdapter.getJobs({ txCtx, jobIds: [stateJob.id] });
+  const readLossError = function* (txCtx: BaseTxContext): Operation<Error> {
+    const [job] = yield* helpers.state.getJobs({ txCtx, jobIds: [stateJob.id] });
     ownership.abort();
     if (!job) {
       return new JobNotFoundError(`Job not found`, { jobId: stateJob.id });
@@ -68,94 +68,95 @@ const createComplete = (
     });
   };
 
-  const complete = async (options: AnyCompleteOptions) => {
-    if (closed) {
-      throw new Error("complete cannot be called after the attempt handler has ended");
-    }
-    const { transactionHooks, output, continueWith, reschedule, ...txCtxFields } = options;
-    const outcomeKeys = ["output", "continueWith", "reschedule"].filter((key) => key in options);
-    if (outcomeKeys.length !== 1) {
-      throw new Error("complete requires exactly one of output, continueWith or reschedule");
-    }
-    requireTransactionHooks(transactionHooks, "complete");
-    const txCtx = requireTxCtx(helpers.stateAdapter, txCtxFields, "complete");
+  const complete = (
+    options: AnyCompleteOptions,
+  ): (AnyJob & { continuedTo?: AnyJob }) | Promise<AnyJob & { continuedTo?: AnyJob }> =>
+    helpers.run(function* (): Operation<AnyJob & { continuedTo?: AnyJob }> {
+      if (closed) {
+        throw new Error("complete cannot be called after the attempt handler has ended");
+      }
+      const { transactionHooks, output, continueWith, reschedule, ...txCtxFields } = options;
+      const outcomeKeys = ["output", "continueWith", "reschedule"].filter((key) => key in options);
+      if (outcomeKeys.length !== 1) {
+        throw new Error("complete requires exactly one of output, continueWith or reschedule");
+      }
+      requireTransactionHooks(transactionHooks, "complete");
+      const txCtx = requireTxCtx(helpers.stateAdapter, txCtxFields, "complete");
 
-    const completeSlot = transactionHooks.getOrInsert(completeHookKey, () => {
-      const state = { write: null as CompleteWrite | null, inProgress: false };
-      ownership.trackCompleteSlot(state);
-      return {
-        state,
-        checkpoint: (state) => {
-          const write = state.write;
-          return () => {
-            state.write = write;
-          };
-        },
-        flush: (state) => {
-          if (state.write === null) return;
-          committed = state.write;
-          void ownership.stopHeartbeat();
-        },
-        discard: (state) => {
-          state.write = null;
-        },
-      };
-    });
-    if (completeSlot.inProgress) {
-      throw new Error("complete is already in progress with these transactionHooks");
-    }
-    if (completeSlot.write !== null) {
-      throw new Error(
-        "complete already succeeded with these transactionHooks; a retried transaction needs its own withTransactionHooks",
-      );
-    }
-    completeSlot.inProgress = true;
-    try {
-      const stateJobWritten =
-        "reschedule" in options
-          ? (
-              await rescheduleJobs(helpers, {
+      const completeSlot = transactionHooks.getOrInsert(completeHookKey, () => {
+        const state = { write: null as CompleteWrite | null, inProgress: false };
+        ownership.trackCompleteSlot(state);
+        return {
+          state,
+          checkpoint: (state) => {
+            const write = state.write;
+            return () => {
+              state.write = write;
+            };
+          },
+          flush: (state) => {
+            if (state.write === null) return;
+            committed = state.write;
+            void ownership.stopHeartbeat();
+          },
+          discard: (state) => {
+            state.write = null;
+          },
+        };
+      });
+      if (completeSlot.inProgress) {
+        throw new Error("complete is already in progress with these transactionHooks");
+      }
+      if (completeSlot.write !== null) {
+        throw new Error(
+          "complete already succeeded with these transactionHooks; a retried transaction needs its own withTransactionHooks",
+        );
+      }
+      completeSlot.inProgress = true;
+      try {
+        const stateJobWritten =
+          "reschedule" in options
+            ? (yield* rescheduleJobs(helpers, {
                 txCtx,
                 transactionHooks,
                 jobs: [{ jobId: stateJob.id, schedule: reschedule, fence }],
-              })
-            )[0]
-          : continueWith === undefined
-            ? await completeChain(helpers, {
-                job: stateJob,
-                output,
-                txCtx,
-                transactionHooks,
-                fence,
-              })
-            : await continueChain(helpers, {
-                job: stateJob,
-                continueWith,
-                txCtx,
-                transactionHooks,
-                fence,
-              });
-      if (stateJobWritten === undefined) {
-        throw await readLossError(txCtx);
-      }
+              }))[0]
+            : continueWith === undefined
+              ? yield* completeChain(helpers, {
+                  job: stateJob,
+                  output,
+                  txCtx,
+                  transactionHooks,
+                  fence,
+                })
+              : yield* continueChain(helpers, {
+                  job: stateJob,
+                  continueWith,
+                  txCtx,
+                  transactionHooks,
+                  fence,
+                });
+        if (stateJobWritten === undefined) {
+          throw yield* readLossError(txCtx);
+        }
 
-      const write: CompleteWrite = {
-        stateJob: stateJobWritten,
-        job: mapStateJobToJob(stateJobWritten),
-      };
-      bufferObservabilityEvent(transactionHooks, () => {
-        helpers.observabilityHelper.jobAttemptCompleted(stateJob, {
-          output: write.stateJob.output,
-          continuedWith: write.stateJob.continuation,
-          workerId,
+        const write: CompleteWrite = {
+          stateJob: stateJobWritten,
+          job: mapStateJobToJob(stateJobWritten),
+        };
+        bufferObservabilityEvent(transactionHooks, () => {
+          helpers.observabilityHelper.jobAttemptCompleted(stateJob, {
+            output: write.stateJob.output,
+            continuedWith: write.stateJob.continuation,
+            workerId,
+          });
         });
-      });
-      completeSlot.write = write;
-      return write.job;
-    } finally {
-      completeSlot.inProgress = false;
-    }
-  };
+        completeSlot.write = write;
+        return write.job;
+      } finally {
+        completeSlot.inProgress = false;
+      }
+    });
 
   return {
     complete,
@@ -223,17 +224,19 @@ const rescheduleFailedAttempt = async (
 ): Promise<boolean> => {
   const { transactionHooks, flush } = createTransactionHooks();
   try {
-    const [rescheduledJob] = await rescheduleJobs(helpers, {
-      jobs: [
-        {
-          jobId: stateJob.id,
-          schedule: { afterMs: calculateBackoffMs(stateJob.attempt, backoffConfig) },
-          error: serializeError(failure),
-          fence,
-        },
-      ],
-      transactionHooks,
-    });
+    const [rescheduledJob] = await runOperation("async", () =>
+      rescheduleJobs(helpers, {
+        jobs: [
+          {
+            jobId: stateJob.id,
+            schedule: { afterMs: calculateBackoffMs(stateJob.attempt, backoffConfig) },
+            error: serializeError(failure),
+            fence,
+          },
+        ],
+        transactionHooks,
+      }),
+    );
     if (!rescheduledJob) return false;
   } catch (rescheduleError) {
     span?.end({ status: "failed", error: failure });

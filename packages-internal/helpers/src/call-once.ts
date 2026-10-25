@@ -1,8 +1,8 @@
 export const createCallOnce = <TArgs extends unknown[], TResult>(
   name: string,
-  fn: (...args: TArgs) => Promise<TResult>,
+  fn: (...args: TArgs) => Generator<unknown, TResult, unknown>,
 ): {
-  call: (...args: TArgs) => Promise<TResult>;
+  call: (...args: TArgs) => Generator<unknown, TResult, unknown>;
   requireResult: (missingMessage: string) => TResult;
 } => {
   let started = false;
@@ -17,14 +17,14 @@ export const createCallOnce = <TArgs extends unknown[], TResult>(
   };
 
   return {
-    call: async (...args) => {
+    *call(...args) {
       throwLatchedFailure();
       if (started) {
         throw new Error(`${name} can only be called once`);
       }
       started = true;
       try {
-        const value = await fn(...args);
+        const value = yield* fn(...args);
         result = { value };
         return value;
       } catch (error) {

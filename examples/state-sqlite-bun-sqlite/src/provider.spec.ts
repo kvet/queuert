@@ -1,7 +1,7 @@
 import { Database } from "bun:sqlite";
 import { test } from "bun:test";
 
-import { createAsyncRwLock, createSqliteStateAdapter } from "@queuert/sqlite";
+import { createAsyncRwLock, createAsyncSqliteStateAdapter } from "@queuert/sqlite";
 import { runStateAdapterConformance } from "queuert/conformance";
 
 import { createBunSqliteStateProvider } from "./provider.js";
@@ -12,7 +12,7 @@ test("state-sqlite-bun-sqlite provider passes state adapter conformance", async 
 
     const lock = createAsyncRwLock();
     const stateProvider = createBunSqliteStateProvider({ db, lock });
-    const adapter = await createSqliteStateAdapter({ stateProvider });
+    const adapter = createAsyncSqliteStateAdapter({ stateProvider });
     await adapter.migrateToLatest();
 
     return {

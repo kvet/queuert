@@ -52,7 +52,7 @@ type MergedDefs<
  */
 export const createProcessors = <
   TClientJobTypeDefinitions extends BaseJobTypeDefinitions,
-  TStateAdapter extends StateAdapter<any, any>,
+  TStateAdapter extends StateAdapter<any, any, any>,
   TJobTypeDefinitions extends BaseJobTypeDefinitions,
   TExternalJobTypeDefinitions extends BaseJobTypeDefinitions,
   TProcessors extends keyof TJobTypeDefinitions & string,

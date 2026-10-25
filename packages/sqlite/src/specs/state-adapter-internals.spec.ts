@@ -3,7 +3,7 @@ import { it as baseIt, describe, expect } from "vitest";
 
 import {
   type SqliteStateAdapter,
-  createSqliteStateAdapter,
+  createAsyncSqliteStateAdapter,
 } from "../state-adapter/state-adapter.sqlite.js";
 import {
   type BetterSqlite3Context,
@@ -27,7 +27,7 @@ const it = baseIt.extend<{
   },
   adapter: async ({ db, executed }, use) => {
     const provider = createBetterSqlite3Provider({ db });
-    const adapter = await createSqliteStateAdapter<BetterSqlite3Context, string>({
+    const adapter = createAsyncSqliteStateAdapter<BetterSqlite3Context, string>({
       stateProvider: {
         ...provider,
         executeSql: async (options) => {

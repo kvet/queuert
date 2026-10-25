@@ -2,7 +2,7 @@ import Database from "better-sqlite3";
 import { seedAllStates } from "queuert/testing";
 import { describe, expect, it } from "vitest";
 
-import { createSqliteStateAdapter } from "../state-adapter/state-adapter.sqlite.js";
+import { createAsyncSqliteStateAdapter } from "../state-adapter/state-adapter.sqlite.js";
 import {
   type BetterSqlite3Context,
   createBetterSqlite3Provider,
@@ -80,7 +80,7 @@ describe("fast seed conformance", { timeout: 120_000 }, () => {
       // Correct seed
       const correctDb = new Database(":memory:");
       const correctProvider = createBetterSqlite3Provider({ db: correctDb });
-      const correctAdapter = await createSqliteStateAdapter<BetterSqlite3Context, string>({
+      const correctAdapter = createAsyncSqliteStateAdapter<BetterSqlite3Context, string>({
         stateProvider: correctProvider,
       });
       await correctAdapter.migrateToLatest();
@@ -92,7 +92,7 @@ describe("fast seed conformance", { timeout: 120_000 }, () => {
       // Fast seed
       const fastDb = new Database(":memory:");
       const fastProvider = createBetterSqlite3Provider({ db: fastDb });
-      const fastAdapter = await createSqliteStateAdapter<BetterSqlite3Context, string>({
+      const fastAdapter = createAsyncSqliteStateAdapter<BetterSqlite3Context, string>({
         stateProvider: fastProvider,
       });
       await fastAdapter.migrateToLatest();

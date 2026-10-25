@@ -15,7 +15,7 @@ test("state-postgres-drizzle provider passes state adapter conformance", async (
     const db = drizzle(pool, { schema: {} });
 
     const stateProvider = createDrizzlePgStateProvider({ db });
-    const adapter = await createPgStateAdapter({ stateProvider });
+    const adapter = createPgStateAdapter({ stateProvider });
     await adapter.migrateToLatest();
 
     return {

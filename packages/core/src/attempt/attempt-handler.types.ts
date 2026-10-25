@@ -15,13 +15,16 @@ import {
 import {
   type BaseTxContext,
   type GetStateAdapterJobId,
+  type GetStateAdapterMode,
   type GetStateAdapterTxContext,
   type StateAdapter,
+  type StateAdapterMode,
+  type StateResult,
 } from "../state-adapter/state-adapter.js";
 import { type TransactionHooks } from "../transaction-hooks.js";
 
 type AttemptContinueWithOutcome<
-  TStateAdapter extends StateAdapter<any, any>,
+  TStateAdapter extends StateAdapter<any, any, any>,
   TJobTypeDefinitions extends BaseJobTypeDefinitions,
   TJobTypeName extends string,
 > =
@@ -51,7 +54,7 @@ type AttemptRescheduleOutcome = { reschedule: ScheduleOptions };
 
 /** Every outcome `complete` accepts, as a single union. */
 export type AttemptOutcome<
-  TStateAdapter extends StateAdapter<any, any>,
+  TStateAdapter extends StateAdapter<any, any, any>,
   TJobTypeDefinitions extends BaseJobTypeDefinitions,
   TJobTypeName extends string,
 > =
@@ -61,7 +64,7 @@ export type AttemptOutcome<
 
 /** Resolves the committed job shape from the outcome's discriminant key. */
 export type AttemptCompleteResult<
-  TStateAdapter extends StateAdapter<any, any>,
+  TStateAdapter extends StateAdapter<any, any, any>,
   TJobTypeDefinitions extends BaseJobTypeDefinitions,
   TJobTypeName extends string,
   TChainTypeName extends string,
@@ -89,7 +92,9 @@ export type AttemptCompleteResult<
       >;
 
 /**
- * Commits an outcome inside the caller's transaction. Takes the transaction context and the
+ * Commits an outcome inside the caller's transaction. Returns the committed job directly when the
+ * state adapter is in sync mode, so it can run inside a synchronous transaction, and a promise
+ * otherwise. Takes the transaction context and the
  * `transactionHooks` of that transaction, spread alongside exactly one outcome key — the same
  * convention as `client.createChain`.
  *
@@ -129,7 +134,7 @@ export type AttemptCompleteResult<
  * stored chain's.
  */
 export type AttemptComplete<
-  TStateAdapter extends StateAdapter<any, any>,
+  TStateAdapter extends StateAdapter<any, any, any>,
   in out TJobTypeDefinitions extends BaseJobTypeDefinitions,
   in out TJobTypeName extends string,
   out TChainTypeName extends string,
@@ -137,7 +142,8 @@ export type AttemptComplete<
   options: TOutcome & {
     transactionHooks: TransactionHooks;
   } & GetStateAdapterTxContext<TStateAdapter>,
-) => Promise<
+) => StateResult<
+  GetStateAdapterMode<TStateAdapter>,
   AttemptCompleteResult<TStateAdapter, TJobTypeDefinitions, TJobTypeName, TChainTypeName, TOutcome>
 >;
 
@@ -157,7 +163,7 @@ export type AttemptComplete<
  * with backoff.
  */
 export type AttemptHandler<
-  TStateAdapter extends StateAdapter<any, any>,
+  TStateAdapter extends StateAdapter<any, any, any>,
   TJobTypeDefinitions extends BaseJobTypeDefinitions,
   TJobTypeName extends string,
   TChainTypeName extends string,
@@ -185,5 +191,7 @@ export type AnyCompleteOptions = BaseTxContext & {
 export type AnyAttemptHandler = (options: {
   signal: AbortSignal;
   job: AnyJob & { blockers: AnyChain[] };
-  complete: (options: AnyCompleteOptions) => Promise<AnyJob & { continuedTo?: AnyJob }>;
+  complete: (
+    options: AnyCompleteOptions,
+  ) => StateResult<StateAdapterMode, AnyJob & { continuedTo?: AnyJob }>;
 }) => Promise<unknown>;

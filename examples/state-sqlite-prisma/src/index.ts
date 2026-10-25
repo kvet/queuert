@@ -4,7 +4,7 @@ import { tmpdir } from "node:os";
 import { join } from "node:path";
 
 import { PrismaBetterSqlite3 } from "@prisma/adapter-better-sqlite3";
-import { createAsyncRwLock, createSqliteStateAdapter } from "@queuert/sqlite";
+import { createAsyncRwLock, createAsyncSqliteStateAdapter } from "@queuert/sqlite";
 import {
   createClient,
   createInProcessNotifyAdapter,
@@ -48,21 +48,21 @@ const jobTypes = defineJobTypes<{
 const stateProvider = createPrismaSqliteStateProvider({ prisma: prisma as any, lock });
 
 // 6. Create adapters and queuert client/worker
-const stateAdapter = await createSqliteStateAdapter({
+const stateAdapter = createAsyncSqliteStateAdapter({
   stateProvider,
 });
 await stateAdapter.migrateToLatest();
 
-const notifyAdapter = await createInProcessNotifyAdapter();
+const notifyAdapter = createInProcessNotifyAdapter();
 
-const client = await createClient({
+const client = createClient({
   stateAdapter,
   notifyAdapter,
   jobTypes,
 });
 
 // 7. Create and start worker
-const worker = await createInProcessWorker({
+const worker = createInProcessWorker({
   client,
   processors: createProcessors({
     client,

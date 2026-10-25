@@ -94,13 +94,13 @@ The library exports a job types factory and a processor factory for system jobs.
 ```ts
 import { createBatchedUnblockJobTypes, createBatchedUnblockProcessors } from "@queuert/core";
 
-const client = await createClient({
+const client = createClient({
   stateAdapter,
   notifyAdapter,
   jobTypes: [createBatchedUnblockJobTypes(), myJobTypes],
 });
 
-const worker = await createInProcessWorker({
+const worker = createInProcessWorker({
   client,
   processors: [
     createBatchedUnblockProcessors({ requiredAttemptMiddleware: [loggingMiddleware] }),

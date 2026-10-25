@@ -412,6 +412,76 @@ describe("createMigrator", () => {
     });
   });
 
+  describe("sync mode", () => {
+    const syncHarness = (initiallyApplied: string[] = []) => {
+      const events: RunEvent[] = [];
+      const applied = new Set<string>(initiallyApplied);
+      const store: MigrationStore<TxCtx> = {
+        initialize: () => {
+          events.push({ kind: "script", name: "initialize" });
+        },
+        runInTransaction: <T>(fn: (txCtx: TxCtx) => T | Promise<T>): T | Promise<T> => {
+          events.push({ kind: "begin" });
+          const result = fn({ tx: true });
+          events.push({ kind: "commit" });
+          return result;
+        },
+        getAppliedMigrationNames: () => [...applied],
+        executeMigrationStatement: (txCtx, statement) => {
+          events.push({ kind: "statement", sql: statement.sql, inTx: txCtx !== undefined });
+        },
+        executeBatchMigrationStatement: (txCtx, statement) => {
+          events.push({ kind: "batch", sql: statement.sql, inTx: txCtx !== undefined });
+          return 0;
+        },
+        recordMigration: (txCtx, name) => {
+          events.push({ kind: "record", name, inTx: txCtx !== undefined });
+          applied.add(name);
+        },
+      };
+      return { events, applied, store };
+    };
+
+    it("returns the result directly from synchronous store methods", () => {
+      const { events, store } = syncHarness([A]);
+      const result = createMigrator({
+        mode: "sync",
+        migrations: [tx(A), nonTx(B), batched(C, "backfill")],
+        store,
+      }).migrateToLatest();
+
+      expect(result).toEqual({ skipped: [A], applied: [B, C], unrecognized: [] });
+      expect(events).toEqual([
+        { kind: "script", name: "initialize" },
+        { kind: "begin" },
+        { kind: "commit" },
+        { kind: "statement", sql: B, inTx: false },
+        { kind: "record", name: B, inTx: false },
+        { kind: "batch", sql: "backfill", inTx: false },
+        { kind: "record", name: C, inTx: false },
+      ]);
+    });
+
+    it("runs a transactional migration inside one synchronous transaction", () => {
+      const { events, store } = syncHarness();
+      createMigrator({ mode: "sync", migrations: [tx(A)], store }).migrateToLatest();
+
+      expect(events.slice(3)).toEqual([
+        { kind: "begin" },
+        { kind: "statement", sql: A, inTx: true },
+        { kind: "record", name: A, inTx: true },
+        { kind: "commit" },
+      ]);
+    });
+
+    it("rejects a store that takes a migration lock", () => {
+      const { store } = harness({ lock: {} });
+      expect(() => createMigrator({ mode: "sync", migrations: [tx(A)], store })).toThrow(
+        "A sync migrator cannot take a migration lock",
+      );
+    });
+  });
+
   describe("migrateTo", () => {
     it("applies only migrations up to and including the target name", async () => {
       const { applied, store } = harness();

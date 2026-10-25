@@ -1,4 +1,4 @@
-import { createAsyncRwLock, createSqliteStateAdapter } from "@queuert/sqlite";
+import { createAsyncRwLock, createAsyncSqliteStateAdapter } from "@queuert/sqlite";
 import { SQL } from "bun";
 import {
   createClient,
@@ -35,18 +35,18 @@ const jobTypes = defineJobTypes<{
 // 4. Create providers and adapters
 const lock = createAsyncRwLock();
 const stateProvider = createBunSqlSqliteStateProvider({ sql, lock });
-const stateAdapter = await createSqliteStateAdapter({ stateProvider });
+const stateAdapter = createAsyncSqliteStateAdapter({ stateProvider });
 await stateAdapter.migrateToLatest();
 
-const notifyAdapter = await createInProcessNotifyAdapter();
+const notifyAdapter = createInProcessNotifyAdapter();
 
-const client = await createClient({
+const client = createClient({
   stateAdapter,
   notifyAdapter,
   jobTypes,
 });
 
-const worker = await createInProcessWorker({
+const worker = createInProcessWorker({
   client,
   processors: createProcessors({
     client,

@@ -24,11 +24,11 @@ const jobTypes = defineJobTypes<{
 }>();
 
 // 2. Create adapters with console logging
-const stateAdapter = await createInProcessStateAdapter();
-const notifyAdapter = await createInProcessNotifyAdapter();
+const stateAdapter = createInProcessStateAdapter();
+const notifyAdapter = createInProcessNotifyAdapter();
 const log = createConsoleLog();
 
-const client = await createClient({
+const client = createClient({
   stateAdapter,
   notifyAdapter,
   log,
@@ -36,7 +36,7 @@ const client = await createClient({
 });
 
 // 3. Create and start worker
-const worker = await createInProcessWorker({
+const worker = createInProcessWorker({
   client,
   processors: createProcessors({
     client,

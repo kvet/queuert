@@ -1,4 +1,4 @@
-import { createSqliteStateAdapter } from "@queuert/sqlite";
+import { createAsyncSqliteStateAdapter } from "@queuert/sqlite";
 import knexFactory from "knex";
 import { runStateAdapterConformance } from "queuert/conformance";
 import { test } from "vitest";
@@ -14,7 +14,7 @@ test("state-sqlite-knex provider passes state adapter conformance", async () => 
     });
 
     const stateProvider = createKnexSqliteStateProvider({ knex });
-    const adapter = await createSqliteStateAdapter({ stateProvider });
+    const adapter = createAsyncSqliteStateAdapter({ stateProvider });
     await adapter.migrateToLatest();
 
     return {

@@ -8,7 +8,7 @@ import { type StateAdapter } from "../state-adapter/state-adapter.js";
 
 /** Configuration for processing a single job type. */
 export type InProcessWorkerProcessor<
-  TStateAdapter extends StateAdapter<any, any>,
+  TStateAdapter extends StateAdapter<any, any, any>,
   TJobTypeDefinitions extends BaseJobTypeDefinitions,
   TJobTypeName extends string,
   THandlerCtx,

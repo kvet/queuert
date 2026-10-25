@@ -11,8 +11,8 @@ type Defs = {
 };
 const jobTypes = defineJobTypes<Defs>();
 
-const stateAdapter = await createInProcessStateAdapter();
-const client = await createClient({ stateAdapter, jobTypes });
+const stateAdapter = createInProcessStateAdapter();
+const client = createClient({ stateAdapter, jobTypes });
 
 describe("registry-level backoffConfig / attemptConfig cascade", () => {
   it("stamps registry-level defaults onto processors that don't override them", () => {

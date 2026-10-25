@@ -14,7 +14,7 @@ test("state-postgres-bun-sql provider passes state adapter conformance", async (
     const sql = new SQL(pg.connectionString, { max: 10 });
 
     const stateProvider = createBunSqlStateProvider({ sql });
-    const adapter = await createPgStateAdapter({ stateProvider });
+    const adapter = createPgStateAdapter({ stateProvider });
     await adapter.migrateToLatest();
 
     return {

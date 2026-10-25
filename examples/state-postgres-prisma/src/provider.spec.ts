@@ -34,7 +34,7 @@ test("state-postgres-prisma provider passes state adapter conformance", async ()
     const prisma = new PrismaClient({ adapter: prismaAdapter }) as unknown as PrismaLike;
 
     const stateProvider = createPrismaPgStateProvider<PrismaLike>({ prisma });
-    const adapter = await createPgStateAdapter({
+    const adapter = createPgStateAdapter({
       stateProvider,
       idType: "text",
     });

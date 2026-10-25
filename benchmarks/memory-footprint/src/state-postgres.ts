@@ -61,14 +61,14 @@ await runDoubleRunBenchmark<Infra>({
     );
 
     const stateAdapter = await step("After creating state adapter (with migrations)", async () => {
-      const adapter = await createPgStateAdapter({ stateProvider, schema: "public" });
+      const adapter = createPgStateAdapter({ stateProvider, schema: "public" });
       await adapter.migrateToLatest();
       return adapter;
     });
 
     const setup = await step("After creating client + worker", async () => {
-      const client = await createClient({ stateAdapter, notifyAdapter, jobTypes });
-      const worker = await createInProcessWorker({
+      const client = createClient({ stateAdapter, notifyAdapter, jobTypes });
+      const worker = createInProcessWorker({
         client,
         processors: createProcessors({
           client,

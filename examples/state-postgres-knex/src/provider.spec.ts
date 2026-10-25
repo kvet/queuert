@@ -17,7 +17,7 @@ test("state-postgres-knex provider passes state adapter conformance", async () =
     });
 
     const stateProvider = createKnexPgStateProvider({ knex });
-    const adapter = await createPgStateAdapter({ stateProvider });
+    const adapter = createPgStateAdapter({ stateProvider });
     await adapter.migrateToLatest();
 
     return {

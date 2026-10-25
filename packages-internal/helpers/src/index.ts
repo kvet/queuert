@@ -16,3 +16,4 @@ export { createParallelExecutor, type ParallelExecutor } from "./parallel-execut
 export { serializeError } from "./serialize-error.js";
 export { type Branded, type IsUnion, type UnionToIntersection } from "./typescript.js";
 export { withWorkers } from "./with-workers.js";
+export { isThenable, runOperation, unwrap, type Operation } from "./operation.js";

@@ -4,7 +4,7 @@ import { createInProcessNotifyAdapter } from "../notify-adapter/notify-adapter.i
 
 describe("In-Process Notify Adapter — indexed routing", () => {
   it("dispatch cost is independent of unrelated listener count (indexed by id)", async () => {
-    const adapter = await createInProcessNotifyAdapter();
+    const adapter = createInProcessNotifyAdapter();
 
     const targetCalls = { count: 0 };
     let unrelatedCalls = 0;
@@ -34,7 +34,7 @@ describe("In-Process Notify Adapter — indexed routing", () => {
   });
 
   it("multiple listeners on same chain id all fire; disposing one leaves the other", async () => {
-    const adapter = await createInProcessNotifyAdapter();
+    const adapter = createInProcessNotifyAdapter();
 
     let aCalls = 0;
     let bCalls = 0;
@@ -60,7 +60,7 @@ describe("In-Process Notify Adapter — indexed routing", () => {
   });
 
   it("listenJobScheduled with multiple type names registers under each", async () => {
-    const adapter = await createInProcessNotifyAdapter();
+    const adapter = createInProcessNotifyAdapter();
 
     const seen: string[] = [];
     const dispose = await adapter.listenJobScheduled(["a", "b"], (typeName) => {
@@ -81,7 +81,7 @@ describe("In-Process Notify Adapter — indexed routing", () => {
   });
 
   it("unsubscribing during notification iteration does not skip peer listeners", async () => {
-    const adapter = await createInProcessNotifyAdapter();
+    const adapter = createInProcessNotifyAdapter();
 
     let peerCalls = 0;
 

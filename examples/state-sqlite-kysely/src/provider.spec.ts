@@ -1,4 +1,4 @@
-import { createSqliteStateAdapter } from "@queuert/sqlite";
+import { createAsyncSqliteStateAdapter } from "@queuert/sqlite";
 import BetterSqlite3 from "better-sqlite3";
 import { Kysely, SqliteDialect } from "kysely";
 import { runStateAdapterConformance } from "queuert/conformance";
@@ -17,7 +17,7 @@ test("state-sqlite-kysely provider passes state adapter conformance", async () =
     });
 
     const stateProvider = createKyselySqliteStateProvider({ db });
-    const adapter = await createSqliteStateAdapter({ stateProvider });
+    const adapter = createAsyncSqliteStateAdapter({ stateProvider });
     await adapter.migrateToLatest();
 
     return {

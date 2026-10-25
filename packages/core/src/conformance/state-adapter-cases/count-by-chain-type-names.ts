@@ -1,4 +1,5 @@
 import { type ConformanceGroup } from "../runner.js";
+import { transaction } from "../transaction.js";
 import { type StateConformanceFixture } from "./types.js";
 
 export const countByChainTypeNamesGroup: ConformanceGroup<StateConformanceFixture> = {
@@ -12,7 +13,7 @@ export const countByChainTypeNamesGroup: ConformanceGroup<StateConformanceFixtur
           expect.skip("countCap too large to exercise");
           return;
         }
-        await stateAdapter.withTransaction(async (txCtx) =>
+        await transaction(stateAdapter, (txCtx) =>
           stateAdapter.createJobs({
             txCtx,
             jobs: [
@@ -66,7 +67,7 @@ export const countByChainTypeNamesGroup: ConformanceGroup<StateConformanceFixtur
     {
       name: "countByChainTypeNames counts running chains",
       run: async ({ stateAdapter }, expect) => {
-        await stateAdapter.withTransaction(async (txCtx) =>
+        await transaction(stateAdapter, (txCtx) =>
           stateAdapter.createJobs({
             txCtx,
             jobs: [
@@ -91,14 +92,14 @@ export const countByChainTypeNamesGroup: ConformanceGroup<StateConformanceFixtur
     {
       name: "countByChainTypeNames counts completed chains",
       run: async ({ stateAdapter }, expect) => {
-        await stateAdapter.withTransaction(async (txCtx) =>
+        await transaction(stateAdapter, (txCtx) =>
           stateAdapter.createJobs({
             txCtx,
             jobs: [{ id: stateAdapter.config.generateId(), typeName: "chain-done", input: null }],
           }),
         );
 
-        const [acquired] = await stateAdapter.withTransaction(async (txCtx) =>
+        const [acquired] = await transaction(stateAdapter, (txCtx) =>
           stateAdapter.startJobAttempts({
             txCtx,
             timeoutMsByTypeName: { "chain-done": 30_000 },
@@ -107,7 +108,7 @@ export const countByChainTypeNamesGroup: ConformanceGroup<StateConformanceFixtur
           }),
         );
 
-        await stateAdapter.withTransaction(async (txCtx) =>
+        await transaction(stateAdapter, (txCtx) =>
           stateAdapter.completeJobs({
             txCtx,
             jobs: [{ jobId: acquired.id, output: null }],
@@ -124,7 +125,7 @@ export const countByChainTypeNamesGroup: ConformanceGroup<StateConformanceFixtur
     {
       name: "countByChainTypeNames preserves input order",
       run: async ({ stateAdapter }, expect) => {
-        await stateAdapter.withTransaction(async (txCtx) =>
+        await transaction(stateAdapter, (txCtx) =>
           stateAdapter.createJobs({
             txCtx,
             jobs: [

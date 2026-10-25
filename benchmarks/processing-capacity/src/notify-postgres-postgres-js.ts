@@ -9,8 +9,8 @@ const sql = postgres(requireEnv("BENCHMARK_POSTGRES_URL"), { max: 20 });
 
 await runBenchmark({
   title: "PROCESSING CAPACITY — PG NOTIFY (postgres-js)",
-  stateAdapter: await createInProcessStateAdapter(),
-  notifyAdapter: await createPgNotifyAdapter({
+  stateAdapter: createInProcessStateAdapter(),
+  notifyAdapter: createPgNotifyAdapter({
     notifyProvider: createPostgresJsNotifyProvider({ sql }),
     channelPrefix: benchmarkNamespace(),
   }),

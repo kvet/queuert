@@ -75,13 +75,13 @@ await runDoubleRunBenchmark<Infra>({
     );
 
     const setup = await step("After creating client + worker (with observability)", async () => {
-      const client = await createClient({
+      const client = createClient({
         stateAdapter,
         notifyAdapter,
         observabilityAdapter,
         jobTypes,
       });
-      const worker = await createInProcessWorker({
+      const worker = createInProcessWorker({
         client,
         processors: createProcessors({
           client,

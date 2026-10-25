@@ -75,7 +75,7 @@ State adapters abstract database operations for job persistence. They handle job
     ```ts
     import { createInProcessStateAdapter } from "queuert";
 
-    const stateAdapter = await createInProcessStateAdapter();
+    const stateAdapter = createInProcessStateAdapter();
     ```
 
   </TabItem>
@@ -121,7 +121,7 @@ Every state adapter factory accepts two optional limits:
 - **`countCap`** (default `10_000`) -- the per-status count at which `countByChainTypeNames` and `countByJobTypeNames` (and the dashboard's type counts) stop counting and report `hasMore`. A higher cap means a longer index scan per count.
 
 ```ts
-const stateAdapter = await createPgStateAdapter({
+const stateAdapter = createPgStateAdapter({
   stateProvider,
   maxBlockersPerJob: 500,
   countCap: 50_000,

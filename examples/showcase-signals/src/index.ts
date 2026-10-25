@@ -43,12 +43,12 @@ await using pg = await acquirePostgres("postgres:18", import.meta.url);
 const sql = postgres(pg.connectionString, { max: 10 });
 
 const stateProvider = createPostgresJsStateProvider({ sql });
-const stateAdapter = await createPgStateAdapter({ stateProvider });
+const stateAdapter = createPgStateAdapter({ stateProvider });
 await stateAdapter.migrateToLatest();
 const notifyProvider = createPostgresJsNotifyProvider({ sql });
-const notifyAdapter = await createPgNotifyAdapter({ notifyProvider });
+const notifyAdapter = createPgNotifyAdapter({ notifyProvider });
 
-const client = await createClient({
+const client = createClient({
   stateAdapter,
   notifyAdapter,
   jobTypes,
@@ -149,7 +149,7 @@ const externalTask = await withTransactionHooks(async (transactionHooks) =>
   ),
 );
 
-const worker1 = await createInProcessWorker({ client, processors });
+const worker1 = createInProcessWorker({ client, processors });
 const stopWorker1 = await worker1.start();
 
 await externalResultStarted;
@@ -197,7 +197,7 @@ const batch = await withTransactionHooks(async (transactionHooks) =>
   ),
 );
 
-const worker2 = await createInProcessWorker({ client, processors });
+const worker2 = createInProcessWorker({ client, processors });
 const stopWorker2 = await worker2.start();
 
 await batchStarted;

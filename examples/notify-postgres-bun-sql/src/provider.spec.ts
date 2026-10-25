@@ -14,7 +14,7 @@ test("notify-postgres-bun-sql provider passes notify adapter conformance", async
     const sql = new SQL(pg.connectionString, { max: 10 });
 
     const notifyProvider = createBunSqlNotifyProvider({ sql });
-    const notifyAdapter = await createPgNotifyAdapter({
+    const notifyAdapter = createPgNotifyAdapter({
       notifyProvider,
       channelPrefix: `queuert_spec_${Date.now()}_${Math.random().toString(36).slice(2)}`,
     });

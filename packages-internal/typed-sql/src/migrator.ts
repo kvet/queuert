@@ -1,3 +1,5 @@
+import { type Operation, runOperation } from "@queuert/helpers";
+
 import { type TypedSqlTemplate } from "./sql.js";
 
 export type Migration = {
@@ -21,18 +23,22 @@ export type MigrationStore<TTxContext> = {
    * Bootstrap migration infrastructure tables (migration + lock). Called at the start of every
    * run, before the lock is taken, so it must be idempotent.
    */
-  initialize?: () => Promise<void>;
-  runInTransaction: <T>(fn: (txCtx: TTxContext) => Promise<T>) => Promise<T>;
-  getAppliedMigrationNames: (txCtx: TTxContext | undefined) => Promise<string[]>;
+  initialize?: () => void | Promise<void>;
+  /**
+   * Runs `fn` in a transaction. When every store method returns synchronously, `fn` does too, so
+   * a synchronous transaction can hold it.
+   */
+  runInTransaction: <T>(fn: (txCtx: TTxContext) => T | Promise<T>) => T | Promise<T>;
+  getAppliedMigrationNames: (txCtx: TTxContext | undefined) => string[] | Promise<string[]>;
   executeMigrationStatement: (
     txCtx: TTxContext | undefined,
     statement: TypedSqlTemplate,
-  ) => Promise<void>;
+  ) => void | Promise<void>;
   executeBatchMigrationStatement: (
     txCtx: TTxContext | undefined,
     statement: TypedSqlTemplate,
-  ) => Promise<number>;
-  recordMigration: (txCtx: TTxContext | undefined, name: string) => Promise<void>;
+  ) => number | Promise<number>;
+  recordMigration: (txCtx: TTxContext | undefined, name: string) => void | Promise<void>;
 } & (
   | {
       acquireMigrationLock: (ownerId: string, ttlMs: number) => Promise<boolean>;
@@ -55,11 +61,15 @@ export type MigrationLockOptions = {
   pollIntervalMs?: number;
 };
 
-export type MigrationScript = (assertLockHeld: () => void) => Promise<void>;
+export type MigrationScript = (assertLockHeld: () => void) => void | Promise<void>;
 
-export type Migrator = {
-  migrateToLatest: () => Promise<MigrationResult>;
-  migrateTo: (targetName: string) => Promise<MigrationResult>;
+type MigratorMode = "sync" | "async";
+
+type MigratorResult<TMode extends MigratorMode, T> = TMode extends "sync" ? T : Promise<T>;
+
+export type Migrator<TMode extends MigratorMode = "async"> = {
+  migrateToLatest: () => MigratorResult<TMode, MigrationResult>;
+  migrateTo: (targetName: string) => MigratorResult<TMode, MigrationResult>;
 };
 
 const MIGRATION_NAME_PATTERN = /^\d{3}_[a-z][a-z0-9_]*$/;
@@ -139,20 +149,29 @@ const withMigrationLock = async <TTxContext, T>(
   }
 };
 
-export const createMigrator = <TTxContext>({
+/**
+ * In sync mode every store method and script must return synchronously, and the store must not
+ * take a migration lock: waiting for a lease is inherently asynchronous.
+ */
+export const createMigrator = <TTxContext, TMode extends MigratorMode = "async">({
+  mode = "async" as TMode,
   migrations,
   store,
   lock,
   before,
   after,
 }: {
+  mode?: TMode;
   migrations: Migration[];
   store: MigrationStore<TTxContext>;
   lock?: MigrationLockOptions;
   before?: MigrationScript;
   after?: MigrationScript;
-}): Migrator => {
+}): Migrator<TMode> => {
   validateMigrations(migrations);
+  if (mode === "sync" && store.acquireMigrationLock) {
+    throw new Error("A sync migrator cannot take a migration lock");
+  }
   const knownNames = new Set(migrations.map((m) => m.name));
   const lockOptions: Required<MigrationLockOptions> = {
     ttlMs: lock?.ttlMs ?? 60_000,
@@ -160,69 +179,89 @@ export const createMigrator = <TTxContext>({
     pollIntervalMs: lock?.pollIntervalMs ?? 1_000,
   };
 
-  const runMigration = async (migration: Migration, assertLockHeld: () => void): Promise<void> => {
+  const runMigration = function* (
+    migration: Migration,
+    assertLockHeld: () => void,
+  ): Operation<void> {
     assertLockHeld();
     switch (migration.type) {
       case "transactional":
-        await store.runInTransaction(async (txCtx) => {
-          for (const statement of migration.statements) {
-            await store.executeMigrationStatement(txCtx, statement);
-          }
-          await store.recordMigration(txCtx, migration.name);
-        });
+        yield store.runInTransaction((txCtx) =>
+          runOperation(mode, function* (): Operation<void> {
+            for (const statement of migration.statements) {
+              yield store.executeMigrationStatement(txCtx, statement);
+            }
+            yield store.recordMigration(txCtx, migration.name);
+          }),
+        );
         break;
       case "non-transactional":
         for (const statement of migration.statements) {
           assertLockHeld();
-          await store.executeMigrationStatement(undefined, statement);
+          yield store.executeMigrationStatement(undefined, statement);
         }
-        await store.recordMigration(undefined, migration.name);
+        yield store.recordMigration(undefined, migration.name);
         break;
       case "batched":
         for (const statement of migration.statements) {
           let affected: number;
           do {
             assertLockHeld();
-            affected = await store.executeBatchMigrationStatement(undefined, statement);
+            affected = (yield store.executeBatchMigrationStatement(undefined, statement)) as number;
           } while (affected > 0);
         }
-        await store.recordMigration(undefined, migration.name);
+        yield store.recordMigration(undefined, migration.name);
         break;
     }
   };
 
-  const run = async (selected: Migration[]): Promise<MigrationResult> => {
-    await store.initialize?.();
-    return withMigrationLock(store, lockOptions, async (assertLockHeld) => {
-      if (before) {
-        assertLockHeld();
-        await before(assertLockHeld);
-      }
+  const migrate = function* (
+    selected: Migration[],
+    assertLockHeld: () => void,
+  ): Operation<MigrationResult> {
+    if (before) {
+      assertLockHeld();
+      yield before(assertLockHeld);
+    }
 
-      const previouslyApplied = await store.runInTransaction(store.getAppliedMigrationNames);
-      const previouslyAppliedSet = new Set(previouslyApplied);
+    const previouslyApplied = (yield store.runInTransaction(
+      store.getAppliedMigrationNames,
+    )) as string[];
+    const previouslyAppliedSet = new Set(previouslyApplied);
 
-      const skipped = previouslyApplied.filter((name) => knownNames.has(name));
-      const unrecognized = previouslyApplied.filter((name) => !knownNames.has(name));
-      const pending = selected.filter((m) => !previouslyAppliedSet.has(m.name));
-      const applied: string[] = [];
+    const skipped = previouslyApplied.filter((name) => knownNames.has(name));
+    const unrecognized = previouslyApplied.filter((name) => !knownNames.has(name));
+    const pending = selected.filter((m) => !previouslyAppliedSet.has(m.name));
+    const applied: string[] = [];
 
-      for (const migration of pending) {
-        await runMigration(migration, assertLockHeld);
-        applied.push(migration.name);
-      }
+    for (const migration of pending) {
+      yield* runMigration(migration, assertLockHeld);
+      applied.push(migration.name);
+    }
 
-      if (after) {
-        assertLockHeld();
-        await after(assertLockHeld);
-      }
+    if (after) {
+      assertLockHeld();
+      yield after(assertLockHeld);
+    }
 
-      return { skipped, applied, unrecognized };
-    });
+    return { skipped, applied, unrecognized };
   };
 
+  const run = (selected: Migration[]): MigratorResult<TMode, MigrationResult> =>
+    (mode === "sync"
+      ? runOperation("sync", function* (): Operation<MigrationResult> {
+          yield store.initialize?.();
+          return yield* migrate(selected, () => {});
+        })
+      : (async () => {
+          await store.initialize?.();
+          return withMigrationLock(store, lockOptions, async (assertLockHeld) =>
+            runOperation("async", () => migrate(selected, assertLockHeld)),
+          );
+        })()) as MigratorResult<TMode, MigrationResult>;
+
   return {
-    migrateToLatest: async () => run(migrations),
-    migrateTo: async (targetName) => run(migrations.filter((m) => m.name <= targetName)),
+    migrateToLatest: () => run(migrations),
+    migrateTo: (targetName) => run(migrations.filter((m) => m.name <= targetName)),
   };
 };

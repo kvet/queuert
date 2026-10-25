@@ -1,5 +1,5 @@
 import { type RuntimeType } from "@queuert/typed-sql";
-import { type BaseTxContext } from "queuert";
+import { type BaseTxContext, type StateAdapterMode, type StateResult } from "queuert";
 
 /**
  * SQLite state provider interface.
@@ -8,16 +8,28 @@ import { type BaseTxContext } from "queuert";
  * and SQL execution. Users create their own implementation to integrate with their preferred
  * SQLite client (better-sqlite3, etc.).
  *
+ * A provider for a synchronous driver (better-sqlite3, node:sqlite, bun:sqlite) is a
+ * `SqliteStateProvider<TTxContext, "sync">`, passed to `createSyncSqliteStateAdapter`:
+ * `withTransaction`, `executeSql` and `close` return results directly, and Queuert calls run
+ * inside the driver's native synchronous transaction. A synchronous transaction cannot interleave
+ * with anything else on the thread, so a sync provider needs no lock. Providers for asynchronous
+ * drivers are passed to `createAsyncSqliteStateAdapter`.
+ *
  * @typeParam TTxContext - The transaction context type containing database client/connection info
+ * @typeParam TMode - Whether the provider returns results directly or as promises
  * @experimental
  */
-export type SqliteStateProvider<TTxContext extends BaseTxContext> = {
+export type SqliteStateProvider<
+  TTxContext extends BaseTxContext,
+  TMode extends StateAdapterMode = "async",
+> = {
   /**
    * Executes a callback within a database transaction.
    * Acquires a connection, starts a transaction, executes the callback,
    * commits on success, rolls back on error, and releases the connection.
+   * In sync mode the callback and the transaction are synchronous.
    */
-  withTransaction: <T>(fn: (txCtx: TTxContext) => Promise<T>) => Promise<T>;
+  withTransaction: <T>(fn: (txCtx: TTxContext) => StateResult<TMode, T>) => StateResult<TMode, T>;
 
   /**
    * Whether `txCtx` is inside an open transaction. Must be synchronous and must not query the
@@ -55,11 +67,11 @@ export type SqliteStateProvider<TTxContext extends BaseTxContext> = {
     paramTypes: Record<number, RuntimeType>;
     columnTypes: Record<string, RuntimeType>;
     readOnly: boolean;
-  }) => Promise<unknown[]>;
+  }) => StateResult<TMode, unknown[]>;
 
   /**
    * Releases provider-owned resources. Optional — providers that wrap a
    * caller-owned connection can omit it. When defined, must be idempotent.
    */
-  close?: () => Promise<void>;
+  close?: () => StateResult<TMode, void>;
 };

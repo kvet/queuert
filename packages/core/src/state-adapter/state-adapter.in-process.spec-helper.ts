@@ -6,38 +6,39 @@ import {
   type InProcessStateAdapter,
   createInProcessStateAdapter,
 } from "./state-adapter.in-process.js";
-import { type StateAdapter } from "./state-adapter.js";
+import { type StateAdapter, type StateAdapterMode } from "./state-adapter.js";
 
 export const extendWithStateInProcess = <T>(
   api: TestAPI<T>,
+  { mode = "async" }: { mode?: StateAdapterMode } = {},
 ): TestAPI<
   T & {
-    stateAdapter: StateAdapter<{ $test: true }, string>;
+    stateAdapter: StateAdapter<{ $test: true }, string, any>;
     transactionConcurrency: "concurrent" | "serialized";
-    flakyStateAdapter: StateAdapter<{ $test: true }, string>;
-    flakyDbStateAdapter: StateAdapter<{ $test: true }, string> | undefined;
+    flakyStateAdapter: StateAdapter<{ $test: true }, string, any>;
+    flakyDbStateAdapter: StateAdapter<{ $test: true }, string, any> | undefined;
     poisonTransaction: ((txCtx: { $test: true }) => Promise<void>) | undefined;
     withNonTransactionContext: <T>(fn: (txCtx: { $test: true }) => Promise<T>) => Promise<T>;
     withSavepoint:
-      | (<T>(txCtx: { $test: true }, fn: (txCtx: { $test: true }) => Promise<T>) => Promise<T>)
+      | (<T>(txCtx: { $test: true }, fn: (txCtx: { $test: true }) => T) => T)
       | undefined;
   }
 > => {
   return api.extend<{
-    stateAdapter: InProcessStateAdapter;
+    stateAdapter: InProcessStateAdapter<StateAdapterMode>;
     transactionConcurrency: "concurrent" | "serialized";
-    flakyStateAdapter: InProcessStateAdapter;
-    flakyDbStateAdapter: InProcessStateAdapter | undefined;
+    flakyStateAdapter: InProcessStateAdapter<StateAdapterMode>;
+    flakyDbStateAdapter: InProcessStateAdapter<StateAdapterMode> | undefined;
     poisonTransaction: ((txCtx: { $test: true }) => Promise<void>) | undefined;
     withNonTransactionContext: <T>(fn: (txCtx: { $test: true }) => Promise<T>) => Promise<T>;
     withSavepoint:
-      | (<T>(txCtx: { $test: true }, fn: (txCtx: { $test: true }) => Promise<T>) => Promise<T>)
+      | (<T>(txCtx: { $test: true }, fn: (txCtx: { $test: true }) => T) => T)
       | undefined;
   }>({
     stateAdapter: [
       // oxlint-disable-next-line no-empty-pattern
       async ({}, use) => {
-        await use(await createInProcessStateAdapter());
+        await use(createInProcessStateAdapter<StateAdapterMode>({ mode }));
       },
       { scope: "test" },
     ],
@@ -69,21 +70,24 @@ export const extendWithStateInProcess = <T>(
         // Only inject errors on calls without txCtx.
         // Calls within a transaction must not fail independently — the worker
         // loop retries the entire operation on transient errors.
-        const wrap = <T extends (...args: never[]) => Promise<unknown>>(fn: T): T =>
-          (async (...args: Parameters<T>) => {
+        const wrap = <T extends (...args: never[]) => unknown>(fn: T): T =>
+          ((...args: Parameters<T>) => {
             const params = args[0] as { txCtx?: InProcessContext } | undefined;
-            if (params?.txCtx === undefined) {
+            if (params?.txCtx !== undefined) return fn(...args);
+            if (mode === "sync") {
               maybeThrow();
+              return fn(...args);
             }
-            return fn(...args);
+            return (async () => {
+              maybeThrow();
+              return fn(...args);
+            })();
           }) as unknown as T;
 
-        const flakyStateAdapter: InProcessStateAdapter = {
+        const flakyStateAdapter: InProcessStateAdapter<StateAdapterMode> = {
           config: stateAdapter.config,
-          withTransaction: async (fn) => {
-            maybeThrow();
-            return stateAdapter.withTransaction(fn);
-          },
+          mode: stateAdapter.mode,
+          withTransaction: wrap(stateAdapter.withTransaction),
           isTransaction: stateAdapter.isTransaction,
           getChains: wrap(stateAdapter.getChains),
           getJobs: wrap(stateAdapter.getJobs),

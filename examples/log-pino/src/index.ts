@@ -41,11 +41,11 @@ const jobTypes = defineJobTypes<{
 }>();
 
 // 3. Create adapters and queuert client
-const stateAdapter = await createInProcessStateAdapter();
-const notifyAdapter = await createInProcessNotifyAdapter();
+const stateAdapter = createInProcessStateAdapter();
+const notifyAdapter = createInProcessNotifyAdapter();
 const log = createPinoLog(logger);
 
-const client = await createClient({
+const client = createClient({
   stateAdapter,
   notifyAdapter,
   log,
@@ -70,7 +70,7 @@ const loggerInjectionMiddleware: AttemptMiddleware<any, { log: Logger }> = {
 };
 
 // 5. Create and start the worker with the middleware
-const worker = await createInProcessWorker({
+const worker = createInProcessWorker({
   client,
   processors: createProcessors({
     client,

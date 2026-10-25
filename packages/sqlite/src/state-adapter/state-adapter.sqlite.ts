@@ -1,5 +1,6 @@
 import { type UUID } from "node:crypto";
 
+import { type Operation, runOperation } from "@queuert/helpers";
 import {
   type DataType,
   type InferColumns,
@@ -9,6 +10,7 @@ import {
   type MigrationStore,
   type TemplateApplier,
   type TypedSql,
+  type TypedSqlTemplate,
   createMigrator,
   createTemplateApplier,
   createTemplateCache,
@@ -17,7 +19,12 @@ import {
   sql,
   t,
 } from "@queuert/typed-sql";
-import { type BaseTxContext, type StateAdapter } from "queuert";
+import {
+  type BaseTxContext,
+  type StateAdapter,
+  type StateAdapterMode,
+  type StateResult,
+} from "queuert";
 import {
   type StateBlockedJob,
   type StateChain,
@@ -257,15 +264,10 @@ ON {{table_prefix}}job_blocker (blocked_by_chain_id)`),
   },
 ];
 
-/** @internal */
-export const createMigrationStore = <TTxContext extends BaseTxContext>(
-  stateProvider: SqliteStateProvider<TTxContext>,
-  applyTemplate: TemplateApplier,
-): MigrationStore<TTxContext> => {
-  const exec = async <
-    TParams extends readonly DataType[],
-    TColumns extends Record<string, DataType>,
-  >({
+const createTypedSqlExecutor = <TTxContext extends BaseTxContext>(
+  stateProvider: SqliteStateProvider<TTxContext, StateAdapterMode>,
+) =>
+  function* <TParams extends readonly DataType[], TColumns extends Record<string, DataType>>({
     txCtx,
     sql: typedSql,
     params,
@@ -274,8 +276,8 @@ export const createMigrationStore = <TTxContext extends BaseTxContext>(
     sql: TypedSql<TParams, TColumns>;
   } & (TParams extends readonly []
     ? { params?: undefined }
-    : { params: [...InferParams<TParams>] })): Promise<InferColumns<TColumns>[]> =>
-    stateProvider.executeSql({
+    : { params: [...InferParams<TParams>] })): Operation<InferColumns<TColumns>[]> {
+    return (yield stateProvider.executeSql({
       txCtx,
       id: typedSql.id,
       sql: typedSql.sql,
@@ -283,7 +285,17 @@ export const createMigrationStore = <TTxContext extends BaseTxContext>(
       paramTypes: extractParamTypes(typedSql.params),
       columnTypes: extractColumnTypes(typedSql.columns),
       readOnly: typedSql.readOnly,
-    }) as Promise<InferColumns<TColumns>[]>;
+    })) as InferColumns<TColumns>[];
+  };
+
+/** @internal */
+export const createMigrationStore = <TTxContext extends BaseTxContext>(
+  stateProvider: SqliteStateProvider<TTxContext, StateAdapterMode>,
+  mode: StateAdapterMode,
+  applyTemplate: TemplateApplier,
+): MigrationStore<TTxContext> => {
+  const run = <T>(operation: () => Operation<T>): T | Promise<T> => runOperation(mode, operation);
+  const exec = createTypedSqlExecutor(stateProvider);
 
   const createMigrationTableSql = applyTemplate(
     sql(
@@ -314,34 +326,46 @@ CREATE TABLE IF NOT EXISTS {{table_prefix}}migration (
     ),
   );
 
-  return {
-    initialize: async () => {
-      await exec({ sql: createMigrationTableSql });
-    },
+  const store = {
+    initialize: (): void | Promise<void> =>
+      run(function* () {
+        yield* exec({ sql: createMigrationTableSql });
+      }),
     runInTransaction: stateProvider.withTransaction,
-    getAppliedMigrationNames: async (txCtx) => {
-      const applied = await exec({ txCtx, sql: getAppliedMigrationsSql });
-      return applied.map((m) => m.name);
-    },
-    executeMigrationStatement: async (txCtx, statement) => {
-      await exec({ txCtx, sql: applyTemplate(statement) as TypedSql<readonly []> });
-    },
-    executeBatchMigrationStatement: async (txCtx, statement) => {
-      const applied = applyTemplate(statement);
-      const wrapped = applyTemplate(
-        sql(/* sql */ `${applied.sql} RETURNING 1 AS affected`, {
-          id: applied.id != null ? `batch:${applied.id}` : undefined,
-          params: [],
-          columns: { affected: t.number() },
-        }),
-      );
-      const rows = await exec({ txCtx, sql: wrapped });
-      return rows.length;
-    },
-    recordMigration: async (txCtx, name) => {
-      await exec({ txCtx, sql: recordMigrationSql, params: [name] });
-    },
+    getAppliedMigrationNames: (txCtx: TTxContext | undefined): string[] | Promise<string[]> =>
+      run(function* () {
+        const applied = yield* exec({ txCtx, sql: getAppliedMigrationsSql });
+        return applied.map((m) => m.name);
+      }),
+    executeMigrationStatement: (
+      txCtx: TTxContext | undefined,
+      statement: TypedSqlTemplate,
+    ): void | Promise<void> =>
+      run(function* () {
+        yield* exec({ txCtx, sql: applyTemplate(statement) as TypedSql<readonly []> });
+      }),
+    executeBatchMigrationStatement: (
+      txCtx: TTxContext | undefined,
+      statement: TypedSqlTemplate,
+    ): number | Promise<number> =>
+      run(function* () {
+        const applied = applyTemplate(statement);
+        const wrapped = applyTemplate(
+          sql(/* sql */ `${applied.sql} RETURNING 1 AS affected`, {
+            id: applied.id != null ? `batch:${applied.id}` : undefined,
+            params: [],
+            columns: { affected: t.number() },
+          }),
+        );
+        const rows = yield* exec({ txCtx, sql: wrapped });
+        return rows.length;
+      }),
+    recordMigration: (txCtx: TTxContext | undefined, name: string): void | Promise<void> =>
+      run(function* () {
+        yield* exec({ txCtx, sql: recordMigrationSql, params: [name] });
+      }),
   };
+  return store;
 };
 
 const SQL_IDENTIFIER_PATTERN = /^[a-zA-Z_][a-zA-Z0-9_]*$/;
@@ -487,27 +511,14 @@ const mapDbChainRowToStateChain = (row: DbChainRow): StateChain => {
   };
 };
 
-/**
- * Create a state adapter backed by SQLite. Returns the adapter with a `migrateToLatest()` method for schema migrations.
- *
- * @param options - SQLite state adapter configuration.
- * @throws Error if `tablePrefix` or `idType` is not a valid SQL identifier.
- * @experimental
- */
-export const createSqliteStateAdapter = async <
+/** Options shared by {@link createSyncSqliteStateAdapter} and {@link createAsyncSqliteStateAdapter}. */
+export type SqliteStateAdapterOptions<
   TTxContext extends BaseTxContext,
-  TIdType extends string = UUID,
->({
-  stateProvider,
-  tablePrefix = "queuert_",
-  idType = "TEXT",
-  generateId: generateIdOption = () => crypto.randomUUID() as TIdType,
-  validateId: validateIdOption,
-  maxBlockersPerJob: maxBlockersPerJobOption,
-  countCap: countCapOption,
-}: {
+  TIdType extends string,
+  TMode extends StateAdapterMode,
+> = {
   /** SQLite state provider wrapping the database connection. */
-  stateProvider: SqliteStateProvider<TTxContext>;
+  stateProvider: SqliteStateProvider<TTxContext, TMode>;
   /** Prefix for all table names. @defaultValue `"queuert_"` */
   tablePrefix?: string;
   /** SQL type for the primary key column. @defaultValue `"TEXT"` */
@@ -538,14 +549,24 @@ export const createSqliteStateAdapter = async <
    * @defaultValue `10_000`
    */
   countCap?: number;
-}): Promise<
-  StateAdapter<TTxContext, TIdType> & {
-    /** Create or upgrade the schema. */
-    migrateToLatest: () => Promise<MigrationResult>;
-    /** Delete all job and blocker rows. Intended for tests. */
-    truncate: () => Promise<void>;
-  }
-> => {
+};
+
+const buildSqliteStateAdapter = <
+  TTxContext extends BaseTxContext,
+  TIdType extends string,
+  TMode extends StateAdapterMode,
+>(
+  mode: TMode,
+  {
+    stateProvider,
+    tablePrefix = "queuert_",
+    idType = "TEXT",
+    generateId: generateIdOption = () => crypto.randomUUID() as TIdType,
+    validateId: validateIdOption,
+    maxBlockersPerJob: maxBlockersPerJobOption,
+    countCap: countCapOption,
+  }: SqliteStateAdapterOptions<TTxContext, TIdType, TMode>,
+): SqliteStateAdapter<TTxContext, TIdType, TMode> => {
   validateSqlIdentifier(tablePrefix, "tablePrefix");
   validateSqlIdentifier(idType, "idType");
 
@@ -633,38 +654,24 @@ export const createSqliteStateAdapter = async <
     tail_trace_context: t["string?"](),
   } as const;
 
-  const executeTypedSql = async <
-    TParams extends readonly DataType[],
-    TColumns extends Record<string, DataType>,
-  >({
-    txCtx,
-    sql: typedSql,
-    params,
-  }: {
-    txCtx?: TTxContext;
-    sql: TypedSql<TParams, TColumns>;
-  } & (TParams extends readonly []
-    ? { params?: undefined }
-    : { params: [...InferParams<TParams>] })): Promise<InferColumns<TColumns>[]> => {
-    return stateProvider.executeSql({
-      txCtx,
-      id: typedSql.id,
-      sql: typedSql.sql,
-      params: params ?? [],
-      paramTypes: extractParamTypes(typedSql.params),
-      columnTypes: extractColumnTypes(typedSql.columns),
-      readOnly: typedSql.readOnly,
-    }) as Promise<InferColumns<TColumns>[]>;
-  };
+  const run = <T>(operation: () => Operation<T>) =>
+    runOperation(mode, operation) as StateResult<TMode, T>;
+  const executeTypedSql = createTypedSqlExecutor(stateProvider);
 
   return {
     config,
+    mode,
 
-    withTransaction: stateProvider.withTransaction,
+    withTransaction: (fn) =>
+      stateProvider.withTransaction((txCtx) =>
+        run(function* () {
+          return yield fn(txCtx);
+        }),
+      ) as never,
 
     isTransaction: stateProvider.isTransaction,
 
-    getChains: async ({
+    getChains: ({
       txCtx,
       chainIds,
       lock,
@@ -672,38 +679,39 @@ export const createSqliteStateAdapter = async <
       txCtx?: TTxContext;
       chainIds: TIdType[];
       lock?: "exclusive";
-    }) => {
-      if (chainIds.length === 0) return [];
-      const idsJson = JSON.stringify(chainIds);
-      if (lock === "exclusive" && txCtx) {
-        await executeTypedSql({
-          txCtx,
-          sql: templateCache.getOrCompute("lockChainHeads", () =>
-            applyTemplate(
-              sql(
-                `
+    }) =>
+      run(function* () {
+        if (chainIds.length === 0) return [];
+        const idsJson = JSON.stringify(chainIds);
+        if (lock === "exclusive" && txCtx) {
+          yield* executeTypedSql({
+            txCtx,
+            sql: templateCache.getOrCompute("lockChainHeads", () =>
+              applyTemplate(
+                sql(
+                  `
 UPDATE {{table_prefix}}job
 SET attempt = attempt
 WHERE id IN (SELECT value FROM json_each(?))
   AND chain_index = 0
 `,
-                {
-                  id: "lockChainHeads",
-                  params: [t.string()],
-                  columns: {},
-                },
+                  {
+                    id: "lockChainHeads",
+                    params: [t.string()],
+                    columns: {},
+                  },
+                ),
               ),
             ),
-          ),
-          params: [idsJson],
-        });
-      }
-      const rows = await executeTypedSql({
-        txCtx,
-        sql: templateCache.getOrCompute("getChains", () =>
-          applyTemplate(
-            sql(
-              `
+            params: [idsJson],
+          });
+        }
+        const rows = yield* executeTypedSql({
+          txCtx,
+          sql: templateCache.getOrCompute("getChains", () =>
+            applyTemplate(
+              sql(
+                `
 SELECT
   {{job_columns:head_job}},
   {{job_columns_prefixed:tail_job:tail_}}
@@ -712,25 +720,25 @@ WHERE head_job.id IN (SELECT value FROM json_each(?))
   AND head_job.chain_index = 0
 ORDER BY head_job.id
 `,
-              {
-                id: "getChains",
-                params: [t.string()],
-                columns: { ...dbChainRowColumns },
-                readOnly: true,
-              },
+                {
+                  id: "getChains",
+                  params: [t.string()],
+                  columns: { ...dbChainRowColumns },
+                  readOnly: true,
+                },
+              ),
             ),
           ),
-        ),
-        params: [idsJson],
-      });
-      const byId = new Map(rows.map((row) => [row.id, row]));
-      return chainIds.map((chainId) => {
-        const row = byId.get(chainId);
-        return row ? mapDbChainRowToStateChain(row) : undefined;
-      });
-    },
+          params: [idsJson],
+        });
+        const byId = new Map(rows.map((row) => [row.id, row]));
+        return chainIds.map((chainId) => {
+          const row = byId.get(chainId);
+          return row ? mapDbChainRowToStateChain(row) : undefined;
+        });
+      }),
 
-    getJobs: async ({
+    getJobs: ({
       txCtx,
       jobIds,
       lock,
@@ -738,16 +746,17 @@ ORDER BY head_job.id
       txCtx?: TTxContext;
       jobIds: TIdType[];
       lock?: "exclusive";
-    }) => {
-      if (jobIds.length === 0) return [];
-      const idsJson = JSON.stringify(jobIds);
-      if (lock === "exclusive" && txCtx) {
-        await executeTypedSql({
-          txCtx,
-          sql: templateCache.getOrCompute("lockJobs", () =>
-            applyTemplate(
-              sql(
-                `
+    }) =>
+      run(function* () {
+        if (jobIds.length === 0) return [];
+        const idsJson = JSON.stringify(jobIds);
+        if (lock === "exclusive" && txCtx) {
+          yield* executeTypedSql({
+            txCtx,
+            sql: templateCache.getOrCompute("lockJobs", () =>
+              applyTemplate(
+                sql(
+                  `
 UPDATE {{table_prefix}}job
 SET attempt = attempt
 WHERE id IN (
@@ -756,79 +765,80 @@ WHERE id IN (
   SELECT chain_id FROM {{table_prefix}}job WHERE id IN (SELECT value FROM json_each(?))
 )
 `,
-                {
-                  id: "lockJobs",
-                  params: [t.string(), t.string()],
-                  columns: {},
-                },
+                  {
+                    id: "lockJobs",
+                    params: [t.string(), t.string()],
+                    columns: {},
+                  },
+                ),
               ),
             ),
-          ),
-          params: [idsJson, idsJson],
-        });
-      }
-      const rows = await executeTypedSql({
-        txCtx,
-        sql: templateCache.getOrCompute("getJobs", () =>
-          applyTemplate(
-            sql(
-              `
+            params: [idsJson, idsJson],
+          });
+        }
+        const rows = yield* executeTypedSql({
+          txCtx,
+          sql: templateCache.getOrCompute("getJobs", () =>
+            applyTemplate(
+              sql(
+                `
 SELECT {{job_columns:j}}, {{chain_columns:h}}
 FROM {{table_prefix}}job j
 JOIN {{table_prefix}}job h ON h.id = j.chain_id
 WHERE j.id IN (SELECT value FROM json_each(?))
 `,
-              {
-                id: "getJobs",
-                params: [t.string()],
-                columns: { ...dbJobColumns, ...dbChainColumns },
-                readOnly: true,
-              },
+                {
+                  id: "getJobs",
+                  params: [t.string()],
+                  columns: { ...dbJobColumns, ...dbChainColumns },
+                  readOnly: true,
+                },
+              ),
             ),
           ),
-        ),
-        params: [idsJson],
-      });
-      const byId = new Map(rows.map((r) => [r.id, r]));
-      return jobIds.map((jobId) => {
-        const row = byId.get(jobId);
-        return row ? mapDbJobRowToStateJob(row) : undefined;
-      });
-    },
+          params: [idsJson],
+        });
+        const byId = new Map(rows.map((r) => [r.id, r]));
+        return jobIds.map((jobId) => {
+          const row = byId.get(jobId);
+          return row ? mapDbJobRowToStateJob(row) : undefined;
+        });
+      }),
 
-    createJobs: async ({ txCtx, jobs }) => {
-      const results: (StateChain & { deduplicated: boolean })[] = Array.from({
-        length: jobs.length,
-      });
-      const toInsert: {
-        index: number;
-        id: string;
-        json: Record<string, unknown>;
-      }[] = [];
-      const firstIndexByBatchKey = new Map<string, number>();
-      const deferredDuplicates: { index: number; firstIndex: number }[] = [];
+    createJobs: ({ txCtx, jobs }) =>
+      run(function* () {
+        const results: (StateChain & { deduplicated: boolean })[] = Array.from({
+          length: jobs.length,
+        });
+        const toInsert: {
+          index: number;
+          id: string;
+          json: Record<string, unknown>;
+        }[] = [];
+        const firstIndexByBatchKey = new Map<string, number>();
+        const deferredDuplicates: { index: number; firstIndex: number }[] = [];
 
-      for (let i = 0; i < jobs.length; i++) {
-        const job = jobs[i];
-        const { typeName, id: newId, input, schedule, chainTraceContext, traceContext } = job;
+        for (let i = 0; i < jobs.length; i++) {
+          const job = jobs[i];
+          const { typeName, id: newId, input, schedule, chainTraceContext, traceContext } = job;
 
-        if (job.deduplication?.key) {
-          const deduplicationKey = job.deduplication.key;
-          const deduplicationScope = job.deduplication.scope;
+          if (job.deduplication?.key) {
+            const deduplicationKey = job.deduplication.key;
+            const deduplicationScope = job.deduplication.scope;
 
-          const batchKey = `${deduplicationKey}\0${job.typeName}`;
-          const firstIndex = firstIndexByBatchKey.get(batchKey);
-          if (firstIndex !== undefined) {
-            deferredDuplicates.push({ index: i, firstIndex });
-            continue;
-          }
+            const batchKey = `${deduplicationKey}\0${job.typeName}`;
+            const firstIndex = firstIndexByBatchKey.get(batchKey);
+            if (firstIndex !== undefined) {
+              deferredDuplicates.push({ index: i, firstIndex });
+              continue;
+            }
 
-          const [existingDeduplicated] = await executeTypedSql({
-            txCtx,
-            sql: templateCache.getOrCompute("findDeduplicatedJob", () =>
-              applyTemplate(
-                sql(
-                  `
+            const [existingDeduplicated] = yield* executeTypedSql({
+              txCtx,
+              sql: templateCache.getOrCompute("findDeduplicatedJob", () =>
+                applyTemplate(
+                  sql(
+                    `
 SELECT *
 FROM {{table_prefix}}job INDEXED BY {{table_prefix}}chain_deduplication_idx
 WHERE ? IS NOT NULL
@@ -842,66 +852,66 @@ WHERE ? IS NOT NULL
 ORDER BY created_at DESC
 LIMIT 1
 `,
-                  {
-                    id: "findDeduplicatedJob",
-                    params: [
-                      t["string?"](),
-                      t["string?"](),
-                      t.string(),
-                      t["string?"](),
-                      t["string?"](),
-                    ],
-                    columns: { ...dbJobColumns },
-                    readOnly: true,
-                  },
+                    {
+                      id: "findDeduplicatedJob",
+                      params: [
+                        t["string?"](),
+                        t["string?"](),
+                        t.string(),
+                        t["string?"](),
+                        t["string?"](),
+                      ],
+                      columns: { ...dbJobColumns },
+                      readOnly: true,
+                    },
+                  ),
                 ),
               ),
-            ),
-            params: [
-              deduplicationKey,
-              deduplicationKey,
-              job.typeName,
-              deduplicationScope,
-              deduplicationScope,
-            ],
-          });
+              params: [
+                deduplicationKey,
+                deduplicationKey,
+                job.typeName,
+                deduplicationScope,
+                deduplicationScope,
+              ],
+            });
 
-          if (existingDeduplicated) {
-            results[i] = {
-              ...mapDbHeadToStateChain(existingDeduplicated),
-              head: mapDbJobToStateJob(existingDeduplicated),
-              tail: undefined,
-              deduplicated: true,
-            };
-            continue;
+            if (existingDeduplicated) {
+              results[i] = {
+                ...mapDbHeadToStateChain(existingDeduplicated),
+                head: mapDbJobToStateJob(existingDeduplicated),
+                tail: undefined,
+                deduplicated: true,
+              };
+              continue;
+            }
+
+            firstIndexByBatchKey.set(batchKey, i);
           }
 
-          firstIndexByBatchKey.set(batchKey, i);
+          toInsert.push({
+            index: i,
+            id: newId,
+            json: {
+              id: newId,
+              type_name: typeName,
+              input: input !== undefined ? JSON.stringify(input) : null,
+              chain_deduplication_key: job.deduplication?.key ?? null,
+              scheduled_at: schedule?.at?.toISOString().replace("T", " ").replace("Z", "") ?? null,
+              schedule_after_ms: schedule?.afterMs ?? null,
+              chain_trace_context: chainTraceContext ?? null,
+              trace_context: traceContext ?? null,
+            },
+          });
         }
 
-        toInsert.push({
-          index: i,
-          id: newId,
-          json: {
-            id: newId,
-            type_name: typeName,
-            input: input !== undefined ? JSON.stringify(input) : null,
-            chain_deduplication_key: job.deduplication?.key ?? null,
-            scheduled_at: schedule?.at?.toISOString().replace("T", " ").replace("Z", "") ?? null,
-            schedule_after_ms: schedule?.afterMs ?? null,
-            chain_trace_context: chainTraceContext ?? null,
-            trace_context: traceContext ?? null,
-          },
-        });
-      }
-
-      if (toInsert.length > 0) {
-        const insertedRows = await executeTypedSql({
-          txCtx,
-          sql: templateCache.getOrCompute("insertChains", () =>
-            applyTemplate(
-              sql(
-                `
+        if (toInsert.length > 0) {
+          const insertedRows = yield* executeTypedSql({
+            txCtx,
+            sql: templateCache.getOrCompute("insertChains", () =>
+              applyTemplate(
+                sql(
+                  `
 WITH input_data AS (
   SELECT
     je.key                                              AS ord,
@@ -941,57 +951,58 @@ FROM input_data d
 ORDER BY d.ord
 RETURNING *
 `,
-                {
-                  id: "insertChains",
-                  params: [t.string()],
-                  columns: { ...dbJobColumns },
-                },
+                  {
+                    id: "insertChains",
+                    params: [t.string()],
+                    columns: { ...dbJobColumns },
+                  },
+                ),
               ),
             ),
-          ),
-          params: [JSON.stringify(toInsert.map((item) => item.json))],
-        });
+            params: [JSON.stringify(toInsert.map((item) => item.json))],
+          });
 
-        for (let j = 0; j < toInsert.length; j++) {
-          const row = insertedRows[j];
-          results[toInsert[j].index] = {
-            ...mapDbHeadToStateChain(row),
-            head: mapDbJobToStateJob(row),
-            tail: undefined,
-            deduplicated: false,
-          };
+          for (let j = 0; j < toInsert.length; j++) {
+            const row = insertedRows[j];
+            results[toInsert[j].index] = {
+              ...mapDbHeadToStateChain(row),
+              head: mapDbJobToStateJob(row),
+              tail: undefined,
+              deduplicated: false,
+            };
+          }
         }
-      }
 
-      for (const { index, firstIndex } of deferredDuplicates) {
-        results[index] = { ...results[firstIndex], deduplicated: true };
-      }
+        for (const { index, firstIndex } of deferredDuplicates) {
+          results[index] = { ...results[firstIndex], deduplicated: true };
+        }
 
-      return results;
-    },
+        return results;
+      }),
 
-    continueJobs: async ({ txCtx, jobs }) => {
-      if (jobs.length === 0) return [];
+    continueJobs: ({ txCtx, jobs }) =>
+      run(function* () {
+        if (jobs.length === 0) return [];
 
-      const entries = jobs.map((job) => ({
-        new_id: job.id,
-        type_name: job.typeName,
-        input: job.input !== undefined ? JSON.stringify(job.input) : null,
-        scheduled_at: job.schedule?.at?.toISOString().replace("T", " ").replace("Z", "") ?? null,
-        schedule_after_ms: job.schedule?.afterMs ?? null,
-        trace_context: job.traceContext ?? null,
-        continue_from_id: job.continueFromId as string,
-        fence_attempt: job.fence?.attempt ?? null,
-        fence_worker_id: job.fence?.workerId ?? null,
-      }));
-      const payload = JSON.stringify(entries);
+        const entries = jobs.map((job) => ({
+          new_id: job.id,
+          type_name: job.typeName,
+          input: job.input !== undefined ? JSON.stringify(job.input) : null,
+          scheduled_at: job.schedule?.at?.toISOString().replace("T", " ").replace("Z", "") ?? null,
+          schedule_after_ms: job.schedule?.afterMs ?? null,
+          trace_context: job.traceContext ?? null,
+          continue_from_id: job.continueFromId as string,
+          fence_attempt: job.fence?.attempt ?? null,
+          fence_worker_id: job.fence?.workerId ?? null,
+        }));
+        const payload = JSON.stringify(entries);
 
-      const insertedRows = await executeTypedSql({
-        txCtx,
-        sql: templateCache.getOrCompute("insertContinuations", () =>
-          applyTemplate(
-            sql(
-              `
+        const insertedRows = yield* executeTypedSql({
+          txCtx,
+          sql: templateCache.getOrCompute("insertContinuations", () =>
+            applyTemplate(
+              sql(
+                `
 WITH input_data AS (
   SELECT
     je.key                                              AS ord,
@@ -1032,23 +1043,23 @@ WHERE d.fence_attempt IS NULL
 ORDER BY d.ord
 RETURNING *
 `,
-              {
-                id: "insertContinuations",
-                params: [t.string()],
-                columns: { ...dbJobColumns },
-              },
+                {
+                  id: "insertContinuations",
+                  params: [t.string()],
+                  columns: { ...dbJobColumns },
+                },
+              ),
             ),
           ),
-        ),
-        params: [payload],
-      });
+          params: [payload],
+        });
 
-      const completedRows = await executeTypedSql({
-        txCtx,
-        sql: templateCache.getOrCompute("completeContinuedJobs", () =>
-          applyTemplate(
-            sql(
-              `
+        const completedRows = yield* executeTypedSql({
+          txCtx,
+          sql: templateCache.getOrCompute("completeContinuedJobs", () =>
+            applyTemplate(
+              sql(
+                `
 WITH input_data AS (
   SELECT
     json_extract(je.value, '$.new_id')           AS new_id,
@@ -1081,47 +1092,48 @@ WHERE {{table_prefix}}job.id = d.continue_from_id
   )
 RETURNING *, ${chainColumnsReturning("{{table_prefix}}job")}
 `,
-              {
-                id: "completeContinuedJobs",
-                params: [t.string()],
-                columns: { ...dbJobColumns, ...dbChainColumns },
-              },
+                {
+                  id: "completeContinuedJobs",
+                  params: [t.string()],
+                  columns: { ...dbJobColumns, ...dbChainColumns },
+                },
+              ),
             ),
           ),
-        ),
-        params: [payload],
-      });
+          params: [payload],
+        });
 
-      const insertedById = new Map(insertedRows.map((row) => [row.id, row]));
-      const completedById = new Map(completedRows.map((row) => [row.id, row]));
+        const insertedById = new Map(insertedRows.map((row) => [row.id, row]));
+        const completedById = new Map(completedRows.map((row) => [row.id, row]));
 
-      return entries.map((entry) => {
-        const completedRow = completedById.get(entry.continue_from_id);
-        if (!completedRow) return undefined;
-        return {
-          ...mapDbJobRowToStateJob(completedRow),
-          continuation: mapDbJobToStateJob(insertedById.get(entry.new_id)!),
-        };
-      });
-    },
+        return entries.map((entry) => {
+          const completedRow = completedById.get(entry.continue_from_id);
+          if (!completedRow) return undefined;
+          return {
+            ...mapDbJobRowToStateJob(completedRow),
+            continuation: mapDbJobToStateJob(insertedById.get(entry.new_id)!),
+          };
+        });
+      }),
 
-    completeJobs: async ({ txCtx, jobs }) => {
-      if (jobs.length === 0) return [];
+    completeJobs: ({ txCtx, jobs }) =>
+      run(function* () {
+        if (jobs.length === 0) return [];
 
-      const entries = jobs.map((job) => ({
-        job_id: job.jobId as string,
-        output: job.output !== undefined ? JSON.stringify(job.output) : null,
-        fence_attempt: job.fence?.attempt ?? null,
-        fence_worker_id: job.fence?.workerId ?? null,
-      }));
-      const payload = JSON.stringify(entries);
+        const entries = jobs.map((job) => ({
+          job_id: job.jobId as string,
+          output: job.output !== undefined ? JSON.stringify(job.output) : null,
+          fence_attempt: job.fence?.attempt ?? null,
+          fence_worker_id: job.fence?.workerId ?? null,
+        }));
+        const payload = JSON.stringify(entries);
 
-      const rows = await executeTypedSql({
-        txCtx,
-        sql: templateCache.getOrCompute("completeJobs", () =>
-          applyTemplate(
-            sql(
-              `
+        const rows = yield* executeTypedSql({
+          txCtx,
+          sql: templateCache.getOrCompute("completeJobs", () =>
+            applyTemplate(
+              sql(
+                `
 WITH input_data AS (
   SELECT
     json_extract(je.value, '$.job_id')          AS job_id,
@@ -1166,46 +1178,47 @@ FROM row_effects e
 WHERE {{table_prefix}}job.id = e.id
 RETURNING *
 `,
-              {
-                id: "completeJobs",
-                params: [t.string()],
-                columns: { ...dbJobColumns },
-              },
+                {
+                  id: "completeJobs",
+                  params: [t.string()],
+                  columns: { ...dbJobColumns },
+                },
+              ),
             ),
           ),
-        ),
-        params: [payload],
-      });
+          params: [payload],
+        });
 
-      const rowById = new Map(rows.map((row) => [row.id, row]));
+        const rowById = new Map(rows.map((row) => [row.id, row]));
 
-      return jobs.map((job) => {
-        const row = rowById.get(job.jobId);
-        if (!row) return undefined;
-        return {
-          ...mapDbJobToStateJob(row),
-          chain: mapDbHeadToStateChain(rowById.get(row.chain_id)!),
-        };
-      });
-    },
+        return jobs.map((job) => {
+          const row = rowById.get(job.jobId);
+          if (!row) return undefined;
+          return {
+            ...mapDbJobToStateJob(row),
+            chain: mapDbHeadToStateChain(rowById.get(row.chain_id)!),
+          };
+        });
+      }),
 
-    rescheduleJobs: async ({ txCtx, jobs }) => {
-      if (jobs.length === 0) return [];
-      const entries = jobs.map((job) => ({
-        job_id: job.jobId as string,
-        at: job.schedule?.at?.toISOString().replace("T", " ").replace("Z", "") ?? null,
-        after_ms: job.schedule?.afterMs ?? null,
-        error: job.error !== undefined ? JSON.stringify(job.error) : null,
-        fence_attempt: job.fence?.attempt ?? null,
-        fence_worker_id: job.fence?.workerId ?? null,
-      }));
-      const payload = JSON.stringify(entries);
-      const rows = await executeTypedSql({
-        txCtx,
-        sql: templateCache.getOrCompute("rescheduleJobs", () =>
-          applyTemplate(
-            sql(
-              `
+    rescheduleJobs: ({ txCtx, jobs }) =>
+      run(function* () {
+        if (jobs.length === 0) return [];
+        const entries = jobs.map((job) => ({
+          job_id: job.jobId as string,
+          at: job.schedule?.at?.toISOString().replace("T", " ").replace("Z", "") ?? null,
+          after_ms: job.schedule?.afterMs ?? null,
+          error: job.error !== undefined ? JSON.stringify(job.error) : null,
+          fence_attempt: job.fence?.attempt ?? null,
+          fence_worker_id: job.fence?.workerId ?? null,
+        }));
+        const payload = JSON.stringify(entries);
+        const rows = yield* executeTypedSql({
+          txCtx,
+          sql: templateCache.getOrCompute("rescheduleJobs", () =>
+            applyTemplate(
+              sql(
+                `
 WITH input_data AS (
   SELECT
     json_extract(je.value, '$.job_id')  AS job_id,
@@ -1241,34 +1254,35 @@ WHERE {{table_prefix}}job.id = d.job_id
   )
 RETURNING *, ${chainColumnsReturning("{{table_prefix}}job")}
 `,
-              {
-                id: "rescheduleJobs",
-                params: [t.string()],
-                columns: { ...dbJobColumns, ...dbChainColumns },
-              },
+                {
+                  id: "rescheduleJobs",
+                  params: [t.string()],
+                  columns: { ...dbJobColumns, ...dbChainColumns },
+                },
+              ),
             ),
           ),
-        ),
-        params: [payload],
-      });
-      const rowById = new Map(rows.map((row) => [row.id, row]));
-      return jobs.map((job) => {
-        const row = rowById.get(job.jobId);
-        return row ? mapDbJobRowToStateJob(row) : undefined;
-      });
-    },
+          params: [payload],
+        });
+        const rowById = new Map(rows.map((row) => [row.id, row]));
+        return jobs.map((job) => {
+          const row = rowById.get(job.jobId);
+          return row ? mapDbJobRowToStateJob(row) : undefined;
+        });
+      }),
 
-    deleteChains: async ({ txCtx, chainIds }) => {
-      if (chainIds.length === 0) return [];
+    deleteChains: ({ txCtx, chainIds }) =>
+      run(function* () {
+        if (chainIds.length === 0) return [];
 
-      const chainIdsJson = JSON.stringify(chainIds);
+        const chainIdsJson = JSON.stringify(chainIds);
 
-      const chainRows = await executeTypedSql({
-        txCtx,
-        sql: templateCache.getOrCompute("getChainsByChainIds", () =>
-          applyTemplate(
-            sql(
-              `
+        const chainRows = yield* executeTypedSql({
+          txCtx,
+          sql: templateCache.getOrCompute("getChainsByChainIds", () =>
+            applyTemplate(
+              sql(
+                `
 SELECT
   {{job_columns:head_job}},
   {{job_columns_prefixed:tail_job:tail_}}
@@ -1276,25 +1290,25 @@ FROM {{table_prefix}}job AS head_job${tailJoin("head_job")}
 WHERE head_job.id IN (SELECT value FROM json_each(?))
   AND head_job.chain_index = 0
 `,
-              {
-                id: "getChainsByChainIds",
-                params: [t.string()],
-                columns: { ...dbChainRowColumns },
-                readOnly: true,
-              },
+                {
+                  id: "getChainsByChainIds",
+                  params: [t.string()],
+                  columns: { ...dbChainRowColumns },
+                  readOnly: true,
+                },
+              ),
             ),
           ),
-        ),
-        params: [chainIdsJson],
-      });
-      const chainRowById = new Map(chainRows.map((row) => [row.id, row]));
+          params: [chainIdsJson],
+        });
+        const chainRowById = new Map(chainRows.map((row) => [row.id, row]));
 
-      const blockerRefRows = await executeTypedSql({
-        txCtx,
-        sql: templateCache.getOrCompute("getExternalBlockerDetails", () =>
-          applyTemplate(
-            sql(
-              `
+        const blockerRefRows = yield* executeTypedSql({
+          txCtx,
+          sql: templateCache.getOrCompute("getExternalBlockerDetails", () =>
+            applyTemplate(
+              sql(
+                `
 SELECT
   jb.job_id AS blocker_job_id,
   jb.blocked_by_chain_id AS blocker_chain_id,
@@ -1306,51 +1320,51 @@ JOIN {{table_prefix}}job j ON j.id = jb.job_id
 WHERE jb.blocked_by_chain_id IN (SELECT value FROM json_each(?))
   AND j.chain_id NOT IN (SELECT value FROM json_each(?))
 `,
-              {
-                id: "getExternalBlockerDetails",
-                params: [t.string(), t.string()],
-                columns: {
-                  blocker_job_id: idDataType,
-                  blocker_chain_id: idDataType,
-                  blocker_index: t.number(),
-                  blocker_trace_context: t["string?"](),
-                  ...dbJobColumns,
+                {
+                  id: "getExternalBlockerDetails",
+                  params: [t.string(), t.string()],
+                  columns: {
+                    blocker_job_id: idDataType,
+                    blocker_chain_id: idDataType,
+                    blocker_index: t.number(),
+                    blocker_trace_context: t["string?"](),
+                    ...dbJobColumns,
+                  },
+                  readOnly: true,
                 },
-                readOnly: true,
-              },
+              ),
             ),
           ),
-        ),
-        params: [chainIdsJson, chainIdsJson],
-      });
+          params: [chainIdsJson, chainIdsJson],
+        });
 
-      const blockersByChain = new Map<string, StateBlockedJob[]>();
-      for (const ref of blockerRefRows) {
-        const blockedJob: StateBlockedJob = {
-          jobId: ref.blocker_job_id,
-          blockedByChainId: ref.blocker_chain_id,
-          index: ref.blocker_index,
-          traceContext: ref.blocker_trace_context,
-          job: mapDbJobToStateJob(ref),
-        };
-        const existing = blockersByChain.get(ref.blocker_chain_id);
-        if (existing) existing.push(blockedJob);
-        else blockersByChain.set(ref.blocker_chain_id, [blockedJob]);
-      }
+        const blockersByChain = new Map<string, StateBlockedJob[]>();
+        for (const ref of blockerRefRows) {
+          const blockedJob: StateBlockedJob = {
+            jobId: ref.blocker_job_id,
+            blockedByChainId: ref.blocker_chain_id,
+            index: ref.blocker_index,
+            traceContext: ref.blocker_trace_context,
+            job: mapDbJobToStateJob(ref),
+          };
+          const existing = blockersByChain.get(ref.blocker_chain_id);
+          if (existing) existing.push(blockedJob);
+          else blockersByChain.set(ref.blocker_chain_id, [blockedJob]);
+        }
 
-      const referenced = blockersByChain.size > 0;
-      const chainsToDelete = referenced
-        ? []
-        : chainIds.filter((id) => chainRowById.has(id as string));
+        const referenced = blockersByChain.size > 0;
+        const chainsToDelete = referenced
+          ? []
+          : chainIds.filter((id) => chainRowById.has(id as string));
 
-      if (chainsToDelete.length > 0) {
-        const deleteJson = JSON.stringify(chainsToDelete);
-        await executeTypedSql({
-          txCtx,
-          sql: templateCache.getOrCompute("deleteBlockersByChainIds", () =>
-            applyTemplate(
-              sql(
-                `
+        if (chainsToDelete.length > 0) {
+          const deleteJson = JSON.stringify(chainsToDelete);
+          yield* executeTypedSql({
+            txCtx,
+            sql: templateCache.getOrCompute("deleteBlockersByChainIds", () =>
+              applyTemplate(
+                sql(
+                  `
 DELETE FROM {{table_prefix}}job_blocker
 WHERE job_id IN (
   SELECT id FROM {{table_prefix}}job
@@ -1358,56 +1372,57 @@ WHERE job_id IN (
      OR (chain_id IN (SELECT value FROM json_each(?)) AND chain_index > 0)
 )
 `,
-                {
-                  id: "deleteBlockersByChainIds",
-                  params: [t.string(), t.string()],
-                  columns: {},
-                },
+                  {
+                    id: "deleteBlockersByChainIds",
+                    params: [t.string(), t.string()],
+                    columns: {},
+                  },
+                ),
               ),
             ),
-          ),
-          params: [deleteJson, deleteJson],
-        });
-        await executeTypedSql({
-          txCtx,
-          sql: templateCache.getOrCompute("deleteChains", () =>
-            applyTemplate(
-              sql(
-                `
+            params: [deleteJson, deleteJson],
+          });
+          yield* executeTypedSql({
+            txCtx,
+            sql: templateCache.getOrCompute("deleteChains", () =>
+              applyTemplate(
+                sql(
+                  `
 DELETE FROM {{table_prefix}}job
 WHERE (id IN (SELECT value FROM json_each(?)) AND chain_index = 0)
    OR (chain_id IN (SELECT value FROM json_each(?)) AND chain_index > 0)
 `,
-                {
-                  id: "deleteChains",
-                  params: [t.string(), t.string()],
-                  columns: {},
-                },
+                  {
+                    id: "deleteChains",
+                    params: [t.string(), t.string()],
+                    columns: {},
+                  },
+                ),
               ),
             ),
-          ),
-          params: [deleteJson, deleteJson],
+            params: [deleteJson, deleteJson],
+          });
+        }
+
+        return chainIds.map((chainId) => {
+          const blockers = blockersByChain.get(chainId);
+          if (blockers) return blockers;
+          if (referenced) return undefined;
+          const row = chainRowById.get(chainId);
+          if (!row) return undefined;
+          return mapDbChainRowToStateChain(row);
         });
-      }
+      }),
 
-      return chainIds.map((chainId) => {
-        const blockers = blockersByChain.get(chainId);
-        if (blockers) return blockers;
-        if (referenced) return undefined;
-        const row = chainRowById.get(chainId);
-        if (!row) return undefined;
-        return mapDbChainRowToStateChain(row);
-      });
-    },
-
-    startJobAttempts: async ({ txCtx, timeoutMsByTypeName, workerId, limit }) => {
-      const timeoutsJson = JSON.stringify(timeoutMsByTypeName);
-      const results = await executeTypedSql({
-        txCtx,
-        sql: templateCache.getOrCompute("startJobAttempts", () =>
-          applyTemplate(
-            sql(
-              `
+    startJobAttempts: ({ txCtx, timeoutMsByTypeName, workerId, limit }) =>
+      run(function* () {
+        const timeoutsJson = JSON.stringify(timeoutMsByTypeName);
+        const results = yield* executeTypedSql({
+          txCtx,
+          sql: templateCache.getOrCompute("startJobAttempts", () =>
+            applyTemplate(
+              sql(
+                `
 UPDATE {{table_prefix}}job
 SET status = 'running',
   attempt = attempt + 1,
@@ -1429,29 +1444,30 @@ RETURNING *, ${chainColumnsReturning("{{table_prefix}}job")}, EXISTS (
   SELECT 1 FROM {{table_prefix}}job_blocker jb WHERE jb.job_id = {{table_prefix}}job.id
 ) AS has_blockers
 `,
-              {
-                id: "startJobAttempts",
-                params: [t.string(), t.string(), t.string(), t.number()],
-                columns: { ...dbJobColumns, ...dbChainColumns, has_blockers: t.number() },
-              },
+                {
+                  id: "startJobAttempts",
+                  params: [t.string(), t.string(), t.string(), t.number()],
+                  columns: { ...dbJobColumns, ...dbChainColumns, has_blockers: t.number() },
+                },
+              ),
             ),
           ),
-        ),
-        params: [workerId, timeoutsJson, timeoutsJson, limit],
-      });
+          params: [workerId, timeoutsJson, timeoutsJson, limit],
+        });
 
-      return results.map((result) => ({
-        ...mapDbJobRowToStateJob(result),
-        hasBlockers: result.has_blockers === 1,
-      }));
-    },
-    getStartAttemptDelayMs: async ({ txCtx, typeNames }) => {
-      const [result] = await executeTypedSql({
-        txCtx,
-        sql: templateCache.getOrCompute("getStartAttemptDelayMs", () =>
-          applyTemplate(
-            sql(
-              `
+        return results.map((result) => ({
+          ...mapDbJobRowToStateJob(result),
+          hasBlockers: result.has_blockers === 1,
+        }));
+      }),
+    getStartAttemptDelayMs: ({ txCtx, typeNames }) =>
+      run(function* () {
+        const [result] = yield* executeTypedSql({
+          txCtx,
+          sql: templateCache.getOrCompute("getStartAttemptDelayMs", () =>
+            applyTemplate(
+              sql(
+                `
 SELECT
   MAX(0, CAST((julianday(job.scheduled_at) - julianday(datetime('now', 'subsec'))) * 86400000 AS INTEGER)) AS delay_ms
 FROM {{table_prefix}}job as job INDEXED BY {{table_prefix}}job_pending_idx
@@ -1460,26 +1476,27 @@ WHERE job.type_name IN (SELECT value FROM json_each(?))
 ORDER BY job.scheduled_at ASC
 LIMIT 1
 `,
-              {
-                id: "getStartAttemptDelayMs",
-                params: [t.string()],
-                columns: { delay_ms: t.number() },
-                readOnly: true,
-              },
+                {
+                  id: "getStartAttemptDelayMs",
+                  params: [t.string()],
+                  columns: { delay_ms: t.number() },
+                  readOnly: true,
+                },
+              ),
             ),
           ),
-        ),
-        params: [JSON.stringify(typeNames)],
-      });
-      return result ? result.delay_ms : null;
-    },
-    extendJobAttempt: async ({ txCtx, jobId, fence, timeoutMs }) => {
-      const [job] = await executeTypedSql({
-        txCtx,
-        sql: templateCache.getOrCompute("extendJobAttempt", () =>
-          applyTemplate(
-            sql(
-              `
+          params: [JSON.stringify(typeNames)],
+        });
+        return result ? result.delay_ms : null;
+      }),
+    extendJobAttempt: ({ txCtx, jobId, fence, timeoutMs }) =>
+      run(function* () {
+        const [job] = yield* executeTypedSql({
+          txCtx,
+          sql: templateCache.getOrCompute("extendJobAttempt", () =>
+            applyTemplate(
+              sql(
+                `
 UPDATE {{table_prefix}}job
 SET attempt_until = datetime('now', 'subsec', '+' || (? / 1000.0) || ' seconds')
 WHERE id = ?
@@ -1488,32 +1505,27 @@ WHERE id = ?
   AND attempt_by = ?
 RETURNING *, ${chainColumnsReturning("{{table_prefix}}job")}
 `,
-              {
-                id: "extendJobAttempt",
-                params: [t.number(), idDataType, t.number(), t.string()],
-                columns: { ...dbJobColumns, ...dbChainColumns },
-              },
+                {
+                  id: "extendJobAttempt",
+                  params: [t.number(), idDataType, t.number(), t.string()],
+                  columns: { ...dbJobColumns, ...dbChainColumns },
+                },
+              ),
             ),
           ),
-        ),
-        params: [timeoutMs, jobId, fence.attempt, fence.workerId],
-      });
+          params: [timeoutMs, jobId, fence.attempt, fence.workerId],
+        });
 
-      return job ? mapDbJobRowToStateJob(job) : undefined;
-    },
-    reclaimExpiredJobAttempts: async ({
-      txCtx,
-      typeNames,
-      ignoredJobIds,
-      lastAttemptError,
-      limit,
-    }) => {
-      const jobs = await executeTypedSql({
-        txCtx,
-        sql: templateCache.getOrCompute("reclaimExpiredJobAttempts", () =>
-          applyTemplate(
-            sql(
-              `
+        return job ? mapDbJobRowToStateJob(job) : undefined;
+      }),
+    reclaimExpiredJobAttempts: ({ txCtx, typeNames, ignoredJobIds, lastAttemptError, limit }) =>
+      run(function* () {
+        const jobs = yield* executeTypedSql({
+          txCtx,
+          sql: templateCache.getOrCompute("reclaimExpiredJobAttempts", () =>
+            applyTemplate(
+              sql(
+                `
 UPDATE {{table_prefix}}job
 SET status = 'pending',
   last_attempt_at = datetime('now', 'subsec'),
@@ -1534,42 +1546,43 @@ WHERE id IN (
 )
 RETURNING *, ${chainColumnsReturning("{{table_prefix}}job")}
 `,
-              {
-                id: "reclaimExpiredJobAttempts",
-                params: [t.string(), t.string(), t.string(), t.number()],
-                columns: { ...dbJobColumns, ...dbChainColumns },
-              },
+                {
+                  id: "reclaimExpiredJobAttempts",
+                  params: [t.string(), t.string(), t.string(), t.number()],
+                  columns: { ...dbJobColumns, ...dbChainColumns },
+                },
+              ),
             ),
           ),
-        ),
-        params: [
-          JSON.stringify(lastAttemptError),
-          JSON.stringify(typeNames),
-          JSON.stringify(ignoredJobIds ?? []),
-          limit,
-        ],
-      });
-      return jobs.map(mapDbJobRowToStateJob);
-    },
-    addJobsBlockers: async ({ txCtx, jobBlockers }) => {
-      if (jobBlockers.length === 0) return [];
+          params: [
+            JSON.stringify(lastAttemptError),
+            JSON.stringify(typeNames),
+            JSON.stringify(ignoredJobIds ?? []),
+            limit,
+          ],
+        });
+        return jobs.map(mapDbJobRowToStateJob);
+      }),
+    addJobsBlockers: ({ txCtx, jobBlockers }) =>
+      run(function* () {
+        if (jobBlockers.length === 0) return [];
 
-      const rows = jobBlockers.flatMap(({ jobId, blockedByChainIds, blockerTraceContexts }) =>
-        blockedByChainIds.map((blockedByChainId, index) => ({
-          job_id: jobId as string,
-          blocked_by_chain_id: blockedByChainId as string,
-          index,
-          trace_context: blockerTraceContexts?.[index] ?? null,
-        })),
-      );
-      const payload = JSON.stringify(rows);
+        const rows = jobBlockers.flatMap(({ jobId, blockedByChainIds, blockerTraceContexts }) =>
+          blockedByChainIds.map((blockedByChainId, index) => ({
+            job_id: jobId as string,
+            blocked_by_chain_id: blockedByChainId as string,
+            index,
+            trace_context: blockerTraceContexts?.[index] ?? null,
+          })),
+        );
+        const payload = JSON.stringify(rows);
 
-      await executeTypedSql({
-        txCtx,
-        sql: templateCache.getOrCompute("insertJobBlockers", () =>
-          applyTemplate(
-            sql(
-              `
+        yield* executeTypedSql({
+          txCtx,
+          sql: templateCache.getOrCompute("insertJobBlockers", () =>
+            applyTemplate(
+              sql(
+                `
 INSERT INTO {{table_prefix}}job_blocker (job_id, blocked_by_chain_id, "index", trace_context)
 SELECT
   json_extract(je.value, '$.job_id'),
@@ -1582,23 +1595,23 @@ WHERE EXISTS (
   WHERE h.id = json_extract(je.value, '$.blocked_by_chain_id') AND h.chain_index = 0
 )
 `,
-              {
-                id: "insertJobBlockers",
-                params: [t.string()],
-                columns: {},
-              },
+                {
+                  id: "insertJobBlockers",
+                  params: [t.string()],
+                  columns: {},
+                },
+              ),
             ),
           ),
-        ),
-        params: [payload],
-      });
+          params: [payload],
+        });
 
-      const blockerRows = await executeTypedSql({
-        txCtx,
-        sql: templateCache.getOrCompute("getBlockerChains", () =>
-          applyTemplate(
-            sql(
-              `
+        const blockerRows = yield* executeTypedSql({
+          txCtx,
+          sql: templateCache.getOrCompute("getBlockerChains", () =>
+            applyTemplate(
+              sql(
+                `
 SELECT
   d.ord,
   d.blocked_by_chain_id,
@@ -1613,95 +1626,100 @@ LEFT JOIN {{table_prefix}}job h
   ON h.id = d.blocked_by_chain_id AND h.chain_index = 0
 ORDER BY d.ord
 `,
-              {
-                id: "getBlockerChains",
-                params: [t.string()],
-                columns: { ord: t.number(), blocked_by_chain_id: idDataType, ...dbChainColumns },
-                readOnly: true,
-              },
+                {
+                  id: "getBlockerChains",
+                  params: [t.string()],
+                  columns: {
+                    ord: t.number(),
+                    blocked_by_chain_id: idDataType,
+                    ...dbChainColumns,
+                  },
+                  readOnly: true,
+                },
+              ),
             ),
           ),
-        ),
-        params: [payload],
-      });
+          params: [payload],
+        });
 
-      const blockerChains: (StateChainInfo | undefined)[] = blockerRows.map((row) => {
-        if (row.c_type_name === null) return undefined;
-        return mapDbChainColumns(row.blocked_by_chain_id, row);
-      });
+        const blockerChains: (StateChainInfo | undefined)[] = blockerRows.map((row) => {
+          if (row.c_type_name === null) return undefined;
+          return mapDbChainColumns(row.blocked_by_chain_id, row);
+        });
 
-      const blockersByJobId = new Map<string, (StateChainInfo | undefined)[]>();
-      const jobIdsToBlock = new Set<string>();
-      for (const [ord, row] of rows.entries()) {
-        const chain = blockerChains[ord];
-        const existing = blockersByJobId.get(row.job_id);
-        if (existing) existing.push(chain);
-        else blockersByJobId.set(row.job_id, [chain]);
-        if (chain?.status === "running") jobIdsToBlock.add(row.job_id);
-      }
+        const blockersByJobId = new Map<string, (StateChainInfo | undefined)[]>();
+        const jobIdsToBlock = new Set<string>();
+        for (const [ord, row] of rows.entries()) {
+          const chain = blockerChains[ord];
+          const existing = blockersByJobId.get(row.job_id);
+          if (existing) existing.push(chain);
+          else blockersByJobId.set(row.job_id, [chain]);
+          if (chain?.status === "running") jobIdsToBlock.add(row.job_id);
+        }
 
-      const jobRowById = new Map<string, DbJob & DbChainColumns>();
-      if (jobIdsToBlock.size > 0) {
-        const updated = await executeTypedSql({
-          txCtx,
-          sql: templateCache.getOrCompute("updateJobsToBlocked", () =>
-            applyTemplate(
-              sql(
-                `
+        const jobRowById = new Map<string, DbJob & DbChainColumns>();
+        if (jobIdsToBlock.size > 0) {
+          const updated = yield* executeTypedSql({
+            txCtx,
+            sql: templateCache.getOrCompute("updateJobsToBlocked", () =>
+              applyTemplate(
+                sql(
+                  `
 UPDATE {{table_prefix}}job
 SET status = 'blocked'
 WHERE id IN (SELECT value FROM json_each(?))
   AND status = 'pending'
 RETURNING *, ${chainColumnsReturning("{{table_prefix}}job")}
 `,
-                {
-                  id: "updateJobsToBlocked",
-                  params: [t.string()],
-                  columns: { ...dbJobColumns, ...dbChainColumns },
-                },
+                  {
+                    id: "updateJobsToBlocked",
+                    params: [t.string()],
+                    columns: { ...dbJobColumns, ...dbChainColumns },
+                  },
+                ),
               ),
             ),
-          ),
-          params: [JSON.stringify([...jobIdsToBlock])],
-        });
-        for (const row of updated) jobRowById.set(row.id, row);
-      }
+            params: [JSON.stringify([...jobIdsToBlock])],
+          });
+          for (const row of updated) jobRowById.set(row.id, row);
+        }
 
-      const remainingJobIds = [...blockersByJobId.keys()].filter((id) => !jobRowById.has(id));
-      if (remainingJobIds.length > 0) {
-        const remaining = await executeTypedSql({
+        const remainingJobIds = [...blockersByJobId.keys()].filter((id) => !jobRowById.has(id));
+        if (remainingJobIds.length > 0) {
+          const remaining = yield* executeTypedSql({
+            txCtx,
+            sql: templateCache.getOrCompute("getJobsForBlockers", () =>
+              applyTemplate(
+                sql(
+                  /* sql */ `SELECT {{job_columns:j}}, {{chain_columns:h}} FROM {{table_prefix}}job j JOIN {{table_prefix}}job h ON h.id = j.chain_id WHERE j.id IN (SELECT value FROM json_each(?))`,
+                  {
+                    id: "getJobsForBlockers",
+                    params: [t.string()],
+                    columns: { ...dbJobColumns, ...dbChainColumns },
+                    readOnly: true,
+                  },
+                ),
+              ),
+            ),
+            params: [JSON.stringify(remainingJobIds)],
+          });
+          for (const row of remaining) jobRowById.set(row.id, row);
+        }
+
+        return jobBlockers.map(({ jobId }) => ({
+          ...mapDbJobRowToStateJob(jobRowById.get(jobId as string)!),
+          blockers: blockersByJobId.get(jobId as string) ?? [],
+        }));
+      }),
+
+    getJobBlockers: ({ txCtx, jobId }) =>
+      run(function* () {
+        const rows = yield* executeTypedSql({
           txCtx,
-          sql: templateCache.getOrCompute("getJobsForBlockers", () =>
+          sql: templateCache.getOrCompute("getJobBlockers", () =>
             applyTemplate(
               sql(
-                /* sql */ `SELECT {{job_columns:j}}, {{chain_columns:h}} FROM {{table_prefix}}job j JOIN {{table_prefix}}job h ON h.id = j.chain_id WHERE j.id IN (SELECT value FROM json_each(?))`,
-                {
-                  id: "getJobsForBlockers",
-                  params: [t.string()],
-                  columns: { ...dbJobColumns, ...dbChainColumns },
-                  readOnly: true,
-                },
-              ),
-            ),
-          ),
-          params: [JSON.stringify(remainingJobIds)],
-        });
-        for (const row of remaining) jobRowById.set(row.id, row);
-      }
-
-      return jobBlockers.map(({ jobId }) => ({
-        ...mapDbJobRowToStateJob(jobRowById.get(jobId as string)!),
-        blockers: blockersByJobId.get(jobId as string) ?? [],
-      }));
-    },
-
-    getJobBlockers: async ({ txCtx, jobId }) => {
-      const rows = await executeTypedSql({
-        txCtx,
-        sql: templateCache.getOrCompute("getJobBlockers", () =>
-          applyTemplate(
-            sql(
-              `
+                `
 SELECT
   {{job_columns:head_job}},
   {{job_columns_prefixed:tail_job:tail_}}
@@ -1711,28 +1729,29 @@ JOIN {{table_prefix}}job AS head_job
 WHERE b.job_id = ?
 ORDER BY b."index" ASC
 `,
-              {
-                id: "getJobBlockers",
-                params: [idDataType],
-                columns: { ...dbChainRowColumns },
-                readOnly: true,
-              },
+                {
+                  id: "getJobBlockers",
+                  params: [idDataType],
+                  columns: { ...dbChainRowColumns },
+                  readOnly: true,
+                },
+              ),
             ),
           ),
-        ),
-        params: [jobId],
-      });
+          params: [jobId],
+        });
 
-      return rows.map(mapDbChainRowToStateChain);
-    },
+        return rows.map(mapDbChainRowToStateChain);
+      }),
 
-    unblockJobs: async ({ txCtx, blockedByChainId }) => {
-      await executeTypedSql({
-        txCtx,
-        sql: templateCache.getOrCompute("scheduleBlockedJobs", () =>
-          applyTemplate(
-            sql(
-              `
+    unblockJobs: ({ txCtx, blockedByChainId }) =>
+      run(function* () {
+        yield* executeTypedSql({
+          txCtx,
+          sql: templateCache.getOrCompute("scheduleBlockedJobs", () =>
+            applyTemplate(
+              sql(
+                `
 UPDATE {{table_prefix}}job
 SET status = 'pending',
   scheduled_at = MAX(scheduled_at, datetime('now', 'subsec'))
@@ -1748,23 +1767,23 @@ WHERE status = 'blocked'
       AND h.chain_status IS NOT 'completed'
   )
 `,
-              {
-                id: "scheduleBlockedJobs",
-                params: [idDataType],
-                columns: {},
-              },
+                {
+                  id: "scheduleBlockedJobs",
+                  params: [idDataType],
+                  columns: {},
+                },
+              ),
             ),
           ),
-        ),
-        params: [blockedByChainId],
-      });
+          params: [blockedByChainId],
+        });
 
-      const blockerRows = await executeTypedSql({
-        txCtx,
-        sql: templateCache.getOrCompute("getChainJobBlockersWithJobs", () =>
-          applyTemplate(
-            sql(
-              `
+        const blockerRows = yield* executeTypedSql({
+          txCtx,
+          sql: templateCache.getOrCompute("getChainJobBlockersWithJobs", () =>
+            applyTemplate(
+              sql(
+                `
 SELECT
   jb.job_id AS blocker_job_id,
   jb.blocked_by_chain_id AS blocker_chain_id,
@@ -1778,41 +1797,42 @@ JOIN {{table_prefix}}job h ON h.id = j.chain_id
 WHERE jb.blocked_by_chain_id = ?
 ORDER BY jb.job_id, jb."index"
 `,
-              {
-                id: "getChainJobBlockersWithJobs",
-                params: [idDataType],
-                columns: {
-                  blocker_job_id: idDataType,
-                  blocker_chain_id: idDataType,
-                  blocker_index: t.number(),
-                  blocker_trace_context: t["string?"](),
-                  ...dbJobColumns,
-                  ...dbChainColumns,
+                {
+                  id: "getChainJobBlockersWithJobs",
+                  params: [idDataType],
+                  columns: {
+                    blocker_job_id: idDataType,
+                    blocker_chain_id: idDataType,
+                    blocker_index: t.number(),
+                    blocker_trace_context: t["string?"](),
+                    ...dbJobColumns,
+                    ...dbChainColumns,
+                  },
+                  readOnly: true,
                 },
-                readOnly: true,
-              },
+              ),
             ),
           ),
-        ),
-        params: [blockedByChainId],
-      });
+          params: [blockedByChainId],
+        });
 
-      return blockerRows.map((row): StateDependentJob => ({
-        jobId: row.blocker_job_id,
-        blockedByChainId: row.blocker_chain_id,
-        index: row.blocker_index,
-        traceContext: row.blocker_trace_context,
-        job: mapDbJobRowToStateJob(row),
-      }));
-    },
+        return blockerRows.map((row): StateDependentJob => ({
+          jobId: row.blocker_job_id,
+          blockedByChainId: row.blocker_chain_id,
+          index: row.blocker_index,
+          traceContext: row.blocker_trace_context,
+          job: mapDbJobRowToStateJob(row),
+        }));
+      }),
 
-    listChainTypeNames: async ({ txCtx }) => {
-      const rows = await executeTypedSql({
-        txCtx,
-        sql: templateCache.getOrCompute("listChainTypeNames", () =>
-          applyTemplate(
-            sql(
-              /* sql */ `
+    listChainTypeNames: ({ txCtx }) =>
+      run(function* () {
+        const rows = yield* executeTypedSql({
+          txCtx,
+          sql: templateCache.getOrCompute("listChainTypeNames", () =>
+            applyTemplate(
+              sql(
+                /* sql */ `
 WITH RECURSIVE types AS (
   SELECT min(type_name) AS type_name FROM {{table_prefix}}job WHERE chain_index = 0
   UNION ALL
@@ -1821,26 +1841,27 @@ WITH RECURSIVE types AS (
 )
 SELECT type_name FROM types WHERE type_name IS NOT NULL
 `,
-              {
-                id: "listChainTypeNames",
-                params: [],
-                columns: { type_name: t.string() },
-                readOnly: true,
-              },
+                {
+                  id: "listChainTypeNames",
+                  params: [],
+                  columns: { type_name: t.string() },
+                  readOnly: true,
+                },
+              ),
             ),
           ),
-        ),
-      });
-      return rows.map((r) => r.type_name);
-    },
+        });
+        return rows.map((r) => r.type_name);
+      }),
 
-    listJobTypeNames: async ({ txCtx }) => {
-      const rows = await executeTypedSql({
-        txCtx,
-        sql: templateCache.getOrCompute("listJobTypeNames", () =>
-          applyTemplate(
-            sql(
-              /* sql */ `
+    listJobTypeNames: ({ txCtx }) =>
+      run(function* () {
+        const rows = yield* executeTypedSql({
+          txCtx,
+          sql: templateCache.getOrCompute("listJobTypeNames", () =>
+            applyTemplate(
+              sql(
+                /* sql */ `
 WITH RECURSIVE types AS (
   SELECT min(type_name) AS type_name FROM {{table_prefix}}job
   UNION ALL
@@ -1849,28 +1870,29 @@ WITH RECURSIVE types AS (
 )
 SELECT type_name FROM types WHERE type_name IS NOT NULL
 `,
-              {
-                id: "listJobTypeNames",
-                params: [],
-                columns: { type_name: t.string() },
-                readOnly: true,
-              },
+                {
+                  id: "listJobTypeNames",
+                  params: [],
+                  columns: { type_name: t.string() },
+                  readOnly: true,
+                },
+              ),
             ),
           ),
-        ),
-      });
-      return rows.map((r) => r.type_name);
-    },
+        });
+        return rows.map((r) => r.type_name);
+      }),
 
-    countByChainTypeNames: async ({ txCtx, typeNames }) => {
-      if (typeNames.length === 0) return [];
+    countByChainTypeNames: ({ txCtx, typeNames }) =>
+      run(function* () {
+        if (typeNames.length === 0) return [];
 
-      const rows = await executeTypedSql({
-        txCtx,
-        sql: templateCache.getOrCompute("countByChainTypeNames", () =>
-          applyTemplate(
-            sql(
-              /* sql */ `
+        const rows = yield* executeTypedSql({
+          txCtx,
+          sql: templateCache.getOrCompute("countByChainTypeNames", () =>
+            applyTemplate(
+              sql(
+                /* sql */ `
 SELECT
   je.value AS name,
   (SELECT count(*) FROM (
@@ -1885,46 +1907,47 @@ SELECT
   )) AS completed_count
 FROM json_each(?) AS je
 `,
-              {
-                id: "countByChainTypeNames",
-                params: [t.string()],
-                columns: {
-                  name: t.string(),
-                  running_count: t.number(),
-                  completed_count: t.number(),
+                {
+                  id: "countByChainTypeNames",
+                  params: [t.string()],
+                  columns: {
+                    name: t.string(),
+                    running_count: t.number(),
+                    completed_count: t.number(),
+                  },
+                  readOnly: true,
                 },
-                readOnly: true,
-              },
+              ),
             ),
           ),
-        ),
-        params: [JSON.stringify(typeNames)],
-      });
+          params: [JSON.stringify(typeNames)],
+        });
 
-      const map = new Map(rows.map((r) => [r.name, r]));
-      return typeNames.map((name) => {
-        const r = map.get(name);
-        if (!r)
+        const map = new Map(rows.map((r) => [r.name, r]));
+        return typeNames.map((name) => {
+          const r = map.get(name);
+          if (!r)
+            return {
+              running: { count: 0, hasMore: false },
+              completed: { count: 0, hasMore: false },
+            };
           return {
-            running: { count: 0, hasMore: false },
-            completed: { count: 0, hasMore: false },
+            running: capCount(r.running_count, countCap),
+            completed: capCount(r.completed_count, countCap),
           };
-        return {
-          running: capCount(r.running_count, countCap),
-          completed: capCount(r.completed_count, countCap),
-        };
-      });
-    },
+        });
+      }),
 
-    countByJobTypeNames: async ({ txCtx, typeNames }) => {
-      if (typeNames.length === 0) return [];
+    countByJobTypeNames: ({ txCtx, typeNames }) =>
+      run(function* () {
+        if (typeNames.length === 0) return [];
 
-      const rows = await executeTypedSql({
-        txCtx,
-        sql: templateCache.getOrCompute("countByJobTypeNames", () =>
-          applyTemplate(
-            sql(
-              /* sql */ `
+        const rows = yield* executeTypedSql({
+          txCtx,
+          sql: templateCache.getOrCompute("countByJobTypeNames", () =>
+            applyTemplate(
+              sql(
+                /* sql */ `
 SELECT
   je.value AS name,
   (SELECT count(*) FROM (SELECT 1 FROM {{table_prefix}}job WHERE type_name = je.value AND status = 'blocked' LIMIT ${countCap + 1})) AS blocked_count,
@@ -1933,44 +1956,44 @@ SELECT
   (SELECT count(*) FROM (SELECT 1 FROM {{table_prefix}}job WHERE type_name = je.value AND status = 'completed' LIMIT ${countCap + 1})) AS completed_count
 FROM json_each(?) AS je
 `,
-              {
-                id: "countByJobTypeNames",
-                params: [t.string()],
-                columns: {
-                  name: t.string(),
-                  blocked_count: t.number(),
-                  pending_count: t.number(),
-                  running_count: t.number(),
-                  completed_count: t.number(),
+                {
+                  id: "countByJobTypeNames",
+                  params: [t.string()],
+                  columns: {
+                    name: t.string(),
+                    blocked_count: t.number(),
+                    pending_count: t.number(),
+                    running_count: t.number(),
+                    completed_count: t.number(),
+                  },
+                  readOnly: true,
                 },
-                readOnly: true,
-              },
+              ),
             ),
           ),
-        ),
-        params: [JSON.stringify(typeNames)],
-      });
+          params: [JSON.stringify(typeNames)],
+        });
 
-      const map = new Map(rows.map((r) => [r.name, r]));
-      return typeNames.map((name) => {
-        const r = map.get(name);
-        if (!r)
+        const map = new Map(rows.map((r) => [r.name, r]));
+        return typeNames.map((name) => {
+          const r = map.get(name);
+          if (!r)
+            return {
+              blocked: { count: 0, hasMore: false },
+              pending: { count: 0, hasMore: false },
+              running: { count: 0, hasMore: false },
+              completed: { count: 0, hasMore: false },
+            };
           return {
-            blocked: { count: 0, hasMore: false },
-            pending: { count: 0, hasMore: false },
-            running: { count: 0, hasMore: false },
-            completed: { count: 0, hasMore: false },
+            blocked: capCount(r.blocked_count, countCap),
+            pending: capCount(r.pending_count, countCap),
+            running: capCount(r.running_count, countCap),
+            completed: capCount(r.completed_count, countCap),
           };
-        return {
-          blocked: capCount(r.blocked_count, countCap),
-          pending: capCount(r.pending_count, countCap),
-          running: capCount(r.running_count, countCap),
-          completed: capCount(r.completed_count, countCap),
-        };
-      });
-    },
+        });
+      }),
 
-    listChains: async ({
+    listChains: ({
       txCtx,
       typeName,
       independent,
@@ -1980,180 +2003,183 @@ FROM json_each(?) AS je
       orderBy,
       orderDirection,
       page,
-    }) => {
-      const orderColumn = orderBy === "completedAt" ? "chain_completed_at" : "created_at";
-      const cursor = page.cursor ? decodeTimestampWithIdCursor(page.cursor, orderBy) : null;
-      const sortDirection = orderDirection === "desc" ? "DESC" : "ASC";
+    }) =>
+      run(function* () {
+        const orderColumn = orderBy === "completedAt" ? "chain_completed_at" : "created_at";
+        const cursor = page.cursor ? decodeTimestampWithIdCursor(page.cursor, orderBy) : null;
+        const sortDirection = orderDirection === "desc" ? "DESC" : "ASC";
 
-      const conditions: string[] = ["head_job.chain_index = 0"];
-      const params: unknown[] = [];
-      const paramTypes: DataType[] = [];
+        const conditions: string[] = ["head_job.chain_index = 0"];
+        const params: unknown[] = [];
+        const paramTypes: DataType[] = [];
 
-      if (status !== undefined) {
-        conditions.push(chainStatusConditions[status]);
-      }
-
-      conditions.push("head_job.type_name = ?");
-      params.push(typeName);
-      paramTypes.push(t.string());
-
-      if (independent === true) {
-        conditions.push(
-          `NOT EXISTS (SELECT 1 FROM {{table_prefix}}job_blocker jb WHERE jb.blocked_by_chain_id = head_job.id)`,
-        );
-      } else if (independent === false) {
-        conditions.push(
-          `EXISTS (SELECT 1 FROM {{table_prefix}}job_blocker jb WHERE jb.blocked_by_chain_id = head_job.id)`,
-        );
-      }
-
-      if (from) {
-        conditions.push(`head_job.${orderColumn} >= ?`);
-        params.push(isoToSqlite(from.toISOString()));
-        paramTypes.push(t.string());
-      }
-      if (to) {
-        conditions.push(`head_job.${orderColumn} <= ?`);
-        params.push(isoToSqlite(to.toISOString()));
-        paramTypes.push(t.string());
-      }
-
-      if (cursor) {
-        const cursorValue = isoToSqlite(cursor.value);
-        const comparison = orderDirection === "desc" ? "<" : ">";
-        conditions.push(
-          `(head_job.${orderColumn} ${comparison} ? OR (head_job.${orderColumn} = ? AND head_job.id ${comparison} ?))`,
-        );
-        params.push(cursorValue, cursorValue, cursor.id);
-        paramTypes.push(t.string(), t.string(), t.string());
-      }
-      params.push(page.limit + 1);
-      paramTypes.push(t.number());
-
-      const sqlText = `SELECT {{job_columns:head_job}}, {{job_columns_prefixed:tail_job:tail_}} FROM (SELECT head_job.* FROM {{table_prefix}}job AS head_job WHERE ${conditions.join(" AND ")} ORDER BY head_job.${orderColumn} ${sortDirection}, head_job.id ${sortDirection} LIMIT ?) AS head_job${tailJoin("head_job")} ORDER BY head_job.${orderColumn} ${sortDirection}, head_job.id ${sortDirection}`;
-
-      const rows = await executeTypedSql({
-        txCtx,
-        sql: applyTemplate(
-          sql(sqlText, {
-            params: paramTypes,
-            columns: dbChainRowColumns,
-            readOnly: true,
-          }),
-        ),
-        params,
-      });
-
-      const hasMore = rows.length > page.limit;
-      const pageRows = hasMore ? rows.slice(0, page.limit) : rows;
-      const items = pageRows.map(mapDbChainRowToStateChain);
-
-      const lastRow = pageRows[pageRows.length - 1];
-      let nextCursor: string | null = null;
-      if (hasMore && lastRow) {
-        nextCursor = encodeCursor({
-          type: "timestampWithId",
-          sortKey: orderBy,
-          value: sqliteDate(lastRow[orderColumn]!).toISOString(),
-          id: lastRow.id,
-        });
-      }
-
-      return { items, nextCursor };
-    },
-
-    listJobs: async ({ txCtx, typeName, from, to, status, orderBy, orderDirection, page }) => {
-      const sortColumn = {
-        createdAt: "created_at",
-        scheduledAt: "scheduled_at",
-        completedAt: "completed_at",
-        attemptAt: "attempt_at",
-        attemptUntil: "attempt_until",
-      }[orderBy];
-
-      const cursor = page.cursor ? decodeTimestampWithIdCursor(page.cursor, orderBy) : null;
-      const conditions: string[] = [];
-      const params: unknown[] = [];
-      const paramTypes: DataType[] = [];
-
-      if (status !== undefined) {
-        conditions.push(jobStatusConditions[status]);
-      }
-
-      conditions.push("j.type_name = ?");
-      params.push(typeName);
-      paramTypes.push(t.string());
-      if (from) {
-        conditions.push(`j.${sortColumn} >= ?`);
-        params.push(isoToSqlite(from.toISOString()));
-        paramTypes.push(t.string());
-      }
-      if (to) {
-        conditions.push(`j.${sortColumn} <= ?`);
-        params.push(isoToSqlite(to.toISOString()));
-        paramTypes.push(t.string());
-      }
-      if (cursor) {
-        const cursorValue = isoToSqlite(cursor.value);
-        if (orderDirection === "desc") {
-          conditions.push(`(j.${sortColumn} < ? OR (j.${sortColumn} = ? AND j.id < ?))`);
-        } else {
-          conditions.push(`(j.${sortColumn} > ? OR (j.${sortColumn} = ? AND j.id > ?))`);
+        if (status !== undefined) {
+          conditions.push(chainStatusConditions[status]);
         }
-        params.push(cursorValue, cursorValue, cursor.id);
-        paramTypes.push(t.string(), t.string(), t.string());
-      }
-      params.push(page.limit + 1);
-      paramTypes.push(t.number());
 
-      const sortDirection = orderDirection === "desc" ? "DESC" : "ASC";
-      const where = conditions.length > 0 ? `WHERE ${conditions.join(" AND ")}` : "";
-      const sqlText = `SELECT {{job_columns:j}}, {{chain_columns:h}} FROM (SELECT j.* FROM {{table_prefix}}job j ${where} ORDER BY j.${sortColumn} ${sortDirection}, j.id ${sortDirection} LIMIT ?) j JOIN {{table_prefix}}job h ON h.id = j.chain_id ORDER BY j.${sortColumn} ${sortDirection}, j.id ${sortDirection}`;
+        conditions.push("head_job.type_name = ?");
+        params.push(typeName);
+        paramTypes.push(t.string());
 
-      const rows = await executeTypedSql({
-        txCtx,
-        sql: applyTemplate(
-          sql(sqlText, {
-            params: paramTypes,
-            columns: { ...dbJobColumns, ...dbChainColumns },
-            readOnly: true,
-          }),
-        ),
-        params,
-      });
+        if (independent === true) {
+          conditions.push(
+            `NOT EXISTS (SELECT 1 FROM {{table_prefix}}job_blocker jb WHERE jb.blocked_by_chain_id = head_job.id)`,
+          );
+        } else if (independent === false) {
+          conditions.push(
+            `EXISTS (SELECT 1 FROM {{table_prefix}}job_blocker jb WHERE jb.blocked_by_chain_id = head_job.id)`,
+          );
+        }
 
-      const hasMore = rows.length > page.limit;
-      const pageRows = hasMore ? rows.slice(0, page.limit) : rows;
-      const items = pageRows.map(mapDbJobRowToStateJob);
+        if (from) {
+          conditions.push(`head_job.${orderColumn} >= ?`);
+          params.push(isoToSqlite(from.toISOString()));
+          paramTypes.push(t.string());
+        }
+        if (to) {
+          conditions.push(`head_job.${orderColumn} <= ?`);
+          params.push(isoToSqlite(to.toISOString()));
+          paramTypes.push(t.string());
+        }
 
-      const lastRow = pageRows[pageRows.length - 1];
-      let nextCursor: string | null = null;
-      if (hasMore && lastRow) {
-        nextCursor = encodeCursor({
-          type: "timestampWithId",
-          sortKey: orderBy,
-          value: sqliteDate(lastRow[sortColumn as keyof DbJob] as string).toISOString(),
-          id: lastRow.id,
+        if (cursor) {
+          const cursorValue = isoToSqlite(cursor.value);
+          const comparison = orderDirection === "desc" ? "<" : ">";
+          conditions.push(
+            `(head_job.${orderColumn} ${comparison} ? OR (head_job.${orderColumn} = ? AND head_job.id ${comparison} ?))`,
+          );
+          params.push(cursorValue, cursorValue, cursor.id);
+          paramTypes.push(t.string(), t.string(), t.string());
+        }
+        params.push(page.limit + 1);
+        paramTypes.push(t.number());
+
+        const sqlText = `SELECT {{job_columns:head_job}}, {{job_columns_prefixed:tail_job:tail_}} FROM (SELECT head_job.* FROM {{table_prefix}}job AS head_job WHERE ${conditions.join(" AND ")} ORDER BY head_job.${orderColumn} ${sortDirection}, head_job.id ${sortDirection} LIMIT ?) AS head_job${tailJoin("head_job")} ORDER BY head_job.${orderColumn} ${sortDirection}, head_job.id ${sortDirection}`;
+
+        const rows = yield* executeTypedSql({
+          txCtx,
+          sql: applyTemplate(
+            sql(sqlText, {
+              params: paramTypes,
+              columns: dbChainRowColumns,
+              readOnly: true,
+            }),
+          ),
+          params,
         });
-      }
 
-      return { items, nextCursor };
-    },
+        const hasMore = rows.length > page.limit;
+        const pageRows = hasMore ? rows.slice(0, page.limit) : rows;
+        const items = pageRows.map(mapDbChainRowToStateChain);
 
-    listChainJobs: async ({ txCtx, chainId, orderDirection, page }) => {
-      const cursor = page.cursor ? decodeIdCursor(page.cursor) : null;
-      const sortDirection = orderDirection === "asc" ? "ASC" : "DESC";
-      const params: unknown[] = [chainId];
-      const paramTypes: DataType[] = [idDataType];
-      let sqlText: string;
+        const lastRow = pageRows[pageRows.length - 1];
+        let nextCursor: string | null = null;
+        if (hasMore && lastRow) {
+          nextCursor = encodeCursor({
+            type: "timestampWithId",
+            sortKey: orderBy,
+            value: sqliteDate(lastRow[orderColumn]!).toISOString(),
+            id: lastRow.id,
+          });
+        }
 
-      if (cursor) {
-        const comparison = orderDirection === "asc" ? ">" : "<";
-        params.length = 0;
-        params.push(cursor.id, chainId, chainId, chainId, chainId, page.limit + 1);
-        paramTypes.length = 0;
-        paramTypes.push(idDataType, idDataType, idDataType, idDataType, idDataType, t.number());
-        sqlText = `WITH start_row AS (
+        return { items, nextCursor };
+      }),
+
+    listJobs: ({ txCtx, typeName, from, to, status, orderBy, orderDirection, page }) =>
+      run(function* () {
+        const sortColumn = {
+          createdAt: "created_at",
+          scheduledAt: "scheduled_at",
+          completedAt: "completed_at",
+          attemptAt: "attempt_at",
+          attemptUntil: "attempt_until",
+        }[orderBy];
+
+        const cursor = page.cursor ? decodeTimestampWithIdCursor(page.cursor, orderBy) : null;
+        const conditions: string[] = [];
+        const params: unknown[] = [];
+        const paramTypes: DataType[] = [];
+
+        if (status !== undefined) {
+          conditions.push(jobStatusConditions[status]);
+        }
+
+        conditions.push("j.type_name = ?");
+        params.push(typeName);
+        paramTypes.push(t.string());
+        if (from) {
+          conditions.push(`j.${sortColumn} >= ?`);
+          params.push(isoToSqlite(from.toISOString()));
+          paramTypes.push(t.string());
+        }
+        if (to) {
+          conditions.push(`j.${sortColumn} <= ?`);
+          params.push(isoToSqlite(to.toISOString()));
+          paramTypes.push(t.string());
+        }
+        if (cursor) {
+          const cursorValue = isoToSqlite(cursor.value);
+          if (orderDirection === "desc") {
+            conditions.push(`(j.${sortColumn} < ? OR (j.${sortColumn} = ? AND j.id < ?))`);
+          } else {
+            conditions.push(`(j.${sortColumn} > ? OR (j.${sortColumn} = ? AND j.id > ?))`);
+          }
+          params.push(cursorValue, cursorValue, cursor.id);
+          paramTypes.push(t.string(), t.string(), t.string());
+        }
+        params.push(page.limit + 1);
+        paramTypes.push(t.number());
+
+        const sortDirection = orderDirection === "desc" ? "DESC" : "ASC";
+        const where = conditions.length > 0 ? `WHERE ${conditions.join(" AND ")}` : "";
+        const sqlText = `SELECT {{job_columns:j}}, {{chain_columns:h}} FROM (SELECT j.* FROM {{table_prefix}}job j ${where} ORDER BY j.${sortColumn} ${sortDirection}, j.id ${sortDirection} LIMIT ?) j JOIN {{table_prefix}}job h ON h.id = j.chain_id ORDER BY j.${sortColumn} ${sortDirection}, j.id ${sortDirection}`;
+
+        const rows = yield* executeTypedSql({
+          txCtx,
+          sql: applyTemplate(
+            sql(sqlText, {
+              params: paramTypes,
+              columns: { ...dbJobColumns, ...dbChainColumns },
+              readOnly: true,
+            }),
+          ),
+          params,
+        });
+
+        const hasMore = rows.length > page.limit;
+        const pageRows = hasMore ? rows.slice(0, page.limit) : rows;
+        const items = pageRows.map(mapDbJobRowToStateJob);
+
+        const lastRow = pageRows[pageRows.length - 1];
+        let nextCursor: string | null = null;
+        if (hasMore && lastRow) {
+          nextCursor = encodeCursor({
+            type: "timestampWithId",
+            sortKey: orderBy,
+            value: sqliteDate(lastRow[sortColumn as keyof DbJob] as string).toISOString(),
+            id: lastRow.id,
+          });
+        }
+
+        return { items, nextCursor };
+      }),
+
+    listChainJobs: ({ txCtx, chainId, orderDirection, page }) =>
+      run(function* () {
+        const cursor = page.cursor ? decodeIdCursor(page.cursor) : null;
+        const sortDirection = orderDirection === "asc" ? "ASC" : "DESC";
+        const params: unknown[] = [chainId];
+        const paramTypes: DataType[] = [idDataType];
+        let sqlText: string;
+
+        if (cursor) {
+          const comparison = orderDirection === "asc" ? ">" : "<";
+          params.length = 0;
+          params.push(cursor.id, chainId, chainId, chainId, chainId, page.limit + 1);
+          paramTypes.length = 0;
+          paramTypes.push(idDataType, idDataType, idDataType, idDataType, idDataType, t.number());
+          sqlText = `WITH start_row AS (
           SELECT c.chain_index AS start_chain_index
           FROM {{table_prefix}}job c
           WHERE c.id = ? AND c.chain_id = ?
@@ -2165,127 +2191,166 @@ FROM json_each(?) AS je
           AND j.chain_index ${comparison} s.start_chain_index
         ORDER BY j.chain_index ${sortDirection}, j.id ${sortDirection}
         LIMIT ?`;
-      } else {
-        params.push(chainId, chainId, page.limit + 1);
-        paramTypes.push(idDataType, idDataType, t.number());
-        sqlText = `SELECT {{job_columns:j}}, {{chain_columns:h}}
+        } else {
+          params.push(chainId, chainId, page.limit + 1);
+          paramTypes.push(idDataType, idDataType, t.number());
+          sqlText = `SELECT {{job_columns:j}}, {{chain_columns:h}}
         FROM {{table_prefix}}job j, {{table_prefix}}job h
         WHERE ${chainMembers("j")}
           AND h.id = ?
         ORDER BY j.chain_index ${sortDirection}, j.id ${sortDirection}
         LIMIT ?`;
-      }
-
-      const rows = await executeTypedSql({
-        txCtx,
-        sql: applyTemplate(
-          sql(sqlText, {
-            params: paramTypes,
-            columns: { ...dbJobColumns, ...dbChainColumns },
-            readOnly: true,
-          }),
-        ),
-        params,
-      });
-
-      const hasMore = rows.length > page.limit;
-      const pageRows = hasMore ? rows.slice(0, page.limit) : rows;
-      const chain = pageRows[0] ? mapDbChainColumns(chainId, pageRows[0]) : undefined;
-      const items = chain ? pageRows.map((row) => ({ ...mapDbJobToStateJob(row), chain })) : [];
-
-      const lastRow = pageRows[pageRows.length - 1];
-      let nextCursor: string | null = null;
-      if (hasMore && lastRow) {
-        nextCursor = encodeCursor({ type: "id", id: lastRow.id });
-      }
-
-      return { items, nextCursor };
-    },
-
-    listBlockedJobs: async ({ txCtx, chainId, orderDirection, page }) => {
-      const cursor = page.cursor ? decodeTimestampWithIdCursor(page.cursor, "createdAt") : null;
-      const conditions: string[] = [
-        `j.id IN (SELECT jb.job_id FROM {{table_prefix}}job_blocker jb WHERE jb.blocked_by_chain_id = ?)`,
-      ];
-      const params: unknown[] = [chainId];
-      const paramTypes: DataType[] = [idDataType];
-
-      if (cursor) {
-        const cursorValue = isoToSqlite(cursor.value);
-        if (orderDirection === "desc") {
-          conditions.push("(j.created_at < ? OR (j.created_at = ? AND j.id < ?))");
-        } else {
-          conditions.push("(j.created_at > ? OR (j.created_at = ? AND j.id > ?))");
         }
-        params.push(cursorValue, cursorValue, cursor.id);
-        paramTypes.push(t.string(), t.string(), t.string());
-      }
-      params.push(page.limit + 1);
-      paramTypes.push(t.number());
 
-      const sortDirection = orderDirection === "desc" ? "DESC" : "ASC";
-      const sqlText = `SELECT {{job_columns:j}}, {{chain_columns:h}} FROM (SELECT j.* FROM {{table_prefix}}job j WHERE ${conditions.join(" AND ")} ORDER BY j.created_at ${sortDirection}, j.id ${sortDirection} LIMIT ?) j JOIN {{table_prefix}}job h ON h.id = j.chain_id ORDER BY j.created_at ${sortDirection}, j.id ${sortDirection}`;
-
-      const rows = await executeTypedSql({
-        txCtx,
-        sql: applyTemplate(
-          sql(sqlText, {
-            params: paramTypes,
-            columns: { ...dbJobColumns, ...dbChainColumns },
-            readOnly: true,
-          }),
-        ),
-        params,
-      });
-
-      const hasMore = rows.length > page.limit;
-      const pageRows = hasMore ? rows.slice(0, page.limit) : rows;
-      const items = pageRows.map(mapDbJobRowToStateJob);
-
-      const lastRow = pageRows[pageRows.length - 1];
-      let nextCursor: string | null = null;
-      if (hasMore && lastRow) {
-        nextCursor = encodeCursor({
-          type: "timestampWithId",
-          sortKey: "createdAt",
-          value: sqliteDate(lastRow.created_at).toISOString(),
-          id: lastRow.id,
+        const rows = yield* executeTypedSql({
+          txCtx,
+          sql: applyTemplate(
+            sql(sqlText, {
+              params: paramTypes,
+              columns: { ...dbJobColumns, ...dbChainColumns },
+              readOnly: true,
+            }),
+          ),
+          params,
         });
-      }
 
-      return { items, nextCursor };
-    },
+        const hasMore = rows.length > page.limit;
+        const pageRows = hasMore ? rows.slice(0, page.limit) : rows;
+        const chain = pageRows[0] ? mapDbChainColumns(chainId, pageRows[0]) : undefined;
+        const items = chain ? pageRows.map((row) => ({ ...mapDbJobToStateJob(row), chain })) : [];
 
-    migrateToLatest: async () =>
-      createMigrator<TTxContext>({
+        const lastRow = pageRows[pageRows.length - 1];
+        let nextCursor: string | null = null;
+        if (hasMore && lastRow) {
+          nextCursor = encodeCursor({ type: "id", id: lastRow.id });
+        }
+
+        return { items, nextCursor };
+      }),
+
+    listBlockedJobs: ({ txCtx, chainId, orderDirection, page }) =>
+      run(function* () {
+        const cursor = page.cursor ? decodeTimestampWithIdCursor(page.cursor, "createdAt") : null;
+        const conditions: string[] = [
+          `j.id IN (SELECT jb.job_id FROM {{table_prefix}}job_blocker jb WHERE jb.blocked_by_chain_id = ?)`,
+        ];
+        const params: unknown[] = [chainId];
+        const paramTypes: DataType[] = [idDataType];
+
+        if (cursor) {
+          const cursorValue = isoToSqlite(cursor.value);
+          if (orderDirection === "desc") {
+            conditions.push("(j.created_at < ? OR (j.created_at = ? AND j.id < ?))");
+          } else {
+            conditions.push("(j.created_at > ? OR (j.created_at = ? AND j.id > ?))");
+          }
+          params.push(cursorValue, cursorValue, cursor.id);
+          paramTypes.push(t.string(), t.string(), t.string());
+        }
+        params.push(page.limit + 1);
+        paramTypes.push(t.number());
+
+        const sortDirection = orderDirection === "desc" ? "DESC" : "ASC";
+        const sqlText = `SELECT {{job_columns:j}}, {{chain_columns:h}} FROM (SELECT j.* FROM {{table_prefix}}job j WHERE ${conditions.join(" AND ")} ORDER BY j.created_at ${sortDirection}, j.id ${sortDirection} LIMIT ?) j JOIN {{table_prefix}}job h ON h.id = j.chain_id ORDER BY j.created_at ${sortDirection}, j.id ${sortDirection}`;
+
+        const rows = yield* executeTypedSql({
+          txCtx,
+          sql: applyTemplate(
+            sql(sqlText, {
+              params: paramTypes,
+              columns: { ...dbJobColumns, ...dbChainColumns },
+              readOnly: true,
+            }),
+          ),
+          params,
+        });
+
+        const hasMore = rows.length > page.limit;
+        const pageRows = hasMore ? rows.slice(0, page.limit) : rows;
+        const items = pageRows.map(mapDbJobRowToStateJob);
+
+        const lastRow = pageRows[pageRows.length - 1];
+        let nextCursor: string | null = null;
+        if (hasMore && lastRow) {
+          nextCursor = encodeCursor({
+            type: "timestampWithId",
+            sortKey: "createdAt",
+            value: sqliteDate(lastRow.created_at).toISOString(),
+            id: lastRow.id,
+          });
+        }
+
+        return { items, nextCursor };
+      }),
+
+    migrateToLatest: () =>
+      createMigrator<TTxContext, TMode>({
+        mode,
         migrations,
-        store: createMigrationStore(stateProvider, applyTemplate),
+        store: createMigrationStore(stateProvider, mode, applyTemplate),
       }).migrateToLatest(),
 
-    truncate: async () => {
-      await stateProvider.withTransaction(async (txCtx) => {
-        await executeTypedSql({
-          txCtx,
-          sql: applyTemplate(
-            sql(/* sql */ `DELETE FROM {{table_prefix}}job_blocker`, { params: [], columns: {} }),
-          ),
-        });
-        await executeTypedSql({
-          txCtx,
-          sql: applyTemplate(
-            sql(/* sql */ `DELETE FROM {{table_prefix}}job`, { params: [], columns: {} }),
-          ),
-        });
-      });
-    },
+    truncate: () =>
+      stateProvider.withTransaction((txCtx) =>
+        run(function* () {
+          yield* executeTypedSql({
+            txCtx,
+            sql: applyTemplate(
+              sql(/* sql */ `DELETE FROM {{table_prefix}}job_blocker`, {
+                params: [],
+                columns: {},
+              }),
+            ),
+          });
+          yield* executeTypedSql({
+            txCtx,
+            sql: applyTemplate(
+              sql(/* sql */ `DELETE FROM {{table_prefix}}job`, { params: [], columns: {} }),
+            ),
+          });
+        }),
+      ),
 
-    close: async () => {
-      if (closed) return;
-      closed = true;
-      await stateProvider.close?.();
-    },
+    close: () =>
+      run(function* () {
+        if (closed) return;
+        closed = true;
+        yield stateProvider.close?.();
+      }),
   };
 };
+
+/**
+ * Create a state adapter over a synchronous SQLite driver (better-sqlite3, node:sqlite,
+ * bun:sqlite). The adapter is in sync mode: every client call,
+ * `complete`, `migrateToLatest`, `truncate` and `close` return their results directly, so they run
+ * inside the driver's native synchronous transaction.
+ *
+ * @param options - SQLite state adapter configuration.
+ * @throws Error if `tablePrefix` or `idType` is not a valid SQL identifier.
+ * @experimental
+ */
+export const createSyncSqliteStateAdapter = <
+  TTxContext extends BaseTxContext,
+  TIdType extends string = UUID,
+>(
+  options: SqliteStateAdapterOptions<TTxContext, TIdType, "sync">,
+): SqliteStateAdapter<TTxContext, TIdType, "sync"> => buildSqliteStateAdapter("sync", options);
+
+/**
+ * Create a state adapter over an asynchronous SQLite driver (libsql, bun's `SQL`, prisma, knex,
+ * kysely). Returns an adapter in async mode, whose methods return promises.
+ *
+ * @param options - SQLite state adapter configuration.
+ * @throws Error if `tablePrefix` or `idType` is not a valid SQL identifier.
+ * @experimental
+ */
+export const createAsyncSqliteStateAdapter = <
+  TTxContext extends BaseTxContext,
+  TIdType extends string = UUID,
+>(
+  options: SqliteStateAdapterOptions<TTxContext, TIdType, "async">,
+): SqliteStateAdapter<TTxContext, TIdType> => buildSqliteStateAdapter("async", options);
 
 /**
  * SQLite state adapter type. Includes `migrateToLatest` for schema migrations and `truncate` for clearing all job data.
@@ -2294,9 +2359,10 @@ FROM json_each(?) AS je
 export type SqliteStateAdapter<
   TTxContext extends BaseTxContext,
   TJobId extends string = UUID,
-> = StateAdapter<TTxContext, TJobId> & {
+  TMode extends StateAdapterMode = "async",
+> = StateAdapter<TTxContext, TJobId, TMode> & {
   /** Create or upgrade the schema. */
-  migrateToLatest: () => Promise<MigrationResult>;
+  migrateToLatest: () => StateResult<TMode, MigrationResult>;
   /** Delete all job and blocker rows. Intended for tests. */
-  truncate: () => Promise<void>;
+  truncate: () => StateResult<TMode, void>;
 };

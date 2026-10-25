@@ -135,13 +135,13 @@ The built-in has no user database client, so `withTransaction` here is the state
 ```ts
 import { createCleanupJobTypes, createCleanupProcessors, scheduleCleanup } from "queuert/cleanup";
 
-const client = await createClient({
+const client = createClient({
   stateAdapter,
   notifyAdapter,
   jobTypes: [createCleanupJobTypes(), myJobTypes],
 });
 
-const worker = await createInProcessWorker({
+const worker = createInProcessWorker({
   client,
   processors: [createCleanupProcessors({ client }), myProcessors],
 });

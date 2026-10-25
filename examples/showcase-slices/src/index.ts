@@ -19,7 +19,7 @@ import { client } from "./client.js";
 import { notificationProcessors } from "./slice-notifications-processors.js";
 import { orderProcessors } from "./slice-orders-processors.js";
 
-const worker = await createInProcessWorker({
+const worker = createInProcessWorker({
   client,
   processors: [orderProcessors, notificationProcessors],
 });

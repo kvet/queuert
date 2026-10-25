@@ -1,4 +1,5 @@
 import { type ConformanceGroup } from "../runner.js";
+import { transaction } from "../transaction.js";
 import { type StateConformanceFixture } from "./types.js";
 
 export const isTransactionGroup: ConformanceGroup<StateConformanceFixture> = {
@@ -7,7 +8,7 @@ export const isTransactionGroup: ConformanceGroup<StateConformanceFixture> = {
     {
       name: "reports true for a withTransaction context",
       run: async ({ stateAdapter }, expect) => {
-        const result = await stateAdapter.withTransaction(async (txCtx) =>
+        const result = await transaction(stateAdapter, (txCtx) =>
           stateAdapter.isTransaction(txCtx),
         );
         expect(result).toBe(true);

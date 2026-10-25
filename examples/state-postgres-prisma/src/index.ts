@@ -42,7 +42,7 @@ const jobTypes = defineJobTypes<{
 const stateProvider = createPrismaPgStateProvider({ prisma: prisma as any });
 
 // 5. Create adapters and queuert client/worker
-const stateAdapter = await createPgStateAdapter({
+const stateAdapter = createPgStateAdapter({
   stateProvider,
   // Prisma v4+ removed implicit type coercion, so $queryRawUnsafe doesn't cast
   // string parameters to UUID, causing "operator does not exist: uuid = text".
@@ -51,16 +51,16 @@ const stateAdapter = await createPgStateAdapter({
 });
 await stateAdapter.migrateToLatest();
 
-const notifyAdapter = await createInProcessNotifyAdapter();
+const notifyAdapter = createInProcessNotifyAdapter();
 
-const client = await createClient({
+const client = createClient({
   stateAdapter,
   notifyAdapter,
   jobTypes,
 });
 
 // 6. Create and start worker
-const worker = await createInProcessWorker({
+const worker = createInProcessWorker({
   client,
   processors: createProcessors({
     client,

@@ -60,7 +60,7 @@ describe("PostgreSQL State Adapter Conformance (postgres.js)", () => {
         );
 
         const stateProvider = createPostgresJsProvider({ sql });
-        const adapter = await createPgStateAdapter({ stateProvider });
+        const adapter = createPgStateAdapter({ stateProvider });
         await adapter.migrateToLatest();
         return use(adapter as unknown as StateAdapter<{ $test: true }, string>);
       },
@@ -82,7 +82,7 @@ it("infers custom ID types through the full stack", async ({ postgresConnectionS
 
   try {
     const stateProvider = createPostgresJsProvider({ sql });
-    const stateAdapter = await createPgStateAdapter({
+    const stateAdapter = createPgStateAdapter({
       stateProvider,
       idType: "text",
       generateId: (): `job.${UUID}` => `job.${randomUUID()}`,
@@ -91,7 +91,7 @@ it("infers custom ID types through the full stack", async ({ postgresConnectionS
     await stateAdapter.migrateToLatest();
 
     const notifyProvider = createPostgresJsNotifyProvider({ sql });
-    const notifyAdapter = await createPgNotifyAdapter({
+    const notifyAdapter = createPgNotifyAdapter({
       notifyProvider,
       channelPrefix: `spec_${Date.now()}_${Math.random().toString(36).slice(2)}`,
     });
@@ -105,13 +105,13 @@ it("infers custom ID types through the full stack", async ({ postgresConnectionS
       };
     }>();
 
-    const client = await createClient({
+    const client = createClient({
       stateAdapter,
       notifyAdapter,
       log,
       jobTypes,
     });
-    const worker = await createInProcessWorker({
+    const worker = createInProcessWorker({
       client,
       processors: createProcessors({
         client,

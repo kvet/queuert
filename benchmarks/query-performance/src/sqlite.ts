@@ -1,7 +1,7 @@
 import { mkdirSync, rmSync, writeFileSync } from "node:fs";
 import { dirname } from "node:path";
 
-import { createAsyncRwLock, createSqliteStateAdapter } from "@queuert/sqlite";
+import { createAsyncRwLock, createAsyncSqliteStateAdapter } from "@queuert/sqlite";
 import { fastSeedAllStates } from "@queuert/sqlite/testing";
 import Database from "better-sqlite3";
 import {
@@ -61,7 +61,7 @@ const stateProvider = {
   },
 };
 
-const stateAdapter = await createSqliteStateAdapter<BetterSqlite3Context, string>({
+const stateAdapter = createAsyncSqliteStateAdapter<BetterSqlite3Context, string>({
   stateProvider,
 });
 await stateAdapter.migrateToLatest();

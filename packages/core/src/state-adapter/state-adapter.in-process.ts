@@ -1,4 +1,4 @@
-import { createAsyncRwLock } from "@queuert/helpers";
+import { type Operation, createAsyncRwLock, runOperation } from "@queuert/helpers";
 
 import { type DeduplicationOptions } from "../entities/deduplication.js";
 import { type OrderDirection, type Page, type PageParams } from "../entities/pagination.js";
@@ -7,6 +7,8 @@ import { resolveStateAdapterConfig } from "./adapter-config.js";
 import { decodeIdCursor, decodeTimestampWithIdCursor, encodeCursor } from "./cursor.js";
 import {
   type StateAdapter,
+  type StateAdapterMode,
+  type StateResult,
   type StateAttemptFence,
   type StateBlockedJob,
   type StateChain,
@@ -594,17 +596,30 @@ class JobIndex {
 export type InProcessContext = { inTransaction?: boolean; journal?: JournalEntry[] };
 
 /** State adapter backed by in-memory data structures. Suitable for testing and single-process deployments without persistence. */
-export type InProcessStateAdapter = StateAdapter<InProcessContext, string>;
+export type InProcessStateAdapter<TMode extends StateAdapterMode = "async"> = StateAdapter<
+  InProcessContext,
+  string,
+  TMode
+>;
 
 /**
  * @param options - Optional ID generation, validation, and limit overrides.
  */
-export const createInProcessStateAdapter = async ({
+export const createInProcessStateAdapter = <TMode extends StateAdapterMode = "async">({
+  mode = "async" as TMode,
   generateId: generateIdOption = () => crypto.randomUUID(),
   validateId: validateIdOption,
   maxBlockersPerJob: maxBlockersPerJobOption,
   countCap: countCapOption,
 }: {
+  /**
+   * Whether data methods return results directly (`"sync"`) or as promises (`"async"`). In sync
+   * mode transactions must be synchronous, and no lock is taken: nothing can interleave with a
+   * synchronous transaction.
+   *
+   * @defaultValue `"async"`
+   */
+  mode?: TMode;
   /**
    * Function to generate new job IDs. Must return unique values — collisions
    * are a hard error.
@@ -631,7 +646,7 @@ export const createInProcessStateAdapter = async ({
    * @defaultValue `10_000`
    */
   countCap?: number;
-} = {}): Promise<InProcessStateAdapter> => {
+} = {}): InProcessStateAdapter<TMode> => {
   const config = resolveStateAdapterConfig({
     generateId: generateIdOption,
     validateId: validateIdOption,
@@ -647,19 +662,24 @@ export const createInProcessStateAdapter = async ({
     if (closed) throw new Error("StateAdapter is closed");
   };
 
-  const withWriteLock = async <T>(txCtx: InProcessContext | undefined, fn: () => T): Promise<T> => {
-    if (txCtx?.inTransaction) return fn();
-    using _h = await lock.acquireWrite();
-    assertOpen();
-    return fn();
-  };
-
-  const withReadLock = async <T>(txCtx: InProcessContext | undefined, fn: () => T): Promise<T> => {
-    if (txCtx?.inTransaction) return fn();
-    using _h = await lock.acquireRead();
-    assertOpen();
-    return fn();
-  };
+  const withLock = <T>(
+    kind: "read" | "write",
+    txCtx: InProcessContext | undefined,
+    fn: () => T,
+  ): StateResult<TMode, T> =>
+    runOperation(mode, function* (): Operation<T> {
+      if (txCtx?.inTransaction) return fn();
+      using _h =
+        mode === "async"
+          ? ((yield kind === "read" ? lock.acquireRead() : lock.acquireWrite()) as Disposable)
+          : undefined;
+      assertOpen();
+      return fn();
+    });
+  const withWriteLock = <T>(txCtx: InProcessContext | undefined, fn: () => T) =>
+    withLock("write", txCtx, fn);
+  const withReadLock = <T>(txCtx: InProcessContext | undefined, fn: () => T) =>
+    withLock("read", txCtx, fn);
 
   // A batch that throws midway leaves none of its writes behind, matching the SQL adapters,
   // whose batch is a single statement — even if the caller catches the error and commits.
@@ -713,25 +733,29 @@ export const createInProcessStateAdapter = async ({
     return jobs.map((job) => ({ ...job, chain }));
   };
 
-  const adapter: InProcessStateAdapter = {
+  const adapter: InProcessStateAdapter<TMode> = {
     config,
+    mode,
 
-    withTransaction: async (fn) => {
-      using _h = await lock.acquireWrite();
-      assertOpen();
-      const journal: JournalEntry[] = [];
-      const txCtx: InProcessContext = { inTransaction: true, journal };
-      try {
-        return await fn(txCtx);
-      } catch (error) {
-        idx.rollback(journal);
-        throw error;
-      }
-    },
+    withTransaction: (fn) =>
+      runOperation(mode, function* () {
+        using _h = mode === "async" ? ((yield lock.acquireWrite()) as Disposable) : undefined;
+        assertOpen();
+        const journal: JournalEntry[] = [];
+        const txCtx: InProcessContext = { inTransaction: true, journal };
+        try {
+          return yield fn(txCtx);
+        } catch (error) {
+          idx.rollback(journal);
+          throw error;
+        } finally {
+          txCtx.inTransaction = false;
+        }
+      }) as never,
 
     isTransaction: (txCtx) => txCtx.inTransaction === true,
 
-    getChains: async ({ txCtx, chainIds }) =>
+    getChains: ({ txCtx, chainIds }) =>
       withReadLock(txCtx, () =>
         chainIds.map((chainId) => {
           const headJob = idx.jobs.get(chainId);
@@ -739,7 +763,7 @@ export const createInProcessStateAdapter = async ({
         }),
       ),
 
-    getJobs: async ({ txCtx, jobIds }) =>
+    getJobs: ({ txCtx, jobIds }) =>
       withReadLock(txCtx, () =>
         jobIds.map((jobId): StateJob | undefined => {
           const job = idx.jobs.get(jobId);
@@ -747,7 +771,7 @@ export const createInProcessStateAdapter = async ({
         }),
       ),
 
-    createJobs: async ({ txCtx, jobs: jobInputs }) =>
+    createJobs: ({ txCtx, jobs: jobInputs }) =>
       withWriteLock(txCtx, () => {
         return withAtomicBatch(txCtx, (journal) => {
           const results: (StateChain & { deduplicated: boolean })[] = [];
@@ -793,7 +817,7 @@ export const createInProcessStateAdapter = async ({
         });
       }),
 
-    continueJobs: async ({ txCtx, jobs: jobInputs }) =>
+    continueJobs: ({ txCtx, jobs: jobInputs }) =>
       withWriteLock(txCtx, () => {
         return withAtomicBatch(txCtx, (journal) => {
           const now = new Date();
@@ -858,7 +882,7 @@ export const createInProcessStateAdapter = async ({
         });
       }),
 
-    completeJobs: async ({ txCtx, jobs: jobInputs }) =>
+    completeJobs: ({ txCtx, jobs: jobInputs }) =>
       withWriteLock(txCtx, () =>
         withAtomicBatch(txCtx, (journal) => {
           const now = new Date();
@@ -897,7 +921,7 @@ export const createInProcessStateAdapter = async ({
         }),
       ),
 
-    rescheduleJobs: async ({ txCtx, jobs }) =>
+    rescheduleJobs: ({ txCtx, jobs }) =>
       withWriteLock(txCtx, () => {
         if (jobs.length === 0) return [];
         const journal = txCtx?.journal;
@@ -936,7 +960,7 @@ export const createInProcessStateAdapter = async ({
         return results;
       }),
 
-    deleteChains: async ({ txCtx, chainIds }) =>
+    deleteChains: ({ txCtx, chainIds }) =>
       withWriteLock(txCtx, () => {
         const journal = txCtx?.journal;
         const uniqueChainIds = new Set<string>(chainIds);
@@ -971,7 +995,7 @@ export const createInProcessStateAdapter = async ({
         return result;
       }),
 
-    startJobAttempts: async ({ txCtx, timeoutMsByTypeName, workerId, limit }) =>
+    startJobAttempts: ({ txCtx, timeoutMsByTypeName, workerId, limit }) =>
       withWriteLock(txCtx, () => {
         const journal = txCtx?.journal;
         const now = new Date();
@@ -1008,7 +1032,7 @@ export const createInProcessStateAdapter = async ({
         return acquired;
       }),
 
-    getStartAttemptDelayMs: async ({ txCtx, typeNames }) =>
+    getStartAttemptDelayMs: ({ txCtx, typeNames }) =>
       withReadLock(txCtx, () => {
         const now = Date.now();
         let nextScheduledAt: number | null = null;
@@ -1027,7 +1051,7 @@ export const createInProcessStateAdapter = async ({
         return Math.max(0, nextScheduledAt - now);
       }),
 
-    extendJobAttempt: async ({ txCtx, jobId, fence, timeoutMs }) =>
+    extendJobAttempt: ({ txCtx, jobId, fence, timeoutMs }) =>
       withWriteLock(txCtx, () => {
         const journal = txCtx?.journal;
         const job = idx.jobs.get(jobId);
@@ -1038,13 +1062,7 @@ export const createInProcessStateAdapter = async ({
         return jobView(updatedJob);
       }),
 
-    reclaimExpiredJobAttempts: async ({
-      txCtx,
-      typeNames,
-      ignoredJobIds,
-      lastAttemptError,
-      limit,
-    }) =>
+    reclaimExpiredJobAttempts: ({ txCtx, typeNames, ignoredJobIds, lastAttemptError, limit }) =>
       withWriteLock(txCtx, () => {
         const journal = txCtx?.journal;
         const now = Date.now();
@@ -1081,7 +1099,7 @@ export const createInProcessStateAdapter = async ({
         });
       }),
 
-    addJobsBlockers: async ({ txCtx, jobBlockers: jobBlockerInputs }) =>
+    addJobsBlockers: ({ txCtx, jobBlockers: jobBlockerInputs }) =>
       withWriteLock(txCtx, () => {
         const journal = txCtx?.journal;
         const results: (StateJob & { blockers: (StateChainInfo | undefined)[] })[] = [];
@@ -1127,7 +1145,7 @@ export const createInProcessStateAdapter = async ({
         return results;
       }),
 
-    getJobBlockers: async ({ txCtx, jobId }) =>
+    getJobBlockers: ({ txCtx, jobId }) =>
       withReadLock(txCtx, () => {
         const blockerMap = idx.jobBlockers.get(jobId);
         if (!blockerMap) return [];
@@ -1141,7 +1159,7 @@ export const createInProcessStateAdapter = async ({
           });
       }),
 
-    unblockJobs: async ({ txCtx, blockedByChainId }) =>
+    unblockJobs: ({ txCtx, blockedByChainId }) =>
       withWriteLock(txCtx, () => {
         const journal = txCtx?.journal;
         const result: StateDependentJob[] = [];
@@ -1199,7 +1217,7 @@ export const createInProcessStateAdapter = async ({
         return result;
       }),
 
-    listChainTypeNames: async ({ txCtx }) =>
+    listChainTypeNames: ({ txCtx }) =>
       withReadLock(txCtx, () => {
         const names = new Set<string>();
         for (const headJob of idx.headJobsByCreatedAt.iterate("asc")) {
@@ -1208,7 +1226,7 @@ export const createInProcessStateAdapter = async ({
         return Array.from(names);
       }),
 
-    listJobTypeNames: async ({ txCtx }) =>
+    listJobTypeNames: ({ txCtx }) =>
       withReadLock(txCtx, () => {
         const names = new Set<string>();
         for (const job of idx.jobs.values()) {
@@ -1217,7 +1235,7 @@ export const createInProcessStateAdapter = async ({
         return Array.from(names);
       }),
 
-    countByChainTypeNames: async ({ txCtx, typeNames }) =>
+    countByChainTypeNames: ({ txCtx, typeNames }) =>
       withReadLock(txCtx, () => {
         const counts = new Map<string, { running: number; completed: number }>();
         for (const name of typeNames) {
@@ -1243,7 +1261,7 @@ export const createInProcessStateAdapter = async ({
         });
       }),
 
-    countByJobTypeNames: async ({ txCtx, typeNames }) =>
+    countByJobTypeNames: ({ txCtx, typeNames }) =>
       withReadLock(txCtx, () => {
         const counts = new Map<
           string,
@@ -1270,7 +1288,7 @@ export const createInProcessStateAdapter = async ({
         });
       }),
 
-    listChains: async ({
+    listChains: ({
       txCtx,
       typeName,
       independent,
@@ -1312,7 +1330,7 @@ export const createInProcessStateAdapter = async ({
         };
       }),
 
-    listJobs: async (params) =>
+    listJobs: (params) =>
       withReadLock(params.txCtx, () => {
         const { typeName, from, to, status, orderBy, orderDirection, page } = params;
 
@@ -1334,7 +1352,7 @@ export const createInProcessStateAdapter = async ({
         return { items: jobPage.items.map(jobView), nextCursor: jobPage.nextCursor };
       }),
 
-    listChainJobs: async ({ txCtx, chainId, orderDirection, page }) =>
+    listChainJobs: ({ txCtx, chainId, orderDirection, page }) =>
       withReadLock(txCtx, () => {
         const chainMap = idx.jobsByChain.get(chainId);
         const matched: DbJob[] = chainMap ? Array.from(chainMap.values()) : [];
@@ -1345,7 +1363,7 @@ export const createInProcessStateAdapter = async ({
         };
       }),
 
-    listBlockedJobs: async ({ txCtx, chainId, orderDirection, page }) =>
+    listBlockedJobs: ({ txCtx, chainId, orderDirection, page }) =>
       withReadLock(txCtx, () => {
         const blockedJobIds = idx.blockedByChain.get(chainId);
         const matched: DbJob[] = [];
@@ -1365,12 +1383,13 @@ export const createInProcessStateAdapter = async ({
         return { items: jobPage.items.map(jobView), nextCursor: jobPage.nextCursor };
       }),
 
-    close: async () => {
-      using _h = await lock.acquireWrite();
-      if (closed) return;
-      closed = true;
-      idx.clear();
-    },
+    close: () =>
+      runOperation(mode, function* () {
+        using _h = mode === "async" ? ((yield lock.acquireWrite()) as Disposable) : undefined;
+        if (closed) return;
+        closed = true;
+        idx.clear();
+      }),
   };
 
   return adapter;

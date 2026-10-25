@@ -14,7 +14,7 @@ This document describes the internal implementation of `@queuert/dashboard` — 
 ```
 HTTP Request
     ↓
-await createDashboard({ client, basePath })
+createDashboard({ client, basePath })
     ↓
 fetch(request) → Response
     ├── /api/*     → seroval API (reads from state adapter)
@@ -130,7 +130,7 @@ This means the published package requires no frontend build tools, no `node_modu
 The `basePath` option enables mounting the dashboard at a sub-path behind a reverse proxy or framework router:
 
 ```typescript
-const dashboard = await createDashboard({
+const dashboard = createDashboard({
   client,
   basePath: "/internal/queuert",
 });

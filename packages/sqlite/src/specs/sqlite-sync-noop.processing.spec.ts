@@ -1,0 +1,35 @@
+import {
+  extendWithCommon,
+  extendWithNotifyNoop,
+  extendWithResourceLeakDetection,
+  processErrorHandlingTestSuite,
+  processTestSuite,
+  attemptReclaimerTestSuite,
+  workerTestSuite,
+} from "queuert/testing";
+import { describe, it } from "vitest";
+
+import { extendWithStateSqlite } from "./state-adapter.sqlite.spec-helper.js";
+
+const sqliteNoopIt = extendWithResourceLeakDetection(
+  extendWithNotifyNoop(extendWithCommon(extendWithStateSqlite(it, { mode: "sync" }))),
+);
+
+// NOTE: hack for vitest plugin
+it("index");
+
+describe("Process Error Handling", () => {
+  processErrorHandlingTestSuite({ it: sqliteNoopIt });
+});
+
+describe("Process", () => {
+  processTestSuite({ it: sqliteNoopIt });
+});
+
+describe("Worker", () => {
+  workerTestSuite({ it: sqliteNoopIt });
+});
+
+describe("Attempt Reclamation", () => {
+  attemptReclaimerTestSuite({ it: sqliteNoopIt });
+});

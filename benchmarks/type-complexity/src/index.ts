@@ -231,17 +231,17 @@ ${typeStrings.join("\n")}
 
 const jobTypes = defineJobTypes<Defs>();
 
-const stateAdapter = await createInProcessStateAdapter();
-const notifyAdapter = await createInProcessNotifyAdapter();
+const stateAdapter = createInProcessStateAdapter();
+const notifyAdapter = createInProcessNotifyAdapter();
 
-const client = await createClient({
+const client = createClient({
   stateAdapter,
   notifyAdapter,
   jobTypes,
 });
 
 ${middleware}
-const worker = await createInProcessWorker({
+const worker = createInProcessWorker({
   client,
   processors: createProcessors({ client, jobTypes, ${mwPart}processors: ${processors} }),
 });
@@ -283,10 +283,10 @@ const ${slice.name}Registry = defineJobTypes<${slice.name}Defs>();`;
   return `import { defineJobTypes, createProcessors, createInProcessWorker, createClient, withTransactionHooks, type AttemptMiddleware, createInProcessStateAdapter, createInProcessNotifyAdapter } from "queuert";
 ${sliceTypeDecls.join("\n")}
 
-const stateAdapter = await createInProcessStateAdapter();
-const notifyAdapter = await createInProcessNotifyAdapter();
+const stateAdapter = createInProcessStateAdapter();
+const notifyAdapter = createInProcessNotifyAdapter();
 
-const client = await createClient({
+const client = createClient({
   stateAdapter,
   notifyAdapter,
   jobTypes: [${registryNames.join(", ")}],
@@ -295,7 +295,7 @@ const client = await createClient({
 ${middleware}
 ${sliceProcessorDecls.join("\n")}
 
-const worker = await createInProcessWorker({
+const worker = createInProcessWorker({
   client,
   processors: [${processorNames.join(", ")}],
 });

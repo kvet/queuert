@@ -13,8 +13,8 @@ export const bufferNotifyJobScheduled = (
 ): void => {
   const state = transactionHooks.getOrInsert(notifyJobScheduledKey, () => ({
     state: new Map<string, number>(),
-    flush: async (state) => {
-      await Promise.all(
+    flush: (state) => {
+      void Promise.all(
         Array.from(state.entries()).map(async ([typeName, count]) => {
           try {
             await notifyAdapter.provideWakeHint(typeName, count);
@@ -42,8 +42,8 @@ export const bufferNotifyChainCompletion = (
   transactionHooks
     .getOrInsert(notifyChainCompletedKey, () => ({
       state: new Set<string>(),
-      flush: async (state) => {
-        await Promise.all(
+      flush: (state) => {
+        void Promise.all(
           Array.from(state).map(async (chainId) => {
             try {
               await notifyAdapter.notifyChainCompleted(chainId);
@@ -70,8 +70,8 @@ export const bufferNotifyJobAttemptLost = (
   transactionHooks
     .getOrInsert(notifyJobAttemptLostKey, () => ({
       state: new Set<string>(),
-      flush: async (state) => {
-        await Promise.all(
+      flush: (state) => {
+        void Promise.all(
           Array.from(state).map(async (jobId) => {
             try {
               await notifyAdapter.notifyJobAttemptLost(jobId);

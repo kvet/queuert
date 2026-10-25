@@ -1,6 +1,6 @@
 import { join } from "node:path";
 
-import { createAsyncRwLock, createSqliteStateAdapter } from "@queuert/sqlite";
+import { createSyncSqliteStateAdapter } from "@queuert/sqlite";
 import Database from "better-sqlite3";
 import { createBetterSqlite3StateProvider } from "example-state-sqlite-better-sqlite3/provider";
 import { createClient, createInProcessNotifyAdapter, defineJobTypes } from "queuert";
@@ -103,27 +103,11 @@ export const jobTypes = defineJobTypes<{
 
 export const db = new Database(join(import.meta.dirname, "..", "data.db"));
 db.pragma("journal_mode = WAL");
-const lock = createAsyncRwLock();
-const stateProvider = createBetterSqlite3StateProvider({ db, lock });
+const stateProvider = createBetterSqlite3StateProvider({ db });
 
-export const stateAdapter = await createSqliteStateAdapter({ stateProvider });
-await stateAdapter.migrateToLatest();
+export const stateAdapter = createSyncSqliteStateAdapter({ stateProvider });
+stateAdapter.migrateToLatest();
 
-export const withTransaction = async <T>(
-  fn: (ctx: { db: typeof db }) => Promise<T>,
-): Promise<T> => {
-  using _h = await lock.acquireWrite();
-  db.exec("BEGIN");
-  try {
-    const result = await fn({ db });
-    db.exec("COMMIT");
-    return result;
-  } catch (error) {
-    if (db.inTransaction) db.exec("ROLLBACK");
-    throw error;
-  }
-};
+export const notifyAdapter = createInProcessNotifyAdapter();
 
-export const notifyAdapter = await createInProcessNotifyAdapter();
-
-export const client = await createClient({ stateAdapter, notifyAdapter, jobTypes });
+export const client = createClient({ stateAdapter, notifyAdapter, jobTypes });

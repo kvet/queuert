@@ -13,7 +13,7 @@ test("state-postgres-pg provider passes state adapter conformance", async () => 
     const pool = new Pool({ connectionString: pg.connectionString, idleTimeoutMillis: 0 });
 
     const stateProvider = createPgPoolStateProvider({ pool });
-    const adapter = await createPgStateAdapter({ stateProvider });
+    const adapter = createPgStateAdapter({ stateProvider });
     await adapter.migrateToLatest();
 
     return {

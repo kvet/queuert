@@ -134,13 +134,13 @@ Key patterns used:
 Compose the cleanup slice with your application slices by passing arrays to `createClient` and `createInProcessWorker`:
 
 ```ts
-const client = await createClient({
+const client = createClient({
   stateAdapter,
   notifyAdapter,
   jobTypes: [cleanupJobTypes, yourJobTypes],
 });
 
-const worker = await createInProcessWorker({
+const worker = createInProcessWorker({
   client,
   processors: [cleanupProcessorRegistry, yourProcessorRegistry],
 });

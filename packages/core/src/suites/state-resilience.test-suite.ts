@@ -1,6 +1,7 @@
 import { type TestAPI } from "vitest";
 
 import { createClient } from "../client.js";
+import { transaction } from "../conformance/transaction.js";
 import { createInProcessWorker } from "../in-process-worker.js";
 import { createProcessors } from "../job-type-processors/create-job-type-processors.js";
 import { defineJobTypes } from "../job-types/define-job-types.js";
@@ -37,21 +38,21 @@ export const stateResilienceTestSuite = ({
         };
       }>();
 
-      const client = await createClient({
+      const client = createClient({
         stateAdapter,
         notifyAdapter,
         observabilityAdapter,
         log,
         jobTypes,
       });
-      const flakyWorkerClient = await createClient({
+      const flakyWorkerClient = createClient({
         stateAdapter: flakyStateAdapter,
         notifyAdapter,
         observabilityAdapter,
         log,
         jobTypes,
       });
-      const flakyWorker = await createInProcessWorker({
+      const flakyWorker = createInProcessWorker({
         client: flakyWorkerClient,
         concurrency: 1,
         // should be processed in a single worker loop
@@ -77,7 +78,7 @@ export const stateResilienceTestSuite = ({
             test: {
               attemptHandler: async ({ job, complete }) =>
                 withTransactionHooks(async (transactionHooks) =>
-                  flakyStateAdapter.withTransaction(async (txCtx) =>
+                  transaction(flakyStateAdapter, (txCtx) =>
                     complete({
                       ...txCtx,
                       transactionHooks,
@@ -90,7 +91,7 @@ export const stateResilienceTestSuite = ({
         }),
       });
 
-      const chains = await withTransaction(async (txCtx, transactionHooks) =>
+      const chains = await withTransaction((txCtx, transactionHooks) =>
         client.createChains({
           ...txCtx,
           transactionHooks,
@@ -130,21 +131,21 @@ export const stateResilienceTestSuite = ({
         };
       }>();
 
-      const client = await createClient({
+      const client = createClient({
         stateAdapter,
         notifyAdapter,
         observabilityAdapter,
         log,
         jobTypes,
       });
-      const flakyWorkerClient = await createClient({
+      const flakyWorkerClient = createClient({
         stateAdapter: flakyStateAdapter,
         notifyAdapter,
         observabilityAdapter,
         log,
         jobTypes,
       });
-      const flakyWorker = await createInProcessWorker({
+      const flakyWorker = createInProcessWorker({
         client: flakyWorkerClient,
         concurrency: 5,
         // Short poll interval so the worker retries promptly after a transient error.
@@ -172,7 +173,7 @@ export const stateResilienceTestSuite = ({
             test: {
               attemptHandler: async ({ job, complete }) =>
                 withTransactionHooks(async (transactionHooks) =>
-                  flakyStateAdapter.withTransaction(async (txCtx) =>
+                  transaction(flakyStateAdapter, (txCtx) =>
                     complete({
                       ...txCtx,
                       transactionHooks,
@@ -185,7 +186,7 @@ export const stateResilienceTestSuite = ({
         }),
       });
 
-      const chains = await withTransaction(async (txCtx, transactionHooks) =>
+      const chains = await withTransaction((txCtx, transactionHooks) =>
         client.createChains({
           ...txCtx,
           transactionHooks,
@@ -225,14 +226,14 @@ export const stateResilienceTestSuite = ({
         };
       }>();
 
-      const client = await createClient({
+      const client = createClient({
         stateAdapter,
         notifyAdapter,
         observabilityAdapter,
         log,
         jobTypes,
       });
-      const flakyWorkerClient = await createClient({
+      const flakyWorkerClient = createClient({
         stateAdapter: flakyStateAdapter,
         notifyAdapter,
         observabilityAdapter,
@@ -263,7 +264,7 @@ export const stateResilienceTestSuite = ({
           maxDelayMs: 1,
         },
       };
-      const flakyWorker1 = await createInProcessWorker({
+      const flakyWorker1 = createInProcessWorker({
         ...workerConfig,
         processors: createProcessors({
           client,
@@ -273,7 +274,7 @@ export const stateResilienceTestSuite = ({
             test: {
               attemptHandler: async ({ job, complete }) =>
                 withTransactionHooks(async (transactionHooks) =>
-                  flakyStateAdapter.withTransaction(async (txCtx) =>
+                  transaction(flakyStateAdapter, (txCtx) =>
                     complete({
                       ...txCtx,
                       transactionHooks,
@@ -285,7 +286,7 @@ export const stateResilienceTestSuite = ({
           },
         }),
       });
-      const flakyWorker2 = await createInProcessWorker({
+      const flakyWorker2 = createInProcessWorker({
         ...workerConfig,
         processors: createProcessors({
           client,
@@ -295,7 +296,7 @@ export const stateResilienceTestSuite = ({
             test: {
               attemptHandler: async ({ job, complete }) =>
                 withTransactionHooks(async (transactionHooks) =>
-                  flakyStateAdapter.withTransaction(async (txCtx) =>
+                  transaction(flakyStateAdapter, (txCtx) =>
                     complete({
                       ...txCtx,
                       transactionHooks,
@@ -308,7 +309,7 @@ export const stateResilienceTestSuite = ({
         }),
       });
 
-      const chains = await withTransaction(async (txCtx, transactionHooks) =>
+      const chains = await withTransaction((txCtx, transactionHooks) =>
         client.createChains({
           ...txCtx,
           transactionHooks,
@@ -348,21 +349,21 @@ export const stateResilienceTestSuite = ({
         };
       }>();
 
-      const client = await createClient({
+      const client = createClient({
         stateAdapter,
         notifyAdapter,
         observabilityAdapter,
         log,
         jobTypes,
       });
-      const flakyWorkerClient = await createClient({
+      const flakyWorkerClient = createClient({
         stateAdapter: flakyDbStateAdapter,
         notifyAdapter,
         observabilityAdapter,
         log,
         jobTypes,
       });
-      const flakyWorker = await createInProcessWorker({
+      const flakyWorker = createInProcessWorker({
         client: flakyWorkerClient,
         concurrency: 1,
         pollIntervalMs: 10_000,
@@ -387,7 +388,7 @@ export const stateResilienceTestSuite = ({
             test: {
               attemptHandler: async ({ job, complete }) =>
                 withTransactionHooks(async (transactionHooks) =>
-                  flakyDbStateAdapter.withTransaction(async (txCtx) =>
+                  transaction(flakyDbStateAdapter, (txCtx) =>
                     complete({
                       ...txCtx,
                       transactionHooks,
@@ -400,7 +401,7 @@ export const stateResilienceTestSuite = ({
         }),
       });
 
-      const chains = await withTransaction(async (txCtx, transactionHooks) =>
+      const chains = await withTransaction((txCtx, transactionHooks) =>
         client.createChains({
           ...txCtx,
           transactionHooks,
@@ -442,21 +443,21 @@ export const stateResilienceTestSuite = ({
         };
       }>();
 
-      const client = await createClient({
+      const client = createClient({
         stateAdapter,
         notifyAdapter,
         observabilityAdapter,
         log,
         jobTypes,
       });
-      const flakyWorkerClient = await createClient({
+      const flakyWorkerClient = createClient({
         stateAdapter: flakyDbStateAdapter,
         notifyAdapter,
         observabilityAdapter,
         log,
         jobTypes,
       });
-      const flakyWorker = await createInProcessWorker({
+      const flakyWorker = createInProcessWorker({
         client: flakyWorkerClient,
         concurrency: 5,
         pollIntervalMs: 250,
@@ -481,7 +482,7 @@ export const stateResilienceTestSuite = ({
             test: {
               attemptHandler: async ({ job, complete }) =>
                 withTransactionHooks(async (transactionHooks) =>
-                  flakyDbStateAdapter.withTransaction(async (txCtx) =>
+                  transaction(flakyDbStateAdapter, (txCtx) =>
                     complete({
                       ...txCtx,
                       transactionHooks,
@@ -494,7 +495,7 @@ export const stateResilienceTestSuite = ({
         }),
       });
 
-      const chains = await withTransaction(async (txCtx, transactionHooks) =>
+      const chains = await withTransaction((txCtx, transactionHooks) =>
         client.createChains({
           ...txCtx,
           transactionHooks,
@@ -536,14 +537,14 @@ export const stateResilienceTestSuite = ({
         };
       }>();
 
-      const client = await createClient({
+      const client = createClient({
         stateAdapter,
         notifyAdapter,
         observabilityAdapter,
         log,
         jobTypes,
       });
-      const flakyWorkerClient = await createClient({
+      const flakyWorkerClient = createClient({
         stateAdapter: flakyDbStateAdapter,
         notifyAdapter,
         observabilityAdapter,
@@ -571,7 +572,7 @@ export const stateResilienceTestSuite = ({
           maxDelayMs: 1,
         },
       };
-      const flakyWorker1 = await createInProcessWorker({
+      const flakyWorker1 = createInProcessWorker({
         ...workerConfig,
         processors: createProcessors({
           client,
@@ -581,7 +582,7 @@ export const stateResilienceTestSuite = ({
             test: {
               attemptHandler: async ({ job, complete }) =>
                 withTransactionHooks(async (transactionHooks) =>
-                  flakyDbStateAdapter.withTransaction(async (txCtx) =>
+                  transaction(flakyDbStateAdapter, (txCtx) =>
                     complete({
                       ...txCtx,
                       transactionHooks,
@@ -593,7 +594,7 @@ export const stateResilienceTestSuite = ({
           },
         }),
       });
-      const flakyWorker2 = await createInProcessWorker({
+      const flakyWorker2 = createInProcessWorker({
         ...workerConfig,
         processors: createProcessors({
           client,
@@ -603,7 +604,7 @@ export const stateResilienceTestSuite = ({
             test: {
               attemptHandler: async ({ job, complete }) =>
                 withTransactionHooks(async (transactionHooks) =>
-                  flakyDbStateAdapter.withTransaction(async (txCtx) =>
+                  transaction(flakyDbStateAdapter, (txCtx) =>
                     complete({
                       ...txCtx,
                       transactionHooks,
@@ -616,7 +617,7 @@ export const stateResilienceTestSuite = ({
         }),
       });
 
-      const chains = await withTransaction(async (txCtx, transactionHooks) =>
+      const chains = await withTransaction((txCtx, transactionHooks) =>
         client.createChains({
           ...txCtx,
           transactionHooks,
@@ -663,21 +664,21 @@ export const stateResilienceTestSuite = ({
         },
       };
 
-      const client = await createClient({
+      const client = createClient({
         stateAdapter,
         notifyAdapter,
         observabilityAdapter,
         log,
         jobTypes,
       });
-      const workerClient = await createClient({
+      const workerClient = createClient({
         stateAdapter: flakyStartStateAdapter,
         notifyAdapter,
         observabilityAdapter,
         log,
         jobTypes,
       });
-      const worker = await createInProcessWorker({
+      const worker = createInProcessWorker({
         client: workerClient,
         pollIntervalMs: 100,
         // Delays of 10ms, 1s, then 60s: only a reset keeps the third failure short.
@@ -688,7 +689,7 @@ export const stateResilienceTestSuite = ({
           processors: {
             test: {
               attemptHandler: async ({ complete }) =>
-                withTransaction(async (txCtx, transactionHooks) =>
+                withTransaction((txCtx, transactionHooks) =>
                   complete({ ...txCtx, transactionHooks, output: null }),
                 ),
             },
@@ -700,7 +701,7 @@ export const stateResilienceTestSuite = ({
         await recovered;
 
         failuresLeft = 1;
-        const chain = await withTransaction(async (txCtx, transactionHooks) =>
+        const chain = await withTransaction((txCtx, transactionHooks) =>
           client.createChain({ ...txCtx, transactionHooks, typeName: "test", input: null }),
         );
         await client.awaitChain(chain, { pollIntervalMs: 100, timeoutMs: 5000 });

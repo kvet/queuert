@@ -2,7 +2,7 @@
  * SQLite State Adapter Memory Measurement
  */
 
-import { createAsyncRwLock, createSqliteStateAdapter } from "@queuert/sqlite";
+import { createSyncSqliteStateAdapter } from "@queuert/sqlite";
 import Database from "better-sqlite3";
 import { createBetterSqlite3StateProvider } from "example-state-sqlite-better-sqlite3/provider";
 import {
@@ -37,7 +37,7 @@ await runDoubleRunBenchmark<Infra>({
     console.log("\nAfter creating better-sqlite3 database:");
     diffMemory(beforeDb, afterDb);
 
-    const stateProvider = createBetterSqlite3StateProvider({ db, lock: createAsyncRwLock() });
+    const stateProvider = createBetterSqlite3StateProvider({ db });
 
     return {
       infra: { db, stateProvider },
@@ -52,14 +52,14 @@ await runDoubleRunBenchmark<Infra>({
     );
 
     const stateAdapter = await step("After creating state adapter (with migrations)", async () => {
-      const adapter = await createSqliteStateAdapter({ stateProvider });
-      await adapter.migrateToLatest();
+      const adapter = createSyncSqliteStateAdapter({ stateProvider });
+      adapter.migrateToLatest();
       return adapter;
     });
 
     const setup = await step("After creating client + worker", async () => {
-      const client = await createClient({ stateAdapter, notifyAdapter, jobTypes });
-      const worker = await createInProcessWorker({
+      const client = createClient({ stateAdapter, notifyAdapter, jobTypes });
+      const worker = createInProcessWorker({
         client,
         processors: createProcessors({
           client,
@@ -67,8 +67,8 @@ await runDoubleRunBenchmark<Infra>({
           processors: {
             "test-job": {
               attemptHandler: async ({ complete }) =>
-                withTransactionHooks(async (transactionHooks) =>
-                  stateProvider.withTransaction(async (ctx) =>
+                withTransactionHooks((transactionHooks) =>
+                  stateProvider.withTransaction((ctx) =>
                     complete({ ...ctx, transactionHooks, output: { processed: true } }),
                   ),
                 ),
@@ -83,8 +83,8 @@ await runDoubleRunBenchmark<Infra>({
     await processStep("After processing 100 jobs", async () => {
       const promises = [];
       for (let i = 0; i < 100; i++) {
-        const chain = await withTransactionHooks(async (transactionHooks) =>
-          stateProvider.withTransaction(async (ctx) =>
+        const chain = withTransactionHooks((transactionHooks) =>
+          stateProvider.withTransaction((ctx) =>
             setup.client.createChain({
               ...ctx,
               transactionHooks,
@@ -99,7 +99,7 @@ await runDoubleRunBenchmark<Infra>({
     });
 
     await setup.stopWorker();
-    await stateAdapter.close();
+    stateAdapter.close();
     await notifyAdapter.close();
   },
 });

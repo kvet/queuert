@@ -1,12 +1,12 @@
 import { type TransactionHooks } from "../transaction-hooks.js";
 
-type Callback = () => void | Promise<void>;
+type Callback = () => void;
 
-const runCallbacks = async (callbacks: Callback[]): Promise<void> => {
+const runCallbacks = (callbacks: Callback[]): void => {
   let firstError: unknown;
   for (const callback of callbacks) {
     try {
-      await callback();
+      callback();
     } catch (error) {
       firstError ??= error;
     }
@@ -52,7 +52,7 @@ export const bufferObservabilityRollback = (
           const scope = state.splice(mark);
           for (const cb of scope) {
             try {
-              void cb();
+              cb();
             } catch {}
           }
         };

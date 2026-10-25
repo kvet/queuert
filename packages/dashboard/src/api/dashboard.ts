@@ -89,21 +89,21 @@ const dispatchApi = async (
  *
  * @example
  * ```ts
- * const dashboard = await createDashboard({ client, basePath: '/internal/queuert' });
+ * const dashboard = createDashboard({ client, basePath: '/internal/queuert' });
  * ```
  *
  * @param options - Dashboard configuration.
  * @experimental
  */
-export const createDashboard = async <
+export const createDashboard = <
   TJobTypeDefinitions extends BaseJobTypeDefinitions,
-  TStateAdapter extends StateAdapter<any, any>,
+  TStateAdapter extends StateAdapter<any, any, any>,
 >(options: {
   /** The Queuert client the dashboard reads jobs and chains from. */
   client: Client<TJobTypeDefinitions, TStateAdapter>;
   /** Mount prefix without trailing slash (e.g. `'/internal/queuert'`). Defaults to `''` (root). */
   basePath?: string;
-}): Promise<{ fetch: (request: Request) => Response | Promise<Response> }> => {
+}): { fetch: (request: Request) => Response | Promise<Response> } => {
   const client = options.client as unknown as Client<any, any>;
   const basePath = options.basePath?.replace(/\/+$/, "") ?? "";
 

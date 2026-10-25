@@ -1,3 +1,4 @@
+import { unwrap } from "@queuert/helpers";
 import { type TestAPI, expect } from "vitest";
 
 import { createClient } from "../client.js";
@@ -29,14 +30,14 @@ export const processErrorHandlingTestSuite = ({ it }: { it: TestAPI<TestSuiteCon
       };
     }>();
 
-    const client = await createClient({
+    const client = createClient({
       stateAdapter,
       notifyAdapter,
       observabilityAdapter,
       log,
       jobTypes,
     });
-    const worker = await createInProcessWorker({
+    const worker = createInProcessWorker({
       client,
       concurrency: 1,
       processors: createProcessors({
@@ -50,7 +51,7 @@ export const processErrorHandlingTestSuite = ({ it }: { it: TestAPI<TestSuiteCon
                 throw new Error("Simulated handler error");
               }
               expect(job.lastAttemptError).toContain("Error: Simulated handler error");
-              return withTransaction(async (txCtx, transactionHooks) =>
+              return withTransaction((txCtx, transactionHooks) =>
                 complete({ ...txCtx, transactionHooks, output: { result: job.input.value * 2 } }),
               );
             },
@@ -59,7 +60,7 @@ export const processErrorHandlingTestSuite = ({ it }: { it: TestAPI<TestSuiteCon
       }),
     });
 
-    const chain = await withTransaction(async (txCtx, transactionHooks) =>
+    const chain = await withTransaction((txCtx, transactionHooks) =>
       client.createChain({
         ...txCtx,
         transactionHooks,
@@ -92,14 +93,14 @@ export const processErrorHandlingTestSuite = ({ it }: { it: TestAPI<TestSuiteCon
       };
     }>();
 
-    const client = await createClient({
+    const client = createClient({
       stateAdapter,
       notifyAdapter,
       observabilityAdapter,
       log,
       jobTypes,
     });
-    const worker = await createInProcessWorker({
+    const worker = createInProcessWorker({
       client,
       concurrency: 1,
       processors: createProcessors({
@@ -112,7 +113,7 @@ export const processErrorHandlingTestSuite = ({ it }: { it: TestAPI<TestSuiteCon
               if (job.attempt > 1) {
                 expect(job.lastAttemptError).toContain("Error: Simulated handler error");
               }
-              return withTransaction(async (txCtx, transactionHooks) => {
+              return withTransaction((txCtx, transactionHooks) => {
                 if (job.attempt === 1) {
                   throw new Error("Simulated handler error");
                 }
@@ -128,7 +129,7 @@ export const processErrorHandlingTestSuite = ({ it }: { it: TestAPI<TestSuiteCon
       }),
     });
 
-    const chain = await withTransaction(async (txCtx, transactionHooks) =>
+    const chain = await withTransaction((txCtx, transactionHooks) =>
       client.createChain({
         ...txCtx,
         transactionHooks,
@@ -146,6 +147,7 @@ export const processErrorHandlingTestSuite = ({ it }: { it: TestAPI<TestSuiteCon
   });
 
   it("reschedules when handler throws inside its transaction after complete", async ({
+    withTransactionOperation,
     stateAdapter,
     notifyAdapter,
     withTransaction,
@@ -161,14 +163,14 @@ export const processErrorHandlingTestSuite = ({ it }: { it: TestAPI<TestSuiteCon
       };
     }>();
 
-    const client = await createClient({
+    const client = createClient({
       stateAdapter,
       notifyAdapter,
       observabilityAdapter,
       log,
       jobTypes,
     });
-    const worker = await createInProcessWorker({
+    const worker = createInProcessWorker({
       client,
       concurrency: 1,
       processors: createProcessors({
@@ -181,12 +183,14 @@ export const processErrorHandlingTestSuite = ({ it }: { it: TestAPI<TestSuiteCon
               if (job.attempt > 1) {
                 expect(job.lastAttemptError).toContain("Error: Error after complete");
               }
-              return withTransaction(async (txCtx, transactionHooks) => {
-                const result = await complete({
-                  ...txCtx,
-                  transactionHooks,
-                  output: { result: job.input.value * 2 },
-                });
+              return withTransactionOperation(function* (txCtx, transactionHooks) {
+                const result = yield* unwrap(
+                  complete({
+                    ...txCtx,
+                    transactionHooks,
+                    output: { result: job.input.value * 2 },
+                  }),
+                );
                 if (job.attempt === 1) {
                   throw new Error("Error after complete");
                 }
@@ -198,7 +202,7 @@ export const processErrorHandlingTestSuite = ({ it }: { it: TestAPI<TestSuiteCon
       }),
     });
 
-    const chain = await withTransaction(async (txCtx, transactionHooks) =>
+    const chain = await withTransaction((txCtx, transactionHooks) =>
       client.createChain({
         ...txCtx,
         transactionHooks,
@@ -231,14 +235,14 @@ export const processErrorHandlingTestSuite = ({ it }: { it: TestAPI<TestSuiteCon
       };
     }>();
 
-    const client = await createClient({
+    const client = createClient({
       stateAdapter,
       notifyAdapter,
       observabilityAdapter,
       log,
       jobTypes,
     });
-    const worker = await createInProcessWorker({
+    const worker = createInProcessWorker({
       client,
       concurrency: 1,
       processors: createProcessors({
@@ -255,7 +259,7 @@ export const processErrorHandlingTestSuite = ({ it }: { it: TestAPI<TestSuiteCon
               expect(job.lastAttemptError).toContain(
                 "Attempt handler returned without a committed `complete` call",
               );
-              return withTransaction(async (txCtx, transactionHooks) =>
+              return withTransaction((txCtx, transactionHooks) =>
                 complete({ ...txCtx, transactionHooks, output: { done: true } }),
               );
             },
@@ -264,7 +268,7 @@ export const processErrorHandlingTestSuite = ({ it }: { it: TestAPI<TestSuiteCon
       }),
     });
 
-    const chain = await withTransaction(async (txCtx, transactionHooks) =>
+    const chain = await withTransaction((txCtx, transactionHooks) =>
       client.createChain({ ...txCtx, transactionHooks, typeName: "test", input: null }),
     );
 
@@ -276,6 +280,7 @@ export const processErrorHandlingTestSuite = ({ it }: { it: TestAPI<TestSuiteCon
   });
 
   it("recovers when user code poisons its transaction before complete", async ({
+    withTransactionOperation,
     stateAdapter,
     notifyAdapter,
     withTransaction,
@@ -295,14 +300,14 @@ export const processErrorHandlingTestSuite = ({ it }: { it: TestAPI<TestSuiteCon
       };
     }>();
 
-    const client = await createClient({
+    const client = createClient({
       stateAdapter,
       notifyAdapter,
       observabilityAdapter,
       log,
       jobTypes,
     });
-    const worker = await createInProcessWorker({
+    const worker = createInProcessWorker({
       client,
       concurrency: 1,
       processors: createProcessors({
@@ -312,9 +317,9 @@ export const processErrorHandlingTestSuite = ({ it }: { it: TestAPI<TestSuiteCon
           test: {
             backoffConfig: fastBackoff,
             attemptHandler: async ({ job, complete }) =>
-              withTransaction(async (txCtx, transactionHooks) => {
+              withTransactionOperation(function* (txCtx, transactionHooks) {
                 if (job.attempt === 1) {
-                  await poisonTransaction(txCtx);
+                  yield* unwrap(poisonTransaction(txCtx));
                 }
                 return complete({
                   ...txCtx,
@@ -327,7 +332,7 @@ export const processErrorHandlingTestSuite = ({ it }: { it: TestAPI<TestSuiteCon
       }),
     });
 
-    const chain = await withTransaction(async (txCtx, transactionHooks) =>
+    const chain = await withTransaction((txCtx, transactionHooks) =>
       client.createChain({
         ...txCtx,
         transactionHooks,
@@ -345,6 +350,7 @@ export const processErrorHandlingTestSuite = ({ it }: { it: TestAPI<TestSuiteCon
   });
 
   it("recovers when user code poisons a separate transaction before complete", async ({
+    withTransactionOperation,
     stateAdapter,
     notifyAdapter,
     withTransaction,
@@ -364,14 +370,14 @@ export const processErrorHandlingTestSuite = ({ it }: { it: TestAPI<TestSuiteCon
       };
     }>();
 
-    const client = await createClient({
+    const client = createClient({
       stateAdapter,
       notifyAdapter,
       observabilityAdapter,
       log,
       jobTypes,
     });
-    const worker = await createInProcessWorker({
+    const worker = createInProcessWorker({
       client,
       concurrency: 1,
       processors: createProcessors({
@@ -382,11 +388,11 @@ export const processErrorHandlingTestSuite = ({ it }: { it: TestAPI<TestSuiteCon
             backoffConfig: fastBackoff,
             attemptHandler: async ({ job, complete }) => {
               if (job.attempt === 1) {
-                await withTransaction(async (txCtx) => {
-                  await poisonTransaction(txCtx);
+                await withTransactionOperation(function* (txCtx) {
+                  yield* unwrap(poisonTransaction(txCtx));
                 });
               }
-              return withTransaction(async (txCtx, transactionHooks) =>
+              return withTransaction((txCtx, transactionHooks) =>
                 complete({ ...txCtx, transactionHooks, output: { result: job.input.value * 2 } }),
               );
             },
@@ -395,7 +401,7 @@ export const processErrorHandlingTestSuite = ({ it }: { it: TestAPI<TestSuiteCon
       }),
     });
 
-    const chain = await withTransaction(async (txCtx, transactionHooks) =>
+    const chain = await withTransaction((txCtx, transactionHooks) =>
       client.createChain({
         ...txCtx,
         transactionHooks,
@@ -411,6 +417,7 @@ export const processErrorHandlingTestSuite = ({ it }: { it: TestAPI<TestSuiteCon
   });
 
   it("rolls back the continuation when handler throws after complete with continueWith inside its transaction", async ({
+    withTransactionOperation,
     stateAdapter,
     notifyAdapter,
     withTransaction,
@@ -430,14 +437,14 @@ export const processErrorHandlingTestSuite = ({ it }: { it: TestAPI<TestSuiteCon
       };
     }>();
 
-    const client = await createClient({
+    const client = createClient({
       stateAdapter,
       notifyAdapter,
       observabilityAdapter,
       log,
       jobTypes,
     });
-    const worker = await createInProcessWorker({
+    const worker = createInProcessWorker({
       client,
       concurrency: 1,
       processors: createProcessors({
@@ -447,12 +454,14 @@ export const processErrorHandlingTestSuite = ({ it }: { it: TestAPI<TestSuiteCon
           step1: {
             backoffConfig: fastBackoff,
             attemptHandler: async ({ job, complete }) =>
-              withTransaction(async (txCtx, transactionHooks) => {
-                const result = await complete({
-                  ...txCtx,
-                  transactionHooks,
-                  continueWith: { typeName: "step2", input: { value: job.input.value * 2 } },
-                });
+              withTransactionOperation(function* (txCtx, transactionHooks) {
+                const result = yield* unwrap(
+                  complete({
+                    ...txCtx,
+                    transactionHooks,
+                    continueWith: { typeName: "step2", input: { value: job.input.value * 2 } },
+                  }),
+                );
                 if (job.attempt === 1) {
                   throw new Error("Error after complete with continueWith");
                 }
@@ -461,7 +470,7 @@ export const processErrorHandlingTestSuite = ({ it }: { it: TestAPI<TestSuiteCon
           },
           step2: {
             attemptHandler: async ({ job, complete }) =>
-              withTransaction(async (txCtx, transactionHooks) =>
+              withTransaction((txCtx, transactionHooks) =>
                 complete({ ...txCtx, transactionHooks, output: { result: job.input.value } }),
               ),
           },
@@ -469,7 +478,7 @@ export const processErrorHandlingTestSuite = ({ it }: { it: TestAPI<TestSuiteCon
       }),
     });
 
-    const chain = await withTransaction(async (txCtx, transactionHooks) =>
+    const chain = await withTransaction((txCtx, transactionHooks) =>
       client.createChain({
         ...txCtx,
         transactionHooks,
@@ -489,6 +498,7 @@ export const processErrorHandlingTestSuite = ({ it }: { it: TestAPI<TestSuiteCon
   });
 
   it("keeps the dependent blocked when the blocker handler throws after complete inside its transaction", async ({
+    withTransactionOperation,
     stateAdapter,
     notifyAdapter,
     withTransaction,
@@ -510,14 +520,14 @@ export const processErrorHandlingTestSuite = ({ it }: { it: TestAPI<TestSuiteCon
       };
     }>();
 
-    const client = await createClient({
+    const client = createClient({
       stateAdapter,
       notifyAdapter,
       observabilityAdapter,
       log,
       jobTypes,
     });
-    const worker = await createInProcessWorker({
+    const worker = createInProcessWorker({
       client,
       concurrency: 1,
       processors: createProcessors({
@@ -527,12 +537,14 @@ export const processErrorHandlingTestSuite = ({ it }: { it: TestAPI<TestSuiteCon
           blocker: {
             backoffConfig: fastBackoff,
             attemptHandler: async ({ job, complete }) =>
-              withTransaction(async (txCtx, transactionHooks) => {
-                const result = await complete({
-                  ...txCtx,
-                  transactionHooks,
-                  output: { done: true },
-                });
+              withTransactionOperation(function* (txCtx, transactionHooks) {
+                const result = yield* unwrap(
+                  complete({
+                    ...txCtx,
+                    transactionHooks,
+                    output: { done: true },
+                  }),
+                );
                 if (job.attempt === 1) {
                   throw new Error("Error after blocker complete");
                 }
@@ -543,7 +555,7 @@ export const processErrorHandlingTestSuite = ({ it }: { it: TestAPI<TestSuiteCon
             attemptHandler: async ({ job, complete }) => {
               const [blocker] = job.blockers;
               expect((await client.getJob({ id: blocker.id }))?.attempt).toBe(2);
-              return withTransaction(async (txCtx, transactionHooks) =>
+              return withTransaction((txCtx, transactionHooks) =>
                 complete({ ...txCtx, transactionHooks, output: { result: "ok" } }),
               );
             },
@@ -552,7 +564,7 @@ export const processErrorHandlingTestSuite = ({ it }: { it: TestAPI<TestSuiteCon
       }),
     });
 
-    const blockerChain = await withTransaction(async (txCtx, transactionHooks) =>
+    const blockerChain = await withTransaction((txCtx, transactionHooks) =>
       client.createChain({
         ...txCtx,
         transactionHooks,
@@ -560,7 +572,7 @@ export const processErrorHandlingTestSuite = ({ it }: { it: TestAPI<TestSuiteCon
         input: { value: 1 },
       }),
     );
-    const dependentChain = await withTransaction(async (txCtx, transactionHooks) =>
+    const dependentChain = await withTransaction((txCtx, transactionHooks) =>
       client.createChain({
         ...txCtx,
         transactionHooks,
@@ -592,14 +604,14 @@ export const processErrorHandlingTestSuite = ({ it }: { it: TestAPI<TestSuiteCon
       };
     }>();
 
-    const client = await createClient({
+    const client = createClient({
       stateAdapter,
       notifyAdapter,
       observabilityAdapter,
       log,
       jobTypes,
     });
-    const worker = await createInProcessWorker({
+    const worker = createInProcessWorker({
       client,
       concurrency: 1,
       processors: createProcessors({
@@ -625,7 +637,7 @@ export const processErrorHandlingTestSuite = ({ it }: { it: TestAPI<TestSuiteCon
                   throw "string error";
                 case 4:
                   expect(job.lastAttemptError).toBe("string error");
-                  return withTransaction(async (txCtx, transactionHooks) =>
+                  return withTransaction((txCtx, transactionHooks) =>
                     complete({ ...txCtx, transactionHooks, output: null }),
                   );
                 default:
@@ -637,7 +649,7 @@ export const processErrorHandlingTestSuite = ({ it }: { it: TestAPI<TestSuiteCon
       }),
     });
 
-    const chain = await withTransaction(async (txCtx, transactionHooks) =>
+    const chain = await withTransaction((txCtx, transactionHooks) =>
       client.createChain({
         ...txCtx,
         transactionHooks,
@@ -667,14 +679,14 @@ export const processErrorHandlingTestSuite = ({ it }: { it: TestAPI<TestSuiteCon
       };
     }>();
 
-    const client = await createClient({
+    const client = createClient({
       stateAdapter,
       notifyAdapter,
       observabilityAdapter,
       log,
       jobTypes,
     });
-    const worker = await createInProcessWorker({
+    const worker = createInProcessWorker({
       client,
       concurrency: 1,
       processors: createProcessors({
@@ -686,11 +698,11 @@ export const processErrorHandlingTestSuite = ({ it }: { it: TestAPI<TestSuiteCon
             attemptHandler: async ({ job, complete }) => {
               expect(job.attempt).toBe(1);
               await expect(
-                withTransaction(async () => {
+                withTransaction(() => {
                   throw new Error("transaction boom");
                 }),
               ).rejects.toThrow("transaction boom");
-              return withTransaction(async (txCtx, transactionHooks) =>
+              return withTransaction((txCtx, transactionHooks) =>
                 complete({ ...txCtx, transactionHooks, output: null }),
               );
             },
@@ -699,7 +711,7 @@ export const processErrorHandlingTestSuite = ({ it }: { it: TestAPI<TestSuiteCon
       }),
     });
 
-    const chain = await withTransaction(async (txCtx, transactionHooks) =>
+    const chain = await withTransaction((txCtx, transactionHooks) =>
       client.createChain({
         ...txCtx,
         transactionHooks,
@@ -729,14 +741,14 @@ export const processErrorHandlingTestSuite = ({ it }: { it: TestAPI<TestSuiteCon
       };
     }>();
 
-    const client = await createClient({
+    const client = createClient({
       stateAdapter,
       notifyAdapter,
       observabilityAdapter,
       log,
       jobTypes,
     });
-    const worker = await createInProcessWorker({
+    const worker = createInProcessWorker({
       client,
       concurrency: 1,
       processors: createProcessors({
@@ -750,7 +762,7 @@ export const processErrorHandlingTestSuite = ({ it }: { it: TestAPI<TestSuiteCon
               if (job.attempt < 3) {
                 throw new Error(`Simulated error on attempt ${job.attempt}`);
               }
-              return withTransaction(async (txCtx, transactionHooks) =>
+              return withTransaction((txCtx, transactionHooks) =>
                 complete({ ...txCtx, transactionHooks, output: { result: job.input.value * 2 } }),
               );
             },
@@ -759,7 +771,7 @@ export const processErrorHandlingTestSuite = ({ it }: { it: TestAPI<TestSuiteCon
       }),
     });
 
-    const chain = await withTransaction(async (txCtx, transactionHooks) =>
+    const chain = await withTransaction((txCtx, transactionHooks) =>
       client.createChain({
         ...txCtx,
         transactionHooks,

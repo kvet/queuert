@@ -1,28 +1,23 @@
 import { DatabaseSync } from "node:sqlite";
 
-import { createAsyncRwLock, createSqliteStateAdapter } from "@queuert/sqlite";
-import { runStateAdapterConformance } from "queuert/conformance";
-import { test } from "vitest";
+import { createSyncSqliteStateAdapter } from "@queuert/sqlite";
+import { type BaseTxContext, type StateAdapter } from "queuert";
+import { syncModeTestSuite } from "queuert/testing";
 
 import { createNodeSqliteStateProvider } from "./provider.js";
 
-test("state-sqlite-node-sqlite provider passes state adapter conformance", async () => {
-  await runStateAdapterConformance(async () => {
+syncModeTestSuite({
+  createStateAdapter: async () => {
     const db = new DatabaseSync(":memory:");
-
-    const lock = createAsyncRwLock();
-    const stateProvider = createNodeSqliteStateProvider({ db, lock });
-    const adapter = await createSqliteStateAdapter({ stateProvider });
-    await adapter.migrateToLatest();
-
+    const stateAdapter = createSyncSqliteStateAdapter({
+      stateProvider: createNodeSqliteStateProvider({ db }),
+    });
+    stateAdapter.migrateToLatest();
     return {
-      stateAdapter: adapter,
-      transactionConcurrency: "serialized",
-      withNonTransactionContext: async (fn) => fn({ db }),
-      reset: async () => adapter.truncate(),
+      stateAdapter: stateAdapter as unknown as StateAdapter<BaseTxContext, string, "sync">,
       dispose: async () => {
         db.close();
       },
     };
-  });
-}, 30_000);
+  },
+});

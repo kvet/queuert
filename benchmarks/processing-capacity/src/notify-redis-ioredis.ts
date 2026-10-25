@@ -10,8 +10,8 @@ const redis = new Redis(redisUrl);
 const redisSubscription = new Redis(redisUrl);
 await runBenchmark({
   title: "PROCESSING CAPACITY — REDIS NOTIFY (ioredis)",
-  stateAdapter: await createInProcessStateAdapter(),
-  notifyAdapter: await createRedisNotifyAdapter({
+  stateAdapter: createInProcessStateAdapter(),
+  notifyAdapter: createRedisNotifyAdapter({
     notifyProvider: createIoredisNotifyProvider({
       client: redis,
       subscribeClient: redisSubscription,

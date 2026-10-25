@@ -16,8 +16,8 @@ type Defs = {
 };
 const jobTypes = defineJobTypes<Defs>();
 
-const stateAdapter = await createInProcessStateAdapter();
-const client = await createClient({ stateAdapter, jobTypes });
+const stateAdapter = createInProcessStateAdapter();
+const client = createClient({ stateAdapter, jobTypes });
 
 describe("middleware ctx cannot shadow built-in handler keys", () => {
   it("handler built-ins (signal, job, complete) win over middleware-injected ctx", async () => {
@@ -55,7 +55,7 @@ describe("middleware ctx cannot shadow built-in handler keys", () => {
       },
     });
 
-    const worker = await createInProcessWorker({
+    const worker = createInProcessWorker({
       client,
       processors: registry,
     });
@@ -118,7 +118,7 @@ describe("middleware ctx flows into the handler through wrapHandler", () => {
       },
     });
 
-    const worker = await createInProcessWorker({
+    const worker = createInProcessWorker({
       client,
       processors: registry,
     });
@@ -169,8 +169,8 @@ describe("registry-level attemptMiddleware — runtime per-slice isolation", () 
     type BDefs = { b: { entry: true; input: Record<string, never>; output: null } };
     const aReg = defineJobTypes<ADefs>();
     const bReg = defineJobTypes<BDefs>();
-    const sa = await createInProcessStateAdapter();
-    const abClient = await createClient({
+    const sa = createInProcessStateAdapter();
+    const abClient = createClient({
       stateAdapter: sa,
       jobTypes: [aReg, bReg],
     });
@@ -206,7 +206,7 @@ describe("registry-level attemptMiddleware — runtime per-slice isolation", () 
       },
     });
 
-    const worker = await createInProcessWorker({
+    const worker = createInProcessWorker({
       client: abClient,
       processors: [aProcessors, bProcessors],
     });

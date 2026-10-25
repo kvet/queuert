@@ -1,27 +1,22 @@
-import { createAsyncRwLock, createSqliteStateAdapter } from "@queuert/sqlite";
+import { createSyncSqliteStateAdapter } from "@queuert/sqlite";
 import Database from "better-sqlite3";
-import { runStateAdapterConformance } from "queuert/conformance";
-import { test } from "vitest";
+import { type BaseTxContext, type StateAdapter } from "queuert";
+import { syncModeTestSuite } from "queuert/testing";
 
 import { createBetterSqlite3StateProvider } from "./provider.js";
 
-test("state-sqlite-better-sqlite3 provider passes state adapter conformance", async () => {
-  await runStateAdapterConformance(async () => {
+syncModeTestSuite({
+  createStateAdapter: async () => {
     const db = new Database(":memory:");
-
-    const lock = createAsyncRwLock();
-    const stateProvider = createBetterSqlite3StateProvider({ db, lock });
-    const adapter = await createSqliteStateAdapter({ stateProvider });
-    await adapter.migrateToLatest();
-
+    const stateAdapter = createSyncSqliteStateAdapter({
+      stateProvider: createBetterSqlite3StateProvider({ db }),
+    });
+    stateAdapter.migrateToLatest();
     return {
-      stateAdapter: adapter,
-      transactionConcurrency: "serialized",
-      withNonTransactionContext: async (fn) => fn({ db }),
-      reset: async () => adapter.truncate(),
+      stateAdapter: stateAdapter as unknown as StateAdapter<BaseTxContext, string, "sync">,
       dispose: async () => {
         db.close();
       },
     };
-  });
-}, 30_000);
+  },
+});

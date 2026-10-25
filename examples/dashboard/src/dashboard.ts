@@ -15,7 +15,7 @@ import { client, db, notifyAdapter, stateAdapter } from "./common.js";
 
 const PORT = 3333;
 
-const dashboard = await createDashboard({ client });
+const dashboard = createDashboard({ client });
 
 const server = createServer((req, res) => {
   void Promise.resolve(
@@ -35,7 +35,7 @@ process.on("SIGINT", () => {
   void (async () => {
     server.close();
     await notifyAdapter.close();
-    await stateAdapter.close();
+    stateAdapter.close();
     db.close();
     process.exit(0);
   })();

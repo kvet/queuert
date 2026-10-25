@@ -2,7 +2,7 @@ import Database from "better-sqlite3";
 import { type StateAdapter } from "queuert";
 import { type TestAPI } from "vitest";
 
-import { createSqliteStateAdapter } from "../state-adapter/state-adapter.sqlite.js";
+import { createAsyncSqliteStateAdapter } from "../state-adapter/state-adapter.sqlite.js";
 import { createBetterSqlite3Provider } from "../state-provider/state-provider.better-sqlite3.js";
 
 export type VarianceFixtures = {
@@ -36,7 +36,7 @@ export const extendWithVarianceStateSqlite = <T>(
     stateAdapter: [
       async ({ db }, use) => {
         const stateProvider = createBetterSqlite3Provider({ db });
-        const adapter = await createSqliteStateAdapter({ stateProvider, ...options });
+        const adapter = createAsyncSqliteStateAdapter({ stateProvider, ...options });
         await adapter.migrateToLatest();
         return use(adapter as unknown as StateAdapter<{ $test: true }, string>);
       },

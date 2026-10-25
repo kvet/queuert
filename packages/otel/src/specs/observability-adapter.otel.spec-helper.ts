@@ -170,7 +170,7 @@ export const extendWithObservabilityOtel = <T extends Record<string, unknown>>(
     observabilityAdapter: [
       async ({ _otelProvider, _otelTracerProvider }, use) => {
         await use(
-          await createOtelObservabilityAdapter({
+          createOtelObservabilityAdapter({
             meter: _otelProvider.getMeter("queuert-test"),
             tracer: _otelTracerProvider.getTracer("queuert-test"),
           }),

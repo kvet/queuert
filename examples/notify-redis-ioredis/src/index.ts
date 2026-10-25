@@ -44,17 +44,17 @@ const jobTypes = defineJobTypes<{
 }>();
 
 // 5. Create adapters
-const stateAdapter = await createInProcessStateAdapter();
-const notifyAdapter = await createRedisNotifyAdapter({ notifyProvider });
+const stateAdapter = createInProcessStateAdapter();
+const notifyAdapter = createRedisNotifyAdapter({ notifyProvider });
 
 // 6. Create client and worker
-const client = await createClient({
+const client = createClient({
   stateAdapter,
   notifyAdapter,
   jobTypes,
 });
 
-const worker = await createInProcessWorker({
+const worker = createInProcessWorker({
   client,
   processors: createProcessors({
     client,

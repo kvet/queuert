@@ -40,7 +40,7 @@ const toException = (error: unknown): Error | string =>
  *
  * @param options - OpenTelemetry adapter configuration.
  */
-export const createOtelObservabilityAdapter = async ({
+export const createOtelObservabilityAdapter = ({
   meter,
   tracer,
 }: {
@@ -48,7 +48,7 @@ export const createOtelObservabilityAdapter = async ({
   meter?: Meter;
   /** OTEL Tracer instance for creating spans. Omit to disable tracing. */
   tracer?: Tracer;
-} = {}): Promise<ObservabilityAdapter> => {
+} = {}): ObservabilityAdapter => {
   const workerStartedCounter = meter?.createCounter("queuert.worker.started");
   const workerErrorCounter = meter?.createCounter("queuert.worker.error");
   const workerStoppingCounter = meter?.createCounter("queuert.worker.stopping");

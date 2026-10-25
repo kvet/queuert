@@ -18,7 +18,7 @@ describe("PostgreSQL Notify Adapter Conformance (postgres.js) - Default Channel 
         const sql = postgres(postgresConnectionString, { max: 10, onnotice: () => {} });
 
         const notifyProvider = createPostgresJsNotifyProvider({ sql });
-        const notifyAdapter = await createPgNotifyAdapter({ notifyProvider });
+        const notifyAdapter = createPgNotifyAdapter({ notifyProvider });
 
         await use(notifyAdapter);
 
@@ -38,7 +38,7 @@ describe("PostgreSQL Notify Adapter Conformance (postgres.js) - Custom Channel P
         const sql = postgres(postgresConnectionString, { max: 10, onnotice: () => {} });
 
         const notifyProvider = createPostgresJsNotifyProvider({ sql });
-        const notifyAdapter = await createPgNotifyAdapter({
+        const notifyAdapter = createPgNotifyAdapter({
           notifyProvider,
           channelPrefix: "myapp_notifications",
         });

@@ -27,9 +27,9 @@ describe("SQL identifier validation", () => {
   describe("rejects invalid schema", () => {
     for (const { label, value } of identifierInjectionCases) {
       it(label, async () => {
-        await expect(
-          createPgStateAdapter({ stateProvider: dummyProvider, schema: value }),
-        ).rejects.toThrow(/Invalid schema/);
+        expect(() => createPgStateAdapter({ stateProvider: dummyProvider, schema: value })).toThrow(
+          /Invalid schema/,
+        );
       });
     }
   });
@@ -37,9 +37,9 @@ describe("SQL identifier validation", () => {
   describe("rejects invalid tablePrefix", () => {
     for (const { label, value } of identifierInjectionCases) {
       it(label, async () => {
-        await expect(
+        expect(() =>
           createPgStateAdapter({ stateProvider: dummyProvider, tablePrefix: value }),
-        ).rejects.toThrow(/Invalid tablePrefix/);
+        ).toThrow(/Invalid tablePrefix/);
       });
     }
   });
@@ -47,15 +47,15 @@ describe("SQL identifier validation", () => {
   describe("rejects invalid idType", () => {
     for (const { label, value } of identifierInjectionCases) {
       it(label, async () => {
-        await expect(
-          createPgStateAdapter({ stateProvider: dummyProvider, idType: value }),
-        ).rejects.toThrow(/Invalid idType/);
+        expect(() => createPgStateAdapter({ stateProvider: dummyProvider, idType: value })).toThrow(
+          /Invalid idType/,
+        );
       });
     }
   });
 
   it("accepts valid schema and tablePrefix", async () => {
-    const adapter = await createPgStateAdapter({
+    const adapter = createPgStateAdapter({
       stateProvider: dummyProvider,
       schema: "my_schema",
       tablePrefix: "qrt_",
@@ -64,12 +64,12 @@ describe("SQL identifier validation", () => {
   });
 
   it("accepts default values", async () => {
-    const adapter = await createPgStateAdapter({ stateProvider: dummyProvider });
+    const adapter = createPgStateAdapter({ stateProvider: dummyProvider });
     expect(adapter).toBeDefined();
   });
 
   it("accepts typical idType value", async () => {
-    const adapter = await createPgStateAdapter({
+    const adapter = createPgStateAdapter({
       stateProvider: dummyProvider,
       idType: "text",
     });
@@ -77,7 +77,7 @@ describe("SQL identifier validation", () => {
   });
 
   it("accepts custom generateId", async () => {
-    const adapter = await createPgStateAdapter({
+    const adapter = createPgStateAdapter({
       stateProvider: dummyProvider,
       generateId: () => "custom-id",
     });
@@ -89,9 +89,9 @@ describe("limit validation", () => {
   for (const option of ["maxBlockersPerJob", "countCap"] as const) {
     for (const value of [0, -1, 1.5, Number.NaN]) {
       it(`rejects ${option} = ${value}`, async () => {
-        await expect(
+        expect(() =>
           createPgStateAdapter({ stateProvider: dummyProvider, [option]: value }),
-        ).rejects.toThrow(new RegExp(`Invalid ${option}`));
+        ).toThrow(new RegExp(`Invalid ${option}`));
       });
     }
   }
@@ -99,7 +99,7 @@ describe("limit validation", () => {
 
 describe("config", () => {
   it("applies defaults", async () => {
-    const { config } = await createPgStateAdapter({ stateProvider: dummyProvider });
+    const { config } = createPgStateAdapter({ stateProvider: dummyProvider });
     expect(config.generateId()).toMatch(
       /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/,
     );
@@ -111,7 +111,7 @@ describe("config", () => {
   it("exposes the configured options", async () => {
     const generateId = () => `job-${crypto.randomUUID()}`;
     const validateId = (id: string) => id.startsWith("job-");
-    const { config } = await createPgStateAdapter({
+    const { config } = createPgStateAdapter({
       stateProvider: dummyProvider,
       generateId,
       validateId,

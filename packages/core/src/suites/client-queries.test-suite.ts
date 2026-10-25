@@ -1,4 +1,4 @@
-import { sleep } from "@queuert/helpers";
+import { unwrap, sleep } from "@queuert/helpers";
 import { type TestAPI, describe, expect, expectTypeOf } from "vitest";
 
 import { createClient } from "../client.js";
@@ -62,7 +62,7 @@ export const clientQueriesTestSuite = ({ it: baseIt }: { it: TestAPI<TestSuiteCo
     });
 
     it("getChain returns chain by id", async ({ client, withTransaction }) => {
-      const created = await withTransaction(async (txCtx, transactionHooks) =>
+      const created = await withTransaction((txCtx, transactionHooks) =>
         client.createChain({
           ...txCtx,
           transactionHooks,
@@ -81,7 +81,7 @@ export const clientQueriesTestSuite = ({ it: baseIt }: { it: TestAPI<TestSuiteCo
     });
 
     it("getChain narrows return type by typeName", async ({ client, withTransaction }) => {
-      const created = await withTransaction(async (txCtx, transactionHooks) =>
+      const created = await withTransaction((txCtx, transactionHooks) =>
         client.createChain({
           ...txCtx,
           transactionHooks,
@@ -97,7 +97,7 @@ export const clientQueriesTestSuite = ({ it: baseIt }: { it: TestAPI<TestSuiteCo
     });
 
     it("getChain returns without typeName", async ({ client, withTransaction }) => {
-      const created = await withTransaction(async (txCtx, transactionHooks) =>
+      const created = await withTransaction((txCtx, transactionHooks) =>
         client.createChain({
           ...txCtx,
           transactionHooks,
@@ -113,7 +113,7 @@ export const clientQueriesTestSuite = ({ it: baseIt }: { it: TestAPI<TestSuiteCo
     });
 
     it("getChain throws on typeName mismatch", async ({ client, withTransaction }) => {
-      const created = await withTransaction(async (txCtx, transactionHooks) =>
+      const created = await withTransaction((txCtx, transactionHooks) =>
         client.createChain({
           ...txCtx,
           transactionHooks,
@@ -122,9 +122,9 @@ export const clientQueriesTestSuite = ({ it: baseIt }: { it: TestAPI<TestSuiteCo
         }),
       );
 
-      await expect(client.getChain({ typeName: "notification", id: created.id })).rejects.toThrow(
-        ChainTypeMismatchError,
-      );
+      await expect(async () =>
+        client.getChain({ typeName: "notification", id: created.id }),
+      ).rejects.toThrow(ChainTypeMismatchError);
     });
   });
 
@@ -144,7 +144,7 @@ export const clientQueriesTestSuite = ({ it: baseIt }: { it: TestAPI<TestSuiteCo
     });
 
     it("getChains returns chains in input order", async ({ client, withTransaction }) => {
-      const order = await withTransaction(async (txCtx, transactionHooks) =>
+      const order = await withTransaction((txCtx, transactionHooks) =>
         client.createChain({
           ...txCtx,
           transactionHooks,
@@ -152,7 +152,7 @@ export const clientQueriesTestSuite = ({ it: baseIt }: { it: TestAPI<TestSuiteCo
           input: { amount: 42 },
         }),
       );
-      const notification = await withTransaction(async (txCtx, transactionHooks) =>
+      const notification = await withTransaction((txCtx, transactionHooks) =>
         client.createChain({
           ...txCtx,
           transactionHooks,
@@ -169,7 +169,7 @@ export const clientQueriesTestSuite = ({ it: baseIt }: { it: TestAPI<TestSuiteCo
     });
 
     it("getChains returns mix of found and undefined", async ({ client, withTransaction }) => {
-      const created = await withTransaction(async (txCtx, transactionHooks) =>
+      const created = await withTransaction((txCtx, transactionHooks) =>
         client.createChain({
           ...txCtx,
           transactionHooks,
@@ -188,7 +188,7 @@ export const clientQueriesTestSuite = ({ it: baseIt }: { it: TestAPI<TestSuiteCo
     });
 
     it("getChains narrows return type by typeName", async ({ client, withTransaction }) => {
-      const created = await withTransaction(async (txCtx, transactionHooks) =>
+      const created = await withTransaction((txCtx, transactionHooks) =>
         client.createChain({
           ...txCtx,
           transactionHooks,
@@ -207,7 +207,7 @@ export const clientQueriesTestSuite = ({ it: baseIt }: { it: TestAPI<TestSuiteCo
     });
 
     it("getChains throws on typeName mismatch", async ({ client, withTransaction }) => {
-      const created = await withTransaction(async (txCtx, transactionHooks) =>
+      const created = await withTransaction((txCtx, transactionHooks) =>
         client.createChain({
           ...txCtx,
           transactionHooks,
@@ -216,7 +216,7 @@ export const clientQueriesTestSuite = ({ it: baseIt }: { it: TestAPI<TestSuiteCo
         }),
       );
 
-      await expect(
+      await expect(async () =>
         client.getChains({ typeName: "notification", ids: [created.id] }),
       ).rejects.toThrow(ChainTypeMismatchError);
     });
@@ -242,7 +242,7 @@ export const clientQueriesTestSuite = ({ it: baseIt }: { it: TestAPI<TestSuiteCo
     });
 
     it("getJob returns job by id", async ({ client, withTransaction }) => {
-      const chain = await withTransaction(async (txCtx, transactionHooks) =>
+      const chain = await withTransaction((txCtx, transactionHooks) =>
         client.createChain({
           ...txCtx,
           transactionHooks,
@@ -261,7 +261,7 @@ export const clientQueriesTestSuite = ({ it: baseIt }: { it: TestAPI<TestSuiteCo
     });
 
     it("getJob returns without typeName", async ({ client, withTransaction }) => {
-      const chain = await withTransaction(async (txCtx, transactionHooks) =>
+      const chain = await withTransaction((txCtx, transactionHooks) =>
         client.createChain({
           ...txCtx,
           transactionHooks,
@@ -277,7 +277,7 @@ export const clientQueriesTestSuite = ({ it: baseIt }: { it: TestAPI<TestSuiteCo
     });
 
     it("getJob throws on typeName mismatch", async ({ client, withTransaction }) => {
-      const chain = await withTransaction(async (txCtx, transactionHooks) =>
+      const chain = await withTransaction((txCtx, transactionHooks) =>
         client.createChain({
           ...txCtx,
           transactionHooks,
@@ -286,7 +286,7 @@ export const clientQueriesTestSuite = ({ it: baseIt }: { it: TestAPI<TestSuiteCo
         }),
       );
 
-      await expect(client.getJob({ typeName: "order", id: chain.id })).rejects.toThrow(
+      await expect(async () => client.getJob({ typeName: "order", id: chain.id })).rejects.toThrow(
         JobTypeMismatchError,
       );
     });
@@ -308,7 +308,7 @@ export const clientQueriesTestSuite = ({ it: baseIt }: { it: TestAPI<TestSuiteCo
     });
 
     it("getJobs returns jobs in input order", async ({ client, withTransaction }) => {
-      const order = await withTransaction(async (txCtx, transactionHooks) =>
+      const order = await withTransaction((txCtx, transactionHooks) =>
         client.createChain({
           ...txCtx,
           transactionHooks,
@@ -316,7 +316,7 @@ export const clientQueriesTestSuite = ({ it: baseIt }: { it: TestAPI<TestSuiteCo
           input: { amount: 42 },
         }),
       );
-      const notification = await withTransaction(async (txCtx, transactionHooks) =>
+      const notification = await withTransaction((txCtx, transactionHooks) =>
         client.createChain({
           ...txCtx,
           transactionHooks,
@@ -333,7 +333,7 @@ export const clientQueriesTestSuite = ({ it: baseIt }: { it: TestAPI<TestSuiteCo
     });
 
     it("getJobs returns mix of found and undefined", async ({ client, withTransaction }) => {
-      const created = await withTransaction(async (txCtx, transactionHooks) =>
+      const created = await withTransaction((txCtx, transactionHooks) =>
         client.createChain({
           ...txCtx,
           transactionHooks,
@@ -352,7 +352,7 @@ export const clientQueriesTestSuite = ({ it: baseIt }: { it: TestAPI<TestSuiteCo
     });
 
     it("getJobs narrows return type by typeName", async ({ client, withTransaction }) => {
-      const created = await withTransaction(async (txCtx, transactionHooks) =>
+      const created = await withTransaction((txCtx, transactionHooks) =>
         client.createChain({
           ...txCtx,
           transactionHooks,
@@ -371,7 +371,7 @@ export const clientQueriesTestSuite = ({ it: baseIt }: { it: TestAPI<TestSuiteCo
     });
 
     it("getJobs throws on typeName mismatch", async ({ client, withTransaction }) => {
-      const created = await withTransaction(async (txCtx, transactionHooks) =>
+      const created = await withTransaction((txCtx, transactionHooks) =>
         client.createChain({
           ...txCtx,
           transactionHooks,
@@ -380,9 +380,9 @@ export const clientQueriesTestSuite = ({ it: baseIt }: { it: TestAPI<TestSuiteCo
         }),
       );
 
-      await expect(client.getJobs({ typeName: "order", ids: [created.id] })).rejects.toThrow(
-        JobTypeMismatchError,
-      );
+      await expect(async () =>
+        client.getJobs({ typeName: "order", ids: [created.id] }),
+      ).rejects.toThrow(JobTypeMismatchError);
     });
 
     it("getJobs skips typeName check for undefined entries", async ({ client }) => {
@@ -406,7 +406,7 @@ export const clientQueriesTestSuite = ({ it: baseIt }: { it: TestAPI<TestSuiteCo
       client,
       withTransaction,
     }) => {
-      await withTransaction(async (txCtx, transactionHooks) =>
+      await withTransaction((txCtx, transactionHooks) =>
         client.createChain({
           ...txCtx,
           transactionHooks,
@@ -414,7 +414,7 @@ export const clientQueriesTestSuite = ({ it: baseIt }: { it: TestAPI<TestSuiteCo
           input: { message: "hi" },
         }),
       );
-      await withTransaction(async (txCtx, transactionHooks) =>
+      await withTransaction((txCtx, transactionHooks) =>
         client.createChain({
           ...txCtx,
           transactionHooks,
@@ -422,7 +422,7 @@ export const clientQueriesTestSuite = ({ it: baseIt }: { it: TestAPI<TestSuiteCo
           input: { amount: 1 },
         }),
       );
-      await withTransaction(async (txCtx, transactionHooks) =>
+      await withTransaction((txCtx, transactionHooks) =>
         client.createChain({
           ...txCtx,
           transactionHooks,
@@ -440,7 +440,7 @@ export const clientQueriesTestSuite = ({ it: baseIt }: { it: TestAPI<TestSuiteCo
       client,
       withTransaction,
     }) => {
-      const order = await withTransaction(async (txCtx, transactionHooks) =>
+      const order = await withTransaction((txCtx, transactionHooks) =>
         client.createChain({
           ...txCtx,
           transactionHooks,
@@ -449,14 +449,14 @@ export const clientQueriesTestSuite = ({ it: baseIt }: { it: TestAPI<TestSuiteCo
         }),
       );
 
-      await withTransaction(async (txCtx, transactionHooks) =>
+      await withTransaction((txCtx, transactionHooks) =>
         client.completeChain({
           ...txCtx,
           transactionHooks,
           ...order,
-          handler: async ({ job, completeJob }) => {
+          handler: ({ job, completeJob }) => {
             if (job.typeName === "order") {
-              return completeJob(job, async ({ complete }) =>
+              return completeJob(job, ({ complete }) =>
                 complete({
                   continueWith: { typeName: "order_fulfill", input: { orderId: "o1" } },
                 }),
@@ -483,7 +483,7 @@ export const clientQueriesTestSuite = ({ it: baseIt }: { it: TestAPI<TestSuiteCo
       client,
       withTransaction,
     }) => {
-      await withTransaction(async (txCtx, transactionHooks) =>
+      await withTransaction((txCtx, transactionHooks) =>
         client.createChain({
           ...txCtx,
           transactionHooks,
@@ -491,7 +491,7 @@ export const clientQueriesTestSuite = ({ it: baseIt }: { it: TestAPI<TestSuiteCo
           input: { message: "hi" },
         }),
       );
-      await withTransaction(async (txCtx, transactionHooks) =>
+      await withTransaction((txCtx, transactionHooks) =>
         client.createChain({
           ...txCtx,
           transactionHooks,
@@ -499,7 +499,7 @@ export const clientQueriesTestSuite = ({ it: baseIt }: { it: TestAPI<TestSuiteCo
           input: { amount: 1 },
         }),
       );
-      await withTransaction(async (txCtx, transactionHooks) =>
+      await withTransaction((txCtx, transactionHooks) =>
         client.createChain({
           ...txCtx,
           transactionHooks,
@@ -517,7 +517,7 @@ export const clientQueriesTestSuite = ({ it: baseIt }: { it: TestAPI<TestSuiteCo
       client,
       withTransaction,
     }) => {
-      const order = await withTransaction(async (txCtx, transactionHooks) =>
+      const order = await withTransaction((txCtx, transactionHooks) =>
         client.createChain({
           ...txCtx,
           transactionHooks,
@@ -526,14 +526,14 @@ export const clientQueriesTestSuite = ({ it: baseIt }: { it: TestAPI<TestSuiteCo
         }),
       );
 
-      await withTransaction(async (txCtx, transactionHooks) =>
+      await withTransaction((txCtx, transactionHooks) =>
         client.completeChain({
           ...txCtx,
           transactionHooks,
           ...order,
-          handler: async ({ job, completeJob }) => {
+          handler: ({ job, completeJob }) => {
             if (job.typeName === "order") {
-              return completeJob(job, async ({ complete }) =>
+              return completeJob(job, ({ complete }) =>
                 complete({
                   continueWith: { typeName: "order_fulfill", input: { orderId: "o1" } },
                 }),
@@ -556,10 +556,10 @@ export const clientQueriesTestSuite = ({ it: baseIt }: { it: TestAPI<TestSuiteCo
     });
 
     it("counts running chains", async ({ client, withTransaction }) => {
-      await withTransaction(async (txCtx, transactionHooks) =>
+      await withTransaction((txCtx, transactionHooks) =>
         client.createChain({ ...txCtx, transactionHooks, typeName: "order", input: { amount: 1 } }),
       );
-      await withTransaction(async (txCtx, transactionHooks) =>
+      await withTransaction((txCtx, transactionHooks) =>
         client.createChain({
           ...txCtx,
           transactionHooks,
@@ -591,7 +591,7 @@ export const clientQueriesTestSuite = ({ it: baseIt }: { it: TestAPI<TestSuiteCo
         task_a: { entry: true; input: null; output: null };
         task_b: { entry: true; input: null; output: null };
       }>();
-      const client = await createClient({
+      const client = createClient({
         stateAdapter,
         notifyAdapter,
         observabilityAdapter,
@@ -599,17 +599,17 @@ export const clientQueriesTestSuite = ({ it: baseIt }: { it: TestAPI<TestSuiteCo
         jobTypes,
       });
 
-      const chainA = await withTransaction(async (txCtx, transactionHooks) =>
+      const chainA = await withTransaction((txCtx, transactionHooks) =>
         client.createChain({ ...txCtx, transactionHooks, typeName: "task_a", input: null }),
       );
-      await withTransaction(async (txCtx, transactionHooks) =>
+      await withTransaction((txCtx, transactionHooks) =>
         client.createChain({ ...txCtx, transactionHooks, typeName: "task_a", input: null }),
       );
-      await withTransaction(async (txCtx, transactionHooks) =>
+      await withTransaction((txCtx, transactionHooks) =>
         client.createChain({ ...txCtx, transactionHooks, typeName: "task_b", input: null }),
       );
 
-      const worker = await createInProcessWorker({
+      const worker = createInProcessWorker({
         client,
         concurrency: 1,
         processors: createProcessors({
@@ -618,13 +618,13 @@ export const clientQueriesTestSuite = ({ it: baseIt }: { it: TestAPI<TestSuiteCo
           processors: {
             task_a: {
               attemptHandler: async ({ complete }) =>
-                withTransaction(async (txCtx, transactionHooks) =>
+                withTransaction((txCtx, transactionHooks) =>
                   complete({ ...txCtx, transactionHooks, output: null }),
                 ),
             },
             task_b: {
               attemptHandler: async ({ complete }) =>
-                withTransaction(async (txCtx, transactionHooks) =>
+                withTransaction((txCtx, transactionHooks) =>
                   complete({ ...txCtx, transactionHooks, output: null }),
                 ),
             },
@@ -651,13 +651,13 @@ export const clientQueriesTestSuite = ({ it: baseIt }: { it: TestAPI<TestSuiteCo
     });
 
     it("counts pending jobs", async ({ client, withTransaction }) => {
-      await withTransaction(async (txCtx, transactionHooks) =>
+      await withTransaction((txCtx, transactionHooks) =>
         client.createChain({ ...txCtx, transactionHooks, typeName: "order", input: { amount: 1 } }),
       );
-      await withTransaction(async (txCtx, transactionHooks) =>
+      await withTransaction((txCtx, transactionHooks) =>
         client.createChain({ ...txCtx, transactionHooks, typeName: "order", input: { amount: 2 } }),
       );
-      await withTransaction(async (txCtx, transactionHooks) =>
+      await withTransaction((txCtx, transactionHooks) =>
         client.createChain({
           ...txCtx,
           transactionHooks,
@@ -704,7 +704,7 @@ export const clientQueriesTestSuite = ({ it: baseIt }: { it: TestAPI<TestSuiteCo
         task_a: { entry: true; input: null; output: null };
         task_b: { entry: true; input: null; output: null };
       }>();
-      const client = await createClient({
+      const client = createClient({
         stateAdapter,
         notifyAdapter,
         observabilityAdapter,
@@ -712,17 +712,17 @@ export const clientQueriesTestSuite = ({ it: baseIt }: { it: TestAPI<TestSuiteCo
         jobTypes,
       });
 
-      await withTransaction(async (txCtx, transactionHooks) =>
+      await withTransaction((txCtx, transactionHooks) =>
         client.createChain({ ...txCtx, transactionHooks, typeName: "task_a", input: null }),
       );
-      const toComplete = await withTransaction(async (txCtx, transactionHooks) =>
+      const toComplete = await withTransaction((txCtx, transactionHooks) =>
         client.createChain({ ...txCtx, transactionHooks, typeName: "task_a", input: null }),
       );
-      await withTransaction(async (txCtx, transactionHooks) =>
+      await withTransaction((txCtx, transactionHooks) =>
         client.createChain({ ...txCtx, transactionHooks, typeName: "task_b", input: null }),
       );
 
-      const worker = await createInProcessWorker({
+      const worker = createInProcessWorker({
         client,
         concurrency: 1,
         processors: createProcessors({
@@ -731,13 +731,13 @@ export const clientQueriesTestSuite = ({ it: baseIt }: { it: TestAPI<TestSuiteCo
           processors: {
             task_a: {
               attemptHandler: async ({ complete }) =>
-                withTransaction(async (txCtx, transactionHooks) =>
+                withTransaction((txCtx, transactionHooks) =>
                   complete({ ...txCtx, transactionHooks, output: null }),
                 ),
             },
             task_b: {
               attemptHandler: async ({ complete }) =>
-                withTransaction(async (txCtx, transactionHooks) =>
+                withTransaction((txCtx, transactionHooks) =>
                   complete({ ...txCtx, transactionHooks, output: null }),
                 ),
             },
@@ -768,7 +768,7 @@ export const clientQueriesTestSuite = ({ it: baseIt }: { it: TestAPI<TestSuiteCo
     });
 
     it("listChains returns chains of the given type", async ({ client, withTransaction }) => {
-      const chain1 = await withTransaction(async (txCtx, transactionHooks) =>
+      const chain1 = await withTransaction((txCtx, transactionHooks) =>
         client.createChain({
           ...txCtx,
           transactionHooks,
@@ -776,7 +776,7 @@ export const clientQueriesTestSuite = ({ it: baseIt }: { it: TestAPI<TestSuiteCo
           input: { amount: 100 },
         }),
       );
-      await withTransaction(async (txCtx, transactionHooks) =>
+      await withTransaction((txCtx, transactionHooks) =>
         client.createChain({
           ...txCtx,
           transactionHooks,
@@ -795,7 +795,7 @@ export const clientQueriesTestSuite = ({ it: baseIt }: { it: TestAPI<TestSuiteCo
       client,
       withTransaction,
     }) => {
-      const order = await withTransaction(async (txCtx, transactionHooks) =>
+      const order = await withTransaction((txCtx, transactionHooks) =>
         client.createChain({
           ...txCtx,
           transactionHooks,
@@ -803,7 +803,7 @@ export const clientQueriesTestSuite = ({ it: baseIt }: { it: TestAPI<TestSuiteCo
           input: { amount: 50 },
         }),
       );
-      await withTransaction(async (txCtx, transactionHooks) =>
+      await withTransaction((txCtx, transactionHooks) =>
         client.createChain({
           ...txCtx,
           transactionHooks,
@@ -821,7 +821,7 @@ export const clientQueriesTestSuite = ({ it: baseIt }: { it: TestAPI<TestSuiteCo
     });
 
     it("listChains filters by status", async ({ client, withTransaction }) => {
-      const order = await withTransaction(async (txCtx, transactionHooks) =>
+      const order = await withTransaction((txCtx, transactionHooks) =>
         client.createChain({
           ...txCtx,
           transactionHooks,
@@ -829,7 +829,7 @@ export const clientQueriesTestSuite = ({ it: baseIt }: { it: TestAPI<TestSuiteCo
           input: { amount: 50 },
         }),
       );
-      await withTransaction(async (txCtx, transactionHooks) =>
+      await withTransaction((txCtx, transactionHooks) =>
         client.createChain({
           ...txCtx,
           transactionHooks,
@@ -837,7 +837,7 @@ export const clientQueriesTestSuite = ({ it: baseIt }: { it: TestAPI<TestSuiteCo
           input: { message: "hi" },
         }),
       );
-      await withTransaction(async (txCtx, transactionHooks) =>
+      await withTransaction((txCtx, transactionHooks) =>
         client.createChain({
           ...txCtx,
           transactionHooks,
@@ -853,7 +853,7 @@ export const clientQueriesTestSuite = ({ it: baseIt }: { it: TestAPI<TestSuiteCo
     });
 
     it("listChains orders ascending", async ({ client, withTransaction }) => {
-      await withTransaction(async (txCtx, transactionHooks) =>
+      await withTransaction((txCtx, transactionHooks) =>
         client.createChain({
           ...txCtx,
           transactionHooks,
@@ -862,7 +862,7 @@ export const clientQueriesTestSuite = ({ it: baseIt }: { it: TestAPI<TestSuiteCo
         }),
       );
       await sleep(5);
-      await withTransaction(async (txCtx, transactionHooks) =>
+      await withTransaction((txCtx, transactionHooks) =>
         client.createChain({
           ...txCtx,
           transactionHooks,
@@ -881,7 +881,7 @@ export const clientQueriesTestSuite = ({ it: baseIt }: { it: TestAPI<TestSuiteCo
     });
 
     it("listChains paginates with cursor", async ({ client, withTransaction }) => {
-      await withTransaction(async (txCtx, transactionHooks) =>
+      await withTransaction((txCtx, transactionHooks) =>
         client.createChain({
           ...txCtx,
           transactionHooks,
@@ -889,7 +889,7 @@ export const clientQueriesTestSuite = ({ it: baseIt }: { it: TestAPI<TestSuiteCo
           input: { amount: 1 },
         }),
       );
-      await withTransaction(async (txCtx, transactionHooks) =>
+      await withTransaction((txCtx, transactionHooks) =>
         client.createChain({
           ...txCtx,
           transactionHooks,
@@ -897,7 +897,7 @@ export const clientQueriesTestSuite = ({ it: baseIt }: { it: TestAPI<TestSuiteCo
           input: { amount: 2 },
         }),
       );
-      await withTransaction(async (txCtx, transactionHooks) =>
+      await withTransaction((txCtx, transactionHooks) =>
         client.createChain({
           ...txCtx,
           transactionHooks,
@@ -923,7 +923,7 @@ export const clientQueriesTestSuite = ({ it: baseIt }: { it: TestAPI<TestSuiteCo
     });
 
     it("listChains filters by date range", async ({ client, withTransaction }) => {
-      const first = await withTransaction(async (txCtx, transactionHooks) =>
+      const first = await withTransaction((txCtx, transactionHooks) =>
         client.createChain({
           ...txCtx,
           transactionHooks,
@@ -931,7 +931,7 @@ export const clientQueriesTestSuite = ({ it: baseIt }: { it: TestAPI<TestSuiteCo
           input: { amount: 1 },
         }),
       );
-      const second = await withTransaction(async (txCtx, transactionHooks) =>
+      const second = await withTransaction((txCtx, transactionHooks) =>
         client.createChain({
           ...txCtx,
           transactionHooks,
@@ -980,7 +980,7 @@ export const clientQueriesTestSuite = ({ it: baseIt }: { it: TestAPI<TestSuiteCo
         };
       }>();
 
-      const client = await createClient({
+      const client = createClient({
         stateAdapter,
         notifyAdapter,
         observabilityAdapter,
@@ -988,7 +988,7 @@ export const clientQueriesTestSuite = ({ it: baseIt }: { it: TestAPI<TestSuiteCo
         jobTypes,
       });
 
-      const worker = await createInProcessWorker({
+      const worker = createInProcessWorker({
         client,
         concurrency: 1,
         processors: createProcessors({
@@ -997,13 +997,13 @@ export const clientQueriesTestSuite = ({ it: baseIt }: { it: TestAPI<TestSuiteCo
           processors: {
             task_a: {
               attemptHandler: async ({ complete }) =>
-                withTransaction(async (txCtx, transactionHooks) =>
+                withTransaction((txCtx, transactionHooks) =>
                   complete({ ...txCtx, transactionHooks, output: null }),
                 ),
             },
             task_b: {
               attemptHandler: async ({ complete }) =>
-                withTransaction(async (txCtx, transactionHooks) =>
+                withTransaction((txCtx, transactionHooks) =>
                   complete({ ...txCtx, transactionHooks, output: null }),
                 ),
             },
@@ -1011,11 +1011,11 @@ export const clientQueriesTestSuite = ({ it: baseIt }: { it: TestAPI<TestSuiteCo
         }),
       });
 
-      const chainA = await withTransaction(async (txCtx, transactionHooks) =>
+      const chainA = await withTransaction((txCtx, transactionHooks) =>
         client.createChain({ ...txCtx, transactionHooks, typeName: "task_a", input: null }),
       );
       await sleep(5);
-      const chainB = await withTransaction(async (txCtx, transactionHooks) =>
+      const chainB = await withTransaction((txCtx, transactionHooks) =>
         client.createChain({ ...txCtx, transactionHooks, typeName: "task_a", input: null }),
       );
 
@@ -1049,7 +1049,7 @@ export const clientQueriesTestSuite = ({ it: baseIt }: { it: TestAPI<TestSuiteCo
     });
 
     it("listChains returns correct chain shape", async ({ client, withTransaction }) => {
-      const chain = await withTransaction(async (txCtx, transactionHooks) =>
+      const chain = await withTransaction((txCtx, transactionHooks) =>
         client.createChain({
           ...txCtx,
           transactionHooks,
@@ -1082,7 +1082,7 @@ export const clientQueriesTestSuite = ({ it: baseIt }: { it: TestAPI<TestSuiteCo
     });
 
     it("listJobs returns jobs of the given type", async ({ client, withTransaction }) => {
-      await withTransaction(async (txCtx, transactionHooks) =>
+      await withTransaction((txCtx, transactionHooks) =>
         client.createChain({
           ...txCtx,
           transactionHooks,
@@ -1090,7 +1090,7 @@ export const clientQueriesTestSuite = ({ it: baseIt }: { it: TestAPI<TestSuiteCo
           input: { amount: 100 },
         }),
       );
-      await withTransaction(async (txCtx, transactionHooks) =>
+      await withTransaction((txCtx, transactionHooks) =>
         client.createChain({
           ...txCtx,
           transactionHooks,
@@ -1105,7 +1105,7 @@ export const clientQueriesTestSuite = ({ it: baseIt }: { it: TestAPI<TestSuiteCo
     });
 
     it("listJobs filters by status", async ({ client, withTransaction }) => {
-      const order = await withTransaction(async (txCtx, transactionHooks) =>
+      const order = await withTransaction((txCtx, transactionHooks) =>
         client.createChain({
           ...txCtx,
           transactionHooks,
@@ -1113,7 +1113,7 @@ export const clientQueriesTestSuite = ({ it: baseIt }: { it: TestAPI<TestSuiteCo
           input: { amount: 50 },
         }),
       );
-      await withTransaction(async (txCtx, transactionHooks) =>
+      await withTransaction((txCtx, transactionHooks) =>
         client.createChain({
           ...txCtx,
           transactionHooks,
@@ -1121,7 +1121,7 @@ export const clientQueriesTestSuite = ({ it: baseIt }: { it: TestAPI<TestSuiteCo
           input: { message: "hi" },
         }),
       );
-      await withTransaction(async (txCtx, transactionHooks) =>
+      await withTransaction((txCtx, transactionHooks) =>
         client.createChain({
           ...txCtx,
           transactionHooks,
@@ -1146,7 +1146,7 @@ export const clientQueriesTestSuite = ({ it: baseIt }: { it: TestAPI<TestSuiteCo
     });
 
     it("listJobs orders ascending", async ({ client, withTransaction }) => {
-      await withTransaction(async (txCtx, transactionHooks) =>
+      await withTransaction((txCtx, transactionHooks) =>
         client.createChain({
           ...txCtx,
           transactionHooks,
@@ -1155,7 +1155,7 @@ export const clientQueriesTestSuite = ({ it: baseIt }: { it: TestAPI<TestSuiteCo
         }),
       );
       await sleep(5);
-      await withTransaction(async (txCtx, transactionHooks) =>
+      await withTransaction((txCtx, transactionHooks) =>
         client.createChain({
           ...txCtx,
           transactionHooks,
@@ -1174,7 +1174,7 @@ export const clientQueriesTestSuite = ({ it: baseIt }: { it: TestAPI<TestSuiteCo
     });
 
     it("listJobs paginates with cursor", async ({ client, withTransaction }) => {
-      await withTransaction(async (txCtx, transactionHooks) =>
+      await withTransaction((txCtx, transactionHooks) =>
         client.createChain({
           ...txCtx,
           transactionHooks,
@@ -1182,7 +1182,7 @@ export const clientQueriesTestSuite = ({ it: baseIt }: { it: TestAPI<TestSuiteCo
           input: { amount: 1 },
         }),
       );
-      await withTransaction(async (txCtx, transactionHooks) =>
+      await withTransaction((txCtx, transactionHooks) =>
         client.createChain({
           ...txCtx,
           transactionHooks,
@@ -1190,7 +1190,7 @@ export const clientQueriesTestSuite = ({ it: baseIt }: { it: TestAPI<TestSuiteCo
           input: { amount: 2 },
         }),
       );
-      await withTransaction(async (txCtx, transactionHooks) =>
+      await withTransaction((txCtx, transactionHooks) =>
         client.createChain({
           ...txCtx,
           transactionHooks,
@@ -1213,7 +1213,7 @@ export const clientQueriesTestSuite = ({ it: baseIt }: { it: TestAPI<TestSuiteCo
     });
 
     it("listJobs filters by date range", async ({ client, withTransaction }) => {
-      const first = await withTransaction(async (txCtx, transactionHooks) =>
+      const first = await withTransaction((txCtx, transactionHooks) =>
         client.createChain({
           ...txCtx,
           transactionHooks,
@@ -1221,7 +1221,7 @@ export const clientQueriesTestSuite = ({ it: baseIt }: { it: TestAPI<TestSuiteCo
           input: { amount: 1 },
         }),
       );
-      const second = await withTransaction(async (txCtx, transactionHooks) =>
+      const second = await withTransaction((txCtx, transactionHooks) =>
         client.createChain({
           ...txCtx,
           transactionHooks,
@@ -1275,7 +1275,7 @@ export const clientQueriesTestSuite = ({ it: baseIt }: { it: TestAPI<TestSuiteCo
         };
       }>();
 
-      const client = await createClient({
+      const client = createClient({
         stateAdapter,
         notifyAdapter,
         observabilityAdapter,
@@ -1283,7 +1283,7 @@ export const clientQueriesTestSuite = ({ it: baseIt }: { it: TestAPI<TestSuiteCo
         jobTypes,
       });
 
-      const worker = await createInProcessWorker({
+      const worker = createInProcessWorker({
         client,
         concurrency: 1,
         processors: createProcessors({
@@ -1292,13 +1292,13 @@ export const clientQueriesTestSuite = ({ it: baseIt }: { it: TestAPI<TestSuiteCo
           processors: {
             job_a: {
               attemptHandler: async ({ complete }) =>
-                withTransaction(async (txCtx, transactionHooks) =>
+                withTransaction((txCtx, transactionHooks) =>
                   complete({ ...txCtx, transactionHooks, output: null }),
                 ),
             },
             job_b: {
               attemptHandler: async ({ complete }) =>
-                withTransaction(async (txCtx, transactionHooks) =>
+                withTransaction((txCtx, transactionHooks) =>
                   complete({ ...txCtx, transactionHooks, output: null }),
                 ),
             },
@@ -1306,11 +1306,11 @@ export const clientQueriesTestSuite = ({ it: baseIt }: { it: TestAPI<TestSuiteCo
         }),
       });
 
-      const chainA = await withTransaction(async (txCtx, transactionHooks) =>
+      const chainA = await withTransaction((txCtx, transactionHooks) =>
         client.createChain({ ...txCtx, transactionHooks, typeName: "job_a", input: null }),
       );
       await sleep(5);
-      const chainB = await withTransaction(async (txCtx, transactionHooks) =>
+      const chainB = await withTransaction((txCtx, transactionHooks) =>
         client.createChain({ ...txCtx, transactionHooks, typeName: "job_a", input: null }),
       );
 
@@ -1347,7 +1347,7 @@ export const clientQueriesTestSuite = ({ it: baseIt }: { it: TestAPI<TestSuiteCo
       client,
       withTransaction,
     }) => {
-      await withTransaction(async (txCtx, transactionHooks) =>
+      await withTransaction((txCtx, transactionHooks) =>
         client.createChain({
           ...txCtx,
           transactionHooks,
@@ -1356,7 +1356,7 @@ export const clientQueriesTestSuite = ({ it: baseIt }: { it: TestAPI<TestSuiteCo
         }),
       );
       await sleep(5);
-      await withTransaction(async (txCtx, transactionHooks) =>
+      await withTransaction((txCtx, transactionHooks) =>
         client.createChain({
           ...txCtx,
           transactionHooks,
@@ -1378,7 +1378,7 @@ export const clientQueriesTestSuite = ({ it: baseIt }: { it: TestAPI<TestSuiteCo
     });
 
     it("listJobs returns correct job shape", async ({ client, withTransaction }) => {
-      await withTransaction(async (txCtx, transactionHooks) =>
+      await withTransaction((txCtx, transactionHooks) =>
         client.createChain({
           ...txCtx,
           transactionHooks,
@@ -1427,7 +1427,7 @@ export const clientQueriesTestSuite = ({ it: baseIt }: { it: TestAPI<TestSuiteCo
         };
       }>();
 
-      const client = await createClient({
+      const client = createClient({
         stateAdapter,
         notifyAdapter,
         observabilityAdapter,
@@ -1435,7 +1435,7 @@ export const clientQueriesTestSuite = ({ it: baseIt }: { it: TestAPI<TestSuiteCo
         jobTypes,
       });
 
-      const worker = await createInProcessWorker({
+      const worker = createInProcessWorker({
         client,
         concurrency: 1,
         processors: createProcessors({
@@ -1444,7 +1444,7 @@ export const clientQueriesTestSuite = ({ it: baseIt }: { it: TestAPI<TestSuiteCo
           processors: {
             step: {
               attemptHandler: async ({ job, complete }) =>
-                withTransaction(async (txCtx, transactionHooks) =>
+                withTransaction((txCtx, transactionHooks) =>
                   job.input.n < 2
                     ? complete({
                         ...txCtx,
@@ -1458,7 +1458,7 @@ export const clientQueriesTestSuite = ({ it: baseIt }: { it: TestAPI<TestSuiteCo
         }),
       });
 
-      const chain = await withTransaction(async (txCtx, transactionHooks) =>
+      const chain = await withTransaction((txCtx, transactionHooks) =>
         client.createChain({ ...txCtx, transactionHooks, typeName: "step", input: { n: 0 } }),
       );
 
@@ -1504,7 +1504,7 @@ export const clientQueriesTestSuite = ({ it: baseIt }: { it: TestAPI<TestSuiteCo
         };
       }>();
 
-      const client = await createClient({
+      const client = createClient({
         stateAdapter,
         notifyAdapter,
         observabilityAdapter,
@@ -1512,7 +1512,7 @@ export const clientQueriesTestSuite = ({ it: baseIt }: { it: TestAPI<TestSuiteCo
         jobTypes,
       });
 
-      const worker = await createInProcessWorker({
+      const worker = createInProcessWorker({
         client,
         concurrency: 1,
         processors: createProcessors({
@@ -1521,7 +1521,7 @@ export const clientQueriesTestSuite = ({ it: baseIt }: { it: TestAPI<TestSuiteCo
           processors: {
             step: {
               attemptHandler: async ({ job, complete }) =>
-                withTransaction(async (txCtx, transactionHooks) =>
+                withTransaction((txCtx, transactionHooks) =>
                   job.input.n < 1
                     ? complete({
                         ...txCtx,
@@ -1535,7 +1535,7 @@ export const clientQueriesTestSuite = ({ it: baseIt }: { it: TestAPI<TestSuiteCo
         }),
       });
 
-      const chain = await withTransaction(async (txCtx, transactionHooks) =>
+      const chain = await withTransaction((txCtx, transactionHooks) =>
         client.createChain({ ...txCtx, transactionHooks, typeName: "step", input: { n: 0 } }),
       );
 
@@ -1576,7 +1576,7 @@ export const clientQueriesTestSuite = ({ it: baseIt }: { it: TestAPI<TestSuiteCo
         };
       }>();
 
-      const client = await createClient({
+      const client = createClient({
         stateAdapter,
         notifyAdapter,
         observabilityAdapter,
@@ -1584,7 +1584,7 @@ export const clientQueriesTestSuite = ({ it: baseIt }: { it: TestAPI<TestSuiteCo
         jobTypes,
       });
 
-      const worker = await createInProcessWorker({
+      const worker = createInProcessWorker({
         client,
         concurrency: 1,
         processors: createProcessors({
@@ -1593,7 +1593,7 @@ export const clientQueriesTestSuite = ({ it: baseIt }: { it: TestAPI<TestSuiteCo
           processors: {
             step: {
               attemptHandler: async ({ job, complete }) =>
-                withTransaction(async (txCtx, transactionHooks) =>
+                withTransaction((txCtx, transactionHooks) =>
                   job.input.n < 2
                     ? complete({
                         ...txCtx,
@@ -1607,7 +1607,7 @@ export const clientQueriesTestSuite = ({ it: baseIt }: { it: TestAPI<TestSuiteCo
         }),
       });
 
-      const chain = await withTransaction(async (txCtx, transactionHooks) =>
+      const chain = await withTransaction((txCtx, transactionHooks) =>
         client.createChain({ ...txCtx, transactionHooks, typeName: "step", input: { n: 0 } }),
       );
 
@@ -1636,7 +1636,7 @@ export const clientQueriesTestSuite = ({ it: baseIt }: { it: TestAPI<TestSuiteCo
       client,
       withTransaction,
     }) => {
-      const chain1 = await withTransaction(async (txCtx, transactionHooks) =>
+      const chain1 = await withTransaction((txCtx, transactionHooks) =>
         client.createChain({
           ...txCtx,
           transactionHooks,
@@ -1644,7 +1644,7 @@ export const clientQueriesTestSuite = ({ it: baseIt }: { it: TestAPI<TestSuiteCo
           input: { amount: 1 },
         }),
       );
-      await withTransaction(async (txCtx, transactionHooks) =>
+      await withTransaction((txCtx, transactionHooks) =>
         client.createChain({
           ...txCtx,
           transactionHooks,
@@ -1663,7 +1663,7 @@ export const clientQueriesTestSuite = ({ it: baseIt }: { it: TestAPI<TestSuiteCo
       client,
       withTransaction,
     }) => {
-      const chain = await withTransaction(async (txCtx, transactionHooks) =>
+      const chain = await withTransaction((txCtx, transactionHooks) =>
         client.createChain({
           ...txCtx,
           transactionHooks,
@@ -1681,7 +1681,7 @@ export const clientQueriesTestSuite = ({ it: baseIt }: { it: TestAPI<TestSuiteCo
     });
 
     it("listChainJobs throws on typeName mismatch", async ({ client, withTransaction }) => {
-      const chain = await withTransaction(async (txCtx, transactionHooks) =>
+      const chain = await withTransaction((txCtx, transactionHooks) =>
         client.createChain({
           ...txCtx,
           transactionHooks,
@@ -1690,7 +1690,7 @@ export const clientQueriesTestSuite = ({ it: baseIt }: { it: TestAPI<TestSuiteCo
         }),
       );
 
-      await expect(
+      await expect(async () =>
         client.listChainJobs({ chainId: chain.id, chainTypeName: "notification" }),
       ).rejects.toThrow(ChainTypeMismatchError);
     });
@@ -1701,7 +1701,7 @@ export const clientQueriesTestSuite = ({ it: baseIt }: { it: TestAPI<TestSuiteCo
       client,
       withTransaction,
     }) => {
-      const chain = await withTransaction(async (txCtx, transactionHooks) =>
+      const chain = await withTransaction((txCtx, transactionHooks) =>
         client.createChain({
           ...txCtx,
           transactionHooks,
@@ -1716,7 +1716,7 @@ export const clientQueriesTestSuite = ({ it: baseIt }: { it: TestAPI<TestSuiteCo
     });
 
     it("getJobBlockers returns blocker chains", async ({ client, withTransaction }) => {
-      const order = await withTransaction(async (txCtx, transactionHooks) =>
+      const order = await withTransaction((txCtx, transactionHooks) =>
         client.createChain({
           ...txCtx,
           transactionHooks,
@@ -1724,7 +1724,7 @@ export const clientQueriesTestSuite = ({ it: baseIt }: { it: TestAPI<TestSuiteCo
           input: { amount: 50 },
         }),
       );
-      const report = await withTransaction(async (txCtx, transactionHooks) =>
+      const report = await withTransaction((txCtx, transactionHooks) =>
         client.createChain({
           ...txCtx,
           transactionHooks,
@@ -1746,7 +1746,7 @@ export const clientQueriesTestSuite = ({ it: baseIt }: { it: TestAPI<TestSuiteCo
       client,
       withTransaction,
     }) => {
-      const order = await withTransaction(async (txCtx, transactionHooks) =>
+      const order = await withTransaction((txCtx, transactionHooks) =>
         client.createChain({
           ...txCtx,
           transactionHooks,
@@ -1754,7 +1754,7 @@ export const clientQueriesTestSuite = ({ it: baseIt }: { it: TestAPI<TestSuiteCo
           input: { amount: 50 },
         }),
       );
-      const report = await withTransaction(async (txCtx, transactionHooks) =>
+      const report = await withTransaction((txCtx, transactionHooks) =>
         client.createChain({
           ...txCtx,
           transactionHooks,
@@ -1777,7 +1777,7 @@ export const clientQueriesTestSuite = ({ it: baseIt }: { it: TestAPI<TestSuiteCo
     });
 
     it("getJobBlockers throws on typeName mismatch", async ({ client, withTransaction }) => {
-      const order = await withTransaction(async (txCtx, transactionHooks) =>
+      const order = await withTransaction((txCtx, transactionHooks) =>
         client.createChain({
           ...txCtx,
           transactionHooks,
@@ -1785,7 +1785,7 @@ export const clientQueriesTestSuite = ({ it: baseIt }: { it: TestAPI<TestSuiteCo
           input: { amount: 50 },
         }),
       );
-      const report = await withTransaction(async (txCtx, transactionHooks) =>
+      const report = await withTransaction((txCtx, transactionHooks) =>
         client.createChain({
           ...txCtx,
           transactionHooks,
@@ -1795,12 +1795,13 @@ export const clientQueriesTestSuite = ({ it: baseIt }: { it: TestAPI<TestSuiteCo
         }),
       );
 
-      await expect(client.getJobBlockers({ jobId: report.id, typeName: "order" })).rejects.toThrow(
-        JobTypeMismatchError,
-      );
+      await expect(async () =>
+        client.getJobBlockers({ jobId: report.id, typeName: "order" }),
+      ).rejects.toThrow(JobTypeMismatchError);
     });
 
     it("getJobBlockers reflects blocker completion status", async ({
+      withTransactionOperation,
       stateAdapter,
       notifyAdapter,
       observabilityAdapter,
@@ -1822,7 +1823,7 @@ export const clientQueriesTestSuite = ({ it: baseIt }: { it: TestAPI<TestSuiteCo
         };
       }>();
 
-      const client = await createClient({
+      const client = createClient({
         stateAdapter,
         notifyAdapter,
         observabilityAdapter,
@@ -1830,7 +1831,7 @@ export const clientQueriesTestSuite = ({ it: baseIt }: { it: TestAPI<TestSuiteCo
         jobTypes,
       });
 
-      const worker = await createInProcessWorker({
+      const worker = createInProcessWorker({
         client,
         concurrency: 1,
         processors: createProcessors({
@@ -1839,13 +1840,13 @@ export const clientQueriesTestSuite = ({ it: baseIt }: { it: TestAPI<TestSuiteCo
           processors: {
             dep: {
               attemptHandler: async ({ complete }) =>
-                withTransaction(async (txCtx, transactionHooks) =>
+                withTransaction((txCtx, transactionHooks) =>
                   complete({ ...txCtx, transactionHooks, output: { ok: true } }),
                 ),
             },
             main: {
               attemptHandler: async ({ complete }) =>
-                withTransaction(async (txCtx, transactionHooks) =>
+                withTransaction((txCtx, transactionHooks) =>
                   complete({ ...txCtx, transactionHooks, output: { result: "done" } }),
                 ),
             },
@@ -1853,20 +1854,24 @@ export const clientQueriesTestSuite = ({ it: baseIt }: { it: TestAPI<TestSuiteCo
         }),
       });
 
-      const { mainChain } = await withTransaction(async (txCtx, transactionHooks) => {
-        const depChain = await client.createChain({
-          ...txCtx,
-          transactionHooks,
-          typeName: "dep",
-          input: { v: 1 },
-        });
-        const mainChain = await client.createChain({
-          ...txCtx,
-          transactionHooks,
-          typeName: "main",
-          input: { start: true },
-          blockers: [depChain],
-        });
+      const { mainChain } = await withTransactionOperation(function* (txCtx, transactionHooks) {
+        const depChain = yield* unwrap(
+          client.createChain({
+            ...txCtx,
+            transactionHooks,
+            typeName: "dep",
+            input: { v: 1 },
+          }),
+        );
+        const mainChain = yield* unwrap(
+          client.createChain({
+            ...txCtx,
+            transactionHooks,
+            typeName: "main",
+            input: { start: true },
+            blockers: [depChain],
+          }),
+        );
         return { depChain, mainChain };
       });
 
@@ -1887,7 +1892,7 @@ export const clientQueriesTestSuite = ({ it: baseIt }: { it: TestAPI<TestSuiteCo
       client,
       withTransaction,
     }) => {
-      const chain = await withTransaction(async (txCtx, transactionHooks) =>
+      const chain = await withTransaction((txCtx, transactionHooks) =>
         client.createChain({
           ...txCtx,
           transactionHooks,
@@ -1903,7 +1908,7 @@ export const clientQueriesTestSuite = ({ it: baseIt }: { it: TestAPI<TestSuiteCo
     });
 
     it("listBlockedJobs returns jobs blocked by chain", async ({ client, withTransaction }) => {
-      const order = await withTransaction(async (txCtx, transactionHooks) =>
+      const order = await withTransaction((txCtx, transactionHooks) =>
         client.createChain({
           ...txCtx,
           transactionHooks,
@@ -1911,7 +1916,7 @@ export const clientQueriesTestSuite = ({ it: baseIt }: { it: TestAPI<TestSuiteCo
           input: { amount: 50 },
         }),
       );
-      const report = await withTransaction(async (txCtx, transactionHooks) =>
+      const report = await withTransaction((txCtx, transactionHooks) =>
         client.createChain({
           ...txCtx,
           transactionHooks,
@@ -1930,7 +1935,7 @@ export const clientQueriesTestSuite = ({ it: baseIt }: { it: TestAPI<TestSuiteCo
     });
 
     it("listBlockedJobs paginates", async ({ client, withTransaction }) => {
-      const order = await withTransaction(async (txCtx, transactionHooks) =>
+      const order = await withTransaction((txCtx, transactionHooks) =>
         client.createChain({
           ...txCtx,
           transactionHooks,
@@ -1938,7 +1943,7 @@ export const clientQueriesTestSuite = ({ it: baseIt }: { it: TestAPI<TestSuiteCo
           input: { amount: 50 },
         }),
       );
-      await withTransaction(async (txCtx, transactionHooks) =>
+      await withTransaction((txCtx, transactionHooks) =>
         client.createChain({
           ...txCtx,
           transactionHooks,
@@ -1947,7 +1952,7 @@ export const clientQueriesTestSuite = ({ it: baseIt }: { it: TestAPI<TestSuiteCo
           blockers: [order] as never,
         }),
       );
-      await withTransaction(async (txCtx, transactionHooks) =>
+      await withTransaction((txCtx, transactionHooks) =>
         client.createChain({
           ...txCtx,
           transactionHooks,
@@ -1956,7 +1961,7 @@ export const clientQueriesTestSuite = ({ it: baseIt }: { it: TestAPI<TestSuiteCo
           blockers: [order] as never,
         }),
       );
-      await withTransaction(async (txCtx, transactionHooks) =>
+      await withTransaction((txCtx, transactionHooks) =>
         client.createChain({
           ...txCtx,
           transactionHooks,
@@ -1983,7 +1988,7 @@ export const clientQueriesTestSuite = ({ it: baseIt }: { it: TestAPI<TestSuiteCo
       client,
       withTransaction,
     }) => {
-      const order = await withTransaction(async (txCtx, transactionHooks) =>
+      const order = await withTransaction((txCtx, transactionHooks) =>
         client.createChain({
           ...txCtx,
           transactionHooks,
@@ -1991,7 +1996,7 @@ export const clientQueriesTestSuite = ({ it: baseIt }: { it: TestAPI<TestSuiteCo
           input: { amount: 50 },
         }),
       );
-      const report = await withTransaction(async (txCtx, transactionHooks) =>
+      const report = await withTransaction((txCtx, transactionHooks) =>
         client.createChain({
           ...txCtx,
           transactionHooks,
@@ -2015,7 +2020,7 @@ export const clientQueriesTestSuite = ({ it: baseIt }: { it: TestAPI<TestSuiteCo
     });
 
     it("listBlockedJobs throws on typeName mismatch", async ({ client, withTransaction }) => {
-      const order = await withTransaction(async (txCtx, transactionHooks) =>
+      const order = await withTransaction((txCtx, transactionHooks) =>
         client.createChain({
           ...txCtx,
           transactionHooks,
@@ -2023,7 +2028,7 @@ export const clientQueriesTestSuite = ({ it: baseIt }: { it: TestAPI<TestSuiteCo
           input: { amount: 50 },
         }),
       );
-      await withTransaction(async (txCtx, transactionHooks) =>
+      await withTransaction((txCtx, transactionHooks) =>
         client.createChain({
           ...txCtx,
           transactionHooks,
@@ -2033,13 +2038,13 @@ export const clientQueriesTestSuite = ({ it: baseIt }: { it: TestAPI<TestSuiteCo
         }),
       );
 
-      await expect(
+      await expect(async () =>
         client.listBlockedJobs({ chainId: order.id, typeName: "notification" }),
       ).rejects.toThrow(ChainTypeMismatchError);
     });
 
     it("listBlockedJobs orders ascending", async ({ client, withTransaction }) => {
-      const order = await withTransaction(async (txCtx, transactionHooks) =>
+      const order = await withTransaction((txCtx, transactionHooks) =>
         client.createChain({
           ...txCtx,
           transactionHooks,
@@ -2047,7 +2052,7 @@ export const clientQueriesTestSuite = ({ it: baseIt }: { it: TestAPI<TestSuiteCo
           input: { amount: 50 },
         }),
       );
-      await withTransaction(async (txCtx, transactionHooks) =>
+      await withTransaction((txCtx, transactionHooks) =>
         client.createChain({
           ...txCtx,
           transactionHooks,
@@ -2057,7 +2062,7 @@ export const clientQueriesTestSuite = ({ it: baseIt }: { it: TestAPI<TestSuiteCo
         }),
       );
       await sleep(5);
-      await withTransaction(async (txCtx, transactionHooks) =>
+      await withTransaction((txCtx, transactionHooks) =>
         client.createChain({
           ...txCtx,
           transactionHooks,
@@ -2099,7 +2104,7 @@ export const clientQueriesTestSuite = ({ it: baseIt }: { it: TestAPI<TestSuiteCo
         };
       }>();
 
-      const client = await createClient({
+      const client = createClient({
         stateAdapter,
         notifyAdapter,
         observabilityAdapter,
@@ -2107,7 +2112,7 @@ export const clientQueriesTestSuite = ({ it: baseIt }: { it: TestAPI<TestSuiteCo
         jobTypes,
       });
 
-      const worker = await createInProcessWorker({
+      const worker = createInProcessWorker({
         client,
         concurrency: 1,
         processors: createProcessors({
@@ -2116,7 +2121,7 @@ export const clientQueriesTestSuite = ({ it: baseIt }: { it: TestAPI<TestSuiteCo
           processors: {
             task: {
               attemptHandler: async ({ job, complete }) =>
-                withTransaction(async (txCtx, transactionHooks) =>
+                withTransaction((txCtx, transactionHooks) =>
                   complete({
                     ...txCtx,
                     transactionHooks,
@@ -2126,7 +2131,7 @@ export const clientQueriesTestSuite = ({ it: baseIt }: { it: TestAPI<TestSuiteCo
             },
             task_next: {
               attemptHandler: async ({ job, complete }) =>
-                withTransaction(async (txCtx, transactionHooks) =>
+                withTransaction((txCtx, transactionHooks) =>
                   complete({ ...txCtx, transactionHooks, output: { final: job.input.n * 10 } }),
                 ),
             },
@@ -2134,7 +2139,7 @@ export const clientQueriesTestSuite = ({ it: baseIt }: { it: TestAPI<TestSuiteCo
         }),
       });
 
-      const chain = await withTransaction(async (txCtx, transactionHooks) =>
+      const chain = await withTransaction((txCtx, transactionHooks) =>
         client.createChain({ ...txCtx, transactionHooks, typeName: "task", input: { n: 1 } }),
       );
 
@@ -2163,6 +2168,7 @@ export const clientQueriesTestSuite = ({ it: baseIt }: { it: TestAPI<TestSuiteCo
     });
 
     it("query methods work with blockers across chains", async ({
+      withTransactionOperation,
       stateAdapter,
       notifyAdapter,
       observabilityAdapter,
@@ -2184,7 +2190,7 @@ export const clientQueriesTestSuite = ({ it: baseIt }: { it: TestAPI<TestSuiteCo
         };
       }>();
 
-      const client = await createClient({
+      const client = createClient({
         stateAdapter,
         notifyAdapter,
         observabilityAdapter,
@@ -2192,7 +2198,7 @@ export const clientQueriesTestSuite = ({ it: baseIt }: { it: TestAPI<TestSuiteCo
         jobTypes,
       });
 
-      const worker = await createInProcessWorker({
+      const worker = createInProcessWorker({
         client,
         concurrency: 1,
         processors: createProcessors({
@@ -2201,13 +2207,13 @@ export const clientQueriesTestSuite = ({ it: baseIt }: { it: TestAPI<TestSuiteCo
           processors: {
             dep: {
               attemptHandler: async ({ complete }) =>
-                withTransaction(async (txCtx, transactionHooks) =>
+                withTransaction((txCtx, transactionHooks) =>
                   complete({ ...txCtx, transactionHooks, output: { ok: true } }),
                 ),
             },
             main: {
               attemptHandler: async ({ complete }) =>
-                withTransaction(async (txCtx, transactionHooks) =>
+                withTransaction((txCtx, transactionHooks) =>
                   complete({ ...txCtx, transactionHooks, output: { result: "done" } }),
                 ),
             },
@@ -2215,22 +2221,28 @@ export const clientQueriesTestSuite = ({ it: baseIt }: { it: TestAPI<TestSuiteCo
         }),
       });
 
-      const { depChain, mainChain } = await withTransaction(async (txCtx, transactionHooks) => {
-        const depChain = await client.createChain({
-          ...txCtx,
-          transactionHooks,
-          typeName: "dep",
-          input: { v: 1 },
-        });
-        const mainChain = await client.createChain({
-          ...txCtx,
-          transactionHooks,
-          typeName: "main",
-          input: { start: true },
-          blockers: [depChain],
-        });
-        return { depChain, mainChain };
-      });
+      const { depChain, mainChain } = await withTransactionOperation(
+        function* (txCtx, transactionHooks) {
+          const depChain = yield* unwrap(
+            client.createChain({
+              ...txCtx,
+              transactionHooks,
+              typeName: "dep",
+              input: { v: 1 },
+            }),
+          );
+          const mainChain = yield* unwrap(
+            client.createChain({
+              ...txCtx,
+              transactionHooks,
+              typeName: "main",
+              input: { start: true },
+              blockers: [depChain],
+            }),
+          );
+          return { depChain, mainChain };
+        },
+      );
 
       const mainJob = await client.getJob({ id: mainChain.id });
       expect(mainJob!.status).toBe("blocked");
@@ -2255,7 +2267,7 @@ export const clientQueriesTestSuite = ({ it: baseIt }: { it: TestAPI<TestSuiteCo
     });
 
     it("default limit is applied when not specified", async ({ client, withTransaction }) => {
-      await withTransaction(async (txCtx, transactionHooks) =>
+      await withTransaction((txCtx, transactionHooks) =>
         client.createChain({
           ...txCtx,
           transactionHooks,

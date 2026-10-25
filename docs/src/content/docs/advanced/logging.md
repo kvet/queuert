@@ -18,7 +18,7 @@ const log: Log = (entry) => {
   console.log(`[${entry.level}] ${entry.message}`, entry.data);
 };
 
-const client = await createClient({
+const client = createClient({
   stateAdapter,
   notifyAdapter,
   log,

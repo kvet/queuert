@@ -1,7 +1,8 @@
-import { sleep } from "@queuert/helpers";
+import { sleep, unwrap } from "@queuert/helpers";
 
 import { type StateChain } from "../../state-adapter/state-adapter.js";
 import { type ConformanceGroup } from "../runner.js";
+import { asyncOnly, transaction, transactionOperation } from "../transaction.js";
 import { type StateConformanceFixture } from "./types.js";
 
 const LOCK_BLOCK_OBSERVATION_MS = 100;
@@ -12,21 +13,21 @@ export const addJobsBlockersGroup: ConformanceGroup<StateConformanceFixture> = {
     {
       name: "adds blockers and reports the blocker chain as incomplete",
       run: async ({ stateAdapter }, expect) => {
-        const [blockerChain] = await stateAdapter.withTransaction(async (txCtx) =>
+        const [blockerChain] = await transaction(stateAdapter, (txCtx) =>
           stateAdapter.createJobs({
             txCtx,
             jobs: [{ id: stateAdapter.config.generateId(), typeName: "blocker", input: null }],
           }),
         );
 
-        const [mainChain] = await stateAdapter.withTransaction(async (txCtx) =>
+        const [mainChain] = await transaction(stateAdapter, (txCtx) =>
           stateAdapter.createJobs({
             txCtx,
             jobs: [{ id: stateAdapter.config.generateId(), typeName: "main", input: null }],
           }),
         );
 
-        const [result] = await stateAdapter.withTransaction(async (txCtx) =>
+        const [result] = await transaction(stateAdapter, (txCtx) =>
           stateAdapter.addJobsBlockers({
             txCtx,
             jobBlockers: [
@@ -46,28 +47,28 @@ export const addJobsBlockersGroup: ConformanceGroup<StateConformanceFixture> = {
     {
       name: "reports a completed blocker chain and leaves the job unblocked",
       run: async ({ stateAdapter }, expect) => {
-        const [blockerChain] = await stateAdapter.withTransaction(async (txCtx) =>
+        const [blockerChain] = await transaction(stateAdapter, (txCtx) =>
           stateAdapter.createJobs({
             txCtx,
             jobs: [{ id: stateAdapter.config.generateId(), typeName: "blocker", input: null }],
           }),
         );
 
-        await stateAdapter.withTransaction(async (txCtx) =>
+        await transaction(stateAdapter, (txCtx) =>
           stateAdapter.completeJobs({
             txCtx,
             jobs: [{ jobId: blockerChain.head.id, output: null }],
           }),
         );
 
-        const [mainChain] = await stateAdapter.withTransaction(async (txCtx) =>
+        const [mainChain] = await transaction(stateAdapter, (txCtx) =>
           stateAdapter.createJobs({
             txCtx,
             jobs: [{ id: stateAdapter.config.generateId(), typeName: "main", input: null }],
           }),
         );
 
-        const [result] = await stateAdapter.withTransaction(async (txCtx) =>
+        const [result] = await transaction(stateAdapter, (txCtx) =>
           stateAdapter.addJobsBlockers({
             txCtx,
             jobBlockers: [
@@ -86,7 +87,7 @@ export const addJobsBlockersGroup: ConformanceGroup<StateConformanceFixture> = {
     {
       name: "reports an undefined blocker for an unknown blocker chain",
       run: async ({ stateAdapter }, expect) => {
-        const [mainChain] = await stateAdapter.withTransaction(async (txCtx) =>
+        const [mainChain] = await transaction(stateAdapter, (txCtx) =>
           stateAdapter.createJobs({
             txCtx,
             jobs: [{ id: stateAdapter.config.generateId(), typeName: "main", input: null }],
@@ -97,11 +98,13 @@ export const addJobsBlockersGroup: ConformanceGroup<StateConformanceFixture> = {
           mainChain.head.chainId.slice(0, -1) + (mainChain.head.chainId.endsWith("0") ? "1" : "0");
 
         await expect(
-          stateAdapter.withTransaction(async (txCtx) => {
-            const [result] = await stateAdapter.addJobsBlockers({
-              txCtx,
-              jobBlockers: [{ jobId: mainChain.head.id, blockedByChainIds: [missingChainId] }],
-            });
+          transactionOperation(stateAdapter, function* (txCtx) {
+            const [result] = yield* unwrap(
+              stateAdapter.addJobsBlockers({
+                txCtx,
+                jobBlockers: [{ jobId: mainChain.head.id, blockedByChainIds: [missingChainId] }],
+              }),
+            );
             expect(result.blockers).toHaveLength(1);
             expect(result.blockers[0]).toBeUndefined();
             throw new Error("caller aborts");
@@ -116,7 +119,7 @@ export const addJobsBlockersGroup: ConformanceGroup<StateConformanceFixture> = {
     {
       name: "adds blockers to multiple jobs in a single batch",
       run: async ({ stateAdapter }, expect) => {
-        const [blockerChain1, blockerChain2] = await stateAdapter.withTransaction(async (txCtx) =>
+        const [blockerChain1, blockerChain2] = await transaction(stateAdapter, (txCtx) =>
           stateAdapter.createJobs({
             txCtx,
             jobs: [
@@ -126,7 +129,7 @@ export const addJobsBlockersGroup: ConformanceGroup<StateConformanceFixture> = {
           }),
         );
 
-        const [mainChain1, mainChain2] = await stateAdapter.withTransaction(async (txCtx) =>
+        const [mainChain1, mainChain2] = await transaction(stateAdapter, (txCtx) =>
           stateAdapter.createJobs({
             txCtx,
             jobs: [
@@ -136,7 +139,7 @@ export const addJobsBlockersGroup: ConformanceGroup<StateConformanceFixture> = {
           }),
         );
 
-        const results = await stateAdapter.withTransaction(async (txCtx) =>
+        const results = await transaction(stateAdapter, (txCtx) =>
           stateAdapter.addJobsBlockers({
             txCtx,
             jobBlockers: [
@@ -171,27 +174,27 @@ export const addJobsBlockersGroup: ConformanceGroup<StateConformanceFixture> = {
     {
       name: "batch handles mix of blocked and unblocked jobs",
       run: async ({ stateAdapter }, expect) => {
-        const [completedBlockerChain] = await stateAdapter.withTransaction(async (txCtx) =>
+        const [completedBlockerChain] = await transaction(stateAdapter, (txCtx) =>
           stateAdapter.createJobs({
             txCtx,
             jobs: [{ id: stateAdapter.config.generateId(), typeName: "blocker", input: null }],
           }),
         );
-        await stateAdapter.withTransaction(async (txCtx) =>
+        await transaction(stateAdapter, (txCtx) =>
           stateAdapter.completeJobs({
             txCtx,
             jobs: [{ jobId: completedBlockerChain.head.id, output: null }],
           }),
         );
 
-        const [incompleteBlockerChain] = await stateAdapter.withTransaction(async (txCtx) =>
+        const [incompleteBlockerChain] = await transaction(stateAdapter, (txCtx) =>
           stateAdapter.createJobs({
             txCtx,
             jobs: [{ id: stateAdapter.config.generateId(), typeName: "blocker", input: null }],
           }),
         );
 
-        const [mainChain1, mainChain2] = await stateAdapter.withTransaction(async (txCtx) =>
+        const [mainChain1, mainChain2] = await transaction(stateAdapter, (txCtx) =>
           stateAdapter.createJobs({
             txCtx,
             jobs: [
@@ -201,7 +204,7 @@ export const addJobsBlockersGroup: ConformanceGroup<StateConformanceFixture> = {
           }),
         );
 
-        const results = await stateAdapter.withTransaction(async (txCtx) =>
+        const results = await transaction(stateAdapter, (txCtx) =>
           stateAdapter.addJobsBlockers({
             txCtx,
             jobBlockers: [
@@ -236,7 +239,7 @@ export const addJobsBlockersGroup: ConformanceGroup<StateConformanceFixture> = {
       name: "returns the blocker chain's own trace context",
       run: async ({ stateAdapter }, expect) => {
         const blockerChainTraceContext = "00-test123-chain456-01";
-        const [blockerChain] = await stateAdapter.withTransaction(async (txCtx) =>
+        const [blockerChain] = await transaction(stateAdapter, (txCtx) =>
           stateAdapter.createJobs({
             txCtx,
             jobs: [
@@ -250,14 +253,14 @@ export const addJobsBlockersGroup: ConformanceGroup<StateConformanceFixture> = {
           }),
         );
 
-        const [mainChain] = await stateAdapter.withTransaction(async (txCtx) =>
+        const [mainChain] = await transaction(stateAdapter, (txCtx) =>
           stateAdapter.createJobs({
             txCtx,
             jobs: [{ id: stateAdapter.config.generateId(), typeName: "main", input: null }],
           }),
         );
 
-        const [result] = await stateAdapter.withTransaction(async (txCtx) =>
+        const [result] = await transaction(stateAdapter, (txCtx) =>
           stateAdapter.addJobsBlockers({
             txCtx,
             jobBlockers: [
@@ -276,7 +279,7 @@ export const addJobsBlockersGroup: ConformanceGroup<StateConformanceFixture> = {
         const chainTraceA = "00-aaa111-chain-aaa-01";
         const chainTraceB = "00-bbb222-chain-bbb-01";
 
-        const [blockerChainA] = await stateAdapter.withTransaction(async (txCtx) =>
+        const [blockerChainA] = await transaction(stateAdapter, (txCtx) =>
           stateAdapter.createJobs({
             txCtx,
             jobs: [
@@ -290,7 +293,7 @@ export const addJobsBlockersGroup: ConformanceGroup<StateConformanceFixture> = {
           }),
         );
 
-        const [blockerChainB] = await stateAdapter.withTransaction(async (txCtx) =>
+        const [blockerChainB] = await transaction(stateAdapter, (txCtx) =>
           stateAdapter.createJobs({
             txCtx,
             jobs: [
@@ -304,14 +307,14 @@ export const addJobsBlockersGroup: ConformanceGroup<StateConformanceFixture> = {
           }),
         );
 
-        const [mainChain] = await stateAdapter.withTransaction(async (txCtx) =>
+        const [mainChain] = await transaction(stateAdapter, (txCtx) =>
           stateAdapter.createJobs({
             txCtx,
             jobs: [{ id: stateAdapter.config.generateId(), typeName: "main", input: null }],
           }),
         );
 
-        const [result] = await stateAdapter.withTransaction(async (txCtx) =>
+        const [result] = await transaction(stateAdapter, (txCtx) =>
           stateAdapter.addJobsBlockers({
             txCtx,
             jobBlockers: [
@@ -331,13 +334,13 @@ export const addJobsBlockersGroup: ConformanceGroup<StateConformanceFixture> = {
     {
       name: "reports an undefined blocker for a continuation job id",
       run: async ({ stateAdapter }, expect) => {
-        const [headChain] = await stateAdapter.withTransaction(async (txCtx) =>
+        const [headChain] = await transaction(stateAdapter, (txCtx) =>
           stateAdapter.createJobs({
             txCtx,
             jobs: [{ id: stateAdapter.config.generateId(), typeName: "blocker", input: null }],
           }),
         );
-        const [continued] = await stateAdapter.withTransaction(async (txCtx) =>
+        const [continued] = await transaction(stateAdapter, (txCtx) =>
           stateAdapter.continueJobs({
             txCtx,
             jobs: [
@@ -352,7 +355,7 @@ export const addJobsBlockersGroup: ConformanceGroup<StateConformanceFixture> = {
         );
         const { continuation } = continued!;
 
-        const [mainChain] = await stateAdapter.withTransaction(async (txCtx) =>
+        const [mainChain] = await transaction(stateAdapter, (txCtx) =>
           stateAdapter.createJobs({
             txCtx,
             jobs: [{ id: stateAdapter.config.generateId(), typeName: "main", input: null }],
@@ -360,11 +363,13 @@ export const addJobsBlockersGroup: ConformanceGroup<StateConformanceFixture> = {
         );
 
         await expect(
-          stateAdapter.withTransaction(async (txCtx) => {
-            const [result] = await stateAdapter.addJobsBlockers({
-              txCtx,
-              jobBlockers: [{ jobId: mainChain.head.id, blockedByChainIds: [continuation.id] }],
-            });
+          transactionOperation(stateAdapter, function* (txCtx) {
+            const [result] = yield* unwrap(
+              stateAdapter.addJobsBlockers({
+                txCtx,
+                jobBlockers: [{ jobId: mainChain.head.id, blockedByChainIds: [continuation.id] }],
+              }),
+            );
             expect(result.blockers[0]).toBeUndefined();
             throw new Error("caller aborts");
           }),
@@ -378,21 +383,21 @@ export const addJobsBlockersGroup: ConformanceGroup<StateConformanceFixture> = {
     {
       name: "duplicate blocker chain ids do not break addJobsBlockers",
       run: async ({ stateAdapter }, expect) => {
-        const [blockerChain] = await stateAdapter.withTransaction(async (txCtx) =>
+        const [blockerChain] = await transaction(stateAdapter, (txCtx) =>
           stateAdapter.createJobs({
             txCtx,
             jobs: [{ id: stateAdapter.config.generateId(), typeName: "blocker", input: null }],
           }),
         );
 
-        const [mainChain] = await stateAdapter.withTransaction(async (txCtx) =>
+        const [mainChain] = await transaction(stateAdapter, (txCtx) =>
           stateAdapter.createJobs({
             txCtx,
             jobs: [{ id: stateAdapter.config.generateId(), typeName: "main", input: null }],
           }),
         );
 
-        const [result] = await stateAdapter.withTransaction(async (txCtx) =>
+        const [result] = await transaction(stateAdapter, (txCtx) =>
           stateAdapter.addJobsBlockers({
             txCtx,
             jobBlockers: [
@@ -418,13 +423,14 @@ export const addJobsBlockersGroup: ConformanceGroup<StateConformanceFixture> = {
     },
     {
       name: "reports a blocker chain deleted while it waited on the head lock as missing",
-      run: async ({ stateAdapter, transactionConcurrency }, expect) => {
+      run: async ({ stateAdapter: fixtureStateAdapter, transactionConcurrency }, expect) => {
+        const stateAdapter = asyncOnly(fixtureStateAdapter, expect);
         if (transactionConcurrency !== "concurrent") {
           expect.skip("requires concurrent transactions");
           return;
         }
 
-        const [blockerChain, mainChain] = await stateAdapter.withTransaction(async (txCtx) =>
+        const [blockerChain, mainChain] = await transaction(stateAdapter, async (txCtx) =>
           stateAdapter.createJobs({
             txCtx,
             jobs: [
@@ -443,10 +449,12 @@ export const addJobsBlockersGroup: ConformanceGroup<StateConformanceFixture> = {
           releaseDeleter = r;
         });
 
-        const deleteTx = stateAdapter.withTransaction(async (txCtx) => {
-          const result = await stateAdapter.deleteChains({ txCtx, chainIds: [blockerChain.id] });
+        const deleteTx = transactionOperation(stateAdapter, function* (txCtx) {
+          const result = yield* unwrap(
+            stateAdapter.deleteChains({ txCtx, chainIds: [blockerChain.id] }),
+          );
           signalDeleted!();
-          await deleterGate;
+          yield* unwrap(deleterGate);
           return result;
         });
 
@@ -484,13 +492,14 @@ export const addJobsBlockersGroup: ConformanceGroup<StateConformanceFixture> = {
     },
     {
       name: "reports a blocker chain continued while it waited on the head lock as incomplete",
-      run: async ({ stateAdapter, transactionConcurrency }, expect) => {
+      run: async ({ stateAdapter: fixtureStateAdapter, transactionConcurrency }, expect) => {
+        const stateAdapter = asyncOnly(fixtureStateAdapter, expect);
         if (transactionConcurrency !== "concurrent") {
           expect.skip("requires concurrent transactions");
           return;
         }
 
-        const [blockerChain, mainChain] = await stateAdapter.withTransaction(async (txCtx) =>
+        const [blockerChain, mainChain] = await transaction(stateAdapter, async (txCtx) =>
           stateAdapter.createJobs({
             txCtx,
             jobs: [
@@ -509,21 +518,25 @@ export const addJobsBlockersGroup: ConformanceGroup<StateConformanceFixture> = {
           releaseContinuer = r;
         });
 
-        const continuerTx = stateAdapter.withTransaction(async (txCtx) => {
-          await stateAdapter.getJobs({ txCtx, jobIds: [blockerChain.head.id], lock: "exclusive" });
-          await stateAdapter.continueJobs({
-            txCtx,
-            jobs: [
-              {
-                id: stateAdapter.config.generateId(),
-                typeName: "continued-blocker:step",
-                input: null,
-                continueFromId: blockerChain.head.id,
-              },
-            ],
-          });
+        const continuerTx = transactionOperation(stateAdapter, function* (txCtx) {
+          yield* unwrap(
+            stateAdapter.getJobs({ txCtx, jobIds: [blockerChain.head.id], lock: "exclusive" }),
+          );
+          yield* unwrap(
+            stateAdapter.continueJobs({
+              txCtx,
+              jobs: [
+                {
+                  id: stateAdapter.config.generateId(),
+                  typeName: "continued-blocker:step",
+                  input: null,
+                  continueFromId: blockerChain.head.id,
+                },
+              ],
+            }),
+          );
           signalContinued!();
-          await continuerGate;
+          yield* unwrap(continuerGate);
         });
 
         await continued;
@@ -553,13 +566,14 @@ export const addJobsBlockersGroup: ConformanceGroup<StateConformanceFixture> = {
     },
     {
       name: "reports a blocker chain completed while it waited on the head lock as complete",
-      run: async ({ stateAdapter, transactionConcurrency }, expect) => {
+      run: async ({ stateAdapter: fixtureStateAdapter, transactionConcurrency }, expect) => {
+        const stateAdapter = asyncOnly(fixtureStateAdapter, expect);
         if (transactionConcurrency !== "concurrent") {
           expect.skip("requires concurrent transactions");
           return;
         }
 
-        const [blockerChain, mainChain] = await stateAdapter.withTransaction(async (txCtx) =>
+        const [blockerChain, mainChain] = await transaction(stateAdapter, async (txCtx) =>
           stateAdapter.createJobs({
             txCtx,
             jobs: [
@@ -578,14 +592,18 @@ export const addJobsBlockersGroup: ConformanceGroup<StateConformanceFixture> = {
           releaseCompleter = r;
         });
 
-        const completerTx = stateAdapter.withTransaction(async (txCtx) => {
-          await stateAdapter.getJobs({ txCtx, jobIds: [blockerChain.head.id], lock: "exclusive" });
-          await stateAdapter.completeJobs({
-            txCtx,
-            jobs: [{ jobId: blockerChain.head.id, output: null }],
-          });
+        const completerTx = transactionOperation(stateAdapter, function* (txCtx) {
+          yield* unwrap(
+            stateAdapter.getJobs({ txCtx, jobIds: [blockerChain.head.id], lock: "exclusive" }),
+          );
+          yield* unwrap(
+            stateAdapter.completeJobs({
+              txCtx,
+              jobs: [{ jobId: blockerChain.head.id, output: null }],
+            }),
+          );
           signalCompleted!();
-          await completerGate;
+          yield* unwrap(completerGate);
         });
 
         await completed;

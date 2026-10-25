@@ -1,8 +1,10 @@
 // oxlint-disable no-empty-pattern
 import inspector from "node:inspector";
 
+import { type Operation, isThenable, runOperation } from "@queuert/helpers";
 import { type MockedFunction, type TestAPI, expect, vi } from "vitest";
 
+import { transaction, transactionOperation } from "../conformance/transaction.js";
 import { createInProcessNotifyAdapter } from "../notify-adapter/notify-adapter.in-process.js";
 import { type NotifyAdapter } from "../notify-adapter/notify-adapter.js";
 import { createConsoleLog } from "../observability-adapter/log.console.js";
@@ -14,19 +16,21 @@ import { type TransactionHooks, withTransactionHooks } from "../transaction-hook
 import { createFlakyBatchGenerator } from "./flaky-test-helper.spec-helper.js";
 
 export type TestSuiteContext = {
-  stateAdapter: StateAdapter<{ $test: true }, string>;
+  stateAdapter: StateAdapter<{ $test: true }, string, any>;
   transactionConcurrency: "concurrent" | "serialized";
   generateId: () => string;
   notifyAdapter: NotifyAdapter | undefined;
   withTransaction: <T>(
-    cb: (txCtx: { $test: true }, transactionHooks: TransactionHooks) => Promise<T>,
+    cb: (txCtx: { $test: true }, transactionHooks: TransactionHooks) => T | Promise<T>,
+  ) => Promise<T>;
+  runInMode: <T>(operation: () => Operation<T>) => T | Promise<T>;
+  withTransactionOperation: <T>(
+    cb: (txCtx: { $test: true }, transactionHooks: TransactionHooks) => Operation<T>,
   ) => Promise<T>;
   poisonTransaction: ((txCtx: { $test: true }) => Promise<void>) | undefined;
   withNonTransactionContext: <T>(fn: (txCtx: { $test: true }) => Promise<T>) => Promise<T>;
-  withSavepoint:
-    | (<T>(txCtx: { $test: true }, fn: (txCtx: { $test: true }) => Promise<T>) => Promise<T>)
-    | undefined;
-  flakyDbStateAdapter: StateAdapter<{ $test: true }, string> | undefined;
+  withSavepoint: (<T>(txCtx: { $test: true }, fn: (txCtx: { $test: true }) => T) => T) | undefined;
+  flakyDbStateAdapter: StateAdapter<{ $test: true }, string, any> | undefined;
   withWorkers: <T>(workers: (() => Promise<void>)[], cb: () => Promise<T>) => Promise<T>;
   log: MockedFunction<Log>;
   observabilityAdapter: ObservabilityAdapter;
@@ -34,7 +38,7 @@ export type TestSuiteContext = {
 
 export const extendWithCommon = <
   T extends {
-    stateAdapter: StateAdapter<{ $test: true }, string>;
+    stateAdapter: StateAdapter<{ $test: true }, string, any>;
   },
 >(
   it: TestAPI<T>,
@@ -42,13 +46,25 @@ export const extendWithCommon = <
   T &
     Pick<
       TestSuiteContext,
-      "withTransaction" | "withWorkers" | "log" | "observabilityAdapter" | "generateId"
+      | "withTransaction"
+      | "withTransactionOperation"
+      | "runInMode"
+      | "withWorkers"
+      | "log"
+      | "observabilityAdapter"
+      | "generateId"
     >
 > =>
   it.extend<
     Pick<
       TestSuiteContext,
-      "withTransaction" | "withWorkers" | "log" | "observabilityAdapter" | "generateId"
+      | "withTransaction"
+      | "withTransactionOperation"
+      | "runInMode"
+      | "withWorkers"
+      | "log"
+      | "observabilityAdapter"
+      | "generateId"
     >
   >({
     generateId: [
@@ -61,7 +77,23 @@ export const extendWithCommon = <
       async ({ stateAdapter }, use) => {
         await use(async (cb) =>
           withTransactionHooks(async (transactionHooks) =>
-            stateAdapter.withTransaction(async (txCtx) => cb(txCtx, transactionHooks)),
+            transaction(stateAdapter, (txCtx) => cb(txCtx, transactionHooks)),
+          ),
+        );
+      },
+      { scope: "test" },
+    ],
+    runInMode: [
+      async ({ stateAdapter }, use) => {
+        await use((operation) => runOperation(stateAdapter.mode, operation));
+      },
+      { scope: "test" },
+    ],
+    withTransactionOperation: [
+      async ({ stateAdapter }, use) => {
+        await use(async (cb) =>
+          withTransactionHooks(async (transactionHooks) =>
+            transactionOperation(stateAdapter, (txCtx) => cb(txCtx, transactionHooks)),
           ),
         );
       },
@@ -106,7 +138,7 @@ export const extendWithNotifyInProcess = <T extends Record<string, unknown>>(
   it.extend<Pick<TestSuiteContext, "notifyAdapter"> & { flakyNotifyAdapter: NotifyAdapter }>({
     notifyAdapter: [
       async ({}, use) => {
-        await use(await createInProcessNotifyAdapter());
+        await use(createInProcessNotifyAdapter());
       },
       { scope: "test" },
     ],
@@ -240,4 +272,30 @@ export const extendWithResourceLeakDetection = <T extends Record<string, unknown
       { auto: true, scope: "test" },
     ],
   }) as any;
+};
+
+export const captureFailure = (fn: () => unknown): unknown => {
+  try {
+    const result = fn();
+    return isThenable(result)
+      ? Promise.resolve(result).then(
+          () => undefined,
+          (error: unknown) => error,
+        )
+      : undefined;
+  } catch (error) {
+    return error;
+  }
+};
+
+export const expectFailure = function* (
+  fn: () => unknown,
+  expected?: string | RegExp | (abstract new (...args: never[]) => Error),
+): Operation<void> {
+  const failure = yield captureFailure(fn);
+  if (failure === undefined) throw new Error("expected the call to fail");
+  expect(() => {
+    // oxlint-disable-next-line typescript/only-throw-error -- re-throwing the captured failure for the matcher
+    throw failure;
+  }).toThrow(expected);
 };

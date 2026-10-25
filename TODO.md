@@ -28,7 +28,8 @@ None
 - [TASK] Unify workerless and worker tracing — workerless completion (`completeChain`) should create an attempt span like the worker path, eliminating the asymmetric `completeJobSpan` adapter method
 - [EPIC] Align `@queuert/otel` with OpenTelemetry messaging semantic conventions
 - [EPIC] SQLite production-readiness
-  - [TASK] Get rid of `createAsyncRwLock()`
+  - [TASK] Sync client and attempt APIs — a `mode: "sync"` state adapter makes every state-touching client method, `complete` and workerless `completeChain` return plain values, so they run inside native synchronous SQLite transactions, and sync providers drop `AsyncRwLock`. See `design/sqlite-sync-api.md`.
+  - [TASK] Get rid of `createAsyncRwLock()` — sync providers drop it with the sync API task; what is left is async providers
   - [TASK] No multi-worker example
   - [TASK] Promote transactions via a dedicated sentinel table (like migration lock in PG) to prevent WAL contention
 - [EPIC] MySQL/MariaDB adapter

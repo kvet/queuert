@@ -13,7 +13,7 @@ test("state-postgres-postgres-js provider passes state adapter conformance", asy
     const sql = postgres(pg.connectionString, { max: 10 });
 
     const stateProvider = createPostgresJsStateProvider({ sql });
-    const adapter = await createPgStateAdapter({ stateProvider });
+    const adapter = createPgStateAdapter({ stateProvider });
     await adapter.migrateToLatest();
 
     return {

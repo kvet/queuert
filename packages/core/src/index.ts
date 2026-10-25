@@ -59,6 +59,8 @@ export {
   type BaseTxContext,
   type StateAdapter,
   type StateAdapterConfig,
+  type StateAdapterMode,
+  type StateResult,
 } from "./state-adapter/state-adapter.js";
 export {
   createTransactionHooks,

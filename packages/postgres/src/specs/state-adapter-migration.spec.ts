@@ -36,7 +36,7 @@ const it = baseIt.extend<{ fresh: Database }>({
     const pg = await acquirePostgres("postgres:14", `pg-migration-${randomUUID()}`);
     const pool = new Pool({ connectionString: pg.connectionString });
     const provider = createPgPoolProvider({ pool });
-    const adapter = await createPgStateAdapter({
+    const adapter = createPgStateAdapter({
       stateProvider: provider,
       generateId: (): string => randomUUID(),
     });

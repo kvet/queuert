@@ -17,7 +17,7 @@ test("state-postgres-kysely provider passes state adapter conformance", async ()
     const db = new Kysely<Database>({ dialect: new PostgresDialect({ pool }) });
 
     const stateProvider = createKyselyPgStateProvider({ db });
-    const adapter = await createPgStateAdapter({ stateProvider });
+    const adapter = createPgStateAdapter({ stateProvider });
     await adapter.migrateToLatest();
 
     return {

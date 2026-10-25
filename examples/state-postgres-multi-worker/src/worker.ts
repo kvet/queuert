@@ -24,14 +24,14 @@ const workerName = process.env.WORKER_NAME!;
 const sql = postgres(connectionString, { max: 5 });
 
 const stateProvider = createPostgresJsStateProvider({ sql });
-const stateAdapter = await createPgStateAdapter({ stateProvider });
+const stateAdapter = createPgStateAdapter({ stateProvider });
 
 const notifyProvider = createPostgresJsNotifyProvider({ sql });
-const notifyAdapter = await createPgNotifyAdapter({ notifyProvider });
+const notifyAdapter = createPgNotifyAdapter({ notifyProvider });
 
-const client = await createClient({ stateAdapter, notifyAdapter, jobTypes });
+const client = createClient({ stateAdapter, notifyAdapter, jobTypes });
 
-const worker = await createInProcessWorker({
+const worker = createInProcessWorker({
   client,
   workerName,
   concurrency: 2,

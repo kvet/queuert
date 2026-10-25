@@ -6,7 +6,7 @@ import { type StateAdapter } from "../../state-adapter/state-adapter.js";
  * context the conformance cases receive.
  */
 export type StateConformanceFixture = {
-  stateAdapter: StateAdapter<any, any>;
+  stateAdapter: StateAdapter<any, any, any>;
   /**
    * Whether two `withTransaction` callbacks can run at the same time — `"concurrent"` for a
    * connection pool, `"serialized"` for a single connection (e.g. SQLite). Cases that need

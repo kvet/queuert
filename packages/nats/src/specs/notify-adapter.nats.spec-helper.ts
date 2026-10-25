@@ -27,7 +27,7 @@ export const extendWithNotifyNats = <
           { ttl: 60_000 },
         );
 
-        const notifyAdapter = await createNatsNotifyAdapter({
+        const notifyAdapter = createNatsNotifyAdapter({
           nc,
           kv,
           subjectPrefix: `queuert.${Date.now()}.${Math.random().toString(36).slice(2)}`,

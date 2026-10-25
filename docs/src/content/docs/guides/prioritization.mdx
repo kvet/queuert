@@ -48,10 +48,10 @@ const jobTypes = defineJobTypes<{
   "email.marketing": { entry: true; input: { to: string }; output: { at: number } };
 }>();
 
-const client = await createClient({ stateAdapter, notifyAdapter, jobTypes });
+const client = createClient({ stateAdapter, notifyAdapter, jobTypes });
 
 // Customer-facing workload (password resets, 2FA): reserved capacity.
-const transactionalWorker = await createInProcessWorker({
+const transactionalWorker = createInProcessWorker({
   client,
   workerName: "email-transactional",
   concurrency: 3,
@@ -65,7 +65,7 @@ const transactionalWorker = await createInProcessWorker({
 });
 
 // Bulk workload (digests, newsletters): throttled, won't interfere with the other worker.
-const marketingWorker = await createInProcessWorker({
+const marketingWorker = createInProcessWorker({
   client,
   workerName: "email-marketing",
   concurrency: 1,

@@ -31,8 +31,8 @@ type BillingDefs = {
 const imageJobTypes = defineJobTypes<ImageDefs>();
 const billingJobTypes = defineJobTypes<BillingDefs>();
 
-const stateAdapter = await createInProcessStateAdapter();
-const client = await createClient({
+const stateAdapter = createInProcessStateAdapter();
+const client = createClient({
   stateAdapter,
   jobTypes: [imageJobTypes, billingJobTypes],
 });
@@ -166,7 +166,7 @@ describe("omitProcessors", () => {
 
 describe("picked registries in a worker's processors array", () => {
   it("rejects overlapping picks from the same registry", async () => {
-    await expect(
+    expect(() =>
       createInProcessWorker({
         client,
         processors: [
@@ -175,11 +175,11 @@ describe("picked registries in a worker's processors array", () => {
           pickProcessors(imageProcessors, ["images.transcode", "images.notify"]),
         ],
       }),
-    ).rejects.toThrow(DuplicateJobTypeError);
+    ).toThrow(DuplicateJobTypeError);
   });
 
   it("checks requiredAttemptMiddleware against each picked slice", async () => {
-    await expect(
+    expect(() =>
       createInProcessWorker({
         client,
         requiredAttemptMiddleware: [traceMiddleware],
@@ -189,6 +189,6 @@ describe("picked registries in a worker's processors array", () => {
           pickProcessors(billingProcessors, ["billing.charge"]),
         ],
       }),
-    ).rejects.toThrow("missing requiredAttemptMiddleware");
+    ).toThrow("missing requiredAttemptMiddleware");
   });
 });

@@ -1,4 +1,4 @@
-import { createAsyncRwLock, createSqliteStateAdapter } from "@queuert/sqlite";
+import { createAsyncRwLock, createAsyncSqliteStateAdapter } from "@queuert/sqlite";
 import Database from "better-sqlite3";
 import { eq, sql } from "drizzle-orm";
 import { drizzle } from "drizzle-orm/better-sqlite3";
@@ -51,18 +51,18 @@ const lock = createAsyncRwLock();
 const stateProvider = createDrizzleSqliteStateProvider({ db: sqlite, lock });
 
 // 6. Create adapters and queuert client/worker
-const stateAdapter = await createSqliteStateAdapter({ stateProvider });
+const stateAdapter = createAsyncSqliteStateAdapter({ stateProvider });
 await stateAdapter.migrateToLatest();
 
-const notifyAdapter = await createInProcessNotifyAdapter();
+const notifyAdapter = createInProcessNotifyAdapter();
 
-const client = await createClient({
+const client = createClient({
   stateAdapter,
   notifyAdapter,
   jobTypes,
 });
 
-const worker = await createInProcessWorker({
+const worker = createInProcessWorker({
   client,
   processors: createProcessors({
     client,

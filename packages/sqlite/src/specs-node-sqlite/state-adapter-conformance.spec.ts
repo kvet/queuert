@@ -14,7 +14,7 @@ import {
 import { stateAdapterConformanceTestSuite, withWorkers } from "queuert/testing";
 import { describe, expectTypeOf, it, vi } from "vitest";
 
-import { createSqliteStateAdapter } from "../state-adapter/state-adapter.sqlite.js";
+import { createAsyncSqliteStateAdapter } from "../state-adapter/state-adapter.sqlite.js";
 import { createNodeSqliteProvider } from "../state-provider/state-provider.node-sqlite.js";
 
 it("index");
@@ -47,7 +47,7 @@ describe("SQLite State Adapter Conformance (node:sqlite)", () => {
     stateAdapter: [
       async ({ db }, use) => {
         const stateProvider = createNodeSqliteProvider({ db });
-        const adapter = await createSqliteStateAdapter({ stateProvider, tablePrefix });
+        const adapter = createAsyncSqliteStateAdapter({ stateProvider, tablePrefix });
         await adapter.migrateToLatest();
         return use(adapter as unknown as StateAdapter<{ $test: true }, string>);
       },
@@ -70,7 +70,7 @@ it("infers custom ID types through the full stack", async () => {
   try {
     const lock = createAsyncRwLock();
     const stateProvider = createNodeSqliteProvider({ db, lock });
-    const stateAdapter = await createSqliteStateAdapter({
+    const stateAdapter = createAsyncSqliteStateAdapter({
       stateProvider,
       tablePrefix: "myapp_",
       idType: "TEXT",
@@ -79,7 +79,7 @@ it("infers custom ID types through the full stack", async () => {
 
     await stateAdapter.migrateToLatest();
 
-    const notifyAdapter = await createInProcessNotifyAdapter();
+    const notifyAdapter = createInProcessNotifyAdapter();
     const log = vi.fn();
     const jobTypes = defineJobTypes<{
       test: {
@@ -89,7 +89,7 @@ it("infers custom ID types through the full stack", async () => {
       };
     }>();
 
-    const client = await createClient({
+    const client = createClient({
       stateAdapter,
       notifyAdapter,
       log,
@@ -109,7 +109,7 @@ it("infers custom ID types through the full stack", async () => {
       }
     };
 
-    const worker = await createInProcessWorker({
+    const worker = createInProcessWorker({
       client,
       processors: createProcessors({
         client,

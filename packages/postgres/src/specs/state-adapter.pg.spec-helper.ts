@@ -27,7 +27,7 @@ export const extendWithStatePg = <
     poisonTransaction: ((txCtx: { $test: true }) => Promise<void>) | undefined;
     withNonTransactionContext: <T>(fn: (txCtx: { $test: true }) => Promise<T>) => Promise<T>;
     withSavepoint:
-      | (<T>(txCtx: { $test: true }, fn: (txCtx: { $test: true }) => Promise<T>) => Promise<T>)
+      | (<T>(txCtx: { $test: true }, fn: (txCtx: { $test: true }) => T) => T)
       | undefined;
   }
 > => {
@@ -45,7 +45,7 @@ export const extendWithStatePg = <
     poisonTransaction: ((txCtx: { $test: true }) => Promise<void>) | undefined;
     withNonTransactionContext: <T>(fn: (txCtx: { $test: true }) => Promise<T>) => Promise<T>;
     withSavepoint:
-      | (<T>(txCtx: { $test: true }, fn: (txCtx: { $test: true }) => Promise<T>) => Promise<T>)
+      | (<T>(txCtx: { $test: true }, fn: (txCtx: { $test: true }) => T) => T)
       | undefined;
   }>({
     statePool: [
@@ -76,7 +76,7 @@ export const extendWithStatePg = <
         const stateProvider = createPgPoolProvider({
           pool: statePool,
         });
-        const stateAdapter = await createPgStateAdapter({
+        const stateAdapter = createPgStateAdapter({
           stateProvider,
         });
 
@@ -141,14 +141,14 @@ export const extendWithStatePg = <
     ],
     stateAdapter: [
       async ({ stateProvider }, use) => {
-        return use(await createPgStateAdapter({ stateProvider }));
+        return use(createPgStateAdapter({ stateProvider }));
       },
       { scope: "test" },
     ],
     flakyStateAdapter: [
       async ({ flakyStateProvider }, use) => {
         return use(
-          await createPgStateAdapter({
+          createPgStateAdapter({
             stateProvider: flakyStateProvider,
           }),
         );
@@ -165,7 +165,7 @@ export const extendWithStatePg = <
     withSavepoint: [
       // oxlint-disable-next-line no-empty-pattern
       async ({}, use) => {
-        await use(async (txCtx, fn) => {
+        await use((async (txCtx: { $test: true }, fn: (txCtx: { $test: true }) => unknown) => {
           const { poolClient } = txCtx as unknown as PgPoolContext;
           await poolClient.query("SAVEPOINT queuert_test");
           try {
@@ -176,7 +176,7 @@ export const extendWithStatePg = <
             await poolClient.query("ROLLBACK TO SAVEPOINT queuert_test");
             throw error;
           }
-        });
+        }) as never);
       },
       { scope: "test" },
     ],
@@ -247,7 +247,7 @@ export const extendWithStatePg = <
     flakyDbStateAdapter: [
       async ({ flakyDbStateProvider }, use) => {
         return use(
-          await createPgStateAdapter({
+          createPgStateAdapter({
             stateProvider: flakyDbStateProvider,
           }),
         );

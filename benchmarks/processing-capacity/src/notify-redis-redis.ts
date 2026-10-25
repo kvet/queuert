@@ -13,8 +13,8 @@ await redisSubscription.connect();
 
 await runBenchmark({
   title: "PROCESSING CAPACITY — REDIS NOTIFY (redis)",
-  stateAdapter: await createInProcessStateAdapter(),
-  notifyAdapter: await createRedisNotifyAdapter({
+  stateAdapter: createInProcessStateAdapter(),
+  notifyAdapter: createRedisNotifyAdapter({
     notifyProvider: createNodeRedisNotifyProvider({
       client: redis,
       subscribeClient: redisSubscription,

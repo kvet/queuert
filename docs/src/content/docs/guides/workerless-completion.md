@@ -35,7 +35,7 @@ const chain = await withTransactionHooks(async (transactionHooks) =>
 );
 
 // The worker handles the timeout case (auto-reject) and processes approved requests
-const worker = await createInProcessWorker({
+const worker = createInProcessWorker({
   client,
   processors: createProcessors({
     client,

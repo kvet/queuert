@@ -142,10 +142,10 @@ const jobTypes = defineJobTypes<{
 }>();
 
 // Create adapters
-const stateAdapter = await createInProcessStateAdapter();
-const notifyAdapter = await createInProcessNotifyAdapter();
+const stateAdapter = createInProcessStateAdapter();
+const notifyAdapter = createInProcessNotifyAdapter();
 
-const client = await createClient({
+const client = createClient({
   stateAdapter,
   notifyAdapter,
   observabilityAdapter,
@@ -153,7 +153,7 @@ const client = await createClient({
 });
 
 // Create worker with processors
-const worker = await createInProcessWorker({
+const worker = createInProcessWorker({
   client,
   processors: createProcessors({
     client,

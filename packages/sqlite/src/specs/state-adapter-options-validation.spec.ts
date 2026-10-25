@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 
-import { createSqliteStateAdapter } from "../state-adapter/state-adapter.sqlite.js";
+import { createAsyncSqliteStateAdapter } from "../state-adapter/state-adapter.sqlite.js";
 
 const dummyProvider = {
   withTransaction: async <T>(fn: (ctx: any) => Promise<T>) => fn({}),
@@ -27,9 +27,9 @@ describe("SQL identifier validation", () => {
   describe("rejects invalid tablePrefix", () => {
     for (const { label, value } of identifierInjectionCases) {
       it(label, async () => {
-        await expect(
-          createSqliteStateAdapter({ stateProvider: dummyProvider, tablePrefix: value }),
-        ).rejects.toThrow(/Invalid tablePrefix/);
+        expect(() =>
+          createAsyncSqliteStateAdapter({ stateProvider: dummyProvider, tablePrefix: value }),
+        ).toThrow(/Invalid tablePrefix/);
       });
     }
   });
@@ -37,15 +37,15 @@ describe("SQL identifier validation", () => {
   describe("rejects invalid idType", () => {
     for (const { label, value } of identifierInjectionCases) {
       it(label, async () => {
-        await expect(
-          createSqliteStateAdapter({ stateProvider: dummyProvider, idType: value }),
-        ).rejects.toThrow(/Invalid idType/);
+        expect(() =>
+          createAsyncSqliteStateAdapter({ stateProvider: dummyProvider, idType: value }),
+        ).toThrow(/Invalid idType/);
       });
     }
   });
 
   it("accepts valid tablePrefix", async () => {
-    const adapter = await createSqliteStateAdapter({
+    const adapter = createAsyncSqliteStateAdapter({
       stateProvider: dummyProvider,
       tablePrefix: "myapp_",
     });
@@ -53,12 +53,12 @@ describe("SQL identifier validation", () => {
   });
 
   it("accepts default values", async () => {
-    const adapter = await createSqliteStateAdapter({ stateProvider: dummyProvider });
+    const adapter = createAsyncSqliteStateAdapter({ stateProvider: dummyProvider });
     expect(adapter).toBeDefined();
   });
 
   it("accepts typical idType value", async () => {
-    const adapter = await createSqliteStateAdapter({
+    const adapter = createAsyncSqliteStateAdapter({
       stateProvider: dummyProvider,
       idType: "INTEGER",
     });
@@ -70,9 +70,9 @@ describe("limit validation", () => {
   for (const option of ["maxBlockersPerJob", "countCap"] as const) {
     for (const value of [0, -1, 1.5, Number.NaN]) {
       it(`rejects ${option} = ${value}`, async () => {
-        await expect(
-          createSqliteStateAdapter({ stateProvider: dummyProvider, [option]: value }),
-        ).rejects.toThrow(new RegExp(`Invalid ${option}`));
+        expect(() =>
+          createAsyncSqliteStateAdapter({ stateProvider: dummyProvider, [option]: value }),
+        ).toThrow(new RegExp(`Invalid ${option}`));
       });
     }
   }
@@ -80,7 +80,7 @@ describe("limit validation", () => {
 
 describe("config", () => {
   it("applies defaults", async () => {
-    const { config } = await createSqliteStateAdapter({ stateProvider: dummyProvider });
+    const { config } = createAsyncSqliteStateAdapter({ stateProvider: dummyProvider });
     expect(config.generateId()).toMatch(
       /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/,
     );
@@ -92,7 +92,7 @@ describe("config", () => {
   it("exposes the configured options", async () => {
     const generateId = () => `job-${crypto.randomUUID()}`;
     const validateId = (id: string) => id.startsWith("job-");
-    const { config } = await createSqliteStateAdapter({
+    const { config } = createAsyncSqliteStateAdapter({
       stateProvider: dummyProvider,
       generateId,
       validateId,

@@ -12,7 +12,7 @@ test("notify-postgres-postgres-js provider passes notify adapter conformance", a
   await runNotifyAdapterConformance(async () => {
     const sql = postgres(pg.connectionString, { max: 10 });
     const notifyProvider = createPostgresJsNotifyProvider({ sql });
-    const notifyAdapter = await createPgNotifyAdapter({
+    const notifyAdapter = createPgNotifyAdapter({
       notifyProvider,
       channelPrefix: `qrt_spec_${Date.now()}_${Math.random().toString(36).slice(2)}`,
     });

@@ -45,7 +45,7 @@ const waitForNextJob = async ({
   executor,
   signal,
 }: {
-  stateAdapter: StateAdapter<any, any>;
+  stateAdapter: StateAdapter<any, any, any>;
   notifyAdapter: NotifyAdapter;
   typeNames: string[];
   pollIntervalMs: number;
@@ -198,9 +198,9 @@ export type InProcessWorkerDefaults = {
  * the message lists every invalid field.
  * @throws {@link DuplicateJobTypeError} if slices in a `processors` array share job types.
  */
-export const createInProcessWorker = async <
+export const createInProcessWorker = <
   TJobTypeDefinitions extends BaseJobTypeDefinitions,
-  TStateAdapter extends StateAdapter<any, any>,
+  TStateAdapter extends StateAdapter<any, any, any>,
   const TProcessorsInput extends Processors | readonly Processors[] = Processors,
   const TRequiredAttemptMiddleware extends readonly AnyAttemptMiddleware[] = readonly [],
 >({
@@ -259,7 +259,7 @@ export const createInProcessWorker = async <
             : ValidatedProcessorSlices<TProcessorsInput>
           : unknown)
     : `Error: processors contain job types unknown to the client: ${ExtraProcessorTypeNames<WorkerProcessorDefs<TProcessorsInput>, TJobTypeDefinitions> & string}`;
-}): Promise<InProcessWorker> => {
+}): InProcessWorker => {
   const merged = Array.isArray(processorsOption)
     ? processorsOption.length === 1
       ? (processorsOption[0] as Processors)

@@ -130,7 +130,8 @@ export const handleChainDelete = async (
   try {
     const { stateAdapter } = client[helpersSymbol];
     const deleted = await withTransactionHooks(async (transactionHooks) =>
-      stateAdapter.withTransaction(async (txCtx) =>
+      // oxlint-disable-next-line typescript/promise-function-async -- the callback returns a value in sync mode and a promise in async mode
+      stateAdapter.withTransaction((txCtx) =>
         client.deleteChains({
           ids: [chainId],
           transactionHooks,

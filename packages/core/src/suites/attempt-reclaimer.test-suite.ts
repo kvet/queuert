@@ -32,7 +32,7 @@ export const attemptReclaimerTestSuite = ({ it }: { it: TestAPI<TestSuiteContext
       };
     }>();
 
-    const client = await createClient({
+    const client = createClient({
       stateAdapter,
       notifyAdapter,
       observabilityAdapter,
@@ -40,7 +40,7 @@ export const attemptReclaimerTestSuite = ({ it }: { it: TestAPI<TestSuiteContext
       jobTypes,
     });
     const handlerAsserted = Promise.withResolvers<void>();
-    const worker = await createInProcessWorker({
+    const worker = createInProcessWorker({
       client,
       concurrency: 1,
       processors: createProcessors({
@@ -58,7 +58,7 @@ export const attemptReclaimerTestSuite = ({ it }: { it: TestAPI<TestSuiteContext
               expect(signal.aborted).toBe(false);
               handlerAsserted.resolve();
 
-              return withTransaction(async (txCtx, transactionHooks) =>
+              return withTransaction((txCtx, transactionHooks) =>
                 complete({ ...txCtx, transactionHooks, output: null }),
               );
             },
@@ -67,7 +67,7 @@ export const attemptReclaimerTestSuite = ({ it }: { it: TestAPI<TestSuiteContext
       }),
     });
 
-    const chain = await withTransaction(async (txCtx, transactionHooks) =>
+    const chain = await withTransaction((txCtx, transactionHooks) =>
       client.createChain({
         ...txCtx,
         transactionHooks,
@@ -98,7 +98,7 @@ export const attemptReclaimerTestSuite = ({ it }: { it: TestAPI<TestSuiteContext
       };
     }>();
 
-    const client = await createClient({
+    const client = createClient({
       stateAdapter,
       notifyAdapter,
       observabilityAdapter,
@@ -110,7 +110,7 @@ export const attemptReclaimerTestSuite = ({ it }: { it: TestAPI<TestSuiteContext
     const jobCompleted = Promise.withResolvers<void>();
     const attemptConfig = { timeoutMs: 10, heartbeatMs: 100 } satisfies AttemptConfig;
 
-    const worker1 = await createInProcessWorker({
+    const worker1 = createInProcessWorker({
       client,
       concurrency: 1,
       pollIntervalMs: attemptConfig.timeoutMs,
@@ -135,7 +135,7 @@ export const attemptReclaimerTestSuite = ({ it }: { it: TestAPI<TestSuiteContext
                 }
               }
 
-              return withTransaction(async (txCtx, transactionHooks) =>
+              return withTransaction((txCtx, transactionHooks) =>
                 complete({ ...txCtx, transactionHooks, output: null }),
               );
             },
@@ -144,7 +144,7 @@ export const attemptReclaimerTestSuite = ({ it }: { it: TestAPI<TestSuiteContext
       }),
     });
 
-    const worker2 = await createInProcessWorker({
+    const worker2 = createInProcessWorker({
       client,
       concurrency: 1,
       pollIntervalMs: attemptConfig.timeoutMs,
@@ -169,7 +169,7 @@ export const attemptReclaimerTestSuite = ({ it }: { it: TestAPI<TestSuiteContext
                 }
               }
 
-              return withTransaction(async (txCtx, transactionHooks) =>
+              return withTransaction((txCtx, transactionHooks) =>
                 complete({ ...txCtx, transactionHooks, output: null }),
               );
             },
@@ -178,7 +178,7 @@ export const attemptReclaimerTestSuite = ({ it }: { it: TestAPI<TestSuiteContext
       }),
     });
 
-    const failChain = await withTransaction(async (txCtx, transactionHooks) =>
+    const failChain = await withTransaction((txCtx, transactionHooks) =>
       client.createChain({
         ...txCtx,
         transactionHooks,
@@ -191,7 +191,7 @@ export const attemptReclaimerTestSuite = ({ it }: { it: TestAPI<TestSuiteContext
       await jobStarted.promise;
       await sleep(10);
 
-      const successChain = await withTransaction(async (txCtx, transactionHooks) =>
+      const successChain = await withTransaction((txCtx, transactionHooks) =>
         client.createChain({
           ...txCtx,
           transactionHooks,
@@ -225,7 +225,7 @@ export const attemptReclaimerTestSuite = ({ it }: { it: TestAPI<TestSuiteContext
       };
     }>();
 
-    const client = await createClient({
+    const client = createClient({
       stateAdapter,
       notifyAdapter,
       observabilityAdapter,
@@ -237,7 +237,7 @@ export const attemptReclaimerTestSuite = ({ it }: { it: TestAPI<TestSuiteContext
     const jobCompleted = Promise.withResolvers<void>();
     const attemptConfig = { timeoutMs: 10, heartbeatMs: 100 } satisfies AttemptConfig;
 
-    const worker1 = await createInProcessWorker({
+    const worker1 = createInProcessWorker({
       client,
       concurrency: 1,
       pollIntervalMs: attemptConfig.timeoutMs,
@@ -252,7 +252,7 @@ export const attemptReclaimerTestSuite = ({ it }: { it: TestAPI<TestSuiteContext
                 jobStarted.resolve();
                 await sleep(attemptConfig.heartbeatMs * 2);
                 await expect(
-                  withTransaction(async (txCtx, transactionHooks) =>
+                  withTransaction((txCtx, transactionHooks) =>
                     complete({ ...txCtx, transactionHooks, output: null }),
                   ),
                 ).rejects.toSatisfy(
@@ -265,7 +265,7 @@ export const attemptReclaimerTestSuite = ({ it }: { it: TestAPI<TestSuiteContext
               }
               await sleep(10);
 
-              return withTransaction(async (txCtx, transactionHooks) =>
+              return withTransaction((txCtx, transactionHooks) =>
                 complete({ ...txCtx, transactionHooks, output: null }),
               );
             },
@@ -274,7 +274,7 @@ export const attemptReclaimerTestSuite = ({ it }: { it: TestAPI<TestSuiteContext
       }),
     });
 
-    const worker2 = await createInProcessWorker({
+    const worker2 = createInProcessWorker({
       client,
       concurrency: 1,
       pollIntervalMs: attemptConfig.timeoutMs,
@@ -289,7 +289,7 @@ export const attemptReclaimerTestSuite = ({ it }: { it: TestAPI<TestSuiteContext
                 jobStarted.resolve();
                 await sleep(attemptConfig.heartbeatMs * 2);
                 await expect(
-                  withTransaction(async (txCtx, transactionHooks) =>
+                  withTransaction((txCtx, transactionHooks) =>
                     complete({ ...txCtx, transactionHooks, output: null }),
                   ),
                 ).rejects.toSatisfy(
@@ -302,7 +302,7 @@ export const attemptReclaimerTestSuite = ({ it }: { it: TestAPI<TestSuiteContext
               }
               await sleep(10);
 
-              return withTransaction(async (txCtx, transactionHooks) =>
+              return withTransaction((txCtx, transactionHooks) =>
                 complete({ ...txCtx, transactionHooks, output: null }),
               );
             },
@@ -311,7 +311,7 @@ export const attemptReclaimerTestSuite = ({ it }: { it: TestAPI<TestSuiteContext
       }),
     });
 
-    const failChain = await withTransaction(async (txCtx, transactionHooks) =>
+    const failChain = await withTransaction((txCtx, transactionHooks) =>
       client.createChain({
         ...txCtx,
         transactionHooks,
@@ -324,7 +324,7 @@ export const attemptReclaimerTestSuite = ({ it }: { it: TestAPI<TestSuiteContext
       await jobStarted.promise;
       await sleep(10);
 
-      const successChain = await withTransaction(async (txCtx, transactionHooks) =>
+      const successChain = await withTransaction((txCtx, transactionHooks) =>
         client.createChain({
           ...txCtx,
           transactionHooks,
@@ -358,7 +358,7 @@ export const attemptReclaimerTestSuite = ({ it }: { it: TestAPI<TestSuiteContext
       };
     }>();
 
-    const client = await createClient({
+    const client = createClient({
       stateAdapter,
       notifyAdapter,
       observabilityAdapter,
@@ -373,7 +373,7 @@ export const attemptReclaimerTestSuite = ({ it }: { it: TestAPI<TestSuiteContext
     const releaseSecond = Promise.withResolvers<void>();
     const firstRejected = Promise.withResolvers<void>();
 
-    const worker = await createInProcessWorker({
+    const worker = createInProcessWorker({
       client,
       concurrency: 2,
       pollIntervalMs: 10,
@@ -388,7 +388,7 @@ export const attemptReclaimerTestSuite = ({ it }: { it: TestAPI<TestSuiteContext
                 firstStarted.resolve();
                 await releaseFirst.promise;
                 await expect(
-                  withTransaction(async (txCtx, transactionHooks) =>
+                  withTransaction((txCtx, transactionHooks) =>
                     complete({ ...txCtx, transactionHooks, output: null }),
                   ),
                 ).rejects.toThrow(JobTakenByAnotherWorkerError);
@@ -398,7 +398,7 @@ export const attemptReclaimerTestSuite = ({ it }: { it: TestAPI<TestSuiteContext
 
               secondStarted.resolve();
               await releaseSecond.promise;
-              return withTransaction(async (txCtx, transactionHooks) =>
+              return withTransaction((txCtx, transactionHooks) =>
                 complete({ ...txCtx, transactionHooks, output: null }),
               );
             },
@@ -407,7 +407,7 @@ export const attemptReclaimerTestSuite = ({ it }: { it: TestAPI<TestSuiteContext
       }),
     });
 
-    const reclaimer = await createInProcessWorker({
+    const reclaimer = createInProcessWorker({
       client,
       concurrency: 1,
       pollIntervalMs: 10,
@@ -418,7 +418,7 @@ export const attemptReclaimerTestSuite = ({ it }: { it: TestAPI<TestSuiteContext
         processors: {
           test: {
             attemptHandler: async ({ complete }) =>
-              withTransaction(async (txCtx, transactionHooks) =>
+              withTransaction((txCtx, transactionHooks) =>
                 complete({ ...txCtx, transactionHooks, reschedule: { afterMs: 100 } }),
               ),
           },
@@ -426,7 +426,7 @@ export const attemptReclaimerTestSuite = ({ it }: { it: TestAPI<TestSuiteContext
       }),
     });
 
-    const chain = await withTransaction(async (txCtx, transactionHooks) =>
+    const chain = await withTransaction((txCtx, transactionHooks) =>
       client.createChain({
         ...txCtx,
         transactionHooks,
@@ -465,7 +465,7 @@ export const attemptReclaimerTestSuite = ({ it }: { it: TestAPI<TestSuiteContext
       };
     }>();
 
-    const client = await createClient({
+    const client = createClient({
       stateAdapter,
       notifyAdapter,
       observabilityAdapter,
@@ -477,7 +477,7 @@ export const attemptReclaimerTestSuite = ({ it }: { it: TestAPI<TestSuiteContext
     const jobsCanComplete = Promise.withResolvers<void>();
     const attemptConfig = { timeoutMs: 10, heartbeatMs: 1000 } satisfies AttemptConfig;
 
-    const worker = await createInProcessWorker({
+    const worker = createInProcessWorker({
       client,
       concurrency: 2,
       pollIntervalMs: 10,
@@ -494,7 +494,7 @@ export const attemptReclaimerTestSuite = ({ it }: { it: TestAPI<TestSuiteContext
 
               expect(job.attempt).toBe(1);
 
-              return withTransaction(async (txCtx, transactionHooks) =>
+              return withTransaction((txCtx, transactionHooks) =>
                 complete({ ...txCtx, transactionHooks, output: { id: job.input.id } }),
               );
             },
@@ -503,7 +503,7 @@ export const attemptReclaimerTestSuite = ({ it }: { it: TestAPI<TestSuiteContext
       }),
     });
 
-    const chain1 = await withTransaction(async (txCtx, transactionHooks) =>
+    const chain1 = await withTransaction((txCtx, transactionHooks) =>
       client.createChain({
         ...txCtx,
         transactionHooks,
@@ -517,7 +517,7 @@ export const attemptReclaimerTestSuite = ({ it }: { it: TestAPI<TestSuiteContext
 
       await sleep(attemptConfig.timeoutMs * 5);
 
-      const chain2 = await withTransaction(async (txCtx, transactionHooks) =>
+      const chain2 = await withTransaction((txCtx, transactionHooks) =>
         client.createChain({
           ...txCtx,
           transactionHooks,
@@ -551,7 +551,7 @@ export const attemptReclaimerTestSuite = ({ it }: { it: TestAPI<TestSuiteContext
       };
     }>();
 
-    const client = await createClient({
+    const client = createClient({
       stateAdapter,
       notifyAdapter,
       observabilityAdapter,
@@ -564,7 +564,7 @@ export const attemptReclaimerTestSuite = ({ it }: { it: TestAPI<TestSuiteContext
     const attemptConfig = { timeoutMs: 50, heartbeatMs: 60_000 } satisfies AttemptConfig;
     const crashedStarted = Promise.withResolvers<void>();
 
-    const crashedWorker = await createInProcessWorker({
+    const crashedWorker = createInProcessWorker({
       client,
       concurrency: 1,
       processors: createProcessors({
@@ -585,7 +585,7 @@ export const attemptReclaimerTestSuite = ({ it }: { it: TestAPI<TestSuiteContext
       }),
     });
 
-    const recoveringWorker = await createInProcessWorker({
+    const recoveringWorker = createInProcessWorker({
       client,
       concurrency: 1,
       pollIntervalMs: 20,
@@ -598,7 +598,7 @@ export const attemptReclaimerTestSuite = ({ it }: { it: TestAPI<TestSuiteContext
             attemptHandler: async ({ job, complete }) => {
               expect(job.attempt).toBe(2);
               expect(job.lastAttemptError).toContain("JobAttemptExpiredError");
-              return withTransaction(async (txCtx, transactionHooks) =>
+              return withTransaction((txCtx, transactionHooks) =>
                 complete({ ...txCtx, transactionHooks, output: null }),
               );
             },
@@ -607,7 +607,7 @@ export const attemptReclaimerTestSuite = ({ it }: { it: TestAPI<TestSuiteContext
       }),
     });
 
-    const chain = await withTransaction(async (txCtx, transactionHooks) =>
+    const chain = await withTransaction((txCtx, transactionHooks) =>
       client.createChain({
         ...txCtx,
         transactionHooks,
@@ -636,7 +636,7 @@ export const attemptReclaimerTestSuite = ({ it }: { it: TestAPI<TestSuiteContext
       test: { entry: true; input: null; output: null };
     }>();
     const spyStateAdapter = createSpyStateAdapter(stateAdapter);
-    const client = await createClient({
+    const client = createClient({
       stateAdapter: spyStateAdapter,
       notifyAdapter,
       observabilityAdapter,
@@ -645,12 +645,15 @@ export const attemptReclaimerTestSuite = ({ it }: { it: TestAPI<TestSuiteContext
     });
 
     const expiredCount = 3;
-    const chains = await withTransaction(async (txCtx, transactionHooks) =>
-      Promise.all(
-        Array.from({ length: expiredCount }, async () =>
-          client.createChain({ ...txCtx, transactionHooks, typeName: "test", input: null }),
-        ),
-      ),
+    const chains = await withTransaction((txCtx, transactionHooks) =>
+      client.createChains({
+        ...txCtx,
+        transactionHooks,
+        items: Array.from({ length: expiredCount }, () => ({
+          typeName: "test" as const,
+          input: null,
+        })),
+      }),
     );
     await stateAdapter.startJobAttempts({
       workerId: "crashed-worker",
@@ -659,7 +662,7 @@ export const attemptReclaimerTestSuite = ({ it }: { it: TestAPI<TestSuiteContext
     });
     await sleep(10);
 
-    const worker = await createInProcessWorker({
+    const worker = createInProcessWorker({
       client,
       concurrency: expiredCount + 1,
       processors: createProcessors({
@@ -669,7 +672,7 @@ export const attemptReclaimerTestSuite = ({ it }: { it: TestAPI<TestSuiteContext
           test: {
             attemptHandler: async ({ job, complete }) => {
               expect(job.attempt).toBe(2);
-              return withTransaction(async (txCtx, transactionHooks) =>
+              return withTransaction((txCtx, transactionHooks) =>
                 complete({ ...txCtx, transactionHooks, output: null }),
               );
             },

@@ -43,7 +43,7 @@ const meterProvider = new MeterProvider({
 metrics.setGlobalMeterProvider(meterProvider);
 
 // --- Queuert Observability Adapter ---
-export const observabilityAdapter = await createOtelObservabilityAdapter({
+export const observabilityAdapter = createOtelObservabilityAdapter({
   meter: metrics.getMeter("queuert"),
   tracer: trace.getTracer("queuert"),
 });

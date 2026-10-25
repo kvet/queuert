@@ -1,3 +1,4 @@
+import { unwrap } from "@queuert/helpers";
 import { type TestAPI, expect } from "vitest";
 
 import { createClient } from "../client.js";
@@ -23,14 +24,14 @@ export const schedulingTestSuite = ({ it }: { it: TestAPI<TestSuiteContext> }): 
       };
     }>();
 
-    const client = await createClient({
+    const client = createClient({
       stateAdapter,
       notifyAdapter,
       observabilityAdapter,
       log,
       jobTypes,
     });
-    const worker = await createInProcessWorker({
+    const worker = createInProcessWorker({
       client,
       concurrency: 1,
       pollIntervalMs: 50,
@@ -40,7 +41,7 @@ export const schedulingTestSuite = ({ it }: { it: TestAPI<TestSuiteContext> }): 
         processors: {
           test: {
             attemptHandler: async ({ job, complete }) => {
-              return withTransaction(async (txCtx, transactionHooks) =>
+              return withTransaction((txCtx, transactionHooks) =>
                 complete({ ...txCtx, transactionHooks, output: { result: job.input.value * 2 } }),
               );
             },
@@ -49,7 +50,7 @@ export const schedulingTestSuite = ({ it }: { it: TestAPI<TestSuiteContext> }): 
       }),
     });
 
-    const chain = await withTransaction(async (txCtx, transactionHooks) =>
+    const chain = await withTransaction((txCtx, transactionHooks) =>
       client.createChain({
         ...txCtx,
         transactionHooks,
@@ -60,7 +61,7 @@ export const schedulingTestSuite = ({ it }: { it: TestAPI<TestSuiteContext> }): 
     );
 
     await withWorkers([await worker.start()], async () => {
-      await expect(client.awaitChain(chain, { timeoutMs: 200 })).rejects.toThrow();
+      await expect(async () => client.awaitChain(chain, { timeoutMs: 200 })).rejects.toThrow();
 
       await expect(
         client.awaitChain(chain, {
@@ -87,14 +88,14 @@ export const schedulingTestSuite = ({ it }: { it: TestAPI<TestSuiteContext> }): 
       };
     }>();
 
-    const client = await createClient({
+    const client = createClient({
       stateAdapter,
       notifyAdapter,
       observabilityAdapter,
       log,
       jobTypes,
     });
-    const worker = await createInProcessWorker({
+    const worker = createInProcessWorker({
       client,
       concurrency: 1,
       pollIntervalMs: 50,
@@ -104,7 +105,7 @@ export const schedulingTestSuite = ({ it }: { it: TestAPI<TestSuiteContext> }): 
         processors: {
           test: {
             attemptHandler: async ({ job, complete }) => {
-              return withTransaction(async (txCtx, transactionHooks) =>
+              return withTransaction((txCtx, transactionHooks) =>
                 complete({ ...txCtx, transactionHooks, output: { result: job.input.value * 2 } }),
               );
             },
@@ -113,7 +114,7 @@ export const schedulingTestSuite = ({ it }: { it: TestAPI<TestSuiteContext> }): 
       }),
     });
 
-    const chain = await withTransaction(async (txCtx, transactionHooks) =>
+    const chain = await withTransaction((txCtx, transactionHooks) =>
       client.createChain({
         ...txCtx,
         transactionHooks,
@@ -124,7 +125,7 @@ export const schedulingTestSuite = ({ it }: { it: TestAPI<TestSuiteContext> }): 
     );
 
     await withWorkers([await worker.start()], async () => {
-      await expect(client.awaitChain(chain, { timeoutMs: 200 })).rejects.toThrow();
+      await expect(async () => client.awaitChain(chain, { timeoutMs: 200 })).rejects.toThrow();
 
       await expect(
         client.awaitChain(chain, {
@@ -155,7 +156,7 @@ export const schedulingTestSuite = ({ it }: { it: TestAPI<TestSuiteContext> }): 
       };
     }>();
 
-    const client = await createClient({
+    const client = createClient({
       stateAdapter,
       notifyAdapter,
       observabilityAdapter,
@@ -165,7 +166,7 @@ export const schedulingTestSuite = ({ it }: { it: TestAPI<TestSuiteContext> }): 
 
     const firstCompleted = Promise.withResolvers<void>();
 
-    const worker = await createInProcessWorker({
+    const worker = createInProcessWorker({
       client,
       concurrency: 1,
       pollIntervalMs: 50,
@@ -176,7 +177,7 @@ export const schedulingTestSuite = ({ it }: { it: TestAPI<TestSuiteContext> }): 
           first: {
             attemptHandler: async ({ complete }) => {
               try {
-                return await withTransaction(async (txCtx, transactionHooks) =>
+                return await withTransaction((txCtx, transactionHooks) =>
                   complete({
                     ...txCtx,
                     transactionHooks,
@@ -194,7 +195,7 @@ export const schedulingTestSuite = ({ it }: { it: TestAPI<TestSuiteContext> }): 
           },
           second: {
             attemptHandler: async ({ complete }) => {
-              return withTransaction(async (txCtx, transactionHooks) =>
+              return withTransaction((txCtx, transactionHooks) =>
                 complete({ ...txCtx, transactionHooks, output: { result: "done" } }),
               );
             },
@@ -203,7 +204,7 @@ export const schedulingTestSuite = ({ it }: { it: TestAPI<TestSuiteContext> }): 
       }),
     });
 
-    const chain = await withTransaction(async (txCtx, transactionHooks) =>
+    const chain = await withTransaction((txCtx, transactionHooks) =>
       client.createChain({
         ...txCtx,
         transactionHooks,
@@ -215,7 +216,7 @@ export const schedulingTestSuite = ({ it }: { it: TestAPI<TestSuiteContext> }): 
     await withWorkers([await worker.start()], async () => {
       await firstCompleted.promise;
 
-      await expect(client.awaitChain(chain, { timeoutMs: 200 })).rejects.toThrow();
+      await expect(async () => client.awaitChain(chain, { timeoutMs: 200 })).rejects.toThrow();
 
       await expect(
         client.awaitChain(chain, {
@@ -246,7 +247,7 @@ export const schedulingTestSuite = ({ it }: { it: TestAPI<TestSuiteContext> }): 
       };
     }>();
 
-    const client = await createClient({
+    const client = createClient({
       stateAdapter,
       notifyAdapter,
       observabilityAdapter,
@@ -256,7 +257,7 @@ export const schedulingTestSuite = ({ it }: { it: TestAPI<TestSuiteContext> }): 
 
     const firstCompleted = Promise.withResolvers<void>();
 
-    const worker = await createInProcessWorker({
+    const worker = createInProcessWorker({
       client,
       concurrency: 1,
       pollIntervalMs: 50,
@@ -267,7 +268,7 @@ export const schedulingTestSuite = ({ it }: { it: TestAPI<TestSuiteContext> }): 
           first: {
             attemptHandler: async ({ complete }) => {
               try {
-                return await withTransaction(async (txCtx, transactionHooks) =>
+                return await withTransaction((txCtx, transactionHooks) =>
                   complete({
                     ...txCtx,
                     transactionHooks,
@@ -285,7 +286,7 @@ export const schedulingTestSuite = ({ it }: { it: TestAPI<TestSuiteContext> }): 
           },
           second: {
             attemptHandler: async ({ complete }) => {
-              return withTransaction(async (txCtx, transactionHooks) =>
+              return withTransaction((txCtx, transactionHooks) =>
                 complete({ ...txCtx, transactionHooks, output: { result: "done" } }),
               );
             },
@@ -294,7 +295,7 @@ export const schedulingTestSuite = ({ it }: { it: TestAPI<TestSuiteContext> }): 
       }),
     });
 
-    const chain = await withTransaction(async (txCtx, transactionHooks) =>
+    const chain = await withTransaction((txCtx, transactionHooks) =>
       client.createChain({
         ...txCtx,
         transactionHooks,
@@ -306,7 +307,7 @@ export const schedulingTestSuite = ({ it }: { it: TestAPI<TestSuiteContext> }): 
     await withWorkers([await worker.start()], async () => {
       await firstCompleted.promise;
 
-      await expect(client.awaitChain(chain, { timeoutMs: 200 })).rejects.toThrow();
+      await expect(async () => client.awaitChain(chain, { timeoutMs: 200 })).rejects.toThrow();
 
       await expect(
         client.awaitChain(chain, {
@@ -333,7 +334,7 @@ export const schedulingTestSuite = ({ it }: { it: TestAPI<TestSuiteContext> }): 
       };
     }>();
 
-    const client = await createClient({
+    const client = createClient({
       stateAdapter,
       notifyAdapter,
       observabilityAdapter,
@@ -344,7 +345,7 @@ export const schedulingTestSuite = ({ it }: { it: TestAPI<TestSuiteContext> }): 
     let attemptCount = 0;
     const firstAttemptDone = Promise.withResolvers<void>();
 
-    const worker = await createInProcessWorker({
+    const worker = createInProcessWorker({
       client,
       concurrency: 1,
       pollIntervalMs: 50,
@@ -360,11 +361,11 @@ export const schedulingTestSuite = ({ it }: { it: TestAPI<TestSuiteContext> }): 
               }
               if (attemptCount === 1) {
                 firstAttemptDone.resolve();
-                return withTransaction(async (txCtx, transactionHooks) =>
+                return withTransaction((txCtx, transactionHooks) =>
                   complete({ ...txCtx, transactionHooks, reschedule: { afterMs: 300 } }),
                 );
               }
-              return withTransaction(async (txCtx, transactionHooks) =>
+              return withTransaction((txCtx, transactionHooks) =>
                 complete({ ...txCtx, transactionHooks, output: { result: job.input.value * 2 } }),
               );
             },
@@ -373,7 +374,7 @@ export const schedulingTestSuite = ({ it }: { it: TestAPI<TestSuiteContext> }): 
       }),
     });
 
-    const chain = await withTransaction(async (txCtx, transactionHooks) =>
+    const chain = await withTransaction((txCtx, transactionHooks) =>
       client.createChain({
         ...txCtx,
         transactionHooks,
@@ -385,7 +386,7 @@ export const schedulingTestSuite = ({ it }: { it: TestAPI<TestSuiteContext> }): 
     await withWorkers([await worker.start()], async () => {
       await firstAttemptDone.promise;
 
-      await expect(client.awaitChain(chain, { timeoutMs: 200 })).rejects.toThrow();
+      await expect(async () => client.awaitChain(chain, { timeoutMs: 200 })).rejects.toThrow();
 
       await expect(
         client.awaitChain(chain, {
@@ -399,6 +400,7 @@ export const schedulingTestSuite = ({ it }: { it: TestAPI<TestSuiteContext> }): 
   });
 
   it("recurring job self-schedules after complete without matching its own chain", async ({
+    withTransactionOperation,
     stateAdapter,
     notifyAdapter,
     withTransaction,
@@ -414,7 +416,7 @@ export const schedulingTestSuite = ({ it }: { it: TestAPI<TestSuiteContext> }): 
       };
     }>();
 
-    const client = await createClient({
+    const client = createClient({
       stateAdapter,
       notifyAdapter,
       observabilityAdapter,
@@ -425,7 +427,7 @@ export const schedulingTestSuite = ({ it }: { it: TestAPI<TestSuiteContext> }): 
     let completionCount = 0;
     const allDone = Promise.withResolvers<void>();
 
-    const worker = await createInProcessWorker({
+    const worker = createInProcessWorker({
       client,
       concurrency: 1,
       pollIntervalMs: 50,
@@ -435,17 +437,21 @@ export const schedulingTestSuite = ({ it }: { it: TestAPI<TestSuiteContext> }): 
         processors: {
           recurring: {
             attemptHandler: async ({ complete }) => {
-              return withTransaction(async (txCtx, transactionHooks) => {
+              return withTransactionOperation(function* (txCtx, transactionHooks) {
                 completionCount++;
-                const completedJob = await complete({ ...txCtx, transactionHooks, output: null });
+                const completedJob = yield* unwrap(
+                  complete({ ...txCtx, transactionHooks, output: null }),
+                );
                 if (completionCount < 3) {
-                  const next = await client.createChain({
-                    ...txCtx,
-                    transactionHooks,
-                    typeName: "recurring",
-                    input: null,
-                    deduplication: { key: "recurring", scope: "running" },
-                  });
+                  const next = yield* unwrap(
+                    client.createChain({
+                      ...txCtx,
+                      transactionHooks,
+                      typeName: "recurring",
+                      input: null,
+                      deduplication: { key: "recurring", scope: "running" },
+                    }),
+                  );
                   expect(next.deduplicated).toBe(false);
                 } else {
                   allDone.resolve();
@@ -458,7 +464,7 @@ export const schedulingTestSuite = ({ it }: { it: TestAPI<TestSuiteContext> }): 
       }),
     });
 
-    await withTransaction(async (txCtx, transactionHooks) =>
+    await withTransaction((txCtx, transactionHooks) =>
       client.createChain({
         ...txCtx,
         transactionHooks,
@@ -496,7 +502,7 @@ export const schedulingTestSuite = ({ it }: { it: TestAPI<TestSuiteContext> }): 
       };
     }>();
 
-    const client = await createClient({
+    const client = createClient({
       stateAdapter,
       notifyAdapter,
       observabilityAdapter,
@@ -507,7 +513,7 @@ export const schedulingTestSuite = ({ it }: { it: TestAPI<TestSuiteContext> }): 
     let attemptCount = 0;
     const firstAttemptDone = Promise.withResolvers<void>();
 
-    const worker = await createInProcessWorker({
+    const worker = createInProcessWorker({
       client,
       concurrency: 1,
       pollIntervalMs: 50,
@@ -523,7 +529,7 @@ export const schedulingTestSuite = ({ it }: { it: TestAPI<TestSuiteContext> }): 
               }
               if (attemptCount === 1) {
                 firstAttemptDone.resolve();
-                return withTransaction(async (txCtx, transactionHooks) =>
+                return withTransaction((txCtx, transactionHooks) =>
                   complete({
                     ...txCtx,
                     transactionHooks,
@@ -531,7 +537,7 @@ export const schedulingTestSuite = ({ it }: { it: TestAPI<TestSuiteContext> }): 
                   }),
                 );
               }
-              return withTransaction(async (txCtx, transactionHooks) =>
+              return withTransaction((txCtx, transactionHooks) =>
                 complete({ ...txCtx, transactionHooks, output: { result: job.input.value * 2 } }),
               );
             },
@@ -540,7 +546,7 @@ export const schedulingTestSuite = ({ it }: { it: TestAPI<TestSuiteContext> }): 
       }),
     });
 
-    const chain = await withTransaction(async (txCtx, transactionHooks) =>
+    const chain = await withTransaction((txCtx, transactionHooks) =>
       client.createChain({
         ...txCtx,
         transactionHooks,
@@ -552,7 +558,7 @@ export const schedulingTestSuite = ({ it }: { it: TestAPI<TestSuiteContext> }): 
     await withWorkers([await worker.start()], async () => {
       await firstAttemptDone.promise;
 
-      await expect(client.awaitChain(chain, { timeoutMs: 200 })).rejects.toThrow();
+      await expect(async () => client.awaitChain(chain, { timeoutMs: 200 })).rejects.toThrow();
 
       await expect(
         client.awaitChain(chain, {
@@ -577,14 +583,14 @@ export const schedulingTestSuite = ({ it }: { it: TestAPI<TestSuiteContext> }): 
       test: { entry: true; input: null; output: null };
     }>();
 
-    const client = await createClient({
+    const client = createClient({
       stateAdapter,
       notifyAdapter,
       observabilityAdapter,
       log,
       jobTypes,
     });
-    const worker = await createInProcessWorker({
+    const worker = createInProcessWorker({
       client,
       concurrency: 1,
       processors: createProcessors({
@@ -593,7 +599,7 @@ export const schedulingTestSuite = ({ it }: { it: TestAPI<TestSuiteContext> }): 
         processors: {
           test: {
             attemptHandler: async ({ complete }) =>
-              withTransaction(async (txCtx, transactionHooks) =>
+              withTransaction((txCtx, transactionHooks) =>
                 complete({ ...txCtx, transactionHooks, output: null }),
               ),
           },
@@ -603,7 +609,7 @@ export const schedulingTestSuite = ({ it }: { it: TestAPI<TestSuiteContext> }): 
 
     const past = new Date(Date.now() - 60 * 60 * 1000);
 
-    const chain = await withTransaction(async (txCtx, transactionHooks) =>
+    const chain = await withTransaction((txCtx, transactionHooks) =>
       client.createChain({
         ...txCtx,
         transactionHooks,
@@ -635,7 +641,7 @@ export const schedulingTestSuite = ({ it }: { it: TestAPI<TestSuiteContext> }): 
       second: { input: null; output: null };
     }>();
 
-    const client = await createClient({
+    const client = createClient({
       stateAdapter,
       notifyAdapter,
       observabilityAdapter,
@@ -645,7 +651,7 @@ export const schedulingTestSuite = ({ it }: { it: TestAPI<TestSuiteContext> }): 
 
     const past = new Date(Date.now() - 60 * 60 * 1000);
 
-    const worker = await createInProcessWorker({
+    const worker = createInProcessWorker({
       client,
       concurrency: 1,
       processors: createProcessors({
@@ -654,7 +660,7 @@ export const schedulingTestSuite = ({ it }: { it: TestAPI<TestSuiteContext> }): 
         processors: {
           first: {
             attemptHandler: async ({ complete }) =>
-              withTransaction(async (txCtx, transactionHooks) =>
+              withTransaction((txCtx, transactionHooks) =>
                 complete({
                   ...txCtx,
                   transactionHooks,
@@ -664,7 +670,7 @@ export const schedulingTestSuite = ({ it }: { it: TestAPI<TestSuiteContext> }): 
           },
           second: {
             attemptHandler: async ({ complete }) =>
-              withTransaction(async (txCtx, transactionHooks) =>
+              withTransaction((txCtx, transactionHooks) =>
                 complete({ ...txCtx, transactionHooks, output: null }),
               ),
           },
@@ -672,7 +678,7 @@ export const schedulingTestSuite = ({ it }: { it: TestAPI<TestSuiteContext> }): 
       }),
     });
 
-    const chain = await withTransaction(async (txCtx, transactionHooks) =>
+    const chain = await withTransaction((txCtx, transactionHooks) =>
       client.createChain({
         ...txCtx,
         transactionHooks,
@@ -707,7 +713,7 @@ export const schedulingTestSuite = ({ it }: { it: TestAPI<TestSuiteContext> }): 
       test: { entry: true; input: null; output: null };
     }>();
 
-    const client = await createClient({
+    const client = createClient({
       stateAdapter,
       notifyAdapter,
       observabilityAdapter,
@@ -719,7 +725,7 @@ export const schedulingTestSuite = ({ it }: { it: TestAPI<TestSuiteContext> }): 
     let attempts = 0;
     const firstAttemptDone = Promise.withResolvers<void>();
 
-    const worker = await createInProcessWorker({
+    const worker = createInProcessWorker({
       client,
       concurrency: 1,
       pollIntervalMs: 50,
@@ -735,11 +741,11 @@ export const schedulingTestSuite = ({ it }: { it: TestAPI<TestSuiteContext> }): 
               }
               if (attempts === 1) {
                 firstAttemptDone.resolve();
-                return withTransaction(async (txCtx, transactionHooks) =>
+                return withTransaction((txCtx, transactionHooks) =>
                   complete({ ...txCtx, transactionHooks, reschedule: { at: past } }),
                 );
               }
-              return withTransaction(async (txCtx, transactionHooks) =>
+              return withTransaction((txCtx, transactionHooks) =>
                 complete({ ...txCtx, transactionHooks, output: null }),
               );
             },
@@ -748,7 +754,7 @@ export const schedulingTestSuite = ({ it }: { it: TestAPI<TestSuiteContext> }): 
       }),
     });
 
-    const chain = await withTransaction(async (txCtx, transactionHooks) =>
+    const chain = await withTransaction((txCtx, transactionHooks) =>
       client.createChain({
         ...txCtx,
         transactionHooks,

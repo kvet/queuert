@@ -1,6 +1,7 @@
 import { sleep } from "@queuert/helpers";
 
 import { type ConformanceGroup } from "../runner.js";
+import { transaction } from "../transaction.js";
 import { type StateConformanceFixture } from "./types.js";
 
 export const extendJobAttemptGroup: ConformanceGroup<StateConformanceFixture> = {
@@ -9,14 +10,14 @@ export const extendJobAttemptGroup: ConformanceGroup<StateConformanceFixture> = 
     {
       name: "extends attempt on a running job",
       run: async ({ stateAdapter }, expect) => {
-        const [createdChain] = await stateAdapter.withTransaction(async (txCtx) =>
+        const [createdChain] = await transaction(stateAdapter, (txCtx) =>
           stateAdapter.createJobs({
             txCtx,
             jobs: [{ id: stateAdapter.config.generateId(), typeName: "attempt-test", input: null }],
           }),
         );
 
-        const [acquired] = await stateAdapter.withTransaction(async (txCtx) =>
+        const [acquired] = await transaction(stateAdapter, (txCtx) =>
           stateAdapter.startJobAttempts({
             txCtx,
             workerId: "worker-1",
@@ -28,7 +29,7 @@ export const extendJobAttemptGroup: ConformanceGroup<StateConformanceFixture> = 
         expect(acquired.attemptBy).toBe("worker-1");
 
         const before = Date.now();
-        const extended = await stateAdapter.withTransaction(async (txCtx) =>
+        const extended = await transaction(stateAdapter, (txCtx) =>
           stateAdapter.extendJobAttempt({
             txCtx,
             jobId: createdChain.head.id,
@@ -50,7 +51,7 @@ export const extendJobAttemptGroup: ConformanceGroup<StateConformanceFixture> = 
       name: "extends attempt by 30 days",
       run: async ({ stateAdapter }, expect) => {
         const thirtyDaysMs = 30 * 24 * 60 * 60 * 1000;
-        const [createdChain] = await stateAdapter.withTransaction(async (txCtx) =>
+        const [createdChain] = await transaction(stateAdapter, (txCtx) =>
           stateAdapter.createJobs({
             txCtx,
             jobs: [
@@ -59,7 +60,7 @@ export const extendJobAttemptGroup: ConformanceGroup<StateConformanceFixture> = 
           }),
         );
 
-        await stateAdapter.withTransaction(async (txCtx) =>
+        await transaction(stateAdapter, (txCtx) =>
           stateAdapter.startJobAttempts({
             txCtx,
             workerId: "worker-1",
@@ -69,7 +70,7 @@ export const extendJobAttemptGroup: ConformanceGroup<StateConformanceFixture> = 
         );
 
         const before = Date.now();
-        const extended = await stateAdapter.withTransaction(async (txCtx) =>
+        const extended = await transaction(stateAdapter, (txCtx) =>
           stateAdapter.extendJobAttempt({
             txCtx,
             jobId: createdChain.head.id,
@@ -87,7 +88,7 @@ export const extendJobAttemptGroup: ConformanceGroup<StateConformanceFixture> = 
       name: "extends attempt by a fractional timeoutMs",
       run: async ({ stateAdapter }, expect) => {
         const fractionalMs = 60_000.5;
-        const [createdChain] = await stateAdapter.withTransaction(async (txCtx) =>
+        const [createdChain] = await transaction(stateAdapter, (txCtx) =>
           stateAdapter.createJobs({
             txCtx,
             jobs: [
@@ -100,7 +101,7 @@ export const extendJobAttemptGroup: ConformanceGroup<StateConformanceFixture> = 
           }),
         );
 
-        await stateAdapter.withTransaction(async (txCtx) =>
+        await transaction(stateAdapter, (txCtx) =>
           stateAdapter.startJobAttempts({
             txCtx,
             workerId: "worker-1",
@@ -110,7 +111,7 @@ export const extendJobAttemptGroup: ConformanceGroup<StateConformanceFixture> = 
         );
 
         const before = Date.now();
-        const extended = await stateAdapter.withTransaction(async (txCtx) =>
+        const extended = await transaction(stateAdapter, (txCtx) =>
           stateAdapter.extendJobAttempt({
             txCtx,
             jobId: createdChain.head.id,
@@ -127,7 +128,7 @@ export const extendJobAttemptGroup: ConformanceGroup<StateConformanceFixture> = 
     {
       name: "updates attemptUntil on subsequent extensions",
       run: async ({ stateAdapter }, expect) => {
-        const [createdChain] = await stateAdapter.withTransaction(async (txCtx) =>
+        const [createdChain] = await transaction(stateAdapter, (txCtx) =>
           stateAdapter.createJobs({
             txCtx,
             jobs: [
@@ -136,7 +137,7 @@ export const extendJobAttemptGroup: ConformanceGroup<StateConformanceFixture> = 
           }),
         );
 
-        await stateAdapter.withTransaction(async (txCtx) =>
+        await transaction(stateAdapter, (txCtx) =>
           stateAdapter.startJobAttempts({
             txCtx,
             workerId: "worker-1",
@@ -145,7 +146,7 @@ export const extendJobAttemptGroup: ConformanceGroup<StateConformanceFixture> = 
           }),
         );
 
-        const first = await stateAdapter.withTransaction(async (txCtx) =>
+        const first = await transaction(stateAdapter, (txCtx) =>
           stateAdapter.extendJobAttempt({
             txCtx,
             jobId: createdChain.head.id,
@@ -154,7 +155,7 @@ export const extendJobAttemptGroup: ConformanceGroup<StateConformanceFixture> = 
           }),
         );
 
-        const second = await stateAdapter.withTransaction(async (txCtx) =>
+        const second = await transaction(stateAdapter, (txCtx) =>
           stateAdapter.extendJobAttempt({
             txCtx,
             jobId: createdChain.head.id,
@@ -169,7 +170,7 @@ export const extendJobAttemptGroup: ConformanceGroup<StateConformanceFixture> = 
     {
       name: "extends an attempt whose deadline has passed",
       run: async ({ stateAdapter }, expect) => {
-        const [createdChain] = await stateAdapter.withTransaction(async (txCtx) =>
+        const [createdChain] = await transaction(stateAdapter, (txCtx) =>
           stateAdapter.createJobs({
             txCtx,
             jobs: [
@@ -203,7 +204,7 @@ export const extendJobAttemptGroup: ConformanceGroup<StateConformanceFixture> = 
     {
       name: "reports an undefined result for an extension by a different worker",
       run: async ({ stateAdapter }, expect) => {
-        const [createdChain] = await stateAdapter.withTransaction(async (txCtx) =>
+        const [createdChain] = await transaction(stateAdapter, (txCtx) =>
           stateAdapter.createJobs({
             txCtx,
             jobs: [
@@ -212,7 +213,7 @@ export const extendJobAttemptGroup: ConformanceGroup<StateConformanceFixture> = 
           }),
         );
 
-        await stateAdapter.withTransaction(async (txCtx) =>
+        await transaction(stateAdapter, (txCtx) =>
           stateAdapter.startJobAttempts({
             txCtx,
             workerId: "worker-1",
@@ -221,7 +222,7 @@ export const extendJobAttemptGroup: ConformanceGroup<StateConformanceFixture> = 
           }),
         );
 
-        const extended = await stateAdapter.withTransaction(async (txCtx) =>
+        const extended = await transaction(stateAdapter, (txCtx) =>
           stateAdapter.extendJobAttempt({
             txCtx,
             jobId: createdChain.head.id,
@@ -239,7 +240,7 @@ export const extendJobAttemptGroup: ConformanceGroup<StateConformanceFixture> = 
     {
       name: "reports an undefined result for a fence on an attempt the same worker has since replaced",
       run: async ({ stateAdapter }, expect) => {
-        const [createdChain] = await stateAdapter.withTransaction(async (txCtx) =>
+        const [createdChain] = await transaction(stateAdapter, (txCtx) =>
           stateAdapter.createJobs({
             txCtx,
             jobs: [
@@ -251,7 +252,7 @@ export const extendJobAttemptGroup: ConformanceGroup<StateConformanceFixture> = 
             ],
           }),
         );
-        const [job] = await stateAdapter.withTransaction(async (txCtx) =>
+        const [job] = await transaction(stateAdapter, (txCtx) =>
           stateAdapter.startJobAttempts({
             txCtx,
             workerId: "worker-1",
@@ -259,10 +260,10 @@ export const extendJobAttemptGroup: ConformanceGroup<StateConformanceFixture> = 
             limit: 1,
           }),
         );
-        await stateAdapter.withTransaction(async (txCtx) =>
+        await transaction(stateAdapter, (txCtx) =>
           stateAdapter.rescheduleJobs({ txCtx, jobs: [{ jobId: job.id }] }),
         );
-        await stateAdapter.withTransaction(async (txCtx) =>
+        await transaction(stateAdapter, (txCtx) =>
           stateAdapter.startJobAttempts({
             txCtx,
             workerId: "worker-1",
@@ -272,7 +273,7 @@ export const extendJobAttemptGroup: ConformanceGroup<StateConformanceFixture> = 
         );
         const [before] = await stateAdapter.getJobs({ jobIds: [createdChain.head.id] });
 
-        const extended = await stateAdapter.withTransaction(async (txCtx) =>
+        const extended = await transaction(stateAdapter, (txCtx) =>
           stateAdapter.extendJobAttempt({
             txCtx,
             jobId: job.id,
@@ -289,7 +290,7 @@ export const extendJobAttemptGroup: ConformanceGroup<StateConformanceFixture> = 
     {
       name: "reports an undefined result for a completed job",
       run: async ({ stateAdapter }, expect) => {
-        await stateAdapter.withTransaction(async (txCtx) =>
+        await transaction(stateAdapter, (txCtx) =>
           stateAdapter.createJobs({
             txCtx,
             jobs: [
@@ -301,7 +302,7 @@ export const extendJobAttemptGroup: ConformanceGroup<StateConformanceFixture> = 
             ],
           }),
         );
-        const [job] = await stateAdapter.withTransaction(async (txCtx) =>
+        const [job] = await transaction(stateAdapter, (txCtx) =>
           stateAdapter.startJobAttempts({
             txCtx,
             workerId: "worker-1",
@@ -309,11 +310,11 @@ export const extendJobAttemptGroup: ConformanceGroup<StateConformanceFixture> = 
             limit: 1,
           }),
         );
-        await stateAdapter.withTransaction(async (txCtx) =>
+        await transaction(stateAdapter, (txCtx) =>
           stateAdapter.completeJobs({ txCtx, jobs: [{ jobId: job.id, output: null }] }),
         );
 
-        const extended = await stateAdapter.withTransaction(async (txCtx) =>
+        const extended = await transaction(stateAdapter, (txCtx) =>
           stateAdapter.extendJobAttempt({
             txCtx,
             jobId: job.id,
@@ -328,7 +329,7 @@ export const extendJobAttemptGroup: ConformanceGroup<StateConformanceFixture> = 
     {
       name: "extends without a txCtx, committing the new deadline on its own",
       run: async ({ stateAdapter }, expect) => {
-        const [createdChain] = await stateAdapter.withTransaction(async (txCtx) =>
+        const [createdChain] = await transaction(stateAdapter, (txCtx) =>
           stateAdapter.createJobs({
             txCtx,
             jobs: [

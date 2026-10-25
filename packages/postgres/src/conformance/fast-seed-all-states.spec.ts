@@ -81,7 +81,7 @@ describe("fast seed conformance", { timeout: 120_000 }, () => {
   it("produces identical data to seedAllStates", async ({ postgresConnectionString }) => {
     const pool = new Pool({ connectionString: postgresConnectionString });
     const provider = createPgPoolProvider({ pool });
-    const adapter = await createPgStateAdapter<PgPoolContext, string>({
+    const adapter = createPgStateAdapter<PgPoolContext, string>({
       stateProvider: provider,
     });
     await adapter.migrateToLatest();

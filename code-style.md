@@ -126,7 +126,8 @@ Adapter packages use their domain-specific prefixes (not "Queuert"):
 | `@queuert/postgres`  | -                                | `PgStateProvider`     |
 | `@queuert/postgres`  | -                                | `PgNotifyProvider`    |
 | `@queuert/postgres`  | -                                | `MigrationResult`     |
-| `@queuert/sqlite`    | `createSqliteStateAdapter`       | `SqliteStateAdapter`  |
+| `@queuert/sqlite`    | `createSyncSqliteStateAdapter`   | `SqliteStateAdapter`  |
+| `@queuert/sqlite`    | `createAsyncSqliteStateAdapter`  | -                     |
 | `@queuert/sqlite`    | -                                | `SqliteStateProvider` |
 | `@queuert/sqlite`    | `createAsyncRwLock`              | `AsyncRwLock`         |
 | `@queuert/sqlite`    | -                                | `LockHandle`          |

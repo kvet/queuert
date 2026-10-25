@@ -1,4 +1,5 @@
 import { type ConformanceGroup } from "../runner.js";
+import { asyncOnly, transaction } from "../transaction.js";
 import { type StateConformanceFixture } from "./types.js";
 
 export const getStartAttemptDelayMsGroup: ConformanceGroup<StateConformanceFixture> = {
@@ -7,7 +8,7 @@ export const getStartAttemptDelayMsGroup: ConformanceGroup<StateConformanceFixtu
     {
       name: "returns 0 for an immediately available pending job",
       run: async ({ stateAdapter }, expect) => {
-        await stateAdapter.withTransaction(async (txCtx) =>
+        await transaction(stateAdapter, (txCtx) =>
           stateAdapter.createJobs({
             txCtx,
             jobs: [{ id: stateAdapter.config.generateId(), typeName: "avail-test", input: null }],
@@ -21,7 +22,7 @@ export const getStartAttemptDelayMsGroup: ConformanceGroup<StateConformanceFixtu
     {
       name: "returns milliseconds until next scheduled job",
       run: async ({ stateAdapter }, expect) => {
-        await stateAdapter.withTransaction(async (txCtx) =>
+        await transaction(stateAdapter, (txCtx) =>
           stateAdapter.createJobs({
             txCtx,
             jobs: [
@@ -45,7 +46,7 @@ export const getStartAttemptDelayMsGroup: ConformanceGroup<StateConformanceFixtu
       name: "returns the full delay for a job scheduled 30 days ahead",
       run: async ({ stateAdapter }, expect) => {
         const thirtyDaysMs = 30 * 24 * 60 * 60 * 1000;
-        await stateAdapter.withTransaction(async (txCtx) =>
+        await transaction(stateAdapter, (txCtx) =>
           stateAdapter.createJobs({
             txCtx,
             jobs: [
@@ -68,7 +69,7 @@ export const getStartAttemptDelayMsGroup: ConformanceGroup<StateConformanceFixtu
     {
       name: "returns 0 when a ready-now job exists alongside a future-scheduled one",
       run: async ({ stateAdapter }, expect) => {
-        await stateAdapter.withTransaction(async (txCtx) =>
+        await transaction(stateAdapter, (txCtx) =>
           stateAdapter.createJobs({
             txCtx,
             jobs: [
@@ -99,7 +100,7 @@ export const getStartAttemptDelayMsGroup: ConformanceGroup<StateConformanceFixtu
     {
       name: "returns null when the only job is blocked",
       run: async ({ stateAdapter }, expect) => {
-        const [blockerChain] = await stateAdapter.withTransaction(async (txCtx) =>
+        const [blockerChain] = await transaction(stateAdapter, (txCtx) =>
           stateAdapter.createJobs({
             txCtx,
             jobs: [
@@ -108,7 +109,7 @@ export const getStartAttemptDelayMsGroup: ConformanceGroup<StateConformanceFixtu
           }),
         );
 
-        const [blockedChain] = await stateAdapter.withTransaction(async (txCtx) =>
+        const [blockedChain] = await transaction(stateAdapter, (txCtx) =>
           stateAdapter.createJobs({
             txCtx,
             jobs: [
@@ -122,7 +123,7 @@ export const getStartAttemptDelayMsGroup: ConformanceGroup<StateConformanceFixtu
           }),
         );
 
-        await stateAdapter.withTransaction(async (txCtx) =>
+        await transaction(stateAdapter, (txCtx) =>
           stateAdapter.addJobsBlockers({
             txCtx,
             jobBlockers: [
@@ -139,7 +140,8 @@ export const getStartAttemptDelayMsGroup: ConformanceGroup<StateConformanceFixtu
     },
     {
       name: "non-transactional getStartAttemptDelayMs does not observe an uncommitted insert",
-      run: async ({ stateAdapter, transactionConcurrency }, expect) => {
+      run: async ({ stateAdapter: fixtureStateAdapter, transactionConcurrency }, expect) => {
+        const stateAdapter = asyncOnly(fixtureStateAdapter, expect);
         if (transactionConcurrency !== "concurrent") {
           expect.skip("requires concurrent transactions");
           return;

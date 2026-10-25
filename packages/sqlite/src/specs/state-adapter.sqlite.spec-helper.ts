@@ -1,50 +1,69 @@
 import { type UUID } from "node:crypto";
 
+import { isThenable } from "@queuert/helpers";
 import Database from "better-sqlite3";
-import { type StateAdapter } from "queuert";
+import { type StateAdapter, type StateAdapterMode } from "queuert";
 import { createFlakyBatchGenerator } from "queuert/testing";
 import { type TestAPI, expect } from "vitest";
 
-import { createSqliteStateAdapter } from "../state-adapter/state-adapter.sqlite.js";
+import {
+  createAsyncSqliteStateAdapter,
+  createSyncSqliteStateAdapter,
+} from "../state-adapter/state-adapter.sqlite.js";
 import {
   type BetterSqlite3Context,
-  type BetterSqlite3Provider,
   createBetterSqlite3Provider,
+  createBetterSqlite3SyncProvider,
 } from "../state-provider/state-provider.better-sqlite3.js";
+import { type SqliteStateProvider } from "../state-provider/state-provider.sqlite.js";
+
+type AnyModeProvider = SqliteStateProvider<BetterSqlite3Context, StateAdapterMode>;
 
 export type BetterSqlite3StateAdapter = StateAdapter<BetterSqlite3Context, UUID>;
 
 export const extendWithStateSqlite = <T>(
   api: TestAPI<T>,
+  { mode = "async" }: { mode?: StateAdapterMode } = {},
 ): TestAPI<
   T & {
     db: Database.Database;
-    stateAdapter: StateAdapter<{ $test: true }, string>;
+    stateAdapter: StateAdapter<{ $test: true }, string, any>;
     transactionConcurrency: "concurrent" | "serialized";
-    flakyStateAdapter: StateAdapter<{ $test: true }, string>;
-    flakyDbStateAdapter: StateAdapter<{ $test: true }, string> | undefined;
+    flakyStateAdapter: StateAdapter<{ $test: true }, string, any>;
+    flakyDbStateAdapter: StateAdapter<{ $test: true }, string, any> | undefined;
     poisonTransaction: ((txCtx: { $test: true }) => Promise<void>) | undefined;
     withNonTransactionContext: <T>(fn: (txCtx: { $test: true }) => Promise<T>) => Promise<T>;
     withSavepoint:
-      | (<T>(txCtx: { $test: true }, fn: (txCtx: { $test: true }) => Promise<T>) => Promise<T>)
+      | (<T>(txCtx: { $test: true }, fn: (txCtx: { $test: true }) => T) => T)
       | undefined;
   }
 > => {
+  const createStateAdapter = async (
+    stateProvider: AnyModeProvider,
+  ): Promise<StateAdapter<BetterSqlite3Context, UUID, StateAdapterMode>> =>
+    mode === "sync"
+      ? createSyncSqliteStateAdapter({
+          stateProvider: stateProvider as SqliteStateProvider<BetterSqlite3Context, "sync">,
+        })
+      : createAsyncSqliteStateAdapter({
+          stateProvider: stateProvider as SqliteStateProvider<BetterSqlite3Context>,
+        });
+
   return api.extend<{
     db: Database.Database;
     _dbMigrateToLatest: void;
     _dbCleanup: void;
-    stateProvider: BetterSqlite3Provider;
-    flakyStateProvider: BetterSqlite3Provider;
-    flakyDbStateProvider: BetterSqlite3Provider;
-    stateAdapter: BetterSqlite3StateAdapter;
+    stateProvider: AnyModeProvider;
+    flakyStateProvider: AnyModeProvider;
+    flakyDbStateProvider: AnyModeProvider;
+    stateAdapter: StateAdapter<BetterSqlite3Context, UUID, StateAdapterMode>;
     transactionConcurrency: "concurrent" | "serialized";
-    flakyStateAdapter: BetterSqlite3StateAdapter;
-    flakyDbStateAdapter: BetterSqlite3StateAdapter | undefined;
+    flakyStateAdapter: StateAdapter<BetterSqlite3Context, UUID, StateAdapterMode>;
+    flakyDbStateAdapter: StateAdapter<BetterSqlite3Context, UUID, StateAdapterMode> | undefined;
     poisonTransaction: ((txCtx: { $test: true }) => Promise<void>) | undefined;
     withNonTransactionContext: <T>(fn: (txCtx: { $test: true }) => Promise<T>) => Promise<T>;
     withSavepoint:
-      | (<T>(txCtx: { $test: true }, fn: (txCtx: { $test: true }) => Promise<T>) => Promise<T>)
+      | (<T>(txCtx: { $test: true }, fn: (txCtx: { $test: true }) => T) => T)
       | undefined;
   }>({
     db: [
@@ -59,7 +78,7 @@ export const extendWithStateSqlite = <T>(
     _dbMigrateToLatest: [
       async ({ db }, use) => {
         const stateProvider = createBetterSqlite3Provider({ db });
-        const stateAdapter = await createSqliteStateAdapter({ stateProvider });
+        const stateAdapter = createAsyncSqliteStateAdapter({ stateProvider });
 
         await stateAdapter.migrateToLatest();
 
@@ -83,7 +102,11 @@ export const extendWithStateSqlite = <T>(
         // oxlint-disable-next-line no-unused-expressions
         _dbCleanup;
 
-        return use(createBetterSqlite3Provider({ db }));
+        return use(
+          mode === "sync"
+            ? createBetterSqlite3SyncProvider({ db })
+            : createBetterSqlite3Provider({ db }),
+        );
       },
       { scope: "test" },
     ],
@@ -96,7 +119,7 @@ export const extendWithStateSqlite = <T>(
         const originalExecuteSql = stateProvider.executeSql.bind(stateProvider);
         const flakyStateProvider: typeof stateProvider = {
           ...stateProvider,
-          executeSql: async ({ txCtx, sql, params, paramTypes, columnTypes, readOnly }) => {
+          executeSql: ({ txCtx, sql, params, paramTypes, columnTypes, readOnly }) => {
             queryCount++;
 
             if (shouldError()) {
@@ -122,17 +145,13 @@ export const extendWithStateSqlite = <T>(
     ],
     stateAdapter: [
       async ({ stateProvider }, use) => {
-        return use(await createSqliteStateAdapter({ stateProvider }));
+        return use(await createStateAdapter(stateProvider));
       },
       { scope: "test" },
     ],
     flakyStateAdapter: [
       async ({ flakyStateProvider }, use) => {
-        return use(
-          await createSqliteStateAdapter({
-            stateProvider: flakyStateProvider,
-          }),
-        );
+        return use(await createStateAdapter(flakyStateProvider));
       },
       { scope: "test" },
     ],
@@ -146,17 +165,32 @@ export const extendWithStateSqlite = <T>(
     withSavepoint: [
       // oxlint-disable-next-line no-empty-pattern
       async ({}, use) => {
-        await use(async (txCtx, fn) => {
+        await use(<R>(txCtx: { $test: true }, fn: (txCtx: { $test: true }) => R): R => {
           const { db } = txCtx as unknown as BetterSqlite3Context;
           db.exec("SAVEPOINT queuert_test");
+          const release = () => db.exec("RELEASE queuert_test");
+          const rollback = () => db.exec("ROLLBACK TO queuert_test");
+          let result: R;
           try {
-            const result = await fn(txCtx);
-            db.exec("RELEASE queuert_test");
-            return result;
+            result = fn(txCtx);
           } catch (error) {
-            db.exec("ROLLBACK TO queuert_test");
+            rollback();
             throw error;
           }
+          if (!isThenable(result)) {
+            release();
+            return result;
+          }
+          return Promise.resolve(result).then(
+            (value) => {
+              release();
+              return value;
+            },
+            (error: unknown) => {
+              rollback();
+              throw error;
+            },
+          ) as R;
         });
       },
       { scope: "test" },
@@ -187,7 +221,7 @@ export const extendWithStateSqlite = <T>(
         const originalExecuteSql = stateProvider.executeSql.bind(stateProvider);
         const flakyDbProvider: typeof stateProvider = {
           ...stateProvider,
-          executeSql: async ({ txCtx, sql, params, paramTypes, columnTypes, readOnly }) => {
+          executeSql: ({ txCtx, sql, params, paramTypes, columnTypes, readOnly }) => {
             queryCount++;
 
             if (enabled && shouldError()) {
@@ -219,11 +253,7 @@ export const extendWithStateSqlite = <T>(
     ],
     flakyDbStateAdapter: [
       async ({ flakyDbStateProvider }, use) => {
-        return use(
-          await createSqliteStateAdapter({
-            stateProvider: flakyDbStateProvider,
-          }),
-        );
+        return use(await createStateAdapter(flakyDbStateProvider));
       },
       { scope: "test" },
     ],

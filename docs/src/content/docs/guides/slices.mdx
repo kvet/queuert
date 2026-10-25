@@ -74,13 +74,13 @@ import { orderProcessors } from "./slice-orders-processors.js";
 import { notificationJobTypes } from "./slice-notifications-definitions.js";
 import { notificationProcessors } from "./slice-notifications-processors.js";
 
-const client = await createClient({
+const client = createClient({
   stateAdapter,
   notifyAdapter,
   jobTypes: [orderJobTypes, notificationJobTypes],
 });
 
-const worker = await createInProcessWorker({
+const worker = createInProcessWorker({
   client,
   processors: [orderProcessors, notificationProcessors],
 });

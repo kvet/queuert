@@ -1,4 +1,4 @@
-import { createAsyncRwLock, createSqliteStateAdapter } from "@queuert/sqlite";
+import { createSyncSqliteStateAdapter } from "@queuert/sqlite";
 import Database from "better-sqlite3";
 import {
   createClient,
@@ -33,20 +33,19 @@ const jobTypes = defineJobTypes<{
 }>();
 
 // 4. Create providers and adapters
-const lock = createAsyncRwLock();
-const stateProvider = createBetterSqlite3StateProvider({ db, lock });
-const stateAdapter = await createSqliteStateAdapter({ stateProvider });
-await stateAdapter.migrateToLatest();
+const stateProvider = createBetterSqlite3StateProvider({ db });
+const stateAdapter = createSyncSqliteStateAdapter({ stateProvider });
+stateAdapter.migrateToLatest();
 
-const notifyAdapter = await createInProcessNotifyAdapter();
+const notifyAdapter = createInProcessNotifyAdapter();
 
-const client = await createClient({
+const client = createClient({
   stateAdapter,
   notifyAdapter,
   jobTypes,
 });
 
-const worker = await createInProcessWorker({
+const worker = createInProcessWorker({
   client,
   processors: createProcessors({
     client,
@@ -54,42 +53,21 @@ const worker = await createInProcessWorker({
     processors: {
       send_welcome_email: {
         attemptHandler: async ({ job, complete }) => {
-          let user: { id: number; name: string; email: string } | undefined;
-          {
-            using _h = await lock.acquireRead();
-            user = db
-              .prepare("SELECT id, name, email FROM users WHERE id = ?")
-              .get(job.input.userId) as { id: number; name: string; email: string } | undefined;
-          }
+          const user = db
+            .prepare("SELECT id, name, email FROM users WHERE id = ?")
+            .get(job.input.userId) as { id: number; name: string; email: string } | undefined;
           if (!user) throw new Error(`User ${job.input.userId} not found`);
 
           // Simulate sending email (in real app, call email service here)
           console.log(`Sending welcome email to ${user.email} for ${user.name}`);
 
-          return withTransactionHooks(async (transactionHooks) => {
-            // The handler's transaction holds the provider's write lock, so the worker's
-            // autocommit statements on this connection cannot run inside it.
-            using _h = await lock.acquireWrite();
-            db.exec("BEGIN");
-            try {
-              const result = await complete({
-                db,
-                transactionHooks,
-                output: { sentAt: new Date().toISOString() },
-              });
-              db.exec("COMMIT");
-              return result;
-            } catch (error) {
-              if (db.inTransaction) {
-                try {
-                  db.exec("ROLLBACK");
-                } catch {
-                  // ignore rollback errors
-                }
-              }
-              throw error;
-            }
-          });
+          // The state adapter is in sync mode, so `complete` runs inside better-sqlite3's
+          // native synchronous transaction.
+          return withTransactionHooks((transactionHooks) =>
+            db.transaction(() =>
+              complete({ db, transactionHooks, output: { sentAt: new Date().toISOString() } }),
+            )(),
+          );
         },
       },
     },
@@ -99,33 +77,20 @@ const worker = await createInProcessWorker({
 const stopWorker = await worker.start();
 
 // 5. Register a new user and queue welcome email atomically
-const chain = await withTransactionHooks(async (transactionHooks) => {
-  using _h = await lock.acquireWrite();
-  db.exec("BEGIN");
-  try {
-    const insertStmt = db.prepare("INSERT INTO users (name, email) VALUES (?, ?) RETURNING id");
-    const user = insertStmt.get("Alice", "alice@example.com") as { id: number };
+const chain = withTransactionHooks((transactionHooks) =>
+  db.transaction(() => {
+    const user = db
+      .prepare("INSERT INTO users (name, email) VALUES (?, ?) RETURNING id")
+      .get("Alice", "alice@example.com") as { id: number };
 
-    const result = await client.createChain({
+    return client.createChain({
       db,
       transactionHooks,
       typeName: "send_welcome_email",
       input: { userId: user.id },
     });
-
-    db.exec("COMMIT");
-    return result;
-  } catch (error) {
-    if (db.inTransaction) {
-      try {
-        db.exec("ROLLBACK");
-      } catch {
-        // ignore rollback errors
-      }
-    }
-    throw error;
-  }
-});
+  })(),
+);
 
 // 6. Wait for the chain to complete
 const result = await client.awaitChain(chain, { timeoutMs: 5000 });
@@ -134,5 +99,5 @@ console.log(`Welcome email sent at: ${result.output.sentAt}`);
 // 7. Cleanup
 await stopWorker();
 await notifyAdapter.close();
-await stateAdapter.close();
+stateAdapter.close();
 db.close();

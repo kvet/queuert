@@ -4,7 +4,7 @@ import { type StateAdapter } from "queuert";
 import { stateAdapterConformanceTestSuite } from "queuert/testing";
 import { describe, expect, it } from "vitest";
 
-import { createSqliteStateAdapter } from "../state-adapter/state-adapter.sqlite.js";
+import { createAsyncSqliteStateAdapter } from "../state-adapter/state-adapter.sqlite.js";
 import {
   type BetterSqlite3Context,
   createBetterSqlite3Provider,
@@ -185,7 +185,7 @@ describe("SQLite SQL contract", () => {
     stateAdapter: [
       async ({ db }, use) => {
         const stateProvider = createValidatingProvider(db);
-        const adapter = await createSqliteStateAdapter({ stateProvider });
+        const adapter = createAsyncSqliteStateAdapter({ stateProvider });
         await adapter.migrateToLatest();
         await adapter.truncate();
         await use(adapter as unknown as StateAdapter<{ $test: true }, string>);
