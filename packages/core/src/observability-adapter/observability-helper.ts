@@ -97,10 +97,7 @@ export type ObservabilityHelper = {
 
   // job attempt
   jobAttemptStarted: (stateJob: StateJob, options: { workerId: string }) => void;
-  jobAttemptTakenByAnotherWorker: (stateJob: StateJob, options: { workerId: string }) => void;
-  jobAttemptAlreadyCompleted: (stateJob: StateJob, options: { workerId: string }) => void;
-  jobAttemptExpired: (stateJob: StateJob, options: { workerId: string }) => void;
-  jobAttemptExtended: (stateJob: StateJob, options: { workerId: string }) => void;
+  jobAttemptLost: (stateJob: StateJob, options: { workerId: string }) => void;
   jobAttemptFailed: (stateJob: StateJob, options: { workerId: string; error: unknown }) => void;
   jobAttemptCompleted: (
     stateJob: StateJob,
@@ -313,58 +310,18 @@ export const createObservabilityHelper = ({
     });
     adapter.jobAttemptStarted(data);
   },
-  jobAttemptTakenByAnotherWorker(stateJob, options) {
+  jobAttemptLost(stateJob, options) {
     const data = {
       ...mapStateJobToJobAttemptData(stateJob),
       workerId: options.workerId,
     };
     log({
-      type: "job_attempt_taken_by_another_worker",
+      type: "job_attempt_lost",
       level: "warn",
-      message: "Job taken by another worker",
+      message: "Job attempt lost",
       data,
     });
-    adapter.jobAttemptTakenByAnotherWorker(data);
-  },
-  jobAttemptAlreadyCompleted(stateJob, options) {
-    const data = {
-      ...mapStateJobToJobProcessingData(stateJob),
-      workerId: options.workerId,
-      completedBy: stateJob.completedBy,
-    };
-    log({
-      type: "job_attempt_already_completed",
-      level: "warn",
-      message: "Job already completed by another worker",
-      data,
-    });
-    adapter.jobAttemptAlreadyCompleted(data);
-  },
-  jobAttemptExpired(stateJob, options) {
-    const data = {
-      ...mapStateJobToJobAttemptData(stateJob),
-      workerId: options.workerId,
-    };
-    log({
-      type: "job_attempt_expired",
-      level: "warn",
-      message: "Job attempt expired",
-      data,
-    });
-    adapter.jobAttemptExpired(data);
-  },
-  jobAttemptExtended(stateJob, options) {
-    const data = {
-      ...mapStateJobToJobAttemptData(stateJob),
-      workerId: options.workerId,
-    };
-    log({
-      type: "job_attempt_extended",
-      level: "info",
-      message: "Job attempt extended",
-      data,
-    });
-    adapter.jobAttemptExtended(data);
+    adapter.jobAttemptLost(data);
   },
   jobAttemptReclaimed(stateJob, options) {
     const data = {

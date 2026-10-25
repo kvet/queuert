@@ -101,14 +101,14 @@ Events representing write claims inside transactions:
 
 - **Creation**: `chainCreated`, `jobCreated`, `jobBlocked`, PRODUCER span ends
 - **Completion**: `jobCompleted`, `jobDuration`, `completeJobSpan`, `chainCompleted`, `chainDuration`, `completeBlockerSpan`, `jobUnblocked`
-- **Worker `complete`**: the completion events above, `jobRescheduled` for `complete({ reschedule })`, continuation PRODUCER span ends — buffered into the `transactionHooks` the handler passes to `complete`, so they are released only after the handler's own transaction commits
+- **Worker `complete`**: the completion events above, `jobAttemptCompleted`, `jobRescheduled` for `complete({ reschedule })`, continuation PRODUCER span ends — buffered into the `transactionHooks` the handler passes to `complete`, so they are released only after the handler's own transaction commits
 
 ### Not Buffered
 
 Events that need immediate context or occur outside transactions:
 
 - **Span starts**: Must happen before the database write that stores the trace context
-- **Worker-side events**: `jobAttemptStarted`, `jobAttemptDuration`, `jobAttemptExtended`, `jobAttemptCompleted`, `jobAttemptFailed`, `jobRescheduled` after a failed attempt, `jobAttemptReclaimed`, attempt span ends. The worker's own writes (acquire, heartbeat, reclaim, the fallback reschedule after a failed attempt) are single autocommit statements, so their events are emitted directly once the statement returns
+- **Worker-side events**: `jobAttemptStarted`, `jobAttemptDuration`, `jobAttemptFailed`, `jobAttemptLost`, `jobAttemptReclaimed`, `jobRescheduled` after a failed attempt, attempt span ends. The worker's own writes are single autocommit statements, so their events are emitted directly once the statement returns
 - **Read-only observations**: Events that observe state without claiming writes
 
 ### `complete` events

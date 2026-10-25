@@ -52,23 +52,15 @@ const createComplete = (
 
   const completeHookKey = Symbol("queuert.complete");
 
-  let lossReported = false;
   const readLossError = async (txCtx: BaseTxContext): Promise<Error> => {
     const [job] = await helpers.stateAdapter.getJobs({ txCtx, jobIds: [stateJob.id] });
     ownership.abort();
-    ownership.reportExpiredAttempt();
-    const firstLossReport = !lossReported;
-    lossReported = true;
     if (!job) {
       return new JobNotFoundError(`Job not found`, { jobId: stateJob.id });
     }
     if (job.completedAt !== null) {
-      if (firstLossReport)
-        helpers.observabilityHelper.jobAttemptAlreadyCompleted(job, { workerId });
       return new JobAlreadyCompletedError("Job is already completed", { jobId: stateJob.id });
     }
-    if (firstLossReport)
-      helpers.observabilityHelper.jobAttemptTakenByAnotherWorker(job, { workerId });
     return new JobTakenByAnotherWorkerError(`Job taken by another worker`, {
       jobId: stateJob.id,
       workerId,
@@ -119,8 +111,6 @@ const createComplete = (
     }
     completeSlot.inProgress = true;
     try {
-      ownership.reportExpiredAttempt();
-
       const stateJobWritten =
         "reschedule" in options
           ? (
@@ -149,8 +139,19 @@ const createComplete = (
         throw await readLossError(txCtx);
       }
 
-      completeSlot.write = { stateJob: stateJobWritten, job: mapStateJobToJob(stateJobWritten) };
-      return completeSlot.write.job;
+      const write: CompleteWrite = {
+        stateJob: stateJobWritten,
+        job: mapStateJobToJob(stateJobWritten),
+      };
+      bufferObservabilityEvent(transactionHooks, () => {
+        helpers.observabilityHelper.jobAttemptCompleted(stateJob, {
+          output: write.stateJob.output,
+          continuedWith: write.stateJob.continuation,
+          workerId,
+        });
+      });
+      completeSlot.write = write;
+      return write.job;
     } finally {
       completeSlot.inProgress = false;
     }
@@ -270,7 +271,6 @@ export const runAttempt = async ({
   const ownership = await startAttemptOwnership(helpers, {
     stateJob,
     fence,
-    workerId,
     attemptConfig,
     stopSignal,
   });
@@ -312,16 +312,14 @@ export const runAttempt = async ({
       backoffConfig,
       failure,
     });
-    if (!rescheduled) span?.end({ status: "failed", error: failure });
+    if (!rescheduled) {
+      helpers.observabilityHelper.jobAttemptLost(stateJob, { workerId });
+      span?.end({ status: "failed", error: failure });
+    }
     return;
   }
 
   const { stateJob: finished } = committed;
-  helpers.observabilityHelper.jobAttemptCompleted(stateJob, {
-    output: finished.output,
-    continuedWith: finished.continuation,
-    workerId,
-  });
   span?.end({
     status: "completed",
     continuedWith: finished.continuation

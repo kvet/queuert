@@ -7,7 +7,6 @@ import { type AttemptConfig } from "./attempt-config.js";
 export type AttemptOwnership = {
   signal: AbortSignal;
   abort: () => void;
-  reportExpiredAttempt: () => void;
   trackCompleteSlot: (completeSlot: { write: unknown }) => void;
   stopHeartbeat: () => Promise<void>;
   release: () => Promise<void>;
@@ -18,13 +17,11 @@ export const startAttemptOwnership = async (
   {
     stateJob,
     fence,
-    workerId,
     attemptConfig,
     stopSignal,
   }: {
     stateJob: StateJob;
     fence: StateAttemptFence;
-    workerId: string;
     attemptConfig: AttemptConfig;
     stopSignal: AbortSignal;
   },
@@ -35,14 +32,6 @@ export const startAttemptOwnership = async (
   };
   stopSignal.addEventListener("abort", abort, { once: true });
   if (stopSignal.aborted) abort();
-
-  let attemptUntil = stateJob.attemptUntil!;
-  let expiredReported = false;
-  const reportExpiredAttempt = () => {
-    if (expiredReported || attemptUntil.getTime() >= Date.now()) return;
-    expiredReported = true;
-    helpers.observabilityHelper.jobAttemptExpired(stateJob, { workerId });
-  };
 
   const completeSlots = new Set<{ write: unknown }>();
   const heartbeatController = new AbortController();
@@ -61,9 +50,6 @@ export const startAttemptOwnership = async (
           if (!completeWritten) abortController.abort();
           return;
         }
-        reportExpiredAttempt();
-        attemptUntil = extended.attemptUntil!;
-        helpers.observabilityHelper.jobAttemptExtended(stateJob, { workerId });
       } catch {
         abortController.abort();
         return;
@@ -90,7 +76,6 @@ export const startAttemptOwnership = async (
   return {
     signal: abortController.signal,
     abort,
-    reportExpiredAttempt,
     trackCompleteSlot: (completeSlot) => {
       completeSlots.add(completeSlot);
     },

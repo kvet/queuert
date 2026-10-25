@@ -120,28 +120,10 @@ type JobAttemptStartedLogEntry = LogEntry<
   "Job attempt started",
   JobProcessingData & WorkerBasicData
 >;
-type JobAttemptTakenByAnotherWorkerLogEntry = LogEntry<
-  "job_attempt_taken_by_another_worker",
+type JobAttemptLostLogEntry = LogEntry<
+  "job_attempt_lost",
   "warn",
-  "Job taken by another worker",
-  JobAttemptData & WorkerBasicData
->;
-type JobAttemptAlreadyCompletedLogEntry = LogEntry<
-  "job_attempt_already_completed",
-  "warn",
-  "Job already completed by another worker",
-  { completedBy: string | null } & JobProcessingData & WorkerBasicData
->;
-type JobAttemptExpiredLogEntry = LogEntry<
-  "job_attempt_expired",
-  "warn",
-  "Job attempt expired",
-  JobAttemptData & WorkerBasicData
->;
-type JobAttemptExtendedLogEntry = LogEntry<
-  "job_attempt_extended",
-  "info",
-  "Job attempt extended",
+  "Job attempt lost",
   JobAttemptData & WorkerBasicData
 >;
 type JobAttemptReclaimedLogEntry = LogEntry<
@@ -200,10 +182,7 @@ type TypedLogEntry =
   | JobUnblockedLogEntry
   // job attempt
   | JobAttemptStartedLogEntry
-  | JobAttemptTakenByAnotherWorkerLogEntry
-  | JobAttemptAlreadyCompletedLogEntry
-  | JobAttemptExpiredLogEntry
-  | JobAttemptExtendedLogEntry
+  | JobAttemptLostLogEntry
   | JobAttemptReclaimedLogEntry
   | JobAttemptFailedLogEntry
   | JobAttemptCompletedLogEntry

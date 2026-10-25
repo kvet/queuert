@@ -24,7 +24,7 @@ One row per live worker process, one lease per worker, one heartbeat per process
 - `job.attempt_by` holds a worker `id`; `job.attempt_until` is dropped.
 - A running job is "live" exactly when its worker's lease is live. Reclamation becomes a worker-level operation: expire the worker, return its jobs to `pending` as a failed attempt, delete the worker row.
 
-Everything else about job processing — the `attempt` fence on every attempt-scoped write (`attempt_by` now holds the worker row id), all-or-nothing fenced writes, commit detection (an attempt counts as completed once a `complete` call's `transactionHooks` flush; otherwise a fenced reschedule records the failed attempt), the miss classifier, `JobTakenByAnotherWorkerError`, `listenJobAttemptLost`, backoff — is unchanged.
+Everything else about job processing — the `attempt` fence on every attempt-scoped write (`attempt_by` now holds the worker row id), all-or-nothing fenced writes, commit detection (an attempt counts as completed once a `complete` call's `transactionHooks` flush; otherwise a fenced reschedule records the failed attempt), `JobTakenByAnotherWorkerError`, `jobAttemptLost`, `listenJobAttemptLost`, backoff — is unchanged.
 
 ### Schema
 
@@ -237,8 +237,6 @@ The per-attempt lease is not a hard timeout either: the heartbeat renews it from
 ## Observability
 
 The worker row and the worker process have the same lifetime, so they share one pair of events rather than getting two. `workerStarted` is emitted after `startWorker` commits, `workerStopped` after `stopWorker` commits — no separate `workerRegistered` / `workerDeregistered`.
-
-Removed: `jobAttemptExtended`, `jobAttemptExpired` (today the miss classifier emits the latter when the lapsed `attempt_until` explains a fence miss; with no `attempt_until`, a miss after a worker release classifies as `taken_by_another_worker`).
 
 Changed:
 

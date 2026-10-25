@@ -201,12 +201,12 @@ Observability events emitted inside database transactions are buffered and only 
 
 - **Creation**: `chainCreated`, `jobCreated`, `jobBlocked`, and PRODUCER span ends from chain creation and continuation
 - **Completion**: `jobCompleted`, `jobDuration`, `completeJobSpan` (workerless), `chainCompleted`, `chainDuration`, `completeBlockerSpan`, `jobUnblocked`
-- **Worker `complete`**: the completion events above, `jobRescheduled` for `complete({ reschedule })`, and continuation PRODUCER span ends — buffered into the `transactionHooks` the handler passes to `complete`
+- **Worker `complete`**: the completion events above, `jobAttemptCompleted`, `jobRescheduled` for `complete({ reschedule })`, and continuation PRODUCER span ends — buffered into the `transactionHooks` the handler passes to `complete`
 
 **Not buffered** -- events that either need immediate context or occur outside transactions:
 
 - **Span starts**: Need trace context immediately for DB writes that store trace IDs
-- **Worker-side events**: `jobAttemptStarted`, `jobAttemptDuration`, `jobAttemptExtended`, `jobAttemptCompleted` (emitted once the worker has confirmed the `complete` committed), `jobAttemptFailed` and `jobRescheduled` for a failed attempt, `jobAttemptReclaimed`, attempt span ends. The worker's own writes are single autocommit statements, so these are emitted directly
+- **Worker-side events**: `jobAttemptStarted`, `jobAttemptDuration`, `jobAttemptFailed`, `jobAttemptLost`, `jobAttemptReclaimed`, `jobRescheduled` after a failed attempt, attempt span ends. The worker's own writes are single autocommit statements, so these are emitted directly
 - **Read-only observations**: events that observe state without making write claims
 
 ### Self-Cleaning

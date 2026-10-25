@@ -17,10 +17,7 @@ export const createNoopObservabilityAdapter = (): ObservabilityAdapter => ({
   jobUnblocked: () => {},
 
   jobAttemptStarted: () => {},
-  jobAttemptTakenByAnotherWorker: () => {},
-  jobAttemptAlreadyCompleted: () => {},
-  jobAttemptExpired: () => {},
-  jobAttemptExtended: () => {},
+  jobAttemptLost: () => {},
   jobAttemptFailed: () => {},
   jobAttemptCompleted: () => {},
   jobAttemptReclaimed: () => {},

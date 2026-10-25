@@ -47,16 +47,13 @@ Attribute names follow OpenTelemetry semantic conventions (lowercase, dotted) an
 
 ### Attempt Lifecycle
 
-| Metric                                        | Attributes                               | Description                                                           |
-| --------------------------------------------- | ---------------------------------------- | --------------------------------------------------------------------- |
-| `queuert.job.attempt.started`                 | `queuert.job.type`, `queuert.chain.type` | Worker began processing an attempt                                    |
-| `queuert.job.attempt.completed`               | `queuert.job.type`, `queuert.chain.type` | Attempt completed successfully (including `complete({ reschedule })`) |
-| `queuert.job.attempt.failed`                  | `queuert.job.type`, `queuert.chain.type` | Attempt failed (may retry)                                            |
-| `queuert.job.attempt.taken_by_another_worker` | `queuert.job.type`, `queuert.chain.type` | Job already claimed by another worker                                 |
-| `queuert.job.attempt.already_completed`       | `queuert.job.type`, `queuert.chain.type` | Job already completed when worker tried to process it                 |
-| `queuert.job.attempt.expired`                 | `queuert.job.type`, `queuert.chain.type` | Attempt expired before processing finished                            |
-| `queuert.job.attempt.reclaimed`               | `queuert.job.type`, `queuert.chain.type` | Expired attempt reclaimed for retry                                   |
-| `queuert.job.attempt.extended`                | `queuert.job.type`, `queuert.chain.type` | Attempt successfully extended during processing                       |
+| Metric                          | Attributes                               | Description                                                                                        |
+| ------------------------------- | ---------------------------------------- | -------------------------------------------------------------------------------------------------- |
+| `queuert.job.attempt.started`   | `queuert.job.type`, `queuert.chain.type` | Worker began processing an attempt                                                                 |
+| `queuert.job.attempt.completed` | `queuert.job.type`, `queuert.chain.type` | Attempt completed successfully (including `complete({ reschedule })`)                              |
+| `queuert.job.attempt.failed`    | `queuert.job.type`, `queuert.chain.type` | Attempt failed (may retry)                                                                         |
+| `queuert.job.attempt.lost`      | `queuert.job.type`, `queuert.chain.type` | Attempt lost ownership before committing: taken by another worker, completed elsewhere, or deleted |
+| `queuert.job.attempt.reclaimed` | `queuert.job.type`, `queuert.chain.type` | Expired attempt reclaimed for retry                                                                |
 
 ### Chain Lifecycle
 

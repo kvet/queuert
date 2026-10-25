@@ -1128,9 +1128,7 @@ export const processTestSuite = ({ it }: { it: TestAPI<TestSuiteContext> }): voi
     });
 
     expect(aborted).toBe(false);
-    expect(log).not.toHaveBeenCalledWith(
-      expect.objectContaining({ type: "job_attempt_taken_by_another_worker" }),
-    );
+    expect(log).not.toHaveBeenCalledWith(expect.objectContaining({ type: "job_attempt_lost" }));
   });
 
   it("fails complete and aborts the signal after a workerless takeover", async ({

@@ -65,18 +65,13 @@ All entries are strongly typed — the `type` field determines the exact shape o
 
 ### Attempt Lifecycle
 
-| Type                                  | Level   | Message                                 | Data                                                                                                                                                           |
-| ------------------------------------- | ------- | --------------------------------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| `job_attempt_started`                 | `info`  | Job attempt started                     | `id`, `typeName`, `chainId`, `chainTypeName`, `status`, `attempt`, `workerId`                                                                                  |
-| `job_attempt_completed`               | `info`  | Job attempt completed                   | `id`, `typeName`, `chainId`, `chainTypeName`, `status`, `attempt`, `output?`, `continuedWith?`, `workerId`                                                     |
-| `job_attempt_failed`                  | `error` | Job attempt failed                      | `id`, `typeName`, `chainId`, `chainTypeName`, `status`, `attempt`, `workerId`; top-level `error`                                                               |
-| `job_attempt_taken_by_another_worker` | `warn`  | Job taken by another worker             | `id`, `typeName`, `chainId`, `chainTypeName`, `status`, `attempt`, `attemptAt`, `attemptBy`, `attemptUntil`, `workerId`                                        |
-| `job_attempt_already_completed`       | `warn`  | Job already completed by another worker | `id`, `typeName`, `chainId`, `chainTypeName`, `status`, `attempt`, `completedBy`, `workerId`                                                                   |
-| `job_attempt_expired`                 | `warn`  | Job attempt expired                     | `id`, `typeName`, `chainId`, `chainTypeName`, `status`, `attempt`, `attemptAt`, `attemptBy`, `attemptUntil`, `workerId`                                        |
-| `job_attempt_extended`                | `info`  | Job attempt extended                    | `id`, `typeName`, `chainId`, `chainTypeName`, `status`, `attempt`, `attemptAt`, `attemptBy`, `attemptUntil`, `workerId`                                        |
-| `job_attempt_reclaimed`               | `info`  | Reclaimed expired job attempt           | `id`, `typeName`, `chainId`, `chainTypeName`, `status`, `attempt`, `attemptAt`, `attemptBy`, `attemptUntil`, `workerId` (attempt fields are `null`; see below) |
-
-`job_attempt_reclaimed` reports the job as it is after the reclaim: `status` is `pending` and `attemptAt`, `attemptBy`, and `attemptUntil` are `null`, so the entry does not identify the worker that previously held the attempt.
+| Type                    | Level   | Message                       | Data                                                                                                                                                |
+| ----------------------- | ------- | ----------------------------- | --------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `job_attempt_started`   | `info`  | Job attempt started           | `id`, `typeName`, `chainId`, `chainTypeName`, `status`, `attempt`, `workerId`                                                                       |
+| `job_attempt_completed` | `info`  | Job attempt completed         | `id`, `typeName`, `chainId`, `chainTypeName`, `status`, `attempt`, `output?`, `continuedWith?`, `workerId`                                          |
+| `job_attempt_failed`    | `error` | Job attempt failed            | `id`, `typeName`, `chainId`, `chainTypeName`, `status`, `attempt`, `workerId`; top-level `error`                                                    |
+| `job_attempt_lost`      | `warn`  | Job attempt lost              | `id`, `typeName`, `chainId`, `chainTypeName`, `status`, `attempt`, `attemptAt`, `attemptBy`, `attemptUntil`, `workerId`                             |
+| `job_attempt_reclaimed` | `info`  | Reclaimed expired job attempt | `id`, `typeName`, `chainId`, `chainTypeName`, `status`, `attempt`, `attemptAt`, `attemptBy`, `attemptUntil`, `workerId` (attempt fields are `null`) |
 
 ### Chain Lifecycle
 

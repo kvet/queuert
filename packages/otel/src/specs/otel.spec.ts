@@ -1,5 +1,6 @@
 import { sleep } from "@queuert/helpers";
 import {
+  JobAlreadyCompletedError,
   type NotifyAdapter,
   createClient,
   createInProcessWorker,
@@ -557,110 +558,6 @@ describe("Metrics", () => {
     ]);
   });
 
-  it("tracks attempt extension metric", async ({
-    stateAdapter,
-    notifyAdapter,
-    withTransaction,
-    withWorkers,
-    observabilityAdapter,
-    log,
-    getMetricNames,
-  }) => {
-    const jobTypes = defineJobTypes<{
-      test: { entry: true; input: null; output: null };
-    }>();
-
-    const client = await createClient({
-      stateAdapter,
-      notifyAdapter,
-      observabilityAdapter,
-      log,
-      jobTypes,
-    });
-    const worker = await createInProcessWorker({
-      client,
-      concurrency: 1,
-      processors: createProcessors({
-        client,
-        jobTypes,
-        attemptConfig: { timeoutMs: 500, heartbeatMs: 50 },
-        processors: {
-          test: {
-            attemptHandler: async ({ complete }) => {
-              await sleep(200);
-              return withTransaction(async (txCtx, transactionHooks) =>
-                complete({ ...txCtx, transactionHooks, output: null }),
-              );
-            },
-          },
-        },
-      }),
-    });
-
-    const chain = await withTransaction(async (txCtx, transactionHooks) =>
-      client.createChain({ ...txCtx, transactionHooks, typeName: "test", input: null }),
-    );
-
-    await withWorkers([await worker.start()], async () => {
-      await client.awaitChain(chain, completionOptions);
-    });
-
-    const metricNames = await getMetricNames();
-    expect(metricNames).toContain("queuert.job.attempt.extended");
-  });
-
-  it("tracks attempt expiration metric", async ({
-    stateAdapter,
-    notifyAdapter,
-    withTransaction,
-    withWorkers,
-    observabilityAdapter,
-    log,
-    getMetricNames,
-  }) => {
-    const jobTypes = defineJobTypes<{
-      test: { entry: true; input: null; output: null };
-    }>();
-
-    const client = await createClient({
-      stateAdapter,
-      notifyAdapter,
-      observabilityAdapter,
-      log,
-      jobTypes,
-    });
-    const worker = await createInProcessWorker({
-      client,
-      concurrency: 1,
-      processors: createProcessors({
-        client,
-        jobTypes,
-        attemptConfig: { timeoutMs: 10, heartbeatMs: 100 },
-        processors: {
-          test: {
-            attemptHandler: async ({ complete }) => {
-              await sleep(100);
-              return withTransaction(async (txCtx, transactionHooks) =>
-                complete({ ...txCtx, transactionHooks, output: null }),
-              );
-            },
-          },
-        },
-      }),
-    });
-
-    const chain = await withTransaction(async (txCtx, transactionHooks) =>
-      client.createChain({ ...txCtx, transactionHooks, typeName: "test", input: null }),
-    );
-
-    await withWorkers([await worker.start()], async () => {
-      await client.awaitChain(chain, completionOptions);
-    });
-
-    const metricNames = await getMetricNames();
-    expect(metricNames).toContain("queuert.job.attempt.expired");
-  });
-
   it("tracks attempt reclaim metrics", async ({
     stateAdapter,
     notifyAdapter,
@@ -765,10 +662,211 @@ describe("Metrics", () => {
 
     const metricNames = await getMetricNames();
     expect(metricNames).toContain("queuert.job.attempt.reclaimed");
-    expect(
-      metricNames.has("queuert.job.attempt.taken_by_another_worker") ||
-        metricNames.has("queuert.job.attempt.already_completed"),
-    ).toBe(true);
+    expect(metricNames).toContain("queuert.job.attempt.lost");
+  });
+
+  it("tracks a lost attempt once after a workerless takeover", async ({
+    stateAdapter,
+    notifyAdapter,
+    withTransaction,
+    withWorkers,
+    observabilityAdapter,
+    log,
+    expectMetrics,
+  }) => {
+    const jobTypes = defineJobTypes<{
+      test: { entry: true; input: null; output: { by: string } };
+    }>();
+
+    const client = await createClient({
+      stateAdapter,
+      notifyAdapter,
+      observabilityAdapter,
+      log,
+      jobTypes,
+    });
+    const started = Promise.withResolvers<void>();
+    const takenOver = Promise.withResolvers<void>();
+    const attemptEnded = Promise.withResolvers<void>();
+    const worker = await createInProcessWorker({
+      client,
+      concurrency: 1,
+      processors: createProcessors({
+        client,
+        jobTypes,
+        processors: {
+          test: {
+            attemptHandler: async ({ complete }) => {
+              started.resolve();
+              await takenOver.promise;
+              const completeAsWorker = async () =>
+                withTransaction(async (txCtx, transactionHooks) =>
+                  complete({ ...txCtx, transactionHooks, output: { by: "worker" } }),
+                );
+              await expect(completeAsWorker()).rejects.toThrow(JobAlreadyCompletedError);
+              attemptEnded.resolve();
+              return completeAsWorker();
+            },
+          },
+        },
+      }),
+    });
+
+    const chain = await withTransaction(async (txCtx, transactionHooks) =>
+      client.createChain({ ...txCtx, transactionHooks, typeName: "test", input: null }),
+    );
+
+    await withWorkers([await worker.start()], async () => {
+      await started.promise;
+      await withTransaction(async (txCtx, transactionHooks) =>
+        client.completeChain({
+          ...txCtx,
+          transactionHooks,
+          ...chain,
+          handler: async ({ job, completeJob }) =>
+            completeJob(job, async ({ complete }) => complete({ output: { by: "workerless" } })),
+        }),
+      );
+      takenOver.resolve();
+      await attemptEnded.promise;
+    });
+
+    await expectMetrics([
+      { method: "chainCreated" },
+      { method: "jobCreated" },
+      { method: "workerStarted" },
+      { method: "jobAttemptStarted" },
+      { method: "jobCompleted" },
+      { method: "chainCompleted" },
+      { method: "jobAttemptLost" },
+      { method: "workerStopping" },
+      { method: "workerStopped" },
+    ]);
+  });
+
+  it("tracks a lost attempt when the job is deleted during the attempt", async ({
+    stateAdapter,
+    notifyAdapter,
+    withTransaction,
+    withWorkers,
+    observabilityAdapter,
+    log,
+    expectMetrics,
+  }) => {
+    const jobTypes = defineJobTypes<{
+      test: { entry: true; input: null; output: null };
+    }>();
+
+    const client = await createClient({
+      stateAdapter,
+      notifyAdapter,
+      observabilityAdapter,
+      log,
+      jobTypes,
+    });
+    const started = Promise.withResolvers<void>();
+    const deleted = Promise.withResolvers<void>();
+    const worker = await createInProcessWorker({
+      client,
+      concurrency: 1,
+      processors: createProcessors({
+        client,
+        jobTypes,
+        processors: {
+          test: {
+            attemptHandler: async ({ complete }) => {
+              started.resolve();
+              await deleted.promise;
+              return withTransaction(async (txCtx, transactionHooks) =>
+                complete({ ...txCtx, transactionHooks, output: null }),
+              );
+            },
+          },
+        },
+      }),
+    });
+
+    const chain = await withTransaction(async (txCtx, transactionHooks) =>
+      client.createChain({ ...txCtx, transactionHooks, typeName: "test", input: null }),
+    );
+
+    await withWorkers([await worker.start()], async () => {
+      await started.promise;
+      await withTransaction(async (txCtx, transactionHooks) =>
+        client.deleteChains({ ...txCtx, transactionHooks, ids: [chain.id] }),
+      );
+      deleted.resolve();
+    });
+
+    await expectMetrics([
+      { method: "chainCreated" },
+      { method: "jobCreated" },
+      { method: "workerStarted" },
+      { method: "jobAttemptStarted" },
+      { method: "chainDeleted" },
+      { method: "jobAttemptLost" },
+      { method: "workerStopping" },
+      { method: "workerStopped" },
+    ]);
+  });
+
+  it("tracks a lost attempt when its complete committed outside its hooks flush", async ({
+    stateAdapter,
+    notifyAdapter,
+    withTransaction,
+    withWorkers,
+    observabilityAdapter,
+    log,
+    expectMetrics,
+  }) => {
+    const jobTypes = defineJobTypes<{
+      test: { entry: true; input: null; output: null };
+    }>();
+
+    const client = await createClient({
+      stateAdapter,
+      notifyAdapter,
+      observabilityAdapter,
+      log,
+      jobTypes,
+    });
+    const worker = await createInProcessWorker({
+      client,
+      concurrency: 1,
+      processors: createProcessors({
+        client,
+        jobTypes,
+        processors: {
+          test: {
+            attemptHandler: async ({ complete }) =>
+              withTransactionHooks(async (transactionHooks) => {
+                await stateAdapter.withTransaction(async (txCtx) =>
+                  complete({ ...txCtx, transactionHooks, output: null }),
+                );
+                throw new Error("after the transaction committed");
+              }),
+          },
+        },
+      }),
+    });
+
+    const chain = await withTransaction(async (txCtx, transactionHooks) =>
+      client.createChain({ ...txCtx, transactionHooks, typeName: "test", input: null }),
+    );
+
+    await withWorkers([await worker.start()], async () => {
+      await client.awaitChain(chain, completionOptions);
+    });
+
+    await expectMetrics([
+      { method: "chainCreated" },
+      { method: "jobCreated" },
+      { method: "workerStarted" },
+      { method: "jobAttemptStarted" },
+      { method: "jobAttemptLost" },
+      { method: "workerStopping" },
+      { method: "workerStopped" },
+    ]);
   });
 
   it("tracks state adapter and worker error metrics", async ({

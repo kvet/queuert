@@ -59,9 +59,6 @@ const client = await createClient({
   stateAdapter,
   notifyAdapter,
   jobTypes,
-  log: ({ type }) => {
-    if (type === "job_attempt_extended") console.log("  [heartbeat] attempt extended");
-  },
 });
 
 const timeoutMs = 1000;

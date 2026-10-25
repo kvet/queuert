@@ -56,16 +56,9 @@ export const createOtelObservabilityAdapter = async ({
 
   const jobCreatedCounter = meter?.createCounter("queuert.job.created");
   const jobAttemptStartedCounter = meter?.createCounter("queuert.job.attempt.started");
-  const jobAttemptTakenByAnotherWorkerCounter = meter?.createCounter(
-    "queuert.job.attempt.taken_by_another_worker",
-  );
-  const jobAttemptExpiredCounter = meter?.createCounter("queuert.job.attempt.expired");
-  const jobAttemptExtendedCounter = meter?.createCounter("queuert.job.attempt.extended");
+  const jobAttemptLostCounter = meter?.createCounter("queuert.job.attempt.lost");
   const jobAttemptFailedCounter = meter?.createCounter("queuert.job.attempt.failed");
   const jobAttemptCompletedCounter = meter?.createCounter("queuert.job.attempt.completed");
-  const jobAttemptAlreadyCompletedCounter = meter?.createCounter(
-    "queuert.job.attempt.already_completed",
-  );
   const jobCompletedCounter = meter?.createCounter("queuert.job.completed");
   const jobAttemptReclaimedCounter = meter?.createCounter("queuert.job.attempt.reclaimed");
 
@@ -188,26 +181,8 @@ export const createOtelObservabilityAdapter = async ({
         "queuert.chain.type": chainTypeName,
       });
     },
-    jobAttemptTakenByAnotherWorker: ({ typeName, chainTypeName }) => {
-      jobAttemptTakenByAnotherWorkerCounter?.add(1, {
-        "queuert.job.type": typeName,
-        "queuert.chain.type": chainTypeName,
-      });
-    },
-    jobAttemptAlreadyCompleted: ({ typeName, chainTypeName }) => {
-      jobAttemptAlreadyCompletedCounter?.add(1, {
-        "queuert.job.type": typeName,
-        "queuert.chain.type": chainTypeName,
-      });
-    },
-    jobAttemptExpired: ({ typeName, chainTypeName }) => {
-      jobAttemptExpiredCounter?.add(1, {
-        "queuert.job.type": typeName,
-        "queuert.chain.type": chainTypeName,
-      });
-    },
-    jobAttemptExtended: ({ typeName, chainTypeName }) => {
-      jobAttemptExtendedCounter?.add(1, {
+    jobAttemptLost: ({ typeName, chainTypeName }) => {
+      jobAttemptLostCounter?.add(1, {
         "queuert.job.type": typeName,
         "queuert.chain.type": chainTypeName,
       });

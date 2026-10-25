@@ -146,12 +146,7 @@ export type ObservabilityAdapter = {
 
   // job attempt
   jobAttemptStarted: (data: JobProcessingData & WorkerBasicData) => void;
-  jobAttemptTakenByAnotherWorker: (data: JobAttemptData & WorkerBasicData) => void;
-  jobAttemptAlreadyCompleted: (
-    data: JobProcessingData & WorkerBasicData & { completedBy: string | null },
-  ) => void;
-  jobAttemptExpired: (data: JobAttemptData & WorkerBasicData) => void;
-  jobAttemptExtended: (data: JobAttemptData & WorkerBasicData) => void;
+  jobAttemptLost: (data: JobAttemptData & WorkerBasicData) => void;
   jobAttemptFailed: (data: JobProcessingData & WorkerBasicData & { error: unknown }) => void;
   jobAttemptCompleted: (data: JobCompletionData & WorkerBasicData) => void;
   jobAttemptReclaimed: (data: JobAttemptData & WorkerBasicData) => void;

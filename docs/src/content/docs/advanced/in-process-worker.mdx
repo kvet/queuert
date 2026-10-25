@@ -97,7 +97,7 @@ When idle slots remain in the main loop:
 1. Find a `running` job of a registered type whose `attemptUntil` has passed (the exact selection is adapter-specific — e.g. PostgreSQL picks a random registered type first, then the oldest expired job within it)
 2. Transition job in a single autocommit statement: `running` → `pending`, clear `attemptAt`, `attemptBy`, and `attemptUntil`, and stamp `lastAttemptAt` and `lastAttemptError` (`JobAttemptExpiredError: Job attempt expired before the holding worker extended it`)
 3. Emit `jobAttemptReclaimed` observability event
-4. Notify via `jobScheduled` (workers wake up) and `jobAttemptLost` (original worker aborts)
+4. Notify via `notifyJobScheduled` (workers wake up) and `notifyJobAttemptLost` (original worker aborts)
 
 **Design decisions:**
 

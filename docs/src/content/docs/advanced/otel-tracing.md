@@ -183,7 +183,7 @@ PRODUCER create chain.process-user [0ms] ─────────────
 
 ## Span Status
 
-The attempt span is set to `OK` when the attempt's `complete` committed and to `ERROR` (with the exception recorded) when it fails — the handler threw before a `complete` committed, returned without a committed `complete`, or lost the job to another worker. A handler that throws after its `complete` committed still ends the span as `OK`, because the outcome stands.
+The attempt span is set to `OK` when the attempt's `complete` committed and to `ERROR` (with the exception recorded) when it fails — the handler threw before a `complete` committed, returned without a committed `complete`, or lost the attempt. A handler that throws after its `complete` committed still ends the span as `OK`, because the outcome stands.
 
 Deduplicated chain creation stays `UNSET` — see [Deduplication](#deduplication).
 
