@@ -1,11 +1,14 @@
 import * as fs from "node:fs";
+import * as os from "node:os";
 import * as path from "node:path";
 
 import Docker from "dockerode";
 import * as lockfile from "proper-lockfile";
 import { type StartedTestContainer } from "testcontainers";
 
-const LOCKS_DIR = path.join(import.meta.dirname, "../node_modules/.locks");
+// Container names are machine-wide, so the lock must be too: a per-checkout lock lets parallel
+// worktrees race to create the same container and remove the one another run is using.
+const LOCKS_DIR = path.join(os.tmpdir(), "queuert-testcontainers-locks");
 
 const ensureLocksDir = (): void => {
   if (!fs.existsSync(LOCKS_DIR)) {

@@ -37,7 +37,7 @@ describe("NATS Notify Adapter Conformance - Custom Subject Prefix", () => {
 
         const notifyAdapter = await createNatsNotifyAdapter({
           nc,
-          subjectPrefix: "myapp.notifications",
+          subjectPrefix: `myapp.notifications.${crypto.randomUUID()}`,
         });
 
         await use(notifyAdapter);

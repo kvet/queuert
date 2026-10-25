@@ -19,12 +19,12 @@ it("should work end-to-end with NATS notify adapter", async ({ natsConnectionOpt
   const nc = await connect(natsConnectionOptions);
 
   const js = nc.jetstream();
-  const kv = await js.views.kv("queuert_e2e_test", { ttl: 60_000 });
+  const kv = await js.views.kv(`queuert_e2e_test_${crypto.randomUUID()}`, { ttl: 60_000 });
 
   const notifyAdapter = await createNatsNotifyAdapter({
     nc,
     kv,
-    subjectPrefix: "queuert.e2e",
+    subjectPrefix: `queuert.e2e.${crypto.randomUUID()}`,
   });
 
   const stateAdapter = await createInProcessStateAdapter();
@@ -86,7 +86,7 @@ it("should work end-to-end without JetStream KV", async ({ natsConnectionOptions
 
   const notifyAdapter = await createNatsNotifyAdapter({
     nc,
-    subjectPrefix: "queuert.e2e.nokv",
+    subjectPrefix: `queuert.e2e.nokv.${crypto.randomUUID()}`,
   });
 
   const stateAdapter = await createInProcessStateAdapter();
