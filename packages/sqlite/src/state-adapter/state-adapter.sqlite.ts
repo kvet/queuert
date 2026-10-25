@@ -1400,11 +1400,11 @@ WHERE (id IN (SELECT value FROM json_each(?)) AND chain_index = 0)
       });
     },
 
-    startJobAttempt: async ({ txCtx, timeoutMsByTypeName, workerId }) => {
+    startJobAttempts: async ({ txCtx, timeoutMsByTypeName, workerId, limit }) => {
       const timeoutsJson = JSON.stringify(timeoutMsByTypeName);
-      const [result] = await executeTypedSql({
+      const results = await executeTypedSql({
         txCtx,
-        sql: templateCache.getOrCompute("startJobAttempt", () =>
+        sql: templateCache.getOrCompute("startJobAttempts", () =>
           applyTemplate(
             sql(
               `
@@ -1416,35 +1416,34 @@ SET status = 'running',
   attempt_until = datetime('now', 'subsec', '+' || ((
     SELECT t.value FROM json_each(?) AS t WHERE t.key = {{table_prefix}}job.type_name
   ) / 1000.0) || ' seconds')
-WHERE id = (
+WHERE id IN (
   SELECT id
   FROM {{table_prefix}}job INDEXED BY {{table_prefix}}job_pending_idx
   WHERE type_name IN (SELECT key FROM json_each(?))
     AND status = 'pending'
     AND scheduled_at <= datetime('now', 'subsec')
   ORDER BY scheduled_at ASC
-  LIMIT 1
+  LIMIT ?
 )
 RETURNING *, ${chainColumnsReturning("{{table_prefix}}job")}, EXISTS (
   SELECT 1 FROM {{table_prefix}}job_blocker jb WHERE jb.job_id = {{table_prefix}}job.id
 ) AS has_blockers
 `,
               {
-                id: "startJobAttempt",
-                params: [t.string(), t.string(), t.string()],
+                id: "startJobAttempts",
+                params: [t.string(), t.string(), t.string(), t.number()],
                 columns: { ...dbJobColumns, ...dbChainColumns, has_blockers: t.number() },
               },
             ),
           ),
         ),
-        params: [workerId, timeoutsJson, timeoutsJson],
+        params: [workerId, timeoutsJson, timeoutsJson, limit],
       });
 
-      if (!result) return undefined;
-      return {
+      return results.map((result) => ({
         ...mapDbJobRowToStateJob(result),
         hasBlockers: result.has_blockers === 1,
-      };
+      }));
     },
     getStartAttemptDelayMs: async ({ txCtx, typeNames }) => {
       const [result] = await executeTypedSql({
@@ -1502,10 +1501,16 @@ RETURNING *, ${chainColumnsReturning("{{table_prefix}}job")}
 
       return job ? mapDbJobRowToStateJob(job) : undefined;
     },
-    reclaimExpiredJobAttempt: async ({ txCtx, typeNames, ignoredJobIds, lastAttemptError }) => {
-      const [job] = await executeTypedSql({
+    reclaimExpiredJobAttempts: async ({
+      txCtx,
+      typeNames,
+      ignoredJobIds,
+      lastAttemptError,
+      limit,
+    }) => {
+      const jobs = await executeTypedSql({
         txCtx,
-        sql: templateCache.getOrCompute("reclaimExpiredJobAttempt", () =>
+        sql: templateCache.getOrCompute("reclaimExpiredJobAttempts", () =>
           applyTemplate(
             sql(
               `
@@ -1516,7 +1521,7 @@ SET status = 'pending',
   attempt_at = NULL,
   attempt_by = NULL,
   attempt_until = NULL
-WHERE id = (
+WHERE id IN (
   SELECT id
   FROM {{table_prefix}}job INDEXED BY {{table_prefix}}job_running_idx
   WHERE status = 'running'
@@ -1525,13 +1530,13 @@ WHERE id = (
     AND type_name IN (SELECT value FROM json_each(?))
     AND id NOT IN (SELECT value FROM json_each(?))
   ORDER BY attempt_until ASC
-  LIMIT 1
+  LIMIT ?
 )
 RETURNING *, ${chainColumnsReturning("{{table_prefix}}job")}
 `,
               {
-                id: "reclaimExpiredJobAttempt",
-                params: [t.string(), t.string(), t.string()],
+                id: "reclaimExpiredJobAttempts",
+                params: [t.string(), t.string(), t.string(), t.number()],
                 columns: { ...dbJobColumns, ...dbChainColumns },
               },
             ),
@@ -1541,9 +1546,10 @@ RETURNING *, ${chainColumnsReturning("{{table_prefix}}job")}
           JSON.stringify(lastAttemptError),
           JSON.stringify(typeNames),
           JSON.stringify(ignoredJobIds ?? []),
+          limit,
         ],
       });
-      return job ? mapDbJobRowToStateJob(job) : undefined;
+      return jobs.map(mapDbJobRowToStateJob);
     },
     addJobsBlockers: async ({ txCtx, jobBlockers }) => {
       if (jobBlockers.length === 0) return [];

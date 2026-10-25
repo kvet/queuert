@@ -7,6 +7,7 @@ import { JobAlreadyCompletedError, JobTakenByAnotherWorkerError } from "../error
 import { createInProcessWorker } from "../in-process-worker.js";
 import { createProcessors } from "../job-type-processors/create-job-type-processors.js";
 import { defineJobTypes } from "../job-types/define-job-types.js";
+import { createSpyStateAdapter } from "../state-adapter/state-adapter.spy.spec-helper.js";
 import { type TestSuiteContext } from "./spec-context.spec-helper.js";
 
 export const attemptReclaimerTestSuite = ({ it }: { it: TestAPI<TestSuiteContext> }): void => {
@@ -621,5 +622,69 @@ export const attemptReclaimerTestSuite = ({ it }: { it: TestAPI<TestSuiteContext
         await client.awaitChain(chain, completionOptions);
       });
     });
+  });
+
+  it("reclaims as many expired attempts as it has idle slots in a single call", async ({
+    stateAdapter,
+    notifyAdapter,
+    withTransaction,
+    withWorkers,
+    observabilityAdapter,
+    log,
+  }) => {
+    const jobTypes = defineJobTypes<{
+      test: { entry: true; input: null; output: null };
+    }>();
+    const spyStateAdapter = createSpyStateAdapter(stateAdapter);
+    const client = await createClient({
+      stateAdapter: spyStateAdapter,
+      notifyAdapter,
+      observabilityAdapter,
+      log,
+      jobTypes,
+    });
+
+    const expiredCount = 3;
+    const chains = await withTransaction(async (txCtx, transactionHooks) =>
+      Promise.all(
+        Array.from({ length: expiredCount }, async () =>
+          client.createChain({ ...txCtx, transactionHooks, typeName: "test", input: null }),
+        ),
+      ),
+    );
+    await stateAdapter.startJobAttempts({
+      workerId: "crashed-worker",
+      timeoutMsByTypeName: { test: 1 },
+      limit: expiredCount,
+    });
+    await sleep(10);
+
+    const worker = await createInProcessWorker({
+      client,
+      concurrency: expiredCount + 1,
+      processors: createProcessors({
+        client,
+        jobTypes,
+        processors: {
+          test: {
+            attemptHandler: async ({ job, complete }) => {
+              expect(job.attempt).toBe(2);
+              return withTransaction(async (txCtx, transactionHooks) =>
+                complete({ ...txCtx, transactionHooks, output: null }),
+              );
+            },
+          },
+        },
+      }),
+    });
+
+    await withWorkers([await worker.start()], async () => {
+      await Promise.all(chains.map(async (chain) => client.awaitChain(chain, completionOptions)));
+    });
+
+    const [firstReclaim] = spyStateAdapter.calls.filter(
+      (call) => call.name === "reclaimExpiredJobAttempts",
+    );
+    expect(firstReclaim.result).toHaveLength(expiredCount);
   });
 };

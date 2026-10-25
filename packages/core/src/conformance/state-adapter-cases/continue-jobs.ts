@@ -146,10 +146,11 @@ export const continueJobsGroup: ConformanceGroup<StateConformanceFixture> = {
         );
 
         await stateAdapter.withTransaction(async (txCtx) =>
-          stateAdapter.startJobAttempt({
+          stateAdapter.startJobAttempts({
             txCtx,
             workerId: "worker-1",
             timeoutMsByTypeName: { head: 30_000 },
+            limit: 1,
           }),
         );
 
@@ -637,11 +638,12 @@ export const continueJobsGroup: ConformanceGroup<StateConformanceFixture> = {
             ],
           }),
         );
-        const job = await stateAdapter.withTransaction(async (txCtx) =>
-          stateAdapter.startJobAttempt({
+        const [job] = await stateAdapter.withTransaction(async (txCtx) =>
+          stateAdapter.startJobAttempts({
             txCtx,
             workerId: "worker-1",
             timeoutMsByTypeName: { "continue-fence-match": 30_000 },
+            limit: 1,
           }),
         );
 
@@ -653,8 +655,8 @@ export const continueJobsGroup: ConformanceGroup<StateConformanceFixture> = {
                 id: stateAdapter.config.generateId(),
                 typeName: "continue-fence-match:next",
                 input: null,
-                continueFromId: job!.id,
-                fence: { attempt: job!.attempt, workerId: "worker-1" },
+                continueFromId: job.id,
+                fence: { attempt: job.attempt, workerId: "worker-1" },
               },
             ],
           }),
@@ -680,11 +682,12 @@ export const continueJobsGroup: ConformanceGroup<StateConformanceFixture> = {
             ],
           }),
         );
-        const job = await stateAdapter.withTransaction(async (txCtx) =>
-          stateAdapter.startJobAttempt({
+        const [job] = await stateAdapter.withTransaction(async (txCtx) =>
+          stateAdapter.startJobAttempts({
             txCtx,
             workerId: "worker-1",
             timeoutMsByTypeName: { "continue-fence-other": 30_000 },
+            limit: 1,
           }),
         );
         const [before] = await stateAdapter.getJobs({ jobIds: [createdChain.head.id] });
@@ -697,8 +700,8 @@ export const continueJobsGroup: ConformanceGroup<StateConformanceFixture> = {
                 id: stateAdapter.config.generateId(),
                 typeName: "continue-fence-other:next",
                 input: null,
-                continueFromId: job!.id,
-                fence: { attempt: job!.attempt, workerId: "worker-2" },
+                continueFromId: job.id,
+                fence: { attempt: job.attempt, workerId: "worker-2" },
               },
             ],
           }),
@@ -730,21 +733,23 @@ export const continueJobsGroup: ConformanceGroup<StateConformanceFixture> = {
             ],
           }),
         );
-        const job = await stateAdapter.withTransaction(async (txCtx) =>
-          stateAdapter.startJobAttempt({
+        const [job] = await stateAdapter.withTransaction(async (txCtx) =>
+          stateAdapter.startJobAttempts({
             txCtx,
             workerId: "worker-1",
             timeoutMsByTypeName: { "continue-fence-replaced": 30_000 },
+            limit: 1,
           }),
         );
         await stateAdapter.withTransaction(async (txCtx) =>
-          stateAdapter.rescheduleJobs({ txCtx, jobs: [{ jobId: job!.id }] }),
+          stateAdapter.rescheduleJobs({ txCtx, jobs: [{ jobId: job.id }] }),
         );
         await stateAdapter.withTransaction(async (txCtx) =>
-          stateAdapter.startJobAttempt({
+          stateAdapter.startJobAttempts({
             txCtx,
             workerId: "worker-1",
             timeoutMsByTypeName: { "continue-fence-replaced": 30_000 },
+            limit: 1,
           }),
         );
         const [before] = await stateAdapter.getJobs({ jobIds: [createdChain.head.id] });
@@ -757,8 +762,8 @@ export const continueJobsGroup: ConformanceGroup<StateConformanceFixture> = {
                 id: stateAdapter.config.generateId(),
                 typeName: "continue-fence-replaced:next",
                 input: null,
-                continueFromId: job!.id,
-                fence: { attempt: job!.attempt, workerId: "worker-1" },
+                continueFromId: job.id,
+                fence: { attempt: job.attempt, workerId: "worker-1" },
               },
             ],
           }),

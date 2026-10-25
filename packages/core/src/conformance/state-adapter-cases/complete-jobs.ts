@@ -21,10 +21,11 @@ export const completeJobsGroup: ConformanceGroup<StateConformanceFixture> = {
         );
 
         await stateAdapter.withTransaction(async (txCtx) =>
-          stateAdapter.startJobAttempt({
+          stateAdapter.startJobAttempts({
             txCtx,
             workerId: "worker-1",
             timeoutMsByTypeName: { "complete-test": 30_000 },
+            limit: 1,
           }),
         );
 
@@ -210,10 +211,11 @@ export const completeJobsGroup: ConformanceGroup<StateConformanceFixture> = {
         );
 
         await stateAdapter.withTransaction(async (txCtx) =>
-          stateAdapter.startJobAttempt({
+          stateAdapter.startJobAttempts({
             txCtx,
             workerId: "worker-1",
             timeoutMsByTypeName: { "double-complete-test": 30_000 },
+            limit: 1,
           }),
         );
 
@@ -272,10 +274,11 @@ export const completeJobsGroup: ConformanceGroup<StateConformanceFixture> = {
         );
 
         await stateAdapter.withTransaction(async (txCtx) =>
-          stateAdapter.startJobAttempt({
+          stateAdapter.startJobAttempts({
             txCtx,
             workerId: "worker-1",
             timeoutMsByTypeName: { "complete-clears-error": 30_000 },
+            limit: 1,
           }),
         );
 
@@ -294,10 +297,11 @@ export const completeJobsGroup: ConformanceGroup<StateConformanceFixture> = {
         expect(failed!.lastAttemptError).toBe("first attempt failed");
 
         await stateAdapter.withTransaction(async (txCtx) =>
-          stateAdapter.startJobAttempt({
+          stateAdapter.startJobAttempts({
             txCtx,
             workerId: "worker-1",
             timeoutMsByTypeName: { "complete-clears-error": 30_000 },
+            limit: 1,
           }),
         );
 
@@ -428,11 +432,12 @@ export const completeJobsGroup: ConformanceGroup<StateConformanceFixture> = {
             ],
           }),
         );
-        const job = await stateAdapter.withTransaction(async (txCtx) =>
-          stateAdapter.startJobAttempt({
+        const [job] = await stateAdapter.withTransaction(async (txCtx) =>
+          stateAdapter.startJobAttempts({
             txCtx,
             workerId: "worker-1",
             timeoutMsByTypeName: { "complete-fence-other": 30_000 },
+            limit: 1,
           }),
         );
         const jobIds = [continued!.continuation.id, headChain.head.id];
@@ -443,9 +448,9 @@ export const completeJobsGroup: ConformanceGroup<StateConformanceFixture> = {
             txCtx,
             jobs: [
               {
-                jobId: job!.id,
+                jobId: job.id,
                 output: null,
-                fence: { attempt: job!.attempt, workerId: "worker-2" },
+                fence: { attempt: job.attempt, workerId: "worker-2" },
               },
             ],
           }),
@@ -470,21 +475,23 @@ export const completeJobsGroup: ConformanceGroup<StateConformanceFixture> = {
             ],
           }),
         );
-        const job = await stateAdapter.withTransaction(async (txCtx) =>
-          stateAdapter.startJobAttempt({
+        const [job] = await stateAdapter.withTransaction(async (txCtx) =>
+          stateAdapter.startJobAttempts({
             txCtx,
             workerId: "worker-1",
             timeoutMsByTypeName: { "complete-fence-replaced": 30_000 },
+            limit: 1,
           }),
         );
         await stateAdapter.withTransaction(async (txCtx) =>
-          stateAdapter.rescheduleJobs({ txCtx, jobs: [{ jobId: job!.id }] }),
+          stateAdapter.rescheduleJobs({ txCtx, jobs: [{ jobId: job.id }] }),
         );
         await stateAdapter.withTransaction(async (txCtx) =>
-          stateAdapter.startJobAttempt({
+          stateAdapter.startJobAttempts({
             txCtx,
             workerId: "worker-1",
             timeoutMsByTypeName: { "complete-fence-replaced": 30_000 },
+            limit: 1,
           }),
         );
         const [before] = await stateAdapter.getJobs({ jobIds: [createdChain.head.id] });
@@ -494,9 +501,9 @@ export const completeJobsGroup: ConformanceGroup<StateConformanceFixture> = {
             txCtx,
             jobs: [
               {
-                jobId: job!.id,
+                jobId: job.id,
                 output: null,
-                fence: { attempt: job!.attempt, workerId: "worker-1" },
+                fence: { attempt: job.attempt, workerId: "worker-1" },
               },
             ],
           }),

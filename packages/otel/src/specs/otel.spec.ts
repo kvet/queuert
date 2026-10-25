@@ -885,12 +885,12 @@ describe("Metrics", () => {
     let errorThrown = false;
     const erroringStateAdapter: typeof stateAdapter = {
       ...stateAdapter,
-      startJobAttempt: async (args) => {
+      startJobAttempts: async (args) => {
         if (!errorThrown) {
           errorThrown = true;
           throw new Error("connection error");
         }
-        return stateAdapter.startJobAttempt(args);
+        return stateAdapter.startJobAttempts(args);
       },
     };
 

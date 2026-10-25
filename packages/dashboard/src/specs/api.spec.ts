@@ -54,9 +54,10 @@ const startAttempt = async (
   stateAdapter: Awaited<ReturnType<typeof createInProcessStateAdapter>>,
   typeName: string,
 ) =>
-  stateAdapter.startJobAttempt({
+  stateAdapter.startJobAttempts({
     workerId: "worker-1",
     timeoutMsByTypeName: { [typeName]: 60_000 },
+    limit: 1,
   });
 
 const completeJob = async (
@@ -801,9 +802,10 @@ describe("Dashboard API", () => {
       const { request, stateAdapter } = await createTestDashboard();
       const job = await createJob(stateAdapter, "test-type", null);
 
-      await stateAdapter.startJobAttempt({
+      await stateAdapter.startJobAttempts({
         workerId: "test-worker",
         timeoutMsByTypeName: { "test-type": 60_000 },
+        limit: 1,
       });
 
       const res = await request(`/api/jobs/${job.id}/reschedule`, { method: "POST" });

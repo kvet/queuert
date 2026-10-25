@@ -98,18 +98,19 @@ export const countByChainTypeNamesGroup: ConformanceGroup<StateConformanceFixtur
           }),
         );
 
-        const acquired = await stateAdapter.withTransaction(async (txCtx) =>
-          stateAdapter.startJobAttempt({
+        const [acquired] = await stateAdapter.withTransaction(async (txCtx) =>
+          stateAdapter.startJobAttempts({
             txCtx,
             timeoutMsByTypeName: { "chain-done": 30_000 },
             workerId: "w1",
+            limit: 1,
           }),
         );
 
         await stateAdapter.withTransaction(async (txCtx) =>
           stateAdapter.completeJobs({
             txCtx,
-            jobs: [{ jobId: acquired!.id, output: null }],
+            jobs: [{ jobId: acquired.id, output: null }],
           }),
         );
 

@@ -971,32 +971,41 @@ export const createInProcessStateAdapter = async ({
         return result;
       }),
 
-    startJobAttempt: async ({ txCtx, timeoutMsByTypeName, workerId }) =>
+    startJobAttempts: async ({ txCtx, timeoutMsByTypeName, workerId, limit }) =>
       withWriteLock(txCtx, () => {
         const journal = txCtx?.journal;
         const now = new Date();
         const nowMs = now.getTime();
+        const typeNames = Object.keys(timeoutMsByTypeName);
+        const acquired: (StateJob & { hasBlockers: boolean })[] = [];
 
-        let bestJob: DbJob | undefined;
-        for (const typeName of Object.keys(timeoutMsByTypeName)) {
-          const candidate = idx.pendingByType.get(typeName)?.first();
-          if (!candidate) continue;
-          if (candidate.scheduledAt.getTime() > nowMs) continue;
-          if (!bestJob || idx.cmpScheduledAt(candidate, bestJob) < 0) bestJob = candidate;
+        while (acquired.length < limit) {
+          let bestJob: DbJob | undefined;
+          for (const typeName of typeNames) {
+            const candidate = idx.pendingByType.get(typeName)?.first();
+            if (!candidate) continue;
+            if (candidate.scheduledAt.getTime() > nowMs) continue;
+            if (!bestJob || idx.cmpScheduledAt(candidate, bestJob) < 0) bestJob = candidate;
+          }
+
+          if (!bestJob) break;
+
+          const updatedJob: DbJob = {
+            ...bestJob,
+            status: "running",
+            attempt: bestJob.attempt + 1,
+            attemptAt: now,
+            attemptBy: workerId,
+            attemptUntil: new Date(nowMs + timeoutMsByTypeName[bestJob.typeName]),
+          };
+          idx.writeJob(journal, bestJob, updatedJob);
+          acquired.push({
+            ...jobView(updatedJob),
+            hasBlockers: idx.jobBlockers.has(updatedJob.id),
+          });
         }
 
-        if (!bestJob) return undefined;
-
-        const updatedJob: DbJob = {
-          ...bestJob,
-          status: "running",
-          attempt: bestJob.attempt + 1,
-          attemptAt: now,
-          attemptBy: workerId,
-          attemptUntil: new Date(nowMs + timeoutMsByTypeName[bestJob.typeName]),
-        };
-        idx.writeJob(journal, bestJob, updatedJob);
-        return { ...jobView(updatedJob), hasBlockers: idx.jobBlockers.has(updatedJob.id) };
+        return acquired;
       }),
 
     getStartAttemptDelayMs: async ({ txCtx, typeNames }) =>
@@ -1029,42 +1038,47 @@ export const createInProcessStateAdapter = async ({
         return jobView(updatedJob);
       }),
 
-    reclaimExpiredJobAttempt: async ({ txCtx, typeNames, ignoredJobIds, lastAttemptError }) =>
+    reclaimExpiredJobAttempts: async ({
+      txCtx,
+      typeNames,
+      ignoredJobIds,
+      lastAttemptError,
+      limit,
+    }) =>
       withWriteLock(txCtx, () => {
         const journal = txCtx?.journal;
         const now = Date.now();
         const ignoredSet = ignoredJobIds ? new Set(ignoredJobIds) : undefined;
 
-        let candidateJob: DbJob | undefined;
+        const candidateJobs: DbJob[] = [];
         for (const typeName of typeNames) {
           const set = idx.runningByType.get(typeName);
           if (!set) continue;
-          for (let i = 0; i < set.size; i++) {
+          let taken = 0;
+          for (let i = 0; i < set.size && taken < limit; i++) {
             const job = set.at(i)!;
             if (!job.attemptUntil) break;
-            const attemptUntil = job.attemptUntil.getTime();
-            if (attemptUntil > now) break;
+            if (job.attemptUntil.getTime() > now) break;
             if (ignoredSet?.has(job.id)) continue;
-            if (!candidateJob || attemptUntil < candidateJob.attemptUntil!.getTime()) {
-              candidateJob = job;
-            }
-            break;
+            candidateJobs.push(job);
+            taken++;
           }
         }
+        candidateJobs.sort((a, b) => a.attemptUntil!.getTime() - b.attemptUntil!.getTime());
 
-        if (!candidateJob) return undefined;
-
-        const updatedJob: DbJob = {
-          ...candidateJob,
-          status: "pending",
-          attemptBy: null,
-          attemptUntil: null,
-          attemptAt: null,
-          lastAttemptAt: new Date(now),
-          lastAttemptError,
-        };
-        idx.writeJob(journal, candidateJob, updatedJob);
-        return jobView(updatedJob);
+        return candidateJobs.slice(0, limit).map((candidateJob) => {
+          const updatedJob: DbJob = {
+            ...candidateJob,
+            status: "pending",
+            attemptBy: null,
+            attemptUntil: null,
+            attemptAt: null,
+            lastAttemptAt: new Date(now),
+            lastAttemptError,
+          };
+          idx.writeJob(journal, candidateJob, updatedJob);
+          return jobView(updatedJob);
+        });
       }),
 
     addJobsBlockers: async ({ txCtx, jobBlockers: jobBlockerInputs }) =>

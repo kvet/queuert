@@ -30,7 +30,6 @@ import {
 } from "./job-type-processors/merge-job-type-processors.js";
 import { type BaseJobTypeDefinitions } from "./job-types/job-type.js";
 import { type NotifyAdapter } from "./notify-adapter/notify-adapter.js";
-import { type Helpers } from "./setup-helpers.js";
 import { type StateAdapter, type StateJob } from "./state-adapter/state-adapter.js";
 
 /** Per-processor runtime stamp carrying the middleware tuple of the originating slice. @internal */
@@ -98,49 +97,6 @@ const waitForNextJob = async ({
   } finally {
     disposeSlotAvailable();
   }
-};
-
-const performJob = async ({
-  helpers,
-  timeoutMsByTypeName,
-  processors,
-  defaultBackoffConfig,
-  defaultAttemptConfig,
-  workerId,
-  stopSignal,
-}: {
-  helpers: Helpers;
-  timeoutMsByTypeName: Record<string, number>;
-  processors: Record<string, StampedProcessor>;
-  defaultBackoffConfig: BackoffConfig;
-  defaultAttemptConfig: AttemptConfig;
-  workerId: string;
-  stopSignal: AbortSignal;
-}): Promise<{ stateJob: null } | { stateJob: StateJob; execute: () => Promise<void> }> => {
-  const stateJob = await helpers.stateAdapter.startJobAttempt({ timeoutMsByTypeName, workerId });
-  if (!stateJob) {
-    return { stateJob: null };
-  }
-
-  const jobTypeProcessor = processors[stateJob.typeName];
-  if (!jobTypeProcessor) {
-    throw new Error(`No attempt handler registered for job type "${stateJob.typeName}"`);
-  }
-
-  return {
-    stateJob,
-    execute: async () =>
-      runAttempt({
-        helpers,
-        attemptHandler: jobTypeProcessor.attemptHandler,
-        stateJob,
-        backoffConfig: jobTypeProcessor.backoffConfig ?? defaultBackoffConfig,
-        attemptConfig: jobTypeProcessor.attemptConfig ?? defaultAttemptConfig,
-        workerId,
-        attemptMiddleware: jobTypeProcessor[processorAttemptMiddlewareSymbol],
-        stopSignal,
-      }),
-  };
 };
 
 /** Merged-processor view of a scalar-or-array input. @internal */
@@ -405,36 +361,51 @@ export const createInProcessWorker = async <
       const executor = createParallelExecutor(concurrencyValue);
       const jobIdsInProgress = new Set<string>();
 
+      const dispatchJob = (stateJob: StateJob & { hasBlockers: boolean }) => {
+        jobIdsInProgress.add(stateJob.id);
+        void executor.add(async () => {
+          observabilityHelper.jobTypeProcessingChange(1, stateJob, workerId);
+          observabilityHelper.jobTypeIdleChange(-1, workerId, typeNames);
+          try {
+            const jobTypeProcessor = processors[stateJob.typeName];
+            if (!jobTypeProcessor) {
+              throw new Error(`No attempt handler registered for job type "${stateJob.typeName}"`);
+            }
+            await runAttempt({
+              helpers,
+              attemptHandler: jobTypeProcessor.attemptHandler,
+              stateJob,
+              backoffConfig: jobTypeProcessor.backoffConfig ?? defaultBackoffConfig,
+              attemptConfig: jobTypeProcessor.attemptConfig ?? defaultAttemptConfig,
+              workerId,
+              attemptMiddleware: jobTypeProcessor[processorAttemptMiddlewareSymbol],
+              stopSignal: stopController.signal,
+            });
+          } catch (error) {
+            observabilityHelper.workerError({ workerId }, error);
+          } finally {
+            jobIdsInProgress.delete(stateJob.id);
+            observabilityHelper.jobTypeIdleChange(1, workerId, typeNames);
+            observabilityHelper.jobTypeProcessingChange(-1, stateJob, workerId);
+          }
+        });
+      };
+
       const runWorkerIteration = async () => {
         try {
           while (executor.idleSlots() > 0) {
-            const result = await performJob({
-              helpers,
+            const limit = executor.idleSlots();
+            const stateJobs = await stateAdapter.startJobAttempts({
               timeoutMsByTypeName,
-              processors,
-              defaultBackoffConfig,
-              defaultAttemptConfig,
               workerId,
-              stopSignal: stopController.signal,
+              limit,
             });
-
-            if (!result.stateJob) {
+            for (const stateJob of stateJobs) {
+              dispatchJob(stateJob);
+            }
+            if (stateJobs.length < limit) {
               break;
             }
-            jobIdsInProgress.add(result.stateJob.id);
-            void executor.add(async () => {
-              observabilityHelper.jobTypeProcessingChange(1, result.stateJob, workerId);
-              observabilityHelper.jobTypeIdleChange(-1, workerId, typeNames);
-              try {
-                await result.execute();
-              } catch (error) {
-                observabilityHelper.workerError({ workerId }, error);
-              } finally {
-                jobIdsInProgress.delete(result.stateJob.id);
-                observabilityHelper.jobTypeIdleChange(1, workerId, typeNames);
-                observabilityHelper.jobTypeProcessingChange(-1, result.stateJob, workerId);
-              }
-            });
           }
 
           if (stopController.signal.aborted) {
@@ -442,7 +413,7 @@ export const createInProcessWorker = async <
           }
 
           if (executor.idleSlots() > 0) {
-            const reclaimed = await stateAdapter.reclaimExpiredJobAttempt({
+            const reclaimedJobs = await stateAdapter.reclaimExpiredJobAttempts({
               typeNames,
               ignoredJobIds: Array.from(jobIdsInProgress),
               lastAttemptError: serializeError(
@@ -451,24 +422,36 @@ export const createInProcessWorker = async <
                   { reclaimedBy: workerId },
                 ),
               ),
+              limit: executor.idleSlots(),
             });
-            if (reclaimed) {
-              observabilityHelper.jobAttemptReclaimed(reclaimed, { workerId });
 
-              try {
-                await notifyAdapter.provideWakeHint(reclaimed.typeName, 1);
-                await notifyAdapter.notifyJobScheduled(reclaimed.typeName);
-              } catch {}
-              try {
-                await notifyAdapter.notifyJobAttemptLost(reclaimed.id);
-              } catch {}
+            const reclaimedCountByTypeName = new Map<string, number>();
+            for (const reclaimed of reclaimedJobs) {
+              observabilityHelper.jobAttemptReclaimed(reclaimed, { workerId });
+              reclaimedCountByTypeName.set(
+                reclaimed.typeName,
+                (reclaimedCountByTypeName.get(reclaimed.typeName) ?? 0) + 1,
+              );
             }
+            await Promise.all([
+              ...Array.from(reclaimedCountByTypeName, async ([typeName, count]) => {
+                try {
+                  await notifyAdapter.provideWakeHint(typeName, count);
+                  await notifyAdapter.notifyJobScheduled(typeName);
+                } catch {}
+              }),
+              ...reclaimedJobs.map(async (reclaimed) => {
+                try {
+                  await notifyAdapter.notifyJobAttemptLost(reclaimed.id);
+                } catch {}
+              }),
+            ]);
 
             if (stopController.signal.aborted) {
               return;
             }
 
-            if (reclaimed) {
+            if (reclaimedJobs.length > 0) {
               return;
             }
           }

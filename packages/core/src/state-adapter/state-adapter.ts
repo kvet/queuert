@@ -208,18 +208,22 @@ export type StateAdapter<TTxContext extends BaseTxContext, TJobId extends string
   ) => Promise<(StateChain | StateBlockedJob[] | undefined)[]>;
 
   /**
-   * Atomically selects a pending job of one of the `timeoutMsByTypeName` keys and starts an
-   * attempt: increments `attempt`, sets `attemptBy`, and sets `attemptUntil` to now plus the
-   * acquired type's timeout. Returns it with its chain. Two parallel callers must never receive
+   * Atomically selects up to `limit` (at least 1) due pending jobs of the `timeoutMsByTypeName`
+   * keys and starts an attempt on each: increments `attempt`, sets `attemptBy`, and sets
+   * `attemptUntil` to now plus the job type's timeout. Returns them with their chains, in no
+   * particular order, fewer than `limit` only when no more due jobs are available to this
+   * caller. Which types fill a batch is adapter-specific: the PostgreSQL adapter takes types in
+   * random order and the oldest due jobs within each. Two parallel callers must never receive
    * the same job — locked rows must be skipped, not waited on. `hasBlockers` gates
    * `getJobBlockers`.
    */
-  startJobAttempt: (
+  startJobAttempts: (
     params: {
       timeoutMsByTypeName: Record<string, number>;
       workerId: string;
+      limit: number;
     } & AutocommitTxContextParam<TTxContext>,
-  ) => Promise<(StateJob & { hasBlockers: boolean }) | undefined>;
+  ) => Promise<(StateJob & { hasBlockers: boolean })[]>;
 
   /** Ms until a pending job of these types can be attempted: 0 if due now, null if none. */
   getStartAttemptDelayMs: (
@@ -239,16 +243,21 @@ export type StateAdapter<TTxContext extends BaseTxContext, TJobId extends string
   ) => Promise<StateJob | undefined>;
 
   /**
-   * Releases an expired job attempt back to the pending pool, setting `lastAttemptAt` to now and
-   * `lastAttemptError` to the given error, as a reschedule after a handler error does.
+   * Selects up to `limit` (at least 1) `running` jobs of `typeNames` whose `attemptUntil` has
+   * passed, excluding `ignoredJobIds`, and releases them back to the pending pool, setting
+   * `lastAttemptAt` to now and `lastAttemptError` to the given error, as a reschedule after a
+   * handler error does. Returns the released jobs in no particular order, fewer than `limit`
+   * only when no more expired attempts are available to this caller. Locked rows must be
+   * skipped, not waited on.
    */
-  reclaimExpiredJobAttempt: (
+  reclaimExpiredJobAttempts: (
     params: {
       typeNames: string[];
       ignoredJobIds?: TJobId[];
       lastAttemptError: string;
+      limit: number;
     } & AutocommitTxContextParam<TTxContext>,
-  ) => Promise<StateJob | undefined>;
+  ) => Promise<StateJob[]>;
 
   /**
    * Adds blocker dependencies to jobs, in input order, with one `blockers` entry per

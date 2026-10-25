@@ -9,6 +9,7 @@ import { createInProcessWorker } from "../in-process-worker.js";
 import { createProcessors } from "../job-type-processors/create-job-type-processors.js";
 import { omitProcessors, pickProcessors } from "../job-type-processors/pick-job-type-processors.js";
 import { defineJobTypes } from "../job-types/define-job-types.js";
+import { createSpyStateAdapter } from "../state-adapter/state-adapter.spy.spec-helper.js";
 import { type TestSuiteContext } from "./spec-context.spec-helper.js";
 
 export const workerTestSuite = ({ it }: { it: TestAPI<TestSuiteContext> }): void => {
@@ -777,5 +778,65 @@ export const workerTestSuite = ({ it }: { it: TestAPI<TestSuiteContext> }): void
     // The single slot is busy for ~600ms with two jobs waiting. A delay of 0 for work the
     // worker has nowhere to put would re-query on every loop pass for that whole window.
     expect(startAttemptDelayCalls).toBeLessThanOrEqual(10);
+  });
+
+  it("fills every idle slot with a single acquisition", async ({
+    stateAdapter,
+    notifyAdapter,
+    withTransaction,
+    withWorkers,
+    observabilityAdapter,
+    log,
+  }) => {
+    const jobTypes = defineJobTypes<{
+      test: { entry: true; input: null; output: null };
+    }>();
+    const spyStateAdapter = createSpyStateAdapter(stateAdapter);
+    const client = await createClient({
+      stateAdapter: spyStateAdapter,
+      notifyAdapter,
+      observabilityAdapter,
+      log,
+      jobTypes,
+    });
+
+    const concurrency = 4;
+    let startedCount = 0;
+    const allStarted = Promise.withResolvers<void>();
+    const worker = await createInProcessWorker({
+      client,
+      concurrency,
+      processors: createProcessors({
+        client,
+        jobTypes,
+        processors: {
+          test: {
+            attemptHandler: async ({ complete }) => {
+              if (++startedCount === concurrency) allStarted.resolve();
+              await allStarted.promise;
+              return withTransaction(async (txCtx, transactionHooks) =>
+                complete({ ...txCtx, transactionHooks, output: null }),
+              );
+            },
+          },
+        },
+      }),
+    });
+
+    const chains = await withTransaction(async (txCtx, transactionHooks) =>
+      Promise.all(
+        Array.from({ length: concurrency }, async () =>
+          client.createChain({ ...txCtx, transactionHooks, typeName: "test", input: null }),
+        ),
+      ),
+    );
+
+    await withWorkers([await worker.start()], async () => {
+      await allStarted.promise;
+      expect(spyStateAdapter.calls.filter((call) => call.name === "startJobAttempts")).toHaveLength(
+        1,
+      );
+      await Promise.all(chains.map(async (chain) => client.awaitChain(chain, completionOptions)));
+    });
   });
 };

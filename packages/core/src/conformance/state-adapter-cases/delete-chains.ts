@@ -263,20 +263,15 @@ export const deleteChainsGroup: ConformanceGroup<StateConformanceFixture> = {
           },
         ]);
 
-        const [acquired, acquiredAgain] = await stateAdapter.withTransaction(async (txCtx) => [
-          await stateAdapter.startJobAttempt({
+        const acquired = await stateAdapter.withTransaction(async (txCtx) =>
+          stateAdapter.startJobAttempts({
             txCtx,
             workerId: "worker-1",
             timeoutMsByTypeName: { "delete-repeated:step": 30_000 },
+            limit: 2,
           }),
-          await stateAdapter.startJobAttempt({
-            txCtx,
-            workerId: "worker-1",
-            timeoutMsByTypeName: { "delete-repeated:step": 30_000 },
-          }),
-        ]);
-        expect(acquired?.id).toBe(continuationId);
-        expect(acquiredAgain).toBeUndefined();
+        );
+        expect(acquired.map((job) => job.id)).toEqual([continuationId]);
 
         const results = await stateAdapter.withTransaction(async (txCtx) =>
           stateAdapter.deleteChains({ txCtx, chainIds: [stateChain.id, stateChain.id] }),

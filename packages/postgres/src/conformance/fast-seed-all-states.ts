@@ -292,7 +292,7 @@ export const fastSeedAllStates = async <TTxContext extends BaseTxContext>(
     ["seed:throwaway:running", seedConfig.throwawayRunning * scale],
   );
 
-  // --- Block: Throwaway expired running (attempt_until in the past for reclaimExpiredJobAttempt) ---
+  // --- Block: Throwaway expired running (attempt_until in the past for reclaimExpiredJobAttempts) ---
   await exec(
     `WITH ids AS (SELECT gen_random_uuid() AS id, gs.i FROM generate_series(0, $2 - 1) AS gs(i))
      INSERT INTO ${job} (id, type_name, chain_id, chain_index, input, status, chain_status,

@@ -240,10 +240,11 @@ export const getJobsGroup: ConformanceGroup<StateConformanceFixture> = {
 
         const txPromise = stateAdapter
           .withTransaction(async (txCtx) => {
-            const acquired = await stateAdapter.startJobAttempt({
+            const [acquired] = await stateAdapter.startJobAttempts({
               txCtx,
               workerId: "worker-1",
               timeoutMsByTypeName: { "iso-update": 30_000 },
+              limit: 1,
             });
             expect(acquired?.id).toBe(seedChain.head.id);
             signalTxReady!();
@@ -331,10 +332,11 @@ export const getJobsGroup: ConformanceGroup<StateConformanceFixture> = {
 
         const txPromise = stateAdapter
           .withTransaction(async (txCtx) => {
-            await stateAdapter.startJobAttempt({
+            await stateAdapter.startJobAttempts({
               txCtx,
               workerId: "worker-1",
               timeoutMsByTypeName: { "iso-locked-job": 30_000 },
+              limit: 1,
             });
             signalTxReady!();
             await gate;

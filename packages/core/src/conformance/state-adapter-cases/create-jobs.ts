@@ -328,10 +328,11 @@ export const createJobsGroup: ConformanceGroup<StateConformanceFixture> = {
         );
 
         const step2 = await stateAdapter.withTransaction(async (txCtx) => {
-          await stateAdapter.startJobAttempt({
+          await stateAdapter.startJobAttempts({
             txCtx,
             workerId: "worker-1",
             timeoutMsByTypeName: { step1: 30_000 },
+            limit: 1,
           });
           const [continued] = await stateAdapter.continueJobs({
             txCtx,

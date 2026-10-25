@@ -19,11 +19,11 @@ Workers process jobs in parallel using slots. See `createInProcessWorker` TSDoc 
 
 ### Architecture
 
-<Diagram label="A worker with concurrency 3: the main loop spawns three slots, and each slot acquires and completes its own job in the database">
+<Diagram label="A worker with concurrency 3: the main loop acquires jobs for its idle slots in one batched call and spawns a slot per job, and each slot completes its own job in the database">
   <Flow direction="column">
     <Group title="worker · concurrency = 3">
       <Flow>
-        <Node tone="green" sub={"fills empty slots\nwaits for completions"}>Main loop</Node>
+        <Node tone="green" sub={"acquires a batch for idle slots\nwaits for completions"}>Main loop</Node>
         <Rows spine>
           <Flow>
             <Arrow label="spawn" tone="green" />
@@ -40,17 +40,17 @@ Workers process jobs in parallel using slots. See `createInProcessWorker` TSDoc 
         </Rows>
       </Flow>
     </Group>
-    <Arrow label="each slot: acquire · complete" />
-    <Node sub="FOR UPDATE SKIP LOCKED: each slot claims a different job">Your database</Node>
+    <Arrow label="main loop: acquire batch · each slot: complete" />
+    <Node sub="FOR UPDATE SKIP LOCKED: concurrent batches claim different jobs">Your database</Node>
   </Flow>
 </Diagram>
 
 **How it works:**
 
-1. Main loop spawns slots up to `concurrency`
-2. Each slot acquires a job and processes it independently
-3. When a slot completes, main loop spawns a replacement
-4. Slots compete for jobs via database-level locking (`FOR UPDATE SKIP LOCKED` in PostgreSQL)
+1. Main loop acquires up to the idle slot count of jobs in one `startJobAttempts` call and spawns a slot per job
+2. Each slot processes its job independently
+3. When slots complete, main loop acquires a batch for the freed slots
+4. Workers compete for jobs via database-level locking (`FOR UPDATE SKIP LOCKED` in PostgreSQL)
 
 ## Worker Lifecycle
 
@@ -58,8 +58,8 @@ Workers process jobs in parallel using slots. See `createInProcessWorker` TSDoc 
 
 The worker runs a single coordinating loop:
 
-1. **Fill**: Loop `startJobAttempt` until it returns nothing or all slots are busy. Each call is a single autocommit statement that starts the attempt and sets its `attemptUntil` to now plus the acquired type's `attemptConfig.timeoutMs`
-2. **Reclaim expired attempt**: Reclaim one job with an expired attempt (if any idle slots remain)
+1. **Fill**: Call `startJobAttempts` with the idle slot count as `limit`, start each returned job in its own slot, and repeat until a call returns fewer jobs than its `limit` or all slots are busy. Each call is a single autocommit statement that starts up to `limit` attempts and sets each `attemptUntil` to now plus that job type's `attemptConfig.timeoutMs`, so filling `N` idle slots costs one round-trip, and an idle worker issues one acquisition per wake-up
+2. **Reclaim expired attempts**: Reclaim up to the idle slot count of jobs with an expired attempt (if any idle slots remain); if any were reclaimed, skip the wait and start the next iteration
 3. **Wait**: Listen for notification, poll timeout, or slot completion
 4. **Repeat**
 
@@ -94,15 +94,15 @@ The worker reclaims jobs with expired attempts, making them available for retry.
 
 When idle slots remain in the main loop:
 
-1. Find a `running` job of a registered type whose `attemptUntil` has passed (the exact selection is adapter-specific — e.g. PostgreSQL picks a random registered type first, then the oldest expired job within it)
-2. Transition job in a single autocommit statement: `running` → `pending`, clear `attemptAt`, `attemptBy`, and `attemptUntil`, and stamp `lastAttemptAt` and `lastAttemptError` (`JobAttemptExpiredError: Job attempt expired before the holding worker extended it`)
-3. Emit `jobAttemptReclaimed` observability event
-4. Notify via `notifyJobScheduled` (workers wake up) and `notifyJobAttemptLost` (original worker aborts)
+1. Find up to the idle slot count of `running` jobs of registered types whose `attemptUntil` has passed (the exact selection is adapter-specific — e.g. PostgreSQL takes types in random order and the oldest expired jobs within each)
+2. Transition the jobs in a single autocommit statement: `running` → `pending`, clear `attemptAt`, `attemptBy`, and `attemptUntil`, and stamp `lastAttemptAt` and `lastAttemptError` (`JobAttemptExpiredError: Job attempt expired before the holding worker extended it`)
+3. Emit a `jobAttemptReclaimed` observability event per job
+4. Notify via `provideWakeHint` and `notifyJobScheduled` once per job type, with the type's reclaimed count as the hint (workers wake up), and `notifyJobAttemptLost` per job (original worker aborts)
 
 **Design decisions:**
 
 - **Integrated with main loop**: Runs once per iteration, no separate process needed.
-- **One job per iteration**: Reclaims at most one expired attempt to avoid blocking slot spawning.
+- **Bounded by idle slots**: Reclaims at most as many expired attempts as the worker has idle slots, so one iteration never releases more work than it can pick up itself.
 - **Type-scoped**: Only reclaims expired attempts for job types the worker is registered to handle.
 - **Concurrent-safe**: The reclaim skips rows another transaction holds (`SKIP LOCKED` in PostgreSQL), so it never interferes with a handler transaction that has already written the job in `complete`.
 - **Self-aware**: When running with multiple slots, the worker excludes jobs currently being processed by itself (via `ignoredJobIds`). This prevents a race condition where a worker could reclaim its own in-progress job if the attempt expires before the heartbeat extends it.
@@ -130,7 +130,7 @@ This is purely a construction convenience — no lifecycle coupling is introduce
 
 ### Multi-Type Workers
 
-A single worker can handle multiple job types. Slots poll all registered types and process whichever is available first. Per-type configuration (attempt, retry) overrides worker defaults.
+A single worker can handle multiple job types. The main loop acquires jobs of all registered types for its idle slots, and each slot processes the job it was given. Per-type configuration (attempt, retry) overrides worker defaults.
 
 ### Attempt Middlewares
 

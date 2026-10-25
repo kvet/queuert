@@ -6,7 +6,7 @@ Persist why the last attempt rescheduled and how many attempts in a row have fai
 
 `complete({ reschedule })` shipped as a non-error outcome, but storage still only knows about errors:
 
-- **Backoff counts the wrong thing.** The fallback reschedule in `attempt-handler.ts` computes the delay from `attempt`, and `startJobAttempt` bumps `attempt` on every acquire, including attempts that ended in `complete({ reschedule })`. A job that long-polls twenty times and then fails backs off as if it had failed twenty times. The design that introduced `complete({ reschedule })` accepted this ("document it, don't design around it"); it is the reason this design exists.
+- **Backoff counts the wrong thing.** The fallback reschedule in `attempt-handler.ts` computes the delay from `attempt`, and `startJobAttempts` bumps `attempt` on every acquire, including attempts that ended in `complete({ reschedule })`. A job that long-polls twenty times and then fails backs off as if it had failed twenty times. The design that introduced `complete({ reschedule })` accepted this ("document it, don't design around it"); it is the reason this design exists.
 - **The last attempt's outcome is half-recorded.** A failure writes `last_attempt_error`; a handler reschedule writes `last_attempt_error = NULL` and nothing else. The dashboard (`jobPhase`) can show "rescheduled after error" but has no way to show why a handler asked to come back later, and apps log "Rescheduling job" by hand to get that.
 - **Nothing counts failures in a row.** The stuck gauges in `design/state-gauges.md` need "this job has failed N times without making progress". `attempt` cannot answer it, for the same reason it cannot drive backoff.
 
@@ -31,7 +31,7 @@ Both are written only when an attempt ends — the same `status = 'running'` bra
 | `complete({ reschedule, reason? })`   | `0`                       | `NULL`               | reason or `NULL`         |
 | `complete({ output / continueWith })` | unchanged (job completes) | unchanged            | unchanged                |
 
-Not touched by `client.rescheduleJob(s)` on a pending job (a reschedule from outside is not an attempt, matching how it already leaves `last_attempt_*` alone), by blocking or unblocking, or by `startJobAttempt`.
+Not touched by `client.rescheduleJob(s)` on a pending job (a reschedule from outside is not an attempt, matching how it already leaves `last_attempt_*` alone), by blocking or unblocking, or by `startJobAttempts`.
 
 Incrementing on failure rather than on acquire (the old design) means a running attempt does not count before it has failed, nothing has to be reset on unblock, and the value at failure time is exactly the backoff exponent.
 
@@ -69,7 +69,7 @@ No backfill. Existing failing jobs start their streak at 0, so their next backof
 
 ## Interaction with worker liveness
 
-`design/worker-liveness.md` rewrites released attempts as failures (`last_attempt_error = 'Worker stopped unexpectedly'`, no backoff). Those releases should also `failure_streak + 1`: a job that keeps killing its worker is the classic stuck job. Today's `reclaimExpiredJobAttempt` records the release as a failure (`last_attempt_error` holds a serialized `JobAttemptExpiredError`) but does not bump any streak.
+`design/worker-liveness.md` rewrites released attempts as failures (`last_attempt_error = 'Worker stopped unexpectedly'`, no backoff). Those releases should also `failure_streak + 1`: a job that keeps killing its worker is the classic stuck job. Today's `reclaimExpiredJobAttempts` records the release as a failure (`last_attempt_error` holds a serialized `JobAttemptExpiredError`) but does not bump any streak.
 
 ## Open questions
 

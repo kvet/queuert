@@ -652,12 +652,12 @@ export const stateResilienceTestSuite = ({
       const { promise: recovered, resolve: onRecovered } = Promise.withResolvers<void>();
       const flakyStartStateAdapter: typeof stateAdapter = {
         ...stateAdapter,
-        startJobAttempt: async (params) => {
+        startJobAttempts: async (params) => {
           if (failuresLeft > 0) {
             failuresLeft--;
-            throw new Error("startJobAttempt failed");
+            throw new Error("startJobAttempts failed");
           }
-          const result = await stateAdapter.startJobAttempt(params);
+          const result = await stateAdapter.startJobAttempts(params);
           onRecovered();
           return result;
         },

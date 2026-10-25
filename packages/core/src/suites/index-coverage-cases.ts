@@ -66,10 +66,12 @@ export type IndexCoverageCaseKey =
   | "addJobsBlockers/default"
   | "getJobBlockers/default"
   | "unblockJobs/default"
-  | "startJobAttempt/default"
+  | "startJobAttempts/default"
+  | "startJobAttempts/limit10"
   | "extendJobAttempt/default"
   | "completeJobs/default"
-  | "reclaimExpiredJobAttempt/default"
+  | "reclaimExpiredJobAttempts/default"
+  | "reclaimExpiredJobAttempts/limit10"
   | "getStartAttemptDelayMs/default"
   | "rescheduleJobs/default"
   | "deleteChains/default"
@@ -887,11 +889,12 @@ export const operationalCoverageGroups: IndexCoverageGroup[] = [
         key: "continueJobs/default",
         label: "default",
         run: async (stateAdapter) => {
-          const acquired = await stateAdapter.withTransaction(async (txCtx) =>
-            stateAdapter.startJobAttempt({
+          const [acquired] = await stateAdapter.withTransaction(async (txCtx) =>
+            stateAdapter.startJobAttempts({
               txCtx,
               timeoutMsByTypeName: { "seed:throwaway:pending": 60_000 },
               workerId: "w-cont",
+              limit: 1,
             }),
           );
           if (!acquired) return async () => {};
@@ -979,17 +982,32 @@ export const operationalCoverageGroups: IndexCoverageGroup[] = [
   },
 
   {
-    name: "startJobAttempt",
+    name: "startJobAttempts",
     cases: [
       {
-        key: "startJobAttempt/default",
+        key: "startJobAttempts/default",
         label: "default",
         run: async () => async (stateAdapter) => {
           await stateAdapter.withTransaction(async (txCtx) =>
-            stateAdapter.startJobAttempt({
+            stateAdapter.startJobAttempts({
               txCtx,
               timeoutMsByTypeName: { "seed:throwaway:pending": 60_000 },
               workerId: "w-idx",
+              limit: 1,
+            }),
+          );
+        },
+      },
+      {
+        key: "startJobAttempts/limit10",
+        label: "limit 10",
+        run: async () => async (stateAdapter) => {
+          await stateAdapter.withTransaction(async (txCtx) =>
+            stateAdapter.startJobAttempts({
+              txCtx,
+              timeoutMsByTypeName: { "seed:throwaway:pending": 60_000 },
+              workerId: "w-idx",
+              limit: 10,
             }),
           );
         },
@@ -1024,11 +1042,12 @@ export const operationalCoverageGroups: IndexCoverageGroup[] = [
         key: "completeJobs/default",
         label: "default",
         run: async (stateAdapter) => {
-          const acquired = await stateAdapter.withTransaction(async (txCtx) =>
-            stateAdapter.startJobAttempt({
+          const [acquired] = await stateAdapter.withTransaction(async (txCtx) =>
+            stateAdapter.startJobAttempts({
               txCtx,
               timeoutMsByTypeName: { "seed:throwaway:pending": 60_000 },
               workerId: "w-ok",
+              limit: 1,
             }),
           );
           if (!acquired) return async () => {};
@@ -1052,19 +1071,36 @@ export const operationalCoverageGroups: IndexCoverageGroup[] = [
   },
 
   {
-    name: "reclaimExpiredJobAttempt",
+    name: "reclaimExpiredJobAttempts",
     cases: [
       {
-        key: "reclaimExpiredJobAttempt/default",
+        key: "reclaimExpiredJobAttempts/default",
         label: "default",
         run: async () => async (stateAdapter) => {
           await stateAdapter.withTransaction(async (txCtx) =>
-            stateAdapter.reclaimExpiredJobAttempt({
+            stateAdapter.reclaimExpiredJobAttempts({
               txCtx,
               typeNames: ["seed:throwaway:expired"],
               ignoredJobIds: [],
               lastAttemptError:
                 "JobAttemptExpiredError: Job attempt expired before the holding worker extended it",
+              limit: 1,
+            }),
+          );
+        },
+      },
+      {
+        key: "reclaimExpiredJobAttempts/limit10",
+        label: "limit 10",
+        run: async () => async (stateAdapter) => {
+          await stateAdapter.withTransaction(async (txCtx) =>
+            stateAdapter.reclaimExpiredJobAttempts({
+              txCtx,
+              typeNames: ["seed:throwaway:expired"],
+              ignoredJobIds: [],
+              lastAttemptError:
+                "JobAttemptExpiredError: Job attempt expired before the holding worker extended it",
+              limit: 10,
             }),
           );
         },

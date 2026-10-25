@@ -430,23 +430,25 @@ export const unblockJobsGroup: ConformanceGroup<StateConformanceFixture> = {
           }),
         );
 
-        const first = await stateAdapter.withTransaction(async (txCtx) =>
-          stateAdapter.startJobAttempt({
+        const [first] = await stateAdapter.withTransaction(async (txCtx) =>
+          stateAdapter.startJobAttempts({
             txCtx,
             workerId: "worker-1",
             timeoutMsByTypeName: { "fairness-main": 30_000 },
+            limit: 1,
           }),
         );
-        const second = await stateAdapter.withTransaction(async (txCtx) =>
-          stateAdapter.startJobAttempt({
+        const [second] = await stateAdapter.withTransaction(async (txCtx) =>
+          stateAdapter.startJobAttempts({
             txCtx,
             workerId: "worker-1",
             timeoutMsByTypeName: { "fairness-main": 30_000 },
+            limit: 1,
           }),
         );
 
-        expect(first!.id).toBe(readyMainChain.head.id);
-        expect(second!.id).toBe(blockedMainChain.head.id);
+        expect(first.id).toBe(readyMainChain.head.id);
+        expect(second.id).toBe(blockedMainChain.head.id);
       },
     },
     {

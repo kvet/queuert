@@ -79,10 +79,11 @@ export const countByJobTypeNamesGroup: ConformanceGroup<StateConformanceFixture>
         );
 
         await stateAdapter.withTransaction(async (txCtx) =>
-          stateAdapter.startJobAttempt({
+          stateAdapter.startJobAttempts({
             txCtx,
             timeoutMsByTypeName: { "count-run": 30_000 },
             workerId: "w1",
+            limit: 1,
           }),
         );
 
@@ -130,18 +131,19 @@ export const countByJobTypeNamesGroup: ConformanceGroup<StateConformanceFixture>
           }),
         );
 
-        const acquired = await stateAdapter.withTransaction(async (txCtx) =>
-          stateAdapter.startJobAttempt({
+        const [acquired] = await stateAdapter.withTransaction(async (txCtx) =>
+          stateAdapter.startJobAttempts({
             txCtx,
             timeoutMsByTypeName: { "count-done": 30_000 },
             workerId: "w1",
+            limit: 1,
           }),
         );
 
         await stateAdapter.withTransaction(async (txCtx) =>
           stateAdapter.completeJobs({
             txCtx,
-            jobs: [{ jobId: acquired!.id, output: null }],
+            jobs: [{ jobId: acquired.id, output: null }],
           }),
         );
 

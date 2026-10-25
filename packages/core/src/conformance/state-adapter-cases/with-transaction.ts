@@ -62,10 +62,11 @@ export const withTransactionGroup: ConformanceGroup<StateConformanceFixture> = {
 
         try {
           await stateAdapter.withTransaction(async (txCtx) => {
-            await stateAdapter.startJobAttempt({
+            await stateAdapter.startJobAttempts({
               txCtx,
               workerId: "worker-1",
               timeoutMsByTypeName: { "update-rollback": 30_000 },
+              limit: 1,
             });
             throw new Error("rollback after acquire");
           });
@@ -78,15 +79,16 @@ export const withTransactionGroup: ConformanceGroup<StateConformanceFixture> = {
         expect(after?.attemptAt).toBeNull();
         expect(after?.attempt).toBe(0);
 
-        const reacquired = await stateAdapter.withTransaction(async (txCtx) =>
-          stateAdapter.startJobAttempt({
+        const [reacquired] = await stateAdapter.withTransaction(async (txCtx) =>
+          stateAdapter.startJobAttempts({
             txCtx,
             workerId: "worker-1",
             timeoutMsByTypeName: { "update-rollback": 30_000 },
+            limit: 1,
           }),
         );
-        expect(reacquired!.id).toBe(stateChain.head.id);
-        expect(reacquired!.attempt).toBe(1);
+        expect(reacquired.id).toBe(stateChain.head.id);
+        expect(reacquired.attempt).toBe(1);
       },
     },
     {
@@ -113,14 +115,15 @@ export const withTransactionGroup: ConformanceGroup<StateConformanceFixture> = {
         const [after] = await stateAdapter.getJobs({ jobIds: [stateChain.head.id] });
         expect(after?.id).toBe(stateChain.head.id);
 
-        const reacquired = await stateAdapter.withTransaction(async (txCtx) =>
-          stateAdapter.startJobAttempt({
+        const [reacquired] = await stateAdapter.withTransaction(async (txCtx) =>
+          stateAdapter.startJobAttempts({
             txCtx,
             workerId: "worker-1",
             timeoutMsByTypeName: { "delete-rollback": 30_000 },
+            limit: 1,
           }),
         );
-        expect(reacquired!.id).toBe(stateChain.head.id);
+        expect(reacquired.id).toBe(stateChain.head.id);
       },
     },
     {
@@ -254,10 +257,11 @@ export const withTransactionGroup: ConformanceGroup<StateConformanceFixture> = {
 
         await expect(
           stateAdapter.withTransaction(async (txCtx) => {
-            await stateAdapter.startJobAttempt({
+            await stateAdapter.startJobAttempts({
               txCtx,
               workerId: "worker-1",
               timeoutMsByTypeName: { "mixed-rollback": 30_000 },
+              limit: 1,
             });
             await stateAdapter.completeJobs({
               txCtx,
@@ -293,11 +297,12 @@ export const withTransactionGroup: ConformanceGroup<StateConformanceFixture> = {
           [aChain.id, bChain.id].toSorted(),
         );
 
-        const reacquired = await stateAdapter.withTransaction(async (txCtx) =>
-          stateAdapter.startJobAttempt({
+        const [reacquired] = await stateAdapter.withTransaction(async (txCtx) =>
+          stateAdapter.startJobAttempts({
             txCtx,
             timeoutMsByTypeName: { "mixed-rollback": 30_000 },
             workerId: "rollback-probe",
+            limit: 1,
           }),
         );
         expect(reacquired).toBeDefined();

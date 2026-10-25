@@ -16,15 +16,16 @@ export const extendJobAttemptGroup: ConformanceGroup<StateConformanceFixture> = 
           }),
         );
 
-        const acquired = await stateAdapter.withTransaction(async (txCtx) =>
-          stateAdapter.startJobAttempt({
+        const [acquired] = await stateAdapter.withTransaction(async (txCtx) =>
+          stateAdapter.startJobAttempts({
             txCtx,
             workerId: "worker-1",
             timeoutMsByTypeName: { "attempt-test": 30_000 },
+            limit: 1,
           }),
         );
-        expect(acquired!.attemptAt).toBeInstanceOf(Date);
-        expect(acquired!.attemptBy).toBe("worker-1");
+        expect(acquired.attemptAt).toBeInstanceOf(Date);
+        expect(acquired.attemptBy).toBe("worker-1");
 
         const before = Date.now();
         const extended = await stateAdapter.withTransaction(async (txCtx) =>
@@ -42,7 +43,7 @@ export const extendJobAttemptGroup: ConformanceGroup<StateConformanceFixture> = 
         expect(extended!.attemptUntil!.getTime()).toBeLessThan(before + 11_000);
         expect(extended!.attemptAt).toBeInstanceOf(Date);
         expect(extended!.completedAt).toBeNull();
-        expect(extended!.attemptAt!.getTime()).toBe(acquired!.attemptAt!.getTime());
+        expect(extended!.attemptAt!.getTime()).toBe(acquired.attemptAt!.getTime());
       },
     },
     {
@@ -59,10 +60,11 @@ export const extendJobAttemptGroup: ConformanceGroup<StateConformanceFixture> = 
         );
 
         await stateAdapter.withTransaction(async (txCtx) =>
-          stateAdapter.startJobAttempt({
+          stateAdapter.startJobAttempts({
             txCtx,
             workerId: "worker-1",
             timeoutMsByTypeName: { "far-attempt-test": 30_000 },
+            limit: 1,
           }),
         );
 
@@ -99,10 +101,11 @@ export const extendJobAttemptGroup: ConformanceGroup<StateConformanceFixture> = 
         );
 
         await stateAdapter.withTransaction(async (txCtx) =>
-          stateAdapter.startJobAttempt({
+          stateAdapter.startJobAttempts({
             txCtx,
             workerId: "worker-1",
             timeoutMsByTypeName: { "fractional-attempt-test": 30_000 },
+            limit: 1,
           }),
         );
 
@@ -134,10 +137,11 @@ export const extendJobAttemptGroup: ConformanceGroup<StateConformanceFixture> = 
         );
 
         await stateAdapter.withTransaction(async (txCtx) =>
-          stateAdapter.startJobAttempt({
+          stateAdapter.startJobAttempts({
             txCtx,
             workerId: "worker-1",
             timeoutMsByTypeName: { "re-attempt-test": 30_000 },
+            limit: 1,
           }),
         );
 
@@ -177,17 +181,18 @@ export const extendJobAttemptGroup: ConformanceGroup<StateConformanceFixture> = 
             ],
           }),
         );
-        const acquired = await stateAdapter.startJobAttempt({
+        const [acquired] = await stateAdapter.startJobAttempts({
           workerId: "worker-1",
           timeoutMsByTypeName: { "lapsed-attempt-test": 1 },
+          limit: 1,
         });
         await sleep(50);
-        expect(acquired!.attemptUntil!.getTime()).toBeLessThan(Date.now());
+        expect(acquired.attemptUntil!.getTime()).toBeLessThan(Date.now());
 
         const before = Date.now();
         const extended = await stateAdapter.extendJobAttempt({
           jobId: createdChain.head.id,
-          fence: { attempt: acquired!.attempt, workerId: "worker-1" },
+          fence: { attempt: acquired.attempt, workerId: "worker-1" },
           timeoutMs: 10_000,
         });
 
@@ -208,10 +213,11 @@ export const extendJobAttemptGroup: ConformanceGroup<StateConformanceFixture> = 
         );
 
         await stateAdapter.withTransaction(async (txCtx) =>
-          stateAdapter.startJobAttempt({
+          stateAdapter.startJobAttempts({
             txCtx,
             workerId: "worker-1",
             timeoutMsByTypeName: { "ownership-test": 30_000 },
+            limit: 1,
           }),
         );
 
@@ -245,21 +251,23 @@ export const extendJobAttemptGroup: ConformanceGroup<StateConformanceFixture> = 
             ],
           }),
         );
-        const job = await stateAdapter.withTransaction(async (txCtx) =>
-          stateAdapter.startJobAttempt({
+        const [job] = await stateAdapter.withTransaction(async (txCtx) =>
+          stateAdapter.startJobAttempts({
             txCtx,
             workerId: "worker-1",
             timeoutMsByTypeName: { "extend-fence-replaced": 30_000 },
+            limit: 1,
           }),
         );
         await stateAdapter.withTransaction(async (txCtx) =>
-          stateAdapter.rescheduleJobs({ txCtx, jobs: [{ jobId: job!.id }] }),
+          stateAdapter.rescheduleJobs({ txCtx, jobs: [{ jobId: job.id }] }),
         );
         await stateAdapter.withTransaction(async (txCtx) =>
-          stateAdapter.startJobAttempt({
+          stateAdapter.startJobAttempts({
             txCtx,
             workerId: "worker-1",
             timeoutMsByTypeName: { "extend-fence-replaced": 30_000 },
+            limit: 1,
           }),
         );
         const [before] = await stateAdapter.getJobs({ jobIds: [createdChain.head.id] });
@@ -267,8 +275,8 @@ export const extendJobAttemptGroup: ConformanceGroup<StateConformanceFixture> = 
         const extended = await stateAdapter.withTransaction(async (txCtx) =>
           stateAdapter.extendJobAttempt({
             txCtx,
-            jobId: job!.id,
-            fence: { attempt: job!.attempt, workerId: "worker-1" },
+            jobId: job.id,
+            fence: { attempt: job.attempt, workerId: "worker-1" },
             timeoutMs: 10_000,
           }),
         );
@@ -293,22 +301,23 @@ export const extendJobAttemptGroup: ConformanceGroup<StateConformanceFixture> = 
             ],
           }),
         );
-        const job = await stateAdapter.withTransaction(async (txCtx) =>
-          stateAdapter.startJobAttempt({
+        const [job] = await stateAdapter.withTransaction(async (txCtx) =>
+          stateAdapter.startJobAttempts({
             txCtx,
             workerId: "worker-1",
             timeoutMsByTypeName: { "extend-fence-completed": 30_000 },
+            limit: 1,
           }),
         );
         await stateAdapter.withTransaction(async (txCtx) =>
-          stateAdapter.completeJobs({ txCtx, jobs: [{ jobId: job!.id, output: null }] }),
+          stateAdapter.completeJobs({ txCtx, jobs: [{ jobId: job.id, output: null }] }),
         );
 
         const extended = await stateAdapter.withTransaction(async (txCtx) =>
           stateAdapter.extendJobAttempt({
             txCtx,
-            jobId: job!.id,
-            fence: { attempt: job!.attempt, workerId: "worker-1" },
+            jobId: job.id,
+            fence: { attempt: job.attempt, workerId: "worker-1" },
             timeoutMs: 10_000,
           }),
         );
@@ -327,19 +336,18 @@ export const extendJobAttemptGroup: ConformanceGroup<StateConformanceFixture> = 
             ],
           }),
         );
-        const acquired = await stateAdapter.startJobAttempt({
+        const [acquired] = await stateAdapter.startJobAttempts({
           workerId: "worker-1",
           timeoutMsByTypeName: { "extend-autocommit": 1_000 },
+          limit: 1,
         });
 
         const extended = await stateAdapter.extendJobAttempt({
           jobId: createdChain.head.id,
-          fence: { attempt: acquired!.attempt, workerId: "worker-1" },
+          fence: { attempt: acquired.attempt, workerId: "worker-1" },
           timeoutMs: 60_000,
         });
-        expect(extended!.attemptUntil!.getTime()).toBeGreaterThan(
-          acquired!.attemptUntil!.getTime(),
-        );
+        expect(extended!.attemptUntil!.getTime()).toBeGreaterThan(acquired.attemptUntil!.getTime());
 
         const [stored] = await stateAdapter.getJobs({ jobIds: [createdChain.head.id] });
         expect(stored!.attemptUntil!.getTime()).toBe(extended!.attemptUntil!.getTime());

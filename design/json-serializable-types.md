@@ -64,7 +64,7 @@ Rules:
 | `client.createChain`                                                                                             | `validateEntry` → `encodeInputs` → state adapter persist                                          |
 | handler `continueWith`                                                                                           | `validateContinueWith` (runtime) → `encodeInputs` → persist next job                              |
 | handler returns output                                                                                           | `encodeOutputs` → state adapter persist completion                                                |
-| worker pickup                                                                                                    | state adapter `startJobAttempt` → `decodeInputs` → handler receives runtime form                  |
+| worker pickup                                                                                                    | state adapter `startJobAttempts` → `decodeInputs` → handler receives runtime form                 |
 | client read (`getJob`, `listJobs`, `listChainJobs`, `listBlockedJobs`, `getChain`, `reschedule` returning a job) | state adapter fetch → `decodeInputs` + `decodeOutputs` (one batch per page) → return runtime form |
 | observability hooks                                                                                              | encoded form passed (open question — see below)                                                   |
 
@@ -295,7 +295,7 @@ Goal: replace `parseInput`/`parseOutput` with the four batch async codec methods
   - `packages/core/src/client.ts` — `rescheduleJobs`, `completeChain`, `getJob`, `listJobs`, `listChainJobs`, `listBlockedJobs`. All already async.
   - `packages/core/src/implementation.ts` — `createChains` (maps the created chain).
   - `packages/core/src/attempt/attempt-handler.ts` — the running job passed to the handler, and the job returned by `complete`.
-- [ ] Worker pickup specifically: ensure `decodeInputs` is called between `startJobAttempt` and handler invocation; runtime input is what the handler sees and what continues into `continueWith` flows.
+- [ ] Worker pickup specifically: ensure `decodeInputs` is called between `startJobAttempts` and handler invocation; runtime input is what the handler sees and what continues into `continueWith` flows.
 - [ ] `getChain`/`listChains` paths: if they surface job-shaped data, batch-decode that page too. Audit during implementation.
 - [ ] Tests:
   - List of N jobs of mixed types → exactly one `decodeInputs` call + one `decodeOutputs` call per page.

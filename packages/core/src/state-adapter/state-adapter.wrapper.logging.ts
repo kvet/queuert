@@ -38,12 +38,12 @@ export const wrapStateAdapterWithLogging = <
     completeJobs: wrap("completeJobs", stateAdapter.completeJobs),
     rescheduleJobs: wrap("rescheduleJobs", stateAdapter.rescheduleJobs),
     deleteChains: wrap("deleteChains", stateAdapter.deleteChains),
-    startJobAttempt: wrap("startJobAttempt", stateAdapter.startJobAttempt),
+    startJobAttempts: wrap("startJobAttempts", stateAdapter.startJobAttempts),
     getStartAttemptDelayMs: wrap("getStartAttemptDelayMs", stateAdapter.getStartAttemptDelayMs),
     extendJobAttempt: wrap("extendJobAttempt", stateAdapter.extendJobAttempt),
-    reclaimExpiredJobAttempt: wrap(
-      "reclaimExpiredJobAttempt",
-      stateAdapter.reclaimExpiredJobAttempt,
+    reclaimExpiredJobAttempts: wrap(
+      "reclaimExpiredJobAttempts",
+      stateAdapter.reclaimExpiredJobAttempts,
     ),
     addJobsBlockers: wrap("addJobsBlockers", stateAdapter.addJobsBlockers),
     getJobBlockers: wrap("getJobBlockers", stateAdapter.getJobBlockers),

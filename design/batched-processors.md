@@ -4,12 +4,11 @@ Opt-in batched processing for in-process workers: an attempt handler that receiv
 
 ## Problem
 
-| State adapter   | Batched creation (chains/s) | Completion ×1 (jobs/s) | Completion ×8 (jobs/s) |
-| --------------- | --------------------------: | ---------------------: | ---------------------: |
-| In-process      |                    ~157,209 |                ~15,744 |                ~14,456 |
-| PostgreSQL (pg) |                     ~28,466 |                   ~478 |                 ~1,108 |
+| State adapter   | Batched creation (chains/s) | Completion x1 (jobs/s) | Completion x16 (jobs/s) |
+| --------------- | --------------------------: | ---------------------: | ----------------------: |
+| PostgreSQL (pg) |                     ~28,415 |                   ~333 |                  ~2,327 |
 
-Each processed job costs its own round-trips: an autocommit acquire, heartbeat extensions, and the user's `complete` transaction (a failed attempt adds one fenced reschedule). On PG that is the whole story: batched creation already does ~28k chains/s while per-job completion does ~500–1,100 jobs/s — a gap of more than 25× that is round-trip cost, not work. Users also cannot batch their own side of the work (bulk API calls, bulk queries) because the handler only ever sees one job.
+Each processed job pays for heartbeat extensions and the user's `complete` transaction, plus its share of a batched acquire (a failed attempt adds one fenced reschedule). On PG that is the whole story: batched creation already does ~28k chains/s while per-job completion does ~330–2,300 jobs/s — a gap of more than 10× that is round-trip cost, not work. Users also cannot batch their own side of the work (bulk API calls, bulk queries) because the handler only ever sees one job.
 
 ## API
 
@@ -77,6 +76,6 @@ createProcessors({
 
 2. **Batch return typing.** `complete(outcomes[])` returns an array of a union, so mixed batches make the caller narrow per slot. Whether a mapped-tuple overload is worth the type complexity for literal call sites is undecided.
 
-3. **Group reclamation.** Every attempt has an `attemptUntil` set at acquire and extended by the heartbeat, but expired-attempt reclamation picks one job at a time, while a batch shares a fate. Candidates: a batch ID written at acquire time, releasing by `(attemptBy, attemptUntil)`, or a batch join table. Until this is decided, batched processing has weaker recovery guarantees than per-job.
+3. **Group reclamation.** Every attempt has an `attemptUntil` set at acquire and extended by the heartbeat, but expired-attempt reclamation releases individual jobs (up to the idle slot count per iteration) with no notion of a batch, while a batch shares a fate. Candidates: a batch ID written at acquire time, releasing by `(attemptBy, attemptUntil)`, or a batch join table. Until this is decided, batched processing has weaker recovery guarantees than per-job.
 
 4. **OTel.** Direction is the standard messaging-batch convention: a batch span parenting per-job spans, producer contexts attached as links rather than parents, per-job errors on per-job spans with a failed count on the batch. Not finalized.

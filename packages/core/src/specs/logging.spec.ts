@@ -1085,17 +1085,17 @@ describe("Logging", () => {
       test: { entry: true; input: null; output: null };
     }>();
 
-    // Wrap startJobAttempt to throw once — triggers both
+    // Wrap startJobAttempts to throw once — triggers both
     // state_adapter_error (from logging middleware) and worker_error (from worker loop catch)
     let errorThrown = false;
     const erroringStateAdapter: typeof stateAdapter = {
       ...stateAdapter,
-      startJobAttempt: async (args) => {
+      startJobAttempts: async (args) => {
         if (!errorThrown) {
           errorThrown = true;
           throw new Error("connection error");
         }
-        return stateAdapter.startJobAttempt(args);
+        return stateAdapter.startJobAttempts(args);
       },
     };
 

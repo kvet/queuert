@@ -5,34 +5,48 @@ description: Processing capacity, memory footprint, query performance, and type 
 
 ## Processing Capacity
 
-Job throughput across six scenarios, each with 5,000 chains in its own child process for isolation (Node.js v22, Apple M1 Pro). State and notify are measured along separate axes — when one is varied, the other is held at the in-process default. PostgreSQL, Redis, and NATS run as Dockerized containers on macOS (Docker Desktop), so per-RTT latency includes the VM bridge — numbers reflect that environment rather than a host-native or production deployment.
+Job throughput across five scenarios per adapter, each in its own child process (Node.js v22, Apple M1 Pro). Every scenario measures a fixed 2 s window, and every completion scenario starts from the same seeded queue of 40,000 jobs, so only concurrency varies between columns. State and notify are measured along separate axes: when one is varied, the other is held at the in-process default. PostgreSQL, Redis, and NATS run as Dockerized containers on macOS (Docker Desktop), so per-RTT latency includes the VM bridge — numbers reflect that environment rather than a host-native or production deployment.
 
-- **Single creation** — a tight `await client.createChain(...)` loop, one transaction per chain. Dominated by per-call RTT (HTTP-handler-shaped traffic).
-- **Batched creation** — `client.createChains({ items: [...100] })`, amortizing transaction and notify overhead across the batch (bulk-enqueue / migration / replay traffic). Real workloads sit between the two creation scenarios depending on call shape and concurrency.
-- **Completion ×1, ×2, ×4, ×8** — how fast one worker drains a full queue, with a handler that only opens its own transaction and calls `complete` in it. The queue is seeded before the measurement starts. The multiplier is the worker concurrency: ×1 measures each job's full round-trip (acquire, then `complete` and commit) back to back, and the higher levels show how far parallel slots scale it.
+- **Creation** — a tight `client.createChain(...)` loop, one transaction per chain (_Single_), and `client.createChains` with 100 items per transaction (_Batched_). Single creation is dominated by per-call RTT (HTTP-handler-shaped traffic); batched creation amortizes transaction and notify overhead (bulk-enqueue traffic).
+- **Completion, no-op handler** — how fast one worker drains the queue when the handler only opens its own transaction and calls `complete` in it. The multiplier is the worker concurrency: x1 measures each job's full round-trip (acquire, then `complete` and commit) back to back, and higher levels show how far parallel slots scale it.
 
-Steady-state deployment throughput is bounded by `min(create, complete)`.
+Steady-state deployment throughput is bounded by `min(create, complete)`. The in-process state adapter keeps its indexes in sorted arrays, so its completion rates fall with queue depth; at 40,000 queued jobs that cost, not the worker, bounds every row that uses in-process state, including the whole notify axis.
 
-### State adapter (no notify)
+### Creation (chains/s)
 
-| State adapter            | Single creation (chains/s) | Batched creation (chains/s) | Completion ×1 (jobs/s) |      ×2 |      ×4 |      ×8 |
-| ------------------------ | -------------------------: | --------------------------: | ---------------------: | ------: | ------: | ------: |
-| In-process               |                    ~59,757 |                    ~157,209 |                ~15,744 | ~11,710 | ~11,998 | ~14,456 |
-| SQLite (better-sqlite3)  |                    ~26,232 |                     ~85,090 |                 ~7,570 |  ~6,868 |  ~8,304 |  ~8,385 |
-| SQLite (node:sqlite)     |                    ~22,798 |                     ~73,349 |                 ~6,390 |  ~6,258 |  ~7,204 |  ~6,911 |
-| PostgreSQL (postgres-js) |                     ~1,223 |                     ~26,292 |                   ~469 |    ~919 |  ~1,107 |  ~1,242 |
-| PostgreSQL (pg)          |                       ~894 |                     ~28,466 |                   ~478 |    ~822 |  ~1,297 |  ~1,108 |
+| Adapter                               |  Single | Batched (100) |
+| ------------------------------------- | ------: | ------------: |
+| **State adapter (in-process notify)** |         |               |
+| In-process                            | ~88,585 |      ~205,063 |
+| SQLite (better-sqlite3)               | ~28,644 |       ~88,850 |
+| SQLite (node:sqlite)                  | ~23,446 |       ~77,073 |
+| PostgreSQL (postgres-js)              |    ~870 |       ~30,241 |
+| PostgreSQL (pg)                       |    ~827 |       ~28,415 |
+| **Notify adapter (in-process state)** |         |               |
+| In-process                            | ~81,548 |      ~186,412 |
+| Redis (redis)                         |  ~1,275 |       ~79,267 |
+| Redis (ioredis)                       |  ~2,340 |      ~100,197 |
+| PostgreSQL (pg)                       |  ~3,879 |      ~116,092 |
+| PostgreSQL (postgres-js)              |  ~4,456 |      ~122,082 |
+| NATS                                  |  ~4,375 |      ~130,000 |
 
-### Notify adapter (in-process state)
+### Completion, no-op handler (jobs/s)
 
-| Notify adapter           | Single creation (chains/s) | Batched creation (chains/s) | Completion ×1 (jobs/s) |      ×2 |      ×4 |      ×8 |
-| ------------------------ | -------------------------: | --------------------------: | ---------------------: | ------: | ------: | ------: |
-| In-process               |                    ~56,434 |                    ~163,268 |                ~15,545 | ~12,203 | ~13,464 | ~14,358 |
-| Redis (redis)            |                     ~2,615 |                     ~77,709 |                 ~1,319 |  ~2,497 |  ~3,715 |  ~4,979 |
-| Redis (ioredis)          |                     ~2,662 |                     ~76,595 |                 ~1,511 |  ~4,523 |  ~9,233 | ~10,064 |
-| PostgreSQL (pg)          |                     ~4,172 |                     ~57,933 |                 ~1,350 |  ~4,793 |  ~6,317 |  ~6,746 |
-| PostgreSQL (postgres-js) |                     ~3,652 |                     ~77,880 |                 ~1,370 |  ~4,915 |  ~6,327 |  ~6,785 |
-| NATS                     |                     ~4,404 |                     ~97,635 |                 ~2,987 |  ~5,203 |  ~8,985 |  ~8,554 |
+| Adapter                               |     x1 |     x4 |    x16 |
+| ------------------------------------- | -----: | -----: | -----: |
+| **State adapter (in-process notify)** |        |        |        |
+| In-process                            | ~4,996 | ~5,143 | ~5,389 |
+| SQLite (better-sqlite3)               | ~4,700 | ~5,328 | ~7,461 |
+| SQLite (node:sqlite)                  | ~3,994 | ~5,475 | ~7,994 |
+| PostgreSQL (postgres-js)              |   ~367 |   ~853 | ~1,738 |
+| PostgreSQL (pg)                       |   ~333 | ~1,127 | ~2,327 |
+| **Notify adapter (in-process state)** |        |        |        |
+| In-process                            | ~4,863 | ~4,509 | ~4,797 |
+| Redis (redis)                         |   ~865 | ~2,067 | ~3,504 |
+| Redis (ioredis)                       | ~1,018 | ~3,987 | ~4,139 |
+| PostgreSQL (pg)                       |   ~964 | ~3,646 | ~3,719 |
+| PostgreSQL (postgres-js)              |   ~992 | ~3,505 | ~3,537 |
+| NATS                                  | ~1,861 | ~4,060 | ~4,111 |
 
 See [processing-capacity](https://github.com/kvet/queuert/tree/main/benchmarks/processing-capacity) for the full benchmark tool.
 
@@ -96,26 +110,30 @@ The benchmark covers every state-adapter method exercised in production: operati
 
 ### Operational queries
 
-| Query                            | PG p50 (ms) | SQLite p50 (ms) |
-| -------------------------------- | ----------: | --------------: |
-| getChains/default                |        1.06 |            0.18 |
-| getChains/lock                   |        1.77 |            0.12 |
-| getJobs/default                  |        0.85 |            0.06 |
-| getJobs/lock                     |        1.94 |            0.07 |
-| createJobs/default               |        3.15 |            0.13 |
-| createJobs/deduplication         |        2.43 |            0.05 |
-| continueJobs/default             |        2.41 |            0.30 |
-| addJobsBlockers/default          |        3.06 |            0.19 |
-| getJobBlockers/default           |        0.82 |            0.21 |
-| unblockJobs/default              |        3.10 |            0.23 |
-| startJobAttempt/default          |        1.71 |            0.14 |
-| extendJobAttempt/default         |        1.90 |            0.08 |
-| completeJobs/default             |        2.36 |            0.41 |
-| reclaimExpiredJobAttempt/default |        2.32 |            0.12 |
-| getStartAttemptDelayMs/default   |        2.07 |            0.04 |
-| rescheduleJobs/default           |        1.98 |            0.13 |
-| deleteChains/default             |        5.48 |            0.23 |
-| deleteChains/multiJob            |        3.80 |            0.26 |
+The `limit10` variants acquire or reclaim ten jobs in one statement, as the worker does when it fills or frees several idle slots at once.
+
+| Query                             | PG p50 (ms) | SQLite p50 (ms) |
+| --------------------------------- | ----------: | --------------: |
+| getChains/default                 |        1.23 |            0.25 |
+| getChains/lock                    |        1.85 |            0.16 |
+| getJobs/default                   |        1.05 |            0.09 |
+| getJobs/lock                      |        2.62 |            0.13 |
+| createJobs/default                |        3.01 |            0.19 |
+| createJobs/deduplication          |        2.18 |            0.07 |
+| continueJobs/default              |        2.19 |            0.30 |
+| addJobsBlockers/default           |        3.94 |            0.23 |
+| getJobBlockers/default            |        1.58 |            0.22 |
+| unblockJobs/default               |        4.99 |            0.33 |
+| startJobAttempts/default          |        3.50 |            0.36 |
+| startJobAttempts/limit10          |        4.13 |            0.47 |
+| extendJobAttempt/default          |        2.20 |            0.10 |
+| completeJobs/default              |        2.57 |            0.40 |
+| reclaimExpiredJobAttempts/default |        2.10 |            0.27 |
+| reclaimExpiredJobAttempts/limit10 |        2.47 |            0.52 |
+| getStartAttemptDelayMs/default    |        2.05 |            0.04 |
+| rescheduleJobs/default            |        2.46 |            0.28 |
+| deleteChains/default              |        4.43 |            0.43 |
+| deleteChains/multiJob             |        3.30 |            0.29 |
 
 ### Type discovery & counts
 

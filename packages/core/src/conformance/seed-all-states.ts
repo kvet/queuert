@@ -140,13 +140,13 @@ export const seedAllStates = async <TTxContext extends BaseTxContext>(
           jobs: indexes.map((i) => headJob(typeName, i)),
         });
         const jobs: StateJob[] = [];
-        for (let k = 0; k < indexes.length; k++) {
-          const job = await stateAdapter.startJobAttempt({
-            txCtx,
-            timeoutMsByTypeName: { [typeName]: 30_000 },
-            workerId: seedConfig.workerId,
-          });
-          if (!job) break;
+        const acquiredJobs = await stateAdapter.startJobAttempts({
+          txCtx,
+          timeoutMsByTypeName: { [typeName]: 30_000 },
+          workerId: seedConfig.workerId,
+          limit: indexes.length,
+        });
+        for (const job of acquiredJobs) {
           if (mode === "running") {
             jobs.push(
               (await stateAdapter.extendJobAttempt({
@@ -336,10 +336,11 @@ export const seedAllStates = async <TTxContext extends BaseTxContext>(
   let longChainTail = longChain.head;
   for (let step = 1; step < chainLength; step++) {
     await stateAdapter.withTransaction(async (txCtx) => {
-      const acquired = await stateAdapter.startJobAttempt({
+      const [acquired] = await stateAdapter.startJobAttempts({
         txCtx,
         timeoutMsByTypeName: { "seed:chain": 30_000 },
         workerId: seedConfig.workerId,
+        limit: 1,
       });
       if (!acquired) return;
       const [continued] = await stateAdapter.continueJobs({
@@ -371,13 +372,13 @@ export const seedAllStates = async <TTxContext extends BaseTxContext>(
         jobs: indexes.map((i) => headJob("seed:throwaway:expired", i)),
       });
       const jobs: StateJob[] = [];
-      for (let k = 0; k < indexes.length; k++) {
-        const job = await stateAdapter.startJobAttempt({
-          txCtx,
-          timeoutMsByTypeName: { "seed:throwaway:expired": 30_000 },
-          workerId: seedConfig.workerId,
-        });
-        if (!job) break;
+      const acquiredJobs = await stateAdapter.startJobAttempts({
+        txCtx,
+        timeoutMsByTypeName: { "seed:throwaway:expired": 30_000 },
+        workerId: seedConfig.workerId,
+        limit: indexes.length,
+      });
+      for (const job of acquiredJobs) {
         jobs.push(
           (await stateAdapter.extendJobAttempt({
             txCtx,
