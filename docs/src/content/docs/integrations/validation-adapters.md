@@ -5,32 +5,63 @@ sidebar:
   order: 3
 ---
 
-Queuert's runtime validation follows an adapter pattern. The core provides `createJobTypes`, which accepts raw validation functions. Schema-specific adapters (Zod, Valibot, TypeBox, ArkType) are implemented in user-land, wrapping their respective schema libraries into the `JobTypes` interface.
+Queuert's runtime validation follows an adapter pattern. The core provides `createJobTypes`, which accepts raw validation and codec functions. Schema-specific adapters (Zod, Valibot, TypeBox, ArkType) are implemented in user-land, wrapping their respective schema libraries into the `JobTypes` interface.
 
 Each adapter:
 
 1. Accepts schema definitions in the library's native format
 2. Infers `TJobTypeDefinitions` from the schemas (providing the same compile-time safety as `defineJobTypes`)
-3. Calls `createJobTypes` with validation functions that delegate to the schema library
+3. Calls `createJobTypes` with functions that delegate to the schema library
+
+## Runtime Form vs Stored Form
+
+A job type definition's `input` and `output` describe the **runtime** form — what a handler receives and what a client read returns. The **stored** form is what the state adapter persists, and it must be JSON-serializable.
+
+The two forms are bridged by `encode` and `decode`:
+
+- `encode` runs on every write, turning the runtime form into the stored form.
+- `decode` runs on every read, turning the stored form back into the runtime form.
+
+For most schemas the two forms are identical and both methods are a validation pass that returns the value unchanged. They diverge when a schema transforms — a `Date` in the handler stored as an ISO string, for instance. See [`examples/codec-zod`](https://github.com/kvet/queuert/tree/main/examples/codec-zod) for that case.
+
+Whatever `encode` returns is checked against `isJsonSerializable` by `createJobTypes` itself, so an adapter that accidentally lets a `Date` reach storage fails loudly on the first write rather than corrupting the row.
 
 ## `defineJobTypes` vs `createJobTypes`
 
 `defineJobTypes` is a lightweight type-only helper. It provides compile-time type inference with zero runtime cost — no validation functions are executed. Use it when your inputs come from trusted internal code.
 
-`createJobTypes` adds runtime validation on top of compile-time types. It accepts validation functions for entry checks, input/output parsing, continuation validation, and blocker validation. Use it when your job inputs originate from external sources (APIs, webhooks, user input) where compile-time guarantees alone are insufficient.
+`defineJobTypes` constrains `input` and `output` to JSON-serializable types at compile time. Since there is no codec, the runtime form _is_ the stored form, so a definition carrying a `Date`, `Map`, or `bigint` is a type error that points you at a validator adapter.
+
+`createJobTypes` adds runtime validation and codecs on top of compile-time types. It accepts functions for entry checks, encoding and decoding, continuation validation, and blocker validation. Use it when your job inputs originate from external sources (APIs, webhooks, user input) where compile-time guarantees alone are insufficient, or when the runtime form is not directly storable.
 
 ## `JobTypes` Interface
 
 The `JobTypes` object validates at each boundary:
 
-| Job Type Definition        | Method                 | Purpose                                      |
-| -------------------------- | ---------------------- | -------------------------------------------- |
-| _(all)_                    | `getTypeNames`         | Returns known type names (for merge/routing) |
-| `entry?: boolean`          | `validateEntry`        | Validates job type can start a chain         |
-| `input: unknown`           | `parseInput`           | Parses and validates job input               |
-| `output?: unknown`         | `parseOutput`          | Parses and validates job output              |
-| `continueWith?: Reference` | `validateContinueWith` | Validates continuation target                |
-| `blockers?: Reference[]`   | `validateBlockers`     | Validates blocker references                 |
+| Job Type Definition        | Method                 | Purpose                                         |
+| -------------------------- | ---------------------- | ----------------------------------------------- |
+| _(all)_                    | `getTypeNames`         | Returns known type names (for merge/routing)    |
+| `entry?: boolean`          | `validateEntry`        | Validates job type can start a chain            |
+| `input: unknown`           | `encode` / `decode`    | Converts input between runtime and stored form  |
+| `output?: unknown`         | `encode` / `decode`    | Converts output between runtime and stored form |
+| `continueWith?: Reference` | `validateContinueWith` | Validates continuation target                   |
+| `blockers?: Reference[]`   | `validateBlockers`     | Validates blocker references                    |
+
+### Batch Codec Calls
+
+`encode` and `decode` are async and take a **batch**. Each item carries the `typeName` and a `direction` of `"input"` or `"output"`, and a single call can mix both:
+
+```ts
+encode: async (items) =>
+  items.map((item) => {
+    const schema = item.direction === "input"
+      ? schemas[item.typeName].input
+      : schemas[item.typeName].output;
+    return schema.parse(item.value);
+  }),
+```
+
+Core batches deliberately: creating N chains issues one `encode` call, and listing a page of jobs issues one `decode` call covering every input _and_ every output on the page. Adapters that talk to a network service — an encryption or tokenization backend, say — can amortize that into a single round trip. Adapters that only validate pay a per-item `direction` check and nothing else.
 
 ## Error Handling
 
@@ -55,10 +86,11 @@ Complete adapter implementations for each library:
 - [Valibot](https://github.com/kvet/queuert/tree/main/examples/validation-valibot)
 - [TypeBox](https://github.com/kvet/queuert/tree/main/examples/validation-typebox)
 - [ArkType](https://github.com/kvet/queuert/tree/main/examples/validation-arktype)
+- [Zod with codecs](https://github.com/kvet/queuert/tree/main/examples/codec-zod) — runtime form differs from stored form
 
 ## Conformance Testing
 
-Custom validation adapters can be validated against Queuert's conformance suite via `runValidationAdapterConformance` from `queuert/conformance`. The suite combines runtime checks (six-method contract, error wrapping) with type-level checks (schema-to-shape inference) — the fixture's builder return types enforce the type contract at the call site, so inference bugs surface as compile errors before the runtime suite runs. See [Custom Adapters](/queuert/advanced/custom-adapters/) for the full pattern.
+Custom validation adapters can be validated against Queuert's conformance suite via `runValidationAdapterConformance` from `queuert/conformance`. The suite combines runtime checks (the method contract, error wrapping, both codec directions) with type-level checks (schema-to-shape inference) — the fixture's builder return types enforce the type contract at the call site, so inference bugs surface as compile errors before the runtime suite runs. See [Custom Adapters](/queuert/advanced/custom-adapters/) for the full pattern.
 
 ## See Also
 

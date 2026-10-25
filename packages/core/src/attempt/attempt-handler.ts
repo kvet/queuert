@@ -5,8 +5,8 @@ import {
   runHandlerMiddlewareChain,
 } from "../attempt-middleware/attempt-middleware.js";
 import { type BackoffConfig, calculateBackoffMs } from "../entities/backoff.js";
-import { mapStateChainToChain } from "../entities/chain.js";
-import { type AnyJob, mapStateJobToJob } from "../entities/job.js";
+import { mapStateChainsToChains } from "../entities/chain.js";
+import { type AnyJob, mapStateJobsToJobs } from "../entities/job.js";
 import {
   JobAlreadyCompletedError,
   JobNotFoundError,
@@ -139,10 +139,8 @@ const createComplete = (
         throw await readLossError(txCtx);
       }
 
-      const write: CompleteWrite = {
-        stateJob: stateJobWritten,
-        job: mapStateJobToJob(stateJobWritten),
-      };
+      const [job] = await mapStateJobsToJobs([stateJobWritten], helpers.jobTypes);
+      const write: CompleteWrite = { stateJob: stateJobWritten, job };
       bufferObservabilityEvent(transactionHooks, () => {
         helpers.observabilityHelper.jobAttemptCompleted(stateJob, {
           output: write.stateJob.output,
@@ -186,10 +184,11 @@ const runAttemptHandler = async ({
   const blockerChains = stateJob.hasBlockers
     ? await helpers.stateAdapter.getJobBlockers({ jobId: stateJob.id })
     : [];
-  const runningJob = {
-    ...mapStateJobToJob(stateJob),
-    blockers: blockerChains.map(mapStateChainToChain),
-  };
+  const [[job], blockers] = await Promise.all([
+    mapStateJobsToJobs([stateJob], helpers.jobTypes),
+    mapStateChainsToChains(blockerChains, helpers.jobTypes),
+  ]);
+  const runningJob = { ...job, blockers };
   await runHandlerMiddlewareChain(
     attemptMiddleware,
     { job: runningJob, workerId },

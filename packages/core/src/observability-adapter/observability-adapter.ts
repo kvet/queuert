@@ -65,6 +65,7 @@ export type JobAttemptSpanResult =
   | {
       status: "completed";
       continuedWith?: { jobId: string; jobTypeName: string };
+      /** `output` is the encoded (stored) form — see {@link ObservabilityAdapter}. */
       chainCompleted?: { output: unknown };
     }
   | {
@@ -118,6 +119,14 @@ export type CompleteBlockerSpanData = {
  * Adapter for structured logging, metrics, and distributed tracing. All methods
  * are synchronous — side effects are buffered via transaction hooks and flushed
  * after commit.
+ *
+ * Every `input`/`output` value handed to these hooks is the **encoded** (stored)
+ * form, not the runtime form the handler sees. Hooks are synchronous while
+ * `decode` is async, so decoding here is not possible; the encoded form is also
+ * what the state adapter persists, which keeps logs and traces aligned with the
+ * database. Adapters that need runtime values must call the registry's `decode`
+ * themselves outside the hook — at the cost of one codec round trip per event
+ * and, for encrypting codecs, of writing plaintext into the telemetry pipeline.
  */
 export type ObservabilityAdapter = {
   // worker
@@ -127,13 +136,16 @@ export type ObservabilityAdapter = {
   workerStopped: (data: WorkerBasicData) => void;
 
   // chain
+  /** `input` is the encoded (stored) form — see {@link ObservabilityAdapter}. */
   chainCreated: (data: ChainBasicData & { input: unknown }) => void;
+  /** `output` is the encoded (stored) form — see {@link ObservabilityAdapter}. */
   chainCompleted: (data: ChainBasicData & { output: unknown }) => void;
   chainDeleted: (data: ChainBasicData) => void;
 
   // job
   jobCreated: (
     data: JobBasicData & {
+      /** Encoded (stored) form — see the note on {@link ObservabilityAdapter}. */
       input: unknown;
       blockers: ChainBasicData[];
       scheduledAt: Date;

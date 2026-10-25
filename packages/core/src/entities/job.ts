@@ -1,26 +1,34 @@
-import { type StateJob, type StateJobInfo } from "../state-adapter/state-adapter.js";
+import { type JobTypes, type ResolvedJobTypeValue } from "../job-types/job-types.js";
+import {
+  type StateChainInfo,
+  type StateJob,
+  type StateJobInfo,
+} from "../state-adapter/state-adapter.js";
 import { type AnyJob } from "./job.types.js";
 
 export type * from "./job.types.js";
 
-export const mapStateJobToJob = (
-  stateJob: StateJob & { continuation?: StateJobInfo },
-): AnyJob & { continuedTo?: AnyJob } => {
+const hasOutput = (stateJob: StateJobInfo): boolean =>
+  stateJob.status === "completed" && stateJob.continuedToId === null;
+
+const projectJob = (
+  stateJob: StateJobInfo,
+  chain: StateChainInfo,
+  input: unknown,
+  output: unknown,
+): AnyJob => {
   const base = {
     id: stateJob.id,
     chainId: stateJob.chainId,
-    chainTypeName: stateJob.chain.typeName,
+    chainTypeName: chain.typeName,
     chainIndex: stateJob.chainIndex,
     typeName: stateJob.typeName,
-    input: stateJob.input,
+    input,
     createdAt: stateJob.createdAt,
     scheduledAt: stateJob.scheduledAt,
     attempt: stateJob.attempt,
     lastAttemptAt: stateJob.lastAttemptAt,
     lastAttemptError: stateJob.lastAttemptError,
-    ...(stateJob.continuation && {
-      continuedTo: mapStateJobToJob({ ...stateJob.continuation, chain: stateJob.chain }),
-    }),
   };
 
   switch (stateJob.status) {
@@ -39,7 +47,7 @@ export const mapStateJobToJob = (
         status: "completed",
         completedAt: stateJob.completedAt!,
         completedBy: stateJob.completedBy,
-        output: stateJob.output,
+        output,
         continuedToId: null,
       };
     case "running":
@@ -55,4 +63,38 @@ export const mapStateJobToJob = (
     case "pending":
       return { ...base, status: "pending" };
   }
+};
+
+export const mapStateJobsToJobs = async (
+  stateJobs: readonly (StateJob & { continuation?: StateJobInfo })[],
+  jobTypes: Pick<JobTypes<any>, "decode">,
+): Promise<(AnyJob & { continuedTo?: AnyJob })[]> => {
+  if (stateJobs.length === 0) return [];
+
+  const items: ResolvedJobTypeValue[] = [];
+  const collect = (stateJob: StateJobInfo): void => {
+    items.push({ typeName: stateJob.typeName, direction: "input", value: stateJob.input });
+    if (hasOutput(stateJob)) {
+      items.push({ typeName: stateJob.typeName, direction: "output", value: stateJob.output });
+    }
+  };
+  for (const stateJob of stateJobs) {
+    collect(stateJob);
+    if (stateJob.continuation) collect(stateJob.continuation);
+  }
+
+  const decoded = await jobTypes.decode(items);
+
+  let cursor = 0;
+  const project = (stateJob: StateJobInfo, chain: StateChainInfo): AnyJob => {
+    const input = decoded[cursor++];
+    const output = hasOutput(stateJob) ? decoded[cursor++] : undefined;
+    return projectJob(stateJob, chain, input, output);
+  };
+  return stateJobs.map((stateJob) => {
+    const job = project(stateJob, stateJob.chain);
+    return stateJob.continuation
+      ? { ...job, continuedTo: project(stateJob.continuation, stateJob.chain) }
+      : job;
+  });
 };

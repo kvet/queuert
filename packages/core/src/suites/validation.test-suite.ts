@@ -4,8 +4,11 @@ import { createClient } from "../client.js";
 import { JobTypeValidationError } from "../errors.js";
 import { createInProcessWorker } from "../in-process-worker.js";
 import { createProcessors } from "../job-type-processors/create-job-type-processors.js";
-import { type BaseJobTypeDefinitions } from "../job-types/job-type.js";
-import { createJobTypes } from "../job-types/job-types.js";
+import {
+  type BaseJobTypeDefinitions,
+  type ResolvedJobTypeReference,
+} from "../job-types/job-type.js";
+import { type ResolvedJobTypeValue, createJobTypes } from "../job-types/job-types.js";
 import { type TestSuiteContext } from "./spec-context.spec-helper.js";
 
 // --- Mini schema adapter (mirrors real adapter pattern) ---
@@ -44,19 +47,30 @@ const createTestSchemaRegistry = <T extends BaseJobTypeDefinitions>(
       if (!schema) throw new Error(`Unknown job type: "${typeName}"`);
       if (!schema.entry) throw new Error(`"${typeName}" is not an entry point`);
     },
-    parseInput: (typeName, input) => {
-      const schema = schemas[typeName];
-      if (!schema) throw new Error(`Unknown job type: "${typeName}"`);
-      validateFields(schema.input, input, "input");
-      return input;
-    },
-    parseOutput: (typeName, output) => {
-      const schema = schemas[typeName];
-      if (!schema) throw new Error(`Unknown job type: "${typeName}"`);
-      if (!schema.output) throw new Error(`"${typeName}" has no output schema`);
-      validateFields(schema.output, output, "output");
-      return output;
-    },
+    encode: async (items) =>
+      items.map((i) => {
+        const schema = schemas[i.typeName];
+        if (!schema) throw new Error(`Unknown job type: "${i.typeName}"`);
+        if (i.direction === "input") {
+          validateFields(schema.input, i.value, "input");
+        } else {
+          if (!schema.output) throw new Error(`"${i.typeName}" has no output schema`);
+          validateFields(schema.output, i.value, "output");
+        }
+        return i.value;
+      }),
+    decode: async (items) =>
+      items.map((i) => {
+        const schema = schemas[i.typeName];
+        if (!schema) throw new Error(`Unknown job type: "${i.typeName}"`);
+        if (i.direction === "input") {
+          validateFields(schema.input, i.value, "input");
+        } else {
+          if (!schema.output) throw new Error(`"${i.typeName}" has no output schema`);
+          validateFields(schema.output, i.value, "output");
+        }
+        return i.value;
+      }),
     validateContinueWith: (fromTypeName, target) => {
       const schema = schemas[fromTypeName];
       if (!schema) throw new Error(`Unknown job type: "${fromTypeName}"`);
@@ -118,6 +132,65 @@ const blockerJobTypes = createTestSchemaRegistry<{
   auth: { entry: true, input: { token: "string" }, output: { userId: "string" } },
 });
 
+type CodecJobTypeDefinitions = {
+  timed: { entry: true; input: { at: Date }; output: { doneAt: Date } };
+  lax: { entry: true; input: { n: number }; output: null };
+  gated: { entry: true; input: null; output: null; blockers: [{ typeName: "timed" }] };
+};
+
+const createCodecJobTypes = () => {
+  const encodeCalls: (readonly ResolvedJobTypeValue[])[] = [];
+  const decodeCalls: (readonly ResolvedJobTypeValue[])[] = [];
+  const validatedBlockers: ResolvedJobTypeReference[] = [];
+  let strictLax = false;
+
+  const dateKey = (direction: "input" | "output") => (direction === "input" ? "at" : "doneAt");
+
+  const jobTypes = createJobTypes<CodecJobTypeDefinitions>({
+    getTypeNames: () => ["timed", "lax", "gated"],
+    validateEntry: () => {},
+    encode: async (items) => {
+      encodeCalls.push(items);
+      return items.map((item) => {
+        if (item.typeName !== "timed") return item.value;
+        const key = dateKey(item.direction);
+        const date = (item.value as Record<string, unknown>)[key];
+        if (!(date instanceof Date)) throw new Error(`expected a Date at "${key}"`);
+        return { [key]: date.toISOString() };
+      });
+    },
+    decode: async (items) => {
+      decodeCalls.push(items);
+      return items.map((item) => {
+        if (item.typeName === "lax") {
+          const n = (item.value as Record<string, unknown> | null)?.n;
+          if (strictLax && typeof n !== "number") throw new Error(`expected a number at "n"`);
+          return item.value;
+        }
+        if (item.typeName !== "timed") return item.value;
+        const key = dateKey(item.direction);
+        const iso = (item.value as Record<string, unknown>)[key];
+        if (typeof iso !== "string") throw new Error(`expected a string at "${key}"`);
+        return { [key]: new Date(iso) };
+      });
+    },
+    validateContinueWith: () => {},
+    validateBlockers: (_typeName, blockers) => {
+      validatedBlockers.push(...blockers);
+    },
+  });
+
+  return {
+    jobTypes,
+    encodeCalls,
+    decodeCalls,
+    validatedBlockers,
+    setStrictLax: (strict: boolean) => {
+      strictLax = strict;
+    },
+  };
+};
+
 // --- Test suite ---
 
 const completionOptions = {
@@ -162,7 +235,7 @@ export const validationTestSuite = ({ it }: { it: TestAPI<TestSuiteContext> }): 
     expect(chain.input).toEqual({ value: 42 });
   });
 
-  it("reports the parsed input when a chain is created", async ({
+  it("reports the encoded input when a chain is created", async ({
     stateAdapter,
     notifyAdapter,
     withTransaction,
@@ -179,8 +252,11 @@ export const validationTestSuite = ({ it }: { it: TestAPI<TestSuiteContext> }): 
       }>({
         getTypeNames: () => ["main"],
         validateEntry: () => {},
-        parseInput: (_typeName, input) => ({ ...(input as object), parsed: true }),
-        parseOutput: (_typeName, output) => output,
+        encode: async (items) =>
+          items.map((item) =>
+            item.direction === "input" ? { ...(item.value as object), parsed: true } : item.value,
+          ),
+        decode: async (items) => items.map((item) => item.value),
         validateContinueWith: () => {},
         validateBlockers: () => {},
       }),
@@ -313,8 +389,8 @@ export const validationTestSuite = ({ it }: { it: TestAPI<TestSuiteContext> }): 
     }>({
       getTypeNames: () => ["main", "auth"],
       validateEntry: () => {},
-      parseInput: (_typeName, input) => input,
-      parseOutput: (_typeName, output) => output,
+      encode: async (items) => items.map((item) => item.value),
+      decode: async (items) => items.map((item) => item.value),
       validateContinueWith: () => {},
       validateBlockers: (_typeName, blockers) => {
         validatedBlockers.push(...blockers);
@@ -772,5 +848,303 @@ export const validationTestSuite = ({ it }: { it: TestAPI<TestSuiteContext> }): 
         }),
       ),
     ).rejects.toThrow(JobTypeValidationError);
+  });
+
+  it("encodes a multi-chain create in a single batch", async ({
+    stateAdapter,
+    notifyAdapter,
+    withTransaction,
+    observabilityAdapter,
+    log,
+  }) => {
+    const codec = createCodecJobTypes();
+    const client = await createClient({
+      stateAdapter,
+      notifyAdapter,
+      observabilityAdapter,
+      log,
+      jobTypes: codec.jobTypes,
+    });
+
+    await withTransaction(async (txCtx, transactionHooks) =>
+      client.createChains({
+        ...txCtx,
+        transactionHooks,
+        items: [
+          { typeName: "timed", input: { at: new Date("2024-01-01T00:00:00.000Z") } },
+          { typeName: "timed", input: { at: new Date("2024-02-01T00:00:00.000Z") } },
+          { typeName: "lax", input: { n: 1 } },
+        ],
+      }),
+    );
+
+    expect(codec.encodeCalls).toHaveLength(1);
+    expect(codec.encodeCalls[0].map((item) => item.direction)).toEqual(["input", "input", "input"]);
+  });
+
+  it("rejects an encode failure as JobTypeValidationError", async ({
+    stateAdapter,
+    notifyAdapter,
+    withTransaction,
+    observabilityAdapter,
+    log,
+  }) => {
+    const codec = createCodecJobTypes();
+    const client = await createClient({
+      stateAdapter,
+      notifyAdapter,
+      observabilityAdapter,
+      log,
+      jobTypes: codec.jobTypes,
+    });
+
+    await expect(
+      withTransaction(async (txCtx, transactionHooks) =>
+        client.createChain({
+          ...txCtx,
+          transactionHooks,
+          typeName: "timed",
+          input: { at: "2024-01-01" as unknown as Date },
+        }),
+      ),
+    ).rejects.toThrow(JobTypeValidationError);
+  });
+
+  it("rejects an encoded value that is not JSON-serializable", async ({
+    stateAdapter,
+    notifyAdapter,
+    withTransaction,
+    observabilityAdapter,
+    log,
+  }) => {
+    const client = await createClient({
+      stateAdapter,
+      notifyAdapter,
+      observabilityAdapter,
+      log,
+      jobTypes: createJobTypes<CodecJobTypeDefinitions>({
+        getTypeNames: () => ["timed"],
+        validateEntry: () => {},
+        encode: async (items) => items.map((item) => item.value),
+        decode: async (items) => items.map((item) => item.value),
+        validateContinueWith: () => {},
+        validateBlockers: () => {},
+      }),
+    });
+
+    await expect(
+      withTransaction(async (txCtx, transactionHooks) =>
+        client.createChain({
+          ...txCtx,
+          transactionHooks,
+          typeName: "timed",
+          input: { at: new Date("2024-01-01T00:00:00.000Z") },
+        }),
+      ),
+    ).rejects.toThrow(/not JSON-serializable at "at"/);
+  });
+
+  it("decodes a page of jobs in a single batch covering inputs and outputs", async ({
+    stateAdapter,
+    notifyAdapter,
+    withTransaction,
+    withWorkers,
+    observabilityAdapter,
+    log,
+  }) => {
+    const codec = createCodecJobTypes();
+    const client = await createClient({
+      stateAdapter,
+      notifyAdapter,
+      observabilityAdapter,
+      log,
+      jobTypes: codec.jobTypes,
+    });
+    const seen: unknown[] = [];
+    const worker = await createInProcessWorker({
+      client,
+      concurrency: 1,
+      processors: createProcessors({
+        client,
+        jobTypes: codec.jobTypes,
+        processors: {
+          timed: {
+            attemptHandler: async ({ job, complete }) => {
+              seen.push(job.input.at);
+              return withTransaction(async (txCtx, transactionHooks) =>
+                complete({
+                  ...txCtx,
+                  transactionHooks,
+                  output: { doneAt: new Date("2024-03-01T00:00:00.000Z") },
+                }),
+              );
+            },
+          },
+        },
+      }),
+    });
+
+    const chains = await withTransaction(async (txCtx, transactionHooks) =>
+      client.createChains({
+        ...txCtx,
+        transactionHooks,
+        items: [
+          { typeName: "timed", input: { at: new Date("2024-01-01T00:00:00.000Z") } },
+          { typeName: "timed", input: { at: new Date("2024-02-01T00:00:00.000Z") } },
+        ],
+      }),
+    );
+    await withWorkers([await worker.start()], async () => {
+      for (const chain of chains) {
+        await client.awaitChain(chain, completionOptions);
+      }
+    });
+    await withTransaction(async (txCtx, transactionHooks) =>
+      client.createChain({
+        ...txCtx,
+        transactionHooks,
+        typeName: "timed",
+        input: { at: new Date("2024-04-01T00:00:00.000Z") },
+      }),
+    );
+
+    codec.decodeCalls.length = 0;
+    const page = await client.listJobs({ typeName: "timed", limit: 10 });
+
+    expect(page.items).toHaveLength(3);
+    expect(codec.decodeCalls).toHaveLength(1);
+    expect(codec.decodeCalls[0]).toHaveLength(5);
+    expect(codec.decodeCalls[0].filter((item) => item.direction === "output")).toHaveLength(2);
+  });
+
+  it("rejects a persisted value the decoder rejects as JobTypeValidationError", async ({
+    stateAdapter,
+    notifyAdapter,
+    withTransaction,
+    observabilityAdapter,
+    log,
+  }) => {
+    const codec = createCodecJobTypes();
+    const client = await createClient({
+      stateAdapter,
+      notifyAdapter,
+      observabilityAdapter,
+      log,
+      jobTypes: codec.jobTypes,
+    });
+
+    const chain = await withTransaction(async (txCtx, transactionHooks) =>
+      client.createChain({
+        ...txCtx,
+        transactionHooks,
+        typeName: "lax",
+        input: { n: "drifted" as unknown as number },
+      }),
+    );
+
+    codec.setStrictLax(true);
+    await expect(client.getJob({ id: chain.id })).rejects.toThrow(JobTypeValidationError);
+  });
+
+  it("hands the worker the decoded input and returns the decoded output to the client", async ({
+    stateAdapter,
+    notifyAdapter,
+    withTransaction,
+    withWorkers,
+    observabilityAdapter,
+    log,
+  }) => {
+    const codec = createCodecJobTypes();
+    const client = await createClient({
+      stateAdapter,
+      notifyAdapter,
+      observabilityAdapter,
+      log,
+      jobTypes: codec.jobTypes,
+    });
+    const seen: unknown[] = [];
+    const worker = await createInProcessWorker({
+      client,
+      concurrency: 1,
+      processors: createProcessors({
+        client,
+        jobTypes: codec.jobTypes,
+        processors: {
+          timed: {
+            attemptHandler: async ({ job, complete }) => {
+              seen.push(job.input.at);
+              return withTransaction(async (txCtx, transactionHooks) =>
+                complete({
+                  ...txCtx,
+                  transactionHooks,
+                  output: { doneAt: new Date("2024-03-01T00:00:00.000Z") },
+                }),
+              );
+            },
+          },
+        },
+      }),
+    });
+
+    const at = new Date("2024-01-01T00:00:00.000Z");
+    const chain = await withTransaction(async (txCtx, transactionHooks) =>
+      client.createChain({ ...txCtx, transactionHooks, typeName: "timed", input: { at } }),
+    );
+
+    await withWorkers([await worker.start()], async () => {
+      const completed = await client.awaitChain(chain, completionOptions);
+      expect(completed.output.doneAt).toEqual(new Date("2024-03-01T00:00:00.000Z"));
+    });
+
+    expect(seen).toEqual([at]);
+    const job = await client.getJob({ id: chain.id, typeName: "timed" });
+    expect(job?.input.at).toEqual(at);
+  });
+
+  it("validates blockers against the decoded input of each stored chain", async ({
+    stateAdapter,
+    notifyAdapter,
+    withTransaction,
+    observabilityAdapter,
+    log,
+  }) => {
+    const codec = createCodecJobTypes();
+    const client = await createClient({
+      stateAdapter,
+      notifyAdapter,
+      observabilityAdapter,
+      log,
+      jobTypes: codec.jobTypes,
+    });
+
+    const at = new Date("2024-01-01T00:00:00.000Z");
+    await withTransaction(async (txCtx, transactionHooks) => {
+      const [first, second] = await client.createChains({
+        ...txCtx,
+        transactionHooks,
+        items: [
+          { typeName: "timed", input: { at } },
+          { typeName: "timed", input: { at } },
+        ],
+      });
+      codec.decodeCalls.length = 0;
+      await client.createChains({
+        ...txCtx,
+        transactionHooks,
+        items: [
+          { typeName: "gated", input: null, blockers: [{ id: first.id }] },
+          { typeName: "gated", input: null, blockers: [{ id: second.id }] },
+        ],
+      });
+    });
+
+    expect(codec.validatedBlockers).toEqual([
+      { typeName: "timed", input: { at } },
+      { typeName: "timed", input: { at } },
+    ]);
+    expect(codec.decodeCalls[0]).toEqual([
+      { typeName: "timed", direction: "input", value: { at: at.toISOString() } },
+      { typeName: "timed", direction: "input", value: { at: at.toISOString() } },
+    ]);
   });
 };

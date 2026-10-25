@@ -441,6 +441,19 @@ importers:
         specifier: 5.9.3
         version: 5.9.3
 
+  examples/codec-zod:
+    dependencies:
+      queuert:
+        specifier: workspace:*
+        version: link:../../packages/core
+      zod:
+        specifier: 4.6.7
+        version: 4.6.7
+    devDependencies:
+      '@queuert/tsconfig':
+        specifier: workspace:*
+        version: link:../../packages-internal/tsconfig
+
   examples/dashboard:
     devDependencies:
       '@queuert/dashboard':

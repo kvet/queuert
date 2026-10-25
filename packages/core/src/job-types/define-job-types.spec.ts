@@ -1430,3 +1430,73 @@ describe("rest/variadic blocker slots", () => {
     });
   });
 });
+
+describe("JSON-serializable constraint", () => {
+  it("accepts JSON-safe inputs and outputs", () => {
+    const defs = defineJobTypes<{
+      job: {
+        entry: true;
+        input: { id: string; count: number; tags: string[]; nested: { flag: boolean } };
+        output: { done: true; label?: string };
+      };
+    }>();
+
+    expectTypeOf<JobTypeDefinitions<typeof defs>>().toHaveProperty("job");
+  });
+
+  it("accepts `unknown` placeholders so structural references keep compiling", () => {
+    const defs = defineJobTypes<{
+      router: {
+        entry: true;
+        input: { path: string };
+        continueWith: { input: { payload: unknown } };
+      };
+      handler: {
+        input: { payload: unknown };
+        output: { data: unknown };
+      };
+    }>();
+
+    expectTypeOf<JobTypeDefinitions<typeof defs>>().toHaveProperty("handler");
+  });
+
+  it("does not mistake an error-shaped payload for a real Error", () => {
+    const defs = defineJobTypes<{
+      "report-failure": {
+        entry: true;
+        input: { name: string; message: string; context: unknown };
+        output: { logged: boolean };
+      };
+    }>();
+
+    expectTypeOf<JobTypeDefinitions<typeof defs>>().toHaveProperty("report-failure");
+  });
+
+  it("rejects a `Date` in input", () => {
+    defineJobTypes<// @ts-expect-error Date is not JSON-serializable
+    {
+      job: { entry: true; input: { sendAt: Date }; output: null };
+    }>();
+  });
+
+  it("rejects a `Date` nested inside an array in input", () => {
+    defineJobTypes<// @ts-expect-error Date is not JSON-serializable
+    {
+      job: { entry: true; input: { slots: { at: Date }[] }; output: null };
+    }>();
+  });
+
+  it("rejects a `Map` in output", () => {
+    defineJobTypes<// @ts-expect-error Map is not JSON-serializable
+    {
+      job: { entry: true; input: null; output: { index: Map<string, number> } };
+    }>();
+  });
+
+  it("rejects a `bigint` in input", () => {
+    defineJobTypes<// @ts-expect-error bigint is not JSON-serializable
+    {
+      job: { entry: true; input: { amount: bigint }; output: null };
+    }>();
+  });
+});

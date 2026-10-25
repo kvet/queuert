@@ -7,13 +7,13 @@ import {
 import {
   type ChainFields,
   type CompletedChainFields,
-  mapStateChainToChain,
+  mapStateChainsToChains,
 } from "./entities/chain.js";
 import {
   type AnyJob,
   type CompletedJob,
   type JobStatus,
-  mapStateJobToJob,
+  mapStateJobsToJobs,
 } from "./entities/job.js";
 import { type OrderDirection, type Page } from "./entities/pagination.js";
 import { type ScheduleOptions } from "./entities/schedule.js";
@@ -749,18 +749,12 @@ export const createClient = async <
         );
       }
 
-      const deletedChains = verdicts
-        .filter(
+      const deletedChains = (await mapStateChainsToChains(
+        verdicts.filter(
           (verdict): verdict is StateChain => verdict !== undefined && !Array.isArray(verdict),
-        )
-        .map(
-          (stateChain) =>
-            mapStateChainToChain(stateChain) as ResolvedChain<
-              TJobId,
-              TJobTypeDefinitions,
-              TEntryName
-            >,
-        );
+        ),
+        helpers.jobTypes,
+      )) as ResolvedChain<TJobId, TJobTypeDefinitions, TEntryName>[];
 
       for (const stateChain of verdicts) {
         if (stateChain !== undefined && !Array.isArray(stateChain)) {
@@ -868,10 +862,11 @@ export const createClient = async <
         return stateJob;
       });
 
-      return rescheduled.map(
-        (stateJob) =>
-          mapStateJobToJob(stateJob) as ResolvedJob<TJobId, TJobTypeDefinitions, TJobTypeName>,
-      );
+      return (await mapStateJobsToJobs(rescheduled, helpers.jobTypes)) as ResolvedJob<
+        TJobId,
+        TJobTypeDefinitions,
+        TJobTypeName
+      >[];
     },
 
     completeChain: async <
@@ -987,7 +982,13 @@ export const createClient = async <
 
         const callbackResult = await completeCallback({
           transactionHooks,
-          complete: async (outcome) => mapStateJobToJob(await completeOnce.call(outcome)),
+          complete: async (outcome) => {
+            const [mapped] = await mapStateJobsToJobs(
+              [await completeOnce.call(outcome)],
+              helpers.jobTypes,
+            );
+            return mapped;
+          },
           ...txCtx,
         });
 
@@ -1007,7 +1008,8 @@ export const createClient = async <
         return callbackResult.continuedTo ?? callbackResult;
       };
 
-      await handler({ job: mapStateJobToJob(currentJob), completeJob });
+      const [mappedCurrentJob] = await mapStateJobsToJobs([currentJob], helpers.jobTypes);
+      await handler({ job: mappedCurrentJob, completeJob });
 
       const [updatedChain] = await helpers.stateAdapter.getChains({
         txCtx,
@@ -1020,7 +1022,8 @@ export const createClient = async <
         });
       }
 
-      return mapStateChainToChain(updatedChain) as TResult;
+      const [mappedChain] = await mapStateChainsToChains([updatedChain], helpers.jobTypes);
+      return mappedChain as TResult;
     },
 
     awaitChain: async <
@@ -1056,7 +1059,7 @@ export const createClient = async <
 
         assertChainTypeName(stateChain, { chainId: String(id), typeName });
 
-        const mapped = mapStateChainToChain(stateChain);
+        const [mapped] = await mapStateChainsToChains([stateChain], helpers.jobTypes);
         return mapped.status === "completed"
           ? (mapped as ResolvedChain<TJobId, TJobTypeDefinitions, TChainTypeName> & {
               status: "completed";
@@ -1160,10 +1163,16 @@ export const createClient = async <
         assertChainTypeName(stateChain, { chainId: String(ids[index]), typeName });
       });
 
+      const mappedChains = await mapStateChainsToChains(
+        stateChains.filter((stateChain) => stateChain !== undefined),
+        helpers.jobTypes,
+      );
+
+      let mappedIndex = 0;
       return stateChains.map((stateChain) => {
         if (!stateChain) return undefined;
 
-        return mapStateChainToChain(stateChain) as ResolvedChain<
+        return mappedChains[mappedIndex++] as ResolvedChain<
           TJobId,
           TJobTypeDefinitions,
           TChainTypeName
@@ -1216,10 +1225,16 @@ export const createClient = async <
         }
       }
 
+      const mappedJobs = await mapStateJobsToJobs(
+        stateJobs.filter((stateJob) => stateJob !== undefined),
+        helpers.jobTypes,
+      );
+
+      let mappedIndex = 0;
       return stateJobs.map((stateJob) => {
         if (!stateJob) return undefined;
 
-        return mapStateJobToJob(stateJob) as ResolvedJob<TJobId, TJobTypeDefinitions, TJobTypeName>;
+        return mappedJobs[mappedIndex++] as ResolvedJob<TJobId, TJobTypeDefinitions, TJobTypeName>;
       });
     },
 
@@ -1298,17 +1313,12 @@ export const createClient = async <
         orderDirection,
         page: { cursor, limit },
       } as Parameters<typeof helpers.stateAdapter.listChains>[0]);
-      return {
-        items: result.items.map(
-          (stateChain) =>
-            mapStateChainToChain(stateChain) as ResolvedChain<
-              TJobId,
-              TJobTypeDefinitions,
-              TChainTypeName
-            >,
-        ),
-        nextCursor: result.nextCursor,
-      };
+      const items = (await mapStateChainsToChains(result.items, helpers.jobTypes)) as ResolvedChain<
+        TJobId,
+        TJobTypeDefinitions,
+        TChainTypeName
+      >[];
+      return { items, nextCursor: result.nextCursor };
     },
 
     listJobs: async <
@@ -1364,13 +1374,12 @@ export const createClient = async <
         orderDirection,
         page: { cursor, limit },
       } as Parameters<typeof helpers.stateAdapter.listJobs>[0]);
-      return {
-        items: result.items.map(
-          (stateJob) =>
-            mapStateJobToJob(stateJob) as ResolvedJob<TJobId, TJobTypeDefinitions, TJobTypeName>,
-        ),
-        nextCursor: result.nextCursor,
-      };
+      const items = (await mapStateJobsToJobs(result.items, helpers.jobTypes)) as ResolvedJob<
+        TJobId,
+        TJobTypeDefinitions,
+        TJobTypeName
+      >[];
+      return { items, nextCursor: result.nextCursor };
     },
 
     listChainJobs: async <
@@ -1409,17 +1418,12 @@ export const createClient = async <
         orderDirection,
         page: { cursor, limit },
       });
-      return {
-        items: result.items.map(
-          (stateJob) =>
-            mapStateJobToJob(stateJob) as ResolvedChainJobs<
-              TJobId,
-              TJobTypeDefinitions,
-              TChainTypeName
-            >,
-        ),
-        nextCursor: result.nextCursor,
-      };
+      const items = (await mapStateJobsToJobs(result.items, helpers.jobTypes)) as ResolvedChainJobs<
+        TJobId,
+        TJobTypeDefinitions,
+        TChainTypeName
+      >[];
+      return { items, nextCursor: result.nextCursor };
     },
 
     getJobBlockers: async <
@@ -1455,7 +1459,7 @@ export const createClient = async <
         txCtx,
         jobId,
       });
-      return blockers.map((stateChain) => mapStateChainToChain(stateChain)) as unknown as TBlockers;
+      return (await mapStateChainsToChains(blockers, helpers.jobTypes)) as unknown as TBlockers;
     },
 
     listBlockedJobs: async <
@@ -1492,10 +1496,11 @@ export const createClient = async <
         orderDirection,
         page: { cursor, limit },
       });
-      return {
-        items: stateJobPage.items.map((stateJob) => mapStateJobToJob(stateJob) as TBlockedJob),
-        nextCursor: stateJobPage.nextCursor,
-      };
+      const items = (await mapStateJobsToJobs(
+        stateJobPage.items,
+        helpers.jobTypes,
+      )) as TBlockedJob[];
+      return { items, nextCursor: stateJobPage.nextCursor };
     },
   };
   return client;

@@ -1,4 +1,4 @@
-import { type Chain, mapStateChainToChain } from "./entities/chain.js";
+import { type Chain, mapStateChainsToChains } from "./entities/chain.js";
 import { type DeduplicationOptions } from "./entities/deduplication.js";
 import { type ScheduleOptions } from "./entities/schedule.js";
 import {
@@ -65,23 +65,26 @@ const resolveJobId = (helpers: Helpers, id: string | undefined): string => {
   return resolvedId;
 };
 
-const prepareJobs = <TEntry extends AnyNewJob>(
+const prepareJobs = async <TEntry extends AnyNewJob>(
   helpers: Helpers,
   entries: TEntry[],
   fromJob: StateJob | null,
-): { entry: TEntry; id: string; parsedInput: unknown; jobSpan: JobSpanHandle | undefined }[] => {
-  const prepared = entries.map((entry) => {
+): Promise<
+  { entry: TEntry; id: string; encodedInput: unknown; jobSpan: JobSpanHandle | undefined }[]
+> => {
+  const ids = entries.map((entry) => {
     assertBlockerLimit(helpers, entry.typeName, entry.blockers?.length ?? 0);
-    return {
-      entry,
-      id: resolveJobId(helpers, entry.id),
-      parsedInput: helpers.jobTypes.parseInput(entry.typeName, entry.input),
-    };
+    return resolveJobId(helpers, entry.id);
   });
+  const encodedInputs = await helpers.jobTypes.encode(
+    entries.map((entry) => ({ typeName: entry.typeName, direction: "input", value: entry.input })),
+  );
 
-  return prepared.map((item) => ({
-    ...item,
-    jobSpan: helpers.observabilityHelper.startJobSpan(item.entry.typeName, fromJob),
+  return entries.map((entry, index) => ({
+    entry,
+    id: ids[index],
+    encodedInput: encodedInputs[index],
+    jobSpan: helpers.observabilityHelper.startJobSpan(entry.typeName, fromJob),
   }));
 };
 
@@ -120,19 +123,34 @@ const lockBlockerChains = async <TItem extends { entry: AnyNewJob }>(
       : [];
 
   const fetched = blockerChains.values();
-  return items.map((item) => {
-    const jobBlockerChains = (item.entry.blockers ?? []).map((blocker) =>
+  const lockedItems = items.map((item) => ({
+    ...item,
+    blockerChains: (item.entry.blockers ?? []).map((blocker) =>
       requireBlockerChain(blocker, fetched.next().value),
-    );
+    ),
+  }));
+
+  const decodedInputs = (
+    await helpers.jobTypes.decode(
+      lockedItems.flatMap((item) =>
+        item.blockerChains.map((blockerChain) => ({
+          typeName: blockerChain.head.typeName,
+          direction: "input" as const,
+          value: blockerChain.head.input,
+        })),
+      ),
+    )
+  ).values();
+  for (const item of lockedItems) {
     helpers.jobTypes.validateBlockers(
       item.entry.typeName,
-      jobBlockerChains.map((blockerChain) => ({
+      item.blockerChains.map((blockerChain) => ({
         typeName: blockerChain.typeName,
-        input: blockerChain.head.input,
+        input: decodedInputs.next().value,
       })),
     );
-    return { ...item, blockerChains: jobBlockerChains };
-  });
+  }
+  return lockedItems;
 };
 
 const addJobsBlockers = async <TItem extends CreatedJob>(
@@ -272,7 +290,8 @@ export const createChains = async (
     }
   }
 
-  const prepared = prepareJobs(helpers, chains, null);
+  const prepared = await prepareJobs(helpers, chains, null);
+  let created;
   try {
     const locked = await lockBlockerChains(helpers, { items: prepared, txCtx });
     const createdChains = await helpers.stateAdapter.createJobs({
@@ -280,14 +299,14 @@ export const createChains = async (
       jobs: locked.map((item) => ({
         id: item.id,
         typeName: item.entry.typeName,
-        input: item.parsedInput,
+        input: item.encodedInput,
         schedule: item.entry.schedule,
         chainTraceContext: item.jobSpan?.chainTraceContext ?? null,
         traceContext: item.jobSpan?.traceContext ?? null,
         deduplication: item.entry.deduplication,
       })),
     });
-    const created = await addJobsBlockers(helpers, {
+    created = await addJobsBlockers(helpers, {
       txCtx,
       items: locked.map((item, index) => {
         const createdChain = createdChains[index];
@@ -297,17 +316,21 @@ export const createChains = async (
     });
 
     reportCreatedJobs(helpers, created, { isChainHead: true, transactionHooks });
-
-    return created.map(({ createdChain }) => ({
-      ...mapStateChainToChain(createdChain),
-      deduplicated: createdChain.deduplicated,
-    }));
   } catch (error) {
     for (const { jobSpan } of prepared) {
       jobSpan?.end({ status: "error", error });
     }
     throw error;
   }
+
+  const mappedChains = await mapStateChainsToChains(
+    created.map(({ createdChain }) => createdChain),
+    helpers.jobTypes,
+  );
+  return mappedChains.map((chain, index) => ({
+    ...chain,
+    deduplicated: created[index].createdChain.deduplicated,
+  }));
 };
 
 export const completeChain = async (
@@ -326,20 +349,22 @@ export const completeChain = async (
     fence: StateAttemptFence | null;
   },
 ): Promise<StateJob | undefined> => {
-  const parsedOutput = helpers.jobTypes.parseOutput(job.typeName, output);
+  const [encodedOutput] = await helpers.jobTypes.encode([
+    { typeName: job.typeName, direction: "output", value: output },
+  ]);
 
   const [completed] = await helpers.stateAdapter.completeJobs({
     txCtx,
-    jobs: [{ jobId: job.id, output: parsedOutput, fence: fence ?? undefined }],
+    jobs: [{ jobId: job.id, output: encodedOutput, fence: fence ?? undefined }],
   });
   if (!completed) return undefined;
   const { chain } = completed;
 
   bufferObservabilityEvent(transactionHooks, () => {
-    helpers.observabilityHelper.jobCompleted(completed, { output: parsedOutput });
+    helpers.observabilityHelper.jobCompleted(completed, { output: encodedOutput });
   });
   bufferObservabilityEvent(transactionHooks, () => {
-    helpers.observabilityHelper.chainCompleted(chain, { output: parsedOutput });
+    helpers.observabilityHelper.chainCompleted(chain, { output: encodedOutput });
   });
   bufferNotifyChainCompletion(transactionHooks, helpers.notifyAdapter, completed);
 
@@ -392,7 +417,7 @@ export const continueChain = async (
     input: continueWith.input,
   });
 
-  const prepared = prepareJobs(helpers, [continueWith], job);
+  const prepared = await prepareJobs(helpers, [continueWith], job);
   const [{ jobSpan }] = prepared;
   try {
     const locked = await lockBlockerChains(helpers, { items: prepared, txCtx });
@@ -401,7 +426,7 @@ export const continueChain = async (
       jobs: locked.map((item) => ({
         id: item.id,
         typeName: item.entry.typeName,
-        input: item.parsedInput,
+        input: item.encodedInput,
         schedule: item.entry.schedule,
         traceContext: item.jobSpan?.traceContext ?? null,
         continueFromId: job.id,

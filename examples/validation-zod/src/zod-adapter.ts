@@ -4,6 +4,11 @@
  * This is a user-land adapter that shows how to integrate Zod with Queuert's
  * runtime validation system. The same pattern applies to Valibot, ArkType,
  * or any other validation library.
+ *
+ * Every schema here is identity: `z.input` equals `z.output`, so `encode` and
+ * `decode` both just validate and pass the value through. See
+ * `examples/codec-zod` for the transforming case, where the runtime form and
+ * the stored form differ (a `Date` handler-side, an ISO string at rest).
  */
 
 import {
@@ -142,18 +147,27 @@ export const createZodJobTypes = <
       }
     },
 
-    parseInput: (typeName, input) => {
-      return getSchema(typeName).input.parse(input);
-    },
+    // Identity codec: the schemas do not transform, so encode and decode are
+    // the same validation pass in both directions.
+    encode: async (items) =>
+      items.map((i) => {
+        const schema = getSchema(i.typeName);
+        const target = i.direction === "input" ? schema.input : schema.output;
+        if (!target) {
+          throw new Error(`Job type "${i.typeName}" does not have an output schema`);
+        }
+        return target.parse(i.value);
+      }),
 
-    parseOutput: (typeName, output) => {
-      const schema = getSchema(typeName);
-      if (schema.output) {
-        return schema.output.parse(output);
-      } else {
-        throw new Error(`Job type "${typeName}" does not have an output schema`);
-      }
-    },
+    decode: async (items) =>
+      items.map((i) => {
+        const schema = getSchema(i.typeName);
+        const target = i.direction === "input" ? schema.input : schema.output;
+        if (!target) {
+          throw new Error(`Job type "${i.typeName}" does not have an output schema`);
+        }
+        return target.parse(i.value);
+      }),
 
     validateContinueWith: (typeName, continuation) => {
       const schema = getSchema(typeName);
