@@ -1,7 +1,7 @@
 /**
  * A handle returned by {@link AsyncRwLock.acquireRead} or {@link AsyncRwLock.acquireWrite}.
  *
- * Call {@link LockHandle.release | release} manually, or use `using` to release at scope exit:
+ * Call `release` manually, or use `using` to release at scope exit:
  *
  * ```ts
  * using h = await lock.acquireRead();

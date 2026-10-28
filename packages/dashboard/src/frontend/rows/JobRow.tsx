@@ -1,14 +1,12 @@
+import { WarningIcon, Row, StatusPill } from "@queuert/ui/components";
+import { shortId } from "@queuert/ui/lib";
 import { A } from "@solidjs/router";
 import { Show } from "solid-js";
 
 import { type UnknownJob } from "../api.js";
-import { shortId } from "../domain/ids.js";
-import { WarningIcon } from "../ui/icons.js";
 import { IdChip } from "../ui/IdChip.js";
-import { RowLink } from "../ui/kit.js";
-import { StatusPill } from "../ui/StatusPill.js";
 import { Time } from "../ui/Time.js";
-import { DataLine, rowClass } from "./ChainRow.js";
+import { DataLine } from "./ChainRow.js";
 
 export type JobSortKey = "createdAt" | "scheduledAt" | "attemptAt" | "attemptUntil" | "completedAt";
 
@@ -20,7 +18,6 @@ const sortTime = (job: UnknownJob, key: JobSortKey): Date | null => {
   return job.createdAt;
 };
 
-/** Identity and chain on line 1, input/output previews on line 2; details live on the job page. */
 export const JobRow = (props: { job: UnknownJob; sortKey: JobSortKey; showType?: boolean }) => {
   const time = () => sortTime(props.job, props.sortKey);
   const output = () =>
@@ -33,12 +30,11 @@ export const JobRow = (props: { job: UnknownJob; sortKey: JobSortKey; showType?:
       : undefined;
 
   return (
-    <li class={rowClass}>
-      <RowLink href={`/jobs/${props.job.id}`} label={`Open job ${props.job.id}`} />
+    <Row href={`/jobs/${props.job.id}`} label={`Open job ${props.job.id}`} link={A}>
       <div class="flex min-w-0 items-center gap-2">
         <StatusPill status={props.job.status} />
         <Show when={props.showType}>
-          <span class="truncate font-medium" title={props.job.typeName}>
+          <span class="font-mono truncate font-medium" title={props.job.typeName}>
             {props.job.typeName}
           </span>
         </Show>
@@ -69,6 +65,6 @@ export const JobRow = (props: { job: UnknownJob; sortKey: JobSortKey; showType?:
         </Show>
       </span>
       <DataLine input={props.job.input} output={output()} />
-    </li>
+    </Row>
   );
 };

@@ -64,7 +64,7 @@ Supports a small set of mutations (running a scheduled job now, deleting a chain
 
 ## UI views
 
-The top bar holds the navigation (Overview, Chains, Jobs), **Find by ID or type** (`⌘K` / `Ctrl+K`), a refresh control, a theme switch (System, Light, Dark), and a link to these docs. Every filter lives in the URL, so any view can be bookmarked or shared.
+The top bar shows the dashboard's version next to the logo and holds the navigation (Overview, Chains, Jobs), **Find by ID or type** (`⌘K` / `Ctrl+K`), a theme switch (System, Light, Dark), and a link to these docs. Every filter lives in the URL, so any view can be bookmarked or shared.
 
 ### Overview
 
@@ -107,10 +107,6 @@ Shows one job, top to bottom: its details (attempts, timing, and the current att
 ![Find dialog listing the chain and job types that match the typed text](../../../assets/dashboard/find.png)
 
 Press `⌘K` (`Ctrl+K`) or click the find box (a search icon on narrow screens) and type part of a type name or paste one or more IDs. While the text could be a type name, the dialog lists up to five matching chain types and five matching job types. Matching works like [fzf](https://github.com/junegunn/fzf): a name matches when it contains the text's letters in order (`ordval` finds `order:validate`), words separated by spaces must all match in any order, and text with an uppercase letter is case-sensitive; the best matches come first. Press `↓` to move into them and `Enter` to open that type's chain or job list; `Enter` in the box also opens the top type when no chain or job has that ID. To look up by ID, paste one or more IDs, separated by commas, spaces or new lines (up to 100). A single ID opens the chain or job directly; a chain and its head job share an ID, so for a head job you choose which to open. Several IDs open `/find`, which lists the matching chains and jobs and the IDs that were not found.
-
-### Refreshing
-
-Data does not update by itself unless you turn it on. The refresh button reloads the current view in place and shows how long ago it last loaded; its menu turns on auto-refresh every 15, 30 or 60 seconds, which pauses while the tab is hidden. A refresh never resets a list you have scrolled: when the top of the list has changed, a "List has changed · Show" banner lets you jump to the fresh list.
 
 ### Content Security Policy
 

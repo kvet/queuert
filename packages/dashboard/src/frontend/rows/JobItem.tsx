@@ -1,3 +1,5 @@
+import { ErrorMark, ChevronRightIcon, StatusPill } from "@queuert/ui/components";
+import { type AnyStatus, statusClasses } from "@queuert/ui/lib";
 import { A } from "@solidjs/router";
 import { type JSX, Show, createSignal } from "solid-js";
 
@@ -5,17 +7,12 @@ import { type UnknownChain, type UnknownJob, errorMessage, rescheduleJob } from 
 import { jobPhase } from "../domain/jobPhase.js";
 import { formatRelative } from "../domain/time.js";
 import { now } from "../state/clock.js";
-import { ChevronRightIcon } from "../ui/icons.js";
 import { IdChip } from "../ui/IdChip.js";
 import { JsonViewer } from "../ui/JsonViewer.js";
 import { buttonClass } from "../ui/kit.js";
-import { ErrorMark } from "../ui/Pips.js";
-import { type AnyStatus, statusClasses } from "../ui/status.js";
-import { StatusPill } from "../ui/StatusPill.js";
 import { Time } from "../ui/Time.js";
 import { BlockerChips, blockerProgress } from "./BlockerChips.js";
 
-/** An entry in the chain sequence: a numbered node coloured by status, connected down to the next. */
 const SequenceItem = (props: {
   label: string;
   status: AnyStatus;
@@ -39,7 +36,6 @@ const SequenceItem = (props: {
   </li>
 );
 
-/** Shown only for a pending job scheduled in the future; failures are reported inline. */
 export const RescheduleButton = (props: {
   job: UnknownJob;
   label: string;
@@ -83,10 +79,8 @@ export const RescheduleButton = (props: {
   );
 };
 
-/** Full error text, mono and pre-wrapped, collapsed to `lines` with a "Show full message" toggle. */
 export const ErrorText = (props: { text: string; lines: 3 | 12 }) => {
   const [full, setFull] = createSignal(false);
-  // Approximates whether the clamp cuts text off, assuming ~90 characters per wrapped line.
   const long = () =>
     props.text.split("\n").length > props.lines || props.text.length > props.lines * 90;
   const clamp = () => (props.lines === 3 ? "line-clamp-3" : "line-clamp-[12]");
@@ -140,7 +134,7 @@ export const JobItem = (props: {
         <div class="flex min-w-0 flex-1 flex-wrap items-center gap-x-2 gap-y-1 sm:flex-nowrap">
           <A
             href={`/jobs/${props.job.id}`}
-            class="min-w-0 truncate font-medium hover:underline"
+            class="font-mono min-w-0 truncate font-medium hover:underline"
             title={props.job.typeName}
           >
             {props.job.typeName}
@@ -227,7 +221,6 @@ export const JobItem = (props: {
   );
 };
 
-/** A run of repeated completed jobs, collapsed. */
 export const FoldItem = (props: {
   jobs: UnknownJob[];
   typeName: string;
@@ -249,7 +242,7 @@ export const FoldItem = (props: {
     >
       <div class="flex min-h-6 items-center gap-2">
         <div class="flex min-w-0 flex-1 items-center gap-2">
-          <span class="min-w-0 truncate font-medium" title={props.typeName}>
+          <span class="font-mono min-w-0 truncate font-medium" title={props.typeName}>
             {props.typeName}
           </span>
           <span class="shrink-0 rounded-xs bg-surface-2 px-2 py-0.5 text-xs whitespace-nowrap text-fg-muted">

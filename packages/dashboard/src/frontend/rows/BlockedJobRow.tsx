@@ -1,19 +1,18 @@
+import { StatusPill } from "@queuert/ui/components";
+import { shortId } from "@queuert/ui/lib";
 import { A } from "@solidjs/router";
 
 import { type UnknownJob } from "../api.js";
-import { shortId } from "../domain/ids.js";
 import { IdChip } from "../ui/IdChip.js";
-import { StatusPill } from "../ui/StatusPill.js";
 import { Time } from "../ui/Time.js";
 
-/** A job in another chain that declared this chain as a blocker. Links to the job, not its chain. */
 export const BlockedJobRow = (props: { job: UnknownJob }) => (
   <li class="grid grid-cols-[minmax(0,1fr)_auto] items-center gap-x-3 px-4 py-2.5">
     <div class="flex min-w-0 flex-wrap items-center gap-x-2 gap-y-1">
       <StatusPill status={props.job.status} />
       <A
         href={`/jobs/${props.job.id}`}
-        class="min-w-0 truncate text-sm font-medium hover:underline"
+        class="font-mono min-w-0 truncate text-sm font-medium hover:underline"
         title={props.job.typeName}
       >
         {props.job.typeName}

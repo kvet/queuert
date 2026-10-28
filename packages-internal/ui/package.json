@@ -1,0 +1,32 @@
+{
+  "name": "@queuert/ui",
+  "version": "0.0.1",
+  "private": true,
+  "description": "Design tokens, base styles, icons and dashboard-style primitives shared by the dashboard and the docs site",
+  "license": "MIT",
+  "author": "kvet",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/kvet/queuert.git"
+  },
+  "type": "module",
+  "exports": {
+    "./components": "./src/components/index.ts",
+    "./lib": "./src/lib/index.ts",
+    "./tokens.css": "./src/styles/tokens.css",
+    "./base.css": "./src/styles/base.css",
+    "./package.json": "./package.json"
+  },
+  "scripts": {
+    "typecheck": "tsc --noEmit",
+    "test": "vitest --run"
+  },
+  "devDependencies": {
+    "@queuert/tsconfig": "workspace:*",
+    "queuert": "workspace:*",
+    "solid-js": "1.9.17"
+  },
+  "peerDependencies": {
+    "solid-js": "1.9.17"
+  }
+}

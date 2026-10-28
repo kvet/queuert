@@ -151,7 +151,7 @@ git checkout dev
 
 Create a GitHub release. Use the analysis from Step 2 to write thorough release notes with user-facing changes grouped by category. Do not include internal/chore changes.
 
-Do not pass `--prerelease`. The docs site renders these release notes as its changelog (via the `github` provider in `docs/src/content.config.ts`), and the plugin skips releases flagged as prereleases.
+Do not pass `--prerelease`: the docs site's changelog page (`docs/plugins/changelog.ts`, built from the GitHub releases API) skips prereleases, so the release would not appear there.
 
 ```bash
 gh release create v<version> --title "v<version>" --notes "$(cat <<'EOF'

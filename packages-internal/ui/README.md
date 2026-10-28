@@ -1,0 +1,3 @@
+# @queuert/ui
+
+Design tokens, base styles, icons and the dashboard-style primitives (box, row, chip, status pill, top bar) shared by the dashboard (`packages/dashboard`) and the docs site (`docs`). Private: both consumers bundle it from source with Vite, so it ships inside the dashboard's embedded frontend and never as its own package. Components come from `@queuert/ui/components`; the JSX-free helpers (statuses, IDs, theme) from `@queuert/ui/lib`, so plain TypeScript modules can import them without a JSX toolchain. Import `@queuert/ui/tokens.css` right after `tailwindcss` (it also registers this package as a Tailwind source), then `@queuert/ui/base.css`.

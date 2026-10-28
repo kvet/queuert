@@ -6,7 +6,6 @@ import { ErrorState, LiveRegion, SkeletonRows, buttonClass } from "../ui/kit.js"
 import { Select } from "../ui/Select.js";
 import { type TypeKind, TypePicker } from "./Types.js";
 
-/** Renders the list for the `typeName` search param, or the type picker when it is missing. */
 export const TypeGate = (props: {
   title: string;
   kind: TypeKind;
@@ -62,7 +61,6 @@ const ListCard = (props: { children: JSX.Element }) => (
   <div class="overflow-hidden rounded-xs border border-border">{props.children}</div>
 );
 
-/** The paged list with its changed banner, error, loading and empty states, and load-more footer. */
 export const PagedListBody = <TItem extends { id: string }>(props: {
   thing: "chains" | "jobs";
   list: ReturnType<typeof createPagedList<unknown, TItem>>;
@@ -78,21 +76,6 @@ export const PagedListBody = <TItem extends { id: string }>(props: {
 
   return (
     <>
-      <Show when={props.list.fresh()}>
-        <div class="mb-2 flex items-center justify-between gap-3 rounded-xs border border-accent/40 bg-status-running-bg px-3 py-2 text-sm text-status-running-fg">
-          <span>List has changed</span>
-          <button
-            type="button"
-            class="font-medium underline"
-            onClick={() => {
-              props.list.applyFresh();
-            }}
-          >
-            Show
-          </button>
-        </div>
-      </Show>
-
       <Switch>
         <Match when={props.list.error()}>
           <ErrorState thing={props.thing} error={props.list.error()} onRetry={props.list.retry} />

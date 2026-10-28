@@ -5,7 +5,11 @@ on:
     branches: [main]
     paths:
       - "docs/**"
+      - "packages/**"
+      - "packages-internal/**"
       - ".github/workflows/deploy-docs.yml"
+  release:
+    types: [published]
   workflow_dispatch:
 
 permissions:
@@ -14,12 +18,28 @@ permissions:
   id-token: write
 
 concurrency:
-  group: pages
+  group: pages-${{ github.event_name == 'release' && 'release' || 'deploy' }}
   cancel-in-progress: false
 
 jobs:
+  dispatch-on-release:
+    name: Dispatch deploy from main
+    if: github.event_name == 'release'
+    runs-on: ubuntu-latest
+    timeout-minutes: 2
+    permissions:
+      actions: write
+    steps:
+      - name: Run this workflow on the default branch
+        run: gh workflow run deploy-docs.yml --repo "$REPOSITORY" --ref "$DEFAULT_BRANCH"
+        env:
+          GH_TOKEN: ${{ github.token }}
+          REPOSITORY: ${{ github.repository }}
+          DEFAULT_BRANCH: ${{ github.event.repository.default_branch }}
+
   build:
     name: Build
+    if: github.event_name != 'release'
     runs-on: ubuntu-latest
     timeout-minutes: 10
     steps:
@@ -35,7 +55,7 @@ jobs:
       - name: Upload artifact
         uses: actions/upload-pages-artifact@v3
         with:
-          path: docs/dist
+          path: docs/.output/public
 
   deploy:
     name: Deploy

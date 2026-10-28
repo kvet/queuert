@@ -138,7 +138,7 @@ Adapter packages use their domain-specific prefixes (not "Queuert"):
 
 ## Reference Documentation
 
-Architecture and API-contract prose lives in `docs/src/content/docs/advanced/`. The per-symbol **API reference** for every public package is generated from source TSDoc by `starlight-typedoc` (configured in `docs/astro.config.mjs`) — there are no hand-written reference pages, so the TSDoc comment on each exported symbol is the source of truth for its documentation. Keep those comments accurate and complete.
+Architecture and API-contract prose lives in `docs/src/content/docs/advanced/`. The per-symbol **API reference** for every public package is generated from source TSDoc by TypeDoc at docs-site build time (configured in `docs/plugins/typedoc.ts`, packages listed in `apiPackages` in `docs/src/docs/sections.ts`) — there are no hand-written reference pages, so the TSDoc comment on each exported symbol is the source of truth for its documentation. Keep those comments accurate and complete.
 
 ### Documenting options-object parameters
 
@@ -353,6 +353,10 @@ When making changes:
 - Update package READMEs (`packages/*/README.md`) if there were changes to adapter exports or configuration
 - Update `TODO.md` if any items were addressed
 - Update the dashboard screenshots whenever a change to `packages/dashboard` alters what the UI looks like (see below)
+
+### Docs Site
+
+[Docs Style](docs-style.md) is the source of truth for the docs site in `docs/`: site layout, the MDX pipeline, where a page's sidebar entry goes, visual language and how to verify a docs change. Read it before changing a page.
 
 ### Dashboard Screenshots
 

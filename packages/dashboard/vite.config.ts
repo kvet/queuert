@@ -1,4 +1,3 @@
-/* oxlint-disable unicorn/prefer-module -- __dirname is standard in vite config files */
 import { readFileSync, readdirSync, writeFileSync } from "node:fs";
 import { join, relative, resolve } from "node:path";
 
@@ -34,8 +33,8 @@ function collectFiles(
 }
 
 function embedAssetsPlugin(): Plugin {
-  const distDir = resolve(__dirname, "dist/frontend");
-  const outFile = resolve(__dirname, "src/api/routes/assets.generated.ts");
+  const distDir = resolve(import.meta.dirname, "dist/frontend");
+  const outFile = resolve(import.meta.dirname, "src/api/routes/assets.generated.ts");
 
   return {
     name: "embed-assets",
@@ -62,12 +61,19 @@ function embedAssetsPlugin(): Plugin {
   };
 }
 
+const { version } = JSON.parse(
+  readFileSync(resolve(import.meta.dirname, "package.json"), "utf-8"),
+) as {
+  version: string;
+};
+
 export default defineConfig({
   plugins: [solidPlugin(), tailwindcss(), embedAssetsPlugin()],
-  root: resolve(__dirname, "src/frontend"),
+  define: { __DASHBOARD_VERSION__: JSON.stringify(version) },
+  root: resolve(import.meta.dirname, "src/frontend"),
   base: "./",
   build: {
-    outDir: resolve(__dirname, "dist/frontend"),
+    outDir: resolve(import.meta.dirname, "dist/frontend"),
     emptyOutDir: true,
   },
 });

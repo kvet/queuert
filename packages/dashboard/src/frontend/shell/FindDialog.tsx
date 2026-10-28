@@ -1,3 +1,4 @@
+import { StatusPill } from "@queuert/ui/components";
 import { useNavigate } from "@solidjs/router";
 import { For, Match, Show, Switch, createMemo, createSignal } from "solid-js";
 
@@ -14,7 +15,6 @@ import { MAX_IDS, parseIdList } from "../domain/ids.js";
 import { matchTypeNames } from "../domain/typeMatch.js";
 import { createLoader } from "../state/createLoader.js";
 import { Dialog, buttonClass } from "../ui/kit.js";
-import { StatusPill } from "../ui/StatusPill.js";
 
 const [findOpen, setFindOpen] = createSignal(false);
 
@@ -26,7 +26,6 @@ const isTypingTarget = (target: EventTarget | null): boolean =>
   target instanceof HTMLElement &&
   (target.isContentEditable || ["INPUT", "TEXTAREA", "SELECT"].includes(target.tagName));
 
-/** Global ⌘K / Ctrl+K handler; ignored while typing in a field outside the dialog. */
 export const handleFindShortcut = (event: KeyboardEvent): void => {
   if (event.key.toLowerCase() !== "k" || !(event.metaKey || event.ctrlKey)) return;
   const inDialog = event.target instanceof Element && event.target.closest("[data-find-dialog]");
@@ -41,13 +40,6 @@ type TypeSuggestion = { kind: "chain" | "job"; typeName: string };
 
 const TYPE_SUGGESTIONS = 5;
 
-/**
- * Find by ID or type name. One ID resolves in place: a lone chain or job navigates straight to it,
- * and an ID that is both (a chain and its job #1 share an ID) offers the two. Several IDs go to
- * `/find`. While the text could be a type name, matching chain and job types are listed below;
- * ArrowDown moves into them and picking one opens that type's list. Enter opens the top type when
- * no chain or job has the text as its ID, or when the text is several words that match a type.
- */
 export const FindDialog = () => {
   const navigate = useNavigate();
   const [text, setText] = createSignal("");
@@ -72,7 +64,6 @@ export const FindDialog = () => {
       return { chains, jobs };
     },
   );
-  // Text with commas or new lines is an ID list, not a type name.
   const suggestions = createMemo((): TypeSuggestion[] => {
     const names = typeNames.data();
     if (!names || choices().length > 0 || /[,\n]/.test(text())) return [];
@@ -113,7 +104,6 @@ export const FindDialog = () => {
   const submit = async () => {
     const { ids } = parsed();
     if (ids.length === 0) return;
-    // Several words that match a type are a type search, not an ID list.
     if (ids.length > 1 && suggestions().length > 0) {
       goToType(suggestions()[0]);
       return;
@@ -266,7 +256,7 @@ export const FindDialog = () => {
                       {suggestion.kind === "chain" ? "Chain type" : "Job type"}
                     </span>
                     <span class="text-fg-subtle">·</span>
-                    <span class="truncate font-medium">{suggestion.typeName}</span>
+                    <span class="truncate font-mono font-medium">{suggestion.typeName}</span>
                   </button>
                 </li>
               )}
@@ -312,7 +302,7 @@ export const FindDialog = () => {
                           <>
                             <span class="font-medium">Chain</span>
                             <span class="text-fg-subtle">·</span>
-                            <span class="truncate">{chain().typeName}</span>
+                            <span class="truncate font-mono">{chain().typeName}</span>
                             <span class="flex-1" />
                             <StatusPill status={chain().status} />
                           </>
@@ -323,7 +313,7 @@ export const FindDialog = () => {
                           <>
                             <span class="font-medium">Job</span>
                             <span class="text-fg-subtle">·</span>
-                            <span class="truncate">{job().typeName}</span>
+                            <span class="truncate font-mono">{job().typeName}</span>
                             <span class="text-fg-subtle">·</span>
                             <span class="text-fg-muted">job #{job().chainIndex + 1}</span>
                             <span class="flex-1" />

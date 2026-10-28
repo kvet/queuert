@@ -1,3 +1,5 @@
+import { Box, MoreIcon, StatusDot, StatusPill } from "@queuert/ui/components";
+import { shortId } from "@queuert/ui/lib";
 import { A, useNavigate, useParams } from "@solidjs/router";
 import {
   For,
@@ -25,18 +27,13 @@ import {
 } from "../api.js";
 import { elapsedMs, formatDuration } from "../domain/duration.js";
 import { type JobEntry, foldJobs } from "../domain/foldJobs.js";
-import { shortId } from "../domain/ids.js";
-import { replaceFirstPage } from "../domain/pages.js";
 import { BlockedJobRow } from "../rows/BlockedJobRow.js";
 import { FoldItem, JobItem } from "../rows/JobItem.js";
 import { PageHeader } from "../shell/PageHeader.js";
 import { createAutoLoadMore } from "../state/createAutoLoadMore.js";
-import { markLoaded, useRefresh } from "../state/refresh.js";
-import { MoreIcon } from "../ui/icons.js";
 import { IdChip } from "../ui/IdChip.js";
 import { JsonViewer } from "../ui/JsonViewer.js";
 import {
-  Card,
   Dialog,
   ErrorState,
   LiveRegion,
@@ -44,7 +41,6 @@ import {
   SkeletonRows,
   buttonClass,
 } from "../ui/kit.js";
-import { StatusDot, StatusPill } from "../ui/StatusPill.js";
 import { Time } from "../ui/Time.js";
 
 const chainListHref = (typeName: string): string =>
@@ -111,10 +107,6 @@ const ActionsMenu = (props: { onDelete: () => void }) => {
   );
 };
 
-/**
- * A running chain's status alone hides what it waits on, so its header names the current (tail)
- * job and that job's status.
- */
 const CurrentJobChip = (props: { job: UnknownJob }) => (
   <A
     href={`/jobs/${props.job.id}`}
@@ -169,7 +161,6 @@ const DeleteChainDialog = (props: {
       await deleteChain(props.chain.id);
       leave();
     } catch (err) {
-      // Already deleted elsewhere: the outcome the user asked for.
       if (isNotFound(err)) {
         leave();
         return;
@@ -270,10 +261,8 @@ export const ChainDetail = () => {
 
   const [chain, setChain] = createSignal<UnknownChain>();
   const [currentJob, setCurrentJob] = createSignal<UnknownJob | null>(null);
-  // Each page keeps the cursor it was loaded with so refresh can refetch it.
-  const [pages, setPages] = createSignal<
-    { cursor: string | undefined; jobs: UnknownJob[]; nextCursor: string | null }[]
-  >([]);
+  const [jobs, setJobs] = createSignal<UnknownJob[]>([]);
+  const [nextCursor, setNextCursor] = createSignal<string | null>(null);
   const [jobBlockers, setJobBlockers] = createSignal<Record<string, UnknownChain[]>>({});
   const [loading, setLoading] = createSignal(true);
   const [error, setError] = createSignal<unknown>();
@@ -283,35 +272,26 @@ export const ChainDetail = () => {
   const [blockedJobsCursor, setBlockedJobsCursor] = createSignal<string | null>(null);
   const [blockedJobsError, setBlockedJobsError] = createSignal<unknown>();
   const [blockedJobsLoadingMore, setBlockedJobsLoadingMore] = createSignal(false);
-  let blockedJobsFirstPageSize = 0;
 
   const [expanded, setExpanded] = createSignal<ReadonlySet<string>>(new Set());
   const [openFolds, setOpenFolds] = createSignal<ReadonlySet<string>>(new Set());
   const [deleteOpen, setDeleteOpen] = createSignal(false);
 
   let loadController: AbortController | null = null;
-  let refreshController: AbortController | null = null;
   let jobsMoreController: AbortController | null = null;
   let blockedJobsController: AbortController | null = null;
 
   const abortAll = () => {
-    for (const controller of [
-      loadController,
-      refreshController,
-      jobsMoreController,
-      blockedJobsController,
-    ]) {
+    for (const controller of [loadController, jobsMoreController, blockedJobsController]) {
       controller?.abort();
     }
   };
   onCleanup(abortAll);
 
-  const jobs = createMemo(() => pages().flatMap((page) => page.jobs));
   const completedChain = () => {
     const current = chain();
     return current?.status === "completed" ? current : undefined;
   };
-  const nextCursor = () => pages().at(-1)?.nextCursor ?? null;
 
   const loadBlockedJobs = async (id: string) => {
     blockedJobsController?.abort();
@@ -323,7 +303,6 @@ export const ChainDetail = () => {
       if (own.signal.aborted) return;
       setBlockedJobs(page.items);
       setBlockedJobsCursor(page.nextCursor);
-      blockedJobsFirstPageSize = page.items.length;
     } catch (err) {
       if (own.signal.aborted || isAbort(err)) return;
       setBlockedJobsError(err);
@@ -336,7 +315,8 @@ export const ChainDetail = () => {
     loadController = own;
     setChain(undefined);
     setCurrentJob(null);
-    setPages([]);
+    setJobs([]);
+    setNextCursor(null);
     setJobBlockers({});
     setBlockedJobs([]);
     setBlockedJobsCursor(null);
@@ -344,7 +324,6 @@ export const ChainDetail = () => {
     setLoading(true);
     setExpanded(new Set<string>());
     setOpenFolds(new Set<string>());
-    // A dialog left open on the previous chain (browser back/forward) must not reopen on this one.
     setDeleteOpen(false);
     void loadBlockedJobs(id);
     try {
@@ -352,9 +331,9 @@ export const ChainDetail = () => {
       if (own.signal.aborted) return;
       setChain(detail.chain);
       setCurrentJob(detail.currentJob);
-      setPages([{ cursor: undefined, jobs: detail.jobs, nextCursor: detail.nextCursor }]);
+      setJobs(detail.jobs);
+      setNextCursor(detail.nextCursor);
       setJobBlockers(detail.jobBlockers);
-      markLoaded();
     } catch (err) {
       if (own.signal.aborted || isAbort(err)) return;
       setError(err);
@@ -382,7 +361,8 @@ export const ChainDetail = () => {
       },
     );
     if (!page || own.signal.aborted) return;
-    setPages((prev) => [...prev, { cursor, jobs: page.jobs, nextCursor: page.nextCursor }]);
+    setJobs((prev) => [...prev, ...page.jobs]);
+    setNextCursor(page.nextCursor);
     setJobBlockers((prev) => ({ ...prev, ...page.jobBlockers }));
     setAnnouncement(`Loaded ${page.jobs.length} more jobs`);
   };
@@ -411,88 +391,11 @@ export const ChainDetail = () => {
     }
   };
 
-  /**
-   * Refetches the header, blocked jobs page 1, and at most two job pages: page 1 and the last loaded
-   * page. Only the tail job can still change; middle pages hold completed, immutable jobs.
-   */
-  const refresh = async () => {
-    const id = params.id;
-    if (loading()) return;
-    if (error() !== undefined) {
-      await load(id);
-      return;
-    }
-    refreshController?.abort();
-    jobsMoreController?.abort();
-    const own = new AbortController();
-    refreshController = own;
-    const snapshot = pages();
-    const lastIndex = snapshot.length - 1;
-
-    const fetched = await Promise.all([
-      getChainDetail(id, { signal: own.signal }),
-      lastIndex > 0
-        ? getChainJobs(id, { cursor: snapshot[lastIndex].cursor, signal: own.signal })
-        : Promise.resolve(undefined),
-      getChainBlocking(id, { signal: own.signal }).catch((err: unknown) => {
-        if (!own.signal.aborted) setBlockedJobsError(err);
-        return undefined;
-      }),
-    ]).catch((err: unknown) => {
-      // A newer load or refresh took over; that's not a failed refresh.
-      if (own.signal.aborted || isAbort(err)) return undefined;
-      // Deleted elsewhere since it loaded: show it as gone rather than keep the stale chain.
-      if (isNotFound(err)) {
-        setError(err);
-        return undefined;
-      }
-      throw err;
-    });
-    if (!fetched || own.signal.aborted) return;
-    const [detail, lastPage, blockedJobsPage] = fetched;
-
-    setChain(detail.chain);
-    setCurrentJob(detail.currentJob);
-    setJobBlockers((prev) => ({ ...prev, ...detail.jobBlockers, ...lastPage?.jobBlockers }));
-    setPages((prev) =>
-      prev.map((page, index) => {
-        if (index === 0) {
-          return {
-            ...page,
-            jobs: detail.jobs,
-            nextCursor: prev.length === 1 ? detail.nextCursor : page.nextCursor,
-          };
-        }
-        if (lastPage && prev === snapshot && index === lastIndex) {
-          return { ...page, jobs: lastPage.jobs, nextCursor: lastPage.nextCursor };
-        }
-        return page;
-      }),
-    );
-
-    if (blockedJobsPage) {
-      setBlockedJobs((prev) =>
-        replaceFirstPage(prev, blockedJobsFirstPageSize, blockedJobsPage.items),
-      );
-      if (blockedJobs().length <= blockedJobsPage.items.length)
-        setBlockedJobsCursor(blockedJobsPage.nextCursor);
-      blockedJobsFirstPageSize = blockedJobsPage.items.length;
-      setBlockedJobsError(undefined);
-    }
-  };
-  useRefresh(refresh);
-
   const replaceJob = (updated: UnknownJob) => {
     if (currentJob()?.id === updated.id) setCurrentJob(updated);
-    setPages((prev) =>
-      prev.map((page) => ({
-        ...page,
-        jobs: page.jobs.map((job) => (job.id === updated.id ? updated : job)),
-      })),
-    );
+    setJobs((prev) => prev.map((job) => (job.id === updated.id ? updated : job)));
   };
 
-  // Reuses unchanged entries so <For> keeps their rows mounted across refreshes.
   let previousEntries = new Map<string, JobEntry>();
   const entries = createMemo(() => {
     const next = new Map<string, JobEntry>();
@@ -609,9 +512,9 @@ export const ChainDetail = () => {
                 <Show
                   when={completedChain()}
                   fallback={
-                    <Card title="Output">
+                    <Box title="Output">
                       <p class="text-sm text-fg-subtle">no output yet</p>
-                    </Card>
+                    </Box>
                   }
                 >
                   {(completed) => (
@@ -619,7 +522,7 @@ export const ChainDetail = () => {
                   )}
                 </Show>
                 <Show when={blockedJobs().length > 0 || blockedJobsError()}>
-                  <Card title="Blocked jobs" bodyClass="">
+                  <Box title="Blocked jobs" bodyClass="">
                     <Show when={blockedJobsError()}>
                       <div class="p-3">
                         <ErrorState
@@ -644,10 +547,10 @@ export const ChainDetail = () => {
                         </button>
                       </div>
                     </Show>
-                  </Card>
+                  </Box>
                 </Show>
                 <div class="min-w-0">
-                  <Card title="Jobs" bodyClass="px-4 pt-4">
+                  <Box title="Jobs" bodyClass="px-4 pt-4">
                     <ol>
                       <For each={entries()}>
                         {(entry, index) => {
@@ -699,7 +602,7 @@ export const ChainDetail = () => {
                       </div>
                     </Show>
                     <LiveRegion text={announcement()} />
-                  </Card>
+                  </Box>
                 </div>
               </div>
 

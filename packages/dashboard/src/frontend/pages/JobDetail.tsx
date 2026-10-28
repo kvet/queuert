@@ -1,9 +1,10 @@
+import { Box, Pips, StatusPill } from "@queuert/ui/components";
+import { shortId } from "@queuert/ui/lib";
 import { A, useParams } from "@solidjs/router";
 import { For, type JSX, Match, Show, Switch } from "solid-js";
 
 import { type UnknownJob, getJobDetail, isNotFound } from "../api.js";
 import { elapsedMs, formatDuration } from "../domain/duration.js";
-import { shortId } from "../domain/ids.js";
 import { jobPhase } from "../domain/jobPhase.js";
 import { formatRelative } from "../domain/time.js";
 import { BlockerChainRow } from "../rows/BlockerChainRow.js";
@@ -12,12 +13,9 @@ import { ErrorText, RescheduleButton } from "../rows/JobItem.js";
 import { PageHeader } from "../shell/PageHeader.js";
 import { now } from "../state/clock.js";
 import { createLoader } from "../state/createLoader.js";
-import { useRefresh } from "../state/refresh.js";
 import { CopyButton, IdChip } from "../ui/IdChip.js";
 import { JsonViewer } from "../ui/JsonViewer.js";
-import { Card, ErrorState, NotFoundState, SkeletonRows, linkClass } from "../ui/kit.js";
-import { Pips } from "../ui/Pips.js";
-import { StatusPill } from "../ui/StatusPill.js";
+import { ErrorState, NotFoundState, SkeletonRows, linkClass } from "../ui/kit.js";
 import { Time } from "../ui/Time.js";
 
 const Fact = (props: { label: string; hint?: string; wide?: boolean; children: JSX.Element }) => (
@@ -40,7 +38,6 @@ export const JobDetail = () => {
     () => params.id,
     async (id, signal) => getJobDetail(id, { signal }),
   );
-  useRefresh(detail.refetch);
 
   const replaceJob = (job: UnknownJob) => {
     const current = detail.data();
@@ -214,7 +211,7 @@ export const JobDetail = () => {
                 <div class="flex min-w-0 flex-col gap-6">
                   <Show when={job().lastAttemptError}>
                     {(error) => (
-                      <Card
+                      <Box
                         title={
                           <>
                             Last error
@@ -228,7 +225,7 @@ export const JobDetail = () => {
                             </Show>
                           </>
                         }
-                        tone="error"
+                        tone="danger"
                         actions={<CopyButton text={error()} label="Copy error" />}
                       >
                         <ErrorText text={error()} lines={12} />
@@ -242,7 +239,7 @@ export const JobDetail = () => {
                             next attempt {formatRelative(job().scheduledAt, now())}
                           </p>
                         </Show>
-                      </Card>
+                      </Box>
                     )}
                   </Show>
 
@@ -250,14 +247,14 @@ export const JobDetail = () => {
 
                   <Switch
                     fallback={
-                      <Card title="Output">
+                      <Box title="Output">
                         <p class="text-sm text-fg-subtle">no output yet</p>
-                      </Card>
+                      </Box>
                     }
                   >
                     <Match when={completed()?.continuedToId}>
                       {(nextId) => (
-                        <Card title="Continued to">
+                        <Box title="Continued to">
                           <Show
                             when={data().continuation}
                             fallback={<IdChip id={nextId()} href={`/jobs/${nextId()}`} />}
@@ -273,7 +270,7 @@ export const JobDetail = () => {
                               </div>
                             )}
                           </Show>
-                        </Card>
+                        </Box>
                       )}
                     </Match>
                     <Match when={completed()}>
@@ -284,7 +281,7 @@ export const JobDetail = () => {
                   </Switch>
 
                   <Show when={data().blockers.length > 0}>
-                    <Card
+                    <Box
                       title="Blockers"
                       actions={
                         <span class="text-fg-muted tabular-nums">
@@ -298,7 +295,7 @@ export const JobDetail = () => {
                           {(blocker) => <BlockerChainRow chain={blocker} />}
                         </For>
                       </ul>
-                    </Card>
+                    </Box>
                   </Show>
                 </div>
               </>

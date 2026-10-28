@@ -98,6 +98,26 @@ jobs:
       - name: Examples
         run: pnpm examples
 
+  docs:
+    needs: [check]
+
+    name: Docs
+    runs-on: ubuntu-latest
+
+    timeout-minutes: 10
+
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - uses: ./.github/actions/setup-repo
+
+      - name: Build docs
+        run: pnpm docs:build
+        env:
+          GITHUB_TOKEN: ${{ github.token }}
+
   benchmark-memory-footprint:
     needs: [check]
 
@@ -179,6 +199,7 @@ jobs:
         commit-trailers,
         test,
         examples,
+        docs,
         benchmark-memory-footprint,
         benchmark-processing-capacity,
         benchmark-query-performance,

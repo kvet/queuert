@@ -8,7 +8,7 @@ Job throughput along two independent axes: state adapter (with the in-process no
 
 Every completion scenario starts from the same 40,000-job queue, so only concurrency varies between them. A result prefixed with `>` drained the queue before the window ended and is a lower bound.
 
-Containers (PostgreSQL, Redis, NATS) start once per run and are shared: each scenario child gets its own PostgreSQL schema, channel prefix or subject prefix. After all runs finish, the tool prints one markdown table per scenario family (creation, no-op completion), with adapters as rows grouped by axis, ready to paste into the docs.
+Containers (PostgreSQL, Redis, NATS) start once per run and are shared: each scenario child gets its own PostgreSQL schema, channel prefix or subject prefix. After all runs finish, the tool prints one markdown table per scenario family (creation, no-op completion), with adapters as rows grouped by axis; the docs take these numbers in `docs/src/data/benchmarks.ts`.
 
 ## Running
 

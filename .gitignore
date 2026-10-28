@@ -33,12 +33,12 @@ pnpm-debug.log*
 # dist
 dist
 
-# astro
-.astro/
-
-
 # ide
 .idea/
 
 # claude
 .claude/scheduled_tasks.lock
+
+# docs
+docs/.output/
+docs/src/content/docs/api/

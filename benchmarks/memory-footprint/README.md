@@ -2,7 +2,7 @@
 
 Measures Queuert's steady-state heap footprint per adapter. The headline question: **once you close queuert, does it release its allocated heap?** Yes for live JS state — what remains is V8 metadata (hidden classes, JIT-compiled code) that's tied to module load, not to queuert holding references.
 
-Headline numbers live in the [Benchmarks docs page](../../docs/src/content/docs/benchmarks.md) — this README covers methodology and how to reproduce them.
+Headline numbers live in the [Memory Footprint docs page](../../docs/src/content/docs/benchmarks/memory-footprint.tsx) (numbers in [`docs/src/data/benchmarks.ts`](../../docs/src/data/benchmarks.ts)) — this README covers methodology and how to reproduce them.
 
 ## Methodology
 

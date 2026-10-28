@@ -11,5 +11,6 @@
 - **Never re-run `pnpm check` (or any other multi-minute task) just to filter its output differently.** If you need to inspect the output multiple ways, redirect it to a file once (`pnpm check > /tmp/check.log 2>&1`) and grep/read the file. Re-invoking the command wastes minutes per iteration.
 - **Don't grep check output for words like "error", "fail", "FAIL".** The examples emit those as legitimate content (showcase logs, simulated errors, retry demos) and produce false positives. To verify a check, rely on vitest's `Test Files`/`Tests ` summary lines, the typecheck `Exited with code N` lines, and the command's final exit code — not free-text matches.
 - **Read [Code Style](code-style.md) before writing code**: it is the source of truth for general principles, testing patterns, documentation update guidelines, and examples naming conventions
+- **Read [Docs Style](docs-style.md) before changing the docs site**
 - When creating or modifying examples, follow the naming convention and single-purpose design described in Code Style
 - Remove todo items as soon as their work is done, whether completed directly or via sub-agents

@@ -1,34 +1,19 @@
-import { A, useLocation } from "@solidjs/router";
-import { For, Show, createSignal } from "solid-js";
-
-import { toLocalPath } from "../base.js";
-import { formatRelative } from "../domain/time.js";
-import { now } from "../state/clock.js";
-import {
-  AUTO_REFRESH_OPTIONS,
-  type AutoRefreshSeconds,
-  autoRefresh,
-  canRefresh,
-  isRefreshing,
-  lastLoaded,
-  lastRefreshError,
-  refreshNow,
-  setAutoRefresh,
-} from "../state/refresh.js";
-import { type ThemePreference, setThemePreference, themePreference } from "../state/theme.js";
 import {
   CloseIcon,
   DocsIcon,
   LogoIcon,
   MenuIcon,
-  MonitorIcon,
-  MoonIcon,
-  RefreshIcon,
   SearchIcon,
-  SunIcon,
-  WarningIcon,
-} from "../ui/icons.js";
-import { Select } from "../ui/Select.js";
+  ThemeToggle,
+  TopBarFrame,
+  TopBarNavLink,
+  iconButtonClass as iconButton,
+} from "@queuert/ui/components";
+import { A, useLocation } from "@solidjs/router";
+import { For, Show, createSignal } from "solid-js";
+
+import { toLocalPath } from "../base.js";
+import { theme } from "../state/theme.js";
 import { openFind } from "./FindDialog.js";
 
 const isMac = (): boolean => /Mac|iPhone|iPad/.test(navigator.userAgent);
@@ -41,166 +26,106 @@ const navItems = [
   { href: "/jobs/types", label: "Jobs", match: (path: string) => path.startsWith("/jobs") },
 ];
 
-const RefreshControl = () => {
-  const label = () => {
-    const loaded = lastLoaded();
-    return loaded === null ? "Refresh" : formatRelative(new Date(loaded), now());
-  };
-
-  return (
-    <div class="flex h-8 items-stretch overflow-hidden rounded-xs border border-border-strong bg-surface text-sm">
-      <button
-        type="button"
-        class="inline-flex items-center gap-1.5 px-2 text-fg-muted hover:bg-surface-2 hover:text-fg disabled:opacity-50"
-        disabled={!canRefresh()}
-        title={lastRefreshError() ? `Last refresh failed: ${lastRefreshError()}` : "Refresh now"}
-        aria-label={`Refresh now${lastLoaded() === null ? "" : `, last loaded ${label()}`}`}
-        onClick={() => void refreshNow()}
-      >
-        <RefreshIcon size={14} class={isRefreshing() ? "animate-spin" : ""} />
-        <Show when={lastRefreshError()}>
-          <WarningIcon size={13} class="text-error-dot" />
-        </Show>
-        <span class="hidden tabular-nums sm:inline">{label()}</span>
-      </button>
-      <div class="flex items-stretch border-l border-border-strong">
-        <Select
-          label="Auto-refresh"
-          variant="ghost"
-          height="fill"
-          class="rounded-none"
-          value={String(autoRefresh())}
-          options={AUTO_REFRESH_OPTIONS.map((seconds) => ({
-            value: String(seconds),
-            label: seconds === 0 ? "Auto: Off" : `Auto: ${seconds}s`,
-          }))}
-          onChange={(value) => {
-            setAutoRefresh(Number(value) as AutoRefreshSeconds);
-          }}
-        />
-      </div>
-    </div>
-  );
-};
-
-const themeOrder: ThemePreference[] = ["system", "light", "dark"];
-const themeLabels: Record<ThemePreference, string> = {
-  system: "System",
-  light: "Light",
-  dark: "Dark",
-};
-
-const ThemeToggle = () => {
-  const next = () => themeOrder[(themeOrder.indexOf(themePreference()) + 1) % themeOrder.length];
-  return (
-    <button
-      type="button"
-      class="inline-flex size-8 items-center justify-center rounded-xs text-fg-muted hover:bg-surface-2 hover:text-fg"
-      title={`Theme: ${themeLabels[themePreference()]} (switch to ${themeLabels[next()]})`}
-      aria-label={`Theme: ${themeLabels[themePreference()]}. Switch to ${themeLabels[next()]}`}
-      onClick={() => {
-        setThemePreference(next());
-      }}
-    >
-      <Show when={themePreference() !== "system"} fallback={<MonitorIcon />}>
-        <Show when={themePreference() === "dark"} fallback={<SunIcon />}>
-          <MoonIcon />
-        </Show>
-      </Show>
-    </button>
-  );
-};
-
 export const TopBar = () => {
   const location = useLocation();
   const [menuOpen, setMenuOpen] = createSignal(false);
   const localPath = () => toLocalPath(location.pathname);
   const shortcut = () => (isMac() ? "⌘K" : "Ctrl K");
 
-  const navLinks = (onNavigate?: () => void) => (
-    <For each={navItems}>
-      {(item) => (
-        <A
-          href={item.href}
-          class="rounded-xs px-2.5 py-1.5 text-sm text-fg-muted hover:bg-surface-2 hover:text-fg data-[active]:bg-surface-2 data-[active]:font-medium data-[active]:text-fg"
-          data-active={item.match(localPath()) ? "" : undefined}
-          aria-current={item.match(localPath()) ? "page" : undefined}
-          onClick={() => onNavigate?.()}
-        >
-          {item.label}
-        </A>
-      )}
-    </For>
-  );
-
   return (
-    <header class="sticky top-0 z-30 border-b border-border bg-surface/90 backdrop-blur">
-      <div class="mx-auto flex h-14 max-w-[1280px] items-center gap-2 px-4 sm:gap-3 sm:px-6 lg:px-8">
-        <button
-          type="button"
-          class="inline-flex size-8 items-center justify-center rounded-xs text-fg-muted hover:bg-surface-2 sm:hidden"
-          aria-label="Menu"
-          aria-expanded={menuOpen()}
-          onClick={() => setMenuOpen((open) => !open)}
-        >
-          <Show when={menuOpen()} fallback={<MenuIcon />}>
-            <CloseIcon />
-          </Show>
-        </button>
-        <A href="/" class="flex items-center gap-2 font-semibold">
-          <LogoIcon size={18} class="text-brand" />
-          <span>Queuert</span>
-        </A>
-        <nav class="ml-2 hidden items-center gap-1 sm:flex" aria-label="Main">
-          {navLinks()}
-        </nav>
-        <span class="flex-1" />
-        <button
-          type="button"
-          class="hidden h-8 w-64 items-center gap-2 rounded-xs border border-border-strong bg-surface px-2.5 text-left text-sm text-fg-subtle hover:border-fg-subtle lg:flex"
-          onClick={openFind}
-        >
-          <SearchIcon size={14} />
-          <span class="flex-1 truncate">Find by ID or type…</span>
-          <kbd class="rounded-xs border border-border px-1 text-[11px]">{shortcut()}</kbd>
-        </button>
-        <button
-          type="button"
-          class="inline-flex size-8 items-center justify-center rounded-xs text-fg-muted hover:bg-surface-2 hover:text-fg lg:hidden"
-          aria-label="Find by ID or type"
-          onClick={openFind}
-        >
-          <SearchIcon />
-        </button>
-        <RefreshControl />
-        <ThemeToggle />
-        <a
-          href={DOCS_URL}
-          target="_blank"
-          rel="noopener"
-          class="hidden size-8 items-center justify-center rounded-xs text-fg-muted hover:bg-surface-2 hover:text-fg sm:inline-flex"
-          title="Documentation"
-          aria-label="Documentation (opens in a new tab)"
-        >
-          <DocsIcon />
-        </a>
-      </div>
-      <Show when={menuOpen()}>
-        <nav
-          class="flex flex-col gap-1 border-t border-border px-4 py-2 sm:hidden"
-          aria-label="Main"
-        >
-          {navLinks(() => setMenuOpen(false))}
-          <a
-            href={DOCS_URL}
-            target="_blank"
-            rel="noopener"
-            class="rounded-xs px-2.5 py-1.5 text-sm text-fg-muted hover:bg-surface-2"
+    <TopBarFrame
+      below={
+        <Show when={menuOpen()}>
+          <nav
+            class="flex flex-col gap-1 border-t border-border px-4 py-2 sm:hidden"
+            aria-label="Main"
           >
-            Documentation
-          </a>
-        </nav>
-      </Show>
-    </header>
+            <For each={navItems}>
+              {(item) => (
+                <A
+                  href={item.href}
+                  class="rounded-xs px-2.5 py-1.5 text-sm text-fg-muted hover:bg-surface-2 data-active:bg-surface-2 data-active:font-medium data-active:text-fg"
+                  data-active={item.match(localPath()) ? "" : undefined}
+                  aria-current={item.match(localPath()) ? "page" : undefined}
+                  onClick={() => setMenuOpen(false)}
+                >
+                  {item.label}
+                </A>
+              )}
+            </For>
+            <a
+              href={DOCS_URL}
+              target="_blank"
+              rel="noopener"
+              class="rounded-xs px-2.5 py-1.5 text-sm text-fg-muted hover:bg-surface-2"
+            >
+              Documentation
+            </a>
+          </nav>
+        </Show>
+      }
+    >
+      <button
+        type="button"
+        class={`${iconButton} -ml-1 sm:hidden`}
+        aria-label="Menu"
+        aria-expanded={menuOpen()}
+        onClick={() => setMenuOpen((open) => !open)}
+      >
+        <Show when={menuOpen()} fallback={<MenuIcon />}>
+          <CloseIcon />
+        </Show>
+      </button>
+      <A href="/" class="flex items-center gap-2 pr-1 font-mono font-semibold">
+        <LogoIcon size={20} class="text-brand" />
+        <span>Queuert</span>
+      </A>
+      <span
+        class="hidden rounded-xs border border-border px-1.5 py-px font-mono text-[11px] text-fg-muted sm:inline-block"
+        title="@queuert/dashboard version"
+      >
+        v{__DASHBOARD_VERSION__}
+      </span>
+      <nav class="ml-4 hidden items-center gap-0.5 sm:flex" aria-label="Main">
+        <For each={navItems}>
+          {(item) => (
+            <TopBarNavLink href={item.href} active={item.match(localPath())} link={A}>
+              {item.label}
+            </TopBarNavLink>
+          )}
+        </For>
+      </nav>
+      <span class="flex-1" />
+      <button
+        type="button"
+        class="hidden h-8 w-64 items-center gap-2 rounded-xs border border-border bg-surface px-2.5 text-left text-sm text-fg-subtle hover:border-border-strong hover:text-fg-muted lg:flex"
+        onClick={openFind}
+      >
+        <SearchIcon size={14} />
+        <span class="flex-1 truncate">Find by ID or type…</span>
+        <kbd class="rounded-xs border border-border px-1 text-[11px] text-fg-subtle">
+          {shortcut()}
+        </kbd>
+      </button>
+      <button
+        type="button"
+        class={`${iconButton} lg:hidden`}
+        aria-label="Find by ID or type"
+        onClick={openFind}
+      >
+        <SearchIcon />
+      </button>
+      <ThemeToggle theme={theme} />
+      <a
+        href={DOCS_URL}
+        target="_blank"
+        rel="noopener"
+        class="hidden size-8 items-center justify-center rounded-xs text-fg-muted hover:bg-surface-2 hover:text-fg sm:inline-flex"
+        title="Documentation"
+        aria-label="Documentation (opens in a new tab)"
+      >
+        <DocsIcon />
+      </a>
+    </TopBarFrame>
   );
 };

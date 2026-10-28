@@ -303,7 +303,7 @@ Long-running aggregations can checkpoint intermediate state in their own short t
 
 ## Changeset
 
-Minor across core + the three adapter packages (schema column on both `job` and `job_blocker`, adapter ops, handler API addition; `job.blockers` preload removal is the breaking part — bump accordingly). Docs in `docs/src/content/docs/guides/job-blockers.md` + an example.
+Minor across core + the three adapter packages (schema column on both `job` and `job_blocker`, adapter ops, handler API addition; `job.blockers` preload removal is the breaking part — bump accordingly). Docs in `docs/src/content/docs/guides/job-blockers.mdx` + an example.
 
 ## Relationship to existing TODO items
 

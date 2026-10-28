@@ -107,14 +107,6 @@ The UI shows only what the API returns, and derives the rest in pure helpers und
 - **Type matching** — fzf-style (v1 algorithm) scoring of type names for the find dialog: whitespace-separated terms must all match with their letters in order, in any term order, case-insensitively unless a term has an uppercase letter; ranked by score (word-start and consecutive-letter bonuses, gap penalties), then the shorter name, then input order.
 - **Counts** — the per-status counts are capped by the state adapter's `countCap` (10,000 by default), so a sum that includes a capped count is a lower bound (`≥`), and a capped count itself is shown with a trailing `+` (e.g. `10,000+`).
 
-### Refresh
-
-A single 15-second clock drives every relative time and duration, and pauses while the tab is hidden. The refresh control re-runs the current view's refresh in place, optionally on an interval (stored per `basePath` in `localStorage`, like the theme). Refreshes never flash a loading state or replace loaded pages: list pages refetch page 1 and offer a "List has changed" banner when the top IDs differ; chain detail refetches the header, blocked jobs page 1, and at most two job pages (page 1 and the last loaded page, with the cursor it was loaded with), since the active job is always at the end of the chain. Every first load and refresh gets its own `AbortController`, and a newer request aborts older ones for the same view.
-
-### Styling
-
-The UI is styled with Tailwind CSS v4 (compiled at build time) and has a terminal-like look: monospace text throughout in a small type scale (12px meta and labels, 14px base, 16px page titles), near-square corners, and unfilled boxed panels whose uppercase title and actions sit on the top border. Colors are theme tokens with light and dark values; the theme follows the system unless set in the top bar. Icons are inline SVG and there are no web fonts, because the build embeds assets as text and only serves HTML, JS and CSS, and an embedded dashboard may run offline or behind a restrictive network policy.
-
 ### Build and Embedding
 
 The frontend is compiled during package build, not at deploy time:

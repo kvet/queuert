@@ -1,14 +1,14 @@
+import { Box, CloseIcon } from "@queuert/ui/components";
+import { shortId } from "@queuert/ui/lib";
 import { useSearchParams } from "@solidjs/router";
 import { For, Match, Show, Switch, createSignal } from "solid-js";
 
 import { getChainsByIds, getJobsByIds } from "../api.js";
-import { MAX_IDS, parseIdList, shortId } from "../domain/ids.js";
+import { MAX_IDS, parseIdList } from "../domain/ids.js";
 import { ChainRow } from "../rows/ChainRow.js";
 import { JobRow } from "../rows/JobRow.js";
 import { createLoader } from "../state/createLoader.js";
-import { useRefresh } from "../state/refresh.js";
-import { CloseIcon } from "../ui/icons.js";
-import { Card, EmptyState, ErrorState, SkeletonRows } from "../ui/kit.js";
+import { EmptyState, ErrorState, SkeletonRows } from "../ui/kit.js";
 
 const IdChipsInput = (props: {
   ids: string[];
@@ -94,7 +94,6 @@ export const Find = () => {
   const [editedOverLimit, setOverLimit] = createSignal(false);
   const parsedIds = () => parseIdList((searchParams.ids ?? "") as string);
   const ids = () => parsedIds().ids;
-  // A deep link can carry more IDs than are looked up; say so instead of dropping them silently.
   const overLimit = () => editedOverLimit() || parsedIds().overLimit;
 
   const setIds = (next: string[]) => {
@@ -117,7 +116,6 @@ export const Find = () => {
       return { chains: chains.items, jobs: jobs.items };
     },
   );
-  useRefresh(results.refetch);
 
   const notFound = () => {
     const data = results.data();
@@ -157,29 +155,29 @@ export const Find = () => {
                 {notFound().length} not found
               </p>
               <Show when={data().chains.length > 0}>
-                <Card title="Chains" bodyClass="">
+                <Box title="Chains" bodyClass="">
                   <ul class="divide-y divide-border">
                     <For each={data().chains}>
                       {(chain) => <ChainRow chain={chain} sortKey="createdAt" showType />}
                     </For>
                   </ul>
-                </Card>
+                </Box>
               </Show>
               <Show when={data().jobs.length > 0}>
-                <Card title="Jobs" bodyClass="">
+                <Box title="Jobs" bodyClass="">
                   <ul class="divide-y divide-border">
                     <For each={data().jobs}>
                       {(job) => <JobRow job={job} sortKey="createdAt" showType />}
                     </For>
                   </ul>
-                </Card>
+                </Box>
               </Show>
               <Show when={notFound().length > 0}>
-                <Card title="Not found">
+                <Box title="Not found">
                   <ul class="flex flex-col gap-1 font-mono text-xs text-fg-muted">
                     <For each={notFound()}>{(id) => <li class="break-all">{id}</li>}</For>
                   </ul>
-                </Card>
+                </Box>
               </Show>
             </div>
           )}

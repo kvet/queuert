@@ -1,11 +1,10 @@
+import { type AnyStatus, CHAIN_STATUSES, JOB_STATUSES } from "@queuert/ui/lib";
 import { useSearchParams } from "@solidjs/router";
 import { For, Match, Switch, createMemo } from "solid-js";
 
 import { TypeRow } from "../rows/TypeRow.js";
 import { createLoader } from "../state/createLoader.js";
-import { useRefresh } from "../state/refresh.js";
 import { EmptyState, ErrorState, SkeletonRows, buttonClass } from "../ui/kit.js";
-import { type AnyStatus, CHAIN_STATUSES, JOB_STATUSES } from "../ui/status.js";
 import { FilterBar, StatusFilter } from "./filters.js";
 import {
   type TypeEntry,
@@ -45,7 +44,6 @@ const TypeList = (props: {
   loading: boolean;
   error: unknown;
   onRetry: () => void;
-  /** The selected status, when it is not All; an empty list then offers to show all. */
   status?: AnyStatus;
   onShowAll?: () => void;
 }) => {
@@ -94,13 +92,11 @@ const TypeList = (props: {
   );
 };
 
-/** The type list without filter and sort controls, shown on a list page opened without a type. */
 export const TypePicker = (props: { kind: TypeKind }) => {
   const types = createLoader(
     () => true,
     async (_, signal) => props.kind.load(signal),
   );
-  useRefresh(types.refetch);
   return (
     <TypeList
       kind={props.kind}
@@ -120,7 +116,6 @@ const TypesPage = (props: { kind: TypeKind }) => {
     () => true,
     async (_, signal) => props.kind.load(signal),
   );
-  useRefresh(types.refetch);
 
   const narrowed = createMemo(() => {
     const all = types.data();

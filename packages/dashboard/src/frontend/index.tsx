@@ -12,11 +12,10 @@ import { JobDetail } from "./pages/JobDetail.js";
 import { JobList } from "./pages/JobList.js";
 import { Overview } from "./pages/Overview.js";
 import { ChainTypes, JobTypes } from "./pages/Types.js";
-import { initTheme } from "./state/theme.js";
+import { theme } from "./state/theme.js";
 
 import "./styles/index.css";
 
-/** Old `?ids=` list links moved to Find by ID; redirect (replace) so they keep working. */
 const redirectIds = (List: Component) => () => {
   const [searchParams] = useSearchParams();
   const ids = () => searchParams.ids as string | undefined;
@@ -27,7 +26,7 @@ const redirectIds = (List: Component) => () => {
   );
 };
 
-initTheme();
+theme.init();
 
 render(
   () => (

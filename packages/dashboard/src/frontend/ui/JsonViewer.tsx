@@ -1,8 +1,7 @@
+import { Box, ChevronRightIcon } from "@queuert/ui/components";
 import { For, Match, Show, Switch, createSignal, onCleanup, onMount } from "solid-js";
 
-import { ChevronRightIcon } from "./icons.js";
 import { CopyButton } from "./IdChip.js";
-import { Card } from "./kit.js";
 
 const COLLAPSE_DEPTH = 2;
 const COLLAPSE_SIZE = 20;
@@ -110,11 +109,6 @@ const JsonNode = (props: { name?: string; value: unknown; depth: number; last: b
   );
 };
 
-/**
- * Collapsible JSON tree with a Raw view and Copy (pretty JSON), boxed as its own titled `Card`.
- * Deep nodes and large arrays or objects start collapsed with a size summary; the panel caps at
- * 480px with an Expand control.
- */
 export const JsonViewer = (props: { data: unknown; title: string; label: string }) => {
   const [mode, setMode] = createSignal<"tree" | "raw">("tree");
   const [expanded, setExpanded] = createSignal(false);
@@ -125,7 +119,6 @@ export const JsonViewer = (props: { data: unknown; title: string; label: string 
     const observer = new ResizeObserver(() => {
       setOverflowing(scroller.scrollHeight > scroller.clientHeight + 1);
     });
-    // The capped scroller keeps its size as content grows, so observe the content too.
     observer.observe(scroller);
     if (scroller.firstElementChild) observer.observe(scroller.firstElementChild);
     onCleanup(() => {
@@ -134,7 +127,7 @@ export const JsonViewer = (props: { data: unknown; title: string; label: string 
   });
 
   return (
-    <Card
+    <Box
       title={props.title}
       bodyClass=""
       actions={
@@ -181,6 +174,6 @@ export const JsonViewer = (props: { data: unknown; title: string; label: string 
           {expanded() ? "Collapse" : "Expand"}
         </button>
       </Show>
-    </Card>
+    </Box>
   );
 };

@@ -1,8 +1,8 @@
+import { ArrowLeftIcon, ChevronRightIcon } from "@queuert/ui/components";
 import { A, useNavigate } from "@solidjs/router";
 import { For, type JSX, Show } from "solid-js";
 
 import { canGoBack, previousLocation } from "../state/navigation.js";
-import { ArrowLeftIcon, ChevronRightIcon } from "../ui/icons.js";
 
 const isPlainClick = (event: MouseEvent) =>
   !(event.metaKey || event.ctrlKey || event.shiftKey || event.altKey || event.button !== 0);
@@ -17,11 +17,6 @@ const sameList = (href: string, location: string): boolean => {
   return true;
 };
 
-/**
- * A plain click pops history so the previous view keeps its URL-held filters. Without in-app
- * history (deep link, reload, new tab) it is a real link to `fallback`, which also keeps
- * right-click / ⌘-click working.
- */
 const BackLink = (props: { fallback: string }) => {
   const navigate = useNavigate();
   return (
@@ -40,10 +35,6 @@ const BackLink = (props: { fallback: string }) => {
   );
 };
 
-/**
- * A breadcrumb link. When it points at the list the user just came from, a plain click goes back
- * through history so the list keeps its current filters, sort and scroll.
- */
 const Crumb = (props: { href: string; children: JSX.Element }) => {
   const navigate = useNavigate();
   return (

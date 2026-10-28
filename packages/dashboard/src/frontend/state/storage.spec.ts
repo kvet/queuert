@@ -8,8 +8,5 @@ describe("storageKey", () => {
     expect(storageKey("/internal/queuert", "theme")).toBe(
       "queuert-dashboard:/internal/queuert:theme",
     );
-    expect(storageKey("/internal/queuert", "refresh")).toBe(
-      "queuert-dashboard:/internal/queuert:refresh",
-    );
   });
 });

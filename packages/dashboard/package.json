@@ -47,6 +47,7 @@
   },
   "devDependencies": {
     "@queuert/tsconfig": "workspace:*",
+    "@queuert/ui": "workspace:*",
     "@solidjs/router": "1.0.0",
     "@tailwindcss/vite": "4.3.3",
     "queuert": "workspace:*",
@@ -64,7 +65,5 @@
   },
   "inlinedDependencies": {
     "seroval": "1.6.9"
-  },
-  "x-examples": "https://github.com/kvet/queuert/tree/main/examples",
-  "x-llms-txt": "https://kvet.github.io/queuert/llms-full.txt"
+  }
 }

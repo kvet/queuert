@@ -1,3 +1,4 @@
+import { JOB_STATUSES } from "@queuert/ui/lib";
 import { useSearchParams } from "@solidjs/router";
 import { Show, createMemo } from "solid-js";
 
@@ -5,9 +6,7 @@ import { PAGE_SIZE, countByJobTypeNames, listJobTypeNames, listJobs } from "../a
 import { JobRow, type JobSortKey } from "../rows/JobRow.js";
 import { createLoader } from "../state/createLoader.js";
 import { createPagedList } from "../state/createPagedList.js";
-import { useRefresh } from "../state/refresh.js";
 import { EmptyState, buttonClass } from "../ui/kit.js";
-import { JOB_STATUSES } from "../ui/status.js";
 import { FilterBar, SortControls, StatusFilter } from "./filters.js";
 import { ListHeader, PagedListBody, TypeGate } from "./listParts.js";
 import { toStatusCounts } from "./typeData.js";
@@ -67,10 +66,6 @@ const JobListForType = (props: { typeName: string }) => {
     }),
     async (params, cursor, signal) => listJobs({ ...params, cursor, limit: PAGE_SIZE, signal }),
   );
-
-  useRefresh(async () => {
-    await Promise.all([typeNames.refetch(), counts.refetch(), list.refresh()]);
-  });
 
   return (
     <div>

@@ -1,8 +1,8 @@
+import { CloseIcon } from "@queuert/ui/components";
 import { A } from "@solidjs/router";
 import { For, type JSX, Show, createEffect } from "solid-js";
 
 import { errorMessage } from "../api.js";
-import { CloseIcon } from "./icons.js";
 
 export const buttonClass = {
   primary:
@@ -11,7 +11,6 @@ export const buttonClass = {
     "inline-flex items-center justify-center gap-1.5 rounded-xs border border-border-strong bg-surface px-3 py-1.5 text-sm font-medium text-fg hover:bg-surface-2 disabled:cursor-not-allowed disabled:opacity-50",
   ghost:
     "inline-flex items-center justify-center gap-1.5 rounded-xs px-2 py-1 text-sm text-fg-muted hover:bg-surface-2 hover:text-fg disabled:cursor-not-allowed disabled:opacity-50",
-  /** Small bordered toggle for inline disclosure controls; filled while open or pressed. */
   toggle:
     "inline-flex shrink-0 items-center gap-1 rounded-xs border border-border-strong px-1.5 py-0.5 text-xs text-fg-muted hover:bg-surface-2 hover:text-fg aria-expanded:bg-surface-2 aria-expanded:text-fg aria-pressed:bg-surface-2 aria-pressed:text-fg",
   danger:
@@ -19,57 +18,6 @@ export const buttonClass = {
 } as const;
 
 export const linkClass = "text-accent-fg hover:underline";
-
-/**
- * A TUI-style box (`┌─ TITLE ──── actions ─┐`): the title and actions sit on the top border. Boxes
- * are unfilled, so the labels' page-coloured background cuts the border cleanly at any nesting.
- */
-export const Card = (props: {
-  title?: JSX.Element;
-  actions?: JSX.Element;
-  children: JSX.Element;
-  tone?: "error";
-  class?: string;
-  bodyClass?: string;
-}) => {
-  return (
-    <section
-      class={`relative rounded-xs border ${props.tone === "error" ? "border-error-border" : "border-border"} ${
-        props.title ? "pt-2" : ""
-      } ${props.class ?? ""}`}
-    >
-      <Show when={props.title}>
-        <header class="absolute inset-x-3 top-0 flex -translate-y-1/2 items-center justify-between gap-3">
-          <h2
-            class={`min-w-0 truncate bg-bg px-1.5 text-xs font-semibold tracking-wider uppercase ${
-              props.tone === "error" ? "text-error-fg" : "text-fg-muted"
-            }`}
-          >
-            {props.title}
-          </h2>
-          <Show when={props.actions}>
-            <div class="flex shrink-0 items-center gap-1 bg-bg px-1 text-xs">{props.actions}</div>
-          </Show>
-        </header>
-      </Show>
-      <div class={props.bodyClass ?? "p-4"}>{props.children}</div>
-    </section>
-  );
-};
-
-/**
- * Full-row link overlay: the row is `relative`, this link fills it, and inner interactive
- * elements sit above it with `relative z-10` and come after it in focus order.
- */
-export const RowLink = (props: { href: string; label: string }) => {
-  return (
-    <A
-      href={props.href}
-      class="absolute inset-0 rounded-[inherit] focus-visible:outline-offset-[-2px]"
-      aria-label={props.label}
-    />
-  );
-};
 
 export const EmptyState = (props: { title: string; children?: JSX.Element }) => {
   return (
@@ -131,7 +79,6 @@ export const SkeletonRows = (props: { count?: number; class?: string }) => {
   );
 };
 
-/** Polite live region for list announcements ("Loaded 100 more"). */
 export const LiveRegion = (props: { text: string }) => {
   return (
     <div class="sr-only" aria-live="polite">
@@ -140,10 +87,6 @@ export const LiveRegion = (props: { text: string }) => {
   );
 };
 
-/**
- * Native modal `<dialog>`: the browser traps focus, closes on Esc, and returns focus to the
- * trigger. A click on the backdrop closes it too. While `busy`, it stays open.
- */
 export const Dialog = (props: {
   open: boolean;
   onClose: () => void;
@@ -153,7 +96,6 @@ export const Dialog = (props: {
   class?: string;
 }) => {
   let dialog!: HTMLDialogElement;
-  // Where the press started: a text selection dragged out onto the backdrop is not a backdrop click.
   let pressedBackdrop = false;
 
   createEffect(() => {

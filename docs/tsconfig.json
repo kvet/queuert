@@ -1,3 +1,15 @@
 {
-  "extends": "astro/tsconfigs/strict"
+  "extends": "@queuert/tsconfig/base",
+  "compilerOptions": {
+    "composite": false,
+    "module": "esnext",
+    "moduleResolution": "bundler",
+    "allowImportingTsExtensions": true,
+    "jsx": "preserve",
+    "jsxImportSource": "solid-js",
+    "types": ["node", "@solidjs/start/env"],
+    "resolveJsonModule": true
+  },
+  "include": ["src/**/*.ts", "src/**/*.tsx", "plugins/**/*.ts", "vite.config.ts"],
+  "exclude": ["node_modules", ".output", "src/snippets"]
 }

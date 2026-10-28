@@ -1,3 +1,4 @@
+import { CHAIN_STATUSES, JOB_STATUSES } from "@queuert/ui/lib";
 import { type ChainStatus, type JobStatus } from "queuert";
 
 import {
@@ -7,7 +8,6 @@ import {
   listJobTypeNames,
 } from "../api.js";
 import { type CappedCount } from "../domain/counts.js";
-import { CHAIN_STATUSES, JOB_STATUSES } from "../ui/status.js";
 
 const COUNT_CHUNK = 50;
 
@@ -16,7 +16,6 @@ export type TypeEntry<TStatus extends string> = {
   counts: { status: TStatus; count: CappedCount }[];
 };
 
-/** Counts are fetched in sequential chunks so each call for a long type list stays cheap. */
 const chunked = async <T>(
   names: string[],
   count: (chunk: string[]) => Promise<T[]>,
@@ -60,10 +59,6 @@ export const countOf = <TStatus extends string>(
     .filter((statusCount) => statuses.includes(statusCount.status))
     .reduce((sum, statusCount) => sum + statusCount.count.count, 0);
 
-/**
- * Keeps only the counts of `statuses` on each entry and drops the entries left with nothing in
- * them, so a type with no chains or jobs in those statuses is not listed.
- */
 export const narrowToStatuses = <TStatus extends string>(
   entries: TypeEntry<TStatus>[],
   statuses: readonly TStatus[],

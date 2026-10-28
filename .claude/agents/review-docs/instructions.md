@@ -23,7 +23,7 @@ Architectural documentation published as part of the docs site. These cover desi
 
 ### Docs Site (`docs/src/content/docs/`)
 
-User-facing pages: `getting-started/`, `guides/`, `integrations/` (adapter setup and options), `examples.md` (index of `examples/`), and `benchmarks.md`.
+User-facing pages: the home page (`docs/src/routes/index.tsx`), `getting-started/`, `guides/`, `integrations/` (adapter setup and options), `examples/` (built from `docs/src/data/examples.ts`, the index of `examples/`), `benchmarks/` (numbers in `docs/src/data/benchmarks.ts`), and `comparison/` (feature data in `docs/src/data/comparison.ts`). Page conventions are in `docs-style.md`.
 
 ### Package READMEs
 
@@ -69,7 +69,7 @@ For each changed file, identify relevant documentation:
 
 - **Package source** (`packages/*/src/**`) → TSDoc on the changed exports + relevant reference docs in `docs/src/content/docs/advanced/` + `integrations/` page for that adapter
 - **Package exports** (`packages/*/src/index.ts`) → TSDoc on the export + every docs page that mentions the symbol (grep `docs/src/content/docs/` and `README.md` for it)
-- **Examples** (`examples/**`) → `docs/src/content/docs/examples.md` and the matching guide
+- **Examples** (`examples/**`) → `docs/src/data/examples.ts`, the examples page that lists it (`docs/src/content/docs/examples/`), and the matching guide
 
 Look in `docs/src/content/docs/advanced/` to identify which reference docs are relevant for a given subsystem.
 
@@ -105,7 +105,7 @@ Look in `docs/src/content/docs/advanced/` to identify which reference docs are r
 **Cross-references in touched docs**:
 
 - Internal links and referenced file paths in docs the diff touches still resolve.
-- A new `examples/showcase-*` directory is listed in `docs/src/content/docs/examples.md`, and the matching guide in `docs/src/content/docs/guides/` links to it (`See [examples/showcase-...](https://github.com/kvet/queuert/tree/main/examples/showcase-...)`).
+- A new `examples/*` directory is listed in `docs/src/data/examples.ts` and on its examples page in `docs/src/content/docs/examples/`, and for a `showcase-*` example the matching guide in `docs/src/content/docs/guides/` links to it (`See [examples/showcase-...](https://github.com/kvet/queuert/tree/main/examples/showcase-...)`).
 - A new or renamed OTEL metric, span, or attribute is reflected in `docs/src/content/docs/advanced/otel-metrics.md` / `otel-tracing.md`.
 
 ### 4. Assess Impact Severity

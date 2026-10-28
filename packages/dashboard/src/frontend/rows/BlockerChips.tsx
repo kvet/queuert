@@ -1,13 +1,12 @@
+import { Chip } from "@queuert/ui/components";
+import { shortId } from "@queuert/ui/lib";
 import { A } from "@solidjs/router";
 import { For, Show, createSignal } from "solid-js";
 
 import { type UnknownChain } from "../api.js";
-import { shortId } from "../domain/ids.js";
-import { StatusDot } from "../ui/StatusPill.js";
 
 const VISIBLE = 6;
 
-/** Blocker chains as chips linking to each chain: the first six, then "+n more" expands inline. */
 export const BlockerChips = (props: { blockers: UnknownChain[] }) => {
   const [showAll, setShowAll] = createSignal(false);
   const shown = () => (showAll() ? props.blockers : props.blockers.slice(0, VISIBLE));
@@ -16,15 +15,17 @@ export const BlockerChips = (props: { blockers: UnknownChain[] }) => {
     <span class="flex flex-wrap items-center gap-1.5">
       <For each={shown()}>
         {(blocker) => (
-          <A
+          <Chip
             href={`/chains/${blocker.id}`}
-            class="relative z-10 inline-flex max-w-full items-center gap-1.5 rounded-xs border border-border bg-surface px-2 py-0.5 text-xs hover:border-border-strong"
+            link={A}
+            status={blocker.status}
+            statusLabel={blocker.status}
+            class="bg-surface"
             title={`${blocker.typeName} (${blocker.status})`}
           >
-            <StatusDot status={blocker.status} label={blocker.status} />
-            <span class="truncate">{blocker.typeName}</span>
+            <span class="truncate font-mono">{blocker.typeName}</span>
             <span class="font-mono text-fg-subtle">{shortId(blocker.id)}</span>
-          </A>
+          </Chip>
         )}
       </For>
       <Show when={!showAll() && props.blockers.length > VISIBLE}>

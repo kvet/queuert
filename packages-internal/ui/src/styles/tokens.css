@@ -1,0 +1,89 @@
+@source "..";
+
+@custom-variant dark (&:where([data-theme=dark], [data-theme=dark] *));
+
+@theme {
+  --font-sans: ui-sans-serif, system-ui, -apple-system, "Segoe UI", Roboto, sans-serif;
+  --font-mono: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
+
+  --color-bg: #fafafa;
+  --color-surface: #ffffff;
+  --color-surface-2: #f4f4f5;
+  --color-border: #e4e4e7;
+  --color-border-strong: #d4d4d8;
+  --color-fg: #18181b;
+  --color-fg-muted: #52525b;
+  --color-fg-subtle: #63636b;
+  --color-accent: #2563eb;
+  --color-accent-fg: #1d4ed8;
+  --color-brand: #8b5cf6;
+
+  --color-status-blocked-bg: #ede9fe;
+  --color-status-blocked-fg: #5b21b6;
+  --color-status-blocked-dot: #8b5cf6;
+  --color-status-pending-bg: #fef3c7;
+  --color-status-pending-fg: #92400e;
+  --color-status-pending-dot: #d97706;
+  --color-status-running-bg: #dbeafe;
+  --color-status-running-fg: #1e40af;
+  --color-status-running-dot: #3b82f6;
+  --color-status-completed-bg: #e4e4e7;
+  --color-status-completed-fg: #3f3f46;
+  --color-status-completed-dot: #a1a1aa;
+
+  --color-error-bg: #fef2f2;
+  --color-error-border: #fecaca;
+  --color-error-fg: #b91c1c;
+  --color-error-dot: #ef4444;
+
+  --color-syntax-key: #6d28d9;
+  --color-syntax-string: #047857;
+  --color-syntax-number: #b45309;
+
+  --animate-pulse-ring: pulse-ring 2s ease-out infinite;
+
+  @keyframes pulse-ring {
+    0% {
+      box-shadow: 0 0 0 0 color-mix(in srgb, var(--color-status-running-dot) 55%, transparent);
+    }
+    70%,
+    100% {
+      box-shadow: 0 0 0 6px transparent;
+    }
+  }
+}
+
+[data-theme="dark"] {
+  --color-bg: #09090b;
+  --color-surface: #18181b;
+  --color-surface-2: #27272a;
+  --color-border: #2e2e33;
+  --color-border-strong: #3f3f46;
+  --color-fg: #f4f4f5;
+  --color-fg-muted: #a1a1aa;
+  --color-fg-subtle: #94949e;
+  --color-accent: #60a5fa;
+  --color-accent-fg: #93c5fd;
+
+  --color-status-blocked-bg: #2e1065;
+  --color-status-blocked-fg: #c4b5fd;
+  --color-status-blocked-dot: #a78bfa;
+  --color-status-pending-bg: #451a03;
+  --color-status-pending-fg: #fcd34d;
+  --color-status-pending-dot: #fbbf24;
+  --color-status-running-bg: #172554;
+  --color-status-running-fg: #93c5fd;
+  --color-status-running-dot: #60a5fa;
+  --color-status-completed-bg: #27272a;
+  --color-status-completed-fg: #d4d4d8;
+  --color-status-completed-dot: #71717a;
+
+  --color-error-bg: #450a0a;
+  --color-error-border: #7f1d1d;
+  --color-error-fg: #fca5a5;
+  --color-error-dot: #f87171;
+
+  --color-syntax-key: #c4b5fd;
+  --color-syntax-string: #6ee7b7;
+  --color-syntax-number: #fcd34d;
+}

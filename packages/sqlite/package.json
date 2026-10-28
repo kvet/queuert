@@ -60,7 +60,5 @@
   },
   "engines": {
     "node": ">=22"
-  },
-  "x-examples": "https://github.com/kvet/queuert/tree/main/examples",
-  "x-llms-txt": "https://kvet.github.io/queuert/llms-full.txt"
+  }
 }
