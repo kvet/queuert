@@ -123,7 +123,6 @@ export type ObservabilityAdapter = {
   // worker
   workerStarted: (data: WorkerBasicData & { jobTypeNames: string[] }) => void;
   workerError: (data: WorkerBasicData & { error: unknown }) => void;
-  workerStopping: (data: WorkerBasicData) => void;
   workerStopped: (data: WorkerBasicData) => void;
 
   // chain

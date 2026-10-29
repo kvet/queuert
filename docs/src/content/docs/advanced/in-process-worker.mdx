@@ -71,10 +71,9 @@ On startup, the worker emits a `workerStarted` observability event.
 
 Calling `stop()` triggers graceful shutdown:
 
-1. Emit the `workerStopping` observability event
-2. Signal abort controller — in-flight jobs see their `signal` abort, and the main loop stops spawning new slots
-3. Wait for the main loop to exit, then for all in-flight handlers to end (return or throw)
-4. Emit the `workerStopped` observability event
+1. Signal abort controller — in-flight jobs see their `signal` abort, and the main loop stops spawning new slots
+2. Wait for the main loop to exit, then for all in-flight handlers to end (return or throw)
+3. Emit the `workerStopped` observability event
 
 Stopping is cooperative: the attempt is still held, so handlers that check `signal.aborted` can wrap up and still commit a `complete` (with partial output or `{ reschedule }`) instead of abandoning work.
 

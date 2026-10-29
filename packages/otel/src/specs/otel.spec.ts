@@ -94,7 +94,6 @@ describe("Metrics", () => {
       { method: "jobCompleted", args: { typeName: "test", output: { result: true } } },
       { method: "chainCompleted", args: { typeName: "test", output: { result: true } } },
       { method: "jobAttemptCompleted", args: { typeName: "test", output: { result: true } } },
-      { method: "workerStopping", args: { workerId: workerIdMatcher } },
       { method: "workerStopped", args: { workerId: workerIdMatcher } },
     ]);
 
@@ -179,7 +178,6 @@ describe("Metrics", () => {
       { method: "jobCompleted" },
       { method: "chainCompleted" },
       { method: "jobAttemptCompleted" },
-      { method: "workerStopping" },
       { method: "workerStopped" },
     ]);
   });
@@ -255,7 +253,6 @@ describe("Metrics", () => {
       { method: "jobCompleted" },
       { method: "chainCompleted" },
       { method: "jobAttemptCompleted" },
-      { method: "workerStopping" },
       { method: "workerStopped" },
     ]);
   });
@@ -369,7 +366,6 @@ describe("Metrics", () => {
       { method: "jobCompleted", args: { typeName: "linear_next_next" } },
       { method: "chainCompleted", args: { typeName: "linear" } },
       { method: "jobAttemptCompleted", args: { typeName: "linear_next_next" } },
-      { method: "workerStopping" },
       { method: "workerStopped" },
     ]);
 
@@ -501,7 +497,6 @@ describe("Metrics", () => {
       { method: "jobCompleted", args: { typeName: "main" } },
       { method: "chainCompleted", args: { typeName: "main" } },
       { method: "jobAttemptCompleted", args: { typeName: "main" } },
-      { method: "workerStopping" },
       { method: "workerStopped" },
     ]);
   });
@@ -739,7 +734,6 @@ describe("Metrics", () => {
       { method: "jobCompleted" },
       { method: "chainCompleted" },
       { method: "jobAttemptLost" },
-      { method: "workerStopping" },
       { method: "workerStopped" },
     ]);
   });
@@ -805,7 +799,6 @@ describe("Metrics", () => {
       { method: "jobAttemptStarted" },
       { method: "chainDeleted" },
       { method: "jobAttemptLost" },
-      { method: "workerStopping" },
       { method: "workerStopped" },
     ]);
   });
@@ -864,7 +857,6 @@ describe("Metrics", () => {
       { method: "workerStarted" },
       { method: "jobAttemptStarted" },
       { method: "jobAttemptLost" },
-      { method: "workerStopping" },
       { method: "workerStopped" },
     ]);
   });
@@ -2718,7 +2710,6 @@ describe("Rollback", () => {
       { method: "jobCompleted" },
       { method: "chainCompleted" },
       { method: "jobAttemptCompleted" },
-      { method: "workerStopping" },
       { method: "workerStopped" },
     ]);
   });
@@ -2808,7 +2799,6 @@ describe("Rollback", () => {
       { method: "jobCompleted" },
       { method: "chainCompleted" },
       { method: "jobAttemptCompleted" },
-      { method: "workerStopping" },
       { method: "workerStopped" },
     ]);
   });
@@ -2900,7 +2890,6 @@ describe("Rollback", () => {
       { method: "jobCompleted" },
       { method: "chainCompleted" },
       { method: "jobAttemptCompleted" },
-      { method: "workerStopping" },
       { method: "workerStopped" },
     ]);
   });
@@ -3006,7 +2995,6 @@ describe("Rollback", () => {
       { method: "chainCompleted" },
       { method: "jobUnblocked" },
       { method: "jobAttemptCompleted" },
-      { method: "workerStopping" },
       { method: "workerStopped" },
     ]);
   });
@@ -3208,7 +3196,6 @@ describe("Rollback", () => {
       { method: "jobCompleted" },
       { method: "chainCompleted" },
       { method: "jobAttemptCompleted" },
-      { method: "workerStopping" },
       { method: "workerStopped" },
     ]);
   });

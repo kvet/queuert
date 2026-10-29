@@ -147,7 +147,6 @@ describe("Logging", () => {
           ...workerArgs,
         },
       },
-      { type: "worker_stopping", data: { ...workerArgs } },
       { type: "worker_stopped", data: { ...workerArgs } },
     ]);
   });
@@ -226,7 +225,6 @@ describe("Logging", () => {
       { type: "job_completed", data: { typeName: "test" } },
       { type: "chain_completed", data: { typeName: "test" } },
       { type: "job_attempt_completed", data: { typeName: "test" } },
-      { type: "worker_stopping" },
       { type: "worker_stopped" },
     ]);
   });
@@ -302,7 +300,6 @@ describe("Logging", () => {
       { type: "job_completed", data: { typeName: "test" } },
       { type: "chain_completed", data: { typeName: "test" } },
       { type: "job_attempt_completed", data: { typeName: "test" } },
-      { type: "worker_stopping" },
       { type: "worker_stopped" },
     ]);
   });
@@ -431,7 +428,6 @@ describe("Logging", () => {
       { type: "job_completed", data: { typeName: "linear_next_next" } },
       { type: "chain_completed", data: { typeName: "linear" } },
       { type: "job_attempt_completed", data: { typeName: "linear_next_next" } },
-      { type: "worker_stopping" },
       { type: "worker_stopped" },
     ]);
   });
@@ -596,7 +592,6 @@ describe("Logging", () => {
       { type: "job_completed", data: { typeName: "main" } },
       { type: "chain_completed", data: { typeName: "main" } },
       { type: "job_attempt_completed", data: { typeName: "main" } },
-      { type: "worker_stopping" },
       { type: "worker_stopped" },
     ]);
   });
@@ -932,7 +927,6 @@ describe("Logging", () => {
       { type: "job_completed", data: { typeName: "test", output: { by: "workerless" } } },
       { type: "chain_completed", data: { typeName: "test" } },
       { type: "job_attempt_lost", data: { typeName: "test", attempt: 1 } },
-      { type: "worker_stopping" },
       { type: "worker_stopped" },
     ]);
   });
@@ -1004,7 +998,6 @@ describe("Logging", () => {
       { type: "job_attempt_started", data: { typeName: "test", attempt: 1 } },
       { type: "chain_deleted", data: { id: chain.id } },
       { type: "job_attempt_lost", data: { typeName: "test", attempt: 1 } },
-      { type: "worker_stopping" },
       { type: "worker_stopped" },
     ]);
   });
@@ -1068,7 +1061,6 @@ describe("Logging", () => {
       { type: "worker_started" },
       { type: "job_attempt_started", data: { typeName: "test", attempt: 1 } },
       { type: "job_attempt_lost", data: { typeName: "test", attempt: 1 } },
-      { type: "worker_stopping" },
       { type: "worker_stopped" },
     ]);
   });

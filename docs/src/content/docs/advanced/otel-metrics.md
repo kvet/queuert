@@ -28,12 +28,11 @@ Attribute names follow OpenTelemetry semantic conventions (lowercase, dotted) an
 
 ### Worker Lifecycle
 
-| Metric                    | Attributes | Description                 |
-| ------------------------- | ---------- | --------------------------- |
-| `queuert.worker.started`  | —          | Worker started processing   |
-| `queuert.worker.error`    | —          | Worker encountered an error |
-| `queuert.worker.stopping` | —          | Worker received stop signal |
-| `queuert.worker.stopped`  | —          | Worker fully stopped        |
+| Metric                   | Attributes | Description                 |
+| ------------------------ | ---------- | --------------------------- |
+| `queuert.worker.started` | —          | Worker started processing   |
+| `queuert.worker.error`   | —          | Worker encountered an error |
+| `queuert.worker.stopped` | —          | Worker fully stopped        |
 
 ### Job Lifecycle
 

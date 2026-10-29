@@ -51,7 +51,6 @@ export const createOtelObservabilityAdapter = async ({
 } = {}): Promise<ObservabilityAdapter> => {
   const workerStartedCounter = meter?.createCounter("queuert.worker.started");
   const workerErrorCounter = meter?.createCounter("queuert.worker.error");
-  const workerStoppingCounter = meter?.createCounter("queuert.worker.stopping");
   const workerStoppedCounter = meter?.createCounter("queuert.worker.stopped");
 
   const jobCreatedCounter = meter?.createCounter("queuert.job.created");
@@ -125,9 +124,6 @@ export const createOtelObservabilityAdapter = async ({
     },
     workerError: () => {
       workerErrorCounter?.add(1);
-    },
-    workerStopping: () => {
-      workerStoppingCounter?.add(1);
     },
     workerStopped: () => {
       workerStoppedCounter?.add(1);

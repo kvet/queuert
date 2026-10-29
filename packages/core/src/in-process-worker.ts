@@ -463,7 +463,6 @@ export const createInProcessWorker = async <
       const runWorkerLoopPromise = runWorkerLoop().catch(() => {});
 
       return async () => {
-        observabilityHelper.workerStopping({ workerId });
         stopController.abort();
         await runWorkerLoopPromise;
         await executor.drain();

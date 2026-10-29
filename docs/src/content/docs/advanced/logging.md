@@ -46,12 +46,11 @@ All entries are strongly typed — the `type` field determines the exact shape o
 
 ### Worker Lifecycle
 
-| Type              | Level   | Message                 | Data                          |
-| ----------------- | ------- | ----------------------- | ----------------------------- |
-| `worker_started`  | `info`  | Started worker          | `workerId`, `jobTypeNames`    |
-| `worker_error`    | `error` | Worker error            | `workerId`; top-level `error` |
-| `worker_stopping` | `info`  | Stopping worker...      | `workerId`                    |
-| `worker_stopped`  | `info`  | Worker has been stopped | `workerId`                    |
+| Type             | Level   | Message                 | Data                          |
+| ---------------- | ------- | ----------------------- | ----------------------------- |
+| `worker_started` | `info`  | Started worker          | `workerId`, `jobTypeNames`    |
+| `worker_error`   | `error` | Worker error            | `workerId`; top-level `error` |
+| `worker_stopped` | `info`  | Worker has been stopped | `workerId`                    |
 
 ### Job Lifecycle
 

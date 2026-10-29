@@ -31,12 +31,6 @@ type WorkerErrorLogEntry = LogEntry<
   WorkerBasicData,
   unknown
 >;
-type WorkerStoppingLogEntry = LogEntry<
-  "worker_stopping",
-  "info",
-  "Stopping worker...",
-  WorkerBasicData
->;
 type WorkerStoppedLogEntry = LogEntry<
   "worker_stopped",
   "info",
@@ -168,7 +162,6 @@ type TypedLogEntry =
   // worker
   | WorkerStartedLogEntry
   | WorkerErrorLogEntry
-  | WorkerStoppingLogEntry
   | WorkerStoppedLogEntry
   // chain
   | ChainCreatedLogEntry

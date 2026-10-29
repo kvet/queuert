@@ -72,7 +72,6 @@ export type ObservabilityHelper = {
   // worker
   workerStarted: (options: { workerId: string; jobTypeNames: string[] }) => void;
   workerError: (options: { workerId: string }, error: unknown) => void;
-  workerStopping: (options: { workerId: string }) => void;
   workerStopped: (options: { workerId: string }) => void;
 
   // chain
@@ -173,15 +172,6 @@ export const createObservabilityHelper = ({
       error,
     });
     adapter.workerError({ ...options, error });
-  },
-  workerStopping(options) {
-    log({
-      type: "worker_stopping",
-      level: "info",
-      message: "Stopping worker...",
-      data: options,
-    });
-    adapter.workerStopping(options);
   },
   workerStopped(options) {
     log({
