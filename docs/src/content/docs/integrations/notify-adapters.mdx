@@ -13,10 +13,8 @@ Notify adapters handle pub/sub notifications for efficient job scheduling. When 
   <TabItem label="Redis">
     **Package:** `@queuert/redis`
 
-    Recommended for production. Uses Redis pub/sub for broadcasting job notifications to workers.
-    Includes a hint-based optimization using Lua scripts for atomic decrement, preventing
-    thundering herd when many workers are idle -- only as many workers as there are new jobs will
-    query the database.
+    Recommended for production. Uses Redis pub/sub for broadcasting job notifications to workers,
+    publishing each batch from one Lua script.
 
     ```bash
     npm install @queuert/redis
@@ -36,8 +34,7 @@ Notify adapters handle pub/sub notifications for efficient job scheduling. When 
   <TabItem label="NATS">
     **Package:** `@queuert/nats` <Badge text="Experimental" variant="caution" />
 
-    Uses NATS pub/sub for job notifications. When JetStream KV is available, supports
-    revision-based CAS operations for hint-based optimization.
+    Uses NATS core pub/sub for job notifications.
 
     ```bash
     npm install @queuert/nats
@@ -52,8 +49,7 @@ Notify adapters handle pub/sub notifications for efficient job scheduling. When 
     **Package:** `@queuert/postgres`
 
     Uses PostgreSQL's built-in `LISTEN`/`NOTIFY` mechanism. No additional infrastructure beyond
-    your existing PostgreSQL database. All listeners query the database on notification (no
-    hint-based optimization).
+    your existing PostgreSQL database.
 
     ```bash
     npm install @queuert/postgres
@@ -97,12 +93,13 @@ Notify adapters handle pub/sub notifications for efficient job scheduling. When 
 
 ## Notify Provider
 
-A Notify Provider bridges your pub/sub client (Redis, NATS, PostgreSQL, etc.) with the notify adapter. You implement an interface for publishing messages and subscribing to channels:
+A Notify Provider bridges your pub/sub client (Redis, NATS, PostgreSQL, etc.) with the notify adapter. You implement an interface for publishing messages (or, for Redis, running Lua scripts) and subscribing to channels:
 
-- **`publish`** -- Sends a message to a named channel.
+- **`publish`** (PostgreSQL) -- Sends a batch of messages to a named channel in one statement.
+- **`eval`** (Redis) -- Runs a Lua script; the adapter publishes each batch of notifications from one script.
 - **`subscribe`** -- Listens on a channel and invokes a callback when messages arrive. Returns a dispose function to unsubscribe.
 
-The provider maintains a dedicated connection for subscriptions and acquires/releases connections for publish operations automatically. Each example linked above demonstrates a complete Notify Provider implementation for its corresponding client.
+The provider maintains a dedicated connection for subscriptions and acquires/releases connections for publish and script operations automatically. Each example linked above demonstrates a complete Notify Provider implementation for its corresponding client.
 
 You're not limited to the clients listed here — you can write a provider for any pub/sub client that supports the same semantics, or implement the `NotifyAdapter` interface from scratch for an entirely different message broker. See [Custom Adapters](/queuert/advanced/custom-adapters/) for a walkthrough.
 

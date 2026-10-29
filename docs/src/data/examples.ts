@@ -381,8 +381,7 @@ export const examples: Example[] = [
     category: "notify",
     page: "notify-adapters",
     label: "NATS",
-    description:
-      "NATS notifications, with an optional JetStream KV bucket that holds the wake-hint counts.",
+    description: "NATS core pub/sub notifications.",
     runtime: "Node.js",
     services: ["NATS"],
     files: ["src/index.ts"],

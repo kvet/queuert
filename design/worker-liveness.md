@@ -207,7 +207,7 @@ Defaults: `durationMs: 60_000`, `heartbeatMs: 20_000` — three renewal opportun
 **Main loop.** Unchanged except for step 2:
 
 1. Fill: `startJobAttempts` with the idle slot count as `limit` until it returns fewer jobs or no slots are idle.
-2. Reclaim: `reclaimExpiredWorkers({ limit: 1 })` when idle slots remain. For each swept worker, emit `workerReclaimed`, then `jobAttemptReclaimed` per returned job, then `provideWakeHint(typeName, count)` + `notifyJobScheduled(typeName)` per distinct type and `notifyJobAttemptLost(jobId)` per job.
+2. Reclaim: `reclaimExpiredWorkers({ limit: 1 })` when idle slots remain. For each swept worker, emit `workerReclaimed`, then `jobAttemptReclaimed` per returned job, then one `notifyJobAttemptsLost` call with every job id. The worker acquires the released jobs itself on the next fill, so it does not wake other workers.
 3. Wait, repeat.
 
 `ignoredJobIds` is gone. A worker may reclaim itself: if its own lease has expired then it is, by definition, dead, and the honest response is to release the jobs and discover the loss on the next heartbeat.
@@ -253,7 +253,7 @@ Recovery emits no event of its own. A lease loss reads as `workerLeaseLost` → 
 
 ### `jobAttemptReclaimed`
 
-Yes — `reclaimExpiredWorkers` returns the released jobs as full `StateJob` rows, so the reclaiming worker can emit `jobAttemptReclaimed(stateJob, { workerId, reclaimedFromWorkerId })` per job, exactly as it does today for each job that `reclaimExpiredJobAttempts` returns. The rows are needed regardless of observability: the caller has to read each job's `typeName` to wake the right listeners and each `id` to fire `notifyJobAttemptLost`. The volume is bounded by the dead worker's concurrency times `limit`.
+Yes — `reclaimExpiredWorkers` returns the released jobs as full `StateJob` rows, so the reclaiming worker can emit `jobAttemptReclaimed(stateJob, { workerId, reclaimedFromWorkerId })` per job, exactly as it does today for each job that `reclaimExpiredJobAttempts` returns. The rows are needed regardless of observability: the caller has to read each `id` to fire `notifyJobAttemptsLost`. The volume is bounded by the dead worker's concurrency times `limit`.
 
 `workerReclaimed` earns its place next to it because it is the only signal when an **idle** worker dies — no jobs held, no `jobAttemptReclaimed`, and without it a crashed idle process leaves no trace anywhere. It also gives the per-job events their parent: `jobCount` says how many `jobAttemptReclaimed` events belong to that sweep.
 

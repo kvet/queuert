@@ -5,17 +5,15 @@ sidebar:
   order: 5
 ---
 
-import { Arrow, Diagram, Flow, Node, Rows } from "../../../components/diagram";
-
 ## Overview
 
-This document describes the design philosophy behind Queuert's adapter system, including factory patterns, context management, and notification optimization.
+This document describes the design philosophy behind Queuert's adapter system, including factory patterns, context management, and notification delivery.
 
 ## Provider vs Adapter
 
 Queuert uses a two-layer abstraction for external integrations:
 
-- **Provider** — a minimal interface that users implement to wrap their chosen database or messaging client. It contains only low-level operations (`executeSql`, `withTransaction`, `publish`/`subscribe`). Each driver library (pg, better-sqlite3, ioredis, etc.) gets its own provider implementation.
+- **Provider** — a minimal interface that users implement to wrap their chosen database or messaging client. It contains only low-level operations (`executeSql`, `withTransaction`, `publish`/`eval`/`subscribe`). Each driver library (pg, better-sqlite3, ioredis, etc.) gets its own provider implementation.
 - **Adapter** — a high-level interface that Queuert builds from a provider via a `create*` factory function. Adapters contain the full domain logic (job lifecycle, state transitions, notification semantics) and are what `createClient` and `createInProcessWorker` consume.
 
 The factory transforms a provider into an adapter:
@@ -105,9 +103,10 @@ At the provider layer, `executeSql` keeps an unconditionally optional `txCtx` �
 
 ### NotifyProvider Interface
 
-A notify provider supplies three capabilities — no transaction context, connections are managed internally:
+A notify provider supplies these capabilities — no transaction context, connections are managed internally:
 
-- **`publish`** — sends a message to a channel
+- **`publish`** (`PgNotifyProvider`) — sends a batch of messages to a channel in one statement
+- **`eval`** (`RedisNotifyProvider`) — runs a Lua script; the Redis adapter publishes each batch from one script
 - **`subscribe`** — listens on a channel, calling a callback on each message; returns an unsubscribe function
 - **`close`** _(optional)_ — only needed when the provider owns resources (e.g. a dedicated LISTEN client)
 
@@ -115,51 +114,11 @@ A notify provider supplies three capabilities — no transaction context, connec
 
 ### Broadcast Semantics
 
-All notifications use broadcast (pub/sub) semantics with three notify/listen pairs: job scheduling, chain completion, and attempt loss. See the `NotifyAdapter` type TSDoc for method details.
+All notifications use broadcast (pub/sub) semantics with three notify/listen pairs: job scheduling, chain completion, and attempt loss. The notify methods take a batch (`notifyJobsScheduled`, `notifyChainsCompleted`, `notifyJobAttemptsLost`), so a commit or a worker reclaim publishes everything it buffered in one round-trip per method; each item reaches listeners as its own notification. Items in a batch are expected to be unique — PostgreSQL delivers identical payloads on a channel once per transaction. See the `NotifyAdapter` type TSDoc for method details.
 
-### Wake-Hint Methods
+### Waking Workers
 
-To prevent thundering herd when many workers are idle, the publisher attaches a per-typeName budget that gates how many listeners actually wake. Hints are an opt-in pair of methods on `NotifyAdapter`, both keyed by `typeName`:
-
-<Diagram
-  label="Wake budget: the publisher sets a budget of 3; workers A to C consume it and wake, worker D gets false and skips"
-  caption="consumeWakeHint decrements the budget atomically and returns false once it is exhausted. The budget expires after 60s."
->
-  <Flow>
-    <Node tone="blue" sub="schedules 3 jobs">Publisher</Node>
-    <Arrow label="provideWakeHint(t, 3)" sub="notifyJobScheduled(t)" />
-    <Node tone="amber" sub="budget[t]: 3 → 0">Your pub/sub</Node>
-    <Rows spine>
-      <Flow>
-        <Arrow label="true" tone="green" />
-        <Node tone="green" sub="wakes">Worker A</Node>
-      </Flow>
-      <Flow>
-        <Arrow label="true" tone="green" />
-        <Node tone="green" sub="wakes">Worker B</Node>
-      </Flow>
-      <Flow>
-        <Arrow label="true" tone="green" />
-        <Node tone="green" sub="wakes">Worker C</Node>
-      </Flow>
-      <Flow>
-        <Arrow label="false" dashed />
-        <Node variant="ghost" sub="skips the wake">Worker D</Node>
-      </Flow>
-    </Rows>
-  </Flow>
-</Diagram>
-
-- `provideWakeHint(typeName, count)` — publisher adds `count` to the budget. Composes additively across concurrent publishers (two `provideWakeHint(t, 3)` calls yield a budget of 6).
-- `consumeWakeHint(typeName)` — listener atomically claims one slot. Returns `true` if a slot was claimed, or if no budget is currently tracked (graceful degradation). Returns `false` only when an explicit budget was set and is now exhausted.
-
-Flow when scheduling N jobs of `typeName`:
-
-1. Publisher calls `provideWakeHint(typeName, N)` followed by `notifyJobScheduled(typeName)`.
-2. Each receiving worker calls `consumeWakeHint(typeName)`. The first N return `true` (worker queries the database); subsequent calls return `false` (worker skips).
-3. When the hint key never existed or the TTL expired, `consumeWakeHint` falls back to `true` so listeners don't silently miss wakeups.
-
-Adapters that don't support hints implement the pair as no-ops (`provideWakeHint: async () => {}`, `consumeWakeHint: async () => true`) — no parameter lies, no thundering-herd protection, but everything else still works.
+A worker listens for its job types only while it waits with idle slots. Any job-scheduled notification for one of those types ends the wait, and the worker fills its idle slots from the database. Every idle worker listening for the type wakes, and the state adapter's batch acquisition settles which worker gets each job (`FOR UPDATE SKIP LOCKED` on PostgreSQL), so a worker that finds nothing to acquire goes back to waiting. A notification that arrives while no worker waits is not replayed: workers that miss one pick the job up on their next poll.
 
 ### Callback Pattern
 

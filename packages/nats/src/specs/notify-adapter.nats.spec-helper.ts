@@ -21,15 +21,8 @@ export const extendWithNotifyNats = <
       async ({ natsConnectionOptions }, use) => {
         const nc = await connect(natsConnectionOptions);
 
-        const js = nc.jetstream();
-        const kv = await js.views.kv(
-          `queuert_hints_${Date.now()}_${Math.random().toString(36).slice(2)}`,
-          { ttl: 60_000 },
-        );
-
         const notifyAdapter = await createNatsNotifyAdapter({
           nc,
-          kv,
           subjectPrefix: `queuert.${Date.now()}.${Math.random().toString(36).slice(2)}`,
         });
 
@@ -57,33 +50,25 @@ export const extendWithNotifyNats = <
         };
 
         const flakyNotifyAdapter: NotifyAdapter = {
-          notifyJobScheduled: async (typeName) => {
+          notifyJobsScheduled: async (typeNames) => {
             maybeThrow();
-            return notifyAdapter.notifyJobScheduled(typeName);
+            return notifyAdapter.notifyJobsScheduled(typeNames);
           },
           listenJobScheduled: async (typeNames, onNotification) => {
             maybeThrow();
             return notifyAdapter.listenJobScheduled(typeNames, onNotification);
           },
-          provideWakeHint: async (typeName, count) => {
+          notifyChainsCompleted: async (chainIds) => {
             maybeThrow();
-            return notifyAdapter.provideWakeHint(typeName, count);
-          },
-          consumeWakeHint: async (typeName) => {
-            maybeThrow();
-            return notifyAdapter.consumeWakeHint(typeName);
-          },
-          notifyChainCompleted: async (chainId) => {
-            maybeThrow();
-            return notifyAdapter.notifyChainCompleted(chainId);
+            return notifyAdapter.notifyChainsCompleted(chainIds);
           },
           listenChainCompleted: async (chainId, onNotification) => {
             maybeThrow();
             return notifyAdapter.listenChainCompleted(chainId, onNotification);
           },
-          notifyJobAttemptLost: async (jobId) => {
+          notifyJobAttemptsLost: async (jobIds) => {
             maybeThrow();
-            return notifyAdapter.notifyJobAttemptLost(jobId);
+            return notifyAdapter.notifyJobAttemptsLost(jobIds);
           },
           listenJobAttemptLost: async (jobId, onNotification) => {
             maybeThrow();

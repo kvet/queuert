@@ -9,9 +9,6 @@ export const createNodeRedisNotifyProvider = ({
   client: RedisClientType;
   subscribeClient: RedisClientType;
 }): RedisNotifyProvider => ({
-  publish: async (channel, message) => {
-    await client.publish(channel, message);
-  },
   subscribe: async (channel, onMessage) => {
     await subscribeClient.subscribe(channel, onMessage);
     return async () => {

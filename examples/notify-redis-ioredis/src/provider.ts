@@ -15,9 +15,6 @@ export const createIoredisNotifyProvider = ({
   });
 
   return {
-    publish: async (channel, message) => {
-      await client.publish(channel, message);
-    },
     subscribe: async (channel, onMessage) => {
       handlers.set(channel, onMessage);
       await subscribeClient.subscribe(channel);

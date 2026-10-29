@@ -10,19 +10,15 @@ import {
   createInProcessStateAdapter,
 } from "queuert";
 
-// 1. Start NATS using testcontainers (with JetStream enabled)
+// 1. Start NATS using testcontainers
 console.log("Starting NATS...");
-await using natsContainer = await acquireNats("nats:2.10");
+await using natsContainer = await acquireNats("nats:2");
 const connectionOptions = natsContainer.connectionOptions;
 
 // 2. Create NATS connection
 const nc = await connect(connectionOptions);
 
-// 3. Create JetStream KV bucket for thundering herd optimization (optional but recommended)
-const js = nc.jetstream();
-const kv = await js.views.kv("queuert_example", { ttl: 60_000 });
-
-// 4. Define job types
+// 3. Define job types
 const jobTypes = defineJobTypes<{
   generate_report: {
     entry: true;
@@ -31,15 +27,14 @@ const jobTypes = defineJobTypes<{
   };
 }>();
 
-// 5. Create adapters
+// 4. Create adapters
 const stateAdapter = await createInProcessStateAdapter();
 const notifyAdapter = await createNatsNotifyAdapter({
   nc,
-  kv,
   subjectPrefix: "queuert.example",
 });
 
-// 6. Create client and worker
+// 5. Create client and worker
 const client = await createClient({
   stateAdapter,
   notifyAdapter,
@@ -77,7 +72,7 @@ const worker = await createInProcessWorker({
   }),
 });
 
-// 7. Start worker and queue a job
+// 6. Start worker and queue a job
 const stopWorker = await worker.start();
 
 console.log("Requesting sales report...");
@@ -92,19 +87,19 @@ const chain = await withTransactionHooks(async (transactionHooks) =>
   ),
 );
 
-// 8. Main thread continues with other work while job processes
+// 7. Main thread continues with other work while job processes
 console.log("Report queued! Continuing with other work...");
 console.log("Preparing email template...");
 await new Promise((resolve) => setTimeout(resolve, 100));
 console.log("Loading recipient list...");
 await new Promise((resolve) => setTimeout(resolve, 100));
 
-// 9. Now wait for the report to be ready
+// 8. Now wait for the report to be ready
 console.log("Waiting for report...");
 const result = await client.awaitChain(chain, { timeoutMs: 5000 });
 console.log(`Report ready! ID: ${result.output.reportId}, Rows: ${result.output.rowCount}`);
 
-// 10. Cleanup
+// 9. Cleanup
 await stopWorker();
 await notifyAdapter.close();
 await stateAdapter.close();

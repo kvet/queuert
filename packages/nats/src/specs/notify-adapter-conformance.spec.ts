@@ -50,25 +50,3 @@ describe("NATS Notify Adapter Conformance - Custom Subject Prefix", () => {
 
   notifyAdapterConformanceTestSuite({ it: conformanceIt });
 });
-
-describe("NATS Notify Adapter Conformance - With JetStream KV", () => {
-  const conformanceIt = it.extend<NotifyConformanceFixture>({
-    notifyAdapter: [
-      async ({ natsConnectionOptions }, use) => {
-        const nc = await connect(natsConnectionOptions);
-
-        const js = nc.jetstream();
-        const kv = await js.views.kv(`queuert_hints_${crypto.randomUUID()}`, { ttl: 60_000 });
-
-        const notifyAdapter = await createNatsNotifyAdapter({ nc, kv });
-
-        await use(notifyAdapter);
-
-        await nc.close();
-      },
-      { scope: "test" },
-    ],
-  });
-
-  notifyAdapterConformanceTestSuite({ it: conformanceIt });
-});

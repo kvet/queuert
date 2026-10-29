@@ -360,7 +360,7 @@ const shipChain = await withTransactionHooks(async (transactionHooks) =>
 // TODO: remove once queuert re-wakes blocker chains it locks (see TODO.md). Attaching the blocker
 // locked the pending capture-payment job, so a worker woken at that moment skipped it
 // (SKIP LOCKED) and would idle until its next poll. Re-publish the wake-up after commit.
-await notifyProvider.publish("queuert_sched", "capture-payment");
+await notifyProvider.publish("queuert_sched", ["capture-payment"]);
 
 const result3 = await client.awaitChain(shipChain, { timeoutMs: 10000 });
 console.log(`\nResult: ${result3.output.orderId} shipped as ${result3.output.trackingNumber}`);

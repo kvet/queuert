@@ -6,12 +6,6 @@
  */
 export type RedisNotifyProvider = {
   /**
-   * Publishes a message to a channel.
-   * Internally uses the command client.
-   */
-  publish: (channel: string, message: string) => Promise<void>;
-
-  /**
    * Subscribes to a channel.
    * The provider uses a dedicated subscription client internally.
    * Returns an unsubscribe function.

@@ -24,7 +24,7 @@ describe("In-Process Notify Adapter — indexed routing", () => {
       }),
     );
 
-    await adapter.notifyChainCompleted("chain-target");
+    await adapter.notifyChainsCompleted(["chain-target"]);
 
     expect(targetCalls.count).toBe(1);
     expect(unrelatedCalls).toBe(0);
@@ -46,12 +46,12 @@ describe("In-Process Notify Adapter — indexed routing", () => {
       bCalls++;
     });
 
-    await adapter.notifyChainCompleted("c");
+    await adapter.notifyChainsCompleted(["c"]);
     expect(aCalls).toBe(1);
     expect(bCalls).toBe(1);
 
     await disposeA();
-    await adapter.notifyChainCompleted("c");
+    await adapter.notifyChainsCompleted(["c"]);
     expect(aCalls).toBe(1);
     expect(bCalls).toBe(2);
 
@@ -67,14 +67,12 @@ describe("In-Process Notify Adapter — indexed routing", () => {
       seen.push(typeName);
     });
 
-    await adapter.notifyJobScheduled("a");
-    await adapter.notifyJobScheduled("b");
-    await adapter.notifyJobScheduled("c");
+    await adapter.notifyJobsScheduled(["a", "b", "c"]);
 
     expect(seen).toEqual(["a", "b"]);
 
     await dispose();
-    await adapter.notifyJobScheduled("a");
+    await adapter.notifyJobsScheduled(["a"]);
     expect(seen).toEqual(["a", "b"]);
 
     await adapter.close();
@@ -93,7 +91,7 @@ describe("In-Process Notify Adapter — indexed routing", () => {
       peerCalls++;
     });
 
-    await adapter.notifyChainCompleted("c");
+    await adapter.notifyChainsCompleted(["c"]);
     expect(peerCalls).toBe(1);
 
     await disposePeer();

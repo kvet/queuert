@@ -9,7 +9,7 @@ Queuert's adapter system is designed to be extended. You can implement the `Stat
 
 ## Custom NotifyAdapter
 
-Implement the `NotifyAdapter` type exported from `queuert`. The interface has three notification channels (job scheduled, chain completed, attempt lost), each with a publish and a subscribe method, plus a `provideWakeHint`/`consumeWakeHint` pair that gates how many listeners actually wake on a job-scheduled notification (no-op for adapters without a counter primitive — see [Adapter Architecture](/queuert/advanced/adapters/#wake-hint-methods)) and a `close()` for releasing internal resources:
+Implement the `NotifyAdapter` type exported from `queuert`. The interface has three notification channels (job scheduled, chain completed, attempt lost), each with a batched publish method and a subscribe method, plus a `close()` for releasing internal resources. Every listener for a type receives each job-scheduled notification — see [Adapter Architecture](/queuert/advanced/adapters/#waking-workers):
 
 ```ts
 import { runNotifyAdapterConformance } from "queuert/conformance";

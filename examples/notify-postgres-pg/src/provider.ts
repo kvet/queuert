@@ -48,11 +48,14 @@ export const createPgPoolNotifyProvider = ({ pool }: { pool: Pool }): PgNotifyPr
   };
 
   return {
-    publish: async (channel, message) => {
+    publish: async (channel, messages) => {
       if (closed) throw new Error("Provider is closed");
       const client = await pool.connect();
       try {
-        await client.query("SELECT pg_notify($1, $2)", [channel, message]);
+        await client.query("SELECT pg_notify($1, message) FROM unnest($2::text[]) AS message", [
+          channel,
+          messages,
+        ]);
       } finally {
         client.release();
       }

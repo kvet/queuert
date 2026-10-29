@@ -29,9 +29,6 @@ export const createNodeRedisClusterNotifyProvider = ({
   };
 
   return {
-    publish: async (channel, message) => {
-      await cluster.publish(channel, message);
-    },
     subscribe: async (channel, onMessage) => {
       await pinPubSubConnection();
       await subscribeCluster.subscribe(channel, onMessage);

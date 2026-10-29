@@ -1,5 +1,5 @@
 import { createSharedListener, type SharedListenerOpen } from "@queuert/helpers";
-import { type KV, type NatsConnection } from "nats";
+import { type NatsConnection } from "nats";
 import { type NotifyAdapter } from "queuert";
 
 const decoder = new TextDecoder();
@@ -19,76 +19,24 @@ const natsSubjectOpen =
     };
   };
 
-const tryAddToHint = async (kv: KV, key: string, count: number): Promise<void> => {
-  const maxRetries = 5;
-  for (let attempt = 0; attempt < maxRetries; attempt++) {
-    const entry = await kv.get(key);
-    if (!entry) {
-      try {
-        await kv.create(key, encoder.encode(String(count)));
-        return;
-      } catch (err) {
-        if (err instanceof Error && err.message.includes("wrong last sequence")) continue;
-        throw err;
-      }
-    }
-    const current = parseInt(decoder.decode(entry.value), 10) || 0;
-    try {
-      await kv.update(key, encoder.encode(String(current + count)), entry.revision);
-      return;
-    } catch (err) {
-      if (err instanceof Error && err.message.includes("wrong last sequence")) continue;
-      throw err;
-    }
-  }
-};
-
-const tryDecrementHint = async (kv: KV, key: string): Promise<boolean> => {
-  const maxRetries = 5;
-  for (let attempt = 0; attempt < maxRetries; attempt++) {
-    const entry = await kv.get(key);
-    if (!entry) return true;
-
-    const current = parseInt(decoder.decode(entry.value), 10);
-    if (current <= 0) return false;
-
-    try {
-      await kv.update(key, encoder.encode(String(current - 1)), entry.revision);
-      return true;
-    } catch (err) {
-      if (err instanceof Error && err.message.includes("wrong last sequence")) continue;
-      throw err;
-    }
-  }
-  return false;
-};
-
 /**
  * Create a notify adapter backed by NATS.
- *
- * When `kv` is provided, `provideWakeHint`/`consumeWakeHint` use a JetStream
- * KV bucket for atomic CAS-based wake-fan-out gating. When `kv` is omitted,
- * the hint methods are no-ops and every listener wakes on every notification.
  *
  * @param options - NATS notify adapter configuration.
  * @experimental
  */
 export const createNatsNotifyAdapter = async ({
   nc,
-  kv,
   subjectPrefix = "queuert",
 }: {
   /** The NATS connection. */
   nc: NatsConnection;
-  /** Optional JetStream KV bucket enabling atomic wake-fan-out gating. */
-  kv?: KV;
   /** Prefix for all NATS subject names. @defaultValue `"queuert"` */
   subjectPrefix?: string;
 }): Promise<NotifyAdapter> => {
   const jobScheduledSubject = `${subjectPrefix}.sched`;
   const chainCompletedSubject = `${subjectPrefix}.chainc`;
   const attemptLostSubject = `${subjectPrefix}.atls`;
-  const hintKeyPrefix = `${subjectPrefix}_hint_`;
 
   const jobScheduledListener = createSharedListener(natsSubjectOpen(nc, jobScheduledSubject));
   const chainCompletedListener = createSharedListener(natsSubjectOpen(nc, chainCompletedSubject));
@@ -100,9 +48,11 @@ export const createNatsNotifyAdapter = async ({
   };
 
   return {
-    notifyJobScheduled: async (typeName) => {
+    notifyJobsScheduled: async (typeNames) => {
       assertOpen();
-      nc.publish(jobScheduledSubject, encoder.encode(typeName));
+      for (const typeName of typeNames) {
+        nc.publish(jobScheduledSubject, encoder.encode(typeName));
+      }
       await nc.flush();
     },
 
@@ -120,21 +70,11 @@ export const createNatsNotifyAdapter = async ({
       };
     },
 
-    provideWakeHint: async (typeName, count) => {
+    notifyChainsCompleted: async (chainIds) => {
       assertOpen();
-      if (!kv) return;
-      await tryAddToHint(kv, `${hintKeyPrefix}${typeName}`, count);
-    },
-
-    consumeWakeHint: async (typeName) => {
-      assertOpen();
-      if (!kv) return true;
-      return tryDecrementHint(kv, `${hintKeyPrefix}${typeName}`);
-    },
-
-    notifyChainCompleted: async (chainId) => {
-      assertOpen();
-      nc.publish(chainCompletedSubject, encoder.encode(chainId));
+      for (const chainId of chainIds) {
+        nc.publish(chainCompletedSubject, encoder.encode(chainId));
+      }
       await nc.flush();
     },
 
@@ -145,9 +85,11 @@ export const createNatsNotifyAdapter = async ({
       });
     },
 
-    notifyJobAttemptLost: async (jobId) => {
+    notifyJobAttemptsLost: async (jobIds) => {
       assertOpen();
-      nc.publish(attemptLostSubject, encoder.encode(jobId));
+      for (const jobId of jobIds) {
+        nc.publish(attemptLostSubject, encoder.encode(jobId));
+      }
       await nc.flush();
     },
 

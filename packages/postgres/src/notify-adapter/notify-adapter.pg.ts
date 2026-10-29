@@ -6,10 +6,6 @@ import { type PgNotifyProvider } from "../notify-provider/notify-provider.pg.js"
 /**
  * Create a notify adapter backed by PostgreSQL LISTEN/NOTIFY.
  *
- * PostgreSQL has no native counter primitive suitable for atomic wake-fan-out
- * gating, so `provideWakeHint`/`consumeWakeHint` are no-ops here — every
- * listener wakes on every notification, and the database handles contention.
- *
  * @param options - PostgreSQL notify adapter configuration.
  */
 export const createPgNotifyAdapter = async ({
@@ -47,9 +43,9 @@ export const createPgNotifyAdapter = async ({
   };
 
   return {
-    notifyJobScheduled: async (typeName) => {
+    notifyJobsScheduled: async (typeNames) => {
       assertOpen();
-      await notifyProvider.publish(jobScheduledChannel, typeName);
+      await notifyProvider.publish(jobScheduledChannel, typeNames);
     },
 
     listenJobScheduled: async (typeNames, onNotification) => {
@@ -66,12 +62,9 @@ export const createPgNotifyAdapter = async ({
       };
     },
 
-    provideWakeHint: async () => {},
-    consumeWakeHint: async () => true,
-
-    notifyChainCompleted: async (chainId) => {
+    notifyChainsCompleted: async (chainIds) => {
       assertOpen();
-      await notifyProvider.publish(chainCompletedChannel, chainId);
+      await notifyProvider.publish(chainCompletedChannel, chainIds);
     },
 
     listenChainCompleted: async (chainId, onNotification) => {
@@ -81,9 +74,9 @@ export const createPgNotifyAdapter = async ({
       });
     },
 
-    notifyJobAttemptLost: async (jobId) => {
+    notifyJobAttemptsLost: async (jobIds) => {
       assertOpen();
-      await notifyProvider.publish(attemptLostChannel, jobId);
+      await notifyProvider.publish(attemptLostChannel, jobIds);
     },
 
     listenJobAttemptLost: async (jobId, onNotification) => {

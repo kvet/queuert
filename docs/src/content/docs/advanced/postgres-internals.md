@@ -116,7 +116,9 @@ The adapter uses three notification channels (configurable prefix, default `queu
 | `{prefix}_chainc` | Chain completes                     | Chain ID      | Wake clients awaiting chain results |
 | `{prefix}_atls`   | Attempt expires and job is released | Job ID        | Notify workers of attempt loss      |
 
-Unlike Redis and NATS, the PostgreSQL notify adapter does not implement hint-based thundering herd optimization. All listening workers query the database on each notification. This is acceptable because `FOR UPDATE SKIP LOCKED` ensures only one worker acquires each job — redundant queries are cheap, not harmful.
+Each notify method hands its whole batch to `PgNotifyProvider.publish` in one call, and the example providers publish it in one statement (`SELECT pg_notify($1, message) FROM unnest($2::text[]) AS message` in `notify-postgres-pg`, `json_array_elements_text` in the postgres-js and Bun.SQL examples), so a commit costs one round-trip per channel. PostgreSQL delivers identical channel and payload pairs once per transaction, so the items in a batch are expected to be unique.
+
+All listening workers query the database on each job-scheduled notification. `FOR UPDATE SKIP LOCKED` ensures only one worker acquires each job, so the redundant queries are cheap, not harmful.
 
 ## Vacuum Tuning
 

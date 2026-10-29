@@ -7,6 +7,8 @@ import { JobAlreadyCompletedError, JobTakenByAnotherWorkerError } from "../error
 import { createInProcessWorker } from "../in-process-worker.js";
 import { createProcessors } from "../job-type-processors/create-job-type-processors.js";
 import { defineJobTypes } from "../job-types/define-job-types.js";
+import { createNoopNotifyAdapter } from "../notify-adapter/notify-adapter.noop.js";
+import { createSpyNotifyAdapter } from "../notify-adapter/notify-adapter.spy.spec-helper.js";
 import { createSpyStateAdapter } from "../state-adapter/state-adapter.spy.spec-helper.js";
 import { type TestSuiteContext } from "./spec-context.spec-helper.js";
 
@@ -636,9 +638,10 @@ export const attemptReclaimerTestSuite = ({ it }: { it: TestAPI<TestSuiteContext
       test: { entry: true; input: null; output: null };
     }>();
     const spyStateAdapter = createSpyStateAdapter(stateAdapter);
+    const spyNotifyAdapter = createSpyNotifyAdapter(notifyAdapter ?? createNoopNotifyAdapter());
     const client = await createClient({
       stateAdapter: spyStateAdapter,
-      notifyAdapter,
+      notifyAdapter: spyNotifyAdapter,
       observabilityAdapter,
       log,
       jobTypes,
@@ -658,6 +661,7 @@ export const attemptReclaimerTestSuite = ({ it }: { it: TestAPI<TestSuiteContext
       limit: expiredCount,
     });
     await sleep(10);
+    spyNotifyAdapter.calls.length = 0;
 
     const worker = await createInProcessWorker({
       client,
@@ -686,5 +690,14 @@ export const attemptReclaimerTestSuite = ({ it }: { it: TestAPI<TestSuiteContext
       (call) => call.name === "reclaimExpiredJobAttempts",
     );
     expect(firstReclaim.result).toHaveLength(expiredCount);
+
+    expect(
+      spyNotifyAdapter.calls
+        .filter((call) => call.name === "notifyJobAttemptsLost")
+        .map((call) => ({ name: call.name, args: [...call.args].sort() })),
+    ).toEqual([{ name: "notifyJobAttemptsLost", args: chains.map((chain) => chain.id).sort() }]);
+    expect(spyNotifyAdapter.calls.filter((call) => call.name === "notifyJobsScheduled")).toEqual(
+      [],
+    );
   });
 };

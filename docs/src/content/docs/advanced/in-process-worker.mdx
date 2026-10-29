@@ -97,7 +97,8 @@ When idle slots remain in the main loop:
 1. Find up to the idle slot count of `running` jobs of registered types whose `attemptUntil` has passed (the exact selection is adapter-specific — e.g. PostgreSQL takes types in random order and the oldest expired jobs within each)
 2. Transition the jobs in a single autocommit statement: `running` → `pending`, clear `attemptAt`, `attemptBy`, and `attemptUntil`, and stamp `lastAttemptAt` and `lastAttemptError` (`JobAttemptExpiredError: Job attempt expired before the holding worker extended it`)
 3. Emit a `jobAttemptReclaimed` observability event per job
-4. Notify via `provideWakeHint` and `notifyJobScheduled` once per job type, with the type's reclaimed count as the hint (workers wake up), and `notifyJobAttemptLost` per job (original worker aborts)
+4. Notify with one `notifyJobAttemptsLost` call carrying every reclaimed job id (original workers abort)
+5. Acquire again right away: the reclaim never takes more jobs than the worker has idle slots, so the worker picks the reclaimed jobs up itself without waking other workers
 
 **Design decisions:**
 
@@ -153,5 +154,5 @@ The worker design emphasizes:
 ## See Also
 
 - [Job Processing](../job-processing/) — Attempt lifecycle, `complete`, abort signals
-- [Adapters](../adapters/) — Notification optimization, state provider design
+- [Adapters](../adapters/) — Notification delivery, state provider design
 - [`showcase-signals`](https://github.com/kvet/queuert/tree/main/examples/showcase-signals) — Runnable example: graceful shutdown with partial results, external completion via `completeChain`

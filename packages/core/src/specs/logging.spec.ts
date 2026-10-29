@@ -1160,7 +1160,7 @@ describe("Logging", () => {
 
     const failingNotifyAdapter: NotifyAdapter = {
       ...notifyAdapter!,
-      notifyJobScheduled: async () => {
+      notifyJobsScheduled: async () => {
         throw new Error("notify error");
       },
     };
@@ -1211,7 +1211,7 @@ describe("Logging", () => {
       expect.objectContaining({
         type: "notify_adapter_error",
         level: "warn",
-        data: expect.objectContaining({ operation: "notifyJobScheduled" }),
+        data: expect.objectContaining({ operation: "notifyJobsScheduled" }),
         error: expect.anything(),
       }),
     );

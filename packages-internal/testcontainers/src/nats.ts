@@ -28,7 +28,6 @@ const startContainer = async (image: string): Promise<StartedNatsContainer> => {
         new NatsContainer(image)
           .withName(containerName)
           .withLabels({ label: containerName })
-          .withArg("-js")
           .withReuse()
           .start(),
     });
@@ -57,7 +56,7 @@ export const extendWithNats = <T>(
   let container: StartedNatsContainer;
 
   beforeAll(async () => {
-    container = await startContainer("nats:2.10");
+    container = await startContainer("nats:2.2");
   }, 60_000);
 
   return api.extend<{

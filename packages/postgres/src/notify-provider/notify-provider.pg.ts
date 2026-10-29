@@ -6,10 +6,11 @@
  */
 export type PgNotifyProvider = {
   /**
-   * Publishes a message to a channel.
+   * Publishes messages to a channel in one statement, e.g.
+   * `SELECT pg_notify($1, message) FROM unnest($2::text[]) AS message`.
    * Internally acquires a connection, publishes, and releases.
    */
-  publish: (channel: string, message: string) => Promise<void>;
+  publish: (channel: string, messages: string[]) => Promise<void>;
 
   /**
    * Subscribes to a channel.

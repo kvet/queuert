@@ -32,7 +32,7 @@ await runDoubleRunBenchmark<Infra>({
   setupInfrastructure: async () => {
     console.log("\nStarting NATS container...");
     const [beforeContainer, afterContainer, natsContainer] = await measureMemory(async () =>
-      new NatsContainer("nats:2.10").withExposedPorts(4222).start(),
+      new NatsContainer("nats:2").withExposedPorts(4222).start(),
     );
     console.log("\nAfter starting container (testcontainers overhead):");
     diffMemory(beforeContainer, afterContainer);

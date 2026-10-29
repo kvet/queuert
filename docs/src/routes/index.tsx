@@ -229,7 +229,7 @@ const Home = () => (
       title="A thin library over the database you already run."
     >
       <Diagram
-        label="Architecture: the client enqueues and workers acquire and complete jobs through your database; an optional pub/sub carries wake hints from the client to workers"
+        label="Architecture: the client enqueues and workers acquire and complete jobs through your database; an optional pub/sub carries notifications from the client to workers"
         stack="none"
       >
         <Flow align="stretch">
@@ -243,7 +243,7 @@ const Home = () => (
               <Arrow label="acquire · complete" sub="state adapter" reverse />
             </Flow>
             <Flow>
-              <Arrow label="wake hint" tone="amber" dashed />
+              <Arrow label="notify" tone="amber" dashed />
               <Node tone="amber" variant="ghost" sub="Postgres LISTEN · Redis · NATS · in-process">
                 Your pub/sub (optional)
               </Node>

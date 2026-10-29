@@ -773,9 +773,9 @@ describe("Dashboard API", () => {
         stateAdapter,
         notifyAdapter: {
           ...innerNotifyAdapter,
-          notifyJobScheduled: async (typeName) => {
+          notifyJobsScheduled: async (typeNames) => {
             events.push("notify");
-            return innerNotifyAdapter.notifyJobScheduled(typeName);
+            return innerNotifyAdapter.notifyJobsScheduled(typeNames);
           },
         },
         jobTypes: defineJobTypes(),

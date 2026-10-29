@@ -63,33 +63,25 @@ export const extendWithNotifyPg = <
         };
 
         const flakyNotifyAdapter: NotifyAdapter = {
-          notifyJobScheduled: async (typeName) => {
+          notifyJobsScheduled: async (typeNames) => {
             maybeThrow();
-            return notifyAdapter.notifyJobScheduled(typeName);
+            return notifyAdapter.notifyJobsScheduled(typeNames);
           },
           listenJobScheduled: async (typeNames, onNotification) => {
             maybeThrow();
             return notifyAdapter.listenJobScheduled(typeNames, onNotification);
           },
-          provideWakeHint: async (typeName, count) => {
+          notifyChainsCompleted: async (chainIds) => {
             maybeThrow();
-            return notifyAdapter.provideWakeHint(typeName, count);
-          },
-          consumeWakeHint: async (typeName) => {
-            maybeThrow();
-            return notifyAdapter.consumeWakeHint(typeName);
-          },
-          notifyChainCompleted: async (chainId) => {
-            maybeThrow();
-            return notifyAdapter.notifyChainCompleted(chainId);
+            return notifyAdapter.notifyChainsCompleted(chainIds);
           },
           listenChainCompleted: async (chainId, onNotification) => {
             maybeThrow();
             return notifyAdapter.listenChainCompleted(chainId, onNotification);
           },
-          notifyJobAttemptLost: async (jobId) => {
+          notifyJobAttemptsLost: async (jobIds) => {
             maybeThrow();
-            return notifyAdapter.notifyJobAttemptLost(jobId);
+            return notifyAdapter.notifyJobAttemptsLost(jobIds);
           },
           listenJobAttemptLost: async (jobId, onNotification) => {
             maybeThrow();

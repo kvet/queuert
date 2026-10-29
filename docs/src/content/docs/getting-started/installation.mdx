@@ -89,8 +89,7 @@ import { Steps, Tabs, TabItem, Badge } from "@astrojs/starlight/components";
 
    <Tabs>
      <TabItem label="Redis">
-       Recommended for production. Uses Redis pub/sub with hint-based optimization to prevent
-       thundering herd. Requires Redis 6+.
+       Recommended for production. Uses Redis pub/sub. Requires Redis 6+.
 
        <Tabs syncKey="pkg">
          <TabItem label="npm">
@@ -111,8 +110,7 @@ import { Steps, Tabs, TabItem, Badge } from "@astrojs/starlight/components";
        </Tabs>
      </TabItem>
      <TabItem label="NATS">
-       <Badge text="Experimental" variant="caution" /> Uses NATS pub/sub. Supports revision-based
-       CAS optimization when JetStream KV is available. Requires NATS 2.2+ (2.6+ for JetStream KV).
+       <Badge text="Experimental" variant="caution" /> Uses NATS pub/sub. Requires NATS 2.2+.
 
        <Tabs syncKey="pkg">
          <TabItem label="npm">

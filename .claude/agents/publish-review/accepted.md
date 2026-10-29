@@ -13,7 +13,7 @@ Read by every `publish-review` agent and by `review-code`.
 - **Notify adapter channel prefix uses different separators**: Each adapter uses its transport's idiomatic separator (`:` for Redis, `_` for PG, `.` for NATS).
 - **NATS notify adapter uses `subjectPrefix` while PG and Redis use `channelPrefix`**: Each adapter uses its transport's idiomatic terminology.
 - **`testing` export declared in `publishConfig` but files excluded**: Testing utilities are workspace-only, not shipped to npm. The `publishConfig.exports` entry is overridden by the `files` exclusion.
-- **NATS is experimental**: No provider abstraction, uses `nc`/`kv` instead of `provider`, exports no types from `index.ts`. All will be standardized when the API stabilizes.
+- **NATS is experimental**: No provider abstraction, uses `nc` instead of `provider`, exports no types from `index.ts`. All will be standardized when the API stabilizes.
 - **State adapter factory options for ID generation are aligned**: Both adapters use `generateId` (JS fn) and `validateId` (optional predicate). PG has no `idDefault` (SQL DEFAULT) in favor of JS-side generation for symmetry and to support caller-supplied IDs uniformly.
 - **OTEL `workerError` does not record error details**: Counter attributes should remain low-cardinality per OTEL best practices. Error details are captured via the Log adapter.
 - **`getStartAttemptDelayMs` uses `FOR UPDATE SKIP LOCKED`**: Accepted for now; future cleanup.

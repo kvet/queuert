@@ -70,13 +70,8 @@ const waitForNextJob = async ({
     const { promise: notified, resolve: onNotification } = Promise.withResolvers<void>();
     let disposeNotified: () => Promise<void> = async () => {};
     try {
-      disposeNotified = await notifyAdapter.listenJobScheduled(typeNames, (typeName) => {
-        notifyAdapter.consumeWakeHint(typeName).then(
-          (claimed) => {
-            if (claimed) onNotification();
-          },
-          () => {},
-        );
+      disposeNotified = await notifyAdapter.listenJobScheduled(typeNames, () => {
+        onNotification();
       });
     } catch {}
 
@@ -425,27 +420,14 @@ export const createInProcessWorker = async <
               limit: executor.idleSlots(),
             });
 
-            const reclaimedCountByTypeName = new Map<string, number>();
             for (const reclaimed of reclaimedJobs) {
               observabilityHelper.jobAttemptReclaimed(reclaimed, { workerId });
-              reclaimedCountByTypeName.set(
-                reclaimed.typeName,
-                (reclaimedCountByTypeName.get(reclaimed.typeName) ?? 0) + 1,
-              );
             }
-            await Promise.all([
-              ...Array.from(reclaimedCountByTypeName, async ([typeName, count]) => {
-                try {
-                  await notifyAdapter.provideWakeHint(typeName, count);
-                  await notifyAdapter.notifyJobScheduled(typeName);
-                } catch {}
-              }),
-              ...reclaimedJobs.map(async (reclaimed) => {
-                try {
-                  await notifyAdapter.notifyJobAttemptLost(reclaimed.id);
-                } catch {}
-              }),
-            ]);
+            if (reclaimedJobs.length > 0) {
+              await notifyAdapter
+                .notifyJobAttemptsLost(reclaimedJobs.map((reclaimed) => reclaimed.id))
+                .catch(() => {});
+            }
 
             if (stopController.signal.aborted) {
               return;

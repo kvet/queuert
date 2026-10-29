@@ -2,7 +2,7 @@ import { createSharedListener } from "@queuert/helpers";
 import { type NotifyAdapter } from "queuert";
 
 import { type RedisNotifyProvider } from "../notify-provider/notify-provider.redis.js";
-import { CONSUME_WAKE_HINT_SCRIPT, PROVIDE_WAKE_HINT_SCRIPT } from "./lua.js";
+import { PUBLISH_MESSAGES_SCRIPT } from "./lua.js";
 
 /**
  * Create a notify adapter backed by Redis pub/sub.
@@ -21,7 +21,6 @@ export const createRedisNotifyAdapter = async ({
   const jobScheduledChannel = `${channelPrefix}:sched`;
   const chainCompletedChannel = `${channelPrefix}:chainc`;
   const attemptLostChannel = `${channelPrefix}:atls`;
-  const hintKeyPrefix = `${channelPrefix}:hint:`;
 
   const jobScheduledListener = createSharedListener(async (dispatch) =>
     notifyProvider.subscribe(jobScheduledChannel, (payload) => {
@@ -45,9 +44,9 @@ export const createRedisNotifyAdapter = async ({
   };
 
   return {
-    notifyJobScheduled: async (typeName) => {
+    notifyJobsScheduled: async (typeNames) => {
       assertOpen();
-      await notifyProvider.publish(jobScheduledChannel, typeName);
+      await notifyProvider.eval(PUBLISH_MESSAGES_SCRIPT, [], [jobScheduledChannel, ...typeNames]);
     },
 
     listenJobScheduled: async (typeNames, onNotification) => {
@@ -64,28 +63,9 @@ export const createRedisNotifyAdapter = async ({
       };
     },
 
-    provideWakeHint: async (typeName, count) => {
+    notifyChainsCompleted: async (chainIds) => {
       assertOpen();
-      await notifyProvider.eval(
-        PROVIDE_WAKE_HINT_SCRIPT,
-        [`${hintKeyPrefix}${typeName}`],
-        [String(count)],
-      );
-    },
-
-    consumeWakeHint: async (typeName) => {
-      assertOpen();
-      const result = await notifyProvider.eval(
-        CONSUME_WAKE_HINT_SCRIPT,
-        [`${hintKeyPrefix}${typeName}`],
-        [],
-      );
-      return result === 1;
-    },
-
-    notifyChainCompleted: async (chainId) => {
-      assertOpen();
-      await notifyProvider.publish(chainCompletedChannel, chainId);
+      await notifyProvider.eval(PUBLISH_MESSAGES_SCRIPT, [], [chainCompletedChannel, ...chainIds]);
     },
 
     listenChainCompleted: async (chainId, onNotification) => {
@@ -95,9 +75,9 @@ export const createRedisNotifyAdapter = async ({
       });
     },
 
-    notifyJobAttemptLost: async (jobId) => {
+    notifyJobAttemptsLost: async (jobIds) => {
       assertOpen();
-      await notifyProvider.publish(attemptLostChannel, jobId);
+      await notifyProvider.eval(PUBLISH_MESSAGES_SCRIPT, [], [attemptLostChannel, ...jobIds]);
     },
 
     listenJobAttemptLost: async (jobId, onNotification) => {

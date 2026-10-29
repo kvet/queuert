@@ -28,7 +28,7 @@ export const startService = async (
       };
     }
     case "nats": {
-      const container = await new NatsContainer("nats:2.10").withExposedPorts(4222).start();
+      const container = await new NatsContainer("nats:2").withExposedPorts(4222).start();
       return {
         env: { BENCHMARK_NATS_OPTIONS: JSON.stringify(container.getConnectionOptions()) },
         stop: async () => {

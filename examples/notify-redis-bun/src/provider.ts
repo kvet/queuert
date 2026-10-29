@@ -8,9 +8,6 @@ export const createBunRedisNotifyProvider = ({
   client: RedisClient;
   subscribeClient: RedisClient;
 }): RedisNotifyProvider => ({
-  publish: async (channel, message) => {
-    await client.publish(channel, message);
-  },
   subscribe: async (channel, onMessage) => {
     const listener = (message: string) => {
       onMessage(message);

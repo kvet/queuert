@@ -291,7 +291,7 @@ notify-postgres-postgres-js  # postgres-js
 notify-postgres-bun-sql      # Bun.SQL
 ```
 
-Redis examples implement a `RedisNotifyProvider` with `publish`, `subscribe`, and `eval` methods. PostgreSQL examples implement a `PgNotifyProvider` with `publish` and `subscribe` methods using PostgreSQL's LISTEN/NOTIFY.
+Redis examples implement a `RedisNotifyProvider` with `subscribe` and `eval` methods. PostgreSQL examples implement a `PgNotifyProvider` with `publish` (a batch of messages in one statement) and `subscribe` methods using PostgreSQL's LISTEN/NOTIFY.
 
 ### Notify Adapter Conventions
 

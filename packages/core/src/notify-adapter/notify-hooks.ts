@@ -2,36 +2,33 @@ import { type StateJob } from "../state-adapter/state-adapter.js";
 import { type TransactionHooks } from "../transaction-hooks.js";
 import { type NotifyAdapter } from "./notify-adapter.js";
 
-const notifyJobScheduledKey = Symbol("queuert.notifyJobScheduled");
-const notifyChainCompletedKey = Symbol("queuert.notifyChainCompleted");
-const notifyJobAttemptLostKey = Symbol("queuert.notifyJobAttemptLost");
+const notifyJobsScheduledKey = Symbol("queuert.notifyJobsScheduled");
+const notifyChainsCompletedKey = Symbol("queuert.notifyChainsCompleted");
+const notifyJobAttemptsLostKey = Symbol("queuert.notifyJobAttemptsLost");
 
 export const bufferNotifyJobScheduled = (
   transactionHooks: TransactionHooks,
   notifyAdapter: NotifyAdapter,
   job: StateJob,
 ): void => {
-  const state = transactionHooks.getOrInsert(notifyJobScheduledKey, () => ({
-    state: new Map<string, number>(),
-    flush: async (state) => {
-      await Promise.all(
-        Array.from(state.entries()).map(async ([typeName, count]) => {
-          try {
-            await notifyAdapter.provideWakeHint(typeName, count);
-            await notifyAdapter.notifyJobScheduled(typeName);
-          } catch {}
-        }),
-      );
-    },
-    checkpoint: (state) => {
-      const snapshot = new Map(state);
-      return () => {
-        state.clear();
-        for (const [k, v] of snapshot) state.set(k, v);
-      };
-    },
-  }));
-  state.set(job.typeName, (state.get(job.typeName) ?? 0) + 1);
+  transactionHooks
+    .getOrInsert(notifyJobsScheduledKey, () => ({
+      state: new Set<string>(),
+      flush: async (state) => {
+        if (state.size === 0) return;
+        try {
+          await notifyAdapter.notifyJobsScheduled(Array.from(state));
+        } catch {}
+      },
+      checkpoint: (state) => {
+        const snapshot = new Set(state);
+        return () => {
+          state.clear();
+          for (const v of snapshot) state.add(v);
+        };
+      },
+    }))
+    .add(job.typeName);
 };
 
 export const bufferNotifyChainCompletion = (
@@ -40,16 +37,13 @@ export const bufferNotifyChainCompletion = (
   job: StateJob,
 ): void => {
   transactionHooks
-    .getOrInsert(notifyChainCompletedKey, () => ({
+    .getOrInsert(notifyChainsCompletedKey, () => ({
       state: new Set<string>(),
       flush: async (state) => {
-        await Promise.all(
-          Array.from(state).map(async (chainId) => {
-            try {
-              await notifyAdapter.notifyChainCompleted(chainId);
-            } catch {}
-          }),
-        );
+        if (state.size === 0) return;
+        try {
+          await notifyAdapter.notifyChainsCompleted(Array.from(state));
+        } catch {}
       },
       checkpoint: (state) => {
         const snapshot = new Set(state);
@@ -68,16 +62,13 @@ export const bufferNotifyJobAttemptLost = (
   jobId: string,
 ): void => {
   transactionHooks
-    .getOrInsert(notifyJobAttemptLostKey, () => ({
+    .getOrInsert(notifyJobAttemptsLostKey, () => ({
       state: new Set<string>(),
       flush: async (state) => {
-        await Promise.all(
-          Array.from(state).map(async (jobId) => {
-            try {
-              await notifyAdapter.notifyJobAttemptLost(jobId);
-            } catch {}
-          }),
-        );
+        if (state.size === 0) return;
+        try {
+          await notifyAdapter.notifyJobAttemptsLost(Array.from(state));
+        } catch {}
       },
       checkpoint: (state) => {
         const snapshot = new Set(state);

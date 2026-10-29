@@ -5,6 +5,8 @@ import { createClient } from "../client.js";
 import { createInProcessWorker } from "../in-process-worker.js";
 import { createProcessors } from "../job-type-processors/create-job-type-processors.js";
 import { defineJobTypes } from "../job-types/define-job-types.js";
+import { createNoopNotifyAdapter } from "../notify-adapter/notify-adapter.noop.js";
+import { createSpyNotifyAdapter } from "../notify-adapter/notify-adapter.spy.spec-helper.js";
 import { type TestSuiteContext } from "./spec-context.spec-helper.js";
 
 export const notifyTestSuite = ({ it }: { it: TestAPI<TestSuiteContext> }): void => {
@@ -66,6 +68,176 @@ export const notifyTestSuite = ({ it }: { it: TestAPI<TestSuiteContext> }): void
         expect.fail("Timed out waiting for chain completion");
       }
     });
+  });
+
+  it("publishes every type scheduled in a commit in one call", async ({
+    stateAdapter,
+    notifyAdapter,
+    observabilityAdapter,
+    log,
+    withTransaction,
+  }) => {
+    const jobTypes = defineJobTypes<{
+      first: { entry: true; input: null; output: null };
+      second: { entry: true; input: null; output: null };
+    }>();
+
+    const spyNotifyAdapter = createSpyNotifyAdapter(notifyAdapter ?? createNoopNotifyAdapter());
+    const client = await createClient({
+      stateAdapter,
+      notifyAdapter: spyNotifyAdapter,
+      observabilityAdapter,
+      log,
+      jobTypes,
+    });
+
+    await withTransaction(async (txCtx, transactionHooks) =>
+      client.createChains({
+        ...txCtx,
+        transactionHooks,
+        items: [
+          { typeName: "first", input: null },
+          { typeName: "first", input: null },
+          { typeName: "second", input: null },
+        ],
+      }),
+    );
+
+    expect(spyNotifyAdapter.calls).toEqual([
+      { name: "notifyJobsScheduled", args: ["first", "second"] },
+    ]);
+  });
+
+  it("wakes every idle worker when a job is scheduled", async ({
+    stateAdapter,
+    notifyAdapter,
+    observabilityAdapter,
+    log,
+    withWorkers,
+    withTransaction,
+  }) => {
+    const jobTypes = defineJobTypes<{
+      test: { entry: true; input: null; output: null };
+    }>();
+
+    let recording = false;
+    let listeningCount = 0;
+    const acquiringWorkerIds = new Set<string>();
+    const client = await createClient({
+      stateAdapter: {
+        ...stateAdapter,
+        startJobAttempts: async (options) => {
+          if (recording) acquiringWorkerIds.add(options.workerId);
+          return stateAdapter.startJobAttempts(options);
+        },
+      },
+      notifyAdapter: {
+        ...notifyAdapter!,
+        listenJobScheduled: async (typeNames, onNotification) => {
+          const dispose = await notifyAdapter!.listenJobScheduled(typeNames, onNotification);
+          listeningCount++;
+          return async () => {
+            listeningCount--;
+            await dispose();
+          };
+        },
+      },
+      observabilityAdapter,
+      log,
+      jobTypes,
+    });
+    const createWorker = async () =>
+      createInProcessWorker({
+        client,
+        concurrency: 1,
+        pollIntervalMs: 60_000,
+        processors: createProcessors({
+          client,
+          jobTypes,
+          processors: {
+            test: {
+              attemptHandler: async ({ complete }) =>
+                withTransaction(async (txCtx, transactionHooks) =>
+                  complete({ ...txCtx, transactionHooks, output: null }),
+                ),
+            },
+          },
+        }),
+      });
+
+    await withWorkers(
+      [await (await createWorker()).start(), await (await createWorker()).start()],
+      async () => {
+        await expect.poll(() => listeningCount, { timeout: 2000 }).toBe(2);
+        recording = true;
+        const chain = await withTransaction(async (txCtx, transactionHooks) =>
+          client.createChain({ ...txCtx, transactionHooks, typeName: "test", input: null }),
+        );
+        await client.awaitChain(chain, { timeoutMs: 2000 });
+        await expect.poll(() => acquiringWorkerIds.size, { timeout: 2000 }).toBe(2);
+      },
+    );
+  });
+
+  it("publishes every chain completed and attempt lost in a commit in one call each", async ({
+    stateAdapter,
+    notifyAdapter,
+    observabilityAdapter,
+    log,
+    withTransaction,
+  }) => {
+    const jobTypes = defineJobTypes<{
+      test: { entry: true; input: null; output: null };
+    }>();
+
+    const spyNotifyAdapter = createSpyNotifyAdapter(notifyAdapter ?? createNoopNotifyAdapter());
+    const client = await createClient({
+      stateAdapter,
+      notifyAdapter: spyNotifyAdapter,
+      observabilityAdapter,
+      log,
+      jobTypes,
+    });
+
+    const chains = await withTransaction(async (txCtx, transactionHooks) =>
+      client.createChains({
+        ...txCtx,
+        transactionHooks,
+        items: [
+          { typeName: "test", input: null },
+          { typeName: "test", input: null },
+        ],
+      }),
+    );
+    await stateAdapter.startJobAttempts({
+      workerId: "worker",
+      timeoutMsByTypeName: { test: 60_000 },
+      limit: chains.length,
+    });
+    spyNotifyAdapter.calls.length = 0;
+
+    await withTransaction(async (txCtx, transactionHooks) => {
+      for (const chain of chains) {
+        await client.completeChain({
+          ...txCtx,
+          transactionHooks,
+          ...chain,
+          handler: async ({ job, completeJob }) =>
+            completeJob(job, async ({ complete }) => complete({ output: null })),
+        });
+      }
+    });
+
+    const chainIds = chains.map((chain) => chain.id).sort();
+    expect(
+      spyNotifyAdapter.calls.map((call) => ({ name: call.name, args: [...call.args].sort() })),
+    ).toEqual(
+      expect.arrayContaining([
+        { name: "notifyChainsCompleted", args: chainIds },
+        { name: "notifyJobAttemptsLost", args: chainIds },
+      ]),
+    );
+    expect(spyNotifyAdapter.calls).toHaveLength(2);
   });
 
   it("distributes processing to multiple workers", async ({

@@ -1,12 +1,7 @@
 import { type NotifyAdapter } from "./notify-adapter.js";
 
-const HINT_TTL_MS = 60_000;
-
-/** Creates an in-memory notify adapter for single-process deployments. Uses in-process callbacks for notification delivery and an in-memory hint counter with a 60-second TTL for thundering herd prevention. */
+/** Creates an in-memory notify adapter for single-process deployments, delivering notifications through in-process callbacks. */
 export const createInProcessNotifyAdapter = async (): Promise<NotifyAdapter> => {
-  const hintCounts = new Map<string, number>();
-  const hintTimers = new Map<string, ReturnType<typeof setTimeout>>();
-
   const jobScheduledListeners = new Map<string, Set<(typeName: string) => void>>();
   const chainCompletedListeners = new Map<string, Set<() => void>>();
   const jobAttemptLostListeners = new Map<string, Set<() => void>>();
@@ -20,17 +15,6 @@ export const createInProcessNotifyAdapter = async (): Promise<NotifyAdapter> => 
     try {
       fn();
     } catch {}
-  };
-
-  const refreshTtl = (typeName: string): void => {
-    const existing = hintTimers.get(typeName);
-    if (existing) clearTimeout(existing);
-    const timer = setTimeout(() => {
-      hintCounts.delete(typeName);
-      hintTimers.delete(typeName);
-    }, HINT_TTL_MS);
-    timer.unref();
-    hintTimers.set(typeName, timer);
   };
 
   const addListener = <V>(map: Map<string, Set<V>>, key: string, value: V): void => {
@@ -50,14 +34,16 @@ export const createInProcessNotifyAdapter = async (): Promise<NotifyAdapter> => 
   };
 
   return {
-    notifyJobScheduled: async (typeName) => {
+    notifyJobsScheduled: async (typeNames) => {
       assertOpen();
-      const listeners = jobScheduledListeners.get(typeName);
-      if (!listeners) return;
-      for (const listener of Array.from(listeners)) {
-        safeInvoke(() => {
-          listener(typeName);
-        });
+      for (const typeName of typeNames) {
+        const listeners = jobScheduledListeners.get(typeName);
+        if (!listeners) continue;
+        for (const listener of Array.from(listeners)) {
+          safeInvoke(() => {
+            listener(typeName);
+          });
+        }
       }
     },
 
@@ -77,29 +63,14 @@ export const createInProcessNotifyAdapter = async (): Promise<NotifyAdapter> => 
       };
     },
 
-    provideWakeHint: async (typeName, count) => {
+    notifyChainsCompleted: async (chainIds) => {
       assertOpen();
-      hintCounts.set(typeName, (hintCounts.get(typeName) ?? 0) + count);
-      refreshTtl(typeName);
-    },
-
-    consumeWakeHint: async (typeName) => {
-      assertOpen();
-      if (!hintCounts.has(typeName)) return true;
-      const count = hintCounts.get(typeName)!;
-      if (count > 0) {
-        hintCounts.set(typeName, count - 1);
-        return true;
-      }
-      return false;
-    },
-
-    notifyChainCompleted: async (chainId: string) => {
-      assertOpen();
-      const listeners = chainCompletedListeners.get(chainId);
-      if (!listeners) return;
-      for (const listener of Array.from(listeners)) {
-        safeInvoke(listener);
+      for (const chainId of chainIds) {
+        const listeners = chainCompletedListeners.get(chainId);
+        if (!listeners) continue;
+        for (const listener of Array.from(listeners)) {
+          safeInvoke(listener);
+        }
       }
     },
 
@@ -115,12 +86,14 @@ export const createInProcessNotifyAdapter = async (): Promise<NotifyAdapter> => 
       };
     },
 
-    notifyJobAttemptLost: async (jobId: string) => {
+    notifyJobAttemptsLost: async (jobIds) => {
       assertOpen();
-      const listeners = jobAttemptLostListeners.get(jobId);
-      if (!listeners) return;
-      for (const listener of Array.from(listeners)) {
-        safeInvoke(listener);
+      for (const jobId of jobIds) {
+        const listeners = jobAttemptLostListeners.get(jobId);
+        if (!listeners) continue;
+        for (const listener of Array.from(listeners)) {
+          safeInvoke(listener);
+        }
       }
     },
 
@@ -142,9 +115,6 @@ export const createInProcessNotifyAdapter = async (): Promise<NotifyAdapter> => 
       jobScheduledListeners.clear();
       chainCompletedListeners.clear();
       jobAttemptLostListeners.clear();
-      hintCounts.clear();
-      for (const timer of hintTimers.values()) clearTimeout(timer);
-      hintTimers.clear();
     },
   };
 };

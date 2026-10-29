@@ -17,9 +17,6 @@ export const createIoredisClusterNotifyProvider = ({
   });
 
   return {
-    publish: async (channel, message) => {
-      await cluster.publish(channel, message);
-    },
     subscribe: async (channel, onMessage) => {
       let listeners = handlers.get(channel);
       if (!listeners) {

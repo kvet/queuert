@@ -42,21 +42,24 @@ const waitFor = async <T>(promise: Promise<T>, label: string): Promise<T> => {
 
 export const notifyAdapterConformanceGroups: ConformanceGroup<NotifyConformanceFixture>[] = [
   {
-    name: "notifyJobScheduled / listenJobScheduled",
+    name: "notifyJobsScheduled / listenJobScheduled",
     cases: [
       {
-        name: "listener receives notification for matching type name",
+        name: "listener receives a notification for each type name in the batch",
         run: async ({ notifyAdapter }, expect) => {
-          const received = Promise.withResolvers<string>();
-          const unsubscribe = await notifyAdapter.listenJobScheduled(["type-a"], (typeName) => {
-            received.resolve(typeName);
-          });
+          const received: string[] = [];
+          const unsubscribe = await notifyAdapter.listenJobScheduled(
+            ["type-a", "type-b", "type-c"],
+            (typeName) => {
+              received.push(typeName);
+            },
+          );
 
-          await notifyAdapter.notifyJobScheduled("type-a");
+          await notifyAdapter.notifyJobsScheduled(["type-a", "type-b", "type-c"]);
 
-          const result = await waitFor(received.promise, "notification");
-
-          expect(result).toBe("type-a");
+          await expect
+            .poll(() => [...received].sort(), { timeout: DELIVERY_TIMEOUT_MS })
+            .toEqual(["type-a", "type-b", "type-c"]);
           await unsubscribe();
         },
       },
@@ -68,9 +71,9 @@ export const notifyAdapterConformanceGroups: ConformanceGroup<NotifyConformanceF
             count++;
           });
 
-          await notifyAdapter.notifyJobScheduled("type-a");
-          await notifyAdapter.notifyJobScheduled("type-a");
-          await notifyAdapter.notifyJobScheduled("type-a");
+          await notifyAdapter.notifyJobsScheduled(["type-a"]);
+          await notifyAdapter.notifyJobsScheduled(["type-a"]);
+          await notifyAdapter.notifyJobsScheduled(["type-a"]);
 
           await expect.poll(() => count, { timeout: DELIVERY_TIMEOUT_MS }).toBe(3);
           await unsubscribe();
@@ -84,7 +87,7 @@ export const notifyAdapterConformanceGroups: ConformanceGroup<NotifyConformanceF
             callCount++;
           });
 
-          await notifyAdapter.notifyJobScheduled("type-b");
+          await notifyAdapter.notifyJobsScheduled(["type-b"]);
           await sleep(NEGATIVE_ASSERTION_DELAY_MS);
 
           expect(callCount).toBe(0);
@@ -102,12 +105,33 @@ export const notifyAdapterConformanceGroups: ConformanceGroup<NotifyConformanceF
             },
           );
 
-          await notifyAdapter.notifyJobScheduled("type-b");
+          await notifyAdapter.notifyJobsScheduled(["type-b"]);
 
           const result = await waitFor(received.promise, "notification");
 
           expect(result).toBe("type-b");
           await unsubscribe();
+        },
+      },
+      {
+        name: "every listener for a type receives each notification",
+        run: async ({ notifyAdapter }) => {
+          const received1 = Promise.withResolvers<void>();
+          const received2 = Promise.withResolvers<void>();
+
+          const unsubscribe1 = await notifyAdapter.listenJobScheduled(["type-multi"], () => {
+            received1.resolve();
+          });
+          const unsubscribe2 = await notifyAdapter.listenJobScheduled(["type-multi"], () => {
+            received2.resolve();
+          });
+
+          await notifyAdapter.notifyJobsScheduled(["type-multi"]);
+
+          await waitFor(Promise.all([received1.promise, received2.promise]), "notifications");
+
+          await unsubscribe1();
+          await unsubscribe2();
         },
       },
       {
@@ -119,7 +143,7 @@ export const notifyAdapterConformanceGroups: ConformanceGroup<NotifyConformanceF
           });
 
           await unsubscribe();
-          await notifyAdapter.notifyJobScheduled("type-a");
+          await notifyAdapter.notifyJobsScheduled(["type-a"]);
           await sleep(NEGATIVE_ASSERTION_DELAY_MS);
 
           expect(callCount).toBe(0);
@@ -128,76 +152,35 @@ export const notifyAdapterConformanceGroups: ConformanceGroup<NotifyConformanceF
       {
         name: "publish without listeners does not error",
         run: async ({ notifyAdapter }) => {
-          await notifyAdapter.notifyJobScheduled("type-a");
-          await notifyAdapter.notifyChainCompleted("chain-1");
-          await notifyAdapter.notifyJobAttemptLost("job-1");
+          await notifyAdapter.notifyJobsScheduled(["type-a"]);
+          await notifyAdapter.notifyChainsCompleted(["chain-1"]);
+          await notifyAdapter.notifyJobAttemptsLost(["job-1"]);
         },
       },
     ],
   },
   {
-    name: "provideWakeHint / consumeWakeHint",
+    name: "notifyChainsCompleted / listenChainCompleted",
     cases: [
       {
-        name: "consumeWakeHint returns true when no budget is tracked (graceful degradation)",
+        name: "listener receives chain completion for each chain ID in the batch",
         run: async ({ notifyAdapter }, expect) => {
-          const typeName = `type-untracked-${crypto.randomUUID()}`;
-          const result = await notifyAdapter.consumeWakeHint(typeName);
-          expect(result).toBe(true);
-        },
-      },
-      {
-        name: "consumeWakeHint claims slots up to the provided budget",
-        run: async ({ notifyAdapter }, expect) => {
-          const typeName = `type-budget-${crypto.randomUUID()}`;
-          await notifyAdapter.provideWakeHint(typeName, 2);
-
-          const first = await notifyAdapter.consumeWakeHint(typeName);
-          const second = await notifyAdapter.consumeWakeHint(typeName);
-          const third = await notifyAdapter.consumeWakeHint(typeName);
-
-          expect(first).toBe(true);
-          expect(second).toBe(true);
-          // Adapters without hint support always return true; honoring adapters return false.
-          // Both behaviors are valid per the contract.
-          expect([true, false]).toContain(third);
-        },
-      },
-      {
-        name: "provideWakeHint composes additively across calls",
-        run: async ({ notifyAdapter }, expect) => {
-          const typeName = `type-additive-${crypto.randomUUID()}`;
-          await notifyAdapter.provideWakeHint(typeName, 2);
-          await notifyAdapter.provideWakeHint(typeName, 3);
-
-          const claims = await Promise.all(
-            Array.from({ length: 6 }, async () => notifyAdapter.consumeWakeHint(typeName)),
+          const chainIds = ["chain-1", "chain-2", "chain-3"];
+          const received: string[] = [];
+          const unsubscribes = await Promise.all(
+            chainIds.map(async (chainId) =>
+              notifyAdapter.listenChainCompleted(chainId, () => {
+                received.push(chainId);
+              }),
+            ),
           );
-          const claimed = claims.filter((c) => c).length;
 
-          // Honoring adapters: exactly 5 of the 6 attempts succeed (budget = 2 + 3 = 5).
-          // No-op adapters: all 6 succeed.
-          expect([5, 6]).toContain(claimed);
-        },
-      },
-    ],
-  },
-  {
-    name: "notifyChainCompleted / listenChainCompleted",
-    cases: [
-      {
-        name: "listener receives chain completion for matching chain ID",
-        run: async ({ notifyAdapter }) => {
-          const received = Promise.withResolvers<void>();
-          const unsubscribe = await notifyAdapter.listenChainCompleted("chain-123", () => {
-            received.resolve();
-          });
+          await notifyAdapter.notifyChainsCompleted(chainIds);
 
-          await notifyAdapter.notifyChainCompleted("chain-123");
-
-          await waitFor(received.promise, "notification");
-
-          await unsubscribe();
+          await expect
+            .poll(() => [...received].sort(), { timeout: DELIVERY_TIMEOUT_MS })
+            .toEqual(chainIds);
+          await Promise.all(unsubscribes.map(async (unsubscribe) => unsubscribe()));
         },
       },
       {
@@ -208,7 +191,7 @@ export const notifyAdapterConformanceGroups: ConformanceGroup<NotifyConformanceF
             callCount++;
           });
 
-          await notifyAdapter.notifyChainCompleted("chain-456");
+          await notifyAdapter.notifyChainsCompleted(["chain-456"]);
           await sleep(NEGATIVE_ASSERTION_DELAY_MS);
 
           expect(callCount).toBe(0);
@@ -228,7 +211,7 @@ export const notifyAdapterConformanceGroups: ConformanceGroup<NotifyConformanceF
             received2.resolve();
           });
 
-          await notifyAdapter.notifyChainCompleted("chain-multi");
+          await notifyAdapter.notifyChainsCompleted(["chain-multi"]);
 
           await waitFor(Promise.all([received1.promise, received2.promise]), "notifications");
 
@@ -245,7 +228,7 @@ export const notifyAdapterConformanceGroups: ConformanceGroup<NotifyConformanceF
           });
 
           await unsubscribe();
-          await notifyAdapter.notifyChainCompleted("chain-unsubscribe");
+          await notifyAdapter.notifyChainsCompleted(["chain-unsubscribe"]);
           await sleep(NEGATIVE_ASSERTION_DELAY_MS);
 
           expect(callCount).toBe(0);
@@ -254,21 +237,27 @@ export const notifyAdapterConformanceGroups: ConformanceGroup<NotifyConformanceF
     ],
   },
   {
-    name: "notifyJobAttemptLost / listenJobAttemptLost",
+    name: "notifyJobAttemptsLost / listenJobAttemptLost",
     cases: [
       {
-        name: "listener receives attempt lost for matching job ID",
-        run: async ({ notifyAdapter }) => {
-          const received = Promise.withResolvers<void>();
-          const unsubscribe = await notifyAdapter.listenJobAttemptLost("job-123", () => {
-            received.resolve();
-          });
+        name: "listener receives attempt lost for each job ID in the batch",
+        run: async ({ notifyAdapter }, expect) => {
+          const jobIds = ["job-1", "job-2", "job-3"];
+          const received: string[] = [];
+          const unsubscribes = await Promise.all(
+            jobIds.map(async (jobId) =>
+              notifyAdapter.listenJobAttemptLost(jobId, () => {
+                received.push(jobId);
+              }),
+            ),
+          );
 
-          await notifyAdapter.notifyJobAttemptLost("job-123");
+          await notifyAdapter.notifyJobAttemptsLost(jobIds);
 
-          await waitFor(received.promise, "notification");
-
-          await unsubscribe();
+          await expect
+            .poll(() => [...received].sort(), { timeout: DELIVERY_TIMEOUT_MS })
+            .toEqual(jobIds);
+          await Promise.all(unsubscribes.map(async (unsubscribe) => unsubscribe()));
         },
       },
       {
@@ -279,7 +268,7 @@ export const notifyAdapterConformanceGroups: ConformanceGroup<NotifyConformanceF
             callCount++;
           });
 
-          await notifyAdapter.notifyJobAttemptLost("job-456");
+          await notifyAdapter.notifyJobAttemptsLost(["job-456"]);
           await sleep(NEGATIVE_ASSERTION_DELAY_MS);
 
           expect(callCount).toBe(0);
@@ -299,7 +288,7 @@ export const notifyAdapterConformanceGroups: ConformanceGroup<NotifyConformanceF
             received2.resolve();
           });
 
-          await notifyAdapter.notifyJobAttemptLost("job-multi");
+          await notifyAdapter.notifyJobAttemptsLost(["job-multi"]);
 
           await waitFor(Promise.all([received1.promise, received2.promise]), "notifications");
 
@@ -316,7 +305,7 @@ export const notifyAdapterConformanceGroups: ConformanceGroup<NotifyConformanceF
           });
 
           await unsubscribe();
-          await notifyAdapter.notifyJobAttemptLost("job-unsubscribe");
+          await notifyAdapter.notifyJobAttemptsLost(["job-unsubscribe"]);
           await sleep(NEGATIVE_ASSERTION_DELAY_MS);
 
           expect(callCount).toBe(0);
@@ -344,7 +333,7 @@ export const notifyAdapterConformanceGroups: ConformanceGroup<NotifyConformanceF
           );
 
           for (let i = 0; i < half; i++) {
-            await notifyAdapter.notifyChainCompleted(chainIds[i]);
+            await notifyAdapter.notifyChainsCompleted([chainIds[i]]);
           }
           // Let fire-and-forget transports drain already-published messages.
           // A batch-at-end impl would show 0 here; an incremental impl makes progress.
@@ -352,7 +341,7 @@ export const notifyAdapterConformanceGroups: ConformanceGroup<NotifyConformanceF
           const receivedMidLoop = received;
 
           for (let i = half; i < count; i++) {
-            await notifyAdapter.notifyChainCompleted(chainIds[i]);
+            await notifyAdapter.notifyChainsCompleted([chainIds[i]]);
           }
 
           await expect.poll(() => received, { timeout: 2000 }).toBe(count);
@@ -401,7 +390,7 @@ export const notifyAdapterConformanceGroups: ConformanceGroup<NotifyConformanceF
             received.resolve(typeName);
           });
 
-          await notifyAdapter.notifyJobScheduled("type-a");
+          await notifyAdapter.notifyJobsScheduled(["type-a"]);
 
           const result = await waitFor(received.promise, "notification");
 
@@ -424,7 +413,7 @@ export const notifyAdapterConformanceGroups: ConformanceGroup<NotifyConformanceF
 
           await unsubscribe1();
 
-          await notifyAdapter.notifyChainCompleted("chain-partial");
+          await notifyAdapter.notifyChainsCompleted(["chain-partial"]);
 
           await waitFor(received2.promise, "notification");
 
@@ -448,7 +437,7 @@ export const notifyAdapterConformanceGroups: ConformanceGroup<NotifyConformanceF
             peerCalled.resolve();
           });
 
-          await notifyAdapter.notifyChainCompleted("chain-throw");
+          await notifyAdapter.notifyChainsCompleted(["chain-throw"]);
           await waitFor(peerCalled.promise, "peer notification");
 
           await unsubBad();
@@ -473,9 +462,9 @@ export const notifyAdapterConformanceGroups: ConformanceGroup<NotifyConformanceF
             const u2 = await notifyAdapter.listenChainCompleted("chain-1", () => {});
             const u3 = await notifyAdapter.listenJobAttemptLost("job-1", () => {});
 
-            await notifyAdapter.notifyJobScheduled("type-a");
-            await notifyAdapter.notifyChainCompleted("chain-1");
-            await notifyAdapter.notifyJobAttemptLost("job-1");
+            await notifyAdapter.notifyJobsScheduled(["type-a"]);
+            await notifyAdapter.notifyChainsCompleted(["chain-1"]);
+            await notifyAdapter.notifyJobAttemptsLost(["job-1"]);
 
             await sleep(NEGATIVE_ASSERTION_DELAY_MS);
 
@@ -506,11 +495,11 @@ export const notifyAdapterConformanceGroups: ConformanceGroup<NotifyConformanceF
 
           await unsubscribe();
 
-          await expect(notifyAdapter.notifyJobScheduled("type-a")).rejects.toThrow();
+          await expect(notifyAdapter.notifyJobsScheduled(["type-a"])).rejects.toThrow();
           await expect(notifyAdapter.listenJobScheduled(["type-a"], () => {})).rejects.toThrow();
-          await expect(notifyAdapter.notifyChainCompleted("chain-1")).rejects.toThrow();
+          await expect(notifyAdapter.notifyChainsCompleted(["chain-1"])).rejects.toThrow();
           await expect(notifyAdapter.listenChainCompleted("chain-1", () => {})).rejects.toThrow();
-          await expect(notifyAdapter.notifyJobAttemptLost("job-1")).rejects.toThrow();
+          await expect(notifyAdapter.notifyJobAttemptsLost(["job-1"])).rejects.toThrow();
           await expect(notifyAdapter.listenJobAttemptLost("job-1", () => {})).rejects.toThrow();
         },
       },

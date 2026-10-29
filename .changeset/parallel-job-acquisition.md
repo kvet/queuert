@@ -8,4 +8,4 @@ The in-process worker acquires and reclaims jobs in batches sized to its idle sl
 
 - `StateAdapter.startJobAttempt` is replaced by `startJobAttempts`, which takes a `limit` and returns an array of up to `limit` acquired jobs.
 - `StateAdapter.reclaimExpiredJobAttempt` is replaced by `reclaimExpiredJobAttempts`, which takes a `limit` and returns an array of up to `limit` released jobs.
-- The worker reclaims up to its idle slot count of expired attempts per iteration, and sends one wake hint and `notifyJobScheduled` per reclaimed job type and one `notifyJobAttemptLost` per reclaimed job.
+- The worker reclaims up to its idle slot count of expired attempts per iteration.
