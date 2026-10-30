@@ -60,7 +60,7 @@ export const rescheduleJobsGroup: ConformanceGroup<StateConformanceFixture> = {
           stateAdapter.startJobAttempts({
             txCtx,
             workerId: "worker-1",
-            timeoutMsByTypeName: { "trigger-acquire": 30_000 },
+            typeNames: ["trigger-acquire"],
             limit: 1,
           }),
         );
@@ -74,7 +74,7 @@ export const rescheduleJobsGroup: ConformanceGroup<StateConformanceFixture> = {
           stateAdapter.startJobAttempts({
             txCtx,
             workerId: "worker-1",
-            timeoutMsByTypeName: { "trigger-acquire": 30_000 },
+            typeNames: ["trigger-acquire"],
             limit: 1,
           }),
         );
@@ -288,17 +288,8 @@ export const rescheduleJobsGroup: ConformanceGroup<StateConformanceFixture> = {
           stateAdapter.startJobAttempts({
             txCtx,
             workerId: "worker-1",
-            timeoutMsByTypeName: { "resched-fail-test": 30_000 },
+            typeNames: ["resched-fail-test"],
             limit: 1,
-          }),
-        );
-
-        await stateAdapter.withTransaction(async (txCtx) =>
-          stateAdapter.extendJobAttempt({
-            txCtx,
-            jobId: createdChain.head.id,
-            fence: { attempt: 1, workerId: "worker-1" },
-            timeoutMs: 10_000,
           }),
         );
 
@@ -321,7 +312,6 @@ export const rescheduleJobsGroup: ConformanceGroup<StateConformanceFixture> = {
         expect(failed!.completedAt).toBeNull();
         expect(failed!.attemptAt).toBeNull();
         expect(failed!.attemptBy).toBeNull();
-        expect(failed!.attemptUntil).toBeNull();
         expect(failed!.lastAttemptError).toBe("transient failure");
         expect(failed!.lastAttemptAt).toBeInstanceOf(Date);
         expect(failed!.scheduledAt.getTime()).toBeGreaterThanOrEqual(before + 4000);
@@ -347,7 +337,7 @@ export const rescheduleJobsGroup: ConformanceGroup<StateConformanceFixture> = {
           stateAdapter.startJobAttempts({
             txCtx,
             workerId: "worker-1",
-            timeoutMsByTypeName: { "resched-running-test": 30_000 },
+            typeNames: ["resched-running-test"],
             limit: 1,
           }),
         );
@@ -363,7 +353,6 @@ export const rescheduleJobsGroup: ConformanceGroup<StateConformanceFixture> = {
         expect(rescheduled!.completedAt).toBeNull();
         expect(rescheduled!.attemptAt).toBeNull();
         expect(rescheduled!.attemptBy).toBeNull();
-        expect(rescheduled!.attemptUntil).toBeNull();
         expect(rescheduled!.lastAttemptError).toBeNull();
         expect(rescheduled!.lastAttemptAt).toBeInstanceOf(Date);
         expect(rescheduled!.scheduledAt.getTime()).toBeGreaterThanOrEqual(before + 4000);
@@ -620,7 +609,7 @@ export const rescheduleJobsGroup: ConformanceGroup<StateConformanceFixture> = {
           stateAdapter.startJobAttempts({
             txCtx,
             workerId: "worker-1",
-            timeoutMsByTypeName: { "resched-fence-other": 30_000 },
+            typeNames: ["resched-fence-other"],
             limit: 1,
           }),
         );
@@ -663,7 +652,7 @@ export const rescheduleJobsGroup: ConformanceGroup<StateConformanceFixture> = {
           stateAdapter.startJobAttempts({
             txCtx,
             workerId: "worker-1",
-            timeoutMsByTypeName: { "resched-fence-replaced": 30_000 },
+            typeNames: ["resched-fence-replaced"],
             limit: 1,
           }),
         );
@@ -674,7 +663,7 @@ export const rescheduleJobsGroup: ConformanceGroup<StateConformanceFixture> = {
           stateAdapter.startJobAttempts({
             txCtx,
             workerId: "worker-1",
-            timeoutMsByTypeName: { "resched-fence-replaced": 30_000 },
+            typeNames: ["resched-fence-replaced"],
             limit: 1,
           }),
         );
@@ -711,7 +700,7 @@ export const rescheduleJobsGroup: ConformanceGroup<StateConformanceFixture> = {
         );
         const [acquired] = await stateAdapter.startJobAttempts({
           workerId: "worker-1",
-          timeoutMsByTypeName: { "resched-autocommit": 30_000 },
+          typeNames: ["resched-autocommit"],
           limit: 1,
         });
 

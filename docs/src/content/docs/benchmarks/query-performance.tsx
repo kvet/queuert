@@ -10,6 +10,7 @@ import {
   listChainsGroups,
   listJobsGroups,
   operationalGroups,
+  workerGroups,
 } from "../../../data/benchmarks.ts";
 
 export const meta = {
@@ -77,11 +78,18 @@ const Page = () => (
       groups={listJobsGroups}
     />
     <BenchChart
-      title="List chain jobs & blocked jobs"
+      title="List chain, blocked & worker jobs"
       unit="p50 ms"
       decimals={2}
       series={series}
       groups={chainJobsGroups}
+    />
+    <BenchChart
+      title="List workers"
+      unit="p50 ms"
+      decimals={2}
+      series={series}
+      groups={workerGroups}
     />
     <h2 id="reproduce">Reproduce</h2>
     <p>

@@ -5,6 +5,7 @@ import {
   type StateChainInfo,
   type StateJob,
   type StateJobInfo,
+  type StateReclaimedJob,
 } from "../state-adapter/state-adapter.js";
 import {
   type ChainBasicData,
@@ -13,6 +14,7 @@ import {
   type JobCompletionData,
   type JobProcessingData,
   type Log,
+  type WorkerData,
 } from "./log.js";
 import {
   type BlockerSpanHandle,
@@ -38,7 +40,6 @@ const mapStateJobToJobAttemptData = (stateJob: StateJob): JobAttemptData => ({
   ...mapStateJobToJobProcessingData(stateJob),
   attemptAt: stateJob.attemptAt!,
   attemptBy: stateJob.attemptBy!,
-  attemptUntil: stateJob.attemptUntil!,
 });
 
 const mapStateJobToJobCompletionData = (
@@ -70,9 +71,10 @@ const mapStateChainToChainData = (stateChain: {
  */
 export type ObservabilityHelper = {
   // worker
-  workerStarted: (options: { workerId: string; jobTypeNames: string[] }) => void;
-  workerError: (options: { workerId: string }, error: unknown) => void;
-  workerStopped: (options: { workerId: string }) => void;
+  workerStarted: (options: WorkerData & { jobTypeNames: string[] }) => void;
+  workerError: (options: WorkerData, error: unknown) => void;
+  workerLeaseLost: (options: WorkerData) => void;
+  workerStopped: (options: WorkerData) => void;
 
   // chain
   chainCreated: (stateChain: StateChainInfo, options: { input: unknown }) => void;
@@ -102,7 +104,7 @@ export type ObservabilityHelper = {
     stateJob: StateJob,
     options: { output?: unknown; continuedWith?: StateJobInfo; workerId: string },
   ) => void;
-  jobAttemptReclaimed: (stateJob: StateJob, options: { workerId: string }) => void;
+  jobAttemptReclaimed: (stateJob: StateReclaimedJob, options: { workerId: string }) => void;
 
   // notify adapter
   notifyAdapterError: (operation: keyof NotifyAdapter, error: unknown) => void;
@@ -172,6 +174,15 @@ export const createObservabilityHelper = ({
       error,
     });
     adapter.workerError({ ...options, error });
+  },
+  workerLeaseLost(options) {
+    log({
+      type: "worker_lease_lost",
+      level: "warn",
+      message: "Worker lost its lease",
+      data: options,
+    });
+    adapter.workerLeaseLost(options);
   },
   workerStopped(options) {
     log({
@@ -317,11 +328,12 @@ export const createObservabilityHelper = ({
     const data = {
       ...mapStateJobToJobAttemptData(stateJob),
       workerId: options.workerId,
+      reclaimedFrom: stateJob.reclaimedFrom,
     };
     log({
       type: "job_attempt_reclaimed",
       level: "info",
-      message: "Reclaimed expired job attempt",
+      message: "Reclaimed job attempt",
       data,
     });
     adapter.jobAttemptReclaimed(data);

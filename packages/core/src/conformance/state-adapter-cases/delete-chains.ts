@@ -267,7 +267,7 @@ export const deleteChainsGroup: ConformanceGroup<StateConformanceFixture> = {
           stateAdapter.startJobAttempts({
             txCtx,
             workerId: "worker-1",
-            timeoutMsByTypeName: { "delete-repeated:step": 30_000 },
+            typeNames: ["delete-repeated:step"],
             limit: 2,
           }),
         );

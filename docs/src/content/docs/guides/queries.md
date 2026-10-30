@@ -1,11 +1,11 @@
 ---
 title: Job & Chain Queries
-description: Read-only methods for inspecting jobs and chains.
+description: Read-only methods for inspecting jobs, chains and workers.
 sidebar:
   order: 14
 ---
 
-The client provides read-only methods for inspecting chains and jobs. All query methods accept an optional transaction context and don't require `transactionHooks`.
+The client provides read-only methods for inspecting chains, jobs and workers. All query methods accept an optional transaction context and don't require `transactionHooks`.
 
 ```ts
 // Look up a single chain or job by ID
@@ -61,3 +61,27 @@ See [examples/showcase-queries](https://github.com/kvet/queuert/tree/main/exampl
 ## Ordering
 
 `listChains` and `listJobs` route queries to status-specific indexes based on the `status` and `orderBy` combination. Each status has a natural default sort order — for example, completed chains default to `completedAt` descending, pending and blocked jobs to `scheduledAt` descending. Pass `orderBy: "createdAt"` to override.
+
+## Workers
+
+Each worker an in-process worker starts is a row in the `worker` table: its id, name, the job types it processes, its concurrency, and its lease. The worker reads list the workers that still have a row, which are the live workers plus any whose lease is gone and that were not reclaimed yet. A worker's row is deleted when it stops or when its lease is reclaimed, so no history is kept.
+
+```ts
+// Look up workers by ID, undefined for a worker with no row
+const worker = await client.getWorker({ id: workerId });
+const workers = await client.getWorkers({ ids: [workerId1, workerId2] });
+
+// Every worker, ordered by startedAt, optionally only those processing a type
+const allWorkers = await client.listWorkers();
+const emailWorkers = await client.listWorkers({ typeName: "send-email" });
+
+// Live workers per job type, in input order
+const [liveEmailWorkers] = await client.countWorkersByTypeNames({
+  typeNames: ["send-email"],
+});
+
+// Every job running under a worker, ordered by attemptAt
+const runningJobs = await client.listWorkerJobs({ workerId });
+```
+
+A worker whose `leaseUntil` is in the past has lost its lease, and the next reclaim takes its running jobs. `countWorkersByTypeNames` counts only workers whose lease is live. `listWorkerJobs` lists a worker's running jobs whether or not the worker still has a row. Worker type names are plain strings, since a worker in another process may run processors registered against a different job type registry.

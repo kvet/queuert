@@ -96,7 +96,6 @@ export const createJobsGroup: ConformanceGroup<StateConformanceFixture> = {
         expect(job.lastAttemptAt).toBeNull();
         expect(job.attemptAt).toBeNull();
         expect(job.attemptBy).toBeNull();
-        expect(job.attemptUntil).toBeNull();
         expect(job.id).toBe(job.chainId);
         expect(created.id).toBe(job.chainId);
         expect(created.typeName).toBe(job.typeName);
@@ -331,7 +330,7 @@ export const createJobsGroup: ConformanceGroup<StateConformanceFixture> = {
           await stateAdapter.startJobAttempts({
             txCtx,
             workerId: "worker-1",
-            timeoutMsByTypeName: { step1: 30_000 },
+            typeNames: ["step1"],
             limit: 1,
           });
           const [continued] = await stateAdapter.continueJobs({

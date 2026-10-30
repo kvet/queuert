@@ -20,6 +20,7 @@ import {
   handleJobsByIds,
   handleJobsList,
 } from "./routes/jobs.js";
+import { handleWorkerDetail, handleWorkerJobs, handleWorkersList } from "./routes/workers.js";
 
 type Assets = Record<string, { content: string; contentType: string }>;
 
@@ -77,6 +78,14 @@ const dispatchApi = async (
   if (localPath === "/api/job-types/counts") return handleJobTypesCounts(url, client);
   if (localPath === "/api/job-types") return handleJobTypesList(client);
   if (localPath === "/api/jobs") return handleJobsList(url, client);
+
+  match = localPath.match(/^\/api\/workers\/([^/]+)\/jobs$/);
+  if (match) return handleWorkerJobs(client, match[1]);
+
+  match = localPath.match(/^\/api\/workers\/([^/]+)$/);
+  if (match) return handleWorkerDetail(client, match[1]);
+
+  if (localPath === "/api/workers") return handleWorkersList(url, client);
 
   return undefined;
 };

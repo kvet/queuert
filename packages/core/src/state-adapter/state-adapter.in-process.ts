@@ -16,6 +16,9 @@ import {
   type StateDependentJob,
   type StateJob,
   type StateJobInfo,
+  type StateReclaimedJob,
+  type StateWorker,
+  type StateWorkerInfo,
 } from "./state-adapter.js";
 
 type DbJob = StateJobInfo & {
@@ -34,7 +37,8 @@ type JournalEntry =
       key: string;
       prev: BlockerEntry | undefined;
       next: BlockerEntry | undefined;
-    };
+    }
+  | { kind: "worker"; prev: StateWorkerInfo | undefined; next: StateWorkerInfo | undefined };
 
 const blockerKey = (blockedByChainId: string, index: number): string =>
   `${blockedByChainId}\u0000${index}`;
@@ -47,6 +51,9 @@ const isPending = (job: DbJob): boolean => job.status === "pending";
 const matchesFence = (job: DbJob, fence: StateAttemptFence | undefined): boolean =>
   fence === undefined ||
   (isRunning(job) && job.attempt === fence.attempt && job.attemptBy === fence.workerId);
+
+const isLive = (worker: StateWorkerInfo, nowMs: number): boolean =>
+  worker.leaseUntil.getTime() > nowMs;
 
 const matchesChainStatus = (headJob: DbJob, status?: string): boolean =>
   status === undefined || headJob.chainStatus === status;
@@ -131,7 +138,6 @@ const jobTimestampGetters: Record<string, (job: DbJob) => Date> = {
   completedAt: (job) => job.completedAt!,
   scheduledAt: (job) => job.scheduledAt,
   attemptAt: (job) => job.attemptAt!,
-  attemptUntil: (job) => job.attemptUntil ?? job.attemptAt!,
 };
 
 const chainTimestampGetters: Record<string, (pair: [DbJob, DbJob | undefined]) => Date> = {
@@ -272,7 +278,6 @@ const buildDbJob = (params: {
     lastAttemptError: null,
     lastAttemptAt: null,
     attemptBy: null,
-    attemptUntil: null,
     attemptAt: null,
     deduplicationKey: params.deduplicationKey,
     chainTraceContext: params.chainTraceContext ?? null,
@@ -283,7 +288,8 @@ const buildDbJob = (params: {
 class JobIndex {
   readonly jobs = new Map<string, DbJob>();
   readonly pendingByType = new Map<string, SortedSet<DbJob>>();
-  readonly runningByType = new Map<string, SortedSet<DbJob>>();
+  readonly runningByWorker = new Map<string, Map<string, DbJob>>();
+  readonly workers = new Map<string, StateWorkerInfo>();
   readonly jobsByChain = new Map<string, Map<number, DbJob>>();
   readonly tailByChain = new Map<string, DbJob>();
   readonly headJobsByDeduplicationKey = new Map<string, Set<DbJob>>();
@@ -293,7 +299,6 @@ class JobIndex {
   readonly headJobsByCreatedAt: SortedSet<DbJob>;
 
   readonly cmpScheduledAt: Comparator<DbJob>;
-  private readonly cmpAttemptUntil: Comparator<DbJob>;
   private nextSeq = 0;
 
   constructor() {
@@ -301,15 +306,6 @@ class JobIndex {
 
     this.cmpScheduledAt = (a, b) => {
       const d = a.scheduledAt.getTime() - b.scheduledAt.getTime();
-      if (d !== 0) return d;
-      const s = seq(a) - seq(b);
-      return s !== 0 ? s : compareStrings(a.id, b.id);
-    };
-
-    this.cmpAttemptUntil = (a, b) => {
-      const ax = a.attemptUntil ? a.attemptUntil.getTime() : Infinity;
-      const bx = b.attemptUntil ? b.attemptUntil.getTime() : Infinity;
-      const d = ax - bx;
       if (d !== 0) return d;
       const s = seq(a) - seq(b);
       return s !== 0 ? s : compareStrings(a.id, b.id);
@@ -335,13 +331,13 @@ class JobIndex {
         this.pendingByType.set(job.typeName, set);
       }
       set.insert(job);
-    } else if (isRunning(job)) {
-      let set = this.runningByType.get(job.typeName);
-      if (!set) {
-        set = new SortedSet(this.cmpAttemptUntil);
-        this.runningByType.set(job.typeName, set);
+    } else if (isRunning(job) && job.attemptBy !== null) {
+      let map = this.runningByWorker.get(job.attemptBy);
+      if (!map) {
+        map = new Map();
+        this.runningByWorker.set(job.attemptBy, map);
       }
-      set.insert(job);
+      map.set(job.id, job);
     }
 
     let chainMap = this.jobsByChain.get(job.chainId);
@@ -373,8 +369,12 @@ class JobIndex {
   removeJob(job: DbJob): void {
     if (isPending(job)) {
       this.pendingByType.get(job.typeName)?.delete(job);
-    } else if (isRunning(job)) {
-      this.runningByType.get(job.typeName)?.delete(job);
+    } else if (isRunning(job) && job.attemptBy !== null) {
+      const map = this.runningByWorker.get(job.attemptBy);
+      if (map) {
+        map.delete(job.id);
+        if (map.size === 0) this.runningByWorker.delete(job.attemptBy);
+      }
     }
 
     const chainMap = this.jobsByChain.get(job.chainId);
@@ -441,10 +441,21 @@ class JobIndex {
     if (journal) journal.push({ kind: "blocker", jobId, key, prev, next });
   }
 
+  writeWorker(
+    journal: JournalEntry[] | undefined,
+    prev: StateWorkerInfo | undefined,
+    next: StateWorkerInfo | undefined,
+  ): void {
+    this.applyWorker(prev, next);
+    if (journal) journal.push({ kind: "worker", prev, next });
+  }
+
   rollback(journal: JournalEntry[]): void {
     while (journal.length > 0) {
       const entry = journal.pop()!;
-      if (entry.kind === "job") {
+      if (entry.kind === "worker") {
+        this.applyWorker(entry.next, entry.prev);
+      } else if (entry.kind === "job") {
         if (entry.next) this.removeJob(entry.next);
         if (entry.prev) {
           this.jobs.set(entry.prev.id, entry.prev);
@@ -457,6 +468,14 @@ class JobIndex {
         this.applyBlocker(entry.jobId, entry.key, entry.next, entry.prev);
       }
     }
+  }
+
+  private applyWorker(
+    current: StateWorkerInfo | undefined,
+    next: StateWorkerInfo | undefined,
+  ): void {
+    if (next) this.workers.set(next.id, next);
+    else if (current) this.workers.delete(current.id);
   }
 
   private applyBlocker(
@@ -571,7 +590,8 @@ class JobIndex {
   clear(): void {
     this.jobs.clear();
     this.pendingByType.clear();
-    this.runningByType.clear();
+    this.runningByWorker.clear();
+    this.workers.clear();
     this.jobsByChain.clear();
     this.tailByChain.clear();
     this.headJobsByDeduplicationKey.clear();
@@ -602,6 +622,8 @@ export type InProcessStateAdapter = StateAdapter<InProcessContext, string>;
 export const createInProcessStateAdapter = async ({
   generateId: generateIdOption = () => crypto.randomUUID(),
   validateId: validateIdOption,
+  generateWorkerId: generateWorkerIdOption,
+  validateWorkerId: validateWorkerIdOption,
   maxBlockersPerJob: maxBlockersPerJobOption,
   countCap: countCapOption,
 }: {
@@ -617,6 +639,18 @@ export const createInProcessStateAdapter = async ({
    * and caller-supplied IDs before writing; failures throw `InvalidJobIdError`.
    */
   validateId?: (id: string) => boolean;
+  /**
+   * Function to generate worker IDs, one per worker an in-process worker starts. Must never
+   * return the same ID twice.
+   *
+   * @defaultValue `() => crypto.randomUUID()`
+   */
+  generateWorkerId?: () => string;
+  /**
+   * Predicate returning `true` if the worker ID is acceptable. Core runs it on generated
+   * worker IDs; failures throw `InvalidWorkerIdError`.
+   */
+  validateWorkerId?: (id: string) => boolean;
   /**
    * Most blocker chains a single job may declare. Declaring more throws
    * `BlockerLimitExceededError` before any state is written.
@@ -635,6 +669,8 @@ export const createInProcessStateAdapter = async ({
   const config = resolveStateAdapterConfig({
     generateId: generateIdOption,
     validateId: validateIdOption,
+    generateWorkerId: generateWorkerIdOption,
+    validateWorkerId: validateWorkerIdOption,
     maxBlockersPerJob: maxBlockersPerJobOption,
     countCap: countCapOption,
   });
@@ -705,6 +741,37 @@ export const createInProcessStateAdapter = async ({
   const jobView = (job: DbJob): StateJob => ({
     ...job,
     chain: chainOf(idx.jobs.get(job.chainId) ?? job),
+  });
+
+  const reclaimJob = (
+    journal: JournalEntry[] | undefined,
+    job: DbJob,
+    {
+      lastAttemptError,
+      now,
+      workerName,
+    }: { lastAttemptError: string; now: Date; workerName: string | null },
+  ): StateReclaimedJob => {
+    const updatedJob: DbJob = {
+      ...job,
+      status: "pending",
+      attemptAt: null,
+      attemptBy: null,
+      lastAttemptAt: now,
+      lastAttemptError,
+    };
+    idx.writeJob(journal, job, updatedJob);
+    return { ...jobView(updatedJob), reclaimedFrom: { workerId: job.attemptBy!, workerName } };
+  };
+
+  const workerInfoView = (worker: StateWorkerInfo): StateWorkerInfo => ({
+    ...worker,
+    typeNames: [...worker.typeNames],
+  });
+
+  const workerView = (worker: StateWorkerInfo): StateWorker => ({
+    ...workerInfoView(worker),
+    runningJobCount: idx.runningByWorker.get(worker.id)?.size ?? 0,
   });
 
   const chainJobViews = (headJob: DbJob | undefined, jobs: DbJob[]): StateJob[] => {
@@ -841,7 +908,6 @@ export const createInProcessStateAdapter = async ({
               ...parent,
               attemptAt: null,
               attemptBy: null,
-              attemptUntil: null,
               continuedToId: id,
               status: "completed",
               completedAt: now,
@@ -870,7 +936,6 @@ export const createInProcessStateAdapter = async ({
               ...job,
               attemptAt: null,
               attemptBy: null,
-              attemptUntil: null,
               output: output ?? null,
               status: "completed",
               completedAt: now,
@@ -923,7 +988,6 @@ export const createInProcessStateAdapter = async ({
             scheduledAt: resolvedScheduledAt,
             attemptAt: null,
             attemptBy: null,
-            attemptUntil: null,
             ...(isRunning(job)
               ? { status: "pending" as const, lastAttemptAt: now, lastAttemptError: error ?? null }
               : {}),
@@ -971,12 +1035,11 @@ export const createInProcessStateAdapter = async ({
         return result;
       }),
 
-    startJobAttempts: async ({ txCtx, timeoutMsByTypeName, workerId, limit }) =>
+    startJobAttempts: async ({ txCtx, typeNames, workerId, limit }) =>
       withWriteLock(txCtx, () => {
         const journal = txCtx?.journal;
         const now = new Date();
         const nowMs = now.getTime();
-        const typeNames = Object.keys(timeoutMsByTypeName);
         const acquired: (StateJob & { hasBlockers: boolean })[] = [];
 
         while (acquired.length < limit) {
@@ -996,7 +1059,6 @@ export const createInProcessStateAdapter = async ({
             attempt: bestJob.attempt + 1,
             attemptAt: now,
             attemptBy: workerId,
-            attemptUntil: new Date(nowMs + timeoutMsByTypeName[bestJob.typeName]),
           };
           idx.writeJob(journal, bestJob, updatedJob);
           acquired.push({
@@ -1027,60 +1089,108 @@ export const createInProcessStateAdapter = async ({
         return Math.max(0, nextScheduledAt - now);
       }),
 
-    extendJobAttempt: async ({ txCtx, jobId, fence, timeoutMs }) =>
+    startWorker: async ({ txCtx, workerId, name, typeNames, concurrency, leaseMs }) =>
       withWriteLock(txCtx, () => {
-        const journal = txCtx?.journal;
-        const job = idx.jobs.get(jobId);
-        if (!job || !matchesFence(job, fence)) return undefined;
-
-        const updatedJob: DbJob = { ...job, attemptUntil: new Date(Date.now() + timeoutMs) };
-        idx.writeJob(journal, job, updatedJob);
-        return jobView(updatedJob);
-      }),
-
-    reclaimExpiredJobAttempts: async ({
-      txCtx,
-      typeNames,
-      ignoredJobIds,
-      lastAttemptError,
-      limit,
-    }) =>
-      withWriteLock(txCtx, () => {
-        const journal = txCtx?.journal;
-        const now = Date.now();
-        const ignoredSet = ignoredJobIds ? new Set(ignoredJobIds) : undefined;
-
-        const candidateJobs: DbJob[] = [];
-        for (const typeName of typeNames) {
-          const set = idx.runningByType.get(typeName);
-          if (!set) continue;
-          let taken = 0;
-          for (let i = 0; i < set.size && taken < limit; i++) {
-            const job = set.at(i)!;
-            if (!job.attemptUntil) break;
-            if (job.attemptUntil.getTime() > now) break;
-            if (ignoredSet?.has(job.id)) continue;
-            candidateJobs.push(job);
-            taken++;
-          }
+        if (idx.workers.has(workerId)) {
+          throw new Error(`Worker id "${workerId}" already exists`);
         }
-        candidateJobs.sort((a, b) => a.attemptUntil!.getTime() - b.attemptUntil!.getTime());
-
-        return candidateJobs.slice(0, limit).map((candidateJob) => {
-          const updatedJob: DbJob = {
-            ...candidateJob,
-            status: "pending",
-            attemptBy: null,
-            attemptUntil: null,
-            attemptAt: null,
-            lastAttemptAt: new Date(now),
-            lastAttemptError,
-          };
-          idx.writeJob(journal, candidateJob, updatedJob);
-          return jobView(updatedJob);
-        });
+        const now = Date.now();
+        const worker: StateWorkerInfo = {
+          id: workerId,
+          name,
+          typeNames: [...typeNames],
+          concurrency,
+          startedAt: new Date(now),
+          leaseUntil: new Date(now + leaseMs),
+        };
+        idx.writeWorker(txCtx?.journal, undefined, worker);
+        return workerInfoView(worker);
       }),
 
+    extendWorkerLease: async ({ txCtx, workerId, leaseMs }) =>
+      withWriteLock(txCtx, () => {
+        const now = Date.now();
+        const worker = idx.workers.get(workerId);
+        if (!worker || !isLive(worker, now)) return undefined;
+        const renewedWorker: StateWorkerInfo = { ...worker, leaseUntil: new Date(now + leaseMs) };
+        idx.writeWorker(txCtx?.journal, worker, renewedWorker);
+        return workerInfoView(renewedWorker);
+      }),
+
+    stopWorker: async ({ txCtx, workerId, lastAttemptError }) =>
+      withWriteLock(txCtx, () => {
+        const journal = txCtx?.journal;
+        const now = new Date();
+        const worker = idx.workers.get(workerId);
+        if (worker) idx.writeWorker(journal, worker, undefined);
+        const runningJobs = Array.from(idx.runningByWorker.get(workerId)?.values() ?? []);
+        return runningJobs.map((job) =>
+          reclaimJob(journal, job, { lastAttemptError, now, workerName: worker?.name ?? null }),
+        );
+      }),
+
+    getWorkers: async ({ txCtx, workerIds }) =>
+      withReadLock(txCtx, () =>
+        workerIds.map((workerId) => {
+          const worker = idx.workers.get(workerId);
+          return worker ? workerView(worker) : undefined;
+        }),
+      ),
+
+    listWorkers: async ({ txCtx, typeName }) =>
+      withReadLock(txCtx, () =>
+        Array.from(idx.workers.values())
+          .filter((worker) => typeName === undefined || worker.typeNames.includes(typeName))
+          .toSorted(
+            (a, b) => a.startedAt.getTime() - b.startedAt.getTime() || compareStrings(a.id, b.id),
+          )
+          .map(workerView),
+      ),
+
+    countWorkersByTypeNames: async ({ txCtx, typeNames }) =>
+      withReadLock(txCtx, () => {
+        const now = Date.now();
+        const liveWorkers = Array.from(idx.workers.values()).filter((worker) =>
+          isLive(worker, now),
+        );
+        return typeNames.map(
+          (typeName) => liveWorkers.filter((worker) => worker.typeNames.includes(typeName)).length,
+        );
+      }),
+
+    listWorkerJobs: async ({ txCtx, workerId }) =>
+      withReadLock(txCtx, () =>
+        Array.from(idx.runningByWorker.get(workerId)?.values() ?? [])
+          .toSorted(
+            (a, b) => a.attemptAt!.getTime() - b.attemptAt!.getTime() || compareStrings(a.id, b.id),
+          )
+          .map(jobView),
+      ),
+
+    reclaimExpiredJobAttempts: async ({ txCtx, lastAttemptError, limit }) =>
+      withWriteLock(txCtx, () => {
+        const journal = txCtx?.journal;
+        const now = new Date();
+        const expiredWorkers = Array.from(idx.workers.values())
+          .filter((worker) => !isLive(worker, now.getTime()))
+          .slice(0, limit);
+        for (const worker of expiredWorkers) idx.writeWorker(journal, worker, undefined);
+        const expiredWorkerNameById = new Map(
+          expiredWorkers.map((worker) => [worker.id, worker.name]),
+        );
+
+        const candidateJobs = Array.from(idx.runningByWorker.entries())
+          .filter(([workerId]) => !idx.workers.has(workerId))
+          .flatMap(([, runningJobs]) => Array.from(runningJobs.values()))
+          .slice(0, limit);
+        return candidateJobs.map((job) =>
+          reclaimJob(journal, job, {
+            lastAttemptError,
+            now,
+            workerName: expiredWorkerNameById.get(job.attemptBy!) ?? null,
+          }),
+        );
+      }),
     addJobsBlockers: async ({ txCtx, jobBlockers: jobBlockerInputs }) =>
       withWriteLock(txCtx, () => {
         const journal = txCtx?.journal;

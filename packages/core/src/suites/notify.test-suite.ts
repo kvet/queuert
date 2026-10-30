@@ -210,8 +210,8 @@ export const notifyTestSuite = ({ it }: { it: TestAPI<TestSuiteContext> }): void
       }),
     );
     await stateAdapter.startJobAttempts({
+      typeNames: ["test"],
       workerId: "worker",
-      timeoutMsByTypeName: { test: 60_000 },
       limit: chains.length,
     });
     spyNotifyAdapter.calls.length = 0;
@@ -573,7 +573,7 @@ export const notifyTestSuite = ({ it }: { it: TestAPI<TestSuiteContext> }): void
     });
   });
 
-  it("notifies workers when expired attempts are reclaimed", async ({
+  it("aborts the attempt of a worker whose lease expired once another worker reclaims its job", async ({
     stateAdapter,
     notifyAdapter,
     observabilityAdapter,
@@ -596,13 +596,31 @@ export const notifyTestSuite = ({ it }: { it: TestAPI<TestSuiteContext> }): void
       log,
       jobTypes,
     });
+    const expiringClient = await createClient({
+      stateAdapter: {
+        ...stateAdapter,
+        startWorker: async (params) => stateAdapter.startWorker({ ...params, leaseMs: 1 }),
+        extendWorkerLease: async ({ workerId }) => ({
+          id: workerId,
+          name: null,
+          typeNames: [],
+          concurrency: 1,
+          startedAt: new Date(),
+          leaseUntil: new Date(),
+        }),
+      },
+      notifyAdapter,
+      observabilityAdapter,
+      log,
+      jobTypes,
+    });
 
     const jobStarted = Promise.withResolvers<void>();
     const jobCompleted = Promise.withResolvers<void>();
 
-    const createWorker = async () =>
+    const createWorker = async (workerClient: typeof client) =>
       createInProcessWorker({
-        client,
+        client: workerClient,
         concurrency: 1,
         processors: createProcessors({
           client,
@@ -612,7 +630,6 @@ export const notifyTestSuite = ({ it }: { it: TestAPI<TestSuiteContext> }): void
               attemptHandler: async ({ signal, job, complete }) => {
                 if (job.attempt > 1) {
                   await jobCompleted.promise;
-                  await sleep(10);
 
                   return withTransaction(async (txCtx, transactionHooks) =>
                     complete({ ...txCtx, transactionHooks, output: { result: "recovered" } }),
@@ -627,13 +644,12 @@ export const notifyTestSuite = ({ it }: { it: TestAPI<TestSuiteContext> }): void
 
                 throw new Error();
               },
-              attemptConfig: { timeoutMs: 10, heartbeatMs: 1000 },
             },
           },
         }),
       });
 
-    await withWorkers([await (await createWorker()).start()], async () => {
+    await withWorkers([await (await createWorker(expiringClient)).start()], async () => {
       const chain = await withTransaction(async (txCtx, transactionHooks) =>
         client.createChain({
           ...txCtx,
@@ -646,7 +662,7 @@ export const notifyTestSuite = ({ it }: { it: TestAPI<TestSuiteContext> }): void
       await jobStarted.promise;
       await sleep(10);
 
-      await withWorkers([await (await createWorker()).start()], async () => {
+      await withWorkers([await (await createWorker(client)).start()], async () => {
         await client.awaitChain(chain, { timeoutMs: 5000 });
       });
 

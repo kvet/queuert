@@ -744,7 +744,7 @@ export const examples: Example[] = [
     page: "logging-observability",
     label: "@queuert/dashboard",
     description:
-      "@queuert/dashboard embedded as a fetch handler with Node's built-in HTTP server. Run the populator to generate chains/jobs, browse them through the web UI.",
+      "@queuert/dashboard embedded as a fetch handler with Node's built-in HTTP server. Run the populator to generate chains, jobs and workers, browse them through the web UI.",
     runtime: "Node.js",
     services: [],
     files: ["src/dashboard.ts", "src/populator.ts", "src/common.ts"],

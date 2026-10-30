@@ -3,7 +3,6 @@ import {
   type AttemptMiddleware,
   type MergedAttemptHandlerCtx,
 } from "../attempt-middleware/attempt-middleware.js";
-import { type AttemptConfig } from "../attempt/attempt-config.js";
 import { type Client } from "../client.js";
 import { type BackoffConfig } from "../entities/backoff.js";
 import { type BaseJobTypeDefinitions } from "../job-types/job-type.js";
@@ -32,8 +31,8 @@ type MergedDefs<
  * external definitions it declares (for cross-slice blocker / continueWith
  * references). The returned registry is plugged into `createInProcessWorker`.
  *
- * Registry-level `backoffConfig` / `attemptConfig` cascade onto every processor
- * in this registry unless that processor overrides them.
+ * A registry-level `backoffConfig` cascades onto every processor in this
+ * registry unless that processor overrides it.
  *
  * @example
  * const orderProcessors = createProcessors({
@@ -68,7 +67,6 @@ export const createProcessors = <
   jobTypes: JobTypes<TJobTypeDefinitions, TExternalJobTypeDefinitions>;
   attemptMiddleware?: TAttemptMiddleware & readonly AttemptMiddleware<TStateAdapter, any>[];
   backoffConfig?: BackoffConfig;
-  attemptConfig?: AttemptConfig;
   processors: {
     [K in TProcessors]: InProcessWorkerProcessor<
       TStateAdapter,
@@ -88,9 +86,6 @@ export const createProcessors = <
       processor,
       options.backoffConfig !== undefined && processor.backoffConfig === undefined
         ? { backoffConfig: options.backoffConfig }
-        : {},
-      options.attemptConfig !== undefined && processor.attemptConfig === undefined
-        ? { attemptConfig: options.attemptConfig }
         : {},
       {
         [processorAttemptMiddlewareSymbol]: middleware,

@@ -1,4 +1,4 @@
-import { type Chain, type Job } from "queuert";
+import { type Chain, type Job, type Worker } from "queuert";
 import { deserialize } from "seroval";
 
 export type UnknownJob = Job<string, string, string, unknown, unknown, true>;
@@ -101,6 +101,18 @@ export const listJobs = async (params: {
   });
 };
 
+export const listWorkers = async (params: {
+  typeName?: string;
+  signal?: AbortSignal;
+}): Promise<Worker[]> => {
+  const searchParams = new URLSearchParams();
+  if (params.typeName) searchParams.set("typeName", params.typeName);
+  const queryString = searchParams.toString();
+  return fetchSeroval<Worker[]>(`/workers${queryString ? `?${queryString}` : ""}`, {
+    signal: params.signal,
+  });
+};
+
 export type ChainJobsPage = {
   jobs: UnknownJob[];
   jobBlockers: Record<string, UnknownChain[]>;
@@ -172,6 +184,18 @@ export const getJobDetail = async (
 ): Promise<{ job: UnknownJob; continuation: UnknownJob | null; blockers: UnknownChain[] }> =>
   fetchSeroval(`/jobs/${encodeURIComponent(jobId)}`, { signal: params.signal });
 
+export const getWorker = async (
+  workerId: string,
+  params: { signal?: AbortSignal } = {},
+): Promise<{ worker: Worker }> =>
+  fetchSeroval(`/workers/${encodeURIComponent(workerId)}`, { signal: params.signal });
+
+export const listWorkerJobs = async (
+  workerId: string,
+  params: { signal?: AbortSignal } = {},
+): Promise<UnknownJob[]> =>
+  fetchSeroval(`/workers/${encodeURIComponent(workerId)}/jobs`, { signal: params.signal });
+
 export const getChainsByIds = async (
   ids: string[],
   params: { signal?: AbortSignal } = {},
@@ -208,6 +232,7 @@ type JobTypeCounts = {
   pending: { count: number; hasMore: boolean };
   running: { count: number; hasMore: boolean };
   completed: { count: number; hasMore: boolean };
+  liveWorkerCount: number;
 };
 
 export const countByChainTypeNames = async (

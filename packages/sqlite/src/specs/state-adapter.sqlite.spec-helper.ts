@@ -73,6 +73,7 @@ export const extendWithStateSqlite = <T>(
 
         db.exec("DELETE FROM queuert_job_blocker;");
         db.exec("DELETE FROM queuert_job;");
+        db.exec("DELETE FROM queuert_worker;");
       },
       { scope: "test" },
     ],

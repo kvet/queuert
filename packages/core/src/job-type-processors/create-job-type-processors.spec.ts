@@ -14,13 +14,12 @@ const jobTypes = defineJobTypes<Defs>();
 const stateAdapter = await createInProcessStateAdapter();
 const client = await createClient({ stateAdapter, jobTypes });
 
-describe("registry-level backoffConfig / attemptConfig cascade", () => {
+describe("registry-level backoffConfig cascade", () => {
   it("stamps registry-level defaults onto processors that don't override them", () => {
     const registry = createProcessors({
       client,
       jobTypes,
       backoffConfig: { initialDelayMs: 111, multiplier: 2, maxDelayMs: 500 },
-      attemptConfig: { timeoutMs: 1111, heartbeatMs: 500 },
       processors: {
         foo: {
           attemptHandler: async ({ complete }) =>
@@ -39,7 +38,6 @@ describe("registry-level backoffConfig / attemptConfig cascade", () => {
       multiplier: 2,
       maxDelayMs: 500,
     });
-    expect(processor.attemptConfig).toEqual({ timeoutMs: 1111, heartbeatMs: 500 });
   });
 
   it("processor-level overrides take precedence over registry-level", () => {
@@ -47,7 +45,6 @@ describe("registry-level backoffConfig / attemptConfig cascade", () => {
       client,
       jobTypes,
       backoffConfig: { initialDelayMs: 111, multiplier: 2, maxDelayMs: 500 },
-      attemptConfig: { timeoutMs: 1111, heartbeatMs: 500 },
       processors: {
         foo: {
           attemptHandler: async ({ complete }) =>
@@ -57,7 +54,6 @@ describe("registry-level backoffConfig / attemptConfig cascade", () => {
               ),
             ),
           backoffConfig: { initialDelayMs: 999, multiplier: 3, maxDelayMs: 9999 },
-          attemptConfig: { timeoutMs: 9999, heartbeatMs: 1000 },
         },
       },
     });
@@ -68,7 +64,6 @@ describe("registry-level backoffConfig / attemptConfig cascade", () => {
       multiplier: 3,
       maxDelayMs: 9999,
     });
-    expect(processor.attemptConfig).toEqual({ timeoutMs: 9999, heartbeatMs: 1000 });
   });
 
   it("leaves processors untouched when registry provides no defaults", () => {
@@ -89,6 +84,5 @@ describe("registry-level backoffConfig / attemptConfig cascade", () => {
 
     const processor = (registry as unknown as Record<string, any>).foo;
     expect(processor.backoffConfig).toBeUndefined();
-    expect(processor.attemptConfig).toBeUndefined();
   });
 });

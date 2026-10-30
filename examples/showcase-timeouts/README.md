@@ -2,7 +2,7 @@
 
 Timeout patterns for job processing.
 
-Scenarios: cooperative timeout via `AbortController` composed with the job signal; the attempt timeout via `attemptConfig`, which a crashed or stalled worker stops extending so the job is reclaimed.
+Scenarios: cooperative timeout via `AbortController` composed with the job signal; the worker `lease`, which a crashed or stalled worker stops renewing so its jobs are reclaimed.
 
 ## Running
 

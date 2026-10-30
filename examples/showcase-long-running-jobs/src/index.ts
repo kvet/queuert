@@ -1,10 +1,10 @@
 /**
  * Long-Running Jobs Showcase
  *
- * Demonstrates a job whose work takes longer than its attempt timeout.
+ * Demonstrates a job whose work takes longer than its worker's lease.
  *
  * - The work runs outside any transaction, so no database connection is held while it runs
- * - The worker's heartbeat keeps extending the attempt until the handler returns
+ * - The worker's heartbeat keeps renewing its lease while the handler runs
  * - The handler passes `signal` to its work so it stops if the attempt is lost
  * - When the work is done, the handler opens its own transaction, writes its result and calls complete
  */
@@ -61,16 +61,16 @@ const client = await createClient({
   jobTypes,
 });
 
-const timeoutMs = 1000;
+const lease = { durationMs: 1000, heartbeatMs: 300 };
 
 const worker = await createInProcessWorker({
   client,
+  lease,
   processors: createProcessors({
     client,
     jobTypes,
     processors: {
       "generate-report": {
-        attemptConfig: { timeoutMs, heartbeatMs: 300 },
         attemptHandler: async ({ job, signal, complete }) => {
           console.log(`[generate-report] Rendering ${job.input.sections} sections...`);
 
@@ -98,7 +98,7 @@ const worker = await createInProcessWorker({
 
 const stopWorker = await worker.start();
 
-console.log(`\n--- Long-running job (attempt timeout ${timeoutMs}ms) ---\n`);
+console.log(`\n--- Long-running job (worker lease ${lease.durationMs}ms) ---\n`);
 
 const startedAt = Date.now();
 const chain = await withTransactionHooks(async (transactionHooks) =>
@@ -125,12 +125,12 @@ console.log(
   `\nReport ${chain.input.reportId} is ${report.status} (generated at ${result.output.generatedAt})`,
 );
 console.log(
-  `Took ${elapsedMs}ms in attempt ${job?.attempt}, longer than the ${timeoutMs}ms timeout`,
+  `Took ${elapsedMs}ms in attempt ${job?.attempt}, longer than the ${lease.durationMs}ms lease`,
 );
 assert.equal(report.status, "ready");
 assert.equal(report.body.split("\n").length, 6);
 assert.equal(job?.attempt, 1);
-assert.ok(elapsedMs > timeoutMs);
+assert.ok(elapsedMs > lease.durationMs);
 
 await stopWorker();
 await notifyAdapter.close();

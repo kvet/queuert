@@ -1,13 +1,13 @@
 ---
 title: Dashboard
-description: Embeddable web UI for observing chains and jobs.
+description: Embeddable web UI for observing chains, jobs and workers.
 sidebar:
   order: 5
 ---
 
 import { Aside, Badge, Steps } from "@astrojs/starlight/components";
 
-`@queuert/dashboard` provides an embeddable web UI for observing chains and jobs. It mounts as a single `fetch` handler on your existing server -- no external build steps or runtime dependencies beyond `queuert`.
+`@queuert/dashboard` provides an embeddable web UI for observing chains, jobs and workers. It mounts as a single `fetch` handler on your existing server -- no external build steps or runtime dependencies beyond `queuert`.
 
 <Aside type="caution" title="Experimental">
   API may change between minor versions.
@@ -53,28 +53,29 @@ import { Aside, Badge, Steps } from "@astrojs/starlight/components";
 
 The dashboard provides:
 
-- **Overview** -- Totals across all chain and job types, plus the busiest types of each kind
-- **Chain and job types** -- Every type with its per-status counts, filterable by status
+- **Overview** -- Totals across all chain and job types and workers, and the busiest types of each kind
+- **Chain and job types** -- Every type with its per-status counts, filterable by status, and each job type's live worker count with a warning when it has pending jobs and no live worker
 - **Chain and job lists** -- One type at a time, with status and role filters, sorting, and input and output previews on every row
 - **Chain detail** -- The chain's jobs in sequence, the blockers each job waited on, and the jobs in other chains that wait on this chain
 - **Job detail** -- Input, output, the last error, attempt info, and the continuation link
+- **Workers** -- Every worker with its job types, concurrency and lease, and the jobs running under each
 - **Find by ID or type** -- Look up any chain or job by ID, or jump to a chain or job type by name
 
 Supports a small set of mutations (running a scheduled job now, deleting a chain) in addition to read queries. Add authentication middleware before the dashboard handler to restrict access.
 
 ## UI views
 
-The top bar shows the dashboard's version next to the logo and holds the navigation (Overview, Chains, Jobs), **Find by ID or type** (`⌘K` / `Ctrl+K`), a theme switch (System, Light, Dark), and a link to these docs. Every filter lives in the URL, so any view can be bookmarked or shared.
+The top bar shows the dashboard's version next to the logo and holds the navigation (Overview, Chains, Jobs, Workers), **Find by ID or type** (`⌘K` / `Ctrl+K`), a theme switch (System, Light, Dark), and a link to these docs. Every filter lives in the URL, so any view can be bookmarked or shared.
 
 ### Overview
 
-![Overview with status bars and the busiest chain and job types](../../../assets/dashboard/overview.png)
+![Overview with chain, job and worker status bars and the busiest chain and job types](../../../assets/dashboard/overview.png)
 
-The home page (`/`). A status panel shows a bar per kind with the totals of every status across all types — running and completed chains; blocked, pending, running and completed jobs — and two lists show the five chain types with the most running chains and the five job types with the most unfinished (blocked, pending or running) jobs. Types with none of that work are left out; each row shows a chip for every status with a non-zero count, completed included. Counts stop at the state adapter's [`countCap`](/queuert/integrations/state-adapters/#limits) (10,000 by default) per type and status, so a total that includes a capped count is shown as a lower bound (`≥`).
+The home page (`/`). A status panel shows a bar per kind with the totals of every status across all types — running and completed chains; blocked, pending, running and completed jobs — and a Workers bar with the number of workers and their running and idle slots, plus how many lost their lease. When any job type has pending jobs and no live worker, the panel links to the job types with pending jobs. Two lists show the five chain types with the most running chains and the five job types with the most unfinished (blocked, pending or running) jobs. Types with none of that work are left out; each row shows a chip for every status with a non-zero count, completed included. Counts stop at the state adapter's [`countCap`](/queuert/integrations/state-adapters/#limits) (10,000 by default) per type and status, so a total that includes a capped count is shown as a lower bound (`≥`).
 
 ### Chain and job types
 
-`/chains/types` and `/jobs/types` list the types by name, one row each: the name and a chip for each status with a non-zero count, which links to the list filtered by that status. A count with a trailing `+` (e.g. `10,000+`) is capped. The same status filter as the lists (All plus each status, with the number of types that have anything in it) narrows the page to the types with chains or jobs in that status and shows only that status's chip.
+`/chains/types` and `/jobs/types` list the types by name, one row each: the name and a chip for each status with a non-zero count, which links to the list filtered by that status. A count with a trailing `+` (e.g. `10,000+`) is capped. A job type row also shows how many workers with a live lease process the type, linking to the worker list filtered by it, and a warning icon when the type has pending jobs and no live worker processes it. The same status filter as the lists (All plus each status, with the number of types that have anything in it) narrows the page to the types with chains or jobs in that status and shows only that status's chip.
 
 ### Chain list
 
@@ -94,13 +95,25 @@ While the chain runs, its header names the current job and that job's status, si
 
 ![Job list with the status filter bar and input previews](../../../assets/dashboard/jobs-list.png)
 
-Lists the jobs of one type, with a filter bar holding the status filter (All, Blocked, Pending, Running and Completed, each with its count) and the sort options. Each row links to the job and to its chain (as "#2 of chain-type · chain-id"), and shows one-line input and, for a tail job, output previews. A warning icon marks an unfinished job whose last attempt failed; hover it for the error. Timing, attempts and the full error live on the job's page.
+Lists the jobs of one type, with a filter bar holding the status filter (All, Blocked, Pending, Running and Completed, each with its count) and the sort options. Each row links to the job and to its chain (as "#2 of chain-type · chain-id"), links a running job's worker, and shows one-line input and, for a tail job, output previews. A warning icon marks an unfinished job whose last attempt failed; hover it for the error. Timing, attempts and the full error live on the job's page.
 
 ### Job detail
 
 ![Job detail with the job input and output](../../../assets/dashboard/job-detail.png)
 
-Shows one job, top to bottom: its details (attempts, timing, and the current attempt's worker and deadline while it runs, or who completed it), its last error if any, input, the job it continued to or its output, and the blocker chains it waited on. A pending job scheduled in the future gets a **Run now** button that makes it due immediately; a failure is reported under the button.
+Shows one job, top to bottom: its attempts and timing, the current attempt's worker and start time while it runs or the worker that completed it, its last error if any, input, the job it continued to or its output, and the blocker chains it waited on. A pending job scheduled in the future gets a **Run now** button that makes it due immediately; a failure is reported under the button.
+
+### Worker list
+
+![Worker list with the job type select and a worker whose lease is lost](../../../assets/dashboard/workers-list.png)
+
+`/workers` lists every worker, oldest first, including a worker whose lease is gone and that was not reclaimed yet. A job type select narrows the list to the workers that process that type. Each row shows the worker's name, its ID, how many jobs it runs out of its concurrency, when it started, and its job types, with a warning icon once its lease is lost.
+
+### Worker detail
+
+![Worker detail with the worker's lease, concurrency and running job](../../../assets/dashboard/worker-detail.png)
+
+Shows one worker: its name, ID, start time, lease end, concurrency, running job count, and its job types, each linking to that type's running jobs. A worker that lost its lease gets a notice that its running jobs are reclaimed by the next live worker. **Running jobs** lists the jobs running under the worker. A worker is removed when it stops or when its lease is reclaimed and no history is kept, so a worker with no row shows as not found, still listing the jobs left running under it until a reclaim takes them.
 
 ### Find by ID or type
 

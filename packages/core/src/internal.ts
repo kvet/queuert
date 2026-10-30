@@ -18,4 +18,7 @@ export {
   type StateJobBlockerInfo,
   type StateJobInfo,
   type StateJobStatus,
+  type StateReclaimedJob,
+  type StateWorker,
+  type StateWorkerInfo,
 } from "./state-adapter/state-adapter.js";

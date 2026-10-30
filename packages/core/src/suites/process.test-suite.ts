@@ -392,7 +392,7 @@ export const processTestSuite = ({ it }: { it: TestAPI<TestSuiteContext> }): voi
                 expect(completedJob.status).toBe("completed");
                 if (completedJob.status === "completed") {
                   expectTypeOf(completedJob.completedBy).toEqualTypeOf<string | null>();
-                  expect(completedJob.completedBy).toMatch(/^worker-[0-9a-f-]{36}$/);
+                  expect(completedJob.completedBy).toMatch(/^[0-9a-f-]{36}$/);
                 }
                 return completedJob;
               });
@@ -428,7 +428,7 @@ export const processTestSuite = ({ it }: { it: TestAPI<TestSuiteContext> }): voi
     const completedJob = await client.getJob({ id: chain.id });
     expect(completedJob?.status).toBe("completed");
     if (completedJob?.status === "completed") {
-      expect(completedJob.completedBy).toMatch(/^worker-[0-9a-f-]{36}$/);
+      expect(completedJob.completedBy).toMatch(/^[0-9a-f-]{36}$/);
     }
   });
 
@@ -986,8 +986,14 @@ export const processTestSuite = ({ it }: { it: TestAPI<TestSuiteContext> }): voi
 
     await withWorkers([await worker.start()], async () => {
       await expect
-        .poll(async () => (await client.getJob({ id: chain.id }))?.status, { timeout: 5000 })
-        .toBe("pending");
+        .poll(
+          async () => {
+            const job = await client.getJob({ id: chain.id });
+            return { status: job?.status, attempt: job?.attempt };
+          },
+          { timeout: 5000 },
+        )
+        .toEqual({ status: "pending", attempt: 1 });
     });
 
     const job = await client.getJob({ id: chain.id });
@@ -1096,10 +1102,10 @@ export const processTestSuite = ({ it }: { it: TestAPI<TestSuiteContext> }): voi
     let aborted: boolean | undefined;
     const worker = await createInProcessWorker({
       client,
+      lease: { durationMs: 1000, heartbeatMs: 20 },
       processors: createProcessors({
         client,
         jobTypes,
-        attemptConfig: { timeoutMs: 1000, heartbeatMs: 20 },
         processors: {
           test: {
             attemptHandler: async ({ signal, complete }) => {
@@ -1219,10 +1225,10 @@ export const processTestSuite = ({ it }: { it: TestAPI<TestSuiteContext> }): voi
     const rolledBack = Promise.withResolvers<AbortSignal>();
     const worker = await createInProcessWorker({
       client,
+      lease: { durationMs: 1000, heartbeatMs: 20 },
       processors: createProcessors({
         client,
         jobTypes,
-        attemptConfig: { timeoutMs: 1000, heartbeatMs: 20 },
         processors: {
           test: {
             attemptHandler: async ({ signal, complete }) => {

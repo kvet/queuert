@@ -4,7 +4,7 @@ import {
   extendWithResourceLeakDetection,
   processErrorHandlingTestSuite,
   processTestSuite,
-  attemptReclaimerTestSuite,
+  workerLivenessTestSuite,
   workerTestSuite,
 } from "queuert/testing";
 import { describe, it } from "vitest";
@@ -30,6 +30,6 @@ describe("Worker", () => {
   workerTestSuite({ it: sqliteNoopIt });
 });
 
-describe("Attempt Reclamation", () => {
-  attemptReclaimerTestSuite({ it: sqliteNoopIt });
+describe("Worker Liveness", () => {
+  workerLivenessTestSuite({ it: sqliteNoopIt });
 });

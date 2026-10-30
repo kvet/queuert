@@ -7,13 +7,14 @@ import {
   listChainTypeNames,
   listJobTypeNames,
 } from "../api.js";
-import { type CappedCount } from "../domain/counts.js";
+import { type CappedCount, isStrandedType } from "../domain/counts.js";
 
 const COUNT_CHUNK = 50;
 
 export type TypeEntry<TStatus extends string> = {
   typeName: string;
   counts: { status: TStatus; count: CappedCount }[];
+  workers?: { liveCount: number; stranded: boolean };
 };
 
 const chunked = async <T>(
@@ -48,6 +49,7 @@ export const loadJobTypes = async (signal: AbortSignal): Promise<TypeEntry<JobSt
   return counts.map((entry) => ({
     typeName: entry.typeName,
     counts: toStatusCounts(JOB_STATUSES, entry),
+    workers: { liveCount: entry.liveWorkerCount, stranded: isStrandedType(entry) },
   }));
 };
 
@@ -65,7 +67,7 @@ export const narrowToStatuses = <TStatus extends string>(
 ): TypeEntry<TStatus>[] =>
   entries
     .map((entry) => ({
-      typeName: entry.typeName,
+      ...entry,
       counts: entry.counts.filter((statusCount) => statuses.includes(statusCount.status)),
     }))
     .filter((entry) => entry.counts.some((statusCount) => statusCount.count.count > 0));

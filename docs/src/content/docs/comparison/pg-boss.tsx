@@ -187,8 +187,8 @@ const Page = () => (
       domain writes. Your handler's domain writes, the chain's completion, and the next step's{" "}
       <code>continueWith</code> all commit in one transaction; <code>complete</code> writes only if
       this attempt still owns the job, so a stale worker's transaction rolls back instead of
-      double-committing. Attempt timeouts, heartbeat, retry, and backoff stay in the worker — long
-      work runs outside any transaction while the worker's heartbeat extends the attempt:
+      double-committing. Worker leases, heartbeat, retry, and backoff stay in the worker — long work
+      runs outside any transaction while the worker's heartbeat renews its lease:
     </p>
     <Code lang="ts">{`
       "send-welcome-email": {

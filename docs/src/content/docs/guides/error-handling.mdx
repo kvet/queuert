@@ -108,7 +108,7 @@ For explicit control over retry timing, see [Rescheduling from a Handler](../sch
 
 ## lastAttemptError
 
-On retry, `job.lastAttemptError` contains the serialized error from the previous attempt. When a worker reclaimed that attempt because it expired, it holds a serialized `JobAttemptExpiredError`. Use it for logging or to adjust retry behavior:
+On retry, `job.lastAttemptError` contains the serialized error from the previous attempt. When a worker reclaimed that attempt because the worker holding it lost its lease or stopped, it holds a serialized `JobAttemptReclaimedError`. Use it for logging or to adjust retry behavior:
 
 ```ts
 attemptHandler: async ({ job, complete }) => {

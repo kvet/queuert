@@ -99,6 +99,17 @@ export const jobTypes = defineJobTypes<{
     output: { index: number; done: true };
     blockers: [{ typeName: "signal" }];
   };
+
+  /*
+   * Scenario 9 - Leftover workers:
+   *   long-task never completes — each one stays `running` under a worker the
+   *   populator leaves behind, so the Workers page has rows to show.
+   */
+  "long-task": {
+    entry: true;
+    input: { label: string };
+    output: { done: true };
+  };
 }>();
 
 export const db = new Database(join(import.meta.dirname, "..", "data.db"));

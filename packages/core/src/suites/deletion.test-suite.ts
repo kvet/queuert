@@ -240,6 +240,7 @@ export const deletionTestSuite = ({ it }: { it: TestAPI<TestSuiteContext> }): vo
     const worker = await createInProcessWorker({
       client,
       concurrency: 1,
+      lease: { durationMs: 1000, heartbeatMs: 100 },
       processors: createProcessors({
         client,
         jobTypes,
@@ -255,7 +256,6 @@ export const deletionTestSuite = ({ it }: { it: TestAPI<TestSuiteContext> }): vo
 
               throw new Error();
             },
-            attemptConfig: { timeoutMs: 1000, heartbeatMs: 100 },
           },
         },
       }),
@@ -424,6 +424,7 @@ export const deletionTestSuite = ({ it }: { it: TestAPI<TestSuiteContext> }): vo
     const worker = await createInProcessWorker({
       client,
       concurrency: 1,
+      lease: { durationMs: 100, heartbeatMs: 10 },
       processors: createProcessors({
         client,
         jobTypes,
@@ -442,7 +443,6 @@ export const deletionTestSuite = ({ it }: { it: TestAPI<TestSuiteContext> }): vo
                 throw error;
               }
             },
-            attemptConfig: { timeoutMs: 100, heartbeatMs: 10 },
           },
         },
       }),

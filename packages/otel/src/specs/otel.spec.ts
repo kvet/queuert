@@ -84,7 +84,7 @@ describe("Metrics", () => {
       await client.awaitChain(chain, completionOptions);
     });
 
-    const workerIdMatcher = expect.stringMatching(/^worker-[0-9a-f-]{36}$/);
+    const workerIdMatcher = expect.stringMatching(/^[0-9a-f-]{36}$/);
 
     await expectMetrics([
       { method: "chainCreated", args: { typeName: "test" } },
@@ -560,7 +560,7 @@ describe("Metrics", () => {
     withWorkers,
     observabilityAdapter,
     log,
-    getMetricNames,
+    expectMetrics,
   }) => {
     const jobTypes = defineJobTypes<{
       test: { entry: true; input: null; output: null };
@@ -574,63 +574,18 @@ describe("Metrics", () => {
       jobTypes,
     });
 
-    let failed = false;
-    const jobStarted = Promise.withResolvers<void>();
-    const jobCompleted = Promise.withResolvers<void>();
-    const attemptConfig = { timeoutMs: 10, heartbeatMs: 100 };
-
-    const worker1 = await createInProcessWorker({
+    const worker = await createInProcessWorker({
       client,
-      concurrency: 1,
-      pollIntervalMs: attemptConfig.timeoutMs,
+      pollIntervalMs: 50,
       processors: createProcessors({
         client,
         jobTypes,
-        attemptConfig,
         processors: {
           test: {
-            attemptHandler: async ({ signal, complete }) => {
-              if (!failed) {
-                failed = true;
-                jobStarted.resolve();
-                try {
-                  await sleep(attemptConfig.heartbeatMs * 2, { signal });
-                } finally {
-                  jobCompleted.resolve();
-                }
-              }
-              return withTransaction(async (txCtx, transactionHooks) =>
+            attemptHandler: async ({ complete }) =>
+              withTransaction(async (txCtx, transactionHooks) =>
                 complete({ ...txCtx, transactionHooks, output: null }),
-              );
-            },
-          },
-        },
-      }),
-    });
-    const worker2 = await createInProcessWorker({
-      client,
-      concurrency: 1,
-      pollIntervalMs: attemptConfig.timeoutMs,
-      processors: createProcessors({
-        client,
-        jobTypes,
-        attemptConfig,
-        processors: {
-          test: {
-            attemptHandler: async ({ signal, complete }) => {
-              if (!failed) {
-                failed = true;
-                jobStarted.resolve();
-                try {
-                  await sleep(attemptConfig.heartbeatMs * 2, { signal });
-                } finally {
-                  jobCompleted.resolve();
-                }
-              }
-              return withTransaction(async (txCtx, transactionHooks) =>
-                complete({ ...txCtx, transactionHooks, output: null }),
-              );
-            },
+              ),
           },
         },
       }),
@@ -639,25 +594,88 @@ describe("Metrics", () => {
     const chain = await withTransaction(async (txCtx, transactionHooks) =>
       client.createChain({ ...txCtx, transactionHooks, typeName: "test", input: null }),
     );
+    await stateAdapter.startWorker({
+      workerId: "crashed",
+      name: null,
+      typeNames: [],
+      concurrency: 1,
+      leaseMs: 1,
+    });
+    await stateAdapter.startJobAttempts({ typeNames: ["test"], workerId: "crashed", limit: 1 });
 
-    await withWorkers([await worker1.start(), await worker2.start()], async () => {
-      await jobStarted.promise;
-      await sleep(10);
-
-      const successChain = await withTransaction(async (txCtx, transactionHooks) =>
-        client.createChain({ ...txCtx, transactionHooks, typeName: "test", input: null }),
-      );
-
-      await Promise.all([
-        client.awaitChain(chain, completionOptions),
-        client.awaitChain(successChain, completionOptions),
-      ]);
-      await jobCompleted.promise;
+    await withWorkers([await worker.start()], async () => {
+      await client.awaitChain(chain, completionOptions);
     });
 
-    const metricNames = await getMetricNames();
-    expect(metricNames).toContain("queuert.job.attempt.reclaimed");
-    expect(metricNames).toContain("queuert.job.attempt.lost");
+    await expectMetrics([
+      { method: "chainCreated" },
+      { method: "jobCreated" },
+      { method: "workerStarted" },
+      { method: "jobAttemptReclaimed" },
+      { method: "jobAttemptStarted" },
+      { method: "jobCompleted" },
+      { method: "chainCompleted" },
+      { method: "jobAttemptCompleted" },
+      { method: "workerStopped" },
+    ]);
+  });
+
+  it("tracks worker lease loss metrics", async ({
+    stateAdapter,
+    notifyAdapter,
+    withWorkers,
+    observabilityAdapter,
+    log,
+    expectMetrics,
+  }) => {
+    const jobTypes = defineJobTypes<{
+      test: { entry: true; input: null; output: null };
+    }>();
+
+    const workerIds: string[] = [];
+    const client = await createClient({
+      stateAdapter: {
+        ...stateAdapter,
+        startWorker: async (params) => {
+          workerIds.push(params.workerId);
+          return stateAdapter.startWorker(params);
+        },
+        extendWorkerLease: async (params) =>
+          params.workerId === workerIds[0] ? undefined : stateAdapter.extendWorkerLease(params),
+      },
+      notifyAdapter,
+      observabilityAdapter,
+      log,
+      jobTypes,
+    });
+
+    const worker = await createInProcessWorker({
+      client,
+      lease: { durationMs: 1000, heartbeatMs: 20 },
+      processors: createProcessors({
+        client,
+        jobTypes,
+        processors: {
+          test: {
+            attemptHandler: async () => {
+              throw new Error("not expected to run");
+            },
+          },
+        },
+      }),
+    });
+
+    await withWorkers([await worker.start()], async () => {
+      await expect.poll(() => workerIds, { timeout: 5000 }).toHaveLength(2);
+    });
+
+    await expectMetrics([
+      { method: "workerStarted" },
+      { method: "workerLeaseLost" },
+      { method: "workerStopped" },
+      { method: "workerStarted" },
+      { method: "workerStopped" },
+    ]);
   });
 
   it("tracks a lost attempt once after a workerless takeover", async ({
@@ -2758,10 +2776,10 @@ describe("Rollback", () => {
       client: workerClient,
       concurrency: 1,
       pollIntervalMs: 50,
+      recoveryBackoffConfig: { initialDelayMs: 10, multiplier: 1, maxDelayMs: 10 },
       processors: createProcessors({
         client,
         jobTypes,
-        attemptConfig: { timeoutMs: 50, heartbeatMs: 500 },
         processors: {
           test: {
             attemptHandler: async ({ complete }) => {
@@ -2792,9 +2810,11 @@ describe("Rollback", () => {
       { method: "workerStarted" },
       { method: "jobAttemptStarted" },
       { method: "stateAdapterError" },
-      // the autocommit error reschedule failed, so the attempt surfaces it as a worker error
+      // the fallback reschedule failed, so the worker reports it and stops; stopWorker reclaims the job
       { method: "workerError" },
       { method: "jobAttemptReclaimed" },
+      { method: "workerStopped" },
+      { method: "workerStarted" },
       { method: "jobAttemptStarted" },
       { method: "jobCompleted" },
       { method: "chainCompleted" },

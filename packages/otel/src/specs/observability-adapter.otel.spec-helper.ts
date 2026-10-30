@@ -21,6 +21,7 @@ import { createOtelObservabilityAdapter } from "../observability-adapter/observa
 const methodToMetricName: Record<string, string> = {
   workerStarted: "queuert.worker.started",
   workerError: "queuert.worker.error",
+  workerLeaseLost: "queuert.worker.lease_lost",
   workerStopped: "queuert.worker.stopped",
   jobCreated: "queuert.job.created",
   jobAttemptStarted: "queuert.job.attempt.started",

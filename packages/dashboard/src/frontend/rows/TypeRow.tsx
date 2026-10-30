@@ -1,4 +1,4 @@
-import { Chip, RowLink } from "@queuert/ui/components";
+import { Chip, RowLink, WarningIcon } from "@queuert/ui/components";
 import { type AnyStatus } from "@queuert/ui/lib";
 import { A } from "@solidjs/router";
 import { For, Show } from "solid-js";
@@ -9,6 +9,7 @@ export const TypeRow = (props: {
   typeName: string;
   counts: { status: AnyStatus; count: CappedCount }[];
   href: (status?: AnyStatus) => string;
+  workers?: { liveCount: number; stranded: boolean };
 }) => (
   <li class="relative px-4 py-3 hover:bg-surface-2/50">
     <RowLink href={props.href()} label={`Open ${props.typeName}`} link={A} />
@@ -32,6 +33,26 @@ export const TypeRow = (props: {
             </Show>
           )}
         </For>
+        <Show when={props.workers}>
+          {(workers) => (
+            <A
+              href={`/workers?typeName=${encodeURIComponent(props.typeName)}`}
+              class="relative z-10 inline-flex items-center gap-1 text-xs text-fg-muted tabular-nums hover:text-fg"
+            >
+              <Show when={workers().stranded}>
+                <span
+                  class="inline-flex shrink-0 items-center"
+                  role="img"
+                  aria-label="No live worker processes this type"
+                  title="No live worker processes this type"
+                >
+                  <WarningIcon size={13} class="text-error-dot" />
+                </span>
+              </Show>
+              {workers().liveCount} {workers().liveCount === 1 ? "worker" : "workers"}
+            </A>
+          )}
+        </Show>
       </div>
     </div>
   </li>

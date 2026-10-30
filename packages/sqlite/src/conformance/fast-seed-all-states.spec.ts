@@ -20,11 +20,17 @@ const jobQuery = `
     chain_trace_context, trace_context,
     continued_to_id IS NOT NULL AS has_continuation,
     chain_completed_at IS NOT NULL AS has_chain_completion,
-    created_at, scheduled_at, attempt_at, attempt_until, completed_at, last_attempt_at
+    created_at, scheduled_at, attempt_at, completed_at, last_attempt_at
   FROM queuert_job
   ORDER BY type_name, chain_index,
     CAST(json_extract(input, '$.index') AS INTEGER),
     CAST(json_extract(input, '$.n') AS INTEGER)
+`;
+
+const workerQuery = `
+  SELECT id, name, type_names, concurrency, lease_until > datetime('now', 'subsec') AS live
+  FROM queuert_worker
+  ORDER BY id
 `;
 
 const blockerQuery = `
@@ -45,7 +51,6 @@ type TimestampRow = {
   created_at: string;
   scheduled_at: string;
   attempt_at: string | null;
-  attempt_until: string | null;
   completed_at: string | null;
   last_attempt_at: string | null;
 };
@@ -59,9 +64,6 @@ const assertTemporalRelationships = (rows: TimestampRow[], label: string) => {
     }
     if (row.attempt_at) {
       expect(row.attempt_at >= row.created_at, `${ctx}: attempt_at >= created_at`).toBe(true);
-    }
-    if (row.attempt_until && row.attempt_at) {
-      expect(row.attempt_until > row.attempt_at, `${ctx}: attempt_until > attempt_at`).toBe(true);
     }
     if (row.completed_at) {
       expect(row.completed_at >= row.created_at, `${ctx}: completed_at >= created_at`).toBe(true);
@@ -88,6 +90,7 @@ describe("fast seed conformance", { timeout: 120_000 }, () => {
       correctDb.exec("ANALYZE");
       const correctJobs = correctDb.prepare(jobQuery).all() as TimestampRow[];
       const correctBlockers = correctDb.prepare(blockerQuery).all();
+      const correctWorkers = correctDb.prepare(workerQuery).all();
 
       // Fast seed
       const fastDb = new Database(":memory:");
@@ -100,6 +103,7 @@ describe("fast seed conformance", { timeout: 120_000 }, () => {
       fastDb.exec("ANALYZE");
       const fastJobs = fastDb.prepare(jobQuery).all() as TimestampRow[];
       const fastBlockers = fastDb.prepare(blockerQuery).all();
+      const fastWorkers = fastDb.prepare(workerQuery).all();
 
       // Structural equivalence (non-timestamp columns)
       const stripTimestamps = (row: TimestampRow) => {
@@ -107,9 +111,8 @@ describe("fast seed conformance", { timeout: 120_000 }, () => {
           created_at: _,
           scheduled_at: _2,
           attempt_at: _3,
-          attempt_until: _4,
-          completed_at: _5,
-          last_attempt_at: _6,
+          completed_at: _4,
+          last_attempt_at: _5,
           ...rest
         } = row;
         return rest;
@@ -118,6 +121,7 @@ describe("fast seed conformance", { timeout: 120_000 }, () => {
         correctJobs.map(stripTimestamps),
       );
       expect(fastBlockers, `scale=${scale} blockers`).toEqual(correctBlockers);
+      expect(fastWorkers, `scale=${scale} workers`).toEqual(correctWorkers);
 
       // Timestamp nullability must match
       const toShape = (row: TimestampRow) => ({
@@ -125,7 +129,6 @@ describe("fast seed conformance", { timeout: 120_000 }, () => {
         chain_index: row.chain_index,
         has_scheduled_at: row.scheduled_at != null,
         has_attempt_at: row.attempt_at != null,
-        has_attempt_until: row.attempt_until != null,
         has_completed_at: row.completed_at != null,
         has_last_attempt_at: row.last_attempt_at != null,
       });

@@ -9,6 +9,8 @@ const it = extendWithVarianceStatePg(extendWithPostgres(baseIt, import.meta.url)
   idType: "text",
   generateId: () => `ok-${crypto.randomUUID()}`,
   validateId: (id) => id.startsWith("ok-"),
+  generateWorkerId: () => `worker-${crypto.randomUUID()}`,
+  validateWorkerId: (id) => id.startsWith("worker-"),
 });
 
 it("index");
@@ -18,6 +20,7 @@ describe("PostgreSQL State Adapter Variance - With validateId", () => {
     expect(tableNames).toContain("queuert_job");
     expect(tableNames).toContain("queuert_job_blocker");
     expect(tableNames).toContain("queuert_migration");
+    expect(tableNames).toContain("queuert_worker");
   });
 
   stateAdapterConformanceTestSuite({ it });

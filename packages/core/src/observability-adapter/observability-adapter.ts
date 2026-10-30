@@ -6,7 +6,9 @@ import {
   type JobBasicData,
   type JobCompletionData,
   type JobProcessingData,
+  type JobReclaimData,
   type WorkerBasicData,
+  type WorkerData,
 } from "./log.js";
 
 /** Input data for creating a job span. */
@@ -121,9 +123,10 @@ export type CompleteBlockerSpanData = {
  */
 export type ObservabilityAdapter = {
   // worker
-  workerStarted: (data: WorkerBasicData & { jobTypeNames: string[] }) => void;
-  workerError: (data: WorkerBasicData & { error: unknown }) => void;
-  workerStopped: (data: WorkerBasicData) => void;
+  workerStarted: (data: WorkerData & { jobTypeNames: string[] }) => void;
+  workerError: (data: WorkerData & { error: unknown }) => void;
+  workerLeaseLost: (data: WorkerData) => void;
+  workerStopped: (data: WorkerData) => void;
 
   // chain
   chainCreated: (data: ChainBasicData & { input: unknown }) => void;
@@ -148,7 +151,7 @@ export type ObservabilityAdapter = {
   jobAttemptLost: (data: JobAttemptData & WorkerBasicData) => void;
   jobAttemptFailed: (data: JobProcessingData & WorkerBasicData & { error: unknown }) => void;
   jobAttemptCompleted: (data: JobCompletionData & WorkerBasicData) => void;
-  jobAttemptReclaimed: (data: JobAttemptData & WorkerBasicData) => void;
+  jobAttemptReclaimed: (data: JobAttemptData & WorkerBasicData & JobReclaimData) => void;
 
   // notify adapter
   notifyAdapterError: (data: { operation: keyof NotifyAdapter; error: unknown }) => void;

@@ -17,6 +17,7 @@ import {
 } from "./entities/job.js";
 import { type OrderDirection, type Page } from "./entities/pagination.js";
 import { type ScheduleOptions } from "./entities/schedule.js";
+import { type Worker, mapStateWorkerToWorker } from "./entities/worker.js";
 import {
   BlockerReferenceError,
   ChainNotFoundError,
@@ -176,7 +177,7 @@ type CreateChainsResult<
  *
  * Methods are split into three categories:
  * - **Mutating** — `createChain`, `createChains`, `completeChain`, `deleteChain`, `deleteChains`, `rescheduleJob`, `rescheduleJobs`. Require `transactionHooks` and a transaction context; they throw `Error` if called without a transaction context, or with one the state adapter's `isTransaction` reports as outside an open transaction.
- * - **Read-only** — `getChain`, `getChains`, `getJob`, `getJobs`, `listChainTypeNames`, `listJobTypeNames`, `countByChainTypeNames`, `countByJobTypeNames`, `listChains`, `listJobs`, `listChainJobs`, `getJobBlockers`, `listBlockedJobs`. Accept an optional transaction context.
+ * - **Read-only** — `getChain`, `getChains`, `getJob`, `getJobs`, `listChainTypeNames`, `listJobTypeNames`, `countByChainTypeNames`, `countByJobTypeNames`, `listChains`, `listJobs`, `listChainJobs`, `getJobBlockers`, `listBlockedJobs`, `getWorker`, `getWorkers`, `listWorkers`, `countWorkersByTypeNames`, `listWorkerJobs`. Accept an optional transaction context.
  * - **Waiting** — `awaitChain`. Takes no transaction context: it polls outside any transaction and listens for notify adapter events.
  */
 export type Client<
@@ -525,7 +526,7 @@ export type Client<
       | { status?: undefined; orderBy?: "createdAt" }
       | { status: "blocked"; orderBy?: "createdAt" | "scheduledAt" }
       | { status: "pending"; orderBy?: "createdAt" | "scheduledAt" }
-      | { status: "running"; orderBy?: "createdAt" | "attemptAt" | "attemptUntil" }
+      | { status: "running"; orderBy?: "createdAt" | "attemptAt" }
       | { status: "completed"; orderBy?: "createdAt" | "completedAt" }
     ) &
       Partial<GetStateAdapterTxContext<TStateAdapter>>,
@@ -590,6 +591,46 @@ export type Client<
       limit?: number;
     } & Partial<GetStateAdapterTxContext<TStateAdapter>>,
   ) => Promise<Page<TBlockedJob>>;
+
+  /** Get a worker by ID, `undefined` when it has no row: it stopped or its lease was reclaimed. */
+  getWorker: (
+    options: { id: string } & Partial<GetStateAdapterTxContext<TStateAdapter>>,
+  ) => Promise<Worker | undefined>;
+
+  /**
+   * Get multiple workers by ID. Returns a positional array aligned with the input `ids` —
+   * `undefined` for any ID with no row.
+   */
+  getWorkers: (
+    options: { ids: string[] } & Partial<GetStateAdapterTxContext<TStateAdapter>>,
+  ) => Promise<(Worker | undefined)[]>;
+
+  /**
+   * List every worker, ordered by `startedAt`, then id. Pass `typeName` for only the workers
+   * that process it. Includes workers whose lease is no longer live and that were not reclaimed
+   * yet.
+   */
+  listWorkers: (
+    options?: { typeName?: string } & Partial<GetStateAdapterTxContext<TStateAdapter>>,
+  ) => Promise<Worker[]>;
+
+  /**
+   * Returns, for each job type name in input order, how many workers with a live lease process
+   * it.
+   */
+  countWorkersByTypeNames: (
+    options: { typeNames: string[] } & Partial<GetStateAdapterTxContext<TStateAdapter>>,
+  ) => Promise<number[]>;
+
+  /**
+   * List every job running under a worker, ordered by `attemptAt`, then id, whether or not the
+   * worker still has a row.
+   */
+  listWorkerJobs: <
+    TJobTypeName extends JobTypeNames<TJobTypeDefinitions> = JobTypeNames<TJobTypeDefinitions>,
+  >(
+    options: { workerId: string } & Partial<GetStateAdapterTxContext<TStateAdapter>>,
+  ) => Promise<ResolvedJob<TJobId, TJobTypeDefinitions, TJobTypeName>[]>;
 };
 
 const assertChainTypeName = (
@@ -1325,7 +1366,7 @@ export const createClient = async <
         | { status?: undefined; orderBy?: "createdAt" }
         | { status: "blocked"; orderBy?: "createdAt" | "scheduledAt" }
         | { status: "pending"; orderBy?: "createdAt" | "scheduledAt" }
-        | { status: "running"; orderBy?: "createdAt" | "attemptAt" | "attemptUntil" }
+        | { status: "running"; orderBy?: "createdAt" | "attemptAt" }
         | { status: "completed"; orderBy?: "createdAt" | "completedAt" }
       ) &
         Partial<GetStateAdapterTxContext<TStateAdapter>>,
@@ -1496,6 +1537,53 @@ export const createClient = async <
         items: stateJobPage.items.map((stateJob) => mapStateJobToJob(stateJob) as TBlockedJob),
         nextCursor: stateJobPage.nextCursor,
       };
+    },
+
+    getWorker: async ({ id, ...rest }) => {
+      const [worker] = await client.getWorkers({
+        ids: [id],
+        ...(rest as Partial<GetStateAdapterTxContext<TStateAdapter>>),
+      });
+      return worker;
+    },
+
+    getWorkers: async ({ ids, ...rest }) => {
+      if (ids.length === 0) return [];
+      const stateWorkers = await helpers.stateAdapter.getWorkers({
+        txCtx: normalizeTxCtx(rest),
+        workerIds: ids,
+      });
+      return stateWorkers.map((stateWorker) =>
+        stateWorker ? mapStateWorkerToWorker(stateWorker) : undefined,
+      );
+    },
+
+    listWorkers: async (options) => {
+      const { typeName, ...rest } = options ?? {};
+      const stateWorkers = await helpers.stateAdapter.listWorkers({
+        txCtx: normalizeTxCtx(rest),
+        typeName,
+      });
+      return stateWorkers.map(mapStateWorkerToWorker);
+    },
+
+    countWorkersByTypeNames: async ({ typeNames, ...rest }) =>
+      helpers.stateAdapter.countWorkersByTypeNames({ txCtx: normalizeTxCtx(rest), typeNames }),
+
+    listWorkerJobs: async <
+      TJobTypeName extends JobTypeNames<TJobTypeDefinitions> = JobTypeNames<TJobTypeDefinitions>,
+    >(
+      options: { workerId: string } & Partial<GetStateAdapterTxContext<TStateAdapter>>,
+    ): Promise<ResolvedJob<TJobId, TJobTypeDefinitions, TJobTypeName>[]> => {
+      const { workerId, ...rest } = options;
+      const stateJobs = await helpers.stateAdapter.listWorkerJobs({
+        txCtx: normalizeTxCtx(rest),
+        workerId,
+      });
+      return stateJobs.map(
+        (stateJob) =>
+          mapStateJobToJob(stateJob) as ResolvedJob<TJobId, TJobTypeDefinitions, TJobTypeName>,
+      );
     },
   };
   return client;

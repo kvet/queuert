@@ -3,6 +3,7 @@ import { type ObservabilityAdapter } from "./observability-adapter.js";
 export const createNoopObservabilityAdapter = (): ObservabilityAdapter => ({
   workerStarted: () => {},
   workerError: () => {},
+  workerLeaseLost: () => {},
   workerStopped: () => {},
 
   chainCreated: () => {},

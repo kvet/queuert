@@ -55,7 +55,7 @@ Bridges your pub/sub client (Redis, PostgreSQL, etc.) with the notify adapter. S
 
 ### Worker
 
-Processes jobs by polling for available work. Workers automatically extend attempts during long-running operations and handle retries with configurable backoff. See [In-Process Worker](/queuert/advanced/in-process-worker/) and [Job Processing](/queuert/advanced/job-processing/).
+Processes jobs by polling for available work. Each worker holds a lease it keeps renewing, so its attempts can run however long they take, and handles retries with configurable backoff. See [In-Process Worker](/queuert/advanced/in-process-worker/) and [Job Processing](/queuert/advanced/job-processing/).
 
 ### Logging
 

@@ -10,7 +10,7 @@ pnpm install
 # Terminal 1 — start the dashboard
 pnpm --filter example-dashboard dashboard
 
-# Terminal 2 — populate jobs (single jobs, continuations, blockers, retries)
+# Terminal 2 — populate jobs (single jobs, continuations, blockers, retries, leftover workers)
 pnpm --filter example-dashboard start
 ```
 

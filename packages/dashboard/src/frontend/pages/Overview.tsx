@@ -3,8 +3,11 @@ import { type AnyStatus, CHAIN_STATUSES, JOB_STATUSES, statusClasses } from "@qu
 import { A } from "@solidjs/router";
 import { For, Match, Show, Switch, createMemo } from "solid-js";
 
+import { listWorkers } from "../api.js";
 import { type CappedCount, formatSum, sumCounts } from "../domain/counts.js";
+import { summarizeWorkers } from "../domain/workers.js";
 import { TypeRow } from "../rows/TypeRow.js";
+import { now } from "../state/clock.js";
 import { createLoader } from "../state/createLoader.js";
 import { EmptyState, ErrorState, SkeletonRows, linkClass } from "../ui/kit.js";
 import { type TypeEntry, countOf, loadChainTypes, loadJobTypes, typeListHref } from "./typeData.js";
@@ -123,12 +126,81 @@ const TopTypes = (props: {
   );
 };
 
+const WorkerBreakdown = (props: {
+  workers: { runningJobCount: number; concurrency: number; leaseUntil: Date }[];
+  strandedTypeCount: number;
+}) => {
+  const summary = () => summarizeWorkers(props.workers, new Date(now()));
+
+  return (
+    <div class="grid grid-cols-1 gap-x-6 gap-y-2 px-4 py-3 sm:grid-cols-[8rem_minmax(0,1fr)] sm:items-center">
+      <A href="/workers" class="flex items-baseline gap-2 hover:underline">
+        <span class="text-xs font-semibold font-mono tracking-wider text-fg-muted uppercase">
+          Workers
+        </span>
+        <span class="font-semibold tabular-nums">{summary().count.toLocaleString()}</span>
+      </A>
+      <div class="flex min-w-0 flex-col gap-2">
+        <div class="flex h-2 gap-px overflow-hidden bg-surface-2" aria-hidden="true">
+          <Show when={summary().runningSlots > 0}>
+            <span
+              class={`min-w-0.5 ${statusClasses.running.dot}`}
+              style={{ "flex-grow": summary().runningSlots, "flex-basis": "0" }}
+            />
+          </Show>
+          <Show when={summary().idleSlots > 0}>
+            <span
+              class="min-w-0.5 bg-border"
+              style={{ "flex-grow": summary().idleSlots, "flex-basis": "0" }}
+            />
+          </Show>
+        </div>
+        <ul class="flex flex-wrap gap-x-5 gap-y-1 text-xs text-fg-muted">
+          <li class="inline-flex items-center gap-1.5">
+            <StatusDot status="running" />
+            running slots
+            <span class="font-semibold text-fg tabular-nums">
+              {summary().runningSlots.toLocaleString()}
+            </span>
+          </li>
+          <li class="inline-flex items-center gap-1.5">
+            <span class="inline-block size-2 shrink-0 rounded-xs bg-border" aria-hidden="true" />
+            idle slots
+            <span class="font-semibold text-fg tabular-nums">
+              {summary().idleSlots.toLocaleString()}
+            </span>
+          </li>
+          <Show when={summary().leaseLostCount > 0}>
+            <li class="inline-flex items-center gap-1.5 text-error-fg">
+              lease lost
+              <span class="font-semibold tabular-nums">
+                {summary().leaseLostCount.toLocaleString()}
+              </span>
+            </li>
+          </Show>
+        </ul>
+        <Show when={props.strandedTypeCount > 0}>
+          <A href="/jobs/types?status=pending" class="text-xs text-error-fg hover:underline">
+            {props.strandedTypeCount}{" "}
+            {props.strandedTypeCount === 1 ? "job type has" : "job types have"} pending jobs and no
+            live worker
+          </A>
+        </Show>
+      </div>
+    </div>
+  );
+};
+
 export const Overview = () => {
   const data = createLoader(
     () => true,
     async (_, signal) => {
-      const [chains, jobs] = await Promise.all([loadChainTypes(signal), loadJobTypes(signal)]);
-      return { chains, jobs };
+      const [chains, jobs, workers] = await Promise.all([
+        loadChainTypes(signal),
+        loadJobTypes(signal),
+        listWorkers({ signal }),
+      ]);
+      return { chains, jobs, workers };
     },
   );
 
@@ -173,6 +245,12 @@ export const Overview = () => {
                   href="/jobs/types"
                   statuses={JOB_STATUSES}
                   entries={loaded().jobs}
+                />
+                <WorkerBreakdown
+                  workers={loaded().workers}
+                  strandedTypeCount={
+                    loaded().jobs.filter((entry) => entry.workers?.stranded).length
+                  }
                 />
               </Box>
               <div class="grid gap-6 lg:grid-cols-2">

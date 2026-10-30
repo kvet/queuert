@@ -5,7 +5,7 @@ import {
   extendWithResourceLeakDetection,
   processErrorHandlingTestSuite,
   processTestSuite,
-  attemptReclaimerTestSuite,
+  workerLivenessTestSuite,
   workerTestSuite,
 } from "queuert/testing";
 import { describe, it } from "vitest";
@@ -34,6 +34,6 @@ describe("Worker", () => {
   workerTestSuite({ it: postgresNoopIt });
 });
 
-describe("Attempt Reclamation", () => {
-  attemptReclaimerTestSuite({ it: postgresNoopIt });
+describe("Worker Liveness", () => {
+  workerLivenessTestSuite({ it: postgresNoopIt });
 });

@@ -4,8 +4,6 @@ None
 
 # Short term
 
-- [EPIC] Worker liveness. Move attempt ownership to worker. Have workers to be registered in the DB and have a heartbeat. See `design/worker-liveness.md`.
-  - [TASK] Retry failed worker statements before giving up on the attempt — a heartbeat extension that fails with an unexpected error (e.g. a transient DB error) aborts the attempt's `signal` and stops extending at once, so the handler gives up or runs on without an extended attempt and can be reclaimed mid-run. Likewise, if the fallback reschedule after a failed attempt throws, the job stays `running` until its attempt expires. Retry each a few times within the attempt timeout before giving up.
 - [TASK] Built-in cleanup. See `design/builtin-cleanup.md`.
 - [TASK] Enforce json-serializable inputs and outputs (like no Date in job definitions) — see `design/json-serializable-types.md`
 - [TASK] Reschedule reason and failure-streak backoff — persist `failure_streak` and the `complete({ reschedule, reason })` reason, compute backoff from the streak instead of `attempt`. See `design/reschedule-reason-and-backoff.md`.

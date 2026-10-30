@@ -56,9 +56,15 @@ const startAttempt = async (
 ) =>
   stateAdapter.startJobAttempts({
     workerId: "worker-1",
-    timeoutMsByTypeName: { [typeName]: 60_000 },
+    typeNames: [typeName],
     limit: 1,
   });
+
+const startWorker = async (
+  stateAdapter: Awaited<ReturnType<typeof createInProcessStateAdapter>>,
+  workerId: string,
+  typeNames: string[],
+) => stateAdapter.startWorker({ workerId, name: null, typeNames, concurrency: 2, leaseMs: 60_000 });
 
 const completeJob = async (
   stateAdapter: Awaited<ReturnType<typeof createInProcessStateAdapter>>,
@@ -588,7 +594,7 @@ describe("Dashboard API", () => {
       for (const query of [
         "typeName=test-type&status=pending&orderBy=completedAt",
         "typeName=test-type&status=running&orderBy=scheduledAt",
-        "typeName=test-type&status=completed&orderBy=attemptUntil",
+        "typeName=test-type&status=completed&orderBy=attemptAt",
         "typeName=test-type&orderBy=bogus",
       ]) {
         const res = await request(`/api/jobs?${query}`);
@@ -649,6 +655,127 @@ describe("Dashboard API", () => {
       expect(body[1].typeName).toBe("type-b");
       expect(body[1].blocked.count).toBe(0);
       expect(body[1].running.count).toBe(1);
+    });
+
+    it("returns the live worker count for each requested type name", async () => {
+      const { request, stateAdapter } = await createTestDashboard();
+      await startWorker(stateAdapter, "worker-a", ["type-a", "type-b"]);
+      await startWorker(stateAdapter, "worker-b", ["type-a"]);
+
+      const body = await parseBody(
+        await request("/api/job-types/counts?typeNames=type-a,type-b,type-c"),
+      );
+
+      expect(
+        body.map((entry: { typeName: string; liveWorkerCount: number }) => [
+          entry.typeName,
+          entry.liveWorkerCount,
+        ]),
+      ).toEqual([
+        ["type-a", 2],
+        ["type-b", 1],
+        ["type-c", 0],
+      ]);
+    });
+  });
+
+  describe("GET /api/workers", () => {
+    it("returns an empty array when no worker has a row", async () => {
+      const { request } = await createTestDashboard();
+      const res = await request("/api/workers");
+
+      expect(res.status).toBe(200);
+      expect(await parseBody(res)).toEqual([]);
+    });
+
+    it("returns every worker, or only those processing typeName", async () => {
+      const { request, stateAdapter } = await createTestDashboard();
+      await startWorker(stateAdapter, "worker-a", ["type-a"]);
+      await startWorker(stateAdapter, "worker-b", ["type-b"]);
+
+      const all = await parseBody(await request("/api/workers"));
+      const typeB = await parseBody(await request("/api/workers?typeName=type-b"));
+
+      expect(all.map((worker: { id: string }) => worker.id).sort()).toEqual([
+        "worker-a",
+        "worker-b",
+      ]);
+      expect(typeB.map((worker: { id: string }) => worker.id)).toEqual(["worker-b"]);
+      expect(typeB[0].typeNames).toEqual(["type-b"]);
+      expect(typeB[0].concurrency).toBe(2);
+      expect(typeB[0].startedAt).toBeInstanceOf(Date);
+    });
+  });
+
+  describe("GET /api/workers/:workerId", () => {
+    it("returns the worker with its running job count", async () => {
+      const { request, stateAdapter } = await createTestDashboard();
+      await startWorker(stateAdapter, "worker-1", ["type-a"]);
+      await createJob(stateAdapter, "type-a", null);
+      await startAttempt(stateAdapter, "type-a");
+
+      const res = await request("/api/workers/worker-1");
+      const body = await parseBody(res);
+
+      expect(res.status).toBe(200);
+      expect(body.worker.id).toBe("worker-1");
+      expect(body.worker.runningJobCount).toBe(1);
+      expect(body.worker.leaseUntil).toBeInstanceOf(Date);
+    });
+
+    it("returns 404 for a worker with no row", async () => {
+      const { request } = await createTestDashboard();
+      const res = await request("/api/workers/missing-worker");
+
+      expect(res.status).toBe(404);
+      expect(await parseBody(res)).toEqual({ error: "Worker not found" });
+    });
+
+    it("decodes a worker id containing / and %", async () => {
+      const { request, stateAdapter } = await createTestDashboard();
+      await startWorker(stateAdapter, "pod/7%a", ["type-a"]);
+
+      const body = await parseBody(await request(`/api/workers/${encodeURIComponent("pod/7%a")}`));
+
+      expect(body.worker.id).toBe("pod/7%a");
+    });
+
+    it("returns 404 for a malformed worker id", async () => {
+      const { request } = await createTestDashboard();
+      const res = await request("/api/workers/%E0");
+
+      expect(res.status).toBe(404);
+      expect(await parseBody(res)).toEqual({ error: "Worker not found" });
+    });
+  });
+
+  describe("GET /api/workers/:workerId/jobs", () => {
+    it("returns the jobs running under the worker", async () => {
+      const { request, stateAdapter } = await createTestDashboard();
+      const job = await createJob(stateAdapter, "type-a", null);
+      await startAttempt(stateAdapter, "type-a");
+
+      const body = await parseBody(await request("/api/workers/worker-1/jobs"));
+
+      expect(
+        body.map((running: { id: string; status: string }) => [running.id, running.status]),
+      ).toEqual([[job.id, "running"]]);
+    });
+
+    it("returns an empty array for an unknown worker", async () => {
+      const { request } = await createTestDashboard();
+      const res = await request("/api/workers/missing-worker/jobs");
+
+      expect(res.status).toBe(200);
+      expect(await parseBody(res)).toEqual([]);
+    });
+
+    it("returns an empty array for a malformed worker id", async () => {
+      const { request } = await createTestDashboard();
+      const res = await request("/api/workers/%E0/jobs");
+
+      expect(res.status).toBe(200);
+      expect(await parseBody(res)).toEqual([]);
     });
   });
 
@@ -804,7 +931,7 @@ describe("Dashboard API", () => {
 
       await stateAdapter.startJobAttempts({
         workerId: "test-worker",
-        timeoutMsByTypeName: { "test-type": 60_000 },
+        typeNames: ["test-type"],
         limit: 1,
       });
 

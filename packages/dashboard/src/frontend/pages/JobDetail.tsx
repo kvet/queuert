@@ -1,7 +1,7 @@
 import { Box, Pips, StatusPill } from "@queuert/ui/components";
 import { shortId } from "@queuert/ui/lib";
 import { A, useParams } from "@solidjs/router";
-import { For, type JSX, Match, Show, Switch } from "solid-js";
+import { For, Match, Show, Switch } from "solid-js";
 
 import { type UnknownJob, getJobDetail, isNotFound } from "../api.js";
 import { elapsedMs, formatDuration } from "../domain/duration.js";
@@ -15,22 +15,8 @@ import { now } from "../state/clock.js";
 import { createLoader } from "../state/createLoader.js";
 import { CopyButton, IdChip } from "../ui/IdChip.js";
 import { JsonViewer } from "../ui/JsonViewer.js";
-import { ErrorState, NotFoundState, SkeletonRows, linkClass } from "../ui/kit.js";
+import { ErrorState, Fact, NotFoundState, SkeletonRows, linkClass } from "../ui/kit.js";
 import { Time } from "../ui/Time.js";
-
-const Fact = (props: { label: string; hint?: string; wide?: boolean; children: JSX.Element }) => (
-  <div class={`min-w-0 ${props.wide ? "col-span-2" : ""}`}>
-    <dt class="text-xs text-fg-muted" title={props.hint}>
-      {props.label}
-      <Show when={props.hint}>
-        <span class="ml-1 cursor-help text-fg-subtle" aria-label={props.hint}>
-          ⓘ
-        </span>
-      </Show>
-    </dt>
-    <dd class="mt-0.5 text-sm break-words">{props.children}</dd>
-  </div>
-);
 
 export const JobDetail = () => {
   const params = useParams<{ id: string }>();
@@ -154,29 +140,15 @@ export const JobDetail = () => {
                         {(current) => (
                           <>
                             <Fact label="Worker" wide>
-                              <code class="font-mono text-xs break-all">{current().attemptBy}</code>
+                              <A
+                                href={`/workers/${encodeURIComponent(current().attemptBy)}`}
+                                class={`${linkClass} font-mono text-xs break-all`}
+                              >
+                                {current().attemptBy}
+                              </A>
                             </Fact>
                             <Fact label="Started">
                               <Time date={current().attemptAt} />
-                            </Fact>
-                            <Fact label="Deadline">
-                              <Show
-                                when={current().attemptUntil}
-                                fallback={<span class="text-fg-muted">set on first heartbeat</span>}
-                              >
-                                {(until) => (
-                                  <Show
-                                    when={until().getTime() > now()}
-                                    fallback={
-                                      <span class="font-medium text-status-pending-fg">
-                                        passed · may be reclaimed
-                                      </span>
-                                    }
-                                  >
-                                    <Time date={until()} />
-                                  </Show>
-                                )}
-                              </Show>
                             </Fact>
                           </>
                         )}

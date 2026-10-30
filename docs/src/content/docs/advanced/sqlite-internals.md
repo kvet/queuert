@@ -44,8 +44,7 @@ The `{tablePrefix}job` table stores all job state:
 | `last_attempt_at`         | `TEXT`                         | ISO 8601 timestamp                                                 |
 | `last_attempt_error`      | `TEXT`                         | Error as JSON string                                               |
 | `attempt_at`              | `TEXT`                         | ISO 8601 timestamp — set when a worker starts an attempt           |
-| `attempt_by`              | `TEXT`                         | Worker ID holding the attempt                                      |
-| `attempt_until`           | `TEXT`                         | ISO 8601 timestamp — attempt expiry deadline                       |
+| `attempt_by`              | `TEXT`                         | ID of the worker holding the attempt                               |
 | `trace_context`           | `TEXT`                         | W3C traceparent                                                    |
 | `chain_status`            | `TEXT`                         | **Head rows only.** `running` or `completed` (CHECK-constrained).  |
 | `chain_completed_at`      | `TEXT`                         | **Head rows only.** ISO 8601 timestamp — the chain's completion.   |
@@ -67,22 +66,38 @@ The adapter writes the `chain_*` columns only on head rows (`chain_index = 0`); 
 
 Primary key: `(job_id, blocked_by_chain_id, index)`.
 
+### Worker Table
+
+The `{tablePrefix}worker` table holds one row per worker, each with a lease:
+
+| Column        | Type      | Description                                                       |
+| ------------- | --------- | ----------------------------------------------------------------- |
+| `started_at`  | `TEXT`    | ISO 8601 timestamp — when the worker started                      |
+| `lease_until` | `TEXT`    | ISO 8601 timestamp — the worker is live while it is in the future |
+| `concurrency` | `INTEGER` | Most attempts the worker runs at once                             |
+| `id`          | `TEXT`    | Worker ID, from the state adapter's `generateWorkerId`            |
+| `name`        | `TEXT`    | The in-process worker's `workerName`                              |
+| `type_names`  | `TEXT`    | JSON array of the job types the worker processes                  |
+
+Primary key: `id`. A row is inserted by `startWorker`, its `lease_until` moved by `extendWorkerLease`, and it is deleted by `stopWorker` or by the reclaim that finds its lease expired. There is no foreign key from `job.attempt_by` to `worker.id`: a `running` job whose worker row is gone is reclaimed. The table has no index besides its primary key: `listWorkers` and `countWorkersByTypeNames` scan it and filter `type_names` with `json_each`.
+
 ## Indexes
 
 ### Job Table
 
-| Index                     | Definition                                                                                                 | Purpose                                     |
-| ------------------------- | ---------------------------------------------------------------------------------------------------------- | ------------------------------------------- |
-| `chain_deduplication_idx` | `(chain_deduplication_key, created_at DESC) WHERE chain_deduplication_key IS NOT NULL AND chain_index = 0` | Deduplication lookup                        |
-| `chain_index_idx`         | `UNIQUE (chain_id, chain_index) WHERE chain_index > 0`                                                     | Continuation position uniqueness            |
-| `job_idx`                 | `(type_name, created_at)`                                                                                  | All jobs by type and time                   |
-| `job_pending_idx`         | `(type_name, scheduled_at) WHERE status = 'pending'`                                                       | Job acquisition and pending job listing     |
-| `job_blocked_idx`         | `(type_name, scheduled_at) WHERE status = 'blocked'`                                                       | Blocked job listing                         |
-| `job_running_idx`         | `(type_name, attempt_until) WHERE status = 'running'`                                                      | Attempt reclamation and running job listing |
-| `job_completed_idx`       | `(type_name, completed_at) WHERE status = 'completed'`                                                     | Completed job listing                       |
-| `chain_idx`               | `(type_name, created_at) WHERE chain_index = 0`                                                            | Chains by type and time                     |
-| `chain_running_idx`       | `(type_name, created_at) WHERE chain_index = 0 AND chain_status = 'running'`                               | Running chain listing                       |
-| `chain_completed_idx`     | `(type_name, chain_completed_at) WHERE chain_index = 0 AND chain_status = 'completed'`                     | Completed chain listing                     |
+| Index                     | Definition                                                                                                 | Purpose                                                          |
+| ------------------------- | ---------------------------------------------------------------------------------------------------------- | ---------------------------------------------------------------- |
+| `chain_deduplication_idx` | `(chain_deduplication_key, created_at DESC) WHERE chain_deduplication_key IS NOT NULL AND chain_index = 0` | Deduplication lookup                                             |
+| `chain_index_idx`         | `UNIQUE (chain_id, chain_index) WHERE chain_index > 0`                                                     | Continuation position uniqueness                                 |
+| `job_idx`                 | `(type_name, created_at)`                                                                                  | All jobs by type and time                                        |
+| `job_pending_idx`         | `(type_name, scheduled_at) WHERE status = 'pending'`                                                       | Job acquisition and pending job listing                          |
+| `job_blocked_idx`         | `(type_name, scheduled_at) WHERE status = 'blocked'`                                                       | Blocked job listing                                              |
+| `job_running_idx`         | `(type_name, attempt_at) WHERE status = 'running'`                                                         | Running job listing                                              |
+| `job_attempt_by_idx`      | `(attempt_by) WHERE status = 'running'`                                                                    | Reclaim, `stopWorker`, worker job listing and running job counts |
+| `job_completed_idx`       | `(type_name, completed_at) WHERE status = 'completed'`                                                     | Completed job listing                                            |
+| `chain_idx`               | `(type_name, created_at) WHERE chain_index = 0`                                                            | Chains by type and time                                          |
+| `chain_running_idx`       | `(type_name, created_at) WHERE chain_index = 0 AND chain_status = 'running'`                               | Running chain listing                                            |
+| `chain_completed_idx`     | `(type_name, chain_completed_at) WHERE chain_index = 0 AND chain_status = 'completed'`                     | Completed chain listing                                          |
 
 ### Job Blocker Table
 

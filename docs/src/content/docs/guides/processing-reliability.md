@@ -125,10 +125,10 @@ Keep work that must succeed for the job to count as done inside the transaction 
 - **No corrupted state.** Your transaction ensures that partial SQL work is never committed when an error occurs.
 - **No orphaned continuations.** If `complete` was called with `continueWith` and the transaction throws afterward, both the continuation job and the completion are rolled back.
 - **Blocked jobs stay blocked.** If a blocker job's completion is rolled back, dependent jobs remain correctly blocked.
-- **No lost-attempt writes.** `complete` only writes while this attempt still owns the job. If the attempt expired and another worker took the job, or the job was completed or deleted elsewhere, `complete` writes nothing and throws (`JobTakenByAnotherWorkerError`, `JobAlreadyCompletedError` or `JobNotFoundError`), so your transaction rolls back.
+- **No lost-attempt writes.** `complete` only writes while this attempt still owns the job. If its worker lost its lease and another worker reclaimed the job, or the job was completed or deleted elsewhere, `complete` writes nothing and throws (`JobTakenByAnotherWorkerError`, `JobAlreadyCompletedError` or `JobNotFoundError`), so your transaction rolls back.
 - **No defensive `try/catch` needed.** Let exceptions propagate naturally — the worker handles them.
 - **Jobs retry indefinitely.** There is no maximum retry count. Use [discriminated unions or compensation patterns](../error-handling/) to handle permanently failing jobs.
 
 ## See Also
 
-See [examples/showcase-error-recovery](https://github.com/kvet/queuert/tree/main/examples/showcase-error-recovery) for a complete working example. See also [Error Handling](../error-handling/) for user-level error strategy, [Timeouts](../timeouts/) for attempt timeouts, and [Job Processing](/queuert/advanced/job-processing/) reference.
+See [examples/showcase-error-recovery](https://github.com/kvet/queuert/tree/main/examples/showcase-error-recovery) for a complete working example. See also [Error Handling](../error-handling/) for user-level error strategy, [Timeouts](../timeouts/) for cooperative timeouts and the worker lease, and [Job Processing](/queuert/advanced/job-processing/) reference.

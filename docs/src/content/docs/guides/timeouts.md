@@ -1,6 +1,6 @@
 ---
 title: Timeouts
-description: Cooperative timeouts and the attempt timeout.
+description: Cooperative timeouts and the worker lease.
 sidebar:
   order: 8
 ---
@@ -38,17 +38,17 @@ const worker = await createInProcessWorker({
 const stop = await worker.start();
 ```
 
-`attemptConfig` is not a runtime limit: it is the attempt's timeout. The worker sets `attemptUntil` when it acquires the job and its heartbeat extends it every `heartbeatMs` while the handler runs, so a handler may run far longer than `timeoutMs`. The attempt only expires when the worker stops extending it — it crashed, its event loop stalled, or it lost its database connection — and then another worker reclaims the job and starts a new attempt. Use the cooperative `signal` pattern above for real runtime limits.
+The worker `lease` is not a runtime limit: it bounds how long a worker may be unreachable. Each worker renews its lease every `heartbeatMs` while its handlers run, so a handler may run far longer than `durationMs`. A worker's jobs are reclaimed only once it stops renewing — it crashed, its event loop stalled, or it lost its database connection — and then another worker returns them to `pending` for a new attempt. Use the cooperative `signal` pattern above for real runtime limits.
 
 ```ts
 const worker = await createInProcessWorker({
   client,
+  lease: { durationMs: 120_000, heartbeatMs: 30_000 }, // jobs reclaimed about 2 min after the worker stops renewing
   processors: createProcessors({
     client,
     jobTypes,
     processors: {
       "long-running-job": {
-        attemptConfig: { timeoutMs: 300_000, heartbeatMs: 60_000 }, // reclaimed 5 min after the worker stops extending
         attemptHandler: async ({ job, complete }) => { ... },
       },
     },
@@ -56,4 +56,6 @@ const worker = await createInProcessWorker({
 });
 ```
 
-See [examples/showcase-timeouts](https://github.com/kvet/queuert/tree/main/examples/showcase-timeouts) for a complete working example demonstrating cooperative timeouts and the attempt timeout, and [examples/showcase-long-running-jobs](https://github.com/kvet/queuert/tree/main/examples/showcase-long-running-jobs) for work that outlasts `timeoutMs` while the heartbeat extends the attempt. See also [Error Handling](../error-handling/) and [In-Process Worker](/queuert/advanced/in-process-worker/) reference.
+The lease is set per in-process worker, since it measures whether the process is alive, not how long any job type takes. The defaults are `durationMs: 60_000` and `heartbeatMs: 15_000`; `heartbeatMs` must be below a third of `durationMs`. The worker counts its lease as lost `durationMs − heartbeatMs` after its last successful renewal was sent, so with the defaults it survives one failed renewal. On loss, every attempt's `signal` aborts; see [In-Process Worker](/queuert/advanced/in-process-worker/#lease-and-heartbeat).
+
+See [examples/showcase-timeouts](https://github.com/kvet/queuert/tree/main/examples/showcase-timeouts) for a complete working example demonstrating cooperative timeouts and the worker lease, and [examples/showcase-long-running-jobs](https://github.com/kvet/queuert/tree/main/examples/showcase-long-running-jobs) for work that outlasts `durationMs` while the heartbeat renews the lease. See also [Error Handling](../error-handling/) and [In-Process Worker](/queuert/advanced/in-process-worker/) reference.

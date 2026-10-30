@@ -28,6 +28,9 @@ import {
   type StateJob,
   type StateJobInfo,
   type StateJobStatus,
+  type StateReclaimedJob,
+  type StateWorker,
+  type StateWorkerInfo,
   decodeIdCursor,
   decodeTimestampWithIdCursor,
   encodeCursor,
@@ -42,7 +45,6 @@ const jobColumns = [
   "completed_at",
   "last_attempt_at",
   "attempt_at",
-  "attempt_until",
   "chain_completed_at",
   "chain_index",
   "attempt",
@@ -96,6 +98,15 @@ const chainColumnsReturning = (rowRef: string): string =>
 const chainMembers = (alias: string): string =>
   `((${alias}.id = ? AND ${alias}.chain_index = 0) OR (${alias}.chain_id = ? AND ${alias}.chain_index > 0))`;
 
+const reclaimableWorkerCondition = (jobAlias: string): string => `NOT EXISTS (
+    SELECT 1 FROM {{table_prefix}}worker w
+    WHERE w.id = ${jobAlias}.attempt_by
+      AND (
+        w.id NOT IN (SELECT value FROM json_each(?))
+        OR w.lease_until > datetime('now', 'subsec')
+      )
+  )`;
+
 const tailJoin = (headAlias: string): string => `
 LEFT JOIN {{table_prefix}}job AS tail_job
   ON tail_job.chain_id = ${headAlias}.id
@@ -144,7 +155,6 @@ type DbJob = {
 
   attempt_at: string | null;
   attempt_by: string | null;
-  attempt_until: string | null;
 
   chain_status: string | null;
   chain_completed_at: string | null;
@@ -152,6 +162,15 @@ type DbJob = {
 
   chain_trace_context: string | null;
   trace_context: string | null;
+};
+
+type DbWorker = {
+  id: string;
+  name: string | null;
+  type_names: string;
+  concurrency: number;
+  started_at: string;
+  lease_until: string;
 };
 
 type DbChainColumns = {
@@ -253,6 +272,31 @@ CREATE TABLE IF NOT EXISTS {{table_prefix}}job_blocker (
       sql(/* sql */ `
 CREATE INDEX IF NOT EXISTS {{table_prefix}}job_blocker_chain_idx
 ON {{table_prefix}}job_blocker (blocked_by_chain_id)`),
+    ],
+  },
+  {
+    name: "002_worker_liveness",
+    type: "transactional",
+    statements: [
+      sql(/* sql */ `
+CREATE TABLE {{table_prefix}}worker (
+  started_at                    TEXT NOT NULL DEFAULT (datetime('now', 'subsec')),
+  lease_until                   TEXT NOT NULL,
+  concurrency                   INTEGER NOT NULL,
+  id                            TEXT PRIMARY KEY,
+  name                          TEXT,
+  type_names                    TEXT NOT NULL
+)`),
+      sql(/* sql */ `DROP INDEX {{table_prefix}}job_running_idx`),
+      sql(/* sql */ `ALTER TABLE {{table_prefix}}job DROP COLUMN attempt_until`),
+      sql(/* sql */ `
+CREATE INDEX {{table_prefix}}job_running_idx
+ON {{table_prefix}}job (type_name, attempt_at)
+WHERE status = 'running'`),
+      sql(/* sql */ `
+CREATE INDEX {{table_prefix}}job_attempt_by_idx
+ON {{table_prefix}}job (attempt_by)
+WHERE status = 'running'`),
     ],
   },
 ];
@@ -389,7 +433,6 @@ const mapDbJobToStateJob = (dbJob: DbJob): StateJobInfo => {
 
     attemptAt: dbJob.attempt_at ? sqliteDate(dbJob.attempt_at) : null,
     attemptBy: dbJob.attempt_by,
-    attemptUntil: dbJob.attempt_until ? sqliteDate(dbJob.attempt_until) : null,
 
     traceContext: dbJob.trace_context,
   };
@@ -420,6 +463,28 @@ const mapDbJobRowToStateJob = (row: DbJob & DbChainColumns): StateJob => ({
   chain: mapDbChainColumns(row.chain_id, row),
 });
 
+const withReclaimedFrom = (
+  job: StateJob,
+  workerId: string,
+  workerName: string | null,
+): StateReclaimedJob => ({ ...job, reclaimedFrom: { workerId, workerName } });
+
+const mapDbWorkerToStateWorkerInfo = (row: DbWorker): StateWorkerInfo => ({
+  id: row.id,
+  name: row.name,
+  typeNames: JSON.parse(row.type_names) as string[],
+  concurrency: row.concurrency,
+  startedAt: sqliteDate(row.started_at),
+  leaseUntil: sqliteDate(row.lease_until),
+});
+
+const mapDbWorkerRowToStateWorker = (
+  row: DbWorker & { running_job_count: number },
+): StateWorker => ({
+  ...mapDbWorkerToStateWorkerInfo(row),
+  runningJobCount: row.running_job_count,
+});
+
 const parseDbChainRow = (row: DbChainRow): { headJob: DbJob; tailJob: DbJob | null } => {
   const headJob: DbJob = {
     id: row.id,
@@ -439,7 +504,6 @@ const parseDbChainRow = (row: DbChainRow): { headJob: DbJob; tailJob: DbJob | nu
     last_attempt_error: row.last_attempt_error,
     attempt_at: row.attempt_at,
     attempt_by: row.attempt_by,
-    attempt_until: row.attempt_until,
     chain_status: row.chain_status,
     chain_completed_at: row.chain_completed_at,
     chain_deduplication_key: row.chain_deduplication_key,
@@ -466,7 +530,6 @@ const parseDbChainRow = (row: DbChainRow): { headJob: DbJob; tailJob: DbJob | nu
         last_attempt_error: row.tail_last_attempt_error,
         attempt_at: row.tail_attempt_at,
         attempt_by: row.tail_attempt_by,
-        attempt_until: row.tail_attempt_until,
         chain_status: row.tail_chain_status,
         chain_completed_at: row.tail_chain_completed_at,
         chain_deduplication_key: row.tail_chain_deduplication_key,
@@ -503,6 +566,8 @@ export const createSqliteStateAdapter = async <
   idType = "TEXT",
   generateId: generateIdOption = () => crypto.randomUUID() as TIdType,
   validateId: validateIdOption,
+  generateWorkerId: generateWorkerIdOption,
+  validateWorkerId: validateWorkerIdOption,
   maxBlockersPerJob: maxBlockersPerJobOption,
   countCap: countCapOption,
 }: {
@@ -525,6 +590,18 @@ export const createSqliteStateAdapter = async <
    */
   validateId?: (id: TIdType) => boolean;
   /**
+   * Function to generate worker IDs, one per worker an in-process worker starts. Must never
+   * return the same ID twice.
+   *
+   * @defaultValue `() => crypto.randomUUID()`
+   */
+  generateWorkerId?: () => string;
+  /**
+   * Predicate returning `true` if the worker ID is acceptable. Core runs it on generated
+   * worker IDs; failures throw `InvalidWorkerIdError`.
+   */
+  validateWorkerId?: (id: string) => boolean;
+  /**
    * Most blocker chains a single job may declare. Declaring more throws
    * `BlockerLimitExceededError` before any state is written.
    *
@@ -542,7 +619,7 @@ export const createSqliteStateAdapter = async <
   StateAdapter<TTxContext, TIdType> & {
     /** Create or upgrade the schema. */
     migrateToLatest: () => Promise<MigrationResult>;
-    /** Delete all job and blocker rows. Intended for tests. */
+    /** Delete all job, blocker and worker rows. Intended for tests. */
     truncate: () => Promise<void>;
   }
 > => {
@@ -554,6 +631,8 @@ export const createSqliteStateAdapter = async <
   const config = resolveStateAdapterConfig({
     generateId: generateIdOption,
     validateId: validateIdOption,
+    generateWorkerId: generateWorkerIdOption,
+    validateWorkerId: validateWorkerIdOption,
     maxBlockersPerJob: maxBlockersPerJobOption,
     countCap: countCapOption,
   });
@@ -589,7 +668,6 @@ export const createSqliteStateAdapter = async <
     last_attempt_error: t["string?"](),
     attempt_at: t["string?"](),
     attempt_by: t["string?"](),
-    attempt_until: t["string?"](),
     chain_status: t["string?"](),
     chain_completed_at: t["string?"](),
     chain_deduplication_key: t["string?"](),
@@ -605,6 +683,33 @@ export const createSqliteStateAdapter = async <
     c_deduplication_key: t["string?"](),
     c_trace_context: t["string?"](),
   } as const;
+
+  const dbWorkerColumns = {
+    id: t.string(),
+    name: t["string?"](),
+    type_names: t.string(),
+    concurrency: t.number(),
+    started_at: t.string(),
+    lease_until: t.string(),
+  } as const;
+
+  const dbWorkerRowColumns = {
+    ...dbWorkerColumns,
+    running_job_count: t.number(),
+  } as const;
+
+  const workerColumnsSelect = Object.keys(dbWorkerColumns).join(", ");
+
+  const workerRowSelect = `
+SELECT ${Object.keys(dbWorkerColumns)
+    .map((column) => `w.${column}`)
+    .join(", ")},
+  (
+    SELECT count(*)
+    FROM {{table_prefix}}job j
+    WHERE j.status = 'running' AND j.attempt_by = w.id
+  ) AS running_job_count
+FROM {{table_prefix}}worker w`;
 
   const dbChainRowColumns = {
     ...dbJobColumns,
@@ -625,7 +730,6 @@ export const createSqliteStateAdapter = async <
     tail_last_attempt_error: t["string?"](),
     tail_attempt_at: t["string?"](),
     tail_attempt_by: t["string?"](),
-    tail_attempt_until: t["string?"](),
     tail_chain_status: t["string?"](),
     tail_chain_completed_at: t["string?"](),
     tail_chain_deduplication_key: t["string?"](),
@@ -1065,8 +1169,7 @@ SET status = 'completed',
   output = NULL,
   last_attempt_error = NULL,
   attempt_at = NULL,
-  attempt_by = NULL,
-  attempt_until = NULL
+  attempt_by = NULL
 FROM input_data d
 WHERE {{table_prefix}}job.id = d.continue_from_id
   AND {{table_prefix}}job.status <> 'completed'
@@ -1155,7 +1258,6 @@ SET status = CASE WHEN e.completes_job THEN 'completed' ELSE {{table_prefix}}job
   last_attempt_error = CASE WHEN e.completes_job THEN NULL ELSE {{table_prefix}}job.last_attempt_error END,
   attempt_at = CASE WHEN e.completes_job THEN NULL ELSE {{table_prefix}}job.attempt_at END,
   attempt_by = CASE WHEN e.completes_job THEN NULL ELSE {{table_prefix}}job.attempt_by END,
-  attempt_until = CASE WHEN e.completes_job THEN NULL ELSE {{table_prefix}}job.attempt_until END,
   completed_at = CASE WHEN e.completes_job THEN datetime('now', 'subsec') ELSE {{table_prefix}}job.completed_at END,
   completed_by = CASE WHEN e.completes_job THEN e.completed_by ELSE {{table_prefix}}job.completed_by END,
   output = CASE WHEN e.completes_job THEN e.output ELSE {{table_prefix}}job.output END,
@@ -1226,8 +1328,7 @@ SET status = CASE WHEN {{table_prefix}}job.status = 'running' THEN 'pending' ELS
   last_attempt_at = CASE WHEN {{table_prefix}}job.status = 'running' THEN datetime('now', 'subsec') ELSE last_attempt_at END,
   last_attempt_error = CASE WHEN {{table_prefix}}job.status = 'running' THEN d.error ELSE last_attempt_error END,
   attempt_at = NULL,
-  attempt_by = NULL,
-  attempt_until = NULL
+  attempt_by = NULL
 FROM input_data d
 WHERE {{table_prefix}}job.id = d.job_id
   AND {{table_prefix}}job.status <> 'completed'
@@ -1400,8 +1501,7 @@ WHERE (id IN (SELECT value FROM json_each(?)) AND chain_index = 0)
       });
     },
 
-    startJobAttempts: async ({ txCtx, timeoutMsByTypeName, workerId, limit }) => {
-      const timeoutsJson = JSON.stringify(timeoutMsByTypeName);
+    startJobAttempts: async ({ txCtx, typeNames, workerId, limit }) => {
       const results = await executeTypedSql({
         txCtx,
         sql: templateCache.getOrCompute("startJobAttempts", () =>
@@ -1412,14 +1512,11 @@ UPDATE {{table_prefix}}job
 SET status = 'running',
   attempt = attempt + 1,
   attempt_at = datetime('now', 'subsec'),
-  attempt_by = ?,
-  attempt_until = datetime('now', 'subsec', '+' || ((
-    SELECT t.value FROM json_each(?) AS t WHERE t.key = {{table_prefix}}job.type_name
-  ) / 1000.0) || ' seconds')
+  attempt_by = ?
 WHERE id IN (
   SELECT id
   FROM {{table_prefix}}job INDEXED BY {{table_prefix}}job_pending_idx
-  WHERE type_name IN (SELECT key FROM json_each(?))
+  WHERE type_name IN (SELECT value FROM json_each(?))
     AND status = 'pending'
     AND scheduled_at <= datetime('now', 'subsec')
   ORDER BY scheduled_at ASC
@@ -1431,13 +1528,13 @@ RETURNING *, ${chainColumnsReturning("{{table_prefix}}job")}, EXISTS (
 `,
               {
                 id: "startJobAttempts",
-                params: [t.string(), t.string(), t.string(), t.number()],
+                params: [t.string(), t.string(), t.number()],
                 columns: { ...dbJobColumns, ...dbChainColumns, has_blockers: t.number() },
               },
             ),
           ),
         ),
-        params: [workerId, timeoutsJson, timeoutsJson, limit],
+        params: [workerId, JSON.stringify(typeNames), limit],
       });
 
       return results.map((result) => ({
@@ -1473,44 +1570,78 @@ LIMIT 1
       });
       return result ? result.delay_ms : null;
     },
-    extendJobAttempt: async ({ txCtx, jobId, fence, timeoutMs }) => {
-      const [job] = await executeTypedSql({
+    startWorker: async ({ txCtx, workerId, name, typeNames, concurrency, leaseMs }) => {
+      const [worker] = await executeTypedSql({
         txCtx,
-        sql: templateCache.getOrCompute("extendJobAttempt", () =>
+        sql: templateCache.getOrCompute("startWorker", () =>
           applyTemplate(
             sql(
               `
-UPDATE {{table_prefix}}job
-SET attempt_until = datetime('now', 'subsec', '+' || (? / 1000.0) || ' seconds')
-WHERE id = ?
-  AND status = 'running'
-  AND attempt = ?
-  AND attempt_by = ?
-RETURNING *, ${chainColumnsReturning("{{table_prefix}}job")}
+INSERT INTO {{table_prefix}}worker (id, name, type_names, concurrency, lease_until)
+VALUES (?, ?, json(?), ?, datetime('now', 'subsec', '+' || (? / 1000.0) || ' seconds'))
+RETURNING ${workerColumnsSelect}
 `,
               {
-                id: "extendJobAttempt",
-                params: [t.number(), idDataType, t.number(), t.string()],
-                columns: { ...dbJobColumns, ...dbChainColumns },
+                id: "startWorker",
+                params: [t.string(), t["string?"](), t.string(), t.number(), t.number()],
+                columns: dbWorkerColumns,
               },
             ),
           ),
         ),
-        params: [timeoutMs, jobId, fence.attempt, fence.workerId],
+        params: [workerId, name, JSON.stringify(typeNames), concurrency, leaseMs],
       });
-
-      return job ? mapDbJobRowToStateJob(job) : undefined;
+      return mapDbWorkerToStateWorkerInfo(worker);
     },
-    reclaimExpiredJobAttempts: async ({
-      txCtx,
-      typeNames,
-      ignoredJobIds,
-      lastAttemptError,
-      limit,
-    }) => {
-      const jobs = await executeTypedSql({
+    extendWorkerLease: async ({ txCtx, workerId, leaseMs }) => {
+      const [worker] = await executeTypedSql({
         txCtx,
-        sql: templateCache.getOrCompute("reclaimExpiredJobAttempts", () =>
+        sql: templateCache.getOrCompute("extendWorkerLease", () =>
+          applyTemplate(
+            sql(
+              `
+UPDATE {{table_prefix}}worker
+SET lease_until = datetime('now', 'subsec', '+' || (? / 1000.0) || ' seconds')
+WHERE id = ?
+  AND lease_until > datetime('now', 'subsec')
+RETURNING ${workerColumnsSelect}
+`,
+              {
+                id: "extendWorkerLease",
+                params: [t.number(), t.string()],
+                columns: dbWorkerColumns,
+              },
+            ),
+          ),
+        ),
+        params: [leaseMs, workerId],
+      });
+      return worker ? mapDbWorkerToStateWorkerInfo(worker) : undefined;
+    },
+    stopWorker: async ({ txCtx, workerId, lastAttemptError }) => {
+      const [deleted] = await executeTypedSql({
+        txCtx,
+        sql: templateCache.getOrCompute("deleteWorker", () =>
+          applyTemplate(
+            sql(
+              `
+DELETE FROM {{table_prefix}}worker
+WHERE id = ?
+RETURNING ${workerColumnsSelect}
+`,
+              {
+                id: "deleteWorker",
+                params: [t.string()],
+                columns: dbWorkerColumns,
+              },
+            ),
+          ),
+        ),
+        params: [workerId],
+      });
+      const rows = await executeTypedSql({
+        txCtx,
+        sql: templateCache.getOrCompute("reclaimWorkerJobs", () =>
           applyTemplate(
             sql(
               `
@@ -1519,37 +1650,256 @@ SET status = 'pending',
   last_attempt_at = datetime('now', 'subsec'),
   last_attempt_error = ?,
   attempt_at = NULL,
-  attempt_by = NULL,
-  attempt_until = NULL
-WHERE id IN (
-  SELECT id
-  FROM {{table_prefix}}job INDEXED BY {{table_prefix}}job_running_idx
-  WHERE status = 'running'
-    AND attempt_until IS NOT NULL
-    AND attempt_until <= datetime('now', 'subsec')
-    AND type_name IN (SELECT value FROM json_each(?))
-    AND id NOT IN (SELECT value FROM json_each(?))
-  ORDER BY attempt_until ASC
-  LIMIT ?
-)
+  attempt_by = NULL
+WHERE status = 'running'
+  AND attempt_by = ?
 RETURNING *, ${chainColumnsReturning("{{table_prefix}}job")}
 `,
               {
-                id: "reclaimExpiredJobAttempts",
-                params: [t.string(), t.string(), t.string(), t.number()],
+                id: "reclaimWorkerJobs",
+                params: [t.string(), t.string()],
                 columns: { ...dbJobColumns, ...dbChainColumns },
               },
             ),
           ),
         ),
-        params: [
-          JSON.stringify(lastAttemptError),
-          JSON.stringify(typeNames),
-          JSON.stringify(ignoredJobIds ?? []),
-          limit,
-        ],
+        params: [JSON.stringify(lastAttemptError), workerId],
       });
-      return jobs.map(mapDbJobRowToStateJob);
+      return rows.map((row) =>
+        withReclaimedFrom(mapDbJobRowToStateJob(row), workerId, deleted?.name ?? null),
+      );
+    },
+    getWorkers: async ({ txCtx, workerIds }) => {
+      if (workerIds.length === 0) return [];
+      const rows = await executeTypedSql({
+        txCtx,
+        sql: templateCache.getOrCompute("getWorkers", () =>
+          applyTemplate(
+            sql(
+              `${workerRowSelect}
+WHERE w.id IN (SELECT value FROM json_each(?))
+`,
+              {
+                id: "getWorkers",
+                params: [t.string()],
+                columns: dbWorkerRowColumns,
+                readOnly: true,
+              },
+            ),
+          ),
+        ),
+        params: [JSON.stringify(workerIds)],
+      });
+      const byId = new Map(rows.map((row) => [row.id, row]));
+      return workerIds.map((workerId) => {
+        const row = byId.get(workerId);
+        return row ? mapDbWorkerRowToStateWorker(row) : undefined;
+      });
+    },
+    listWorkers: async ({ txCtx, typeName }) => {
+      const rows = await executeTypedSql({
+        txCtx,
+        sql: templateCache.getOrCompute("listWorkers", () =>
+          applyTemplate(
+            sql(
+              `${workerRowSelect}
+WHERE ? IS NULL OR EXISTS (SELECT 1 FROM json_each(w.type_names) WHERE value = ?)
+ORDER BY w.started_at ASC, w.id ASC
+`,
+              {
+                id: "listWorkers",
+                params: [t["string?"](), t["string?"]()],
+                columns: dbWorkerRowColumns,
+                readOnly: true,
+              },
+            ),
+          ),
+        ),
+        params: [typeName ?? null, typeName ?? null],
+      });
+      return rows.map(mapDbWorkerRowToStateWorker);
+    },
+    countWorkersByTypeNames: async ({ txCtx, typeNames }) => {
+      if (typeNames.length === 0) return [];
+      const rows = await executeTypedSql({
+        txCtx,
+        sql: templateCache.getOrCompute("countWorkersByTypeNames", () =>
+          applyTemplate(
+            sql(
+              `
+SELECT count(w.id) AS count
+FROM json_each(?) AS t
+LEFT JOIN {{table_prefix}}worker w
+  ON EXISTS (SELECT 1 FROM json_each(w.type_names) WHERE value = t.value)
+  AND w.lease_until > datetime('now', 'subsec')
+GROUP BY t.key
+ORDER BY t.key
+`,
+              {
+                id: "countWorkersByTypeNames",
+                params: [t.string()],
+                columns: { count: t.number() },
+                readOnly: true,
+              },
+            ),
+          ),
+        ),
+        params: [JSON.stringify(typeNames)],
+      });
+      return rows.map((row) => row.count);
+    },
+    listWorkerJobs: async ({ txCtx, workerId }) => {
+      const rows = await executeTypedSql({
+        txCtx,
+        sql: templateCache.getOrCompute("listWorkerJobs", () =>
+          applyTemplate(
+            sql(
+              `
+SELECT {{job_columns:j}}, {{chain_columns:h}}
+FROM {{table_prefix}}job j
+JOIN {{table_prefix}}job h ON h.id = j.chain_id
+WHERE j.status = 'running' AND j.attempt_by = ?
+ORDER BY j.attempt_at ASC, j.id ASC
+`,
+              {
+                id: "listWorkerJobs",
+                params: [t.string()],
+                columns: { ...dbJobColumns, ...dbChainColumns },
+                readOnly: true,
+              },
+            ),
+          ),
+        ),
+        params: [workerId],
+      });
+      return rows.map(mapDbJobRowToStateJob);
+    },
+    reclaimExpiredJobAttempts: async ({ txCtx, lastAttemptError, limit }) => {
+      const expiredWorkers = await executeTypedSql({
+        txCtx,
+        sql: templateCache.getOrCompute("getExpiredWorkers", () =>
+          applyTemplate(
+            sql(
+              `
+SELECT id, name, type_names, concurrency, started_at, lease_until
+FROM {{table_prefix}}worker
+WHERE lease_until <= datetime('now', 'subsec')
+LIMIT ?
+`,
+              {
+                id: "getExpiredWorkers",
+                params: [t.number()],
+                columns: dbWorkerColumns,
+                readOnly: true,
+              },
+            ),
+          ),
+        ),
+        params: [limit],
+      });
+      const expiredWorkerIdsJson = JSON.stringify(expiredWorkers.map((worker) => worker.id));
+      const candidates = await executeTypedSql({
+        txCtx,
+        sql: templateCache.getOrCompute("getReclaimCandidates", () =>
+          applyTemplate(
+            sql(
+              `
+SELECT j.id, j.attempt, j.attempt_by
+FROM {{table_prefix}}job j
+WHERE j.status = 'running'
+  AND ${reclaimableWorkerCondition("j")}
+LIMIT ?
+`,
+              {
+                id: "getReclaimCandidates",
+                params: [t.string(), t.number()],
+                columns: { id: idDataType, attempt: t.number(), attempt_by: t.string() },
+                readOnly: true,
+              },
+            ),
+          ),
+        ),
+        params: [expiredWorkerIdsJson, limit],
+      });
+      const rows =
+        candidates.length > 0
+          ? await executeTypedSql({
+              txCtx,
+              sql: templateCache.getOrCompute("reclaimJobs", () =>
+                applyTemplate(
+                  sql(
+                    `
+UPDATE {{table_prefix}}job
+SET status = 'pending',
+  last_attempt_at = datetime('now', 'subsec'),
+  last_attempt_error = ?,
+  attempt_at = NULL,
+  attempt_by = NULL
+WHERE (id, attempt, attempt_by) IN (
+    SELECT json_extract(value, '$[0]'), json_extract(value, '$[1]'), json_extract(value, '$[2]')
+    FROM json_each(?)
+  )
+  AND status = 'running'
+  AND ${reclaimableWorkerCondition("{{table_prefix}}job")}
+RETURNING *, ${chainColumnsReturning("{{table_prefix}}job")}
+`,
+                    {
+                      id: "reclaimJobs",
+                      params: [t.string(), t.string(), t.string()],
+                      columns: { ...dbJobColumns, ...dbChainColumns },
+                    },
+                  ),
+                ),
+              ),
+              params: [
+                JSON.stringify(lastAttemptError),
+                JSON.stringify(
+                  candidates.map((candidate) => [
+                    candidate.id,
+                    candidate.attempt,
+                    candidate.attempt_by,
+                  ]),
+                ),
+                expiredWorkerIdsJson,
+              ],
+            })
+          : [];
+      if (expiredWorkers.length > 0) {
+        await executeTypedSql({
+          txCtx,
+          sql: templateCache.getOrCompute("deleteExpiredWorkers", () =>
+            applyTemplate(
+              sql(
+                `
+DELETE FROM {{table_prefix}}worker
+WHERE id IN (SELECT value FROM json_each(?))
+  AND lease_until <= datetime('now', 'subsec')
+`,
+                {
+                  id: "deleteExpiredWorkers",
+                  params: [t.string()],
+                  columns: {},
+                },
+              ),
+            ),
+          ),
+          params: [expiredWorkerIdsJson],
+        });
+      }
+      const workerIdByJobId = new Map(
+        candidates.map((candidate) => [candidate.id, candidate.attempt_by]),
+      );
+      const expiredWorkerNameById = new Map(
+        expiredWorkers.map((worker) => [worker.id, worker.name]),
+      );
+      return rows.map((row) => {
+        const workerId = workerIdByJobId.get(row.id)!;
+        return withReclaimedFrom(
+          mapDbJobRowToStateJob(row),
+          workerId,
+          expiredWorkerNameById.get(workerId) ?? null,
+        );
+      });
     },
     addJobsBlockers: async ({ txCtx, jobBlockers }) => {
       if (jobBlockers.length === 0) return [];
@@ -2068,7 +2418,6 @@ FROM json_each(?) AS je
         scheduledAt: "scheduled_at",
         completedAt: "completed_at",
         attemptAt: "attempt_at",
-        attemptUntil: "attempt_until",
       }[orderBy];
 
       const cursor = page.cursor ? decodeTimestampWithIdCursor(page.cursor, orderBy) : null;
@@ -2276,6 +2625,12 @@ FROM json_each(?) AS je
             sql(/* sql */ `DELETE FROM {{table_prefix}}job`, { params: [], columns: {} }),
           ),
         });
+        await executeTypedSql({
+          txCtx,
+          sql: applyTemplate(
+            sql(/* sql */ `DELETE FROM {{table_prefix}}worker`, { params: [], columns: {} }),
+          ),
+        });
       });
     },
 
@@ -2288,7 +2643,7 @@ FROM json_each(?) AS je
 };
 
 /**
- * SQLite state adapter type. Includes `migrateToLatest` for schema migrations and `truncate` for clearing all job data.
+ * SQLite state adapter type. Includes `migrateToLatest` for schema migrations and `truncate` for clearing all job and worker data.
  * @experimental
  */
 export type SqliteStateAdapter<
@@ -2297,6 +2652,6 @@ export type SqliteStateAdapter<
 > = StateAdapter<TTxContext, TJobId> & {
   /** Create or upgrade the schema. */
   migrateToLatest: () => Promise<MigrationResult>;
-  /** Delete all job and blocker rows. Intended for tests. */
+  /** Delete all job, blocker and worker rows. Intended for tests. */
   truncate: () => Promise<void>;
 };

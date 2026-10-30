@@ -101,7 +101,7 @@ export const countByChainTypeNamesGroup: ConformanceGroup<StateConformanceFixtur
         const [acquired] = await stateAdapter.withTransaction(async (txCtx) =>
           stateAdapter.startJobAttempts({
             txCtx,
-            timeoutMsByTypeName: { "chain-done": 30_000 },
+            typeNames: ["chain-done"],
             workerId: "w1",
             limit: 1,
           }),

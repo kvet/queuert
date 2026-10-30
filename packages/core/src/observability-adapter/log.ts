@@ -18,24 +18,25 @@ type LogEntry<
 } & ([TError] extends [never] ? unknown : { error: TError });
 
 export type WorkerBasicData = { workerId: string };
+export type WorkerData = WorkerBasicData & { workerName: string | null };
 type WorkerStartedLogEntry = LogEntry<
   "worker_started",
   "info",
   "Started worker",
-  { jobTypeNames: string[] } & WorkerBasicData
+  { jobTypeNames: string[] } & WorkerData
 >;
-type WorkerErrorLogEntry = LogEntry<
-  "worker_error",
-  "error",
-  "Worker error",
-  WorkerBasicData,
-  unknown
+type WorkerErrorLogEntry = LogEntry<"worker_error", "error", "Worker error", WorkerData, unknown>;
+type WorkerLeaseLostLogEntry = LogEntry<
+  "worker_lease_lost",
+  "warn",
+  "Worker lost its lease",
+  WorkerData
 >;
 type WorkerStoppedLogEntry = LogEntry<
   "worker_stopped",
   "info",
   "Worker has been stopped",
-  WorkerBasicData
+  WorkerData
 >;
 
 export type ChainBasicData = {
@@ -66,7 +67,6 @@ export type JobProcessingData = JobBasicData & { status: JobStatus; attempt: num
 export type JobAttemptData = JobProcessingData & {
   attemptAt: Date;
   attemptBy: string;
-  attemptUntil: Date;
 };
 export type JobCompletionData = JobProcessingData & {
   output?: unknown;
@@ -120,11 +120,12 @@ type JobAttemptLostLogEntry = LogEntry<
   "Job attempt lost",
   JobAttemptData & WorkerBasicData
 >;
+export type JobReclaimData = { reclaimedFrom: WorkerData };
 type JobAttemptReclaimedLogEntry = LogEntry<
   "job_attempt_reclaimed",
   "info",
-  "Reclaimed expired job attempt",
-  JobAttemptData & WorkerBasicData
+  "Reclaimed job attempt",
+  JobAttemptData & WorkerBasicData & JobReclaimData
 >;
 type JobAttemptFailedLogEntry = LogEntry<
   "job_attempt_failed",
@@ -162,6 +163,7 @@ type TypedLogEntry =
   // worker
   | WorkerStartedLogEntry
   | WorkerErrorLogEntry
+  | WorkerLeaseLostLogEntry
   | WorkerStoppedLogEntry
   // chain
   | ChainCreatedLogEntry

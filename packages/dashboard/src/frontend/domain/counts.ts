@@ -13,3 +13,8 @@ export const sumCounts = (counts: CappedCount[]): CappedCount => ({
 /** Renders a sum: `≥10,000` when it includes a capped value, otherwise the plain number. */
 export const formatSum = (capped: CappedCount): string =>
   capped.hasMore ? `≥${capped.count.toLocaleString()}` : capped.count.toLocaleString();
+
+export const isStrandedType = (counts: {
+  pending: CappedCount;
+  liveWorkerCount: number;
+}): boolean => counts.pending.count > 0 && counts.liveWorkerCount === 0;

@@ -24,17 +24,8 @@ export const completeJobsGroup: ConformanceGroup<StateConformanceFixture> = {
           stateAdapter.startJobAttempts({
             txCtx,
             workerId: "worker-1",
-            timeoutMsByTypeName: { "complete-test": 30_000 },
+            typeNames: ["complete-test"],
             limit: 1,
-          }),
-        );
-
-        await stateAdapter.withTransaction(async (txCtx) =>
-          stateAdapter.extendJobAttempt({
-            txCtx,
-            jobId: createdChain.head.id,
-            fence: { attempt: 1, workerId: "worker-1" },
-            timeoutMs: 10_000,
           }),
         );
 
@@ -56,7 +47,6 @@ export const completeJobsGroup: ConformanceGroup<StateConformanceFixture> = {
         expect(completed!.completedAt).toBeInstanceOf(Date);
         expect(completed!.completedBy).toBe("worker-1");
         expect(completed!.attemptBy).toBeNull();
-        expect(completed!.attemptUntil).toBeNull();
         expect(completed!.attemptAt).toBeNull();
       },
     },
@@ -214,17 +204,8 @@ export const completeJobsGroup: ConformanceGroup<StateConformanceFixture> = {
           stateAdapter.startJobAttempts({
             txCtx,
             workerId: "worker-1",
-            timeoutMsByTypeName: { "double-complete-test": 30_000 },
+            typeNames: ["double-complete-test"],
             limit: 1,
-          }),
-        );
-
-        await stateAdapter.withTransaction(async (txCtx) =>
-          stateAdapter.extendJobAttempt({
-            txCtx,
-            jobId: createdChain.head.id,
-            fence: { attempt: 1, workerId: "worker-1" },
-            timeoutMs: 10_000,
           }),
         );
 
@@ -277,7 +258,7 @@ export const completeJobsGroup: ConformanceGroup<StateConformanceFixture> = {
           stateAdapter.startJobAttempts({
             txCtx,
             workerId: "worker-1",
-            timeoutMsByTypeName: { "complete-clears-error": 30_000 },
+            typeNames: ["complete-clears-error"],
             limit: 1,
           }),
         );
@@ -300,7 +281,7 @@ export const completeJobsGroup: ConformanceGroup<StateConformanceFixture> = {
           stateAdapter.startJobAttempts({
             txCtx,
             workerId: "worker-1",
-            timeoutMsByTypeName: { "complete-clears-error": 30_000 },
+            typeNames: ["complete-clears-error"],
             limit: 1,
           }),
         );
@@ -315,7 +296,6 @@ export const completeJobsGroup: ConformanceGroup<StateConformanceFixture> = {
         expect(completed!.completedAt).toBeInstanceOf(Date);
         expect(completed!.lastAttemptError).toBeNull();
         expect(completed!.attemptAt).toBeNull();
-        expect(completed!.attemptUntil).toBeNull();
       },
     },
     {
@@ -436,7 +416,7 @@ export const completeJobsGroup: ConformanceGroup<StateConformanceFixture> = {
           stateAdapter.startJobAttempts({
             txCtx,
             workerId: "worker-1",
-            timeoutMsByTypeName: { "complete-fence-other": 30_000 },
+            typeNames: ["complete-fence-other"],
             limit: 1,
           }),
         );
@@ -479,7 +459,7 @@ export const completeJobsGroup: ConformanceGroup<StateConformanceFixture> = {
           stateAdapter.startJobAttempts({
             txCtx,
             workerId: "worker-1",
-            timeoutMsByTypeName: { "complete-fence-replaced": 30_000 },
+            typeNames: ["complete-fence-replaced"],
             limit: 1,
           }),
         );
@@ -490,7 +470,7 @@ export const completeJobsGroup: ConformanceGroup<StateConformanceFixture> = {
           stateAdapter.startJobAttempts({
             txCtx,
             workerId: "worker-1",
-            timeoutMsByTypeName: { "complete-fence-replaced": 30_000 },
+            typeNames: ["complete-fence-replaced"],
             limit: 1,
           }),
         );

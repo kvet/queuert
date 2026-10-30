@@ -128,7 +128,7 @@ const stateAdapter = await createPgStateAdapter({
 });
 ```
 
-Both must be positive integers; anything else throws when the adapter is created. The resolved values — along with `generateId` and `validateId` — are readable on `stateAdapter.config`.
+Both must be positive integers; anything else throws when the adapter is created. The resolved values — along with `generateId`, `validateId`, `generateWorkerId` and `validateWorkerId` — are readable on `stateAdapter.config`.
 
 ## Multi-worker deployment
 

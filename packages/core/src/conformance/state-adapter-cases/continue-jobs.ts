@@ -149,17 +149,8 @@ export const continueJobsGroup: ConformanceGroup<StateConformanceFixture> = {
           stateAdapter.startJobAttempts({
             txCtx,
             workerId: "worker-1",
-            timeoutMsByTypeName: { head: 30_000 },
+            typeNames: ["head"],
             limit: 1,
-          }),
-        );
-
-        await stateAdapter.withTransaction(async (txCtx) =>
-          stateAdapter.extendJobAttempt({
-            txCtx,
-            jobId: headChain.head.id,
-            fence: { attempt: 1, workerId: "worker-1" },
-            timeoutMs: 10_000,
           }),
         );
 
@@ -184,7 +175,6 @@ export const continueJobsGroup: ConformanceGroup<StateConformanceFixture> = {
         expect(headAfter!.completedBy).toBe(null);
         expect(headAfter!.attemptAt).toBe(null);
         expect(headAfter!.attemptBy).toBe(null);
-        expect(headAfter!.attemptUntil).toBe(null);
       },
     },
     {
@@ -642,7 +632,7 @@ export const continueJobsGroup: ConformanceGroup<StateConformanceFixture> = {
           stateAdapter.startJobAttempts({
             txCtx,
             workerId: "worker-1",
-            timeoutMsByTypeName: { "continue-fence-match": 30_000 },
+            typeNames: ["continue-fence-match"],
             limit: 1,
           }),
         );
@@ -686,7 +676,7 @@ export const continueJobsGroup: ConformanceGroup<StateConformanceFixture> = {
           stateAdapter.startJobAttempts({
             txCtx,
             workerId: "worker-1",
-            timeoutMsByTypeName: { "continue-fence-other": 30_000 },
+            typeNames: ["continue-fence-other"],
             limit: 1,
           }),
         );
@@ -737,7 +727,7 @@ export const continueJobsGroup: ConformanceGroup<StateConformanceFixture> = {
           stateAdapter.startJobAttempts({
             txCtx,
             workerId: "worker-1",
-            timeoutMsByTypeName: { "continue-fence-replaced": 30_000 },
+            typeNames: ["continue-fence-replaced"],
             limit: 1,
           }),
         );
@@ -748,7 +738,7 @@ export const continueJobsGroup: ConformanceGroup<StateConformanceFixture> = {
           stateAdapter.startJobAttempts({
             txCtx,
             workerId: "worker-1",
-            timeoutMsByTypeName: { "continue-fence-replaced": 30_000 },
+            typeNames: ["continue-fence-replaced"],
             limit: 1,
           }),
         );

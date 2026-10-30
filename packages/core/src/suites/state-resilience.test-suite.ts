@@ -61,6 +61,7 @@ export const stateResilienceTestSuite = ({
           multiplier: 1,
           maxDelayMs: 1,
         },
+        lease: { durationMs: 100, heartbeatMs: 20 },
         processors: createProcessors({
           client,
           jobTypes,
@@ -68,10 +69,6 @@ export const stateResilienceTestSuite = ({
             initialDelayMs: 1,
             multiplier: 1,
             maxDelayMs: 1,
-          },
-          attemptConfig: {
-            timeoutMs: 10,
-            heartbeatMs: 5,
           },
           processors: {
             test: {
@@ -148,14 +145,13 @@ export const stateResilienceTestSuite = ({
         client: flakyWorkerClient,
         concurrency: 5,
         // Short poll interval so the worker retries promptly after a transient error.
-        // When complete hits a flaky-adapter error and the fenced reschedule also fails, the job
-        // stays running until its short attempt timeout expires and the worker reclaims it on a re-poll.
         pollIntervalMs: 250,
         recoveryBackoffConfig: {
           initialDelayMs: 1,
           multiplier: 1,
           maxDelayMs: 1,
         },
+        lease: { durationMs: 100, heartbeatMs: 20 },
         processors: createProcessors({
           client,
           jobTypes,
@@ -163,10 +159,6 @@ export const stateResilienceTestSuite = ({
             initialDelayMs: 1,
             multiplier: 1,
             maxDelayMs: 1,
-          },
-          attemptConfig: {
-            timeoutMs: 10,
-            heartbeatMs: 5,
           },
           processors: {
             test: {
@@ -247,16 +239,11 @@ export const stateResilienceTestSuite = ({
           multiplier: 1,
           maxDelayMs: 1,
         },
+        lease: { durationMs: 100, heartbeatMs: 20 },
         // Short poll interval so the worker retries promptly after a transient error.
-        // When complete hits a flaky-adapter error and the fenced reschedule also fails, the job
-        // stays running until its short attempt timeout expires and the worker reclaims it on a re-poll.
         pollIntervalMs: 100,
       };
       const registryConfig = {
-        attemptConfig: {
-          timeoutMs: 10,
-          heartbeatMs: 5,
-        },
         backoffConfig: {
           initialDelayMs: 1,
           multiplier: 1,
@@ -371,6 +358,7 @@ export const stateResilienceTestSuite = ({
           multiplier: 1,
           maxDelayMs: 1,
         },
+        lease: { durationMs: 100, heartbeatMs: 20 },
         processors: createProcessors({
           client,
           jobTypes,
@@ -378,10 +366,6 @@ export const stateResilienceTestSuite = ({
             initialDelayMs: 1,
             multiplier: 1,
             maxDelayMs: 1,
-          },
-          attemptConfig: {
-            timeoutMs: 10,
-            heartbeatMs: 5,
           },
           processors: {
             test: {
@@ -465,6 +449,7 @@ export const stateResilienceTestSuite = ({
           multiplier: 1,
           maxDelayMs: 1,
         },
+        lease: { durationMs: 100, heartbeatMs: 20 },
         processors: createProcessors({
           client,
           jobTypes,
@@ -472,10 +457,6 @@ export const stateResilienceTestSuite = ({
             initialDelayMs: 1,
             multiplier: 1,
             maxDelayMs: 1,
-          },
-          attemptConfig: {
-            timeoutMs: 10,
-            heartbeatMs: 5,
           },
           processors: {
             test: {
@@ -559,12 +540,9 @@ export const stateResilienceTestSuite = ({
           multiplier: 1,
           maxDelayMs: 1,
         },
+        lease: { durationMs: 100, heartbeatMs: 20 },
       };
       const registryConfig = {
-        attemptConfig: {
-          timeoutMs: 10,
-          heartbeatMs: 5,
-        },
         backoffConfig: {
           initialDelayMs: 1,
           multiplier: 1,
@@ -652,12 +630,12 @@ export const stateResilienceTestSuite = ({
       const { promise: recovered, resolve: onRecovered } = Promise.withResolvers<void>();
       const flakyStartStateAdapter: typeof stateAdapter = {
         ...stateAdapter,
-        startJobAttempts: async (params) => {
+        getStartAttemptDelayMs: async (params) => {
           if (failuresLeft > 0) {
             failuresLeft--;
-            throw new Error("startJobAttempts failed");
+            throw new Error("getStartAttemptDelayMs failed");
           }
-          const result = await stateAdapter.startJobAttempts(params);
+          const result = await stateAdapter.getStartAttemptDelayMs(params);
           onRecovered();
           return result;
         },
@@ -701,7 +679,13 @@ export const stateResilienceTestSuite = ({
 
         failuresLeft = 1;
         const chain = await withTransaction(async (txCtx, transactionHooks) =>
-          client.createChain({ ...txCtx, transactionHooks, typeName: "test", input: null }),
+          client.createChain({
+            ...txCtx,
+            transactionHooks,
+            typeName: "test",
+            input: null,
+            schedule: { afterMs: 1000 },
+          }),
         );
         await client.awaitChain(chain, { pollIntervalMs: 100, timeoutMs: 5000 });
       });

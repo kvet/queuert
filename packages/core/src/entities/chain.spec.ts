@@ -17,7 +17,6 @@ const headJob: StateJobInfo = {
   lastAttemptError: null,
   attemptAt: null,
   attemptBy: null,
-  attemptUntil: null,
   completedAt: new Date("2026-01-01T00:01:00Z"),
   completedBy: "worker-1",
   continuedToId: "job-2",

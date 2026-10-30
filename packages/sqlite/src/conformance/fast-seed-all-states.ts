@@ -18,6 +18,7 @@ export const fastSeedAllStates = async <TTxContext extends BaseTxContext>(
 ): Promise<SeedSentinels> => {
   const job = `${tablePrefix}job`;
   const blockerTable = `${tablePrefix}job_blocker`;
+  const workerTable = `${tablePrefix}worker`;
 
   const exec = async (sql: string, params: unknown[] = []) =>
     stateProvider.executeSql({
@@ -40,6 +41,31 @@ export const fastSeedAllStates = async <TTxContext extends BaseTxContext>(
       await exec(`INSERT INTO ${job} (${columns}) VALUES ${rows.join(",\n")}`, params);
     }
   };
+
+  await exec(
+    `INSERT INTO ${workerTable} (id, name, type_names, concurrency, lease_until)
+     VALUES (?, NULL, json(?), ?, ${futureTs(seedConfig.leaseMs)}),
+            (?, NULL, json(?), ?, ${pastTs(300)}),
+            (?, NULL, json(?), ?, ${futureTs(seedConfig.leaseMs)})`,
+    [
+      seedConfig.workerId,
+      JSON.stringify(seedConfig.workerTypeNames),
+      seedConfig.workerConcurrency,
+      seedConfig.expiredWorkerId,
+      JSON.stringify(seedConfig.expiredWorkerTypeNames),
+      seedConfig.workerConcurrency,
+      seedConfig.busyWorkerId,
+      JSON.stringify(seedConfig.busyWorkerTypeNames),
+      seedConfig.workerConcurrency,
+    ],
+  );
+  for (const idleWorker of seedConfig.idleWorkers) {
+    await exec(
+      `INSERT INTO ${workerTable} (id, name, type_names, concurrency, lease_until)
+       VALUES (?, NULL, json(?), ?, ${futureTs(seedConfig.leaseMs)})`,
+      [idleWorker.id, JSON.stringify(idleWorker.typeNames), seedConfig.workerConcurrency],
+    );
+  }
 
   // --- Block: Pending jobs ---
   const pendingIds: Record<string, string[]> = {};
@@ -72,9 +98,9 @@ export const fastSeedAllStates = async <TTxContext extends BaseTxContext>(
     runningIds[typeName] = ids;
     await bulkInsertJobs(
       ids,
-      "id, type_name, chain_id, chain_index, input, status, chain_status, attempt, attempt_at, attempt_by, attempt_until, created_at",
+      "id, type_name, chain_id, chain_index, input, status, chain_status, attempt, attempt_at, attempt_by, created_at",
       (id, i) =>
-        `('${id}', '${typeName}', '${id}', 0, '${JSON.stringify({ index: i })}', 'running', 'running', 1, datetime('now', 'subsec'), '${seedConfig.workerId}', ${futureTs(seedConfig.attemptMs)}, ${pastTs(540)})`,
+        `('${id}', '${typeName}', '${id}', 0, '${JSON.stringify({ index: i })}', 'running', 'running', 1, datetime('now', 'subsec'), '${seedConfig.workerId}', ${pastTs(540)})`,
     );
   }
 
@@ -248,18 +274,26 @@ export const fastSeedAllStates = async <TTxContext extends BaseTxContext>(
   const throwawayRunningIds = generateIds(seedConfig.throwawayRunning * scale);
   await bulkInsertJobs(
     throwawayRunningIds,
-    "id, type_name, chain_id, chain_index, input, status, chain_status, attempt, attempt_at, attempt_by, attempt_until",
+    "id, type_name, chain_id, chain_index, input, status, chain_status, attempt, attempt_at, attempt_by",
     (id, i) =>
-      `('${id}', 'seed:throwaway:running', '${id}', 0, '${JSON.stringify({ index: i })}', 'running', 'running', 1, datetime('now', 'subsec'), '${seedConfig.workerId}', ${futureTs(seedConfig.attemptMs)})`,
+      `('${id}', 'seed:throwaway:running', '${id}', 0, '${JSON.stringify({ index: i })}', 'running', 'running', 1, datetime('now', 'subsec'), '${seedConfig.workerId}')`,
+  );
+
+  // --- Block: Busy worker (running jobs bounded by its concurrency) ---
+  await bulkInsertJobs(
+    generateIds(seedConfig.workerConcurrency),
+    "id, type_name, chain_id, chain_index, input, status, chain_status, attempt, attempt_at, attempt_by",
+    (id, i) =>
+      `('${id}', 'seed:busy', '${id}', 0, '${JSON.stringify({ index: i })}', 'running', 'running', 1, datetime('now', 'subsec'), '${seedConfig.busyWorkerId}')`,
   );
 
   // --- Block: Throwaway expired running ---
   const throwawayExpiredIds = generateIds(seedConfig.throwawayExpiredRunning * scale);
   await bulkInsertJobs(
     throwawayExpiredIds,
-    "id, type_name, chain_id, chain_index, input, status, chain_status, attempt, attempt_at, attempt_by, attempt_until, created_at",
+    "id, type_name, chain_id, chain_index, input, status, chain_status, attempt, attempt_at, attempt_by, created_at",
     (id, i) =>
-      `('${id}', 'seed:throwaway:expired', '${id}', 0, '${JSON.stringify({ index: i })}', 'running', 'running', 1, ${pastTs(600)}, '${seedConfig.workerId}', ${pastTs(300)}, ${pastTs(900)})`,
+      `('${id}', 'seed:throwaway:expired', '${id}', 0, '${JSON.stringify({ index: i })}', 'running', 'running', 1, ${pastTs(600)}, '${seedConfig.expiredWorkerId}', ${pastTs(900)})`,
   );
 
   // --- Block: Throwaway chains ---
@@ -336,6 +370,10 @@ export const fastSeedAllStates = async <TTxContext extends BaseTxContext>(
     nonIndependent: {
       chainId: nonIndependentIds[0],
       count: nonIndependentCount,
+    },
+    workers: {
+      idleWorkerIds: seedConfig.idleWorkers.map((idleWorker) => idleWorker.id),
+      busyWorkerId: seedConfig.busyWorkerId,
     },
     throwaway: {
       pendingTypeName: "seed:throwaway:pending",

@@ -19,6 +19,18 @@ export class InvalidJobIdError extends Error {
   }
 }
 
+/** Thrown when a worker ID fails the state adapter's `validateWorkerId` check. */
+export class InvalidWorkerIdError extends Error {
+  /** The ID that failed validation. */
+  readonly id: string;
+
+  constructor(message: string, options: { id: string; cause?: unknown }) {
+    super(message, options.cause !== undefined ? { cause: options.cause } : undefined);
+    this.name = "InvalidWorkerIdError";
+    this.id = options.id;
+  }
+}
+
 /** Thrown when the job's current attempt is not the one this worker holds. */
 export class JobTakenByAnotherWorkerError extends Error {
   /** The job that was contested. */
@@ -80,16 +92,16 @@ export class ChainNotFoundError extends Error {
 }
 
 /**
- * Recorded as a job's `lastAttemptError` when a worker reclaims its attempt because the attempt
- * expired before the holding worker extended it.
+ * Recorded as a job's `lastAttemptError` when a worker reclaims its attempt because the worker
+ * holding the attempt lost its lease or stopped.
  */
-export class JobAttemptExpiredError extends Error {
+export class JobAttemptReclaimedError extends Error {
   /** The worker that reclaimed the attempt. */
   readonly reclaimedBy: string;
 
   constructor(message: string, options: { reclaimedBy: string; cause?: unknown }) {
     super(message, options.cause !== undefined ? { cause: options.cause } : undefined);
-    this.name = "JobAttemptExpiredError";
+    this.name = "JobAttemptReclaimedError";
     this.reclaimedBy = options.reclaimedBy;
   }
 }

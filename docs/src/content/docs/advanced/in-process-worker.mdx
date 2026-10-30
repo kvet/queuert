@@ -11,7 +11,7 @@ import { Arrow, Diagram, Flow, Group, Node, Rows } from "../../../components/dia
 
 This document describes the worker design in Queuert: how workers coordinate job processing, manage concurrency, and handle failures.
 
-A **worker** runs a main loop that coordinates job processing across multiple **slots**. Each slot processes one job at a time; the worker manages concurrency and scaling.
+An **in-process worker**, returned by `createInProcessWorker`, runs one **worker** at a time. A worker is a row in the `worker` table with an id, a name and a **lease**, and owns every attempt it starts. It runs a main loop that coordinates job processing across multiple **slots**. Each slot processes one job at a time; the worker manages concurrency and scaling.
 
 ## Concurrency Model
 
@@ -58,54 +58,90 @@ Workers process jobs in parallel using slots. See `createInProcessWorker` TSDoc 
 
 The worker runs a single coordinating loop:
 
-1. **Fill**: Call `startJobAttempts` with the idle slot count as `limit`, start each returned job in its own slot, and repeat until a call returns fewer jobs than its `limit` or all slots are busy. Each call is a single autocommit statement that starts up to `limit` attempts and sets each `attemptUntil` to now plus that job type's `attemptConfig.timeoutMs`, so filling `N` idle slots costs one round-trip, and an idle worker issues one acquisition per wake-up
-2. **Reclaim expired attempts**: Reclaim up to the idle slot count of jobs with an expired attempt (if any idle slots remain); if any were reclaimed, skip the wait and start the next iteration
+1. **Fill**: Call `startJobAttempts` with the idle slot count as `limit`, start each returned job in its own slot, and repeat until a call returns fewer jobs than its `limit` or all slots are busy. Each call is a single autocommit statement that starts up to `limit` attempts owned by this worker, incrementing `attempt` and setting `attemptBy` to the worker's id, so filling `N` idle slots costs one round-trip, and an idle worker issues one acquisition per wake-up
+2. **Reclaim**: Reclaim up to the idle slot count of jobs whose worker lost its lease or has no row (if any idle slots remain); if any were reclaimed, skip the wait and start the next iteration
 3. **Wait**: Listen for notification, poll timeout, or slot completion
 4. **Repeat**
 
 If an iteration throws, the worker emits `workerError` and sleeps per `recoveryBackoffConfig` before the next one. The backoff grows only while consecutive iterations keep failing and resets once an iteration completes, so an isolated error long after a past outage gets the initial delay rather than the maximum.
 
-### Shutdown
+The worker stops claiming once it is stopping or its lease may be gone. A job returned by a claim that resolves after that point is not run; `stopWorker` or reclaim returns it to `pending`.
 
-On startup, the worker emits a `workerStarted` observability event.
+### Starting
+
+`start()` returns without touching the database. The in-process worker registers its first worker in the background with `startWorker`, a single autocommit statement that inserts the worker row with its processors' job type names, its `concurrency` and a lease `lease.durationMs` from now, and emits `workerStarted` once it commits. A failed registration emits `workerError` and is retried per `recoveryBackoffConfig`, each try under a fresh id.
+
+### Shutdown
 
 Calling `stop()` triggers graceful shutdown:
 
-1. Signal abort controller — in-flight jobs see their `signal` abort, and the main loop stops spawning new slots
-2. Wait for the main loop to exit, then for all in-flight handlers to end (return or throw)
-3. Emit the `workerStopped` observability event
+1. Signal abort — in-flight attempts see their `signal` abort, and the main loop stops claiming; a claim already in flight is awaited and the job it returns is not run
+2. Wait for all in-flight handlers to end (return or throw), while the lease keeps renewing
+3. `stopWorker` deletes the worker row and reclaims every job still `running` under it
+4. Emit the `workerStopped` observability event
 
-Stopping is cooperative: the attempt is still held, so handlers that check `signal.aborted` can wrap up and still commit a `complete` (with partial output or `{ reschedule }`) instead of abandoning work.
+Stopping is cooperative: the lease keeps renewing and the attempt is still held, so handlers that check `signal.aborted` can wrap up and still commit a `complete` (with partial output or `{ reschedule }`) instead of abandoning work.
+
+`stop()` never rejects. If `stopWorker` throws, the worker emits `workerError` and `workerStopped`; its row expires and is reclaimed like a crashed worker's.
+
+### Successive Workers
+
+A worker is never restarted: when it stops for any reason other than `stop()`, the in-process worker starts the next one under a fresh id. A worker stops when:
+
+- **It loses its lease.** It emits `workerLeaseLost`, aborts every attempt's `signal`, and stops claiming and renewing. Once every attempt ended it emits `workerStopped` without calling `stopWorker`; reclaim removes its row and returns its remaining jobs to `pending`.
+- **A write's outcome is unknown.** When a claim or a fallback reschedule throws, the job may be left `running` under the worker. The worker emits `workerError`, stops claiming and keeps renewing, but leaves its attempts' signals alone. Once every attempt ended, `stopWorker` reclaims whatever is still `running` under it, and the worker emits `workerStopped`. If it also loses its lease meanwhile, it stops as after a lost lease, without `stopWorker`, and the next worker still waits the backoff.
+
+In every case the worker waits for each of its attempts to end before it stops, and the next worker starts only then: at once after a lost lease, and after the `recoveryBackoffConfig` backoff after a write whose outcome is unknown, so a claim or reschedule that keeps failing does not restart workers in a tight loop. The backoff grows while successive workers fail to start or stop this way, and resets once a worker stops after a lost lease. A worker that renewed its lease at least once has proven healthy, so when it stops on a write whose outcome is unknown the next one waits the initial delay, however long ago an earlier worker stopped this way. A handler that ignores its aborted `signal` holds the in-process worker in this state until it returns. A lease loss reads `workerLeaseLost` → `workerStopped` → `workerStarted` with a new `workerId`, and later attempts carry the new id in `attemptBy`.
+
+Stopping on an uncertain write trades throughput for safety: a single claim or fallback reschedule that throws takes the whole worker out of claiming. It takes no new jobs until its in-flight attempts end, then the next worker starts after the recovery backoff, so a long-running attempt keeps the in-process worker below its `concurrency` for as long as it runs.
 
 ## Worker Identity
 
-Each worker has a unique identity (a random UUID, prefixed with the optional `workerName` option when set) stored in `attemptBy`. The worker tracks active jobs internally and routes abort signals by job ID—no per-slot identity is needed: the worker checks the job's `attempt` as well as `attemptBy` before each write, so a slot whose attempt was reclaimed and re-acquired by another slot of the same worker fails with `JobTakenByAnotherWorkerError`.
+Each worker's id comes from the state adapter's `generateWorkerId` (default: a random UUID), called once per worker. Core runs `validateWorkerId` on it and throws `InvalidWorkerIdError` when it fails, reported as a `workerError`; a `generateWorkerId` that throws is reported as a `workerError` with an empty `workerId`. Either is retried as a failed registration. `generateWorkerId` must never return the same id twice: a `running` job whose worker row is gone is reclaimed as dead for good, which is only sound if that id is never registered again.
 
-## Attempt Timeout and Heartbeat
+The optional `workerName` option accepts any non-empty string. It is stored as the worker row's `name` and carried as `workerName` on worker events, and is not part of the id, so replicas sharing a name still get distinct ids.
 
-Every attempt has a deadline, `attemptUntil`, set when the job is acquired from `attemptConfig.timeoutMs`. While the handler runs, the slot extends it every `attemptConfig.heartbeatMs` with a single autocommit statement that only matches while the job is still `running` at this attempt and held by this worker. The heartbeat stops when the handler ends or its `complete` commits. An extension that misses after the attempt's own `complete` wrote simply stops the heartbeat; any other miss means the attempt was lost (another worker took it, it was completed elsewhere, or it was deleted) and aborts the handler's `signal`. An extension that fails with a database error also aborts the `signal` and stops the heartbeat, since ownership cannot be confirmed.
+The id is stored in `attemptBy` of every attempt the worker starts. The worker tracks active jobs internally and routes abort signals by job ID—no per-slot identity is needed: the worker checks the job's `attempt` as well as `attemptBy` before each write, so an attempt whose job was reclaimed and claimed again by a later worker under a new id fails with `JobTakenByAnotherWorkerError`.
 
-If the worker crashes, nothing extends the attempt; once it expires, a worker reclaims the job. The crashed attempt counts as used.
+## Lease and Heartbeat
 
-## Expired Attempt Reclamation
+The `lease` option configures the lease of each worker the in-process worker starts:
 
-The worker reclaims jobs with expired attempts, making them available for retry.
+- `durationMs` — how long a lease lasts without a renewal. Default `60_000`.
+- `heartbeatMs` — how often the lease is renewed. Must be below a third of `durationMs`. Default `15_000`.
 
-When idle slots remain in the main loop:
+One heartbeat per worker renews the lease every `heartbeatMs`, however many attempts it runs. Each renewal, `extendWorkerLease`, is a single autocommit statement that sets the lease to `durationMs` from the database's `now()`, and matches only while the lease is still live: an expired lease cannot be renewed. A renewal that finds the row gone or expired loses the lease. A renewal that throws is retried on the next tick.
 
-1. Find up to the idle slot count of `running` jobs of registered types whose `attemptUntil` has passed (the exact selection is adapter-specific — e.g. PostgreSQL takes types in random order and the oldest expired jobs within each)
-2. Transition the jobs in a single autocommit statement: `running` → `pending`, clear `attemptAt`, `attemptBy`, and `attemptUntil`, and stamp `lastAttemptAt` and `lastAttemptError` (`JobAttemptExpiredError: Job attempt expired before the holding worker extended it`)
-3. Emit a `jobAttemptReclaimed` observability event per job
-4. Notify with one `notifyJobAttemptsLost` call carrying every reclaimed job id (original workers abort)
-5. Acquire again right away: the reclaim never takes more jobs than the worker has idle slots, so the worker picks the reclaimed jobs up itself without waking other workers
+**Local deadline.** The worker counts its lease as lost `durationMs − heartbeatMs` after the last successful renewal (or `startWorker`) was sent, measured on a monotonic local clock. The stored lease runs `durationMs` from a database `now()` taken after that send, so the local deadline comes at least `heartbeatMs` before the lease can expire, and no local timestamp is compared with the stored lease. With the defaults the deadline falls 45s after the last successful renewal was sent, so a worker survives one failed renewal and loses its lease when the next one fails too. The deadline fires even while a renewal hangs, and the worker checks it before every claim, so an event-loop stall cannot make a worker past its deadline look live.
+
+Losing the lease does not lose the jobs: a job is lost only once another worker reclaims it. Until then the attempt fence still matches, so a `complete` committed in the last `heartbeatMs` before the lease can expire succeeds. Once the job is reclaimed, `complete` throws `JobTakenByAnotherWorkerError` and the fallback reschedule matches nothing and emits `jobAttemptLost`.
+
+**Lost attempts.** While attempts are in flight, each successful renewal also reads their jobs and aborts the `signal` of every attempt whose job is no longer `running` at that attempt under this worker — deleted, completed by `completeChain`, or reclaimed. An attempt whose own `complete` has written is skipped, so its committed `complete` never aborts it. This works without a notify adapter; `listenJobAttemptLost` delivers the same signal sooner when one is configured.
+
+On the in-process and SQLite adapters a user transaction holds the global write lock, so a renewal waits for it; with the defaults a user transaction can run for 45s before the worker counts its lease as lost.
+
+## Reclamation
+
+A `running` job is reclaimed when its worker is **dead** — its lease expired — or **absent** — no worker row has its `attemptBy`. When idle slots remain in the main loop, the worker calls `reclaimExpiredJobAttempts` once with the idle slot count as `limit`. It runs in autocommit (one statement on [PostgreSQL](../postgres-internals/#worker-leases-and-reclaim), three steps under the write lock on [SQLite](../sqlite-internals/#worker-leases-and-reclaim)) and:
+
+1. Deletes up to `limit` workers whose lease expired
+2. Picks up to `limit` `running` jobs, of any type, whose worker is one of them or has no row
+3. Transitions them `running` → `pending`, clears `attemptAt` and `attemptBy`, and stamps `lastAttemptAt` and `lastAttemptError` (`JobAttemptReclaimedError: Worker holding the attempt lost its lease`)
+
+Then the worker:
+
+1. Emits `jobAttemptReclaimed` per job with `reclaimedFrom`, the id and name of the worker the job was reclaimed from; the name is `null` when its row was already gone
+2. Notifies with one `notifyJobAttemptsLost` call carrying every job id, so a process that lost its lease aborts the attempt
+
+Reclaim publishes no job-scheduled notification: workers acquire the released jobs on their next fill or poll. Jobs reclaimed by `stopWorker` take the same path, with `lastAttemptError` holding `JobAttemptReclaimedError: Worker holding the attempt stopped`. A reclaimed attempt counts as used.
 
 **Design decisions:**
 
 - **Integrated with main loop**: Runs once per iteration, no separate process needed.
-- **Bounded by idle slots**: Reclaims at most as many expired attempts as the worker has idle slots, so one iteration never releases more work than it can pick up itself.
-- **Type-scoped**: Only reclaims expired attempts for job types the worker is registered to handle.
-- **Concurrent-safe**: The reclaim skips rows another transaction holds (`SKIP LOCKED` in PostgreSQL), so it never interferes with a handler transaction that has already written the job in `complete`.
-- **Self-aware**: When running with multiple slots, the worker excludes jobs currently being processed by itself (via `ignoredJobIds`). This prevents a race condition where a worker could reclaim its own in-progress job if the attempt expires before the heartbeat extends it.
+- **Bounded by idle slots**: Reclaims at most as many jobs as the worker has idle slots, so one iteration never releases more work than it can pick up itself. A dead worker holding more jobs than that is deleted by the first call; the rest are absent from then on and go to later calls.
+- **Any type**: A worker reclaims jobs of every type, including types it does not process, so a dead worker's jobs never wait for a worker of their type.
+- **Locked through the worker row**: A dead worker is locked and deleted in the same statement that reclaims its jobs, and a renewal goes through the same row lock, so a worker renewing its lease never loses its jobs, and a live worker's jobs are never reclaimed.
+- **Concurrent-safe**: The reclaim skips job rows another transaction holds (`SKIP LOCKED` in PostgreSQL), so it never interferes with a handler transaction that has already written the job in `complete`; a later call reclaims a skipped job if it is still `running`.
 
 ## Retry and Backoff
 
@@ -119,18 +155,18 @@ Example with defaults: 10s → 20s → 40s → 80s → 160s → 300s → 300s...
 
 See [Job Processing](../job-processing/) for details on error handling and abort signals.
 
-`createInProcessWorker` validates every `recoveryBackoffConfig`, `backoffConfig` and `attemptConfig` passed to it, including unused `defaults`, and throws a `TypeError` listing each invalid field. `initialDelayMs` must be finite and non-negative, `maxDelayMs` non-negative (`Infinity` means no cap), and `multiplier`, `timeoutMs` and `heartbeatMs` finite and positive. Fractional values are allowed.
+`createInProcessWorker` validates `recoveryBackoffConfig`, `lease` and every `backoffConfig` passed to it, including unused `defaults`, and throws a `TypeError` listing each invalid field. `initialDelayMs` must be finite and non-negative, `maxDelayMs` non-negative (`Infinity` means no cap), `multiplier`, `durationMs` and `heartbeatMs` finite and positive, and `heartbeatMs` below a third of `durationMs`. Fractional values are allowed.
 
 ## Client-Based Construction
 
-`createInProcessWorker` accepts a `client` instance and extracts infrastructure (`stateAdapter`, `notifyAdapter`, `observabilityAdapter`, `jobTypes`, `log`) from it internally. Worker-specific options (`processors`, `workerName`, `concurrency`, `pollIntervalMs`, `recoveryBackoffConfig`, `defaults`, `requiredAttemptMiddleware`) remain separate parameters. The top-level `recoveryBackoffConfig` controls the worker's own main loop retry behavior (e.g., recovery from database connection errors). Per-attempt configuration — `backoffConfig`, `attemptConfig`, `attemptMiddleware` — lives on the processor registry; the worker-level `defaults.backoffConfig` / `defaults.attemptConfig` provide a fallback for processors that don't set their own (resolution order: processor → registry → worker `defaults` → library default). `requiredAttemptMiddleware` enforces that every slice merged into the worker includes a fixed set of middleware instances as an in-order subsequence — useful for guaranteeing cross-cutting concerns like auth or tracing are present on every slice. The worker only enforces presence; slices continue to run their own middleware chains.
+`createInProcessWorker` accepts a `client` instance and extracts infrastructure (`stateAdapter`, `notifyAdapter`, `observabilityAdapter`, `jobTypes`, `log`) from it internally. Worker-specific options (`processors`, `workerName`, `concurrency`, `pollIntervalMs`, `recoveryBackoffConfig`, `lease`, `defaults`, `requiredAttemptMiddleware`) remain separate parameters. The top-level `recoveryBackoffConfig` controls the worker's own main loop retry behavior (e.g., recovery from database connection errors) and the delay before the next worker after an uncertain write, and `lease` the lease of every worker it starts. Per-attempt configuration — `backoffConfig`, `attemptMiddleware` — lives on the processor registry; the worker-level `defaults.backoffConfig` provides a fallback for processors that don't set their own (resolution order: processor → registry → worker `defaults` → library default). `requiredAttemptMiddleware` enforces that every slice merged into the worker includes a fixed set of middleware instances as an in-order subsequence — useful for guaranteeing cross-cutting concerns like auth or tracing are present on every slice. The worker only enforces presence; slices continue to run their own middleware chains.
 This is purely a construction convenience — no lifecycle coupling is introduced. The client and worker remain independent after construction.
 
 ## Extensibility
 
 ### Multi-Type Workers
 
-A single worker can handle multiple job types. The main loop acquires jobs of all registered types for its idle slots, and each slot processes the job it was given. Per-type configuration (attempt, retry) overrides worker defaults.
+A single worker can handle multiple job types. The main loop acquires jobs of all registered types for its idle slots, and each slot processes the job it was given. Per-type retry configuration overrides worker defaults.
 
 ### Attempt Middlewares
 
@@ -146,7 +182,7 @@ The worker design emphasizes:
 
 1. **Simplicity**: Single main loop coordinating parallel slots
 2. **Efficiency**: Slots are self-contained, main loop just manages concurrency
-3. **Reliability**: Integrated attempt reclamation ensures recovery from failures
+3. **Reliability**: One lease per worker and integrated reclamation ensure recovery from crashed workers
 4. **Flexibility**: Per-type configuration, multi-type workers
 5. **Extensibility**: Handler middleware enable cross-cutting concerns
 

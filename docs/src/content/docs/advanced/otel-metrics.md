@@ -28,11 +28,12 @@ Attribute names follow OpenTelemetry semantic conventions (lowercase, dotted) an
 
 ### Worker Lifecycle
 
-| Metric                   | Attributes | Description                 |
-| ------------------------ | ---------- | --------------------------- |
-| `queuert.worker.started` | —          | Worker started processing   |
-| `queuert.worker.error`   | —          | Worker encountered an error |
-| `queuert.worker.stopped` | —          | Worker fully stopped        |
+| Metric                      | Attributes | Description                              |
+| --------------------------- | ---------- | ---------------------------------------- |
+| `queuert.worker.started`    | —          | Worker registered and started processing |
+| `queuert.worker.error`      | —          | Worker encountered an error              |
+| `queuert.worker.lease_lost` | —          | Worker lost its lease and is stopping    |
+| `queuert.worker.stopped`    | —          | Worker fully stopped                     |
 
 ### Job Lifecycle
 
@@ -52,7 +53,7 @@ Attribute names follow OpenTelemetry semantic conventions (lowercase, dotted) an
 | `queuert.job.attempt.completed` | `queuert.job.type`, `queuert.chain.type` | Attempt completed successfully (including `complete({ reschedule })`)                              |
 | `queuert.job.attempt.failed`    | `queuert.job.type`, `queuert.chain.type` | Attempt failed (may retry)                                                                         |
 | `queuert.job.attempt.lost`      | `queuert.job.type`, `queuert.chain.type` | Attempt lost ownership before committing: taken by another worker, completed elsewhere, or deleted |
-| `queuert.job.attempt.reclaimed` | `queuert.job.type`, `queuert.chain.type` | Expired attempt reclaimed for retry                                                                |
+| `queuert.job.attempt.reclaimed` | `queuert.job.type`, `queuert.chain.type` | Attempt reclaimed for retry from a worker that lost its lease or stopped                           |
 
 ### Chain Lifecycle
 

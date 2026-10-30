@@ -60,11 +60,11 @@ Observability events and notifications produced by `complete` are buffered in `t
 
 ## The Attempt Lifecycle
 
-<Diagram label="An attempt: acquire and heartbeat are single statements; the handler's work runs outside any transaction; complete() commits inside the handler's own transaction; afterwards the worker trusts the result complete() returned or runs one fenced reschedule">
+<Diagram label="An attempt: acquire is a single statement and the worker's lease heartbeat runs alongside; the handler's work runs outside any transaction; complete() commits inside the handler's own transaction; afterwards the worker trusts the result complete() returned or runs one fenced reschedule">
   <Flow direction="column">
-    <Node tone="blue" sub="single statement · sets attemptUntil">acquire</Node>
+    <Node tone="blue" sub="single statement · sets attemptBy to the worker">acquire</Node>
     <Arrow />
-    <Group title="attempt handler · heartbeat extends the attempt until complete() commits or the handler ends">
+    <Group title="attempt handler · the worker's heartbeat renews its lease while the handler runs">
       <Flow direction="column">
         <Node variant="ghost" sub="no transaction held">your work</Node>
         <Arrow />
@@ -88,8 +88,8 @@ Observability events and notifications produced by `complete` are buffered in `t
   </Flow>
 </Diagram>
 
-1. **Acquire.** The worker starts an attempt and sets its `attemptUntil`.
-2. **Heartbeat.** The worker extends the attempt every `attemptConfig.heartbeatMs` until the handler ends or its `complete` commits; see [In-Process Worker](../in-process-worker/#attempt-timeout-and-heartbeat).
+1. **Acquire.** The worker starts an attempt it owns: `attemptBy` holds the worker's id.
+2. **Heartbeat.** The worker renews its lease every `lease.heartbeatMs`, one renewal for all of its attempts, and the attempt stays owned while the lease is live; see [In-Process Worker](../in-process-worker/#lease-and-heartbeat).
 3. **Handler.** Your handler does its work, then opens a transaction, calls `complete` in it, and returns the `complete` result.
 4. **Commit detection.** The worker records the attempt as completed if a `complete` call's `transactionHooks` flushed, and otherwise fails it; see [Errors and Commit Detection](#errors-and-commit-detection).
 
@@ -122,13 +122,13 @@ Flushed hooks stand for a committed write only when two preconditions hold:
 - **`withTransactionHooks` wraps your transaction from outside**, so the hooks flush after COMMIT. Opened inside the transaction, they flush before COMMIT, and a COMMIT that then fails leaves nothing written.
 - **A `complete` inside a database savepoint that may be rolled back is also wrapped in `transactionHooks.withSavepoint`**, so rolling back the savepoint discards the buffered write too. See [Transaction Hooks](../../guides/transaction-hooks/#savepoints).
 
-If either is broken, the worker can count the attempt as completed although nothing was written. The job then stays `running` until its attempt expires and another worker reclaims it.
+If either is broken, the worker can count the attempt as completed although nothing was written. The job then stays `running` until its worker stops and `stopWorker` or reclaim returns it to `pending`.
 
 See [Job Processing Reliability](../../guides/processing-reliability/) for each scenario with code examples, and [Error Handling](../../guides/error-handling/) for handling permanently failing jobs.
 
 ## Abort Signal
 
-Every attempt handler receives a `signal` that aborts when the worker is stopping, when the attempt is lost (taken by another worker, deleted, or completed externally), or when ownership can no longer be confirmed (the heartbeat failed). Your own committed `complete` never aborts it. On abort, stop working and commit a `complete` — with partial output or `{ reschedule }` — or throw to reschedule with backoff. If the attempt was lost, `complete` writes nothing and throws. A handler that returns without a committed `complete` fails the attempt.
+Every attempt handler receives a `signal` that aborts when `stop()` is called, when the attempt is lost (taken by another worker, deleted, or completed externally), or when the worker loses its lease. Your own committed `complete` never aborts it. On abort, stop working and commit a `complete` — with partial output or `{ reschedule }` — or throw to reschedule with backoff. If the attempt was lost, `complete` writes nothing and throws. A handler that returns without a committed `complete` fails the attempt.
 
 ```typescript
 attemptHandler: async ({ signal, complete }) => {
@@ -148,7 +148,7 @@ attemptHandler: async ({ signal, complete }) => {
 
 - [Job Processing Reliability](../../guides/processing-reliability/) — What happens when a handler throws, before and after `complete`
 - [Client API](/queuert/api/core/type-aliases/client/) — Mutation methods, query methods, awaitChain
-- [In-Process Worker](../in-process-worker/) — Worker lifecycle, attempt timeouts, expired attempt reclamation
+- [In-Process Worker](../in-process-worker/) — Worker lifecycle, leases, reclamation
 - [Adapters](../adapters/) — StateAdapter context architecture
 - [`showcase-long-running-jobs`](https://github.com/kvet/queuert/tree/main/examples/showcase-long-running-jobs) — Runnable example: long work outside a transaction, then `complete` in your own transaction
 - [`showcase-signals`](https://github.com/kvet/queuert/tree/main/examples/showcase-signals) — Runnable example: external completion via `completeChain`, graceful shutdown with partial results

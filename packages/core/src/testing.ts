@@ -1,5 +1,4 @@
 // Test Suites
-export { attemptReclaimerTestSuite } from "./suites/attempt-reclaimer.test-suite.js";
 export { awaitChainTestSuite } from "./suites/await-chain.test-suite.js";
 export { blockerChainsTestSuite } from "./suites/blocker-chains.test-suite.js";
 export { chainsTestSuite } from "./suites/chains.test-suite.js";
@@ -23,6 +22,7 @@ export {
 } from "./suites/state-adapter-conformance.test-suite.js";
 export { stateResilienceTestSuite } from "./suites/state-resilience.test-suite.js";
 export { validationTestSuite } from "./suites/validation.test-suite.js";
+export { workerLivenessTestSuite } from "./suites/worker-liveness.test-suite.js";
 export { workerTestSuite } from "./suites/worker.test-suite.js";
 export { workerlessCompletionTestSuite } from "./suites/workerless-completion.test-suite.js";
 

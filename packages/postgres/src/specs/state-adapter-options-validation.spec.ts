@@ -104,6 +104,11 @@ describe("config", () => {
       /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/,
     );
     expect(config.validateId(crypto.randomUUID())).toBe(true);
+    expect(config.generateWorkerId()).toMatch(
+      /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/,
+    );
+    expect(config.generateWorkerId()).not.toBe(config.generateWorkerId());
+    expect(config.validateWorkerId("any-worker-id")).toBe(true);
     expect(config.maxBlockersPerJob).toBe(100);
     expect(config.countCap).toBe(10_000);
   });
@@ -111,13 +116,24 @@ describe("config", () => {
   it("exposes the configured options", async () => {
     const generateId = () => `job-${crypto.randomUUID()}`;
     const validateId = (id: string) => id.startsWith("job-");
+    const generateWorkerId = () => `worker-${crypto.randomUUID()}`;
+    const validateWorkerId = (id: string) => id.startsWith("worker-");
     const { config } = await createPgStateAdapter({
       stateProvider: dummyProvider,
       generateId,
       validateId,
+      generateWorkerId,
+      validateWorkerId,
       maxBlockersPerJob: 2,
       countCap: 3,
     });
-    expect(config).toEqual({ generateId, validateId, maxBlockersPerJob: 2, countCap: 3 });
+    expect(config).toEqual({
+      generateId,
+      validateId,
+      generateWorkerId,
+      validateWorkerId,
+      maxBlockersPerJob: 2,
+      countCap: 3,
+    });
   });
 });

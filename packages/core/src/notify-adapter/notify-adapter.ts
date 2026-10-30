@@ -20,7 +20,7 @@ export type NotifyAdapter = {
     chainId: string,
     onNotification: () => void,
   ) => Promise<() => Promise<void>>;
-  /** Notify that the given jobs lost their attempts (e.g. expired or workerless completion). */
+  /** Notify that the given jobs lost their attempts (e.g. reclaimed or workerless completion). */
   notifyJobAttemptsLost: (jobIds: string[]) => Promise<void>;
   /** Listen for attempt loss on a specific job. Returns a dispose function. */
   listenJobAttemptLost: (jobId: string, onNotification: () => void) => Promise<() => Promise<void>>;

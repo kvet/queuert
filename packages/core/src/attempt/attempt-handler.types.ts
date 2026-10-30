@@ -117,8 +117,8 @@ export type AttemptCompleteResult<
  * `transactionHooks`, not exactly one outcome, a second success or a concurrent call with the
  * same `transactionHooks`, or a call after the handler ended.
  *
- * @throws {@link JobTakenByAnotherWorkerError} if the attempt expired and the job was
- * reclaimed or acquired by another attempt.
+ * @throws {@link JobTakenByAnotherWorkerError} if the attempt's worker lost its lease and the job
+ * was reclaimed or acquired by another attempt.
  * @throws {@link JobAlreadyCompletedError} if the job was completed elsewhere, for example by
  * `client.completeChain`.
  * @throws {@link JobNotFoundError} if the job was deleted.
@@ -144,9 +144,9 @@ export type AttemptComplete<
 /**
  * Handler function called for each job attempt.
  *
- * Receives `signal` (aborts when the worker is stopping or the attempt is lost), `job` (the
- * running job with its completed blocker chains) and `complete` (commits the outcome inside the
- * caller's transaction). Do the work, then open a transaction and call `complete` inside it. The
+ * Receives `signal` (aborts when `stop()` is called, the worker loses its lease, or the attempt
+ * is lost), `job` (the running job with its completed blocker chains) and `complete` (commits the
+ * outcome inside the caller's transaction). Do the work, then open a transaction and call `complete` inside it. The
  * handler returns what `complete` returned.
  *
  * A `complete` call counts once its `transactionHooks` flushed — right after COMMIT when

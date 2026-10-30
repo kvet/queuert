@@ -35,8 +35,7 @@ The `job` table stores all job state:
 | `last_attempt_at`         | `timestamptz`                  | When the last failed attempt ended                                  |
 | `last_attempt_error`      | `jsonb`                        | Error from the last failed or reclaimed attempt                     |
 | `attempt_at`              | `timestamptz`                  | When the current attempt started (null when idle)                   |
-| `attempt_by`              | `text`                         | Worker ID holding the current attempt                               |
-| `attempt_until`           | `timestamptz`                  | Attempt expiry time                                                 |
+| `attempt_by`              | `text`                         | ID of the worker holding the current attempt                        |
 | `trace_context`           | `text`                         | W3C traceparent for this job                                        |
 | `chain_status`            | `text`                         | **Head rows only.** `running` or `completed` (CHECK-constrained)    |
 | `chain_completed_at`      | `timestamptz`                  | **Head rows only.** When the chain completed (null until completed) |
@@ -59,6 +58,21 @@ The `job_blocker` table tracks dependencies between jobs and chains:
 | `trace_context`       | `text`       | W3C traceparent                  |
 
 Primary key: `(job_id, blocked_by_chain_id, index)` — each blocker slot is unique.
+
+### Worker Table
+
+The `worker` table holds one row per worker, each with a lease:
+
+| Column        | Type          | Description                                                 |
+| ------------- | ------------- | ----------------------------------------------------------- |
+| `started_at`  | `timestamptz` | When the worker started                                     |
+| `lease_until` | `timestamptz` | Lease expiry — the worker is live while it is in the future |
+| `concurrency` | `integer`     | Most attempts the worker runs at once                       |
+| `id`          | `text`        | Worker ID, from the state adapter's `generateWorkerId`      |
+| `name`        | `text`        | The in-process worker's `workerName`                        |
+| `type_names`  | `text[]`      | Job types the worker processes                              |
+
+Primary key: `id`. A row is inserted by `startWorker`, its `lease_until` moved by `extendWorkerLease`, and it is deleted by `stopWorker` or by the reclaim that finds its lease expired. There is no foreign key from `job.attempt_by` to `worker.id`: a `running` job whose worker row is gone is reclaimed. The table has no index besides its primary key: it holds one row per live worker plus rows not reclaimed yet, so `listWorkers` scans it and `countWorkersByTypeNames` filters it with `= ANY(type_names)`.
 
 ### Migration Table
 
@@ -83,18 +97,19 @@ The `migration_lock` table holds a single-row lease that gives `migrateToLatest(
 
 ### Job Table
 
-| Index                     | Definition                                                                                                 | Purpose                                     |
-| ------------------------- | ---------------------------------------------------------------------------------------------------------- | ------------------------------------------- |
-| `chain_deduplication_idx` | `(chain_deduplication_key, created_at DESC) WHERE chain_deduplication_key IS NOT NULL AND chain_index = 0` | Deduplication lookup                        |
-| `chain_index_idx`         | `UNIQUE (chain_id, chain_index) WHERE chain_index > 0`                                                     | Chain position uniqueness                   |
-| `job_idx`                 | `(type_name, created_at)`                                                                                  | All jobs by type and time                   |
-| `job_pending_idx`         | `(type_name, scheduled_at) WHERE status = 'pending'`                                                       | Job acquisition and pending job listing     |
-| `job_blocked_idx`         | `(type_name, scheduled_at) WHERE status = 'blocked'`                                                       | Blocked job listing                         |
-| `job_running_idx`         | `(type_name, attempt_until) WHERE status = 'running'`                                                      | Attempt reclamation and running job listing |
-| `job_completed_idx`       | `(type_name, completed_at) WHERE status = 'completed'`                                                     | Completed job listing                       |
-| `chain_idx`               | `(type_name, created_at) WHERE chain_index = 0`                                                            | Chains by type and time                     |
-| `chain_running_idx`       | `(type_name, created_at) WHERE chain_index = 0 AND chain_status = 'running'`                               | Running chain listing                       |
-| `chain_completed_idx`     | `(type_name, chain_completed_at) WHERE chain_index = 0 AND chain_status = 'completed'`                     | Completed chain listing                     |
+| Index                     | Definition                                                                                                 | Purpose                                                          |
+| ------------------------- | ---------------------------------------------------------------------------------------------------------- | ---------------------------------------------------------------- |
+| `chain_deduplication_idx` | `(chain_deduplication_key, created_at DESC) WHERE chain_deduplication_key IS NOT NULL AND chain_index = 0` | Deduplication lookup                                             |
+| `chain_index_idx`         | `UNIQUE (chain_id, chain_index) WHERE chain_index > 0`                                                     | Chain position uniqueness                                        |
+| `job_idx`                 | `(type_name, created_at)`                                                                                  | All jobs by type and time                                        |
+| `job_pending_idx`         | `(type_name, scheduled_at) WHERE status = 'pending'`                                                       | Job acquisition and pending job listing                          |
+| `job_blocked_idx`         | `(type_name, scheduled_at) WHERE status = 'blocked'`                                                       | Blocked job listing                                              |
+| `job_running_idx`         | `(type_name, attempt_at) WHERE status = 'running'`                                                         | Running job listing                                              |
+| `job_attempt_by_idx`      | `(attempt_by) WHERE status = 'running'`                                                                    | Reclaim, `stopWorker`, worker job listing and running job counts |
+| `job_completed_idx`       | `(type_name, completed_at) WHERE status = 'completed'`                                                     | Completed job listing                                            |
+| `chain_idx`               | `(type_name, created_at) WHERE chain_index = 0`                                                            | Chains by type and time                                          |
+| `chain_running_idx`       | `(type_name, created_at) WHERE chain_index = 0 AND chain_status = 'running'`                               | Running chain listing                                            |
+| `chain_completed_idx`     | `(type_name, chain_completed_at) WHERE chain_index = 0 AND chain_status = 'completed'`                     | Completed chain listing                                          |
 
 ### Job Blocker Table
 
@@ -110,11 +125,11 @@ Queuert supports only READ COMMITTED, PostgreSQL's default isolation level. This
 
 The adapter uses three notification channels (configurable prefix, default `queuert`):
 
-| Channel           | Published When                      | Payload       | Purpose                             |
-| ----------------- | ----------------------------------- | ------------- | ----------------------------------- |
-| `{prefix}_sched`  | Jobs become pending                 | Job type name | Wake idle workers                   |
-| `{prefix}_chainc` | Chain completes                     | Chain ID      | Wake clients awaiting chain results |
-| `{prefix}_atls`   | Attempt expires and job is released | Job ID        | Notify workers of attempt loss      |
+| Channel           | Published When       | Payload       | Purpose                             |
+| ----------------- | -------------------- | ------------- | ----------------------------------- |
+| `{prefix}_sched`  | Jobs become pending  | Job type name | Wake idle workers                   |
+| `{prefix}_chainc` | Chain completes      | Chain ID      | Wake clients awaiting chain results |
+| `{prefix}_atls`   | Attempt is reclaimed | Job ID        | Notify workers of attempt loss      |
 
 Each notify method hands its whole batch to `PgNotifyProvider.publish` in one call, and the example providers publish it in one statement (`SELECT pg_notify($1, message) FROM unnest($2::text[]) AS message` in `notify-postgres-pg`, `json_array_elements_text` in the postgres-js and Bun.SQL examples), so a commit costs one round-trip per channel. PostgreSQL delivers identical channel and payload pairs once per transaction, so the items in a batch are expected to be unique.
 
@@ -125,6 +140,7 @@ All listening workers query the database on each job-scheduled notification. `FO
 The schema configures aggressive autovacuum and storage settings on the job tables:
 
 - **`fillfactor = 75`** on `job` reserves free space per heap page for HOT updates. `job_blocker` skips it — blockers are inserted and deleted without intermediate updates.
+- **`fillfactor = 50`** on `worker` leaves room for each lease renewal to be a HOT update on the same page.
 - **`autovacuum_vacuum_threshold` / `autovacuum_analyze_threshold = 5000`** with **`scale_factor = 0`** on both tables pin autovacuum to a fixed dead-tuple budget, and **`autovacuum_vacuum_cost_delay = 0`** removes I/O throttling.
 
 ## See Also

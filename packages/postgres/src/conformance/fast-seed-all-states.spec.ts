@@ -21,9 +21,15 @@ const jobQuery = `
     chain_trace_context, trace_context,
     continued_to_id IS NOT NULL AS has_continuation,
     chain_completed_at IS NOT NULL AS has_chain_completion,
-    created_at, scheduled_at, attempt_at, attempt_until, completed_at, last_attempt_at
+    created_at, scheduled_at, attempt_at, completed_at, last_attempt_at
   FROM public.queuert_job
   ORDER BY type_name, chain_index, (input->>'index')::int NULLS LAST, (input->>'n')::int NULLS LAST
+`;
+
+const workerQuery = `
+  SELECT id, name, type_names, concurrency, lease_until > now() AS live
+  FROM public.queuert_worker
+  ORDER BY id
 `;
 
 const blockerQuery = `
@@ -44,7 +50,6 @@ type TimestampRow = {
   created_at: Date;
   scheduled_at: Date;
   attempt_at: Date | null;
-  attempt_until: Date | null;
   completed_at: Date | null;
   last_attempt_at: Date | null;
 };
@@ -58,9 +63,6 @@ const assertTemporalRelationships = (rows: TimestampRow[], label: string) => {
     }
     if (row.attempt_at) {
       expect(row.attempt_at >= row.created_at, `${ctx}: attempt_at >= created_at`).toBe(true);
-    }
-    if (row.attempt_until && row.attempt_at) {
-      expect(row.attempt_until > row.attempt_at, `${ctx}: attempt_until > attempt_at`).toBe(true);
     }
     if (row.completed_at) {
       expect(row.completed_at >= row.created_at, `${ctx}: completed_at >= created_at`).toBe(true);
@@ -90,20 +92,24 @@ describe("fast seed conformance", { timeout: 120_000 }, () => {
       // Reset
       await pool.query("DELETE FROM queuert_job_blocker");
       await pool.query("DELETE FROM queuert_job");
+      await pool.query("DELETE FROM queuert_worker");
 
       // Correct seed
       await seedAllStates(adapter, { scale });
       const { rows: correctJobs } = await pool.query<TimestampRow>(jobQuery);
       const { rows: correctBlockers } = await pool.query(blockerQuery);
+      const { rows: correctWorkers } = await pool.query(workerQuery);
 
       // Reset
       await pool.query("DELETE FROM queuert_job_blocker");
       await pool.query("DELETE FROM queuert_job");
+      await pool.query("DELETE FROM queuert_worker");
 
       // Fast seed
       await fastSeedAllStates(provider, { scale });
       const { rows: fastJobs } = await pool.query<TimestampRow>(jobQuery);
       const { rows: fastBlockers } = await pool.query(blockerQuery);
+      const { rows: fastWorkers } = await pool.query(workerQuery);
 
       // Structural equivalence (non-timestamp columns)
       const stripTimestamps = (row: TimestampRow) => {
@@ -111,9 +117,8 @@ describe("fast seed conformance", { timeout: 120_000 }, () => {
           created_at: _,
           scheduled_at: _2,
           attempt_at: _3,
-          attempt_until: _4,
-          completed_at: _5,
-          last_attempt_at: _6,
+          completed_at: _4,
+          last_attempt_at: _5,
           ...rest
         } = row;
         return rest;
@@ -122,6 +127,7 @@ describe("fast seed conformance", { timeout: 120_000 }, () => {
         correctJobs.map(stripTimestamps),
       );
       expect(fastBlockers, `scale=${scale} blockers`).toEqual(correctBlockers);
+      expect(fastWorkers, `scale=${scale} workers`).toEqual(correctWorkers);
 
       // Timestamp nullability must match (if correct has attempt_at set, fast must too)
       const toShape = (row: TimestampRow) => ({
@@ -130,7 +136,6 @@ describe("fast seed conformance", { timeout: 120_000 }, () => {
         input_index: row.input_index,
         has_scheduled_at: row.scheduled_at != null,
         has_attempt_at: row.attempt_at != null,
-        has_attempt_until: row.attempt_until != null,
         has_completed_at: row.completed_at != null,
         has_last_attempt_at: row.last_attempt_at != null,
       });

@@ -1,5 +1,4 @@
 // oxlint-disable no-empty-pattern
-import { sleep } from "@queuert/helpers";
 import { it as baseIt, describe, expect, onTestFinished, vi } from "vitest";
 
 import {
@@ -109,7 +108,7 @@ describe("Logging", () => {
     });
 
     const workerArgs = {
-      workerId: expect.stringMatching(/^worker-[0-9a-f-]{36}$/) as unknown as string,
+      workerId: expect.stringMatching(/^[0-9a-f-]{36}$/) as unknown as string,
     };
     const chainArgs = {
       typeName: "test",
@@ -124,7 +123,10 @@ describe("Logging", () => {
     expectLogs([
       { type: "chain_created", data: { ...chainArgs, input: { test: true } } },
       { type: "job_created", data: { ...jobArgs, input: { test: true } } },
-      { type: "worker_started", data: { ...workerArgs, jobTypeNames: ["test"] } },
+      {
+        type: "worker_started",
+        data: { ...workerArgs, workerName: "worker", jobTypeNames: ["test"] },
+      },
       {
         type: "job_attempt_started",
         data: { ...jobArgs, status: "running", attempt: 1, ...workerArgs },
@@ -147,7 +149,7 @@ describe("Logging", () => {
           ...workerArgs,
         },
       },
-      { type: "worker_stopped", data: { ...workerArgs } },
+      { type: "worker_stopped", data: { ...workerArgs, workerName: "worker" } },
     ]);
   });
 
@@ -764,63 +766,19 @@ describe("Logging", () => {
       jobTypes,
     });
 
-    let failed = false;
-    const jobStarted = Promise.withResolvers<void>();
-    const jobCompleted = Promise.withResolvers<void>();
-    const attemptConfig = { timeoutMs: 10, heartbeatMs: 100 };
-
-    const worker1 = await createInProcessWorker({
+    const worker = await createInProcessWorker({
       client,
-      concurrency: 1,
-      pollIntervalMs: attemptConfig.timeoutMs,
+      workerName: "worker",
+      pollIntervalMs: 50,
       processors: createProcessors({
         client,
         jobTypes,
-        attemptConfig,
         processors: {
           test: {
-            attemptHandler: async ({ signal, complete }) => {
-              if (!failed) {
-                failed = true;
-                jobStarted.resolve();
-                try {
-                  await sleep(attemptConfig.heartbeatMs * 2, { signal });
-                } finally {
-                  jobCompleted.resolve();
-                }
-              }
-              return withTransaction(async (txCtx, transactionHooks) =>
+            attemptHandler: async ({ complete }) =>
+              withTransaction(async (txCtx, transactionHooks) =>
                 complete({ ...txCtx, transactionHooks, output: null }),
-              );
-            },
-          },
-        },
-      }),
-    });
-    const worker2 = await createInProcessWorker({
-      client,
-      concurrency: 1,
-      pollIntervalMs: attemptConfig.timeoutMs,
-      processors: createProcessors({
-        client,
-        jobTypes,
-        attemptConfig,
-        processors: {
-          test: {
-            attemptHandler: async ({ signal, complete }) => {
-              if (!failed) {
-                failed = true;
-                jobStarted.resolve();
-                try {
-                  await sleep(attemptConfig.heartbeatMs * 2, { signal });
-                } finally {
-                  jobCompleted.resolve();
-                }
-              }
-              return withTransaction(async (txCtx, transactionHooks) =>
-                complete({ ...txCtx, transactionHooks, output: null }),
-              );
-            },
+              ),
           },
         },
       }),
@@ -829,25 +787,101 @@ describe("Logging", () => {
     const chain = await withTransaction(async (txCtx, transactionHooks) =>
       client.createChain({ ...txCtx, transactionHooks, typeName: "test", input: null }),
     );
+    await stateAdapter.startWorker({
+      workerId: "crashed",
+      name: "crashed",
+      typeNames: [],
+      concurrency: 1,
+      leaseMs: 1,
+    });
+    await stateAdapter.startJobAttempts({ typeNames: ["test"], workerId: "crashed", limit: 1 });
 
-    await withWorkers([await worker1.start(), await worker2.start()], async () => {
-      await jobStarted.promise;
-      await sleep(10);
-
-      const successChain = await withTransaction(async (txCtx, transactionHooks) =>
-        client.createChain({ ...txCtx, transactionHooks, typeName: "test", input: null }),
-      );
-
-      await Promise.all([
-        client.awaitChain(chain, completionOptions),
-        client.awaitChain(successChain, completionOptions),
-      ]);
-      await jobCompleted.promise;
+    await withWorkers([await worker.start()], async () => {
+      await client.awaitChain(chain, completionOptions);
     });
 
-    const logTypes = new Set(log.mock.calls.map((call) => call[0].type));
-    expect(logTypes).toContain("job_attempt_reclaimed");
-    expect(logTypes).toContain("job_attempt_lost");
+    expect(log).toHaveBeenCalledWith({
+      type: "job_attempt_reclaimed",
+      level: "info",
+      message: "Reclaimed job attempt",
+      data: {
+        id: chain.id,
+        typeName: "test",
+        chainId: chain.id,
+        chainTypeName: "test",
+        status: "pending",
+        attempt: 1,
+        attemptAt: null,
+        attemptBy: null,
+        workerId: expect.stringMatching(/^[0-9a-f-]{36}$/),
+        reclaimedFrom: { workerId: "crashed", workerName: "crashed" },
+      },
+    });
+  });
+
+  it("logs a lost worker lease", async ({
+    stateAdapter,
+    notifyAdapter,
+    withWorkers,
+    observabilityAdapter,
+    log,
+    expectLogs,
+  }) => {
+    const jobTypes = defineJobTypes<{
+      test: { entry: true; input: null; output: null };
+    }>();
+
+    const workerIds: string[] = [];
+    const client = await createClient({
+      stateAdapter: {
+        ...stateAdapter,
+        startWorker: async (params) => {
+          workerIds.push(params.workerId);
+          return stateAdapter.startWorker(params);
+        },
+        extendWorkerLease: async (params) =>
+          params.workerId === workerIds[0] ? undefined : stateAdapter.extendWorkerLease(params),
+      },
+      notifyAdapter,
+      observabilityAdapter,
+      log,
+      jobTypes,
+    });
+
+    const worker = await createInProcessWorker({
+      client,
+      workerName: "worker",
+      lease: { durationMs: 1000, heartbeatMs: 20 },
+      processors: createProcessors({
+        client,
+        jobTypes,
+        processors: {
+          test: {
+            attemptHandler: async () => {
+              throw new Error("not expected to run");
+            },
+          },
+        },
+      }),
+    });
+
+    await withWorkers([await worker.start()], async () => {
+      await expect.poll(() => workerIds, { timeout: 5000 }).toHaveLength(2);
+    });
+
+    expectLogs([
+      { type: "worker_started", data: { workerId: workerIds[0], workerName: "worker" } },
+      { type: "worker_lease_lost", data: { workerId: workerIds[0], workerName: "worker" } },
+      { type: "worker_stopped", data: { workerId: workerIds[0], workerName: "worker" } },
+      { type: "worker_started", data: { workerId: workerIds[1], workerName: "worker" } },
+      { type: "worker_stopped", data: { workerId: workerIds[1], workerName: "worker" } },
+    ]);
+    expect(log).toHaveBeenCalledWith({
+      type: "worker_lease_lost",
+      level: "warn",
+      message: "Worker lost its lease",
+      data: { workerId: workerIds[0], workerName: "worker" },
+    });
   });
 
   it("logs a lost attempt once after a workerless takeover", async ({
@@ -1449,10 +1483,10 @@ describe("Logging rollback", () => {
       client: workerClient,
       concurrency: 1,
       pollIntervalMs: 50,
+      recoveryBackoffConfig: { initialDelayMs: 10, multiplier: 1, maxDelayMs: 10 },
       processors: createProcessors({
         client,
         jobTypes,
-        attemptConfig: { timeoutMs: 50, heartbeatMs: 500 },
         processors: {
           test: {
             attemptHandler: async ({ complete }) => {

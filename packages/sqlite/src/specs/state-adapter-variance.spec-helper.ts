@@ -19,6 +19,8 @@ export const extendWithVarianceStateSqlite = <T>(
     idType?: string;
     generateId?: () => string;
     validateId?: (id: string) => boolean;
+    generateWorkerId?: () => string;
+    validateWorkerId?: (id: string) => boolean;
     maxBlockersPerJob?: number;
     countCap?: number;
   },

@@ -1,5 +1,4 @@
 import { type AnyAttemptMiddleware } from "../attempt-middleware/attempt-middleware.js";
-import { type AttemptConfig } from "../attempt/attempt-config.js";
 import { type AttemptHandler } from "../attempt/attempt-handler.types.js";
 import { type BackoffConfig } from "../entities/backoff.js";
 import { type BaseJobTypeDefinitions } from "../job-types/job-type.js";
@@ -23,8 +22,6 @@ export type InProcessWorkerProcessor<
   >;
   /** Per-job-type backoff configuration (overrides registry/worker defaults) */
   backoffConfig?: BackoffConfig;
-  /** Per-job-type attempt configuration (overrides registry/worker defaults) */
-  attemptConfig?: AttemptConfig;
 };
 
 /**

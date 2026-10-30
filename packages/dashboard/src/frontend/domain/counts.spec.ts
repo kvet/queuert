@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 
-import { formatCount, formatSum, sumCounts } from "./counts.js";
+import { formatCount, formatSum, isStrandedType, sumCounts } from "./counts.js";
 
 describe("counts", () => {
   it("formats a capped count with a trailing +", () => {
@@ -23,5 +23,17 @@ describe("counts", () => {
     expect(capped).toEqual({ count: 10_005, hasMore: true });
     expect(formatSum(capped)).toBe(`≥${(10_005).toLocaleString()}`);
     expect(sumCounts([])).toEqual({ count: 0, hasMore: false });
+  });
+
+  it("flags a type with pending jobs and no live worker as stranded", () => {
+    expect(isStrandedType({ pending: { count: 3, hasMore: false }, liveWorkerCount: 0 })).toBe(
+      true,
+    );
+    expect(isStrandedType({ pending: { count: 3, hasMore: false }, liveWorkerCount: 1 })).toBe(
+      false,
+    );
+    expect(isStrandedType({ pending: { count: 0, hasMore: false }, liveWorkerCount: 0 })).toBe(
+      false,
+    );
   });
 });

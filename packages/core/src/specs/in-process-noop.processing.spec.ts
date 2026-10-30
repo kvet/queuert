@@ -1,7 +1,6 @@
 import { describe, it } from "vitest";
 
 import { extendWithStateInProcess } from "../state-adapter/state-adapter.in-process.spec-helper.js";
-import { attemptReclaimerTestSuite } from "../suites/attempt-reclaimer.test-suite.js";
 import { processErrorHandlingTestSuite } from "../suites/process-error-handling.test-suite.js";
 import { processTestSuite } from "../suites/process.test-suite.js";
 import {
@@ -9,6 +8,7 @@ import {
   extendWithNotifyNoop,
   extendWithResourceLeakDetection,
 } from "../suites/spec-context.spec-helper.js";
+import { workerLivenessTestSuite } from "../suites/worker-liveness.test-suite.js";
 import { workerTestSuite } from "../suites/worker.test-suite.js";
 
 const inProcessNoopIt = extendWithResourceLeakDetection(
@@ -30,6 +30,6 @@ describe("Worker", () => {
   workerTestSuite({ it: inProcessNoopIt });
 });
 
-describe("Attempt Reclamation", () => {
-  attemptReclaimerTestSuite({ it: inProcessNoopIt });
+describe("Worker Liveness", () => {
+  workerLivenessTestSuite({ it: inProcessNoopIt });
 });

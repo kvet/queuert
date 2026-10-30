@@ -1,7 +1,6 @@
 import { describe, it } from "vitest";
 
 import { extendWithStateInProcess } from "../state-adapter/state-adapter.in-process.spec-helper.js";
-import { attemptReclaimerTestSuite } from "../suites/attempt-reclaimer.test-suite.js";
 import { awaitChainTestSuite } from "../suites/await-chain.test-suite.js";
 import { blockerChainsTestSuite } from "../suites/blocker-chains.test-suite.js";
 import { chainsTestSuite } from "../suites/chains.test-suite.js";
@@ -16,6 +15,7 @@ import {
   extendWithNotifyInProcess,
   extendWithResourceLeakDetection,
 } from "../suites/spec-context.spec-helper.js";
+import { workerLivenessTestSuite } from "../suites/worker-liveness.test-suite.js";
 import { workerTestSuite } from "../suites/worker.test-suite.js";
 import { workerlessCompletionTestSuite } from "../suites/workerless-completion.test-suite.js";
 import { notifyResilienceTestSuite, stateResilienceTestSuite } from "../testing.js";
@@ -39,8 +39,8 @@ describe("Worker", () => {
   workerTestSuite({ it: inProcessInProcessIt });
 });
 
-describe("Attempt Reclamation", () => {
-  attemptReclaimerTestSuite({ it: inProcessInProcessIt });
+describe("Worker Liveness", () => {
+  workerLivenessTestSuite({ it: inProcessInProcessIt });
 });
 
 describe("Chains", () => {

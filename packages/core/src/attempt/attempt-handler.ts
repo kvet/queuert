@@ -24,9 +24,8 @@ import {
 } from "../state-adapter/state-adapter.js";
 import { requireTxCtx } from "../state-adapter/tx-context.js";
 import { createTransactionHooks, requireTransactionHooks } from "../transaction-hooks.js";
-import { type AttemptConfig } from "./attempt-config.js";
 import { type AnyAttemptHandler, type AnyCompleteOptions } from "./attempt-handler.types.js";
-import { type AttemptOwnership, startAttemptOwnership } from "./attempt-ownership.js";
+import { type AttemptOwnership } from "./attempt-ownership.js";
 
 type CompleteWrite = {
   stateJob: StateJob & { continuation?: StateJobInfo };
@@ -94,7 +93,6 @@ const createComplete = (
         flush: (state) => {
           if (state.write === null) return;
           committed = state.write;
-          void ownership.stopHeartbeat();
         },
         discard: (state) => {
           state.write = null;
@@ -253,27 +251,21 @@ export const runAttempt = async ({
   attemptHandler,
   stateJob,
   backoffConfig,
-  attemptConfig,
   workerId,
   attemptMiddleware,
-  stopSignal,
+  ownership,
+  onRescheduleError,
 }: {
   helpers: Helpers;
   attemptHandler: AnyAttemptHandler;
   stateJob: StateJob & { hasBlockers: boolean };
   backoffConfig: BackoffConfig;
-  attemptConfig: AttemptConfig;
   workerId: string;
   attemptMiddleware?: readonly AnyAttemptMiddleware[];
-  stopSignal: AbortSignal;
+  ownership: AttemptOwnership;
+  onRescheduleError: (error: unknown) => void;
 }): Promise<void> => {
   const fence: StateAttemptFence = { attempt: stateJob.attempt, workerId };
-  const ownership = await startAttemptOwnership(helpers, {
-    stateJob,
-    fence,
-    attemptConfig,
-    stopSignal,
-  });
   const startTime = Date.now();
   helpers.observabilityHelper.jobAttemptStarted(stateJob, { workerId });
   const span = helpers.observabilityHelper.startAttemptSpan(stateJob, { workerId });
@@ -294,7 +286,7 @@ export const runAttempt = async ({
   );
 
   const committed = close();
-  await ownership.release();
+  await ownership.dispose();
 
   helpers.observabilityHelper.jobAttemptDuration(stateJob, {
     durationMs: Date.now() - startTime,
@@ -311,8 +303,11 @@ export const runAttempt = async ({
       fence,
       backoffConfig,
       failure,
+    }).catch((rescheduleError: unknown) => {
+      onRescheduleError(rescheduleError);
+      return undefined;
     });
-    if (!rescheduled) {
+    if (rescheduled === false) {
       helpers.observabilityHelper.jobAttemptLost(stateJob, { workerId });
       span?.end({ status: "failed", error: failure });
     }

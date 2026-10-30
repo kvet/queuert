@@ -1,10 +1,15 @@
 import { randomUUID } from "node:crypto";
 
 import { type AcquiredPostgres, acquirePostgres } from "@queuert/testcontainers";
+import { createMigrator, createTemplateApplier } from "@queuert/typed-sql";
 import { Pool } from "pg";
 import { it as baseIt, describe, expect } from "vitest";
 
-import { createPgStateAdapter } from "../state-adapter/state-adapter.pg.js";
+import {
+  createMigrationStore,
+  createPgStateAdapter,
+  migrations,
+} from "../state-adapter/state-adapter.pg.js";
 import {
   type PgPoolContext,
   createPgPoolProvider,
@@ -12,7 +17,8 @@ import {
 import { type PgStateProvider } from "../state-provider/state-provider.pg.js";
 
 const INSTALL = "001_initial_schema";
-const ALL = [INSTALL];
+const WORKER_LIVENESS = "002_worker_liveness";
+const ALL = [INSTALL, WORKER_LIVENESS];
 
 type Provider = PgStateProvider<PgPoolContext>;
 type Database = {
@@ -52,7 +58,8 @@ const relations = async (provider: Provider): Promise<Record<string, boolean>> =
     `SELECT to_regclass('public.queuert_job') AS job,
             to_regclass('public.queuert_job_blocker') AS job_blocker,
             to_regclass('public.queuert_migration') AS migration,
-            to_regclass('public.queuert_migration_lock') AS migration_lock`,
+            to_regclass('public.queuert_migration_lock') AS migration_lock,
+            to_regclass('public.queuert_worker') AS worker`,
   );
   return Object.fromEntries(Object.entries(row).map(([name, value]) => [name, value !== null]));
 };
@@ -64,6 +71,34 @@ const indexNames = async (provider: Provider): Promise<string[]> =>
       "SELECT indexname FROM pg_indexes WHERE schemaname = 'public' ORDER BY indexname",
     )
   ).map((row) => row.indexname);
+
+const migrateToInstall = async (provider: Provider): Promise<void> => {
+  await createMigrator<PgPoolContext>({
+    migrations: migrations.filter((migration) => migration.name === INSTALL),
+    store: createMigrationStore(
+      provider,
+      createTemplateApplier({ schema: "public", table_prefix: "queuert_", id_type: "uuid" }),
+    ),
+  }).migrateToLatest();
+};
+
+const jobColumnNames = async (provider: Provider): Promise<string[]> =>
+  (
+    await query<{ column_name: string }>(
+      provider,
+      "SELECT column_name FROM information_schema.columns WHERE table_schema = 'public' AND table_name = 'queuert_job' ORDER BY column_name",
+    )
+  ).map((row) => row.column_name);
+
+const workerColumns = async (provider: Provider): Promise<string[]> =>
+  (
+    await query<{ column_name: string; udt_name: string; is_nullable: string }>(
+      provider,
+      "SELECT column_name, udt_name, is_nullable FROM information_schema.columns WHERE table_schema = 'public' AND table_name = 'queuert_worker' ORDER BY column_name",
+    )
+  ).map(
+    (row) => `${row.column_name} ${row.udt_name}${row.is_nullable === "NO" ? " NOT NULL" : ""}`,
+  );
 
 describe("migrateToLatest", () => {
   it(
@@ -80,7 +115,16 @@ describe("migrateToLatest", () => {
         job_blocker: true,
         migration: true,
         migration_lock: true,
+        worker: true,
       });
+      expect(await workerColumns(provider)).toEqual([
+        "concurrency int4 NOT NULL",
+        "id text NOT NULL",
+        "lease_until timestamptz NOT NULL",
+        "name text",
+        "started_at timestamptz NOT NULL",
+        "type_names _text NOT NULL",
+      ]);
     },
   );
 
@@ -92,6 +136,7 @@ describe("migrateToLatest", () => {
       "queuert_chain_idx",
       "queuert_chain_index_idx",
       "queuert_chain_running_idx",
+      "queuert_job_attempt_by_idx",
       "queuert_job_blocked_idx",
       "queuert_job_blocker_chain_idx",
       "queuert_job_blocker_pkey",
@@ -102,7 +147,9 @@ describe("migrateToLatest", () => {
       "queuert_job_running_idx",
       "queuert_migration_lock_pkey",
       "queuert_migration_pkey",
+      "queuert_worker_pkey",
     ]);
+    expect(await jobColumnNames(provider)).not.toContain("attempt_until");
   });
 
   it("is a no-op on a second run", { timeout: 120_000 }, async ({ fresh: { adapter } }) => {
@@ -125,6 +172,39 @@ describe("migrateToLatest", () => {
       expect(loser.applied).toEqual([]);
       expect(loser.skipped).toEqual(ALL);
       expect(await query(provider, "SELECT * FROM queuert_migration_lock")).toHaveLength(0);
+    },
+  );
+
+  it(
+    "upgrades a database with running jobs of the previous version, which reclaim returns to pending",
+    { timeout: 120_000 },
+    async ({ fresh: { provider, adapter } }) => {
+      await migrateToInstall(provider);
+      const jobId = randomUUID();
+      await query(
+        provider,
+        `INSERT INTO queuert_job (id, type_name, chain_id, chain_index, status, chain_status, attempt, attempt_at, attempt_by, attempt_until)
+         VALUES ('${jobId}', 'legacy', '${jobId}', 0, 'running', 'running', 1, now(), 'legacy-worker', now() + interval '60 seconds')`,
+      );
+
+      expect(await adapter.migrateToLatest()).toEqual({
+        applied: [WORKER_LIVENESS],
+        skipped: [INSTALL],
+        unrecognized: [],
+      });
+      expect(await jobColumnNames(provider)).not.toContain("attempt_until");
+
+      const [running] = await adapter.getJobs({ jobIds: [jobId] });
+      expect(running!.status).toBe("running");
+      expect(running!.attemptBy).toBe("legacy-worker");
+
+      const [reclaimed] = await adapter.reclaimExpiredJobAttempts({
+        lastAttemptError: "JobAttemptReclaimedError: upgraded",
+        limit: 1,
+      });
+      expect(reclaimed.id).toBe(jobId);
+      expect(reclaimed.status).toBe("pending");
+      expect(reclaimed.reclaimedFrom).toEqual({ workerId: "legacy-worker", workerName: null });
     },
   );
 });

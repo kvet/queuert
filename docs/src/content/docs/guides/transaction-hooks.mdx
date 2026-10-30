@@ -153,4 +153,4 @@ An attempt counts as completed once the `transactionHooks` of a successful `comp
 - **`withTransactionHooks` wraps your transaction from outside**, so the hooks flush after COMMIT rather than before it.
 - **A `complete` inside a database savepoint that may be rolled back is also wrapped in `transactionHooks.withSavepoint`** (or a `createSavepoint` handle rolled back alongside the database savepoint). Rolling back only the database savepoint undoes the write but leaves `complete`'s buffered result in the hooks.
 
-If either is broken, the worker counts the attempt as completed while nothing was written: the job stays `running` until its attempt expires and another worker reclaims it.
+If either is broken, the worker counts the attempt as completed while nothing was written: the job stays `running` until its worker stops and `stopWorker` or reclaim returns it to `pending`.

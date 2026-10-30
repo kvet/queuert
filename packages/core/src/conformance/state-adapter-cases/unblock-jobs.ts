@@ -434,7 +434,7 @@ export const unblockJobsGroup: ConformanceGroup<StateConformanceFixture> = {
           stateAdapter.startJobAttempts({
             txCtx,
             workerId: "worker-1",
-            timeoutMsByTypeName: { "fairness-main": 30_000 },
+            typeNames: ["fairness-main"],
             limit: 1,
           }),
         );
@@ -442,7 +442,7 @@ export const unblockJobsGroup: ConformanceGroup<StateConformanceFixture> = {
           stateAdapter.startJobAttempts({
             txCtx,
             workerId: "worker-1",
-            timeoutMsByTypeName: { "fairness-main": 30_000 },
+            typeNames: ["fairness-main"],
             limit: 1,
           }),
         );

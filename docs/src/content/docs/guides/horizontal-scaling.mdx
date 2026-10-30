@@ -58,7 +58,9 @@ const workerB = await createInProcessWorker({
 });
 ```
 
-`workerName` is an optional human-readable label. The runtime always appends a random UUID, so two replicas sharing the same name still get distinct ids and cannot collide on job attempts. Workers compete for available jobs — when one acquires a job, others skip it. The notify adapter (Redis, PostgreSQL LISTEN/NOTIFY, etc.) ensures workers wake up immediately when new jobs are queued.
+`workerName` is an optional human-readable label, stored with each worker the in-process worker starts and carried on its events. Worker ids come from the state adapter's `generateWorkerId` (a random UUID by default) and never include the name, so two replicas sharing the same name still get distinct ids and cannot collide on job attempts. Workers compete for available jobs — when one acquires a job, others skip it. The notify adapter (Redis, PostgreSQL LISTEN/NOTIFY, etc.) ensures workers wake up immediately when new jobs are queued.
+
+Each worker is a row in the database with a lease that its process renews. When a process crashes, its lease expires and any other worker reclaims its jobs, whatever their type, so a crashed replica's jobs return to `pending` even when no other worker processes their type.
 
 ## Specialized Workers
 
@@ -129,7 +131,7 @@ See [Feature Slices](../slices/) for organizing job types and processors into in
 
 ### Splitting a Registry
 
-When one `createProcessors` registry (`appProcessors` below) holds the processors for every job type, split it across workers with `pickProcessors` and `omitProcessors`. `pickProcessors` keeps only the listed job types; `omitProcessors` keeps everything else, so the two together cover every job type. Each processor keeps its handler, its slice's middleware chain, and its `backoffConfig` / `attemptConfig`:
+When one `createProcessors` registry (`appProcessors` below) holds the processors for every job type, split it across workers with `pickProcessors` and `omitProcessors`. `pickProcessors` keeps only the listed job types; `omitProcessors` keeps everything else, so the two together cover every job type. Each processor keeps its handler, its slice's middleware chain, and its `backoffConfig`:
 
 ```ts
 import { omitProcessors, pickProcessors } from "queuert";

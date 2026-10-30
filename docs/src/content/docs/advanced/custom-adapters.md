@@ -34,7 +34,9 @@ See the [Notify adapter examples](/queuert/examples/#notify-adapters) for end-to
 
 ## Custom StateAdapter
 
-Implement the `StateAdapter` type exported from `queuert`. This is a larger interface covering job creation, status transitions, attempt tracking, querying, and migrations. Besides methods, it exposes `config` (a `StateAdapterConfig` with `generateId`, `validateId`, `maxBlockersPerJob`, and `countCap`), which core uses to generate and validate job IDs and enforce the blocker limit — the built-in adapters default to `crypto.randomUUID`, accept-all, `100`, and `10_000`. See the [Adapter Architecture](/queuert/advanced/adapters/) doc for the full contract and the [Conformance reference](/queuert/api/conformance/readme/) for what the suite tests.
+Implement the `StateAdapter` type exported from `queuert`. This is a larger interface covering job creation, status transitions, attempt tracking, worker leases and reclaim, querying, and migrations. Besides methods, it exposes `config` (a `StateAdapterConfig` with `generateId`, `validateId`, `generateWorkerId`, `validateWorkerId`, `maxBlockersPerJob`, and `countCap`), which core uses to generate and validate job and worker IDs and enforce the blocker limit — the built-in adapters default to `crypto.randomUUID`, accept-all, `crypto.randomUUID`, accept-all, `100`, and `10_000`. See the [Adapter Architecture](/queuert/advanced/adapters/) doc for the full contract and the [Conformance reference](/queuert/api/conformance/readme/) for what the suite tests.
+
+The worker methods store each worker as a row: `startWorker` records its `typeNames` and `concurrency` with its lease, and `getWorkers`, `listWorkers`, `countWorkersByTypeNames` and `listWorkerJobs` read them back for the client's [worker queries](/queuert/guides/queries/#workers). `getWorkers` and `listWorkers` compute each worker's running job count in the same read.
 
 ```ts
 import { runStateAdapterConformance } from "queuert/conformance";

@@ -24,7 +24,6 @@ export type StateJobInfo = {
   lastAttemptAt: Date | null;
   attemptAt: Date | null;
   attemptBy: string | null;
-  attemptUntil: Date | null;
   traceContext: string | null;
 };
 
@@ -45,10 +44,23 @@ export type StateJobBlockerInfo = {
   traceContext: string | null;
 };
 
+export type StateWorkerInfo = {
+  id: string;
+  name: string | null;
+  typeNames: string[];
+  concurrency: number;
+  startedAt: Date;
+  leaseUntil: Date;
+};
+
+export type StateWorker = StateWorkerInfo & { runningJobCount: number };
 export type StateChain = StateChainInfo & { head: StateJobInfo; tail: StateJobInfo | undefined };
 export type StateJob = StateJobInfo & { chain: StateChainInfo };
 export type StateBlockedJob = StateJobBlockerInfo & { job: StateJobInfo };
 export type StateDependentJob = StateJobBlockerInfo & { job: StateJob };
+export type StateReclaimedJob = StateJob & {
+  reclaimedFrom: { workerId: string; workerName: string | null };
+};
 
 export type StateCount = { count: number; hasMore: boolean };
 
@@ -66,6 +78,16 @@ export type StateAdapterConfig<TJobId extends string> = {
    * and throws `InvalidJobIdError` on failure.
    */
   validateId: (id: TJobId) => boolean;
+  /**
+   * Generates the ID of each worker an in-process worker starts. Must never return the same ID
+   * twice: a running job whose worker row is gone is reclaimed as dead for good.
+   */
+  generateWorkerId: () => string;
+  /**
+   * Returns `true` if the worker ID is acceptable. Core runs it on generated IDs and throws
+   * `InvalidWorkerIdError` on failure.
+   */
+  validateWorkerId: (id: string) => boolean;
   /**
    * Most blocker chains a single job may declare. Core rejects a job declaring more with
    * `BlockerLimitExceededError`.
@@ -208,18 +230,17 @@ export type StateAdapter<TTxContext extends BaseTxContext, TJobId extends string
   ) => Promise<(StateChain | StateBlockedJob[] | undefined)[]>;
 
   /**
-   * Atomically selects up to `limit` (at least 1) due pending jobs of the `timeoutMsByTypeName`
-   * keys and starts an attempt on each: increments `attempt`, sets `attemptBy`, and sets
-   * `attemptUntil` to now plus the job type's timeout. Returns them with their chains, in no
-   * particular order, fewer than `limit` only when no more due jobs are available to this
-   * caller. Which types fill a batch is adapter-specific: the PostgreSQL adapter takes types in
-   * random order and the oldest due jobs within each. Two parallel callers must never receive
-   * the same job — locked rows must be skipped, not waited on. `hasBlockers` gates
+   * Atomically selects up to `limit` (at least 1) due pending jobs of the `typeNames` and starts
+   * an attempt on each: increments `attempt` and sets `attemptBy` to `workerId`. Returns them
+   * with their chains, in no particular order, fewer than `limit` only when no more due jobs are
+   * available to this caller. Which types fill a batch is adapter-specific: the PostgreSQL adapter
+   * takes types in random order and the oldest due jobs within each. Two parallel callers must
+   * never receive the same job — locked rows must be skipped, not waited on. `hasBlockers` gates
    * `getJobBlockers`.
    */
   startJobAttempts: (
     params: {
-      timeoutMsByTypeName: Record<string, number>;
+      typeNames: string[];
       workerId: string;
       limit: number;
     } & AutocommitTxContextParam<TTxContext>,
@@ -231,33 +252,76 @@ export type StateAdapter<TTxContext extends BaseTxContext, TJobId extends string
   ) => Promise<number | null>;
 
   /**
-   * Extends a running job attempt's deadline. Returns `undefined` when the job does not match
-   * the `fence` — it is gone, finished, or the attempt is someone else's.
+   * Inserts a worker with its `typeNames`, its `concurrency` and a lease `leaseMs` from now. A
+   * duplicate id is a driver error.
    */
-  extendJobAttempt: (
+  startWorker: (
     params: {
-      jobId: TJobId;
-      fence: StateAttemptFence;
-      timeoutMs: number;
+      workerId: string;
+      name: string | null;
+      typeNames: string[];
+      concurrency: number;
+      leaseMs: number;
     } & AutocommitTxContextParam<TTxContext>,
-  ) => Promise<StateJob | undefined>;
+  ) => Promise<StateWorkerInfo>;
 
   /**
-   * Selects up to `limit` (at least 1) `running` jobs of `typeNames` whose `attemptUntil` has
-   * passed, excluding `ignoredJobIds`, and releases them back to the pending pool, setting
-   * `lastAttemptAt` to now and `lastAttemptError` to the given error, as a reschedule after a
-   * handler error does. Returns the released jobs in no particular order, fewer than `limit`
-   * only when no more expired attempts are available to this caller. Locked rows must be
-   * skipped, not waited on.
+   * Sets a live worker's lease to `leaseMs` from now. Returns `undefined` when the worker row is
+   * gone or its lease already expired — an expired lease cannot be renewed.
+   */
+  extendWorkerLease: (
+    params: { workerId: string; leaseMs: number } & AutocommitTxContextParam<TTxContext>,
+  ) => Promise<StateWorkerInfo | undefined>;
+
+  /**
+   * Deletes the worker row, if any, and reclaims every job still running under it, setting
+   * `lastAttemptAt` to now and `lastAttemptError` to the given error.
+   */
+  stopWorker: (
+    params: { workerId: string; lastAttemptError: string } & AutocommitTxContextParam<TTxContext>,
+  ) => Promise<StateReclaimedJob[]>;
+
+  /** Gets workers by their IDs, in input order, `undefined` for workers with no row. */
+  getWorkers: (
+    params: { workerIds: string[] } & AutocommitTxContextParam<TTxContext>,
+  ) => Promise<(StateWorker | undefined)[]>;
+
+  /**
+   * Lists every worker, ordered by `startedAt`, then id. With `typeName`, only workers whose
+   * `typeNames` include it. Includes workers whose lease is no longer live and that were not
+   * reclaimed yet.
+   */
+  listWorkers: (
+    params: { typeName?: string } & AutocommitTxContextParam<TTxContext>,
+  ) => Promise<StateWorker[]>;
+
+  /**
+   * Returns, for each job type name in input order, how many workers with a live lease process
+   * it.
+   */
+  countWorkersByTypeNames: (
+    params: { typeNames: string[] } & AutocommitTxContextParam<TTxContext>,
+  ) => Promise<number[]>;
+
+  /**
+   * Lists every job `running` under a worker, ordered by `attemptAt`, then id. Lists them whether
+   * or not the worker still has a row.
+   */
+  listWorkerJobs: (
+    params: { workerId: string } & AutocommitTxContextParam<TTxContext>,
+  ) => Promise<StateJob[]>;
+
+  /**
+   * Deletes up to `limit` (at least 1) workers whose lease expired and reclaims up to `limit`
+   * running jobs, of any type, whose worker is expired or has no row, setting `lastAttemptAt` to
+   * now and `lastAttemptError` to the given error. Returns the reclaimed jobs in no particular
+   * order, fewer than `limit` only when no more expired attempts are available to this caller. A
+   * worker is locked before its jobs are reclaimed, so a worker renewing its lease never loses its
+   * jobs; locked rows must be skipped, not waited on.
    */
   reclaimExpiredJobAttempts: (
-    params: {
-      typeNames: string[];
-      ignoredJobIds?: TJobId[];
-      lastAttemptError: string;
-      limit: number;
-    } & AutocommitTxContextParam<TTxContext>,
-  ) => Promise<StateJob[]>;
+    params: { lastAttemptError: string; limit: number } & AutocommitTxContextParam<TTxContext>,
+  ) => Promise<StateReclaimedJob[]>;
 
   /**
    * Adds blocker dependencies to jobs, in input order, with one `blockers` entry per
@@ -337,7 +401,7 @@ export type StateAdapter<TTxContext extends BaseTxContext, TJobId extends string
         | { status?: undefined; orderBy: "createdAt" }
         | { status: "blocked"; orderBy: "createdAt" | "scheduledAt" }
         | { status: "pending"; orderBy: "createdAt" | "scheduledAt" }
-        | { status: "running"; orderBy: "createdAt" | "attemptAt" | "attemptUntil" }
+        | { status: "running"; orderBy: "createdAt" | "attemptAt" }
         | { status: "completed"; orderBy: "createdAt" | "completedAt" }
       ),
   ) => Promise<Page<StateJob>>;

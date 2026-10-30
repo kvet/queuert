@@ -65,7 +65,7 @@ export const withTransactionGroup: ConformanceGroup<StateConformanceFixture> = {
             await stateAdapter.startJobAttempts({
               txCtx,
               workerId: "worker-1",
-              timeoutMsByTypeName: { "update-rollback": 30_000 },
+              typeNames: ["update-rollback"],
               limit: 1,
             });
             throw new Error("rollback after acquire");
@@ -83,7 +83,7 @@ export const withTransactionGroup: ConformanceGroup<StateConformanceFixture> = {
           stateAdapter.startJobAttempts({
             txCtx,
             workerId: "worker-1",
-            timeoutMsByTypeName: { "update-rollback": 30_000 },
+            typeNames: ["update-rollback"],
             limit: 1,
           }),
         );
@@ -119,7 +119,7 @@ export const withTransactionGroup: ConformanceGroup<StateConformanceFixture> = {
           stateAdapter.startJobAttempts({
             txCtx,
             workerId: "worker-1",
-            timeoutMsByTypeName: { "delete-rollback": 30_000 },
+            typeNames: ["delete-rollback"],
             limit: 1,
           }),
         );
@@ -260,7 +260,7 @@ export const withTransactionGroup: ConformanceGroup<StateConformanceFixture> = {
             await stateAdapter.startJobAttempts({
               txCtx,
               workerId: "worker-1",
-              timeoutMsByTypeName: { "mixed-rollback": 30_000 },
+              typeNames: ["mixed-rollback"],
               limit: 1,
             });
             await stateAdapter.completeJobs({
@@ -300,7 +300,7 @@ export const withTransactionGroup: ConformanceGroup<StateConformanceFixture> = {
         const [reacquired] = await stateAdapter.withTransaction(async (txCtx) =>
           stateAdapter.startJobAttempts({
             txCtx,
-            timeoutMsByTypeName: { "mixed-rollback": 30_000 },
+            typeNames: ["mixed-rollback"],
             workerId: "rollback-probe",
             limit: 1,
           }),

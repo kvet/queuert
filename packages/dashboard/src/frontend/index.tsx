@@ -12,6 +12,8 @@ import { JobDetail } from "./pages/JobDetail.js";
 import { JobList } from "./pages/JobList.js";
 import { Overview } from "./pages/Overview.js";
 import { ChainTypes, JobTypes } from "./pages/Types.js";
+import { WorkerDetail } from "./pages/WorkerDetail.js";
+import { WorkerList } from "./pages/WorkerList.js";
 import { theme } from "./state/theme.js";
 
 import "./styles/index.css";
@@ -38,6 +40,8 @@ render(
       <Route path="/jobs/types" component={JobTypes} />
       <Route path="/jobs" component={redirectIds(JobList)} />
       <Route path="/jobs/:id" component={JobDetail} />
+      <Route path="/workers" component={WorkerList} />
+      <Route path="/workers/:id" component={WorkerDetail} />
       <Route path="/find" component={Find} />
     </Router>
   ),

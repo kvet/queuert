@@ -28,4 +28,17 @@ describe("narrowToStatuses", () => {
     ]);
     expect(narrowToStatuses(entries, ["running", "completed"])).toEqual(entries);
   });
+
+  it("keeps a type's live worker count", () => {
+    const workers = { liveCount: 0, stranded: true };
+
+    expect(
+      narrowToStatuses(
+        [{ typeName: "ship-order", counts: [{ status: "pending", count: count(3) }], workers }],
+        ["pending"],
+      ),
+    ).toEqual([
+      { typeName: "ship-order", counts: [{ status: "pending", count: count(3) }], workers },
+    ]);
+  });
 });

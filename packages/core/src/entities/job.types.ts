@@ -40,8 +40,6 @@ export type RunningJobFields = {
   attemptAt: Date;
   /** Worker that owns the current attempt. */
   attemptBy: string;
-  /** Attempt deadline: set at acquire from `attemptConfig.timeoutMs`, extended by heartbeats. */
-  attemptUntil: Date;
 };
 
 /** Status fields shared by both `completed` {@link Job} variants. @inline */

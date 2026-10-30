@@ -12,7 +12,7 @@ type Defs = {
 };
 
 describe("createInProcessWorker defaults", () => {
-  it("applies worker-level backoffConfig and attemptConfig fallbacks when processor has none", async () => {
+  it("applies the worker-level backoffConfig fallback when processor has none", async () => {
     const jobTypes = defineJobTypes<Defs>();
     const stateAdapter = await createInProcessStateAdapter();
     const client = await createClient({ stateAdapter, jobTypes });
@@ -22,7 +22,6 @@ describe("createInProcessWorker defaults", () => {
       client,
       defaults: {
         backoffConfig: { initialDelayMs: 1, multiplier: 1, maxDelayMs: 1 },
-        attemptConfig: { timeoutMs: 45_000, heartbeatMs: 10_000 },
       },
       processors: createProcessors({
         client,
@@ -30,7 +29,6 @@ describe("createInProcessWorker defaults", () => {
         processors: {
           foo: {
             attemptHandler: async ({ job, complete }) => {
-              expect(job.attemptUntil.getTime() - job.attemptAt.getTime()).toBe(45_000);
               attempts.push(job.attempt);
               if (job.attempt < 3) throw new Error("retry");
               return withTransactionHooks(async (transactionHooks) =>
@@ -56,7 +54,7 @@ describe("createInProcessWorker defaults", () => {
     expect(attempts).toEqual([1, 2, 3]);
   });
 
-  it("processor-level backoffConfig and attemptConfig win over worker-level defaults", async () => {
+  it("processor-level backoffConfig wins over worker-level defaults", async () => {
     const jobTypes = defineJobTypes<Defs>();
     const stateAdapter = await createInProcessStateAdapter();
     const client = await createClient({ stateAdapter, jobTypes });
@@ -68,7 +66,6 @@ describe("createInProcessWorker defaults", () => {
       client,
       defaults: {
         backoffConfig: { initialDelayMs: 5_000, multiplier: 1, maxDelayMs: 5_000 },
-        attemptConfig: { timeoutMs: 45_000, heartbeatMs: 10_000 },
       },
       processors: createProcessors({
         client,
@@ -76,9 +73,7 @@ describe("createInProcessWorker defaults", () => {
         processors: {
           foo: {
             backoffConfig: { initialDelayMs: 1, multiplier: 1, maxDelayMs: 1 },
-            attemptConfig: { timeoutMs: 15_000, heartbeatMs: 5_000 },
             attemptHandler: async ({ job, complete }) => {
-              expect(job.attemptUntil.getTime() - job.attemptAt.getTime()).toBe(15_000);
               const now = Date.now();
               if (lastAt !== null) delaysBetweenAttempts.push(now - lastAt);
               lastAt = now;
@@ -105,6 +100,39 @@ describe("createInProcessWorker defaults", () => {
 
     expect(delaysBetweenAttempts.length).toBe(1);
     expect(delaysBetweenAttempts[0]).toBeLessThan(1_000);
+  });
+});
+
+describe("createInProcessWorker lease defaults", () => {
+  it("starts each worker with a 60s lease under its workerName", async () => {
+    const jobTypes = defineJobTypes<Defs>();
+    const stateAdapter = await createInProcessStateAdapter();
+    const startWorkerCalls: { name: string | null; leaseMs: number }[] = [];
+    const client = await createClient({
+      stateAdapter: {
+        ...stateAdapter,
+        startWorker: async (params) => {
+          startWorkerCalls.push({ name: params.name, leaseMs: params.leaseMs });
+          return stateAdapter.startWorker(params);
+        },
+      },
+      jobTypes,
+    });
+
+    const worker = await createInProcessWorker({
+      client,
+      workerName: "east 1",
+      processors: createProcessors({
+        client,
+        jobTypes,
+        processors: { foo: { attemptHandler: async () => undefined as never } },
+      }),
+    });
+    const stop = await worker.start();
+    await expect.poll(() => startWorkerCalls.length).toBe(1);
+    await stop();
+
+    expect(startWorkerCalls).toEqual([{ name: "east 1", leaseMs: 60_000 }]);
   });
 });
 
@@ -137,18 +165,8 @@ describe("createInProcessWorker workerName validation", () => {
     await expect(buildWorker("")).rejects.toThrow(TypeError);
   });
 
-  it("rejects workerName containing whitespace", async () => {
-    await expect(buildWorker(" worker ")).rejects.toThrow(TypeError);
-    await expect(buildWorker("my worker")).rejects.toThrow(TypeError);
-  });
-
-  it("rejects workerName containing disallowed characters", async () => {
-    await expect(buildWorker("worker/1")).rejects.toThrow(TypeError);
-    await expect(buildWorker("worker:1")).rejects.toThrow(TypeError);
-  });
-
-  it("accepts identifier-style names", async () => {
+  it("accepts any non-empty workerName", async () => {
     await expect(buildWorker("worker-1")).resolves.toBeDefined();
-    await expect(buildWorker("worker.east_1")).resolves.toBeDefined();
+    await expect(buildWorker("my worker / east:1")).resolves.toBeDefined();
   });
 });

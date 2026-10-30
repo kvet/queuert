@@ -21,7 +21,6 @@ const orderByOptionsFor = (status: string): readonly { value: JobSortKey; label:
   if (status === "running")
     return [
       { value: "attemptAt", label: "Started" },
-      { value: "attemptUntil", label: "Deadline" },
       { value: "createdAt", label: "Created" },
     ];
   if (status === "completed")

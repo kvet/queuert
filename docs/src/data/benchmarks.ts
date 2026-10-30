@@ -181,7 +181,10 @@ export const operationalGroups = [
       { label: "unblockJobs/default", values: [4.99, 0.33] },
       { label: "startJobAttempts/default", values: [3.5, 0.36] },
       { label: "startJobAttempts/limit10", values: [4.13, 0.47] },
-      { label: "extendJobAttempt/default", values: [2.2, 0.1] },
+      { label: "startWorker/default", values: [0.77, 0.03] },
+      { label: "extendWorkerLease/default", values: [0.99, 0.03] },
+      { label: "stopWorker/default", values: [3.05, 0.23] },
+      { label: "getWorkers/default", values: [0.7, 0.05] },
       { label: "completeJobs/default", values: [2.57, 0.4] },
       { label: "reclaimExpiredJobAttempts/default", values: [2.1, 0.27] },
       { label: "reclaimExpiredJobAttempts/limit10", values: [2.47, 0.52] },
@@ -200,6 +203,7 @@ export const discoveryGroups = [
       { label: "listJobTypeNames/default", values: [0.95, 0.05] },
       { label: "countByChainTypeNames/default", values: [2.49, 1.22] },
       { label: "countByJobTypeNames/default", values: [4.37, 1.23] },
+      { label: "countWorkersByTypeNames/default", values: [0.57, 0.04] },
     ],
   },
 ] satisfies BenchGroup[];
@@ -271,7 +275,6 @@ export const listJobsGroups = [
     rows: [
       { label: "listJobs/running/default", values: [5.71, 7.9] },
       { label: "listJobs/running/orderByCreatedAt", values: [5.64, 0.36] },
-      { label: "listJobs/running/orderByAttemptUntil", values: [4.99, 0.38] },
       { label: "listJobs/running/cursor", values: [8.36, 12.12] },
     ],
   },
@@ -292,6 +295,16 @@ export const chainJobsGroups = [
       { label: "listChainJobs/cursor", values: [5.52, 0.87] },
       { label: "listBlockedJobs/default", values: [143.13, 195.61] },
       { label: "listBlockedJobs/cursor", values: [313.46, 362.46] },
+      { label: "listWorkerJobs/default", values: [0.84, 0.13] },
+    ],
+  },
+] satisfies BenchGroup[];
+
+export const workerGroups = [
+  {
+    rows: [
+      { label: "listWorkers/default", values: [2.57, 1.14] },
+      { label: "listWorkers/typeName", values: [0.65, 0.04] },
     ],
   },
 ] satisfies BenchGroup[];

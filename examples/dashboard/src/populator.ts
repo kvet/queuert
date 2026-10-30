@@ -8,7 +8,7 @@
 
 import { createInProcessWorker, createProcessors, withTransactionHooks } from "queuert";
 
-import { client, db, jobTypes, notifyAdapter, stateAdapter, withTransaction } from "./common.js";
+import { client, jobTypes, stateAdapter, withTransaction } from "./common.js";
 
 const DASHBOARD_PAGE_SIZE = 100;
 const delay = async (ms: number) => {
@@ -362,8 +362,54 @@ await withTransactionHooks(async (transactionHooks) =>
   ),
 );
 
-await notifyAdapter.close();
-await stateAdapter.close();
-db.close();
+// Scenario 9: Leftover workers — workers left registered with a job running under each
+// (Workers page, worker detail, lease-lost warning, job types with no live worker)
+console.log("\n--- Scenario 9: Leftover workers ---");
+const startLeftoverWorker = async (options: {
+  workerName: string;
+  lease?: { durationMs: number; heartbeatMs: number };
+}) => {
+  const claimed = Promise.withResolvers<void>();
+  const leftoverWorker = await createInProcessWorker({
+    client,
+    workerName: options.workerName,
+    concurrency: 1,
+    lease: options.lease,
+    processors: createProcessors({
+      client,
+      jobTypes,
+      processors: {
+        "long-task": {
+          attemptHandler: async () => {
+            claimed.resolve();
+            return new Promise<never>(() => {});
+          },
+        },
+      },
+    }),
+  });
+  await leftoverWorker.start();
+  await withTransactionHooks(async (transactionHooks) =>
+    withTransaction(async (ctx) =>
+      client.createChain({
+        ...ctx,
+        transactionHooks,
+        typeName: "long-task",
+        input: { label: options.workerName },
+      }),
+    ),
+  );
+  await claimed.promise;
+};
+// Lease outlives the populator by an hour, so the worker shows as live.
+await startLeftoverWorker({
+  workerName: "long-runner-live",
+  lease: { durationMs: 60 * 60 * 1000, heartbeatMs: 15 * 60 * 1000 },
+});
+// Default 60s lease: a minute after the populator exits, the dashboard shows it lost.
+await startLeftoverWorker({ workerName: "long-runner-lost" });
 
 console.log("\nDone!");
+
+// Exit without stopping the leftover workers: stopping would delete their rows.
+process.exit(0);

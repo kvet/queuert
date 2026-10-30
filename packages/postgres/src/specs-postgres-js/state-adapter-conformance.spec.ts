@@ -56,7 +56,7 @@ describe("PostgreSQL State Adapter Conformance (postgres.js)", () => {
     stateAdapter: [
       async ({ sql }, use) => {
         await sql.unsafe(
-          `DROP TABLE IF EXISTS queuert_job_blocker, queuert_job, queuert_migration CASCADE; DROP TYPE IF EXISTS queuert_job_status CASCADE`,
+          `DROP TABLE IF EXISTS queuert_job_blocker, queuert_job, queuert_worker, queuert_migration CASCADE; DROP TYPE IF EXISTS queuert_job_status CASCADE`,
         );
 
         const stateProvider = createPostgresJsProvider({ sql });

@@ -317,7 +317,7 @@ export const listChainsGroup: ConformanceGroup<StateConformanceFixture> = {
           stateAdapter.startJobAttempts({
             txCtx,
             workerId: "w1",
-            timeoutMsByTypeName: { task: 30_000 },
+            typeNames: ["task"],
             limit: 1,
           }),
         );
@@ -325,7 +325,7 @@ export const listChainsGroup: ConformanceGroup<StateConformanceFixture> = {
           stateAdapter.startJobAttempts({
             txCtx,
             workerId: "w1",
-            timeoutMsByTypeName: { task: 30_000 },
+            typeNames: ["task"],
             limit: 1,
           }),
         );
@@ -387,7 +387,7 @@ export const listChainsGroup: ConformanceGroup<StateConformanceFixture> = {
             stateAdapter.startJobAttempts({
               txCtx,
               workerId: "w1",
-              timeoutMsByTypeName: { task: 30_000 },
+              typeNames: ["task"],
               limit: 1,
             }),
           );
@@ -448,7 +448,7 @@ export const listChainsGroup: ConformanceGroup<StateConformanceFixture> = {
             stateAdapter.startJobAttempts({
               txCtx,
               workerId: "w1",
-              timeoutMsByTypeName: { task: 30_000 },
+              typeNames: ["task"],
               limit: 1,
             }),
           );
@@ -508,7 +508,7 @@ export const listChainsGroup: ConformanceGroup<StateConformanceFixture> = {
           stateAdapter.startJobAttempts({
             txCtx,
             workerId: "worker-1",
-            timeoutMsByTypeName: { "test-type": 30_000 },
+            typeNames: ["test-type"],
             limit: 1,
           }),
         );
@@ -617,7 +617,7 @@ export const listChainsGroup: ConformanceGroup<StateConformanceFixture> = {
           stateAdapter.startJobAttempts({
             txCtx,
             workerId: "w1",
-            timeoutMsByTypeName: { task: 30_000 },
+            typeNames: ["task"],
             limit: 1,
           }),
         );
@@ -625,7 +625,7 @@ export const listChainsGroup: ConformanceGroup<StateConformanceFixture> = {
           stateAdapter.startJobAttempts({
             txCtx,
             workerId: "w1",
-            timeoutMsByTypeName: { task: 30_000 },
+            typeNames: ["task"],
             limit: 1,
           }),
         );
@@ -633,7 +633,7 @@ export const listChainsGroup: ConformanceGroup<StateConformanceFixture> = {
           stateAdapter.startJobAttempts({
             txCtx,
             workerId: "w1",
-            timeoutMsByTypeName: { task: 30_000 },
+            typeNames: ["task"],
             limit: 1,
           }),
         );
@@ -689,7 +689,7 @@ export const listChainsGroup: ConformanceGroup<StateConformanceFixture> = {
           stateAdapter.startJobAttempts({
             txCtx,
             workerId: "w1",
-            timeoutMsByTypeName: { task: 30_000 },
+            typeNames: ["task"],
             limit: 1,
           }),
         );
@@ -697,7 +697,7 @@ export const listChainsGroup: ConformanceGroup<StateConformanceFixture> = {
           stateAdapter.startJobAttempts({
             txCtx,
             workerId: "w1",
-            timeoutMsByTypeName: { task: 30_000 },
+            typeNames: ["task"],
             limit: 1,
           }),
         );
@@ -734,7 +734,7 @@ export const listChainsGroup: ConformanceGroup<StateConformanceFixture> = {
             stateAdapter.startJobAttempts({
               txCtx,
               workerId: "w1",
-              timeoutMsByTypeName: { task: 30_000 },
+              typeNames: ["task"],
               limit: 1,
             }),
           );
@@ -801,7 +801,7 @@ export const listChainsGroup: ConformanceGroup<StateConformanceFixture> = {
             stateAdapter.startJobAttempts({
               txCtx,
               workerId: "w1",
-              timeoutMsByTypeName: { task: 30_000 },
+              typeNames: ["task"],
               limit: 1,
             }),
           );
@@ -865,7 +865,7 @@ export const listChainsGroup: ConformanceGroup<StateConformanceFixture> = {
             stateAdapter.startJobAttempts({
               txCtx,
               workerId: "w1",
-              timeoutMsByTypeName: { task: 30_000 },
+              typeNames: ["task"],
               limit: 1,
             }),
           );
@@ -908,7 +908,7 @@ export const listChainsGroup: ConformanceGroup<StateConformanceFixture> = {
             stateAdapter.startJobAttempts({
               txCtx,
               workerId: "w1",
-              timeoutMsByTypeName: { task: 30_000 },
+              typeNames: ["task"],
               limit: 1,
             }),
           );
@@ -970,7 +970,7 @@ export const listChainsGroup: ConformanceGroup<StateConformanceFixture> = {
           stateAdapter.startJobAttempts({
             txCtx,
             workerId: "w1",
-            timeoutMsByTypeName: { task: 30_000 },
+            typeNames: ["task"],
             limit: 1,
           }),
         );
@@ -994,7 +994,7 @@ export const listChainsGroup: ConformanceGroup<StateConformanceFixture> = {
           stateAdapter.startJobAttempts({
             txCtx,
             workerId: "w1",
-            timeoutMsByTypeName: { task: 30_000 },
+            typeNames: ["task"],
             limit: 1,
           }),
         );
@@ -1031,7 +1031,7 @@ export const listChainsGroup: ConformanceGroup<StateConformanceFixture> = {
           stateAdapter.startJobAttempts({
             txCtx,
             workerId: "w1",
-            timeoutMsByTypeName: { "task-step2": 30_000 },
+            typeNames: ["task-step2"],
             limit: 1,
           }),
         );
