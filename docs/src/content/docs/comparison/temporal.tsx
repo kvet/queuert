@@ -1,4 +1,4 @@
-import { CompareCards } from "../../../components/CompareCards.tsx";
+import { CompareMatrix } from "../../../components/CompareMatrix.tsx";
 import { QueuertSummary } from "../../../components/QueuertSummary.tsx";
 import { comparedQueuertVersion } from "../../../data/comparison.ts";
 
@@ -19,10 +19,10 @@ const Page = () => (
     <blockquote>
       <p>
         Compared versions: Queuert <code>{comparedQueuertVersion}</code> and the Temporal TypeScript
-        SDK <code>1.17.1</code>.
+        SDK <code>1.25.0</code>.
       </p>
     </blockquote>
-    <CompareCards tools={["queuert", "temporal"]} />
+    <CompareMatrix tools={["queuert", "temporal"]} />
     <h2>What Temporal is</h2>
     <p>
       Temporal is a <strong>distributed durable-execution platform</strong>. The mental model is
@@ -30,7 +30,8 @@ const Page = () => (
       execute side effects via separately-deployed Activities, and survive any crash by being
       replayed from their persistent history. Workflows can wait for hours or days, accept signals
       from outside, expose queries on their state, and spawn child workflows. Cross-language:
-      official SDKs in Go, Java, Python, .NET, TypeScript, PHP, Ruby — all sharing the same server.
+      official SDKs in Go, Java, Python, .NET, TypeScript, PHP, Ruby, and Rust (preview) — all
+      sharing the same server.
     </p>
     <p>
       You operate (or rent via Temporal Cloud) a separate Temporal server cluster — frontend,
@@ -84,8 +85,13 @@ const Page = () => (
         loops.
       </li>
       <li>
-        <strong>Battle-tested at scale.</strong> Production-deployed at Stripe, Snap, Coinbase, and
-        many others.
+        <strong>Task-queue priority and fairness.</strong> Workflows and activities carry a{" "}
+        <code>priorityKey</code> and fairness keys, and task queues take rate limits on activity
+        dispatch.
+      </li>
+      <li>
+        <strong>Battle-tested at scale.</strong> Production-deployed at Snap, Coinbase, and many
+        others.
       </li>
     </ul>
     <p>
@@ -107,12 +113,12 @@ const Page = () => (
       </li>
       <li>
         <strong>Plain TypeScript handlers.</strong> No determinism constraint, no separate workflow
-        bundle, no "you can't call <code>Date.now()</code> here." Job handlers are normal Node code
-        that does normal Node things.
+        bundle, no "do I/O only in activities" rule. Job handlers are normal Node code that does
+        normal Node things.
       </li>
       <li>
         <strong>Operational simplicity.</strong> No cluster to run, no separate persistence tier, no
-        bundling step. Your application's Postgres is the entire backing store.
+        bundling step. Your application's database (Postgres or SQLite) is the entire backing store.
       </li>
       <li>
         <strong>Database as the system of record.</strong> Chain state lives next to your domain
@@ -133,12 +139,11 @@ const Page = () => (
       <li>
         <strong>Transactional consistency.</strong> Because Temporal state lives elsewhere, both
         ends require application discipline. <em>Enqueue:</em> starting a workflow is a gRPC call to
-        the Temporal Service, not a DB transaction. Temporal staff describe the dual-write trap
-        explicitly in{" "}
+        the Temporal Service, not a DB transaction. A reply on{" "}
         <a href="https://community.temporal.io/t/what-is-recommended-approach-on-starting-workflow-in-transaction/16248">
-          their own forum
-        </a>
-        :{" "}
+          Temporal's community forum
+        </a>{" "}
+        describes the dual-write trap:{" "}
         <em>
           "this pattern will start the workflow even if the database needs to abort and retry the
           database transaction, leaving you in an inconsistent state where the workflow has started
@@ -150,17 +155,18 @@ const Page = () => (
           "You should always make your business logic Activities idempotent in Temporal. Because
           Activities may be retried, these functions may be executed more than once."
         </em>{" "}
-        The Temporal-blessed workaround is "workflow as the source of truth": start the workflow
-        first, then write to the DB from inside an activity. That's a real architectural choice — it
-        inverts the assumption many applications start from (that the DB is the system of record).
-        With Queuert, both halves commit inside your DB transaction; the precondition is that your
-        DB <em>is</em> the SoT for the data your handlers touch.
+        The workaround Temporal staff suggest in that thread is "workflow as the source of truth":
+        start the workflow first, then write to the DB from inside an activity. That's a real
+        architectural choice — it inverts the assumption many applications start from (that the DB
+        is the system of record). With Queuert, both halves commit inside your DB transaction; the
+        precondition is that your DB <em>is</em> the SoT for the data your handlers touch.
       </li>
       <li>
-        <strong>Determinism.</strong> Temporal workflow code must be deterministic; you can't call{" "}
-        <code>Date.now()</code>, <code>Math.random()</code>, <code>fetch</code>, or use plain{" "}
-        <code>setTimeout</code>. Replay relies on this. Queuert handlers are plain TypeScript with
-        no such constraint.
+        <strong>Determinism.</strong> Temporal workflow code must be deterministic: it runs in a
+        sandbox where <code>Date.now()</code>, <code>Math.random()</code>, and{" "}
+        <code>setTimeout</code> are replaced with replay-safe versions, and I/O such as{" "}
+        <code>fetch</code> must go through activities. Replay relies on this. Queuert handlers are
+        plain TypeScript with no such constraint.
       </li>
       <li>
         <strong>Long durable waits.</strong> Temporal can <code>await sleep('30 days')</code> and
@@ -173,14 +179,16 @@ const Page = () => (
         doesn't model an externally-interactive running process.
       </li>
       <li>
-        <strong>Versioning.</strong> Bumping workflow code mid-flight in Temporal requires explicit{" "}
-        <code>patched</code> / <code>getVersion</code> discipline. In Queuert, deploying new code
-        doesn't risk replay drift because there's no replay.
+        <strong>Versioning.</strong> Changing workflow code mid-flight in Temporal needs either{" "}
+        <code>patched</code> / <code>deprecatePatch</code> branches or Worker Versioning, which pins
+        running workflows to the worker deployment that started them at the cost of keeping old
+        workers running until those workflows drain. In Queuert, deploying new code doesn't risk
+        replay drift because there's no replay.
       </li>
       <li>
         <strong>Operational footprint.</strong> Temporal: a multi-service cluster (frontend /
         matching / history / worker) plus Cassandra-class persistence, or pay for Temporal Cloud.
-        Queuert: your existing Postgres.
+        Queuert: your existing database.
       </li>
     </ul>
     <h2>Choosing between them</h2>
@@ -195,8 +203,8 @@ const Page = () => (
       </li>
       <li>You need rich runtime interaction with running workflows — signals, queries, updates.</li>
       <li>
-        You need cross-language workflows or activities (Go / Java / Python / .NET / TS / PHP /
-        Ruby).
+        You need cross-language workflows or activities (Go / Java / Python / .NET / TS / PHP / Ruby
+        / Rust).
       </li>
       <li>
         The operational complexity of a separate cluster (or paying for Temporal Cloud) is

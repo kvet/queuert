@@ -95,8 +95,9 @@ const stop = await worker.start();
 
 Background-work libraries split across two axes: the _shape_ of work they model and where the _state_ lives.
 
-- **Job queues** (BullMQ, pg-boss) model messages routed through named lanes with policies. Good fit for "I have many independent jobs to run."
+- **Job queues** (BullMQ, pg-boss, Graphile Worker) model messages routed through named lanes with policies. Good fit for "I have many independent jobs to run."
 - **Workflow platforms** (Temporal, Inngest) model long-lived processes with rich runtime interaction (signals, queries, durable sleeps). Good fit for "I have multi-step processes that run for hours/days/weeks and need to survive arbitrary failures."
+- **Durable workflow libraries** (DBOS) replay a workflow function against checkpoints in your Postgres. Good fit for "I want to write a multi-step process as one function, without running a server."
 - **Queuert** is a third thing: a job-chain library. Chains can be a single job (queue-shaped) or a multi-step typed sequence with fan-in (workflow-shaped) — both are first-class. Good fit for "I have background work that should commit with my domain writes and finish in seconds-to-minutes."
 
 For one-on-one comparisons see the [comparison docs](/queuert/comparison/).

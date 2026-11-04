@@ -156,7 +156,9 @@ export const siteSections: SiteSection[] = [
         slugs: [
           "comparison",
           "comparison/pg-boss",
+          "comparison/graphile-worker",
           "comparison/bullmq",
+          "comparison/dbos",
           "comparison/temporal",
           "comparison/inngest",
         ],

@@ -21,6 +21,7 @@ import {
 import { CodeTour } from "../components/landing/CodeTour.tsx";
 import { LiveChain } from "../components/landing/LiveChain.tsx";
 import { LinkCard } from "../components/mdx/Cards.tsx";
+import { compareNeighbors } from "../data/comparison.ts";
 // oxlint-disable-next-line import/default -- served by the queuert:highlight plugin in plugins/content.ts
 import defineSnippet from "../snippets/define.ts?highlight";
 // oxlint-disable-next-line import/default -- served by the queuert:highlight plugin in plugins/content.ts
@@ -124,25 +125,6 @@ const integrations: {
     href: "/integrations/observability/",
     customAdapter: true,
   },
-];
-
-const comparisons = [
-  {
-    title: "vs. pg-boss",
-    slug: "pg-boss",
-    description: "A Postgres job queue. Different shape of tool.",
-  },
-  {
-    title: "vs. BullMQ",
-    slug: "bullmq",
-    description: "A Redis job queue. Different storage tier.",
-  },
-  {
-    title: "vs. Temporal",
-    slug: "temporal",
-    description: "A workflow platform. Both model multi-step durable work.",
-  },
-  { title: "vs. Inngest", slug: "inngest", description: "An event-driven workflow platform." },
 ];
 
 const footerLinks: { label: string; href: string; external?: boolean }[] = [
@@ -346,13 +328,13 @@ const Home = () => (
       eyebrow="Already using something else?"
       title="How Queuert relates to the tools you know."
     >
-      <div class="grid gap-4 sm:grid-cols-2">
-        <For each={comparisons}>
-          {(comparison) => (
+      <div class="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
+        <For each={compareNeighbors}>
+          {(neighbor) => (
             <LinkCard
-              title={comparison.title}
-              href={`${import.meta.env.BASE_URL}comparison/${comparison.slug}/`}
-              description={comparison.description}
+              title={`vs. ${neighbor.name}`}
+              href={`${import.meta.env.BASE_URL}${neighbor.href.slice(1)}`}
+              description={neighbor.summary}
             />
           )}
         </For>

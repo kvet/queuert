@@ -27,6 +27,8 @@ You verify that the Queuert documentation tells the truth about the code and agr
 - Internal links and referenced file paths resolve.
 - Every `examples/*` directory is listed in `docs/src/data/examples.ts` (`docs/src/data/examples.spec.ts` enforces this), and every guide in `docs/src/content/docs/guides/` with a matching showcase example links to it (`See [examples/showcase-...](https://github.com/kvet/queuert/tree/main/examples/showcase-...)`).
 
+The Compare pages (`docs/src/content/docs/comparison/*`, `docs/src/data/comparison.ts`) are covered by the comparison agent; skip them.
+
 ## Output
 
 Findings only, grouped CRITICAL / WARNING / SUGGESTION. For each: doc file:line, what it says, what the code does (file:line), and the fix. Do not produce terminology or feature-coverage matrices; do not list pages that were checked and found correct beyond a single line naming them.

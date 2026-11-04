@@ -1,16 +1,24 @@
 export type CompareMark = "yes" | "partial" | "no";
 
-export const comparedQueuertVersion = "0.12.0";
+export const comparedQueuertVersion = "0.17.0";
 
 type CompareCell = { mark?: CompareMark; text: string; footnote?: number };
 
-export type CompareToolId = "queuert" | "pg-boss" | "bullmq" | "temporal" | "inngest";
+export type CompareToolId =
+  | "queuert"
+  | "pg-boss"
+  | "graphile-worker"
+  | "bullmq"
+  | "dbos"
+  | "temporal"
+  | "inngest";
 
 type CompareTool = {
   id: CompareToolId;
   name: string;
   category: string;
   href?: string;
+  summary?: string;
   version?: string;
   cells: Record<CompareRowId, CompareCell | undefined>;
 };
@@ -38,21 +46,21 @@ export const compareFootnotes: { id: number; text: string; href: string }[] = [
   {
     id: 1,
     text: "pg-boss v12.17 added a { db } option on send() and complete() with Knex, Kysely, Drizzle and Prisma bridges; it is opt-in per call.",
-    href: "https://github.com/timgit/pg-boss",
+    href: "https://pgboss.io/api/adapters",
   },
   {
     id: 2,
-    text: "pg-boss's work() loop calls complete() on its own pool in a separate transaction; atomic completion needs a hand-written fetch/complete loop.",
-    href: "https://github.com/timgit/pg-boss/blob/master/src/manager.ts",
+    text: "pg-boss v12.32 added work({ transactional: true }): the handler's writes through the transaction pg-boss opens commit with the job's completion; it is off by default and the transaction spans the whole handler.",
+    href: "https://pgboss.io/api/workers",
   },
   {
     id: 3,
-    text: "BullMQ documents at-least-once execution: on lock expiration a job can be double processed, so handlers must be idempotent.",
-    href: "https://docs.bullmq.io/bull/important-notes",
+    text: "BullMQ documents at-least-once delivery: a job whose worker crashes or loses its lock can be processed again, so processors must be idempotent.",
+    href: "https://docs.bullmq.io/",
   },
   {
     id: 4,
-    text: "Temporal staff: starting a workflow inside a DB transaction can start it even if the transaction aborts.",
+    text: "Temporal community forum: starting a workflow inside a DB transaction can start it even if the transaction aborts.",
     href: "https://community.temporal.io/t/what-is-recommended-approach-on-starting-workflow-in-transaction/16248",
   },
   {
@@ -62,8 +70,28 @@ export const compareFootnotes: { id: number; text: string; href: string }[] = [
   },
   {
     id: 6,
-    text: "Inngest: step.run is at-least-once until its result reaches the server; inserts are not idempotent, upserts are.",
-    href: "https://www.inngest.com/docs/guides/error-handling",
+    text: "Inngest: a saved step.run result does not make external side effects exactly-once; a call can succeed and time out before Inngest records the result.",
+    href: "https://www.inngest.com/docs/durable-execution/guides-and-advanced/error-handling",
+  },
+  {
+    id: 7,
+    text: "Graphile Worker: the add_job() SQL function joins whatever transaction calls it; the JavaScript addJob runs on Graphile Worker's own pool.",
+    href: "https://worker.graphile.org/docs/sql-add-job",
+  },
+  {
+    id: 8,
+    text: "Graphile Worker deletes the job in its own statement after the task returns; withPgClient and query do not open a transaction.",
+    href: "https://worker.graphile.org/docs/tasks",
+  },
+  {
+    id: 9,
+    text: "DBOS: enqueueInTransaction takes a node-postgres client in an open transaction, and that client must be connected to the DBOS system database.",
+    href: "https://docs.dbos.dev/typescript/reference/client",
+  },
+  {
+    id: 10,
+    text: "DBOS: transaction steps commit the user's changes and the checkpoint in one database transaction; ordinary steps are at least once.",
+    href: "https://docs.dbos.dev/typescript/tutorials/workflow-tutorial",
   },
 ];
 
@@ -73,7 +101,7 @@ export const compareTools: CompareTool[] = [
     name: "Queuert",
     category: "job-chain library",
     cells: {
-      storage: { text: "Your database — PostgreSQL or SQLite" },
+      storage: { text: "Your database — PostgreSQL, or SQLite (experimental)" },
       operate: { text: "None — your existing database" },
       enqueue: { mark: "yes", text: "createChain writes in your transaction" },
       completion: { mark: "yes", text: "complete commits with your domain writes" },
@@ -94,22 +122,47 @@ export const compareTools: CompareTool[] = [
     name: "pg-boss",
     category: "job queue",
     href: "/comparison/pg-boss/",
-    version: "v12.18.2",
+    summary: "A Postgres job queue with dependency flows and opt-in transactional workers.",
+    version: "v12.38.0",
     cells: {
-      storage: { text: "PostgreSQL" },
+      storage: { text: "PostgreSQL, CockroachDB, Citus or PGlite" },
       operate: { text: "None — your PostgreSQL" },
       enqueue: { mark: "partial", text: "Opt-in { db } per call", footnote: 1 },
-      completion: { mark: "partial", text: "Not in the work() loop", footnote: 2 },
-      chains: { mark: "no", text: "Single jobs on queues" },
-      fanIn: { mark: "no", text: "Not provided" },
+      completion: { mark: "partial", text: "Opt-in transactional work()", footnote: 2 },
+      chains: { mark: "partial", text: "flow() declares a dependency graph up front" },
+      fanIn: { mark: "yes", text: "dependsOn in flow()" },
       delayed: { mark: "yes", text: "sendAfter" },
       cron: { mark: "yes", text: "schedule() with time zones" },
       deadLetter: { mark: "yes", text: "deadLetter queue option" },
       priority: { mark: "yes", text: "priority option on send" },
       rateLimit: { mark: "partial", text: "sendThrottled / sendDebounced per key" },
-      wakeup: { text: "Polling, every 2 s by default" },
+      wakeup: { text: "Polling every 2 s; opt-in LISTEN/NOTIFY per queue" },
       durableWaits: { mark: "no", text: "Not provided" },
-      languages: { text: "Node.js" },
+      languages: { text: "Node.js and Bun" },
+    },
+  },
+  {
+    id: "graphile-worker",
+    name: "Graphile Worker",
+    category: "job queue",
+    href: "/comparison/graphile-worker/",
+    summary: "A SQL-native Postgres job queue. Transactional enqueue, separate completion.",
+    version: "v0.18.0",
+    cells: {
+      storage: { text: "PostgreSQL" },
+      operate: { text: "None — your PostgreSQL" },
+      enqueue: { mark: "partial", text: "add_job() SQL in your transaction", footnote: 7 },
+      completion: { mark: "no", text: "Completed in a separate statement", footnote: 8 },
+      chains: { mark: "no", text: "A task can add the next job itself" },
+      fanIn: { mark: "no", text: "Not provided" },
+      delayed: { mark: "yes", text: "run_at" },
+      cron: { mark: "yes", text: "Built-in crontab" },
+      deadLetter: { mark: "no", text: "Permanently failed jobs stay in the table" },
+      priority: { mark: "yes", text: "priority, lower runs first" },
+      rateLimit: { mark: "no", text: "Not provided" },
+      wakeup: { text: "LISTEN/NOTIFY; 2 s poll for future jobs" },
+      durableWaits: { mark: "no", text: "Not provided" },
+      languages: { text: "Node.js; any language enqueues via SQL" },
     },
   },
   {
@@ -117,22 +170,51 @@ export const compareTools: CompareTool[] = [
     name: "BullMQ",
     category: "job queue",
     href: "/comparison/bullmq/",
-    version: "v5.76.6",
+    summary: "A Redis or Postgres job queue. Enqueue runs outside your transaction.",
+    version: "v6.7.0",
     cells: {
-      storage: { text: "Redis" },
-      operate: { text: "Redis, with persistence configured" },
-      enqueue: { mark: "no", text: "Redis is separate from your database" },
+      storage: { text: "Redis, or PostgreSQL since v6" },
+      operate: { text: "Redis with persistence, or none on PostgreSQL" },
+      enqueue: { mark: "no", text: "add() runs on BullMQ's own connection" },
       completion: { mark: "no", text: "At-least-once; idempotent handlers", footnote: 3 },
       chains: { mark: "partial", text: "FlowProducer parent/child flows" },
       fanIn: { mark: "partial", text: "A parent waits for its children" },
       delayed: { mark: "yes", text: "delay option" },
-      cron: { mark: "yes", text: "Repeatable jobs" },
+      cron: { mark: "yes", text: "Job schedulers" },
       deadLetter: { mark: "partial", text: "The failed set, re-run with retry()" },
-      priority: { mark: "yes", text: "priority 0–2,097,152" },
-      rateLimit: { mark: "yes", text: "Per queue and per key" },
-      wakeup: { text: "BZPOPMIN blocking pop — sub-millisecond" },
+      priority: { mark: "yes", text: "priority 0–2,097,151" },
+      rateLimit: { mark: "partial", text: "Per queue; per group in BullMQ Pro" },
+      wakeup: { text: "BZPOPMIN on Redis, LISTEN/NOTIFY on PostgreSQL" },
       durableWaits: { mark: "no", text: "Not provided" },
-      languages: { text: "Node.js, Python, Elixir, PHP" },
+      languages: { text: "Node.js, Bun, Python, Elixir, Rust, .NET; PHP producer" },
+    },
+  },
+  {
+    id: "dbos",
+    name: "DBOS",
+    category: "durable workflow library",
+    href: "/comparison/dbos/",
+    summary: "A Postgres durable-workflow library. Replayed functions instead of typed chains.",
+    version: "TS SDK v5.4.0",
+    cells: {
+      storage: { text: "PostgreSQL, a system database by default" },
+      operate: { text: "None — paid Conductor for fleet recovery" },
+      enqueue: { mark: "partial", text: "Opt-in, on the system database", footnote: 9 },
+      completion: {
+        mark: "yes",
+        text: "Transaction steps commit with the checkpoint",
+        footnote: 10,
+      },
+      chains: { mark: "yes", text: "Deterministic workflow code calling steps" },
+      fanIn: { mark: "yes", text: "waitAll / waitFirst on child workflows" },
+      delayed: { mark: "yes", text: "delaySeconds, DBOS.sleep" },
+      cron: { mark: "yes", text: "Stored schedules with time zones" },
+      deadLetter: { mark: "partial", text: "A status after 100 recovery attempts" },
+      priority: { mark: "yes", text: "priority on every queue" },
+      rateLimit: { mark: "yes", text: "Per queue and per partition" },
+      wakeup: { text: "Queues poll, every 1 s at the fastest" },
+      durableWaits: { mark: "yes", text: "sleep, recv, getEvent, streams" },
+      languages: { text: "TypeScript, Python, Go, Java" },
     },
   },
   {
@@ -140,7 +222,8 @@ export const compareTools: CompareTool[] = [
     name: "Temporal",
     category: "workflow platform",
     href: "/comparison/temporal/",
-    version: "TS SDK v1.17.1",
+    summary: "A distributed workflow platform. Both model multi-step durable work.",
+    version: "TS SDK v1.25.0",
     cells: {
       storage: { text: "Temporal cluster (Cassandra, MySQL or PostgreSQL) or Temporal Cloud" },
       operate: { text: "Multi-service cluster, or Temporal Cloud" },
@@ -151,8 +234,8 @@ export const compareTools: CompareTool[] = [
       delayed: { mark: "yes", text: "sleep() inside the workflow" },
       cron: { mark: "yes", text: "Server-managed schedules" },
       deadLetter: { text: "Failures are handled in workflow code" },
-      priority: undefined,
-      rateLimit: undefined,
+      priority: { mark: "yes", text: "priorityKey with fairness keys" },
+      rateLimit: { mark: "partial", text: "Activity dispatch per worker or task queue" },
       wakeup: { text: "Workers poll task queues on the server" },
       durableWaits: { mark: "yes", text: "sleep, condition, signals" },
       languages: { text: "Go, Java, TypeScript, Python, .NET and more" },
@@ -163,7 +246,8 @@ export const compareTools: CompareTool[] = [
     name: "Inngest",
     category: "workflow platform",
     href: "/comparison/inngest/",
-    version: "SDK v4.3.0",
+    summary: "An event-driven workflow platform. Different trigger model.",
+    version: "SDK v4.26.2",
     cells: {
       storage: { text: "Inngest server — Inngest Cloud or self-hosted" },
       operate: { text: "Inngest Cloud, or the OSS server" },
@@ -173,12 +257,18 @@ export const compareTools: CompareTool[] = [
       fanIn: { mark: "yes", text: "Await parallel steps" },
       delayed: { mark: "yes", text: "step.sleep()" },
       cron: { mark: "yes", text: "Cron-triggered functions" },
-      deadLetter: { text: "Failures are handled in function code" },
+      deadLetter: { text: "onFailure handlers and bulk replay" },
       priority: { mark: "yes", text: "priority on the function" },
       rateLimit: { mark: "yes", text: "Rate limit, throttle, debounce" },
-      wakeup: { text: "The server invokes your HTTP handler" },
+      wakeup: { text: "The server calls your HTTP handler or Connect worker" },
       durableWaits: { mark: "yes", text: "step.sleep, step.waitForEvent" },
-      languages: { text: "TypeScript, Python, Go, Kotlin, Elixir, Rust" },
+      languages: { text: "TypeScript, Python, Go" },
     },
   },
 ];
+
+export const compareNeighbors = compareTools.flatMap((tool) =>
+  tool.href !== undefined && tool.summary !== undefined
+    ? [{ name: tool.name, href: tool.href, summary: tool.summary }]
+    : [],
+);

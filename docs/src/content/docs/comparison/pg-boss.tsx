@@ -1,4 +1,4 @@
-import { CompareCards } from "../../../components/CompareCards.tsx";
+import { CompareMatrix } from "../../../components/CompareMatrix.tsx";
 import { Code } from "../../../components/mdx/Code.tsx";
 import { QueuertSummary } from "../../../components/QueuertSummary.tsx";
 import { comparedQueuertVersion } from "../../../data/comparison.ts";
@@ -19,17 +19,18 @@ const Page = () => (
     <blockquote>
       <p>
         Compared versions: Queuert <code>{comparedQueuertVersion}</code> and pg-boss{" "}
-        <code>12.18.2</code>.
+        <code>12.38.0</code>.
       </p>
     </blockquote>
-    <CompareCards tools={["queuert", "pg-boss"]} />
+    <CompareMatrix tools={["queuert", "pg-boss"]} />
     <h2>What pg-boss is</h2>
     <p>
       pg-boss is a <strong>Postgres-backed job queue</strong>. The mental model is messages routed
       through named queues, with rich policies attached to each queue (singleton, exclusive,
-      strict-FIFO, throttling), retries with backoff, cron schedules, dead-letter queues, and a
-      supervisor that runs maintenance for you. Seven years of production use, polling-based,
-      Postgres-only.
+      strict-FIFO, throttling), retries with backoff, cron schedules, dead-letter queues, job
+      dependency flows, and a supervisor that runs maintenance for you. In production since 2016,
+      polling by default with opt-in <code>LISTEN/NOTIFY</code>, on Postgres or a
+      Postgres-compatible database.
     </p>
     <p>
       You install it, point it at Postgres, create queues, and <code>send</code> jobs to them.
@@ -48,9 +49,11 @@ const Page = () => (
         isn't modeling messages-through-lanes — it's modeling chains tied to data.
       </li>
       <li>
-        <strong>Chain concepts</strong> like typed continuations, blocker DAGs, and transactional
-        enqueue are central to Queuert because Queuert is a job-chain library. They are absent from
-        pg-boss because pg-boss isn't modeling chained execution — it's modeling queues.
+        <strong>Chain concepts</strong> like typed continuations, where each step's handler decides
+        the next step at runtime, are central to Queuert because Queuert is a job-chain library.
+        pg-boss added dependency flows in v12.19, but a flow is a set of jobs and their dependencies
+        declared up front with <code>flow()</code>, not a chain that grows as each step completes —
+        pg-boss is modeling queues, not chained execution.
       </li>
     </ul>
     <p>
@@ -68,12 +71,17 @@ const Page = () => (
       </li>
       <li>
         <strong>Built-in cron scheduling.</strong>{" "}
-        <code>{"schedule(name, cron, data, { tz })"}</code> with timezone support, multiple
-        schedules per queue.
+        <code>{"schedule(name, cron, data, { tz })"}</code> with timezone support, RRULE
+        expressions, and multiple schedules per queue.
       </li>
       <li>
         <strong>Dead letter queues.</strong> Set <code>deadLetter: 'dlq-name'</code> and
-        final-failure jobs route there atomically.
+        final-failure jobs route there atomically; <code>redrive()</code> sends them back.
+      </li>
+      <li>
+        <strong>Dependency flows.</strong> <code>flow()</code> creates a set of jobs with{" "}
+        <code>dependsOn</code> edges in one transaction; a dependent job stays blocked until every
+        parent completes.
       </li>
       <li>
         <strong>Throttle / debounce primitives.</strong> <code>sendThrottled</code> /{" "}
@@ -84,7 +92,7 @@ const Page = () => (
         you scheduling anything.
       </li>
       <li>
-        <strong>Maturity.</strong> Seven years of deployment, widely used, well-documented.
+        <strong>Maturity.</strong> In production since 2016, widely used, well-documented.
       </li>
     </ul>
     <p>
@@ -98,27 +106,30 @@ const Page = () => (
     <ul>
       <li>
         <strong>Wakeup mechanism.</strong> pg-boss polls every <code>pollingIntervalSeconds</code>{" "}
-        (default 2s); that's the floor on enqueue→dequeue latency. Queuert listens on{" "}
-        <code>LISTEN/NOTIFY</code> (or Redis / NATS), so workers wake when a row commits — typically
-        tens of milliseconds.
+        (default 2s) unless you enable <code>useListenNotify</code> and <code>notify</code> on a
+        queue; it then wakes on <code>LISTEN/NOTIFY</code> and keeps a slower poll as a backstop.
+        With a notify adapter — <code>LISTEN/NOTIFY</code>, Redis, or NATS — Queuert workers wake
+        when a row commits, typically within tens of milliseconds; without one they poll, every 60 s
+        by default.
       </li>
       <li>
         <strong>Failure shape.</strong> In pg-boss, final failure routes the job to a dead-letter
-        queue (or its own <code>failed</code> set). In Queuert, failure stays as data on the chain (
-        <code>last_attempt_error</code>); what happens next is an application decision. These are
+        queue (or its own <code>failed</code> set). In Queuert, the error stays on the job as{" "}
+        <code>lastAttemptError</code>; what happens next is an application decision. These are
         direct consequences of "queue" vs. "job-chain library."
       </li>
       <li>
-        <strong>Storage backends.</strong> pg-boss is Postgres-only. Queuert works against Postgres
-        or SQLite (experimental), or an in-process adapter for tests / single-process apps.
+        <strong>Storage backends.</strong> pg-boss runs on Postgres and Postgres-compatible
+        databases (CockroachDB, Citus, PGlite). Queuert works against Postgres or SQLite
+        (experimental), or an in-process adapter for tests / single-process apps.
       </li>
     </ul>
     <h2>Transactional consistency, both ends</h2>
     <p>
       Both pg-boss and Queuert store state in your Postgres, so the question isn't "is the state
       nearby?" — it's "is the API wired to commit your domain write atomically with the queue's
-      state mutation?" pg-boss requires per-call discipline at one end and offers no equivalent at
-      the other; Queuert is structural at both.
+      state mutation?" pg-boss offers it at both ends as options you turn on per call or per worker;
+      in Queuert it is the only path.
     </p>
     <h3>Enqueue</h3>
     <p>
@@ -133,9 +144,9 @@ const Page = () => (
     `}</Code>
     <p>
       It works, but it's per-call discipline: the adapter set is fixed (raw <code>pg</code> users
-      have to write their own <code>IDatabase</code> shim), and most pg-boss code in the wild
-      predates v12.17 and uses pg-boss's own pool — meaning dual-write is the default unless every
-      call site remembers to pass <code>{"{ db }"}</code>.
+      have to write their own <code>executeSql</code> shim), and a call that omits{" "}
+      <code>{"{ db }"}</code> runs on pg-boss's own pool — dual-write is the default unless every
+      call site remembers to pass it.
     </p>
     <p>
       Queuert's <code>createChain</code> writes into your DB transaction structurally — there is no
@@ -143,52 +154,50 @@ const Page = () => (
     </p>
     <Code lang="ts">{`
       await withTransactionHooks(async (transactionHooks) =>
-        db.transaction(async (tx) => {
-          await tx.users.create({ ... });
+        sql.begin(async (txSql) => {
+          const [user] = await txSql\`insert into users (email) values (\${email}) returning id\`;
           await client.createChain({
-            tx,
+            txSql,
             transactionHooks,
             typeName: "send-welcome-email",
-            input: { ... },
+            input: { userId: user.id },
           });
         }),
       );
     `}</Code>
     <h3>Processing</h3>
     <p>
-      This is where the gap is sharper. pg-boss's README markets{" "}
-      <em>"Exactly-once job delivery"</em> — but that phrase refers specifically to{" "}
-      <code>SKIP LOCKED</code> on the fetch path (two workers can't claim the same row atomically).
-      It does NOT mean handler-to-completion is exactly-once. Under <code>work()</code>, the handler
-      runs, returns, and pg-boss then calls <code>complete()</code> against its own pool in a
-      separate transaction (see{" "}
-      <a href="https://github.com/timgit/pg-boss/blob/master/src/manager.ts">
-        <code>src/manager.ts</code>
-      </a>
-      ). If your handler commits domain writes and the worker crashes before <code>complete()</code>{" "}
-      lands (or the lease expires via <code>expireInSeconds</code>, default 15 min), the job is
-      re-fetched and the handler runs again — domain writes commit twice.
+      pg-boss documents at-least-once delivery: a job whose worker crashes or runs past{" "}
+      <code>expireInSeconds</code> (default 15 min) is retried, so a handler can run twice. By
+      default, <code>work()</code> runs the handler and then calls <code>complete()</code> on its
+      own pool in a separate transaction, so domain writes the handler committed can commit twice.
     </p>
     <p>
-      v12.17 (April 2026) added <code>{"{ db }"}</code> on <code>complete()</code> (and{" "}
-      <code>fetch()</code>, <code>fail()</code>, etc.), so the <em>primitives</em> for atomic
-      completion exist — you can call <code>{"complete(jobId, output, { db: tx })"}</code> inside
-      your domain transaction and the job's state flips in the same commit. But the{" "}
-      <code>work()</code> worker loop doesn't surface them: to actually fuse "handler tx" with
-      "completion tx," you have to opt out of <code>work()</code>, write your own <code>fetch</code>{" "}
-      + handler + <code>{"complete(..., { db: tx })"}</code> loop, and re-implement lease, retry,
-      and backoff yourself. Atomic processing is possible, but it's a parallel API you build — for
-      code using the supported <code>work()</code> worker, idempotency at processing is application
-      discipline.
+      v12.32 added an opt-in <code>{"work(name, { transactional: true }, handler)"}</code> that
+      closes this gap (see <a href="https://pgboss.io/api/workers">the workers docs</a>). pg-boss
+      opens a transaction, passes it to the handler, and commits the job's completion in it; writes
+      routed through that transaction commit or roll back with the completion, and a claim lost
+      meanwhile rolls it back:
+    </p>
+    <Code lang="js">{`
+      await boss.work("send-welcome-email", { transactional: true }, async ([job], tx) => {
+        await tx.executeSql("insert into email_log (user_id) values ($1)", [job.data.userId]);
+        await boss.send("log-sent", { ... }, { db: tx });
+      });
+    `}</Code>
+    <p>
+      The transaction stays open for the whole handler run and holds a pool connection, so pg-boss
+      recommends it for handlers that finish in seconds and points long work back to the default
+      worker with <code>{"complete(..., { db })"}</code>.
     </p>
     <p>
-      Queuert's supported worker is built around this. The handler does its work, then opens its own
-      transaction and commits the outcome with <code>complete</code> inside it, together with its
-      domain writes. Your handler's domain writes, the chain's completion, and the next step's{" "}
-      <code>continueWith</code> all commit in one transaction; <code>complete</code> writes only if
-      this attempt still owns the job, so a stale worker's transaction rolls back instead of
-      double-committing. The worker lease, retry, and backoff stay in the worker — long work runs
-      outside any transaction while the worker's heartbeat renews its lease:
+      Queuert's worker has no other mode. The handler does its work, then opens its own transaction
+      with your database client and commits the outcome with <code>complete</code> inside it,
+      together with its domain writes. Your handler's domain writes, the chain's completion, and the
+      next step's <code>continueWith</code> all commit in one transaction; <code>complete</code>{" "}
+      writes only if this attempt still owns the job, so a stale worker's transaction rolls back
+      instead of double-committing. The worker lease, retry, and backoff stay in the worker — long
+      work runs outside any transaction while the worker's heartbeat renews its lease:
     </p>
     <Code lang="ts">{`
       "send-welcome-email": {
@@ -227,8 +236,8 @@ const Page = () => (
         them yourself.
       </li>
       <li>You want cron, DLQ, and a maintenance supervisor in the box.</li>
-      <li>Polling-interval wakeup latency is fine.</li>
-      <li>You value seven years of production deployment over newer designs.</li>
+      <li>Your multi-step work is a dependency graph you can declare up front.</li>
+      <li>You value a decade of production deployment over newer designs.</li>
     </ul>
     <p>
       <strong>Reach for Queuert when:</strong>
@@ -243,7 +252,8 @@ const Page = () => (
         data that triggered it.
       </li>
       <li>
-        You want sub-second wakeup latency via <code>LISTEN/NOTIFY</code> (or Redis / NATS).
+        You want long handlers that keep only the final commit inside a transaction, in your own
+        database client's transaction rather than one the library opens.
       </li>
       <li>
         Your DB is the system of record and you'd rather not introduce queue concepts you don't
@@ -251,10 +261,8 @@ const Page = () => (
       </li>
     </ul>
     <p>
-      If both shapes plausibly fit, the deciding question is usually whether transactional enqueue
-      and typed chains matter more than queue policies, or the other way around. Neither is a
-      feature the other side can add cheaply — they're consequences of what each tool fundamentally
-      is.
+      If both shapes plausibly fit, the deciding question is usually whether typed chains and
+      always-on transactional processing matter more than queue policies, or the other way around.
     </p>
   </>
 );

@@ -1,6 +1,6 @@
 ---
 name: publish-review
-description: Run a pre-publish review of the Queuert library — release hygiene (changesets, TODOs, package metadata), API surface, docs accuracy, plus schema and OTEL reviews when those areas changed since the last release, and benchmarks. Use when preparing to publish or validating publish readiness.
+description: Run a pre-publish review of the Queuert library — release hygiene (changesets, TODOs, package metadata), API surface, docs accuracy, the Compare pages against the release and each neighbor's latest version, plus schema and OTEL reviews when those areas changed since the last release, and benchmarks. Use when preparing to publish or validating publish readiness.
 ---
 
 # Publish Readiness Review
@@ -23,9 +23,11 @@ git diff --name-only $BASE..HEAD -- 'packages/*/src/state-adapter/**' 'packages-
 git diff --name-only $BASE..HEAD -- 'packages/otel/**' 'packages/core/src/observability-adapter/**' 'docs/src/content/docs/advanced/otel-*' | head -1
 ```
 
+Determine the release version `<VERSION>` from the current `packages/core/package.json` version and the pending `.changeset/*.md` bumps, following the pre-1.0 rule in the `release` skill (any `major` or `minor` → `0.<minor+1>.0`, patch-only → next patch). Pass it to the Comparison agent.
+
 - **Schema agent** runs if state-adapter or typed-sql files changed (or `--full`).
 - **OTEL agent** runs if OTEL/observability files changed (or `--full`).
-- The other three agents always run.
+- The other four agents always run.
 
 ## Step 2: Start benchmarks
 
@@ -44,6 +46,8 @@ Read, in order:
 
 The last release tag is <BASE>. <"Focus on what changed since <BASE> (git diff --name-only <BASE>..HEAD), and on how those changes interact with code that did not change." | for --full: "Review the whole library.">
 
+<Comparison agent only: "The release version is <VERSION>.">
+
 Report findings only — no inventories of things that are fine. Every finding needs a file:line and a concrete fix. Severity: CRITICAL = must fix before publish (docs lie about behavior, breaking change unflagged, data-integrity risk); WARNING = should fix; SUGGESTION = nice to have. Keep SUGGESTIONs to the 10 most valuable.
 ```
 
@@ -52,6 +56,7 @@ Report findings only — no inventories of things that are fine. Every finding n
 | Release hygiene | `release-hygiene.md`  | release hygiene auditor            | `sonnet`             |
 | API surface     | `api-surface.md`      | API surface reviewer               | default              |
 | Docs accuracy   | `docs-accuracy.md`    | documentation accuracy reviewer    | default              |
+| Comparison      | `comparison.md`       | comparison pages reviewer          | default              |
 | Schema          | `schema-review.md`    | database schema reviewer           | default, conditional |
 | OTEL            | `otel-conventions.md` | OTEL semantic conventions reviewer | default, conditional |
 
@@ -73,7 +78,7 @@ Generated: [date] · Scope: [BASE]..HEAD ([N] files) or full · Agents run: [lis
 
 ## Must Fix Before Publish
 
-[CRITICAL items, each tagged with its area: hygiene / api / docs / schema / otel / benchmarks]
+[CRITICAL items, each tagged with its area: hygiene / api / docs / comparison / schema / otel / benchmarks]
 
 ## Should Fix
 

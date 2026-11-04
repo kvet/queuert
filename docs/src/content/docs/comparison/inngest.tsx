@@ -1,4 +1,4 @@
-import { CompareCards } from "../../../components/CompareCards.tsx";
+import { CompareMatrix } from "../../../components/CompareMatrix.tsx";
 import { QueuertSummary } from "../../../components/QueuertSummary.tsx";
 import { comparedQueuertVersion } from "../../../data/comparison.ts";
 
@@ -18,19 +18,19 @@ const Page = () => (
     <blockquote>
       <p>
         Compared versions: Queuert <code>{comparedQueuertVersion}</code> and the Inngest SDK{" "}
-        <code>inngest@4.3.0</code>.
+        <code>inngest@4.26.2</code>.
       </p>
     </blockquote>
-    <CompareCards tools={["queuert", "inngest"]} />
+    <CompareMatrix tools={["queuert", "inngest"]} />
     <h2>What Inngest is</h2>
     <p>
       Inngest is an <strong>event-driven durable-function platform</strong>. The mental model is
       events that trigger functions; each function is composed of <code>step.run</code> blocks whose
-      results are persisted server-side. Functions execute inside HTTP handlers in your application
-      — there's no worker process — with the Inngest server invoking your <code>serve()</code>{" "}
-      adapter and re-invoking it as steps complete. Built-in primitives for concurrency,
-      rate-limiting, throttling, debouncing, priority, cron, <code>step.sleep('30d')</code>,{" "}
-      <code>step.waitForEvent</code>, and fan-out via subscribe.
+      results are persisted server-side. Functions execute inside HTTP handlers in your application,
+      with the Inngest server invoking your <code>serve()</code> adapter, or in long-running{" "}
+      <code>connect()</code> workers that hold a WebSocket to the server. Built-in primitives for
+      concurrency, rate-limiting, throttling, debouncing, priority, cron,{" "}
+      <code>step.sleep('30d')</code>, <code>step.waitForEvent</code>, and fan-out via subscribe.
     </p>
     <p>
       You install the SDK, mount a <code>serve()</code> adapter at <code>/api/inngest</code>, and
@@ -45,8 +45,8 @@ const Page = () => (
         <strong>Inngest</strong> starts from events. You publish events; functions subscribe to
         them. Multiple functions can subscribe to the same event (fan-out). Long-lived workflows
         pause via <code>step.sleep</code> / <code>step.waitForEvent</code> and resume when
-        conditions are met. Functions execute as HTTP request/response cycles invoked by the Inngest
-        server.
+        conditions are met. The Inngest server drives execution, over HTTP or a Connect worker's
+        WebSocket.
       </li>
       <li>
         <strong>Queuert</strong> starts from database transactions. You write data and start a chain
@@ -76,15 +76,20 @@ const Page = () => (
       </li>
       <li>
         <strong>HTTP-handler execution shape.</strong> Functions live next to your routes and run on
-        whatever HTTP runtime you already have (Vercel, Cloudflare, Lambda, Express, etc.). No
-        worker process to manage.
+        whatever HTTP runtime you already have (Vercel, Cloudflare, Lambda, Express, etc.), with no
+        worker process to manage; <code>connect()</code> covers long-running workers on Kubernetes,
+        ECS, and similar.
       </li>
       <li>
         <strong>Hosted option.</strong> Inngest Cloud handles the server-side concerns; the OSS Go
         server is the self-hosted alternative.
       </li>
       <li>
-        <strong>Cross-language SDKs.</strong> TypeScript, Python, Go, Kotlin, Elixir, Rust.
+        <strong>Failure tooling.</strong> <code>onFailure</code> handlers run after retries are
+        exhausted, and the dashboard replays or cancels runs in bulk.
+      </li>
+      <li>
+        <strong>Cross-language SDKs.</strong> Official SDKs for TypeScript, Python, and Go.
       </li>
     </ul>
     <p>
@@ -126,23 +131,25 @@ const Page = () => (
       <li>
         <strong>Trigger model.</strong> Inngest is event-first: you{" "}
         <code>{"inngest.send({ name, data })"}</code> and matching functions run. Queuert is
-        transaction-first: you <code>{"client.createChain({ typeName, input })"}</code> inside a DB
-        transaction.
+        transaction-first: you{" "}
+        <code>{"client.createChain({ ...txCtx, transactionHooks, typeName, input })"}</code> inside
+        a DB transaction.
       </li>
       <li>
-        <strong>Where execution happens.</strong> Inngest functions run in your HTTP handlers,
-        invoked by the Inngest server. Queuert handlers run in your worker process, pulled from the
-        DB.
+        <strong>Where execution happens.</strong> Inngest functions run in your HTTP handlers or
+        Connect workers, driven by the Inngest server. Queuert handlers run in your worker process,
+        pulled from the DB.
       </li>
       <li>
         <strong>Where state lives.</strong> Inngest server (managed or self-hosted) owns step state
         and event histories. Queuert keeps everything in your application's DB.
       </li>
       <li>
-        <strong>Per-step cost.</strong> Each Inngest <code>step.run</code> is an HTTP roundtrip to
-        the Inngest server (sync checkpointing). Queuert commits each attempt's outcome in one DB
-        transaction — yours; a chain of 5 jobs is 5 DB transactions plus the worker's
-        single-statement bookkeeping, no platform RTT.
+        <strong>Per-step cost.</strong> Each Inngest <code>step.run</code> is checkpointed to the
+        Inngest server over the network (batchable with <code>bufferedSteps</code>), and retries and
+        parallel steps fall back to server-driven re-invocation. Queuert commits each attempt's
+        outcome in one DB transaction — yours; a chain of 5 jobs is 5 DB transactions plus the
+        worker's single-statement bookkeeping, no platform RTT.
       </li>
       <li>
         <strong>Long durable waits.</strong> Inngest's <code>step.sleep('30d')</code> and{" "}
@@ -154,11 +161,13 @@ const Page = () => (
         both ends require application discipline. <em>Enqueue:</em> <code>inngest.send</code> posts
         over HTTP independently of your DB transaction; dual-write is the default.{" "}
         <em>Processing:</em> Inngest's own{" "}
-        <a href="https://www.inngest.com/docs/guides/error-handling">Errors & Retries</a> doc tells
-        users{" "}
+        <a href="https://www.inngest.com/docs/durable-execution/guides-and-advanced/error-handling">
+          Error handling
+        </a>{" "}
+        doc says a saved step result{" "}
         <em>
-          "a step inserting a new user to the database is not idempotent while a step upserting a
-          user is"
+          "doesn't make external side effects exactly-once. A call can succeed and then time out
+          before Inngest records the result."
         </em>{" "}
         — <code>step.run</code> is at-least-once until the result reaches the server. With Queuert,
         both halves commit inside your DB transaction; for DB-bound work, no outbox and no
@@ -166,8 +175,8 @@ const Page = () => (
       </li>
       <li>
         <strong>Vendor / hosting story.</strong> Inngest Cloud is the easy path; self-hosting the
-        OSS server is possible but newer. Queuert has no vendor — your existing DB is the entire
-        dependency.
+        OSS server is supported, with its single-node mode labeled beta. Queuert has no vendor —
+        your existing DB is the entire dependency.
       </li>
     </ul>
     <h2>Choosing between them</h2>
@@ -184,7 +193,10 @@ const Page = () => (
         them yourself.
       </li>
       <li>You're comfortable with Inngest Cloud (or operating the OSS server) as a dependency.</li>
-      <li>HTTP-handler execution fits your runtime (Vercel / Cloudflare / Lambda / etc.).</li>
+      <li>
+        HTTP-handler execution fits your runtime (Vercel / Cloudflare / Lambda / etc.), or you want
+        server-driven Connect workers.
+      </li>
       <li>You can accept the dual-write story and use idempotency keys to make it safe.</li>
     </ul>
     <p>

@@ -1,6 +1,9 @@
 # Triage
 
-None
+- [REF] transactionHooks provider
+- [REF] empirical complete chains
+- [REF] RR & S pg transactions
+- [REF] sync sqlite api
 
 # Short term
 
@@ -8,7 +11,6 @@ None
 - [TASK] Enforce json-serializable inputs and outputs (like no Date in job definitions) — see `design/json-serializable-types.md`
 - [TASK] Reschedule reason and failure-streak backoff — persist `failure_streak` and the `complete({ reschedule, reason })` reason, compute backoff from the streak instead of `attempt`. See `design/reschedule-reason-and-backoff.md`.
 - [EPIC] Decouple chain from jobs. See `design/chain-table.md`.
-- [TASK] Re-verify the Compare pages — `docs/src/content/docs/comparison/*` and `docs/src/data/comparison.ts` show the compared Queuert version hard-coded as 0.12.0, the version they were last checked against; re-check each comparison against the current release and update the version.
 - [EPIC] Chain identity. Closing [#3](https://github.com/kvet/queuert/issues/3). See `design/chain-identity.md`.
   - [TASK] List chains by identity — `listChains` gains an `identity` filter to page through the full recurrence history of a key
 - [TASK] Best-effort `rescheduleJobs` — today it fails the whole batch if any job is not pending, so apps hand-roll "wake a sleeping chain" loops (`listChainJobs` + `rescheduleJob` + catch `JobNotReschedulableError`). Add an option such as `skipNotReschedulable: true` that returns a per-job outcome (`rescheduled` / `not-pending` / `completed`) instead of throwing.

@@ -91,12 +91,12 @@ const stop = await worker.start();
 
 Background-work libraries trade off across two axes: what storage tier they own, and what shape of work they model.
 
-|                       | Queuert               | pg-boss             | BullMQ            | Temporal          | Inngest           |
-| --------------------- | --------------------- | ------------------- | ----------------- | ----------------- | ----------------- |
-| Category              | Job-chain library     | Job queue           | Job queue         | Workflow platform | Workflow platform |
-| Storage               | Your DB (PG / SQLite) | Postgres            | Redis             | Separate cluster  | Inngest server    |
-| Transactional enqueue | ✅ structural         | 🟡 per-call adapter | ❌ app discipline | ❌ app discipline | ❌ app discipline |
-| Operate a server?     | No                    | No                  | Redis             | Yes               | Yes               |
+|                       | Queuert               | pg-boss             | Graphile Worker | BullMQ            | DBOS              | Temporal          | Inngest           |
+| --------------------- | --------------------- | ------------------- | --------------- | ----------------- | ----------------- | ----------------- | ----------------- |
+| Category              | Job-chain library     | Job queue           | Job queue       | Job queue         | Workflow library  | Workflow platform | Workflow platform |
+| Storage               | Your DB (PG / SQLite) | Postgres            | Postgres        | Redis or Postgres | Postgres          | Separate cluster  | Inngest server    |
+| Transactional enqueue | ✅ structural         | 🟡 per-call adapter | 🟡 SQL function | ❌ app discipline | 🟡 system DB only | ❌ app discipline | ❌ app discipline |
+| Operate a server?     | No                    | No                  | No              | Redis, or none    | No                | Yes               | Yes               |
 
 Queuert sits between job queues and workflow engines. A one-job chain _is_ a queue; a multi-step chain with blockers is closer to a workflow. Neither label fully fits, which is why the canonical term is "job-chain library."
 
