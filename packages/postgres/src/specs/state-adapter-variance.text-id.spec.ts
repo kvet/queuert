@@ -6,7 +6,7 @@ import { extendWithVarianceStatePg } from "./state-adapter-variance.spec-helper.
 
 const it = extendWithVarianceStatePg(extendWithPostgres(baseIt, import.meta.url), {
   schema: "queuert_text_id",
-  idType: "text",
+  jobIdType: "text",
 });
 
 it("index");

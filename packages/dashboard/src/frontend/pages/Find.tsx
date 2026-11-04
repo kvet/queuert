@@ -3,10 +3,11 @@ import { shortId } from "@queuert/ui/lib";
 import { useSearchParams } from "@solidjs/router";
 import { For, Match, Show, Switch, createSignal } from "solid-js";
 
-import { getChainsByIds, getJobsByIds } from "../api.js";
+import { getChainsByIds, getJobsByIds, getWorkersByIds } from "../api.js";
 import { MAX_IDS, parseIdList } from "../domain/ids.js";
 import { ChainRow } from "../rows/ChainRow.js";
 import { JobRow } from "../rows/JobRow.js";
+import { WorkerRow } from "../rows/WorkerRow.js";
 import { createLoader } from "../state/createLoader.js";
 import { EmptyState, ErrorState, SkeletonRows } from "../ui/kit.js";
 
@@ -109,11 +110,12 @@ export const Find = () => {
     () => (ids().length > 0 ? ids().join(",") : null),
     async (joined, signal) => {
       const list = joined.split(",");
-      const [chains, jobs] = await Promise.all([
+      const [chains, jobs, workers] = await Promise.all([
         getChainsByIds(list, { signal }),
         getJobsByIds(list, { signal }),
+        getWorkersByIds(list, { signal }),
       ]);
-      return { chains: chains.items, jobs: jobs.items };
+      return { chains: chains.items, jobs: jobs.items, workers: workers.items };
     },
   );
 
@@ -123,6 +125,7 @@ export const Find = () => {
     const found = new Set([
       ...data.chains.map((chain) => chain.id),
       ...data.jobs.map((job) => job.id),
+      ...data.workers.map((worker) => worker.id),
     ]);
     return ids().filter((id) => !found.has(id));
   };
@@ -137,7 +140,7 @@ export const Find = () => {
       </div>
       <Switch>
         <Match when={ids().length === 0}>
-          <EmptyState title="Paste chain or job IDs above to look them up." />
+          <EmptyState title="Paste chain, job or worker IDs above to look them up." />
         </Match>
         <Match when={results.error()}>
           <ErrorState thing="the results" error={results.error()} onRetry={results.retry} />
@@ -152,7 +155,7 @@ export const Find = () => {
             <div class="flex flex-col gap-6">
               <p class="text-sm text-fg-muted">
                 {ids().length} IDs · {data().chains.length} chains · {data().jobs.length} jobs ·{" "}
-                {notFound().length} not found
+                {data().workers.length} workers · {notFound().length} not found
               </p>
               <Show when={data().chains.length > 0}>
                 <Box title="Chains" bodyClass="">
@@ -169,6 +172,13 @@ export const Find = () => {
                     <For each={data().jobs}>
                       {(job) => <JobRow job={job} sortKey="createdAt" showType />}
                     </For>
+                  </ul>
+                </Box>
+              </Show>
+              <Show when={data().workers.length > 0}>
+                <Box title="Workers" bodyClass="">
+                  <ul class="divide-y divide-border">
+                    <For each={data().workers}>{(worker) => <WorkerRow worker={worker} />}</For>
                   </ul>
                 </Box>
               </Show>

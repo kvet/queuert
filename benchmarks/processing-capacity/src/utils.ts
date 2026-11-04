@@ -26,7 +26,7 @@ const jobTypes = defineJobTypes<{
 
 type BenchmarkContext = {
   client: Client<any, any>;
-  withTransaction: StateAdapter<any, any>["withTransaction"];
+  withTransaction: StateAdapter<any, any, any>["withTransaction"];
 };
 
 type Measurement = { count: number; durationMs: number; drained: boolean };
@@ -205,7 +205,7 @@ export const runBenchmark = async ({
   notifyAdapter,
 }: {
   title: string;
-  stateAdapter: StateAdapter<any, any>;
+  stateAdapter: StateAdapter<any, any, any>;
   notifyAdapter?: NotifyAdapter;
 }): Promise<void> => {
   const name = parseScenarioName();

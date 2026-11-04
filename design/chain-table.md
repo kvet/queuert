@@ -32,7 +32,7 @@ Head-row aliasing also costs under REPEATABLE READ and SERIALIZABLE: an acquisit
 A chain is a row in `chain`; its jobs are rows in `job` that point at it. A chain's id is its own: it is no longer its head job's id.
 
 - `job.chain_id` references `chain.id`; the head job is the job with `chain_index = 0`.
-- Core generates both ids with the adapter's `generateId` and runs `validateId` on both.
+- Core generates both ids with the adapter's `generateJobId` and runs `validateJobId` on both.
 - A chain lock is the chain row, a job lock is the job row, and the two never alias.
 
 Making the ids independent (not just storing them twice) removes the remaining special cases of "the head is the chain": the `chainMembers` `OR` predicate (`(id = X AND chain_index = 0) OR (chain_id = X AND chain_index > 0)`), the `WHERE chain_index > 0` partial unique index that excludes heads, and every `job.id === job.chainId` branch in the in-process adapter. It also lets jobs be removed without removing the chain: the "cleanup chains with 1k+ jobs" epic and "reset jobs in chains" both need a chain whose identity outlives its head job.
@@ -43,7 +43,7 @@ Making the ids independent (not just storing them twice) removes the remaining s
 CREATE TABLE {{schema}}.{{table_prefix}}chain (
   created_at        timestamptz NOT NULL DEFAULT now(),
   completed_at      timestamptz,
-  id                {{id_type}} PRIMARY KEY,
+  id                {{job_id_type}} PRIMARY KEY,
   has_dependents    boolean NOT NULL DEFAULT false,
   status            text NOT NULL DEFAULT 'running' CHECK (status IN ('running', 'completed')),
   type_name         text NOT NULL,
@@ -79,7 +79,7 @@ On `job`:
 | `getChains({ lock })`  | —                                                                                               | chain rows only; the head and tail are read in a following statement so READ COMMITTED sees their latest versions |
 | `completeChain` (core) | —                                                                                               | chain row, then current job, then follow `continued_to_id` (below)                                                |
 
-**Lock order.** A statement or transaction that locks both takes chain rows first (ordered by id), then job rows (ordered by id). In a single statement this needs a `MATERIALIZED` CTE for the chain locks that the job scan depends on; otherwise the planner may interleave them. `startJobAttempts`, `reclaimExpiredJobAttempts` and `stopWorker` use `SKIP LOCKED` and never wait, so they are exempt; the reclaim statements lock worker rows and job rows but never chain rows, and read chain columns by primary key.
+**Lock order.** A statement or transaction that locks both takes chain rows first (ordered by id), then job rows (ordered by id). In a single statement this needs a `MATERIALIZED` CTE for the chain locks that the job scan depends on; otherwise the planner may interleave them. `startJobAttempts` uses `SKIP LOCKED` and never waits, so it is exempt; the reclaim transactions lock worker rows and job rows but never chain rows, and read chain columns by primary key.
 
 ### Finding the current job in `completeChain`
 
@@ -124,7 +124,7 @@ Results from the spike's two-connection interleavings (PostgreSQL 18):
 
 - `Chain.id` is the chain's own id. The head job's id is exposed separately (`Chain.headJobId`, or head/tail jobs on `Chain` as in the "expand the Chain type" idea). `Job.chainId` keeps its meaning.
 - `createChain({ id })` assigns the **chain** id; the head job's id is always generated.
-- Code that uses a chain id as a job id — `getJob({ id: chain.id })`, `getJobs({ ids: [chain.id] })`, `getJobBlockers({ jobId: chain.id })`, `rescheduleJob({ id: chain.id })` — has to switch to the head job id. The examples (`showcase-long-running-jobs`, `showcase-queries`, `showcase-chain-deletion`) and the core test suites do this today.
+- Code that uses a chain id as a job id — `getJob({ id: chain.id })`, `getJobs({ ids: [chain.id] })`, `getJobBlockers({ jobId: chain.id })`, `rescheduleJob({ id: chain.id })` — has to switch to the head job id. The examples (`showcase-queries`, `showcase-chain-deletion`) and the core test suites do this today.
 - `examples/showcase-blockers` re-publishes a notification by hand to work around the lost wake-up; drop that once attaching no longer locks the blocker's head job.
 - State adapter contract: `createJobs` takes a `chainId` per head job; `completeJobs` returns `hasDependents`; `getChains({ lock })` no longer locks the head job (the conformance case "holds the chain lock implicitly for a single-job chain" asserts the old aliasing and changes); `unblockJobs` is counter-based.
 

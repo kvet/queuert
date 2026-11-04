@@ -1,5 +1,5 @@
 import { sleep } from "@queuert/helpers";
-import { type TestAPI, describe, expect, expectTypeOf } from "vitest";
+import { type TestAPI, assert, describe, expect, expectTypeOf } from "vitest";
 
 import { createClient } from "../client.js";
 import { ChainTypeMismatchError, JobTypeMismatchError } from "../errors.js";
@@ -8,51 +8,51 @@ import { createProcessors } from "../job-type-processors/create-job-type-process
 import { defineJobTypes } from "../job-types/define-job-types.js";
 import { type TestSuiteContext } from "./spec-context.spec-helper.js";
 
-export const clientQueriesTestSuite = ({ it: baseIt }: { it: TestAPI<TestSuiteContext> }): void => {
+export const clientQueriesTestSuite = ({ it }: { it: TestAPI<TestSuiteContext> }): void => {
   const completionOptions = {
     pollIntervalMs: 100,
     timeoutMs: 5000,
   };
 
-  const it = baseIt.extend(
-    "client",
-    async ({ stateAdapter, notifyAdapter, observabilityAdapter, log }) => {
-      const jobTypes = defineJobTypes<{
-        order: {
-          entry: true;
-          input: { amount: number };
-          output: { receipt: string };
-          continueWith: { typeName: "order_fulfill" };
-        };
-        order_fulfill: {
-          input: { orderId: string };
-          output: { shipped: boolean };
-        };
-        notification: {
-          entry: true;
-          input: { message: string };
-          output: { sent: boolean };
-        };
-        report: {
-          entry: true;
-          input: { type: string };
-          output: { data: string };
-          blockers: [{ typeName: "order" }];
-        };
-      }>();
+  const jobTypes = defineJobTypes<{
+    order: {
+      entry: true;
+      input: { amount: number };
+      output: { receipt: string };
+      continueWith: { typeName: "order_fulfill" };
+    };
+    order_fulfill: {
+      input: { orderId: string };
+      output: { shipped: boolean };
+    };
+    notification: {
+      entry: true;
+      input: { message: string };
+      output: { sent: boolean };
+    };
+    report: {
+      entry: true;
+      input: { type: string };
+      output: { data: string };
+      blockers: [{ typeName: "order" }];
+    };
+  }>();
 
-      return createClient({
+  describe("getChain", () => {
+    it("getChain returns undefined for nonexistent chain", async ({
+      stateAdapter,
+      notifyAdapter,
+      observabilityAdapter,
+      log,
+    }) => {
+      const client = await createClient({
         stateAdapter,
         notifyAdapter,
         observabilityAdapter,
         log,
         jobTypes,
       });
-    },
-  );
 
-  describe("getChain", () => {
-    it("getChain returns undefined for nonexistent chain", async ({ client }) => {
       const chain = await client.getChain({
         typeName: "order",
         id: "00000000-0000-0000-0000-000000000000",
@@ -61,7 +61,21 @@ export const clientQueriesTestSuite = ({ it: baseIt }: { it: TestAPI<TestSuiteCo
       expect(chain).toBeUndefined();
     });
 
-    it("getChain returns chain by id", async ({ client, withTransaction }) => {
+    it("getChain returns chain by id", async ({
+      stateAdapter,
+      notifyAdapter,
+      observabilityAdapter,
+      log,
+      withTransaction,
+    }) => {
+      const client = await createClient({
+        stateAdapter,
+        notifyAdapter,
+        observabilityAdapter,
+        log,
+        jobTypes,
+      });
+
       const created = await withTransaction(async (txCtx, transactionHooks) =>
         client.createChain({
           ...txCtx,
@@ -80,7 +94,21 @@ export const clientQueriesTestSuite = ({ it: baseIt }: { it: TestAPI<TestSuiteCo
       expect(chain!.status).toBe("running");
     });
 
-    it("getChain narrows return type by typeName", async ({ client, withTransaction }) => {
+    it("getChain narrows return type by typeName", async ({
+      stateAdapter,
+      notifyAdapter,
+      observabilityAdapter,
+      log,
+      withTransaction,
+    }) => {
+      const client = await createClient({
+        stateAdapter,
+        notifyAdapter,
+        observabilityAdapter,
+        log,
+        jobTypes,
+      });
+
       const created = await withTransaction(async (txCtx, transactionHooks) =>
         client.createChain({
           ...txCtx,
@@ -96,7 +124,21 @@ export const clientQueriesTestSuite = ({ it: baseIt }: { it: TestAPI<TestSuiteCo
       expectTypeOf(chain!.typeName).toEqualTypeOf<"notification">();
     });
 
-    it("getChain returns without typeName", async ({ client, withTransaction }) => {
+    it("getChain returns without typeName", async ({
+      stateAdapter,
+      notifyAdapter,
+      observabilityAdapter,
+      log,
+      withTransaction,
+    }) => {
+      const client = await createClient({
+        stateAdapter,
+        notifyAdapter,
+        observabilityAdapter,
+        log,
+        jobTypes,
+      });
+
       const created = await withTransaction(async (txCtx, transactionHooks) =>
         client.createChain({
           ...txCtx,
@@ -112,7 +154,21 @@ export const clientQueriesTestSuite = ({ it: baseIt }: { it: TestAPI<TestSuiteCo
       expect(chain!.typeName).toBe("order");
     });
 
-    it("getChain throws on typeName mismatch", async ({ client, withTransaction }) => {
+    it("getChain throws on typeName mismatch", async ({
+      stateAdapter,
+      notifyAdapter,
+      observabilityAdapter,
+      log,
+      withTransaction,
+    }) => {
+      const client = await createClient({
+        stateAdapter,
+        notifyAdapter,
+        observabilityAdapter,
+        log,
+        jobTypes,
+      });
+
       const created = await withTransaction(async (txCtx, transactionHooks) =>
         client.createChain({
           ...txCtx,
@@ -129,13 +185,39 @@ export const clientQueriesTestSuite = ({ it: baseIt }: { it: TestAPI<TestSuiteCo
   });
 
   describe("getChains", () => {
-    it("getChains returns empty array for empty ids", async ({ client }) => {
+    it("getChains returns empty array for empty ids", async ({
+      stateAdapter,
+      notifyAdapter,
+      observabilityAdapter,
+      log,
+    }) => {
+      const client = await createClient({
+        stateAdapter,
+        notifyAdapter,
+        observabilityAdapter,
+        log,
+        jobTypes,
+      });
+
       const chains = await client.getChains({ ids: [] });
 
       expect(chains).toEqual([]);
     });
 
-    it("getChains returns undefined for nonexistent ids", async ({ client }) => {
+    it("getChains returns undefined for nonexistent ids", async ({
+      stateAdapter,
+      notifyAdapter,
+      observabilityAdapter,
+      log,
+    }) => {
+      const client = await createClient({
+        stateAdapter,
+        notifyAdapter,
+        observabilityAdapter,
+        log,
+        jobTypes,
+      });
+
       const chains = await client.getChains({
         ids: ["00000000-0000-0000-0000-000000000000"],
       });
@@ -143,7 +225,21 @@ export const clientQueriesTestSuite = ({ it: baseIt }: { it: TestAPI<TestSuiteCo
       expect(chains).toEqual([undefined]);
     });
 
-    it("getChains returns chains in input order", async ({ client, withTransaction }) => {
+    it("getChains returns chains in input order", async ({
+      stateAdapter,
+      notifyAdapter,
+      observabilityAdapter,
+      log,
+      withTransaction,
+    }) => {
+      const client = await createClient({
+        stateAdapter,
+        notifyAdapter,
+        observabilityAdapter,
+        log,
+        jobTypes,
+      });
+
       const order = await withTransaction(async (txCtx, transactionHooks) =>
         client.createChain({
           ...txCtx,
@@ -168,7 +264,21 @@ export const clientQueriesTestSuite = ({ it: baseIt }: { it: TestAPI<TestSuiteCo
       expect(chains[1]!.id).toBe(order.id);
     });
 
-    it("getChains returns mix of found and undefined", async ({ client, withTransaction }) => {
+    it("getChains returns mix of found and undefined", async ({
+      stateAdapter,
+      notifyAdapter,
+      observabilityAdapter,
+      log,
+      withTransaction,
+    }) => {
+      const client = await createClient({
+        stateAdapter,
+        notifyAdapter,
+        observabilityAdapter,
+        log,
+        jobTypes,
+      });
+
       const created = await withTransaction(async (txCtx, transactionHooks) =>
         client.createChain({
           ...txCtx,
@@ -187,7 +297,21 @@ export const clientQueriesTestSuite = ({ it: baseIt }: { it: TestAPI<TestSuiteCo
       expect(chains[1]!.id).toBe(created.id);
     });
 
-    it("getChains narrows return type by typeName", async ({ client, withTransaction }) => {
+    it("getChains narrows return type by typeName", async ({
+      stateAdapter,
+      notifyAdapter,
+      observabilityAdapter,
+      log,
+      withTransaction,
+    }) => {
+      const client = await createClient({
+        stateAdapter,
+        notifyAdapter,
+        observabilityAdapter,
+        log,
+        jobTypes,
+      });
+
       const created = await withTransaction(async (txCtx, transactionHooks) =>
         client.createChain({
           ...txCtx,
@@ -206,7 +330,21 @@ export const clientQueriesTestSuite = ({ it: baseIt }: { it: TestAPI<TestSuiteCo
       expectTypeOf(chains[0]!.typeName).toEqualTypeOf<"notification">();
     });
 
-    it("getChains throws on typeName mismatch", async ({ client, withTransaction }) => {
+    it("getChains throws on typeName mismatch", async ({
+      stateAdapter,
+      notifyAdapter,
+      observabilityAdapter,
+      log,
+      withTransaction,
+    }) => {
+      const client = await createClient({
+        stateAdapter,
+        notifyAdapter,
+        observabilityAdapter,
+        log,
+        jobTypes,
+      });
+
       const created = await withTransaction(async (txCtx, transactionHooks) =>
         client.createChain({
           ...txCtx,
@@ -221,7 +359,20 @@ export const clientQueriesTestSuite = ({ it: baseIt }: { it: TestAPI<TestSuiteCo
       ).rejects.toThrow(ChainTypeMismatchError);
     });
 
-    it("getChains skips typeName check for undefined entries", async ({ client }) => {
+    it("getChains skips typeName check for undefined entries", async ({
+      stateAdapter,
+      notifyAdapter,
+      observabilityAdapter,
+      log,
+    }) => {
+      const client = await createClient({
+        stateAdapter,
+        notifyAdapter,
+        observabilityAdapter,
+        log,
+        jobTypes,
+      });
+
       const chains = await client.getChains({
         typeName: "order",
         ids: ["00000000-0000-0000-0000-000000000000"],
@@ -232,7 +383,20 @@ export const clientQueriesTestSuite = ({ it: baseIt }: { it: TestAPI<TestSuiteCo
   });
 
   describe("getJob", () => {
-    it("getJob returns undefined for nonexistent job", async ({ client }) => {
+    it("getJob returns undefined for nonexistent job", async ({
+      stateAdapter,
+      notifyAdapter,
+      observabilityAdapter,
+      log,
+    }) => {
+      const client = await createClient({
+        stateAdapter,
+        notifyAdapter,
+        observabilityAdapter,
+        log,
+        jobTypes,
+      });
+
       const job = await client.getJob({
         typeName: "order",
         id: "00000000-0000-0000-0000-000000000000",
@@ -241,7 +405,21 @@ export const clientQueriesTestSuite = ({ it: baseIt }: { it: TestAPI<TestSuiteCo
       expect(job).toBeUndefined();
     });
 
-    it("getJob returns job by id", async ({ client, withTransaction }) => {
+    it("getJob returns job by id", async ({
+      stateAdapter,
+      notifyAdapter,
+      observabilityAdapter,
+      log,
+      withTransaction,
+    }) => {
+      const client = await createClient({
+        stateAdapter,
+        notifyAdapter,
+        observabilityAdapter,
+        log,
+        jobTypes,
+      });
+
       const chain = await withTransaction(async (txCtx, transactionHooks) =>
         client.createChain({
           ...txCtx,
@@ -260,7 +438,21 @@ export const clientQueriesTestSuite = ({ it: baseIt }: { it: TestAPI<TestSuiteCo
       expect(job!.status).toBe("pending");
     });
 
-    it("getJob returns without typeName", async ({ client, withTransaction }) => {
+    it("getJob returns without typeName", async ({
+      stateAdapter,
+      notifyAdapter,
+      observabilityAdapter,
+      log,
+      withTransaction,
+    }) => {
+      const client = await createClient({
+        stateAdapter,
+        notifyAdapter,
+        observabilityAdapter,
+        log,
+        jobTypes,
+      });
+
       const chain = await withTransaction(async (txCtx, transactionHooks) =>
         client.createChain({
           ...txCtx,
@@ -276,7 +468,21 @@ export const clientQueriesTestSuite = ({ it: baseIt }: { it: TestAPI<TestSuiteCo
       expect(job!.typeName).toBe("notification");
     });
 
-    it("getJob throws on typeName mismatch", async ({ client, withTransaction }) => {
+    it("getJob throws on typeName mismatch", async ({
+      stateAdapter,
+      notifyAdapter,
+      observabilityAdapter,
+      log,
+      withTransaction,
+    }) => {
+      const client = await createClient({
+        stateAdapter,
+        notifyAdapter,
+        observabilityAdapter,
+        log,
+        jobTypes,
+      });
+
       const chain = await withTransaction(async (txCtx, transactionHooks) =>
         client.createChain({
           ...txCtx,
@@ -293,13 +499,39 @@ export const clientQueriesTestSuite = ({ it: baseIt }: { it: TestAPI<TestSuiteCo
   });
 
   describe("getJobs", () => {
-    it("getJobs returns empty array for empty ids", async ({ client }) => {
+    it("getJobs returns empty array for empty ids", async ({
+      stateAdapter,
+      notifyAdapter,
+      observabilityAdapter,
+      log,
+    }) => {
+      const client = await createClient({
+        stateAdapter,
+        notifyAdapter,
+        observabilityAdapter,
+        log,
+        jobTypes,
+      });
+
       const jobs = await client.getJobs({ ids: [] });
 
       expect(jobs).toEqual([]);
     });
 
-    it("getJobs returns undefined for nonexistent ids", async ({ client }) => {
+    it("getJobs returns undefined for nonexistent ids", async ({
+      stateAdapter,
+      notifyAdapter,
+      observabilityAdapter,
+      log,
+    }) => {
+      const client = await createClient({
+        stateAdapter,
+        notifyAdapter,
+        observabilityAdapter,
+        log,
+        jobTypes,
+      });
+
       const jobs = await client.getJobs({
         ids: ["00000000-0000-0000-0000-000000000000"],
       });
@@ -307,7 +539,21 @@ export const clientQueriesTestSuite = ({ it: baseIt }: { it: TestAPI<TestSuiteCo
       expect(jobs).toEqual([undefined]);
     });
 
-    it("getJobs returns jobs in input order", async ({ client, withTransaction }) => {
+    it("getJobs returns jobs in input order", async ({
+      stateAdapter,
+      notifyAdapter,
+      observabilityAdapter,
+      log,
+      withTransaction,
+    }) => {
+      const client = await createClient({
+        stateAdapter,
+        notifyAdapter,
+        observabilityAdapter,
+        log,
+        jobTypes,
+      });
+
       const order = await withTransaction(async (txCtx, transactionHooks) =>
         client.createChain({
           ...txCtx,
@@ -332,7 +578,21 @@ export const clientQueriesTestSuite = ({ it: baseIt }: { it: TestAPI<TestSuiteCo
       expect(jobs[1]!.id).toBe(order.id);
     });
 
-    it("getJobs returns mix of found and undefined", async ({ client, withTransaction }) => {
+    it("getJobs returns mix of found and undefined", async ({
+      stateAdapter,
+      notifyAdapter,
+      observabilityAdapter,
+      log,
+      withTransaction,
+    }) => {
+      const client = await createClient({
+        stateAdapter,
+        notifyAdapter,
+        observabilityAdapter,
+        log,
+        jobTypes,
+      });
+
       const created = await withTransaction(async (txCtx, transactionHooks) =>
         client.createChain({
           ...txCtx,
@@ -351,7 +611,21 @@ export const clientQueriesTestSuite = ({ it: baseIt }: { it: TestAPI<TestSuiteCo
       expect(jobs[1]!.id).toBe(created.id);
     });
 
-    it("getJobs narrows return type by typeName", async ({ client, withTransaction }) => {
+    it("getJobs narrows return type by typeName", async ({
+      stateAdapter,
+      notifyAdapter,
+      observabilityAdapter,
+      log,
+      withTransaction,
+    }) => {
+      const client = await createClient({
+        stateAdapter,
+        notifyAdapter,
+        observabilityAdapter,
+        log,
+        jobTypes,
+      });
+
       const created = await withTransaction(async (txCtx, transactionHooks) =>
         client.createChain({
           ...txCtx,
@@ -370,7 +644,21 @@ export const clientQueriesTestSuite = ({ it: baseIt }: { it: TestAPI<TestSuiteCo
       expectTypeOf(jobs[0]!.typeName).toEqualTypeOf<"notification">();
     });
 
-    it("getJobs throws on typeName mismatch", async ({ client, withTransaction }) => {
+    it("getJobs throws on typeName mismatch", async ({
+      stateAdapter,
+      notifyAdapter,
+      observabilityAdapter,
+      log,
+      withTransaction,
+    }) => {
+      const client = await createClient({
+        stateAdapter,
+        notifyAdapter,
+        observabilityAdapter,
+        log,
+        jobTypes,
+      });
+
       const created = await withTransaction(async (txCtx, transactionHooks) =>
         client.createChain({
           ...txCtx,
@@ -385,7 +673,20 @@ export const clientQueriesTestSuite = ({ it: baseIt }: { it: TestAPI<TestSuiteCo
       );
     });
 
-    it("getJobs skips typeName check for undefined entries", async ({ client }) => {
+    it("getJobs skips typeName check for undefined entries", async ({
+      stateAdapter,
+      notifyAdapter,
+      observabilityAdapter,
+      log,
+    }) => {
+      const client = await createClient({
+        stateAdapter,
+        notifyAdapter,
+        observabilityAdapter,
+        log,
+        jobTypes,
+      });
+
       const jobs = await client.getJobs({
         typeName: "order",
         ids: ["00000000-0000-0000-0000-000000000000"],
@@ -395,17 +696,41 @@ export const clientQueriesTestSuite = ({ it: baseIt }: { it: TestAPI<TestSuiteCo
     });
   });
 
-  describe("listChainTypeNames", () => {
-    it("listChainTypeNames returns empty array when no chains exist", async ({ client }) => {
-      const names = await client.listChainTypeNames();
+  describe("getChainTypeNames", () => {
+    it("getChainTypeNames returns empty array when no chains exist", async ({
+      stateAdapter,
+      notifyAdapter,
+      observabilityAdapter,
+      log,
+    }) => {
+      const client = await createClient({
+        stateAdapter,
+        notifyAdapter,
+        observabilityAdapter,
+        log,
+        jobTypes,
+      });
+
+      const names = await client.getChainTypeNames();
 
       expect(names).toEqual([]);
     });
 
-    it("listChainTypeNames returns sorted distinct chain type names", async ({
-      client,
+    it("getChainTypeNames returns sorted distinct chain type names", async ({
+      stateAdapter,
+      notifyAdapter,
+      observabilityAdapter,
+      log,
       withTransaction,
     }) => {
+      const client = await createClient({
+        stateAdapter,
+        notifyAdapter,
+        observabilityAdapter,
+        log,
+        jobTypes,
+      });
+
       await withTransaction(async (txCtx, transactionHooks) =>
         client.createChain({
           ...txCtx,
@@ -431,15 +756,26 @@ export const clientQueriesTestSuite = ({ it: baseIt }: { it: TestAPI<TestSuiteCo
         }),
       );
 
-      const names = await client.listChainTypeNames();
+      const names = await client.getChainTypeNames();
 
       expect(names).toEqual(["notification", "order"]);
     });
 
-    it("listChainTypeNames does not include continuation-only type names", async ({
-      client,
+    it("getChainTypeNames does not include continuation-only type names", async ({
+      stateAdapter,
+      notifyAdapter,
+      observabilityAdapter,
+      log,
       withTransaction,
     }) => {
+      const client = await createClient({
+        stateAdapter,
+        notifyAdapter,
+        observabilityAdapter,
+        log,
+        jobTypes,
+      });
+
       const order = await withTransaction(async (txCtx, transactionHooks) =>
         client.createChain({
           ...txCtx,
@@ -466,23 +802,47 @@ export const clientQueriesTestSuite = ({ it: baseIt }: { it: TestAPI<TestSuiteCo
         }),
       );
 
-      const names = await client.listChainTypeNames();
+      const names = await client.getChainTypeNames();
 
       expect(names).toEqual(["order"]);
     });
   });
 
-  describe("listJobTypeNames", () => {
-    it("listJobTypeNames returns empty array when no jobs exist", async ({ client }) => {
-      const names = await client.listJobTypeNames();
+  describe("getJobTypeNames", () => {
+    it("getJobTypeNames returns empty array when no jobs exist", async ({
+      stateAdapter,
+      notifyAdapter,
+      observabilityAdapter,
+      log,
+    }) => {
+      const client = await createClient({
+        stateAdapter,
+        notifyAdapter,
+        observabilityAdapter,
+        log,
+        jobTypes,
+      });
+
+      const names = await client.getJobTypeNames();
 
       expect(names).toEqual([]);
     });
 
-    it("listJobTypeNames returns sorted distinct job type names", async ({
-      client,
+    it("getJobTypeNames returns sorted distinct job type names", async ({
+      stateAdapter,
+      notifyAdapter,
+      observabilityAdapter,
+      log,
       withTransaction,
     }) => {
+      const client = await createClient({
+        stateAdapter,
+        notifyAdapter,
+        observabilityAdapter,
+        log,
+        jobTypes,
+      });
+
       await withTransaction(async (txCtx, transactionHooks) =>
         client.createChain({
           ...txCtx,
@@ -508,15 +868,26 @@ export const clientQueriesTestSuite = ({ it: baseIt }: { it: TestAPI<TestSuiteCo
         }),
       );
 
-      const names = await client.listJobTypeNames();
+      const names = await client.getJobTypeNames();
 
       expect(names).toEqual(["notification", "order"]);
     });
 
-    it("listJobTypeNames includes continuation job type names", async ({
-      client,
+    it("getJobTypeNames includes continuation job type names", async ({
+      stateAdapter,
+      notifyAdapter,
+      observabilityAdapter,
+      log,
       withTransaction,
     }) => {
+      const client = await createClient({
+        stateAdapter,
+        notifyAdapter,
+        observabilityAdapter,
+        log,
+        jobTypes,
+      });
+
       const order = await withTransaction(async (txCtx, transactionHooks) =>
         client.createChain({
           ...txCtx,
@@ -543,19 +914,46 @@ export const clientQueriesTestSuite = ({ it: baseIt }: { it: TestAPI<TestSuiteCo
         }),
       );
 
-      const names = await client.listJobTypeNames();
+      const names = await client.getJobTypeNames();
 
       expect(names).toEqual(["order", "order_fulfill"]);
     });
   });
 
-  describe("countByChainTypeNames", () => {
-    it("returns empty array for empty input", async ({ client }) => {
-      const counts = await client.countByChainTypeNames({ typeNames: [] });
+  describe("countChainsByTypeName", () => {
+    it("returns empty array for empty input", async ({
+      stateAdapter,
+      notifyAdapter,
+      observabilityAdapter,
+      log,
+    }) => {
+      const client = await createClient({
+        stateAdapter,
+        notifyAdapter,
+        observabilityAdapter,
+        log,
+        jobTypes,
+      });
+
+      const counts = await client.countChainsByTypeName({ typeNames: [] });
       expect(counts).toEqual([]);
     });
 
-    it("counts running chains", async ({ client, withTransaction }) => {
+    it("counts running chains", async ({
+      stateAdapter,
+      notifyAdapter,
+      observabilityAdapter,
+      log,
+      withTransaction,
+    }) => {
+      const client = await createClient({
+        stateAdapter,
+        notifyAdapter,
+        observabilityAdapter,
+        log,
+        jobTypes,
+      });
+
       await withTransaction(async (txCtx, transactionHooks) =>
         client.createChain({ ...txCtx, transactionHooks, typeName: "order", input: { amount: 1 } }),
       );
@@ -568,7 +966,7 @@ export const clientQueriesTestSuite = ({ it: baseIt }: { it: TestAPI<TestSuiteCo
         }),
       );
 
-      const counts = await client.countByChainTypeNames({
+      const counts = await client.countChainsByTypeName({
         typeNames: ["order", "notification", "report"],
       });
 
@@ -636,7 +1034,7 @@ export const clientQueriesTestSuite = ({ it: baseIt }: { it: TestAPI<TestSuiteCo
         await client.awaitChain(chainA, completionOptions);
       });
 
-      const counts = await client.countByChainTypeNames({ typeNames: ["task_a", "task_b"] });
+      const counts = await client.countChainsByTypeName({ typeNames: ["task_a", "task_b"] });
 
       expect(counts[0].completed.count).toBeGreaterThanOrEqual(1);
       expect(counts[0].running.count + counts[0].completed.count).toBe(2);
@@ -644,13 +1042,40 @@ export const clientQueriesTestSuite = ({ it: baseIt }: { it: TestAPI<TestSuiteCo
     });
   });
 
-  describe("countByJobTypeNames", () => {
-    it("returns empty array for empty input", async ({ client }) => {
-      const counts = await client.countByJobTypeNames({ typeNames: [] });
+  describe("countJobsByTypeName", () => {
+    it("returns empty array for empty input", async ({
+      stateAdapter,
+      notifyAdapter,
+      observabilityAdapter,
+      log,
+    }) => {
+      const client = await createClient({
+        stateAdapter,
+        notifyAdapter,
+        observabilityAdapter,
+        log,
+        jobTypes,
+      });
+
+      const counts = await client.countJobsByTypeName({ typeNames: [] });
       expect(counts).toEqual([]);
     });
 
-    it("counts pending jobs", async ({ client, withTransaction }) => {
+    it("counts pending jobs", async ({
+      stateAdapter,
+      notifyAdapter,
+      observabilityAdapter,
+      log,
+      withTransaction,
+    }) => {
+      const client = await createClient({
+        stateAdapter,
+        notifyAdapter,
+        observabilityAdapter,
+        log,
+        jobTypes,
+      });
+
       await withTransaction(async (txCtx, transactionHooks) =>
         client.createChain({ ...txCtx, transactionHooks, typeName: "order", input: { amount: 1 } }),
       );
@@ -666,7 +1091,7 @@ export const clientQueriesTestSuite = ({ it: baseIt }: { it: TestAPI<TestSuiteCo
         }),
       );
 
-      const counts = await client.countByJobTypeNames({
+      const counts = await client.countJobsByTypeName({
         typeNames: ["order", "notification", "report"],
       });
 
@@ -749,7 +1174,7 @@ export const clientQueriesTestSuite = ({ it: baseIt }: { it: TestAPI<TestSuiteCo
         await client.awaitChain(toComplete, completionOptions);
       });
 
-      const counts = await client.countByJobTypeNames({ typeNames: ["task_a", "task_b"] });
+      const counts = await client.countJobsByTypeName({ typeNames: ["task_a", "task_b"] });
 
       expect(counts[0].completed.count).toBeGreaterThanOrEqual(1);
       expect(counts[0].pending.count + counts[0].running.count + counts[0].completed.count).toBe(2);
@@ -760,14 +1185,41 @@ export const clientQueriesTestSuite = ({ it: baseIt }: { it: TestAPI<TestSuiteCo
   });
 
   describe("listChains", () => {
-    it("listChains returns empty page when no chains exist", async ({ client }) => {
+    it("listChains returns empty page when no chains exist", async ({
+      stateAdapter,
+      notifyAdapter,
+      observabilityAdapter,
+      log,
+    }) => {
+      const client = await createClient({
+        stateAdapter,
+        notifyAdapter,
+        observabilityAdapter,
+        log,
+        jobTypes,
+      });
+
       const page = await client.listChains({ typeName: "order" });
 
       expect(page.items).toEqual([]);
       expect(page.nextCursor).toBeNull();
     });
 
-    it("listChains returns chains of the given type", async ({ client, withTransaction }) => {
+    it("listChains returns chains of the given type", async ({
+      stateAdapter,
+      notifyAdapter,
+      observabilityAdapter,
+      log,
+      withTransaction,
+    }) => {
+      const client = await createClient({
+        stateAdapter,
+        notifyAdapter,
+        observabilityAdapter,
+        log,
+        jobTypes,
+      });
+
       const chain1 = await withTransaction(async (txCtx, transactionHooks) =>
         client.createChain({
           ...txCtx,
@@ -792,9 +1244,20 @@ export const clientQueriesTestSuite = ({ it: baseIt }: { it: TestAPI<TestSuiteCo
     });
 
     it("listChains filters root-only (excludes blocker chains)", async ({
-      client,
+      stateAdapter,
+      notifyAdapter,
+      observabilityAdapter,
+      log,
       withTransaction,
     }) => {
+      const client = await createClient({
+        stateAdapter,
+        notifyAdapter,
+        observabilityAdapter,
+        log,
+        jobTypes,
+      });
+
       const order = await withTransaction(async (txCtx, transactionHooks) =>
         client.createChain({
           ...txCtx,
@@ -820,7 +1283,21 @@ export const clientQueriesTestSuite = ({ it: baseIt }: { it: TestAPI<TestSuiteCo
       expect(rootChains.items).toHaveLength(0);
     });
 
-    it("listChains filters by status", async ({ client, withTransaction }) => {
+    it("listChains filters by status", async ({
+      stateAdapter,
+      notifyAdapter,
+      observabilityAdapter,
+      log,
+      withTransaction,
+    }) => {
+      const client = await createClient({
+        stateAdapter,
+        notifyAdapter,
+        observabilityAdapter,
+        log,
+        jobTypes,
+      });
+
       const order = await withTransaction(async (txCtx, transactionHooks) =>
         client.createChain({
           ...txCtx,
@@ -852,7 +1329,21 @@ export const clientQueriesTestSuite = ({ it: baseIt }: { it: TestAPI<TestSuiteCo
       expect(running.items).toHaveLength(1);
     });
 
-    it("listChains orders ascending", async ({ client, withTransaction }) => {
+    it("listChains orders ascending", async ({
+      stateAdapter,
+      notifyAdapter,
+      observabilityAdapter,
+      log,
+      withTransaction,
+    }) => {
+      const client = await createClient({
+        stateAdapter,
+        notifyAdapter,
+        observabilityAdapter,
+        log,
+        jobTypes,
+      });
+
       await withTransaction(async (txCtx, transactionHooks) =>
         client.createChain({
           ...txCtx,
@@ -880,7 +1371,21 @@ export const clientQueriesTestSuite = ({ it: baseIt }: { it: TestAPI<TestSuiteCo
       expect(asc.items[1].id).toBe(desc.items[0].id);
     });
 
-    it("listChains paginates with cursor", async ({ client, withTransaction }) => {
+    it("listChains paginates with cursor", async ({
+      stateAdapter,
+      notifyAdapter,
+      observabilityAdapter,
+      log,
+      withTransaction,
+    }) => {
+      const client = await createClient({
+        stateAdapter,
+        notifyAdapter,
+        observabilityAdapter,
+        log,
+        jobTypes,
+      });
+
       await withTransaction(async (txCtx, transactionHooks) =>
         client.createChain({
           ...txCtx,
@@ -922,7 +1427,21 @@ export const clientQueriesTestSuite = ({ it: baseIt }: { it: TestAPI<TestSuiteCo
       expect(new Set(allIds).size).toBe(3);
     });
 
-    it("listChains filters by date range", async ({ client, withTransaction }) => {
+    it("listChains filters by date range", async ({
+      stateAdapter,
+      notifyAdapter,
+      observabilityAdapter,
+      log,
+      withTransaction,
+    }) => {
+      const client = await createClient({
+        stateAdapter,
+        notifyAdapter,
+        observabilityAdapter,
+        log,
+        jobTypes,
+      });
+
       const first = await withTransaction(async (txCtx, transactionHooks) =>
         client.createChain({
           ...txCtx,
@@ -1048,7 +1567,21 @@ export const clientQueriesTestSuite = ({ it: baseIt }: { it: TestAPI<TestSuiteCo
       }
     });
 
-    it("listChains returns correct chain shape", async ({ client, withTransaction }) => {
+    it("listChains returns correct chain shape", async ({
+      stateAdapter,
+      notifyAdapter,
+      observabilityAdapter,
+      log,
+      withTransaction,
+    }) => {
+      const client = await createClient({
+        stateAdapter,
+        notifyAdapter,
+        observabilityAdapter,
+        log,
+        jobTypes,
+      });
+
       const chain = await withTransaction(async (txCtx, transactionHooks) =>
         client.createChain({
           ...txCtx,
@@ -1074,14 +1607,41 @@ export const clientQueriesTestSuite = ({ it: baseIt }: { it: TestAPI<TestSuiteCo
   });
 
   describe("listJobs", () => {
-    it("listJobs returns empty page when no jobs exist", async ({ client }) => {
+    it("listJobs returns empty page when no jobs exist", async ({
+      stateAdapter,
+      notifyAdapter,
+      observabilityAdapter,
+      log,
+    }) => {
+      const client = await createClient({
+        stateAdapter,
+        notifyAdapter,
+        observabilityAdapter,
+        log,
+        jobTypes,
+      });
+
       const page = await client.listJobs({ typeName: "order" });
 
       expect(page.items).toEqual([]);
       expect(page.nextCursor).toBeNull();
     });
 
-    it("listJobs returns jobs of the given type", async ({ client, withTransaction }) => {
+    it("listJobs returns jobs of the given type", async ({
+      stateAdapter,
+      notifyAdapter,
+      observabilityAdapter,
+      log,
+      withTransaction,
+    }) => {
+      const client = await createClient({
+        stateAdapter,
+        notifyAdapter,
+        observabilityAdapter,
+        log,
+        jobTypes,
+      });
+
       await withTransaction(async (txCtx, transactionHooks) =>
         client.createChain({
           ...txCtx,
@@ -1104,7 +1664,21 @@ export const clientQueriesTestSuite = ({ it: baseIt }: { it: TestAPI<TestSuiteCo
       expect(page.items).toHaveLength(1);
     });
 
-    it("listJobs filters by status", async ({ client, withTransaction }) => {
+    it("listJobs filters by status", async ({
+      stateAdapter,
+      notifyAdapter,
+      observabilityAdapter,
+      log,
+      withTransaction,
+    }) => {
+      const client = await createClient({
+        stateAdapter,
+        notifyAdapter,
+        observabilityAdapter,
+        log,
+        jobTypes,
+      });
+
       const order = await withTransaction(async (txCtx, transactionHooks) =>
         client.createChain({
           ...txCtx,
@@ -1145,7 +1719,21 @@ export const clientQueriesTestSuite = ({ it: baseIt }: { it: TestAPI<TestSuiteCo
       expect(runnable.items[0].typeName).toBe("order");
     });
 
-    it("listJobs orders ascending", async ({ client, withTransaction }) => {
+    it("listJobs orders ascending", async ({
+      stateAdapter,
+      notifyAdapter,
+      observabilityAdapter,
+      log,
+      withTransaction,
+    }) => {
+      const client = await createClient({
+        stateAdapter,
+        notifyAdapter,
+        observabilityAdapter,
+        log,
+        jobTypes,
+      });
+
       await withTransaction(async (txCtx, transactionHooks) =>
         client.createChain({
           ...txCtx,
@@ -1173,7 +1761,21 @@ export const clientQueriesTestSuite = ({ it: baseIt }: { it: TestAPI<TestSuiteCo
       expect(asc.items[1].id).toBe(desc.items[0].id);
     });
 
-    it("listJobs paginates with cursor", async ({ client, withTransaction }) => {
+    it("listJobs paginates with cursor", async ({
+      stateAdapter,
+      notifyAdapter,
+      observabilityAdapter,
+      log,
+      withTransaction,
+    }) => {
+      const client = await createClient({
+        stateAdapter,
+        notifyAdapter,
+        observabilityAdapter,
+        log,
+        jobTypes,
+      });
+
       await withTransaction(async (txCtx, transactionHooks) =>
         client.createChain({
           ...txCtx,
@@ -1212,7 +1814,21 @@ export const clientQueriesTestSuite = ({ it: baseIt }: { it: TestAPI<TestSuiteCo
       expect(page2.nextCursor).toBeNull();
     });
 
-    it("listJobs filters by date range", async ({ client, withTransaction }) => {
+    it("listJobs filters by date range", async ({
+      stateAdapter,
+      notifyAdapter,
+      observabilityAdapter,
+      log,
+      withTransaction,
+    }) => {
+      const client = await createClient({
+        stateAdapter,
+        notifyAdapter,
+        observabilityAdapter,
+        log,
+        jobTypes,
+      });
+
       const first = await withTransaction(async (txCtx, transactionHooks) =>
         client.createChain({
           ...txCtx,
@@ -1344,9 +1960,20 @@ export const clientQueriesTestSuite = ({ it: baseIt }: { it: TestAPI<TestSuiteCo
     });
 
     it("listJobs sorts pending jobs by scheduledAt when orderBy is scheduledAt", async ({
-      client,
+      stateAdapter,
+      notifyAdapter,
+      observabilityAdapter,
+      log,
       withTransaction,
     }) => {
+      const client = await createClient({
+        stateAdapter,
+        notifyAdapter,
+        observabilityAdapter,
+        log,
+        jobTypes,
+      });
+
       await withTransaction(async (txCtx, transactionHooks) =>
         client.createChain({
           ...txCtx,
@@ -1377,7 +2004,21 @@ export const clientQueriesTestSuite = ({ it: baseIt }: { it: TestAPI<TestSuiteCo
       );
     });
 
-    it("listJobs returns correct job shape", async ({ client, withTransaction }) => {
+    it("listJobs returns correct job shape", async ({
+      stateAdapter,
+      notifyAdapter,
+      observabilityAdapter,
+      log,
+      withTransaction,
+    }) => {
+      const client = await createClient({
+        stateAdapter,
+        notifyAdapter,
+        observabilityAdapter,
+        log,
+        jobTypes,
+      });
+
       await withTransaction(async (txCtx, transactionHooks) =>
         client.createChain({
           ...txCtx,
@@ -1402,7 +2043,20 @@ export const clientQueriesTestSuite = ({ it: baseIt }: { it: TestAPI<TestSuiteCo
   });
 
   describe("listChainJobs", () => {
-    it("listChainJobs returns empty page for nonexistent chain", async ({ client }) => {
+    it("listChainJobs returns empty page for nonexistent chain", async ({
+      stateAdapter,
+      notifyAdapter,
+      observabilityAdapter,
+      log,
+    }) => {
+      const client = await createClient({
+        stateAdapter,
+        notifyAdapter,
+        observabilityAdapter,
+        log,
+        jobTypes,
+      });
+
       const page = await client.listChainJobs({
         chainId: "00000000-0000-0000-0000-000000000000",
       });
@@ -1633,9 +2287,20 @@ export const clientQueriesTestSuite = ({ it: baseIt }: { it: TestAPI<TestSuiteCo
     });
 
     it("listChainJobs only returns jobs from the specified chain", async ({
-      client,
+      stateAdapter,
+      notifyAdapter,
+      observabilityAdapter,
+      log,
       withTransaction,
     }) => {
+      const client = await createClient({
+        stateAdapter,
+        notifyAdapter,
+        observabilityAdapter,
+        log,
+        jobTypes,
+      });
+
       const chain1 = await withTransaction(async (txCtx, transactionHooks) =>
         client.createChain({
           ...txCtx,
@@ -1660,9 +2325,20 @@ export const clientQueriesTestSuite = ({ it: baseIt }: { it: TestAPI<TestSuiteCo
     });
 
     it("listChainJobs narrows return type when typeName is provided", async ({
-      client,
+      stateAdapter,
+      notifyAdapter,
+      observabilityAdapter,
+      log,
       withTransaction,
     }) => {
+      const client = await createClient({
+        stateAdapter,
+        notifyAdapter,
+        observabilityAdapter,
+        log,
+        jobTypes,
+      });
+
       const chain = await withTransaction(async (txCtx, transactionHooks) =>
         client.createChain({
           ...txCtx,
@@ -1680,7 +2356,21 @@ export const clientQueriesTestSuite = ({ it: baseIt }: { it: TestAPI<TestSuiteCo
       expectTypeOf(page.items[0].input).toEqualTypeOf<{ amount: number } | { orderId: string }>();
     });
 
-    it("listChainJobs throws on typeName mismatch", async ({ client, withTransaction }) => {
+    it("listChainJobs throws on typeName mismatch", async ({
+      stateAdapter,
+      notifyAdapter,
+      observabilityAdapter,
+      log,
+      withTransaction,
+    }) => {
+      const client = await createClient({
+        stateAdapter,
+        notifyAdapter,
+        observabilityAdapter,
+        log,
+        jobTypes,
+      });
+
       const chain = await withTransaction(async (txCtx, transactionHooks) =>
         client.createChain({
           ...txCtx,
@@ -1698,9 +2388,20 @@ export const clientQueriesTestSuite = ({ it: baseIt }: { it: TestAPI<TestSuiteCo
 
   describe("getJobBlockers", () => {
     it("getJobBlockers returns empty array when job has no blockers", async ({
-      client,
+      stateAdapter,
+      notifyAdapter,
+      observabilityAdapter,
+      log,
       withTransaction,
     }) => {
+      const client = await createClient({
+        stateAdapter,
+        notifyAdapter,
+        observabilityAdapter,
+        log,
+        jobTypes,
+      });
+
       const chain = await withTransaction(async (txCtx, transactionHooks) =>
         client.createChain({
           ...txCtx,
@@ -1715,7 +2416,21 @@ export const clientQueriesTestSuite = ({ it: baseIt }: { it: TestAPI<TestSuiteCo
       expect(blockers).toEqual([]);
     });
 
-    it("getJobBlockers returns blocker chains", async ({ client, withTransaction }) => {
+    it("getJobBlockers returns blocker chains", async ({
+      stateAdapter,
+      notifyAdapter,
+      observabilityAdapter,
+      log,
+      withTransaction,
+    }) => {
+      const client = await createClient({
+        stateAdapter,
+        notifyAdapter,
+        observabilityAdapter,
+        log,
+        jobTypes,
+      });
+
       const order = await withTransaction(async (txCtx, transactionHooks) =>
         client.createChain({
           ...txCtx,
@@ -1743,9 +2458,20 @@ export const clientQueriesTestSuite = ({ it: baseIt }: { it: TestAPI<TestSuiteCo
     });
 
     it("getJobBlockers resolves typed blockers when typeName is provided", async ({
-      client,
+      stateAdapter,
+      notifyAdapter,
+      observabilityAdapter,
+      log,
       withTransaction,
     }) => {
+      const client = await createClient({
+        stateAdapter,
+        notifyAdapter,
+        observabilityAdapter,
+        log,
+        jobTypes,
+      });
+
       const order = await withTransaction(async (txCtx, transactionHooks) =>
         client.createChain({
           ...txCtx,
@@ -1776,7 +2502,21 @@ export const clientQueriesTestSuite = ({ it: baseIt }: { it: TestAPI<TestSuiteCo
       expectTypeOf(blockers[0].typeName).toEqualTypeOf<"order">();
     });
 
-    it("getJobBlockers throws on typeName mismatch", async ({ client, withTransaction }) => {
+    it("getJobBlockers throws on typeName mismatch", async ({
+      stateAdapter,
+      notifyAdapter,
+      observabilityAdapter,
+      log,
+      withTransaction,
+    }) => {
+      const client = await createClient({
+        stateAdapter,
+        notifyAdapter,
+        observabilityAdapter,
+        log,
+        jobTypes,
+      });
+
       const order = await withTransaction(async (txCtx, transactionHooks) =>
         client.createChain({
           ...txCtx,
@@ -1884,9 +2624,20 @@ export const clientQueriesTestSuite = ({ it: baseIt }: { it: TestAPI<TestSuiteCo
 
   describe("listBlockedJobs", () => {
     it("listBlockedJobs returns empty page when chain has no dependents", async ({
-      client,
+      stateAdapter,
+      notifyAdapter,
+      observabilityAdapter,
+      log,
       withTransaction,
     }) => {
+      const client = await createClient({
+        stateAdapter,
+        notifyAdapter,
+        observabilityAdapter,
+        log,
+        jobTypes,
+      });
+
       const chain = await withTransaction(async (txCtx, transactionHooks) =>
         client.createChain({
           ...txCtx,
@@ -1902,7 +2653,21 @@ export const clientQueriesTestSuite = ({ it: baseIt }: { it: TestAPI<TestSuiteCo
       expect(page.nextCursor).toBeNull();
     });
 
-    it("listBlockedJobs returns jobs blocked by chain", async ({ client, withTransaction }) => {
+    it("listBlockedJobs returns jobs blocked by chain", async ({
+      stateAdapter,
+      notifyAdapter,
+      observabilityAdapter,
+      log,
+      withTransaction,
+    }) => {
+      const client = await createClient({
+        stateAdapter,
+        notifyAdapter,
+        observabilityAdapter,
+        log,
+        jobTypes,
+      });
+
       const order = await withTransaction(async (txCtx, transactionHooks) =>
         client.createChain({
           ...txCtx,
@@ -1929,7 +2694,21 @@ export const clientQueriesTestSuite = ({ it: baseIt }: { it: TestAPI<TestSuiteCo
       expect(page.items[0].status).toBe("blocked");
     });
 
-    it("listBlockedJobs paginates", async ({ client, withTransaction }) => {
+    it("listBlockedJobs paginates", async ({
+      stateAdapter,
+      notifyAdapter,
+      observabilityAdapter,
+      log,
+      withTransaction,
+    }) => {
+      const client = await createClient({
+        stateAdapter,
+        notifyAdapter,
+        observabilityAdapter,
+        log,
+        jobTypes,
+      });
+
       const order = await withTransaction(async (txCtx, transactionHooks) =>
         client.createChain({
           ...txCtx,
@@ -1980,9 +2759,20 @@ export const clientQueriesTestSuite = ({ it: baseIt }: { it: TestAPI<TestSuiteCo
     });
 
     it("listBlockedJobs narrows return type when typeName is provided", async ({
-      client,
+      stateAdapter,
+      notifyAdapter,
+      observabilityAdapter,
+      log,
       withTransaction,
     }) => {
+      const client = await createClient({
+        stateAdapter,
+        notifyAdapter,
+        observabilityAdapter,
+        log,
+        jobTypes,
+      });
+
       const order = await withTransaction(async (txCtx, transactionHooks) =>
         client.createChain({
           ...txCtx,
@@ -2014,7 +2804,21 @@ export const clientQueriesTestSuite = ({ it: baseIt }: { it: TestAPI<TestSuiteCo
       expectTypeOf(page.items[0].input).toEqualTypeOf<{ type: string }>();
     });
 
-    it("listBlockedJobs throws on typeName mismatch", async ({ client, withTransaction }) => {
+    it("listBlockedJobs throws on typeName mismatch", async ({
+      stateAdapter,
+      notifyAdapter,
+      observabilityAdapter,
+      log,
+      withTransaction,
+    }) => {
+      const client = await createClient({
+        stateAdapter,
+        notifyAdapter,
+        observabilityAdapter,
+        log,
+        jobTypes,
+      });
+
       const order = await withTransaction(async (txCtx, transactionHooks) =>
         client.createChain({
           ...txCtx,
@@ -2038,7 +2842,21 @@ export const clientQueriesTestSuite = ({ it: baseIt }: { it: TestAPI<TestSuiteCo
       ).rejects.toThrow(ChainTypeMismatchError);
     });
 
-    it("listBlockedJobs orders ascending", async ({ client, withTransaction }) => {
+    it("listBlockedJobs orders ascending", async ({
+      stateAdapter,
+      notifyAdapter,
+      observabilityAdapter,
+      log,
+      withTransaction,
+    }) => {
+      const client = await createClient({
+        stateAdapter,
+        notifyAdapter,
+        observabilityAdapter,
+        log,
+        jobTypes,
+      });
+
       const order = await withTransaction(async (txCtx, transactionHooks) =>
         client.createChain({
           ...txCtx,
@@ -2074,6 +2892,645 @@ export const clientQueriesTestSuite = ({ it: baseIt }: { it: TestAPI<TestSuiteCo
       expect(asc.items).toHaveLength(2);
       expect(asc.items[0].id).toBe(desc.items[1].id);
       expect(asc.items[1].id).toBe(desc.items[0].id);
+    });
+  });
+
+  describe("getWorker", () => {
+    it("returns a worker with its type names and concurrency", async ({
+      stateAdapter,
+      notifyAdapter,
+      observabilityAdapter,
+      log,
+      withTransaction,
+      withWorkers,
+    }) => {
+      const jobTypes = defineJobTypes<{
+        send_email: { entry: true; input: null; output: null };
+        sync_crm: { entry: true; input: null; output: null };
+      }>();
+      const client = await createClient({
+        stateAdapter,
+        notifyAdapter,
+        observabilityAdapter,
+        log,
+        jobTypes,
+      });
+      const attemptStarted = Promise.withResolvers<void>();
+      const releaseAttempt = Promise.withResolvers<void>();
+      const worker = await createInProcessWorker({
+        client,
+        concurrency: 2,
+        processors: createProcessors({
+          client,
+          jobTypes,
+          processors: {
+            send_email: {
+              attemptHandler: async ({ complete }) => {
+                attemptStarted.resolve();
+                await releaseAttempt.promise;
+                return withTransaction(async (txCtx, transactionHooks) =>
+                  complete({ ...txCtx, transactionHooks, output: null }),
+                );
+              },
+            },
+            sync_crm: {
+              attemptHandler: async ({ complete }) =>
+                withTransaction(async (txCtx, transactionHooks) =>
+                  complete({ ...txCtx, transactionHooks, output: null }),
+                ),
+            },
+          },
+        }),
+      });
+      const chain = await withTransaction(async (txCtx, transactionHooks) =>
+        client.createChain({ ...txCtx, transactionHooks, typeName: "send_email", input: null }),
+      );
+
+      await withWorkers([await worker.start()], async () => {
+        await attemptStarted.promise;
+        const job = await client.getJob({ id: chain.id, typeName: "send_email" });
+        assert(job?.status === "running");
+
+        expect(await client.getWorker({ id: job.attemptBy })).toEqual({
+          id: job.attemptBy,
+          typeNames: ["send_email", "sync_crm"],
+          concurrency: 2,
+          startedAt: expect.any(Date),
+          leaseUntil: expect.any(Date),
+          expired: false,
+        });
+
+        releaseAttempt.resolve();
+        await client.awaitChain(chain, completionOptions);
+      });
+    });
+
+    it("returns undefined once the worker stops", async ({
+      stateAdapter,
+      notifyAdapter,
+      observabilityAdapter,
+      log,
+      withTransaction,
+      withWorkers,
+    }) => {
+      const jobTypes = defineJobTypes<{
+        send_email: { entry: true; input: null; output: null };
+        sync_crm: { entry: true; input: null; output: null };
+      }>();
+      const client = await createClient({
+        stateAdapter,
+        notifyAdapter,
+        observabilityAdapter,
+        log,
+        jobTypes,
+      });
+      const attemptStarted = Promise.withResolvers<void>();
+      const releaseAttempt = Promise.withResolvers<void>();
+      const worker = await createInProcessWorker({
+        client,
+        concurrency: 2,
+        processors: createProcessors({
+          client,
+          jobTypes,
+          processors: {
+            send_email: {
+              attemptHandler: async ({ complete }) => {
+                attemptStarted.resolve();
+                await releaseAttempt.promise;
+                return withTransaction(async (txCtx, transactionHooks) =>
+                  complete({ ...txCtx, transactionHooks, output: null }),
+                );
+              },
+            },
+            sync_crm: {
+              attemptHandler: async ({ complete }) =>
+                withTransaction(async (txCtx, transactionHooks) =>
+                  complete({ ...txCtx, transactionHooks, output: null }),
+                ),
+            },
+          },
+        }),
+      });
+      const chain = await withTransaction(async (txCtx, transactionHooks) =>
+        client.createChain({ ...txCtx, transactionHooks, typeName: "send_email", input: null }),
+      );
+
+      const job = await withWorkers([await worker.start()], async () => {
+        await attemptStarted.promise;
+        const runningJob = await client.getJob({ id: chain.id, typeName: "send_email" });
+        releaseAttempt.resolve();
+        await client.awaitChain(chain, completionOptions);
+        return runningJob;
+      });
+
+      assert(job?.status === "running");
+      expect(await client.getWorker({ id: job.attemptBy })).toBeUndefined();
+    });
+  });
+
+  describe("getWorkers", () => {
+    it("returns workers in input order with undefined for missing ids", async ({
+      stateAdapter,
+      notifyAdapter,
+      observabilityAdapter,
+      log,
+      withTransaction,
+      withWorkers,
+    }) => {
+      const jobTypes = defineJobTypes<{
+        send_email: { entry: true; input: null; output: null };
+        sync_crm: { entry: true; input: null; output: null };
+      }>();
+      const client = await createClient({
+        stateAdapter,
+        notifyAdapter,
+        observabilityAdapter,
+        log,
+        jobTypes,
+      });
+      const attemptStarted = Promise.withResolvers<void>();
+      const releaseAttempt = Promise.withResolvers<void>();
+      const worker = await createInProcessWorker({
+        client,
+        concurrency: 2,
+        processors: createProcessors({
+          client,
+          jobTypes,
+          processors: {
+            send_email: {
+              attemptHandler: async ({ complete }) => {
+                attemptStarted.resolve();
+                await releaseAttempt.promise;
+                return withTransaction(async (txCtx, transactionHooks) =>
+                  complete({ ...txCtx, transactionHooks, output: null }),
+                );
+              },
+            },
+            sync_crm: {
+              attemptHandler: async ({ complete }) =>
+                withTransaction(async (txCtx, transactionHooks) =>
+                  complete({ ...txCtx, transactionHooks, output: null }),
+                ),
+            },
+          },
+        }),
+      });
+      const chain = await withTransaction(async (txCtx, transactionHooks) =>
+        client.createChain({ ...txCtx, transactionHooks, typeName: "send_email", input: null }),
+      );
+
+      await withWorkers([await worker.start()], async () => {
+        await attemptStarted.promise;
+        const job = await client.getJob({ id: chain.id, typeName: "send_email" });
+        assert(job?.status === "running");
+
+        expect(
+          (
+            await client.getWorkers({
+              ids: [job.attemptBy, stateAdapter.config.generateWorkerId()],
+            })
+          ).map((found) => found?.id),
+        ).toEqual([job.attemptBy, undefined]);
+        expect(await client.getWorkers({ ids: [] })).toEqual([]);
+
+        releaseAttempt.resolve();
+        await client.awaitChain(chain, completionOptions);
+      });
+    });
+  });
+
+  describe("listWorkers", () => {
+    it("lists workers with their running job count", async ({
+      stateAdapter,
+      notifyAdapter,
+      observabilityAdapter,
+      log,
+      withTransaction,
+      withWorkers,
+    }) => {
+      const jobTypes = defineJobTypes<{
+        send_email: { entry: true; input: null; output: null };
+        sync_crm: { entry: true; input: null; output: null };
+      }>();
+      const client = await createClient({
+        stateAdapter,
+        notifyAdapter,
+        observabilityAdapter,
+        log,
+        jobTypes,
+      });
+      const attemptStarted = Promise.withResolvers<void>();
+      const releaseAttempt = Promise.withResolvers<void>();
+      const worker = await createInProcessWorker({
+        client,
+        concurrency: 2,
+        processors: createProcessors({
+          client,
+          jobTypes,
+          processors: {
+            send_email: {
+              attemptHandler: async ({ complete }) => {
+                attemptStarted.resolve();
+                await releaseAttempt.promise;
+                return withTransaction(async (txCtx, transactionHooks) =>
+                  complete({ ...txCtx, transactionHooks, output: null }),
+                );
+              },
+            },
+            sync_crm: {
+              attemptHandler: async ({ complete }) =>
+                withTransaction(async (txCtx, transactionHooks) =>
+                  complete({ ...txCtx, transactionHooks, output: null }),
+                ),
+            },
+          },
+        }),
+      });
+      const chain = await withTransaction(async (txCtx, transactionHooks) =>
+        client.createChain({ ...txCtx, transactionHooks, typeName: "send_email", input: null }),
+      );
+
+      await withWorkers([await worker.start()], async () => {
+        await attemptStarted.promise;
+        const job = await client.getJob({ id: chain.id, typeName: "send_email" });
+        assert(job?.status === "running");
+
+        expect(
+          (await client.listWorkers()).items.map((listed) => [listed.id, listed.concurrency]),
+        ).toEqual([[job.attemptBy, 2]]);
+
+        releaseAttempt.resolve();
+        await client.awaitChain(chain, completionOptions);
+      });
+    });
+
+    it("narrows by typeName", async ({
+      stateAdapter,
+      notifyAdapter,
+      observabilityAdapter,
+      log,
+      withTransaction,
+      withWorkers,
+    }) => {
+      const jobTypes = defineJobTypes<{
+        send_email: { entry: true; input: null; output: null };
+        sync_crm: { entry: true; input: null; output: null };
+      }>();
+      const client = await createClient({
+        stateAdapter,
+        notifyAdapter,
+        observabilityAdapter,
+        log,
+        jobTypes,
+      });
+      const attemptStarted = Promise.withResolvers<void>();
+      const releaseAttempt = Promise.withResolvers<void>();
+      const worker = await createInProcessWorker({
+        client,
+        concurrency: 2,
+        processors: createProcessors({
+          client,
+          jobTypes,
+          processors: {
+            send_email: {
+              attemptHandler: async ({ complete }) => {
+                attemptStarted.resolve();
+                await releaseAttempt.promise;
+                return withTransaction(async (txCtx, transactionHooks) =>
+                  complete({ ...txCtx, transactionHooks, output: null }),
+                );
+              },
+            },
+            sync_crm: {
+              attemptHandler: async ({ complete }) =>
+                withTransaction(async (txCtx, transactionHooks) =>
+                  complete({ ...txCtx, transactionHooks, output: null }),
+                ),
+            },
+          },
+        }),
+      });
+      const chain = await withTransaction(async (txCtx, transactionHooks) =>
+        client.createChain({ ...txCtx, transactionHooks, typeName: "send_email", input: null }),
+      );
+
+      await withWorkers([await worker.start()], async () => {
+        await attemptStarted.promise;
+        const job = await client.getJob({ id: chain.id, typeName: "send_email" });
+        assert(job?.status === "running");
+
+        expect(
+          (await client.listWorkers({ typeName: "sync_crm" })).items.map((listed) => listed.id),
+        ).toEqual([job.attemptBy]);
+        expect(await client.listWorkers({ typeName: "order" })).toEqual({
+          items: [],
+          nextCursor: null,
+        });
+
+        releaseAttempt.resolve();
+        await client.awaitChain(chain, completionOptions);
+      });
+    });
+
+    it("pages through workers with cursor and limit", async ({
+      stateAdapter,
+      notifyAdapter,
+      observabilityAdapter,
+      log,
+      withTransaction,
+      withWorkers,
+    }) => {
+      const jobTypes = defineJobTypes<{
+        send_email: { entry: true; input: { index: number }; output: null };
+      }>();
+      const client = await createClient({
+        stateAdapter,
+        notifyAdapter,
+        observabilityAdapter,
+        log,
+        jobTypes,
+      });
+      const attemptsStarted = [
+        Promise.withResolvers<void>(),
+        Promise.withResolvers<void>(),
+        Promise.withResolvers<void>(),
+      ];
+      const releaseAttempts = Promise.withResolvers<void>();
+      const processors = createProcessors({
+        client,
+        jobTypes,
+        processors: {
+          send_email: {
+            attemptHandler: async ({ job, complete }) => {
+              attemptsStarted[job.input.index].resolve();
+              await releaseAttempts.promise;
+              return withTransaction(async (txCtx, transactionHooks) =>
+                complete({ ...txCtx, transactionHooks, output: null }),
+              );
+            },
+          },
+        },
+      });
+      const workers = await Promise.all(
+        [0, 1, 2].map(async () => createInProcessWorker({ client, concurrency: 1, processors })),
+      );
+      const chains = await withTransaction(async (txCtx, transactionHooks) =>
+        client.createChains({
+          ...txCtx,
+          transactionHooks,
+          items: [0, 1, 2].map((index) => ({ typeName: "send_email", input: { index } })),
+        }),
+      );
+
+      await withWorkers(
+        await Promise.all(workers.map(async (worker) => worker.start())),
+        async () => {
+          await Promise.all(attemptsStarted.map(async (attemptStarted) => attemptStarted.promise));
+          const allWorkerIds = (await client.listWorkers()).items.map((listed) => listed.id);
+          expect(allWorkerIds).toHaveLength(3);
+
+          const firstPage = await client.listWorkers({ limit: 2 });
+          expect(firstPage.items.map((listed) => listed.id)).toEqual(allWorkerIds.slice(0, 2));
+          const secondPage = await client.listWorkers({ limit: 2, cursor: firstPage.nextCursor! });
+          expect(secondPage.items.map((listed) => listed.id)).toEqual(allWorkerIds.slice(2));
+          expect(secondPage.nextCursor).toBeNull();
+          expect(
+            (await client.listWorkers({ orderDirection: "desc" })).items.map((listed) => listed.id),
+          ).toEqual(allWorkerIds.toReversed());
+
+          releaseAttempts.resolve();
+          await Promise.all(
+            chains.map(async (chain) => client.awaitChain(chain, completionOptions)),
+          );
+        },
+      );
+    });
+  });
+
+  describe("worker counts", () => {
+    it("counts workers, workers per type name and running jobs per worker", async ({
+      stateAdapter,
+      notifyAdapter,
+      observabilityAdapter,
+      log,
+      withTransaction,
+      withWorkers,
+    }) => {
+      const jobTypes = defineJobTypes<{
+        send_email: { entry: true; input: null; output: null };
+        sync_crm: { entry: true; input: null; output: null };
+      }>();
+      const client = await createClient({
+        stateAdapter,
+        notifyAdapter,
+        observabilityAdapter,
+        log,
+        jobTypes,
+      });
+      const attemptStarted = Promise.withResolvers<void>();
+      const releaseAttempt = Promise.withResolvers<void>();
+      const worker = await createInProcessWorker({
+        client,
+        concurrency: 2,
+        processors: createProcessors({
+          client,
+          jobTypes,
+          processors: {
+            send_email: {
+              attemptHandler: async ({ complete }) => {
+                attemptStarted.resolve();
+                await releaseAttempt.promise;
+                return withTransaction(async (txCtx, transactionHooks) =>
+                  complete({ ...txCtx, transactionHooks, output: null }),
+                );
+              },
+            },
+            sync_crm: {
+              attemptHandler: async ({ complete }) =>
+                withTransaction(async (txCtx, transactionHooks) =>
+                  complete({ ...txCtx, transactionHooks, output: null }),
+                ),
+            },
+          },
+        }),
+      });
+      const chain = await withTransaction(async (txCtx, transactionHooks) =>
+        client.createChain({ ...txCtx, transactionHooks, typeName: "send_email", input: null }),
+      );
+
+      await withWorkers([await worker.start()], async () => {
+        await attemptStarted.promise;
+        const job = await client.getJob({ id: chain.id, typeName: "send_email" });
+        assert(job?.status === "running");
+
+        expect(await client.countWorkers()).toEqual({ live: 1, expired: 0 });
+        expect(
+          await client.countWorkersByTypeName({ typeNames: ["sync_crm", "order", "send_email"] }),
+        ).toEqual([
+          { live: 1, expired: 0 },
+          { live: 0, expired: 0 },
+          { live: 1, expired: 0 },
+        ]);
+        expect(
+          await client.countRunningJobsByWorkerId({
+            workerIds: [job.attemptBy, stateAdapter.config.generateWorkerId()],
+          }),
+        ).toEqual([1, 0]);
+
+        releaseAttempt.resolve();
+        await client.awaitChain(chain, completionOptions);
+      });
+    });
+  });
+
+  describe("listWorkerJobs", () => {
+    it("returns the running job, then nothing once it completes", async ({
+      stateAdapter,
+      notifyAdapter,
+      observabilityAdapter,
+      log,
+      withTransaction,
+      withWorkers,
+    }) => {
+      const jobTypes = defineJobTypes<{
+        send_email: { entry: true; input: null; output: null };
+        sync_crm: { entry: true; input: null; output: null };
+      }>();
+      const client = await createClient({
+        stateAdapter,
+        notifyAdapter,
+        observabilityAdapter,
+        log,
+        jobTypes,
+      });
+      const attemptStarted = Promise.withResolvers<void>();
+      const releaseAttempt = Promise.withResolvers<void>();
+      const worker = await createInProcessWorker({
+        client,
+        concurrency: 2,
+        processors: createProcessors({
+          client,
+          jobTypes,
+          processors: {
+            send_email: {
+              attemptHandler: async ({ complete }) => {
+                attemptStarted.resolve();
+                await releaseAttempt.promise;
+                return withTransaction(async (txCtx, transactionHooks) =>
+                  complete({ ...txCtx, transactionHooks, output: null }),
+                );
+              },
+            },
+            sync_crm: {
+              attemptHandler: async ({ complete }) =>
+                withTransaction(async (txCtx, transactionHooks) =>
+                  complete({ ...txCtx, transactionHooks, output: null }),
+                ),
+            },
+          },
+        }),
+      });
+      const chain = await withTransaction(async (txCtx, transactionHooks) =>
+        client.createChain({ ...txCtx, transactionHooks, typeName: "send_email", input: null }),
+      );
+
+      await withWorkers([await worker.start()], async () => {
+        await attemptStarted.promise;
+        const job = await client.getJob({ id: chain.id, typeName: "send_email" });
+        assert(job?.status === "running");
+
+        expect(
+          (await client.listWorkerJobs({ workerId: job.attemptBy })).items.map((running) => [
+            running.id,
+            running.status,
+          ]),
+        ).toEqual([[chain.id, "running"]]);
+
+        releaseAttempt.resolve();
+        await client.awaitChain(chain, completionOptions);
+
+        expect(await client.listWorkerJobs({ workerId: job.attemptBy })).toEqual({
+          items: [],
+          nextCursor: null,
+        });
+      });
+    });
+
+    it("pages through a worker's running jobs with cursor and limit", async ({
+      stateAdapter,
+      notifyAdapter,
+      observabilityAdapter,
+      log,
+      withTransaction,
+      withWorkers,
+    }) => {
+      const jobTypes = defineJobTypes<{
+        send_email: { entry: true; input: { index: number }; output: null };
+      }>();
+      const client = await createClient({
+        stateAdapter,
+        notifyAdapter,
+        observabilityAdapter,
+        log,
+        jobTypes,
+      });
+      const attemptsStarted = [
+        Promise.withResolvers<void>(),
+        Promise.withResolvers<void>(),
+        Promise.withResolvers<void>(),
+      ];
+      const releaseAttempts = Promise.withResolvers<void>();
+      const processors = createProcessors({
+        client,
+        jobTypes,
+        processors: {
+          send_email: {
+            attemptHandler: async ({ job, complete }) => {
+              attemptsStarted[job.input.index].resolve();
+              await releaseAttempts.promise;
+              return withTransaction(async (txCtx, transactionHooks) =>
+                complete({ ...txCtx, transactionHooks, output: null }),
+              );
+            },
+          },
+        },
+      });
+      const worker = await createInProcessWorker({ client, concurrency: 3, processors });
+      const chains = await withTransaction(async (txCtx, transactionHooks) =>
+        client.createChains({
+          ...txCtx,
+          transactionHooks,
+          items: [0, 1, 2].map((index) => ({ typeName: "send_email", input: { index } })),
+        }),
+      );
+
+      await withWorkers([await worker.start()], async () => {
+        await Promise.all(attemptsStarted.map(async (attemptStarted) => attemptStarted.promise));
+        const job = await client.getJob({ id: chains[0].id, typeName: "send_email" });
+        assert(job?.status === "running");
+        const allJobIds = (await client.listWorkerJobs({ workerId: job.attemptBy })).items.map(
+          (running) => running.id,
+        );
+        expect(allJobIds.toSorted()).toEqual(chains.map((chain) => chain.id).toSorted());
+
+        const firstPage = await client.listWorkerJobs({ workerId: job.attemptBy, limit: 2 });
+        expect(firstPage.items.map((running) => running.id)).toEqual(allJobIds.slice(0, 2));
+        const secondPage = await client.listWorkerJobs({
+          workerId: job.attemptBy,
+          limit: 2,
+          cursor: firstPage.nextCursor!,
+        });
+        expect(secondPage.items.map((running) => running.id)).toEqual(allJobIds.slice(2));
+        expect(secondPage.nextCursor).toBeNull();
+        expect(
+          (
+            await client.listWorkerJobs({ workerId: job.attemptBy, orderDirection: "desc" })
+          ).items.map((running) => running.id),
+        ).toEqual(allJobIds.toReversed());
+
+        releaseAttempts.resolve();
+        await Promise.all(chains.map(async (chain) => client.awaitChain(chain, completionOptions)));
+      });
     });
   });
 
@@ -2254,7 +3711,21 @@ export const clientQueriesTestSuite = ({ it: baseIt }: { it: TestAPI<TestSuiteCo
       expect(completedDep!.status).toBe("completed");
     });
 
-    it("default limit is applied when not specified", async ({ client, withTransaction }) => {
+    it("default limit is applied when not specified", async ({
+      stateAdapter,
+      notifyAdapter,
+      observabilityAdapter,
+      log,
+      withTransaction,
+    }) => {
+      const client = await createClient({
+        stateAdapter,
+        notifyAdapter,
+        observabilityAdapter,
+        log,
+        jobTypes,
+      });
+
       await withTransaction(async (txCtx, transactionHooks) =>
         client.createChain({
           ...txCtx,

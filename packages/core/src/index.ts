@@ -14,6 +14,7 @@ export {
 export { createJobTypes, type JobTypeDefinitions, type JobTypes } from "./job-types/job-types.js";
 export { type JobTypeEntryNames, type JobTypeNames } from "./job-types/job-types.resolvers.js";
 export { type CompletedJob, type Job, type JobStatus } from "./entities/job.js";
+export { type Worker } from "./entities/worker.js";
 export { type JobTypesDefinitions } from "./job-types/merge-job-types.js";
 export { type ScheduleOptions } from "./entities/schedule.js";
 export {
@@ -24,8 +25,9 @@ export {
   DuplicateJobTypeError,
   HookNotRegisteredError,
   InvalidJobIdError,
+  InvalidWorkerIdError,
   JobAlreadyCompletedError,
-  JobAttemptExpiredError,
+  JobAttemptReclaimedError,
   JobNotFoundError,
   JobNotReschedulableError,
   JobsNotFoundError,
@@ -35,15 +37,14 @@ export {
   JobTypeValidationError,
   UnknownJobTypeError,
   WaitChainTimeoutError,
+  WorkerAlreadyLiveError,
+  WorkerLeaseLostError,
   type JobTypeValidationErrorCode,
 } from "./errors.js";
 export { type BackoffConfig } from "./entities/backoff.js";
 export { type RetryConfig } from "./entities/retry.js";
-export {
-  createInProcessWorker,
-  type InProcessWorker,
-  type InProcessWorkerDefaults,
-} from "./in-process-worker.js";
+export { createInProcessWorker, type InProcessWorker } from "./in-process-worker.js";
+export { type WorkerLeaseConfig } from "./worker/worker-lease.js";
 export { createInProcessNotifyAdapter } from "./notify-adapter/notify-adapter.in-process.js";
 export { type NotifyAdapter } from "./notify-adapter/notify-adapter.js";
 export { createConsoleLog } from "./observability-adapter/log.console.js";
@@ -68,7 +69,6 @@ export {
   type TransactionHooksHandle,
   type TransactionHooksSavepoint,
 } from "./transaction-hooks.js";
-export { type AttemptConfig } from "./attempt/attempt-config.js";
 export { type AttemptMiddleware } from "./attempt-middleware/attempt-middleware.js";
 export { createProcessors } from "./job-type-processors/create-job-type-processors.js";
 export { omitProcessors, pickProcessors } from "./job-type-processors/pick-job-type-processors.js";

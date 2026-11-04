@@ -53,20 +53,23 @@ export const sleep = async (
  * @param promise - The promise to race against the sleep
  * @param ms - Sleep duration in milliseconds
  * @param options - Optional jitter and abort signal
- * @returns void when either the promise resolves or the sleep completes
+ * @returns the promise's value when it resolves first, `undefined` when the sleep completes first
  */
-export const raceWithSleep = async (
-  promise: Promise<void>,
+export const raceWithSleep = async <T>(
+  promise: Promise<T>,
   ms: number,
   options?: { jitterMs?: number; signal?: AbortSignal },
-): Promise<void> => {
+): Promise<T | undefined> => {
   const cleanupController = new AbortController();
   const sleepSignal = options?.signal
     ? AbortSignal.any([options.signal, cleanupController.signal])
     : cleanupController.signal;
 
   try {
-    await Promise.race([promise, sleep(ms, { jitterMs: options?.jitterMs, signal: sleepSignal })]);
+    return await Promise.race([
+      promise,
+      sleep(ms, { jitterMs: options?.jitterMs, signal: sleepSignal }).then(() => undefined),
+    ]);
   } finally {
     cleanupController.abort();
   }

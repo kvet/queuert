@@ -24,7 +24,7 @@ describe("SQLite State Adapter Conformance (node:sqlite)", () => {
 
   const conformanceIt = it.extend<{
     db: DatabaseSync;
-    stateAdapter: StateAdapter<{ $test: true }, string>;
+    stateAdapter: StateAdapter<{ $test: true }, string, string>;
     transactionConcurrency: "concurrent" | "serialized";
     withNonTransactionContext: <T>(fn: (txCtx: { $test: true }) => Promise<T>) => Promise<T>;
   }>({
@@ -49,7 +49,7 @@ describe("SQLite State Adapter Conformance (node:sqlite)", () => {
         const stateProvider = createNodeSqliteProvider({ db });
         const adapter = await createSqliteStateAdapter({ stateProvider, tablePrefix });
         await adapter.migrateToLatest();
-        return use(adapter as unknown as StateAdapter<{ $test: true }, string>);
+        return use(adapter as unknown as StateAdapter<{ $test: true }, string, string>);
       },
       { scope: "test" },
     ],
@@ -73,8 +73,8 @@ it("infers custom ID types through the full stack", async () => {
     const stateAdapter = await createSqliteStateAdapter({
       stateProvider,
       tablePrefix: "myapp_",
-      idType: "TEXT",
-      generateId: () => `job.${crypto.randomUUID()}`,
+      jobIdType: "TEXT",
+      generateJobId: () => `job.${crypto.randomUUID()}`,
     });
 
     await stateAdapter.migrateToLatest();

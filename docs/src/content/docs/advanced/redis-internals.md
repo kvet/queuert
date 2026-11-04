@@ -15,11 +15,11 @@ This document describes the internal implementation of `@queuert/redis`. Redis i
 
 Three channels carry notifications between processes (configurable prefix, default `queuert`):
 
-| Channel           | Published When      | Payload Format | Purpose                       |
-| ----------------- | ------------------- | -------------- | ----------------------------- |
-| `{prefix}:sched`  | Jobs become pending | `{typeName}`   | Wake idle workers             |
-| `{prefix}:chainc` | Chain completes     | `{chainId}`    | Wake clients awaiting results |
-| `{prefix}:atls`   | Attempt reclaimed   | `{jobId}`      | Notify attempt loss           |
+| Channel           | Published When                  | Payload Format | Purpose                       |
+| ----------------- | ------------------------------- | -------------- | ----------------------------- |
+| `{prefix}:sched`  | Jobs become pending             | `{typeName}`   | Wake idle workers             |
+| `{prefix}:chainc` | Chain completes                 | `{chainId}`    | Wake clients awaiting results |
+| `{prefix}:atls`   | A running job's attempt is lost | `{jobId}`      | Notify attempt loss           |
 
 Channels use Redis Pub/Sub — messages are fire-and-forget with no persistence. If no subscriber is listening when a message is published, it is lost. This is acceptable because workers fall back to polling when notifications are missed.
 

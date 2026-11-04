@@ -1,20 +1,20 @@
 import { type ConformanceGroup } from "../runner.js";
 import { type StateConformanceFixture } from "./types.js";
 
-export const countByJobTypeNamesGroup: ConformanceGroup<StateConformanceFixture> = {
-  name: "countByJobTypeNames",
+export const countJobsByTypeNameGroup: ConformanceGroup<StateConformanceFixture> = {
+  name: "countJobsByTypeName",
   cases: [
     {
-      name: "countByJobTypeNames returns empty array for empty input",
+      name: "countJobsByTypeName returns empty array for empty input",
       run: async ({ stateAdapter }, expect) => {
-        const result = await stateAdapter.countByJobTypeNames({ typeNames: [] });
+        const result = await stateAdapter.countJobsByTypeName({ typeNames: [] });
         expect(result).toEqual([]);
       },
     },
     {
-      name: "countByJobTypeNames returns zeros for unknown type names",
+      name: "countJobsByTypeName returns zeros for unknown type names",
       run: async ({ stateAdapter }, expect) => {
-        const result = await stateAdapter.countByJobTypeNames({ typeNames: ["nonexistent"] });
+        const result = await stateAdapter.countJobsByTypeName({ typeNames: ["nonexistent"] });
         expect(result).toEqual([
           {
             blocked: { count: 0, hasMore: false },
@@ -26,20 +26,20 @@ export const countByJobTypeNamesGroup: ConformanceGroup<StateConformanceFixture>
       },
     },
     {
-      name: "countByJobTypeNames counts pending jobs",
+      name: "countJobsByTypeName counts pending jobs",
       run: async ({ stateAdapter }, expect) => {
         await stateAdapter.withTransaction(async (txCtx) =>
           stateAdapter.createJobs({
             txCtx,
             jobs: [
-              { id: stateAdapter.config.generateId(), typeName: "count-a", input: null },
-              { id: stateAdapter.config.generateId(), typeName: "count-a", input: null },
-              { id: stateAdapter.config.generateId(), typeName: "count-b", input: null },
+              { id: stateAdapter.config.generateJobId(), typeName: "count-a", input: null },
+              { id: stateAdapter.config.generateJobId(), typeName: "count-a", input: null },
+              { id: stateAdapter.config.generateJobId(), typeName: "count-b", input: null },
             ],
           }),
         );
 
-        const result = await stateAdapter.countByJobTypeNames({
+        const result = await stateAdapter.countJobsByTypeName({
           typeNames: ["count-a", "count-b", "count-c"],
         });
 
@@ -66,43 +66,47 @@ export const countByJobTypeNamesGroup: ConformanceGroup<StateConformanceFixture>
       },
     },
     {
-      name: "countByJobTypeNames counts running jobs",
+      name: "countJobsByTypeName counts running jobs",
       run: async ({ stateAdapter }, expect) => {
+        const worker = await stateAdapter.startWorker({
+          workerId: stateAdapter.config.generateWorkerId(),
+          typeNames: ["count-run"],
+          concurrency: 1,
+          leaseMs: 60_000,
+        });
         await stateAdapter.withTransaction(async (txCtx) =>
           stateAdapter.createJobs({
             txCtx,
             jobs: [
-              { id: stateAdapter.config.generateId(), typeName: "count-run", input: null },
-              { id: stateAdapter.config.generateId(), typeName: "count-run", input: null },
+              { id: stateAdapter.config.generateJobId(), typeName: "count-run", input: null },
+              { id: stateAdapter.config.generateJobId(), typeName: "count-run", input: null },
             ],
           }),
         );
 
-        await stateAdapter.withTransaction(async (txCtx) =>
-          stateAdapter.startJobAttempts({
-            txCtx,
-            timeoutMsByTypeName: { "count-run": 30_000 },
-            workerId: "w1",
-            limit: 1,
-          }),
-        );
+        await stateAdapter.startJobAttempts({
+          typeNames: ["count-run"],
+          workerId: worker.id,
+          workerToken: worker.token,
+          limit: 1,
+        });
 
-        const result = await stateAdapter.countByJobTypeNames({ typeNames: ["count-run"] });
+        const result = await stateAdapter.countJobsByTypeName({ typeNames: ["count-run"] });
 
         expect(result[0].pending.count).toBe(1);
         expect(result[0].running.count).toBe(1);
       },
     },
     {
-      name: "countByJobTypeNames counts blocked jobs apart from pending ones",
+      name: "countJobsByTypeName counts blocked jobs apart from pending ones",
       run: async ({ stateAdapter }, expect) => {
         const [blockerChain, blockedChain] = await stateAdapter.withTransaction(async (txCtx) =>
           stateAdapter.createJobs({
             txCtx,
             jobs: [
-              { id: stateAdapter.config.generateId(), typeName: "count-blocker", input: null },
-              { id: stateAdapter.config.generateId(), typeName: "count-blocked", input: null },
-              { id: stateAdapter.config.generateId(), typeName: "count-blocked", input: null },
+              { id: stateAdapter.config.generateJobId(), typeName: "count-blocker", input: null },
+              { id: stateAdapter.config.generateJobId(), typeName: "count-blocked", input: null },
+              { id: stateAdapter.config.generateJobId(), typeName: "count-blocked", input: null },
             ],
           }),
         );
@@ -115,30 +119,36 @@ export const countByJobTypeNamesGroup: ConformanceGroup<StateConformanceFixture>
           }),
         );
 
-        const result = await stateAdapter.countByJobTypeNames({ typeNames: ["count-blocked"] });
+        const result = await stateAdapter.countJobsByTypeName({ typeNames: ["count-blocked"] });
 
         expect(result[0].blocked.count).toBe(1);
         expect(result[0].pending.count).toBe(1);
       },
     },
     {
-      name: "countByJobTypeNames counts completed jobs",
+      name: "countJobsByTypeName counts completed jobs",
       run: async ({ stateAdapter }, expect) => {
+        const worker = await stateAdapter.startWorker({
+          workerId: stateAdapter.config.generateWorkerId(),
+          typeNames: ["count-done"],
+          concurrency: 1,
+          leaseMs: 60_000,
+        });
         await stateAdapter.withTransaction(async (txCtx) =>
           stateAdapter.createJobs({
             txCtx,
-            jobs: [{ id: stateAdapter.config.generateId(), typeName: "count-done", input: null }],
+            jobs: [
+              { id: stateAdapter.config.generateJobId(), typeName: "count-done", input: null },
+            ],
           }),
         );
 
-        const [acquired] = await stateAdapter.withTransaction(async (txCtx) =>
-          stateAdapter.startJobAttempts({
-            txCtx,
-            timeoutMsByTypeName: { "count-done": 30_000 },
-            workerId: "w1",
-            limit: 1,
-          }),
-        );
+        const [acquired] = await stateAdapter.startJobAttempts({
+          typeNames: ["count-done"],
+          workerId: worker.id,
+          workerToken: worker.token,
+          limit: 1,
+        });
 
         await stateAdapter.withTransaction(async (txCtx) =>
           stateAdapter.completeJobs({
@@ -147,7 +157,7 @@ export const countByJobTypeNamesGroup: ConformanceGroup<StateConformanceFixture>
           }),
         );
 
-        const result = await stateAdapter.countByJobTypeNames({ typeNames: ["count-done"] });
+        const result = await stateAdapter.countJobsByTypeName({ typeNames: ["count-done"] });
 
         expect(result).toEqual([
           {
@@ -160,20 +170,20 @@ export const countByJobTypeNamesGroup: ConformanceGroup<StateConformanceFixture>
       },
     },
     {
-      name: "countByJobTypeNames preserves input order",
+      name: "countJobsByTypeName preserves input order",
       run: async ({ stateAdapter }, expect) => {
         await stateAdapter.withTransaction(async (txCtx) =>
           stateAdapter.createJobs({
             txCtx,
             jobs: [
-              { id: stateAdapter.config.generateId(), typeName: "count-z", input: null },
-              { id: stateAdapter.config.generateId(), typeName: "count-a", input: null },
-              { id: stateAdapter.config.generateId(), typeName: "count-a", input: null },
+              { id: stateAdapter.config.generateJobId(), typeName: "count-z", input: null },
+              { id: stateAdapter.config.generateJobId(), typeName: "count-a", input: null },
+              { id: stateAdapter.config.generateJobId(), typeName: "count-a", input: null },
             ],
           }),
         );
 
-        const result = await stateAdapter.countByJobTypeNames({
+        const result = await stateAdapter.countJobsByTypeName({
           typeNames: ["count-z", "count-a"],
         });
 

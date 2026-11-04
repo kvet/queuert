@@ -3,7 +3,7 @@ import { type TestAPI, expect } from "vitest";
 
 import { createClient } from "../client.js";
 import { type Chain } from "../entities/chain.js";
-import { BlockerReferenceError } from "../errors.js";
+import { BlockerReferenceError, JobNotFoundError } from "../errors.js";
 import { createInProcessWorker } from "../in-process-worker.js";
 import { createProcessors } from "../job-type-processors/create-job-type-processors.js";
 import { defineJobTypes } from "../job-types/define-job-types.js";
@@ -217,7 +217,10 @@ export const deletionTestSuite = ({ it }: { it: TestAPI<TestSuiteContext> }): vo
     withWorkers,
     observabilityAdapter,
     log,
+    skip,
   }) => {
+    if (!notifyAdapter) return skip();
+
     const jobTypes = defineJobTypes<{
       test: {
         entry: true;
@@ -245,17 +248,20 @@ export const deletionTestSuite = ({ it }: { it: TestAPI<TestSuiteContext> }): vo
         jobTypes,
         processors: {
           test: {
-            attemptHandler: async ({ signal }) => {
+            attemptHandler: async ({ signal, complete }) => {
               jobStarted.resolve();
 
               await sleep(5000, { signal });
 
               expect(signal.aborted).toBe(true);
+              const completion = withTransaction(async (txCtx, transactionHooks) =>
+                complete({ ...txCtx, transactionHooks, output: null }),
+              );
+              await expect(completion).rejects.toThrow(JobNotFoundError);
               jobDeleted.resolve();
 
-              throw new Error();
+              return completion;
             },
-            attemptConfig: { timeoutMs: 1000, heartbeatMs: 100 },
           },
         },
       }),
@@ -442,7 +448,6 @@ export const deletionTestSuite = ({ it }: { it: TestAPI<TestSuiteContext> }): vo
                 throw error;
               }
             },
-            attemptConfig: { timeoutMs: 100, heartbeatMs: 10 },
           },
         },
       }),

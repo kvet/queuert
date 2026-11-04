@@ -20,6 +20,13 @@ import {
   handleJobsByIds,
   handleJobsList,
 } from "./routes/jobs.js";
+import {
+  handleWorkerDetail,
+  handleWorkerJobs,
+  handleWorkersByIds,
+  handleWorkersCounts,
+  handleWorkersList,
+} from "./routes/workers.js";
 
 type Assets = Record<string, { content: string; contentType: string }>;
 
@@ -78,6 +85,15 @@ const dispatchApi = async (
   if (localPath === "/api/job-types") return handleJobTypesList(client);
   if (localPath === "/api/jobs") return handleJobsList(url, client);
 
+  if (localPath === "/api/workers/by-id") return handleWorkerDetail(url, client);
+  if (localPath === "/api/workers/by-ids") return handleWorkersByIds(url, client);
+  if (localPath === "/api/workers/counts") return handleWorkersCounts(client);
+
+  match = localPath.match(/^\/api\/workers\/([^/]+)\/jobs$/);
+  if (match) return handleWorkerJobs(url, client, match[1]);
+
+  if (localPath === "/api/workers") return handleWorkersList(url, client);
+
   return undefined;
 };
 
@@ -97,9 +113,9 @@ const dispatchApi = async (
  */
 export const createDashboard = async <
   TJobTypeDefinitions extends BaseJobTypeDefinitions,
-  TStateAdapter extends StateAdapter<any, any>,
+  TStateAdapter extends StateAdapter<any, any, any>,
 >(options: {
-  /** The Queuert client the dashboard reads jobs and chains from. */
+  /** The Queuert client the dashboard reads jobs, chains and workers from. */
   client: Client<TJobTypeDefinitions, TStateAdapter>;
   /** Mount prefix without trailing slash (e.g. `'/internal/queuert'`). Defaults to `''` (root). */
   basePath?: string;

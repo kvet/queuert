@@ -2,18 +2,20 @@ import { CHAIN_STATUSES, JOB_STATUSES } from "@queuert/ui/lib";
 import { type ChainStatus, type JobStatus } from "queuert";
 
 import {
-  countByChainTypeNames,
-  countByJobTypeNames,
-  listChainTypeNames,
-  listJobTypeNames,
+  countChainsByTypeName,
+  countJobsByTypeName,
+  getChainTypeNames,
+  getJobTypeNames,
 } from "../api.js";
 import { type CappedCount } from "../domain/counts.js";
+import { type TypeWorkers, isStrandedType } from "../domain/workers.js";
 
 const COUNT_CHUNK = 50;
 
 export type TypeEntry<TStatus extends string> = {
   typeName: string;
   counts: { status: TStatus; count: CappedCount }[];
+  workers?: TypeWorkers;
 };
 
 const chunked = async <T>(
@@ -34,8 +36,8 @@ export const toStatusCounts = <TStatus extends string>(
   statuses.map((status) => ({ status, count: entry[status] }));
 
 export const loadChainTypes = async (signal: AbortSignal): Promise<TypeEntry<ChainStatus>[]> => {
-  const names = await listChainTypeNames({ signal });
-  const counts = await chunked(names, async (chunk) => countByChainTypeNames(chunk, { signal }));
+  const names = await getChainTypeNames({ signal });
+  const counts = await chunked(names, async (chunk) => countChainsByTypeName(chunk, { signal }));
   return counts.map((entry) => ({
     typeName: entry.typeName,
     counts: toStatusCounts(CHAIN_STATUSES, entry),
@@ -43,11 +45,15 @@ export const loadChainTypes = async (signal: AbortSignal): Promise<TypeEntry<Cha
 };
 
 export const loadJobTypes = async (signal: AbortSignal): Promise<TypeEntry<JobStatus>[]> => {
-  const names = await listJobTypeNames({ signal });
-  const counts = await chunked(names, async (chunk) => countByJobTypeNames(chunk, { signal }));
+  const names = await getJobTypeNames({ signal });
+  const counts = await chunked(names, async (chunk) => countJobsByTypeName(chunk, { signal }));
   return counts.map((entry) => ({
     typeName: entry.typeName,
     counts: toStatusCounts(JOB_STATUSES, entry),
+    workers: {
+      ...entry.workers,
+      stranded: isStrandedType({ pending: entry.pending, liveWorkerCount: entry.workers.live }),
+    },
   }));
 };
 
@@ -65,7 +71,7 @@ export const narrowToStatuses = <TStatus extends string>(
 ): TypeEntry<TStatus>[] =>
   entries
     .map((entry) => ({
-      typeName: entry.typeName,
+      ...entry,
       counts: entry.counts.filter((statusCount) => statuses.includes(statusCount.status)),
     }))
     .filter((entry) => entry.counts.some((statusCount) => statusCount.count.count > 0));

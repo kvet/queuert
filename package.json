@@ -30,6 +30,7 @@
     "@changesets/config": "4.0.1",
     "@types/node": "22.20.5",
     "husky": "9.1.7",
+    "lint-staged": "17.6.0",
     "oxfmt": "0.76.0",
     "oxlint": "1.91.0",
     "oxlint-tsgolint": "7.0.2005",
@@ -37,6 +38,10 @@
     "tsx": "4.23.15",
     "typescript": "7.0.2",
     "vitest": "5.1.0"
+  },
+  "lint-staged": {
+    "*.{ts,tsx,mts,cts,js,jsx,mjs,cjs}": "oxlint --type-aware --fix --no-error-on-unmatched-pattern",
+    "*": "oxfmt --no-error-on-unmatched-pattern"
   },
   "engines": {
     "node": ">=22"

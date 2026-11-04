@@ -108,7 +108,7 @@ Events representing write claims inside transactions:
 Events that need immediate context or occur outside transactions:
 
 - **Span starts**: Must happen before the database write that stores the trace context
-- **Worker-side events**: `jobAttemptStarted`, `jobAttemptDuration`, `jobAttemptFailed`, `jobAttemptLost`, `jobAttemptReclaimed`, `jobRescheduled` after a failed attempt, attempt span ends. The worker's own writes are single autocommit statements, so their events are emitted directly once the statement returns
+- **Worker-side events**: `jobAttemptStarted`, `jobAttemptDuration`, `jobAttemptFailed`, `jobAttemptLost`, `jobRescheduled` after a failed attempt, attempt span ends. The worker's own writes are atomic and run outside any caller transaction, so their events are emitted directly once the write returns. `jobAttemptReclaimed` is emitted once the worker's reclaim transaction commits.
 - **Read-only observations**: Events that observe state without claiming writes
 
 ### `complete` events

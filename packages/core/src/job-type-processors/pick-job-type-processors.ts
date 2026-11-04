@@ -38,7 +38,7 @@ const selectProcessors = (
 /**
  * Create a registry holding only the listed job types of `processors`, e.g. to run them on a
  * dedicated worker. Each picked processor keeps its handler, its middleware chain and its
- * `backoffConfig` / `attemptConfig`.
+ * `backoffConfig`.
  *
  * @example
  * const imageWorker = await createInProcessWorker({
@@ -70,8 +70,7 @@ export const pickProcessors = <
 /**
  * Create a registry holding every job type of `processors` except the listed ones, e.g. for the
  * worker that handles whatever the dedicated workers built with {@link pickProcessors} don't.
- * Each remaining processor keeps its handler, its middleware chain and its
- * `backoffConfig` / `attemptConfig`.
+ * Each remaining processor keeps its handler, its middleware chain and its `backoffConfig`.
  *
  * @example
  * const defaultWorker = await createInProcessWorker({

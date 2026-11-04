@@ -2,7 +2,7 @@ import { CHAIN_STATUSES } from "@queuert/ui/lib";
 import { useSearchParams } from "@solidjs/router";
 import { Match, Switch, createMemo } from "solid-js";
 
-import { PAGE_SIZE, countByChainTypeNames, listChainTypeNames, listChains } from "../api.js";
+import { PAGE_SIZE, countChainsByTypeName, getChainTypeNames, listChains } from "../api.js";
 import { ChainRow } from "../rows/ChainRow.js";
 import { createLoader } from "../state/createLoader.js";
 import { createPagedList } from "../state/createPagedList.js";
@@ -46,11 +46,11 @@ const ChainListForType = (props: { typeName: string }) => {
 
   const typeNames = createLoader(
     () => true,
-    async (_, signal) => listChainTypeNames({ signal }),
+    async (_, signal) => getChainTypeNames({ signal }),
   );
   const counts = createLoader(
     () => props.typeName,
-    async (typeName, signal) => (await countByChainTypeNames([typeName], { signal }))[0],
+    async (typeName, signal) => (await countChainsByTypeName([typeName], { signal }))[0],
   );
   const statusCounts = () => {
     const typeCounts = counts.data();

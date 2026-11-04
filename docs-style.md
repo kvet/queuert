@@ -76,7 +76,7 @@ Each topic is owned by exactly one page. Every other page that touches it says o
 - Run `pnpm docs:build` once: the dev server compiles only the pages you open, and the build compiles every page, including the generated API reference.
 - Screenshot every page you changed in light, dark and at 390px (for example with Playwright against `pnpm docs:dev` at 1440×1000 and 390×844, reduced motion, full page), and look at the images. Check for console errors and horizontal overflow.
 - For stepped or tabbed figures, click through every step and tab and confirm the figure's height stays fixed.
-- From `docs/`, run `pnpm typecheck` and `pnpm test` (covers `sections.spec.ts`, `examples.spec.ts`, `benchmarks.spec.ts` and the plugin specs in `docs/plugins/`).
+- From `docs/`, run `pnpm typecheck` and `pnpm test` (covers `sections.spec.ts`, `examples.spec.ts` and the plugin specs in `docs/plugins/`).
 - Run `pnpm fmt` from the repo root, then re-check your diff: the oxlint autofix can add `async` or strip `await` on sync-or-async code.
 - When the page cites an example you changed, run it (`pnpm --filter example-<name> start`).
 - Dashboard screenshots embedded in the docs are regenerated per Code Style, "Dashboard Screenshots".

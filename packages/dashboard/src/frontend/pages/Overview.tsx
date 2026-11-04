@@ -3,10 +3,11 @@ import { type AnyStatus, CHAIN_STATUSES, JOB_STATUSES, statusClasses } from "@qu
 import { A } from "@solidjs/router";
 import { For, Match, Show, Switch, createMemo } from "solid-js";
 
+import { countWorkers } from "../api.js";
 import { type CappedCount, formatSum, sumCounts } from "../domain/counts.js";
 import { TypeRow } from "../rows/TypeRow.js";
 import { createLoader } from "../state/createLoader.js";
-import { EmptyState, ErrorState, SkeletonRows, linkClass } from "../ui/kit.js";
+import { EmptyState, ErrorState, SkeletonRows, WarningBox, linkClass } from "../ui/kit.js";
 import { type TypeEntry, countOf, loadChainTypes, loadJobTypes, typeListHref } from "./typeData.js";
 import { type TypeKind, chainKind, jobKind } from "./Types.js";
 
@@ -114,6 +115,7 @@ const TopTypes = (props: {
                 typeName={entry.typeName}
                 counts={entry.counts}
                 href={(status) => typeListHref(props.kind.base, entry.typeName, status)}
+                workers={entry.workers}
               />
             )}
           </For>
@@ -123,30 +125,96 @@ const TopTypes = (props: {
   );
 };
 
+const WorkerBreakdown = (props: { counts: { live: number; expired: number } }) => (
+  <div class="grid grid-cols-1 gap-x-6 gap-y-2 px-4 py-3 sm:grid-cols-[8rem_minmax(0,1fr)] sm:items-center">
+    <A href="/workers" class="flex items-baseline gap-2 hover:underline">
+      <span class="text-xs font-semibold font-mono tracking-wider text-fg-muted uppercase">
+        Workers
+      </span>
+      <span class="font-semibold tabular-nums">
+        {(props.counts.live + props.counts.expired).toLocaleString()}
+      </span>
+    </A>
+    <ul class="flex flex-wrap gap-x-5 gap-y-1 text-xs text-fg-muted">
+      <li class="inline-flex items-center gap-1.5">
+        live
+        <span class="font-semibold text-fg tabular-nums">{props.counts.live.toLocaleString()}</span>
+      </li>
+      <li class="inline-flex items-center gap-1.5">
+        expired
+        <span class="font-semibold text-fg tabular-nums">
+          {props.counts.expired.toLocaleString()}
+        </span>
+      </li>
+    </ul>
+  </div>
+);
+
+const Warnings = (props: { leaseLostCount: number; strandedTypeCount: number }) => (
+  <Show when={props.leaseLostCount > 0 || props.strandedTypeCount > 0}>
+    <div class="mb-6 flex flex-col gap-2">
+      <Show when={props.leaseLostCount > 0}>
+        <WarningBox
+          action={
+            <A href="/workers" class="font-medium underline">
+              View workers
+            </A>
+          }
+        >
+          {props.leaseLostCount === 1
+            ? "1 worker lost its lease."
+            : `${props.leaseLostCount} workers lost their lease.`}
+        </WarningBox>
+      </Show>
+      <Show when={props.strandedTypeCount > 0}>
+        <WarningBox
+          action={
+            <A href="/jobs/types?status=pending" class="font-medium underline">
+              View job types
+            </A>
+          }
+        >
+          {props.strandedTypeCount}{" "}
+          {props.strandedTypeCount === 1 ? "job type has" : "job types have"} pending jobs and no
+          live worker.
+        </WarningBox>
+      </Show>
+    </div>
+  </Show>
+);
+
 export const Overview = () => {
   const data = createLoader(
     () => true,
     async (_, signal) => {
-      const [chains, jobs] = await Promise.all([loadChainTypes(signal), loadJobTypes(signal)]);
-      return { chains, jobs };
+      const [chains, jobs, workerCounts] = await Promise.all([
+        loadChainTypes(signal),
+        loadJobTypes(signal),
+        countWorkers({ signal }),
+      ]);
+      return { chains, jobs, workerCounts };
     },
   );
 
   return (
     <div>
-      <div class="mb-5">
-        <h1 class="text-base font-semibold">Overview</h1>
-      </div>
       <Switch>
         <Match when={data.error()}>
-          <ErrorState thing="the overview" error={data.error()} onRetry={data.retry} />
+          <ErrorState thing="the dashboard" error={data.error()} onRetry={data.retry} />
         </Match>
         <Match when={data.loading() || !data.data()}>
           <div class="rounded-xs border border-border">
             <SkeletonRows />
           </div>
         </Match>
-        <Match when={data.data()?.chains.length === 0 && data.data()?.jobs.length === 0}>
+        <Match
+          when={
+            data.data()?.chains.length === 0 &&
+            data.data()?.jobs.length === 0 &&
+            data.data()?.workerCounts.live === 0 &&
+            data.data()?.workerCounts.expired === 0
+          }
+        >
           <EmptyState title="Nothing here yet. Chains appear once your app creates them.">
             <a
               href="https://kvet.github.io/queuert/"
@@ -161,6 +229,10 @@ export const Overview = () => {
         <Match when={data.data()}>
           {(loaded) => (
             <>
+              <Warnings
+                leaseLostCount={loaded().workerCounts.expired}
+                strandedTypeCount={loaded().jobs.filter((entry) => entry.workers?.stranded).length}
+              />
               <Box title="Status" class="mb-6" bodyClass="divide-y divide-border">
                 <StatusBreakdown
                   label="Chains"
@@ -174,6 +246,7 @@ export const Overview = () => {
                   statuses={JOB_STATUSES}
                   entries={loaded().jobs}
                 />
+                <WorkerBreakdown counts={loaded().workerCounts} />
               </Box>
               <div class="grid gap-6 lg:grid-cols-2">
                 <TopTypes kind={chainKind} statuses={["running"]} entries={loaded().chains} />

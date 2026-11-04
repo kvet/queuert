@@ -108,7 +108,7 @@ For explicit control over retry timing, see [Rescheduling from a Handler](../sch
 
 ## lastAttemptError
 
-On retry, `job.lastAttemptError` contains the serialized error from the previous attempt. When a worker reclaimed that attempt because it expired, it holds a serialized `JobAttemptExpiredError`. Use it for logging or to adjust retry behavior:
+On retry, `job.lastAttemptError` contains the serialized error from the previous attempt. When a worker reclaimed that attempt because the worker running it lost its lease, stopped, or no longer ran it, it holds a serialized `JobAttemptReclaimedError`. Use it for logging or to adjust retry behavior:
 
 ```ts
 attemptHandler: async ({ job, complete }) => {
@@ -127,4 +127,4 @@ attemptHandler: async ({ job, complete }) => {
 
 Values are truncated to 10,000 characters.
 
-See [examples/showcase-error-handling](https://github.com/kvet/queuert/tree/main/examples/showcase-error-handling) for a complete working example demonstrating discriminated unions, compensation patterns, and automatic backoff. See also [Job Processing Reliability](../processing-reliability/) for engine-level safety guarantees (fenced `complete`, automatic reschedule), and [Timeouts](../timeouts/).
+See [examples/showcase-error-handling](https://github.com/kvet/queuert/tree/main/examples/showcase-error-handling) for a complete working example demonstrating discriminated unions, compensation patterns, and automatic backoff. See also [Job Processing Reliability](../processing-reliability/) for engine-level safety guarantees such as the token-guarded `complete` and automatic reschedule, and [Timeouts](../timeouts/).

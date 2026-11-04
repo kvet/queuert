@@ -10,7 +10,7 @@ const PER_ID_CONCURRENCY = 8;
  */
 export const probeOrRethrow = async (client: Client<any, any>, err: unknown): Promise<void> => {
   try {
-    await client.listChainTypeNames();
+    await client.getChainTypeNames();
   } catch {
     // oxlint-disable-next-line typescript/only-throw-error -- re-throwing the original adapter error
     throw err;

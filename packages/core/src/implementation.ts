@@ -5,7 +5,6 @@ import {
   BlockerLimitExceededError,
   ChainNotFoundError,
   ChainTypeMismatchError,
-  InvalidJobIdError,
   JobNotFoundError,
 } from "./errors.js";
 import { type AnyNewJob } from "./job-types/job-types.resolvers.js";
@@ -22,9 +21,9 @@ import {
   bufferObservabilityRollback,
 } from "./observability-adapter/observability-hooks.js";
 import { type Helpers } from "./setup-helpers.js";
+import { resolveJobId } from "./state-adapter/adapter-config.js";
 import {
   type BaseTxContext,
-  type StateAttemptFence,
   type StateChain,
   type StateChainInfo,
   type StateJob,
@@ -52,19 +51,6 @@ const assertBlockerLimit = (helpers: Helpers, typeName: string, blockerCount: nu
   }
 };
 
-const resolveJobId = (helpers: Helpers, id: string | undefined): string => {
-  const { generateId, validateId } = helpers.stateAdapter.config;
-  const source = id === undefined ? "generator" : "caller";
-  const resolvedId = id ?? generateId();
-  if (!validateId(resolvedId)) {
-    throw new InvalidJobIdError(
-      `Invalid job ID "${resolvedId}" from ${source} — failed validateId predicate`,
-      { id: resolvedId, source },
-    );
-  }
-  return resolvedId;
-};
-
 const prepareJobs = <TEntry extends AnyNewJob>(
   helpers: Helpers,
   entries: TEntry[],
@@ -74,7 +60,7 @@ const prepareJobs = <TEntry extends AnyNewJob>(
     assertBlockerLimit(helpers, entry.typeName, entry.blockers?.length ?? 0);
     return {
       entry,
-      id: resolveJobId(helpers, entry.id),
+      id: resolveJobId(helpers.stateAdapter.config, entry.id),
       parsedInput: helpers.jobTypes.parseInput(entry.typeName, entry.input),
     };
   });
@@ -317,20 +303,29 @@ export const completeChain = async (
     output,
     txCtx,
     transactionHooks,
-    fence,
+    attemptToken,
+    workerId,
   }: {
     job: StateJob;
     output: unknown;
     txCtx: BaseTxContext;
     transactionHooks: TransactionHooks;
-    fence: StateAttemptFence | null;
+    attemptToken: string | null;
+    workerId: string | null;
   },
 ): Promise<StateJob | undefined> => {
   const parsedOutput = helpers.jobTypes.parseOutput(job.typeName, output);
 
   const [completed] = await helpers.stateAdapter.completeJobs({
     txCtx,
-    jobs: [{ jobId: job.id, output: parsedOutput, fence: fence ?? undefined }],
+    jobs: [
+      {
+        jobId: job.id,
+        output: parsedOutput,
+        attemptToken: attemptToken ?? undefined,
+        workerId: workerId ?? undefined,
+      },
+    ],
   });
   if (!completed) return undefined;
   const { chain } = completed;
@@ -378,13 +373,15 @@ export const continueChain = async (
     continueWith,
     txCtx,
     transactionHooks,
-    fence,
+    attemptToken,
+    workerId,
   }: {
     job: StateJob;
     continueWith: AnyNewJob;
     txCtx: BaseTxContext;
     transactionHooks: TransactionHooks;
-    fence: StateAttemptFence | null;
+    attemptToken: string | null;
+    workerId: string | null;
   },
 ): Promise<(StateJob & { continuation: StateJobInfo }) | undefined> => {
   helpers.jobTypes.validateContinueWith(job.typeName, {
@@ -405,7 +402,8 @@ export const continueChain = async (
         schedule: item.entry.schedule,
         traceContext: item.jobSpan?.traceContext ?? null,
         continueFromId: job.id,
-        fence: fence ?? undefined,
+        attemptToken: attemptToken ?? undefined,
+        workerId: workerId ?? undefined,
       })),
     });
     if (!continued) {
@@ -453,7 +451,7 @@ export const rescheduleJobs = async (
       jobId: string;
       schedule?: ScheduleOptions;
       error?: string;
-      fence?: StateAttemptFence;
+      attemptToken?: string;
     }[];
     txCtx?: BaseTxContext;
     transactionHooks: TransactionHooks;

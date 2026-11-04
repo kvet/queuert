@@ -13,11 +13,11 @@ This document describes the internal implementation of `@queuert/nats`. Like Red
 
 Three NATS subjects carry notifications (configurable prefix, default `queuert`):
 
-| Subject           | Published When      | Payload Format | Purpose                       |
-| ----------------- | ------------------- | -------------- | ----------------------------- |
-| `{prefix}.sched`  | Jobs become pending | `{typeName}`   | Wake idle workers             |
-| `{prefix}.chainc` | Chain completes     | `{chainId}`    | Wake clients awaiting results |
-| `{prefix}.atls`   | Attempt reclaimed   | `{jobId}`      | Notify attempt loss           |
+| Subject           | Published When                  | Payload Format | Purpose                       |
+| ----------------- | ------------------------------- | -------------- | ----------------------------- |
+| `{prefix}.sched`  | Jobs become pending             | `{typeName}`   | Wake idle workers             |
+| `{prefix}.chainc` | Chain completes                 | `{chainId}`    | Wake clients awaiting results |
+| `{prefix}.atls`   | A running job's attempt is lost | `{jobId}`      | Notify attempt loss           |
 
 NATS core pub/sub is fire-and-forget — messages are delivered to currently connected subscribers only. Each notify method publishes every item of its batch, then calls `flush()` once, so a batch costs one round-trip. Every idle worker subscribed to a type wakes on its `{prefix}.sched` message and queries the database; the database (`FOR UPDATE SKIP LOCKED` in PostgreSQL, exclusive locking in SQLite) settles which worker gets each job.
 

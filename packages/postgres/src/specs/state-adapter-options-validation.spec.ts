@@ -44,12 +44,22 @@ describe("SQL identifier validation", () => {
     }
   });
 
-  describe("rejects invalid idType", () => {
+  describe("rejects invalid jobIdType", () => {
     for (const { label, value } of identifierInjectionCases) {
       it(label, async () => {
         await expect(
-          createPgStateAdapter({ stateProvider: dummyProvider, idType: value }),
-        ).rejects.toThrow(/Invalid idType/);
+          createPgStateAdapter({ stateProvider: dummyProvider, jobIdType: value }),
+        ).rejects.toThrow(/Invalid jobIdType/);
+      });
+    }
+  });
+
+  describe("rejects invalid workerIdType", () => {
+    for (const { label, value } of identifierInjectionCases) {
+      it(label, async () => {
+        await expect(
+          createPgStateAdapter({ stateProvider: dummyProvider, workerIdType: value }),
+        ).rejects.toThrow(/Invalid workerIdType/);
       });
     }
   });
@@ -68,18 +78,26 @@ describe("SQL identifier validation", () => {
     expect(adapter).toBeDefined();
   });
 
-  it("accepts typical idType value", async () => {
+  it("accepts typical jobIdType value", async () => {
     const adapter = await createPgStateAdapter({
       stateProvider: dummyProvider,
-      idType: "text",
+      jobIdType: "text",
     });
     expect(adapter).toBeDefined();
   });
 
-  it("accepts custom generateId", async () => {
+  it("accepts typical workerIdType value", async () => {
     const adapter = await createPgStateAdapter({
       stateProvider: dummyProvider,
-      generateId: () => "custom-id",
+      workerIdType: "uuid",
+    });
+    expect(adapter).toBeDefined();
+  });
+
+  it("accepts custom generateJobId", async () => {
+    const adapter = await createPgStateAdapter({
+      stateProvider: dummyProvider,
+      generateJobId: () => "custom-id",
     });
     expect(adapter).toBeDefined();
   });
@@ -100,24 +118,40 @@ describe("limit validation", () => {
 describe("config", () => {
   it("applies defaults", async () => {
     const { config } = await createPgStateAdapter({ stateProvider: dummyProvider });
-    expect(config.generateId()).toMatch(
+    expect(config.generateJobId()).toMatch(
       /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/,
     );
-    expect(config.validateId(crypto.randomUUID())).toBe(true);
+    expect(config.validateJobId(crypto.randomUUID())).toBe(true);
+    expect(config.generateWorkerId()).toMatch(
+      /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/,
+    );
+    expect(config.generateWorkerId()).not.toBe(config.generateWorkerId());
+    expect(config.validateWorkerId(crypto.randomUUID())).toBe(true);
     expect(config.maxBlockersPerJob).toBe(100);
     expect(config.countCap).toBe(10_000);
   });
 
   it("exposes the configured options", async () => {
-    const generateId = () => `job-${crypto.randomUUID()}`;
-    const validateId = (id: string) => id.startsWith("job-");
+    const generateJobId = () => `job-${crypto.randomUUID()}`;
+    const validateJobId = (id: string) => id.startsWith("job-");
+    const generateWorkerId = () => `worker-${crypto.randomUUID()}`;
+    const validateWorkerId = (id: string) => id.startsWith("worker-");
     const { config } = await createPgStateAdapter({
       stateProvider: dummyProvider,
-      generateId,
-      validateId,
+      generateJobId,
+      validateJobId,
+      generateWorkerId,
+      validateWorkerId,
       maxBlockersPerJob: 2,
       countCap: 3,
     });
-    expect(config).toEqual({ generateId, validateId, maxBlockersPerJob: 2, countCap: 3 });
+    expect(config).toEqual({
+      generateJobId,
+      validateJobId,
+      generateWorkerId,
+      validateWorkerId,
+      maxBlockersPerJob: 2,
+      countCap: 3,
+    });
   });
 });

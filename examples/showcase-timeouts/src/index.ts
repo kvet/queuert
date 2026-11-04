@@ -5,7 +5,7 @@
  *
  * Scenarios:
  * 1. Cooperative Timeout: Using AbortController with the job signal
- * 2. Attempt Timeout: Using attemptConfig (reclaimed if the worker stops extending)
+ * 2. Worker Lease: Using lease (a job is reclaimed if its worker stops renewing the lease)
  */
 
 import assert from "node:assert/strict";
@@ -31,7 +31,7 @@ const jobTypes = defineJobTypes<{
     output: { data: string } | { timedOut: true };
   };
 
-  // Job demonstrating the attempt timeout via attempt config
+  // Job outlasting the worker lease while the lease renews
   "long-running-job": {
     entry: true;
     input: { taskId: string; durationMs: number };
@@ -72,6 +72,7 @@ const client = await createClient({
 
 const worker = await createInProcessWorker({
   client,
+  lease: { durationMs: 600, heartbeatMs: 150 },
   processors: createProcessors({
     client,
     jobTypes,
@@ -111,8 +112,6 @@ const worker = await createInProcessWorker({
       },
 
       "long-running-job": {
-        // Configure shorter attempt timeout for demo (normally you'd use longer values)
-        attemptConfig: { timeoutMs: 500, heartbeatMs: 200 },
         attemptHandler: async ({ job, complete }) => {
           const attempt = job.attempt;
           console.log(
@@ -171,9 +170,9 @@ const result2 = await client.awaitChain(fetch2, { timeoutMs: 5000 });
 console.log(`Result: ${JSON.stringify(result2.output)}`);
 assert.ok("timedOut" in result2.output);
 
-// Scenario 2: Attempt timeout via attempt config (completes while the attempt is extended)
-console.log("\n--- Scenario 2: Attempt Timeout via Attempt Config ---");
-console.log("Job with attemptConfig completes while the heartbeat extends the attempt.\n");
+// Scenario 2: Worker lease (completes while the heartbeat renews the lease)
+console.log("\n--- Scenario 2: Worker Lease ---");
+console.log("Job outlasting the worker lease completes while the heartbeat renews the lease.\n");
 
 const longChain = await withTransactionHooks(async (transactionHooks) =>
   sql.begin(async (txSql) =>
@@ -181,7 +180,7 @@ const longChain = await withTransactionHooks(async (transactionHooks) =>
       txSql,
       transactionHooks,
       typeName: "long-running-job",
-      input: { taskId: "task-001", durationMs: 200 }, // 200ms work, 500ms attempt
+      input: { taskId: "task-001", durationMs: 1000 }, // 1000ms work, 600ms lease
     }),
   ),
 );

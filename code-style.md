@@ -15,6 +15,7 @@ This document describes code style conventions, testing patterns, and project or
 - **Typed error classes**: Use specific error types for all thrown errors (`JobNotFoundError`, `JobAlreadyCompletedError`, etc.) to enable proper error handling by consumers. Generic `Error` should only be used for truly unreachable code paths (assertion-style guards). If a caller could reasonably need to catch and handle an error, it must have a specific type. Throws that are not recoverable — programmer-error invariants, corrupted internal input (e.g., malformed cursors), and configuration mistakes that surface at setup time and require a code change to fix — stay as bare `Error`; a typed class adds API surface without enabling any new caller behavior. The same goes for caller misuse the type system already rejects: the runtime throw is a backstop for JavaScript callers and for `any` erasing the signature, so it needs a clear message, not a class nobody can meaningfully catch. `requireTxCtx` in `packages/core/src/state-adapter/tx-context.ts` is the reference case — the transaction context is required by the method's type, and the throw only fires when the types were bypassed.
 - **Factory functions over classes**: Expose `createClient()` instead of `new Client()`. Classes can be used internally, but the public API should always be factory functions. This keeps constructors private, allows async initialization, and makes the API consistent.
 - **Nullable conventions**: Use `undefined` for "not found/not present" and `null` for "explicitly set to no value". For example, `getJobById` returns `undefined` when job doesn't exist, while `job.completedAt` is `null` before completion.
+- **List methods are paginated, get methods are capped**: A `list*` method on the state adapter or the client takes a cursor and a limit (`PageParams` on the adapter, `cursor` / `limit` options on the client) and returns a `Page`, ordered by a unique key so the cursor stays stable. Only a `get*` method returns a plain array, and only when its length is bounded: by its input (`getJobs` returns one entry per requested id), by a configured limit (`getJobBlockers` returns at most `maxBlockersPerJob` chains), or by the type names an app writes (`getJobTypeNames`, `getChainTypeNames`). A collection the data alone sizes is a `list*` method and is paginated. A screen that needs a total or a sum over such a collection gets it from a `count*` method, never by fetching every page.
 - **Prefer explicit context passing over async context**: Use parameters, callbacks, and handles to pass context rather than relying on `AsyncLocalStorage` or `async_hooks`. The library does not bind or snapshot async context internally — callers (e.g., OTEL adapters) are responsible for propagating their own async context.
 - **No hard-wrapped prose in markdown**: Keep each paragraph on a single continuous line in `.md` files — don't split sentences across multiple lines for line-length reasons. Let the editor soft-wrap instead.
 - **No abbreviated names**: Use full words in variable names, type names, and type parameters. Write `TDefinitions` not `TDefs`, `definitions` not `defs`, `config` not `cfg`. Single-letter type parameters (`T`, `K`) are fine when there's only one and the meaning is obvious. `ctx`/`TCtx` is also acceptable as a well-established abbreviation.
@@ -56,9 +57,18 @@ const jobChains = await client.listJobChains({ filter });
 
 ### Domain Vocabulary
 
-The library has one vocabulary for job and chain state, and it is the one persisted in the schema and exposed on the public API: a job is `blocked`, `pending`, `running`, or `completed`; a chain is `running` or `completed`. Do not introduce synonyms — no `open`/`closed`, `active`/`done`, `queued`/`finished` — in column names, status values, exported symbols, option fields, error classes, event names, or docs. A design document that reaches for a synonym in prose does not license one in code.
+Once a concept has a word, that word is the only one for it — everywhere, including column names, status values, exported symbols, option fields, error classes, event names, variable names, comments, docs, error messages, and design documents. A design document that reaches for a synonym in prose does not license one in code. When a concept has no established word yet, pick one, use it consistently, and add it here.
 
-The same holds for the rest of the domain, not just state: once a concept has a word, that word is the only one for it — everywhere, including variable names, comments, docs, error messages, and design documents. A chain's ends are its `head` and `tail` job, never "first"/"last" or "root"/"leaf". Related terms stay in their own vocabulary too: a job has `attempt`s (not "tries" or "runs"), a job is `reschedule`d (not "requeued" or "retried"), and a chain `continueWith`s (not "chains to" or "forwards"). An `entry` job type is one that can start a chain; don't reuse "entry" for list items or other inputs. `input` is a job's payload; don't use it as a suffix for "what a caller passes" when the type also carries an `input` field. When a concept has no established word yet, pick one, use it consistently, and add it here.
+- **Job and chain state**: a job is `blocked`, `pending`, `running`, or `completed`; a chain is `running` or `completed`. These are persisted in the schema and exposed on the public API. No `open`/`closed`, `active`/`done`, `queued`/`finished`.
+- **`head` and `tail`**: a chain's ends are its `head` and `tail` job, never "first"/"last" or "root"/"leaf".
+- **`attempt`**: a job has `attempt`s, not "tries" or "runs".
+- **`reschedule`**: a job is `reschedule`d, not "requeued" or "retried".
+- **`continueWith`**: a chain `continueWith`s, not "chains to" or "forwards".
+- **`entry`**: an `entry` job type is one that can start a chain; don't reuse "entry" for list items or other inputs.
+- **`input`**: a job's payload; don't use it as a suffix for "what a caller passes" when the type also carries an `input` field.
+- **`worker`**: one row in the `worker` table — an id, its job types, its concurrency and a lease. Its id is the `workerId` in `attemptBy`, `completedBy` and worker events. A worker starts and stops.
+- **In-process worker**: what `createInProcessWorker` returns.
+- **`lease`**: a worker's `lease_until`, live while it is in the future in database time; a worker whose lease is gone has lost it.
 
 ### Type Naming Scheme
 
@@ -199,6 +209,8 @@ describe("MyFeature", () => {
 });
 ```
 
+- **No `vi` mocks or spies in suites**: Test suites don't use `vi.fn`, `vi.spyOn` or the `mock*` methods. To change what an adapter does, spread it and override the method with a plain function: `{ ...stateAdapter, extendWorkerLease: async () => undefined }`. When only the first call should differ, mark it with an `AbortController` and fall through to the real method once `signal.aborted` is set. Assert the outcome the test can observe, such as the job's state or an assertion inside the handler, rather than call counts or arguments. Spec helpers and unit specs may keep using `vi` mocks.
+
 ### File Organization
 
 **Test suites** (`*.test-suite.ts`):
@@ -308,11 +320,11 @@ This follows the principle of using each technology's native terminology rather 
 
 State adapters have configuration differences that reflect database capabilities:
 
-| Option       | PostgreSQL           | SQLite               | Rationale                                                    |
-| ------------ | -------------------- | -------------------- | ------------------------------------------------------------ |
-| Namespace    | `schema`             | `tablePrefix`        | PostgreSQL uses schemas; SQLite prefixes table names         |
-| ID generator | `generateId` (JS fn) | `generateId` (JS fn) | Both adapters generate IDs in JS for symmetry                |
-| ID validator | `validateId`         | `validateId`         | Optional predicate runs on generated and caller-supplied IDs |
+| Option           | PostgreSQL              | SQLite                  | Rationale                                                    |
+| ---------------- | ----------------------- | ----------------------- | ------------------------------------------------------------ |
+| Namespace        | `schema`                | `tablePrefix`           | PostgreSQL uses schemas; SQLite prefixes table names         |
+| Job ID generator | `generateJobId` (JS fn) | `generateJobId` (JS fn) | Both adapters generate IDs in JS for symmetry                |
+| Job ID validator | `validateJobId`         | `validateJobId`         | Optional predicate runs on generated and caller-supplied IDs |
 
 ### In-Process Adapters
 
@@ -360,8 +372,9 @@ When making changes:
 
 ### Dashboard Screenshots
 
-`docs/src/content/docs/integrations/dashboard.mdx` embeds six screenshots from `docs/src/assets/dashboard/`. Every visible dashboard change regenerates all six in the same change, and the prose and alt text next to each image are updated to match. Capture them from the `examples/dashboard` example (run `start` to populate, then `dashboard`) with Playwright, using exactly these settings so the set stays consistent:
+`docs/src/content/docs/integrations/dashboard.mdx` embeds ten screenshots from `docs/src/assets/dashboard/`. Every visible dashboard change regenerates all ten in the same change, and the prose and alt text next to each image are updated to match. Capture them from the `examples/dashboard` example (run `start` to populate, then `dashboard`) with Playwright, using exactly these settings so the set stays consistent:
 
 - Viewport 800×640, device scale factor 1, the viewport only (never a full-page capture)
 - Light color scheme and reduced motion, so the running-status pulse doesn't show up mid-animation
-- Views: `overview.png` (`/`), `chains-list.png` (`/chains?typeName=greet`), `chain-detail.png` (a `process-with-blockers` chain), `jobs-list.png` (`/jobs?typeName=greet`), `job-detail.png` (a `might-fail` job), `find.png` (`/` with the find dialog open and `order` typed)
+- At least a minute after `start` exits, so one leftover worker shows its lost lease
+- Views: `overview.png` (`/`), `chain-types-list.png` (`/chains/types`), `job-types-list.png` (`/jobs/types`), `chains-list.png` (`/chains?typeName=greet`), `chain-detail.png` (a `process-with-blockers` chain), `jobs-list.png` (`/jobs?typeName=greet`), `job-detail.png` (a `might-fail` job), `workers-list.png` (`/workers`), `worker-detail.png` (the worker running the `long-runner-live` job), `find.png` (`/` with the find dialog open and `order` typed)

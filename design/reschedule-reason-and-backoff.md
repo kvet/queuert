@@ -69,7 +69,7 @@ No backfill. Existing failing jobs start their streak at 0, so their next backof
 
 ## Interaction with worker liveness
 
-`design/worker-liveness.md` rewrites released attempts as failures (`last_attempt_error = 'Worker stopped unexpectedly'`, no backoff). Those releases should also `failure_streak + 1`: a job that keeps killing its worker is the classic stuck job. Today's `reclaimExpiredJobAttempts` records the release as a failure (`last_attempt_error` holds a serialized `JobAttemptExpiredError`) but does not bump any streak.
+Reclaiming a worker's jobs records each release as a failed attempt with no backoff (`last_attempt_error` holds a serialized `JobAttemptReclaimedError`). Those releases should also `failure_streak + 1`: a job that keeps killing its worker is the classic stuck job. Today the release does not bump any streak.
 
 ## Open questions
 

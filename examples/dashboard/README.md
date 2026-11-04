@@ -1,6 +1,6 @@
 # Dashboard Example
 
-`@queuert/dashboard` embedded as a `fetch` handler with Node's built-in HTTP server. Run the populator to generate chains/jobs, browse them through the web UI.
+`@queuert/dashboard` embedded as a `fetch` handler with Node's built-in HTTP server. Run the populator to generate chains, jobs and workers, browse them through the web UI.
 
 ## Running
 
@@ -10,7 +10,7 @@ pnpm install
 # Terminal 1 — start the dashboard
 pnpm --filter example-dashboard dashboard
 
-# Terminal 2 — populate jobs (single jobs, continuations, blockers, retries)
+# Terminal 2 — populate jobs (single jobs, continuations, blockers, retries, leftover workers)
 pnpm --filter example-dashboard start
 ```
 

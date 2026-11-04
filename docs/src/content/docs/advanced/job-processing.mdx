@@ -1,6 +1,6 @@
 ---
 title: Job Processing
-description: How an attempt runs, finishing in your own transaction, and ownership fencing.
+description: How an attempt runs, finishing in your own transaction, and attempt ownership.
 sidebar:
   order: 4
 ---
@@ -60,11 +60,11 @@ Observability events and notifications produced by `complete` are buffered in `t
 
 ## The Attempt Lifecycle
 
-<Diagram label="An attempt: acquire and heartbeat are single statements; the handler's work runs outside any transaction; complete() commits inside the handler's own transaction; afterwards the worker trusts the result complete() returned or runs one fenced reschedule">
+<Diagram label="An attempt: acquire is one atomic write gated on the worker's lease; the handler's work runs outside any transaction; complete() commits inside the handler's own transaction; afterwards the worker trusts the result complete() returned or runs one reschedule under the attempt token">
   <Flow direction="column">
-    <Node tone="blue" sub="single statement · sets attemptUntil">acquire</Node>
+    <Node tone="blue" sub="atomic · while the worker's lease is live">acquire</Node>
     <Arrow />
-    <Group title="attempt handler · heartbeat extends the attempt until complete() commits or the handler ends">
+    <Group title="attempt handler · held while the worker's lease is live">
       <Flow direction="column">
         <Node variant="ghost" sub="no transaction held">your work</Node>
         <Arrow />
@@ -74,7 +74,7 @@ Observability events and notifications produced by `complete` are buffered in `t
       </Flow>
     </Group>
     <Arrow />
-    <Node sub="complete() hooks flushed · else one fenced reschedule">commit detection</Node>
+    <Node sub="complete() hooks flushed · else one reschedule under the attempt token">commit detection</Node>
     <Rows spine columns="minmax(5.5rem, auto) auto">
       <Flow>
         <Arrow label="complete() committed" tone="green" />
@@ -88,10 +88,9 @@ Observability events and notifications produced by `complete` are buffered in `t
   </Flow>
 </Diagram>
 
-1. **Acquire.** The worker starts an attempt and sets its `attemptUntil`.
-2. **Heartbeat.** The worker extends the attempt every `attemptConfig.heartbeatMs` until the handler ends or its `complete` commits; see [In-Process Worker](../in-process-worker/#attempt-timeout-and-heartbeat).
-3. **Handler.** Your handler does its work, then opens a transaction, calls `complete` in it, and returns the `complete` result.
-4. **Commit detection.** The worker records the attempt as completed if a `complete` call's `transactionHooks` flushed, and otherwise fails it; see [Errors and Commit Detection](#errors-and-commit-detection).
+1. **Acquire.** The worker starts an attempt under its id, which it holds while the worker's lease is live; see [In-Process Worker](../in-process-worker/#worker-lease).
+2. **Handler.** Your handler does its work, then opens a transaction, calls `complete` in it, and returns the `complete` result.
+3. **Commit detection.** The worker records the attempt as completed if a `complete` call's `transactionHooks` flushed, and otherwise fails it; see [Errors and Commit Detection](#errors-and-commit-detection).
 
 ## `complete`
 
@@ -107,28 +106,28 @@ The transaction context and `transactionHooks` are required. `complete` performs
 
 **One successful `complete` per `transactionHooks`.** A second successful call with the same `transactionHooks` throws, so a loop that retries your transaction must open `withTransactionHooks` inside the loop, once per try. A call that threw before writing (for example a validation error), or one rolled back by `transactionHooks.withSavepoint`, does not count, so you can catch the error and call `complete` again. `complete` cannot be called after the handler has ended.
 
-## Ownership and Fencing
+## Attempt Ownership
 
-Every write tied to an attempt is conditional on the job row: the job must be `running`, at this attempt number, held by this worker. A conditional write that does not match writes nothing at all — no completed job, no chain update, no continuation. This is what makes `complete` safe without Queuert holding a lock for the duration of the attempt.
+Every write tied to an attempt is conditional on the job row: the job must be `running` and still hold the attempt token it was given when this attempt acquired it. Each acquisition gets a new token, so an earlier attempt, or one of a chain deleted and recreated under the same id, never matches. A conditional write that does not match writes nothing at all — no completed job, no chain update, no continuation. This is what makes `complete` safe without Queuert holding a lock for the duration of the attempt.
 
 When `complete`'s write misses, `complete` writes nothing, throws and aborts the attempt's `signal`; let the error propagate so your transaction rolls back with it.
 
 ## Errors and Commit Detection
 
-The attempt counts as completed once the `transactionHooks` of a successful `complete` call flush, so a successful attempt needs no extra database round-trip. If no `complete` call's hooks flushed — the handler threw before committing, or returned without calling `complete` — the attempt fails: the worker runs one reschedule fenced on the attempt, which retries the job with backoff while the attempt still owns it and matches nothing if a `complete` committed or the attempt was lost. An error thrown after a committed `complete` does not roll the completion back; it is reported as a `workerError`.
+The attempt counts as completed once the `transactionHooks` of a successful `complete` call flush, so a successful attempt needs no extra database round-trip. If no `complete` call's hooks flushed — the handler threw before committing, or returned without calling `complete` — the attempt fails: the worker runs one reschedule under the attempt token, which retries the job with backoff while the attempt still owns it and matches nothing if a `complete` committed or the attempt was lost. An error thrown after a committed `complete` does not roll the completion back; it is reported as a `workerError`.
 
 Flushed hooks stand for a committed write only when two preconditions hold:
 
 - **`withTransactionHooks` wraps your transaction from outside**, so the hooks flush after COMMIT. Opened inside the transaction, they flush before COMMIT, and a COMMIT that then fails leaves nothing written.
 - **A `complete` inside a database savepoint that may be rolled back is also wrapped in `transactionHooks.withSavepoint`**, so rolling back the savepoint discards the buffered write too. See [Transaction Hooks](../../guides/transaction-hooks/#savepoints).
 
-If either is broken, the worker can count the attempt as completed although nothing was written. The job then stays `running` until its attempt expires and another worker reclaims it.
+If either is broken, the worker can count the attempt as completed although nothing was written. The job then stays `running` until the worker is next idle and reclaims it as a failed attempt; see [In-Process Worker](../in-process-worker/#reclaim).
 
 See [Job Processing Reliability](../../guides/processing-reliability/) for each scenario with code examples, and [Error Handling](../../guides/error-handling/) for handling permanently failing jobs.
 
 ## Abort Signal
 
-Every attempt handler receives a `signal` that aborts when the worker is stopping, when the attempt is lost (taken by another worker, deleted, or completed externally), or when ownership can no longer be confirmed (the heartbeat failed). Your own committed `complete` never aborts it. On abort, stop working and commit a `complete` — with partial output or `{ reschedule }` — or throw to reschedule with backoff. If the attempt was lost, `complete` writes nothing and throws. A handler that returns without a committed `complete` fails the attempt.
+Every attempt handler receives a `signal` that aborts when the worker is stopping, when its worker lost its lease, or when the attempt is lost (taken by another worker, deleted, or completed externally). Your own committed `complete` never aborts it. On abort, stop working and commit a `complete` — with partial output or `{ reschedule }` — or throw to reschedule with backoff. If the attempt was lost, `complete` writes nothing and throws. A handler that returns without a committed `complete` fails the attempt.
 
 ```typescript
 attemptHandler: async ({ signal, complete }) => {
@@ -148,7 +147,7 @@ attemptHandler: async ({ signal, complete }) => {
 
 - [Job Processing Reliability](../../guides/processing-reliability/) — What happens when a handler throws, before and after `complete`
 - [Client API](/queuert/api/core/type-aliases/client/) — Mutation methods, query methods, awaitChain
-- [In-Process Worker](../in-process-worker/) — Worker lifecycle, attempt timeouts, expired attempt reclamation
+- [In-Process Worker](../in-process-worker/) — Worker lifecycle, worker lease, reclaim
 - [Adapters](../adapters/) — StateAdapter context architecture
-- [`showcase-long-running-jobs`](https://github.com/kvet/queuert/tree/main/examples/showcase-long-running-jobs) — Runnable example: long work outside a transaction, then `complete` in your own transaction
+- [`showcase-timeouts`](https://github.com/kvet/queuert/tree/main/examples/showcase-timeouts) — Runnable example: work that outlasts the worker lease while the heartbeat renews it, then `complete` in your own transaction
 - [`showcase-signals`](https://github.com/kvet/queuert/tree/main/examples/showcase-signals) — Runnable example: external completion via `completeChain`, graceful shutdown with partial results

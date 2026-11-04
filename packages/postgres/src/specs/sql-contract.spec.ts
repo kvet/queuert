@@ -296,7 +296,7 @@ const it = extendWithResourceLeakDetection(extendWithPostgres(baseIt, import.met
   })
   .extend<{
     pool: Pool;
-    stateAdapter: StateAdapter<{ $test: true }, string>;
+    stateAdapter: StateAdapter<{ $test: true }, string, string>;
     transactionConcurrency: "concurrent" | "serialized";
   }>({
     pool: [
@@ -325,7 +325,7 @@ const it = extendWithResourceLeakDetection(extendWithPostgres(baseIt, import.met
         const adapter = await createPgStateAdapter({ stateProvider });
         await adapter.migrateToLatest();
         await adapter.truncate();
-        await use(adapter as unknown as StateAdapter<{ $test: true }, string>);
+        await use(adapter as unknown as StateAdapter<{ $test: true }, string, string>);
       },
       { scope: "test" },
     ],

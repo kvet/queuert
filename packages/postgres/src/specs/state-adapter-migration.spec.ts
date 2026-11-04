@@ -3,7 +3,7 @@ import { join } from "node:path";
 
 import { createDeploymentSpawner, startPaused, startTogether } from "@queuert/helpers/testing";
 import { acquirePostgres } from "@queuert/testcontainers";
-import { type MigrationResult, createTemplateApplier } from "@queuert/typed-sql";
+import { type MigrationResult, createMigrator, createTemplateApplier } from "@queuert/typed-sql";
 import { Pool } from "pg";
 import { it as baseIt, describe, expect } from "vitest";
 
@@ -19,6 +19,8 @@ import {
 import { type PgStateProvider } from "../state-provider/state-provider.pg.js";
 import { LEASE_TTL_MS, MARKER } from "./state-adapter-migration.process.js";
 
+const INSTALL = "001_initial_schema";
+const WORKER_LIVENESS = "002_worker_liveness";
 const ALL = migrations.map((migration) => migration.name);
 const spawnDeployment = createDeploymentSpawner<MigrationResult>(
   join(import.meta.dirname, "state-adapter-migration.process.ts"),
@@ -29,7 +31,7 @@ type Provider = PgStateProvider<PgPoolContext>;
 type Database = {
   connectionString: string;
   provider: Provider;
-  adapter: Awaited<ReturnType<typeof createPgStateAdapter<PgPoolContext, string>>>;
+  adapter: Awaited<ReturnType<typeof createPgStateAdapter<PgPoolContext, string, string>>>;
 };
 
 const query = async <T = Record<string, unknown>>(provider: Provider, text: string): Promise<T[]> =>
@@ -44,7 +46,8 @@ const query = async <T = Record<string, unknown>>(provider: Provider, text: stri
 const applyTemplate = createTemplateApplier({
   schema: "public",
   table_prefix: "queuert_",
-  id_type: "text",
+  job_id_type: "text",
+  worker_id_type: "text",
 });
 
 const appliedNames = async (provider: Provider): Promise<string[]> =>
@@ -66,7 +69,8 @@ const it = baseIt.extend<{ database: Database }>({
     const provider = createPgPoolProvider({ pool });
     const adapter = await createPgStateAdapter({
       stateProvider: provider,
-      generateId: (): string => randomUUID(),
+      generateJobId: (): string => randomUUID(),
+      generateWorkerId: (): string => randomUUID(),
     });
     await use({ connectionString: pg.connectionString, provider, adapter });
     await pool.end();
@@ -80,7 +84,8 @@ const relations = async (provider: Provider): Promise<Record<string, boolean>> =
     `SELECT to_regclass('public.queuert_job') AS job,
             to_regclass('public.queuert_job_blocker') AS job_blocker,
             to_regclass('public.queuert_migration') AS migration,
-            to_regclass('public.queuert_migration_lock') AS migration_lock`,
+            to_regclass('public.queuert_migration_lock') AS migration_lock,
+            to_regclass('public.queuert_worker') AS worker`,
   );
   return Object.fromEntries(Object.entries(row).map(([name, value]) => [name, value !== null]));
 };
@@ -92,6 +97,42 @@ const indexNames = async (provider: Provider): Promise<string[]> =>
       "SELECT indexname FROM pg_indexes WHERE schemaname = 'public' ORDER BY indexname",
     )
   ).map((row) => row.indexname);
+
+const migrateToInstall = async (provider: Provider): Promise<void> => {
+  await createMigrator<PgPoolContext>({
+    migrations: migrations.filter((migration) => migration.name === INSTALL),
+    store: createMigrationStore(
+      provider,
+      createTemplateApplier({ schema: "public", table_prefix: "queuert_", job_id_type: "uuid" }),
+    ),
+  }).migrateToLatest();
+};
+
+const workerColumns = async (provider: Provider): Promise<string[]> =>
+  (
+    await query<{ column_name: string; udt_name: string; is_nullable: string }>(
+      provider,
+      "SELECT column_name, udt_name, is_nullable FROM information_schema.columns WHERE table_schema = 'public' AND table_name = 'queuert_worker' ORDER BY column_name",
+    )
+  ).map(
+    (row) => `${row.column_name} ${row.udt_name}${row.is_nullable === "NO" ? " NOT NULL" : ""}`,
+  );
+
+const jobColumnNames = async (provider: Provider): Promise<string[]> =>
+  (
+    await query<{ column_name: string }>(
+      provider,
+      "SELECT column_name FROM information_schema.columns WHERE table_schema = 'public' AND table_name = 'queuert_job' ORDER BY column_name",
+    )
+  ).map((row) => row.column_name);
+
+const indexDefinition = async (provider: Provider, indexName: string): Promise<string> => {
+  const [row] = await query<{ indexdef: string }>(
+    provider,
+    `SELECT indexdef FROM pg_indexes WHERE schemaname = 'public' AND indexname = '${indexName}'`,
+  );
+  return row.indexdef;
+};
 
 describe("migrateToLatest", () => {
   it(
@@ -108,7 +149,18 @@ describe("migrateToLatest", () => {
         job_blocker: true,
         migration: true,
         migration_lock: true,
+        worker: true,
       });
+      expect(await workerColumns(provider)).toEqual([
+        "concurrency int4 NOT NULL",
+        "id uuid NOT NULL",
+        "lease_until timestamptz NOT NULL",
+        "started_at timestamptz NOT NULL",
+        "token uuid NOT NULL",
+        "type_names _text NOT NULL",
+      ]);
+      expect(await jobColumnNames(provider)).not.toContain("attempt_until");
+      expect(await jobColumnNames(provider)).toContain("attempt_token");
     },
   );
 
@@ -120,6 +172,7 @@ describe("migrateToLatest", () => {
       "queuert_chain_idx",
       "queuert_chain_index_idx",
       "queuert_chain_running_idx",
+      "queuert_job_attempt_by_idx",
       "queuert_job_blocked_idx",
       "queuert_job_blocker_chain_idx",
       "queuert_job_blocker_pkey",
@@ -130,7 +183,12 @@ describe("migrateToLatest", () => {
       "queuert_job_running_idx",
       "queuert_migration_lock_pkey",
       "queuert_migration_pkey",
+      "queuert_worker_idx",
+      "queuert_worker_pkey",
     ]);
+    expect(await indexDefinition(provider, "queuert_job_running_idx")).toBe(
+      "CREATE INDEX queuert_job_running_idx ON public.queuert_job USING btree (type_name, attempt_at) WHERE (status = 'running'::text)",
+    );
   });
 
   it("is a no-op on a second run", { timeout: 120_000 }, async ({ database: { adapter } }) => {
@@ -141,6 +199,62 @@ describe("migrateToLatest", () => {
       unrecognized: [],
     });
   });
+
+  it(
+    "upgrades a database with jobs of the previous version, returning running jobs to pending and clearing their worker IDs",
+    { timeout: 120_000 },
+    async ({ database: { provider, adapter } }) => {
+      await migrateToInstall(provider);
+      const jobId = randomUUID();
+      const completedJobId = randomUUID();
+      await query(
+        provider,
+        `INSERT INTO queuert_job (id, type_name, chain_id, chain_index, status, chain_status, attempt, attempt_at, attempt_by, attempt_until)
+         VALUES ('${jobId}', 'legacy', '${jobId}', 0, 'running', 'running', 1, now(), 'worker-${randomUUID()}', now() + interval '60 seconds')`,
+      );
+      await query(
+        provider,
+        `INSERT INTO queuert_job (id, type_name, chain_id, chain_index, status, chain_status, attempt, completed_at, completed_by, chain_completed_at)
+         VALUES ('${completedJobId}', 'legacy', '${completedJobId}', 0, 'completed', 'completed', 1, now(), 'worker-${randomUUID()}', now())`,
+      );
+
+      expect(await adapter.migrateToLatest()).toEqual({
+        applied: [WORKER_LIVENESS],
+        skipped: [INSTALL],
+        unrecognized: [],
+      });
+      expect(await relations(provider)).toMatchObject({ worker: true });
+      expect(await jobColumnNames(provider)).not.toContain("attempt_until");
+      expect(await indexDefinition(provider, "queuert_job_running_idx")).toBe(
+        "CREATE INDEX queuert_job_running_idx ON public.queuert_job USING btree (type_name, attempt_at) WHERE (status = 'running'::text)",
+      );
+
+      const [running] = await adapter.getJobs({ jobIds: [jobId] });
+      expect(running!.status).toBe("pending");
+      expect(running!.attempt).toBe(1);
+      expect(running!.attemptAt).toBeNull();
+      expect(running!.attemptBy).toBeNull();
+      expect(running!.attemptToken).toBeNull();
+
+      const [completed] = await adapter.getJobs({ jobIds: [completedJobId] });
+      expect(completed!.status).toBe("completed");
+      expect(completed!.completedBy).toBeNull();
+    },
+  );
+
+  it(
+    "upgrades without rewriting the job table",
+    { timeout: 120_000 },
+    async ({ database: { provider, adapter } }) => {
+      await migrateToInstall(provider);
+      const filenodeQuery = `SELECT pg_relation_filenode('queuert_job')::text AS filenode`;
+      const [before] = await query(provider, filenodeQuery);
+
+      await adapter.migrateToLatest();
+
+      expect(await query(provider, filenodeQuery)).toEqual([before]);
+    },
+  );
 });
 
 describe("parallel deployments", () => {

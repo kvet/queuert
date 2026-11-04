@@ -14,12 +14,12 @@ const jobTypes = defineJobTypes<{
   process_order: {
     entry: true;
     input: { orderId: string };
-    output: { processedAt: string; workerName: string };
+    output: { processedAt: string; processName: string };
   };
 }>();
 
 const connectionString = process.env.CONNECTION_STRING!;
-const workerName = process.env.WORKER_NAME!;
+const processName = process.env.PROCESS_NAME!;
 
 const sql = postgres(connectionString, { max: 5 });
 
@@ -33,7 +33,6 @@ const client = await createClient({ stateAdapter, notifyAdapter, jobTypes });
 
 const worker = await createInProcessWorker({
   client,
-  workerName,
   concurrency: 2,
   processors: createProcessors({
     client,
@@ -62,7 +61,7 @@ const worker = await createInProcessWorker({
                 transactionHooks,
                 output: {
                   processedAt: new Date().toISOString(),
-                  workerName,
+                  processName,
                 },
               }),
             ),

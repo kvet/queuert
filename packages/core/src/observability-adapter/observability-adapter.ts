@@ -6,6 +6,7 @@ import {
   type JobBasicData,
   type JobCompletionData,
   type JobProcessingData,
+  type JobReclaimData,
   type WorkerBasicData,
 } from "./log.js";
 
@@ -123,6 +124,7 @@ export type ObservabilityAdapter = {
   // worker
   workerStarted: (data: WorkerBasicData & { jobTypeNames: string[] }) => void;
   workerError: (data: WorkerBasicData & { error: unknown }) => void;
+  workerLeaseLost: (data: WorkerBasicData) => void;
   workerStopped: (data: WorkerBasicData) => void;
 
   // chain
@@ -148,13 +150,16 @@ export type ObservabilityAdapter = {
   jobAttemptLost: (data: JobAttemptData & WorkerBasicData) => void;
   jobAttemptFailed: (data: JobProcessingData & WorkerBasicData & { error: unknown }) => void;
   jobAttemptCompleted: (data: JobCompletionData & WorkerBasicData) => void;
-  jobAttemptReclaimed: (data: JobAttemptData & WorkerBasicData) => void;
+  jobAttemptReclaimed: (data: JobAttemptData & WorkerBasicData & JobReclaimData) => void;
 
   // notify adapter
   notifyAdapterError: (data: { operation: keyof NotifyAdapter; error: unknown }) => void;
 
   // state adapter
-  stateAdapterError: (data: { operation: keyof StateAdapter<any, any>; error: unknown }) => void;
+  stateAdapterError: (data: {
+    operation: keyof StateAdapter<any, any, any>;
+    error: unknown;
+  }) => void;
 
   // histograms
   chainDuration: (data: ChainBasicData & { durationMs: number }) => void;

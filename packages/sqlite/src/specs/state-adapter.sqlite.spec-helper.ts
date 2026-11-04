@@ -12,17 +12,17 @@ import {
   createBetterSqlite3Provider,
 } from "../state-provider/state-provider.better-sqlite3.js";
 
-export type BetterSqlite3StateAdapter = StateAdapter<BetterSqlite3Context, UUID>;
+export type BetterSqlite3StateAdapter = StateAdapter<BetterSqlite3Context, UUID, UUID>;
 
 export const extendWithStateSqlite = <T>(
   api: TestAPI<T>,
 ): TestAPI<
   T & {
     db: Database.Database;
-    stateAdapter: StateAdapter<{ $test: true }, string>;
+    stateAdapter: StateAdapter<{ $test: true }, string, string>;
     transactionConcurrency: "concurrent" | "serialized";
-    flakyStateAdapter: StateAdapter<{ $test: true }, string>;
-    flakyDbStateAdapter: StateAdapter<{ $test: true }, string> | undefined;
+    flakyStateAdapter: StateAdapter<{ $test: true }, string, string>;
+    flakyDbStateAdapter: StateAdapter<{ $test: true }, string, string> | undefined;
     poisonTransaction: ((txCtx: { $test: true }) => Promise<void>) | undefined;
     withNonTransactionContext: <T>(fn: (txCtx: { $test: true }) => Promise<T>) => Promise<T>;
     withSavepoint:
@@ -73,6 +73,7 @@ export const extendWithStateSqlite = <T>(
 
         db.exec("DELETE FROM queuert_job_blocker;");
         db.exec("DELETE FROM queuert_job;");
+        db.exec("DELETE FROM queuert_worker;");
       },
       { scope: "test" },
     ],

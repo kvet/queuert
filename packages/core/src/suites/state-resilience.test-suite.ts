@@ -1,18 +1,14 @@
-import { type TestAPI } from "vitest";
+import { sleep } from "@queuert/helpers";
+import { type TestAPI, expect } from "vitest";
 
 import { createClient } from "../client.js";
 import { createInProcessWorker } from "../in-process-worker.js";
 import { createProcessors } from "../job-type-processors/create-job-type-processors.js";
 import { defineJobTypes } from "../job-types/define-job-types.js";
-import { type StateAdapter } from "../state-adapter/state-adapter.js";
 import { withTransactionHooks } from "../transaction-hooks.js";
 import { type TestSuiteContext } from "./spec-context.spec-helper.js";
 
-export const stateResilienceTestSuite = ({
-  it,
-}: {
-  it: TestAPI<TestSuiteContext & { flakyStateAdapter: StateAdapter<{ $test: true }, string> }>;
-}): void => {
+export const stateResilienceTestSuite = ({ it }: { it: TestAPI<TestSuiteContext> }): void => {
   const completionOptions = {
     pollIntervalMs: 100,
     timeoutMs: 15000,
@@ -68,10 +64,6 @@ export const stateResilienceTestSuite = ({
             initialDelayMs: 1,
             multiplier: 1,
             maxDelayMs: 1,
-          },
-          attemptConfig: {
-            timeoutMs: 10,
-            heartbeatMs: 5,
           },
           processors: {
             test: {
@@ -148,7 +140,7 @@ export const stateResilienceTestSuite = ({
         client: flakyWorkerClient,
         concurrency: 5,
         // Short poll interval so the worker retries promptly after a transient error.
-        // When complete hits a flaky-adapter error and the fenced reschedule also fails, the job
+        // When complete hits a flaky-adapter error and the reschedule under its attempt token also fails, the job
         // stays running until its short attempt timeout expires and the worker reclaims it on a re-poll.
         pollIntervalMs: 250,
         recoveryBackoffConfig: {
@@ -163,10 +155,6 @@ export const stateResilienceTestSuite = ({
             initialDelayMs: 1,
             multiplier: 1,
             maxDelayMs: 1,
-          },
-          attemptConfig: {
-            timeoutMs: 10,
-            heartbeatMs: 5,
           },
           processors: {
             test: {
@@ -248,15 +236,11 @@ export const stateResilienceTestSuite = ({
           maxDelayMs: 1,
         },
         // Short poll interval so the worker retries promptly after a transient error.
-        // When complete hits a flaky-adapter error and the fenced reschedule also fails, the job
+        // When complete hits a flaky-adapter error and the reschedule under its attempt token also fails, the job
         // stays running until its short attempt timeout expires and the worker reclaims it on a re-poll.
         pollIntervalMs: 100,
       };
       const registryConfig = {
-        attemptConfig: {
-          timeoutMs: 10,
-          heartbeatMs: 5,
-        },
         backoffConfig: {
           initialDelayMs: 1,
           multiplier: 1,
@@ -379,10 +363,6 @@ export const stateResilienceTestSuite = ({
             multiplier: 1,
             maxDelayMs: 1,
           },
-          attemptConfig: {
-            timeoutMs: 10,
-            heartbeatMs: 5,
-          },
           processors: {
             test: {
               attemptHandler: async ({ job, complete }) =>
@@ -473,10 +453,6 @@ export const stateResilienceTestSuite = ({
             multiplier: 1,
             maxDelayMs: 1,
           },
-          attemptConfig: {
-            timeoutMs: 10,
-            heartbeatMs: 5,
-          },
           processors: {
             test: {
               attemptHandler: async ({ job, complete }) =>
@@ -561,10 +537,6 @@ export const stateResilienceTestSuite = ({
         },
       };
       const registryConfig = {
-        attemptConfig: {
-          timeoutMs: 10,
-          heartbeatMs: 5,
-        },
         backoffConfig: {
           initialDelayMs: 1,
           multiplier: 1,
@@ -634,7 +606,7 @@ export const stateResilienceTestSuite = ({
   );
 
   it(
-    "resets the recovery backoff once the worker loop recovers",
+    "resets the recovery backoff once the worker starts a job",
     { timeout: 15000 },
     async ({
       stateAdapter,
@@ -649,7 +621,6 @@ export const stateResilienceTestSuite = ({
       }>();
 
       let failuresLeft = 2;
-      const { promise: recovered, resolve: onRecovered } = Promise.withResolvers<void>();
       const flakyStartStateAdapter: typeof stateAdapter = {
         ...stateAdapter,
         startJobAttempts: async (params) => {
@@ -657,9 +628,7 @@ export const stateResilienceTestSuite = ({
             failuresLeft--;
             throw new Error("startJobAttempts failed");
           }
-          const result = await stateAdapter.startJobAttempts(params);
-          onRecovered();
-          return result;
+          return stateAdapter.startJobAttempts(params);
         },
       };
 
@@ -696,15 +665,100 @@ export const stateResilienceTestSuite = ({
         }),
       });
 
+      const firstChain = await withTransaction(async (txCtx, transactionHooks) =>
+        client.createChain({ ...txCtx, transactionHooks, typeName: "test", input: null }),
+      );
+
       await withWorkers([await worker.start()], async () => {
-        await recovered;
+        await client.awaitChain(firstChain, { pollIntervalMs: 100, timeoutMs: 5000 });
 
         failuresLeft = 1;
-        const chain = await withTransaction(async (txCtx, transactionHooks) =>
+        const secondChain = await withTransaction(async (txCtx, transactionHooks) =>
           client.createChain({ ...txCtx, transactionHooks, typeName: "test", input: null }),
         );
-        await client.awaitChain(chain, { pollIntervalMs: 100, timeoutMs: 5000 });
+        await client.awaitChain(secondChain, { pollIntervalMs: 100, timeoutMs: 5000 });
       });
     },
   );
+
+  it("aborts the attempts of a worker that lost its lease and completes them once it registers again under the same id", async ({
+    stateAdapter,
+    notifyAdapter,
+    withTransaction,
+    withWorkers,
+    observabilityAdapter,
+    log,
+  }) => {
+    const jobTypes = defineJobTypes<{
+      test: { entry: true; input: null; output: null };
+    }>();
+
+    const firstRenewal = new AbortController();
+    const workerClient = await createClient({
+      stateAdapter: {
+        ...stateAdapter,
+        extendWorkerLease: async (params) => {
+          if (firstRenewal.signal.aborted) return stateAdapter.extendWorkerLease(params);
+          firstRenewal.abort();
+          return undefined;
+        },
+      },
+      notifyAdapter,
+      observabilityAdapter,
+      log,
+      jobTypes,
+    });
+    const client = await createClient({
+      stateAdapter,
+      notifyAdapter,
+      observabilityAdapter,
+      log,
+      jobTypes,
+    });
+    const worker = await createInProcessWorker({
+      client: workerClient,
+      concurrency: 2,
+      pollIntervalMs: 50,
+      recoveryBackoffConfig: { initialDelayMs: 10, multiplier: 1, maxDelayMs: 10 },
+      lease: { durationMs: 300, heartbeatMs: 50 },
+      processors: createProcessors({
+        client,
+        jobTypes,
+        backoffConfig: { initialDelayMs: 1, multiplier: 1, maxDelayMs: 1 },
+        processors: {
+          test: {
+            attemptHandler: async ({ job, signal, complete }) => {
+              if (job.attempt === 1) {
+                await sleep(Number.POSITIVE_INFINITY, { signal });
+                throw new Error("lease lost");
+              }
+              return withTransaction(async (txCtx, transactionHooks) =>
+                complete({ ...txCtx, transactionHooks, output: null }),
+              );
+            },
+          },
+        },
+      }),
+    });
+
+    const chains = await withTransaction(async (txCtx, transactionHooks) =>
+      client.createChains({
+        ...txCtx,
+        transactionHooks,
+        items: [
+          { typeName: "test", input: null },
+          { typeName: "test", input: null },
+        ],
+      }),
+    );
+
+    await withWorkers([await worker.start()], async () => {
+      await Promise.all(chains.map(async (chain) => client.awaitChain(chain, completionOptions)));
+    });
+
+    expect(await client.getJobs({ ids: chains.map((chain) => chain.id) })).toEqual([
+      expect.objectContaining({ status: "completed", attempt: 2 }),
+      expect.objectContaining({ status: "completed", attempt: 2 }),
+    ]);
+  });
 };

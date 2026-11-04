@@ -13,6 +13,7 @@ export const fastSeedAllStates = async <TTxContext extends BaseTxContext>(
 ): Promise<SeedSentinels> => {
   const job = `${schema}.${tablePrefix}job`;
   const blockerTable = `${schema}.${tablePrefix}job_blocker`;
+  const workerTable = `${schema}.${tablePrefix}worker`;
 
   const exec = async (sql: string, params: unknown[] = []) =>
     stateProvider.executeSql({
@@ -22,6 +23,29 @@ export const fastSeedAllStates = async <TTxContext extends BaseTxContext>(
       columnTypes: {},
       readOnly: false,
     }) as Promise<Record<string, unknown>[]>;
+
+  await exec(
+    `INSERT INTO ${workerTable} (id, type_names, concurrency, lease_until, token)
+     VALUES ($1, $2::text[], $3, now() + interval '${seedConfig.leaseMs} milliseconds', gen_random_uuid())`,
+    [seedConfig.workerId, seedConfig.workerTypeNames, seedConfig.workerConcurrency],
+  );
+  for (const idleWorker of seedConfig.idleWorkers) {
+    await exec(
+      `INSERT INTO ${workerTable} (id, type_names, concurrency, lease_until, token)
+       VALUES ($1, $2::text[], $3, now() + interval '${seedConfig.leaseMs} milliseconds', gen_random_uuid())`,
+      [idleWorker.id, idleWorker.typeNames, seedConfig.workerConcurrency],
+    );
+  }
+  await exec(
+    `INSERT INTO ${workerTable} (id, type_names, concurrency, lease_until, token)
+     VALUES ($1, $2::text[], $3, now() + interval '${seedConfig.leaseMs} milliseconds', gen_random_uuid())`,
+    [seedConfig.busyWorkerId, seedConfig.busyWorkerTypeNames, seedConfig.workerConcurrency],
+  );
+  await exec(
+    `INSERT INTO ${workerTable} (id, type_names, concurrency, started_at, lease_until, token)
+     VALUES ($1, $2::text[], $3, now() - interval '15 minutes', now() - interval '5 minutes', gen_random_uuid())`,
+    [seedConfig.expiredWorkerId, seedConfig.expiredWorkerTypeNames, seedConfig.workerConcurrency],
+  );
 
   // --- Block: Pending jobs (created at t=base, earliest createdAt) ---
   const pendingIds: Record<string, string> = {};
@@ -56,9 +80,9 @@ export const fastSeedAllStates = async <TTxContext extends BaseTxContext>(
     const rows = await exec(
       `WITH ids AS (SELECT gen_random_uuid() AS id, gs.i FROM generate_series(0, $2 - 1) AS gs(i))
        INSERT INTO ${job} (id, type_name, chain_id, chain_index, input, status, chain_status,
-                           attempt, attempt_at, attempt_by, attempt_until, created_at)
+                           attempt, attempt_at, attempt_by, attempt_token, created_at)
        SELECT ids.id, $1, ids.id, 0, jsonb_build_object('index', ids.i), 'running', 'running',
-              1, now(), '${seedConfig.workerId}', now() + interval '${seedConfig.attemptMs} milliseconds',
+              1, now(), '${seedConfig.workerId}', gen_random_uuid(),
               now() - interval '9 minutes'
        FROM ids RETURNING id`,
       [typeName, count],
@@ -285,20 +309,31 @@ export const fastSeedAllStates = async <TTxContext extends BaseTxContext>(
   await exec(
     `WITH ids AS (SELECT gen_random_uuid() AS id, gs.i FROM generate_series(0, $2 - 1) AS gs(i))
      INSERT INTO ${job} (id, type_name, chain_id, chain_index, input, status, chain_status,
-                         attempt, attempt_at, attempt_by, attempt_until)
+                         attempt, attempt_at, attempt_by, attempt_token)
      SELECT ids.id, $1, ids.id, 0, jsonb_build_object('index', ids.i), 'running', 'running',
-            1, now(), '${seedConfig.workerId}', now() + interval '${seedConfig.attemptMs} milliseconds'
+            1, now(), '${seedConfig.workerId}', gen_random_uuid()
      FROM ids RETURNING id`,
     ["seed:throwaway:running", seedConfig.throwawayRunning * scale],
   );
 
-  // --- Block: Throwaway expired running (attempt_until in the past for reclaimExpiredJobAttempts) ---
+  // --- Block: Busy worker (running jobs bounded by its concurrency) ---
   await exec(
     `WITH ids AS (SELECT gen_random_uuid() AS id, gs.i FROM generate_series(0, $2 - 1) AS gs(i))
      INSERT INTO ${job} (id, type_name, chain_id, chain_index, input, status, chain_status,
-                         attempt, attempt_at, attempt_by, attempt_until, created_at)
+                         attempt, attempt_at, attempt_by, attempt_token)
      SELECT ids.id, $1, ids.id, 0, jsonb_build_object('index', ids.i), 'running', 'running',
-            1, now() - interval '10 minutes', '${seedConfig.workerId}', now() - interval '5 minutes',
+            1, now(), '${seedConfig.busyWorkerId}', gen_random_uuid()
+     FROM ids RETURNING id`,
+    ["seed:busy", seedConfig.workerConcurrency],
+  );
+
+  // --- Block: Throwaway expired running (held by the expired worker) ---
+  await exec(
+    `WITH ids AS (SELECT gen_random_uuid() AS id, gs.i FROM generate_series(0, $2 - 1) AS gs(i))
+     INSERT INTO ${job} (id, type_name, chain_id, chain_index, input, status, chain_status,
+                         attempt, attempt_at, attempt_by, attempt_token, created_at)
+     SELECT ids.id, $1, ids.id, 0, jsonb_build_object('index', ids.i), 'running', 'running',
+            1, now() - interval '10 minutes', '${seedConfig.expiredWorkerId}', gen_random_uuid(),
             now() - interval '15 minutes'
      FROM ids RETURNING id`,
     ["seed:throwaway:expired", seedConfig.throwawayExpiredRunning * scale],
@@ -384,6 +419,10 @@ export const fastSeedAllStates = async <TTxContext extends BaseTxContext>(
     nonIndependent: {
       chainId: nonIndependentChainId as string,
       count: nonIndependentCount,
+    },
+    workers: {
+      idleWorkerIds: seedConfig.idleWorkers.map((idleWorker) => idleWorker.id),
+      busyWorkerId: seedConfig.busyWorkerId,
     },
     throwaway: {
       pendingTypeName: "seed:throwaway:pending",

@@ -1,25 +1,17 @@
-import { randomUUID } from "node:crypto";
-
-import {
-  raceWithSleep,
-  type ParallelExecutor,
-  createParallelExecutor,
-  serializeError,
-} from "@queuert/helpers";
+import { sleep } from "@queuert/helpers";
 
 import {
   type AnyAttemptMiddleware,
   type AttemptMiddleware,
   type IsAttemptMiddlewareSubsequence,
 } from "./attempt-middleware/attempt-middleware.js";
-import { type AttemptConfig, attemptConfigViolations } from "./attempt/attempt-config.js";
-import { runAttempt } from "./attempt/attempt-handler.js";
 import { type Client, helpersSymbol } from "./client.js";
-import { type BackoffConfig, backoffConfigViolations } from "./entities/backoff.js";
-import { withRetry } from "./entities/retry.js";
-import { JobAttemptExpiredError } from "./errors.js";
 import {
-  type InProcessWorkerProcessor,
+  type BackoffConfig,
+  backoffConfigViolations,
+  calculateBackoffMs,
+} from "./entities/backoff.js";
+import {
   type Processors,
   processorAttemptMiddlewareSymbol,
 } from "./job-type-processors/job-type-processors.js";
@@ -29,70 +21,10 @@ import {
   mergeProcessors,
 } from "./job-type-processors/merge-job-type-processors.js";
 import { type BaseJobTypeDefinitions } from "./job-types/job-type.js";
-import { type NotifyAdapter } from "./notify-adapter/notify-adapter.js";
-import { type StateAdapter, type StateJob } from "./state-adapter/state-adapter.js";
-
-/** Per-processor runtime stamp carrying the middleware tuple of the originating slice. @internal */
-type StampedProcessor = InProcessWorkerProcessor<any, any, any, any> & {
-  readonly [processorAttemptMiddlewareSymbol]: readonly AnyAttemptMiddleware[];
-};
-
-const waitForNextJob = async ({
-  stateAdapter,
-  notifyAdapter,
-  typeNames,
-  pollIntervalMs,
-  executor,
-  signal,
-}: {
-  stateAdapter: StateAdapter<any, any>;
-  notifyAdapter: NotifyAdapter;
-  typeNames: string[];
-  pollIntervalMs: number;
-  executor: ParallelExecutor<any>;
-  signal: AbortSignal;
-}): Promise<void> => {
-  const { promise: slotAvailable, resolve: onSlotAvailable } = Promise.withResolvers<void>();
-  const disposeSlotAvailable = executor.onIdleSlot(onSlotAvailable);
-  try {
-    if (signal.aborted) {
-      return;
-    }
-
-    if (executor.idleSlots() === 0) {
-      await raceWithSleep(slotAvailable, pollIntervalMs, {
-        jitterMs: pollIntervalMs / 10,
-        signal,
-      });
-      return;
-    }
-
-    const { promise: notified, resolve: onNotification } = Promise.withResolvers<void>();
-    let disposeNotified: () => Promise<void> = async () => {};
-    try {
-      disposeNotified = await notifyAdapter.listenJobScheduled(typeNames, () => {
-        onNotification();
-      });
-    } catch {}
-
-    try {
-      const startAttemptDelayMs = await stateAdapter.getStartAttemptDelayMs({ typeNames });
-      const pullDelayMs = Math.min(startAttemptDelayMs ?? pollIntervalMs, pollIntervalMs);
-
-      if (signal.aborted) {
-        return;
-      }
-      await raceWithSleep(Promise.race([slotAvailable, notified]), pullDelayMs, {
-        jitterMs: pullDelayMs / 10,
-        signal,
-      });
-    } finally {
-      await disposeNotified();
-    }
-  } finally {
-    disposeSlotAvailable();
-  }
-};
+import { resolveWorkerId } from "./state-adapter/adapter-config.js";
+import { type GetStateAdapterWorkerId, type StateAdapter } from "./state-adapter/state-adapter.js";
+import { type StampedProcessor, runWorker } from "./worker/run-worker.js";
+import { type WorkerLeaseConfig, workerLeaseConfigViolations } from "./worker/worker-lease.js";
 
 /** Merged-processor view of a scalar-or-array input. @internal */
 type WorkerProcessorDefs<T> = T extends readonly Processors[]
@@ -167,75 +99,82 @@ export type InProcessWorker = {
 };
 
 /**
- * Per-attempt defaults applied to every job type the worker processes,
- * unless overridden by the matching processor entry.
- */
-export type InProcessWorkerDefaults = {
-  /** Default backoff for failed job attempts. Overridden by per-processor `backoffConfig`. */
-  backoffConfig?: BackoffConfig;
-  /** Default attempt timeout and heartbeat. Overridden by per-processor `attemptConfig`. */
-  attemptConfig?: AttemptConfig;
-};
-
-/**
  * Create an in-process worker for processing jobs.
  *
- * Per-attempt configuration (`attemptMiddleware`, `backoffConfig`,
- * `attemptConfig`) lives on the **processor registry** (see {@link createProcessors}).
- * The worker dispatches to whichever processor matches the job's typeName and
- * runs that slice's middleware chain. Worker-level `defaults` provide fallbacks
- * for processors that don't set `backoffConfig` / `attemptConfig` themselves;
- * precedence is processor > worker `defaults` > built-in defaults.
+ * Per-attempt configuration (`attemptMiddleware`, `backoffConfig`) lives on the **processor
+ * registry** (see {@link createProcessors}). The worker dispatches to whichever processor
+ * matches the job's typeName and runs that slice's middleware chain. The worker-level
+ * `backoffConfig` is the fallback for processors that don't set their own; precedence is
+ * processor > worker > built-in default.
+ *
+ * The in-process worker registers one worker at a time under `workerId`, a row with a lease it
+ * renews. When the lease is lost, it aborts the attempts' signals, waits for every attempt to
+ * end and registers again under the same id.
  *
  * @param options - Worker configuration.
- * @throws {TypeError} When `workerName` is malformed, or when `recoveryBackoffConfig`,
- * `defaults` or any processor's `backoffConfig` / `attemptConfig` holds an invalid value;
- * the message lists every invalid field.
+ * @throws {TypeError} When `recoveryBackoffConfig`, `lease`, `backoffConfig` or any processor's
+ * `backoffConfig` holds an invalid value; the message lists every invalid field.
+ * @throws {@link InvalidWorkerIdError} if `workerId` fails the state adapter's
+ * `validateWorkerId`.
  * @throws {@link DuplicateJobTypeError} if slices in a `processors` array share job types.
  */
 export const createInProcessWorker = async <
   TJobTypeDefinitions extends BaseJobTypeDefinitions,
-  TStateAdapter extends StateAdapter<any, any>,
+  TStateAdapter extends StateAdapter<any, any, any>,
   const TProcessorsInput extends Processors | readonly Processors[] = Processors,
   const TRequiredAttemptMiddleware extends readonly AnyAttemptMiddleware[] = readonly [],
 >({
   client,
-  workerName,
+  workerId: workerIdOption,
   concurrency,
   pollIntervalMs: pollIntervalMsOption,
   recoveryBackoffConfig: recoveryBackoffConfigOption,
-  defaults: defaultsOption,
+  lease: leaseOption,
+  backoffConfig: backoffConfigOption,
   requiredAttemptMiddleware: requiredAttemptMiddlewareOption,
   processors: processorsOption,
 }: {
   /** The Queuert client to process jobs for. */
   client: Client<TJobTypeDefinitions, TStateAdapter>;
   /**
-   * Optional human-readable label included in the worker id (which is always
-   * suffixed with a random UUID to guarantee uniqueness across replicas). Must
-   * match `/^[A-Za-z0-9._-]+$/` when provided.
+   * Id the worker registers under, kept across restarts. While a live worker holds it, the
+   * worker waits for that lease to expire before it starts.
+   *
+   * @defaultValue the state adapter's `generateWorkerId()`
    */
-  workerName?: string;
-  /** Maximum number of jobs to process in parallel. Defaults to 1. */
+  workerId?: GetStateAdapterWorkerId<TStateAdapter>;
+  /**
+   * Maximum number of jobs to process in parallel.
+   *
+   * @defaultValue `1`
+   */
   concurrency?: number;
   /**
    * How often to poll for new jobs when no notify adapter wakes the worker.
-   * Defaults to 60s.
+   *
+   * @defaultValue `60_000`
    */
   pollIntervalMs?: number;
-  /** Backoff configuration for the worker loop itself (not job retries). */
-  recoveryBackoffConfig?: BackoffConfig;
-  /** Fallback `backoffConfig` / `attemptConfig` for processors that don't set their own. */
-  defaults?: InProcessWorkerDefaults;
   /**
-   * Middleware instances that every dispatched processor's slice must include
-   * as an in-order subsequence. Enforced both at compile time (against the
-   * slice middleware tuple inferred by {@link createProcessors}) and at runtime
-   * by reference-identity (`===`). The worker does not execute this middleware
-   * itself — slices run their own chains.
+   * Backoff after a failed worker loop iteration, a failed registration or a lost lease. It
+   * resets once the worker starts a job.
    *
-   * Same adapter guard as `createProcessors`'s `attemptMiddleware`.
+   * @defaultValue `{ initialDelayMs: 10_000, multiplier: 2, maxDelayMs: 300_000 }`
    */
+  recoveryBackoffConfig?: BackoffConfig;
+  /**
+   * The lease the in-process worker registers its worker with.
+   *
+   * @defaultValue `{ durationMs: 60_000, heartbeatMs: 15_000 }`
+   */
+  lease?: WorkerLeaseConfig;
+  /**
+   * Backoff for failed job attempts of processors that don't set their own `backoffConfig`.
+   *
+   * @defaultValue `{ initialDelayMs: 10_000, multiplier: 2, maxDelayMs: 300_000 }`
+   */
+  backoffConfig?: BackoffConfig;
+  /** Middleware every processor's slice must include, in this order. The worker does not run it. */
   requiredAttemptMiddleware?: TRequiredAttemptMiddleware &
     readonly AttemptMiddleware<TStateAdapter, any>[];
   /**
@@ -301,29 +240,22 @@ export const createInProcessWorker = async <
     multiplier: 2.0,
     maxDelayMs: 300_000,
   };
-  const defaultBackoffConfig = defaultsOption?.backoffConfig ?? {
+  const defaultBackoffConfig = backoffConfigOption ?? {
     initialDelayMs: 10_000,
     multiplier: 2.0,
     maxDelayMs: 300_000,
   };
-  const defaultAttemptConfig = defaultsOption?.attemptConfig ?? {
-    timeoutMs: 60_000,
-    heartbeatMs: 30_000,
-  };
+  const leaseConfig = leaseOption ?? { durationMs: 60_000, heartbeatMs: 15_000 };
   const configViolations = [
     ...backoffConfigViolations("recoveryBackoffConfig", recoveryBackoffConfig),
-    ...backoffConfigViolations("defaults.backoffConfig", defaultBackoffConfig),
-    ...attemptConfigViolations("defaults.attemptConfig", defaultAttemptConfig),
-    ...typeNames.flatMap((typeName) => [
-      ...backoffConfigViolations(
+    ...workerLeaseConfigViolations("lease", leaseConfig),
+    ...backoffConfigViolations("backoffConfig", defaultBackoffConfig),
+    ...typeNames.flatMap((typeName) =>
+      backoffConfigViolations(
         `processors["${typeName}"].backoffConfig`,
         processors[typeName].backoffConfig,
       ),
-      ...attemptConfigViolations(
-        `processors["${typeName}"].attemptConfig`,
-        processors[typeName].attemptConfig,
-      ),
-    ]),
+    ),
   ];
   if (configViolations.length > 0) {
     throw new TypeError(
@@ -331,143 +263,45 @@ export const createInProcessWorker = async <
     );
   }
   const concurrencyValue = concurrency ?? 1;
-  if (workerName !== undefined && !/^[A-Za-z0-9._-]+$/.test(workerName)) {
-    throw new TypeError(
-      `createInProcessWorker: workerName must be a non-empty string of letters, digits, '.', '_', or '-' (got ${JSON.stringify(workerName)})`,
-    );
-  }
-  const workerId = workerName ? `${workerName}-${randomUUID()}` : randomUUID();
-  const timeoutMsByTypeName = Object.fromEntries(
-    typeNames.map((typeName) => [
-      typeName,
-      (processors[typeName].attemptConfig ?? defaultAttemptConfig).timeoutMs,
-    ]),
-  );
+  const workerId = resolveWorkerId(client[helpersSymbol].stateAdapter.config, workerIdOption);
 
   return {
     start: async (): Promise<() => Promise<void>> => {
       const helpers = client[helpersSymbol];
-      const { stateAdapter, notifyAdapter, observabilityHelper } = helpers;
-
-      observabilityHelper.workerStarted({ workerId, jobTypeNames: typeNames });
-      observabilityHelper.jobTypeIdleChange(concurrencyValue, workerId, typeNames);
-
       const stopController = new AbortController();
-      const executor = createParallelExecutor(concurrencyValue);
-      const jobIdsInProgress = new Set<string>();
 
-      const dispatchJob = (stateJob: StateJob & { hasBlockers: boolean }) => {
-        jobIdsInProgress.add(stateJob.id);
-        void executor.add(async () => {
-          observabilityHelper.jobTypeProcessingChange(1, stateJob, workerId);
-          observabilityHelper.jobTypeIdleChange(-1, workerId, typeNames);
-          try {
-            const jobTypeProcessor = processors[stateJob.typeName];
-            if (!jobTypeProcessor) {
-              throw new Error(`No attempt handler registered for job type "${stateJob.typeName}"`);
-            }
-            await runAttempt({
-              helpers,
-              attemptHandler: jobTypeProcessor.attemptHandler,
-              stateJob,
-              backoffConfig: jobTypeProcessor.backoffConfig ?? defaultBackoffConfig,
-              attemptConfig: jobTypeProcessor.attemptConfig ?? defaultAttemptConfig,
-              workerId,
-              attemptMiddleware: jobTypeProcessor[processorAttemptMiddlewareSymbol],
-              stopSignal: stopController.signal,
-            });
-          } catch (error) {
-            observabilityHelper.workerError({ workerId }, error);
-          } finally {
-            jobIdsInProgress.delete(stateJob.id);
-            observabilityHelper.jobTypeIdleChange(1, workerId, typeNames);
-            observabilityHelper.jobTypeProcessingChange(-1, stateJob, workerId);
-          }
-        });
-      };
-
-      const runWorkerIteration = async () => {
-        try {
-          while (executor.idleSlots() > 0) {
-            const limit = executor.idleSlots();
-            const stateJobs = await stateAdapter.startJobAttempts({
-              timeoutMsByTypeName,
-              workerId,
-              limit,
-            });
-            for (const stateJob of stateJobs) {
-              dispatchJob(stateJob);
-            }
-            if (stateJobs.length < limit) {
-              break;
-            }
-          }
-
-          if (stopController.signal.aborted) {
-            return;
-          }
-
-          if (executor.idleSlots() > 0) {
-            const reclaimedJobs = await stateAdapter.reclaimExpiredJobAttempts({
-              typeNames,
-              ignoredJobIds: Array.from(jobIdsInProgress),
-              lastAttemptError: serializeError(
-                new JobAttemptExpiredError(
-                  "Job attempt expired before the holding worker extended it",
-                  { reclaimedBy: workerId },
-                ),
-              ),
-              limit: executor.idleSlots(),
-            });
-
-            for (const reclaimed of reclaimedJobs) {
-              observabilityHelper.jobAttemptReclaimed(reclaimed, { workerId });
-            }
-            if (reclaimedJobs.length > 0) {
-              await notifyAdapter
-                .notifyJobAttemptsLost(reclaimedJobs.map((reclaimed) => reclaimed.id))
-                .catch(() => {});
-            }
-
-            if (stopController.signal.aborted) {
-              return;
-            }
-
-            if (reclaimedJobs.length > 0) {
-              return;
-            }
-          }
-
-          await waitForNextJob({
-            stateAdapter,
-            notifyAdapter,
-            typeNames,
-            pollIntervalMs,
-            executor,
-            signal: stopController.signal,
-          });
-        } catch (error) {
-          observabilityHelper.workerError({ workerId }, error);
-          throw error;
-        }
-      };
-
-      const runWorkerLoop = async () => {
+      const runWorkers = async () => {
+        let failures = 0;
         while (!stopController.signal.aborted) {
-          await withRetry(runWorkerIteration, recoveryBackoffConfig, {
+          const startedJob = await runWorker({
+            helpers,
+            workerId,
+            typeNames,
+            processors,
+            concurrency: concurrencyValue,
+            pollIntervalMs,
+            recoveryBackoffConfig,
+            defaultBackoffConfig,
+            leaseConfig,
+            stopSignal: stopController.signal,
+          }).catch((error: unknown) => {
+            helpers.observabilityHelper.workerError({ workerId }, error);
+            return false;
+          });
+          failures = startedJob ? 1 : failures + 1;
+          await sleep(calculateBackoffMs(failures, recoveryBackoffConfig), {
             signal: stopController.signal,
           });
         }
       };
 
-      const runWorkerLoopPromise = runWorkerLoop().catch(() => {});
+      const runWorkersPromise = runWorkers().catch((error: unknown) => {
+        helpers.observabilityHelper.workerError({ workerId }, error);
+      });
 
       return async () => {
         stopController.abort();
-        await runWorkerLoopPromise;
-        await executor.drain();
-        observabilityHelper.jobTypeIdleChange(-concurrencyValue, workerId, typeNames);
-        observabilityHelper.workerStopped({ workerId });
+        await runWorkersPromise;
       };
     },
   };

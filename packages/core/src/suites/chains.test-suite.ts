@@ -828,7 +828,7 @@ export const chainsTestSuite = ({ it }: { it: TestAPI<TestSuiteContext> }): void
 
   it("continueWith accepts caller-supplied id", async ({
     stateAdapter,
-    generateId,
+    generateJobId,
     notifyAdapter,
     withTransaction,
     withWorkers,
@@ -848,7 +848,7 @@ export const chainsTestSuite = ({ it }: { it: TestAPI<TestSuiteContext> }): void
       jobTypes,
     });
 
-    const userId = generateId();
+    const userId = generateJobId();
 
     const worker = await createInProcessWorker({
       client,
@@ -889,7 +889,7 @@ export const chainsTestSuite = ({ it }: { it: TestAPI<TestSuiteContext> }): void
     });
   });
 
-  it("continueWith rejects caller-supplied id that fails validateId", async ({
+  it("continueWith rejects caller-supplied id that fails validateJobId", async ({
     stateAdapter,
     notifyAdapter,
     withTransaction,
@@ -905,7 +905,7 @@ export const chainsTestSuite = ({ it }: { it: TestAPI<TestSuiteContext> }): void
     const client = await createClient({
       stateAdapter: {
         ...stateAdapter,
-        config: { ...stateAdapter.config, validateId: (id) => id !== "bad-id" },
+        config: { ...stateAdapter.config, validateJobId: (id) => id !== "bad-id" },
       },
       notifyAdapter,
       observabilityAdapter,
@@ -965,7 +965,7 @@ export const chainsTestSuite = ({ it }: { it: TestAPI<TestSuiteContext> }): void
 
   it("continueWith duplicate caller-supplied id errors", async ({
     stateAdapter,
-    generateId,
+    generateJobId,
     notifyAdapter,
     withTransaction,
     withWorkers,
@@ -985,7 +985,7 @@ export const chainsTestSuite = ({ it }: { it: TestAPI<TestSuiteContext> }): void
       jobTypes,
     });
 
-    const sharedId = generateId();
+    const sharedId = generateJobId();
     let collisionOccurred = false;
 
     const worker = await createInProcessWorker({

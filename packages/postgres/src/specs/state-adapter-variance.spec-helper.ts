@@ -7,7 +7,7 @@ import { createPgPoolProvider } from "../state-provider/state-provider.pg-pool.j
 
 export type VarianceFixtures = {
   pool: Pool;
-  stateAdapter: StateAdapter<{ $test: true }, string>;
+  stateAdapter: StateAdapter<{ $test: true }, string, string>;
   transactionConcurrency: "concurrent" | "serialized";
   tableNames: string[];
 };
@@ -17,9 +17,12 @@ export const extendWithVarianceStatePg = <T extends { postgresConnectionString: 
   options: {
     schema: string;
     tablePrefix?: string;
-    idType?: string;
-    generateId?: () => string;
-    validateId?: (id: string) => boolean;
+    jobIdType?: string;
+    workerIdType?: string;
+    generateJobId?: () => string;
+    validateJobId?: (id: string) => boolean;
+    generateWorkerId?: () => string;
+    validateWorkerId?: (id: string) => boolean;
     maxBlockersPerJob?: number;
     countCap?: number;
   },
@@ -43,7 +46,7 @@ export const extendWithVarianceStatePg = <T extends { postgresConnectionString: 
         const stateProvider = createPgPoolProvider({ pool });
         const adapter = await createPgStateAdapter({ stateProvider, ...options });
         await adapter.migrateToLatest();
-        return use(adapter as unknown as StateAdapter<{ $test: true }, string>);
+        return use(adapter as unknown as StateAdapter<{ $test: true }, string, string>);
       },
       { scope: "test" },
     ],

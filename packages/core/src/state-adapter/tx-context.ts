@@ -10,7 +10,7 @@ export const normalizeTxCtx = <T extends Record<string, unknown>>(rest: T): T | 
  * this is the backstop for callers that bypass them.
  */
 export const requireTxCtx = <T extends Record<string, unknown>>(
-  stateAdapter: StateAdapter<any, any>,
+  stateAdapter: StateAdapter<any, any, any>,
   rest: T,
   caller: string,
 ): T => {

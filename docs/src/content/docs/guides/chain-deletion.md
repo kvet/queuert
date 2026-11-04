@@ -15,6 +15,8 @@ await withTransactionHooks(async (transactionHooks) =>
 );
 ```
 
+When a deleted chain has a running job, its attempt is notified as lost: with a notify adapter configured, the handler's `signal` aborts, and its `complete` throws `JobNotFoundError`.
+
 Use `deleteChain` to target a single chain — it returns the deleted chain or `undefined` if no chain with that ID exists. `deleteChains` silently skips missing IDs and returns the chains that were actually deleted. Both calls are idempotent:
 
 ```ts

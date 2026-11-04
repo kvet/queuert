@@ -21,9 +21,9 @@ const isMac = (): boolean => /Mac|iPhone|iPad/.test(navigator.userAgent);
 const DOCS_URL = "https://kvet.github.io/queuert/";
 
 const navItems = [
-  { href: "/", label: "Overview", match: (path: string) => path === "/" },
   { href: "/chains/types", label: "Chains", match: (path: string) => path.startsWith("/chains") },
   { href: "/jobs/types", label: "Jobs", match: (path: string) => path.startsWith("/jobs") },
+  { href: "/workers", label: "Workers", match: (path: string) => path.startsWith("/workers") },
 ];
 
 export const TopBar = () => {

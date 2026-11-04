@@ -7,17 +7,22 @@ export type SpyCall = {
   result?: unknown;
 };
 
-export type SpyStateAdapter<TTxContext extends BaseTxContext, TJobId extends string> = StateAdapter<
-  TTxContext,
-  TJobId
-> & {
+export type SpyStateAdapter<
+  TTxContext extends BaseTxContext,
+  TJobId extends string,
+  TWorkerId extends string,
+> = StateAdapter<TTxContext, TJobId, TWorkerId> & {
   calls: SpyCall[];
   record: (args: { name: string } & TTxContext) => Promise<SpyCall>;
 };
 
-export const createSpyStateAdapter = <TTxContext extends BaseTxContext, TJobId extends string>(
-  stateAdapter: StateAdapter<TTxContext, TJobId>,
-): SpyStateAdapter<TTxContext, TJobId> => {
+export const createSpyStateAdapter = <
+  TTxContext extends BaseTxContext,
+  TJobId extends string,
+  TWorkerId extends string,
+>(
+  stateAdapter: StateAdapter<TTxContext, TJobId, TWorkerId>,
+): SpyStateAdapter<TTxContext, TJobId, TWorkerId> => {
   const calls: SpyCall[] = [];
   const weakMap = new WeakMap<symbol, SpyCall>();
 
@@ -63,6 +68,7 @@ export const createSpyStateAdapter = <TTxContext extends BaseTxContext, TJobId e
     isTransaction: (txCtx) => stateAdapter.isTransaction(txCtx),
     getChains: wrap("getChains", stateAdapter.getChains),
     getJobs: wrap("getJobs", stateAdapter.getJobs),
+    getWorkers: wrap("getWorkers", stateAdapter.getWorkers),
     createJobs: wrap("createJobs", stateAdapter.createJobs),
     continueJobs: wrap("continueJobs", stateAdapter.continueJobs),
     completeJobs: wrap("completeJobs", stateAdapter.completeJobs),
@@ -70,22 +76,28 @@ export const createSpyStateAdapter = <TTxContext extends BaseTxContext, TJobId e
     deleteChains: wrap("deleteChains", stateAdapter.deleteChains),
     startJobAttempts: wrap("startJobAttempts", stateAdapter.startJobAttempts),
     getStartAttemptDelayMs: wrap("getStartAttemptDelayMs", stateAdapter.getStartAttemptDelayMs),
-    extendJobAttempt: wrap("extendJobAttempt", stateAdapter.extendJobAttempt),
-    reclaimExpiredJobAttempts: wrap(
-      "reclaimExpiredJobAttempts",
-      stateAdapter.reclaimExpiredJobAttempts,
-    ),
     addJobsBlockers: wrap("addJobsBlockers", stateAdapter.addJobsBlockers),
     getJobBlockers: wrap("getJobBlockers", stateAdapter.getJobBlockers),
     unblockJobs: wrap("unblockJobs", stateAdapter.unblockJobs),
-    listChainTypeNames: wrap("listChainTypeNames", stateAdapter.listChainTypeNames),
-    listJobTypeNames: wrap("listJobTypeNames", stateAdapter.listJobTypeNames),
-    countByChainTypeNames: wrap("countByChainTypeNames", stateAdapter.countByChainTypeNames),
-    countByJobTypeNames: wrap("countByJobTypeNames", stateAdapter.countByJobTypeNames),
+    startWorker: wrap("startWorker", stateAdapter.startWorker),
+    extendWorkerLease: wrap("extendWorkerLease", stateAdapter.extendWorkerLease),
+    stopWorker: wrap("stopWorker", stateAdapter.stopWorker),
+    getChainTypeNames: wrap("getChainTypeNames", stateAdapter.getChainTypeNames),
+    getJobTypeNames: wrap("getJobTypeNames", stateAdapter.getJobTypeNames),
+    countChainsByTypeName: wrap("countChainsByTypeName", stateAdapter.countChainsByTypeName),
+    countJobsByTypeName: wrap("countJobsByTypeName", stateAdapter.countJobsByTypeName),
+    countWorkers: wrap("countWorkers", stateAdapter.countWorkers),
+    countWorkersByTypeName: wrap("countWorkersByTypeName", stateAdapter.countWorkersByTypeName),
+    countRunningJobsByWorkerId: wrap(
+      "countRunningJobsByWorkerId",
+      stateAdapter.countRunningJobsByWorkerId,
+    ),
     listChains: wrap("listChains", stateAdapter.listChains),
     listJobs: wrap("listJobs", stateAdapter.listJobs),
     listChainJobs: wrap("listChainJobs", stateAdapter.listChainJobs),
     listBlockedJobs: wrap("listBlockedJobs", stateAdapter.listBlockedJobs),
+    listWorkers: wrap("listWorkers", stateAdapter.listWorkers),
+    listWorkerJobs: wrap("listWorkerJobs", stateAdapter.listWorkerJobs),
     close: stateAdapter.close,
     record: async ({ name, ...txCtx }: { name: string } & TTxContext) =>
       record({ name, txCtx: txCtx as unknown as TTxContext }),

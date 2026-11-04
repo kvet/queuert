@@ -4,7 +4,7 @@ import { type TestAPI, expect, expectTypeOf } from "vitest";
 import { type AttemptMiddleware } from "../attempt-middleware/attempt-middleware.js";
 import { createClient } from "../client.js";
 import { type Chain } from "../entities/chain.js";
-import { JobAlreadyCompletedError } from "../errors.js";
+import { JobAlreadyCompletedError, JobTakenByAnotherWorkerError } from "../errors.js";
 import { createInProcessWorker } from "../in-process-worker.js";
 import { createProcessors } from "../job-type-processors/create-job-type-processors.js";
 import { omitProcessors, pickProcessors } from "../job-type-processors/pick-job-type-processors.js";
@@ -837,6 +837,949 @@ export const workerTestSuite = ({ it }: { it: TestAPI<TestSuiteContext> }): void
         1,
       );
       await Promise.all(chains.map(async (chain) => client.awaitChain(chain, completionOptions)));
+    });
+  });
+
+  it("completes an attempt that outlives the lease duration", async ({
+    stateAdapter,
+    notifyAdapter,
+    withTransaction,
+    withWorkers,
+    observabilityAdapter,
+    log,
+  }) => {
+    const jobTypes = defineJobTypes<{
+      test: { entry: true; input: null; output: null };
+    }>();
+
+    const client = await createClient({
+      stateAdapter,
+      notifyAdapter,
+      observabilityAdapter,
+      log,
+      jobTypes,
+    });
+    const lease = { durationMs: 300, heartbeatMs: 50 };
+    const worker = await createInProcessWorker({
+      client,
+      lease,
+      processors: createProcessors({
+        client,
+        jobTypes,
+        processors: {
+          test: {
+            attemptHandler: async ({ signal, complete }) => {
+              await sleep(lease.durationMs * 2);
+              expect(signal.aborted).toBe(false);
+              return withTransaction(async (txCtx, transactionHooks) =>
+                complete({ ...txCtx, transactionHooks, output: null }),
+              );
+            },
+          },
+        },
+      }),
+    });
+
+    const chain = await withTransaction(async (txCtx, transactionHooks) =>
+      client.createChain({ ...txCtx, transactionHooks, typeName: "test", input: null }),
+    );
+
+    await withWorkers([await worker.start()], async () => {
+      await client.awaitChain(chain, completionOptions);
+    });
+
+    expect(await client.getJob({ id: chain.id })).toMatchObject({
+      status: "completed",
+      attempt: 1,
+    });
+  });
+
+  it("registers under the configured workerId", async ({
+    stateAdapter,
+    notifyAdapter,
+    withWorkers,
+    observabilityAdapter,
+    log,
+  }) => {
+    const jobTypes = defineJobTypes<{
+      test: { entry: true; input: null; output: null };
+    }>();
+
+    const client = await createClient({
+      stateAdapter,
+      notifyAdapter,
+      observabilityAdapter,
+      log,
+      jobTypes,
+    });
+    const workerId = stateAdapter.config.generateWorkerId();
+    const worker = await createInProcessWorker({
+      client,
+      workerId,
+      processors: createProcessors({
+        client,
+        jobTypes,
+        processors: { test: { attemptHandler: async () => undefined as never } },
+      }),
+    });
+
+    await withWorkers([await worker.start()], async () => {
+      await expect.poll(async () => client.getWorker({ id: workerId })).toBeDefined();
+    });
+  });
+
+  it("registers under the state adapter's generateWorkerId by default", async ({
+    stateAdapter,
+    notifyAdapter,
+    withWorkers,
+    observabilityAdapter,
+    log,
+  }) => {
+    const jobTypes = defineJobTypes<{
+      test: { entry: true; input: null; output: null };
+    }>();
+
+    const workerId = stateAdapter.config.generateWorkerId();
+    const client = await createClient({
+      stateAdapter: {
+        ...stateAdapter,
+        config: { ...stateAdapter.config, generateWorkerId: () => workerId },
+      },
+      notifyAdapter,
+      observabilityAdapter,
+      log,
+      jobTypes,
+    });
+    const worker = await createInProcessWorker({
+      client,
+      processors: createProcessors({
+        client,
+        jobTypes,
+        processors: { test: { attemptHandler: async () => undefined as never } },
+      }),
+    });
+
+    await withWorkers([await worker.start()], async () => {
+      await expect.poll(async () => client.getWorker({ id: workerId })).toBeDefined();
+    });
+  });
+
+  it("deletes its worker row on stop", async ({
+    stateAdapter,
+    notifyAdapter,
+    withWorkers,
+    observabilityAdapter,
+    log,
+  }) => {
+    const jobTypes = defineJobTypes<{
+      test: { entry: true; input: null; output: null };
+    }>();
+
+    const client = await createClient({
+      stateAdapter,
+      notifyAdapter,
+      observabilityAdapter,
+      log,
+      jobTypes,
+    });
+    const workerId = stateAdapter.config.generateWorkerId();
+    const worker = await createInProcessWorker({
+      client,
+      workerId,
+      processors: createProcessors({
+        client,
+        jobTypes,
+        processors: { test: { attemptHandler: async () => undefined as never } },
+      }),
+    });
+
+    await withWorkers([await worker.start()], async () => {
+      await expect.poll(async () => client.getWorker({ id: workerId })).toBeDefined();
+    });
+
+    expect(await client.getWorker({ id: workerId })).toBeUndefined();
+  });
+
+  it("reclaims the job of an expired worker with a worker of another type and rejects its late `complete`", async ({
+    stateAdapter,
+    notifyAdapter,
+    withTransaction,
+    withWorkers,
+    observabilityAdapter,
+    log,
+  }) => {
+    const jobTypes = defineJobTypes<{
+      test: { entry: true; input: null; output: null };
+      other: { entry: true; input: null; output: null };
+    }>();
+
+    const client = await createClient({
+      stateAdapter,
+      notifyAdapter,
+      observabilityAdapter,
+      log,
+      jobTypes,
+    });
+    const leaseLosingClient = await createClient({
+      stateAdapter: { ...stateAdapter, extendWorkerLease: async () => undefined },
+      notifyAdapter,
+      observabilityAdapter,
+      log,
+      jobTypes,
+    });
+
+    const jobStarted = Promise.withResolvers<void>();
+    const handlerReleased = Promise.withResolvers<void>();
+    const lateComplete = Promise.withResolvers<unknown>();
+
+    const leaseLosingWorker = await createInProcessWorker({
+      client: leaseLosingClient,
+      lease: { durationMs: 200, heartbeatMs: 50 },
+      processors: createProcessors({
+        client: leaseLosingClient,
+        jobTypes,
+        processors: {
+          test: {
+            attemptHandler: async ({ complete }) => {
+              jobStarted.resolve();
+              await handlerReleased.promise;
+              return withTransaction(async (txCtx, transactionHooks) =>
+                complete({ ...txCtx, transactionHooks, output: null }),
+              ).catch((error: unknown) => {
+                lateComplete.resolve(error);
+                throw error;
+              });
+            },
+          },
+          other: { attemptHandler: async () => undefined as never },
+        },
+      }),
+    });
+    const otherTypeWorker = await createInProcessWorker({
+      client,
+      pollIntervalMs: 20,
+      processors: pickProcessors(
+        createProcessors({
+          client,
+          jobTypes,
+          processors: {
+            test: { attemptHandler: async () => undefined as never },
+            other: { attemptHandler: async () => undefined as never },
+          },
+        }),
+        ["other"],
+      ),
+    });
+
+    const chain = await withTransaction(async (txCtx, transactionHooks) =>
+      client.createChain({ ...txCtx, transactionHooks, typeName: "test", input: null }),
+    );
+
+    await withWorkers([await leaseLosingWorker.start()], async () => {
+      await jobStarted.promise;
+      await withWorkers([await otherTypeWorker.start()], async () => {
+        await expect
+          .poll(async () => client.getJob({ id: chain.id }), { interval: 20, timeout: 5000 })
+          .toMatchObject({
+            status: "pending",
+            lastAttemptError: expect.stringContaining("JobAttemptReclaimedError"),
+          });
+      });
+      handlerReleased.resolve();
+      await expect(lateComplete.promise).resolves.toBeInstanceOf(JobTakenByAnotherWorkerError);
+    });
+  });
+
+  it("aborts its attempts when it loses its lease and restarts under the same id", async ({
+    stateAdapter,
+    notifyAdapter,
+    withTransaction,
+    withWorkers,
+    observabilityAdapter,
+    log,
+  }) => {
+    const jobTypes = defineJobTypes<{
+      test: { entry: true; input: null; output: null };
+    }>();
+
+    const firstRenewal = new AbortController();
+    const client = await createClient({
+      stateAdapter: {
+        ...stateAdapter,
+        extendWorkerLease: async (params) => {
+          if (firstRenewal.signal.aborted) return stateAdapter.extendWorkerLease(params);
+          firstRenewal.abort();
+          return undefined;
+        },
+      },
+      notifyAdapter,
+      observabilityAdapter,
+      log,
+      jobTypes,
+    });
+    const workerId = stateAdapter.config.generateWorkerId();
+    const worker = await createInProcessWorker({
+      client,
+      workerId,
+      lease: { durationMs: 200, heartbeatMs: 50 },
+      recoveryBackoffConfig: { initialDelayMs: 20, multiplier: 1, maxDelayMs: 20 },
+      backoffConfig: { initialDelayMs: 1, multiplier: 1, maxDelayMs: 1 },
+      processors: createProcessors({
+        client,
+        jobTypes,
+        processors: {
+          test: {
+            attemptHandler: async ({ job, signal, complete }) => {
+              if (job.attempt === 1) {
+                await new Promise((resolve) => {
+                  signal.addEventListener("abort", resolve, { once: true });
+                });
+                throw new Error("aborted by the lost lease");
+              }
+              return withTransaction(async (txCtx, transactionHooks) =>
+                complete({ ...txCtx, transactionHooks, output: null }),
+              );
+            },
+          },
+        },
+      }),
+    });
+
+    const chain = await withTransaction(async (txCtx, transactionHooks) =>
+      client.createChain({ ...txCtx, transactionHooks, typeName: "test", input: null }),
+    );
+
+    await withWorkers([await worker.start()], async () => {
+      await client.awaitChain(chain, completionOptions);
+    });
+
+    expect(await client.getJob({ id: chain.id })).toMatchObject({
+      status: "completed",
+      attempt: 2,
+      completedBy: workerId,
+    });
+  });
+
+  it("waits for a live worker holding its id to expire, then reclaims its job and starts", async ({
+    stateAdapter,
+    notifyAdapter,
+    withTransaction,
+    withWorkers,
+    observabilityAdapter,
+    log,
+  }) => {
+    const jobTypes = defineJobTypes<{
+      test: { entry: true; input: null; output: null };
+    }>();
+
+    const client = await createClient({
+      stateAdapter,
+      notifyAdapter,
+      observabilityAdapter,
+      log,
+      jobTypes,
+    });
+    const leaseLosingClient = await createClient({
+      stateAdapter: { ...stateAdapter, extendWorkerLease: async () => undefined },
+      notifyAdapter,
+      observabilityAdapter,
+      log,
+      jobTypes,
+    });
+    const workerId = stateAdapter.config.generateWorkerId();
+    const jobStarted = Promise.withResolvers<void>();
+    const handlerReleased = Promise.withResolvers<void>();
+
+    const leaseLosingWorker = await createInProcessWorker({
+      client: leaseLosingClient,
+      workerId,
+      lease: { durationMs: 200, heartbeatMs: 50 },
+      processors: createProcessors({
+        client: leaseLosingClient,
+        jobTypes,
+        processors: {
+          test: {
+            attemptHandler: async () => {
+              jobStarted.resolve();
+              await handlerReleased.promise;
+              throw new Error("released after the job was reclaimed");
+            },
+          },
+        },
+      }),
+    });
+    const sameIdWorker = await createInProcessWorker({
+      client,
+      workerId,
+      recoveryBackoffConfig: { initialDelayMs: 20, multiplier: 1, maxDelayMs: 20 },
+      processors: createProcessors({
+        client,
+        jobTypes,
+        processors: {
+          test: {
+            attemptHandler: async ({ complete }) =>
+              withTransaction(async (txCtx, transactionHooks) =>
+                complete({ ...txCtx, transactionHooks, output: null }),
+              ),
+          },
+        },
+      }),
+    });
+
+    const chain = await withTransaction(async (txCtx, transactionHooks) =>
+      client.createChain({ ...txCtx, transactionHooks, typeName: "test", input: null }),
+    );
+
+    await withWorkers([await leaseLosingWorker.start()], async () => {
+      await jobStarted.promise;
+      await withWorkers([await sameIdWorker.start()], async () => {
+        await client.awaitChain(chain, completionOptions);
+      });
+      handlerReleased.resolve();
+    });
+
+    expect(await client.getJob({ id: chain.id })).toMatchObject({
+      status: "completed",
+      attempt: 2,
+      completedBy: workerId,
+    });
+  });
+
+  it("keeps the row of the run that replaced a frozen run under the same id", async ({
+    stateAdapter,
+    notifyAdapter,
+    withTransaction,
+    withWorkers,
+    observabilityAdapter,
+    log,
+  }) => {
+    const jobTypes = defineJobTypes<{
+      test: { entry: true; input: null; output: null };
+    }>();
+
+    const client = await createClient({
+      stateAdapter,
+      notifyAdapter,
+      observabilityAdapter,
+      log,
+      jobTypes,
+    });
+    const frozenClient = await createClient({
+      stateAdapter: {
+        ...stateAdapter,
+        extendWorkerLease: async ({ txCtx, workerId }) =>
+          (await stateAdapter.getWorkers({ txCtx, workerIds: [workerId] }))[0],
+      },
+      notifyAdapter,
+      observabilityAdapter,
+      log,
+      jobTypes,
+    });
+    const workerId = stateAdapter.config.generateWorkerId();
+    const jobStarted = Promise.withResolvers<void>();
+
+    const frozenWorker = await createInProcessWorker({
+      client: frozenClient,
+      workerId,
+      lease: { durationMs: 200, heartbeatMs: 50 },
+      recoveryBackoffConfig: { initialDelayMs: 20, multiplier: 1, maxDelayMs: 20 },
+      processors: createProcessors({
+        client: frozenClient,
+        jobTypes,
+        processors: {
+          test: {
+            attemptHandler: async ({ signal }) => {
+              jobStarted.resolve();
+              await new Promise((resolve) => {
+                signal.addEventListener("abort", resolve, { once: true });
+              });
+              throw new Error("aborted");
+            },
+          },
+        },
+      }),
+    });
+    const sameIdWorker = await createInProcessWorker({
+      client,
+      workerId,
+      recoveryBackoffConfig: { initialDelayMs: 20, multiplier: 1, maxDelayMs: 20 },
+      processors: createProcessors({
+        client,
+        jobTypes,
+        processors: {
+          test: {
+            attemptHandler: async ({ complete }) =>
+              withTransaction(async (txCtx, transactionHooks) =>
+                complete({ ...txCtx, transactionHooks, output: null }),
+              ),
+          },
+        },
+      }),
+    });
+
+    const chain = await withTransaction(async (txCtx, transactionHooks) =>
+      client.createChain({ ...txCtx, transactionHooks, typeName: "test", input: null }),
+    );
+
+    const stopFrozenWorker = await frozenWorker.start();
+    await withWorkers([stopFrozenWorker], async () => {
+      await jobStarted.promise;
+      await withWorkers([await sameIdWorker.start()], async () => {
+        await client.awaitChain(chain, completionOptions);
+        await stopFrozenWorker();
+
+        expect(await client.getWorker({ id: workerId })).toMatchObject({ id: workerId });
+      });
+    });
+
+    expect(await client.getJob({ id: chain.id })).toMatchObject({
+      status: "completed",
+      attempt: 2,
+      completedBy: workerId,
+    });
+  });
+
+  it("reclaims its own job left running by a failed reschedule once it is idle", async ({
+    stateAdapter,
+    notifyAdapter,
+    withTransaction,
+    withWorkers,
+    observabilityAdapter,
+    log,
+  }) => {
+    const jobTypes = defineJobTypes<{
+      test: { entry: true; input: null; output: null };
+    }>();
+
+    const firstReschedule = new AbortController();
+    const client = await createClient({
+      stateAdapter: {
+        ...stateAdapter,
+        rescheduleJobs: async (params) => {
+          if (firstReschedule.signal.aborted) return stateAdapter.rescheduleJobs(params);
+          firstReschedule.abort();
+          throw new Error("database unreachable");
+        },
+      },
+      notifyAdapter,
+      observabilityAdapter,
+      log,
+      jobTypes,
+    });
+    const worker = await createInProcessWorker({
+      client,
+      pollIntervalMs: 20,
+      processors: createProcessors({
+        client,
+        jobTypes,
+        processors: {
+          test: {
+            attemptHandler: async ({ job, complete }) => {
+              if (job.attempt === 1) throw new Error("fails before completing");
+              return withTransaction(async (txCtx, transactionHooks) =>
+                complete({ ...txCtx, transactionHooks, output: null }),
+              );
+            },
+          },
+        },
+      }),
+    });
+
+    const chain = await withTransaction(async (txCtx, transactionHooks) =>
+      client.createChain({ ...txCtx, transactionHooks, typeName: "test", input: null }),
+    );
+
+    await withWorkers([await worker.start()], async () => {
+      await client.awaitChain(chain, completionOptions);
+    });
+
+    expect(await client.getJob({ id: chain.id })).toMatchObject({
+      status: "completed",
+      attempt: 2,
+    });
+  });
+
+  it("reclaims its own job claimed by a claim that committed but threw once it is idle", async ({
+    stateAdapter,
+    notifyAdapter,
+    withTransaction,
+    withWorkers,
+    observabilityAdapter,
+    log,
+  }) => {
+    const jobTypes = defineJobTypes<{
+      test: { entry: true; input: null; output: null };
+    }>();
+
+    const firstClaim = new AbortController();
+    const client = await createClient({
+      stateAdapter: {
+        ...stateAdapter,
+        startJobAttempts: async (params) => {
+          if (firstClaim.signal.aborted) return stateAdapter.startJobAttempts(params);
+          firstClaim.abort();
+          await stateAdapter.startJobAttempts(params);
+          throw new Error("connection lost after commit");
+        },
+      },
+      notifyAdapter,
+      observabilityAdapter,
+      log,
+      jobTypes,
+    });
+    const worker = await createInProcessWorker({
+      client,
+      pollIntervalMs: 20,
+      recoveryBackoffConfig: { initialDelayMs: 10, multiplier: 1, maxDelayMs: 10 },
+      processors: createProcessors({
+        client,
+        jobTypes,
+        processors: {
+          test: {
+            attemptHandler: async ({ complete }) =>
+              withTransaction(async (txCtx, transactionHooks) =>
+                complete({ ...txCtx, transactionHooks, output: null }),
+              ),
+          },
+        },
+      }),
+    });
+
+    const chain = await withTransaction(async (txCtx, transactionHooks) =>
+      client.createChain({ ...txCtx, transactionHooks, typeName: "test", input: null }),
+    );
+
+    await withWorkers([await worker.start()], async () => {
+      await client.awaitChain(chain, completionOptions);
+    });
+
+    expect(await client.getJob({ id: chain.id })).toMatchObject({
+      status: "completed",
+      attempt: 2,
+    });
+  });
+
+  it("keeps a sibling slot's running attempt when an idle slot reclaims its own jobs", async ({
+    stateAdapter,
+    notifyAdapter,
+    withTransaction,
+    withWorkers,
+    observabilityAdapter,
+    log,
+  }) => {
+    const jobTypes = defineJobTypes<{
+      test: { entry: true; input: { slow: boolean }; output: null };
+    }>();
+
+    const slowStarted = Promise.withResolvers<void>();
+    const releaseSlow = Promise.withResolvers<void>();
+    const fastCompleted = new AbortController();
+    const reclaimPassed = Promise.withResolvers<void>();
+    const client = await createClient({
+      stateAdapter: {
+        ...stateAdapter,
+        listWorkerJobs: async (params) => {
+          const page = await stateAdapter.listWorkerJobs(params);
+          if (fastCompleted.signal.aborted) reclaimPassed.resolve();
+          return page;
+        },
+      },
+      notifyAdapter,
+      observabilityAdapter,
+      log,
+      jobTypes,
+    });
+    const worker = await createInProcessWorker({
+      client,
+      concurrency: 2,
+      pollIntervalMs: 20,
+      processors: createProcessors({
+        client,
+        jobTypes,
+        processors: {
+          test: {
+            attemptHandler: async ({ job, complete }) => {
+              if (job.input.slow) {
+                slowStarted.resolve();
+                await releaseSlow.promise;
+              }
+              return withTransaction(async (txCtx, transactionHooks) =>
+                complete({ ...txCtx, transactionHooks, output: null }),
+              );
+            },
+          },
+        },
+      }),
+    });
+
+    const slowChain = await withTransaction(async (txCtx, transactionHooks) =>
+      client.createChain({ ...txCtx, transactionHooks, typeName: "test", input: { slow: true } }),
+    );
+
+    await withWorkers([await worker.start()], async () => {
+      await slowStarted.promise;
+      const fastChain = await withTransaction(async (txCtx, transactionHooks) =>
+        client.createChain({
+          ...txCtx,
+          transactionHooks,
+          typeName: "test",
+          input: { slow: false },
+        }),
+      );
+      await client.awaitChain(fastChain, completionOptions);
+      fastCompleted.abort();
+      await reclaimPassed.promise;
+      releaseSlow.resolve();
+      await client.awaitChain(slowChain, completionOptions);
+    });
+
+    expect(await client.getJob({ id: slowChain.id })).toMatchObject({
+      status: "completed",
+      attempt: 1,
+    });
+  });
+
+  it("keeps the running attempt of a chain recreated under the id of a chain it deleted", async ({
+    stateAdapter,
+    notifyAdapter,
+    withTransaction,
+    withWorkers,
+    observabilityAdapter,
+    log,
+    generateJobId,
+  }) => {
+    const jobTypes = defineJobTypes<{
+      test: { entry: true; input: { run: "deleted" | "recreated" }; output: null };
+    }>();
+
+    const deletedStarted = Promise.withResolvers<void>();
+    const releaseDeleted = Promise.withResolvers<void>();
+    const recreatedStarted = Promise.withResolvers<void>();
+    const releaseRecreated = Promise.withResolvers<void>();
+    const deletedFinished = new AbortController();
+    const reclaimPassed = Promise.withResolvers<void>();
+    const client = await createClient({
+      stateAdapter: {
+        ...stateAdapter,
+        listWorkerJobs: async (params) => {
+          const page = await stateAdapter.listWorkerJobs(params);
+          if (deletedFinished.signal.aborted) reclaimPassed.resolve();
+          return page;
+        },
+      },
+      notifyAdapter,
+      observabilityAdapter,
+      log,
+      jobTypes,
+    });
+    const worker = await createInProcessWorker({
+      client,
+      concurrency: 2,
+      pollIntervalMs: 20,
+      processors: createProcessors({
+        client,
+        jobTypes,
+        processors: {
+          test: {
+            attemptHandler: async ({ job, complete }) => {
+              if (job.input.run === "deleted") {
+                deletedStarted.resolve();
+                await releaseDeleted.promise;
+                deletedFinished.abort();
+                throw new Error("chain was deleted");
+              }
+              recreatedStarted.resolve();
+              await releaseRecreated.promise;
+              return withTransaction(async (txCtx, transactionHooks) =>
+                complete({ ...txCtx, transactionHooks, output: null }),
+              );
+            },
+          },
+        },
+      }),
+    });
+
+    const chainId = generateJobId();
+    await withTransaction(async (txCtx, transactionHooks) =>
+      client.createChain({
+        ...txCtx,
+        transactionHooks,
+        typeName: "test",
+        id: chainId,
+        input: { run: "deleted" },
+      }),
+    );
+
+    await withWorkers([await worker.start()], async () => {
+      await deletedStarted.promise;
+      await withTransaction(async (txCtx, transactionHooks) =>
+        client.deleteChain({ ...txCtx, transactionHooks, id: chainId }),
+      );
+      const recreatedChain = await withTransaction(async (txCtx, transactionHooks) =>
+        client.createChain({
+          ...txCtx,
+          transactionHooks,
+          typeName: "test",
+          id: chainId,
+          input: { run: "recreated" },
+        }),
+      );
+      await recreatedStarted.promise;
+      releaseDeleted.resolve();
+      await reclaimPassed.promise;
+      releaseRecreated.resolve();
+      await client.awaitChain(recreatedChain, completionOptions);
+    });
+
+    expect(await client.getJob({ id: chainId })).toMatchObject({
+      status: "completed",
+      attempt: 1,
+    });
+  });
+
+  it("applies the worker-level backoffConfig when the processor has none", async ({
+    stateAdapter,
+    notifyAdapter,
+    withTransaction,
+    withWorkers,
+    observabilityAdapter,
+    log,
+  }) => {
+    const jobTypes = defineJobTypes<{
+      test: { entry: true; input: null; output: null };
+    }>();
+
+    const client = await createClient({
+      stateAdapter,
+      notifyAdapter,
+      observabilityAdapter,
+      log,
+      jobTypes,
+    });
+    const worker = await createInProcessWorker({
+      client,
+      pollIntervalMs: 20,
+      backoffConfig: { initialDelayMs: 1, multiplier: 1, maxDelayMs: 1 },
+      processors: createProcessors({
+        client,
+        jobTypes,
+        processors: {
+          test: {
+            attemptHandler: async ({ job, complete }) => {
+              if (job.attempt < 3) throw new Error("retry");
+              return withTransaction(async (txCtx, transactionHooks) =>
+                complete({ ...txCtx, transactionHooks, output: null }),
+              );
+            },
+          },
+        },
+      }),
+    });
+
+    const chain = await withTransaction(async (txCtx, transactionHooks) =>
+      client.createChain({ ...txCtx, transactionHooks, typeName: "test", input: null }),
+    );
+
+    await withWorkers([await worker.start()], async () => {
+      await client.awaitChain(chain, completionOptions);
+    });
+
+    expect(await client.getJob({ id: chain.id })).toMatchObject({
+      status: "completed",
+      attempt: 3,
+    });
+  });
+
+  it("prefers the processor-level backoffConfig over the worker-level one", async ({
+    stateAdapter,
+    notifyAdapter,
+    withTransaction,
+    withWorkers,
+    observabilityAdapter,
+    log,
+  }) => {
+    const jobTypes = defineJobTypes<{
+      test: { entry: true; input: null; output: null };
+    }>();
+
+    const client = await createClient({
+      stateAdapter,
+      notifyAdapter,
+      observabilityAdapter,
+      log,
+      jobTypes,
+    });
+    const worker = await createInProcessWorker({
+      client,
+      pollIntervalMs: 20,
+      backoffConfig: { initialDelayMs: 60_000, multiplier: 1, maxDelayMs: 60_000 },
+      processors: createProcessors({
+        client,
+        jobTypes,
+        processors: {
+          test: {
+            backoffConfig: { initialDelayMs: 1, multiplier: 1, maxDelayMs: 1 },
+            attemptHandler: async ({ job, complete }) => {
+              if (job.attempt < 2) throw new Error("retry");
+              return withTransaction(async (txCtx, transactionHooks) =>
+                complete({ ...txCtx, transactionHooks, output: null }),
+              );
+            },
+          },
+        },
+      }),
+    });
+
+    const chain = await withTransaction(async (txCtx, transactionHooks) =>
+      client.createChain({ ...txCtx, transactionHooks, typeName: "test", input: null }),
+    );
+
+    await withWorkers([await worker.start()], async () => {
+      await client.awaitChain(chain, completionOptions);
+    });
+
+    expect(await client.getJob({ id: chain.id })).toMatchObject({
+      status: "completed",
+      attempt: 2,
+    });
+  });
+
+  it("registers with a 60s lease by default", async ({
+    stateAdapter,
+    notifyAdapter,
+    withWorkers,
+    observabilityAdapter,
+    log,
+  }) => {
+    const jobTypes = defineJobTypes<{
+      test: { entry: true; input: null; output: null };
+    }>();
+
+    const client = await createClient({
+      stateAdapter,
+      notifyAdapter,
+      observabilityAdapter,
+      log,
+      jobTypes,
+    });
+    const workerId = stateAdapter.config.generateWorkerId();
+    const worker = await createInProcessWorker({
+      client,
+      workerId,
+      processors: createProcessors({
+        client,
+        jobTypes,
+        processors: { test: { attemptHandler: async () => undefined as never } },
+      }),
+    });
+
+    await withWorkers([await worker.start()], async () => {
+      await expect
+        .poll(async () => {
+          const registered = await client.getWorker({ id: workerId });
+          return registered && registered.leaseUntil.getTime() - registered.startedAt.getTime();
+        })
+        .toBe(60_000);
     });
   });
 };

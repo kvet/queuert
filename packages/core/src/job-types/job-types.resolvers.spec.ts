@@ -45,7 +45,7 @@ type BranchingDefs = {
 };
 
 describe("OutputJob", () => {
-  type Result = OutputJob<string, LinearDefs, "entry">;
+  type Result = OutputJob<string, string, LinearDefs, "entry">;
 
   it("resolves status to completed", () => {
     expectTypeOf<Result["status"]>().toEqualTypeOf<"completed">();
@@ -65,7 +65,7 @@ describe("OutputJob", () => {
 });
 
 describe("ContinuedJob", () => {
-  type Result = ContinuedJob<string, LinearDefs, "entry", "entry", "step">;
+  type Result = ContinuedJob<string, string, LinearDefs, "entry", "entry", "step">;
 
   it("resolves status to completed", () => {
     expectTypeOf<Result["status"]>().toEqualTypeOf<"completed">();
@@ -92,13 +92,13 @@ describe("ContinuedJob", () => {
 
 describe("ContinuedJob branching", () => {
   it("narrows to branchA when TContinuationTypeName is branchA", () => {
-    type Result = ContinuedJob<string, BranchingDefs, "root", "root", "branchA">;
+    type Result = ContinuedJob<string, string, BranchingDefs, "root", "root", "branchA">;
     expectTypeOf<Result["continuedTo"]["typeName"]>().toEqualTypeOf<"branchA">();
     expectTypeOf<Result["continuedTo"]["input"]>().toEqualTypeOf<{ a: number }>();
   });
 
   it("narrows to branchB when TContinuationTypeName is branchB", () => {
-    type Result = ContinuedJob<string, BranchingDefs, "root", "root", "branchB">;
+    type Result = ContinuedJob<string, string, BranchingDefs, "root", "root", "branchB">;
     expectTypeOf<Result["continuedTo"]["typeName"]>().toEqualTypeOf<"branchB">();
     expectTypeOf<Result["continuedTo"]["input"]>().toEqualTypeOf<{ b: string }>();
   });
@@ -127,27 +127,29 @@ type BlockerDefs = {
 
 describe("OutputJob variants", () => {
   it("carries the output and no successor", () => {
-    type Result = OutputJob<string, LinearDefs, "step", "entry">;
+    type Result = OutputJob<string, string, LinearDefs, "step", "entry">;
     expectTypeOf<Result["output"]>().toEqualTypeOf<{ stepResult: number }>();
     expectTypeOf<Result["continuedToId"]>().toEqualTypeOf<null>();
     expectTypeOf<Result["chainTypeName"]>().toEqualTypeOf<"entry">();
   });
 
   it("is never for a job type without output", () => {
-    expectTypeOf<OutputJob<string, ContinuingOnlyDefs, "head", "head">>().toBeNever();
+    expectTypeOf<OutputJob<string, string, ContinuingOnlyDefs, "head", "head">>().toBeNever();
   });
 });
 
 describe("ContinuedJob variants", () => {
   it("has no output and points at the successor", () => {
-    type Result = ContinuedJob<string, ContinuingOnlyDefs, "head", "head", "tail">;
+    type Result = ContinuedJob<string, string, ContinuingOnlyDefs, "head", "head", "tail">;
     expectTypeOf<Result["continuedToId"]>().toEqualTypeOf<string>();
     expectTypeOf<Result["output"]>().toEqualTypeOf<undefined>();
     expectTypeOf<Result["continuedTo"]["chainTypeName"]>().toEqualTypeOf<"head">();
   });
 
   it("is never for a job type that cannot continue", () => {
-    expectTypeOf<ContinuedJob<string, TerminalOnlyDefs, "only", "only", "only">>().toBeNever();
+    expectTypeOf<
+      ContinuedJob<string, string, TerminalOnlyDefs, "only", "only", "only">
+    >().toBeNever();
   });
 });
 
@@ -161,20 +163,19 @@ describe("RescheduledJob", () => {
   });
 
   it("is the pending member of ResolvedJob", () => {
-    expectTypeOf<Result>().toExtend<ResolvedJob<string, LinearDefs, "entry", "entry">>();
+    expectTypeOf<Result>().toExtend<ResolvedJob<string, string, LinearDefs, "entry", "entry">>();
     expectTypeOf<
-      Extract<ResolvedJob<string, LinearDefs, "entry", "entry">, { status: "pending" }>
+      Extract<ResolvedJob<string, string, LinearDefs, "entry", "entry">, { status: "pending" }>
     >().toExtend<Result>();
   });
 });
 
 describe("ResolvedRunningJob", () => {
-  type Result = ResolvedRunningJob<string, BlockerDefs, "main">;
+  type Result = ResolvedRunningJob<string, string, BlockerDefs, "main">;
 
   it("is the running variant with attempt fields", () => {
     expectTypeOf<Result["status"]>().toEqualTypeOf<"running">();
     expectTypeOf<Result["attemptBy"]>().toEqualTypeOf<string>();
-    expectTypeOf<Result["attemptUntil"]>().toEqualTypeOf<Date>();
   });
 
   it("defaults the chain type name to the reaching entry", () => {

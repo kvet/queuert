@@ -10,7 +10,9 @@ export const createJobsGroup: ConformanceGroup<StateConformanceFixture> = {
         const [stateChain] = await stateAdapter.withTransaction(async (txCtx) =>
           stateAdapter.createJobs({
             txCtx,
-            jobs: [{ id: stateAdapter.config.generateId(), typeName: "chain-test", input: null }],
+            jobs: [
+              { id: stateAdapter.config.generateJobId(), typeName: "chain-test", input: null },
+            ],
           }),
         );
 
@@ -26,12 +28,12 @@ export const createJobsGroup: ConformanceGroup<StateConformanceFixture> = {
             txCtx,
             jobs: [
               {
-                id: stateAdapter.config.generateId(),
+                id: stateAdapter.config.generateJobId(),
                 typeName: "scalar-input",
                 input: "a bare string",
               },
-              { id: stateAdapter.config.generateId(), typeName: "scalar-input", input: 42 },
-              { id: stateAdapter.config.generateId(), typeName: "scalar-input", input: true },
+              { id: stateAdapter.config.generateJobId(), typeName: "scalar-input", input: 42 },
+              { id: stateAdapter.config.generateJobId(), typeName: "scalar-input", input: true },
             ],
           }),
         );
@@ -46,12 +48,12 @@ export const createJobsGroup: ConformanceGroup<StateConformanceFixture> = {
       },
     },
     {
-      name: "config.generateId produces unique ids that pass config.validateId",
+      name: "config.generateJobId produces unique ids that pass config.validateJobId",
       run: async ({ stateAdapter }, expect) => {
-        const ids = Array.from({ length: 10 }, () => stateAdapter.config.generateId());
+        const ids = Array.from({ length: 10 }, () => stateAdapter.config.generateJobId());
         expect(new Set(ids).size).toBe(ids.length);
         for (const id of ids) {
-          expect(stateAdapter.config.validateId(id)).toBe(true);
+          expect(stateAdapter.config.validateJobId(id)).toBe(true);
         }
       },
     },
@@ -62,7 +64,7 @@ export const createJobsGroup: ConformanceGroup<StateConformanceFixture> = {
         const [createdChain] = await stateAdapter.withTransaction(async (txCtx) =>
           stateAdapter.createJobs({
             txCtx,
-            jobs: [{ id: stateAdapter.config.generateId(), typeName: "test-job", input }],
+            jobs: [{ id: stateAdapter.config.generateJobId(), typeName: "test-job", input }],
           }),
         );
 
@@ -82,7 +84,7 @@ export const createJobsGroup: ConformanceGroup<StateConformanceFixture> = {
         const [created] = await stateAdapter.withTransaction(async (txCtx) =>
           stateAdapter.createJobs({
             txCtx,
-            jobs: [{ id: stateAdapter.config.generateId(), typeName: "null-test", input: null }],
+            jobs: [{ id: stateAdapter.config.generateJobId(), typeName: "null-test", input: null }],
           }),
         );
         const job = created.head;
@@ -96,7 +98,7 @@ export const createJobsGroup: ConformanceGroup<StateConformanceFixture> = {
         expect(job.lastAttemptAt).toBeNull();
         expect(job.attemptAt).toBeNull();
         expect(job.attemptBy).toBeNull();
-        expect(job.attemptUntil).toBeNull();
+        expect(job.attemptToken).toBeNull();
         expect(job.id).toBe(job.chainId);
         expect(created.id).toBe(job.chainId);
         expect(created.typeName).toBe(job.typeName);
@@ -129,7 +131,11 @@ export const createJobsGroup: ConformanceGroup<StateConformanceFixture> = {
           stateAdapter.createJobs({
             txCtx,
             jobs: [
-              { id: stateAdapter.config.generateId(), typeName: "json-test", input: complexInput },
+              {
+                id: stateAdapter.config.generateJobId(),
+                typeName: "json-test",
+                input: complexInput,
+              },
             ],
           }),
         );
@@ -146,7 +152,7 @@ export const createJobsGroup: ConformanceGroup<StateConformanceFixture> = {
             txCtx,
             jobs: [
               {
-                id: stateAdapter.config.generateId(),
+                id: stateAdapter.config.generateJobId(),
                 typeName: "dedup-test",
                 input: { value: 1 },
                 deduplication: { key: "same-key", scope: "running" },
@@ -160,7 +166,7 @@ export const createJobsGroup: ConformanceGroup<StateConformanceFixture> = {
             txCtx,
             jobs: [
               {
-                id: stateAdapter.config.generateId(),
+                id: stateAdapter.config.generateJobId(),
                 typeName: "dedup-test",
                 input: { value: 2 },
                 deduplication: { key: "same-key", scope: "running" },
@@ -180,7 +186,7 @@ export const createJobsGroup: ConformanceGroup<StateConformanceFixture> = {
               txCtx,
               jobs: [
                 {
-                  id: stateAdapter.config.generateId(),
+                  id: stateAdapter.config.generateJobId(),
                   typeName: "dedup-test",
                   input: { value: 3 },
                   deduplication: { key: "different-key", scope: "running" },
@@ -200,7 +206,7 @@ export const createJobsGroup: ConformanceGroup<StateConformanceFixture> = {
             txCtx,
             jobs: [
               {
-                id: stateAdapter.config.generateId(),
+                id: stateAdapter.config.generateJobId(),
                 typeName: "dedup-scope-a",
                 input: null,
                 deduplication: { key: "shared-key", scope: "running" },
@@ -214,7 +220,7 @@ export const createJobsGroup: ConformanceGroup<StateConformanceFixture> = {
             txCtx,
             jobs: [
               {
-                id: stateAdapter.config.generateId(),
+                id: stateAdapter.config.generateJobId(),
                 typeName: "dedup-scope-b",
                 input: null,
                 deduplication: { key: "shared-key", scope: "running" },
@@ -238,7 +244,7 @@ export const createJobsGroup: ConformanceGroup<StateConformanceFixture> = {
             txCtx,
             jobs: [
               {
-                id: stateAdapter.config.generateId(),
+                id: stateAdapter.config.generateJobId(),
                 typeName: "scope-test",
                 input: null,
                 deduplication: { key: "scope-key", scope: "running" },
@@ -260,7 +266,7 @@ export const createJobsGroup: ConformanceGroup<StateConformanceFixture> = {
               txCtx,
               jobs: [
                 {
-                  id: stateAdapter.config.generateId(),
+                  id: stateAdapter.config.generateJobId(),
                   typeName: "scope-test",
                   input: null,
                   deduplication: { key: "scope-key", scope: "running" },
@@ -276,7 +282,7 @@ export const createJobsGroup: ConformanceGroup<StateConformanceFixture> = {
             txCtx,
             jobs: [
               {
-                id: stateAdapter.config.generateId(),
+                id: stateAdapter.config.generateJobId(),
                 typeName: "scope-test-any",
                 input: null,
                 deduplication: { key: "any-key", scope: "any" },
@@ -298,7 +304,7 @@ export const createJobsGroup: ConformanceGroup<StateConformanceFixture> = {
               txCtx,
               jobs: [
                 {
-                  id: stateAdapter.config.generateId(),
+                  id: stateAdapter.config.generateJobId(),
                   typeName: "scope-test-any",
                   input: null,
                   deduplication: { key: "any-key", scope: "any" },
@@ -313,12 +319,18 @@ export const createJobsGroup: ConformanceGroup<StateConformanceFixture> = {
     {
       name: "deduplication scope 'running' matches multi-step chains that have continued",
       run: async ({ stateAdapter }, expect) => {
+        const worker = await stateAdapter.startWorker({
+          workerId: stateAdapter.config.generateWorkerId(),
+          typeNames: ["step1"],
+          concurrency: 1,
+          leaseMs: 60_000,
+        });
         const [headChain] = await stateAdapter.withTransaction(async (txCtx) =>
           stateAdapter.createJobs({
             txCtx,
             jobs: [
               {
-                id: stateAdapter.config.generateId(),
+                id: stateAdapter.config.generateJobId(),
                 typeName: "step1",
                 input: null,
                 deduplication: { key: "multi-key", scope: "running" },
@@ -330,15 +342,16 @@ export const createJobsGroup: ConformanceGroup<StateConformanceFixture> = {
         const step2 = await stateAdapter.withTransaction(async (txCtx) => {
           await stateAdapter.startJobAttempts({
             txCtx,
-            workerId: "worker-1",
-            timeoutMsByTypeName: { step1: 30_000 },
+            workerId: worker.id,
+            workerToken: worker.token,
+            typeNames: ["step1"],
             limit: 1,
           });
           const [continued] = await stateAdapter.continueJobs({
             txCtx,
             jobs: [
               {
-                id: stateAdapter.config.generateId(),
+                id: stateAdapter.config.generateJobId(),
                 typeName: "step2",
                 input: null,
                 continueFromId: headChain.head.id,
@@ -355,7 +368,7 @@ export const createJobsGroup: ConformanceGroup<StateConformanceFixture> = {
               txCtx,
               jobs: [
                 {
-                  id: stateAdapter.config.generateId(),
+                  id: stateAdapter.config.generateJobId(),
                   typeName: "step1",
                   input: null,
                   deduplication: { key: "multi-key", scope: "running" },
@@ -379,7 +392,7 @@ export const createJobsGroup: ConformanceGroup<StateConformanceFixture> = {
               txCtx,
               jobs: [
                 {
-                  id: stateAdapter.config.generateId(),
+                  id: stateAdapter.config.generateJobId(),
                   typeName: "step1",
                   input: null,
                   deduplication: { key: "multi-key", scope: "running" },
@@ -399,7 +412,7 @@ export const createJobsGroup: ConformanceGroup<StateConformanceFixture> = {
             txCtx,
             jobs: [
               {
-                id: stateAdapter.config.generateId(),
+                id: stateAdapter.config.generateJobId(),
                 typeName: "coexist",
                 input: null,
                 deduplication: { key: "coexist-key", scope: "running" },
@@ -420,7 +433,7 @@ export const createJobsGroup: ConformanceGroup<StateConformanceFixture> = {
             txCtx,
             jobs: [
               {
-                id: stateAdapter.config.generateId(),
+                id: stateAdapter.config.generateJobId(),
                 typeName: "coexist",
                 input: null,
                 deduplication: { key: "coexist-key", scope: "running" },
@@ -436,7 +449,7 @@ export const createJobsGroup: ConformanceGroup<StateConformanceFixture> = {
             txCtx,
             jobs: [
               {
-                id: stateAdapter.config.generateId(),
+                id: stateAdapter.config.generateJobId(),
                 typeName: "coexist",
                 input: null,
                 deduplication: { key: "coexist-key", scope: "running" },
@@ -459,7 +472,7 @@ export const createJobsGroup: ConformanceGroup<StateConformanceFixture> = {
             txCtx,
             jobs: [
               {
-                id: stateAdapter.config.generateId(),
+                id: stateAdapter.config.generateJobId(),
                 typeName: "schedule-test",
                 input: null,
                 schedule: { afterMs: 5000 },
@@ -478,7 +491,7 @@ export const createJobsGroup: ConformanceGroup<StateConformanceFixture> = {
             txCtx,
             jobs: [
               {
-                id: stateAdapter.config.generateId(),
+                id: stateAdapter.config.generateJobId(),
                 typeName: "schedule-test-at",
                 input: null,
                 schedule: { at: futureDate },
@@ -502,7 +515,7 @@ export const createJobsGroup: ConformanceGroup<StateConformanceFixture> = {
             txCtx,
             jobs: [
               {
-                id: stateAdapter.config.generateId(),
+                id: stateAdapter.config.generateJobId(),
                 typeName: "schedule-far",
                 input: null,
                 schedule: { afterMs: thirtyDaysMs },
@@ -526,7 +539,7 @@ export const createJobsGroup: ConformanceGroup<StateConformanceFixture> = {
             txCtx,
             jobs: [
               {
-                id: stateAdapter.config.generateId(),
+                id: stateAdapter.config.generateJobId(),
                 typeName: "schedule-fractional",
                 input: null,
                 schedule: { afterMs: fractionalMs },
@@ -549,7 +562,7 @@ export const createJobsGroup: ConformanceGroup<StateConformanceFixture> = {
             txCtx,
             jobs: [
               {
-                id: stateAdapter.config.generateId(),
+                id: stateAdapter.config.generateJobId(),
                 typeName: "schedule-past",
                 input: null,
                 schedule: { at: past },
@@ -576,7 +589,7 @@ export const createJobsGroup: ConformanceGroup<StateConformanceFixture> = {
             txCtx,
             jobs: [
               {
-                id: stateAdapter.config.generateId(),
+                id: stateAdapter.config.generateJobId(),
                 typeName: "trace-test",
                 input: null,
                 chainTraceContext,
@@ -597,7 +610,7 @@ export const createJobsGroup: ConformanceGroup<StateConformanceFixture> = {
         const [stateChain] = await stateAdapter.withTransaction(async (txCtx) =>
           stateAdapter.createJobs({
             txCtx,
-            jobs: [{ id: stateAdapter.config.generateId(), typeName: "date-test", input: null }],
+            jobs: [{ id: stateAdapter.config.generateJobId(), typeName: "date-test", input: null }],
           }),
         );
 
@@ -615,9 +628,9 @@ export const createJobsGroup: ConformanceGroup<StateConformanceFixture> = {
           stateAdapter.createJobs({
             txCtx,
             jobs: [
-              { id: stateAdapter.config.generateId(), typeName: "batch-a", input: { value: 1 } },
-              { id: stateAdapter.config.generateId(), typeName: "batch-b", input: { value: 2 } },
-              { id: stateAdapter.config.generateId(), typeName: "batch-c", input: { value: 3 } },
+              { id: stateAdapter.config.generateJobId(), typeName: "batch-a", input: { value: 1 } },
+              { id: stateAdapter.config.generateJobId(), typeName: "batch-b", input: { value: 2 } },
+              { id: stateAdapter.config.generateJobId(), typeName: "batch-c", input: { value: 3 } },
             ],
           }),
         );
@@ -645,7 +658,7 @@ export const createJobsGroup: ConformanceGroup<StateConformanceFixture> = {
             txCtx,
             jobs: [
               {
-                id: stateAdapter.config.generateId(),
+                id: stateAdapter.config.generateJobId(),
                 typeName: "dedup-test",
                 input: { value: "existing" },
                 deduplication: { key: "dup-key-1", scope: "running" },
@@ -659,13 +672,13 @@ export const createJobsGroup: ConformanceGroup<StateConformanceFixture> = {
             txCtx,
             jobs: [
               {
-                id: stateAdapter.config.generateId(),
+                id: stateAdapter.config.generateJobId(),
                 typeName: "dedup-test",
                 input: { value: "new-1" },
                 deduplication: { key: "dup-key-1", scope: "running" },
               },
               {
-                id: stateAdapter.config.generateId(),
+                id: stateAdapter.config.generateJobId(),
                 typeName: "dedup-test",
                 input: { value: "new-2" },
                 deduplication: { key: "dup-key-unique", scope: "running" },
@@ -689,13 +702,13 @@ export const createJobsGroup: ConformanceGroup<StateConformanceFixture> = {
             txCtx,
             jobs: [
               {
-                id: stateAdapter.config.generateId(),
+                id: stateAdapter.config.generateJobId(),
                 typeName: "dedup-intra-batch",
                 input: { value: "first" },
                 deduplication: { key: "intra-batch-key", scope: "running" },
               },
               {
-                id: stateAdapter.config.generateId(),
+                id: stateAdapter.config.generateJobId(),
                 typeName: "dedup-intra-batch",
                 input: { value: "second" },
                 deduplication: { key: "intra-batch-key", scope: "running" },
@@ -730,7 +743,7 @@ export const createJobsGroup: ConformanceGroup<StateConformanceFixture> = {
     {
       name: "uses caller-supplied id when provided",
       run: async ({ stateAdapter }, expect) => {
-        const userId = stateAdapter.config.generateId();
+        const userId = stateAdapter.config.generateJobId();
         const [stateChain] = await stateAdapter.withTransaction(async (txCtx) =>
           stateAdapter.createJobs({
             txCtx,
@@ -755,7 +768,7 @@ export const createJobsGroup: ConformanceGroup<StateConformanceFixture> = {
             txCtx,
             jobs: [
               {
-                id: stateAdapter.config.generateId(),
+                id: stateAdapter.config.generateJobId(),
                 typeName: "id-dedup",
                 input: null,
                 deduplication: { key: "dedup-id-key", scope: "running" },
@@ -764,7 +777,7 @@ export const createJobsGroup: ConformanceGroup<StateConformanceFixture> = {
           }),
         );
 
-        const userId = stateAdapter.config.generateId();
+        const userId = stateAdapter.config.generateJobId();
         const [secondChain] = await stateAdapter.withTransaction(async (txCtx) =>
           stateAdapter.createJobs({
             txCtx,
@@ -788,7 +801,7 @@ export const createJobsGroup: ConformanceGroup<StateConformanceFixture> = {
     {
       name: "caller-supplied id collision on createJobs errors",
       run: async ({ stateAdapter }, expect) => {
-        const userId = stateAdapter.config.generateId();
+        const userId = stateAdapter.config.generateJobId();
         await stateAdapter.withTransaction(async (txCtx) =>
           stateAdapter.createJobs({
             txCtx,
@@ -821,7 +834,7 @@ export const createJobsGroup: ConformanceGroup<StateConformanceFixture> = {
     {
       name: "caller-supplied id collision does not affect the existing chain",
       run: async ({ stateAdapter }, expect) => {
-        const userId = stateAdapter.config.generateId();
+        const userId = stateAdapter.config.generateJobId();
         await stateAdapter.withTransaction(async (txCtx) =>
           stateAdapter.createJobs({
             txCtx,
@@ -858,7 +871,7 @@ export const createJobsGroup: ConformanceGroup<StateConformanceFixture> = {
     {
       name: "intra-batch duplicate caller-supplied id errors",
       run: async ({ stateAdapter }, expect) => {
-        const userId = stateAdapter.config.generateId();
+        const userId = stateAdapter.config.generateJobId();
         await expect(
           stateAdapter.withTransaction(async (txCtx) =>
             stateAdapter.createJobs({

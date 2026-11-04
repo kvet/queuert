@@ -184,6 +184,7 @@ export const notifyTestSuite = ({ it }: { it: TestAPI<TestSuiteContext> }): void
     notifyAdapter,
     observabilityAdapter,
     log,
+    withWorkers,
     withTransaction,
   }) => {
     const jobTypes = defineJobTypes<{
@@ -209,35 +210,54 @@ export const notifyTestSuite = ({ it }: { it: TestAPI<TestSuiteContext> }): void
         ],
       }),
     );
-    await stateAdapter.startJobAttempts({
-      workerId: "worker",
-      timeoutMsByTypeName: { test: 60_000 },
-      limit: chains.length,
-    });
-    spyNotifyAdapter.calls.length = 0;
-
-    await withTransaction(async (txCtx, transactionHooks) => {
-      for (const chain of chains) {
-        await client.completeChain({
-          ...txCtx,
-          transactionHooks,
-          ...chain,
-          handler: async ({ job, completeJob }) =>
-            completeJob(job, async ({ complete }) => complete({ output: null })),
-        });
-      }
+    const crashedWorker = await createInProcessWorker({
+      client,
+      concurrency: chains.length,
+      processors: createProcessors({
+        client,
+        jobTypes,
+        processors: {
+          test: {
+            attemptHandler: async ({ signal }) => {
+              await sleep(Number.POSITIVE_INFINITY, { signal });
+              throw new Error("crashed");
+            },
+          },
+        },
+      }),
     });
 
-    const chainIds = chains.map((chain) => chain.id).sort();
-    expect(
-      spyNotifyAdapter.calls.map((call) => ({ name: call.name, args: [...call.args].sort() })),
-    ).toEqual(
-      expect.arrayContaining([
-        { name: "notifyChainsCompleted", args: chainIds },
-        { name: "notifyJobAttemptsLost", args: chainIds },
-      ]),
-    );
-    expect(spyNotifyAdapter.calls).toHaveLength(2);
+    await withWorkers([await crashedWorker.start()], async () => {
+      await expect
+        .poll(async () =>
+          Promise.all(chains.map(async (chain) => (await client.getJob({ id: chain.id }))?.status)),
+        )
+        .toEqual(["running", "running"]);
+      spyNotifyAdapter.calls.length = 0;
+
+      await withTransaction(async (txCtx, transactionHooks) => {
+        for (const chain of chains) {
+          await client.completeChain({
+            ...txCtx,
+            transactionHooks,
+            ...chain,
+            handler: async ({ job, completeJob }) =>
+              completeJob(job, async ({ complete }) => complete({ output: null })),
+          });
+        }
+      });
+
+      const chainIds = chains.map((chain) => chain.id).sort();
+      expect(
+        spyNotifyAdapter.calls.map((call) => ({ name: call.name, args: [...call.args].sort() })),
+      ).toEqual(
+        expect.arrayContaining([
+          { name: "notifyChainsCompleted", args: chainIds },
+          { name: "notifyJobAttemptsLost", args: chainIds },
+        ]),
+      );
+      expect(spyNotifyAdapter.calls).toHaveLength(2);
+    });
   });
 
   it("distributes processing to multiple workers", async ({
@@ -573,7 +593,7 @@ export const notifyTestSuite = ({ it }: { it: TestAPI<TestSuiteContext> }): void
     });
   });
 
-  it("notifies workers when expired attempts are reclaimed", async ({
+  it("notifies the expired worker's attempts as lost when another worker reclaims them", async ({
     stateAdapter,
     notifyAdapter,
     observabilityAdapter,
@@ -597,13 +617,26 @@ export const notifyTestSuite = ({ it }: { it: TestAPI<TestSuiteContext> }): void
       jobTypes,
     });
 
+    const zombieClient = await createClient({
+      stateAdapter: {
+        ...stateAdapter,
+        extendWorkerLease: async ({ workerId }) =>
+          (await stateAdapter.getWorkers({ workerIds: [workerId] }))[0],
+      },
+      notifyAdapter,
+      observabilityAdapter,
+      log,
+      jobTypes,
+    });
+
     const jobStarted = Promise.withResolvers<void>();
     const jobCompleted = Promise.withResolvers<void>();
 
-    const createWorker = async () =>
+    const createWorker = async (workerClient: typeof client) =>
       createInProcessWorker({
-        client,
+        client: workerClient,
         concurrency: 1,
+        lease: { durationMs: 200, heartbeatMs: 50 },
         processors: createProcessors({
           client,
           jobTypes,
@@ -627,13 +660,12 @@ export const notifyTestSuite = ({ it }: { it: TestAPI<TestSuiteContext> }): void
 
                 throw new Error();
               },
-              attemptConfig: { timeoutMs: 10, heartbeatMs: 1000 },
             },
           },
         }),
       });
 
-    await withWorkers([await (await createWorker()).start()], async () => {
+    await withWorkers([await (await createWorker(zombieClient)).start()], async () => {
       const chain = await withTransaction(async (txCtx, transactionHooks) =>
         client.createChain({
           ...txCtx,
@@ -644,9 +676,9 @@ export const notifyTestSuite = ({ it }: { it: TestAPI<TestSuiteContext> }): void
       );
 
       await jobStarted.promise;
-      await sleep(10);
+      await sleep(250);
 
-      await withWorkers([await (await createWorker()).start()], async () => {
+      await withWorkers([await (await createWorker(client)).start()], async () => {
         await client.awaitChain(chain, { timeoutMs: 5000 });
       });
 

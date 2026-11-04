@@ -4,11 +4,15 @@ import { tmpdir } from "node:os";
 import { join } from "node:path";
 
 import { createDeploymentSpawner, startPaused, startTogether } from "@queuert/helpers/testing";
-import { type MigrationResult } from "@queuert/typed-sql";
+import { type MigrationResult, createMigrator, createTemplateApplier } from "@queuert/typed-sql";
 import Database from "better-sqlite3";
 import { it as baseIt, describe, expect } from "vitest";
 
-import { createSqliteStateAdapter, migrations } from "../state-adapter/state-adapter.sqlite.js";
+import {
+  createMigrationStore,
+  createSqliteStateAdapter,
+  migrations,
+} from "../state-adapter/state-adapter.sqlite.js";
 import {
   type BetterSqlite3Context,
   createBetterSqlite3Provider,
@@ -16,6 +20,8 @@ import {
 import { type SqliteStateProvider } from "../state-provider/state-provider.sqlite.js";
 import { MARKER } from "./state-adapter-migration.process.js";
 
+const INSTALL = "001_initial_schema";
+const WORKER_LIVENESS = "002_worker_liveness";
 const ALL = migrations.map((migration) => migration.name);
 const spawnDeployment = createDeploymentSpawner<MigrationResult>(
   join(import.meta.dirname, "state-adapter-migration.process.ts"),
@@ -39,6 +45,47 @@ const names = async (provider: Provider, text: string): Promise<string[]> =>
 const appliedNames = async (provider: Provider): Promise<string[]> =>
   names(provider, "SELECT name FROM queuert_migration ORDER BY name");
 
+const execute = async (provider: Provider, text: string): Promise<void> => {
+  await provider.executeSql({
+    sql: text,
+    params: [],
+    paramTypes: {},
+    columnTypes: {},
+    readOnly: false,
+  });
+};
+
+const migrateToInstall = async (provider: Provider): Promise<void> => {
+  await createMigrator<BetterSqlite3Context>({
+    migrations: migrations.filter((migration) => migration.name === INSTALL),
+    store: createMigrationStore(
+      provider,
+      createTemplateApplier({ table_prefix: "queuert_", job_id_type: "TEXT" }),
+    ),
+  }).migrateToLatest();
+};
+
+const workerColumns = async (provider: Provider): Promise<string[]> =>
+  (
+    await query<{ name: string; type: string; notnull: number }>(
+      provider,
+      "SELECT name, type, \"notnull\" FROM pragma_table_info('queuert_worker') ORDER BY name",
+    )
+  ).map((row) => `${row.name} ${row.type}${row.notnull === 1 ? " NOT NULL" : ""}`);
+
+const jobColumnNames = async (provider: Provider): Promise<string[]> =>
+  (
+    await query<{ name: string }>(provider, "SELECT name FROM pragma_table_info('queuert_job')")
+  ).map((row) => row.name);
+
+const indexColumnNames = async (provider: Provider, indexName: string): Promise<string[]> =>
+  (
+    await query<{ name: string }>(
+      provider,
+      `SELECT name FROM pragma_index_info('${indexName}') ORDER BY seqno`,
+    )
+  ).map((row) => row.name);
+
 const it = baseIt.extend<{
   database: {
     path: string;
@@ -54,7 +101,7 @@ const it = baseIt.extend<{
     const provider = createBetterSqlite3Provider({ db });
     const adapter = await createSqliteStateAdapter({
       stateProvider: provider,
-      generateId: (): string => randomUUID(),
+      generateJobId: (): string => randomUUID(),
     });
     await use({ path, provider, adapter });
     db.close();
@@ -79,6 +126,7 @@ describe("migrateToLatest", () => {
         "queuert_chain_index_idx",
         "queuert_chain_running_idx",
         "queuert_job",
+        "queuert_job_attempt_by_idx",
         "queuert_job_blocked_idx",
         "queuert_job_blocker",
         "queuert_job_blocker_chain_idx",
@@ -87,11 +135,23 @@ describe("migrateToLatest", () => {
         "queuert_job_pending_idx",
         "queuert_job_running_idx",
         "queuert_migration",
+        "queuert_worker",
+        "queuert_worker_idx",
         "queuert_write_lock",
         "sqlite_autoindex_queuert_job_1",
         "sqlite_autoindex_queuert_job_blocker_1",
         "sqlite_autoindex_queuert_migration_1",
+        "sqlite_autoindex_queuert_worker_1",
       ]);
+      expect(await workerColumns(provider)).toEqual([
+        "concurrency INTEGER NOT NULL",
+        "id TEXT",
+        "lease_until TEXT NOT NULL",
+        "started_at TEXT NOT NULL",
+        "token TEXT NOT NULL",
+        "type_names TEXT NOT NULL",
+      ]);
+      expect(await jobColumnNames(provider)).toContain("attempt_token");
     },
   );
 
@@ -103,6 +163,41 @@ describe("migrateToLatest", () => {
       unrecognized: [],
     });
   });
+
+  it(
+    "upgrades a database with running jobs of the previous version, returning them to pending",
+    { timeout: 60_000 },
+    async ({ database: { provider, adapter } }) => {
+      await migrateToInstall(provider);
+      const jobId = randomUUID();
+      await execute(
+        provider,
+        `INSERT INTO queuert_job (id, type_name, chain_id, chain_index, status, chain_status, attempt, attempt_at, attempt_by, attempt_until)
+         VALUES ('${jobId}', 'legacy', '${jobId}', 0, 'running', 'running', 1, datetime('now', 'subsec'), 'legacy-worker', datetime('now', 'subsec', '+60 seconds'))`,
+      );
+
+      expect(await adapter.migrateToLatest()).toEqual({
+        applied: [WORKER_LIVENESS],
+        skipped: [INSTALL],
+        unrecognized: [],
+      });
+      expect(await names(provider, "SELECT name FROM sqlite_master ORDER BY name")).toContain(
+        "queuert_worker",
+      );
+      expect(await jobColumnNames(provider)).not.toContain("attempt_until");
+      expect(await indexColumnNames(provider, "queuert_job_running_idx")).toEqual([
+        "type_name",
+        "attempt_at",
+      ]);
+
+      const [job] = await adapter.getJobs({ jobIds: [jobId] });
+      expect(job!.status).toBe("pending");
+      expect(job!.attempt).toBe(1);
+      expect(job!.attemptAt).toBeNull();
+      expect(job!.attemptBy).toBeNull();
+      expect(job!.attemptToken).toBeNull();
+    },
+  );
 });
 
 describe("parallel deployments", () => {

@@ -28,7 +28,6 @@ export const runningJob = (
   attempt: 1,
   attemptAt: new Date(1000),
   attemptBy: "worker-1",
-  attemptUntil: new Date(11_000),
   ...overrides,
 });
 

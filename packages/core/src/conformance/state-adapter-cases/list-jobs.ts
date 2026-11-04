@@ -26,7 +26,11 @@ export const listJobsGroup: ConformanceGroup<StateConformanceFixture> = {
           stateAdapter.createJobs({
             txCtx,
             jobs: [
-              { id: stateAdapter.config.generateId(), typeName: "chain-type", input: { step: 1 } },
+              {
+                id: stateAdapter.config.generateJobId(),
+                typeName: "chain-type",
+                input: { step: 1 },
+              },
             ],
           }),
         );
@@ -35,7 +39,7 @@ export const listJobsGroup: ConformanceGroup<StateConformanceFixture> = {
             txCtx,
             jobs: [
               {
-                id: stateAdapter.config.generateId(),
+                id: stateAdapter.config.generateJobId(),
                 typeName: "chain-type",
                 continueFromId: headChain.head.id,
                 input: { step: 2 },
@@ -46,7 +50,9 @@ export const listJobsGroup: ConformanceGroup<StateConformanceFixture> = {
         await stateAdapter.withTransaction(async (txCtx) =>
           stateAdapter.createJobs({
             txCtx,
-            jobs: [{ id: stateAdapter.config.generateId(), typeName: "chain-type", input: null }],
+            jobs: [
+              { id: stateAdapter.config.generateJobId(), typeName: "chain-type", input: null },
+            ],
           }),
         );
 
@@ -62,27 +68,31 @@ export const listJobsGroup: ConformanceGroup<StateConformanceFixture> = {
     {
       name: "listJobs filters by status completed",
       run: async ({ stateAdapter }, expect) => {
+        const worker = await stateAdapter.startWorker({
+          workerId: stateAdapter.config.generateWorkerId(),
+          typeNames: ["test-type"],
+          concurrency: 1,
+          leaseMs: 60_000,
+        });
         const [stateChain] = await stateAdapter.withTransaction(async (txCtx) =>
           stateAdapter.createJobs({
             txCtx,
-            jobs: [{ id: stateAdapter.config.generateId(), typeName: "test-type", input: null }],
+            jobs: [{ id: stateAdapter.config.generateJobId(), typeName: "test-type", input: null }],
           }),
         );
         await stateAdapter.withTransaction(async (txCtx) =>
           stateAdapter.createJobs({
             txCtx,
-            jobs: [{ id: stateAdapter.config.generateId(), typeName: "test-type", input: null }],
+            jobs: [{ id: stateAdapter.config.generateJobId(), typeName: "test-type", input: null }],
           }),
         );
 
-        await stateAdapter.withTransaction(async (txCtx) =>
-          stateAdapter.startJobAttempts({
-            txCtx,
-            workerId: "worker-1",
-            timeoutMsByTypeName: { "test-type": 30_000 },
-            limit: 1,
-          }),
-        );
+        await stateAdapter.startJobAttempts({
+          workerId: worker.id,
+          workerToken: worker.token,
+          typeNames: ["test-type"],
+          limit: 1,
+        });
         await stateAdapter.withTransaction(async (txCtx) =>
           stateAdapter.completeJobs({
             txCtx,
@@ -104,26 +114,34 @@ export const listJobsGroup: ConformanceGroup<StateConformanceFixture> = {
     {
       name: "listJobs filters by status pending",
       run: async ({ stateAdapter }, expect) => {
+        const worker = await stateAdapter.startWorker({
+          workerId: stateAdapter.config.generateWorkerId(),
+          typeNames: ["pending-type"],
+          concurrency: 1,
+          leaseMs: 60_000,
+        });
         await stateAdapter.withTransaction(async (txCtx) =>
           stateAdapter.createJobs({
             txCtx,
-            jobs: [{ id: stateAdapter.config.generateId(), typeName: "pending-type", input: null }],
+            jobs: [
+              { id: stateAdapter.config.generateJobId(), typeName: "pending-type", input: null },
+            ],
           }),
         );
         await stateAdapter.withTransaction(async (txCtx) =>
           stateAdapter.createJobs({
             txCtx,
-            jobs: [{ id: stateAdapter.config.generateId(), typeName: "pending-type", input: null }],
+            jobs: [
+              { id: stateAdapter.config.generateJobId(), typeName: "pending-type", input: null },
+            ],
           }),
         );
-        await stateAdapter.withTransaction(async (txCtx) =>
-          stateAdapter.startJobAttempts({
-            txCtx,
-            workerId: "worker-1",
-            timeoutMsByTypeName: { "pending-type": 30_000 },
-            limit: 1,
-          }),
-        );
+        await stateAdapter.startJobAttempts({
+          workerId: worker.id,
+          workerToken: worker.token,
+          typeNames: ["pending-type"],
+          limit: 1,
+        });
 
         const result = await stateAdapter.listJobs({
           typeName: "pending-type",
@@ -140,26 +158,34 @@ export const listJobsGroup: ConformanceGroup<StateConformanceFixture> = {
     {
       name: "listJobs filters by status running",
       run: async ({ stateAdapter }, expect) => {
+        const worker = await stateAdapter.startWorker({
+          workerId: stateAdapter.config.generateWorkerId(),
+          typeNames: ["running-type"],
+          concurrency: 1,
+          leaseMs: 60_000,
+        });
         await stateAdapter.withTransaction(async (txCtx) =>
           stateAdapter.createJobs({
             txCtx,
-            jobs: [{ id: stateAdapter.config.generateId(), typeName: "running-type", input: null }],
+            jobs: [
+              { id: stateAdapter.config.generateJobId(), typeName: "running-type", input: null },
+            ],
           }),
         );
         await stateAdapter.withTransaction(async (txCtx) =>
           stateAdapter.createJobs({
             txCtx,
-            jobs: [{ id: stateAdapter.config.generateId(), typeName: "running-type", input: null }],
+            jobs: [
+              { id: stateAdapter.config.generateJobId(), typeName: "running-type", input: null },
+            ],
           }),
         );
-        const [acquired] = await stateAdapter.withTransaction(async (txCtx) =>
-          stateAdapter.startJobAttempts({
-            txCtx,
-            workerId: "worker-1",
-            timeoutMsByTypeName: { "running-type": 30_000 },
-            limit: 1,
-          }),
-        );
+        const [acquired] = await stateAdapter.startJobAttempts({
+          workerId: worker.id,
+          workerToken: worker.token,
+          typeNames: ["running-type"],
+          limit: 1,
+        });
 
         const result = await stateAdapter.listJobs({
           typeName: "running-type",
@@ -180,7 +206,7 @@ export const listJobsGroup: ConformanceGroup<StateConformanceFixture> = {
           stateAdapter.createJobs({
             txCtx,
             jobs: [
-              { id: stateAdapter.config.generateId(), typeName: "blocker-filter", input: null },
+              { id: stateAdapter.config.generateJobId(), typeName: "blocker-filter", input: null },
             ],
           }),
         );
@@ -189,7 +215,7 @@ export const listJobsGroup: ConformanceGroup<StateConformanceFixture> = {
             txCtx,
             jobs: [
               {
-                id: stateAdapter.config.generateId(),
+                id: stateAdapter.config.generateJobId(),
                 typeName: "blocked-filter",
                 input: { kind: "unblocked" },
               },
@@ -201,7 +227,7 @@ export const listJobsGroup: ConformanceGroup<StateConformanceFixture> = {
             txCtx,
             jobs: [
               {
-                id: stateAdapter.config.generateId(),
+                id: stateAdapter.config.generateJobId(),
                 typeName: "blocked-filter",
                 input: { kind: "blocked" },
               },
@@ -243,11 +269,17 @@ export const listJobsGroup: ConformanceGroup<StateConformanceFixture> = {
     {
       name: "listJobs completed status includes both terminal and continued jobs",
       run: async ({ stateAdapter }, expect) => {
+        const worker = await stateAdapter.startWorker({
+          workerId: stateAdapter.config.generateWorkerId(),
+          typeNames: ["completed-mixed"],
+          concurrency: 1,
+          leaseMs: 60_000,
+        });
         const [stateChain1] = await stateAdapter.withTransaction(async (txCtx) =>
           stateAdapter.createJobs({
             txCtx,
             jobs: [
-              { id: stateAdapter.config.generateId(), typeName: "completed-mixed", input: null },
+              { id: stateAdapter.config.generateJobId(), typeName: "completed-mixed", input: null },
             ],
           }),
         );
@@ -255,27 +287,23 @@ export const listJobsGroup: ConformanceGroup<StateConformanceFixture> = {
           stateAdapter.createJobs({
             txCtx,
             jobs: [
-              { id: stateAdapter.config.generateId(), typeName: "completed-mixed", input: null },
+              { id: stateAdapter.config.generateJobId(), typeName: "completed-mixed", input: null },
             ],
           }),
         );
 
-        await stateAdapter.withTransaction(async (txCtx) =>
-          stateAdapter.startJobAttempts({
-            txCtx,
-            workerId: "worker-1",
-            timeoutMsByTypeName: { "completed-mixed": 30_000 },
-            limit: 1,
-          }),
-        );
-        await stateAdapter.withTransaction(async (txCtx) =>
-          stateAdapter.startJobAttempts({
-            txCtx,
-            workerId: "worker-1",
-            timeoutMsByTypeName: { "completed-mixed": 30_000 },
-            limit: 1,
-          }),
-        );
+        await stateAdapter.startJobAttempts({
+          workerId: worker.id,
+          workerToken: worker.token,
+          typeNames: ["completed-mixed"],
+          limit: 1,
+        });
+        await stateAdapter.startJobAttempts({
+          workerId: worker.id,
+          workerToken: worker.token,
+          typeNames: ["completed-mixed"],
+          limit: 1,
+        });
 
         await stateAdapter.withTransaction(async (txCtx) =>
           stateAdapter.completeJobs({
@@ -289,7 +317,7 @@ export const listJobsGroup: ConformanceGroup<StateConformanceFixture> = {
             txCtx,
             jobs: [
               {
-                id: stateAdapter.config.generateId(),
+                id: stateAdapter.config.generateJobId(),
                 typeName: "next-step",
                 continueFromId: stateChain2.head.id,
                 input: null,
@@ -316,11 +344,17 @@ export const listJobsGroup: ConformanceGroup<StateConformanceFixture> = {
     {
       name: "listJobs sorts completed jobs by completedAt when orderBy is completedAt",
       run: async ({ stateAdapter }, expect) => {
+        const worker = await stateAdapter.startWorker({
+          workerId: stateAdapter.config.generateWorkerId(),
+          typeNames: ["sort-complete"],
+          concurrency: 1,
+          leaseMs: 60_000,
+        });
         const [chainA] = await stateAdapter.withTransaction(async (txCtx) =>
           stateAdapter.createJobs({
             txCtx,
             jobs: [
-              { id: stateAdapter.config.generateId(), typeName: "sort-complete", input: null },
+              { id: stateAdapter.config.generateJobId(), typeName: "sort-complete", input: null },
             ],
           }),
         );
@@ -329,27 +363,23 @@ export const listJobsGroup: ConformanceGroup<StateConformanceFixture> = {
           stateAdapter.createJobs({
             txCtx,
             jobs: [
-              { id: stateAdapter.config.generateId(), typeName: "sort-complete", input: null },
+              { id: stateAdapter.config.generateJobId(), typeName: "sort-complete", input: null },
             ],
           }),
         );
 
-        await stateAdapter.withTransaction(async (txCtx) =>
-          stateAdapter.startJobAttempts({
-            txCtx,
-            workerId: "w1",
-            timeoutMsByTypeName: { "sort-complete": 30_000 },
-            limit: 1,
-          }),
-        );
-        await stateAdapter.withTransaction(async (txCtx) =>
-          stateAdapter.startJobAttempts({
-            txCtx,
-            workerId: "w1",
-            timeoutMsByTypeName: { "sort-complete": 30_000 },
-            limit: 1,
-          }),
-        );
+        await stateAdapter.startJobAttempts({
+          workerId: worker.id,
+          workerToken: worker.token,
+          typeNames: ["sort-complete"],
+          limit: 1,
+        });
+        await stateAdapter.startJobAttempts({
+          workerId: worker.id,
+          workerToken: worker.token,
+          typeNames: ["sort-complete"],
+          limit: 1,
+        });
         await stateAdapter.withTransaction(async (txCtx) =>
           stateAdapter.completeJobs({
             txCtx,
@@ -388,37 +418,43 @@ export const listJobsGroup: ConformanceGroup<StateConformanceFixture> = {
     {
       name: "listJobs sorts running jobs by attemptAt when orderBy is attemptAt",
       run: async ({ stateAdapter }, expect) => {
+        const worker = await stateAdapter.startWorker({
+          workerId: stateAdapter.config.generateWorkerId(),
+          typeNames: ["sort-running"],
+          concurrency: 1,
+          leaseMs: 60_000,
+        });
         const [chainA] = await stateAdapter.withTransaction(async (txCtx) =>
           stateAdapter.createJobs({
             txCtx,
-            jobs: [{ id: stateAdapter.config.generateId(), typeName: "sort-running", input: null }],
+            jobs: [
+              { id: stateAdapter.config.generateJobId(), typeName: "sort-running", input: null },
+            ],
           }),
         );
         await sleep(5);
         const [chainB] = await stateAdapter.withTransaction(async (txCtx) =>
           stateAdapter.createJobs({
             txCtx,
-            jobs: [{ id: stateAdapter.config.generateId(), typeName: "sort-running", input: null }],
+            jobs: [
+              { id: stateAdapter.config.generateJobId(), typeName: "sort-running", input: null },
+            ],
           }),
         );
 
-        await stateAdapter.withTransaction(async (txCtx) =>
-          stateAdapter.startJobAttempts({
-            txCtx,
-            workerId: "w1",
-            timeoutMsByTypeName: { "sort-running": 30_000 },
-            limit: 1,
-          }),
-        );
+        await stateAdapter.startJobAttempts({
+          workerId: worker.id,
+          workerToken: worker.token,
+          typeNames: ["sort-running"],
+          limit: 1,
+        });
         await sleep(5);
-        await stateAdapter.withTransaction(async (txCtx) =>
-          stateAdapter.startJobAttempts({
-            txCtx,
-            workerId: "w1",
-            timeoutMsByTypeName: { "sort-running": 30_000 },
-            limit: 1,
-          }),
-        );
+        await stateAdapter.startJobAttempts({
+          workerId: worker.id,
+          workerToken: worker.token,
+          typeNames: ["sort-running"],
+          limit: 1,
+        });
 
         const byCreatedAt = await stateAdapter.listJobs({
           typeName: "sort-running",
@@ -452,7 +488,7 @@ export const listJobsGroup: ConformanceGroup<StateConformanceFixture> = {
             txCtx,
             jobs: [
               {
-                id: stateAdapter.config.generateId(),
+                id: stateAdapter.config.generateJobId(),
                 typeName: "sort-sched",
                 input: null,
                 schedule: { at: future2 },
@@ -466,7 +502,7 @@ export const listJobsGroup: ConformanceGroup<StateConformanceFixture> = {
             txCtx,
             jobs: [
               {
-                id: stateAdapter.config.generateId(),
+                id: stateAdapter.config.generateJobId(),
                 typeName: "sort-sched",
                 input: null,
                 schedule: { at: future1 },
@@ -502,26 +538,32 @@ export const listJobsGroup: ConformanceGroup<StateConformanceFixture> = {
     {
       name: "listJobs paginates correctly with completedAt ordering",
       run: async ({ stateAdapter }, expect) => {
+        const worker = await stateAdapter.startWorker({
+          workerId: stateAdapter.config.generateWorkerId(),
+          typeNames: ["page-type"],
+          concurrency: 1,
+          leaseMs: 60_000,
+        });
         const jobIds: string[] = [];
         for (let i = 0; i < 3; i++) {
           const [stateChain] = await stateAdapter.withTransaction(async (txCtx) =>
             stateAdapter.createJobs({
               txCtx,
-              jobs: [{ id: stateAdapter.config.generateId(), typeName: "page-type", input: null }],
+              jobs: [
+                { id: stateAdapter.config.generateJobId(), typeName: "page-type", input: null },
+              ],
             }),
           );
           jobIds.push(stateChain.head.id);
         }
 
         for (const id of jobIds) {
-          await stateAdapter.withTransaction(async (txCtx) =>
-            stateAdapter.startJobAttempts({
-              txCtx,
-              workerId: "w1",
-              timeoutMsByTypeName: { "page-type": 30_000 },
-              limit: 1,
-            }),
-          );
+          await stateAdapter.startJobAttempts({
+            workerId: worker.id,
+            workerToken: worker.token,
+            typeNames: ["page-type"],
+            limit: 1,
+          });
           await stateAdapter.withTransaction(async (txCtx) =>
             stateAdapter.completeJobs({
               txCtx,
@@ -566,7 +608,11 @@ export const listJobsGroup: ConformanceGroup<StateConformanceFixture> = {
             stateAdapter.createJobs({
               txCtx,
               jobs: [
-                { id: stateAdapter.config.generateId(), typeName: "paginate-type", input: { i } },
+                {
+                  id: stateAdapter.config.generateJobId(),
+                  typeName: "paginate-type",
+                  input: { i },
+                },
               ],
             }),
           );
@@ -603,14 +649,14 @@ export const listJobsGroup: ConformanceGroup<StateConformanceFixture> = {
         const [chain1] = await stateAdapter.withTransaction(async (txCtx) =>
           stateAdapter.createJobs({
             txCtx,
-            jobs: [{ id: stateAdapter.config.generateId(), typeName: "sort-asc", input: null }],
+            jobs: [{ id: stateAdapter.config.generateJobId(), typeName: "sort-asc", input: null }],
           }),
         );
         await sleep(5);
         const [chain2] = await stateAdapter.withTransaction(async (txCtx) =>
           stateAdapter.createJobs({
             txCtx,
-            jobs: [{ id: stateAdapter.config.generateId(), typeName: "sort-asc", input: null }],
+            jobs: [{ id: stateAdapter.config.generateJobId(), typeName: "sort-asc", input: null }],
           }),
         );
 
@@ -631,14 +677,18 @@ export const listJobsGroup: ConformanceGroup<StateConformanceFixture> = {
         const [chainA] = await stateAdapter.withTransaction(async (txCtx) =>
           stateAdapter.createJobs({
             txCtx,
-            jobs: [{ id: stateAdapter.config.generateId(), typeName: "range-type", input: null }],
+            jobs: [
+              { id: stateAdapter.config.generateJobId(), typeName: "range-type", input: null },
+            ],
           }),
         );
         await sleep(50);
         const [chainB] = await stateAdapter.withTransaction(async (txCtx) =>
           stateAdapter.createJobs({
             txCtx,
-            jobs: [{ id: stateAdapter.config.generateId(), typeName: "range-type", input: null }],
+            jobs: [
+              { id: stateAdapter.config.generateJobId(), typeName: "range-type", input: null },
+            ],
           }),
         );
         const midpoint = new Date(
@@ -673,7 +723,7 @@ export const listJobsGroup: ConformanceGroup<StateConformanceFixture> = {
           stateAdapter.createJobs({
             txCtx,
             jobs: [
-              { id: stateAdapter.config.generateId(), typeName: "pending-range", input: null },
+              { id: stateAdapter.config.generateJobId(), typeName: "pending-range", input: null },
             ],
           }),
         );
@@ -682,7 +732,7 @@ export const listJobsGroup: ConformanceGroup<StateConformanceFixture> = {
           stateAdapter.createJobs({
             txCtx,
             jobs: [
-              { id: stateAdapter.config.generateId(), typeName: "pending-range", input: null },
+              { id: stateAdapter.config.generateJobId(), typeName: "pending-range", input: null },
             ],
           }),
         );
@@ -714,101 +764,35 @@ export const listJobsGroup: ConformanceGroup<StateConformanceFixture> = {
       },
     },
     {
-      name: "listJobs sorts running by attemptUntil",
-      run: async ({ stateAdapter }, expect) => {
-        const [chainA] = await stateAdapter.withTransaction(async (txCtx) =>
-          stateAdapter.createJobs({
-            txCtx,
-            jobs: [{ id: stateAdapter.config.generateId(), typeName: "sort-until", input: null }],
-          }),
-        );
-        const [chainB] = await stateAdapter.withTransaction(async (txCtx) =>
-          stateAdapter.createJobs({
-            txCtx,
-            jobs: [{ id: stateAdapter.config.generateId(), typeName: "sort-until", input: null }],
-          }),
-        );
-
-        await stateAdapter.withTransaction(async (txCtx) =>
-          stateAdapter.startJobAttempts({
-            txCtx,
-            workerId: "worker-1",
-            timeoutMsByTypeName: { "sort-until": 30_000 },
-            limit: 1,
-          }),
-        );
-        await sleep(5);
-        await stateAdapter.withTransaction(async (txCtx) =>
-          stateAdapter.startJobAttempts({
-            txCtx,
-            workerId: "worker-1",
-            timeoutMsByTypeName: { "sort-until": 30_000 },
-            limit: 1,
-          }),
-        );
-
-        await stateAdapter.withTransaction(async (txCtx) =>
-          stateAdapter.extendJobAttempt({
-            txCtx,
-            jobId: chainA.head.id,
-            fence: { attempt: 1, workerId: "worker-1" },
-            timeoutMs: 5_000,
-          }),
-        );
-        await stateAdapter.withTransaction(async (txCtx) =>
-          stateAdapter.extendJobAttempt({
-            txCtx,
-            jobId: chainB.head.id,
-            fence: { attempt: 1, workerId: "worker-1" },
-            timeoutMs: 60_000,
-          }),
-        );
-
-        const desc = await stateAdapter.listJobs({
-          typeName: "sort-until",
-          status: "running",
-          orderBy: "attemptUntil",
-          orderDirection: "desc",
-          page: { limit: 10 },
-        });
-        expect(desc.items[0].id).toBe(chainB.head.id);
-        expect(desc.items[1].id).toBe(chainA.head.id);
-
-        const asc = await stateAdapter.listJobs({
-          typeName: "sort-until",
-          status: "running",
-          orderBy: "attemptUntil",
-          orderDirection: "asc",
-          page: { limit: 10 },
-        });
-        expect(asc.items[0].id).toBe(chainA.head.id);
-        expect(asc.items[1].id).toBe(chainB.head.id);
-      },
-    },
-    {
       name: "listJobs returns continuation jobs with correct status in multi-job chains",
       run: async ({ stateAdapter }, expect) => {
+        const worker = await stateAdapter.startWorker({
+          workerId: stateAdapter.config.generateWorkerId(),
+          typeNames: ["multi-step"],
+          concurrency: 1,
+          leaseMs: 60_000,
+        });
         const [headChain] = await stateAdapter.withTransaction(async (txCtx) =>
           stateAdapter.createJobs({
             txCtx,
-            jobs: [{ id: stateAdapter.config.generateId(), typeName: "multi-step", input: null }],
+            jobs: [
+              { id: stateAdapter.config.generateJobId(), typeName: "multi-step", input: null },
+            ],
           }),
         );
 
-        await stateAdapter.withTransaction(async (txCtx) =>
-          stateAdapter.startJobAttempts({
-            txCtx,
-            workerId: "w1",
-            timeoutMsByTypeName: { "multi-step": 30_000 },
-            limit: 1,
-          }),
-        );
+        await stateAdapter.startJobAttempts({
+          workerId: worker.id,
+          workerToken: worker.token,
+          typeNames: ["multi-step"],
+          limit: 1,
+        });
         const [continuedTail] = await stateAdapter.withTransaction(async (txCtx) =>
           stateAdapter.continueJobs({
             txCtx,
             jobs: [
               {
-                id: stateAdapter.config.generateId(),
+                id: stateAdapter.config.generateJobId(),
                 typeName: "multi-step",
                 continueFromId: headChain.head.id,
                 input: null,
@@ -841,14 +825,12 @@ export const listJobsGroup: ConformanceGroup<StateConformanceFixture> = {
 
         // Complete the tail and verify both jobs appear correctly
         await sleep(5);
-        await stateAdapter.withTransaction(async (txCtx) =>
-          stateAdapter.startJobAttempts({
-            txCtx,
-            workerId: "w1",
-            timeoutMsByTypeName: { "multi-step": 30_000 },
-            limit: 1,
-          }),
-        );
+        await stateAdapter.startJobAttempts({
+          workerId: worker.id,
+          workerToken: worker.token,
+          typeNames: ["multi-step"],
+          limit: 1,
+        });
         await stateAdapter.withTransaction(async (txCtx) =>
           stateAdapter.completeJobs({
             txCtx,
@@ -889,7 +871,9 @@ export const listJobsGroup: ConformanceGroup<StateConformanceFixture> = {
           .withTransaction(async (txCtx) => {
             await stateAdapter.createJobs({
               txCtx,
-              jobs: [{ id: stateAdapter.config.generateId(), typeName: "iso-list", input: null }],
+              jobs: [
+                { id: stateAdapter.config.generateJobId(), typeName: "iso-list", input: null },
+              ],
             });
             signalTxReady!();
             await gate;
@@ -909,6 +893,41 @@ export const listJobsGroup: ConformanceGroup<StateConformanceFixture> = {
 
         const { items } = await listPromise;
         expect(items).toHaveLength(0);
+      },
+    },
+    {
+      name: "listJobs paginates jobs created at the same time by id in both directions",
+      run: async ({ stateAdapter }, expect) => {
+        const created = await stateAdapter.withTransaction(async (txCtx) =>
+          stateAdapter.createJobs({
+            txCtx,
+            jobs: [0, 1, 2].map(() => ({
+              id: stateAdapter.config.generateJobId(),
+              typeName: "same-time-job",
+              input: null,
+            })),
+          }),
+        );
+        const [firstId, secondId, thirdId] = created.map((chain) => chain.head.id).toSorted();
+        const listSameTimeJobs = async (orderDirection: "asc" | "desc", cursor?: string) =>
+          stateAdapter.listJobs({
+            typeName: "same-time-job",
+            orderBy: "createdAt",
+            orderDirection,
+            page: { limit: 2, cursor },
+          });
+
+        const ascPage = await listSameTimeJobs("asc");
+        expect(ascPage.items.map((job) => job.id)).toEqual([firstId, secondId]);
+        expect(
+          (await listSameTimeJobs("asc", ascPage.nextCursor!)).items.map((job) => job.id),
+        ).toEqual([thirdId]);
+
+        const descPage = await listSameTimeJobs("desc");
+        expect(descPage.items.map((job) => job.id)).toEqual([thirdId, secondId]);
+        expect(
+          (await listSameTimeJobs("desc", descPage.nextCursor!)).items.map((job) => job.id),
+        ).toEqual([firstId]);
       },
     },
   ],

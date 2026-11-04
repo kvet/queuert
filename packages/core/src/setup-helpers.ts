@@ -20,13 +20,13 @@ export const createHelpers = ({
   jobTypes: jobTypesOption,
   log,
 }: {
-  stateAdapter: StateAdapter<any, any>;
+  stateAdapter: StateAdapter<any, any, any>;
   notifyAdapter?: NotifyAdapter;
   observabilityAdapter?: ObservabilityAdapter;
   jobTypes: JobTypes;
   log?: Log;
 }): {
-  stateAdapter: StateAdapter<any, any>;
+  stateAdapter: StateAdapter<any, any, any>;
   notifyAdapter: NotifyAdapter;
   observabilityHelper: ObservabilityHelper;
   jobTypes: JobTypes;

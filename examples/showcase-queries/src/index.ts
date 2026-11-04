@@ -1,7 +1,7 @@
 /**
- * Job & Chain Queries Showcase
+ * Job, Chain & Worker Queries Showcase
  *
- * Demonstrates read-only query methods for inspecting chains and jobs.
+ * Demonstrates read-only query methods for inspecting chains, jobs and workers.
  *
  * Scenarios:
  * 1. Single Lookups: Get a chain or job by ID with type narrowing
@@ -11,6 +11,7 @@
  * 5. Paginated Lists: Filter and paginate chains and jobs
  * 6. Chain Jobs: List jobs within a chain ordered by chain index
  * 7. Blocker Queries: Inspect blocker relationships from both directions
+ * 8. Worker Queries: Look up, count and list workers and the jobs running under them
  */
 
 import assert from "node:assert/strict";
@@ -249,12 +250,12 @@ for (const j of jobs) {
 // Scenario 3: Type discovery
 console.log("\n--- Scenario 3: Type Discovery ---\n");
 
-const chainTypeNames = await client.listChainTypeNames();
+const chainTypeNames = await client.getChainTypeNames();
 console.log(`Chain types: ${chainTypeNames.join(", ")}`);
 assert.ok(chainTypeNames.includes("process-order"));
 assert.ok(chainTypeNames.includes("send-notification"));
 
-const jobTypeNames = await client.listJobTypeNames();
+const jobTypeNames = await client.getJobTypeNames();
 console.log(`Job types: ${jobTypeNames.join(", ")}`);
 assert.ok(jobTypeNames.includes("process-order"));
 assert.ok(jobTypeNames.includes("ship-order"));
@@ -263,7 +264,7 @@ assert.ok(jobTypeNames.includes("send-notification"));
 // Scenario 4: Type counts
 console.log("\n--- Scenario 4: Type Counts ---\n");
 
-const chainCounts = await client.countByChainTypeNames({
+const chainCounts = await client.countChainsByTypeName({
   typeNames: ["process-order", "send-notification"],
 });
 console.log("Chain counts:");
@@ -273,7 +274,7 @@ for (const [i, name] of ["process-order", "send-notification"].entries()) {
 }
 assert.equal(chainCounts.length, 2);
 
-const jobCounts = await client.countByJobTypeNames({
+const jobCounts = await client.countJobsByTypeName({
   typeNames: ["process-order", "ship-order", "send-notification"],
 });
 console.log("\nJob counts:");
@@ -359,6 +360,44 @@ console.log(`\nJobs blocked by validate-input chain:`);
 for (const j of blockedByValidate.items) {
   console.log(`  "${j.typeName}" (${j.id}) — ${j.status}`);
 }
+
+// Scenario 8: Workers
+console.log("\n--- Scenario 8: Worker Queries ---\n");
+
+const workerPage = await client.listWorkers({ limit: 20 });
+assert.equal(workerPage.items.length, 1);
+const [liveWorker] = workerPage.items;
+console.log(
+  `Worker ${liveWorker.id}: ${liveWorker.typeNames.join(", ")} (concurrency ${liveWorker.concurrency})`,
+);
+
+const foundWorker = await client.getWorker({ id: liveWorker.id });
+assert.equal(foundWorker?.id, liveWorker.id);
+const foundWorkers = await client.getWorkers({
+  ids: [liveWorker.id, "00000000-0000-0000-0000-000000000000"],
+});
+assert.equal(foundWorkers[1], undefined);
+
+const workerCounts = await client.countWorkers();
+console.log(`Workers: live=${workerCounts.live}, expired=${workerCounts.expired}`);
+assert.deepEqual(workerCounts, { live: 1, expired: 0 });
+
+const [notificationWorkers] = await client.countWorkersByTypeName({
+  typeNames: ["send-notification"],
+});
+console.log(`send-notification workers: live=${notificationWorkers.live}`);
+assert.equal(notificationWorkers.live, 1);
+
+const notificationWorkerPage = await client.listWorkers({ typeName: "send-notification" });
+assert.equal(notificationWorkerPage.items.length, 1);
+
+const [runningJobCount] = await client.countRunningJobsByWorkerId({
+  workerIds: [liveWorker.id],
+});
+const runningJobs = await client.listWorkerJobs({ workerId: liveWorker.id });
+console.log(`Jobs running under the worker: ${runningJobCount}`);
+assert.equal(runningJobCount, 0);
+assert.equal(runningJobs.items.length, 0);
 
 await stopWorker();
 await notifyAdapter.close();

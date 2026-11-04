@@ -12,7 +12,7 @@ export const withTransactionGroup: ConformanceGroup<StateConformanceFixture> = {
             txCtx,
             jobs: [
               {
-                id: stateAdapter.config.generateId(),
+                id: stateAdapter.config.generateJobId(),
                 typeName: "isolation-test",
                 input: { value: "original" },
               },
@@ -27,7 +27,7 @@ export const withTransactionGroup: ConformanceGroup<StateConformanceFixture> = {
               txCtx,
               jobs: [
                 {
-                  id: stateAdapter.config.generateId(),
+                  id: stateAdapter.config.generateJobId(),
                   typeName: "rollback-test",
                   input: { value: "should-rollback" },
                 },
@@ -51,11 +51,17 @@ export const withTransactionGroup: ConformanceGroup<StateConformanceFixture> = {
     {
       name: "restores updated job state when rolled back",
       run: async ({ stateAdapter }, expect) => {
+        const worker = await stateAdapter.startWorker({
+          workerId: stateAdapter.config.generateWorkerId(),
+          typeNames: ["update-rollback"],
+          concurrency: 1,
+          leaseMs: 60_000,
+        });
         const [stateChain] = await stateAdapter.withTransaction(async (txCtx) =>
           stateAdapter.createJobs({
             txCtx,
             jobs: [
-              { id: stateAdapter.config.generateId(), typeName: "update-rollback", input: null },
+              { id: stateAdapter.config.generateJobId(), typeName: "update-rollback", input: null },
             ],
           }),
         );
@@ -64,8 +70,9 @@ export const withTransactionGroup: ConformanceGroup<StateConformanceFixture> = {
           await stateAdapter.withTransaction(async (txCtx) => {
             await stateAdapter.startJobAttempts({
               txCtx,
-              workerId: "worker-1",
-              timeoutMsByTypeName: { "update-rollback": 30_000 },
+              workerId: worker.id,
+              workerToken: worker.token,
+              typeNames: ["update-rollback"],
               limit: 1,
             });
             throw new Error("rollback after acquire");
@@ -82,8 +89,9 @@ export const withTransactionGroup: ConformanceGroup<StateConformanceFixture> = {
         const [reacquired] = await stateAdapter.withTransaction(async (txCtx) =>
           stateAdapter.startJobAttempts({
             txCtx,
-            workerId: "worker-1",
-            timeoutMsByTypeName: { "update-rollback": 30_000 },
+            workerId: worker.id,
+            workerToken: worker.token,
+            typeNames: ["update-rollback"],
             limit: 1,
           }),
         );
@@ -94,11 +102,17 @@ export const withTransactionGroup: ConformanceGroup<StateConformanceFixture> = {
     {
       name: "revives deleted chains when rolled back",
       run: async ({ stateAdapter }, expect) => {
+        const worker = await stateAdapter.startWorker({
+          workerId: stateAdapter.config.generateWorkerId(),
+          typeNames: ["delete-rollback"],
+          concurrency: 1,
+          leaseMs: 60_000,
+        });
         const [stateChain] = await stateAdapter.withTransaction(async (txCtx) =>
           stateAdapter.createJobs({
             txCtx,
             jobs: [
-              { id: stateAdapter.config.generateId(), typeName: "delete-rollback", input: null },
+              { id: stateAdapter.config.generateJobId(), typeName: "delete-rollback", input: null },
             ],
           }),
         );
@@ -118,8 +132,9 @@ export const withTransactionGroup: ConformanceGroup<StateConformanceFixture> = {
         const [reacquired] = await stateAdapter.withTransaction(async (txCtx) =>
           stateAdapter.startJobAttempts({
             txCtx,
-            workerId: "worker-1",
-            timeoutMsByTypeName: { "delete-rollback": 30_000 },
+            workerId: worker.id,
+            workerToken: worker.token,
+            typeNames: ["delete-rollback"],
             limit: 1,
           }),
         );
@@ -133,7 +148,11 @@ export const withTransactionGroup: ConformanceGroup<StateConformanceFixture> = {
           stateAdapter.createJobs({
             txCtx,
             jobs: [
-              { id: stateAdapter.config.generateId(), typeName: "blocker-rollback-a", input: null },
+              {
+                id: stateAdapter.config.generateJobId(),
+                typeName: "blocker-rollback-a",
+                input: null,
+              },
             ],
           }),
         );
@@ -141,7 +160,11 @@ export const withTransactionGroup: ConformanceGroup<StateConformanceFixture> = {
           stateAdapter.createJobs({
             txCtx,
             jobs: [
-              { id: stateAdapter.config.generateId(), typeName: "blocker-rollback-b", input: null },
+              {
+                id: stateAdapter.config.generateJobId(),
+                typeName: "blocker-rollback-b",
+                input: null,
+              },
             ],
           }),
         );
@@ -199,7 +222,7 @@ export const withTransactionGroup: ConformanceGroup<StateConformanceFixture> = {
               txCtx,
               jobs: [
                 {
-                  id: stateAdapter.config.generateId(),
+                  id: stateAdapter.config.generateJobId(),
                   typeName: "independent-vs-tx",
                   input: { side: "tx" },
                 },
@@ -218,7 +241,7 @@ export const withTransactionGroup: ConformanceGroup<StateConformanceFixture> = {
             txCtx: outsideTxCtx,
             jobs: [
               {
-                id: stateAdapter.config.generateId(),
+                id: stateAdapter.config.generateJobId(),
                 typeName: "independent-vs-tx",
                 input: { side: "outside" },
               },
@@ -238,11 +261,23 @@ export const withTransactionGroup: ConformanceGroup<StateConformanceFixture> = {
     {
       name: "rolls back mixed mutations atomically with consistent indexes",
       run: async ({ stateAdapter }, expect) => {
+        const worker = await stateAdapter.startWorker({
+          workerId: stateAdapter.config.generateWorkerId(),
+          typeNames: ["mixed-rollback"],
+          concurrency: 1,
+          leaseMs: 60_000,
+        });
+        const otherWorker = await stateAdapter.startWorker({
+          workerId: stateAdapter.config.generateWorkerId(),
+          typeNames: ["mixed-rollback"],
+          concurrency: 1,
+          leaseMs: 60_000,
+        });
         const [aChain] = await stateAdapter.withTransaction(async (txCtx) =>
           stateAdapter.createJobs({
             txCtx,
             jobs: [
-              { id: stateAdapter.config.generateId(), typeName: "mixed-rollback", input: null },
+              { id: stateAdapter.config.generateJobId(), typeName: "mixed-rollback", input: null },
             ],
           }),
         );
@@ -250,7 +285,7 @@ export const withTransactionGroup: ConformanceGroup<StateConformanceFixture> = {
           stateAdapter.createJobs({
             txCtx,
             jobs: [
-              { id: stateAdapter.config.generateId(), typeName: "mixed-rollback", input: null },
+              { id: stateAdapter.config.generateJobId(), typeName: "mixed-rollback", input: null },
             ],
           }),
         );
@@ -259,8 +294,9 @@ export const withTransactionGroup: ConformanceGroup<StateConformanceFixture> = {
           stateAdapter.withTransaction(async (txCtx) => {
             await stateAdapter.startJobAttempts({
               txCtx,
-              workerId: "worker-1",
-              timeoutMsByTypeName: { "mixed-rollback": 30_000 },
+              workerId: worker.id,
+              workerToken: worker.token,
+              typeNames: ["mixed-rollback"],
               limit: 1,
             });
             await stateAdapter.completeJobs({
@@ -300,8 +336,9 @@ export const withTransactionGroup: ConformanceGroup<StateConformanceFixture> = {
         const [reacquired] = await stateAdapter.withTransaction(async (txCtx) =>
           stateAdapter.startJobAttempts({
             txCtx,
-            timeoutMsByTypeName: { "mixed-rollback": 30_000 },
-            workerId: "rollback-probe",
+            typeNames: ["mixed-rollback"],
+            workerId: otherWorker.id,
+            workerToken: otherWorker.token,
             limit: 1,
           }),
         );
@@ -315,7 +352,7 @@ export const withTransactionGroup: ConformanceGroup<StateConformanceFixture> = {
           stateAdapter.createJobs({
             txCtx,
             jobs: [
-              { id: stateAdapter.config.generateId(), typeName: "tail-rollback", input: null },
+              { id: stateAdapter.config.generateJobId(), typeName: "tail-rollback", input: null },
             ],
           }),
         );
@@ -324,7 +361,7 @@ export const withTransactionGroup: ConformanceGroup<StateConformanceFixture> = {
             txCtx,
             jobs: [
               {
-                id: stateAdapter.config.generateId(),
+                id: stateAdapter.config.generateJobId(),
                 typeName: "tail-rollback:step",
                 continueFromId: stateChain.id,
                 input: null,
@@ -363,7 +400,7 @@ export const withTransactionGroup: ConformanceGroup<StateConformanceFixture> = {
         expect(chainAfter?.tail?.id).toBe(tailId);
         expect(chainAfter?.tail?.status).toBe("pending");
 
-        const counts = await stateAdapter.countByChainTypeNames({ typeNames: ["tail-rollback"] });
+        const counts = await stateAdapter.countChainsByTypeName({ typeNames: ["tail-rollback"] });
         expect(counts).toEqual([
           { running: { count: 1, hasMore: false }, completed: { count: 0, hasMore: false } },
         ]);
@@ -384,7 +421,7 @@ export const withTransactionGroup: ConformanceGroup<StateConformanceFixture> = {
                 txCtx,
                 jobs: [
                   {
-                    id: stateAdapter.config.generateId(),
+                    id: stateAdapter.config.generateJobId(),
                     typeName: "parallel-tx",
                     input: { index: i },
                   },
@@ -414,7 +451,11 @@ export const withTransactionGroup: ConformanceGroup<StateConformanceFixture> = {
           stateAdapter.createJobs({
             txCtx,
             jobs: [
-              { id: stateAdapter.config.generateId(), typeName: "mixed-concurrency", input: null },
+              {
+                id: stateAdapter.config.generateJobId(),
+                typeName: "mixed-concurrency",
+                input: null,
+              },
             ],
           }),
         );
@@ -426,7 +467,7 @@ export const withTransactionGroup: ConformanceGroup<StateConformanceFixture> = {
                 txCtx,
                 jobs: [
                   {
-                    id: stateAdapter.config.generateId(),
+                    id: stateAdapter.config.generateJobId(),
                     typeName: "mixed-tx",
                     input: { index: i },
                   },

@@ -88,7 +88,6 @@ const simulateWork = async (durationMs: number): Promise<void> => {
 
 const urgentWorker = await createInProcessWorker({
   client,
-  workerName: "urgent-worker",
   concurrency: 3,
   processors: createProcessors({
     client,
@@ -143,7 +142,6 @@ const urgentWorker = await createInProcessWorker({
 
 const bulkWorker = await createInProcessWorker({
   client,
-  workerName: "bulk-worker",
   concurrency: 1,
   processors: createProcessors({
     client,

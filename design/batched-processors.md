@@ -8,7 +8,7 @@ Opt-in batched processing for in-process workers: an attempt handler that receiv
 | --------------- | --------------------------: | ---------------------: | ----------------------: |
 | PostgreSQL (pg) |                     ~28,415 |                   ~333 |                  ~2,327 |
 
-Each processed job pays for heartbeat extensions and the user's `complete` transaction, plus its share of a batched acquire (a failed attempt adds one fenced reschedule). On PG that is the whole story: batched creation already does ~28k chains/s while per-job completion does ~330–2,300 jobs/s — a gap of more than 10× that is round-trip cost, not work. Users also cannot batch their own side of the work (bulk API calls, bulk queries) because the handler only ever sees one job.
+Each processed job pays for the user's `complete` transaction, plus its share of a batched acquire (a failed attempt adds one fenced reschedule). On PG that is the whole story: batched creation already does ~28k chains/s while per-job completion does ~330–2,300 jobs/s — a gap of more than 10× that is round-trip cost, not work. Users also cannot batch their own side of the work (bulk API calls, bulk queries) because the handler only ever sees one job.
 
 ## API
 
@@ -60,11 +60,11 @@ createProcessors({
 
 **One type per batch.** A batch shares a handler, so it must share a type. The adapter picks the type with the oldest pending job and fills up to that type's limit — one statement, no cross-type fairness logic in the worker.
 
-**The batch is the unit.** One attempt, one `complete` in one user transaction, one abort. Every job's write is fenced on its own `attempt = N AND attempt_by = workerId`; if any fence misses, `complete` throws, the user's transaction rolls back with nothing written, the whole batch aborts, and the fallback fenced reschedule returns the survivors (attempt expiry and reclaim are the backstop after a crash). Per-job fates inside a shared transaction would need per-job rollback, which buys little and costs a lot.
+**The batch is the unit.** One attempt, one `complete` in one user transaction, one abort. Every job's write is guarded by its own `attemptToken`; if any job lost its token, `complete` throws, the user's transaction rolls back with nothing written, the whole batch aborts, and the fallback reschedule under each job's `attemptToken` returns the survivors. After a crash, the worker lease and reclaim are the backstop. Per-job fates inside a shared transaction would need per-job rollback, which buys little and costs a lot.
 
 **`fail` is a value, not a throw.** A throw fails all N — that is the all-or-nothing signal. Failing a subset therefore has to be data, so per-job errors ride in the same outcome array as successes and land in the same write.
 
-**One processing path.** Every batch acquires with autocommit, sets `attemptUntil` for each job at acquire, heartbeats every job until the handler ends or its `complete` commits, and does its work outside any queuert-owned transaction.
+**One processing path.** Every batch acquires atomically under the worker's lease and does its work outside any queuert-owned transaction.
 
 **User writes share the batch's fate.** Writes the handler makes in the transaction it passes to `complete` commit or roll back with the whole batch's outcomes. Writes in other transactions the handler opens are not ownership-fenced and must be idempotent.
 
@@ -76,6 +76,6 @@ createProcessors({
 
 2. **Batch return typing.** `complete(outcomes[])` returns an array of a union, so mixed batches make the caller narrow per slot. Whether a mapped-tuple overload is worth the type complexity for literal call sites is undecided.
 
-3. **Group reclamation.** Every attempt has an `attemptUntil` set at acquire and extended by the heartbeat, but expired-attempt reclamation releases individual jobs (up to the idle slot count per iteration) with no notion of a batch, while a batch shares a fate. Candidates: a batch ID written at acquire time, releasing by `(attemptBy, attemptUntil)`, or a batch join table. Until this is decided, batched processing has weaker recovery guarantees than per-job.
+3. **Group reclamation.** A running job is live while its worker's lease is, and reclaiming an expired worker releases all of its running jobs at once, so a batch held by one worker already shares its fate. A worker that is still live but no longer runs some of its jobs releases them one by one, with no notion of a batch.
 
 4. **OTel.** Direction is the standard messaging-batch convention: a batch span parenting per-job spans, producer contexts attached as links rather than parents, per-job errors on per-job spans with a failed count on the batch. Not finalized.

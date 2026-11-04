@@ -31,6 +31,12 @@ type WorkerErrorLogEntry = LogEntry<
   WorkerBasicData,
   unknown
 >;
+type WorkerLeaseLostLogEntry = LogEntry<
+  "worker_lease_lost",
+  "warn",
+  "Worker lost its lease",
+  WorkerBasicData
+>;
 type WorkerStoppedLogEntry = LogEntry<
   "worker_stopped",
   "info",
@@ -66,7 +72,6 @@ export type JobProcessingData = JobBasicData & { status: JobStatus; attempt: num
 export type JobAttemptData = JobProcessingData & {
   attemptAt: Date;
   attemptBy: string;
-  attemptUntil: Date;
 };
 export type JobCompletionData = JobProcessingData & {
   output?: unknown;
@@ -120,11 +125,12 @@ type JobAttemptLostLogEntry = LogEntry<
   "Job attempt lost",
   JobAttemptData & WorkerBasicData
 >;
+export type JobReclaimData = { reclaimedFrom: string };
 type JobAttemptReclaimedLogEntry = LogEntry<
   "job_attempt_reclaimed",
   "info",
-  "Reclaimed expired job attempt",
-  JobAttemptData & WorkerBasicData
+  "Reclaimed job attempt",
+  JobAttemptData & WorkerBasicData & JobReclaimData
 >;
 type JobAttemptFailedLogEntry = LogEntry<
   "job_attempt_failed",
@@ -146,7 +152,7 @@ type StateAdapterErrorLogEntry = LogEntry<
   "state_adapter_error",
   "warn",
   "State adapter error",
-  { operation: keyof StateAdapter<any, any> },
+  { operation: keyof StateAdapter<any, any, any> },
   unknown
 >;
 
@@ -162,6 +168,7 @@ type TypedLogEntry =
   // worker
   | WorkerStartedLogEntry
   | WorkerErrorLogEntry
+  | WorkerLeaseLostLogEntry
   | WorkerStoppedLogEntry
   // chain
   | ChainCreatedLogEntry

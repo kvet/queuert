@@ -10,21 +10,21 @@ export const getJobBlockersGroup: ConformanceGroup<StateConformanceFixture> = {
         const [blockerChainA] = await stateAdapter.withTransaction(async (txCtx) =>
           stateAdapter.createJobs({
             txCtx,
-            jobs: [{ id: stateAdapter.config.generateId(), typeName: "blocker", input: null }],
+            jobs: [{ id: stateAdapter.config.generateJobId(), typeName: "blocker", input: null }],
           }),
         );
 
         const [blockerChainB] = await stateAdapter.withTransaction(async (txCtx) =>
           stateAdapter.createJobs({
             txCtx,
-            jobs: [{ id: stateAdapter.config.generateId(), typeName: "blocker", input: null }],
+            jobs: [{ id: stateAdapter.config.generateJobId(), typeName: "blocker", input: null }],
           }),
         );
 
         const [mainChain] = await stateAdapter.withTransaction(async (txCtx) =>
           stateAdapter.createJobs({
             txCtx,
-            jobs: [{ id: stateAdapter.config.generateId(), typeName: "main", input: null }],
+            jobs: [{ id: stateAdapter.config.generateJobId(), typeName: "main", input: null }],
           }),
         );
 
@@ -58,7 +58,9 @@ export const getJobBlockersGroup: ConformanceGroup<StateConformanceFixture> = {
         const [blockerHeadChain] = await stateAdapter.withTransaction(async (txCtx) =>
           stateAdapter.createJobs({
             txCtx,
-            jobs: [{ id: stateAdapter.config.generateId(), typeName: "blocker-head", input: null }],
+            jobs: [
+              { id: stateAdapter.config.generateJobId(), typeName: "blocker-head", input: null },
+            ],
           }),
         );
 
@@ -67,7 +69,7 @@ export const getJobBlockersGroup: ConformanceGroup<StateConformanceFixture> = {
             txCtx,
             jobs: [
               {
-                id: stateAdapter.config.generateId(),
+                id: stateAdapter.config.generateJobId(),
                 typeName: "blocker-step2",
                 continueFromId: blockerHeadChain.head.id,
                 input: null,
@@ -80,7 +82,7 @@ export const getJobBlockersGroup: ConformanceGroup<StateConformanceFixture> = {
         const [mainChain] = await stateAdapter.withTransaction(async (txCtx) =>
           stateAdapter.createJobs({
             txCtx,
-            jobs: [{ id: stateAdapter.config.generateId(), typeName: "main", input: null }],
+            jobs: [{ id: stateAdapter.config.generateJobId(), typeName: "main", input: null }],
           }),
         );
 
@@ -109,8 +111,8 @@ export const getJobBlockersGroup: ConformanceGroup<StateConformanceFixture> = {
           stateAdapter.createJobs({
             txCtx,
             jobs: [
-              { id: stateAdapter.config.generateId(), typeName: "blocker", input: null },
-              { id: stateAdapter.config.generateId(), typeName: "main", input: null },
+              { id: stateAdapter.config.generateJobId(), typeName: "blocker", input: null },
+              { id: stateAdapter.config.generateJobId(), typeName: "main", input: null },
             ],
           }),
         );
@@ -137,7 +139,9 @@ export const getJobBlockersGroup: ConformanceGroup<StateConformanceFixture> = {
         const [stateChain] = await stateAdapter.withTransaction(async (txCtx) =>
           stateAdapter.createJobs({
             txCtx,
-            jobs: [{ id: stateAdapter.config.generateId(), typeName: "no-blockers", input: null }],
+            jobs: [
+              { id: stateAdapter.config.generateJobId(), typeName: "no-blockers", input: null },
+            ],
           }),
         );
 
@@ -156,7 +160,7 @@ export const getJobBlockersGroup: ConformanceGroup<StateConformanceFixture> = {
           stateAdapter.createJobs({
             txCtx,
             jobs: [
-              { id: stateAdapter.config.generateId(), typeName: "iso-blocker-src", input: null },
+              { id: stateAdapter.config.generateJobId(), typeName: "iso-blocker-src", input: null },
             ],
           }),
         );
@@ -164,7 +168,11 @@ export const getJobBlockersGroup: ConformanceGroup<StateConformanceFixture> = {
           stateAdapter.createJobs({
             txCtx,
             jobs: [
-              { id: stateAdapter.config.generateId(), typeName: "iso-blocker-target", input: null },
+              {
+                id: stateAdapter.config.generateJobId(),
+                typeName: "iso-blocker-target",
+                input: null,
+              },
             ],
           }),
         );

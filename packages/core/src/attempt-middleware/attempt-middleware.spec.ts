@@ -124,7 +124,7 @@ describe("tuple narrowing without `as const`", () => {
 describe("AttemptMiddleware accepts concrete (non-any) state adapters", () => {
   it("accepts an adapter with a non-empty txCtx as the TStateAdapter parameter", () => {
     type Tx = { db: { query: (sql: string) => Promise<unknown> } };
-    type DbStateAdapter = StateAdapter<Tx, string>;
+    type DbStateAdapter = StateAdapter<Tx, string, string>;
 
     expectTypeOf<AttemptMiddleware<DbStateAdapter>>().toBeObject();
     expectTypeOf<AttemptMiddleware<DbStateAdapter, { trace: string }>>().toBeObject();
@@ -132,7 +132,7 @@ describe("AttemptMiddleware accepts concrete (non-any) state adapters", () => {
 
   it("merges ctx across a multi-element tuple of concrete-adapter middleware", () => {
     type Tx = { db: { query: (sql: string) => Promise<unknown> } };
-    type DbStateAdapter = StateAdapter<Tx, string>;
+    type DbStateAdapter = StateAdapter<Tx, string, string>;
     const dbClient = client as unknown as Client<Defs, DbStateAdapter>;
     const dbStateAdapter = stateAdapter as unknown as DbStateAdapter;
 
@@ -170,6 +170,7 @@ describe("AttemptMiddleware accepts concrete (non-any) state adapters", () => {
   it("merges ctx across a tuple mixing any- and concrete-adapter middleware", () => {
     type DbStateAdapter = StateAdapter<
       { db: { query: (sql: string) => Promise<unknown> } },
+      string,
       string
     >;
 
@@ -204,7 +205,7 @@ describe("AttemptMiddleware accepts concrete (non-any) state adapters", () => {
 describe("middleware must match the client's state adapter", () => {
   it("rejects middleware typed against a foreign adapter", () => {
     type PgJobId = string & { readonly brand: "pg" };
-    type PgAdapter = StateAdapter<{ sql: (q: string) => Promise<void> }, PgJobId>;
+    type PgAdapter = StateAdapter<{ sql: (q: string) => Promise<void> }, PgJobId, string>;
     const foreignMw: AttemptMiddleware<PgAdapter, { tenant: string }> = {
       wrapHandler: async ({ job, next }) => {
         void (job.id satisfies PgJobId);

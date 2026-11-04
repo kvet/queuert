@@ -41,24 +41,14 @@ Deploy multiple worker processes sharing the same database for horizontal scalin
 The simplest approach: deploy the same worker configuration on multiple machines or processes.
 
 ```ts
-// Process A (e.g., machine-1)
-const workerA = await createInProcessWorker({
+const worker = await createInProcessWorker({
   client,
-  workerName: "worker-a",
-  concurrency: 10,
-  processors: createProcessors({ client, jobTypes, processors: { ... } }),
-});
-
-// Process B (e.g., machine-2)
-const workerB = await createInProcessWorker({
-  client,
-  workerName: "worker-b",
   concurrency: 10,
   processors: createProcessors({ client, jobTypes, processors: { ... } }),
 });
 ```
 
-`workerName` is an optional human-readable label. The runtime always appends a random UUID, so two replicas sharing the same name still get distinct ids and cannot collide on job attempts. Workers compete for available jobs — when one acquires a job, others skip it. The notify adapter (Redis, PostgreSQL LISTEN/NOTIFY, etc.) ensures workers wake up immediately when new jobs are queued.
+Each in-process worker registers under a new id from the state adapter's `generateWorkerId`, a random UUID by default, so processes running the same code never share an id. A restarted process registers under a new id, and once the lease of its previous run expires, an idle worker reclaims the jobs that run left behind. To keep a stable id per process (a pod name, for example), pass `workerId`; a process restarting under it waits until the previous run's lease expires, then reclaims it and starts. Workers compete for available jobs — when one acquires a job, others skip it. The notify adapter (Redis, PostgreSQL LISTEN/NOTIFY, etc.) ensures workers wake up immediately when new jobs are queued.
 
 ## Specialized Workers
 
@@ -77,7 +67,6 @@ const client = await createClient({
 
 const worker = await createInProcessWorker({
   client,
-  workerName: `image-worker-${threadId}`,
   concurrency: 1,
   processors: createProcessors({
     client,
@@ -101,7 +90,6 @@ for (let i = 0; i < 10; i++) {
 // Lightweight async I/O — single worker in main thread, high concurrency
 const notificationWorker = await createInProcessWorker({
   client,
-  workerName: "notification-worker",
   concurrency: 100,
   processors: createProcessors({
     client,
@@ -129,7 +117,7 @@ See [Feature Slices](../slices/) for organizing job types and processors into in
 
 ### Splitting a Registry
 
-When one `createProcessors` registry (`appProcessors` below) holds the processors for every job type, split it across workers with `pickProcessors` and `omitProcessors`. `pickProcessors` keeps only the listed job types; `omitProcessors` keeps everything else, so the two together cover every job type. Each processor keeps its handler, its slice's middleware chain, and its `backoffConfig` / `attemptConfig`:
+When one `createProcessors` registry (`appProcessors` below) holds the processors for every job type, split it across workers with `pickProcessors` and `omitProcessors`. `pickProcessors` keeps only the listed job types; `omitProcessors` keeps everything else, so the two together cover every job type. Each processor keeps its handler, its slice's middleware chain, and its `backoffConfig`:
 
 ```ts
 import { omitProcessors, pickProcessors } from "queuert";
@@ -138,14 +126,12 @@ const imageJobTypeNames = ["images.resize", "images.transcode"] as const;
 
 const imageWorker = await createInProcessWorker({
   client,
-  workerName: "image-worker",
   concurrency: 1,
   processors: pickProcessors(appProcessors, imageJobTypeNames),
 });
 
 const defaultWorker = await createInProcessWorker({
   client,
-  workerName: "default-worker",
   concurrency: 100,
   processors: omitProcessors(appProcessors, imageJobTypeNames),
 });

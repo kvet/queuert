@@ -1,5 +1,5 @@
 import { sleep } from "@queuert/helpers";
-import { type TestAPI, expect, expectTypeOf, vi } from "vitest";
+import { type TestAPI, expect, expectTypeOf } from "vitest";
 
 import { createClient } from "../client.js";
 import {
@@ -489,21 +489,20 @@ export const workerlessCompletionTestSuite = ({ it }: { it: TestAPI<TestSuiteCon
       }),
     );
 
-    const handlerFn = vi.fn();
+    const handlerCalled = new AbortController();
     const updatedChain = await withTransaction(async (txCtx, transactionHooks) =>
       client.completeChain({
         ...txCtx,
         transactionHooks,
         ...chain,
-        handler: handlerFn,
+        handler: async ({ job }) => {
+          expect(job).toMatchObject({ typeName: "test", status: "pending" });
+          handlerCalled.abort();
+        },
       }),
     );
 
-    expect(handlerFn).toHaveBeenCalledWith(
-      expect.objectContaining({
-        job: expect.objectContaining({ typeName: "test", status: "pending" }),
-      }),
-    );
+    expect(handlerCalled.signal.aborted).toBe(true);
     expect(updatedChain).toMatchObject({
       id: chain.id,
       status: "running",
@@ -644,7 +643,7 @@ export const workerlessCompletionTestSuite = ({ it }: { it: TestAPI<TestSuiteCon
       }),
     );
 
-    const secondAttempted = vi.fn();
+    const secondAttempted = new AbortController();
     const worker = await createInProcessWorker({
       client,
       concurrency: 1,
@@ -654,7 +653,7 @@ export const workerlessCompletionTestSuite = ({ it }: { it: TestAPI<TestSuiteCon
         processors: {
           second: {
             attemptHandler: async () => {
-              secondAttempted();
+              secondAttempted.abort();
               throw new Error("acquired the job locked by completeChain");
             },
           },
@@ -681,7 +680,7 @@ export const workerlessCompletionTestSuite = ({ it }: { it: TestAPI<TestSuiteCon
     try {
       await handlerEntered.promise;
       await withWorkers([await worker.start()], async () => sleep(100));
-      expect(secondAttempted).not.toHaveBeenCalled();
+      expect(secondAttempted.signal.aborted).toBe(false);
     } finally {
       handlerGate.resolve();
       await completion;

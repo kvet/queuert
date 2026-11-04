@@ -33,7 +33,7 @@ const mergedClient = await createClient({
 describe("Client covariance", () => {
   it("Client<A | B> is assignable to Client<A>", () => {
     const acceptDefs1Client = <TTxContext extends BaseTxContext>(
-      _client: Client<Defs1, StateAdapter<TTxContext, any>>,
+      _client: Client<Defs1, StateAdapter<TTxContext, any, any>>,
     ) => {};
 
     acceptDefs1Client(mergedClient);
@@ -41,15 +41,15 @@ describe("Client covariance", () => {
 
   it("Client<A | B> is assignable to Client<B>", () => {
     const acceptDefs2Client = <TTxContext extends BaseTxContext>(
-      _client: Client<Defs2, StateAdapter<TTxContext, any>>,
+      _client: Client<Defs2, StateAdapter<TTxContext, any, any>>,
     ) => {};
 
     acceptDefs2Client(mergedClient);
   });
 
   it("Client<A> is not assignable to Client<B>", () => {
-    type ClientDefs1 = Client<Defs1, StateAdapter<BaseTxContext, any>>;
-    type ClientDefs2 = Client<Defs2, StateAdapter<BaseTxContext, any>>;
+    type ClientDefs1 = Client<Defs1, StateAdapter<BaseTxContext, any, any>>;
+    type ClientDefs2 = Client<Defs2, StateAdapter<BaseTxContext, any, any>>;
 
     expectTypeOf<ClientDefs1>().not.toExtend<ClientDefs2>();
     expectTypeOf<ClientDefs2>().not.toExtend<ClientDefs1>();

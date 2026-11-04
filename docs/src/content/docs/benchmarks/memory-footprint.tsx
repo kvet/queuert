@@ -59,7 +59,7 @@ const Page = () => (
     />
     <h2 id="reading-the-results">Reading the results</h2>
     <p>
-      Live JS retained stays at about 10–25 KB for every package: V8 hidden classes and shape
+      Live JS retained stays at about 10-20 KB for every package: V8 hidden classes and shape
       descriptors left by method calls, not Queuert state. JIT code retained grows with the code
       paths a package exercises, so packages that run more queries keep more. Neither grows per job
       or per lifecycle.

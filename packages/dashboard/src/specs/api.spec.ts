@@ -29,7 +29,7 @@ const createJob = async (
   const [stateChain] = await stateAdapter.withTransaction(async (txCtx) =>
     stateAdapter.createJobs({
       txCtx,
-      jobs: [{ id: stateAdapter.config.generateId(), typeName, input }],
+      jobs: [{ id: stateAdapter.config.generateJobId(), typeName, input }],
     }),
   );
   return stateChain.head;
@@ -44,7 +44,7 @@ const createContinuation = async (
   const [continued] = await stateAdapter.withTransaction(async (txCtx) =>
     stateAdapter.continueJobs({
       txCtx,
-      jobs: [{ id: stateAdapter.config.generateId(), typeName, continueFromId, input }],
+      jobs: [{ id: stateAdapter.config.generateJobId(), typeName, continueFromId, input }],
     }),
   );
   return continued!.continuation;
@@ -53,12 +53,21 @@ const createContinuation = async (
 const startAttempt = async (
   stateAdapter: Awaited<ReturnType<typeof createInProcessStateAdapter>>,
   typeName: string,
-) =>
-  stateAdapter.startJobAttempts({
+) => {
+  const [worker] = await stateAdapter.getWorkers({ workerIds: ["worker-1"] });
+  return stateAdapter.startJobAttempts({
     workerId: "worker-1",
-    timeoutMsByTypeName: { [typeName]: 60_000 },
+    workerToken: worker!.token,
+    typeNames: [typeName],
     limit: 1,
   });
+};
+
+const startWorker = async (
+  stateAdapter: Awaited<ReturnType<typeof createInProcessStateAdapter>>,
+  workerId: string,
+  typeNames: string[],
+) => stateAdapter.startWorker({ workerId, typeNames, concurrency: 2, leaseMs: 60_000 });
 
 const completeJob = async (
   stateAdapter: Awaited<ReturnType<typeof createInProcessStateAdapter>>,
@@ -115,9 +124,17 @@ const createUuidStrictDashboard = async () => {
       assertUuids([params.chainId]);
       return inner.listBlockedJobs(params);
     },
-    listChainTypeNames: async (params) => {
+    getWorkers: async (params) => {
+      assertUuids(params.workerIds);
+      return inner.getWorkers(params);
+    },
+    listWorkerJobs: async (params) => {
+      assertUuids([params.workerId]);
+      return inner.listWorkerJobs(params);
+    },
+    getChainTypeNames: async (params) => {
       if (failures.probe) throw new Error("connection refused");
-      return inner.listChainTypeNames(params);
+      return inner.getChainTypeNames(params);
     },
   };
   const client = await createClient({ stateAdapter, jobTypes: defineJobTypes() });
@@ -222,6 +239,7 @@ describe("Dashboard API", () => {
       const running = await createJob(stateAdapter, "running-type", null);
       const done = await createJob(stateAdapter, "done-type", null);
 
+      await startWorker(stateAdapter, "worker-1", ["done-type"]);
       await startAttempt(stateAdapter, "done-type");
       await completeJob(stateAdapter, done.id, { output: null });
 
@@ -283,6 +301,7 @@ describe("Dashboard API", () => {
     it("returns a null currentJob for a completed chain", async () => {
       const { request, stateAdapter } = await createTestDashboard();
       const root = await createJob(stateAdapter, "completed-type", null);
+      await startWorker(stateAdapter, "worker-1", ["completed-type"]);
       await startAttempt(stateAdapter, "completed-type");
       await completeJob(stateAdapter, root.id, { output: null });
 
@@ -452,6 +471,7 @@ describe("Dashboard API", () => {
       const { request, stateAdapter } = await createTestDashboard();
       await createJob(stateAdapter, "type-a", null);
       const done = await createJob(stateAdapter, "type-b", null);
+      await startWorker(stateAdapter, "worker-1", ["type-b"]);
       await startAttempt(stateAdapter, "type-b");
       await completeJob(stateAdapter, done.id, { output: null });
 
@@ -539,6 +559,11 @@ describe("Dashboard API", () => {
       );
 
       const running = await createJob(stateAdapter, "running-type", null);
+      await startWorker(stateAdapter, "worker-1", [
+        "running-type",
+        "terminal-type",
+        "continued-type",
+      ]);
       await startAttempt(stateAdapter, "running-type");
 
       const terminal = await createJob(stateAdapter, "terminal-type", null);
@@ -588,7 +613,7 @@ describe("Dashboard API", () => {
       for (const query of [
         "typeName=test-type&status=pending&orderBy=completedAt",
         "typeName=test-type&status=running&orderBy=scheduledAt",
-        "typeName=test-type&status=completed&orderBy=attemptUntil",
+        "typeName=test-type&status=completed&orderBy=attemptAt",
         "typeName=test-type&orderBy=bogus",
       ]) {
         const res = await request(`/api/jobs?${query}`);
@@ -626,8 +651,9 @@ describe("Dashboard API", () => {
       expect(await parseBody(res)).toEqual([]);
     });
 
-    it("returns per-status counts for each requested type name", async () => {
+    it("returns per-status counts and live workers for each requested type name", async () => {
       const { request, stateAdapter } = await createTestDashboard();
+      await startWorker(stateAdapter, "worker-1", ["type-b"]);
       await createJob(stateAdapter, "type-a", null);
       const blockerChain = await createJob(stateAdapter, "type-b", null);
       await startAttempt(stateAdapter, "type-b");
@@ -646,9 +672,267 @@ describe("Dashboard API", () => {
       expect(body[0].blocked.count).toBe(1);
       expect(body[0].pending.count).toBe(1);
       expect(body[0].running.count).toBe(0);
+      expect(body[0].workers).toEqual({ live: 0, expired: 0 });
       expect(body[1].typeName).toBe("type-b");
       expect(body[1].blocked.count).toBe(0);
       expect(body[1].running.count).toBe(1);
+      expect(body[1].workers).toEqual({ live: 1, expired: 0 });
+    });
+  });
+
+  describe("GET /api/workers", () => {
+    it("returns an empty page when no worker has a row", async () => {
+      const { request } = await createTestDashboard();
+      const res = await request("/api/workers");
+
+      expect(res.status).toBe(200);
+      expect(await parseBody(res)).toEqual({ items: [], nextCursor: null });
+    });
+
+    it("returns every worker, or only those processing typeName, with its running job count", async () => {
+      const { request, stateAdapter } = await createTestDashboard();
+      await startWorker(stateAdapter, "worker-a", ["type-a"]);
+      await startWorker(stateAdapter, "worker-1", ["type-b"]);
+      await createJob(stateAdapter, "type-b", null);
+      await startAttempt(stateAdapter, "type-b");
+
+      const all = await parseBody(await request("/api/workers"));
+      const typeB = await parseBody(await request("/api/workers?typeName=type-b"));
+
+      expect(all.items.map((worker: { id: string }) => worker.id).sort()).toEqual([
+        "worker-1",
+        "worker-a",
+      ]);
+      expect(typeB.items.map((worker: { id: string }) => worker.id)).toEqual(["worker-1"]);
+      expect(typeB.items[0].typeNames).toEqual(["type-b"]);
+      expect(typeB.items[0].concurrency).toBe(2);
+      expect(typeB.items[0].runningJobCount).toBe(1);
+      expect(typeB.items[0].startedAt).toBeInstanceOf(Date);
+    });
+
+    it("returns every worker for an empty typeName", async () => {
+      const { request, stateAdapter } = await createTestDashboard();
+      await startWorker(stateAdapter, "worker-a", ["type-a"]);
+
+      const body = await parseBody(await request("/api/workers?typeName="));
+
+      expect(body.items.map((worker: { id: string }) => worker.id)).toEqual(["worker-a"]);
+    });
+
+    it("pages with cursor and limit", async () => {
+      const { request, stateAdapter } = await createTestDashboard();
+      await startWorker(stateAdapter, "worker-a", ["type-a"]);
+      await startWorker(stateAdapter, "worker-b", ["type-a"]);
+
+      const firstPage = await parseBody(await request("/api/workers?limit=1"));
+      const secondPage = await parseBody(
+        await request(`/api/workers?limit=1&cursor=${firstPage.nextCursor}`),
+      );
+
+      expect(firstPage.items).toHaveLength(1);
+      expect(secondPage.items).toHaveLength(1);
+      expect(secondPage.nextCursor).toBeNull();
+      expect(new Set([firstPage.items[0].id, secondPage.items[0].id])).toEqual(
+        new Set(["worker-a", "worker-b"]),
+      );
+    });
+
+    it("returns whether each worker lost its lease on the list, by-id and by-ids routes", async () => {
+      const { request, stateAdapter } = await createTestDashboard();
+      await startWorker(stateAdapter, "worker-live", ["type-a"]);
+      await stateAdapter.startWorker({
+        workerId: "worker-expired",
+        typeNames: ["type-a"],
+        concurrency: 1,
+        leaseMs: 0,
+      });
+
+      const list = await parseBody(await request("/api/workers"));
+      const byIds = await parseBody(
+        await request("/api/workers/by-ids?ids=worker-live,worker-expired"),
+      );
+
+      expect(
+        list.items
+          .map((worker: { id: string; expired: boolean }) => [worker.id, worker.expired])
+          .sort(),
+      ).toEqual([
+        ["worker-expired", true],
+        ["worker-live", false],
+      ]);
+      expect(
+        byIds.items.map((worker: { id: string; expired: boolean }) => [worker.id, worker.expired]),
+      ).toEqual([
+        ["worker-live", false],
+        ["worker-expired", true],
+      ]);
+      expect(
+        (await parseBody(await request("/api/workers/by-id?id=worker-live"))).worker.expired,
+      ).toBe(false);
+      expect(
+        (await parseBody(await request("/api/workers/by-id?id=worker-expired"))).worker.expired,
+      ).toBe(true);
+    });
+  });
+
+  describe("GET /api/workers/counts", () => {
+    it("returns the live and expired worker counts", async () => {
+      const { request, stateAdapter } = await createTestDashboard();
+      await startWorker(stateAdapter, "worker-a", ["type-a"]);
+      await stateAdapter.startWorker({
+        workerId: "worker-b",
+        typeNames: ["type-a"],
+        concurrency: 1,
+        leaseMs: 0,
+      });
+
+      expect(await parseBody(await request("/api/workers/counts"))).toEqual({
+        live: 1,
+        expired: 1,
+      });
+    });
+  });
+
+  describe("GET /api/workers/by-id", () => {
+    it("returns the worker with its running job count", async () => {
+      const { request, stateAdapter } = await createTestDashboard();
+      await startWorker(stateAdapter, "worker-1", ["type-a"]);
+      await createJob(stateAdapter, "type-a", null);
+      await startAttempt(stateAdapter, "type-a");
+
+      const res = await request("/api/workers/by-id?id=worker-1");
+      const body = await parseBody(res);
+
+      expect(res.status).toBe(200);
+      expect(body.worker.id).toBe("worker-1");
+      expect(body.worker.runningJobCount).toBe(1);
+      expect(body.worker.leaseUntil).toBeInstanceOf(Date);
+    });
+
+    it("returns 404 for a worker with no row", async () => {
+      const { request } = await createTestDashboard();
+      const res = await request("/api/workers/by-id?id=missing-worker");
+
+      expect(res.status).toBe(404);
+      expect(await parseBody(res)).toEqual({ error: "Worker not found" });
+    });
+
+    it("returns 404 without an id", async () => {
+      const { request } = await createTestDashboard();
+      const res = await request("/api/workers/by-id");
+
+      expect(res.status).toBe(404);
+      expect(await parseBody(res)).toEqual({ error: "Worker not found" });
+    });
+
+    it("returns a worker whose id contains / % and , or names another worker route", async () => {
+      const { request, stateAdapter } = await createTestDashboard();
+      await startWorker(stateAdapter, "pod/7%a,b", ["type-a"]);
+      await startWorker(stateAdapter, "counts", ["type-a"]);
+      await startWorker(stateAdapter, "by-ids", ["type-a"]);
+
+      expect(
+        (await parseBody(await request(`/api/workers/by-id?id=${encodeURIComponent("pod/7%a,b")}`)))
+          .worker.id,
+      ).toBe("pod/7%a,b");
+      expect((await parseBody(await request("/api/workers/by-id?id=counts"))).worker.id).toBe(
+        "counts",
+      );
+      expect((await parseBody(await request("/api/workers/by-id?id=by-ids"))).worker.id).toBe(
+        "by-ids",
+      );
+    });
+  });
+
+  describe("GET /api/workers/:workerId/jobs", () => {
+    it("returns the jobs running under the worker", async () => {
+      const { request, stateAdapter } = await createTestDashboard();
+      const job = await createJob(stateAdapter, "type-a", null);
+      await startWorker(stateAdapter, "worker-1", ["type-a"]);
+      await startAttempt(stateAdapter, "type-a");
+
+      const body = await parseBody(await request("/api/workers/worker-1/jobs"));
+
+      expect(
+        body.items.map((running: { id: string; status: string }) => [running.id, running.status]),
+      ).toEqual([[job.id, "running"]]);
+      expect(body.nextCursor).toBeNull();
+    });
+
+    it("paginates the running jobs with an attemptAt cursor", async () => {
+      const { request, stateAdapter } = await createTestDashboard();
+      const first = await createJob(stateAdapter, "type-a", null);
+      const second = await createJob(stateAdapter, "type-a", null);
+      await startWorker(stateAdapter, "worker-1", ["type-a"]);
+      await startAttempt(stateAdapter, "type-a");
+      await startAttempt(stateAdapter, "type-a");
+
+      const firstPage = await parseBody(await request("/api/workers/worker-1/jobs?limit=1"));
+      const secondPage = await parseBody(
+        await request(
+          `/api/workers/worker-1/jobs?limit=1&cursor=${encodeURIComponent(firstPage.nextCursor)}`,
+        ),
+      );
+
+      expect(firstPage.items).toHaveLength(1);
+      expect(firstPage.nextCursor).not.toBeNull();
+      expect(secondPage.items).toHaveLength(1);
+      expect(secondPage.nextCursor).toBeNull();
+      expect(new Set([firstPage.items[0].id, secondPage.items[0].id])).toEqual(
+        new Set([first.id, second.id]),
+      );
+    });
+
+    it("returns an empty page for an unknown worker", async () => {
+      const { request } = await createTestDashboard();
+      const res = await request("/api/workers/missing-worker/jobs");
+
+      expect(res.status).toBe(200);
+      expect(await parseBody(res)).toEqual({ items: [], nextCursor: null });
+    });
+
+    it("returns an empty page for a malformed worker id", async () => {
+      const { request } = await createTestDashboard();
+      const res = await request("/api/workers/%E0/jobs");
+
+      expect(res.status).toBe(200);
+      expect(await parseBody(res)).toEqual({ items: [], nextCursor: null });
+    });
+  });
+
+  describe("GET /api/workers/by-ids", () => {
+    it("returns an empty list when no ids given", async () => {
+      const { request } = await createTestDashboard();
+      const res = await request("/api/workers/by-ids");
+
+      expect(res.status).toBe(200);
+      expect(await parseBody(res)).toEqual({ items: [], nextCursor: null });
+    });
+
+    it("returns the workers matching the given ids with their running job counts", async () => {
+      const { request, stateAdapter } = await createTestDashboard();
+      await startWorker(stateAdapter, "worker-1", ["type-a"]);
+      await startWorker(stateAdapter, "worker-b", ["type-a"]);
+      await startWorker(stateAdapter, "pod/7%a", ["type-b"]);
+      await createJob(stateAdapter, "type-a", null);
+      await startAttempt(stateAdapter, "type-a");
+
+      const body = await parseBody(
+        await request(
+          `/api/workers/by-ids?ids=${encodeURIComponent("worker-1,pod/7%a,nonexistent")}`,
+        ),
+      );
+
+      expect(
+        body.items.map((worker: { id: string; runningJobCount: number }) => [
+          worker.id,
+          worker.runningJobCount,
+        ]),
+      ).toEqual([
+        ["worker-1", 1],
+        ["pod/7%a", 0],
+      ]);
+      expect(body.nextCursor).toBeNull();
     });
   });
 
@@ -741,7 +1025,7 @@ describe("Dashboard API", () => {
           txCtx,
           jobs: [
             {
-              id: stateAdapter.config.generateId(),
+              id: stateAdapter.config.generateJobId(),
               typeName: "scheduled-type",
               input: null,
               schedule: { afterMs: 60_000 },
@@ -802,9 +1086,11 @@ describe("Dashboard API", () => {
       const { request, stateAdapter } = await createTestDashboard();
       const job = await createJob(stateAdapter, "test-type", null);
 
+      const worker = await startWorker(stateAdapter, "test-worker", ["test-type"]);
       await stateAdapter.startJobAttempts({
         workerId: "test-worker",
-        timeoutMsByTypeName: { "test-type": 60_000 },
+        workerToken: worker.token,
+        typeNames: ["test-type"],
         limit: 1,
       });
 
@@ -859,6 +1145,7 @@ describe("Dashboard API", () => {
       const { request, stateAdapter } = await createTestDashboard();
       const first = await createJob(stateAdapter, "test-type", null);
       const second = await createJob(stateAdapter, "test-type", null);
+      await startWorker(stateAdapter, "worker-1", ["test-type"]);
       await startAttempt(stateAdapter, "test-type");
       await completeJob(stateAdapter, first.id, { output: null });
       await startAttempt(stateAdapter, "test-type");
@@ -908,6 +1195,18 @@ describe("Dashboard API", () => {
 
       const res = await request(
         `/api/chains/${blockerChain.chainId}/blocking?cursor=${encodeRawCursor({ type: "id", id: blockedJob.id })}`,
+      );
+
+      expect(res.status).toBe(200);
+      expect((await parseBody(res)).items).toHaveLength(1);
+    });
+
+    it("drops a cursor of another sort key on the workers route", async () => {
+      const { request, stateAdapter } = await createTestDashboard();
+      await startWorker(stateAdapter, "worker-a", ["type-a"]);
+
+      const res = await request(
+        `/api/workers?cursor=${encodeRawCursor({ type: "timestampWithId", sortKey: "attemptAt", value: new Date().toISOString(), id: "worker-a" })}`,
       );
 
       expect(res.status).toBe(200);
@@ -988,6 +1287,39 @@ describe("Dashboard API", () => {
       expect((await parseBody(blockingRes)).error).toBe("Chain not found");
     });
 
+    it("returns only the valid workers when by-ids mixes valid and malformed IDs", async () => {
+      const { request, stateAdapter } = await createUuidStrictDashboard();
+      const workerId = crypto.randomUUID();
+      await startWorker(stateAdapter, workerId, ["type-a"]);
+
+      const res = await request(`/api/workers/by-ids?ids=junk,${workerId}`);
+
+      expect(res.status).toBe(200);
+      expect((await parseBody(res)).items.map((w: { id: string }) => w.id)).toEqual([workerId]);
+    });
+
+    it("returns 404 for worker detail and an empty page for its jobs with a malformed ID", async () => {
+      const { request } = await createUuidStrictDashboard();
+
+      const workerRes = await request("/api/workers/by-id?id=junk");
+      const workerJobsRes = await request("/api/workers/junk/jobs");
+
+      expect(workerRes.status).toBe(404);
+      expect(await parseBody(workerRes)).toEqual({ error: "Worker not found" });
+      expect(workerJobsRes.status).toBe(200);
+      expect(await parseBody(workerJobsRes)).toEqual({ items: [], nextCursor: null });
+    });
+
+    it("returns 500 for worker detail with a malformed ID when the database probe fails too", async () => {
+      const { request, failures } = await createUuidStrictDashboard();
+      failures.probe = true;
+
+      const res = await request("/api/workers/by-id?id=junk");
+
+      expect(res.status).toBe(500);
+      expect((await parseBody(res)).error).toContain("invalid input syntax");
+    });
+
     it("returns 500 when rescheduling a malformed ID and the database probe fails too", async () => {
       const { request, failures } = await createUuidStrictDashboard();
       failures.probe = true;
@@ -1015,10 +1347,13 @@ describe("Dashboard API", () => {
 
       const chainsRes = await request(`/api/chains/by-ids?ids=${ids}`);
       const jobsRes = await request(`/api/jobs/by-ids?ids=${ids}`);
+      const workersRes = await request(`/api/workers/by-ids?ids=${ids}`);
 
       expect(chainsRes.status).toBe(400);
       expect((await parseBody(chainsRes)).error).toBe("At most 100 IDs");
       expect(jobsRes.status).toBe(400);
+      expect(workersRes.status).toBe(400);
+      expect((await parseBody(workersRes)).error).toBe("At most 100 IDs");
     });
 
     it("counts IDs after de-duplication against the 100 ID limit", async () => {

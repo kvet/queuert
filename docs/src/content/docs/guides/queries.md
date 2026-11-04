@@ -1,11 +1,11 @@
 ---
-title: Job & Chain Queries
-description: Read-only methods for inspecting jobs and chains.
+title: Job, Chain & Worker Queries
+description: Read-only methods for inspecting jobs, chains and workers.
 sidebar:
   order: 14
 ---
 
-The client provides read-only methods for inspecting chains and jobs. All query methods accept an optional transaction context and don't require `transactionHooks`.
+The client provides read-only methods for inspecting chains, jobs and workers. All query methods accept an optional transaction context and don't require `transactionHooks`.
 
 ```ts
 // Look up a single chain or job by ID
@@ -17,14 +17,14 @@ const chains = await client.getChains({ ids: [id1, id2, id3] });
 const jobs = await client.getJobs({ ids: [id1, id2] });
 
 // Discover which types exist in the data
-const chainTypes = await client.listChainTypeNames();
-const jobTypes = await client.listJobTypeNames();
+const chainTypes = await client.getChainTypeNames();
+const jobTypes = await client.getJobTypeNames();
 
 // Per-status counts for specific types
-const chainCounts = await client.countByChainTypeNames({
+const chainCounts = await client.countChainsByTypeName({
   typeNames: ["send-email"],
 });
-const jobCounts = await client.countByJobTypeNames({
+const jobCounts = await client.countJobsByTypeName({
   typeNames: ["send-email"],
 });
 
@@ -56,8 +56,33 @@ const blockedJobs = await client.listBlockedJobs({ chainId });
 
 `getChain`, `getChains`, `getJob`, `getJobs`, `getJobBlockers`, and `listBlockedJobs` accept an optional `typeName` for type narrowing (`listChainJobs` takes `chainTypeName`) -- the return type narrows to the specified type. If the entity exists but has a different type, `ChainTypeMismatchError` or `JobTypeMismatchError` is thrown. `listChains` and `listJobs` require `typeName` and filter by it.
 
-See [examples/showcase-queries](https://github.com/kvet/queuert/tree/main/examples/showcase-queries) for a complete working example demonstrating single lookups, paginated lists, chain job listing, and blocker queries. See also [Client API](/queuert/api/core/type-aliases/client/) reference and [Dashboard](/queuert/integrations/dashboard/).
+## Workers
+
+```ts
+// Look up workers by ID, undefined for a worker with no row
+const worker = await client.getWorker({ id: workerId });
+const workers = await client.getWorkers({ ids: [workerId1, workerId2] });
+
+// Live and expired workers, overall and per job type, and jobs running under each worker
+const { live, expired } = await client.countWorkers();
+const [emailWorkers] = await client.countWorkersByTypeName({
+  typeNames: ["send-email"],
+});
+const [runningJobCount] = await client.countRunningJobsByWorkerId({ workerIds: [workerId] });
+
+// Workers ordered by startedAt, optionally only those processing a type
+const page = await client.listWorkers({ limit: 20 });
+const nextPage = await client.listWorkers({ limit: 20, cursor: page.nextCursor! });
+const emailWorkerPage = await client.listWorkers({ typeName: "send-email" });
+
+// Jobs running under a worker, ordered by attemptAt
+const runningJobs = await client.listWorkerJobs({ workerId });
+```
 
 ## Ordering
 
-`listChains` and `listJobs` route queries to status-specific indexes based on the `status` and `orderBy` combination. Each status has a natural default sort order — for example, completed chains default to `completedAt` descending, pending and blocked jobs to `scheduledAt` descending. Pass `orderBy: "createdAt"` to override.
+`listChains` and `listJobs` route queries to status-specific indexes based on the `status` and `orderBy` combination. Each status has a natural default sort order — for example, completed chains default to `completedAt` descending, pending and blocked jobs to `scheduledAt` descending. Pass `orderBy: "createdAt"` to override. `listWorkers` and `listWorkerJobs` take no `orderBy`: they sort by `startedAt` and `attemptAt`, then id, ascending unless `orderDirection` says otherwise.
+
+## See Also
+
+See [examples/showcase-queries](https://github.com/kvet/queuert/tree/main/examples/showcase-queries) for a complete working example demonstrating single lookups, paginated lists, chain job listing, blocker queries, and worker queries. See also [Client API](/queuert/api/core/type-aliases/client/) reference and [Dashboard](/queuert/integrations/dashboard/).

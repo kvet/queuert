@@ -15,7 +15,9 @@ export const getJobsGroup: ConformanceGroup<StateConformanceFixture> = {
         const [realChain] = await stateAdapter.withTransaction(async (txCtx) =>
           stateAdapter.createJobs({
             txCtx,
-            jobs: [{ id: stateAdapter.config.generateId(), typeName: "lookup-test", input: null }],
+            jobs: [
+              { id: stateAdapter.config.generateJobId(), typeName: "lookup-test", input: null },
+            ],
           }),
         );
         const nonexistentId =
@@ -32,7 +34,7 @@ export const getJobsGroup: ConformanceGroup<StateConformanceFixture> = {
             txCtx,
             jobs: [
               {
-                id: stateAdapter.config.generateId(),
+                id: stateAdapter.config.generateJobId(),
                 typeName: "lock-blocking-job",
                 input: { value: 1 },
               },
@@ -92,7 +94,7 @@ export const getJobsGroup: ConformanceGroup<StateConformanceFixture> = {
           stateAdapter.createJobs({
             txCtx,
             jobs: [
-              { id: stateAdapter.config.generateId(), typeName: "lock-head-chain", input: null },
+              { id: stateAdapter.config.generateJobId(), typeName: "lock-head-chain", input: null },
             ],
           }),
         );
@@ -101,7 +103,7 @@ export const getJobsGroup: ConformanceGroup<StateConformanceFixture> = {
             txCtx,
             jobs: [
               {
-                id: stateAdapter.config.generateId(),
+                id: stateAdapter.config.generateJobId(),
                 typeName: "lock-head-chain-step",
                 input: null,
                 continueFromId: headChain.head.id,
@@ -161,7 +163,7 @@ export const getJobsGroup: ConformanceGroup<StateConformanceFixture> = {
           stateAdapter.createJobs({
             txCtx,
             jobs: Array.from({ length: count }, (_, i) => ({
-              id: stateAdapter.config.generateId(),
+              id: stateAdapter.config.generateJobId(),
               typeName: "parallel-read",
               input: { index: i },
             })),
@@ -198,7 +200,9 @@ export const getJobsGroup: ConformanceGroup<StateConformanceFixture> = {
           .withTransaction(async (txCtx) => {
             const [stateChain] = await stateAdapter.createJobs({
               txCtx,
-              jobs: [{ id: stateAdapter.config.generateId(), typeName: "iso-insert", input: null }],
+              jobs: [
+                { id: stateAdapter.config.generateJobId(), typeName: "iso-insert", input: null },
+              ],
             });
             insertedId = stateChain.head.id;
             signalTxReady!();
@@ -218,6 +222,12 @@ export const getJobsGroup: ConformanceGroup<StateConformanceFixture> = {
     {
       name: "non-transactional getJob does not observe an uncommitted status update",
       run: async ({ stateAdapter, transactionConcurrency }, expect) => {
+        const worker = await stateAdapter.startWorker({
+          workerId: stateAdapter.config.generateWorkerId(),
+          typeNames: ["iso-update"],
+          concurrency: 1,
+          leaseMs: 60_000,
+        });
         if (transactionConcurrency !== "concurrent") {
           expect.skip("requires concurrent transactions");
           return;
@@ -225,7 +235,9 @@ export const getJobsGroup: ConformanceGroup<StateConformanceFixture> = {
         const [seedChain] = await stateAdapter.withTransaction(async (txCtx) =>
           stateAdapter.createJobs({
             txCtx,
-            jobs: [{ id: stateAdapter.config.generateId(), typeName: "iso-update", input: null }],
+            jobs: [
+              { id: stateAdapter.config.generateJobId(), typeName: "iso-update", input: null },
+            ],
           }),
         );
 
@@ -242,8 +254,9 @@ export const getJobsGroup: ConformanceGroup<StateConformanceFixture> = {
           .withTransaction(async (txCtx) => {
             const [acquired] = await stateAdapter.startJobAttempts({
               txCtx,
-              workerId: "worker-1",
-              timeoutMsByTypeName: { "iso-update": 30_000 },
+              workerId: worker.id,
+              workerToken: worker.token,
+              typeNames: ["iso-update"],
               limit: 1,
             });
             expect(acquired?.id).toBe(seedChain.head.id);
@@ -274,7 +287,9 @@ export const getJobsGroup: ConformanceGroup<StateConformanceFixture> = {
         const [seedChain] = await stateAdapter.withTransaction(async (txCtx) =>
           stateAdapter.createJobs({
             txCtx,
-            jobs: [{ id: stateAdapter.config.generateId(), typeName: "iso-delete", input: null }],
+            jobs: [
+              { id: stateAdapter.config.generateJobId(), typeName: "iso-delete", input: null },
+            ],
           }),
         );
 
@@ -308,6 +323,12 @@ export const getJobsGroup: ConformanceGroup<StateConformanceFixture> = {
     {
       name: "locked getJob in a separate transaction does not observe an uncommitted status update",
       run: async ({ stateAdapter, transactionConcurrency }, expect) => {
+        const worker = await stateAdapter.startWorker({
+          workerId: stateAdapter.config.generateWorkerId(),
+          typeNames: ["iso-locked-job"],
+          concurrency: 1,
+          leaseMs: 60_000,
+        });
         if (transactionConcurrency !== "concurrent") {
           expect.skip("requires concurrent transactions");
           return;
@@ -316,7 +337,7 @@ export const getJobsGroup: ConformanceGroup<StateConformanceFixture> = {
           stateAdapter.createJobs({
             txCtx,
             jobs: [
-              { id: stateAdapter.config.generateId(), typeName: "iso-locked-job", input: null },
+              { id: stateAdapter.config.generateJobId(), typeName: "iso-locked-job", input: null },
             ],
           }),
         );
@@ -334,8 +355,9 @@ export const getJobsGroup: ConformanceGroup<StateConformanceFixture> = {
           .withTransaction(async (txCtx) => {
             await stateAdapter.startJobAttempts({
               txCtx,
-              workerId: "worker-1",
-              timeoutMsByTypeName: { "iso-locked-job": 30_000 },
+              workerId: worker.id,
+              workerToken: worker.token,
+              typeNames: ["iso-locked-job"],
               limit: 1,
             });
             signalTxReady!();

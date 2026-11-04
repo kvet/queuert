@@ -37,7 +37,7 @@ const cleanupProcessorRegistry = createProcessors({
         const cutoffDate = new Date(Date.now() - CLEANUP_RETENTION_MS);
         let deletedChainCount = 0;
 
-        const typeNames = await client.listChainTypeNames();
+        const typeNames = await client.getChainTypeNames();
         let roundDeletedCount: number;
 
         do {

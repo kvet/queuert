@@ -7,7 +7,7 @@ import { createBetterSqlite3Provider } from "../state-provider/state-provider.be
 
 export type VarianceFixtures = {
   db: Database.Database;
-  stateAdapter: StateAdapter<{ $test: true }, string>;
+  stateAdapter: StateAdapter<{ $test: true }, string, string>;
   transactionConcurrency: "concurrent" | "serialized";
   tableNames: string[];
 };
@@ -16,9 +16,12 @@ export const extendWithVarianceStateSqlite = <T>(
   api: TestAPI<T>,
   options: {
     tablePrefix: string;
-    idType?: string;
-    generateId?: () => string;
-    validateId?: (id: string) => boolean;
+    jobIdType?: string;
+    workerIdType?: string;
+    generateJobId?: () => string;
+    validateJobId?: (id: string) => boolean;
+    generateWorkerId?: () => string;
+    validateWorkerId?: (id: string) => boolean;
     maxBlockersPerJob?: number;
     countCap?: number;
   },
@@ -38,7 +41,7 @@ export const extendWithVarianceStateSqlite = <T>(
         const stateProvider = createBetterSqlite3Provider({ db });
         const adapter = await createSqliteStateAdapter({ stateProvider, ...options });
         await adapter.migrateToLatest();
-        return use(adapter as unknown as StateAdapter<{ $test: true }, string>);
+        return use(adapter as unknown as StateAdapter<{ $test: true }, string, string>);
       },
       { scope: "test" },
     ],

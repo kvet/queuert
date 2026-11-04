@@ -1,4 +1,4 @@
-import { CloseIcon } from "@queuert/ui/components";
+import { CloseIcon, WarningIcon } from "@queuert/ui/components";
 import { A } from "@solidjs/router";
 import { For, type JSX, Show, createEffect } from "solid-js";
 
@@ -54,15 +54,54 @@ export const ErrorState = (props: { thing: string; error: unknown; onRetry: () =
   );
 };
 
-export const NotFoundState = (props: { kind: "Chain" | "Job"; href: string }) => {
+export const WarningBox = (props: { children: JSX.Element; action?: JSX.Element }) => {
+  return (
+    <div
+      class="flex flex-wrap items-center gap-x-3 gap-y-1 rounded-xs border border-error-border bg-error-bg px-3 py-2 text-sm text-error-fg"
+      role="alert"
+    >
+      <WarningIcon size={14} class="shrink-0 text-error-dot" />
+      <span class="min-w-0 flex-1">{props.children}</span>
+      {props.action}
+    </div>
+  );
+};
+
+export const NotFoundState = (props: {
+  kind: "Chain" | "Job" | "Worker";
+  href: string;
+  children?: JSX.Element;
+}) => {
   return (
     <EmptyState title={`${props.kind} not found`}>
+      <Show when={props.children}>
+        <p class="w-full">{props.children}</p>
+      </Show>
       <A href={props.href} class={linkClass}>
         Go to the {props.kind.toLowerCase()} list
       </A>
     </EmptyState>
   );
 };
+
+export const Fact = (props: {
+  label: string;
+  hint?: string;
+  wide?: boolean;
+  children: JSX.Element;
+}) => (
+  <div class={`min-w-0 ${props.wide ? "col-span-2" : ""}`}>
+    <dt class="text-xs text-fg-muted" title={props.hint}>
+      {props.label}
+      <Show when={props.hint}>
+        <span class="ml-1 cursor-help text-fg-subtle" aria-label={props.hint}>
+          ⓘ
+        </span>
+      </Show>
+    </dt>
+    <dd class="mt-0.5 text-sm break-words">{props.children}</dd>
+  </div>
+);
 
 export const SkeletonRows = (props: { count?: number; class?: string }) => {
   return (

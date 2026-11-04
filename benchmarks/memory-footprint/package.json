@@ -30,7 +30,7 @@
     "example-state-postgres-postgres-js": "workspace:*",
     "example-state-sqlite-better-sqlite3": "workspace:*",
     "pg": "8.23.1",
-    "postgres": "4.0.0",
+    "postgres": "3.4.9",
     "queuert": "workspace:*",
     "redis": "6.3.1"
   },

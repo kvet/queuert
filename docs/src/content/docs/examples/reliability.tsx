@@ -2,8 +2,7 @@ import { ExampleDetail } from "../../../components/ExampleList.tsx";
 
 export const meta = {
   title: "Reliability",
-  description:
-    "Showcases for error recovery, error handling, timeouts, long-running jobs and abort signals.",
+  description: "Showcases for error recovery, error handling, timeouts and abort signals.",
 };
 
 const Page = () => (
@@ -18,8 +17,6 @@ const Page = () => (
     <ExampleDetail name="showcase-error-handling" />
     <h2 id="showcase-timeouts">Timeouts</h2>
     <ExampleDetail name="showcase-timeouts" />
-    <h2 id="showcase-long-running-jobs">Long-running jobs</h2>
-    <ExampleDetail name="showcase-long-running-jobs" />
     <h2 id="showcase-signals">Abort signals</h2>
     <ExampleDetail name="showcase-signals" />
   </>

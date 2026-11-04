@@ -1,7 +1,6 @@
 import { describe, it } from "vitest";
 
 import { extendWithStateInProcess } from "../state-adapter/state-adapter.in-process.spec-helper.js";
-import { attemptReclaimerTestSuite } from "../suites/attempt-reclaimer.test-suite.js";
 import { awaitChainTestSuite } from "../suites/await-chain.test-suite.js";
 import { blockerChainsTestSuite } from "../suites/blocker-chains.test-suite.js";
 import { chainsTestSuite } from "../suites/chains.test-suite.js";
@@ -37,10 +36,6 @@ describe("Process", () => {
 
 describe("Worker", () => {
   workerTestSuite({ it: inProcessInProcessIt });
-});
-
-describe("Attempt Reclamation", () => {
-  attemptReclaimerTestSuite({ it: inProcessInProcessIt });
 });
 
 describe("Chains", () => {

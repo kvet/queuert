@@ -529,7 +529,7 @@ describe("continuation-only jobs (default behavior)", () => {
       second: { input: null; output: { done: true } };
     }>();
 
-    type SecondJob = ResolvedJob<string, JobTypeDefinitions<typeof defs>, "second">;
+    type SecondJob = ResolvedJob<string, string, JobTypeDefinitions<typeof defs>, "second">;
     expectTypeOf<SecondJob["input"]>().toEqualTypeOf<null>();
   });
 
@@ -542,7 +542,7 @@ describe("continuation-only jobs (default behavior)", () => {
       };
     }>();
 
-    type SecondJob = ResolvedJob<string, JobTypeDefinitions<typeof defs>, "second">;
+    type SecondJob = ResolvedJob<string, string, JobTypeDefinitions<typeof defs>, "second">;
     expectTypeOf<SecondJob["input"]>().toEqualTypeOf<{
       value: number;
       name: string;
@@ -555,7 +555,7 @@ describe("continuation-only jobs (default behavior)", () => {
       second: { input: number; output: { done: true } };
     }>();
 
-    type SecondJob = ResolvedJob<string, JobTypeDefinitions<typeof defs>, "second">;
+    type SecondJob = ResolvedJob<string, string, JobTypeDefinitions<typeof defs>, "second">;
     expectTypeOf<SecondJob["input"]>().toEqualTypeOf<number>();
   });
 
@@ -565,7 +565,7 @@ describe("continuation-only jobs (default behavior)", () => {
       second: { input: string[]; output: { done: true } };
     }>();
 
-    type SecondJob = ResolvedJob<string, JobTypeDefinitions<typeof defs>, "second">;
+    type SecondJob = ResolvedJob<string, string, JobTypeDefinitions<typeof defs>, "second">;
     expectTypeOf<SecondJob["input"]>().toEqualTypeOf<string[]>();
   });
 
@@ -621,8 +621,8 @@ describe("ResolvedJob", () => {
       };
     }>();
 
-    type FirstJob = ResolvedJob<string, JobTypeDefinitions<typeof defs>, "first">;
-    type SecondJob = ResolvedJob<string, JobTypeDefinitions<typeof defs>, "second">;
+    type FirstJob = ResolvedJob<string, string, JobTypeDefinitions<typeof defs>, "first">;
+    type SecondJob = ResolvedJob<string, string, JobTypeDefinitions<typeof defs>, "second">;
 
     expectTypeOf<FirstJob["input"]>().toEqualTypeOf<{ value: number }>();
     expectTypeOf<SecondJob["input"]>().toEqualTypeOf<{ continued: boolean }>();
@@ -633,7 +633,7 @@ describe("ResolvedJob", () => {
       test: { entry: true; input: { id: string }; output: { result: number } };
     }>();
 
-    type TestJob = ResolvedJob<string, JobTypeDefinitions<typeof defs>, "test">;
+    type TestJob = ResolvedJob<string, string, JobTypeDefinitions<typeof defs>, "test">;
 
     expectTypeOf<TestJob["id"]>().toEqualTypeOf<string>();
     expectTypeOf<TestJob["chainId"]>().toEqualTypeOf<string>();
@@ -1069,14 +1069,25 @@ describe("JobTypeReachingEntry", () => {
     >().toEqualTypeOf<"entryE">();
 
     // ResolvedJob uses the computed chain type by default
-    type SharedStep1Job = ResolvedJob<string, JobTypeDefinitions<typeof defs>, "sharedStep1">;
+    type SharedStep1Job = ResolvedJob<
+      string,
+      string,
+      JobTypeDefinitions<typeof defs>,
+      "sharedStep1"
+    >;
     expectTypeOf<SharedStep1Job["chainTypeName"]>().toEqualTypeOf<"entryA" | "entryB">();
 
-    type FinalSharedJob = ResolvedJob<string, JobTypeDefinitions<typeof defs>, "finalShared">;
+    type FinalSharedJob = ResolvedJob<
+      string,
+      string,
+      JobTypeDefinitions<typeof defs>,
+      "finalShared"
+    >;
     expectTypeOf<FinalSharedJob["chainTypeName"]>().toEqualTypeOf<"entryA" | "entryB" | "entryC">();
 
     // Can narrow with explicit 4th param
     type FinalSharedFromA = ResolvedJob<
+      string,
       string,
       JobTypeDefinitions<typeof defs>,
       "finalShared",
@@ -1384,7 +1395,7 @@ describe("rest/variadic blocker slots", () => {
     };
 
     it("a job type without continueWith narrows to terminal-only", () => {
-      type J = ResolvedJob<string, Defs, "terminal">;
+      type J = ResolvedJob<string, string, Defs, "terminal">;
       type Completed = Extract<J, { status: "completed" }>;
       type ContinuedSibling = Extract<Completed, { continuedToId: string }>;
 
@@ -1394,7 +1405,7 @@ describe("rest/variadic blocker slots", () => {
     });
 
     it("a job type with continueWith keeps both completed variants", () => {
-      type J = ResolvedJob<string, Defs, "step">;
+      type J = ResolvedJob<string, string, Defs, "step">;
       type Completed = Extract<J, { status: "completed" }>;
       type Terminal = Extract<Completed, { continuedToId: null }>;
       type Continued = Exclude<Completed, { continuedToId: null }>;
@@ -1406,7 +1417,7 @@ describe("rest/variadic blocker slots", () => {
     });
 
     it("a job type without `output` declared makes the terminal output `never`", () => {
-      type J = ResolvedJob<string, Defs, "relay">;
+      type J = ResolvedJob<string, string, Defs, "relay">;
       type Completed = Extract<J, { status: "completed" }>;
       type Terminal = Extract<Completed, { continuedToId: null }>;
       type Continued = Exclude<Completed, { continuedToId: null }>;
@@ -1416,8 +1427,8 @@ describe("rest/variadic blocker slots", () => {
     });
 
     it("non-completed states are unaffected by TCanContinue", () => {
-      type Terminal = ResolvedJob<string, Defs, "terminal">;
-      type Step = ResolvedJob<string, Defs, "step">;
+      type Terminal = ResolvedJob<string, string, Defs, "terminal">;
+      type Step = ResolvedJob<string, string, Defs, "step">;
       type TerminalPending = Extract<Terminal, { status: "pending" }>;
       type TerminalRunning = Extract<Terminal, { status: "running" }>;
       type StepPending = Extract<Step, { status: "pending" }>;

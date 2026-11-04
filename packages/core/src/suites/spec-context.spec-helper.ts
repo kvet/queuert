@@ -14,9 +14,9 @@ import { type TransactionHooks, withTransactionHooks } from "../transaction-hook
 import { createFlakyBatchGenerator } from "./flaky-test-helper.spec-helper.js";
 
 export type TestSuiteContext = {
-  stateAdapter: StateAdapter<{ $test: true }, string>;
+  stateAdapter: StateAdapter<{ $test: true }, string, string>;
   transactionConcurrency: "concurrent" | "serialized";
-  generateId: () => string;
+  generateJobId: () => string;
   notifyAdapter: NotifyAdapter | undefined;
   withTransaction: <T>(
     cb: (txCtx: { $test: true }, transactionHooks: TransactionHooks) => Promise<T>,
@@ -26,7 +26,8 @@ export type TestSuiteContext = {
   withSavepoint:
     | (<T>(txCtx: { $test: true }, fn: (txCtx: { $test: true }) => Promise<T>) => Promise<T>)
     | undefined;
-  flakyDbStateAdapter: StateAdapter<{ $test: true }, string> | undefined;
+  flakyStateAdapter: StateAdapter<{ $test: true }, string, string>;
+  flakyDbStateAdapter: StateAdapter<{ $test: true }, string, string> | undefined;
   withWorkers: <T>(workers: (() => Promise<void>)[], cb: () => Promise<T>) => Promise<T>;
   log: MockedFunction<Log>;
   observabilityAdapter: ObservabilityAdapter;
@@ -34,7 +35,7 @@ export type TestSuiteContext = {
 
 export const extendWithCommon = <
   T extends {
-    stateAdapter: StateAdapter<{ $test: true }, string>;
+    stateAdapter: StateAdapter<{ $test: true }, string, string>;
   },
 >(
   it: TestAPI<T>,
@@ -42,18 +43,18 @@ export const extendWithCommon = <
   T &
     Pick<
       TestSuiteContext,
-      "withTransaction" | "withWorkers" | "log" | "observabilityAdapter" | "generateId"
+      "withTransaction" | "withWorkers" | "log" | "observabilityAdapter" | "generateJobId"
     >
 > =>
   it.extend<
     Pick<
       TestSuiteContext,
-      "withTransaction" | "withWorkers" | "log" | "observabilityAdapter" | "generateId"
+      "withTransaction" | "withWorkers" | "log" | "observabilityAdapter" | "generateJobId"
     >
   >({
-    generateId: [
+    generateJobId: [
       async ({ stateAdapter }, use) => {
-        await use(stateAdapter.config.generateId);
+        await use(stateAdapter.config.generateJobId);
       },
       { scope: "test" },
     ],

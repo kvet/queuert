@@ -544,7 +544,7 @@ export const createChainsTestSuite = ({ it }: { it: TestAPI<TestSuiteContext> })
 
     it("uses caller-supplied id", async ({
       stateAdapter,
-      generateId,
+      generateJobId,
       notifyAdapter,
       withTransaction,
       observabilityAdapter,
@@ -562,7 +562,7 @@ export const createChainsTestSuite = ({ it }: { it: TestAPI<TestSuiteContext> })
         jobTypes,
       });
 
-      const userId = generateId();
+      const userId = generateJobId();
       const chain = await withTransaction(async (txCtx, transactionHooks) =>
         client.createChain({
           ...txCtx,
@@ -1235,7 +1235,7 @@ export const createChainsTestSuite = ({ it }: { it: TestAPI<TestSuiteContext> })
 
     it("uses caller-supplied ids per item", async ({
       stateAdapter,
-      generateId,
+      generateJobId,
       notifyAdapter,
       withTransaction,
       observabilityAdapter,
@@ -1253,8 +1253,8 @@ export const createChainsTestSuite = ({ it }: { it: TestAPI<TestSuiteContext> })
         jobTypes,
       });
 
-      const idA = generateId();
-      const idB = generateId();
+      const idA = generateJobId();
+      const idB = generateJobId();
       const chains = await withTransaction(async (txCtx, transactionHooks) =>
         client.createChains({
           ...txCtx,
@@ -1270,7 +1270,7 @@ export const createChainsTestSuite = ({ it }: { it: TestAPI<TestSuiteContext> })
       expect(chains[1].id).toBe(idB);
     });
 
-    it("rejects caller-supplied id that fails validateId", async ({
+    it("rejects caller-supplied id that fails validateJobId", async ({
       stateAdapter,
       notifyAdapter,
       withTransaction,
@@ -1284,7 +1284,7 @@ export const createChainsTestSuite = ({ it }: { it: TestAPI<TestSuiteContext> })
       const client = await createClient({
         stateAdapter: {
           ...stateAdapter,
-          config: { ...stateAdapter.config, validateId: (id) => id !== "bad-id" },
+          config: { ...stateAdapter.config, validateJobId: (id) => id !== "bad-id" },
         },
         notifyAdapter,
         observabilityAdapter,
@@ -1305,7 +1305,7 @@ export const createChainsTestSuite = ({ it }: { it: TestAPI<TestSuiteContext> })
       ).rejects.toThrow('Invalid job ID "bad-id" from caller');
     });
 
-    it("rejects generated id that fails validateId", async ({
+    it("rejects generated id that fails validateJobId", async ({
       stateAdapter,
       notifyAdapter,
       withTransaction,
@@ -1321,8 +1321,8 @@ export const createChainsTestSuite = ({ it }: { it: TestAPI<TestSuiteContext> })
           ...stateAdapter,
           config: {
             ...stateAdapter.config,
-            generateId: () => "bad-id",
-            validateId: (id) => id !== "bad-id",
+            generateJobId: () => "bad-id",
+            validateJobId: (id) => id !== "bad-id",
           },
         },
         notifyAdapter,
@@ -1345,7 +1345,7 @@ export const createChainsTestSuite = ({ it }: { it: TestAPI<TestSuiteContext> })
 
     it("duplicate caller-supplied id errors", async ({
       stateAdapter,
-      generateId,
+      generateJobId,
       notifyAdapter,
       withTransaction,
       observabilityAdapter,
@@ -1363,7 +1363,7 @@ export const createChainsTestSuite = ({ it }: { it: TestAPI<TestSuiteContext> })
         jobTypes,
       });
 
-      const sharedId = generateId();
+      const sharedId = generateJobId();
       await withTransaction(async (txCtx, transactionHooks) =>
         client.createChain({
           ...txCtx,

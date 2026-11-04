@@ -13,9 +13,11 @@ export {
   type StateChainInfo,
   type StateChainStatus,
   type StateCount,
+  type StateWorkerCounts,
   type StateDependentJob,
   type StateJob,
   type StateJobBlockerInfo,
   type StateJobInfo,
   type StateJobStatus,
+  type StateWorkerInfo,
 } from "./state-adapter/state-adapter.js";

@@ -10,7 +10,7 @@ import {
   createPgPoolProvider,
 } from "../state-provider/state-provider.pg-pool.js";
 
-export type PgPoolStateAdapter = StateAdapter<PgPoolContext, string>;
+export type PgPoolStateAdapter = StateAdapter<PgPoolContext, string, string>;
 
 export const extendWithStatePg = <
   T extends {
@@ -20,10 +20,10 @@ export const extendWithStatePg = <
   api: TestAPI<T>,
 ): TestAPI<
   T & {
-    stateAdapter: StateAdapter<{ $test: true }, string>;
+    stateAdapter: StateAdapter<{ $test: true }, string, string>;
     transactionConcurrency: "concurrent" | "serialized";
-    flakyStateAdapter: StateAdapter<{ $test: true }, string>;
-    flakyDbStateAdapter: StateAdapter<{ $test: true }, string> | undefined;
+    flakyStateAdapter: StateAdapter<{ $test: true }, string, string>;
+    flakyDbStateAdapter: StateAdapter<{ $test: true }, string, string> | undefined;
     poisonTransaction: ((txCtx: { $test: true }) => Promise<void>) | undefined;
     withNonTransactionContext: <T>(fn: (txCtx: { $test: true }) => Promise<T>) => Promise<T>;
     withSavepoint:
@@ -66,7 +66,7 @@ export const extendWithStatePg = <
         const client = await statePool.connect();
         await client
           .query(
-            `DROP TABLE IF EXISTS queuert_job_blocker, queuert_job, queuert_migration, queuert_migration_lock CASCADE; DROP TYPE IF EXISTS queuert_job_status CASCADE;`,
+            `DROP TABLE IF EXISTS queuert_job_blocker, queuert_job, queuert_worker, queuert_migration, queuert_migration_lock CASCADE; DROP TYPE IF EXISTS queuert_job_status CASCADE;`,
           )
           .catch(() => {
             // ignore
@@ -93,6 +93,7 @@ export const extendWithStatePg = <
         const client = await statePool.connect();
         await client.query(`DELETE FROM queuert_job_blocker;`);
         await client.query(`DELETE FROM queuert_job;`);
+        await client.query(`DELETE FROM queuert_worker;`);
         client.release();
       },
       { scope: "test" },

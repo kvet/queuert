@@ -10,3 +10,4 @@ A worker that loses its attempt now reports it through one signal, `jobAttemptLo
 - `jobAttemptCompleted` is buffered on the `transactionHooks` passed to `complete` and reported when that transaction commits, after the other events `complete` buffers.
 - Logs: `job_attempt_taken_by_another_worker` and `job_attempt_already_completed` are replaced by `job_attempt_lost` (`warn`); the `completedBy` field is gone. `job_attempt_extended` and `job_attempt_expired` are removed.
 - `@queuert/otel`: the `queuert.job.attempt.taken_by_another_worker` and `queuert.job.attempt.already_completed` counters are replaced by `queuert.job.attempt.lost`; `queuert.job.attempt.extended` and `queuert.job.attempt.expired` are removed.
+- Deleting a chain whose job is running notifies that attempt as lost, so with a notify adapter configured the handler's `signal` aborts and its `complete` throws `JobNotFoundError`.

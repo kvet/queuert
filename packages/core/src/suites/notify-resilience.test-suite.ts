@@ -52,10 +52,6 @@ export const notifyResilienceTestSuite = ({
           multiplier: 1,
           maxDelayMs: 1,
         },
-        attemptConfig: {
-          timeoutMs: 10,
-          heartbeatMs: 5,
-        },
         processors: {
           test: {
             attemptHandler: async ({ job, complete }) =>

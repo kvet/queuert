@@ -12,10 +12,10 @@ export const extendWithStateInProcess = <T>(
   api: TestAPI<T>,
 ): TestAPI<
   T & {
-    stateAdapter: StateAdapter<{ $test: true }, string>;
+    stateAdapter: StateAdapter<{ $test: true }, string, string>;
     transactionConcurrency: "concurrent" | "serialized";
-    flakyStateAdapter: StateAdapter<{ $test: true }, string>;
-    flakyDbStateAdapter: StateAdapter<{ $test: true }, string> | undefined;
+    flakyStateAdapter: StateAdapter<{ $test: true }, string, string>;
+    flakyDbStateAdapter: StateAdapter<{ $test: true }, string, string> | undefined;
     poisonTransaction: ((txCtx: { $test: true }) => Promise<void>) | undefined;
     withNonTransactionContext: <T>(fn: (txCtx: { $test: true }) => Promise<T>) => Promise<T>;
     withSavepoint:
@@ -87,6 +87,7 @@ export const extendWithStateInProcess = <T>(
           isTransaction: stateAdapter.isTransaction,
           getChains: wrap(stateAdapter.getChains),
           getJobs: wrap(stateAdapter.getJobs),
+          getWorkers: wrap(stateAdapter.getWorkers),
           createJobs: wrap(stateAdapter.createJobs),
           continueJobs: wrap(stateAdapter.continueJobs),
           completeJobs: wrap(stateAdapter.completeJobs),
@@ -94,19 +95,25 @@ export const extendWithStateInProcess = <T>(
           deleteChains: wrap(stateAdapter.deleteChains),
           startJobAttempts: wrap(stateAdapter.startJobAttempts),
           getStartAttemptDelayMs: wrap(stateAdapter.getStartAttemptDelayMs),
-          extendJobAttempt: wrap(stateAdapter.extendJobAttempt),
-          reclaimExpiredJobAttempts: wrap(stateAdapter.reclaimExpiredJobAttempts),
           addJobsBlockers: wrap(stateAdapter.addJobsBlockers),
           getJobBlockers: wrap(stateAdapter.getJobBlockers),
           unblockJobs: wrap(stateAdapter.unblockJobs),
-          listChainTypeNames: wrap(stateAdapter.listChainTypeNames),
-          listJobTypeNames: wrap(stateAdapter.listJobTypeNames),
-          countByChainTypeNames: wrap(stateAdapter.countByChainTypeNames),
-          countByJobTypeNames: wrap(stateAdapter.countByJobTypeNames),
+          startWorker: wrap(stateAdapter.startWorker),
+          extendWorkerLease: wrap(stateAdapter.extendWorkerLease),
+          stopWorker: wrap(stateAdapter.stopWorker),
+          getChainTypeNames: wrap(stateAdapter.getChainTypeNames),
+          getJobTypeNames: wrap(stateAdapter.getJobTypeNames),
+          countChainsByTypeName: wrap(stateAdapter.countChainsByTypeName),
+          countJobsByTypeName: wrap(stateAdapter.countJobsByTypeName),
+          countWorkers: wrap(stateAdapter.countWorkers),
+          countWorkersByTypeName: wrap(stateAdapter.countWorkersByTypeName),
+          countRunningJobsByWorkerId: wrap(stateAdapter.countRunningJobsByWorkerId),
           listChains: wrap(stateAdapter.listChains),
           listJobs: wrap(stateAdapter.listJobs),
           listChainJobs: wrap(stateAdapter.listChainJobs),
           listBlockedJobs: wrap(stateAdapter.listBlockedJobs),
+          listWorkers: wrap(stateAdapter.listWorkers),
+          listWorkerJobs: wrap(stateAdapter.listWorkerJobs),
           close: stateAdapter.close,
         };
 

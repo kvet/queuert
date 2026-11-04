@@ -178,6 +178,9 @@ importers:
       husky:
         specifier: 9.1.7
         version: 9.1.7
+      lint-staged:
+        specifier: 17.6.0
+        version: 17.6.0
       oxfmt:
         specifier: 0.76.0
         version: 0.76.0
@@ -248,8 +251,8 @@ importers:
         specifier: 8.23.1
         version: 8.23.1
       postgres:
-        specifier: 4.0.0
-        version: 4.0.0
+        specifier: 3.4.9
+        version: 3.4.9
       queuert:
         specifier: workspace:*
         version: link:../../packages/core
@@ -327,8 +330,8 @@ importers:
         specifier: 8.23.1
         version: 8.23.1
       postgres:
-        specifier: 4.0.0
-        version: 4.0.0
+        specifier: 3.4.9
+        version: 3.4.9
       queuert:
         specifier: workspace:*
         version: link:../../packages/core
@@ -675,8 +678,8 @@ importers:
         specifier: workspace:*
         version: link:../../packages-internal/tsconfig
       postgres:
-        specifier: 4.0.0
-        version: 4.0.0
+        specifier: 3.4.9
+        version: 3.4.9
       queuert:
         specifier: workspace:*
         version: link:../../packages/core
@@ -823,8 +826,8 @@ importers:
         specifier: workspace:*
         version: link:../state-postgres-postgres-js
       postgres:
-        specifier: 4.0.0
-        version: 4.0.0
+        specifier: 3.4.9
+        version: 3.4.9
       queuert:
         specifier: workspace:*
         version: link:../../packages/core
@@ -848,8 +851,8 @@ importers:
         specifier: workspace:*
         version: link:../state-postgres-postgres-js
       postgres:
-        specifier: 4.0.0
-        version: 4.0.0
+        specifier: 3.4.9
+        version: 3.4.9
       queuert:
         specifier: workspace:*
         version: link:../../packages/core
@@ -873,8 +876,8 @@ importers:
         specifier: workspace:*
         version: link:../state-postgres-postgres-js
       postgres:
-        specifier: 4.0.0
-        version: 4.0.0
+        specifier: 3.4.9
+        version: 3.4.9
       queuert:
         specifier: workspace:*
         version: link:../../packages/core
@@ -898,8 +901,8 @@ importers:
         specifier: workspace:*
         version: link:../state-postgres-postgres-js
       postgres:
-        specifier: 4.0.0
-        version: 4.0.0
+        specifier: 3.4.9
+        version: 3.4.9
       queuert:
         specifier: workspace:*
         version: link:../../packages/core
@@ -923,8 +926,8 @@ importers:
         specifier: workspace:*
         version: link:../state-postgres-postgres-js
       postgres:
-        specifier: 4.0.0
-        version: 4.0.0
+        specifier: 3.4.9
+        version: 3.4.9
       queuert:
         specifier: workspace:*
         version: link:../../packages/core
@@ -948,8 +951,8 @@ importers:
         specifier: workspace:*
         version: link:../state-postgres-postgres-js
       postgres:
-        specifier: 4.0.0
-        version: 4.0.0
+        specifier: 3.4.9
+        version: 3.4.9
       queuert:
         specifier: workspace:*
         version: link:../../packages/core
@@ -973,33 +976,8 @@ importers:
         specifier: workspace:*
         version: link:../state-postgres-postgres-js
       postgres:
-        specifier: 4.0.0
-        version: 4.0.0
-      queuert:
-        specifier: workspace:*
-        version: link:../../packages/core
-    devDependencies:
-      '@queuert/testcontainers':
-        specifier: workspace:*
-        version: link:../../packages-internal/testcontainers
-      '@queuert/tsconfig':
-        specifier: workspace:*
-        version: link:../../packages-internal/tsconfig
-
-  examples/showcase-long-running-jobs:
-    dependencies:
-      '@queuert/postgres':
-        specifier: workspace:*
-        version: link:../../packages/postgres
-      example-notify-postgres-postgres-js:
-        specifier: workspace:*
-        version: link:../notify-postgres-postgres-js
-      example-state-postgres-postgres-js:
-        specifier: workspace:*
-        version: link:../state-postgres-postgres-js
-      postgres:
-        specifier: 4.0.0
-        version: 4.0.0
+        specifier: 3.4.9
+        version: 3.4.9
       queuert:
         specifier: workspace:*
         version: link:../../packages/core
@@ -1023,8 +1001,8 @@ importers:
         specifier: workspace:*
         version: link:../state-postgres-postgres-js
       postgres:
-        specifier: 4.0.0
-        version: 4.0.0
+        specifier: 3.4.9
+        version: 3.4.9
       queuert:
         specifier: workspace:*
         version: link:../../packages/core
@@ -1048,8 +1026,8 @@ importers:
         specifier: workspace:*
         version: link:../state-postgres-postgres-js
       postgres:
-        specifier: 4.0.0
-        version: 4.0.0
+        specifier: 3.4.9
+        version: 3.4.9
       queuert:
         specifier: workspace:*
         version: link:../../packages/core
@@ -1073,8 +1051,8 @@ importers:
         specifier: workspace:*
         version: link:../state-postgres-postgres-js
       postgres:
-        specifier: 4.0.0
-        version: 4.0.0
+        specifier: 3.4.9
+        version: 3.4.9
       queuert:
         specifier: workspace:*
         version: link:../../packages/core
@@ -1098,8 +1076,8 @@ importers:
         specifier: workspace:*
         version: link:../state-postgres-postgres-js
       postgres:
-        specifier: 4.0.0
-        version: 4.0.0
+        specifier: 3.4.9
+        version: 3.4.9
       queuert:
         specifier: workspace:*
         version: link:../../packages/core
@@ -1123,8 +1101,8 @@ importers:
         specifier: workspace:*
         version: link:../state-postgres-postgres-js
       postgres:
-        specifier: 4.0.0
-        version: 4.0.0
+        specifier: 3.4.9
+        version: 3.4.9
       queuert:
         specifier: workspace:*
         version: link:../../packages/core
@@ -1148,8 +1126,8 @@ importers:
         specifier: workspace:*
         version: link:../state-postgres-postgres-js
       postgres:
-        specifier: 4.0.0
-        version: 4.0.0
+        specifier: 3.4.9
+        version: 3.4.9
       queuert:
         specifier: workspace:*
         version: link:../../packages/core
@@ -1173,8 +1151,8 @@ importers:
         specifier: workspace:*
         version: link:../state-postgres-postgres-js
       postgres:
-        specifier: 4.0.0
-        version: 4.0.0
+        specifier: 3.4.9
+        version: 3.4.9
       queuert:
         specifier: workspace:*
         version: link:../../packages/core
@@ -1198,8 +1176,8 @@ importers:
         specifier: workspace:*
         version: link:../state-postgres-postgres-js
       postgres:
-        specifier: 4.0.0
-        version: 4.0.0
+        specifier: 3.4.9
+        version: 3.4.9
       queuert:
         specifier: workspace:*
         version: link:../../packages/core
@@ -1251,7 +1229,7 @@ importers:
         version: 8.23.1
       drizzle-orm:
         specifier: 0.45.4
-        version: 0.45.4(@electric-sql/pglite@0.4.3)(@opentelemetry/api@1.10.0)(@prisma/client@7.10.1(prisma@7.10.0(@types/react@19.3.0)(better-sqlite3@13.0.3)(react-dom@19.3.1(react@19.3.1))(react@19.3.1)(typescript@7.0.2))(typescript@7.0.2))(@types/better-sqlite3@9.6.0)(@types/pg@8.23.1)(better-sqlite3@13.0.3)(bun-types@1.4.4)(knex@3.3.0(better-sqlite3@13.0.3)(mysql2@3.15.3)(pg@8.23.1))(kysely@0.29.8)(mysql2@3.15.3)(pg@8.23.1)(postgres@4.0.0)(prisma@7.10.0(@types/react@19.3.0)(better-sqlite3@13.0.3)(react-dom@19.3.1(react@19.3.1))(react@19.3.1)(typescript@7.0.2))
+        version: 0.45.4(@electric-sql/pglite@0.4.3)(@opentelemetry/api@1.10.0)(@prisma/client@7.10.1(prisma@7.10.0(@types/react@19.3.0)(better-sqlite3@13.0.3)(react-dom@19.3.1(react@19.3.1))(react@19.3.1)(typescript@7.0.2))(typescript@7.0.2))(@types/better-sqlite3@9.6.0)(@types/pg@8.23.1)(better-sqlite3@13.0.3)(bun-types@1.4.4)(knex@3.3.0(better-sqlite3@13.0.3)(mysql2@3.15.3)(pg@8.23.1))(kysely@0.29.8)(mysql2@3.15.3)(pg@8.23.1)(postgres@3.4.9)(prisma@7.10.0(@types/react@19.3.0)(better-sqlite3@13.0.3)(react-dom@19.3.1(react@19.3.1))(react@19.3.1)(typescript@7.0.2))
       pg:
         specifier: 8.23.1
         version: 8.23.1
@@ -1322,8 +1300,8 @@ importers:
         specifier: workspace:*
         version: link:../state-postgres-postgres-js
       postgres:
-        specifier: 4.0.0
-        version: 4.0.0
+        specifier: 3.4.9
+        version: 3.4.9
       queuert:
         specifier: workspace:*
         version: link:../../packages/core
@@ -1364,8 +1342,8 @@ importers:
         specifier: workspace:*
         version: link:../../packages-internal/typed-sql
       postgres:
-        specifier: 4.0.0
-        version: 4.0.0
+        specifier: 3.4.9
+        version: 3.4.9
       queuert:
         specifier: workspace:*
         version: link:../../packages/core
@@ -1467,7 +1445,7 @@ importers:
         version: 13.0.3
       drizzle-orm:
         specifier: 0.45.4
-        version: 0.45.4(@electric-sql/pglite@0.4.3)(@opentelemetry/api@1.10.0)(@prisma/client@7.10.1(prisma@7.10.0(@types/react@19.3.0)(better-sqlite3@13.0.3)(react-dom@19.3.1(react@19.3.1))(react@19.3.1)(typescript@7.0.2))(typescript@7.0.2))(@types/better-sqlite3@9.6.0)(@types/pg@8.23.1)(better-sqlite3@13.0.3)(bun-types@1.4.4)(knex@3.3.0(better-sqlite3@13.0.3)(mysql2@3.15.3)(pg@8.23.1))(kysely@0.29.8)(mysql2@3.15.3)(pg@8.23.1)(postgres@4.0.0)(prisma@7.10.0(@types/react@19.3.0)(better-sqlite3@13.0.3)(react-dom@19.3.1(react@19.3.1))(react@19.3.1)(typescript@7.0.2))
+        version: 0.45.4(@electric-sql/pglite@0.4.3)(@opentelemetry/api@1.10.0)(@prisma/client@7.10.1(prisma@7.10.0(@types/react@19.3.0)(better-sqlite3@13.0.3)(react-dom@19.3.1(react@19.3.1))(react@19.3.1)(typescript@7.0.2))(typescript@7.0.2))(@types/better-sqlite3@9.6.0)(@types/pg@8.23.1)(better-sqlite3@13.0.3)(bun-types@1.4.4)(knex@3.3.0(better-sqlite3@13.0.3)(mysql2@3.15.3)(pg@8.23.1))(kysely@0.29.8)(mysql2@3.15.3)(pg@8.23.1)(postgres@3.4.9)(prisma@7.10.0(@types/react@19.3.0)(better-sqlite3@13.0.3)(react-dom@19.3.1(react@19.3.1))(react@19.3.1)(typescript@7.0.2))
       queuert:
         specifier: workspace:*
         version: link:../../packages/core
@@ -1773,11 +1751,8 @@ importers:
         specifier: 8.23.1
         version: 8.23.1
       postgres:
-        specifier: 4.0.0
-        version: 4.0.0
-      postgres-3:
-        specifier: npm:postgres@3.4.9
-        version: postgres@3.4.9
+        specifier: 3.4.9
+        version: 3.4.9
       queuert:
         specifier: workspace:*
         version: link:../core
@@ -5257,6 +5232,11 @@ packages:
   linkify-it@5.0.2:
     resolution: {integrity: sha512-ONTm2jCMAVZjgQa/Fy1kScXsuOoF5NPTsoFBdE1KVIZ2vAh/r9+Bqo+0jINCBYnavTPQZz38QzFTme79ENoN3Q==}
 
+  lint-staged@17.6.0:
+    resolution: {integrity: sha512-nOhBfYkZEwkFtNzD5pK9s9LkcWoxJ+whLzEnhqi9nl7zTB5n7tg8+9iYgMGx2Wm3VlLu8cbNj0RACzY+nWi5iQ==}
+    engines: {node: '>=22.22.1'}
+    hasBin: true
+
   lodash.camelcase@4.3.0:
     resolution: {integrity: sha512-TwuEnCnxbc3rAvhf/LbG7tJUDzhqXyFnv3dtzLOPgCG/hODL7WFnsbwktkD7yUV0RrreP/l1PALq/YSg6VvjlA==}
 
@@ -5753,10 +5733,6 @@ packages:
     resolution: {integrity: sha512-GD3qdB0x1z9xgFI6cdRD6xu2Sp2WCOEoe3mtnyB5Ee0XrrL5Pe+e4CCnJrRMnL1zYtRDZmQQVbvOttLnKDLnaw==}
     engines: {node: '>=12'}
 
-  postgres@4.0.0:
-    resolution: {integrity: sha512-kBh8qXtcvvIAc00DftQyOxz7M/3Zxww1tRMXZPLzipNXXl5PIzHml+9zB3Mrge2U8ldc0WF1ZdLp1iYQi7Kh3A==}
-    engines: {node: '>=20'}
-
   prebuild-install@7.1.3:
     resolution: {integrity: sha512-8Mf2cbV7x1cXPUILADGI3wuhfqWvtiLA1iclTDbFRZkgRQS0NqsPZphna9V+HyTEadheuPmjaJMsbzKQFOzLug==}
     engines: {node: '>=10'}
@@ -6167,6 +6143,10 @@ packages:
 
   streamx@2.28.1:
     resolution: {integrity: sha512-zEzXb0s5Cds7tqMH6rhZ05lcJydCWiQPEwiNngVqzsxCc962vLY4Uw+mW7od8kDH258k2Uz/JrOkdIAAhSh9VA==}
+
+  string-argv@0.3.2:
+    resolution: {integrity: sha512-aqD2Q0144Z+/RqG52NeHEkZauTAUWJO8c6yTftGJKO3Tja5tUgIfmIl6kExvhtxSDP7fXB6DvzkfMpCd/F3G+Q==}
+    engines: {node: '>=0.6.19'}
 
   string-width@4.2.3:
     resolution: {integrity: sha512-wKyQRQpjJ0sIp62ErSZdGsjMJWsap5oRNihHhu6G7JVO/9jIB6UyevL+tXuOqrng8j/cxKTWyWUwvSTriiZz/g==}
@@ -8925,7 +8905,7 @@ snapshots:
 
   dotenv@17.4.2: {}
 
-  drizzle-orm@0.45.4(@electric-sql/pglite@0.4.3)(@opentelemetry/api@1.10.0)(@prisma/client@7.10.1(prisma@7.10.0(@types/react@19.3.0)(better-sqlite3@13.0.3)(react-dom@19.3.1(react@19.3.1))(react@19.3.1)(typescript@7.0.2))(typescript@7.0.2))(@types/better-sqlite3@9.6.0)(@types/pg@8.23.1)(better-sqlite3@13.0.3)(bun-types@1.4.4)(knex@3.3.0(better-sqlite3@13.0.3)(mysql2@3.15.3)(pg@8.23.1))(kysely@0.29.8)(mysql2@3.15.3)(pg@8.23.1)(postgres@4.0.0)(prisma@7.10.0(@types/react@19.3.0)(better-sqlite3@13.0.3)(react-dom@19.3.1(react@19.3.1))(react@19.3.1)(typescript@7.0.2)):
+  drizzle-orm@0.45.4(@electric-sql/pglite@0.4.3)(@opentelemetry/api@1.10.0)(@prisma/client@7.10.1(prisma@7.10.0(@types/react@19.3.0)(better-sqlite3@13.0.3)(react-dom@19.3.1(react@19.3.1))(react@19.3.1)(typescript@7.0.2))(typescript@7.0.2))(@types/better-sqlite3@9.6.0)(@types/pg@8.23.1)(better-sqlite3@13.0.3)(bun-types@1.4.4)(knex@3.3.0(better-sqlite3@13.0.3)(mysql2@3.15.3)(pg@8.23.1))(kysely@0.29.8)(mysql2@3.15.3)(pg@8.23.1)(postgres@3.4.9)(prisma@7.10.0(@types/react@19.3.0)(better-sqlite3@13.0.3)(react-dom@19.3.1(react@19.3.1))(react@19.3.1)(typescript@7.0.2)):
     optionalDependencies:
       '@electric-sql/pglite': 0.4.3
       '@opentelemetry/api': 1.10.0
@@ -8938,7 +8918,7 @@ snapshots:
       kysely: 0.29.8
       mysql2: 3.15.3
       pg: 8.23.1
-      postgres: 4.0.0
+      postgres: 3.4.9
       prisma: 7.10.0(@types/react@19.3.0)(better-sqlite3@13.0.3)(react-dom@19.3.1(react@19.3.1))(react@19.3.1)(typescript@7.0.2)
 
   dts-resolver@3.0.0: {}
@@ -9540,6 +9520,14 @@ snapshots:
   linkify-it@5.0.2:
     dependencies:
       uc.micro: 2.1.0
+
+  lint-staged@17.6.0:
+    dependencies:
+      picomatch: 4.0.7
+      string-argv: 0.3.2
+      tinyexec: 1.3.1
+    optionalDependencies:
+      yaml: 2.9.1
 
   lodash.camelcase@4.3.0: {}
 
@@ -10390,8 +10378,6 @@ snapshots:
 
   postgres@3.4.9: {}
 
-  postgres@4.0.0: {}
-
   prebuild-install@7.1.3:
     dependencies:
       detect-libc: 2.1.2
@@ -10912,6 +10898,8 @@ snapshots:
     transitivePeerDependencies:
       - bare-abort-controller
       - react-native-b4a
+
+  string-argv@0.3.2: {}
 
   string-width@4.2.3:
     dependencies:

@@ -37,7 +37,7 @@ it("index");
 describe("PostgreSQL State Adapter Conformance", () => {
   const conformanceIt = it.extend<{
     pool: Pool;
-    stateAdapter: StateAdapter<{ $test: true }, string>;
+    stateAdapter: StateAdapter<{ $test: true }, string, string>;
     transactionConcurrency: "concurrent" | "serialized";
     withNonTransactionContext: <T>(fn: (txCtx: { $test: true }) => Promise<T>) => Promise<T>;
   }>({
@@ -61,7 +61,7 @@ describe("PostgreSQL State Adapter Conformance", () => {
         const client = await pool.connect();
         await client
           .query(
-            `DROP TABLE IF EXISTS queuert_job_blocker, queuert_job, queuert_migration CASCADE; DROP TYPE IF EXISTS queuert_job_status CASCADE`,
+            `DROP TABLE IF EXISTS queuert_job_blocker, queuert_job, queuert_worker, queuert_migration CASCADE; DROP TYPE IF EXISTS queuert_job_status CASCADE`,
           )
           .catch(() => {});
         client.release();
@@ -69,7 +69,7 @@ describe("PostgreSQL State Adapter Conformance", () => {
         const stateProvider = createPgPoolProvider({ pool });
         const adapter = await createPgStateAdapter({ stateProvider });
         await adapter.migrateToLatest();
-        return use(adapter as unknown as StateAdapter<{ $test: true }, string>);
+        return use(adapter as unknown as StateAdapter<{ $test: true }, string, string>);
       },
       { scope: "test" },
     ],
@@ -99,8 +99,8 @@ it("infers custom ID types through the full stack", async ({ postgresConnectionS
     const stateProvider = createPgPoolProvider({ pool });
     const stateAdapter = await createPgStateAdapter({
       stateProvider,
-      idType: "text",
-      generateId: (): `job.${UUID}` => `job.${randomUUID()}`,
+      jobIdType: "text",
+      generateJobId: (): `job.${UUID}` => `job.${randomUUID()}`,
     });
 
     await stateAdapter.migrateToLatest();

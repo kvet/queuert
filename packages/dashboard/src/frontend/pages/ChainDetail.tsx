@@ -42,6 +42,7 @@ import {
   buttonClass,
 } from "../ui/kit.js";
 import { Time } from "../ui/Time.js";
+import { LoadMoreFooter } from "./listParts.js";
 
 const chainListHref = (typeName: string): string =>
   `/chains?typeName=${encodeURIComponent(typeName)}`;
@@ -579,28 +580,12 @@ export const ChainDetail = () => {
                         }}
                       </For>
                     </ol>
-                    <Show when={nextCursor()}>
-                      <div class="-mx-4 flex items-center justify-between gap-3 border-t border-border px-4 py-3 text-sm text-fg-muted">
-                        <span>
-                          Showing {jobs().length.toLocaleString()} jobs · more load as you scroll
-                        </span>
-                        <button
-                          type="button"
-                          class={buttonClass.secondary}
-                          ref={autoLoadMoreJobs.ref}
-                          disabled={autoLoadMoreJobs.loading()}
-                          onClick={() => {
-                            autoLoadMoreJobs.trigger();
-                          }}
-                        >
-                          {autoLoadMoreJobs.loading()
-                            ? "Loading…"
-                            : autoLoadMoreJobs.failed()
-                              ? "Retry"
-                              : "Load more"}
-                        </button>
-                      </div>
-                    </Show>
+                    <LoadMoreFooter
+                      hasMore={nextCursor() !== null}
+                      shownCount={jobs().length}
+                      autoLoadMore={autoLoadMoreJobs}
+                      class="-mx-4"
+                    />
                     <LiveRegion text={announcement()} />
                   </Box>
                 </div>

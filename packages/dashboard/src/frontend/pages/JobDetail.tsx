@@ -1,12 +1,13 @@
 import { Box, Pips, StatusPill } from "@queuert/ui/components";
 import { shortId } from "@queuert/ui/lib";
 import { A, useParams } from "@solidjs/router";
-import { For, type JSX, Match, Show, Switch } from "solid-js";
+import { For, Match, Show, Switch } from "solid-js";
 
-import { type UnknownJob, getJobDetail, isNotFound } from "../api.js";
+import { type UnknownJob, getJobDetail, getWorker, isNotFound } from "../api.js";
 import { elapsedMs, formatDuration } from "../domain/duration.js";
 import { jobPhase } from "../domain/jobPhase.js";
 import { formatRelative } from "../domain/time.js";
+import { jobLease } from "../domain/workers.js";
 import { BlockerChainRow } from "../rows/BlockerChainRow.js";
 import { blockerProgress } from "../rows/BlockerChips.js";
 import { ErrorText, RescheduleButton } from "../rows/JobItem.js";
@@ -15,22 +16,8 @@ import { now } from "../state/clock.js";
 import { createLoader } from "../state/createLoader.js";
 import { CopyButton, IdChip } from "../ui/IdChip.js";
 import { JsonViewer } from "../ui/JsonViewer.js";
-import { ErrorState, NotFoundState, SkeletonRows, linkClass } from "../ui/kit.js";
+import { ErrorState, Fact, NotFoundState, SkeletonRows, linkClass } from "../ui/kit.js";
 import { Time } from "../ui/Time.js";
-
-const Fact = (props: { label: string; hint?: string; wide?: boolean; children: JSX.Element }) => (
-  <div class={`min-w-0 ${props.wide ? "col-span-2" : ""}`}>
-    <dt class="text-xs text-fg-muted" title={props.hint}>
-      {props.label}
-      <Show when={props.hint}>
-        <span class="ml-1 cursor-help text-fg-subtle" aria-label={props.hint}>
-          ⓘ
-        </span>
-      </Show>
-    </dt>
-    <dd class="mt-0.5 text-sm break-words">{props.children}</dd>
-  </div>
-);
 
 export const JobDetail = () => {
   const params = useParams<{ id: string }>();
@@ -38,6 +25,28 @@ export const JobDetail = () => {
     () => params.id,
     async (id, signal) => getJobDetail(id, { signal }),
   );
+  const attemptWorker = createLoader(
+    () => {
+      const job = detail.data()?.job;
+      return job?.status === "running" ? job.attemptBy : undefined;
+    },
+    async (workerId, signal) =>
+      getWorker(workerId, { signal }).then(
+        ({ worker }) => worker,
+        (error: unknown) => {
+          if (isNotFound(error)) return null;
+          throw error;
+        },
+      ),
+  );
+  const lease = () => {
+    const worker = attemptWorker.data();
+    return worker === undefined ? undefined : jobLease(worker);
+  };
+  const leaseUntil = () => {
+    const current = lease();
+    return current?.state === "live" ? current.leaseUntil : undefined;
+  };
 
   const replaceJob = (job: UnknownJob) => {
     const current = detail.data();
@@ -154,29 +163,35 @@ export const JobDetail = () => {
                         {(current) => (
                           <>
                             <Fact label="Worker" wide>
-                              <code class="font-mono text-xs break-all">{current().attemptBy}</code>
+                              <A
+                                href={`/workers/${encodeURIComponent(current().attemptBy)}`}
+                                class={`${linkClass} font-mono text-xs break-all`}
+                              >
+                                {current().attemptBy}
+                              </A>
                             </Fact>
                             <Fact label="Started">
                               <Time date={current().attemptAt} />
                             </Fact>
-                            <Fact label="Deadline">
-                              <Show
-                                when={current().attemptUntil}
-                                fallback={<span class="text-fg-muted">set on first heartbeat</span>}
-                              >
-                                {(until) => (
-                                  <Show
-                                    when={until().getTime() > now()}
-                                    fallback={
-                                      <span class="font-medium text-status-pending-fg">
-                                        passed · may be reclaimed
-                                      </span>
-                                    }
-                                  >
-                                    <Time date={until()} />
-                                  </Show>
-                                )}
-                              </Show>
+                            <Fact
+                              label="Deadline"
+                              hint="A running job is held while its worker keeps its lease."
+                            >
+                              <Switch fallback={<span class="text-fg-muted">—</span>}>
+                                <Match when={leaseUntil()}>
+                                  {(until) => <Time date={until()} />}
+                                </Match>
+                                <Match when={lease()?.state === "expired"}>
+                                  <span class="font-medium text-status-pending-fg">
+                                    passed · may be reclaimed
+                                  </span>
+                                </Match>
+                                <Match when={lease()?.state === "gone"}>
+                                  <span class="font-medium text-status-pending-fg">
+                                    worker no longer registered
+                                  </span>
+                                </Match>
+                              </Switch>
                             </Fact>
                           </>
                         )}

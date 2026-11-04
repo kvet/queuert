@@ -34,21 +34,19 @@ export type PendingJobFields = {
 };
 
 /** Status fields of a `running` {@link Job}. @inline */
-export type RunningJobFields = {
+export type RunningJobFields<TWorkerId> = {
   status: "running";
   /** When the current attempt started. */
   attemptAt: Date;
   /** Worker that owns the current attempt. */
-  attemptBy: string;
-  /** Attempt deadline: set at acquire from `attemptConfig.timeoutMs`, extended by heartbeats. */
-  attemptUntil: Date;
+  attemptBy: TWorkerId;
 };
 
 /** Status fields shared by both `completed` {@link Job} variants. @inline */
-export type CompletedJobFields = {
+export type CompletedJobFields<TWorkerId> = {
   status: "completed";
   completedAt: Date;
-  completedBy: string | null;
+  completedBy: TWorkerId | null;
 };
 
 /** Fields of a terminally completed {@link Job}: carries `output`, has no successor. */
@@ -64,6 +62,7 @@ export type ContinuedJobFields<TJobId> = { output?: never; continuedToId: TJobId
  * `continuedToId` points at the successor job).
  *
  * @typeParam TJobId - The job ID type (e.g. `string` or `UUID`)
+ * @typeParam TWorkerId - The worker ID type of `attemptBy` and `completedBy`
  * @typeParam TJobTypeName - The job type name literal
  * @typeParam TChainTypeName - The chain type name literal
  * @typeParam TInput - The job's input payload type
@@ -71,6 +70,7 @@ export type ContinuedJobFields<TJobId> = { output?: never; continuedToId: TJobId
  */
 export type Job<
   TJobId,
+  TWorkerId,
   TJobTypeName,
   TChainTypeName,
   TInput,
@@ -80,15 +80,15 @@ export type Job<
   (
     | BlockedJobFields
     | PendingJobFields
-    | RunningJobFields
-    | (CompletedJobFields &
+    | RunningJobFields<TWorkerId>
+    | (CompletedJobFields<TWorkerId> &
         (
           | ([TOutput] extends [never] ? never : TerminalJobFields<TOutput>)
           | (TCanContinue extends true ? ContinuedJobFields<TJobId> : never)
         ))
   );
 
-export type AnyJob = Job<any, any, any, any, any, boolean>;
+export type AnyJob = Job<any, any, any, any, any, any, boolean>;
 
 /** A job narrowed to `"completed"` status. */
 export type CompletedJob<TJob extends AnyJob> = Extract<

@@ -15,7 +15,11 @@ export const getChainsGroup: ConformanceGroup<StateConformanceFixture> = {
           stateAdapter.createJobs({
             txCtx,
             jobs: [
-              { id: stateAdapter.config.generateId(), typeName: "chain-head", input: { step: 1 } },
+              {
+                id: stateAdapter.config.generateJobId(),
+                typeName: "chain-head",
+                input: { step: 1 },
+              },
             ],
           }),
         );
@@ -33,7 +37,9 @@ export const getChainsGroup: ConformanceGroup<StateConformanceFixture> = {
         const [headChain] = await stateAdapter.withTransaction(async (txCtx) =>
           stateAdapter.createJobs({
             txCtx,
-            jobs: [{ id: stateAdapter.config.generateId(), typeName: "chain-head", input: null }],
+            jobs: [
+              { id: stateAdapter.config.generateJobId(), typeName: "chain-head", input: null },
+            ],
           }),
         );
 
@@ -42,7 +48,7 @@ export const getChainsGroup: ConformanceGroup<StateConformanceFixture> = {
             txCtx,
             jobs: [
               {
-                id: stateAdapter.config.generateId(),
+                id: stateAdapter.config.generateJobId(),
                 typeName: "chain-step2",
                 continueFromId: headChain.head.id,
                 input: null,
@@ -67,7 +73,9 @@ export const getChainsGroup: ConformanceGroup<StateConformanceFixture> = {
         const [headChain] = await stateAdapter.withTransaction(async (txCtx) =>
           stateAdapter.createJobs({
             txCtx,
-            jobs: [{ id: stateAdapter.config.generateId(), typeName: "single-head", input: null }],
+            jobs: [
+              { id: stateAdapter.config.generateJobId(), typeName: "single-head", input: null },
+            ],
           }),
         );
 
@@ -85,7 +93,11 @@ export const getChainsGroup: ConformanceGroup<StateConformanceFixture> = {
           stateAdapter.createJobs({
             txCtx,
             jobs: [
-              { id: stateAdapter.config.generateId(), typeName: "single-head-locked", input: null },
+              {
+                id: stateAdapter.config.generateJobId(),
+                typeName: "single-head-locked",
+                input: null,
+              },
             ],
           }),
         );
@@ -106,7 +118,11 @@ export const getChainsGroup: ConformanceGroup<StateConformanceFixture> = {
           stateAdapter.createJobs({
             txCtx,
             jobs: [
-              { id: stateAdapter.config.generateId(), typeName: "chain-lookup-test", input: null },
+              {
+                id: stateAdapter.config.generateJobId(),
+                typeName: "chain-lookup-test",
+                input: null,
+              },
             ],
           }),
         );
@@ -122,7 +138,9 @@ export const getChainsGroup: ConformanceGroup<StateConformanceFixture> = {
         const [headChain] = await stateAdapter.withTransaction(async (txCtx) =>
           stateAdapter.createJobs({
             txCtx,
-            jobs: [{ id: stateAdapter.config.generateId(), typeName: "chain-locked", input: null }],
+            jobs: [
+              { id: stateAdapter.config.generateJobId(), typeName: "chain-locked", input: null },
+            ],
           }),
         );
 
@@ -131,7 +149,7 @@ export const getChainsGroup: ConformanceGroup<StateConformanceFixture> = {
             txCtx,
             jobs: [
               {
-                id: stateAdapter.config.generateId(),
+                id: stateAdapter.config.generateJobId(),
                 typeName: "chain-locked-step2",
                 continueFromId: headChain.head.id,
                 input: null,
@@ -211,7 +229,11 @@ export const getChainsGroup: ConformanceGroup<StateConformanceFixture> = {
             const [stateChain] = await stateAdapter.createJobs({
               txCtx,
               jobs: [
-                { id: stateAdapter.config.generateId(), typeName: "iso-chain-create", input: null },
+                {
+                  id: stateAdapter.config.generateJobId(),
+                  typeName: "iso-chain-create",
+                  input: null,
+                },
               ],
             });
             newChainId = stateChain.head.chainId;
@@ -240,7 +262,7 @@ export const getChainsGroup: ConformanceGroup<StateConformanceFixture> = {
           stateAdapter.createJobs({
             txCtx,
             jobs: [
-              { id: stateAdapter.config.generateId(), typeName: "iso-latest-head", input: null },
+              { id: stateAdapter.config.generateJobId(), typeName: "iso-latest-head", input: null },
             ],
           }),
         );
@@ -260,7 +282,7 @@ export const getChainsGroup: ConformanceGroup<StateConformanceFixture> = {
               txCtx,
               jobs: [
                 {
-                  id: stateAdapter.config.generateId(),
+                  id: stateAdapter.config.generateJobId(),
                   typeName: "iso-latest-cont",
                   continueFromId: seedChain.head.id,
                   input: null,

@@ -1,42 +1,42 @@
 import { type ConformanceGroup } from "../runner.js";
 import { type StateConformanceFixture } from "./types.js";
 
-export const listChainTypeNamesGroup: ConformanceGroup<StateConformanceFixture> = {
-  name: "listChainTypeNames",
+export const getJobTypeNamesGroup: ConformanceGroup<StateConformanceFixture> = {
+  name: "getJobTypeNames",
   cases: [
     {
-      name: "listChainTypeNames returns empty array when no jobs exist",
+      name: "getJobTypeNames returns empty array when no jobs exist",
       run: async ({ stateAdapter }, expect) => {
-        const result = await stateAdapter.listChainTypeNames({});
+        const result = await stateAdapter.getJobTypeNames({});
         expect(result).toEqual([]);
       },
     },
     {
-      name: "listChainTypeNames returns distinct chain type names",
+      name: "getJobTypeNames returns distinct type names",
       run: async ({ stateAdapter }, expect) => {
         await stateAdapter.withTransaction(async (txCtx) =>
           stateAdapter.createJobs({
             txCtx,
             jobs: [
-              { id: stateAdapter.config.generateId(), typeName: "zebra", input: null },
-              { id: stateAdapter.config.generateId(), typeName: "alpha", input: null },
-              { id: stateAdapter.config.generateId(), typeName: "zebra", input: null },
-              { id: stateAdapter.config.generateId(), typeName: "mid", input: null },
+              { id: stateAdapter.config.generateJobId(), typeName: "zebra", input: null },
+              { id: stateAdapter.config.generateJobId(), typeName: "alpha", input: null },
+              { id: stateAdapter.config.generateJobId(), typeName: "zebra", input: null },
+              { id: stateAdapter.config.generateJobId(), typeName: "mid", input: null },
             ],
           }),
         );
 
-        const result = await stateAdapter.listChainTypeNames({});
+        const result = await stateAdapter.getJobTypeNames({});
         expect(result.sort()).toEqual(["alpha", "mid", "zebra"]);
       },
     },
     {
-      name: "listChainTypeNames does not include continuation-only type names",
+      name: "getJobTypeNames includes continuation job type names",
       run: async ({ stateAdapter }, expect) => {
         const [headChain] = await stateAdapter.withTransaction(async (txCtx) =>
           stateAdapter.createJobs({
             txCtx,
-            jobs: [{ id: stateAdapter.config.generateId(), typeName: "head-type", input: null }],
+            jobs: [{ id: stateAdapter.config.generateJobId(), typeName: "head-type", input: null }],
           }),
         );
 
@@ -45,7 +45,7 @@ export const listChainTypeNamesGroup: ConformanceGroup<StateConformanceFixture> 
             txCtx,
             jobs: [
               {
-                id: stateAdapter.config.generateId(),
+                id: stateAdapter.config.generateJobId(),
                 typeName: "continuation-type",
                 continueFromId: headChain.head.id,
                 input: null,
@@ -54,8 +54,8 @@ export const listChainTypeNamesGroup: ConformanceGroup<StateConformanceFixture> 
           }),
         );
 
-        const result = await stateAdapter.listChainTypeNames({});
-        expect(result).toEqual(["head-type"]);
+        const result = await stateAdapter.getJobTypeNames({});
+        expect(result.sort()).toEqual(["continuation-type", "head-type"]);
       },
     },
   ],

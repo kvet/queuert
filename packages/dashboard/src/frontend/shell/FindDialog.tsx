@@ -5,11 +5,13 @@ import { For, Match, Show, Switch, createMemo, createSignal } from "solid-js";
 import {
   type UnknownChain,
   type UnknownJob,
+  type WorkerWithRunningJobs,
   errorMessage,
   getChainsByIds,
   getJobsByIds,
-  listChainTypeNames,
-  listJobTypeNames,
+  getWorkersByIds,
+  getChainTypeNames,
+  getJobTypeNames,
 } from "../api.js";
 import { MAX_IDS, parseIdList } from "../domain/ids.js";
 import { matchTypeNames } from "../domain/typeMatch.js";
@@ -34,7 +36,16 @@ export const handleFindShortcut = (event: KeyboardEvent): void => {
   setFindOpen(true);
 };
 
-type Choice = { kind: "chain"; chain: UnknownChain } | { kind: "job"; job: UnknownJob };
+type Choice =
+  | { kind: "chain"; chain: UnknownChain }
+  | { kind: "job"; job: UnknownJob }
+  | { kind: "worker"; worker: WorkerWithRunningJobs };
+
+const choiceHref = (choice: Choice): string => {
+  if (choice.kind === "chain") return `/chains/${choice.chain.id}`;
+  if (choice.kind === "job") return `/jobs/${choice.job.id}`;
+  return `/workers/${encodeURIComponent(choice.worker.id)}`;
+};
 
 type TypeSuggestion = { kind: "chain" | "job"; typeName: string };
 
@@ -58,8 +69,8 @@ export const FindDialog = () => {
     () => findOpen(),
     async (_, signal) => {
       const [chains, jobs] = await Promise.all([
-        listChainTypeNames({ signal }),
-        listJobTypeNames({ signal }),
+        getChainTypeNames({ signal }),
+        getJobTypeNames({ signal }),
       ]);
       return { chains, jobs };
     },
@@ -91,7 +102,7 @@ export const FindDialog = () => {
 
   const go = (choice: Choice) => {
     close();
-    navigate(choice.kind === "chain" ? `/chains/${choice.chain.id}` : `/jobs/${choice.job.id}`);
+    navigate(choiceHref(choice));
   };
 
   const goToType = (suggestion: TypeSuggestion) => {
@@ -120,19 +131,21 @@ export const FindDialog = () => {
     setMessage(null);
     setChoices([]);
     try {
-      const [chains, jobs] = await Promise.all([
+      const [chains, jobs, workers] = await Promise.all([
         getChainsByIds(ids, { signal: own.signal }),
         getJobsByIds(ids, { signal: own.signal }),
+        getWorkersByIds(ids, { signal: own.signal }),
       ]);
       if (own.signal.aborted) return;
       const found: Choice[] = [
         ...chains.items.map((chain) => ({ kind: "chain" as const, chain })),
         ...jobs.items.map((job) => ({ kind: "job" as const, job })),
+        ...workers.items.map((worker) => ({ kind: "worker" as const, worker })),
       ];
       const topSuggestion = suggestions()[0];
       if (found.length === 0 && topSuggestion) goToType(topSuggestion);
       else if (found.length === 0)
-        setMessage({ text: "No chain or job with this ID", error: false });
+        setMessage({ text: "No chain, job or worker with this ID", error: false });
       else if (found.length === 1) go(found[0]);
       else {
         setChoices(found);
@@ -162,7 +175,7 @@ export const FindDialog = () => {
           }}
         >
           <label class="sr-only" for="find-ids">
-            Chain or job IDs, or a type name
+            Chain, job or worker IDs, or a type name
           </label>
           <textarea
             ref={(element) => {
@@ -266,7 +279,9 @@ export const FindDialog = () => {
 
         <Show when={choices().length > 0}>
           <p class="mt-3 mb-2 text-xs text-fg-muted">
-            This ID is both a chain and its job #1. Choose one:
+            {choices().some((choice) => choice.kind === "worker")
+              ? "Several items have this ID. Choose one:"
+              : "This ID is both a chain and its job #1. Choose one:"}
           </p>
           <ul
             ref={(element) => {
@@ -318,6 +333,19 @@ export const FindDialog = () => {
                             <span class="text-fg-muted">job #{job().chainIndex + 1}</span>
                             <span class="flex-1" />
                             <StatusPill status={job().status} />
+                          </>
+                        )}
+                      </Match>
+                      <Match when={choice.kind === "worker" && choice.worker}>
+                        {(worker) => (
+                          <>
+                            <span class="font-medium">Worker</span>
+                            <span class="text-fg-subtle">·</span>
+                            <span class="truncate font-mono">{worker().typeNames.join(", ")}</span>
+                            <span class="flex-1" />
+                            <span class="shrink-0 text-xs text-fg-muted tabular-nums">
+                              {worker().runningJobCount} / {worker().concurrency} running
+                            </span>
                           </>
                         )}
                       </Match>

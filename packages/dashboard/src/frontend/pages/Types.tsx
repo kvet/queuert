@@ -81,6 +81,7 @@ const TypeList = (props: {
                 <TypeRow
                   typeName={entry.typeName}
                   counts={entry.counts}
+                  workers={entry.workers}
                   href={(status) => typeListHref(props.kind.base, entry.typeName, status)}
                 />
               )}

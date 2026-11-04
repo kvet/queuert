@@ -10,7 +10,9 @@ export const getStartAttemptDelayMsGroup: ConformanceGroup<StateConformanceFixtu
         await stateAdapter.withTransaction(async (txCtx) =>
           stateAdapter.createJobs({
             txCtx,
-            jobs: [{ id: stateAdapter.config.generateId(), typeName: "avail-test", input: null }],
+            jobs: [
+              { id: stateAdapter.config.generateJobId(), typeName: "avail-test", input: null },
+            ],
           }),
         );
 
@@ -26,7 +28,7 @@ export const getStartAttemptDelayMsGroup: ConformanceGroup<StateConformanceFixtu
             txCtx,
             jobs: [
               {
-                id: stateAdapter.config.generateId(),
+                id: stateAdapter.config.generateJobId(),
                 typeName: "future-test",
                 input: null,
                 schedule: { afterMs: 5000 },
@@ -50,7 +52,7 @@ export const getStartAttemptDelayMsGroup: ConformanceGroup<StateConformanceFixtu
             txCtx,
             jobs: [
               {
-                id: stateAdapter.config.generateId(),
+                id: stateAdapter.config.generateJobId(),
                 typeName: "far-future-test",
                 input: null,
                 schedule: { at: new Date(Date.now() + thirtyDaysMs) },
@@ -72,9 +74,9 @@ export const getStartAttemptDelayMsGroup: ConformanceGroup<StateConformanceFixtu
           stateAdapter.createJobs({
             txCtx,
             jobs: [
-              { id: stateAdapter.config.generateId(), typeName: "mixed-test", input: null },
+              { id: stateAdapter.config.generateJobId(), typeName: "mixed-test", input: null },
               {
-                id: stateAdapter.config.generateId(),
+                id: stateAdapter.config.generateJobId(),
                 typeName: "mixed-test",
                 input: null,
                 schedule: { afterMs: 5000 },
@@ -103,7 +105,7 @@ export const getStartAttemptDelayMsGroup: ConformanceGroup<StateConformanceFixtu
           stateAdapter.createJobs({
             txCtx,
             jobs: [
-              { id: stateAdapter.config.generateId(), typeName: "delay-blocker", input: null },
+              { id: stateAdapter.config.generateJobId(), typeName: "delay-blocker", input: null },
             ],
           }),
         );
@@ -113,7 +115,7 @@ export const getStartAttemptDelayMsGroup: ConformanceGroup<StateConformanceFixtu
             txCtx,
             jobs: [
               {
-                id: stateAdapter.config.generateId(),
+                id: stateAdapter.config.generateJobId(),
                 typeName: "delay-blocked",
                 input: null,
                 schedule: { afterMs: 5000 },
@@ -159,7 +161,7 @@ export const getStartAttemptDelayMsGroup: ConformanceGroup<StateConformanceFixtu
               txCtx,
               jobs: [
                 {
-                  id: stateAdapter.config.generateId(),
+                  id: stateAdapter.config.generateJobId(),
                   typeName: "iso-next",
                   input: null,
                   schedule: { afterMs: 5000 },

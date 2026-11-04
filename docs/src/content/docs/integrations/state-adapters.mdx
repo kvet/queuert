@@ -118,7 +118,7 @@ Every example's `src/provider.spec.ts` is a working template. See the [Custom Ad
 Every state adapter factory accepts two optional limits:
 
 - **`maxBlockersPerJob`** (default `100`) -- the most blocker chains a single job may declare. Declaring more throws `BlockerLimitExceededError`. See [Job Blockers](/queuert/guides/job-blockers/#blocker-limit).
-- **`countCap`** (default `10_000`) -- the per-status count at which `countByChainTypeNames` and `countByJobTypeNames` (and the dashboard's type counts) stop counting and report `hasMore`. A higher cap means a longer index scan per count.
+- **`countCap`** (default `10_000`) -- the per-status count at which `countChainsByTypeName` and `countJobsByTypeName` (and the dashboard's type counts) stop counting and report `hasMore`. A higher cap means a longer index scan per count.
 
 ```ts
 const stateAdapter = await createPgStateAdapter({
@@ -128,7 +128,7 @@ const stateAdapter = await createPgStateAdapter({
 });
 ```
 
-Both must be positive integers; anything else throws when the adapter is created. The resolved values — along with `generateId` and `validateId` — are readable on `stateAdapter.config`.
+Both must be positive integers; anything else throws when the adapter is created. The resolved values — along with `generateJobId`, `validateJobId`, `generateWorkerId` and `validateWorkerId` — are readable on `stateAdapter.config`.
 
 ## Multi-worker deployment
 

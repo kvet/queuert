@@ -34,7 +34,7 @@ Because each `create*` factory produces an adapter with the same contract regard
 
 The suite is exposed as a framework-agnostic runner under the `queuert/conformance` subpath. Users wire it into a single `test()` block from their framework of choice; internal Queuert specs go through the same case list via a thin vitest binding so there's no drift between end-user validation and internal coverage.
 
-The suite reads the adapter's `config` as well: it calls `generateId` for the ID of every job it creates and, when `countCap` is small, checks that counts stop at it.
+The suite reads the adapter's `config` as well: it calls `generateJobId` for the ID of every job it creates and, when `countCap` is small, checks that counts stop at it.
 
 Whether the backing database can run two transactions at once is a property of the test setup, not of the adapter: no runtime code branches on it. The conformance fixture carries it as `transactionConcurrency` (`"concurrent"` for a connection pool, `"serialized"` for a single connection), and cases that need concurrent transactions are skipped for `"serialized"`.
 
@@ -64,18 +64,20 @@ This principle ensures predictable performance and proper atomicity.
 
 ### Context Architecture
 
-The `StateAdapter` type accepts two generic parameters: `TTxContext` (transaction context containing database client/session info) and `TJobId` (the job ID type for input parameters).
+The `StateAdapter` type accepts three generic parameters: `TTxContext` (transaction context containing database client/session info), `TJobId` (the job ID type for input parameters) and `TWorkerId` (the worker ID type).
 
-The context is named `TTxContext` (transaction context) because it represents an active transaction: the one your own database client opened (and passed to `client.createChain` or a handler's `complete`), or one opened by `withTransaction`. Queuert itself opens transactions only for migrations and in test helpers — never around job processing.
+The context is named `TTxContext` (transaction context) because it represents an active transaction: the one your own database client opened (and passed to `client.createChain` or a handler's `complete`), or one opened by `withTransaction`. Queuert itself opens transactions only for migrations, for the worker's registration, reclaims and stop, and in test helpers — never around job processing.
 
 ### Adapter Config
 
 Every state adapter exposes `config`, a frozen `StateAdapterConfig` with defaults applied. Its values are settings of the storage, so they live on the adapter rather than the client, and every client and worker sharing one adapter agrees on them:
 
-- **`generateId`** — core calls it for every job created without a caller-supplied `id`. `createJobs` and `continueJobs` require an `id` on every job, so adapters never generate IDs themselves
-- **`validateId`** — core runs it on every caller-supplied and generated ID before writing, throwing `InvalidJobIdError` (with `source: "caller"` or `"generator"`) on failure. Adapters never validate IDs
+- **`generateJobId`** — core calls it for every job created without a caller-supplied `id`. `createJobs` and `continueJobs` require an `id` on every job, so adapters never generate IDs themselves
+- **`validateJobId`** — core runs it on every caller-supplied and generated ID before writing, throwing `InvalidJobIdError` (with `source: "caller"` or `"generator"`) on failure. Adapters never validate IDs
+- **`generateWorkerId`** — core calls it once for each in-process worker created without a `workerId`, and must return a new id on every call
+- **`validateWorkerId`** — core runs it on the configured or generated worker id when the in-process worker is created; `createInProcessWorker` throws `InvalidWorkerIdError` on failure
 - **`maxBlockersPerJob`** — core rejects a job declaring more blockers with `BlockerLimitExceededError` before writing
-- **`countCap`** — the adapter bounds each per-type, per-status count in `countByChainTypeNames` / `countByJobTypeNames` at it; callers see the cap through `StateCount.hasMore`
+- **`countCap`** — the adapter bounds each per-type, per-status count in `countChainsByTypeName` / `countJobsByTypeName` at it; callers see the cap through `StateCount.hasMore`
 
 ### StateProvider Interface
 
@@ -91,13 +93,21 @@ Users create a `StateProvider` implementation to integrate with their database c
 Whether `txCtx` is optional depends on what the method does:
 
 - **Multi-statement mutating methods require it** (`createJobs`, `continueJobs`, `addJobsBlockers`, `unblockJobs`, `completeJobs`, `deleteChains`). These writes have to commit or roll back together with the caller's other writes, including the notify and observability side effects buffered on `transactionHooks`. The type enforces this, so a missing `txCtx` is a compile error rather than a silently auto-committed write.
-- **Single-statement worker writes leave it optional** (`startJobAttempts`, `extendJobAttempt`, `reclaimExpiredJobAttempts`, `rescheduleJobs`). The worker runs them without a transaction, in autocommit; `rescheduleJobs` also joins a caller's transaction when given one (`client.rescheduleJobs`, `complete({ reschedule })`).
-- **Read-only methods leave it optional** (`getChains`, `getJobs`, `getJobBlockers`, `getStartAttemptDelayMs`, `listJobTypeNames`, `listChainTypeNames`, `countByJobTypeNames`, `countByChainTypeNames`, `listChains`, `listJobs`, `listChainJobs`, `listBlockedJobs`). With a `txCtx` the read joins the caller's transaction and sees its uncommitted writes; without one the adapter acquires its own connection, executes, and releases.
-- **`lock: "exclusive"` requires it.** `getChains` and `getJobs` don't mutate rows, but a write-intent lock only lasts as long as the transaction that took it, so the parameter type pairs `lock` with a mandatory `txCtx`. `getChains` locks each chain's head row; `getJobs` locks each job **and its chain's head row**, in a consistent id order.
+- **Atomic worker writes leave it optional** (`startJobAttempts`, `rescheduleJobs`, `startWorker`, `extendWorkerLease`, `stopWorker`). Each one is atomic and opens its own transaction when no `txCtx` is given. The worker claims and renews without a `txCtx`, and registers, reclaims and stops a worker in one transaction that composes `getWorkers({ lock: "exclusive" })`, `listWorkerJobs`, `rescheduleJobs` and `startWorker` or `stopWorker`; `rescheduleJobs` also joins a caller's transaction when given one (`client.rescheduleJobs`, `complete({ reschedule })`).
+- **Read-only methods leave it optional** (`getChains`, `getJobs`, `getWorkers`, `getJobBlockers`, `getStartAttemptDelayMs`, `getJobTypeNames`, `getChainTypeNames`, `countJobsByTypeName`, `countChainsByTypeName`, `countWorkers`, `countWorkersByTypeName`, `countRunningJobsByWorkerId`, `listChains`, `listJobs`, `listChainJobs`, `listBlockedJobs`, `listWorkers`, `listWorkerJobs`). With a `txCtx` the read joins the caller's transaction and sees its uncommitted writes; without one the adapter acquires its own connection, executes, and releases.
+- **`lock: "exclusive"` requires it.** `getChains` and `getJobs` don't mutate rows, but a write-intent lock only lasts as long as the transaction that took it, so the parameter type pairs `lock` with a mandatory `txCtx`. `getChains` locks each chain's head row; `getJobs` locks each job **and its chain's head row**, in a consistent id order; `getWorkers` locks each worker row, which blocks claims under that worker until the transaction ends.
 
-### Attempt Fence
+### Attempt Token
 
-`completeJobs`, `continueJobs`, `rescheduleJobs` and `extendJobAttempt` take a `fence: { attempt, workerId }` (optional per job, required on `extendJobAttempt`). A fenced write matches only a `running` job in exactly that attempt, held by that worker. Anything else — another worker's attempt, a later attempt of the same worker, a completed or missing job — reports `undefined` and writes nothing: no chain head update and no successor. A completed or continued job's `completedBy` is its fence's `workerId`, `null` without a fence. `attempt` is incremented only by `startJobAttempts`, so each acquisition has its own number; `workerId` stays in the fence because `attempt` restarts at 1 when a chain is deleted and recreated with the same caller-supplied id.
+`startJobAttempts` gives each job it claims a new random `attemptToken`, which the job holds while it is `running` and loses when it leaves `running`. `completeJobs`, `continueJobs` and `rescheduleJobs` take an `attemptToken`, optional per job. A write with a token matches only a `running` job that still holds it. Anything else — another worker's attempt, a later attempt of the same worker, a chain deleted and recreated under the same id, a completed or missing job — reports `undefined` and writes nothing: no chain head update and no successor. `completeJobs` and `continueJobs` also take the `workerId` they record as the job's `completedBy`, `null` without one.
+
+### Worker Lease
+
+`startWorker` inserts a worker row with its `typeNames`, its `concurrency`, a new random `token` and a lease `leaseMs` from the database's `now()` in one statement and returns it. The token identifies that registration: `extendWorkerLease`, `startJobAttempts` and `stopWorker` take the `workerId` and its `workerToken` and match only a row that holds both. An insert under an id that already has a row rejects with the database's error, whatever that row's lease; the worker locks and reclaims an expired row under its id before it inserts. `extendWorkerLease({ workerId, workerToken, leaseMs })` moves a live lease to `leaseMs` from now and returns `undefined` when the row is gone, its lease already expired or it holds another token, so an expired lease or another registration's row is never renewed. `stopWorker({ workerId, workerToken })` deletes the row and returns it, `undefined` when no row matches; it leaves the jobs `running` under the worker untouched, so the worker reschedules them in the same transaction.
+
+A lease is live while `leaseUntil` is in the future in database time. `StateWorkerInfo.expired` reports it as computed by the database, and `listWorkers({ status: "live" | "expired" })` filters on it, so no worker compares its own clock with `leaseUntil`.
+
+`startJobAttempts({ typeNames, workerId, workerToken, limit })` claims nothing unless the worker's row exists with that token and a live lease, and must never commit a claim under a worker whose row a concurrent transaction locked and deletes: every `running` job's `attemptBy` names an existing worker row. The PostgreSQL adapter meets this by taking `FOR KEY SHARE` on the worker row in the claiming statement, which conflicts with the `FOR UPDATE` lock and `DELETE` of a reclaim but not with a lease renewal, so on PostgreSQL renewals never block claims. On SQLite the single writer serializes them.
 
 At the provider layer, `executeSql` keeps an unconditionally optional `txCtx` — that's what lets the adapter run reads on their own connection, and DDL operations (like `CREATE INDEX CONCURRENTLY`) that cannot run inside a transaction at all.
 
@@ -165,7 +175,7 @@ Observability events emitted inside database transactions are buffered and only 
 **Not buffered** -- events that either need immediate context or occur outside transactions:
 
 - **Span starts**: Need trace context immediately for DB writes that store trace IDs
-- **Worker-side events**: `jobAttemptStarted`, `jobAttemptDuration`, `jobAttemptFailed`, `jobAttemptLost`, `jobAttemptReclaimed`, `jobRescheduled` after a failed attempt, attempt span ends. The worker's own writes are single autocommit statements, so these are emitted directly
+- **Worker-side events**: `jobAttemptStarted`, `jobAttemptDuration`, `jobAttemptFailed`, `jobAttemptLost`, `jobRescheduled` after a failed attempt, attempt span ends. The worker's own writes are atomic and run outside any caller transaction, so these are emitted directly. `jobAttemptReclaimed` is emitted once the worker's reclaim transaction commits.
 - **Read-only observations**: events that observe state without making write claims
 
 ### Self-Cleaning

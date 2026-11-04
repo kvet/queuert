@@ -3,6 +3,7 @@ import {
   type StateAdapter,
   type StateJob,
   type StateJobInfo,
+  type StateWorkerInfo,
 } from "../state-adapter/state-adapter.js";
 
 export type SeedSentinels = {
@@ -47,6 +48,10 @@ export type SeedSentinels = {
     chainId: string;
     count: number;
   };
+  workers: {
+    idleWorkerIds: string[];
+    busyWorkerId: string;
+  };
   throwaway: {
     pendingTypeName: string;
     runningTypeName: string;
@@ -57,8 +62,28 @@ export type SeedSentinels = {
 };
 
 export const seedConfig = {
-  workerId: "seed-worker",
+  workerId: "00000000-0000-4000-8000-000000000000",
   attemptMs: 3600000, // 60 * 60 * 1000
+  workerTypeNames: [
+    "seed:running:order",
+    "seed:running:payment",
+    "seed:completed:order",
+    "seed:completed:payment",
+    "seed:retried",
+    "seed:chain",
+    "seed:throwaway:running",
+  ],
+  busyWorkerId: "00000000-0000-4000-8000-000000000002",
+  busyWorkerTypeNames: ["seed:busy"],
+  idleWorkers: [
+    { id: "00000000-0000-4000-8000-000000000003", typeNames: ["seed:pending:order"] },
+    { id: "00000000-0000-4000-8000-000000000004", typeNames: ["seed:pending:payment"] },
+    { id: "00000000-0000-4000-8000-000000000005", typeNames: ["seed:pending:notify"] },
+  ],
+  expiredWorkerId: "00000000-0000-4000-8000-000000000006",
+  expiredWorkerTypeNames: ["seed:throwaway:expired"],
+  workerConcurrency: 10,
+  leaseMs: 3600000, // 60 * 60 * 1000
   futureMs: 86400000, // 24 * 60 * 60 * 1000
   pendingTypes: ["seed:pending:order", "seed:pending:payment", "seed:pending:notify"],
   runningTypes: ["seed:running:order", "seed:running:payment"],
@@ -99,11 +124,11 @@ const chunkIndexes = (total: number, size: number): number[][] => {
 };
 
 export const seedAllStates = async <TTxContext extends BaseTxContext>(
-  stateAdapter: StateAdapter<TTxContext, string>,
+  stateAdapter: StateAdapter<TTxContext, string, any>,
   { scale = 1 }: { scale?: number } = {},
 ): Promise<SeedSentinels> => {
   const headJob = (typeName: string, index: number, schedule?: { afterMs: number }) => ({
-    id: stateAdapter.config.generateId(),
+    id: stateAdapter.config.generateJobId(),
     typeName,
     input: { index },
     ...(schedule ? { schedule } : {}),
@@ -131,6 +156,7 @@ export const seedAllStates = async <TTxContext extends BaseTxContext>(
     typeName: string,
     total: number,
     mode: "running" | "completed" | "retried",
+    worker: StateWorkerInfo = seedWorker,
   ): Promise<StateJob[]> => {
     const processed: StateJob[] = [];
     for (const indexes of chunkIndexes(total, PROCESS_CHUNK)) {
@@ -142,20 +168,14 @@ export const seedAllStates = async <TTxContext extends BaseTxContext>(
         const jobs: StateJob[] = [];
         const acquiredJobs = await stateAdapter.startJobAttempts({
           txCtx,
-          timeoutMsByTypeName: { [typeName]: 30_000 },
-          workerId: seedConfig.workerId,
+          typeNames: [typeName],
+          workerId: worker.id,
+          workerToken: worker.token,
           limit: indexes.length,
         });
         for (const job of acquiredJobs) {
           if (mode === "running") {
-            jobs.push(
-              (await stateAdapter.extendJobAttempt({
-                txCtx,
-                jobId: job.id,
-                fence: { attempt: job.attempt, workerId: seedConfig.workerId },
-                timeoutMs: seedConfig.attemptMs,
-              }))!,
-            );
+            jobs.push(job);
           } else if (mode === "completed") {
             const completed = await stateAdapter.completeJobs({
               txCtx,
@@ -163,7 +183,8 @@ export const seedAllStates = async <TTxContext extends BaseTxContext>(
                 {
                   jobId: job.id,
                   output: { ok: true, index: (job.input as { index: number }).index },
-                  fence: { attempt: job.attempt, workerId: seedConfig.workerId },
+                  attemptToken: job.attemptToken!,
+                  workerId: job.attemptBy!,
                 },
               ],
             });
@@ -188,6 +209,27 @@ export const seedAllStates = async <TTxContext extends BaseTxContext>(
     }
     return processed;
   };
+
+  const seedWorker = await stateAdapter.startWorker({
+    workerId: seedConfig.workerId,
+    typeNames: [...seedConfig.workerTypeNames],
+    concurrency: seedConfig.workerConcurrency,
+    leaseMs: seedConfig.leaseMs,
+  });
+  for (const idleWorker of seedConfig.idleWorkers) {
+    await stateAdapter.startWorker({
+      workerId: idleWorker.id,
+      typeNames: [...idleWorker.typeNames],
+      concurrency: seedConfig.workerConcurrency,
+      leaseMs: seedConfig.leaseMs,
+    });
+  }
+  const busyWorker = await stateAdapter.startWorker({
+    workerId: seedConfig.busyWorkerId,
+    typeNames: [...seedConfig.busyWorkerTypeNames],
+    concurrency: seedConfig.workerConcurrency,
+    leaseMs: seedConfig.leaseMs,
+  });
 
   // --- Block: Pending jobs (created first = earlier createdAt) ---
   const pendingJobs: StateJobInfo[] = [];
@@ -330,7 +372,7 @@ export const seedAllStates = async <TTxContext extends BaseTxContext>(
   const [longChain] = await stateAdapter.withTransaction(async (txCtx) =>
     stateAdapter.createJobs({
       txCtx,
-      jobs: [{ id: stateAdapter.config.generateId(), typeName: "seed:chain", input: { n: 0 } }],
+      jobs: [{ id: stateAdapter.config.generateJobId(), typeName: "seed:chain", input: { n: 0 } }],
     }),
   );
   let longChainTail = longChain.head;
@@ -338,8 +380,9 @@ export const seedAllStates = async <TTxContext extends BaseTxContext>(
     await stateAdapter.withTransaction(async (txCtx) => {
       const [acquired] = await stateAdapter.startJobAttempts({
         txCtx,
-        timeoutMsByTypeName: { "seed:chain": 30_000 },
-        workerId: seedConfig.workerId,
+        typeNames: ["seed:chain"],
+        workerId: seedWorker.id,
+        workerToken: seedWorker.token,
         limit: 1,
       });
       if (!acquired) return;
@@ -347,11 +390,12 @@ export const seedAllStates = async <TTxContext extends BaseTxContext>(
         txCtx,
         jobs: [
           {
-            id: stateAdapter.config.generateId(),
+            id: stateAdapter.config.generateJobId(),
             typeName: "seed:chain",
             input: { n: step },
             continueFromId: acquired.id,
-            fence: { attempt: acquired.attempt, workerId: seedConfig.workerId },
+            attemptToken: acquired.attemptToken!,
+            workerId: acquired.attemptBy!,
           },
         ],
       });
@@ -360,44 +404,36 @@ export const seedAllStates = async <TTxContext extends BaseTxContext>(
     });
   }
 
+  // --- Block: Busy worker (running jobs bounded by its concurrency) ---
+  await createProcessed("seed:busy", seedConfig.workerConcurrency, "running", busyWorker);
+
   // --- Block: Throwaway inventory (consumed by operational query benchmarks) ---
   await createChains("seed:throwaway:pending", seedConfig.throwawayPending * scale);
   await createProcessed("seed:throwaway:running", seedConfig.throwawayRunning * scale, "running");
 
-  const throwawayExpiredRunning: StateJob[] = [];
-  for (const indexes of chunkIndexes(seedConfig.throwawayExpiredRunning * scale, PROCESS_CHUNK)) {
-    const batch = await stateAdapter.withTransaction(async (txCtx) => {
-      await stateAdapter.createJobs({
-        txCtx,
-        jobs: indexes.map((i) => headJob("seed:throwaway:expired", i)),
-      });
-      const jobs: StateJob[] = [];
-      const acquiredJobs = await stateAdapter.startJobAttempts({
-        txCtx,
-        timeoutMsByTypeName: { "seed:throwaway:expired": 30_000 },
-        workerId: seedConfig.workerId,
-        limit: indexes.length,
-      });
-      for (const job of acquiredJobs) {
-        jobs.push(
-          (await stateAdapter.extendJobAttempt({
-            txCtx,
-            jobId: job.id,
-            fence: { attempt: job.attempt, workerId: seedConfig.workerId },
-            timeoutMs: 1,
-          }))!,
-        );
-      }
-      return jobs;
-    });
-    throwawayExpiredRunning.push(...batch);
-  }
+  const expiredWorker = await stateAdapter.startWorker({
+    workerId: seedConfig.expiredWorkerId,
+    typeNames: [...seedConfig.expiredWorkerTypeNames],
+    concurrency: seedConfig.workerConcurrency,
+    leaseMs: seedConfig.leaseMs,
+  });
+  await createProcessed(
+    "seed:throwaway:expired",
+    seedConfig.throwawayExpiredRunning * scale,
+    "running",
+    expiredWorker,
+  );
+  await stateAdapter.extendWorkerLease({
+    workerId: expiredWorker.id,
+    workerToken: expiredWorker.token,
+    leaseMs: 1,
+  });
 
   const throwawayChainResults = await stateAdapter.withTransaction(async (txCtx) =>
     stateAdapter.createJobs({
       txCtx,
       jobs: Array.from({ length: seedConfig.throwawayChains * scale }, (_, i) => ({
-        id: stateAdapter.config.generateId(),
+        id: stateAdapter.config.generateJobId(),
         typeName: "seed:throwaway:chain",
         input: { index: i },
       })),
@@ -408,7 +444,7 @@ export const seedAllStates = async <TTxContext extends BaseTxContext>(
     const blockers = await stateAdapter.createJobs({
       txCtx,
       jobs: Array.from({ length: seedConfig.throwawayUnblockers * scale }, (_, i) => ({
-        id: stateAdapter.config.generateId(),
+        id: stateAdapter.config.generateJobId(),
         typeName: "seed:throwaway:unblocker",
         input: { index: i },
       })),
@@ -416,7 +452,7 @@ export const seedAllStates = async <TTxContext extends BaseTxContext>(
     const targets = await stateAdapter.createJobs({
       txCtx,
       jobs: Array.from({ length: seedConfig.throwawayUnblockers * scale }, (_, i) => ({
-        id: stateAdapter.config.generateId(),
+        id: stateAdapter.config.generateJobId(),
         typeName: "seed:throwaway:unblock-target",
         input: { index: i },
       })),
@@ -472,6 +508,10 @@ export const seedAllStates = async <TTxContext extends BaseTxContext>(
     nonIndependent: {
       chainId: nonIndependent[0].chainId,
       count: nonIndependentCount,
+    },
+    workers: {
+      idleWorkerIds: seedConfig.idleWorkers.map((idleWorker) => idleWorker.id),
+      busyWorkerId: seedConfig.busyWorkerId,
     },
     throwaway: {
       pendingTypeName: "seed:throwaway:pending",

@@ -54,7 +54,6 @@ describe("Metrics", () => {
     });
     const worker = await createInProcessWorker({
       client,
-      workerName: "worker",
       concurrency: 1,
       processors: createProcessors({
         client,
@@ -84,7 +83,7 @@ describe("Metrics", () => {
       await client.awaitChain(chain, completionOptions);
     });
 
-    const workerIdMatcher = expect.stringMatching(/^worker-[0-9a-f-]{36}$/);
+    const workerIdMatcher = expect.stringMatching(/^[0-9a-f-]{36}$/);
 
     await expectMetrics([
       { method: "chainCreated", args: { typeName: "test" } },
@@ -574,31 +573,28 @@ describe("Metrics", () => {
       jobTypes,
     });
 
-    let failed = false;
-    const jobStarted = Promise.withResolvers<void>();
-    const jobCompleted = Promise.withResolvers<void>();
-    const attemptConfig = { timeoutMs: 10, heartbeatMs: 100 };
+    const leaseLosingClient = await createClient({
+      stateAdapter: { ...stateAdapter, extendWorkerLease: async () => undefined },
+      notifyAdapter,
+      observabilityAdapter,
+      log,
+      jobTypes,
+    });
 
-    const worker1 = await createInProcessWorker({
-      client,
-      concurrency: 1,
-      pollIntervalMs: attemptConfig.timeoutMs,
+    const jobStarted = Promise.withResolvers<void>();
+    const handlerReleased = Promise.withResolvers<void>();
+
+    const leaseLosingWorker = await createInProcessWorker({
+      client: leaseLosingClient,
+      lease: { durationMs: 150, heartbeatMs: 40 },
       processors: createProcessors({
-        client,
+        client: leaseLosingClient,
         jobTypes,
-        attemptConfig,
         processors: {
           test: {
-            attemptHandler: async ({ signal, complete }) => {
-              if (!failed) {
-                failed = true;
-                jobStarted.resolve();
-                try {
-                  await sleep(attemptConfig.heartbeatMs * 2, { signal });
-                } finally {
-                  jobCompleted.resolve();
-                }
-              }
+            attemptHandler: async ({ complete }) => {
+              jobStarted.resolve();
+              await handlerReleased.promise;
               return withTransaction(async (txCtx, transactionHooks) =>
                 complete({ ...txCtx, transactionHooks, output: null }),
               );
@@ -607,30 +603,18 @@ describe("Metrics", () => {
         },
       }),
     });
-    const worker2 = await createInProcessWorker({
+    const reclaimingWorker = await createInProcessWorker({
       client,
-      concurrency: 1,
-      pollIntervalMs: attemptConfig.timeoutMs,
+      pollIntervalMs: 20,
       processors: createProcessors({
         client,
         jobTypes,
-        attemptConfig,
         processors: {
           test: {
-            attemptHandler: async ({ signal, complete }) => {
-              if (!failed) {
-                failed = true;
-                jobStarted.resolve();
-                try {
-                  await sleep(attemptConfig.heartbeatMs * 2, { signal });
-                } finally {
-                  jobCompleted.resolve();
-                }
-              }
-              return withTransaction(async (txCtx, transactionHooks) =>
+            attemptHandler: async ({ complete }) =>
+              withTransaction(async (txCtx, transactionHooks) =>
                 complete({ ...txCtx, transactionHooks, output: null }),
-              );
-            },
+              ),
           },
         },
       }),
@@ -640,24 +624,58 @@ describe("Metrics", () => {
       client.createChain({ ...txCtx, transactionHooks, typeName: "test", input: null }),
     );
 
-    await withWorkers([await worker1.start(), await worker2.start()], async () => {
+    await withWorkers([await leaseLosingWorker.start()], async () => {
       await jobStarted.promise;
-      await sleep(10);
-
-      const successChain = await withTransaction(async (txCtx, transactionHooks) =>
-        client.createChain({ ...txCtx, transactionHooks, typeName: "test", input: null }),
-      );
-
-      await Promise.all([
-        client.awaitChain(chain, completionOptions),
-        client.awaitChain(successChain, completionOptions),
-      ]);
-      await jobCompleted.promise;
+      await withWorkers([await reclaimingWorker.start()], async () => {
+        await client.awaitChain(chain, completionOptions);
+      });
+      handlerReleased.resolve();
     });
 
     const metricNames = await getMetricNames();
     expect(metricNames).toContain("queuert.job.attempt.reclaimed");
     expect(metricNames).toContain("queuert.job.attempt.lost");
+  });
+
+  it("tracks worker lease loss metrics", async ({
+    stateAdapter,
+    notifyAdapter,
+    withWorkers,
+    observabilityAdapter,
+    log,
+    getMetricNames,
+  }) => {
+    const jobTypes = defineJobTypes<{
+      test: { entry: true; input: null; output: null };
+    }>();
+
+    const client = await createClient({
+      stateAdapter: { ...stateAdapter, extendWorkerLease: async () => undefined },
+      notifyAdapter,
+      observabilityAdapter,
+      log,
+      jobTypes,
+    });
+
+    const worker = await createInProcessWorker({
+      client,
+      lease: { durationMs: 1000, heartbeatMs: 20 },
+      processors: createProcessors({
+        client,
+        jobTypes,
+        processors: {
+          test: {
+            attemptHandler: async () => {
+              throw new Error("not expected to run");
+            },
+          },
+        },
+      }),
+    });
+
+    await withWorkers([await worker.start()], async () => {
+      await expect.poll(getMetricNames).toContain("queuert.worker.lease_lost");
+    });
   });
 
   it("tracks a lost attempt once after a workerless takeover", async ({
@@ -2761,7 +2779,6 @@ describe("Rollback", () => {
       processors: createProcessors({
         client,
         jobTypes,
-        attemptConfig: { timeoutMs: 50, heartbeatMs: 500 },
         processors: {
           test: {
             attemptHandler: async ({ complete }) => {

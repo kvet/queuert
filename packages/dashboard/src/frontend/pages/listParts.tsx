@@ -1,6 +1,7 @@
 import { useSearchParams } from "@solidjs/router";
 import { For, type JSX, Match, Show, Switch } from "solid-js";
 
+import { type createAutoLoadMore } from "../state/createAutoLoadMore.js";
 import { type createPagedList } from "../state/createPagedList.js";
 import { ErrorState, LiveRegion, SkeletonRows, buttonClass } from "../ui/kit.js";
 import { Select } from "../ui/Select.js";
@@ -61,19 +62,46 @@ const ListCard = (props: { children: JSX.Element }) => (
   <div class="overflow-hidden rounded-xs border border-border">{props.children}</div>
 );
 
+export const LoadMoreFooter = (props: {
+  hasMore: boolean;
+  shownCount: number;
+  autoLoadMore: ReturnType<typeof createAutoLoadMore>;
+  class?: string;
+}) => {
+  const loadMoreLabel = () => {
+    if (props.autoLoadMore.loading()) return "Loading…";
+    if (props.autoLoadMore.failed()) return "Retry";
+    return "Load more";
+  };
+
+  return (
+    <Show when={props.hasMore}>
+      <div
+        class={`flex items-center justify-between gap-3 border-t border-border px-4 py-3 text-sm text-fg-muted ${props.class ?? ""}`}
+      >
+        <span>Showing {props.shownCount.toLocaleString()} · more load as you scroll</span>
+        <button
+          type="button"
+          class={buttonClass.secondary}
+          ref={props.autoLoadMore.ref}
+          disabled={props.autoLoadMore.loading()}
+          onClick={() => {
+            props.autoLoadMore.trigger();
+          }}
+        >
+          {loadMoreLabel()}
+        </button>
+      </div>
+    </Show>
+  );
+};
+
 export const PagedListBody = <TItem extends { id: string }>(props: {
-  thing: "chains" | "jobs";
+  thing: "chains" | "jobs" | "workers";
   list: ReturnType<typeof createPagedList<unknown, TItem>>;
   empty: JSX.Element;
   children: (item: TItem) => JSX.Element;
 }) => {
-  const autoLoadMore = () => props.list.autoLoadMore;
-  const loadMoreLabel = () => {
-    if (autoLoadMore().loading()) return "Loading…";
-    if (autoLoadMore().failed()) return "Retry";
-    return "Load more";
-  };
-
   return (
     <>
       <Switch>
@@ -91,24 +119,11 @@ export const PagedListBody = <TItem extends { id: string }>(props: {
             <ul class="divide-y divide-border">
               <For each={props.list.items()}>{(item) => props.children(item)}</For>
             </ul>
-            <Show when={props.list.cursor()}>
-              <div class="flex items-center justify-between gap-3 border-t border-border px-4 py-3 text-sm text-fg-muted">
-                <span>
-                  Showing {props.list.items().length.toLocaleString()} · more load as you scroll
-                </span>
-                <button
-                  type="button"
-                  class={buttonClass.secondary}
-                  ref={autoLoadMore().ref}
-                  disabled={autoLoadMore().loading()}
-                  onClick={() => {
-                    autoLoadMore().trigger();
-                  }}
-                >
-                  {loadMoreLabel()}
-                </button>
-              </div>
-            </Show>
+            <LoadMoreFooter
+              hasMore={props.list.cursor() !== null}
+              shownCount={props.list.items().length}
+              autoLoadMore={props.list.autoLoadMore}
+            />
             <LiveRegion text={props.list.announcement()} />
           </ListCard>
         </Match>

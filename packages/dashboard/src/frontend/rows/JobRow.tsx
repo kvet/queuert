@@ -8,18 +8,24 @@ import { IdChip } from "../ui/IdChip.js";
 import { Time } from "../ui/Time.js";
 import { DataLine } from "./ChainRow.js";
 
-export type JobSortKey = "createdAt" | "scheduledAt" | "attemptAt" | "attemptUntil" | "completedAt";
+export type JobSortKey = "createdAt" | "scheduledAt" | "attemptAt" | "completedAt";
 
 const sortTime = (job: UnknownJob, key: JobSortKey): Date | null => {
   if (key === "scheduledAt") return job.scheduledAt;
   if (key === "attemptAt" && job.status === "running") return job.attemptAt;
-  if (key === "attemptUntil" && job.status === "running") return job.attemptUntil;
   if (key === "completedAt" && job.status === "completed") return job.completedAt;
   return job.createdAt;
 };
 
-export const JobRow = (props: { job: UnknownJob; sortKey: JobSortKey; showType?: boolean }) => {
+export const JobRow = (props: {
+  job: UnknownJob;
+  sortKey: JobSortKey;
+  showType?: boolean;
+  showWorker?: boolean;
+}) => {
   const time = () => sortTime(props.job, props.sortKey);
+  const runningWorkerId = () =>
+    props.showWorker !== false && props.job.status === "running" ? props.job.attemptBy : undefined;
   const output = () =>
     props.job.status === "completed" && props.job.continuedToId === null
       ? props.job.output
@@ -46,6 +52,17 @@ export const JobRow = (props: { job: UnknownJob; sortKey: JobSortKey; showType?:
         >
           #{props.job.chainIndex + 1} of {props.job.chainTypeName} · {shortId(props.job.chainId)}
         </A>
+        <Show when={runningWorkerId()}>
+          {(workerId) => (
+            <A
+              href={`/workers/${encodeURIComponent(workerId())}`}
+              class="relative z-10 min-w-0 truncate text-xs text-accent-fg hover:underline"
+              title={`Worker ${workerId()}`}
+            >
+              worker {shortId(workerId())}
+            </A>
+          )}
+        </Show>
         <Show when={failing()}>
           {(error) => (
             <span

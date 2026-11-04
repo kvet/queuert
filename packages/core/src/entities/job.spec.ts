@@ -1,7 +1,7 @@
 import { describe, expect, expectTypeOf, it } from "vitest";
 
 import { type StateJobInfo } from "../state-adapter/state-adapter.js";
-import { type AnyJob, mapStateJobToJob } from "./job.js";
+import { type Job, mapStateJobToJob } from "./job.js";
 
 const chainInfo = {
   id: "chain-1",
@@ -27,7 +27,7 @@ const pendingJobInfo: StateJobInfo = {
   lastAttemptError: null,
   attemptAt: null,
   attemptBy: null,
-  attemptUntil: null,
+  attemptToken: null,
   completedAt: null,
   completedBy: null,
   continuedToId: null,
@@ -43,7 +43,7 @@ const runningStateJob = {
   attempt: 1,
   attemptAt: new Date("2026-01-01T00:00:30Z"),
   attemptBy: "worker-1",
-  attemptUntil: new Date("2026-01-01T00:01:30Z"),
+  attemptToken: "attempt-token-1",
 };
 
 describe("mapStateJobToJob", () => {
@@ -64,21 +64,22 @@ describe("mapStateJobToJob", () => {
     expect(mapStateJobToJob({ ...pendingStateJob, chainIndex: 3 }).chainIndex).toBe(3);
   });
 
-  it("carries the attempt triplet through on a running job", () => {
+  it("carries the attempt fields through on a running job", () => {
     const job = mapStateJobToJob(runningStateJob);
 
     expect(job.status).toBe("running");
     if (job.status !== "running") throw new Error("expected a running job");
     expect(job.attemptAt).toEqual(runningStateJob.attemptAt);
     expect(job.attemptBy).toBe("worker-1");
-    expect(job.attemptUntil).toEqual(runningStateJob.attemptUntil);
   });
 
-  it("types the attempt triplet as non-null", () => {
-    const job = {} as Extract<AnyJob, { status: "running" }>;
+  it("types the attempt fields as non-null", () => {
+    const job = {} as Extract<
+      Job<string, "worker-id", string, string, unknown, unknown, false>,
+      { status: "running" }
+    >;
 
     expectTypeOf(job.attemptAt).toEqualTypeOf<Date>();
-    expectTypeOf(job.attemptBy).toEqualTypeOf<string>();
-    expectTypeOf(job.attemptUntil).toEqualTypeOf<Date>();
+    expectTypeOf(job.attemptBy).toEqualTypeOf<"worker-id">();
   });
 });

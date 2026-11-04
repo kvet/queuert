@@ -31,7 +31,7 @@ export const handleJobsList = async (url: URL, client: Client<any, any>): Promis
       : status === "running"
         ? ({
             status,
-            orderBy: parseOrderBy(rawOrderBy, ["attemptAt", "attemptUntil", "createdAt"]),
+            orderBy: parseOrderBy(rawOrderBy, ["attemptAt", "createdAt"]),
           } as const)
         : status === "completed"
           ? ({ status, orderBy: parseOrderBy(rawOrderBy, ["completedAt", "createdAt"]) } as const)
@@ -56,7 +56,7 @@ export const handleJobsList = async (url: URL, client: Client<any, any>): Promis
 };
 
 export const handleJobTypesList = async (client: Client<any, any>): Promise<Response> => {
-  const names = await client.listJobTypeNames();
+  const names = await client.getJobTypeNames();
   return serovalResponse(names);
 };
 
@@ -70,8 +70,17 @@ export const handleJobTypesCounts = async (
     .map((s) => s.trim())
     .filter(Boolean);
   if (typeNames.length === 0) return serovalResponse([]);
-  const counts = await client.countByJobTypeNames({ typeNames });
-  return serovalResponse(typeNames.map((typeName, i) => ({ typeName, ...counts[i] })));
+  const [counts, workerCounts] = await Promise.all([
+    client.countJobsByTypeName({ typeNames }),
+    client.countWorkersByTypeName({ typeNames }),
+  ]);
+  return serovalResponse(
+    typeNames.map((typeName, i) => ({
+      typeName,
+      ...counts[i],
+      workers: workerCounts[i],
+    })),
+  );
 };
 
 export const handleJobsByIds = async (url: URL, client: Client<any, any>): Promise<Response> => {

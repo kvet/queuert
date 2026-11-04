@@ -7,17 +7,20 @@ const tablePrefix = "queuert_";
 
 const it = extendWithVarianceStateSqlite(baseIt, {
   tablePrefix,
-  generateId: () => `ok-${crypto.randomUUID()}`,
-  validateId: (id) => id.startsWith("ok-"),
+  generateJobId: () => `ok-${crypto.randomUUID()}`,
+  validateJobId: (id) => id.startsWith("ok-"),
+  generateWorkerId: () => `worker-${crypto.randomUUID()}`,
+  validateWorkerId: (id) => id.startsWith("worker-"),
 });
 
 it("index");
 
-describe("SQLite State Adapter Variance - With validateId", () => {
+describe("SQLite State Adapter Variance - With validateJobId", () => {
   it("creates tables with correct prefix", ({ tableNames }) => {
     expect(tableNames).toContain(`${tablePrefix}job`);
     expect(tableNames).toContain(`${tablePrefix}job_blocker`);
     expect(tableNames).toContain(`${tablePrefix}migration`);
+    expect(tableNames).toContain(`${tablePrefix}worker`);
   });
 
   stateAdapterConformanceTestSuite({ it });

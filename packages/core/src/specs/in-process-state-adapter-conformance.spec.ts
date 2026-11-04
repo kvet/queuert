@@ -10,7 +10,7 @@ it("index");
 
 describe("In-Process State Adapter Conformance", () => {
   const conformanceIt = it.extend<{
-    stateAdapter: StateAdapter<{ $test: true }, string>;
+    stateAdapter: StateAdapter<{ $test: true }, string, string>;
     transactionConcurrency: "concurrent" | "serialized";
     withNonTransactionContext: <T>(fn: (txCtx: { $test: true }) => Promise<T>) => Promise<T>;
   }>({
@@ -25,7 +25,11 @@ describe("In-Process State Adapter Conformance", () => {
       // oxlint-disable-next-line no-empty-pattern
       async ({}, use) => {
         await use(
-          (await createInProcessStateAdapter()) as unknown as StateAdapter<{ $test: true }, string>,
+          (await createInProcessStateAdapter()) as unknown as StateAdapter<
+            { $test: true },
+            string,
+            string
+          >,
         );
       },
       { scope: "test" },
@@ -43,7 +47,7 @@ describe("In-Process State Adapter Conformance", () => {
     const [stateChain] = await stateAdapter.withTransaction(async (txCtx) =>
       stateAdapter.createJobs({
         txCtx,
-        jobs: [{ id: stateAdapter.config.generateId(), typeName: "t", input: null }],
+        jobs: [{ id: stateAdapter.config.generateJobId(), typeName: "t", input: null }],
       }),
     );
     expect(UUID_PATTERN.test(stateChain.head.id)).toBe(true);

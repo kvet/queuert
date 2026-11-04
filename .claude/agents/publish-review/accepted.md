@@ -14,7 +14,7 @@ Read by every `publish-review` agent and by `review-code`.
 - **NATS notify adapter uses `subjectPrefix` while PG and Redis use `channelPrefix`**: Each adapter uses its transport's idiomatic terminology.
 - **`testing` export declared in `publishConfig` but files excluded**: Testing utilities are workspace-only, not shipped to npm. The `publishConfig.exports` entry is overridden by the `files` exclusion.
 - **NATS is experimental**: No provider abstraction, uses `nc` instead of `provider`, exports no types from `index.ts`. All will be standardized when the API stabilizes.
-- **State adapter factory options for ID generation are aligned**: Both adapters use `generateId` (JS fn) and `validateId` (optional predicate). PG has no `idDefault` (SQL DEFAULT) in favor of JS-side generation for symmetry and to support caller-supplied IDs uniformly.
+- **State adapter factory options for ID generation are aligned**: Both adapters use `generateJobId` (JS fn) and `validateJobId` (optional predicate). PG has no `idDefault` (SQL DEFAULT) in favor of JS-side generation for symmetry and to support caller-supplied IDs uniformly.
 - **OTEL `workerError` does not record error details**: Counter attributes should remain low-cardinality per OTEL best practices. Error details are captured via the Log adapter.
 - **`getStartAttemptDelayMs` uses `FOR UPDATE SKIP LOCKED`**: Accepted for now; future cleanup.
 - **SQLite `createJobs` performs per-item deduplication lookups (O(n) round-trips for deduplicated items)**: Accepted SQLite trade-off; `addJobsBlockers` is batched via `json_each`.

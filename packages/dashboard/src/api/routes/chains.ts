@@ -151,7 +151,7 @@ export const handleChainDelete = async (
 };
 
 export const handleChainTypesList = async (client: Client<any, any>): Promise<Response> => {
-  const names = await client.listChainTypeNames();
+  const names = await client.getChainTypeNames();
   return serovalResponse(names);
 };
 
@@ -165,7 +165,7 @@ export const handleChainTypesCounts = async (
     .map((s) => s.trim())
     .filter(Boolean);
   if (typeNames.length === 0) return serovalResponse([]);
-  const counts = await client.countByChainTypeNames({ typeNames });
+  const counts = await client.countChainsByTypeName({ typeNames });
   return serovalResponse(typeNames.map((typeName, i) => ({ typeName, ...counts[i] })));
 };
 

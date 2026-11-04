@@ -19,7 +19,12 @@ if (process.argv[1] === import.meta.filename) {
   const pool = new Pool({ connectionString: process.argv[2] });
   const store = createMigrationStore(
     createPgPoolProvider({ pool }),
-    createTemplateApplier({ schema: "public", table_prefix: "queuert_", id_type: "text" }),
+    createTemplateApplier({
+      schema: "public",
+      table_prefix: "queuert_",
+      job_id_type: "text",
+      worker_id_type: "text",
+    }),
   );
   await runDeploymentProcess({
     migrate: async ({ version, pause }) => {

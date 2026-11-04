@@ -38,7 +38,6 @@ const mapStateJobToJobAttemptData = (stateJob: StateJob): JobAttemptData => ({
   ...mapStateJobToJobProcessingData(stateJob),
   attemptAt: stateJob.attemptAt!,
   attemptBy: stateJob.attemptBy!,
-  attemptUntil: stateJob.attemptUntil!,
 });
 
 const mapStateJobToJobCompletionData = (
@@ -72,6 +71,7 @@ export type ObservabilityHelper = {
   // worker
   workerStarted: (options: { workerId: string; jobTypeNames: string[] }) => void;
   workerError: (options: { workerId: string }, error: unknown) => void;
+  workerLeaseLost: (options: { workerId: string }) => void;
   workerStopped: (options: { workerId: string }) => void;
 
   // chain
@@ -102,13 +102,16 @@ export type ObservabilityHelper = {
     stateJob: StateJob,
     options: { output?: unknown; continuedWith?: StateJobInfo; workerId: string },
   ) => void;
-  jobAttemptReclaimed: (stateJob: StateJob, options: { workerId: string }) => void;
+  jobAttemptReclaimed: (
+    stateJob: StateJob,
+    options: { workerId: string; reclaimedFrom: string },
+  ) => void;
 
   // notify adapter
   notifyAdapterError: (operation: keyof NotifyAdapter, error: unknown) => void;
 
   // state adapter
-  stateAdapterError: (operation: keyof StateAdapter<any, any>, error: unknown) => void;
+  stateAdapterError: (operation: keyof StateAdapter<any, any, any>, error: unknown) => void;
 
   // job type validation
   jobTypeValidationError: (error: JobTypeValidationError) => void;
@@ -172,6 +175,15 @@ export const createObservabilityHelper = ({
       error,
     });
     adapter.workerError({ ...options, error });
+  },
+  workerLeaseLost(options) {
+    log({
+      type: "worker_lease_lost",
+      level: "warn",
+      message: "Worker lost its lease",
+      data: options,
+    });
+    adapter.workerLeaseLost(options);
   },
   workerStopped(options) {
     log({
@@ -317,11 +329,12 @@ export const createObservabilityHelper = ({
     const data = {
       ...mapStateJobToJobAttemptData(stateJob),
       workerId: options.workerId,
+      reclaimedFrom: options.reclaimedFrom,
     };
     log({
       type: "job_attempt_reclaimed",
       level: "info",
-      message: "Reclaimed expired job attempt",
+      message: "Reclaimed job attempt",
       data,
     });
     adapter.jobAttemptReclaimed(data);

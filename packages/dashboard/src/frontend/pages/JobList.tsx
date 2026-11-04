@@ -2,7 +2,7 @@ import { JOB_STATUSES } from "@queuert/ui/lib";
 import { useSearchParams } from "@solidjs/router";
 import { Show, createMemo } from "solid-js";
 
-import { PAGE_SIZE, countByJobTypeNames, listJobTypeNames, listJobs } from "../api.js";
+import { PAGE_SIZE, countJobsByTypeName, getJobTypeNames, listJobs } from "../api.js";
 import { JobRow, type JobSortKey } from "../rows/JobRow.js";
 import { createLoader } from "../state/createLoader.js";
 import { createPagedList } from "../state/createPagedList.js";
@@ -21,7 +21,6 @@ const orderByOptionsFor = (status: string): readonly { value: JobSortKey; label:
   if (status === "running")
     return [
       { value: "attemptAt", label: "Started" },
-      { value: "attemptUntil", label: "Deadline" },
       { value: "createdAt", label: "Created" },
     ];
   if (status === "completed")
@@ -46,11 +45,11 @@ const JobListForType = (props: { typeName: string }) => {
 
   const typeNames = createLoader(
     () => true,
-    async (_, signal) => listJobTypeNames({ signal }),
+    async (_, signal) => getJobTypeNames({ signal }),
   );
   const counts = createLoader(
     () => props.typeName,
-    async (typeName, signal) => (await countByJobTypeNames([typeName], { signal }))[0],
+    async (typeName, signal) => (await countJobsByTypeName([typeName], { signal }))[0],
   );
   const statusCounts = () => {
     const typeCounts = counts.data();

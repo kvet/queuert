@@ -16,12 +16,13 @@ import {
   type BaseTxContext,
   type GetStateAdapterJobId,
   type GetStateAdapterTxContext,
+  type GetStateAdapterWorkerId,
   type StateAdapter,
 } from "../state-adapter/state-adapter.js";
 import { type TransactionHooks } from "../transaction-hooks.js";
 
 type AttemptContinueWithOutcome<
-  TStateAdapter extends StateAdapter<any, any>,
+  TStateAdapter extends StateAdapter<any, any, any>,
   TJobTypeDefinitions extends BaseJobTypeDefinitions,
   TJobTypeName extends string,
 > =
@@ -51,7 +52,7 @@ type AttemptRescheduleOutcome = { reschedule: ScheduleOptions };
 
 /** Every outcome `complete` accepts, as a single union. */
 export type AttemptOutcome<
-  TStateAdapter extends StateAdapter<any, any>,
+  TStateAdapter extends StateAdapter<any, any, any>,
   TJobTypeDefinitions extends BaseJobTypeDefinitions,
   TJobTypeName extends string,
 > =
@@ -61,7 +62,7 @@ export type AttemptOutcome<
 
 /** Resolves the committed job shape from the outcome's discriminant key. */
 export type AttemptCompleteResult<
-  TStateAdapter extends StateAdapter<any, any>,
+  TStateAdapter extends StateAdapter<any, any, any>,
   TJobTypeDefinitions extends BaseJobTypeDefinitions,
   TJobTypeName extends string,
   TChainTypeName extends string,
@@ -69,6 +70,7 @@ export type AttemptCompleteResult<
 > = TOutcome extends { continueWith: { typeName: infer TContinuationTypeName extends string } }
   ? ContinuedJob<
       GetStateAdapterJobId<TStateAdapter>,
+      GetStateAdapterWorkerId<TStateAdapter>,
       TJobTypeDefinitions,
       TJobTypeName,
       TChainTypeName,
@@ -83,6 +85,7 @@ export type AttemptCompleteResult<
       >
     : OutputJob<
         GetStateAdapterJobId<TStateAdapter>,
+        GetStateAdapterWorkerId<TStateAdapter>,
         TJobTypeDefinitions,
         TJobTypeName,
         TChainTypeName
@@ -117,8 +120,8 @@ export type AttemptCompleteResult<
  * `transactionHooks`, not exactly one outcome, a second success or a concurrent call with the
  * same `transactionHooks`, or a call after the handler ended.
  *
- * @throws {@link JobTakenByAnotherWorkerError} if the attempt expired and the job was
- * reclaimed or acquired by another attempt.
+ * @throws {@link JobTakenByAnotherWorkerError} if the attempt was reclaimed and the job
+ * acquired by another attempt.
  * @throws {@link JobAlreadyCompletedError} if the job was completed elsewhere, for example by
  * `client.completeChain`.
  * @throws {@link JobNotFoundError} if the job was deleted.
@@ -129,7 +132,7 @@ export type AttemptCompleteResult<
  * stored chain's.
  */
 export type AttemptComplete<
-  TStateAdapter extends StateAdapter<any, any>,
+  TStateAdapter extends StateAdapter<any, any, any>,
   in out TJobTypeDefinitions extends BaseJobTypeDefinitions,
   in out TJobTypeName extends string,
   out TChainTypeName extends string,
@@ -144,10 +147,10 @@ export type AttemptComplete<
 /**
  * Handler function called for each job attempt.
  *
- * Receives `signal` (aborts when the worker is stopping or the attempt is lost), `job` (the
- * running job with its completed blocker chains) and `complete` (commits the outcome inside the
- * caller's transaction). Do the work, then open a transaction and call `complete` inside it. The
- * handler returns what `complete` returned.
+ * Receives `signal` (aborts when the worker is stopping or lost its lease, or the attempt is
+ * lost), `job` (the running job with its completed blocker chains) and `complete` (commits the
+ * outcome inside the caller's transaction). Do the work, then open a transaction and call
+ * `complete` inside it. The handler returns what `complete` returned.
  *
  * A `complete` call counts once its `transactionHooks` flushed — right after COMMIT when
  * `withTransactionHooks` wraps the transaction — and then completes the attempt without another
@@ -157,7 +160,7 @@ export type AttemptComplete<
  * with backoff.
  */
 export type AttemptHandler<
-  TStateAdapter extends StateAdapter<any, any>,
+  TStateAdapter extends StateAdapter<any, any, any>,
   TJobTypeDefinitions extends BaseJobTypeDefinitions,
   TJobTypeName extends string,
   TChainTypeName extends string,
@@ -167,6 +170,7 @@ export type AttemptHandler<
     signal: AbortSignal;
     job: ResolvedRunningJob<
       GetStateAdapterJobId<TStateAdapter>,
+      GetStateAdapterWorkerId<TStateAdapter>,
       TJobTypeDefinitions,
       TJobTypeName,
       TChainTypeName

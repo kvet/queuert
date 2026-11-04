@@ -22,10 +22,14 @@ const newerMigration: Migration = {
 if (process.argv[1] === import.meta.filename) {
   const db = new Database(process.argv[2], { timeout: 30_000 });
   const provider = createBetterSqlite3Provider({ db });
-  await createSqliteStateAdapter({ stateProvider: provider, generateId: () => randomUUID() });
+  await createSqliteStateAdapter({ stateProvider: provider, generateJobId: () => randomUUID() });
   const store = createMigrationStore(
     provider,
-    createTemplateApplier({ table_prefix: "queuert_", id_type: "TEXT" }),
+    createTemplateApplier({
+      table_prefix: "queuert_",
+      job_id_type: "TEXT",
+      worker_id_type: "TEXT",
+    }),
   );
   await runDeploymentProcess({
     migrate: async ({ version, pause }) => {

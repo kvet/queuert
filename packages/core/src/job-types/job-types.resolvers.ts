@@ -203,11 +203,13 @@ export type JobTypeHasBlockers<
 /** Resolves a {@link Job} with concrete input/output types for a given job type name. */
 export type ResolvedJob<
   TJobId,
+  TWorkerId,
   TJobTypeDefinitions extends BaseJobTypeDefinitions,
   TJobTypeName extends string,
   TChainTypeName extends string = JobTypeReachingEntry<TJobTypeDefinitions, TJobTypeName>,
 > = Job<
   TJobId,
+  TWorkerId,
   TJobTypeName,
   TChainTypeName,
   JobTypeProperty<TJobTypeDefinitions, TJobTypeName, "input">,
@@ -218,11 +220,12 @@ export type ResolvedJob<
 /** The `running` `ResolvedJob` with its completed blocker chains — the job an attempt handler receives. */
 export type ResolvedRunningJob<
   TJobId,
+  TWorkerId,
   TJobTypeDefinitions extends BaseJobTypeDefinitions,
   TJobTypeName extends string,
   TChainTypeName extends string = JobTypeReachingEntry<TJobTypeDefinitions, TJobTypeName>,
 > = ResolvedJobFields<TJobId, TJobTypeDefinitions, TJobTypeName, TChainTypeName> &
-  RunningJobFields & {
+  RunningJobFields<TWorkerId> & {
     blockers: CompletedBlockerChains<TJobId, TJobTypeDefinitions, TJobTypeName>;
   };
 
@@ -263,6 +266,7 @@ export type ContinuationJobs<
 
 export type OutputJob<
   TJobId,
+  TWorkerId,
   TJobTypeDefinitions extends BaseJobTypeDefinitions,
   TJobTypeName extends string,
   TChainTypeName extends string = JobTypeReachingEntry<TJobTypeDefinitions, TJobTypeName>,
@@ -271,7 +275,7 @@ export type OutputJob<
     ? [TOutput] extends [never]
       ? never
       : ResolvedJobFields<TJobId, TJobTypeDefinitions, TJobTypeName, TChainTypeName> &
-          CompletedJobFields &
+          CompletedJobFields<TWorkerId> &
           TerminalJobFields<TOutput> & { continuedTo: undefined }
     : never;
 
@@ -284,6 +288,7 @@ export type RescheduledJob<
 
 export type ContinuedJob<
   TJobId,
+  TWorkerId,
   TJobTypeDefinitions extends BaseJobTypeDefinitions,
   TJobTypeName extends string,
   TChainTypeName extends string = JobTypeReachingEntry<TJobTypeDefinitions, TJobTypeName>,
@@ -291,7 +296,7 @@ export type ContinuedJob<
 > = [JobTypeContinuation<TJobTypeDefinitions, TJobTypeName>] extends [never]
   ? never
   : ResolvedJobFields<TJobId, TJobTypeDefinitions, TJobTypeName, TChainTypeName> &
-      CompletedJobFields &
+      CompletedJobFields<TWorkerId> &
       ContinuedJobFields<TJobId> & {
         continuedTo: ContinuationJob<
           TJobId,
@@ -355,6 +360,7 @@ export type ResolvedRunningChain<
 /** Union of all resolved {@link Job} types reachable within a chain starting from the given entry type. */
 export type ResolvedChainJobs<
   TJobId,
+  TWorkerId,
   TJobTypeDefinitions extends BaseJobTypeDefinitions,
   TChainTypeName extends string,
 > =
@@ -363,6 +369,7 @@ export type ResolvedChainJobs<
     ? {
         [K in TChainTypeNames]: Job<
           TJobId,
+          TWorkerId,
           K,
           TChainTypeName,
           JobTypeProperty<TJobTypeDefinitions, K, "input">,

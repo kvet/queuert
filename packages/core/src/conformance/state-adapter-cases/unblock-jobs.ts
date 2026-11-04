@@ -14,14 +14,14 @@ export const unblockJobsGroup: ConformanceGroup<StateConformanceFixture> = {
         const [blockerChain] = await stateAdapter.withTransaction(async (txCtx) =>
           stateAdapter.createJobs({
             txCtx,
-            jobs: [{ id: stateAdapter.config.generateId(), typeName: "blocker", input: null }],
+            jobs: [{ id: stateAdapter.config.generateJobId(), typeName: "blocker", input: null }],
           }),
         );
 
         const [mainChain] = await stateAdapter.withTransaction(async (txCtx) =>
           stateAdapter.createJobs({
             txCtx,
-            jobs: [{ id: stateAdapter.config.generateId(), typeName: "main", input: null }],
+            jobs: [{ id: stateAdapter.config.generateJobId(), typeName: "main", input: null }],
           }),
         );
 
@@ -62,8 +62,8 @@ export const unblockJobsGroup: ConformanceGroup<StateConformanceFixture> = {
           stateAdapter.createJobs({
             txCtx,
             jobs: [
-              { id: stateAdapter.config.generateId(), typeName: "blocker", input: null },
-              { id: stateAdapter.config.generateId(), typeName: "main", input: null },
+              { id: stateAdapter.config.generateJobId(), typeName: "blocker", input: null },
+              { id: stateAdapter.config.generateJobId(), typeName: "main", input: null },
             ],
           }),
         );
@@ -73,7 +73,7 @@ export const unblockJobsGroup: ConformanceGroup<StateConformanceFixture> = {
             txCtx,
             jobs: [
               {
-                id: stateAdapter.config.generateId(),
+                id: stateAdapter.config.generateJobId(),
                 typeName: "main:step",
                 continueFromId: mainChain.id,
                 input: null,
@@ -114,21 +114,21 @@ export const unblockJobsGroup: ConformanceGroup<StateConformanceFixture> = {
         const [blockerAChain] = await stateAdapter.withTransaction(async (txCtx) =>
           stateAdapter.createJobs({
             txCtx,
-            jobs: [{ id: stateAdapter.config.generateId(), typeName: "blocker", input: null }],
+            jobs: [{ id: stateAdapter.config.generateJobId(), typeName: "blocker", input: null }],
           }),
         );
 
         const [blockerBChain] = await stateAdapter.withTransaction(async (txCtx) =>
           stateAdapter.createJobs({
             txCtx,
-            jobs: [{ id: stateAdapter.config.generateId(), typeName: "blocker", input: null }],
+            jobs: [{ id: stateAdapter.config.generateJobId(), typeName: "blocker", input: null }],
           }),
         );
 
         const [mainChain] = await stateAdapter.withTransaction(async (txCtx) =>
           stateAdapter.createJobs({
             txCtx,
-            jobs: [{ id: stateAdapter.config.generateId(), typeName: "main", input: null }],
+            jobs: [{ id: stateAdapter.config.generateJobId(), typeName: "main", input: null }],
           }),
         );
 
@@ -174,7 +174,9 @@ export const unblockJobsGroup: ConformanceGroup<StateConformanceFixture> = {
         const [stateChain] = await stateAdapter.withTransaction(async (txCtx) =>
           stateAdapter.createJobs({
             txCtx,
-            jobs: [{ id: stateAdapter.config.generateId(), typeName: "standalone", input: null }],
+            jobs: [
+              { id: stateAdapter.config.generateJobId(), typeName: "standalone", input: null },
+            ],
           }),
         );
 
@@ -194,14 +196,14 @@ export const unblockJobsGroup: ConformanceGroup<StateConformanceFixture> = {
         const [blockerChain] = await stateAdapter.withTransaction(async (txCtx) =>
           stateAdapter.createJobs({
             txCtx,
-            jobs: [{ id: stateAdapter.config.generateId(), typeName: "blocker", input: null }],
+            jobs: [{ id: stateAdapter.config.generateJobId(), typeName: "blocker", input: null }],
           }),
         );
 
         const [mainChain] = await stateAdapter.withTransaction(async (txCtx) =>
           stateAdapter.createJobs({
             txCtx,
-            jobs: [{ id: stateAdapter.config.generateId(), typeName: "main", input: null }],
+            jobs: [{ id: stateAdapter.config.generateJobId(), typeName: "main", input: null }],
           }),
         );
 
@@ -240,7 +242,9 @@ export const unblockJobsGroup: ConformanceGroup<StateConformanceFixture> = {
         const [stateChain] = await stateAdapter.withTransaction(async (txCtx) =>
           stateAdapter.createJobs({
             txCtx,
-            jobs: [{ id: stateAdapter.config.generateId(), typeName: "standalone", input: null }],
+            jobs: [
+              { id: stateAdapter.config.generateJobId(), typeName: "standalone", input: null },
+            ],
           }),
         );
 
@@ -262,7 +266,7 @@ export const unblockJobsGroup: ConformanceGroup<StateConformanceFixture> = {
         const [blockerChain] = await stateAdapter.withTransaction(async (txCtx) =>
           stateAdapter.createJobs({
             txCtx,
-            jobs: [{ id: stateAdapter.config.generateId(), typeName: "blocker", input: null }],
+            jobs: [{ id: stateAdapter.config.generateJobId(), typeName: "blocker", input: null }],
           }),
         );
 
@@ -271,7 +275,7 @@ export const unblockJobsGroup: ConformanceGroup<StateConformanceFixture> = {
             txCtx,
             jobs: [
               {
-                id: stateAdapter.config.generateId(),
+                id: stateAdapter.config.generateJobId(),
                 typeName: "main",
                 input: null,
                 schedule: { at: past },
@@ -317,7 +321,7 @@ export const unblockJobsGroup: ConformanceGroup<StateConformanceFixture> = {
         const [blockerChain] = await stateAdapter.withTransaction(async (txCtx) =>
           stateAdapter.createJobs({
             txCtx,
-            jobs: [{ id: stateAdapter.config.generateId(), typeName: "blocker", input: null }],
+            jobs: [{ id: stateAdapter.config.generateJobId(), typeName: "blocker", input: null }],
           }),
         );
 
@@ -326,7 +330,7 @@ export const unblockJobsGroup: ConformanceGroup<StateConformanceFixture> = {
             txCtx,
             jobs: [
               {
-                id: stateAdapter.config.generateId(),
+                id: stateAdapter.config.generateJobId(),
                 typeName: "main",
                 input: null,
                 schedule: { at: future },
@@ -365,6 +369,12 @@ export const unblockJobsGroup: ConformanceGroup<StateConformanceFixture> = {
     {
       name: "unblocked job with stale past scheduledAt does not jump ahead of already-ready jobs",
       run: async ({ stateAdapter }, expect) => {
+        const worker = await stateAdapter.startWorker({
+          workerId: stateAdapter.config.generateWorkerId(),
+          typeNames: ["fairness-main"],
+          concurrency: 1,
+          leaseMs: 60_000,
+        });
         const longPast = new Date(Date.now() - 60 * 60 * 1000);
         const recentPast = new Date(Date.now() - 60 * 1000);
 
@@ -372,7 +382,11 @@ export const unblockJobsGroup: ConformanceGroup<StateConformanceFixture> = {
           stateAdapter.createJobs({
             txCtx,
             jobs: [
-              { id: stateAdapter.config.generateId(), typeName: "fairness-blocker", input: null },
+              {
+                id: stateAdapter.config.generateJobId(),
+                typeName: "fairness-blocker",
+                input: null,
+              },
             ],
           }),
         );
@@ -382,7 +396,7 @@ export const unblockJobsGroup: ConformanceGroup<StateConformanceFixture> = {
             txCtx,
             jobs: [
               {
-                id: stateAdapter.config.generateId(),
+                id: stateAdapter.config.generateJobId(),
                 typeName: "fairness-main",
                 input: { kind: "blocked-since-creation" },
                 schedule: { at: longPast },
@@ -405,7 +419,7 @@ export const unblockJobsGroup: ConformanceGroup<StateConformanceFixture> = {
             txCtx,
             jobs: [
               {
-                id: stateAdapter.config.generateId(),
+                id: stateAdapter.config.generateJobId(),
                 typeName: "fairness-main",
                 input: { kind: "ready" },
                 schedule: { at: recentPast },
@@ -430,22 +444,18 @@ export const unblockJobsGroup: ConformanceGroup<StateConformanceFixture> = {
           }),
         );
 
-        const [first] = await stateAdapter.withTransaction(async (txCtx) =>
-          stateAdapter.startJobAttempts({
-            txCtx,
-            workerId: "worker-1",
-            timeoutMsByTypeName: { "fairness-main": 30_000 },
-            limit: 1,
-          }),
-        );
-        const [second] = await stateAdapter.withTransaction(async (txCtx) =>
-          stateAdapter.startJobAttempts({
-            txCtx,
-            workerId: "worker-1",
-            timeoutMsByTypeName: { "fairness-main": 30_000 },
-            limit: 1,
-          }),
-        );
+        const [first] = await stateAdapter.startJobAttempts({
+          workerId: worker.id,
+          workerToken: worker.token,
+          typeNames: ["fairness-main"],
+          limit: 1,
+        });
+        const [second] = await stateAdapter.startJobAttempts({
+          workerId: worker.id,
+          workerToken: worker.token,
+          typeNames: ["fairness-main"],
+          limit: 1,
+        });
 
         expect(first.id).toBe(readyMainChain.head.id);
         expect(second.id).toBe(blockedMainChain.head.id);
@@ -457,14 +467,14 @@ export const unblockJobsGroup: ConformanceGroup<StateConformanceFixture> = {
         const [blockerChain] = await stateAdapter.withTransaction(async (txCtx) =>
           stateAdapter.createJobs({
             txCtx,
-            jobs: [{ id: stateAdapter.config.generateId(), typeName: "blocker", input: null }],
+            jobs: [{ id: stateAdapter.config.generateJobId(), typeName: "blocker", input: null }],
           }),
         );
 
         const [mainChain] = await stateAdapter.withTransaction(async (txCtx) =>
           stateAdapter.createJobs({
             txCtx,
-            jobs: [{ id: stateAdapter.config.generateId(), typeName: "main", input: null }],
+            jobs: [{ id: stateAdapter.config.generateJobId(), typeName: "main", input: null }],
           }),
         );
 
@@ -496,7 +506,7 @@ export const unblockJobsGroup: ConformanceGroup<StateConformanceFixture> = {
           stateAdapter.createJobs({
             txCtx,
             jobs: [
-              { id: stateAdapter.config.generateId(), typeName: "race-add-first", input: null },
+              { id: stateAdapter.config.generateJobId(), typeName: "race-add-first", input: null },
             ],
           }),
         );
@@ -506,7 +516,7 @@ export const unblockJobsGroup: ConformanceGroup<StateConformanceFixture> = {
             txCtx,
             jobs: [
               {
-                id: stateAdapter.config.generateId(),
+                id: stateAdapter.config.generateJobId(),
                 typeName: "race-add-first:step",
                 input: null,
                 continueFromId: chainId,
@@ -527,7 +537,7 @@ export const unblockJobsGroup: ConformanceGroup<StateConformanceFixture> = {
             txCtx,
             jobs: [
               {
-                id: stateAdapter.config.generateId(),
+                id: stateAdapter.config.generateJobId(),
                 typeName: "race-add-first:dependent",
                 input: null,
               },
@@ -593,7 +603,7 @@ export const unblockJobsGroup: ConformanceGroup<StateConformanceFixture> = {
             txCtx,
             jobs: [
               {
-                id: stateAdapter.config.generateId(),
+                id: stateAdapter.config.generateJobId(),
                 typeName: "race-complete-first",
                 input: null,
               },
@@ -606,7 +616,7 @@ export const unblockJobsGroup: ConformanceGroup<StateConformanceFixture> = {
             txCtx,
             jobs: [
               {
-                id: stateAdapter.config.generateId(),
+                id: stateAdapter.config.generateJobId(),
                 typeName: "race-complete-first:step",
                 input: null,
                 continueFromId: chainId,
@@ -627,7 +637,7 @@ export const unblockJobsGroup: ConformanceGroup<StateConformanceFixture> = {
             txCtx,
             jobs: [
               {
-                id: stateAdapter.config.generateId(),
+                id: stateAdapter.config.generateJobId(),
                 typeName: "race-complete-first:dependent",
                 input: null,
               },
@@ -696,7 +706,7 @@ export const unblockJobsGroup: ConformanceGroup<StateConformanceFixture> = {
             stateAdapter.createJobs({
               txCtx,
               jobs: Array.from({ length: blockerCount }, (_, index) => ({
-                id: stateAdapter.config.generateId(),
+                id: stateAdapter.config.generateJobId(),
                 typeName: "shared-blocker",
                 input: { index },
               })),
@@ -709,7 +719,7 @@ export const unblockJobsGroup: ConformanceGroup<StateConformanceFixture> = {
             stateAdapter.createJobs({
               txCtx,
               jobs: Array.from({ length: mainCount }, (_, index) => ({
-                id: stateAdapter.config.generateId(),
+                id: stateAdapter.config.generateJobId(),
                 typeName: "shared-main",
                 input: { index },
               })),
@@ -764,14 +774,14 @@ export const unblockJobsGroup: ConformanceGroup<StateConformanceFixture> = {
         const [blockerChain] = await stateAdapter.withTransaction(async (txCtx) =>
           stateAdapter.createJobs({
             txCtx,
-            jobs: [{ id: stateAdapter.config.generateId(), typeName: "blocker", input: null }],
+            jobs: [{ id: stateAdapter.config.generateJobId(), typeName: "blocker", input: null }],
           }),
         );
 
         const [mainChain] = await stateAdapter.withTransaction(async (txCtx) =>
           stateAdapter.createJobs({
             txCtx,
-            jobs: [{ id: stateAdapter.config.generateId(), typeName: "main", input: null }],
+            jobs: [{ id: stateAdapter.config.generateJobId(), typeName: "main", input: null }],
           }),
         );
 

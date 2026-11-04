@@ -1,11 +1,11 @@
 import { type ConformanceGroup } from "../runner.js";
 import { type StateConformanceFixture } from "./types.js";
 
-export const countByChainTypeNamesGroup: ConformanceGroup<StateConformanceFixture> = {
-  name: "countByChainTypeNames",
+export const countChainsByTypeNameGroup: ConformanceGroup<StateConformanceFixture> = {
+  name: "countChainsByTypeName",
   cases: [
     {
-      name: "countByChainTypeNames and countByJobTypeNames stop counting at config.countCap",
+      name: "countChainsByTypeName and countJobsByTypeName stop counting at config.countCap",
       run: async ({ stateAdapter }, expect) => {
         const { countCap } = stateAdapter.config;
         if (countCap > 50) {
@@ -17,12 +17,12 @@ export const countByChainTypeNamesGroup: ConformanceGroup<StateConformanceFixtur
             txCtx,
             jobs: [
               ...Array.from({ length: countCap + 1 }, () => ({
-                id: stateAdapter.config.generateId(),
+                id: stateAdapter.config.generateJobId(),
                 typeName: "over-cap",
                 input: null,
               })),
               ...Array.from({ length: countCap }, () => ({
-                id: stateAdapter.config.generateId(),
+                id: stateAdapter.config.generateJobId(),
                 typeName: "at-cap",
                 input: null,
               })),
@@ -31,13 +31,13 @@ export const countByChainTypeNamesGroup: ConformanceGroup<StateConformanceFixtur
         );
 
         expect(
-          await stateAdapter.countByChainTypeNames({ typeNames: ["over-cap", "at-cap"] }),
+          await stateAdapter.countChainsByTypeName({ typeNames: ["over-cap", "at-cap"] }),
         ).toEqual([
           { running: { count: countCap, hasMore: true }, completed: { count: 0, hasMore: false } },
           { running: { count: countCap, hasMore: false }, completed: { count: 0, hasMore: false } },
         ]);
 
-        const [over, at] = await stateAdapter.countByJobTypeNames({
+        const [over, at] = await stateAdapter.countJobsByTypeName({
           typeNames: ["over-cap", "at-cap"],
         });
         expect(over.pending).toEqual({ count: countCap, hasMore: true });
@@ -45,16 +45,16 @@ export const countByChainTypeNamesGroup: ConformanceGroup<StateConformanceFixtur
       },
     },
     {
-      name: "countByChainTypeNames returns empty array for empty input",
+      name: "countChainsByTypeName returns empty array for empty input",
       run: async ({ stateAdapter }, expect) => {
-        const result = await stateAdapter.countByChainTypeNames({ typeNames: [] });
+        const result = await stateAdapter.countChainsByTypeName({ typeNames: [] });
         expect(result).toEqual([]);
       },
     },
     {
-      name: "countByChainTypeNames returns zeros for unknown type names",
+      name: "countChainsByTypeName returns zeros for unknown type names",
       run: async ({ stateAdapter }, expect) => {
-        const result = await stateAdapter.countByChainTypeNames({ typeNames: ["nonexistent"] });
+        const result = await stateAdapter.countChainsByTypeName({ typeNames: ["nonexistent"] });
         expect(result).toEqual([
           {
             running: { count: 0, hasMore: false },
@@ -64,20 +64,20 @@ export const countByChainTypeNamesGroup: ConformanceGroup<StateConformanceFixtur
       },
     },
     {
-      name: "countByChainTypeNames counts running chains",
+      name: "countChainsByTypeName counts running chains",
       run: async ({ stateAdapter }, expect) => {
         await stateAdapter.withTransaction(async (txCtx) =>
           stateAdapter.createJobs({
             txCtx,
             jobs: [
-              { id: stateAdapter.config.generateId(), typeName: "chain-count-a", input: null },
-              { id: stateAdapter.config.generateId(), typeName: "chain-count-a", input: null },
-              { id: stateAdapter.config.generateId(), typeName: "chain-count-b", input: null },
+              { id: stateAdapter.config.generateJobId(), typeName: "chain-count-a", input: null },
+              { id: stateAdapter.config.generateJobId(), typeName: "chain-count-a", input: null },
+              { id: stateAdapter.config.generateJobId(), typeName: "chain-count-b", input: null },
             ],
           }),
         );
 
-        const result = await stateAdapter.countByChainTypeNames({
+        const result = await stateAdapter.countChainsByTypeName({
           typeNames: ["chain-count-a", "chain-count-b", "chain-count-c"],
         });
 
@@ -89,23 +89,29 @@ export const countByChainTypeNamesGroup: ConformanceGroup<StateConformanceFixtur
       },
     },
     {
-      name: "countByChainTypeNames counts completed chains",
+      name: "countChainsByTypeName counts completed chains",
       run: async ({ stateAdapter }, expect) => {
+        const worker = await stateAdapter.startWorker({
+          workerId: stateAdapter.config.generateWorkerId(),
+          typeNames: ["chain-done"],
+          concurrency: 1,
+          leaseMs: 60_000,
+        });
         await stateAdapter.withTransaction(async (txCtx) =>
           stateAdapter.createJobs({
             txCtx,
-            jobs: [{ id: stateAdapter.config.generateId(), typeName: "chain-done", input: null }],
+            jobs: [
+              { id: stateAdapter.config.generateJobId(), typeName: "chain-done", input: null },
+            ],
           }),
         );
 
-        const [acquired] = await stateAdapter.withTransaction(async (txCtx) =>
-          stateAdapter.startJobAttempts({
-            txCtx,
-            timeoutMsByTypeName: { "chain-done": 30_000 },
-            workerId: "w1",
-            limit: 1,
-          }),
-        );
+        const [acquired] = await stateAdapter.startJobAttempts({
+          typeNames: ["chain-done"],
+          workerId: worker.id,
+          workerToken: worker.token,
+          limit: 1,
+        });
 
         await stateAdapter.withTransaction(async (txCtx) =>
           stateAdapter.completeJobs({
@@ -114,7 +120,7 @@ export const countByChainTypeNamesGroup: ConformanceGroup<StateConformanceFixtur
           }),
         );
 
-        const result = await stateAdapter.countByChainTypeNames({ typeNames: ["chain-done"] });
+        const result = await stateAdapter.countChainsByTypeName({ typeNames: ["chain-done"] });
 
         expect(result).toEqual([
           { running: { count: 0, hasMore: false }, completed: { count: 1, hasMore: false } },
@@ -122,20 +128,20 @@ export const countByChainTypeNamesGroup: ConformanceGroup<StateConformanceFixtur
       },
     },
     {
-      name: "countByChainTypeNames preserves input order",
+      name: "countChainsByTypeName preserves input order",
       run: async ({ stateAdapter }, expect) => {
         await stateAdapter.withTransaction(async (txCtx) =>
           stateAdapter.createJobs({
             txCtx,
             jobs: [
-              { id: stateAdapter.config.generateId(), typeName: "chain-z", input: null },
-              { id: stateAdapter.config.generateId(), typeName: "chain-a", input: null },
-              { id: stateAdapter.config.generateId(), typeName: "chain-a", input: null },
+              { id: stateAdapter.config.generateJobId(), typeName: "chain-z", input: null },
+              { id: stateAdapter.config.generateJobId(), typeName: "chain-a", input: null },
+              { id: stateAdapter.config.generateJobId(), typeName: "chain-a", input: null },
             ],
           }),
         );
 
-        const result = await stateAdapter.countByChainTypeNames({
+        const result = await stateAdapter.countChainsByTypeName({
           typeNames: ["chain-z", "chain-a"],
         });
 

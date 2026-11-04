@@ -80,7 +80,7 @@ type BlockerDefs = {
 
 // A transaction context with a required field, as real database adapters have.
 type ClientContext = { client: { query: (sql: string) => Promise<unknown> } };
-type ClientStateAdapter = StateAdapter<ClientContext, string>;
+type ClientStateAdapter = StateAdapter<ClientContext, string, string>;
 
 declare const txCtx: ClientContext;
 declare const transactionHooks: TransactionHooks;
@@ -254,7 +254,7 @@ describe("AttemptComplete", () => {
 
     it("resolves an output outcome to the completed job", () => {
       expectTypeOf<OutputResult>().toExtend<
-        OutputJob<string, TerminalDefs, "terminal", "terminal">
+        OutputJob<string, string, TerminalDefs, "terminal", "terminal">
       >();
       expectTypeOf<OutputResult["status"]>().toEqualTypeOf<"completed">();
       expectTypeOf<OutputResult["continuedTo"]>().toEqualTypeOf<undefined>();
@@ -262,7 +262,7 @@ describe("AttemptComplete", () => {
 
     it("resolves a continueWith outcome to the continued job", () => {
       expectTypeOf<ContinuedResult>().toExtend<
-        ContinuedJob<string, LinearDefs, "entry", "entry", "step">
+        ContinuedJob<string, string, LinearDefs, "entry", "entry", "step">
       >();
       expectTypeOf<ContinuedResult["continuedTo"]["typeName"]>().toEqualTypeOf<"step">();
       expectTypeOf<ContinuedResult["continuedTo"]["input"]>().toEqualTypeOf<{

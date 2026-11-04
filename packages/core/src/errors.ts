@@ -1,10 +1,10 @@
-/** Thrown when a job ID fails the state adapter's `validateId` check. */
+/** Thrown when a job ID fails the state adapter's `validateJobId` check. */
 export class InvalidJobIdError extends Error {
   /** The ID that failed validation. */
   readonly id: string;
   /**
    * Where the ID came from: `"generator"` if produced by the adapter's
-   * `generateId`, `"caller"` if supplied by the caller.
+   * `generateJobId`, `"caller"` if supplied by the caller.
    */
   readonly source: "generator" | "caller";
 
@@ -16,6 +16,18 @@ export class InvalidJobIdError extends Error {
     this.name = "InvalidJobIdError";
     this.id = options.id;
     this.source = options.source;
+  }
+}
+
+/** Thrown when a worker ID fails the state adapter's `validateWorkerId` check. */
+export class InvalidWorkerIdError extends Error {
+  /** The ID that failed validation. */
+  readonly id: string;
+
+  constructor(message: string, options: { id: string; cause?: unknown }) {
+    super(message, options.cause !== undefined ? { cause: options.cause } : undefined);
+    this.name = "InvalidWorkerIdError";
+    this.id = options.id;
   }
 }
 
@@ -80,17 +92,44 @@ export class ChainNotFoundError extends Error {
 }
 
 /**
- * Recorded as a job's `lastAttemptError` when a worker reclaims its attempt because the attempt
- * expired before the holding worker extended it.
+ * Recorded as a job's `lastAttemptError` when a worker reclaims its attempt because the worker
+ * holding the attempt lost its lease, stopped, or no longer runs it.
  */
-export class JobAttemptExpiredError extends Error {
+export class JobAttemptReclaimedError extends Error {
   /** The worker that reclaimed the attempt. */
   readonly reclaimedBy: string;
 
   constructor(message: string, options: { reclaimedBy: string; cause?: unknown }) {
     super(message, options.cause !== undefined ? { cause: options.cause } : undefined);
-    this.name = "JobAttemptExpiredError";
+    this.name = "JobAttemptReclaimedError";
     this.reclaimedBy = options.reclaimedBy;
+  }
+}
+
+/**
+ * Thrown when a worker can't start because a live worker holds its id. Reported through
+ * `workerError`.
+ */
+export class WorkerAlreadyLiveError extends Error {
+  /** The worker id held by the live worker. */
+  readonly workerId: string;
+
+  constructor(message: string, options: { workerId: string; cause?: unknown }) {
+    super(message, options.cause !== undefined ? { cause: options.cause } : undefined);
+    this.name = "WorkerAlreadyLiveError";
+    this.workerId = options.workerId;
+  }
+}
+
+/** Thrown when a worker lost its lease. Reported through `workerError`. */
+export class WorkerLeaseLostError extends Error {
+  /** The worker that lost its lease. */
+  readonly workerId: string;
+
+  constructor(message: string, options: { workerId: string; cause?: unknown }) {
+    super(message, options.cause !== undefined ? { cause: options.cause } : undefined);
+    this.name = "WorkerLeaseLostError";
+    this.workerId = options.workerId;
   }
 }
 

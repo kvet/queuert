@@ -36,7 +36,7 @@ test("state-postgres-prisma provider passes state adapter conformance", async ()
     const stateProvider = createPrismaPgStateProvider<PrismaLike>({ prisma });
     const adapter = await createPgStateAdapter({
       stateProvider,
-      idType: "text",
+      jobIdType: "text",
     });
     await adapter.migrateToLatest();
 
