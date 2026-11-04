@@ -231,10 +231,10 @@ CREATE TABLE IF NOT EXISTS {{schema}}.{{table_prefix}}migration (
       { id: "recordMigration", params: [t.string()], columns: {} },
     ),
   );
-  const serializeBootstrapSql = applyTemplate(
+  const serializeMigrationTransactionSql = applyTemplate(
     sql(
       `DO $$ BEGIN PERFORM pg_advisory_xact_lock(hashtext('{{schema}}.{{table_prefix}}migration_lock'), 0); END $$`,
-      { id: "bootstrapMigrationLock", params: [], columns: {}, readOnly: true },
+      { id: "serializeMigrationTransaction", params: [], columns: {}, readOnly: true },
     ),
   );
   const createMigrationLockTableSql = applyTemplate(
@@ -254,7 +254,7 @@ CREATE TABLE IF NOT EXISTS {{schema}}.{{table_prefix}}migration_lock (
 INSERT INTO {{schema}}.{{table_prefix}}migration_lock AS l (id, locked_by, locked_until)
 VALUES (1, $1, now() + ($2::integer * interval '1 millisecond'))
 ON CONFLICT (id) DO UPDATE SET locked_by = EXCLUDED.locked_by, locked_until = EXCLUDED.locked_until
-WHERE l.locked_until <= now() OR l.locked_by = EXCLUDED.locked_by
+WHERE l.locked_until <= now()
 RETURNING 1 AS acquired`,
       {
         id: "acquireMigrationLock",
@@ -268,7 +268,7 @@ RETURNING 1 AS acquired`,
       `
 UPDATE {{schema}}.{{table_prefix}}migration_lock
 SET locked_until = now() + ($2::integer * interval '1 millisecond')
-WHERE id = 1 AND locked_by = $1 AND locked_until > now()
+WHERE id = 1 AND locked_by = $1
 RETURNING 1 AS extended`,
       {
         id: "extendMigrationLock",
@@ -288,12 +288,16 @@ RETURNING 1 AS extended`,
   return {
     initialize: async () => {
       await stateProvider.withTransaction(async (txCtx) => {
-        await exec({ txCtx, sql: serializeBootstrapSql });
+        await exec({ txCtx, sql: serializeMigrationTransactionSql });
         await exec({ txCtx, sql: createMigrationTableSql });
         await exec({ txCtx, sql: createMigrationLockTableSql });
       });
     },
-    runInTransaction: stateProvider.withTransaction,
+    runInTransaction: async (fn) =>
+      stateProvider.withTransaction(async (txCtx) => {
+        await exec({ txCtx, sql: serializeMigrationTransactionSql });
+        return fn(txCtx);
+      }),
     getAppliedMigrationNames: async (txCtx) => {
       const applied = await exec({ txCtx, sql: getAppliedMigrationsSql });
       return applied.map((m) => m.name);

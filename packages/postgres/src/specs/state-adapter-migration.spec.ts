@@ -1,38 +1,66 @@
 import { randomUUID } from "node:crypto";
+import { join } from "node:path";
 
-import { type AcquiredPostgres, acquirePostgres } from "@queuert/testcontainers";
+import { createDeploymentSpawner, startPaused, startTogether } from "@queuert/helpers/testing";
+import { acquirePostgres } from "@queuert/testcontainers";
+import { type MigrationResult, createTemplateApplier } from "@queuert/typed-sql";
 import { Pool } from "pg";
 import { it as baseIt, describe, expect } from "vitest";
 
-import { createPgStateAdapter } from "../state-adapter/state-adapter.pg.js";
+import {
+  createMigrationStore,
+  createPgStateAdapter,
+  migrations,
+} from "../state-adapter/state-adapter.pg.js";
 import {
   type PgPoolContext,
   createPgPoolProvider,
 } from "../state-provider/state-provider.pg-pool.js";
 import { type PgStateProvider } from "../state-provider/state-provider.pg.js";
+import { LEASE_TTL_MS, MARKER } from "./state-adapter-migration.process.js";
 
-const INSTALL = "001_initial_schema";
-const ALL = [INSTALL];
+const ALL = migrations.map((migration) => migration.name);
+const spawnDeployment = createDeploymentSpawner<MigrationResult>(
+  join(import.meta.dirname, "state-adapter-migration.process.ts"),
+  join(import.meta.dirname, "..", ".."),
+);
 
 type Provider = PgStateProvider<PgPoolContext>;
 type Database = {
+  connectionString: string;
   provider: Provider;
   adapter: Awaited<ReturnType<typeof createPgStateAdapter<PgPoolContext, string>>>;
-  pg: AcquiredPostgres;
 };
 
-const query = async <T = Record<string, unknown>>(provider: Provider, sql: string): Promise<T[]> =>
+const query = async <T = Record<string, unknown>>(provider: Provider, text: string): Promise<T[]> =>
   provider.executeSql({
-    sql,
+    sql: text,
     params: [],
     paramTypes: {},
     columnTypes: {},
-    readOnly: true,
+    readOnly: false,
   }) as Promise<T[]>;
 
-const it = baseIt.extend<{ fresh: Database }>({
+const applyTemplate = createTemplateApplier({
+  schema: "public",
+  table_prefix: "queuert_",
+  id_type: "text",
+});
+
+const appliedNames = async (provider: Provider): Promise<string[]> =>
+  (await query<{ name: string }>(provider, "SELECT name FROM queuert_migration ORDER BY name")).map(
+    (row) => row.name,
+  );
+
+const lockRows = async (provider: Provider): Promise<{ locked_by: string }[]> =>
+  query(provider, "SELECT locked_by FROM queuert_migration_lock");
+
+const sleep = async (ms: number): Promise<void> =>
+  new Promise((resolve) => setTimeout(resolve, ms));
+
+const it = baseIt.extend<{ database: Database }>({
   // oxlint-disable-next-line no-empty-pattern
-  fresh: async ({}, use) => {
+  database: async ({}, use) => {
     const pg = await acquirePostgres("postgres:14", `pg-migration-${randomUUID()}`);
     const pool = new Pool({ connectionString: pg.connectionString });
     const provider = createPgPoolProvider({ pool });
@@ -40,7 +68,7 @@ const it = baseIt.extend<{ fresh: Database }>({
       stateProvider: provider,
       generateId: (): string => randomUUID(),
     });
-    await use({ provider, adapter, pg });
+    await use({ connectionString: pg.connectionString, provider, adapter });
     await pool.end();
     await pg[Symbol.asyncDispose]();
   },
@@ -69,7 +97,7 @@ describe("migrateToLatest", () => {
   it(
     "installs the schema on an empty database",
     { timeout: 120_000 },
-    async ({ fresh: { provider, adapter } }) => {
+    async ({ database: { provider, adapter } }) => {
       expect(await adapter.migrateToLatest()).toEqual({
         applied: ALL,
         skipped: [],
@@ -84,7 +112,7 @@ describe("migrateToLatest", () => {
     },
   );
 
-  it("creates every index", { timeout: 120_000 }, async ({ fresh: { provider, adapter } }) => {
+  it("creates every index", { timeout: 120_000 }, async ({ database: { provider, adapter } }) => {
     await adapter.migrateToLatest();
     expect(await indexNames(provider)).toEqual([
       "queuert_chain_completed_idx",
@@ -105,7 +133,7 @@ describe("migrateToLatest", () => {
     ]);
   });
 
-  it("is a no-op on a second run", { timeout: 120_000 }, async ({ fresh: { adapter } }) => {
+  it("is a no-op on a second run", { timeout: 120_000 }, async ({ database: { adapter } }) => {
     await adapter.migrateToLatest();
     expect(await adapter.migrateToLatest()).toEqual({
       applied: [],
@@ -113,18 +141,178 @@ describe("migrateToLatest", () => {
       unrecognized: [],
     });
   });
+});
+
+describe("parallel deployments", () => {
+  it(
+    "applies the schema exactly once when several deployments migrate at the same time",
+    { timeout: 120_000 },
+    async ({ database: { connectionString, provider } }) => {
+      const results = await startTogether(
+        Array.from({ length: 5 }, () => spawnDeployment(connectionString, "older")),
+      );
+
+      expect(
+        results.toSorted((a, b) => JSON.stringify(a).localeCompare(JSON.stringify(b))),
+      ).toEqual([
+        { applied: [], skipped: ALL, unrecognized: [] },
+        { applied: [], skipped: ALL, unrecognized: [] },
+        { applied: [], skipped: ALL, unrecognized: [] },
+        { applied: [], skipped: ALL, unrecognized: [] },
+        { applied: ALL, skipped: [], unrecognized: [] },
+      ]);
+      expect(await appliedNames(provider)).toEqual(ALL);
+      expect(await lockRows(provider)).toEqual([]);
+    },
+  );
 
   it(
-    "serializes concurrent runs via the migration lease",
-    { timeout: 180_000 },
-    async ({ fresh: { provider, adapter } }) => {
-      const [a, b] = await Promise.all([adapter.migrateToLatest(), adapter.migrateToLatest()]);
+    "keeps the lease past its TTL while the holder is busy, and the waiter skips the holder's work",
+    { timeout: 120_000 },
+    async ({ database: { connectionString, provider } }) => {
+      const holder = await startPaused(
+        spawnDeployment(connectionString, "older", "before-migrating"),
+      );
+      const waiter = spawnDeployment(connectionString, "older");
+      await waiter.waitFor("ready");
+      waiter.go();
 
-      const [winner, loser] = a.applied.length > 0 ? [a, b] : [b, a];
-      expect(winner.applied).toEqual(ALL);
-      expect(loser.applied).toEqual([]);
-      expect(loser.skipped).toEqual(ALL);
-      expect(await query(provider, "SELECT * FROM queuert_migration_lock")).toHaveLength(0);
+      await sleep(LEASE_TTL_MS * 2);
+      expect(waiter.finished()).toBe(false);
+
+      holder.go();
+      expect(await holder.result()).toEqual({ applied: ALL, skipped: [], unrecognized: [] });
+      expect(await waiter.result()).toEqual({ applied: [], skipped: ALL, unrecognized: [] });
+      expect(await lockRows(provider)).toEqual([]);
+    },
+  );
+
+  it(
+    "rolls back the migration of a deployment killed mid-migration and takes over its lease once it expires",
+    { timeout: 120_000 },
+    async ({ database: { connectionString, provider } }) => {
+      const killed = await startPaused(
+        spawnDeployment(connectionString, "older", "inside-migration"),
+      );
+      await killed.kill();
+
+      expect(await appliedNames(provider)).toEqual([]);
+      expect(await lockRows(provider)).toHaveLength(1);
+
+      const startedAt = performance.now();
+      expect(await startTogether([spawnDeployment(connectionString, "older")])).toEqual([
+        { applied: ALL, skipped: [], unrecognized: [] },
+      ]);
+      expect(performance.now() - startedAt).toBeGreaterThan(LEASE_TTL_MS / 2);
+      expect(await lockRows(provider)).toEqual([]);
+    },
+  );
+
+  it(
+    "aborts a deployment frozen before migrating once it resumes after another deployment migrated in its place",
+    { timeout: 120_000 },
+    async ({ database: { connectionString, provider } }) => {
+      const frozen = await startPaused(
+        spawnDeployment(connectionString, "newer", "before-migrating"),
+      );
+      frozen.freeze();
+      await sleep(LEASE_TTL_MS + 500);
+
+      expect(await startTogether([spawnDeployment(connectionString, "older")])).toEqual([
+        { applied: ALL, skipped: [], unrecognized: [] },
+      ]);
+
+      frozen.thaw();
+      frozen.go();
+      expect(await frozen.result()).toEqual({
+        error: expect.stringMatching(/Migration lock lost/),
+      });
+      expect(await appliedNames(provider)).toEqual(ALL);
+      expect(await lockRows(provider)).toEqual([]);
+    },
+  );
+
+  it(
+    "aborts a deployment frozen mid-migration once it resumes, while the deployment that took over finishes the rest",
+    { timeout: 120_000 },
+    async ({ database: { connectionString, provider } }) => {
+      const frozen = await startPaused(
+        spawnDeployment(connectionString, "newer", "inside-migration"),
+      );
+      frozen.freeze();
+      await sleep(LEASE_TTL_MS + 500);
+
+      const takingOver = spawnDeployment(connectionString, "older");
+      await takingOver.waitFor("ready");
+      takingOver.go();
+      await sleep(500);
+      expect(takingOver.finished()).toBe(false);
+
+      frozen.thaw();
+      frozen.go();
+      expect(await frozen.result()).toEqual({
+        error: expect.stringMatching(/Migration lock lost/),
+      });
+      expect(await takingOver.result()).toEqual({
+        applied: ALL.slice(1),
+        skipped: ALL.slice(0, 1),
+        unrecognized: [],
+      });
+      expect(await appliedNames(provider)).toEqual(ALL);
+      expect(await lockRows(provider)).toEqual([]);
+    },
+  );
+
+  it(
+    "lets an older and a newer deployment migrate side by side",
+    { timeout: 120_000 },
+    async ({ database: { connectionString, provider } }) => {
+      const [older, newer] = (await startTogether([
+        spawnDeployment(connectionString, "older"),
+        spawnDeployment(connectionString, "newer"),
+      ])) as MigrationResult[];
+
+      expect([...older.applied, ...newer.applied].toSorted()).toEqual([...ALL, MARKER]);
+      expect(newer.applied).toContain(MARKER);
+      expect(await startTogether([spawnDeployment(connectionString, "older")])).toEqual([
+        { applied: [], skipped: ALL, unrecognized: [MARKER] },
+      ]);
+      expect(await appliedNames(provider)).toEqual([...ALL, MARKER]);
+    },
+  );
+});
+
+describe("migration lease", () => {
+  it(
+    "is fenced by its owner, so an expired lease stays extendable until another owner claims it",
+    { timeout: 120_000 },
+    async ({ database: { provider } }) => {
+      const store = createMigrationStore(provider, applyTemplate);
+      await store.initialize?.();
+      const expire = async (): Promise<void> => {
+        await query(
+          provider,
+          "UPDATE queuert_migration_lock SET locked_until = now() - interval '1 second'",
+        );
+      };
+
+      expect(await store.acquireMigrationLock!("first", 60_000)).toBe(true);
+      expect(await store.acquireMigrationLock!("second", 60_000)).toBe(false);
+      expect(await store.acquireMigrationLock!("first", 60_000)).toBe(false);
+
+      await expire();
+      expect(await store.extendMigrationLock!("first", 60_000)).toBe(true);
+      expect(await store.acquireMigrationLock!("second", 60_000)).toBe(false);
+
+      await expire();
+      expect(await store.acquireMigrationLock!("second", 60_000)).toBe(true);
+      expect(await store.extendMigrationLock!("first", 60_000)).toBe(false);
+
+      await store.releaseMigrationLock!("first");
+      expect(await lockRows(provider)).toEqual([{ locked_by: "second" }]);
+      await store.releaseMigrationLock!("second");
+      expect(await lockRows(provider)).toEqual([]);
+      expect(await store.extendMigrationLock!("second", 60_000)).toBe(false);
     },
   );
 });

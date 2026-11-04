@@ -22,6 +22,10 @@ The `{tablePrefix}migration` table tracks applied schema migrations:
 | `name`       | `TEXT` | Migration identifier (e.g., `001_initial_schema`)   |
 | `applied_at` | `TEXT` | ISO 8601 timestamp — when the migration was applied |
 
+### Write Lock Table
+
+The `{tablePrefix}write_lock` table is always empty. Every migration transaction starts with a no-op write to it, which takes SQLite's write lock before the transaction reads anything, whatever `BEGIN` the provider sends.
+
 ### Job Table
 
 The `{tablePrefix}job` table stores all job state:

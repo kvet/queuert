@@ -295,6 +295,20 @@ CREATE TABLE IF NOT EXISTS {{table_prefix}}migration (
       { id: "createMigrationTable", params: [], columns: {} },
     ),
   );
+  const createWriteLockTableSql = applyTemplate(
+    sql(`CREATE TABLE IF NOT EXISTS {{table_prefix}}write_lock (id INTEGER PRIMARY KEY)`, {
+      id: "createWriteLockTable",
+      params: [],
+      columns: {},
+    }),
+  );
+  const takeWriteLockSql = applyTemplate(
+    sql(/* sql */ `UPDATE {{table_prefix}}write_lock SET id = id WHERE 0`, {
+      id: "takeWriteLock",
+      params: [],
+      columns: {},
+    }),
+  );
   const getAppliedMigrationsSql = applyTemplate(
     sql(/* sql */ `SELECT name FROM {{table_prefix}}migration ORDER BY name`, {
       id: "getAppliedMigrations",
@@ -317,8 +331,13 @@ CREATE TABLE IF NOT EXISTS {{table_prefix}}migration (
   return {
     initialize: async () => {
       await exec({ sql: createMigrationTableSql });
+      await exec({ sql: createWriteLockTableSql });
     },
-    runInTransaction: stateProvider.withTransaction,
+    runInTransaction: async (fn) =>
+      stateProvider.withTransaction(async (txCtx) => {
+        await exec({ txCtx, sql: takeWriteLockSql });
+        return fn(txCtx);
+      }),
     getAppliedMigrationNames: async (txCtx) => {
       const applied = await exec({ txCtx, sql: getAppliedMigrationsSql });
       return applied.map((m) => m.name);

@@ -184,6 +184,20 @@ describe("createMigrator", () => {
       expect(events.filter((e) => e.kind === "record")).toEqual([]);
     });
 
+    it("skips a transactional migration that another run recorded after the applied-set read", async () => {
+      const { events, applied, store } = harness();
+      const getAppliedMigrationNames = store.getAppliedMigrationNames;
+      store.getAppliedMigrationNames = async (txCtx) => {
+        const names = await getAppliedMigrationNames(txCtx);
+        applied.add(A);
+        return names;
+      };
+      const result = await createMigrator({ migrations: [tx(A), tx(B)], store }).migrateToLatest();
+
+      expect(result).toEqual({ skipped: [A], applied: [B], unrecognized: [] });
+      expect(events.filter((e) => e.kind === "statement").map((e) => e.sql)).toEqual([B]);
+    });
+
     it("skips already-recorded migrations and reports unrecognized DB names", async () => {
       const { store } = harness({ initiallyApplied: [A, "legacy"] });
       const result = await createMigrator({
@@ -255,9 +269,9 @@ describe("createMigrator", () => {
       expect(events.some((e) => e.kind === "record")).toBe(false);
     });
 
-    it("aborts a long-running script once the lease is stolen", async () => {
+    it("aborts a long-running script once the lease is lost", async () => {
       const { applied, store } = harness({
-        lock: { acquireResults: [true, false], extendResults: [false] },
+        lock: { extendResults: [false] },
       });
       await expect(
         createMigrator({
@@ -271,7 +285,7 @@ describe("createMigrator", () => {
             }
           },
         }).migrateToLatest(),
-      ).rejects.toThrow(/another process took over/);
+      ).rejects.toThrow(/no longer held by this run/);
 
       expect([...applied]).toEqual([]);
     });
@@ -333,9 +347,9 @@ describe("createMigrator", () => {
       expect(events.some((e) => e.kind === "extend" && e.extended)).toBe(true);
     });
 
-    it("aborts before the next migration when the lease is stolen", async () => {
+    it("aborts before the next migration when the lease is lost", async () => {
       const { events, applied, store } = harness({
-        lock: { acquireResults: [true, false], extendResults: [false] },
+        lock: { extendResults: [false] },
       });
       stretchStatementsPastHeartbeat(store);
       await expect(
@@ -344,26 +358,67 @@ describe("createMigrator", () => {
           store,
           lock: { heartbeatIntervalMs: 5 },
         }).migrateToLatest(),
-      ).rejects.toThrow(/another process took over/);
+      ).rejects.toThrow(/no longer held by this run/);
 
       expect([...applied]).toEqual([A]);
+      expect(events.filter((e) => e.kind === "acquire")).toEqual([
+        { kind: "acquire", acquired: true },
+      ]);
+      expect(events.filter((e) => e.kind === "extend")).toEqual([
+        { kind: "extend", extended: false },
+      ]);
       expect(events.at(-1)).toEqual({ kind: "release" });
     });
 
-    it("re-claims a merely expired lease instead of aborting a healthy run", async () => {
-      const { events, applied, store } = harness({
-        lock: { extendResults: [false] },
+    it("waits for an in-flight heartbeat before releasing the lease", async () => {
+      const { events, store } = harness({ lock: {} });
+      let signalExtendStarted!: () => void;
+      const extendStarted = new Promise<void>((resolve) => {
+        signalExtendStarted = resolve;
       });
-      stretchStatementsPastHeartbeat(store);
-      const result = await createMigrator({
-        migrations: [tx(A), tx(B)],
+      const extendMigrationLock = store.extendMigrationLock!;
+      store.extendMigrationLock = async (ownerId, ttlMs) => {
+        signalExtendStarted();
+        await new Promise((resolve) => setTimeout(resolve, 40));
+        return extendMigrationLock(ownerId, ttlMs);
+      };
+      const executeMigrationStatement = store.executeMigrationStatement;
+      store.executeMigrationStatement = async (txCtx, statement) => {
+        await extendStarted;
+        await executeMigrationStatement(txCtx, statement);
+      };
+      await createMigrator({
+        migrations: [tx(A)],
         store,
         lock: { heartbeatIntervalMs: 5 },
       }).migrateToLatest();
+      const settled = events.length;
+      await new Promise((resolve) => setTimeout(resolve, 60));
 
-      expect(result.applied).toEqual([A, B]);
-      expect([...applied]).toEqual([A, B]);
-      expect(events.filter((e) => e.kind === "acquire").length).toBeGreaterThan(1);
+      expect(events.slice(-2)).toEqual([{ kind: "extend", extended: true }, { kind: "release" }]);
+      expect(events).toHaveLength(settled);
+    });
+
+    it("runs one heartbeat at a time when extending outlasts the interval", async () => {
+      const { store } = harness({ lock: {} });
+      let inFlight = 0;
+      let maxInFlight = 0;
+      const extendMigrationLock = store.extendMigrationLock!;
+      store.extendMigrationLock = async (ownerId, ttlMs) => {
+        inFlight += 1;
+        maxInFlight = Math.max(maxInFlight, inFlight);
+        await new Promise((resolve) => setTimeout(resolve, 15));
+        inFlight -= 1;
+        return extendMigrationLock(ownerId, ttlMs);
+      };
+      stretchStatementsPastHeartbeat(store);
+      await createMigrator({
+        migrations: [tx(A), tx(B)],
+        store,
+        lock: { heartbeatIntervalMs: 1 },
+      }).migrateToLatest();
+
+      expect(maxInFlight).toBe(1);
     });
 
     it("aborts when heartbeats keep failing past the lease TTL", async () => {
@@ -377,14 +432,14 @@ describe("createMigrator", () => {
           store,
           lock: { heartbeatIntervalMs: 5, ttlMs: 20 },
         }).migrateToLatest(),
-      ).rejects.toThrow(/could not be extended within its TTL/);
+      ).rejects.toThrow(/could not be extended in time/);
 
       expect([...applied]).toEqual([A]);
     });
 
     it("checks the lease between non-transactional statements", async () => {
       const { events, applied, store } = harness({
-        lock: { acquireResults: [true, false], extendResults: [false] },
+        lock: { extendResults: [false] },
       });
       stretchStatementsPastHeartbeat(store);
       const m: Migration = {
@@ -398,7 +453,7 @@ describe("createMigrator", () => {
           store,
           lock: { heartbeatIntervalMs: 5 },
         }).migrateToLatest(),
-      ).rejects.toThrow(/another process took over/);
+      ).rejects.toThrow(/no longer held by this run/);
 
       expect(events.filter((e) => e.kind === "statement").map((e) => e.sql)).toEqual(["first"]);
       expect(applied.size).toBe(0);

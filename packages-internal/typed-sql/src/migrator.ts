@@ -94,47 +94,47 @@ const withMigrationLock = async <TTxContext, T>(
   }
 
   const ownerId = crypto.randomUUID();
+  let lastExtendedAt = performance.now();
   while (!(await acquireMigrationLock(ownerId, ttlMs))) {
     await sleep(pollIntervalMs);
+    lastExtendedAt = performance.now();
   }
 
-  let lockStolen = false;
-  let lastExtendedAt = performance.now();
+  let lockLost = false;
+  let inFlightTick: Promise<void> | undefined;
+  const extend = async (): Promise<void> => {
+    const sentAt = performance.now();
+    const extended = await extendMigrationLock(ownerId, ttlMs).catch(() => undefined);
+    if (extended === true) {
+      lastExtendedAt = sentAt;
+    } else if (extended === false) {
+      lockLost = true;
+      clearInterval(heartbeat);
+    }
+  };
   const heartbeat = setInterval(() => {
-    void (async () => {
-      try {
-        if (await extendMigrationLock(ownerId, ttlMs)) {
-          lastExtendedAt = performance.now();
-          return;
-        }
-        // The lease may have expired with no thief (e.g. a stalled heartbeat);
-        // re-claiming our own or an expired lease is atomic, so recover.
-        if (await acquireMigrationLock(ownerId, ttlMs)) {
-          lastExtendedAt = performance.now();
-          return;
-        }
-        lockStolen = true;
-      } catch {
-        // Transient heartbeat errors are covered by the staleness check below.
-      }
-    })();
+    if (lockLost || inFlightTick) return;
+    inFlightTick = extend().finally(() => {
+      inFlightTick = undefined;
+    });
   }, heartbeatIntervalMs);
 
   try {
     return await fn(() => {
-      if (lockStolen) {
+      if (lockLost) {
         throw new Error(
-          "Migration lock lost: another process took over the migration lease. Aborting to avoid concurrent migration runs.",
+          "Migration lock lost: the lease is no longer held by this run, so another process may have migrated. Aborting to avoid concurrent migration runs.",
         );
       }
-      if (performance.now() - lastExtendedAt > ttlMs) {
+      if (performance.now() - lastExtendedAt > ttlMs - heartbeatIntervalMs) {
         throw new Error(
-          "Migration lock lost: the lease could not be extended within its TTL. Aborting to avoid concurrent migration runs.",
+          "Migration lock lost: the lease could not be extended in time. Aborting to avoid concurrent migration runs.",
         );
       }
     });
   } finally {
     clearInterval(heartbeat);
+    await inFlightTick;
     await releaseMigrationLock(ownerId).catch(() => {});
   }
 };
@@ -160,24 +160,30 @@ export const createMigrator = <TTxContext>({
     pollIntervalMs: lock?.pollIntervalMs ?? 1_000,
   };
 
-  const runMigration = async (migration: Migration, assertLockHeld: () => void): Promise<void> => {
+  const runMigration = async (
+    migration: Migration,
+    assertLockHeld: () => void,
+  ): Promise<"applied" | "skipped"> => {
     assertLockHeld();
     switch (migration.type) {
       case "transactional":
-        await store.runInTransaction(async (txCtx) => {
+        return store.runInTransaction(async (txCtx) => {
+          if ((await store.getAppliedMigrationNames(txCtx)).includes(migration.name)) {
+            return "skipped";
+          }
           for (const statement of migration.statements) {
             await store.executeMigrationStatement(txCtx, statement);
           }
           await store.recordMigration(txCtx, migration.name);
+          return "applied";
         });
-        break;
       case "non-transactional":
         for (const statement of migration.statements) {
           assertLockHeld();
           await store.executeMigrationStatement(undefined, statement);
         }
         await store.recordMigration(undefined, migration.name);
-        break;
+        return "applied";
       case "batched":
         for (const statement of migration.statements) {
           let affected: number;
@@ -187,7 +193,7 @@ export const createMigrator = <TTxContext>({
           } while (affected > 0);
         }
         await store.recordMigration(undefined, migration.name);
-        break;
+        return "applied";
     }
   };
 
@@ -208,8 +214,8 @@ export const createMigrator = <TTxContext>({
       const applied: string[] = [];
 
       for (const migration of pending) {
-        await runMigration(migration, assertLockHeld);
-        applied.push(migration.name);
+        const outcome = await runMigration(migration, assertLockHeld);
+        (outcome === "applied" ? applied : skipped).push(migration.name);
       }
 
       if (after) {
