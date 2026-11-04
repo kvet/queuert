@@ -1,5 +1,5 @@
+import { connect } from "@nats-io/transport-node";
 import { extendWithNats } from "@queuert/testcontainers";
-import { connect } from "nats";
 import { type NotifyConformanceFixture, notifyAdapterConformanceTestSuite } from "queuert/testing";
 import { it as baseIt, describe } from "vitest";
 

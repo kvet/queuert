@@ -8,10 +8,10 @@ import {
   PeriodicExportingMetricReader,
 } from "@opentelemetry/sdk-metrics";
 import {
-  BasicTracerProvider,
+  TracerProvider,
   InMemorySpanExporter,
   SimpleSpanProcessor,
-} from "@opentelemetry/sdk-trace-base";
+} from "@opentelemetry/sdk-trace";
 import { type ObservabilityAdapter } from "queuert";
 import { type TestAPI, expect } from "vitest";
 
@@ -134,7 +134,7 @@ export const extendWithObservabilityOtel = <T extends Record<string, unknown>>(
     _otelReader: PeriodicExportingMetricReader;
     _otelProvider: MeterProvider;
     _otelTraceExporter: InMemorySpanExporter;
-    _otelTracerProvider: BasicTracerProvider;
+    _otelTracerProvider: TracerProvider;
   }>({
     _otelExporter: [
       async ({}, use) => use(new InMemoryMetricExporter(AggregationTemporality.CUMULATIVE)),
@@ -158,8 +158,8 @@ export const extendWithObservabilityOtel = <T extends Record<string, unknown>>(
     _otelTraceExporter: [async ({}, use) => use(new InMemorySpanExporter()), { scope: "test" }],
     _otelTracerProvider: [
       async ({ _otelTraceExporter }, use) => {
-        const provider = new BasicTracerProvider({
-          spanProcessors: [new SimpleSpanProcessor(_otelTraceExporter)],
+        const provider = new TracerProvider({
+          spanProcessors: [new SimpleSpanProcessor({ exporter: _otelTraceExporter })],
         });
         await use(provider);
         await provider.shutdown();

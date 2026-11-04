@@ -21,12 +21,14 @@ const PG_OID: Partial<Record<RuntimeType, number>> = {
 
 export const createPostgresJsProvider = ({ sql }: { sql: postgres.Sql }): PostgresJsProvider => {
   const typed = sql.typed.bind(sql);
-  const pgArray = sql.array.bind(sql);
 
   const serializeParam = (value: unknown, type: RuntimeType | undefined): unknown => {
     if (value === undefined || value === null) return null;
-    if (type === "array") return pgArray(value as any[]);
-    if (type === "jsonArray") return pgArray((value as unknown[]).map((el) => JSON.stringify(el)));
+    // Arrays are passed as-is (postgres.js v4 removed `sql.array()`) and cast in the queries.
+    // On v3 this relies on string/number/null elements: v3 infers a concrete element type for
+    // boolean, Date and bigint elements, which breaks the `$n::type[]` cast.
+    if (type === "array") return value;
+    if (type === "jsonArray") return (value as unknown[]).map((el) => JSON.stringify(el));
     if (type === "json" || type === "json?") return typed(value, JSONB_OID);
     // Force explicit OIDs for string params to prevent postgres.js
     // from auto-detecting timestamps and truncating microsecond precision.

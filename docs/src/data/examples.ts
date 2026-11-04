@@ -377,7 +377,7 @@ export const examples: Example[] = [
     guide: notifyAdapters,
   },
   {
-    name: "notify-nats-nats",
+    name: "notify-nats-transport-node",
     category: "notify",
     page: "notify-adapters",
     label: "NATS",

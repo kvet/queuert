@@ -54,7 +54,7 @@
     "@queuert/tsconfig": "workspace:*",
     "ioredis": "6.0.0",
     "queuert": "workspace:*",
-    "redis": "6.3.0"
+    "redis": "6.3.1"
   },
   "peerDependencies": {
     "queuert": "workspace:*"

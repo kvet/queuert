@@ -30,7 +30,7 @@ pnpm start:notify-redis-redis             # Redis notify via node-redis
 pnpm start:notify-redis-ioredis           # Redis notify via ioredis
 pnpm start:notify-postgres-pg             # PostgreSQL notify via pg
 pnpm start:notify-postgres-postgres-js    # PostgreSQL notify via postgres-js
-pnpm start:notify-nats-nats               # NATS notify via nats
+pnpm start:notify-nats-transport-node     # NATS notify via @nats-io/transport-node
 
 pnpm start --state-sqlite-better-sqlite3 --scenario=create-single    # one scenario
 ```

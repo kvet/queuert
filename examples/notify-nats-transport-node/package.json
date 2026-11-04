@@ -1,5 +1,5 @@
 {
-  "name": "example-notify-nats-nats",
+  "name": "example-notify-nats-transport-node",
   "version": "0.0.1",
   "private": true,
   "description": "An example demonstrating the NATS notify adapter.",
@@ -15,10 +15,10 @@
     "typecheck": "tsc --noEmit"
   },
   "devDependencies": {
+    "@nats-io/transport-node": "3.4.0",
     "@queuert/nats": "workspace:*",
     "@queuert/testcontainers": "workspace:*",
     "@queuert/tsconfig": "workspace:*",
-    "nats": "2.29.3",
     "queuert": "workspace:*"
   }
 }

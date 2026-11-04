@@ -14,11 +14,12 @@
     "start:notify-redis-ioredis": "node --import=tsx src/index.ts --notify-redis-ioredis",
     "start:notify-postgres-pg": "node --import=tsx src/index.ts --notify-postgres-pg",
     "start:notify-postgres-postgres-js": "node --import=tsx src/index.ts --notify-postgres-postgres-js",
-    "start:notify-nats-nats": "node --import=tsx src/index.ts --notify-nats-nats",
+    "start:notify-nats-transport-node": "node --import=tsx src/index.ts --notify-nats-transport-node",
     "start:notify-in-process": "node --import=tsx src/index.ts --notify-in-process",
     "typecheck": "tsc --noEmit"
   },
   "dependencies": {
+    "@nats-io/transport-node": "3.4.0",
     "@queuert/nats": "workspace:*",
     "@queuert/postgres": "workspace:*",
     "@queuert/redis": "workspace:*",
@@ -33,11 +34,10 @@
     "example-state-sqlite-better-sqlite3": "workspace:*",
     "example-state-sqlite-node-sqlite": "workspace:*",
     "ioredis": "6.0.0",
-    "nats": "2.29.3",
     "pg": "8.23.1",
-    "postgres": "3.4.9",
+    "postgres": "4.0.0",
     "queuert": "workspace:*",
-    "redis": "6.3.0"
+    "redis": "6.3.1"
   },
   "devDependencies": {
     "@queuert/tsconfig": "workspace:*",

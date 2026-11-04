@@ -1,5 +1,5 @@
+import { type NatsConnection } from "@nats-io/nats-core";
 import { createSharedListener, type SharedListenerOpen } from "@queuert/helpers";
-import { type NatsConnection } from "nats";
 import { type NotifyAdapter } from "queuert";
 
 const decoder = new TextDecoder();
@@ -29,7 +29,7 @@ export const createNatsNotifyAdapter = async ({
   nc,
   subjectPrefix = "queuert",
 }: {
-  /** The NATS connection. */
+  /** A `NatsConnection` from `@nats-io/nats-core`, e.g. created with `connect` from `@nats-io/transport-node`. */
   nc: NatsConnection;
   /** Prefix for all NATS subject names. @defaultValue `"queuert"` */
   subjectPrefix?: string;

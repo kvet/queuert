@@ -20,7 +20,7 @@
     "@queuert/tsconfig": "workspace:*",
     "example-notify-postgres-postgres-js": "workspace:*",
     "example-state-postgres-postgres-js": "workspace:*",
-    "postgres": "3.4.9",
+    "postgres": "4.0.0",
     "queuert": "workspace:*"
   }
 }

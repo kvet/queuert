@@ -1,6 +1,6 @@
+import { connect } from "@nats-io/transport-node";
 import { createNatsNotifyAdapter } from "@queuert/nats";
 import { acquireNats } from "@queuert/testcontainers";
-import { connect } from "nats";
 import {
   createClient,
   createInProcessWorker,

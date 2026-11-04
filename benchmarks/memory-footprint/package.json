@@ -15,8 +15,9 @@
     "typecheck": "tsc --noEmit"
   },
   "dependencies": {
-    "@opentelemetry/api": "1.9.1",
-    "@opentelemetry/sdk-metrics": "2.12.0",
+    "@nats-io/transport-node": "3.4.0",
+    "@opentelemetry/api": "1.10.0",
+    "@opentelemetry/sdk-metrics": "3.0.0",
     "@queuert/dashboard": "workspace:*",
     "@queuert/nats": "workspace:*",
     "@queuert/otel": "workspace:*",
@@ -28,11 +29,10 @@
     "example-notify-redis-redis": "workspace:*",
     "example-state-postgres-postgres-js": "workspace:*",
     "example-state-sqlite-better-sqlite3": "workspace:*",
-    "nats": "2.29.3",
     "pg": "8.23.1",
-    "postgres": "3.4.9",
+    "postgres": "4.0.0",
     "queuert": "workspace:*",
-    "redis": "6.3.0"
+    "redis": "6.3.1"
   },
   "devDependencies": {
     "@queuert/tsconfig": "workspace:*",

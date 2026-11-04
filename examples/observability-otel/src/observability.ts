@@ -1,10 +1,10 @@
-import { metrics, trace } from "@opentelemetry/api";
+import { context, metrics, trace } from "@opentelemetry/api";
+import { AsyncLocalStorageContextManager } from "@opentelemetry/context-async-hooks";
 import { OTLPMetricExporter } from "@opentelemetry/exporter-metrics-otlp-http";
 import { OTLPTraceExporter } from "@opentelemetry/exporter-trace-otlp-http";
 import { resourceFromAttributes } from "@opentelemetry/resources";
 import { MeterProvider, PeriodicExportingMetricReader } from "@opentelemetry/sdk-metrics";
-import { BatchSpanProcessor } from "@opentelemetry/sdk-trace-base";
-import { NodeTracerProvider } from "@opentelemetry/sdk-trace-node";
+import { BatchSpanProcessor, TracerProvider } from "@opentelemetry/sdk-trace";
 import { ATTR_SERVICE_NAME } from "@opentelemetry/semantic-conventions";
 import { createOtelObservabilityAdapter } from "@queuert/otel";
 
@@ -20,11 +20,12 @@ const traceExporter = new OTLPTraceExporter({
   url: `${OTLP_ENDPOINT}/v1/traces`,
 });
 
-const tracerProvider = new NodeTracerProvider({
+const tracerProvider = new TracerProvider({
   resource,
-  spanProcessors: [new BatchSpanProcessor(traceExporter)],
+  spanProcessors: [new BatchSpanProcessor({ exporter: traceExporter })],
 });
-tracerProvider.register();
+context.setGlobalContextManager(new AsyncLocalStorageContextManager().enable());
+trace.setGlobalTracerProvider(tracerProvider);
 
 // --- Metrics Setup ---
 const metricExporter = new OTLPMetricExporter({

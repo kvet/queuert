@@ -23,7 +23,7 @@
     "@queuert/testcontainers": "workspace:*",
     "@queuert/tsconfig": "workspace:*",
     "@queuert/typed-sql": "workspace:*",
-    "postgres": "3.4.9",
+    "postgres": "4.0.0",
     "queuert": "workspace:*"
   }
 }

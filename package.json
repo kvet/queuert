@@ -30,13 +30,13 @@
     "@changesets/config": "4.0.1",
     "@types/node": "22.20.5",
     "husky": "9.1.7",
-    "oxfmt": "0.73.0",
-    "oxlint": "1.88.0",
-    "oxlint-tsgolint": "7.0.2004",
-    "tsdown": "0.23.1",
+    "oxfmt": "0.76.0",
+    "oxlint": "1.91.0",
+    "oxlint-tsgolint": "7.0.2005",
+    "tsdown": "0.23.5",
     "tsx": "4.23.15",
     "typescript": "7.0.2",
-    "vitest": "5.0.5"
+    "vitest": "5.1.0"
   },
   "engines": {
     "node": ">=22"

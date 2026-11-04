@@ -20,7 +20,7 @@ pnpm add @queuert/nats
 yarn add @queuert/nats
 ```
 
-**Peer dependencies:** `queuert`, `nats` (^2.8.0)
+**Peer dependencies:** `queuert`, `@nats-io/nats-core` (^3.0.0) — connect with `@nats-io/transport-node` (or another `@nats-io` transport)
 
 ## Documentation
 

@@ -302,7 +302,7 @@ Redis examples implement a `RedisNotifyProvider` with `subscribe` and `eval` met
 
 This follows the principle of using each technology's native terminology rather than forcing artificial consistency.
 
-**Provider types**: Postgres and Redis export provider types (`PgNotifyProvider`, `RedisNotifyProvider`) because users implement these interfaces with their chosen client library. NATS does not export a provider type because it accepts the `NatsConnection` directly from the `nats` package — no adapter layer is needed since there's only one NATS client implementation in the Node.js ecosystem.
+**Provider types**: Postgres and Redis export provider types (`PgNotifyProvider`, `RedisNotifyProvider`) because users implement these interfaces with their chosen client library. NATS does not export a provider type because it accepts the `NatsConnection` from `@nats-io/nats-core` directly — no adapter layer is needed since every official `@nats-io` transport (Node, Deno, WebSocket) produces that same connection type.
 
 ### State Adapter Conventions
 

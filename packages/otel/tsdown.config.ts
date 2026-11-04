@@ -14,7 +14,7 @@ export default defineConfig({
     neverBundle: [
       "@opentelemetry/api",
       "@opentelemetry/sdk-metrics",
-      "@opentelemetry/sdk-trace-base",
+      "@opentelemetry/sdk-trace",
       "@opentelemetry/core",
       "@opentelemetry/semantic-conventions",
       "@opentelemetry/resources",

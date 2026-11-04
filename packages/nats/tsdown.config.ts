@@ -11,6 +11,11 @@ export default defineConfig({
     devExports: true,
   },
   deps: {
-    neverBundle: ["vitest", "nats", "@queuert/testcontainers"],
+    neverBundle: [
+      "vitest",
+      "@nats-io/nats-core",
+      "@nats-io/transport-node",
+      "@queuert/testcontainers",
+    ],
   },
 });

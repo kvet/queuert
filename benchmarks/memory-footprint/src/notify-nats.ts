@@ -2,9 +2,9 @@
  * NATS Notify Adapter Memory Measurement
  */
 
+import { type NatsConnection, connect } from "@nats-io/transport-node";
 import { createNatsNotifyAdapter } from "@queuert/nats";
 import { NatsContainer } from "@testcontainers/nats";
-import { type NatsConnection, connect } from "nats";
 import {
   createClient,
   createInProcessStateAdapter,

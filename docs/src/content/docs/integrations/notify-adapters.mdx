@@ -37,12 +37,12 @@ Notify adapters handle pub/sub notifications for efficient job scheduling. When 
     Uses NATS core pub/sub for job notifications.
 
     ```bash
-    npm install @queuert/nats
+    npm install @queuert/nats @nats-io/nats-core @nats-io/transport-node
     ```
 
-    | Client | Example                                                                                 |
-    | ------ | --------------------------------------------------------------------------------------- |
-    | nats   | [notify-nats-nats](https://github.com/kvet/queuert/tree/main/examples/notify-nats-nats) |
+    | Client                  | Example                                                                                 |
+    | ----------------------- | --------------------------------------------------------------------------------------- |
+    | @nats-io/transport-node | [notify-nats-transport-node](https://github.com/kvet/queuert/tree/main/examples/notify-nats-transport-node) |
 
   </TabItem>
   <TabItem label="PostgreSQL LISTEN/NOTIFY">

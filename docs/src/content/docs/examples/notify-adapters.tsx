@@ -30,7 +30,7 @@ const Page = () => (
       names={["notify-postgres-pg", "notify-postgres-postgres-js", "notify-postgres-bun-sql"]}
     />
     <h2 id="nats">NATS</h2>
-    <ExampleRows title="@queuert/nats" names={["notify-nats-nats"]} />
+    <ExampleRows title="@queuert/nats" names={["notify-nats-transport-node"]} />
   </>
 );
 

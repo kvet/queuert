@@ -48,14 +48,14 @@
   "devDependencies": {
     "@queuert/tsconfig": "workspace:*",
     "@queuert/ui": "workspace:*",
-    "@solidjs/router": "1.0.0",
-    "@tailwindcss/vite": "4.3.3",
+    "@solidjs/router": "1.0.1",
+    "@tailwindcss/vite": "4.3.4",
     "queuert": "workspace:*",
-    "seroval": "1.6.9",
-    "solid-js": "1.9.17",
-    "tailwindcss": "4.3.3",
-    "vite": "8.3.4",
-    "vite-plugin-solid": "2.11.14"
+    "seroval": "1.7.7",
+    "solid-js": "1.9.18",
+    "tailwindcss": "4.3.4",
+    "vite": "8.3.5",
+    "vite-plugin-solid": "2.11.15"
   },
   "peerDependencies": {
     "queuert": "workspace:*"
@@ -64,6 +64,6 @@
     "node": ">=22"
   },
   "inlinedDependencies": {
-    "seroval": "1.6.9"
+    "seroval": "1.7.7"
   }
 }

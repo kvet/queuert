@@ -73,8 +73,8 @@ const benchmarkModules: Record<
     axis: "notify",
     service: "postgres",
   },
-  "notify-nats-nats": {
-    modulePath: "notify-nats-nats.ts",
+  "notify-nats-transport-node": {
+    modulePath: "notify-nats-transport-node.ts",
     label: "NATS",
     axis: "notify",
     service: "nats",
