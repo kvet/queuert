@@ -35,8 +35,8 @@ const setup = [
   ...benchmarkMachine,
   {
     label: "Compilers",
-    value: "TypeScript 6.0.2 and 7.0.2",
-    note: "The last JavaScript-based tsc and the native compiler.",
+    value: "TypeScript 6.0.2, TypeScript 7.0.2 and tsrs 0.20.1",
+    note: "The last JavaScript-based tsc, the native compiler, and an experimental Rust port of the TypeScript 7.1 beta checker.",
   },
   { label: "Runs", value: "3 per scenario", note: "The best time counts." },
 ] satisfies KeyValueItem[];
@@ -53,14 +53,14 @@ const Page = () => (
     <h2 id="results">Results</h2>
     <p>
       Beyond a fixed baseline, cost grows roughly linearly with the number of job types whatever the
-      chain's shape. Each row shows the job type count, the instantiation count, and the scaling
-      against the one-type baseline.
+      chain's shape. Each row shows the job type count, the TypeScript 7 instantiation count, and
+      the scaling against the one-type baseline.
     </p>
     <BenchChart
       title="Type-check time"
       unit="ms"
       approximate
-      series={["TS 6", "TS 7"]}
+      series={["TS 6", "TS 7", "tsrs"]}
       groups={typeGroups}
     />
     <h2 id="reproduce">Reproduce</h2>
@@ -71,6 +71,7 @@ const Page = () => (
     <Code lang="bash">{`
       pnpm --filter benchmark-type-complexity start
       pnpm --filter benchmark-type-complexity start:ts7
+      pnpm --filter benchmark-type-complexity start:tsrs
     `}</Code>
   </>
 );

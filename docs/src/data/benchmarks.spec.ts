@@ -10,7 +10,7 @@ test("headline numbers are picked from the measured rows", () => {
     retainedAfterClose: { min: 10, max: 25 },
     postgresOperational: { min: 1.05, max: 4.99 },
     sqliteOperationalMax: 0.52,
-    typeCheck100: [771, 163],
-    typeCheck2500: [5006, 1318],
+    typeCheck100: [810, 159, 77],
+    typeCheck2500: [5532, 1430, 422],
   });
 });

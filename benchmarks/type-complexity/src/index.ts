@@ -619,8 +619,15 @@ const generateScenarioFiles = (): Map<
 
 // --- Runner ---
 
-const ts6Path = join(benchmarkDir, "node_modules/typescript-6/bin/tsc");
-const ts7Path = join(benchmarkDir, "node_modules/typescript-7/bin/tsc");
+type Compiler = { name: string; label: string; path: string };
+
+// Order matters: the first compiler that runs is the comparison baseline.
+const knownCompilers: Compiler[] = [
+  { name: "ts6", label: "TS6", path: join(benchmarkDir, "node_modules/typescript-6/bin/tsc") },
+  { name: "ts7", label: "TS7", path: join(benchmarkDir, "node_modules/typescript-7/bin/tsc") },
+  // Experimental Rust port of the TS 7 checker; tracks a newer TS 7.x than typescript-7.
+  { name: "tsrs", label: "tsrs", path: join(benchmarkDir, "node_modules/tsrs/bin/tsrs") },
+];
 
 const args = process.argv.slice(2);
 const compilerArg = args.find((a) => !a.startsWith("--"));
@@ -665,15 +672,19 @@ const runTypeCheck = (scenarioDir: string, compilerPath: string): Diagnostics | 
   }
 };
 
-const compilers: { name: string; path: string }[] = [];
+let compilers: Compiler[];
 
-if (compilerArg === "ts6") {
-  compilers.push({ name: "ts6", path: ts6Path });
-} else if (compilerArg === "ts7") {
-  compilers.push({ name: "ts7", path: ts7Path });
+if (compilerArg) {
+  const requested = knownCompilers.find((c) => c.name === compilerArg);
+  if (!requested) {
+    console.error(
+      `Unknown compiler "${compilerArg}". Expected one of: ${knownCompilers.map((c) => c.name).join(", ")}.`,
+    );
+    process.exit(1);
+  }
+  compilers = [requested];
 } else {
-  if (getVersion(ts6Path)) compilers.push({ name: "ts6", path: ts6Path });
-  if (getVersion(ts7Path)) compilers.push({ name: "ts7", path: ts7Path });
+  compilers = knownCompilers.filter((c) => getVersion(c.path));
 }
 
 if (compilers.length === 0) {
@@ -684,7 +695,7 @@ if (compilers.length === 0) {
 const iterations = 3;
 
 const runBenchmark = (
-  compiler: { name: string; path: string },
+  compiler: Compiler,
   scenarioMap: Map<string, { dir: string; code: string; jobTypeCount: number }>,
 ): Result[] => {
   const version = getVersion(compiler.path);
@@ -781,42 +792,43 @@ for (const compiler of compilers) {
   allResults.set(compiler.name, runBenchmark(compiler, scenarioMap));
 }
 
-// Comparison table if both compilers ran
-if (allResults.size > 1) {
-  const ts6Results = allResults.get("ts6")!;
-  const ts7Results = allResults.get("ts7")!;
+// Comparison table if more than one compiler ran. Speedups are relative to the first compiler.
+if (compilers.length > 1) {
+  const [baseline, ...others] = compilers;
+  const resultsByCompiler = compilers.map((c) => allResults.get(c.name)!);
+
+  const timeOf = (r: Result): number => r.diagnostics?.timeMs ?? -1;
+  const timeStr = (r: Result): string =>
+    r.diagnostics?.errors ? `ERR(${r.diagnostics.errors})` : timeOf(r) > 0 ? `${timeOf(r)}ms` : "-";
+
+  const columns = [
+    ...compilers.map((c) => `${c.label} time`),
+    ...others.map((c) => `${c.label} speedup`),
+    ...compilers.map((c) => `${c.label} inst`),
+  ];
+  const width = 25 + columns.length * 13;
 
   console.log();
-  console.log("=".repeat(80));
-  console.log("Comparison: TS 6 vs TS 7");
-  console.log("=".repeat(80));
-  console.log();
+  console.log("=".repeat(width));
   console.log(
-    `${"Scenario".padEnd(25)} ${"TS6 time".padStart(10)} ${"TS7 time".padStart(10)} ${"Speedup".padStart(8)} ${"TS6 inst".padStart(12)} ${"TS7 inst".padStart(12)}`,
+    `Comparison: ${compilers.map((c) => c.label).join(" vs ")} (speedup vs ${baseline.label})`,
   );
-  console.log("-".repeat(80));
+  console.log("=".repeat(width));
+  console.log();
+  console.log(`${"Scenario".padEnd(25)} ${columns.map((c) => c.padStart(12)).join(" ")}`);
+  console.log("-".repeat(width));
 
-  for (let i = 0; i < ts6Results.length; i++) {
-    const ts6 = ts6Results[i];
-    const ts7 = ts7Results[i];
-    const ts6Time = ts6.diagnostics?.timeMs ?? -1;
-    const ts7Time = ts7.diagnostics?.timeMs ?? -1;
-    const ts6TimeStr = ts6.diagnostics?.errors
-      ? `ERR(${ts6.diagnostics.errors})`
-      : ts6Time > 0
-        ? `${ts6Time}ms`
-        : "-";
-    const ts7TimeStr = ts7.diagnostics?.errors
-      ? `ERR(${ts7.diagnostics.errors})`
-      : ts7Time > 0
-        ? `${ts7Time}ms`
-        : "-";
-    const speedup = ts6Time > 0 && ts7Time > 0 ? `${(ts6Time / ts7Time).toFixed(1)}x` : "-";
-    const ts6Inst = fmtNum(ts6.diagnostics?.instantiations ?? null);
-    const ts7Inst = fmtNum(ts7.diagnostics?.instantiations ?? null);
-
-    console.log(
-      `${ts6.description.padEnd(25)} ${ts6TimeStr.padStart(10)} ${ts7TimeStr.padStart(10)} ${speedup.padStart(8)} ${ts6Inst.padStart(12)} ${ts7Inst.padStart(12)}`,
-    );
+  for (let i = 0; i < resultsByCompiler[0].length; i++) {
+    const row = resultsByCompiler.map((results) => results[i]);
+    const baseTime = timeOf(row[0]);
+    const cells = [
+      ...row.map(timeStr),
+      ...row.slice(1).map((r) => {
+        const t = timeOf(r);
+        return baseTime > 0 && t > 0 ? `${(baseTime / t).toFixed(1)}x` : "-";
+      }),
+      ...row.map((r) => fmtNum(r.diagnostics?.instantiations ?? null)),
+    ];
+    console.log(`${row[0].description.padEnd(25)} ${cells.map((c) => c.padStart(12)).join(" ")}`);
   }
 }
