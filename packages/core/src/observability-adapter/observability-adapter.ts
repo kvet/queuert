@@ -66,6 +66,7 @@ export type JobAttemptSpanResult =
   | {
       status: "completed";
       continuedWith?: { jobId: string; jobTypeName: string };
+      /** `output` is the encoded (stored) form — see {@link ObservabilityAdapter}. */
       chainCompleted?: { output: unknown };
     }
   | {
@@ -119,6 +120,11 @@ export type CompleteBlockerSpanData = {
  * Adapter for structured logging, metrics, and distributed tracing. All methods
  * are synchronous — side effects are buffered via transaction hooks and flushed
  * after commit.
+ *
+ * Every `input`/`output` value handed to these hooks is the **encoded** (stored)
+ * form, not the runtime form the handler sees. It is what the state adapter
+ * persists, which keeps logs and traces aligned with the database and keeps
+ * plaintext out of the telemetry pipeline for encrypting codecs.
  */
 export type ObservabilityAdapter = {
   // worker
@@ -128,13 +134,16 @@ export type ObservabilityAdapter = {
   workerStopped: (data: WorkerBasicData) => void;
 
   // chain
+  /** `input` is the encoded (stored) form — see {@link ObservabilityAdapter}. */
   chainCreated: (data: ChainBasicData & { input: unknown }) => void;
+  /** `output` is the encoded (stored) form — see {@link ObservabilityAdapter}. */
   chainCompleted: (data: ChainBasicData & { output: unknown }) => void;
   chainDeleted: (data: ChainBasicData) => void;
 
   // job
   jobCreated: (
     data: JobBasicData & {
+      /** Encoded (stored) form — see the note on {@link ObservabilityAdapter}. */
       input: unknown;
       blockers: ChainBasicData[];
       scheduledAt: Date;

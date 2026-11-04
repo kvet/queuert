@@ -139,7 +139,7 @@ const createComplete = (
 
       const write: CompleteWrite = {
         stateJob: stateJobWritten,
-        job: mapStateJobToJob(stateJobWritten),
+        job: mapStateJobToJob(stateJobWritten, helpers.jobTypes),
       };
       bufferObservabilityEvent(transactionHooks, () => {
         helpers.observabilityHelper.jobAttemptCompleted(stateJob, {
@@ -185,8 +185,10 @@ const runAttemptHandler = async ({
     ? await helpers.stateAdapter.getJobBlockers({ jobId: stateJob.id })
     : [];
   const runningJob = {
-    ...mapStateJobToJob(stateJob),
-    blockers: blockerChains.map(mapStateChainToChain),
+    ...mapStateJobToJob(stateJob, helpers.jobTypes),
+    blockers: blockerChains.map((blockerChain) =>
+      mapStateChainToChain(blockerChain, helpers.jobTypes),
+    ),
   };
   await runHandlerMiddlewareChain(
     attemptMiddleware,

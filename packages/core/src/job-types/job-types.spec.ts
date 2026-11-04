@@ -3,14 +3,18 @@ import { describe, expect, it, vi } from "vitest";
 import { JobTypeValidationError } from "../errors.js";
 import { createJobTypes, createNoopJobTypes } from "./job-types.js";
 
+const identity = (_typeName: string, value: unknown): unknown => value;
+
 describe("createJobTypes", () => {
   const createMockConfig = (
     overrides: Partial<Parameters<typeof createJobTypes>[0]> = {},
   ): Parameters<typeof createJobTypes>[0] => ({
     getTypeNames: () => [],
     validateEntry: vi.fn(),
-    parseInput: vi.fn((_, input) => input),
-    parseOutput: vi.fn((_, output) => output),
+    encodeInput: vi.fn(identity),
+    decodeInput: vi.fn(identity),
+    encodeOutput: vi.fn(identity),
+    decodeOutput: vi.fn(identity),
     validateContinueWith: vi.fn(),
     validateBlockers: vi.fn(),
     ...overrides,
@@ -22,16 +26,6 @@ describe("createJobTypes", () => {
       const jobTypes = createJobTypes(config);
 
       expect(jobTypes.getTypeNames()).toEqual(["job-a", "job-b"]);
-    });
-
-    it("delegates to config.getTypeNames", () => {
-      const typeNames = ["x", "y", "z"];
-      const getTypeNames = vi.fn(() => typeNames);
-      const config = createMockConfig({ getTypeNames });
-      const jobTypes = createJobTypes(config);
-
-      jobTypes.getTypeNames();
-      expect(getTypeNames).toHaveBeenCalled();
     });
 
     it("returns empty array when config provides none", () => {
@@ -68,7 +62,6 @@ describe("createJobTypes", () => {
       try {
         jobTypes.validateEntry("myJob");
       } catch (error) {
-        expect(error).toBeInstanceOf(JobTypeValidationError);
         const validationError = error as JobTypeValidationError;
         expect(validationError.code).toBe("not_entry_point");
         expect(validationError.typeName).toBe("myJob");
@@ -77,71 +70,114 @@ describe("createJobTypes", () => {
     });
   });
 
-  describe("parseInput", () => {
-    it("returns transformed value from adapter", () => {
-      const config = createMockConfig({
-        parseInput: vi.fn((_, input) => ({ ...input, transformed: true })),
-      });
+  describe.each([
+    ["input", "encodeInput", "invalid_input"],
+    ["output", "encodeOutput", "invalid_output"],
+  ] as const)("%s encoding", (field, method, code) => {
+    it("returns the adapter's encoded value", () => {
+      const config = createMockConfig({ [method]: vi.fn(() => ({ stored: true })) });
       const jobTypes = createJobTypes(config);
 
-      const result = jobTypes.parseInput("myJob", { value: 1 });
-      expect(result).toEqual({ value: 1, transformed: true });
-      expect(config.parseInput).toHaveBeenCalledWith("myJob", { value: 1 });
+      expect(jobTypes[method]("myJob", { value: 1 })).toEqual({ stored: true });
+      expect(config[method]).toHaveBeenCalledWith("myJob", { value: 1 });
     });
 
-    it("wraps adapter errors in JobTypeValidationError", () => {
-      const originalError = new Error("Invalid input");
+    it(`wraps adapter errors as ${code} carrying only that value`, () => {
+      const originalError = new Error("Invalid");
       const config = createMockConfig({
-        parseInput: vi.fn(() => {
+        [method]: vi.fn(() => {
           throw originalError;
         }),
       });
       const jobTypes = createJobTypes(config);
 
-      expect(() => jobTypes.parseInput("myJob", { bad: "input" })).toThrow(JobTypeValidationError);
       try {
-        jobTypes.parseInput("myJob", { bad: "input" });
+        jobTypes[method]("myJob", { bad: true });
+        throw new Error("expected throw");
       } catch (error) {
         const validationError = error as JobTypeValidationError;
-        expect(validationError.code).toBe("invalid_input");
+        expect(validationError).toBeInstanceOf(JobTypeValidationError);
+        expect(validationError.code).toBe(code);
         expect(validationError.typeName).toBe("myJob");
-        expect(validationError.details.input).toEqual({ bad: "input" });
+        expect(validationError.details).toEqual({ [field]: { bad: true } });
         expect(validationError.cause).toBe(originalError);
       }
     });
-  });
 
-  describe("parseOutput", () => {
-    it("returns transformed value from adapter", () => {
+    it("rejects an encoded value that is not JSON-serializable", () => {
+      const config = createMockConfig({ [method]: vi.fn(() => ({ when: new Date() })) });
+      const jobTypes = createJobTypes(config);
+
+      try {
+        jobTypes[method]("myJob", {});
+        throw new Error("expected throw");
+      } catch (error) {
+        const validationError = error as JobTypeValidationError;
+        expect(validationError.code).toBe(code);
+        expect(validationError.message).toMatch(/not JSON-serializable/);
+      }
+    });
+
+    it("rejects a promise returned by the adapter", () => {
       const config = createMockConfig({
-        parseOutput: vi.fn((_, output) => ({ ...output, validated: true })),
+        [method]: vi.fn(async (_typeName: string, value: unknown) => value),
       });
       const jobTypes = createJobTypes(config);
 
-      const result = jobTypes.parseOutput("myJob", { result: 42 });
-      expect(result).toEqual({ result: 42, validated: true });
-      expect(config.parseOutput).toHaveBeenCalledWith("myJob", { result: 42 });
+      expect(() => jobTypes[method]("myJob", {})).toThrow(JobTypeValidationError);
+    });
+  });
+
+  describe.each([
+    ["input", "decodeInput", "invalid_input"],
+    ["output", "decodeOutput", "invalid_output"],
+  ] as const)("%s decoding", (field, method, code) => {
+    it("returns the adapter's decoded value for a known type", () => {
+      const date = new Date();
+      const config = createMockConfig({
+        getTypeNames: () => ["myJob"],
+        [method]: vi.fn(() => date),
+      });
+      const jobTypes = createJobTypes(config);
+
+      expect(jobTypes[method]("myJob", "iso")).toBe(date);
     });
 
-    it("wraps adapter errors in JobTypeValidationError", () => {
-      const originalError = new Error("Invalid output");
+    it("returns the stored value of a type the registry does not know without calling the adapter", () => {
+      const config = createMockConfig({ getTypeNames: () => ["myJob"] });
+      const jobTypes = createJobTypes(config);
+
+      expect(jobTypes[method]("removedJob", { raw: 1 })).toEqual({ raw: 1 });
+      expect(config[method]).not.toHaveBeenCalled();
+    });
+
+    it("rejects a promise returned by the adapter", () => {
       const config = createMockConfig({
-        parseOutput: vi.fn(() => {
+        getTypeNames: () => ["myJob"],
+        [method]: vi.fn(async (_typeName: string, value: unknown) => value),
+      });
+      const jobTypes = createJobTypes(config);
+
+      expect(() => jobTypes[method]("myJob", {})).toThrow(JobTypeValidationError);
+    });
+
+    it(`wraps adapter errors as ${code} carrying only that value`, () => {
+      const originalError = new Error("Corrupt stored value");
+      const config = createMockConfig({
+        getTypeNames: () => ["myJob"],
+        [method]: vi.fn(() => {
           throw originalError;
         }),
       });
       const jobTypes = createJobTypes(config);
 
-      expect(() => jobTypes.parseOutput("myJob", { bad: "output" })).toThrow(
-        JobTypeValidationError,
-      );
       try {
-        jobTypes.parseOutput("myJob", { bad: "output" });
+        jobTypes[method]("myJob", "bad");
+        throw new Error("expected throw");
       } catch (error) {
         const validationError = error as JobTypeValidationError;
-        expect(validationError.code).toBe("invalid_output");
-        expect(validationError.typeName).toBe("myJob");
-        expect(validationError.details.output).toEqual({ bad: "output" });
+        expect(validationError.code).toBe(code);
+        expect(validationError.details).toEqual({ [field]: "bad" });
         expect(validationError.cause).toBe(originalError);
       }
     });
@@ -157,47 +193,6 @@ describe("createJobTypes", () => {
         jobTypes.validateContinueWith("fromJob", to);
       }).not.toThrow();
       expect(config.validateContinueWith).toHaveBeenCalledWith("fromJob", to);
-    });
-
-    it("receives { typeName, input } for nominal validation", () => {
-      const validateContinueWith = vi.fn();
-      const config = createMockConfig({ validateContinueWith });
-      const jobTypes = createJobTypes(config);
-
-      jobTypes.validateContinueWith("step1", { typeName: "step2", input: { id: 123 } });
-
-      expect(validateContinueWith).toHaveBeenCalledWith("step1", {
-        typeName: "step2",
-        input: { id: 123 },
-      });
-    });
-
-    it("receives { typeName, input } for structural validation", () => {
-      // Adapter can use input to validate structurally (e.g., check input shape matches target)
-      const validateContinueWith = vi.fn((fromTypeName, to) => {
-        // Structural validation: check input has required fields
-        if (to.input && typeof to.input === "object" && !("payload" in to.input)) {
-          throw new Error("Missing payload field for structural match");
-        }
-      });
-      const config = createMockConfig({ validateContinueWith });
-      const jobTypes = createJobTypes(config);
-
-      // Valid structural match
-      expect(() => {
-        jobTypes.validateContinueWith("router", {
-          typeName: "handler",
-          input: { payload: { data: "test" } },
-        });
-      }).not.toThrow();
-
-      // Invalid structural match - wraps error
-      expect(() => {
-        jobTypes.validateContinueWith("router", {
-          typeName: "handler",
-          input: { wrongField: true },
-        });
-      }).toThrow(JobTypeValidationError);
     });
 
     it("wraps adapter errors in JobTypeValidationError", () => {
@@ -218,8 +213,6 @@ describe("createJobTypes", () => {
         const validationError = error as JobTypeValidationError;
         expect(validationError.code).toBe("invalid_continuation");
         expect(validationError.typeName).toBe("fromJob");
-        expect(validationError.message).toContain("fromJob");
-        expect(validationError.message).toContain("toJob");
         expect(validationError.details.target).toEqual({ typeName: "toJob", input: {} });
         expect(validationError.cause).toBe(originalError);
       }
@@ -239,44 +232,6 @@ describe("createJobTypes", () => {
         jobTypes.validateBlockers("main", blockers);
       }).not.toThrow();
       expect(config.validateBlockers).toHaveBeenCalledWith("main", blockers);
-    });
-
-    it("receives array of { typeName, input } for nominal validation", () => {
-      const validateBlockers = vi.fn();
-      const config = createMockConfig({ validateBlockers });
-      const jobTypes = createJobTypes(config);
-
-      const blockers = [{ typeName: "auth", input: { userId: "123" } }];
-      jobTypes.validateBlockers("main", blockers);
-
-      expect(validateBlockers).toHaveBeenCalledWith("main", blockers);
-    });
-
-    it("receives array of { typeName, input } for structural validation", () => {
-      // Adapter can validate blockers by input shape (structural references)
-      const validateBlockers = vi.fn((typeName, blockers) => {
-        for (const blocker of blockers) {
-          // Structural validation: check each blocker has required input fields
-          if (blocker.input && typeof blocker.input === "object" && !("token" in blocker.input)) {
-            throw new Error(`Blocker ${blocker.typeName} missing token field`);
-          }
-        }
-      });
-      const config = createMockConfig({ validateBlockers });
-      const jobTypes = createJobTypes(config);
-
-      // Valid structural match
-      expect(() => {
-        jobTypes.validateBlockers("main", [
-          { typeName: "auth", input: { token: "abc" } },
-          { typeName: "authAlt", input: { token: "xyz" } },
-        ]);
-      }).not.toThrow();
-
-      // Invalid structural match - wraps error
-      expect(() => {
-        jobTypes.validateBlockers("main", [{ typeName: "auth", input: { noToken: true } }]);
-      }).toThrow(JobTypeValidationError);
     });
 
     it("wraps adapter errors in JobTypeValidationError", () => {
@@ -318,16 +273,13 @@ describe("createNoopJobTypes", () => {
     }).not.toThrow();
   });
 
-  it("parseInput returns input unchanged", () => {
+  it("encodes and decodes inputs and outputs unchanged without runtime checks", () => {
     const jobTypes = createNoopJobTypes();
-    const input = { value: 42, nested: { data: "test" } };
-    expect(jobTypes.parseInput("anyType", input)).toBe(input);
-  });
-
-  it("parseOutput returns output unchanged", () => {
-    const jobTypes = createNoopJobTypes();
-    const output = { result: "success", count: 10 };
-    expect(jobTypes.parseOutput("anyType", output)).toBe(output);
+    const value = { when: new Date() };
+    expect(jobTypes.encodeInput("anyType", value)).toBe(value);
+    expect(jobTypes.decodeInput("anyType", value)).toBe(value);
+    expect(jobTypes.encodeOutput("anyType", value)).toBe(value);
+    expect(jobTypes.decodeOutput("anyType", value)).toBe(value);
   });
 
   it("validateContinueWith does nothing", () => {

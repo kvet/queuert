@@ -166,6 +166,15 @@ export const createTypeBoxJobTypes = <
     return schema;
   };
 
+  const parseInput = (typeName: string, input: unknown): unknown =>
+    parse(getSchema(typeName).input, input);
+
+  const parseOutput = (typeName: string, output: unknown): unknown => {
+    const schema = getSchema(typeName).output;
+    if (!schema) throw new Error(`Job type "${typeName}" does not have an output schema`);
+    return parse(schema, output);
+  };
+
   return createJobTypes<InferTypeBoxJobTypes<T>, JobTypesDefinitions<TExternal>>({
     getTypeNames: () => Object.keys(_schemas),
     validateEntry: (typeName) => {
@@ -175,18 +184,10 @@ export const createTypeBoxJobTypes = <
       }
     },
 
-    parseInput: (typeName, input) => {
-      return parse(getSchema(typeName).input, input);
-    },
-
-    parseOutput: (typeName, output) => {
-      const schema = getSchema(typeName);
-      if (schema.output) {
-        return parse(schema.output, output);
-      } else {
-        throw new Error(`Job type "${typeName}" does not have an output schema`);
-      }
-    },
+    encodeInput: parseInput,
+    decodeInput: parseInput,
+    encodeOutput: parseOutput,
+    decodeOutput: parseOutput,
 
     validateContinueWith: (typeName, continuation) => {
       const schema = getSchema(typeName);

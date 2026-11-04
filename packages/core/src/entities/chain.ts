@@ -1,22 +1,27 @@
+import { type JobTypes } from "../job-types/job-types.js";
 import { type StateChain } from "../state-adapter/state-adapter.js";
 import { type AnyChain } from "./chain.types.js";
 
 export type * from "./chain.types.js";
 
-export const mapStateChainToChain = (stateChain: StateChain): AnyChain => {
+export const mapStateChainToChain = (
+  stateChain: StateChain,
+  jobTypes: Pick<JobTypes<any>, "decodeInput" | "decodeOutput">,
+): AnyChain => {
   const base = {
     id: stateChain.id,
     typeName: stateChain.typeName,
-    input: stateChain.head.input,
+    input: jobTypes.decodeInput(stateChain.head.typeName, stateChain.head.input),
     createdAt: stateChain.createdAt,
   };
 
   if (stateChain.status === "running") return { ...base, status: "running" };
 
+  const tail = stateChain.tail ?? stateChain.head;
   return {
     ...base,
     status: "completed",
-    output: (stateChain.tail ?? stateChain.head).output,
+    output: jobTypes.decodeOutput(tail.typeName, tail.output),
     completedAt: stateChain.completedAt!,
   };
 };

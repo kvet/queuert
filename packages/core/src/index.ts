@@ -15,6 +15,12 @@ export { createJobTypes, type JobTypeDefinitions, type JobTypes } from "./job-ty
 export { type JobTypeEntryNames, type JobTypeNames } from "./job-types/job-types.resolvers.js";
 export { type CompletedJob, type Job, type JobStatus } from "./entities/job.js";
 export { type Worker } from "./entities/worker.js";
+export {
+  isJsonSerializable,
+  type EnsureJsonSerializable,
+  type JsonPrimitive,
+  type JsonSerializable,
+} from "./job-types/json-serializable.js";
 export { type JobTypesDefinitions } from "./job-types/merge-job-types.js";
 export { type ScheduleOptions } from "./entities/schedule.js";
 export {

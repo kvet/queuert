@@ -100,13 +100,14 @@ export type ValidatedSlices<
 
 /**
  * Merge multiple JobTypes slices into one. Routes calls to the owning slice
- * so per-slice validation errors propagate correctly; falls back to a noop
- * when any slice is noop (from {@link defineJobTypes}).
+ * so per-slice validation/codec errors propagate correctly; falls back to a
+ * noop slice when any input slice is noop (from {@link defineJobTypes}).
  *
  * When every slice is validated (built with {@link createJobTypes}) and the
  * caller references an unknown type name, throws {@link UnknownJobTypeError}.
  * Mixed merges that include at least one noop slice keep noop semantics for
- * unknown types — silently passing inputs/outputs through.
+ * unknown types. `decodeInput` / `decodeOutput` always pass values of unknown types through
+ * unchanged, so rows of removed job types stay readable.
  *
  * @internal — invoked by {@link createClient} when users pass an array of slices.
  */
@@ -166,18 +167,26 @@ export const mergeJobTypes = <const TSlices extends readonly [JobTypes<any>, ...
         () => {},
       );
     },
-    parseInput: (typeName, input) =>
+    encodeInput: (typeName, input) =>
       route(
         typeName,
-        (r) => r.parseInput(typeName, input),
+        (r) => r.encodeInput(typeName, input),
         () => input,
       ),
-    parseOutput: (typeName, output) =>
+    decodeInput: (typeName, input) => {
+      const owner = typeNameMap.get(typeName);
+      return owner ? owner.decodeInput(typeName, input) : input;
+    },
+    encodeOutput: (typeName, output) =>
       route(
         typeName,
-        (r) => r.parseOutput(typeName, output),
+        (r) => r.encodeOutput(typeName, output),
         () => output,
       ),
+    decodeOutput: (typeName, output) => {
+      const owner = typeNameMap.get(typeName);
+      return owner ? owner.decodeOutput(typeName, output) : output;
+    },
     validateContinueWith: (typeName, target) => {
       route(
         typeName,

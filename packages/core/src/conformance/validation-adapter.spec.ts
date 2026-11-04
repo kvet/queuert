@@ -56,24 +56,28 @@ const createShapeCheckJobTypes = <
   const checkKnown = (typeName: string): void => {
     if (!knownTypes.has(typeName)) throw new Error(`unknown type: ${typeName}`);
   };
+  const checkInput = (typeName: string, input: unknown): unknown => {
+    checkKnown(typeName);
+    const shape = config.inputs[typeName];
+    if (!shape) throw new Error(`no input shape for ${typeName}`);
+    return checkShape(input, shape);
+  };
+  const checkOutput = (typeName: string, output: unknown): unknown => {
+    checkKnown(typeName);
+    const shape = config.outputs[typeName];
+    if (!shape) throw new Error(`no output shape for ${typeName}`);
+    return checkShape(output, shape);
+  };
   return createJobTypes<TJobTypeDefinitions, TExternalJobTypeDefinitions>({
     getTypeNames: () => config.typeNames,
     validateEntry: (typeName) => {
       checkKnown(typeName);
       if (!config.entryTypes.has(typeName)) throw new Error(`not entry: ${typeName}`);
     },
-    parseInput: (typeName, input) => {
-      checkKnown(typeName);
-      const shape = config.inputs[typeName];
-      if (!shape) throw new Error(`no input shape for ${typeName}`);
-      return checkShape(input, shape);
-    },
-    parseOutput: (typeName, output) => {
-      checkKnown(typeName);
-      const shape = config.outputs[typeName];
-      if (!shape) throw new Error(`no output for ${typeName}`);
-      return checkShape(output, shape);
-    },
+    encodeInput: checkInput,
+    decodeInput: checkInput,
+    encodeOutput: checkOutput,
+    decodeOutput: checkOutput,
     validateContinueWith: (typeName, target) => {
       checkKnown(typeName);
       const validator = config.continueWith[typeName];

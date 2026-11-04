@@ -5,7 +5,6 @@ None
 # Short term
 
 - [TASK] Built-in cleanup. See `design/builtin-cleanup.md`.
-- [TASK] Enforce json-serializable inputs and outputs (like no Date in job definitions) — see `design/json-serializable-types.md`
 - [TASK] Reschedule reason and failure-streak backoff — persist `failure_streak` and the `complete({ reschedule, reason })` reason, compute backoff from the streak instead of `attempt`. See `design/reschedule-reason-and-backoff.md`.
 - [EPIC] Decouple chain from jobs. See `design/chain-table.md`.
 - [TASK] Re-verify the Compare pages — `docs/src/content/docs/comparison/*` and `docs/src/data/comparison.ts` show the compared Queuert version hard-coded as 0.12.0, the version they were last checked against; re-check each comparison against the current release and update the version.

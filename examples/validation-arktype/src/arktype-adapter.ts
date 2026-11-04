@@ -130,6 +130,15 @@ export const createArkTypeJobTypes = <
     return schema;
   };
 
+  const parseInput = (typeName: string, input: unknown): unknown =>
+    getSchema(typeName).input.assert(input);
+
+  const parseOutput = (typeName: string, output: unknown): unknown => {
+    const schema = getSchema(typeName).output;
+    if (!schema) throw new Error(`Job type "${typeName}" does not have an output schema`);
+    return schema.assert(output);
+  };
+
   return createJobTypes<InferArkTypeJobTypes<T>, JobTypesDefinitions<TExternal>>({
     getTypeNames: () => Object.keys(_schemas),
     validateEntry: (typeName) => {
@@ -139,18 +148,10 @@ export const createArkTypeJobTypes = <
       }
     },
 
-    parseInput: (typeName, input) => {
-      return getSchema(typeName).input.assert(input);
-    },
-
-    parseOutput: (typeName, output) => {
-      const schema = getSchema(typeName);
-      if (schema.output) {
-        return schema.output.assert(output);
-      } else {
-        throw new Error(`Job type "${typeName}" does not have an output schema`);
-      }
-    },
+    encodeInput: parseInput,
+    decodeInput: parseInput,
+    encodeOutput: parseOutput,
+    decodeOutput: parseOutput,
 
     validateContinueWith: (typeName, continuation) => {
       const schema = getSchema(typeName);
