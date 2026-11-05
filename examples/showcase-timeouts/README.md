@@ -2,7 +2,7 @@
 
 Timeout patterns for job processing.
 
-Scenarios: cooperative timeout via `AbortController` composed with the job signal; a job that outlasts the worker `lease` and completes while the heartbeat renews it.
+Scenarios: cooperative timeout via `AbortController` composed with the job signal; a job that outlasts the worker lease (`leaseConfig`) and completes while the heartbeat renews it.
 
 ## Running
 

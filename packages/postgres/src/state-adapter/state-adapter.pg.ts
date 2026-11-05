@@ -193,6 +193,7 @@ ON {{schema}}.{{table_prefix}}job_blocker (blocked_by_chain_id)`),
     name: "002_worker_liveness",
     type: "transactional",
     statements: [
+      sql(/* sql */ `SET LOCAL lock_timeout = '5000ms'`),
       sql(/* sql */ `
 CREATE TABLE {{schema}}.{{table_prefix}}worker (
   started_at                    timestamptz NOT NULL DEFAULT now(),

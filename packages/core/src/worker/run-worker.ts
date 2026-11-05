@@ -89,6 +89,8 @@ const waitForNextJob = async ({
   }
 };
 
+type ReclaimedJob = { reclaimed: StateJob; rescheduled: StateJob };
+
 const listRunningJobs = async (
   stateAdapter: StateAdapter<any, any, any>,
   { txCtx, workerId }: { txCtx?: unknown; workerId: string },
@@ -122,7 +124,7 @@ const reclaimWorkerJobs = async (
     keepAttemptTokens?: Set<string>;
     message: string;
   },
-): Promise<StateJob[]> => {
+): Promise<ReclaimedJob[]> => {
   const { stateAdapter } = helpers;
   const runningJobs = (await listRunningJobs(stateAdapter, { txCtx, workerId })).filter(
     (job) => keepAttemptTokens === undefined || !keepAttemptTokens.has(job.attemptToken!),
@@ -137,24 +139,30 @@ const reclaimWorkerJobs = async (
       error,
     })),
   });
-  return runningJobs.filter((_, index) => rescheduledJobs[index] !== undefined);
+  return runningJobs.flatMap((reclaimed, index) => {
+    const rescheduled = rescheduledJobs[index];
+    return rescheduled === undefined ? [] : [{ reclaimed, rescheduled }];
+  });
 };
 
 const announceReclaimed = async (
   helpers: Helpers,
-  { jobs, workerId }: { jobs: StateJob[]; workerId: string },
+  { jobs, workerId }: { jobs: ReclaimedJob[]; workerId: string },
 ): Promise<void> => {
   const { notifyAdapter, observabilityHelper } = helpers;
-  for (const job of jobs) {
-    observabilityHelper.jobAttemptReclaimed(job, {
+  for (const { reclaimed, rescheduled } of jobs) {
+    observabilityHelper.jobAttemptReclaimed(reclaimed, {
       workerId,
-      reclaimedFrom: job.attemptBy!,
+      reclaimedFrom: reclaimed.attemptBy!,
     });
+    observabilityHelper.jobRescheduled(rescheduled);
   }
   if (jobs.length === 0) return;
-  await notifyAdapter.notifyJobAttemptsLost(jobs.map((job) => job.id)).catch(() => {});
   await notifyAdapter
-    .notifyJobsScheduled([...new Set(jobs.map((job) => job.typeName))])
+    .notifyJobAttemptsLost(jobs.map(({ reclaimed }) => reclaimed.id))
+    .catch(() => {});
+  await notifyAdapter
+    .notifyJobsScheduled([...new Set(jobs.map(({ reclaimed }) => reclaimed.typeName))])
     .catch(() => {});
 };
 
@@ -183,7 +191,7 @@ const registerWorker = async (
     concurrency: number;
     leaseConfig: WorkerLeaseConfig;
   },
-): Promise<{ token: string; reclaimedJobs: StateJob[] }> => {
+): Promise<{ token: string; reclaimedJobs: ReclaimedJob[] }> => {
   const { stateAdapter } = helpers;
   return stateAdapter.withTransaction(async (txCtx) => {
     const existing = await lockWorker(stateAdapter, { txCtx, workerId });
@@ -217,14 +225,13 @@ const reclaimExpiredWorker = async (
   { workerId }: { workerId: string },
 ): Promise<boolean> => {
   const { stateAdapter } = helpers;
-  const {
-    items: [candidate],
-  } = await stateAdapter.listWorkers({
+  const { items: candidates } = await stateAdapter.listWorkers({
     status: "expired",
     orderDirection: "asc",
-    page: { limit: 1 },
+    page: { limit: 8 },
   });
-  if (candidate === undefined) return false;
+  if (candidates.length === 0) return false;
+  const candidate = candidates[Math.floor(Math.random() * candidates.length)];
   const reclaimedJobs = await stateAdapter.withTransaction(async (txCtx) => {
     const worker = await lockWorker(stateAdapter, { txCtx, workerId: candidate.id });
     if (worker === undefined || !worker.expired) return undefined;
@@ -320,6 +327,8 @@ export const runWorker = async ({
 
   const executor = createParallelExecutor(concurrency);
   const runningAttemptTokens = new Set<string>();
+  let finishedJobsReclaimDue = false;
+  let finishedJobsReclaimedAt = performance.now();
 
   const dispatchJob = (stateJob: StateJob & { hasBlockers: boolean }) => {
     runningAttemptTokens.add(stateJob.attemptToken!);
@@ -341,6 +350,7 @@ export const runWorker = async ({
           abortSignal: signal,
         });
       } catch (error) {
+        finishedJobsReclaimDue = true;
         observabilityHelper.workerError({ workerId }, error);
       } finally {
         runningAttemptTokens.delete(stateJob.attemptToken!);
@@ -396,7 +406,14 @@ export const runWorker = async ({
     }
 
     if (executor.idleSlots() > 0) {
-      await reclaimFinishedJobs();
+      if (
+        finishedJobsReclaimDue ||
+        performance.now() - finishedJobsReclaimedAt >= leaseConfig.heartbeatMs
+      ) {
+        finishedJobsReclaimDue = false;
+        finishedJobsReclaimedAt = performance.now();
+        await reclaimFinishedJobs();
+      }
       if (await reclaimExpiredWorker(helpers, { workerId })) {
         return;
       }
@@ -422,6 +439,7 @@ export const runWorker = async ({
       }
       await reclaimOrWait();
     } catch (error) {
+      finishedJobsReclaimDue = true;
       observabilityHelper.workerError({ workerId }, error);
       failures += 1;
       await sleep(calculateBackoffMs(failures, recoveryBackoffConfig), { signal });

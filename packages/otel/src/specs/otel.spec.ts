@@ -586,7 +586,7 @@ describe("Metrics", () => {
 
     const leaseLosingWorker = await createInProcessWorker({
       client: leaseLosingClient,
-      lease: { durationMs: 150, heartbeatMs: 40 },
+      leaseConfig: { durationMs: 150, heartbeatMs: 40 },
       processors: createProcessors({
         client: leaseLosingClient,
         jobTypes,
@@ -635,6 +635,7 @@ describe("Metrics", () => {
     const metricNames = await getMetricNames();
     expect(metricNames).toContain("queuert.job.attempt.reclaimed");
     expect(metricNames).toContain("queuert.job.attempt.lost");
+    expect(metricNames).toContain("queuert.job.rescheduled");
   });
 
   it("tracks worker lease loss metrics", async ({
@@ -659,7 +660,7 @@ describe("Metrics", () => {
 
     const worker = await createInProcessWorker({
       client,
-      lease: { durationMs: 1000, heartbeatMs: 20 },
+      leaseConfig: { durationMs: 1000, heartbeatMs: 20 },
       processors: createProcessors({
         client,
         jobTypes,
@@ -2812,6 +2813,7 @@ describe("Rollback", () => {
       // the autocommit error reschedule failed, so the attempt surfaces it as a worker error
       { method: "workerError" },
       { method: "jobAttemptReclaimed" },
+      { method: "jobRescheduled" },
       { method: "jobAttemptStarted" },
       { method: "jobCompleted" },
       { method: "chainCompleted" },

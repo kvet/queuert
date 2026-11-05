@@ -2,7 +2,7 @@
 "@queuert/dashboard": minor
 ---
 
-The dashboard is easier to read and shows which version you are running. Body text now uses the system sans-serif font, with monospace kept for headings, labels, type names, IDs and JSON, and the top bar carries the dashboard's version. Auto-refresh and the refresh button are removed: reload the page or navigate to see fresh data.
+Removed auto-refresh, the refresh button and the "List has changed" banner: reload the page or navigate to see fresh data. The dashboard is also easier to read and shows which version you are running: body text uses the system sans-serif font, with monospace kept for headings, labels, type names, IDs and JSON, and the top bar carries the dashboard's version.
 
 - Body text uses the system sans-serif font; headings, labels, status pills, type names, IDs and JSON stay monospace
 - The top bar shows the `@queuert/dashboard` version next to the logo

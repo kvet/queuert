@@ -344,6 +344,12 @@ export const schemaTables: Record<SchemaDialect, SchemaTable[]> = {
         },
       ],
     },
+    {
+      name: "write_lock",
+      purpose:
+        "Always empty; taken first by every migration transaction to acquire SQLite's write lock.",
+      columns: [{ name: "id", type: "INTEGER", primaryKey: true, description: "Never written" }],
+    },
   ],
 };
 

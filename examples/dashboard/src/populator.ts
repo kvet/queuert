@@ -367,13 +367,13 @@ await withTransactionHooks(async (transactionHooks) =>
 console.log("\n--- Scenario 9: Leftover workers ---");
 const startLeftoverWorker = async (options: {
   label: string;
-  lease?: { durationMs: number; heartbeatMs: number };
+  leaseConfig?: { durationMs: number; heartbeatMs: number };
 }) => {
   const claimed = Promise.withResolvers<void>();
   const leftoverWorker = await createInProcessWorker({
     client,
     concurrency: 1,
-    lease: options.lease,
+    leaseConfig: options.leaseConfig,
     processors: createProcessors({
       client,
       jobTypes,
@@ -403,7 +403,7 @@ const startLeftoverWorker = async (options: {
 // Lease outlives the populator by an hour, so the worker shows as live.
 await startLeftoverWorker({
   label: "long-runner-live",
-  lease: { durationMs: 60 * 60 * 1000, heartbeatMs: 15 * 60 * 1000 },
+  leaseConfig: { durationMs: 60 * 60 * 1000, heartbeatMs: 15 * 60 * 1000 },
 });
 // Default 60s lease: a minute after the populator exits, the dashboard shows it lost.
 await startLeftoverWorker({ label: "long-runner-lost" });

@@ -4,7 +4,7 @@ import { join } from "node:path";
 import { createDeploymentSpawner, startPaused, startTogether } from "@queuert/helpers/testing";
 import { acquirePostgres } from "@queuert/testcontainers";
 import { type MigrationResult, createMigrator, createTemplateApplier } from "@queuert/typed-sql";
-import { Pool } from "pg";
+import { Client, Pool } from "pg";
 import { it as baseIt, describe, expect } from "vitest";
 
 import {
@@ -239,6 +239,32 @@ describe("migrateToLatest", () => {
       const [completed] = await adapter.getJobs({ jobIds: [completedJobId] });
       expect(completed!.status).toBe("completed");
       expect(completed!.completedBy).toBeNull();
+    },
+  );
+
+  it(
+    "gives up when an open transaction holds a lock on the job table, and applies once it ends",
+    { timeout: 120_000 },
+    async ({ database: { connectionString, provider, adapter } }) => {
+      await migrateToInstall(provider);
+      const blocker = new Client({ connectionString });
+      await blocker.connect();
+      try {
+        await blocker.query("BEGIN");
+        await blocker.query("SELECT 1 FROM queuert_job LIMIT 1");
+
+        await expect(adapter.migrateToLatest()).rejects.toMatchObject({ code: "55P03" });
+
+        await blocker.query("ROLLBACK");
+      } finally {
+        await blocker.end();
+      }
+
+      expect(await adapter.migrateToLatest()).toEqual({
+        applied: [WORKER_LIVENESS],
+        skipped: [INSTALL],
+        unrecognized: [],
+      });
     },
   );
 

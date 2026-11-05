@@ -5,7 +5,7 @@
  *
  * Scenarios:
  * 1. Cooperative Timeout: Using AbortController with the job signal
- * 2. Worker Lease: Using lease (a job is reclaimed if its worker stops renewing the lease)
+ * 2. Worker Lease: Using `leaseConfig` (a job is reclaimed if its worker stops renewing the lease)
  */
 
 import assert from "node:assert/strict";
@@ -72,7 +72,7 @@ const client = await createClient({
 
 const worker = await createInProcessWorker({
   client,
-  lease: { durationMs: 600, heartbeatMs: 150 },
+  leaseConfig: { durationMs: 600, heartbeatMs: 150 },
   processors: createProcessors({
     client,
     jobTypes,

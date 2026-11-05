@@ -8,7 +8,7 @@ type LogEntry<
   TLevel extends LogLevel,
   TMessage extends string,
   TData extends Record<string, unknown>,
-  // oxlint-disable-next-line no-unnecessary-type-constraint
+  // oxlint-disable-next-line no-unnecessary-type-constraint -- spells out that any error value is accepted next to the `never` default
   TError extends unknown = never,
 > = {
   type: TType;

@@ -87,7 +87,12 @@ const members = (): FieldItem[] => [
   },
   {
     name: "Attempt lost",
-    description: <>The given jobs lost their attempts, for example because the attempt expired.</>,
+    description: (
+      <>
+        The given jobs lost their attempts: they were reclaimed from a worker whose lease expired or
+        that stopped, completed workerless, or their chain was deleted.
+      </>
+    ),
     extra: ["notifyJobAttemptsLost", "listenJobAttemptLost"],
   },
   {

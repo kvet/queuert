@@ -8,6 +8,11 @@ import { type BaseTxContext } from "queuert";
  * and SQL execution. Users create their own implementation to integrate with their preferred
  * SQLite client (better-sqlite3, etc.).
  *
+ * Every transaction you pass to `complete` or to client methods must be serialized with the
+ * transactions `withTransaction` opens, for example by holding the same `AsyncRwLock` write
+ * lock. An unserialized transaction can interleave its statements with the worker's own writes on
+ * the same connection.
+ *
  * @typeParam TTxContext - The transaction context type containing database client/connection info
  * @experimental
  */

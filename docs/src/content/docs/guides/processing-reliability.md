@@ -20,7 +20,7 @@ The rest of this page walks through each scenario with code examples.
 
 ## Error Before the Transaction
 
-Work before your transaction — reads, external API calls — runs without a transaction. If it throws, nothing was written and the job is rescheduled using the processor's `backoffConfig` (or the default exponential backoff).
+Work before your transaction — reads, external API calls — runs without a transaction. If it throws, nothing was written and the job is rescheduled using the first `backoffConfig` set on the processor, its processor registry or the worker, or else the default exponential backoff.
 
 ```ts
 'charge-payment': {
@@ -121,7 +121,7 @@ Keep work that must succeed for the job to count as done inside the transaction 
 
 ## What This Means in Practice
 
-- **Any unhandled error before the commit → reschedule with backoff.** Whether the error occurs before your transaction or inside it — the job is always rescheduled. Backoff follows the processor's `backoffConfig` or the default (10s → 20s → 40s → ... → 300s cap). A handler that returns without a committed `complete` is rescheduled the same way.
+- **Any unhandled error before the commit → reschedule with backoff.** Whether the error occurs before your transaction or inside it — the job is always rescheduled. Backoff follows the first `backoffConfig` set on the processor, its processor registry or the worker, or else the default (10s → 20s → 40s → ... → 300s cap). A handler that returns without a committed `complete` is rescheduled the same way.
 - **No corrupted state.** Your transaction ensures that partial SQL work is never committed when an error occurs.
 - **No orphaned continuations.** If `complete` was called with `continueWith` and the transaction throws afterward, both the continuation job and the completion are rolled back.
 - **Blocked jobs stay blocked.** If a blocker job's completion is rolled back, dependent jobs remain correctly blocked.

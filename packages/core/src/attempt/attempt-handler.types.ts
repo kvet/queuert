@@ -130,6 +130,10 @@ export type AttemptCompleteResult<
  * @throws {@link ChainNotFoundError} if a `continueWith` blocker chain does not exist.
  * @throws {@link ChainTypeMismatchError} if a `continueWith` blocker's `typeName` differs from the
  * stored chain's.
+ * @throws {@link JobTypeValidationError} if the job type rejects the `output`, or the continuation
+ * job type rejects the `continueWith` target, input or blockers.
+ * @throws {@link InvalidJobIdError} if a `continueWith` `id` fails the state adapter's
+ * `validateJobId` check.
  */
 export type AttemptComplete<
   TStateAdapter extends StateAdapter<any, any, any>,

@@ -38,12 +38,12 @@ const worker = await createInProcessWorker({
 const stop = await worker.start();
 ```
 
-The worker's `lease` is not a runtime limit: it bounds how long a crashed worker's jobs wait before another worker picks them up. Each worker's heartbeat renews its lease every `heartbeatMs`, however many attempts it runs, so a handler may run far longer than `durationMs`. The lease only expires when the worker stops renewing it — it crashed, its event loop stalled, or it lost its database connection — and then an idle worker reclaims the jobs running under it, which start a new attempt. Use the cooperative `signal` pattern above for real runtime limits.
+The worker's lease (`leaseConfig`) is not a runtime limit: it bounds how long a crashed worker's jobs wait before another worker picks them up. Each worker's heartbeat renews its lease every `heartbeatMs`, however many attempts it runs, so a handler may run far longer than `durationMs`. The lease only expires when the worker stops renewing it — it crashed, its event loop stalled, or it lost its database connection. On the in-process and SQLite adapters, a user transaction that holds the write lock past the worker's local deadline also makes the worker give up its lease (see [Worker Lease](../../how-it-works/in-process-worker/#worker-lease)). Either way the jobs running under it are reclaimed and start a new attempt. Use the cooperative `signal` pattern above for real runtime limits.
 
 ```ts
 const worker = await createInProcessWorker({
   client,
-  lease: { durationMs: 300_000, heartbeatMs: 60_000 }, // jobs reclaimed 5 min after the worker stops renewing
+  leaseConfig: { durationMs: 300_000, heartbeatMs: 60_000 }, // jobs reclaimed 5 min after the worker stops renewing
   processors: createProcessors({
     client,
     jobTypes,

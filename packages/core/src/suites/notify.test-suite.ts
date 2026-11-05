@@ -636,7 +636,7 @@ export const notifyTestSuite = ({ it }: { it: TestAPI<TestSuiteContext> }): void
       createInProcessWorker({
         client: workerClient,
         concurrency: 1,
-        lease: { durationMs: 200, heartbeatMs: 50 },
+        leaseConfig: { durationMs: 200, heartbeatMs: 50 },
         processors: createProcessors({
           client,
           jobTypes,

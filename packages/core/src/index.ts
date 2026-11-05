@@ -42,7 +42,6 @@ export {
   type JobTypeValidationErrorCode,
 } from "./errors.js";
 export { type BackoffConfig } from "./entities/backoff.js";
-export { type RetryConfig } from "./entities/retry.js";
 export { createInProcessWorker, type InProcessWorker } from "./in-process-worker.js";
 export { type WorkerLeaseConfig } from "./worker/worker-lease.js";
 export { createInProcessNotifyAdapter } from "./notify-adapter/notify-adapter.in-process.js";

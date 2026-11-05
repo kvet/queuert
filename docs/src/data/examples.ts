@@ -68,7 +68,7 @@ export const examplePages: { slug: ExamplePageSlug; title: string; summary: stri
   {
     slug: "reliability",
     title: "Reliability",
-    summary: "Error recovery, error handling, timeouts, long-running jobs and abort signals.",
+    summary: "Error recovery, error handling, timeouts and abort signals.",
   },
   {
     slug: "app-structure",

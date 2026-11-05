@@ -362,6 +362,8 @@ export type Client<
    * @throws {@link BlockerLimitExceededError} from the inner `complete` if a `continueWith` outcome declares more blockers than the per-job limit.
    * @throws {@link ChainNotFoundError} from the inner `complete` if a `continueWith` blocker chain does not exist.
    * @throws {@link ChainTypeMismatchError} from the inner `complete` if a `continueWith` blocker's `typeName` differs from the stored chain's.
+   * @throws {@link JobTypeValidationError} from the inner `complete` if the job type rejects the `output`, or the continuation job type rejects the `continueWith` target, input or blockers.
+   * @throws {@link InvalidJobIdError} from the inner `complete` if a `continueWith` `id` fails the state adapter's `validateJobId` check.
    */
   completeChain: <
     TChainTypeName extends JobTypeEntryNames<TJobTypeDefinitions>,

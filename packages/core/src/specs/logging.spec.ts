@@ -774,7 +774,7 @@ describe("Logging", () => {
 
     const leaseLosingWorker = await createInProcessWorker({
       client: leaseLosingClient,
-      lease: { durationMs: 150, heartbeatMs: 40 },
+      leaseConfig: { durationMs: 150, heartbeatMs: 40 },
       processors: createProcessors({
         client: leaseLosingClient,
         jobTypes,
@@ -812,8 +812,10 @@ describe("Logging", () => {
       client.createChain({ ...txCtx, transactionHooks, typeName: "test", input: null }),
     );
 
+    let attemptStartedAt = new Date();
     await withWorkers([await leaseLosingWorker.start()], async () => {
       await jobStarted.promise;
+      attemptStartedAt = new Date();
       await withWorkers([await reclaimingWorker.start()], async () => {
         await client.awaitChain(chain, completionOptions);
       });
@@ -823,6 +825,10 @@ describe("Logging", () => {
     const logTypes = new Set(log.mock.calls.map((call) => call[0].type));
     expect(logTypes).toContain("job_attempt_reclaimed");
     expect(logTypes).toContain("job_attempt_lost");
+    const rescheduled = log.mock.calls.find((call) => call[0].type === "job_rescheduled");
+    expect(
+      (rescheduled![0].data as { scheduledAt: Date }).scheduledAt.getTime(),
+    ).toBeGreaterThanOrEqual(attemptStartedAt.getTime());
   });
 
   it("logs a lost worker lease", async ({
@@ -846,7 +852,7 @@ describe("Logging", () => {
 
     const worker = await createInProcessWorker({
       client,
-      lease: { durationMs: 1000, heartbeatMs: 20 },
+      leaseConfig: { durationMs: 1000, heartbeatMs: 20 },
       processors: createProcessors({
         client,
         jobTypes,

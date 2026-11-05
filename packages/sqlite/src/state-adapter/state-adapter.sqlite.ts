@@ -588,7 +588,11 @@ export const createSqliteStateAdapter = async <
   maxBlockersPerJob: maxBlockersPerJobOption,
   countCap: countCapOption,
 }: {
-  /** SQLite state provider wrapping the database connection. */
+  /**
+   * SQLite state provider wrapping the database connection. Transactions you pass to `complete`
+   * or to client methods must be serialized with its `withTransaction`, for example by holding
+   * the same `AsyncRwLock` write lock.
+   */
   stateProvider: SqliteStateProvider<TTxContext>;
   /** Prefix for all table names. @defaultValue `"queuert_"` */
   tablePrefix?: string;

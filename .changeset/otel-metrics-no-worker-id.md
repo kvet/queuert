@@ -1,5 +1,5 @@
 ---
-"@queuert/otel": minor
+"@queuert/otel": major
 ---
 
 Metrics from `@queuert/otel` no longer carry the `queuert.worker.id` attribute. Worker IDs are random for each process start by default, so every restart or deploy created a new set of time series and metric cardinality grew without limit. The worker ID stays on job attempt spans. If you need per-process metrics, use an OTEL resource attribute such as `service.instance.id`.

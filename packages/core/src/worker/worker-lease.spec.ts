@@ -206,25 +206,25 @@ describe("holdLease", () => {
 describe("workerLeaseConfigViolations", () => {
   it("accepts a heartbeat below a third of the duration", () => {
     expect(
-      workerLeaseConfigViolations("lease", { durationMs: 60_000, heartbeatMs: 15_000 }),
+      workerLeaseConfigViolations("leaseConfig", { durationMs: 60_000, heartbeatMs: 15_000 }),
     ).toEqual([]);
   });
 
   it("rejects a heartbeat that is not below a third of the duration", () => {
-    expect(workerLeaseConfigViolations("lease", { durationMs: 90, heartbeatMs: 30 })).toEqual([
-      "lease.heartbeatMs must be below a third of lease.durationMs (got 30 and 90)",
-    ]);
+    expect(workerLeaseConfigViolations("leaseConfig", { durationMs: 90, heartbeatMs: 30 })).toEqual(
+      ["leaseConfig.heartbeatMs must be below a third of leaseConfig.durationMs (got 30 and 90)"],
+    );
   });
 
   it("rejects non-positive or non-finite values", () => {
     expect(
-      workerLeaseConfigViolations("lease", {
+      workerLeaseConfigViolations("leaseConfig", {
         durationMs: 0,
         heartbeatMs: Number.POSITIVE_INFINITY,
       }),
     ).toEqual([
-      "lease.durationMs must be a positive finite number (got 0)",
-      "lease.heartbeatMs must be a positive finite number (got Infinity)",
+      "leaseConfig.durationMs must be a positive finite number (got 0)",
+      "leaseConfig.heartbeatMs must be a positive finite number (got Infinity)",
     ]);
   });
 });

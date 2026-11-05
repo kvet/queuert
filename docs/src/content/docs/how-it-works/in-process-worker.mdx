@@ -59,17 +59,17 @@ Workers process jobs in parallel using slots. See `createInProcessWorker` TSDoc 
 The worker runs a single coordinating loop:
 
 1. **Fill**: Call `startJobAttempts` with the idle slot count as `limit`, start each returned job in its own slot, and repeat until a call returns fewer jobs than its `limit` or all slots are busy. Each call atomically starts up to `limit` attempts under the worker's id, so filling `N` idle slots costs one round-trip, and an idle worker issues one acquisition per wake-up
-2. **Reclaim**: If any idle slots remain, reschedule the worker's own running jobs that no slot runs, then reclaim one expired worker (see [Reclaim](#reclaim)); if a worker was reclaimed, skip the wait and start the next iteration
+2. **Reclaim**: If any idle slots remain, reschedule the worker's own running jobs that no slot runs when due, then reclaim one expired worker (see [Reclaim](#reclaim)); if a worker was reclaimed, skip the wait and start the next iteration
 3. **Wait**: Listen for notification, poll timeout, or slot completion
 4. **Repeat**
 
-If an iteration throws, the worker emits `workerError` and sleeps per `recoveryBackoffConfig` before the next one. Failed registrations and restarts after a lost lease back off per `recoveryBackoffConfig` too. The delay grows with each failure in a row and resets once the worker starts a job.
+If an iteration throws, the worker emits `workerError` and sleeps per `recoveryBackoffConfig` before the next one. Failed registrations and restarts after a lost lease back off per `recoveryBackoffConfig` too. The delay grows with each failure since the worker last started a job, and resets once it starts one.
 
 The worker stops claiming once it is stopping or its lease is lost.
 
 ### Starting
 
-`start()` returns without touching the database. The in-process worker registers its worker in the background, in one transaction: it locks the row under its id with `getWorkers({ lock: "exclusive" })`, and calls `startWorker`, which inserts the worker row with its processors' job type names, its `concurrency` and a lease `lease.durationMs` from now. When a row under the id already exists, a live one fails the registration with `WorkerAlreadyLiveError`, and an expired one is reclaimed in the same transaction before the insert. The worker emits `workerStarted` once the transaction commits. Its lease is held from the registration on, and the jobs its registration reclaimed are announced afterwards, as in [Reclaim](#reclaim). A failed registration emits `workerError` and is retried under the same id per `recoveryBackoffConfig`.
+`start()` returns without touching the database. Calling it again before the returned `stop` function resolved throws. The in-process worker registers its worker in the background, in one transaction: it locks the row under its id with `getWorkers({ lock: "exclusive" })`, and calls `startWorker`, which inserts the worker row with its processors' job type names, its `concurrency` and a lease `leaseConfig.durationMs` from now. When a row under the id already exists, a live one fails the registration with `WorkerAlreadyLiveError`, and an expired one is reclaimed in the same transaction before the insert. The worker emits `workerStarted` once the transaction commits. Its lease is held from the registration on, and the jobs its registration reclaimed are announced afterwards, as in [Reclaim](#reclaim). A failed registration emits `workerError` and is retried under the same id per `recoveryBackoffConfig`.
 
 ### Shutdown
 
@@ -100,16 +100,18 @@ The id is stored in `attemptBy` of every attempt the worker starts. The worker t
 
 ## Worker Lease
 
-A running job is live exactly while the worker named by its `attemptBy` holds a live lease. The `lease` option configures that lease:
+A running job is live exactly while the worker named by its `attemptBy` holds a live lease. The `leaseConfig` option configures that lease:
 
-- `durationMs` — how long a lease lasts without a renewal. Default `60_000`.
-- `heartbeatMs` — how often the lease is renewed. Must be below a third of `durationMs`. Default `15_000`.
+- `durationMs` — how long a lease lasts without a renewal.
+- `heartbeatMs` — how often the lease is renewed. Must be below a third of `durationMs`.
 
-One heartbeat per worker renews the lease every `heartbeatMs`, however many attempts it runs. Each renewal, `extendWorkerLease`, is one atomic write that sets the lease to `durationMs` from the database's `now()`, and matches only while the lease is still live and the row is the one this run registered: an expired lease cannot be renewed. A renewal that finds the row gone, expired or registered by another run loses the lease. A renewal that throws is retried on the next tick.
+Both fields are required when `leaseConfig` is passed. Leaving `leaseConfig` out uses `{ durationMs: 60_000, heartbeatMs: 15_000 }`.
+
+One heartbeat per worker renews the lease every `heartbeatMs`, however many attempts it runs. Each renewal, `extendWorkerLease`, is one atomic write that sets the lease to `durationMs` from the database's current time (`statement_timestamp()` on PostgreSQL), and matches only while the lease is still live and the row is the one this run registered: an expired lease cannot be renewed. A renewal that finds the row gone, expired or registered by another run loses the lease. A renewal that throws is retried on the next tick.
 
 **Claims are gated on the lease.** `startJobAttempts` claims nothing unless the row this run registered exists with a live lease in database time, so a worker whose lease expired cannot start new attempts even before it notices.
 
-**Local deadline.** The worker counts its lease as lost `durationMs − heartbeatMs` after the last successful renewal was sent, or after the registration was sent, measured on a monotonic local clock. The stored lease runs `durationMs` from a database `now()` taken after a renewal was sent, so the local deadline comes at least `heartbeatMs` before the lease can expire, and the worker aborts its attempts before another worker can reclaim their jobs. No local timestamp is compared with the stored lease. With the defaults the deadline falls 45s after the last successful renewal was sent, so the renewals 15s and 30s after it can both fail, and the worker loses its lease at 45s. A renewal still pending at the deadline is cut off, so a renewal that hangs cannot keep a worker past its deadline looking live.
+**Local deadline.** The worker counts its lease as lost `durationMs − heartbeatMs` after the last successful renewal was sent, or after the registration was sent, measured on a monotonic local clock. The stored lease runs `durationMs` from a database time taken after a renewal was sent, so the local deadline comes at least `heartbeatMs` before the lease can expire, and the worker aborts its attempts before another worker can reclaim their jobs. No local timestamp is compared with the stored lease. With the defaults the deadline falls 45s after the last successful renewal was sent, so the renewals 15s and 30s after it can both fail, and the worker loses its lease at 45s. A renewal still pending at the deadline is cut off, so a renewal that hangs cannot keep a worker past its deadline looking live.
 
 On the in-process and SQLite adapters a user transaction holds the global write lock, so a renewal waits for it; with the defaults a user transaction can run for 45s before the worker counts its lease as lost.
 
@@ -117,9 +119,9 @@ A handler learns that its attempt was lost elsewhere (the job was taken over, co
 
 ## Reclaim
 
-A worker whose lease expired holds jobs no one runs. An idle worker reclaims them: each iteration with an idle slot, it lists one expired worker of any job type, locks its row, checks it is still expired, and in one transaction reschedules every job running under it and deletes the row with `stopWorker`. Each reclaimed job returns to `pending` at once, with no backoff, as a failed attempt: `lastAttemptAt` is stamped and `lastAttemptError` holds a serialized `JobAttemptReclaimedError` (carrying `reclaimedBy`, the reclaiming worker). After the commit the worker:
+A worker whose lease expired holds jobs no one runs. An idle worker reclaims them: each iteration with an idle slot, it lists up to eight expired workers of any job type, picks one at random, locks its row, checks it is still expired, and in one transaction reschedules every job running under it and deletes the row with `stopWorker`. Each reclaimed job returns to `pending` at once, with no backoff, as a failed attempt: `lastAttemptAt` is stamped and `lastAttemptError` holds a serialized `JobAttemptReclaimedError` (carrying `reclaimedBy`, the reclaiming worker). After the commit the worker:
 
-1. Emits a `jobAttemptReclaimed` observability event per job, with `reclaimedFrom` naming the expired worker
+1. Emits `jobAttemptReclaimed` (with `reclaimedFrom` naming the expired worker) and `jobRescheduled` observability events per job
 2. Notifies with one `notifyJobAttemptsLost` call carrying every reclaimed job id, so a handler still running on the expired worker aborts
 3. Notifies `notifyJobsScheduled` for the reclaimed jobs' types, so the workers that process them wake up
 4. Skips the wait and claims again right away
@@ -127,11 +129,11 @@ A worker whose lease expired holds jobs no one runs. An idle worker reclaims the
 **Design decisions:**
 
 - **Integrated with main loop**: Runs once per idle iteration, no separate process needed.
-- **One worker at a time**: An iteration reclaims at most one expired worker, so idle workers spread the reclaims among themselves.
+- **One worker at a time**: An iteration reclaims at most one expired worker, picked at random among the oldest expired ones, so idle workers spread the reclaims among themselves.
 - **Any job type**: A worker reclaims expired workers whatever job types they processed, so the jobs of a type whose workers all crashed are recovered by any worker that is still running.
-- **Concurrent-safe**: The reclaim waits for the expired worker's row lock rather than skipping it. When several workers list the same expired worker, the first one reclaims it and the others find it gone. A claim racing the reclaim either commits first and its jobs are rescheduled with the rest, or claims nothing.
+- **Concurrent-safe**: The reclaim waits for the expired worker's row lock rather than skipping it. When several workers pick the same expired worker, the first one reclaims it and the others find it gone. A claim racing the reclaim either commits first and its jobs are rescheduled with the rest, or claims nothing.
 
-**Own jobs.** A write whose outcome the worker could not tell — a claim that committed but threw, or a failed attempt's reschedule that threw — can leave a job running under the worker with no slot running it. On each idle iteration the worker locks its row and, if it is still the row this run registered, reschedules in the same way the jobs running under it that no slot runs, so a finished job never stays leased. If another run registered the id, the worker loses its lease.
+**Own jobs.** A write whose outcome the worker could not tell — a claim that committed but threw, or a failed attempt's reschedule that threw — can leave a job running under the worker with no slot running it. On the next idle iteration after an iteration or attempt that threw, and otherwise at most once every `heartbeatMs`, the worker locks its row and, if it is still the row this run registered, reschedules in the same way the jobs running under it that no slot runs, so a finished job never stays leased. If another run registered the id, the worker loses its lease.
 
 ## Retry and Backoff
 
@@ -145,11 +147,11 @@ Example with defaults: 10s → 20s → 40s → 80s → 160s → 300s → 300s...
 
 See [Job Processing](../job-processing/) for details on error handling and abort signals.
 
-`createInProcessWorker` validates `recoveryBackoffConfig`, `lease` and every `backoffConfig` passed to it, including an unused worker-level one, and throws a `TypeError` listing each invalid field. `initialDelayMs` must be finite and non-negative, `maxDelayMs` non-negative (`Infinity` means no cap), and `multiplier`, `durationMs` and `heartbeatMs` finite and positive, with `heartbeatMs` below a third of `durationMs`. Fractional values are allowed.
+`createInProcessWorker` validates `concurrency`, `pollIntervalMs`, `recoveryBackoffConfig`, `leaseConfig` and every `backoffConfig` passed to it, including an unused worker-level one, and throws a `TypeError` listing each invalid field. `concurrency` must be a positive integer, `initialDelayMs` finite and non-negative, `maxDelayMs` non-negative (`Infinity` means no cap), and `pollIntervalMs`, `multiplier`, `durationMs` and `heartbeatMs` finite and positive, with `heartbeatMs` below a third of `durationMs`. Fractional values are allowed.
 
 ## Client-Based Construction
 
-`createInProcessWorker` accepts a `client` instance and extracts infrastructure (`stateAdapter`, `notifyAdapter`, `observabilityAdapter`, `jobTypes`, `log`) from it internally. Worker-specific options (`processors`, `workerId`, `concurrency`, `pollIntervalMs`, `recoveryBackoffConfig`, `lease`, `backoffConfig`, `requiredAttemptMiddleware`) remain separate parameters. The top-level `recoveryBackoffConfig` controls the worker's own retry behavior (e.g., recovery from database connection errors, failed registrations and restarts after a lost lease), and `lease` the worker's lease. Per-attempt configuration — `backoffConfig`, `attemptMiddleware` — lives on the processor registry; the worker-level `backoffConfig` is the fallback for processors that don't set their own (resolution order: processor → registry → worker → library default). `requiredAttemptMiddleware` enforces that every slice merged into the worker includes a fixed set of middleware instances as an in-order subsequence — useful for guaranteeing cross-cutting concerns like auth or tracing are present on every slice. The worker only enforces presence; slices continue to run their own middleware chains.
+`createInProcessWorker` accepts a `client` instance and extracts infrastructure (`stateAdapter`, `notifyAdapter`, `observabilityAdapter`, `jobTypes`, `log`) from it internally. Worker-specific options (`processors`, `workerId`, `concurrency`, `pollIntervalMs`, `recoveryBackoffConfig`, `leaseConfig`, `backoffConfig`, `requiredAttemptMiddleware`) remain separate parameters. The top-level `recoveryBackoffConfig` controls the worker's own retry behavior (e.g., recovery from database connection errors, failed registrations and restarts after a lost lease), and `leaseConfig` the worker's lease. Per-attempt configuration — `backoffConfig`, `attemptMiddleware` — lives on the processor registry; the worker-level `backoffConfig` is the fallback for processors that don't set their own (resolution order: processor → registry → worker → library default). `requiredAttemptMiddleware` enforces that every slice merged into the worker includes a fixed set of middleware instances as an in-order subsequence — useful for guaranteeing cross-cutting concerns like auth or tracing are present on every slice. The worker only enforces presence; slices continue to run their own middleware chains.
 This is purely a construction convenience — no lifecycle coupling is introduced. The client and worker remain independent after construction.
 
 ## Extensibility

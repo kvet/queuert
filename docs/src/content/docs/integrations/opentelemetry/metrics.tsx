@@ -102,8 +102,9 @@ const jobCounters = (): FieldItem[] => [
     chips: [counter],
     description: (
       <>
-        Job returned to pending: client reschedule, <code>{"complete({ reschedule })"}</code>, or
-        retry after a failed attempt.
+        Job returned to pending: client reschedule, <code>{"complete({ reschedule })"}</code>, retry
+        after a failed attempt, or reclaim from a worker that lost its lease, stopped or no longer
+        runs it.
       </>
     ),
     extra: jobAttributes,

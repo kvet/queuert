@@ -13,7 +13,7 @@ import {
 
 export const meta = {
   title: "OpenTelemetry Tracing",
-  description: "OpenTelemetry span hierarchy and messaging conventions.",
+  description: "OpenTelemetry span hierarchy, span kinds and attributes.",
 };
 
 const producer = { label: "PRODUCER", mono: true } as const;

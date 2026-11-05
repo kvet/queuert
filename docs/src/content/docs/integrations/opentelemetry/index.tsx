@@ -76,7 +76,7 @@ const Page = () => (
         {
           name: "Spans",
           description:
-            "PRODUCER spans for job creation and CONSUMER spans for processing, following OpenTelemetry messaging conventions.",
+            "PRODUCER spans for job creation and CONSUMER spans for processing, with span kinds modeled on OpenTelemetry messaging conventions.",
         },
       ]}
     />

@@ -39,11 +39,13 @@ Handlers keep full type inference — `job.input` is typed from the Zod schema. 
 A failed validation throws `JobTypeValidationError`. A `code` identifies which boundary rejected the value, and `typeName` identifies the job type:
 
 ```ts
-import { JobTypeValidationError } from "queuert";
+import { JobTypeValidationError, withTransactionHooks } from "queuert";
 
 try {
-  await stateAdapter.withTransaction((ctx) =>
-    client.createChain({ ...ctx, transactionHooks, typeName: "send-email", input: untrusted }),
+  await withTransactionHooks(async (transactionHooks) =>
+    stateProvider.withTransaction(async (txCtx) =>
+      client.createChain({ ...txCtx, transactionHooks, typeName: "send-email", input: untrusted }),
+    ),
   );
 } catch (err) {
   if (err instanceof JobTypeValidationError && err.code === "invalid_input") {

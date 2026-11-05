@@ -720,7 +720,7 @@ export const stateResilienceTestSuite = ({ it }: { it: TestAPI<TestSuiteContext>
       concurrency: 2,
       pollIntervalMs: 50,
       recoveryBackoffConfig: { initialDelayMs: 10, multiplier: 1, maxDelayMs: 10 },
-      lease: { durationMs: 300, heartbeatMs: 50 },
+      leaseConfig: { durationMs: 300, heartbeatMs: 50 },
       processors: createProcessors({
         client,
         jobTypes,

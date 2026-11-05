@@ -2,17 +2,9 @@ import { isPositiveFinite, raceWithSleep, sleep } from "@queuert/helpers";
 
 /** The lease the in-process worker registers its worker with. */
 export type WorkerLeaseConfig = {
-  /**
-   * How long a worker's lease lasts without a renewal. Must be finite and positive.
-   *
-   * @defaultValue 60_000
-   */
+  /** How long a worker's lease lasts without a renewal. Must be finite and positive. */
   durationMs: number;
-  /**
-   * How often the lease is renewed. Must be finite, positive and below a third of `durationMs`.
-   *
-   * @defaultValue 15_000
-   */
+  /** How often the lease is renewed. Must be finite, positive and below a third of `durationMs`. */
   heartbeatMs: number;
 };
 

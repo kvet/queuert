@@ -1,4 +1,4 @@
-import { sleep } from "@queuert/helpers";
+import { isPositiveFinite, sleep } from "@queuert/helpers";
 
 import {
   type AnyAttemptMiddleware,
@@ -94,7 +94,11 @@ type ValidateRequiredMiddleware<TProcessorsInput, TReq extends readonly AnyAttem
  * Call `start()` to begin processing. It returns a `stop` function — call it to gracefully shut down.
  */
 export type InProcessWorker = {
-  /** Begin processing jobs. Returns a `stop` function that gracefully shuts down the worker. */
+  /**
+   * Begin processing jobs. Returns a `stop` function that gracefully shuts down the worker.
+   *
+   * @throws {Error} if the worker is already started and its `stop` function has not resolved.
+   */
   start: () => Promise<() => Promise<void>>;
 };
 
@@ -105,15 +109,16 @@ export type InProcessWorker = {
  * registry** (see {@link createProcessors}). The worker dispatches to whichever processor
  * matches the job's typeName and runs that slice's middleware chain. The worker-level
  * `backoffConfig` is the fallback for processors that don't set their own; precedence is
- * processor > worker > built-in default.
+ * processor > processor registry > worker > built-in default.
  *
  * The in-process worker registers one worker at a time under `workerId`, a row with a lease it
  * renews. When the lease is lost, it aborts the attempts' signals, waits for every attempt to
  * end and registers again under the same id.
  *
  * @param options - Worker configuration.
- * @throws {TypeError} When `recoveryBackoffConfig`, `lease`, `backoffConfig` or any processor's
- * `backoffConfig` holds an invalid value; the message lists every invalid field.
+ * @throws {TypeError} When `concurrency`, `pollIntervalMs`, `recoveryBackoffConfig`, `leaseConfig`,
+ * `backoffConfig` or any processor's `backoffConfig` holds an invalid value; the message lists
+ * every invalid field.
  * @throws {@link InvalidWorkerIdError} if `workerId` fails the state adapter's
  * `validateWorkerId`.
  * @throws {@link DuplicateJobTypeError} if slices in a `processors` array share job types.
@@ -126,10 +131,10 @@ export const createInProcessWorker = async <
 >({
   client,
   workerId: workerIdOption,
-  concurrency,
+  concurrency: concurrencyOption,
   pollIntervalMs: pollIntervalMsOption,
   recoveryBackoffConfig: recoveryBackoffConfigOption,
-  lease: leaseOption,
+  leaseConfig: leaseConfigOption,
   backoffConfig: backoffConfigOption,
   requiredAttemptMiddleware: requiredAttemptMiddlewareOption,
   processors: processorsOption,
@@ -137,20 +142,22 @@ export const createInProcessWorker = async <
   /** The Queuert client to process jobs for. */
   client: Client<TJobTypeDefinitions, TStateAdapter>;
   /**
-   * Id the worker registers under, kept across restarts. While a live worker holds it, the
-   * worker waits for that lease to expire before it starts.
+   * Id the worker registers under, kept when it registers again after a lost lease. Pass a fixed
+   * id to keep it across process restarts. While a live worker holds it, the worker waits for
+   * that lease to expire before it starts.
    *
    * @defaultValue the state adapter's `generateWorkerId()`
    */
   workerId?: GetStateAdapterWorkerId<TStateAdapter>;
   /**
-   * Maximum number of jobs to process in parallel.
+   * Maximum number of jobs to process in parallel. Must be a positive integer.
    *
    * @defaultValue `1`
    */
   concurrency?: number;
   /**
-   * How often to poll for new jobs when no notify adapter wakes the worker.
+   * How often to poll for new jobs when no notify adapter wakes the worker. Must be finite and
+   * positive.
    *
    * @defaultValue `60_000`
    */
@@ -163,11 +170,12 @@ export const createInProcessWorker = async <
    */
   recoveryBackoffConfig?: BackoffConfig;
   /**
-   * The lease the in-process worker registers its worker with.
+   * The lease the in-process worker registers its worker with. Both fields are required when it
+   * is passed.
    *
    * @defaultValue `{ durationMs: 60_000, heartbeatMs: 15_000 }`
    */
-  lease?: WorkerLeaseConfig;
+  leaseConfig?: WorkerLeaseConfig;
   /**
    * Backoff for failed job attempts of processors that don't set their own `backoffConfig`.
    *
@@ -245,10 +253,17 @@ export const createInProcessWorker = async <
     multiplier: 2.0,
     maxDelayMs: 300_000,
   };
-  const leaseConfig = leaseOption ?? { durationMs: 60_000, heartbeatMs: 15_000 };
+  const leaseConfig = leaseConfigOption ?? { durationMs: 60_000, heartbeatMs: 15_000 };
+  const concurrency = concurrencyOption ?? 1;
   const configViolations = [
+    ...(Number.isSafeInteger(concurrency) && concurrency > 0
+      ? []
+      : [`concurrency must be a positive integer (got ${String(concurrency)})`]),
+    ...(isPositiveFinite(pollIntervalMs)
+      ? []
+      : [`pollIntervalMs must be a positive finite number (got ${String(pollIntervalMs)})`]),
     ...backoffConfigViolations("recoveryBackoffConfig", recoveryBackoffConfig),
-    ...workerLeaseConfigViolations("lease", leaseConfig),
+    ...workerLeaseConfigViolations("leaseConfig", leaseConfig),
     ...backoffConfigViolations("backoffConfig", defaultBackoffConfig),
     ...typeNames.flatMap((typeName) =>
       backoffConfigViolations(
@@ -262,11 +277,17 @@ export const createInProcessWorker = async <
       `createInProcessWorker: invalid configuration:\n${configViolations.map((v) => `  - ${v}`).join("\n")}`,
     );
   }
-  const concurrencyValue = concurrency ?? 1;
   const workerId = resolveWorkerId(client[helpersSymbol].stateAdapter.config, workerIdOption);
 
+  let started = false;
   return {
     start: async (): Promise<() => Promise<void>> => {
+      if (started) {
+        throw new Error(
+          "createInProcessWorker: the worker is already started; await the stop function returned by start() before starting it again",
+        );
+      }
+      started = true;
       const helpers = client[helpersSymbol];
       const stopController = new AbortController();
 
@@ -278,7 +299,7 @@ export const createInProcessWorker = async <
             workerId,
             typeNames,
             processors,
-            concurrency: concurrencyValue,
+            concurrency,
             pollIntervalMs,
             recoveryBackoffConfig,
             defaultBackoffConfig,
@@ -299,9 +320,13 @@ export const createInProcessWorker = async <
         helpers.observabilityHelper.workerError({ workerId }, error);
       });
 
+      let stopped = false;
       return async () => {
         stopController.abort();
         await runWorkersPromise;
+        if (stopped) return;
+        stopped = true;
+        started = false;
       };
     },
   };

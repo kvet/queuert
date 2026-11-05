@@ -859,17 +859,17 @@ export const workerTestSuite = ({ it }: { it: TestAPI<TestSuiteContext> }): void
       log,
       jobTypes,
     });
-    const lease = { durationMs: 300, heartbeatMs: 50 };
+    const leaseConfig = { durationMs: 300, heartbeatMs: 50 };
     const worker = await createInProcessWorker({
       client,
-      lease,
+      leaseConfig,
       processors: createProcessors({
         client,
         jobTypes,
         processors: {
           test: {
             attemptHandler: async ({ signal, complete }) => {
-              await sleep(lease.durationMs * 2);
+              await sleep(leaseConfig.durationMs * 2);
               expect(signal.aborted).toBe(false);
               return withTransaction(async (txCtx, transactionHooks) =>
                 complete({ ...txCtx, transactionHooks, output: null }),
@@ -1034,7 +1034,7 @@ export const workerTestSuite = ({ it }: { it: TestAPI<TestSuiteContext> }): void
 
     const leaseLosingWorker = await createInProcessWorker({
       client: leaseLosingClient,
-      lease: { durationMs: 200, heartbeatMs: 50 },
+      leaseConfig: { durationMs: 200, heartbeatMs: 50 },
       processors: createProcessors({
         client: leaseLosingClient,
         jobTypes,
@@ -1121,7 +1121,7 @@ export const workerTestSuite = ({ it }: { it: TestAPI<TestSuiteContext> }): void
     const worker = await createInProcessWorker({
       client,
       workerId,
-      lease: { durationMs: 200, heartbeatMs: 50 },
+      leaseConfig: { durationMs: 200, heartbeatMs: 50 },
       recoveryBackoffConfig: { initialDelayMs: 20, multiplier: 1, maxDelayMs: 20 },
       backoffConfig: { initialDelayMs: 1, multiplier: 1, maxDelayMs: 1 },
       processors: createProcessors({
@@ -1193,7 +1193,7 @@ export const workerTestSuite = ({ it }: { it: TestAPI<TestSuiteContext> }): void
     const leaseLosingWorker = await createInProcessWorker({
       client: leaseLosingClient,
       workerId,
-      lease: { durationMs: 200, heartbeatMs: 50 },
+      leaseConfig: { durationMs: 200, heartbeatMs: 50 },
       processors: createProcessors({
         client: leaseLosingClient,
         jobTypes,
@@ -1281,7 +1281,7 @@ export const workerTestSuite = ({ it }: { it: TestAPI<TestSuiteContext> }): void
     const frozenWorker = await createInProcessWorker({
       client: frozenClient,
       workerId,
-      lease: { durationMs: 200, heartbeatMs: 50 },
+      leaseConfig: { durationMs: 200, heartbeatMs: 50 },
       recoveryBackoffConfig: { initialDelayMs: 20, multiplier: 1, maxDelayMs: 20 },
       processors: createProcessors({
         client: frozenClient,
@@ -1459,6 +1459,61 @@ export const workerTestSuite = ({ it }: { it: TestAPI<TestSuiteContext> }): void
     });
   });
 
+  it("reclaims its own jobs at most once per heartbeat while idle", async ({
+    stateAdapter,
+    notifyAdapter,
+    withWorkers,
+    observabilityAdapter,
+    log,
+  }) => {
+    const jobTypes = defineJobTypes<{
+      test: { entry: true; input: null; output: null };
+    }>();
+
+    const workerId = stateAdapter.config.generateWorkerId();
+    let ownJobListings = 0;
+    let idleIterations = 0;
+    const client = await createClient({
+      stateAdapter: {
+        ...stateAdapter,
+        listWorkerJobs: async (params) => {
+          if (params.workerId === workerId) ownJobListings += 1;
+          return stateAdapter.listWorkerJobs(params);
+        },
+        getStartAttemptDelayMs: async (params) => {
+          idleIterations += 1;
+          return stateAdapter.getStartAttemptDelayMs(params);
+        },
+      },
+      notifyAdapter,
+      observabilityAdapter,
+      log,
+      jobTypes,
+    });
+    const worker = await createInProcessWorker({
+      client,
+      workerId,
+      pollIntervalMs: 20,
+      leaseConfig: { durationMs: 300_000, heartbeatMs: 60_000 },
+      processors: createProcessors({
+        client,
+        jobTypes,
+        processors: {
+          test: {
+            attemptHandler: async () => {
+              throw new Error("not expected to run");
+            },
+          },
+        },
+      }),
+    });
+
+    await withWorkers([await worker.start()], async () => {
+      await expect.poll(() => idleIterations).toBeGreaterThanOrEqual(5);
+      expect(ownJobListings).toBe(1);
+    });
+  });
+
   it("keeps a sibling slot's running attempt when an idle slot reclaims its own jobs", async ({
     stateAdapter,
     notifyAdapter,
@@ -1493,6 +1548,7 @@ export const workerTestSuite = ({ it }: { it: TestAPI<TestSuiteContext> }): void
       client,
       concurrency: 2,
       pollIntervalMs: 20,
+      leaseConfig: { durationMs: 60_000, heartbeatMs: 20 },
       processors: createProcessors({
         client,
         jobTypes,
@@ -1576,6 +1632,7 @@ export const workerTestSuite = ({ it }: { it: TestAPI<TestSuiteContext> }): void
       client,
       concurrency: 2,
       pollIntervalMs: 20,
+      leaseConfig: { durationMs: 60_000, heartbeatMs: 20 },
       processors: createProcessors({
         client,
         jobTypes,
