@@ -4,7 +4,7 @@ import { type SeedSentinels, seedConfig } from "queuert/testing";
 import { type PgStateProvider } from "../state-provider/state-provider.pg.js";
 
 export const fastSeedAllStates = async <TTxContext extends BaseTxContext>(
-  stateProvider: PgStateProvider<TTxContext>,
+  stateProvider: PgStateProvider<TTxContext, any>,
   {
     scale = 1,
     schema = "public",

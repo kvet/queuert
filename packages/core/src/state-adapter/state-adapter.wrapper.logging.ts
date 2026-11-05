@@ -1,19 +1,21 @@
 import { type ObservabilityHelper } from "../observability-adapter/observability-helper.js";
+import { type TransactionHooksMode } from "../transaction-hooks.js";
 import { type BaseTxContext, type StateAdapter } from "./state-adapter.js";
 
 export const wrapStateAdapterWithLogging = <
   TTxContext extends BaseTxContext,
   TJobId extends string,
   TWorkerId extends string,
+  TTransactionHooksMode extends TransactionHooksMode,
 >({
   stateAdapter,
   observabilityHelper,
 }: {
-  stateAdapter: StateAdapter<TTxContext, TJobId, TWorkerId>;
+  stateAdapter: StateAdapter<TTxContext, TJobId, TWorkerId, TTransactionHooksMode>;
   observabilityHelper: ObservabilityHelper;
-}): StateAdapter<TTxContext, TJobId, TWorkerId> => {
+}): StateAdapter<TTxContext, TJobId, TWorkerId, TTransactionHooksMode> => {
   const wrap = <T extends (...args: never[]) => Promise<unknown>>(
-    operationName: keyof StateAdapter<any, any, any>,
+    operationName: keyof StateAdapter<any, any, any, any>,
     fn: T,
   ): T =>
     (async (...args) => {
@@ -30,6 +32,7 @@ export const wrapStateAdapterWithLogging = <
     config: stateAdapter.config,
     withTransaction: stateAdapter.withTransaction,
     isTransaction: stateAdapter.isTransaction,
+    getTransactionHooks: stateAdapter.getTransactionHooks,
 
     // Operation methods - wrap with error logging
     getChains: wrap("getChains", stateAdapter.getChains),

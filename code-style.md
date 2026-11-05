@@ -69,6 +69,7 @@ Once a concept has a word, that word is the only one for it — everywhere, incl
 - **`worker`**: one row in the `worker` table — an id, its job types, its concurrency and a lease. Its id is the `workerId` in `attemptBy`, `completedBy` and worker events. A worker starts and stops.
 - **In-process worker**: what `createInProcessWorker` returns.
 - **`lease`**: a worker's `lease_until`, live while it is in the future in database time; a worker whose lease is gone has lost it.
+- **`explicit` / `implicit` transaction hooks**: the two transaction hooks modes of a state provider — callers pass `transactionHooks`, or the provider supplies the hooks bound to a transaction. Hooks are **bound** to a transaction; a context with no hooks bound to it is **unbound**.
 
 ### Type Naming Scheme
 
@@ -273,6 +274,7 @@ state-postgres-pg           # node-postgres (pg)
 state-postgres-postgres-js  # postgres.js
 state-postgres-drizzle      # Drizzle ORM
 state-postgres-kysely       # Kysely
+state-postgres-kysely-implicit-hooks # Kysely, implicit transaction hooks
 state-postgres-prisma       # Prisma
 state-postgres-knex         # Knex
 state-postgres-bun-sql      # Bun.SQL

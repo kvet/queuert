@@ -1,5 +1,6 @@
 export { helpersSymbol } from "./client.js";
 export { resolveStateAdapterConfig } from "./state-adapter/adapter-config.js";
+export { withStateAdapterTransaction } from "./state-adapter/tx-context.js";
 export {
   decodeIdCursor,
   decodeTimestampWithIdCursor,

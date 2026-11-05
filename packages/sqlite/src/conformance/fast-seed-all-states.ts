@@ -13,7 +13,7 @@ const futureTs = (ms: number) => `datetime('now', 'subsec', '+${ms / 1000} secon
 const pastTs = (seconds: number) => `datetime('now', 'subsec', '-${seconds} seconds')`;
 
 export const fastSeedAllStates = async <TTxContext extends BaseTxContext>(
-  stateProvider: SqliteStateProvider<TTxContext>,
+  stateProvider: SqliteStateProvider<TTxContext, any>,
   { scale = 1, tablePrefix = "queuert_" }: { scale?: number; tablePrefix?: string } = {},
 ): Promise<SeedSentinels> => {
   const job = `${tablePrefix}job`;

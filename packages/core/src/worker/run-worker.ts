@@ -40,7 +40,7 @@ const waitForNextJob = async ({
   executor,
   signal,
 }: {
-  stateAdapter: StateAdapter<any, any, any>;
+  stateAdapter: StateAdapter<any, any, any, any>;
   notifyAdapter: NotifyAdapter;
   typeNames: string[];
   pollIntervalMs: number;
@@ -90,7 +90,7 @@ const waitForNextJob = async ({
 };
 
 const listRunningJobs = async (
-  stateAdapter: StateAdapter<any, any, any>,
+  stateAdapter: StateAdapter<any, any, any, any>,
   { txCtx, workerId }: { txCtx?: unknown; workerId: string },
 ): Promise<StateJob[]> => {
   const listPage = async (cursor: string | undefined) =>
@@ -159,7 +159,7 @@ const announceReclaimed = async (
 };
 
 const lockWorker = async (
-  stateAdapter: StateAdapter<any, any, any>,
+  stateAdapter: StateAdapter<any, any, any, any>,
   { txCtx, workerId }: { txCtx: unknown; workerId: string },
 ): Promise<StateWorkerInfo | undefined> => {
   const [worker] = await stateAdapter.getWorkers({

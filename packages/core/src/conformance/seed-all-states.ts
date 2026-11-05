@@ -124,7 +124,7 @@ const chunkIndexes = (total: number, size: number): number[][] => {
 };
 
 export const seedAllStates = async <TTxContext extends BaseTxContext>(
-  stateAdapter: StateAdapter<TTxContext, string, any>,
+  stateAdapter: StateAdapter<TTxContext, string, any, any>,
   { scale = 1 }: { scale?: number } = {},
 ): Promise<SeedSentinels> => {
   const headJob = (typeName: string, index: number, schedule?: { afterMs: number }) => ({

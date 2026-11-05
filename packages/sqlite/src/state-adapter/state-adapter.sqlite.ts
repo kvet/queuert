@@ -17,7 +17,7 @@ import {
   sql,
   t,
 } from "@queuert/typed-sql";
-import { type BaseTxContext, type StateAdapter } from "queuert";
+import { type BaseTxContext, type StateAdapter, type TransactionHooksMode } from "queuert";
 import {
   type StateBlockedJob,
   type StateChain,
@@ -308,7 +308,7 @@ WHERE status = 'running'`),
 
 /** @internal */
 export const createMigrationStore = <TTxContext extends BaseTxContext>(
-  stateProvider: SqliteStateProvider<TTxContext>,
+  stateProvider: SqliteStateProvider<TTxContext, any>,
   applyTemplate: TemplateApplier,
 ): MigrationStore<TTxContext> => {
   const exec = async <
@@ -576,6 +576,7 @@ export const createSqliteStateAdapter = async <
   TTxContext extends BaseTxContext,
   TJobId extends string = UUID,
   TWorkerId extends string = UUID,
+  TTransactionHooksMode extends TransactionHooksMode = "explicit",
 >({
   stateProvider,
   tablePrefix = "queuert_",
@@ -589,7 +590,7 @@ export const createSqliteStateAdapter = async <
   countCap: countCapOption,
 }: {
   /** SQLite state provider wrapping the database connection. */
-  stateProvider: SqliteStateProvider<TTxContext>;
+  stateProvider: SqliteStateProvider<TTxContext, TTransactionHooksMode>;
   /** Prefix for all table names. @defaultValue `"queuert_"` */
   tablePrefix?: string;
   /** SQL type of the job ID columns. @defaultValue `"TEXT"` */
@@ -637,7 +638,7 @@ export const createSqliteStateAdapter = async <
    */
   countCap?: number;
 }): Promise<
-  StateAdapter<TTxContext, TJobId, TWorkerId> & {
+  StateAdapter<TTxContext, TJobId, TWorkerId, TTransactionHooksMode> & {
     /** Create or upgrade the schema. */
     migrateToLatest: () => Promise<MigrationResult>;
     /** Delete all job, blocker and worker rows. Intended for tests. */
@@ -768,7 +769,7 @@ export const createSqliteStateAdapter = async <
     }) as Promise<InferColumns<TColumns>[]>;
   };
 
-  return {
+  const adapter: SqliteStateAdapter<TTxContext, TJobId, TWorkerId> = {
     config,
 
     withTransaction: stateProvider.withTransaction,
@@ -2650,6 +2651,11 @@ ORDER BY w.key
       await stateProvider.close?.();
     },
   };
+
+  return {
+    ...adapter,
+    getTransactionHooks: stateProvider.getTransactionHooks,
+  } as SqliteStateAdapter<TTxContext, TJobId, TWorkerId, TTransactionHooksMode>;
 };
 
 /**
@@ -2660,7 +2666,8 @@ export type SqliteStateAdapter<
   TTxContext extends BaseTxContext,
   TJobId extends string = UUID,
   TWorkerId extends string = UUID,
-> = StateAdapter<TTxContext, TJobId, TWorkerId> & {
+  TTransactionHooksMode extends TransactionHooksMode = "explicit",
+> = StateAdapter<TTxContext, TJobId, TWorkerId, TTransactionHooksMode> & {
   /** Create or upgrade the schema. */
   migrateToLatest: () => Promise<MigrationResult>;
   /** Delete all job, blocker and worker rows. Intended for tests. */

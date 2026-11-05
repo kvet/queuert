@@ -17,7 +17,7 @@ import {
   sql,
   t,
 } from "@queuert/typed-sql";
-import { type BaseTxContext, type StateAdapter } from "queuert";
+import { type BaseTxContext, type StateAdapter, type TransactionHooksMode } from "queuert";
 import {
   type StateBlockedJob,
   type StateChain,
@@ -235,7 +235,7 @@ WHERE status = 'running'`),
 
 /** @internal */
 export const createMigrationStore = <TTxContext extends BaseTxContext>(
-  stateProvider: PgStateProvider<TTxContext>,
+  stateProvider: PgStateProvider<TTxContext, any>,
   applyTemplate: TemplateApplier,
 ): MigrationStore<TTxContext> => {
   const exec = async <
@@ -504,6 +504,7 @@ export const createPgStateAdapter = async <
   TTxContext extends BaseTxContext,
   TJobId extends string = UUID,
   TWorkerId extends string = UUID,
+  TTransactionHooksMode extends TransactionHooksMode = "explicit",
 >({
   stateProvider,
   schema = "public",
@@ -518,7 +519,7 @@ export const createPgStateAdapter = async <
   countCap: countCapOption,
 }: {
   /** PostgreSQL state provider wrapping the database connection. */
-  stateProvider: PgStateProvider<TTxContext>;
+  stateProvider: PgStateProvider<TTxContext, TTransactionHooksMode>;
   /** PostgreSQL schema for all tables. @defaultValue `"public"` */
   schema?: string;
   /** Prefix for all table names. @defaultValue `"queuert_"` */
@@ -568,7 +569,7 @@ export const createPgStateAdapter = async <
    */
   countCap?: number;
 }): Promise<
-  StateAdapter<TTxContext, TJobId, TWorkerId> & {
+  StateAdapter<TTxContext, TJobId, TWorkerId, TTransactionHooksMode> & {
     /** Create or upgrade the schema. */
     migrateToLatest: () => Promise<MigrationResult>;
     /** Delete all job, blocker and worker rows. Intended for tests. */
@@ -699,7 +700,7 @@ LEFT JOIN LATERAL (
       readOnly: typedSql.readOnly,
     }) as Promise<InferColumns<TColumns>[]>;
 
-  return {
+  const adapter: PgStateAdapter<TTxContext, TJobId, TWorkerId> = {
     config,
 
     withTransaction: stateProvider.withTransaction,
@@ -2527,6 +2528,11 @@ ORDER BY w.ord
       await stateProvider.close?.();
     },
   };
+
+  return {
+    ...adapter,
+    getTransactionHooks: stateProvider.getTransactionHooks,
+  } as PgStateAdapter<TTxContext, TJobId, TWorkerId, TTransactionHooksMode>;
 };
 
 /**
@@ -2537,7 +2543,8 @@ export type PgStateAdapter<
   TTxContext extends BaseTxContext,
   TJobId extends string = UUID,
   TWorkerId extends string = UUID,
-> = StateAdapter<TTxContext, TJobId, TWorkerId> & {
+  TTransactionHooksMode extends TransactionHooksMode = "explicit",
+> = StateAdapter<TTxContext, TJobId, TWorkerId, TTransactionHooksMode> & {
   /** Create or upgrade the schema. */
   migrateToLatest: () => Promise<MigrationResult>;
   /** Delete all job, blocker and worker rows. Intended for tests. */

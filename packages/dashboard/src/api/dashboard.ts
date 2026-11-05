@@ -113,7 +113,7 @@ const dispatchApi = async (
  */
 export const createDashboard = async <
   TJobTypeDefinitions extends BaseJobTypeDefinitions,
-  TStateAdapter extends StateAdapter<any, any, any>,
+  TStateAdapter extends StateAdapter<any, any, any, any>,
 >(options: {
   /** The Queuert client the dashboard reads jobs, chains and workers from. */
   client: Client<TJobTypeDefinitions, TStateAdapter>;

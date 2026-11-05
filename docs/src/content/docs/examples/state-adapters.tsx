@@ -31,6 +31,7 @@ const Page = () => (
         "state-postgres-postgres-js",
         "state-postgres-drizzle",
         "state-postgres-kysely",
+        "state-postgres-kysely-implicit-hooks",
         "state-postgres-prisma",
         "state-postgres-knex",
         "state-postgres-bun-sql",

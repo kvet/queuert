@@ -1,5 +1,5 @@
-import { BlockerReferenceError, type Client, withTransactionHooks } from "queuert";
-import { helpersSymbol } from "queuert/internal";
+import { BlockerReferenceError, type Client } from "queuert";
+import { helpersSymbol, withStateAdapterTransaction } from "queuert/internal";
 
 import { serovalResponse } from "../response.js";
 import { MAX_IDS, lookupEachOrNotFound, lookupOrNotFound, parseIds } from "./lookup.js";
@@ -129,14 +129,8 @@ export const handleChainDelete = async (
 
   try {
     const { stateAdapter } = client[helpersSymbol];
-    const deleted = await withTransactionHooks(async (transactionHooks) =>
-      stateAdapter.withTransaction(async (txCtx) =>
-        client.deleteChains({
-          ids: [chainId],
-          transactionHooks,
-          ...txCtx,
-        }),
-      ),
+    const deleted = await withStateAdapterTransaction(stateAdapter, async (txCtx) =>
+      client.deleteChains({ ids: [chainId], ...txCtx }),
     );
     return serovalResponse({ deleted });
   } catch (err) {

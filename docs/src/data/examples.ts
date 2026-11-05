@@ -142,6 +142,18 @@ export const examples: Example[] = [
     guide: stateAdapters,
   },
   {
+    name: "state-postgres-kysely-implicit-hooks",
+    category: "state",
+    page: "state-adapters",
+    label: "Kysely (implicit transaction hooks)",
+    description:
+      "A Kysely state provider whose transaction and savepoint helpers bind transaction hooks, so createChain and complete take only the transaction context.",
+    runtime: "Node.js",
+    services: ["PostgreSQL"],
+    files: ["src/transaction.ts", "src/provider.ts", "src/index.ts"],
+    guide: stateAdapters,
+  },
+  {
     name: "state-postgres-prisma",
     category: "state",
     page: "state-adapters",

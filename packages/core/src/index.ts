@@ -66,8 +66,11 @@ export {
   withTransactionHooks,
   type HookDefinition,
   type TransactionHooks,
+  type TransactionHooksGetter,
   type TransactionHooksHandle,
+  type TransactionHooksMode,
   type TransactionHooksSavepoint,
+  type TransactionHooksSource,
 } from "./transaction-hooks.js";
 export { type AttemptMiddleware } from "./attempt-middleware/attempt-middleware.js";
 export { createProcessors } from "./job-type-processors/create-job-type-processors.js";

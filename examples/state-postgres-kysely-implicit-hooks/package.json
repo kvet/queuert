@@ -1,0 +1,26 @@
+{
+  "name": "example-state-postgres-kysely-implicit-hooks",
+  "version": "0.0.1",
+  "private": true,
+  "description": "An example demonstrating a Kysely PostgreSQL state provider that supplies transaction hooks implicitly.",
+  "license": "MIT",
+  "author": "kvet",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/kvet/queuert.git"
+  },
+  "type": "module",
+  "scripts": {
+    "start": "tsx src/index.ts",
+    "typecheck": "tsc --noEmit"
+  },
+  "devDependencies": {
+    "@queuert/postgres": "workspace:*",
+    "@queuert/testcontainers": "workspace:*",
+    "@queuert/tsconfig": "workspace:*",
+    "@types/pg": "8.23.1",
+    "kysely": "0.29.8",
+    "pg": "8.23.1",
+    "queuert": "workspace:*"
+  }
+}

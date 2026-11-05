@@ -1,5 +1,9 @@
 import { type RuntimeType } from "@queuert/typed-sql";
-import { type BaseTxContext } from "queuert";
+import {
+  type BaseTxContext,
+  type TransactionHooksMode,
+  type TransactionHooksSource,
+} from "queuert";
 
 /**
  * PostgreSQL state provider interface.
@@ -11,8 +15,13 @@ import { type BaseTxContext } from "queuert";
  * Queuert supports only READ COMMITTED (the default).
  *
  * @typeParam TTxContext - The transaction context type containing database client/connection info
+ * @typeParam TTransactionHooksMode - `implicit` when the provider supplies the `transactionHooks`
+ * bound to a transaction through `getTransactionHooks`; `explicit` (default) when callers pass them
  */
-export type PgStateProvider<TTxContext extends BaseTxContext> = {
+export type PgStateProvider<
+  TTxContext extends BaseTxContext,
+  TTransactionHooksMode extends TransactionHooksMode = "explicit",
+> = TransactionHooksSource<TTxContext, TTransactionHooksMode> & {
   /**
    * Executes a callback within a database transaction.
    * Acquires a connection, starts a transaction, executes the callback,

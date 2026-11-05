@@ -1,12 +1,12 @@
 # Triage
 
-- [REF] transactionHooks provider
 - [REF] empirical complete chains
 - [REF] RR & S pg transactions
 - [REF] sync sqlite api
 
 # Short term
 
+- [TASK] transactionHooks provider. See `design/transaction-hooks-provider.md`.
 - [TASK] Built-in cleanup. See `design/builtin-cleanup.md`.
 - [TASK] Enforce json-serializable inputs and outputs (like no Date in job definitions) — see `design/json-serializable-types.md`
 - [TASK] Reschedule reason and failure-streak backoff — persist `failure_streak` and the `complete({ reschedule, reason })` reason, compute backoff from the streak instead of `attempt`. See `design/reschedule-reason-and-backoff.md`.

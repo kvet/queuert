@@ -157,7 +157,7 @@ export type ObservabilityAdapter = {
 
   // state adapter
   stateAdapterError: (data: {
-    operation: keyof StateAdapter<any, any, any>;
+    operation: keyof StateAdapter<any, any, any, any>;
     error: unknown;
   }) => void;
 

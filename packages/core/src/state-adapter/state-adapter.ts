@@ -1,6 +1,7 @@
 import { type DeduplicationOptions } from "../entities/deduplication.js";
 import { type OrderDirection, type Page, type PageParams } from "../entities/pagination.js";
 import { type ScheduleOptions } from "../entities/schedule.js";
+import { type TransactionHooksGetter, type TransactionHooksMode } from "../transaction-hooks.js";
 
 export type StateJobStatus = "blocked" | "pending" | "running" | "completed";
 
@@ -103,11 +104,14 @@ type TransactionTxContextParam<TTxContext extends BaseTxContext> = { txCtx: TTxC
  * @typeParam TTxContext - The transaction context type
  * @typeParam TJobId - The job ID type
  * @typeParam TWorkerId - The worker ID type
+ * @typeParam TTransactionHooksMode - Whether callers pass `transactionHooks` (`explicit`) or the
+ * adapter supplies the hooks bound to a transaction (`implicit`)
  */
 export type StateAdapter<
   TTxContext extends BaseTxContext,
   TJobId extends string,
   TWorkerId extends string,
+  TTransactionHooksMode extends TransactionHooksMode = "explicit",
 > = {
   /** How the adapter was configured, with defaults applied. */
   config: Readonly<StateAdapterConfig<TJobId, TWorkerId>>;
@@ -117,6 +121,12 @@ export type StateAdapter<
 
   /** Whether `txCtx` is in an open transaction, answered without a query. */
   isTransaction: (txCtx: TTxContext) => boolean;
+
+  /**
+   * For an implicit adapter, the `transactionHooks` bound to `txCtx`'s transaction, or
+   * `undefined` for an unbound context. Absent for an explicit adapter.
+   */
+  getTransactionHooks?: TransactionHooksGetter<TTxContext, TTransactionHooksMode>;
 
   /** Gets chains by ID in input order; `lock` locks each head row. */
   getChains: (
@@ -368,10 +378,18 @@ export type StateAdapter<
 };
 
 export type GetStateAdapterTxContext<TStateAdapter> =
-  TStateAdapter extends StateAdapter<infer TTxContext, any, any> ? TTxContext : never;
+  TStateAdapter extends StateAdapter<infer TTxContext, any, any, any> ? TTxContext : never;
 
 export type GetStateAdapterJobId<TStateAdapter> =
-  TStateAdapter extends StateAdapter<any, infer TJobId, any> ? TJobId : never;
+  TStateAdapter extends StateAdapter<any, infer TJobId, any, any> ? TJobId : never;
 
 export type GetStateAdapterWorkerId<TStateAdapter> =
-  TStateAdapter extends StateAdapter<any, any, infer TWorkerId> ? TWorkerId : never;
+  TStateAdapter extends StateAdapter<any, any, infer TWorkerId, any> ? TWorkerId : never;
+
+export type GetStateAdapterTransactionHooksMode<TStateAdapter> = TStateAdapter extends {
+  getTransactionHooks?: infer TGetter;
+}
+  ? [NonNullable<TGetter>] extends [never]
+    ? "explicit"
+    : "implicit"
+  : "explicit";

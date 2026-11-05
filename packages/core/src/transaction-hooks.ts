@@ -195,11 +195,38 @@ export const withTransactionHooks = async <T>(
   }
 };
 
-export const requireTransactionHooks = (
-  transactionHooks: TransactionHooks | undefined,
-  caller: string,
-): void => {
-  if (transactionHooks === undefined) {
-    throw new Error(`${caller} requires transactionHooks`);
-  }
-};
+/**
+ * Who supplies the `transactionHooks` of a transaction.
+ *
+ * - `explicit`: callers pass `transactionHooks` to `complete` and the client's mutating methods.
+ * - `implicit`: the state provider supplies the `transactionHooks` bound to a transaction
+ *   context, and callers must not pass them.
+ */
+export type TransactionHooksMode = "explicit" | "implicit";
+
+/**
+ * The `getTransactionHooks` member of a state provider or state adapter in the given mode.
+ *
+ * An implicit `getTransactionHooks` returns the hooks bound to `txCtx`'s transaction, or
+ * `undefined` for an unbound context. It must be synchronous and must not query the database.
+ * The bound hooks flush after the transaction commits and are discarded after it rolls back; a
+ * nested transaction or savepoint gets a savepoint of its parent's hooks; two transactions
+ * never share hooks; and every transaction the provider's `withTransaction` opens is bound.
+ */
+export type TransactionHooksSource<
+  TTxContext,
+  TMode extends TransactionHooksMode,
+> = TMode extends "implicit"
+  ? { getTransactionHooks: (txCtx: TTxContext) => TransactionHooks | undefined }
+  : { getTransactionHooks?: undefined };
+
+/** The type of a state adapter's `getTransactionHooks`: a function when implicit, `undefined` when explicit. */
+export type TransactionHooksGetter<
+  TTxContext,
+  TMode extends TransactionHooksMode,
+> = TMode extends "implicit" ? (txCtx: TTxContext) => TransactionHooks | undefined : undefined;
+
+/** The `transactionHooks` option of a mutating call in the given mode. */
+export type TransactionHooksParam<TMode extends TransactionHooksMode> = TMode extends "implicit"
+  ? { transactionHooks?: never }
+  : { transactionHooks: TransactionHooks };

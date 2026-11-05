@@ -15,14 +15,15 @@ import {
 import {
   type BaseTxContext,
   type GetStateAdapterJobId,
+  type GetStateAdapterTransactionHooksMode,
   type GetStateAdapterTxContext,
   type GetStateAdapterWorkerId,
   type StateAdapter,
 } from "../state-adapter/state-adapter.js";
-import { type TransactionHooks } from "../transaction-hooks.js";
+import { type TransactionHooks, type TransactionHooksParam } from "../transaction-hooks.js";
 
 type AttemptContinueWithOutcome<
-  TStateAdapter extends StateAdapter<any, any, any>,
+  TStateAdapter extends StateAdapter<any, any, any, any>,
   TJobTypeDefinitions extends BaseJobTypeDefinitions,
   TJobTypeName extends string,
 > =
@@ -52,7 +53,7 @@ type AttemptRescheduleOutcome = { reschedule: ScheduleOptions };
 
 /** Every outcome `complete` accepts, as a single union. */
 export type AttemptOutcome<
-  TStateAdapter extends StateAdapter<any, any, any>,
+  TStateAdapter extends StateAdapter<any, any, any, any>,
   TJobTypeDefinitions extends BaseJobTypeDefinitions,
   TJobTypeName extends string,
 > =
@@ -62,7 +63,7 @@ export type AttemptOutcome<
 
 /** Resolves the committed job shape from the outcome's discriminant key. */
 export type AttemptCompleteResult<
-  TStateAdapter extends StateAdapter<any, any, any>,
+  TStateAdapter extends StateAdapter<any, any, any, any>,
   TJobTypeDefinitions extends BaseJobTypeDefinitions,
   TJobTypeName extends string,
   TChainTypeName extends string,
@@ -132,14 +133,14 @@ export type AttemptCompleteResult<
  * stored chain's.
  */
 export type AttemptComplete<
-  TStateAdapter extends StateAdapter<any, any, any>,
+  TStateAdapter extends StateAdapter<any, any, any, any>,
   in out TJobTypeDefinitions extends BaseJobTypeDefinitions,
   in out TJobTypeName extends string,
   out TChainTypeName extends string,
 > = <TOutcome extends AttemptOutcome<TStateAdapter, TJobTypeDefinitions, TJobTypeName>>(
-  options: TOutcome & {
-    transactionHooks: TransactionHooks;
-  } & GetStateAdapterTxContext<TStateAdapter>,
+  options: TOutcome &
+    TransactionHooksParam<GetStateAdapterTransactionHooksMode<TStateAdapter>> &
+    GetStateAdapterTxContext<TStateAdapter>,
 ) => Promise<
   AttemptCompleteResult<TStateAdapter, TJobTypeDefinitions, TJobTypeName, TChainTypeName, TOutcome>
 >;
@@ -160,7 +161,7 @@ export type AttemptComplete<
  * with backoff.
  */
 export type AttemptHandler<
-  TStateAdapter extends StateAdapter<any, any, any>,
+  TStateAdapter extends StateAdapter<any, any, any, any>,
   TJobTypeDefinitions extends BaseJobTypeDefinitions,
   TJobTypeName extends string,
   TChainTypeName extends string,
@@ -180,7 +181,7 @@ export type AttemptHandler<
 ) => Promise<Exclude<AnyJob, { status: "running" }>>;
 
 export type AnyCompleteOptions = BaseTxContext & {
-  transactionHooks: TransactionHooks;
+  transactionHooks?: TransactionHooks;
   output?: unknown;
   continueWith?: AnyNewJob;
   reschedule?: ScheduleOptions;

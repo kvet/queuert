@@ -88,14 +88,17 @@ export type IndexCoverageCaseKey =
   | "deleteChains/multiJob";
 
 type Act = (
-  stateAdapter: StateAdapter<any, string, string>,
+  stateAdapter: StateAdapter<any, string, string, any>,
   sentinels: SeedSentinels,
 ) => Promise<void>;
 
 export type IndexCoverageCase = {
   key: IndexCoverageCaseKey;
   label: string;
-  run: (stateAdapter: StateAdapter<any, string, string>, sentinels: SeedSentinels) => Promise<Act>;
+  run: (
+    stateAdapter: StateAdapter<any, string, string, any>,
+    sentinels: SeedSentinels,
+  ) => Promise<Act>;
 };
 
 export type IndexCoverageGroup = {

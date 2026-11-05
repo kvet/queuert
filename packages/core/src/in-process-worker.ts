@@ -120,7 +120,7 @@ export type InProcessWorker = {
  */
 export const createInProcessWorker = async <
   TJobTypeDefinitions extends BaseJobTypeDefinitions,
-  TStateAdapter extends StateAdapter<any, any, any>,
+  TStateAdapter extends StateAdapter<any, any, any, any>,
   const TProcessorsInput extends Processors | readonly Processors[] = Processors,
   const TRequiredAttemptMiddleware extends readonly AnyAttemptMiddleware[] = readonly [],
 >({

@@ -21,8 +21,8 @@ import {
   type StateJob,
   type StateJobInfo,
 } from "../state-adapter/state-adapter.js";
-import { requireTxCtx } from "../state-adapter/tx-context.js";
-import { createTransactionHooks, requireTransactionHooks } from "../transaction-hooks.js";
+import { requireTxCtx, resolveTransactionHooks } from "../state-adapter/tx-context.js";
+import { createTransactionHooks } from "../transaction-hooks.js";
 import { type AnyAttemptHandler, type AnyCompleteOptions } from "./attempt-handler.types.js";
 import { type AttemptOwnership, startAttemptOwnership } from "./attempt-ownership.js";
 
@@ -47,6 +47,7 @@ const createComplete = (
 ) => {
   let closed = false;
   let committed: CompleteWrite | null = null;
+  const settlements = new Set<{ written: () => boolean; settled: Promise<void> }>();
 
   const completeHookKey = Symbol("queuert.complete");
 
@@ -70,16 +71,29 @@ const createComplete = (
     if (closed) {
       throw new Error("complete cannot be called after the attempt handler has ended");
     }
-    const { transactionHooks, output, continueWith, reschedule, ...txCtxFields } = options;
+    const {
+      transactionHooks: passedTransactionHooks,
+      output,
+      continueWith,
+      reschedule,
+      ...txCtxFields
+    } = options;
     const outcomeKeys = ["output", "continueWith", "reschedule"].filter((key) => key in options);
     if (outcomeKeys.length !== 1) {
       throw new Error("complete requires exactly one of output, continueWith or reschedule");
     }
-    requireTransactionHooks(transactionHooks, "complete");
     const txCtx = requireTxCtx(helpers.stateAdapter, txCtxFields, "complete");
+    const transactionHooks = resolveTransactionHooks(
+      helpers.stateAdapter,
+      passedTransactionHooks,
+      txCtx,
+      "complete",
+    );
 
     const completeSlot = transactionHooks.getOrInsert(completeHookKey, () => {
       const state = { write: null as CompleteWrite | null, inProgress: false };
+      const { promise: settled, resolve: settle } = Promise.withResolvers<void>();
+      settlements.add({ written: () => state.write !== null, settled });
       return {
         state,
         checkpoint: (state) => {
@@ -89,10 +103,12 @@ const createComplete = (
           };
         },
         flush: (state) => {
+          settle();
           if (state.write === null) return;
           committed = state.write;
         },
         discard: (state) => {
+          settle();
           state.write = null;
         },
       };
@@ -157,8 +173,13 @@ const createComplete = (
 
   return {
     complete,
-    close: () => {
+    close: async () => {
       closed = true;
+      if (helpers.stateAdapter.getTransactionHooks !== undefined) {
+        await Promise.all(
+          [...settlements].filter((slot) => slot.written()).map(async (slot) => slot.settled),
+        );
+      }
       return committed;
     },
   };
@@ -288,7 +309,7 @@ export const runAttempt = async ({
     (error: unknown) => error,
   );
 
-  const committed = close();
+  const committed = await close();
   await ownership.release();
 
   helpers.observabilityHelper.jobAttemptDuration(stateJob, {
