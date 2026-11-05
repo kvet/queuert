@@ -1000,7 +1000,7 @@ export const workerTestSuite = ({ it }: { it: TestAPI<TestSuiteContext> }): void
     expect(await client.getWorker({ id: workerId })).toBeUndefined();
   });
 
-  it("reclaims the job of an expired worker with a worker of another type and rejects its late `complete`", async ({
+  it("reclaims the job of an expired worker with a worker of another type and rejects its late `fence` and `complete`", async ({
     stateAdapter,
     notifyAdapter,
     withTransaction,
@@ -1040,9 +1040,12 @@ export const workerTestSuite = ({ it }: { it: TestAPI<TestSuiteContext> }): void
         jobTypes,
         processors: {
           test: {
-            attemptHandler: async ({ complete }) => {
+            attemptHandler: async ({ complete, fence }) => {
               jobStarted.resolve();
               await handlerReleased.promise;
+              await expect(withTransaction(async (txCtx) => fence({ ...txCtx }))).rejects.toThrow(
+                JobTakenByAnotherWorkerError,
+              );
               return withTransaction(async (txCtx, transactionHooks) =>
                 complete({ ...txCtx, transactionHooks, output: null }),
               ).catch((error: unknown) => {

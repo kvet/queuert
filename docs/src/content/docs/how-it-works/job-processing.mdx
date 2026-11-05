@@ -9,7 +9,7 @@ import { Arrow, Diagram, Flow, Group, Node, Rows } from "../../../components/dia
 
 ## Overview
 
-This document describes how Queuert processes jobs: the transactional design, how an attempt runs from acquisition to `complete`, and how ownership is enforced without holding locks.
+This document describes how Queuert processes jobs: the transactional design, how an attempt runs from acquisition to `complete`, and how ownership is enforced without holding a lock for the duration of the attempt.
 
 ## Transactional Design
 
@@ -112,6 +112,27 @@ Every write tied to an attempt is conditional on the job row: the job must be `r
 
 When `complete`'s write misses, `complete` writes nothing, throws and aborts the attempt's `signal`; let the error propagate so your transaction rolls back with it.
 
+### `fence`
+
+`complete` checks ownership for its own transaction only. For writes in the other transactions your handler opens, call `fence({ ...txCtx })` at the start of that transaction. It takes the same transaction context as `complete`, with the same isolation and SQLite write-lock requirements. It locks the job row and its chain head and checks that the job is `running` under this attempt's token. Reclaiming the job, completing it with `client.completeChain` and deleting its chain all lock or update the same rows, so they wait until your transaction commits or rolls back: every write that commits after a successful `fence` committed while the attempt owned the job.
+
+```typescript
+attemptHandler: async ({ signal, fence, complete }) => {
+  for (const batch of batches) {
+    if (signal.aborted) break;
+    await db.transaction(async (tx) => {
+      await fence({ tx });
+      await writeBatch(tx, batch);
+    });
+  }
+  return withTransactionHooks(async (transactionHooks) =>
+    db.transaction(async (tx) => complete({ tx, transactionHooks, output: null })),
+  );
+},
+```
+
+When the attempt no longer owns the job, `fence` throws the same error `complete` would and aborts `signal`; let it propagate so the transaction rolls back. `fence` writes nothing, so it can be called any number of times. In the transaction that calls `complete`, call it before `complete`: `complete` ends the attempt, so a later `fence` treats it as lost. While a fenced transaction is open, reclaim, client writes to the chain and new chains that use it as a blocker wait for it, so keep fenced transactions short. On PostgreSQL, a fenced transaction that then locks other chains, for example by deleting them, can deadlock with a client call that locks the same chains in a different order; PostgreSQL aborts one of the two transactions, and a handler that lets the error propagate is rescheduled. Transactions without `fence` are not checked against ownership: their writes can commit after the attempt was lost, so keep them idempotent.
+
 ## Errors and Commit Detection
 
 The attempt counts as completed once the `transactionHooks` of a successful `complete` call flush, so a successful attempt needs no extra database round-trip. If no `complete` call's hooks flushed — the handler threw before committing, or returned without calling `complete` — the attempt fails: the worker runs one reschedule under the attempt token, which retries the job with backoff while the attempt still owns it and matches nothing if a `complete` committed or the attempt was lost. An error thrown after a committed `complete` does not roll the completion back; it is reported as a `workerError`.
@@ -127,7 +148,7 @@ See [Job Processing Reliability](../../guides/processing-reliability/) for each 
 
 ## Abort Signal
 
-Every attempt handler receives a `signal` that aborts when the worker is stopping, when its worker lost its lease, or when the attempt is lost (taken by another worker, deleted, or completed externally). Your own committed `complete` never aborts it. On abort, stop working and commit a `complete` — with partial output or `{ reschedule }` — or throw to reschedule with backoff. If the attempt was lost, `complete` writes nothing and throws. A handler that returns without a committed `complete` fails the attempt.
+Every attempt handler receives a `signal` that aborts when the worker is stopping, when its worker lost its lease, or when the attempt is lost (taken by another worker, deleted, or completed externally). Your own committed `complete` never aborts it. On abort, stop working and commit a `complete` — with partial output or `{ reschedule }` — or throw to reschedule with backoff. If the attempt was lost, `complete` and `fence` write nothing and throw. A handler that returns without a committed `complete` fails the attempt.
 
 ```typescript
 attemptHandler: async ({ signal, complete }) => {

@@ -148,13 +148,17 @@ it("infers custom ID types through the full stack", async ({ postgresConnectionS
         jobTypes,
         processors: {
           test: {
-            attemptHandler: async ({ job, complete }) => {
+            attemptHandler: async ({ job, complete, fence }) => {
               expectTypeOf(job.id).toEqualTypeOf<`job.${UUID}`>();
+              expectTypeOf(fence).parameter(0).toEqualTypeOf<{ poolClient: PoolClient }>();
+
+              await withTransaction(async (poolClient) => fence({ poolClient }));
 
               return withTransactionHooks(async (transactionHooks) =>
-                withTransaction(async (poolClient) =>
-                  complete({ poolClient, transactionHooks, output: { bar: 42 } }),
-                ),
+                withTransaction(async (poolClient) => {
+                  await fence({ poolClient });
+                  return complete({ poolClient, transactionHooks, output: { bar: 42 } });
+                }),
               );
             },
           },

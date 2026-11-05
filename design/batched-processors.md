@@ -8,7 +8,7 @@ Opt-in batched processing for in-process workers: an attempt handler that receiv
 | --------------- | --------------------------: | ---------------------: | ----------------------: |
 | PostgreSQL (pg) |                     ~28,415 |                   ~333 |                  ~2,327 |
 
-Each processed job pays for the user's `complete` transaction, plus its share of a batched acquire (a failed attempt adds one fenced reschedule). On PG that is the whole story: batched creation already does ~28k chains/s while per-job completion does ~330–2,300 jobs/s — a gap of more than 10× that is round-trip cost, not work. Users also cannot batch their own side of the work (bulk API calls, bulk queries) because the handler only ever sees one job.
+Each processed job pays for the user's `complete` transaction, plus its share of a batched acquire (a failed attempt adds one reschedule under the attempt token). On PG that is the whole story: batched creation already does ~28k chains/s while per-job completion does ~330–2,300 jobs/s — a gap of more than 10× that is round-trip cost, not work. Users also cannot batch their own side of the work (bulk API calls, bulk queries) because the handler only ever sees one job.
 
 ## API
 
@@ -66,7 +66,7 @@ createProcessors({
 
 **One processing path.** Every batch acquires atomically under the worker's lease and does its work outside any queuert-owned transaction.
 
-**User writes share the batch's fate.** Writes the handler makes in the transaction it passes to `complete` commit or roll back with the whole batch's outcomes. Writes in other transactions the handler opens are not ownership-fenced and must be idempotent.
+**User writes share the batch's fate.** Writes the handler makes in the transaction it passes to `complete` commit or roll back with the whole batch's outcomes. Writes in other transactions the handler opens are checked against ownership only when that transaction calls `fence`, which locks and checks every job of the batch; without it they must be idempotent.
 
 **Single-job is batched-of-1.** Internally there is one path. That keeps the two shapes from drifting and makes the array vocabulary the same at `batchLimit` 1 and 50.
 

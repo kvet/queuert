@@ -16,7 +16,7 @@ export const processTestSuite = ({ it }: { it: TestAPI<TestSuiteContext> }): voi
     timeoutMs: 5000,
   };
 
-  it("throws error when complete is called incorrectly", async ({
+  it("throws error when complete or fence is called incorrectly", async ({
     stateAdapter,
     notifyAdapter,
     withTransaction,
@@ -42,6 +42,7 @@ export const processTestSuite = ({ it }: { it: TestAPI<TestSuiteContext> }): voi
     });
 
     const completeAfterHandler = Promise.withResolvers<() => Promise<unknown>>();
+    const fenceAfterHandler = Promise.withResolvers<() => Promise<unknown>>();
     const worker = await createInProcessWorker({
       client,
       concurrency: 1,
@@ -50,13 +51,22 @@ export const processTestSuite = ({ it }: { it: TestAPI<TestSuiteContext> }): voi
         jobTypes,
         processors: {
           test: {
-            attemptHandler: async ({ complete }) => {
+            attemptHandler: async ({ complete, fence }) => {
               await withNonTransactionContext(async (nonTransactionCtx) =>
                 withTransactionHooks(async (transactionHooks) =>
                   expect(
                     complete({ ...nonTransactionCtx, transactionHooks, output: null }),
                   ).rejects.toThrow("not in a transaction"),
                 ),
+              );
+              await withNonTransactionContext(async (nonTransactionCtx) =>
+                expect(fence({ ...nonTransactionCtx })).rejects.toThrow("not in a transaction"),
+              );
+              await expect(
+                // @ts-expect-error the caller's transaction context is required
+                fence({}),
+              ).rejects.toThrow(
+                "fence requires a transaction context from the caller's transaction",
               );
               const result = await withTransaction(async (txCtx, transactionHooks) => {
                 await expect(
@@ -80,12 +90,16 @@ export const processTestSuite = ({ it }: { it: TestAPI<TestSuiteContext> }): voi
                   "complete requires a transaction context from the caller's transaction",
                 );
 
+                await fence({ ...txCtx });
                 return complete({ ...txCtx, transactionHooks, output: null });
               });
               completeAfterHandler.resolve(async () =>
                 withTransaction(async (txCtx, transactionHooks) =>
                   complete({ ...txCtx, transactionHooks, output: null }),
                 ),
+              );
+              fenceAfterHandler.resolve(async () =>
+                withTransaction(async (txCtx) => fence({ ...txCtx })),
               );
               return result;
             },
@@ -110,6 +124,10 @@ export const processTestSuite = ({ it }: { it: TestAPI<TestSuiteContext> }): voi
     const callComplete = await completeAfterHandler.promise;
     await expect(callComplete()).rejects.toThrow(
       "complete cannot be called after the attempt handler has ended",
+    );
+    const callFence = await fenceAfterHandler.promise;
+    await expect(callFence()).rejects.toThrow(
+      "fence cannot be called after the attempt handler has ended",
     );
   });
 
@@ -1199,6 +1217,83 @@ export const processTestSuite = ({ it }: { it: TestAPI<TestSuiteContext> }): voi
       const completed = await client.awaitChain(chain, completionOptions);
       expect(completed.output).toEqual({ by: "workerless" });
       await handlerAsserted.promise;
+    });
+  });
+
+  it("holds a workerless takeover until the fenced transaction ends, then fails fence and aborts the signal", async ({
+    stateAdapter,
+    notifyAdapter,
+    withTransaction,
+    withWorkers,
+    observabilityAdapter,
+    log,
+  }) => {
+    const jobTypes = defineJobTypes<{
+      test: { entry: true; input: null; output: { by: string } };
+    }>();
+    const client = await createClient({
+      stateAdapter,
+      notifyAdapter,
+      observabilityAdapter,
+      log,
+      jobTypes,
+    });
+    const handlerAsserted = Promise.withResolvers<void>();
+    const worker = await createInProcessWorker({
+      client,
+      processors: createProcessors({
+        client,
+        jobTypes,
+        processors: {
+          test: {
+            attemptHandler: async ({ job, signal, fence, complete }) => {
+              const { takeover } = await withTransaction(async (txCtx) => {
+                await fence({ ...txCtx });
+                await fence({ ...txCtx });
+                const pendingTakeover = withTransaction(async (takeoverTxCtx, transactionHooks) =>
+                  client.completeChain({
+                    ...takeoverTxCtx,
+                    transactionHooks,
+                    id: job.chainId,
+                    typeName: "test",
+                    handler: async ({ job: headJob, completeJob }) =>
+                      completeJob(headJob, async ({ complete }) =>
+                        complete({ output: { by: "workerless" } }),
+                      ),
+                  }),
+                );
+                await sleep(200);
+                const [fencedJob] = await stateAdapter.getJobs({ txCtx, jobIds: [job.id] });
+                expect(fencedJob!.status).toBe("running");
+                return { takeover: pendingTakeover };
+              });
+              await expect(takeover).resolves.toMatchObject({ status: "completed" });
+
+              await expect(withTransaction(async (txCtx) => fence({ ...txCtx }))).rejects.toThrow(
+                JobAlreadyCompletedError,
+              );
+              expect(signal.aborted).toBe(true);
+              await expect(
+                withTransaction(async (txCtx, transactionHooks) =>
+                  complete({ ...txCtx, transactionHooks, output: { by: "worker" } }),
+                ),
+              ).rejects.toThrow(JobAlreadyCompletedError);
+              handlerAsserted.resolve();
+              throw new Error("attempt lost");
+            },
+          },
+        },
+      }),
+    });
+
+    const chain = await withTransaction(async (txCtx, transactionHooks) =>
+      client.createChain({ ...txCtx, transactionHooks, typeName: "test", input: null }),
+    );
+
+    await withWorkers([await worker.start()], async () => {
+      await handlerAsserted.promise;
+      const completed = await client.awaitChain(chain, completionOptions);
+      expect(completed.output).toEqual({ by: "workerless" });
     });
   });
 

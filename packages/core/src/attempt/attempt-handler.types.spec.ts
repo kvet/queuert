@@ -7,9 +7,16 @@ import {
   type RescheduledJob,
 } from "../job-types/job-types.resolvers.js";
 import { type InProcessStateAdapter } from "../state-adapter/state-adapter.in-process.js";
-import { type StateAdapter } from "../state-adapter/state-adapter.js";
+import {
+  type GetStateAdapterTxContext,
+  type StateAdapter,
+} from "../state-adapter/state-adapter.js";
 import { type TransactionHooks } from "../transaction-hooks.js";
-import { type AttemptComplete, type AttemptHandler } from "./attempt-handler.types.js";
+import {
+  type AttemptComplete,
+  type AttemptFence,
+  type AttemptHandler,
+} from "./attempt-handler.types.js";
 
 type LinearDefs = {
   entry: {
@@ -336,9 +343,16 @@ describe("AttemptHandler", () => {
     >();
   });
 
-  it("exposes only signal, job and complete", () => {
-    expectTypeOf<keyof Options>().toEqualTypeOf<"signal" | "job" | "complete">();
-    expectTypeOf<keyof BlockedOptions>().toEqualTypeOf<"signal" | "job" | "complete">();
+  it("exposes fence taking the state adapter's transaction context", () => {
+    expectTypeOf<Options["fence"]>().toEqualTypeOf<AttemptFence<InProcessStateAdapter>>();
+    expectTypeOf<Parameters<Options["fence"]>[0]>().toEqualTypeOf<
+      GetStateAdapterTxContext<InProcessStateAdapter>
+    >();
+  });
+
+  it("exposes only signal, job, complete and fence", () => {
+    expectTypeOf<keyof Options>().toEqualTypeOf<"signal" | "job" | "complete" | "fence">();
+    expectTypeOf<keyof BlockedOptions>().toEqualTypeOf<"signal" | "job" | "complete" | "fence">();
   });
 
   it("resolves job.blockers to the completed blocker chains in declaration order", () => {

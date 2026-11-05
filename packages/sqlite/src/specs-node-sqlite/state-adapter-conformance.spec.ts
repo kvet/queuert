@@ -116,13 +116,17 @@ it("infers custom ID types through the full stack", async () => {
         jobTypes,
         processors: {
           test: {
-            attemptHandler: async ({ job, complete }) => {
+            attemptHandler: async ({ job, complete, fence }) => {
               expectTypeOf(job.id).toEqualTypeOf<`job.${UUID}`>();
+              expectTypeOf(fence).parameter(0).toEqualTypeOf<{ db: DatabaseSync }>();
+
+              await withTransaction(async (db) => fence({ db }));
 
               return withTransactionHooks(async (transactionHooks) =>
-                withTransaction(async (db) =>
-                  complete({ db, transactionHooks, output: { bar: 42 } }),
-                ),
+                withTransaction(async (db) => {
+                  await fence({ db });
+                  return complete({ db, transactionHooks, output: { bar: 42 } });
+                }),
               );
             },
           },

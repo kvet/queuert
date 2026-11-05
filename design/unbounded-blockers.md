@@ -249,16 +249,17 @@ The eagerly preloaded `job.blockers` is **removed** from the attempt handler and
 
 // Unsealed — streamed, unbounded.
 "aggregate": {
-  attemptHandler: async ({ job, listBlockers, complete }) => {
+  attemptHandler: async ({ job, listBlockers, fence, complete }) => {
     let total = 0;
     let count = 0;
     for await (const b of listBlockers()) {   // Completed<producer>, paged
       total += b.output.value;
       count++;
 
-      // Checkpoint in the handler's own short transaction (not ownership-fenced)
+      // Checkpoint in the handler's own short, fenced transaction
       if (count % 1000 === 0) {
         await sql.begin(async (txSql) => {
+          await fence({ sql: txSql });
           await txSql`UPDATE aggregation_state SET total = ${total}, count = ${count} WHERE job_id = ${job.id}`;
         });
       }
@@ -274,7 +275,7 @@ The eagerly preloaded `job.blockers` is **removed** from the attempt handler and
 
 `listBlockers()` is a cursor paginator over `job_blocker WHERE job_id = $1 ORDER BY index` (the PK supports it), usable as an async iterator with an explicit `listBlockers({ cursor, limit }) → { items, nextCursor }` escape hatch. Every item is guaranteed `completed` (the job only runs once sealed and all blockers resolved). Paging runs outside any queuert-owned transaction, and the attempt stays live while its worker holds its lease, so a long scan needs nothing extra. Page size is an internal tuning knob, not user-facing.
 
-Long-running aggregations can checkpoint intermediate state in their own short transactions, so the handler never holds a single long-lived transaction across the entire blocker set. These checkpoint transactions are not ownership-fenced: they must be idempotent, and a worker that lost the attempt may still write one, so the checkpoint should be treated as a resumable hint rather than authoritative state. Only the final `complete` is fenced.
+Long-running aggregations can checkpoint intermediate state in their own short transactions, so the handler never holds a single long-lived transaction across the entire blocker set. Each checkpoint transaction calls `fence` first, so a checkpoint commits only while the attempt owns the job and a worker that lost the attempt cannot overwrite the state of the attempt that replaced it.
 
 ---
 

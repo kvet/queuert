@@ -149,12 +149,39 @@ export type AttemptComplete<
 >;
 
 /**
+ * Holds the attempt's ownership of the job inside the caller's transaction until it commits or
+ * rolls back. Takes the transaction context of that transaction, the same way `complete` does.
+ *
+ * `fence` locks the job row and its chain head and checks that this attempt still owns the job.
+ * Reclaiming, completing or deleting the job waits for the caller's transaction to end, so every
+ * write in a transaction where `fence` succeeded commits while the attempt owns the job. Use it in
+ * the transactions the handler opens besides the one that calls `complete`; keep them short,
+ * since the lock holds back everything else that writes to the job or its chain.
+ *
+ * `fence` writes nothing and can be called any number of times, in the same or different
+ * transactions. In the transaction that calls `complete`, call it before `complete`: `complete`
+ * ends the attempt, so a later `fence` treats it as lost.
+ *
+ * Misuse throws a plain `Error`: a transaction context outside an open transaction, or a call
+ * after the handler ended.
+ *
+ * @throws {@link JobTakenByAnotherWorkerError} if the attempt was reclaimed, and aborts `signal`.
+ * @throws {@link JobAlreadyCompletedError} if the job was completed elsewhere, for example by
+ * `client.completeChain`, and aborts `signal`.
+ * @throws {@link JobNotFoundError} if the job was deleted, and aborts `signal`.
+ */
+export type AttemptFence<TStateAdapter extends StateAdapter<any, any, any>> = (
+  options: GetStateAdapterTxContext<TStateAdapter>,
+) => Promise<void>;
+
+/**
  * Handler function called for each job attempt.
  *
  * Receives `signal` (aborts when the worker is stopping or lost its lease, or the attempt is
- * lost), `job` (the running job with its completed blocker chains) and `complete` (commits the
- * outcome inside the caller's transaction). Do the work, then open a transaction and call
- * `complete` inside it. The handler returns what `complete` returned.
+ * lost), `job` (the running job with its completed blocker chains), `complete` (commits the
+ * outcome inside the caller's transaction) and `fence` (holds the attempt's ownership inside
+ * another of the caller's transactions until it ends). Do the work, then open a transaction and
+ * call `complete` inside it. The handler returns what `complete` returned.
  *
  * A `complete` call counts once its `transactionHooks` flushed — right after COMMIT when
  * `withTransactionHooks` wraps the transaction — and then completes the attempt without another
@@ -180,6 +207,7 @@ export type AttemptHandler<
       TChainTypeName
     >;
     complete: AttemptComplete<TStateAdapter, TJobTypeDefinitions, TJobTypeName, TChainTypeName>;
+    fence: AttemptFence<TStateAdapter>;
   } & THandlerCtx,
 ) => Promise<Exclude<AnyJob, { status: "running" }>>;
 
@@ -194,4 +222,5 @@ export type AnyAttemptHandler = (options: {
   signal: AbortSignal;
   job: AnyJob & { blockers: AnyChain[] };
   complete: (options: AnyCompleteOptions) => Promise<AnyJob & { continuedTo?: AnyJob }>;
+  fence: (options: BaseTxContext) => Promise<void>;
 }) => Promise<unknown>;

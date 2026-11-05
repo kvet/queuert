@@ -33,7 +33,7 @@ const cleanupProcessorRegistry = createProcessors({
   jobTypes: cleanupJobTypes,
   processors: {
     "queuert.cleanup": {
-      attemptHandler: async ({ job, signal, complete }) => {
+      attemptHandler: async ({ job, signal, complete, fence }) => {
         const cutoffDate = new Date(Date.now() - CLEANUP_RETENTION_MS);
         let deletedChainCount = 0;
 
@@ -72,13 +72,14 @@ const cleanupProcessorRegistry = createProcessors({
 
               if (chainsToDelete.length > 0) {
                 const deleted = await withTransactionHooks(async (transactionHooks) =>
-                  stateProvider.withTransaction(async (txCtx) =>
-                    client.deleteChains({
+                  stateProvider.withTransaction(async (txCtx) => {
+                    await fence({ ...txCtx });
+                    return client.deleteChains({
                       ...txCtx,
                       transactionHooks,
                       ids: chainsToDelete.map((chain) => chain.id),
-                    }),
-                  ),
+                    });
+                  }),
                 );
                 deletedChainCount += deleted.length;
                 roundDeletedCount += deleted.length;
@@ -121,13 +122,12 @@ Key patterns used:
 - **Status-filtered listing** — `status: "completed"` with `orderBy: "completedAt"` pushes filtering to the database and orders by completion time, so the oldest-completed chains are deleted first
 - **Cursor pagination** — processes chains in bounded batches using `listChains` cursor, preventing unbounded memory usage
 - **Stabilization loop** — repeats the full pass until a round deletes zero chains, so chains that become independent after their dependents are removed get cleaned up in subsequent rounds
-- **Batched transactions** — each batch of deletions runs in its own short transaction, so the handler never holds a single long-lived transaction. Deleting chains is idempotent, so a batch that commits before the attempt is lost is safe to repeat
+- **Batched transactions** — each batch of deletions runs in its own short transaction, so the handler never holds a single long-lived transaction
+- **Fenced batches** — `fence` at the start of each batch transaction keeps the attempt's ownership until that batch commits, so once the attempt is lost its next batch throws before deleting anything; see [`fence`](/queuert/how-it-works/job-processing/#fence)
 - **Graceful shutdown** — checks `signal.aborted` before each batch; when the worker is stopping, reschedules the job immediately so a fresh worker can resume cleanup
 - **`deduplication`** with `scope: "running"` — ensures only one cleanup chain is active at a time
 - **Complete before scheduling** — `complete({ output: null })` applies the completion inside the same transaction, so the next run is created against an already-completed chain and does not deduplicate against the one finishing
 - **`schedule`** — defers the next run by `CLEANUP_INTERVAL_MS`
-
-<!-- TODO: batches are not checked against attempt ownership and may commit after the attempt is lost; revisit the "Batched transactions" bullet once the ownership check for user transactions lands (see TODO.md). -->
 
 ## Merge and Start
 

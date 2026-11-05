@@ -69,7 +69,7 @@ The same holds for a throw after `complete` returned but before the transaction 
 
 ## Intermediate Transactions
 
-A handler can commit work in its own transactions before the one that calls `complete`. Those transactions are not tied to the attempt: if an error occurs after one commits (typically a failed external API call), the job is rescheduled with backoff, its side-effects persist, and the next attempt runs it again.
+A handler can commit work in its own transactions before the one that calls `complete`. Those transactions are not tied to the attempt unless they call [`fence`](/queuert/how-it-works/job-processing/#fence): if an error occurs after one commits (typically a failed external API call), the job is rescheduled with backoff, its side-effects persist, and the next attempt runs it again.
 
 ```ts
 'sync-external': {
@@ -94,7 +94,7 @@ A handler can commit work in its own transactions before the one that calls `com
 }
 ```
 
-> **Note:** Intermediate transactions commit even if the attempt is later lost to another worker. Design them so that their side-effects are safe to keep when the job retries.
+> **Note:** Intermediate transactions without `fence` commit even if the attempt is later lost to another worker. Call [`fence`](/queuert/how-it-works/job-processing/#fence) at the start of one to commit it only while the attempt owns the job, and design its side-effects to be safe to keep when the job retries.
 
 ## Error After `complete` Committed
 
@@ -125,7 +125,7 @@ Keep work that must succeed for the job to count as done inside the transaction 
 - **No corrupted state.** Your transaction ensures that partial SQL work is never committed when an error occurs.
 - **No orphaned continuations.** If `complete` was called with `continueWith` and the transaction throws afterward, both the continuation job and the completion are rolled back.
 - **Blocked jobs stay blocked.** If a blocker job's completion is rolled back, dependent jobs remain correctly blocked.
-- **No lost-attempt writes.** `complete` only writes while this attempt still owns the job. If the attempt was reclaimed and another worker took the job, or the job was completed or deleted elsewhere, `complete` writes nothing and throws (`JobTakenByAnotherWorkerError`, `JobAlreadyCompletedError` or `JobNotFoundError`), so your transaction rolls back.
+- **No lost-attempt writes.** `complete` only writes while this attempt still owns the job. If the attempt was reclaimed and another worker took the job, or the job was completed or deleted elsewhere, `complete` writes nothing and throws (`JobTakenByAnotherWorkerError`, `JobAlreadyCompletedError` or `JobNotFoundError`), so your transaction rolls back. Writes in your other transactions get the same guarantee when they call [`fence`](/queuert/how-it-works/job-processing/#fence) first.
 - **No defensive `try/catch` needed.** Let exceptions propagate naturally — the worker handles them.
 - **Jobs retry indefinitely.** There is no maximum retry count. Use [discriminated unions or compensation patterns](../error-handling/) to handle permanently failing jobs.
 

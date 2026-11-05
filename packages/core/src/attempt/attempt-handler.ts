@@ -31,7 +31,7 @@ type CompleteWrite = {
   job: AnyJob & { continuedTo?: AnyJob };
 };
 
-const createComplete = (
+const createAttemptWrites = (
   helpers: Helpers,
   {
     stateJob,
@@ -155,8 +155,24 @@ const createComplete = (
     }
   };
 
+  const fence = async (options: BaseTxContext) => {
+    if (closed) {
+      throw new Error("fence cannot be called after the attempt handler has ended");
+    }
+    const txCtx = requireTxCtx(helpers.stateAdapter, { ...options }, "fence");
+    const [job] = await helpers.stateAdapter.getJobs({
+      txCtx,
+      jobIds: [stateJob.id],
+      lock: "exclusive",
+    });
+    if (job?.status !== "running" || job.attemptToken !== attemptToken) {
+      throw await readLossError(txCtx);
+    }
+  };
+
   return {
     complete,
+    fence,
     close: () => {
       closed = true;
       return committed;
@@ -172,6 +188,7 @@ const runAttemptHandler = async ({
   workerId,
   signal,
   complete,
+  fence,
 }: {
   helpers: Helpers;
   attemptHandler: AnyAttemptHandler;
@@ -180,6 +197,7 @@ const runAttemptHandler = async ({
   workerId: string;
   signal: AbortSignal;
   complete: Parameters<AnyAttemptHandler>[0]["complete"];
+  fence: Parameters<AnyAttemptHandler>[0]["fence"];
 }): Promise<void> => {
   const blockerChains = stateJob.hasBlockers
     ? await helpers.stateAdapter.getJobBlockers({ jobId: stateJob.id })
@@ -197,6 +215,7 @@ const runAttemptHandler = async ({
         signal,
         job: runningJob,
         complete,
+        fence,
       }),
   );
 };
@@ -268,7 +287,7 @@ export const runAttempt = async ({
   helpers.observabilityHelper.jobAttemptStarted(stateJob, { workerId });
   const span = helpers.observabilityHelper.startAttemptSpan(stateJob, { workerId });
 
-  const { complete, close } = createComplete(helpers, {
+  const { complete, fence, close } = createAttemptWrites(helpers, {
     stateJob,
     workerId,
     attemptToken: stateJob.attemptToken!,
@@ -283,6 +302,7 @@ export const runAttempt = async ({
     workerId,
     signal: ownership.signal,
     complete,
+    fence,
   }).then(
     () => undefined,
     (error: unknown) => error,

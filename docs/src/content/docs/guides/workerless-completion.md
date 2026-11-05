@@ -108,4 +108,4 @@ Your handler can also decline: just return without calling `completeJob`. The ch
 
 Internally, `completeChain` locks the current job at the state adapter level, preventing concurrent completion by a worker or another caller. The completed job has `completedBy: null` (no worker identity), distinguishing it from worker-completed jobs.
 
-If a worker is already processing the job when `completeChain` runs, `completeChain` takes the job over. The handler's abort signal fires when the notify adapter delivers the attempt-lost notification, and its `complete`, when it runs, writes nothing and throws `JobAlreadyCompletedError`, so the handler's transaction rolls back.
+If a worker is already processing the job when `completeChain` runs, `completeChain` takes the job over. The handler's abort signal fires when the notify adapter delivers the attempt-lost notification, and its `complete`, when it runs, writes nothing and throws `JobAlreadyCompletedError`, so the handler's transaction rolls back. If the handler is inside a [fenced](/queuert/how-it-works/job-processing/#fence) transaction, `completeChain` waits for it to end.

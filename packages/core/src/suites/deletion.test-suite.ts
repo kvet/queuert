@@ -210,7 +210,7 @@ export const deletionTestSuite = ({ it }: { it: TestAPI<TestSuiteContext> }): vo
     ).rejects.toThrow(BlockerReferenceError);
   });
 
-  it("running job receives deletion signal", async ({
+  it("running job receives deletion signal and its fence and complete fail", async ({
     stateAdapter,
     notifyAdapter,
     withTransaction,
@@ -248,12 +248,15 @@ export const deletionTestSuite = ({ it }: { it: TestAPI<TestSuiteContext> }): vo
         jobTypes,
         processors: {
           test: {
-            attemptHandler: async ({ signal, complete }) => {
+            attemptHandler: async ({ signal, complete, fence }) => {
               jobStarted.resolve();
 
               await sleep(5000, { signal });
 
               expect(signal.aborted).toBe(true);
+              await expect(withTransaction(async (txCtx) => fence({ ...txCtx }))).rejects.toThrow(
+                JobNotFoundError,
+              );
               const completion = withTransaction(async (txCtx, transactionHooks) =>
                 complete({ ...txCtx, transactionHooks, output: null }),
               );
@@ -297,6 +300,65 @@ export const deletionTestSuite = ({ it }: { it: TestAPI<TestSuiteContext> }): vo
 
       await jobDeleted.promise;
     });
+  });
+
+  it("waits for a fenced transaction of the running job before deleting its chain", async ({
+    stateAdapter,
+    notifyAdapter,
+    withTransaction,
+    withWorkers,
+    observabilityAdapter,
+    log,
+  }) => {
+    const jobTypes = defineJobTypes<{
+      test: { entry: true; input: null; output: null };
+    }>();
+    const client = await createClient({
+      stateAdapter,
+      notifyAdapter,
+      observabilityAdapter,
+      log,
+      jobTypes,
+    });
+    const handlerAsserted = Promise.withResolvers<void>();
+    const worker = await createInProcessWorker({
+      client,
+      processors: createProcessors({
+        client,
+        jobTypes,
+        processors: {
+          test: {
+            attemptHandler: async ({ job, fence }) => {
+              const { deletion } = await withTransaction(async (txCtx) => {
+                await fence({ ...txCtx });
+                const pendingDeletion = withTransaction(async (deletionTxCtx, transactionHooks) =>
+                  client.deleteChains({ ...deletionTxCtx, transactionHooks, ids: [job.chainId] }),
+                );
+                await sleep(200);
+                const [fencedJob] = await stateAdapter.getJobs({ txCtx, jobIds: [job.id] });
+                expect(fencedJob!.status).toBe("running");
+                return { deletion: pendingDeletion };
+              });
+              await expect(deletion).resolves.toHaveLength(1);
+              await expect(withTransaction(async (txCtx) => fence({ ...txCtx }))).rejects.toThrow(
+                JobNotFoundError,
+              );
+              handlerAsserted.resolve();
+              throw new Error("attempt lost");
+            },
+          },
+        },
+      }),
+    });
+
+    const chain = await withTransaction(async (txCtx, transactionHooks) =>
+      client.createChain({ ...txCtx, transactionHooks, typeName: "test", input: null }),
+    );
+
+    await withWorkers([await worker.start()], async () => {
+      await handlerAsserted.promise;
+    });
+    expect(await client.getChain({ id: chain.id })).toBeUndefined();
   });
 
   it("throws error when deleting chain referenced as a blocker", async ({

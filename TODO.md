@@ -46,4 +46,3 @@
 - [IDEA] Singletons/concurrency limit
 - [IDEA] Partitioned PG adapter
 - [IDEA] Browser runtime support - SQLite WASM (OPFS) state adapter, Web Workers as job processors, BroadcastChannel notify adapter
-- [IDEA] Attempt ownership check for handler-owned transactions (e.g. `assertOwnership(txCtx)`)
