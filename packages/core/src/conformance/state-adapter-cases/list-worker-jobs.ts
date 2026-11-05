@@ -252,6 +252,39 @@ export const listWorkerJobsGroup: ConformanceGroup<StateConformanceFixture> = {
       },
     },
     {
+      name: "excludes jobs running with an attempt token when workerId is null",
+      run: async ({ stateAdapter }, expect) => {
+        const worker = await stateAdapter.startWorker({
+          workerId: stateAdapter.config.generateWorkerId(),
+          typeNames: ["send-invoice"],
+          concurrency: 1,
+          leaseMs: 60_000,
+        });
+        await stateAdapter.withTransaction(async (txCtx) =>
+          stateAdapter.createJobs({
+            txCtx,
+            jobs: [
+              { id: stateAdapter.config.generateJobId(), typeName: "send-invoice", input: null },
+            ],
+          }),
+        );
+        const [claimed] = await stateAdapter.startJobAttempts({
+          workerId: worker.id,
+          workerToken: worker.token,
+          typeNames: ["send-invoice"],
+          limit: 1,
+        });
+
+        const { items: jobs } = await stateAdapter.listWorkerJobs({
+          workerId: null,
+          orderDirection: "asc",
+          page: { limit: 10 },
+        });
+
+        expect(jobs.map((job) => job.id)).not.toContain(claimed.id);
+      },
+    },
+    {
       name: "returns an empty page for an unknown worker",
       run: async ({ stateAdapter }, expect) => {
         expect(

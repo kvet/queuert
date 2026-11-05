@@ -2569,9 +2569,12 @@ ORDER BY w.key
 
     listWorkerJobs: async ({ txCtx, workerId, orderDirection, page }) => {
       const cursor = page.cursor ? decodeTimestampWithIdCursor(page.cursor, "attemptAt") : null;
-      const conditions: string[] = ["j.status = 'running'", "j.attempt_by = ?"];
-      const params: unknown[] = [workerId];
-      const paramTypes: DataType[] = [t.string()];
+      const conditions: string[] = [
+        "j.status = 'running'",
+        workerId === null ? "j.attempt_token IS NULL" : "j.attempt_by = ?",
+      ];
+      const params: unknown[] = workerId === null ? [] : [workerId];
+      const paramTypes: DataType[] = workerId === null ? [] : [t.string()];
 
       if (cursor) {
         const cursorValue = isoToSqlite(cursor.value);

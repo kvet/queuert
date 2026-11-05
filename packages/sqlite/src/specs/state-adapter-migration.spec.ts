@@ -6,6 +6,14 @@ import { join } from "node:path";
 import { createDeploymentSpawner, startPaused, startTogether } from "@queuert/helpers/testing";
 import { type MigrationResult, createMigrator, createTemplateApplier } from "@queuert/typed-sql";
 import Database from "better-sqlite3";
+import {
+  createClient,
+  createInProcessWorker,
+  createProcessors,
+  defineJobTypes,
+  withTransactionHooks,
+} from "queuert";
+import { withWorkers } from "queuert/testing";
 import { it as baseIt, describe, expect } from "vitest";
 
 import {
@@ -196,6 +204,53 @@ describe("migrateToLatest", () => {
       expect(job!.attemptAt).toBeNull();
       expect(job!.attemptBy).toBeNull();
       expect(job!.attemptToken).toBeNull();
+    },
+  );
+
+  it(
+    "reclaims a job a worker of the previous version claimed after the upgrade once its attempt is older than the lease",
+    { timeout: 60_000 },
+    async ({ database: { provider, adapter } }) => {
+      await adapter.migrateToLatest();
+      const staleJobId = randomUUID();
+      const freshJobId = randomUUID();
+      await execute(
+        provider,
+        `INSERT INTO queuert_job (id, type_name, chain_id, chain_index, status, chain_status, attempt, attempt_at, attempt_by)
+         VALUES ('${staleJobId}', 'legacy', '${staleJobId}', 0, 'running', 'running', 1, datetime('now', 'subsec', '-1 hour'), 'legacy-worker'),
+                ('${freshJobId}', 'legacy', '${freshJobId}', 0, 'running', 'running', 1, datetime('now', 'subsec'), 'legacy-worker')`,
+      );
+      const jobTypes = defineJobTypes<{ legacy: { entry: true; input: null; output: null } }>();
+      const client = await createClient({ stateAdapter: adapter, jobTypes });
+      const worker = await createInProcessWorker({
+        client,
+        pollIntervalMs: 20,
+        leaseConfig: { durationMs: 60_000, heartbeatMs: 50 },
+        processors: createProcessors({
+          client,
+          jobTypes,
+          processors: {
+            legacy: {
+              attemptHandler: async ({ complete }) =>
+                withTransactionHooks(async (transactionHooks) =>
+                  provider.withTransaction(async (txCtx) =>
+                    complete({ ...txCtx, transactionHooks, output: null }),
+                  ),
+                ),
+            },
+          },
+        }),
+      });
+
+      await withWorkers([await worker.start()], async () => {
+        await expect
+          .poll(async () => (await adapter.getJobs({ jobIds: [staleJobId] }))[0]!.status)
+          .toBe("completed");
+      });
+
+      const [stale, fresh] = await adapter.getJobs({ jobIds: [staleJobId, freshJobId] });
+      expect(stale).toMatchObject({ status: "completed", attempt: 2 });
+      expect(fresh).toMatchObject({ status: "running", attempt: 1, attemptToken: null });
     },
   );
 });

@@ -7,6 +7,7 @@
 
 # Short term
 
+- [TASK] Remove the sweep of jobs without an attempt token in the next major — drop `reclaimTokenlessJobs` from the in-process worker and the `workerId: null` option of `StateAdapter.listWorkerJobs`.
 - [TASK] Built-in cleanup. See `design/builtin-cleanup.md`.
 - [TASK] Enforce json-serializable inputs and outputs (like no Date in job definitions) — see `design/json-serializable-types.md`
 - [TASK] Reschedule reason and failure-streak backoff — persist `failure_streak` and the `complete({ reschedule, reason })` reason, compute backoff from the streak instead of `attempt`. See `design/reschedule-reason-and-backoff.md`.

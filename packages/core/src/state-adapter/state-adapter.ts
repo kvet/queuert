@@ -354,10 +354,13 @@ export type StateAdapter<
     } & AutocommitTxContextParam<TTxContext>,
   ) => Promise<Page<StateWorkerInfo>>;
 
-  /** Lists jobs running under a worker by `attemptAt`, paginated. */
+  /**
+   * Lists jobs running under a worker by `attemptAt`, paginated. A `null` `workerId` lists the
+   * running jobs that hold no `attemptToken`, which only a worker of a version before 0.17 claims.
+   */
   listWorkerJobs: (
     params: {
-      workerId: TWorkerId;
+      workerId: TWorkerId | null;
       orderDirection: OrderDirection;
       page: PageParams;
     } & AutocommitTxContextParam<TTxContext>,

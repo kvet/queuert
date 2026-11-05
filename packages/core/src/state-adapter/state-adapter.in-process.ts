@@ -1446,7 +1446,12 @@ export const createInProcessStateAdapter = async ({
 
     listWorkerJobs: async ({ txCtx, workerId, orderDirection, page }) =>
       withReadLock(txCtx, () => {
-        const matched = Array.from(idx.runningByWorker.get(workerId)?.values() ?? []);
+        const matched =
+          workerId === null
+            ? Array.from(idx.runningByWorker.values()).flatMap((jobs) =>
+                Array.from(jobs.values()).filter((job) => job.attemptToken === null),
+              )
+            : Array.from(idx.runningByWorker.get(workerId)?.values() ?? []);
         const jobPage = paginateByTimestamp(
           matched,
           page,

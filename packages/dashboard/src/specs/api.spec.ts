@@ -129,7 +129,7 @@ const createUuidStrictDashboard = async () => {
       return inner.getWorkers(params);
     },
     listWorkerJobs: async (params) => {
-      assertUuids([params.workerId]);
+      assertUuids(params.workerId === null ? [] : [params.workerId]);
       return inner.listWorkerJobs(params);
     },
     getChainTypeNames: async (params) => {
