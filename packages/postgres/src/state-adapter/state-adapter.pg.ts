@@ -2450,11 +2450,11 @@ ORDER BY w.ord
       const cursor = page.cursor ? decodeTimestampWithIdCursor(page.cursor, "attemptAt") : null;
       const conditions: string[] = [
         "j.status = 'running'",
-        workerId === null ? "j.attempt_token IS NULL" : "j.attempt_by = $1::{{worker_id_type}}",
+        "j.attempt_by = $1::{{worker_id_type}}",
       ];
-      const params: unknown[] = workerId === null ? [] : [workerId];
-      const paramTypes: DataType[] = workerId === null ? [] : [workerIdDataType];
-      let p = params.length + 1;
+      const params: unknown[] = [workerId];
+      const paramTypes: DataType[] = [workerIdDataType];
+      let p = 2;
 
       const cmp = orderDirection === "desc" ? "<" : ">";
       if (cursor) {

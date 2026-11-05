@@ -248,42 +248,6 @@ const reclaimExpiredWorker = async (
   return true;
 };
 
-const reclaimTokenlessJobs = async (
-  helpers: Helpers,
-  { workerId, attemptedBefore }: { workerId: string; attemptedBefore: number },
-): Promise<void> => {
-  const { stateAdapter } = helpers;
-  const { items: candidates } = await stateAdapter.listWorkerJobs({
-    workerId: null,
-    orderDirection: "asc",
-    page: { limit: 100 },
-  });
-  const dueJobIds = candidates
-    .filter((job) => job.attemptAt !== null && job.attemptAt.getTime() <= attemptedBefore)
-    .map((job) => job.id);
-  if (dueJobIds.length === 0) return;
-  const error = serializeError(
-    new JobAttemptReclaimedError("Worker holding the attempt is not registered", {
-      reclaimedBy: workerId,
-    }),
-  );
-  const reclaimedJobs = await stateAdapter.withTransaction(async (txCtx) => {
-    const lockedJobs = await stateAdapter.getJobs({ txCtx, jobIds: dueJobIds, lock: "exclusive" });
-    const runningJobs = lockedJobs.filter(
-      (job): job is StateJob => job?.status === "running" && job.attemptToken === null,
-    );
-    const rescheduledJobs = await stateAdapter.rescheduleJobs({
-      txCtx,
-      jobs: runningJobs.map((job) => ({ jobId: job.id, error })),
-    });
-    return runningJobs.flatMap((reclaimed, index) => {
-      const rescheduled = rescheduledJobs[index];
-      return rescheduled === undefined ? [] : [{ reclaimed, rescheduled }];
-    });
-  });
-  await announceReclaimed(helpers, { jobs: reclaimedJobs, workerId });
-};
-
 const stopOwnWorker = async (
   helpers: Helpers,
   { workerId, workerToken }: { workerId: string; workerToken: string },
@@ -449,10 +413,6 @@ export const runWorker = async ({
         finishedJobsReclaimDue = false;
         finishedJobsReclaimedAt = performance.now();
         await reclaimFinishedJobs();
-        await reclaimTokenlessJobs(helpers, {
-          workerId,
-          attemptedBefore: Date.now() - leaseConfig.durationMs,
-        });
       }
       if (await reclaimExpiredWorker(helpers, { workerId })) {
         return;
