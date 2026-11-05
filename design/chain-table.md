@@ -187,6 +187,7 @@ SQLite serializes writers, so none of the lock races apply. It adopts the same s
 
 ## Related designs
 
+- **PostgreSQL isolation levels** (`design/pg-isolation-levels.md`): ships the write-based bookkeeping first, on the head job row (`job.has_dependents`, `job.blockers_remaining`); this design then moves `has_dependents` to the `chain` row.
 - **Chain identity** (`design/chain-identity.md`): the `running`-scope and `any`-scope partial unique indexes go on `chain` instead of on head job rows, next to the persisted `scope`.
 - **Unbounded blockers** (`design/unbounded-blockers.md`): the `job_blocker.blocked` flip must follow the write-based rule to be safe under REPEATABLE READ. `blockers_remaining` is a hot row for massive fan-in (every completing blocker writes the collector row), which that design's system-chain approach has to absorb.
 - **Built-in cleanup** and **truncating chains with 1k+ jobs**: the chain row carries status and identity, so completed jobs can be deleted without losing the chain.
