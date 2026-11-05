@@ -42,3 +42,6 @@ dist
 # docs
 docs/.output/
 docs/src/content/docs/api/
+
+# prerelease bundles
+.prerelease/
