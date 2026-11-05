@@ -5,7 +5,6 @@
 
 # Short term
 
-- [TASK] Remove the sweep of jobs without an attempt token in the next major — drop `reclaimTokenlessJobs` from the in-process worker and the `workerId: null` option of `StateAdapter.listWorkerJobs`.
 - [TASK] PostgreSQL REPEATABLE READ and SERIALIZABLE support — counter-based blocker bookkeeping (`has_dependents`, `blockers_remaining`) and Queuert-owned transactions pinned to READ COMMITTED. Ship with `002_worker_liveness` to keep one stop-the-world upgrade. See `design/pg-isolation-levels.md`.
 - [TASK] Built-in cleanup. See `design/builtin-cleanup.md`.
 - [TASK] Enforce json-serializable inputs and outputs (like no Date in job definitions) — see `design/json-serializable-types.md`

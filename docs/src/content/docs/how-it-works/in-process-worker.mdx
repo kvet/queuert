@@ -59,7 +59,7 @@ Workers process jobs in parallel using slots. See `createInProcessWorker` TSDoc 
 The worker runs a single coordinating loop:
 
 1. **Fill**: Call `startJobAttempts` with the idle slot count as `limit`, start each returned job in its own slot, and repeat until a call returns fewer jobs than its `limit` or all slots are busy. Each call atomically starts up to `limit` attempts under the worker's id, so filling `N` idle slots costs one round-trip, and an idle worker issues one acquisition per wake-up
-2. **Reclaim**: If any idle slots remain, reschedule the worker's own running jobs that no slot runs and the running jobs without an attempt token when due, then reclaim one expired worker (see [Reclaim](#reclaim)); if a worker was reclaimed, skip the wait and start the next iteration
+2. **Reclaim**: If any idle slots remain, reschedule the worker's own running jobs that no slot runs when due, then reclaim one expired worker (see [Reclaim](#reclaim)); if a worker was reclaimed, skip the wait and start the next iteration
 3. **Wait**: Listen for notification, poll timeout, or slot completion
 4. **Repeat**
 
@@ -134,8 +134,6 @@ A worker whose lease expired holds jobs no one runs. An idle worker reclaims the
 - **Concurrent-safe**: The reclaim waits for the expired worker's row lock rather than skipping it. When several workers pick the same expired worker, the first one reclaims it and the others find it gone. A claim racing the reclaim either commits first and its jobs are rescheduled with the rest, or claims nothing.
 
 **Own jobs.** A write whose outcome the worker could not tell — a claim that committed but threw, or a failed attempt's reschedule that threw — can leave a job running under the worker with no slot running it. On the next idle iteration after an iteration or attempt that threw, and otherwise at most once every `heartbeatMs`, the worker locks its row and, if it is still the row this run registered, reschedules in the same way the jobs running under it that no slot runs, so a finished job never stays leased. If another run registered the id, the worker loses its lease.
-
-**Jobs without an attempt token.** A worker of a version before 0.17 claims a job without an attempt token and under an id that has no worker row, so no worker's reclaim reaches it, and its `complete` fails against the 0.17 schema. On the same cadence as its own jobs, the worker lists up to 100 running jobs that hold no attempt token with `listWorkerJobs({ workerId: null })`, keeps those whose `attemptAt` is more than `leaseConfig.durationMs` ago, locks them with `getJobs({ lock: "exclusive" })` and reschedules the ones still running without a token, in the same way as an expired worker's jobs.
 
 ## Retry and Backoff
 
