@@ -6,6 +6,7 @@ import { test } from "vitest";
 
 import { createPostgresJsNotifyProvider } from "./provider.js";
 
+// #region conformance
 test("notify-postgres-postgres-js provider passes notify adapter conformance", async () => {
   await using pg = await acquirePostgres("postgres:18", import.meta.url);
 
@@ -25,3 +26,4 @@ test("notify-postgres-postgres-js provider passes notify adapter conformance", a
     };
   });
 }, 60_000);
+// #endregion

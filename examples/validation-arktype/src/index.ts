@@ -20,7 +20,8 @@ import {
 
 import { createArkTypeJobTypes } from "./arktype-adapter.js";
 
-// 1. Define job types with ArkType schemas
+// #region usage
+// Define job types with ArkType schemas
 const jobTypes = createArkTypeJobTypes({
   // Entry point with nominal continuation validation
   "fetch-data": {
@@ -72,8 +73,9 @@ const jobTypes = createArkTypeJobTypes({
     }),
   },
 });
+// #endregion
 
-// 2. Create queuert client and worker with the jobTypes
+// Create queuert client with the jobTypes
 const stateAdapter = await createInProcessStateAdapter();
 const notifyAdapter = await createInProcessNotifyAdapter();
 
@@ -83,7 +85,7 @@ const client = await createClient({
   jobTypes,
 });
 
-// 3. Create and start worker with job type processors
+// Create and start worker with job type processors
 const worker = await createInProcessWorker({
   client,
   processors: createProcessors({
@@ -163,7 +165,7 @@ const worker = await createInProcessWorker({
 
 const stopWorker = await worker.start();
 
-// 4. Run a chain
+// Run a chain
 console.log("\n=== Running fetch-data chain ===");
 const chain = await withTransactionHooks(async (transactionHooks) =>
   stateAdapter.withTransaction(async (ctx) =>
@@ -179,7 +181,7 @@ const chain = await withTransactionHooks(async (transactionHooks) =>
 const result = await client.awaitChain(chain, { timeoutMs: 5000 });
 console.log("Chain completed:", result.output);
 
-// 5. Cleanup
+// Cleanup
 await stopWorker();
 await notifyAdapter.close();
 await stateAdapter.close();

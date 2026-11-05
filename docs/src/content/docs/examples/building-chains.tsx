@@ -11,6 +11,12 @@ const Page = () => (
       Each showcase runs against PostgreSQL in Docker and prints what happens, scenario by scenario.
       Read one next to the guide it accompanies.
     </p>
+    <h2 id="showcase-onboarding">Onboarding chain</h2>
+    <p>
+      The three-step chain from the home page, with every handler filled in. The home page's code
+      tour is cut from this file, so it always compiles.
+    </p>
+    <ExampleDetail name="showcase-onboarding" />
     <h2 id="showcase-chain-patterns">Chain patterns</h2>
     <ExampleDetail name="showcase-chain-patterns" />
     <h2 id="showcase-blockers">Job blockers</h2>

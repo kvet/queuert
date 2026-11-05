@@ -10,15 +10,12 @@ import {
   createInProcessStateAdapter,
 } from "queuert";
 
-// 1. Start NATS using testcontainers
+// Start NATS using testcontainers
 console.log("Starting NATS...");
 await using natsContainer = await acquireNats("nats:2");
 const connectionOptions = natsContainer.connectionOptions;
 
-// 2. Create NATS connection
-const nc = await connect(connectionOptions);
-
-// 3. Define job types
+// Define job types
 const jobTypes = defineJobTypes<{
   generate_report: {
     entry: true;
@@ -27,14 +24,21 @@ const jobTypes = defineJobTypes<{
   };
 }>();
 
-// 4. Create adapters
+// Create the state adapter
 const stateAdapter = await createInProcessStateAdapter();
+
+// #region setup
+// Create NATS connection
+const nc = await connect(connectionOptions);
+
+// Create the notify adapter
 const notifyAdapter = await createNatsNotifyAdapter({
   nc,
   subjectPrefix: "queuert.example",
 });
+// #endregion
 
-// 5. Create client and worker
+// Create client and worker
 const client = await createClient({
   stateAdapter,
   notifyAdapter,
@@ -72,7 +76,7 @@ const worker = await createInProcessWorker({
   }),
 });
 
-// 6. Start worker and queue a job
+// Start worker and queue a job
 const stopWorker = await worker.start();
 
 console.log("Requesting sales report...");
@@ -87,21 +91,23 @@ const chain = await withTransactionHooks(async (transactionHooks) =>
   ),
 );
 
-// 7. Main thread continues with other work while job processes
+// Main thread continues with other work while job processes
 console.log("Report queued! Continuing with other work...");
 console.log("Preparing email template...");
 await new Promise((resolve) => setTimeout(resolve, 100));
 console.log("Loading recipient list...");
 await new Promise((resolve) => setTimeout(resolve, 100));
 
-// 8. Now wait for the report to be ready
+// Now wait for the report to be ready
 console.log("Waiting for report...");
 const result = await client.awaitChain(chain, { timeoutMs: 5000 });
 console.log(`Report ready! ID: ${result.output.reportId}, Rows: ${result.output.rowCount}`);
 
-// 9. Cleanup
+// Cleanup
 await stopWorker();
+// #region cleanup
 await notifyAdapter.close();
 await stateAdapter.close();
 await nc.close();
+// #endregion
 console.log("Done!");

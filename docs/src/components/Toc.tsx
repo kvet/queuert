@@ -32,14 +32,14 @@ export const Toc = (props: { headings: DocHeading[] }) => {
               <li class={heading.depth === 3 ? "pl-3" : ""}>
                 <a
                   href={`#${heading.id}`}
-                  class="block truncate py-0.5 text-fg-muted hover:text-fg aria-current:font-medium aria-current:text-fg"
+                  class="flex gap-1 py-0.5 leading-4 text-fg-muted transition-colors hover:text-fg aria-current:font-medium aria-current:text-fg"
                   aria-current={active() === heading.id ? "true" : undefined}
-                  title={heading.text}
                 >
-                  <span class="text-fg-subtle" aria-hidden="true">
-                    {active() === heading.id ? "▸ " : "  "}
+                  {/* A fixed-width marker column, so long titles wrap under their own text. */}
+                  <span class="w-2 shrink-0 text-fg-subtle" aria-hidden="true">
+                    {active() === heading.id ? "▸" : ""}
                   </span>
-                  {heading.text}
+                  <span class="min-w-0">{heading.text}</span>
                 </a>
               </li>
             )}

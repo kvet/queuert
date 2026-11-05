@@ -82,13 +82,22 @@ export const examplePages: { slug: ExamplePageSlug; title: string; summary: stri
   },
 ];
 
-const stateAdapters = { title: "State Adapters", href: "/integrations/state-adapters/" };
-const notifyAdapters = { title: "Notify Adapters", href: "/integrations/notify-adapters/" };
-const validationAdapters = {
-  title: "Validation Adapters",
-  href: "/integrations/validation-adapters/",
+const statePostgres = {
+  title: "PostgreSQL State Adapter",
+  href: "/integrations/state-adapters/postgres/",
 };
-const logging = { title: "Logging", href: "/advanced/logging/" };
+const stateSqlite = { title: "SQLite State Adapter", href: "/integrations/state-adapters/sqlite/" };
+const notifyPostgres = {
+  title: "PostgreSQL Notify Adapter",
+  href: "/integrations/notify-adapters/postgres/",
+};
+const notifyRedis = { title: "Redis Notify Adapter", href: "/integrations/notify-adapters/redis/" };
+const notifyNats = { title: "NATS Notify Adapter", href: "/integrations/notify-adapters/nats/" };
+const validationAdapters = {
+  title: "Validation",
+  href: "/integrations/validation/",
+};
+const logging = { title: "Logging", href: "/integrations/logging/" };
 
 const providerFiles = ["src/provider.ts", "src/index.ts"];
 
@@ -103,7 +112,7 @@ export const examples: Example[] = [
     runtime: "Node.js",
     services: ["PostgreSQL"],
     files: providerFiles,
-    guide: stateAdapters,
+    guide: statePostgres,
   },
   {
     name: "state-postgres-postgres-js",
@@ -115,7 +124,7 @@ export const examples: Example[] = [
     runtime: "Node.js",
     services: ["PostgreSQL"],
     files: providerFiles,
-    guide: stateAdapters,
+    guide: statePostgres,
   },
   {
     name: "state-postgres-drizzle",
@@ -127,7 +136,7 @@ export const examples: Example[] = [
     runtime: "Node.js",
     services: ["PostgreSQL"],
     files: providerFiles,
-    guide: stateAdapters,
+    guide: statePostgres,
   },
   {
     name: "state-postgres-kysely",
@@ -139,7 +148,7 @@ export const examples: Example[] = [
     runtime: "Node.js",
     services: ["PostgreSQL"],
     files: providerFiles,
-    guide: stateAdapters,
+    guide: statePostgres,
   },
   {
     name: "state-postgres-prisma",
@@ -151,7 +160,7 @@ export const examples: Example[] = [
     runtime: "Node.js",
     services: ["PostgreSQL"],
     files: ["src/provider.ts", "src/index.ts", "prisma/schema.prisma"],
-    guide: stateAdapters,
+    guide: statePostgres,
   },
   {
     name: "state-postgres-knex",
@@ -163,7 +172,7 @@ export const examples: Example[] = [
     runtime: "Node.js",
     services: ["PostgreSQL"],
     files: providerFiles,
-    guide: stateAdapters,
+    guide: statePostgres,
   },
   {
     name: "state-postgres-bun-sql",
@@ -175,7 +184,7 @@ export const examples: Example[] = [
     runtime: "Bun",
     services: ["PostgreSQL"],
     files: providerFiles,
-    guide: stateAdapters,
+    guide: statePostgres,
   },
   {
     name: "state-postgres-multi-worker",
@@ -199,7 +208,7 @@ export const examples: Example[] = [
     runtime: "Node.js",
     services: [],
     files: providerFiles,
-    guide: stateAdapters,
+    guide: stateSqlite,
   },
   {
     name: "state-sqlite-node-sqlite",
@@ -211,7 +220,7 @@ export const examples: Example[] = [
     runtime: "Node.js",
     services: [],
     files: providerFiles,
-    guide: stateAdapters,
+    guide: stateSqlite,
   },
   {
     name: "state-sqlite-drizzle",
@@ -223,7 +232,7 @@ export const examples: Example[] = [
     runtime: "Node.js",
     services: [],
     files: providerFiles,
-    guide: stateAdapters,
+    guide: stateSqlite,
   },
   {
     name: "state-sqlite-kysely",
@@ -235,7 +244,7 @@ export const examples: Example[] = [
     runtime: "Node.js",
     services: [],
     files: providerFiles,
-    guide: stateAdapters,
+    guide: stateSqlite,
   },
   {
     name: "state-sqlite-prisma",
@@ -247,7 +256,7 @@ export const examples: Example[] = [
     runtime: "Node.js",
     services: [],
     files: ["src/provider.ts", "src/index.ts", "prisma/schema.prisma"],
-    guide: stateAdapters,
+    guide: stateSqlite,
   },
   {
     name: "state-sqlite-knex",
@@ -259,7 +268,7 @@ export const examples: Example[] = [
     runtime: "Node.js",
     services: [],
     files: providerFiles,
-    guide: stateAdapters,
+    guide: stateSqlite,
   },
   {
     name: "state-sqlite-bun-sqlite",
@@ -271,7 +280,7 @@ export const examples: Example[] = [
     runtime: "Bun",
     services: [],
     files: providerFiles,
-    guide: stateAdapters,
+    guide: stateSqlite,
   },
   {
     name: "state-sqlite-bun-sql",
@@ -283,7 +292,7 @@ export const examples: Example[] = [
     runtime: "Bun",
     services: [],
     files: providerFiles,
-    guide: stateAdapters,
+    guide: stateSqlite,
   },
   {
     name: "notify-redis-ioredis",
@@ -294,7 +303,7 @@ export const examples: Example[] = [
     runtime: "Node.js",
     services: ["Redis"],
     files: providerFiles,
-    guide: notifyAdapters,
+    guide: notifyRedis,
   },
   {
     name: "notify-redis-redis",
@@ -305,7 +314,7 @@ export const examples: Example[] = [
     runtime: "Node.js",
     services: ["Redis"],
     files: providerFiles,
-    guide: notifyAdapters,
+    guide: notifyRedis,
   },
   {
     name: "notify-redis-cluster-ioredis",
@@ -316,7 +325,7 @@ export const examples: Example[] = [
     runtime: "Node.js",
     services: ["Redis Cluster"],
     files: providerFiles,
-    guide: notifyAdapters,
+    guide: notifyRedis,
   },
   {
     name: "notify-redis-cluster-node-redis",
@@ -327,7 +336,7 @@ export const examples: Example[] = [
     runtime: "Node.js",
     services: ["Redis Cluster"],
     files: providerFiles,
-    guide: notifyAdapters,
+    guide: notifyRedis,
   },
   {
     name: "notify-redis-bun",
@@ -339,7 +348,7 @@ export const examples: Example[] = [
     runtime: "Bun",
     services: ["Redis"],
     files: providerFiles,
-    guide: notifyAdapters,
+    guide: notifyRedis,
   },
   {
     name: "notify-postgres-pg",
@@ -351,7 +360,7 @@ export const examples: Example[] = [
     runtime: "Node.js",
     services: ["PostgreSQL"],
     files: providerFiles,
-    guide: notifyAdapters,
+    guide: notifyPostgres,
   },
   {
     name: "notify-postgres-postgres-js",
@@ -362,7 +371,7 @@ export const examples: Example[] = [
     runtime: "Node.js",
     services: ["PostgreSQL"],
     files: providerFiles,
-    guide: notifyAdapters,
+    guide: notifyPostgres,
   },
   {
     name: "notify-postgres-bun-sql",
@@ -374,7 +383,7 @@ export const examples: Example[] = [
     runtime: "Bun",
     services: ["PostgreSQL"],
     files: providerFiles,
-    guide: notifyAdapters,
+    guide: notifyPostgres,
   },
   {
     name: "notify-nats-transport-node",
@@ -385,7 +394,19 @@ export const examples: Example[] = [
     runtime: "Node.js",
     services: ["NATS"],
     files: ["src/index.ts"],
-    guide: notifyAdapters,
+    guide: notifyNats,
+  },
+  {
+    name: "showcase-onboarding",
+    category: "patterns",
+    page: "building-chains",
+    label: "onboarding",
+    description:
+      "The home page's provision-account → send-welcome-email → sync-to-crm chain, runnable end to end with Drizzle.",
+    runtime: "Node.js",
+    services: ["PostgreSQL"],
+    files: ["src/index.ts"],
+    scenarios: ["Typed continueWith", "Transactional createChain", "complete in your transaction"],
   },
   {
     name: "showcase-chain-patterns",
@@ -557,7 +578,7 @@ export const examples: Example[] = [
       "Graceful shutdown: the handler stops on signal and completes with partial results.",
       "External completion via completeChain: the running handler stops and the worker discards its attempt.",
     ],
-    guide: { title: "In-Process Worker", href: "/advanced/in-process-worker/" },
+    guide: { title: "In-Process Worker", href: "/how-it-works/in-process-worker/" },
   },
   {
     name: "showcase-multiworker-prioritization",
@@ -725,7 +746,7 @@ export const examples: Example[] = [
       { label: "Terminal 2: example", script: "start" },
     ],
     requires: "otel-tui",
-    guide: { title: "Observability", href: "/integrations/observability/" },
+    guide: { title: "OpenTelemetry", href: "/integrations/opentelemetry/" },
   },
   {
     name: "dashboard",
@@ -736,9 +757,13 @@ export const examples: Example[] = [
       "@queuert/dashboard embedded as a fetch handler with Node's built-in HTTP server. Run the populator to generate chains, jobs and workers, browse them through the web UI.",
     runtime: "Node.js",
     services: [],
-    files: ["src/dashboard.ts", "src/populator.ts", "src/common.ts"],
+    files: ["src/dashboard.ts", "src/dashboard-mounted.ts", "src/populator.ts", "src/common.ts"],
     commands: [
       { label: "Terminal 1: dashboard", script: "dashboard" },
+      {
+        label: "Terminal 1, alternative: mounted under a base path with Basic auth",
+        script: "dashboard:mounted",
+      },
       { label: "Terminal 2: populator", script: "start" },
     ],
     guide: { title: "Dashboard", href: "/integrations/dashboard/" },

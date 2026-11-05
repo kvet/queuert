@@ -11,14 +11,14 @@ import {
 
 import { createKnexSqliteStateProvider } from "./provider.js";
 
-// 1. Create in-memory SQLite database
+// Create in-memory SQLite database
 const knex = knexFactory({
   client: "better-sqlite3",
   connection: { filename: ":memory:" },
   useNullAsDefault: true,
 });
 
-// 2. Create application schema
+// Create application schema
 await knex.raw(`
   CREATE TABLE IF NOT EXISTS users (
     id INTEGER PRIMARY KEY AUTOINCREMENT,
@@ -27,7 +27,7 @@ await knex.raw(`
   )
 `);
 
-// 3. Define job types
+// Define job types
 const jobTypes = defineJobTypes<{
   send_welcome_email: {
     entry: true;
@@ -36,14 +36,14 @@ const jobTypes = defineJobTypes<{
   };
 }>();
 
-// 4. Create state provider for Knex
+// Create state provider for Knex
+// #region adapter
 const stateProvider = createKnexSqliteStateProvider({ knex });
-
-// 5. Create adapters and queuert client/worker
 const stateAdapter = await createSqliteStateAdapter({
   stateProvider,
 });
 await stateAdapter.migrateToLatest();
+// #endregion
 
 const notifyAdapter = await createInProcessNotifyAdapter();
 
@@ -53,7 +53,7 @@ const client = await createClient({
   jobTypes,
 });
 
-// 6. Create worker with job type processors
+// Create worker with job type processors
 const worker = await createInProcessWorker({
   client,
   processors: createProcessors({
@@ -85,7 +85,8 @@ const worker = await createInProcessWorker({
 
 const stopWorker = await worker.start();
 
-// 7. Register a new user and queue welcome email atomically
+// Register a new user and queue welcome email atomically
+// #region create-chain
 const chain = await withTransactionHooks(async (transactionHooks) =>
   knex.transaction(async (trx) => {
     const [user] = await trx<{ id: number; name: string; email: string }>("users")
@@ -101,12 +102,13 @@ const chain = await withTransactionHooks(async (transactionHooks) =>
     });
   }),
 );
+// #endregion
 
-// 8. Wait for the chain to complete
+// Wait for the chain to complete
 const result = await client.awaitChain(chain, { timeoutMs: 5000 });
 console.log(`Welcome email sent at: ${result.output.sentAt}`);
 
-// 9. Cleanup
+// Cleanup
 await stopWorker();
 await notifyAdapter.close();
 await stateAdapter.close();

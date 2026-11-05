@@ -24,7 +24,7 @@ type JobAttemptMeta = {
   workerId: string;
 };
 
-// 1. Create Winston logger (no AsyncLocalStorage, no global format hook)
+// Create Winston logger (no AsyncLocalStorage, no global format hook)
 const logger = winston.createLogger({
   level: "info",
   format: winston.format.combine(
@@ -43,7 +43,7 @@ const logger = winston.createLogger({
   transports: [new winston.transports.Console()],
 });
 
-// 2. Define job types
+// Define job types
 const jobTypes = defineJobTypes<{
   greet: {
     entry: true;
@@ -57,9 +57,10 @@ const jobTypes = defineJobTypes<{
   };
 }>();
 
-// 3. Create adapters and queuert client
+// Create adapters and queuert client
 const stateAdapter = await createInProcessStateAdapter();
 const notifyAdapter = await createInProcessNotifyAdapter();
+// #region client
 const log = createWinstonLog(logger);
 
 const client = await createClient({
@@ -68,9 +69,10 @@ const client = await createClient({
   log,
   jobTypes,
 });
+// #endregion
 
-// 4. Middleware that injects a child logger pre-bound to job context.
-//    The handler receives `log` in its typed ctx — no AsyncLocalStorage, no mixin.
+// Middleware that injects a child logger pre-bound to job context.
+// The handler receives `log` in its typed ctx — no AsyncLocalStorage, no mixin.
 const loggerInjectionMiddleware: AttemptMiddleware<any, { log: winston.Logger }> = {
   wrapHandler: async ({ job, workerId, next }) =>
     next({
@@ -86,7 +88,7 @@ const loggerInjectionMiddleware: AttemptMiddleware<any, { log: winston.Logger }>
     }),
 };
 
-// 5. Create and start the worker with the middleware
+// Create and start the worker with the middleware
 const worker = await createInProcessWorker({
   client,
   processors: createProcessors({
@@ -137,7 +139,7 @@ const worker = await createInProcessWorker({
 // Start worker
 const stopWorker = await worker.start();
 
-// 6. Run successful job
+// Run successful job
 logger.info("--- Running successful job ---");
 const successChain = await withTransactionHooks(async (transactionHooks) =>
   stateAdapter.withTransaction(async (ctx) =>
@@ -151,7 +153,7 @@ const successChain = await withTransactionHooks(async (transactionHooks) =>
 );
 await client.awaitChain(successChain, { timeoutMs: 5000 });
 
-// 7. Run job that fails then succeeds (demonstrates error logging with stack trace)
+// Run job that fails then succeeds (demonstrates error logging with stack trace)
 logger.info("--- Running job that fails first attempt ---");
 const failThenSucceedChain = await withTransactionHooks(async (transactionHooks) =>
   stateAdapter.withTransaction(async (ctx) =>
@@ -165,7 +167,7 @@ const failThenSucceedChain = await withTransactionHooks(async (transactionHooks)
 );
 await client.awaitChain(failThenSucceedChain, { timeoutMs: 5000 });
 
-// 8. Cleanup
+// Cleanup
 await stopWorker();
 await notifyAdapter.close();
 await stateAdapter.close();

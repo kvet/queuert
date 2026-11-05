@@ -7,6 +7,7 @@ import { runNotifyAdapterConformance } from "queuert/conformance";
 
 import { createBunRedisNotifyProvider } from "./provider.js";
 
+// #region conformance
 test("notify-redis-bun provider passes notify adapter conformance", async () => {
   await using redis = await acquireRedis("redis:8");
 
@@ -31,3 +32,4 @@ test("notify-redis-bun provider passes notify adapter conformance", async () => 
     };
   });
 }, 120_000);
+// #endregion

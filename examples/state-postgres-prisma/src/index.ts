@@ -14,10 +14,10 @@ import {
 
 import { createPrismaPgStateProvider } from "./provider.js";
 
-// 1. Start PostgreSQL using testcontainers
+// Start PostgreSQL using testcontainers
 await using pg = await acquirePostgres("postgres:18", import.meta.url);
 
-// 2. Push Prisma schema to database and generate client
+// Push Prisma schema to database and generate client
 execSync("npx prisma db push", {
   env: { ...process.env, DATABASE_URL: pg.connectionString },
   stdio: "inherit",
@@ -29,7 +29,7 @@ const { PrismaClient } = await import("../prisma/generated/prisma/client.js");
 const adapter = new PrismaPg({ connectionString: pg.connectionString });
 const prisma = new PrismaClient({ adapter });
 
-// 3. Define job types
+// Define job types
 const jobTypes = defineJobTypes<{
   send_welcome_email: {
     entry: true;
@@ -38,10 +38,9 @@ const jobTypes = defineJobTypes<{
   };
 }>();
 
-// 4. Create state provider for Prisma
+// Create state provider for Prisma
+// #region adapter
 const stateProvider = createPrismaPgStateProvider({ prisma: prisma as any });
-
-// 5. Create adapters and queuert client/worker
 const stateAdapter = await createPgStateAdapter({
   stateProvider,
   // Prisma v4+ removed implicit type coercion, so $queryRawUnsafe doesn't cast
@@ -50,6 +49,7 @@ const stateAdapter = await createPgStateAdapter({
   jobIdType: "text",
 });
 await stateAdapter.migrateToLatest();
+// #endregion
 
 const notifyAdapter = await createInProcessNotifyAdapter();
 
@@ -59,7 +59,7 @@ const client = await createClient({
   jobTypes,
 });
 
-// 6. Create and start worker
+// Create and start worker
 const worker = await createInProcessWorker({
   client,
   processors: createProcessors({
@@ -86,7 +86,7 @@ const worker = await createInProcessWorker({
 
 const stopWorker = await worker.start();
 
-// 7. Register a new user and queue welcome email atomically
+// Register a new user and queue welcome email atomically
 const chain = await withTransactionHooks(async (transactionHooks) =>
   prisma.$transaction(async (prisma) => {
     const user = await prisma.user.create({
@@ -103,11 +103,11 @@ const chain = await withTransactionHooks(async (transactionHooks) =>
   }),
 );
 
-// 8. Wait for the chain to complete
+// Wait for the chain to complete
 const result = await client.awaitChain(chain, { timeoutMs: 5000 });
 console.log(`Welcome email sent at: ${result.output.sentAt}`);
 
-// 9. Cleanup
+// Cleanup
 await stopWorker();
 await notifyAdapter.close();
 await stateAdapter.close();

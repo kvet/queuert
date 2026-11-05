@@ -1,6 +1,10 @@
+import { mkdirSync, mkdtempSync, writeFileSync } from "node:fs";
+import { tmpdir } from "node:os";
+import { join } from "node:path";
+
 import { describe, expect, it } from "vitest";
 
-import { dedent, readPageMeta, transformPage } from "./tsx-pages.ts";
+import { dedent, extractRegion, readPageMeta, transformPage } from "./tsx-pages.ts";
 
 const file = "/content/guides/a.tsx";
 
@@ -104,5 +108,86 @@ describe("readPageMeta", () => {
     expect(() => readPageMeta("export const meta = { title: name };", file)).toThrow(
       "meta.title must be a string literal",
     );
+  });
+});
+
+describe("extractRegion", () => {
+  const source = [
+    "import { a } from 'a';",
+    "",
+    "// #region setup",
+    "  const pool = createPool();",
+    "  // #region inner",
+    "  const adapter = createAdapter(pool);",
+    "  // #endregion",
+    "// #endregion",
+    "run();",
+  ].join("\n");
+
+  it("returns the named region dedented, without nested markers", () => {
+    expect(extractRegion(source, "setup", "x")).toBe(
+      "const pool = createPool();\nconst adapter = createAdapter(pool);",
+    );
+    expect(extractRegion(source, "inner", "x")).toBe("const adapter = createAdapter(pool);");
+  });
+
+  it("returns the whole file without marker lines when no region is given", () => {
+    expect(extractRegion(source, undefined, "x")).not.toContain("#region");
+    expect(extractRegion(source, undefined, "x")).toContain("run();");
+  });
+
+  it("drops #hide blocks", () => {
+    const hidden = ["a();", "// #hide", "b();", "// #endhide", "c();"].join("\n");
+    expect(extractRegion(hidden, undefined, "x")).toBe("a();\nc();");
+    expect(() => extractRegion("// #hide\na();", undefined, "x")).toThrow('no "// #endhide"');
+  });
+
+  it("throws for a missing region", () => {
+    expect(() => extractRegion(source, "nope", "x")).toThrow('no "// #region nope"');
+  });
+});
+
+describe("ExampleCode", () => {
+  const examplesDirectory = mkdtempSync(join(tmpdir(), "examples-"));
+  mkdirSync(join(examplesDirectory, "state-demo/src"), { recursive: true });
+  writeFileSync(
+    join(examplesDirectory, "state-demo/src/index.ts"),
+    "// #region usage\nconst x = 1;\n// #endregion\n",
+  );
+
+  it("inlines the example file's code and highlighted html at build time", async () => {
+    const { code, dependencies } = await transformPage(
+      page('    <ExampleCode example="state-demo" file="src/index.ts" region="usage" />'),
+      file,
+      { examplesDirectory },
+    );
+    expect(code).toContain('lang={"ts"} example={"state-demo"} file={"src/index.ts"}');
+    expect(code).toContain('code={"const x = 1;"}');
+    expect(code).toContain("html={");
+    expect(dependencies).toEqual([join(examplesDirectory, "state-demo/src/index.ts")]);
+  });
+
+  it("reads library source with package=", async () => {
+    const packagesDirectory = mkdtempSync(join(tmpdir(), "packages-"));
+    mkdirSync(join(packagesDirectory, "redis/src"), { recursive: true });
+    writeFileSync(
+      join(packagesDirectory, "redis/src/script.ts"),
+      "// #region lua\nconst script = 1;\n// #endregion\n",
+    );
+    const { code } = await transformPage(
+      page('    <ExampleCode package="redis" file="src/script.ts" region="lua" />'),
+      file,
+      { examplesDirectory, packagesDirectory },
+    );
+    expect(code).toContain('package={"redis"} file={"src/script.ts"}');
+    expect(code).toContain('code={"const script = 1;"}');
+  });
+
+  it("rejects paths outside the examples directory", async () => {
+    await expect(
+      transformPage(page('    <ExampleCode example=".." file="secret.ts" />'), file, {
+        examplesDirectory,
+      }),
+    ).rejects.toThrow("escapes examples/");
   });
 });

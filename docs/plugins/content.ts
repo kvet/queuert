@@ -10,7 +10,7 @@ import { changelog } from "./changelog.ts";
 import { highlight } from "./highlight.ts";
 import { mdxOptions, pageSlug } from "./mdx.ts";
 import { searchIndex } from "./search-index.ts";
-import { readPageMeta, tsxPages } from "./tsx-pages.ts";
+import { extractRegion, readPageMeta, tsxPages } from "./tsx-pages.ts";
 import { typedoc } from "./typedoc.ts";
 
 export const contentDirectory = fileURLToPath(new URL("../src/content/docs", import.meta.url));
@@ -22,7 +22,8 @@ const diagramModule = fileURLToPath(
 
 const pagesId = "virtual:docs-pages";
 const resolvedPagesId = `\0${pagesId}`;
-const highlightSuffix = "?highlight";
+/** `file.ts?highlight` (whole file) or `file.ts?region=<name>&highlight` (one `// #region`). */
+const highlightQuery = /\?(?:region=([\w-]+)&)?highlight$/;
 const highlightPrefix = "\0highlight:";
 
 const apiKinds: Record<string, string> = {
@@ -161,15 +162,20 @@ export const content = (options: { base: string }): Plugin[] => [
     name: "queuert:highlight",
     enforce: "pre",
     async resolveId(id, importer) {
-      if (!id.endsWith(highlightSuffix)) return;
-      const resolved = await this.resolve(id.slice(0, -highlightSuffix.length), importer);
-      return resolved ? `${highlightPrefix}${resolved.id}` : undefined;
+      const match = highlightQuery.exec(id);
+      if (!match) return;
+      const resolved = await this.resolve(id.slice(0, match.index), importer);
+      // The region goes before the path: a `#` or `?` suffix would not survive the dev server's URLs.
+      return resolved ? `${highlightPrefix}${match[1] ?? ""}:${resolved.id}` : undefined;
     },
     async load(id) {
       if (!id.startsWith(highlightPrefix)) return;
-      const file = id.slice(highlightPrefix.length);
+      const rest = id.slice(highlightPrefix.length);
+      const separator = rest.indexOf(":");
+      const region = rest.slice(0, separator) || undefined;
+      const file = rest.slice(separator + 1);
       this.addWatchFile(file);
-      const code = (await readFile(file, "utf8")).trimEnd();
+      const code = extractRegion(await readFile(file, "utf8"), region, file).trimEnd();
       const lang = extname(file).slice(1);
       return `export default ${JSON.stringify({ code, lang, html: await highlight(code, lang) })};`;
     },

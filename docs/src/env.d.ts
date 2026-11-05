@@ -14,3 +14,8 @@ declare module "*?highlight" {
   const snippet: { code: string; lang: string; html: string };
   export default snippet;
 }
+
+declare module "*&highlight" {
+  const snippet: { code: string; lang: string; html: string };
+  export default snippet;
+}

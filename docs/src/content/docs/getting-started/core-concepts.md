@@ -19,54 +19,26 @@ Defines a named job type with its input/output types. Job types are registered w
 
 ### State Adapter
 
-Abstracts database operations for job persistence. Queuert provides adapters for PostgreSQL and SQLite. The adapter handles job creation, status transitions, attempt tracking, and queries.
-
-**Available adapters:**
-
-- `@queuert/postgres` - PostgreSQL state adapter (recommended for production)
-- `@queuert/sqlite` - SQLite state adapter _(experimental)_
-
-:::tip
-See [State Adapters](/queuert/integrations/state-adapters/) for supported ORMs, drivers, and configuration details.
-:::
-
-### State Provider
-
-Bridges your database client (Kysely, Drizzle, Prisma, raw pg, etc.) with the state adapter. You implement a simple interface that provides transaction handling and SQL execution. See [Adapter Architecture](/queuert/advanced/adapters/).
+Abstracts database operations for job persistence. The adapter handles job creation, status transitions, attempt tracking, and queries. Database-backed adapters run through a state provider you implement for your database client (Kysely, Drizzle, Prisma, raw pg, etc.), providing transaction handling and SQL execution. See [State Adapters](/queuert/integrations/state-adapters/) for the available backends, and the state provider for [PostgreSQL](/queuert/integrations/state-adapters/postgres/#state-provider) or [SQLite](/queuert/integrations/state-adapters/sqlite/#state-provider).
 
 ### Notify Adapter
 
-Handles pub/sub notifications for efficient job scheduling. When a job is created, workers are notified immediately instead of polling. This reduces latency from seconds to milliseconds.
-
-**Available adapters:**
-
-- `@queuert/redis` - Redis notify adapter (recommended for production)
-- `@queuert/nats` - NATS notify adapter _(experimental)_
-- `@queuert/postgres` - PostgreSQL notify adapter (uses LISTEN/NOTIFY, no additional infrastructure)
-- None (default) - polling only, no real-time notifications
-
-:::tip
-See [Notify Adapters](/queuert/integrations/notify-adapters/) for supported clients and configuration details.
-:::
-
-### Notify Provider
-
-Bridges your pub/sub client (Redis, PostgreSQL, etc.) with the notify adapter. Similar to state providers, you implement an interface for publishing messages and subscribing to channels. See [Adapter Architecture](/queuert/advanced/adapters/).
+Handles pub/sub notifications for efficient job scheduling. When a job is created, workers are notified immediately instead of polling. This reduces latency from seconds to milliseconds. Without one, workers poll. Some adapters run through a notify provider you implement for your pub/sub client, for publishing messages and subscribing to channels. See [Notify Adapters](/queuert/integrations/notify-adapters/) for the available backends, and the notify provider for [PostgreSQL](/queuert/integrations/notify-adapters/postgres/#notify-provider) or [Redis](/queuert/integrations/notify-adapters/redis/#notify-provider).
 
 ### Worker
 
-Processes jobs by polling for available work. Each worker holds a lease it keeps renewing, so its attempts can run however long they take, reclaims the jobs of workers whose lease expired, and handles retries with configurable backoff. See [In-Process Worker](/queuert/advanced/in-process-worker/) and [Job Processing](/queuert/advanced/job-processing/).
+Processes jobs by polling for available work. Each worker holds a lease it keeps renewing, so its attempts can run however long they take, reclaims the jobs of workers whose lease expired, and handles retries with configurable backoff. See [In-Process Worker](/queuert/how-it-works/in-process-worker/) and [Job Processing](/queuert/how-it-works/job-processing/).
 
 ### Logging
 
-By default, Queuert operates silently. Enable logging with `createConsoleLog()` for development, or implement a custom `Log` function for production (Pino, Winston, etc.). See the [log-console](https://github.com/kvet/queuert/tree/main/examples/log-console), [log-pino](https://github.com/kvet/queuert/tree/main/examples/log-pino), and [log-winston](https://github.com/kvet/queuert/tree/main/examples/log-winston) examples.
+By default, Queuert operates silently. Enable logging with `createConsoleLog()` for development, or implement a custom `Log` function for production (Pino, Winston, etc.). See [Logging](/queuert/integrations/logging/).
 
 ## What's next?
 
 Now that you understand the building blocks, follow the guides in order:
 
 1. **[Transaction Hooks](/queuert/guides/transaction-hooks/)** — How jobs are created inside database transactions (required for all usage)
-2. **[Job Processing](/queuert/advanced/job-processing/)** — How an attempt runs and how `complete` commits its outcome in your transaction
+2. **[Job Processing](/queuert/how-it-works/job-processing/)** — How an attempt runs and how `complete` commits its outcome in your transaction
 3. **[Chain Patterns](/queuert/guides/chain-patterns/)** — Linear chains, branching, loops, and go-to patterns
 
-For setting up your database and infrastructure, see [Integrations](/queuert/integrations/state-adapters/).
+For setting up your database and infrastructure, see [Integrations](/queuert/integrations/).

@@ -12,15 +12,15 @@ import {
 
 import { createKyselySqliteStateProvider } from "./provider.js";
 
-// 1. Create in-memory SQLite database
+// Create in-memory SQLite database
 const sqliteDb = new BetterSqlite3(":memory:");
 
-// 2. Define Kysely database schema
+// Define Kysely database schema
 type Database = {
   users: { id: Generated<number>; name: string; email: string };
 };
 
-// 3. Create Kysely database connection
+// Create Kysely database connection
 const db = new Kysely<Database>({
   dialect: new SqliteDialect({
     database: sqliteDb,
@@ -36,7 +36,7 @@ await sql`
   )
 `.execute(db);
 
-// 4. Define job types
+// Define job types
 const jobTypes = defineJobTypes<{
   send_welcome_email: {
     entry: true;
@@ -45,14 +45,14 @@ const jobTypes = defineJobTypes<{
   };
 }>();
 
-// 5. Create state provider for Kysely
+// Create state provider for Kysely
+// #region adapter
 const stateProvider = createKyselySqliteStateProvider({ db });
-
-// 6. Create adapters and queuert client/worker
 const stateAdapter = await createSqliteStateAdapter({
   stateProvider,
 });
 await stateAdapter.migrateToLatest();
+// #endregion
 
 const notifyAdapter = await createInProcessNotifyAdapter();
 
@@ -62,7 +62,7 @@ const client = await createClient({
   jobTypes,
 });
 
-// 7. Create worker with job type processors
+// Create worker with job type processors
 const worker = await createInProcessWorker({
   client,
   processors: createProcessors({
@@ -99,7 +99,8 @@ const worker = await createInProcessWorker({
 
 const stopWorker = await worker.start();
 
-// 8. Register a new user and queue welcome email atomically
+// Register a new user and queue welcome email atomically
+// #region create-chain
 const chain = await withTransactionHooks(async (transactionHooks) =>
   db.transaction().execute(async (txDb) => {
     const user = await txDb
@@ -117,12 +118,13 @@ const chain = await withTransactionHooks(async (transactionHooks) =>
     });
   }),
 );
+// #endregion
 
-// 9. Wait for the chain to complete
+// Wait for the chain to complete
 const result = await client.awaitChain(chain, { timeoutMs: 5000 });
 console.log(`Welcome email sent at: ${result.output.sentAt}`);
 
-// 10. Cleanup
+// Cleanup
 await stopWorker();
 await notifyAdapter.close();
 await stateAdapter.close();

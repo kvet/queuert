@@ -21,6 +21,6 @@ yarn add @queuert/redis
 
 ## Documentation
 
-- [Notify Adapters Guide](https://kvet.github.io/queuert/integrations/notify-adapters/)
+- [Notify Adapters Guide](https://kvet.github.io/queuert/integrations/notify-adapters/redis/)
 - [API Reference](https://kvet.github.io/queuert/api/redis/readme/)
 - [Full Documentation](https://kvet.github.io/queuert/)

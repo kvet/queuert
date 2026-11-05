@@ -20,7 +20,7 @@ Review the Queuert library before publishing. This complements the per-change re
 BASE=$(git describe --tags --abbrev=0)
 git diff --name-only $BASE..HEAD | wc -l
 git diff --name-only $BASE..HEAD -- 'packages/*/src/state-adapter/**' 'packages-internal/typed-sql/**' | head -1
-git diff --name-only $BASE..HEAD -- 'packages/otel/**' 'packages/core/src/observability-adapter/**' 'docs/src/content/docs/advanced/otel-*' | head -1
+git diff --name-only $BASE..HEAD -- 'packages/otel/**' 'packages/core/src/observability-adapter/**' 'docs/src/content/docs/integrations/opentelemetry/**' | head -1
 ```
 
 Determine the release version `<VERSION>` from the current `packages/core/package.json` version and the pending `.changeset/*.md` bumps, following the pre-1.0 rule in the `release` skill (any `major` or `minor` → `0.<minor+1>.0`, patch-only → next patch). Pass it to the Comparison agent.

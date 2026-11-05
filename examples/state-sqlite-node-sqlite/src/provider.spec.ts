@@ -6,6 +6,7 @@ import { test } from "vitest";
 
 import { createNodeSqliteStateProvider } from "./provider.js";
 
+// #region conformance
 test("state-sqlite-node-sqlite provider passes state adapter conformance", async () => {
   await runStateAdapterConformance(async () => {
     const db = new DatabaseSync(":memory:");
@@ -26,3 +27,4 @@ test("state-sqlite-node-sqlite provider passes state adapter conformance", async
     };
   });
 }, 30_000);
+// #endregion

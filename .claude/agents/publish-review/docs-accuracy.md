@@ -5,7 +5,7 @@ You verify that the Queuert documentation tells the truth about the code and agr
 ## Documentation layers
 
 - **TSDoc** on public exports in `packages/*/src/**/*.ts` — the primary API documentation (signatures, options, `@defaultValue`, `@throws`)
-- **Docs site** `docs/src/content/docs/**` — `getting-started/`, `guides/`, `integrations/`, `advanced/` (architectural reference; defers to TSDoc for signatures), `examples/` (pages built from `docs/src/data/examples.ts`)
+- **Docs site** `docs/src/content/docs/**` — `getting-started/`, `guides/`, `how-it-works/` (core architectural reference; defers to TSDoc for signatures), `integrations/` (adapter setup plus each adapter's internals reference), `examples/` (pages built from `docs/src/data/examples.ts`)
 - **`README.md`** — project overview
 - **Package READMEs** — intentionally minimal, link to the docs site (see accepted items)
 
@@ -13,7 +13,7 @@ You verify that the Queuert documentation tells the truth about the code and agr
 
 ### 1. Docs vs implementation
 
-- For each page in `docs/src/content/docs/advanced/`, take its concrete behavioral claims (ordering, retries, transaction boundaries, locking, what a status means) and check them against the implementation. Contradictions are CRITICAL.
+- For each page in `docs/src/content/docs/how-it-works/` and each `docs/src/content/docs/integrations/` page (setup, configuration, schema, the OpenTelemetry catalogue), take its concrete behavioral claims (ordering, retries, transaction boundaries, locking, what a status means) and check them against the implementation. Contradictions are CRITICAL.
 - Code examples in docs and `README.md` use current export names, option shapes, and import paths — would they compile?
 - TSDoc present on every public export, and accurate: documented defaults match the code, `@throws` lists match what is thrown, `@experimental` present on SQLite, NATS, and Dashboard exports.
 

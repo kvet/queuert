@@ -12,10 +12,10 @@ import {
 
 import { createNodeSqliteStateProvider } from "./provider.js";
 
-// 1. Create in-memory SQLite database
+// Create in-memory SQLite database
 const db = new DatabaseSync(":memory:");
 
-// 2. Create application schema
+// Create application schema
 db.exec(`
   CREATE TABLE IF NOT EXISTS users (
     id INTEGER PRIMARY KEY AUTOINCREMENT,
@@ -24,7 +24,7 @@ db.exec(`
   );
 `);
 
-// 3. Define job types
+// Define job types
 const jobTypes = defineJobTypes<{
   send_welcome_email: {
     entry: true;
@@ -33,13 +33,13 @@ const jobTypes = defineJobTypes<{
   };
 }>();
 
-// 4. Create state provider for node:sqlite
+// Create state provider for node:sqlite
+// #region adapter
 const lock = createAsyncRwLock();
 const stateProvider = createNodeSqliteStateProvider({ db, lock });
-
-// 5. Create adapters and queuert client/worker
 const stateAdapter = await createSqliteStateAdapter({ stateProvider });
 await stateAdapter.migrateToLatest();
+// #endregion
 
 const notifyAdapter = await createInProcessNotifyAdapter();
 
@@ -49,7 +49,7 @@ const client = await createClient({
   jobTypes,
 });
 
-// 6. Create and start worker
+// Create and start worker
 const worker = await createInProcessWorker({
   client,
   processors: createProcessors({
@@ -102,7 +102,8 @@ const worker = await createInProcessWorker({
 
 const stopWorker = await worker.start();
 
-// 7. Register a new user and queue welcome email atomically
+// Register a new user and queue welcome email atomically
+// #region create-chain
 const chain = await withTransactionHooks(async (transactionHooks) => {
   using _h = await lock.acquireWrite();
   db.exec("BEGIN");
@@ -131,12 +132,13 @@ const chain = await withTransactionHooks(async (transactionHooks) => {
     throw error;
   }
 });
+// #endregion
 
-// 8. Wait for the chain to complete
+// Wait for the chain to complete
 const result = await client.awaitChain(chain, { timeoutMs: 5000 });
 console.log(`Welcome email sent at: ${result.output.sentAt}`);
 
-// 9. Cleanup
+// Cleanup
 await stopWorker();
 await notifyAdapter.close();
 await stateAdapter.close();

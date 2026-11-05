@@ -23,7 +23,10 @@ export const CopyButton = (props: { text: string; label?: string; class?: string
       }}
     >
       <Show when={copied()} fallback={<CopyIcon size={13} />}>
-        <CheckIcon size={13} class="text-status-running-dot" />
+        <span class="animate-fade-in text-[11px] text-fg-muted" aria-hidden="true">
+          Copied
+        </span>
+        <CheckIcon size={13} class="animate-fade-in text-status-running-dot" />
       </Show>
     </button>
   );

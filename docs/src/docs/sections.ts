@@ -1,7 +1,7 @@
 type SiteGroup = { label: string; slugs: string[] };
 
 export type SiteSection = {
-  id: "docs" | "examples" | "api" | "compare" | "benchmarks" | "changelog";
+  id: "docs" | "integrations" | "examples" | "api" | "compare" | "benchmarks" | "changelog";
   label: string;
   href: string;
   groups: SiteGroup[];
@@ -82,33 +82,56 @@ export const siteSections: SiteSection[] = [
         ],
       },
       {
-        label: "Integrations",
+        label: "How It Works",
+        slugs: [
+          "how-it-works/chain-model",
+          "how-it-works/job-processing",
+          "how-it-works/in-process-worker",
+          "how-it-works/job-type-references",
+        ],
+      },
+    ],
+  },
+  {
+    id: "integrations",
+    label: "Integrations",
+    href: "/integrations/",
+    groups: [
+      { label: "Overview", slugs: ["integrations"] },
+      {
+        label: "State Adapters",
         slugs: [
           "integrations/state-adapters",
-          "integrations/notify-adapters",
-          "integrations/validation-adapters",
-          "integrations/observability",
-          "integrations/dashboard",
+          "integrations/state-adapters/postgres",
+          "integrations/state-adapters/sqlite",
+          "integrations/state-adapters/in-process",
+          "integrations/state-adapters/custom",
         ],
       },
       {
-        label: "Advanced",
+        label: "Notify Adapters",
         slugs: [
-          "advanced/in-process-worker",
-          "advanced/chain-model",
-          "advanced/job-processing",
-          "advanced/adapters",
-          "advanced/job-type-references",
-          "advanced/postgres-internals",
-          "advanced/sqlite-internals",
-          "advanced/redis-internals",
-          "advanced/nats-internals",
-          "advanced/logging",
-          "advanced/otel-metrics",
-          "advanced/otel-tracing",
-          "advanced/otel-internals",
-          "advanced/dashboard-internals",
-          "advanced/custom-adapters",
+          "integrations/notify-adapters",
+          "integrations/notify-adapters/postgres",
+          "integrations/notify-adapters/redis",
+          "integrations/notify-adapters/nats",
+          "integrations/notify-adapters/in-process",
+          "integrations/notify-adapters/custom",
+        ],
+      },
+      {
+        label: "Validation",
+        slugs: ["integrations/validation", "integrations/validation/custom"],
+      },
+      {
+        label: "Observability",
+        slugs: [
+          "integrations/observability",
+          "integrations/logging",
+          "integrations/opentelemetry",
+          "integrations/opentelemetry/metrics",
+          "integrations/opentelemetry/tracing",
+          "integrations/dashboard",
         ],
       },
     ],

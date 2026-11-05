@@ -49,7 +49,7 @@ const Page = () => (
       baseline is a realistic client.
     </p>
     <KeyValueList title="Test setup" items={setup} />
-    <FieldList title="Scenario families" items={families} />
+    <FieldList title="Scenario families" items={families} proseNames />
     <h2 id="results">Results</h2>
     <p>
       Beyond a fixed baseline, cost grows roughly linearly with the number of job types whatever the

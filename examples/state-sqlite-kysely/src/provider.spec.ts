@@ -8,6 +8,7 @@ import { createKyselySqliteStateProvider } from "./provider.js";
 
 type Database = Record<string, never>;
 
+// #region conformance
 test("state-sqlite-kysely provider passes state adapter conformance", async () => {
   await runStateAdapterConformance(async () => {
     const sqliteDb = new BetterSqlite3(":memory:");
@@ -31,3 +32,4 @@ test("state-sqlite-kysely provider passes state adapter conformance", async () =
     };
   });
 }, 30_000);
+// #endregion

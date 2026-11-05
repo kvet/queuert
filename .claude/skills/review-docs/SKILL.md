@@ -5,7 +5,7 @@ description: Check if documentation is up to date with code changes. Analyzes gi
 
 # Documentation Sync Check
 
-Analyze git changes to identify documentation that may need updating. This skill compares code modifications against TSDoc, reference docs (`docs/src/content/docs/advanced/`), and the rest of the docs site to ensure documentation stays in sync with the codebase.
+Analyze git changes to identify documentation that may need updating. This skill compares code modifications against TSDoc, reference docs (`docs/src/content/docs/how-it-works/`, plus the schema and OpenTelemetry catalogue pages under `docs/src/content/docs/integrations/`), and the rest of the docs site to ensure documentation stays in sync with the codebase.
 
 ## Instructions
 
@@ -43,13 +43,13 @@ Also run `git diff --name-only` (with appropriate flags) to get the list of chan
 
 Group changes by their documentation relevance:
 
-| File Pattern        | Related Documentation                                                                                           |
-| ------------------- | --------------------------------------------------------------------------------------------------------------- |
-| `packages/*/src/**` | TSDoc on exports, relevant reference docs in `docs/src/content/docs/advanced/`, adapter page in `integrations/` |
-| `examples/**`       | `docs/src/data/examples.ts`, matching guide in `docs/src/content/docs/guides/`                                  |
-| Exports/public API  | TSDoc on exports, every docs page and `README.md` section that mentions the symbol                              |
+| File Pattern        | Related Documentation                                                                                                                                               |
+| ------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `packages/*/src/**` | TSDoc on exports, relevant reference docs in `docs/src/content/docs/how-it-works/`, adapter pages in `integrations/` (setup, configuration, schema, OTel catalogue) |
+| `examples/**`       | `docs/src/data/examples.ts`, matching guide in `docs/src/content/docs/guides/`                                                                                      |
+| Exports/public API  | TSDoc on exports, every docs page and `README.md` section that mentions the symbol                                                                                  |
 
-Look in `docs/src/content/docs/advanced/` to identify which reference docs are relevant for a given package or subsystem.
+Look in `docs/src/content/docs/how-it-works/` and `docs/src/content/docs/integrations/` to identify which reference docs are relevant for a given package or subsystem.
 
 ### Step 3: Analyze Documentation Impact
 

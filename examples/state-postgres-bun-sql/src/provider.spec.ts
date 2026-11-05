@@ -7,6 +7,7 @@ import { runStateAdapterConformance } from "queuert/conformance";
 
 import { createBunSqlStateProvider } from "./provider.js";
 
+// #region conformance
 test("state-postgres-bun-sql provider passes state adapter conformance", async () => {
   await using pg = await acquirePostgres("postgres:18", import.meta.url);
 
@@ -28,3 +29,4 @@ test("state-postgres-bun-sql provider passes state adapter conformance", async (
     };
   });
 }, 120_000);
+// #endregion

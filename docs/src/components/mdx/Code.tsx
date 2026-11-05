@@ -1,5 +1,5 @@
 import { Box } from "@queuert/ui/components";
-import { Show } from "solid-js";
+import { type JSX, Show } from "solid-js";
 
 import { CopyButton } from "../CopyButton.tsx";
 
@@ -21,10 +21,14 @@ const langLabels: Record<string, string> = {
 };
 
 export const Code = (
-  props: { lang: string; title?: string; signature?: string } & (
-    | { children: string }
-    | { code: string; html: string }
-  ),
+  props: {
+    lang: string;
+    title?: JSX.Element;
+    signature?: string;
+    actions?: JSX.Element;
+    /** Caps the box at about 30 lines and scrolls the rest inside it. */
+    scroll?: boolean;
+  } & ({ children: string } | { code: string; html: string }),
 ) => {
   const code = () => ("code" in props ? props.code : props.children);
   return (
@@ -33,12 +37,17 @@ export const Code = (
       bodyClass={
         props.signature
           ? `code-html code-signature ${code().includes("\n") ? "" : "code-signature-line"}`
-          : "code-html"
+          : `code-html ${props.scroll ? "code-scroll" : ""}`
       }
       title={
         props.title ?? (props.signature ? "Signature" : (langLabels[props.lang] ?? props.lang))
       }
-      actions={<CopyButton text={code()} label="Copy code" />}
+      actions={
+        <>
+          {props.actions}
+          <CopyButton text={code()} label="Copy code" />
+        </>
+      }
       data-code-lang={props.lang}
     >
       <Show

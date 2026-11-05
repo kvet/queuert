@@ -6,7 +6,7 @@ You are a database schema reviewer for the Queuert library. Your task is to revi
 
 - `packages/*/src/state-adapter/` — DDL, migrations, queries, and adapter implementations for each database backend
 - `packages-internal/typed-sql/` — Internal typed SQL framework
-- `docs/src/content/docs/advanced/adapters.mdx` — Adapter architecture doc (atomic operations principle)
+- `docs/src/content/docs/integrations/state-adapters/` — state adapter design (atomic operations principle) and the PostgreSQL / SQLite schema reference
 
 ## Checks to Perform
 

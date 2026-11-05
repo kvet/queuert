@@ -52,10 +52,10 @@ try {
 }
 ```
 
-Errors thrown by the underlying schema library (`ZodError`, `ValiError`, `TypeBoxError`, ...) are caught and wrapped, so callers always handle a single error type regardless of which library the adapter uses. The five codes are `not_entry_point`, `invalid_input`, `invalid_output`, `invalid_continuation`, and `invalid_blockers`.
+Errors thrown by the underlying schema library (`ZodError`, `ValiError`, `TypeBoxError`, ...) are caught and wrapped, so callers always handle a single error type regardless of which library the adapter uses. The five codes are `not_entry_point`, `invalid_input`, `invalid_output`, `invalid_continuation`, and `invalid_blockers`. `details` holds what failed validation (the input, output, continuation target or blockers), and `cause` the error the validation function threw.
 
 ## See also
 
-- [Validation Adapters](/queuert/integrations/validation-adapters/) — the adapter pattern, the six-method contract, and ready-to-copy adapters for Zod, Valibot, TypeBox, and ArkType
-- [Custom Adapters](/queuert/advanced/custom-adapters/) — building and conformance-testing your own validation adapter
+- [Validation Adapters](/queuert/integrations/validation/) — the adapter pattern, the six-method contract, and ready-to-copy adapters for Zod, Valibot, TypeBox, and ArkType
+- [Custom Validation Adapter](/queuert/integrations/validation/custom/) — building and conformance-testing your own validation adapter
 - [Error Handling](/queuert/guides/error-handling/) — how `JobTypeValidationError` interacts with retries and chain failure

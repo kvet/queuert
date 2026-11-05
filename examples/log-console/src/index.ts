@@ -9,7 +9,7 @@ import {
   withTransactionHooks,
 } from "queuert";
 
-// 1. Define job types
+// Define job types
 const jobTypes = defineJobTypes<{
   greet: {
     entry: true;
@@ -23,9 +23,10 @@ const jobTypes = defineJobTypes<{
   };
 }>();
 
-// 2. Create adapters with console logging
+// Create adapters with console logging
 const stateAdapter = await createInProcessStateAdapter();
 const notifyAdapter = await createInProcessNotifyAdapter();
+// #region client
 const log = createConsoleLog();
 
 const client = await createClient({
@@ -34,8 +35,9 @@ const client = await createClient({
   log,
   jobTypes,
 });
+// #endregion
 
-// 3. Create and start worker
+// Create and start worker
 const worker = await createInProcessWorker({
   client,
   processors: createProcessors({
@@ -79,7 +81,7 @@ const worker = await createInProcessWorker({
 
 const stopWorker = await worker.start();
 
-// 4. Run successful job
+// Run successful job
 console.log("\n--- Running successful job ---\n");
 const successChain = await withTransactionHooks(async (transactionHooks) =>
   stateAdapter.withTransaction(async (ctx) =>
@@ -93,7 +95,7 @@ const successChain = await withTransactionHooks(async (transactionHooks) =>
 );
 await client.awaitChain(successChain, { timeoutMs: 5000 });
 
-// 5. Run job that fails then succeeds (demonstrates error logging)
+// Run job that fails then succeeds (demonstrates error logging)
 console.log("\n--- Running job that fails first attempt ---\n");
 const failThenSucceedChain = await withTransactionHooks(async (transactionHooks) =>
   stateAdapter.withTransaction(async (ctx) =>
@@ -107,7 +109,7 @@ const failThenSucceedChain = await withTransactionHooks(async (transactionHooks)
 );
 await client.awaitChain(failThenSucceedChain, { timeoutMs: 5000 });
 
-// 6. Cleanup
+// Cleanup
 await stopWorker();
 await notifyAdapter.close();
 await stateAdapter.close();

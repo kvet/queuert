@@ -38,7 +38,7 @@ rather than overloading an unrelated standard attribute.
   originate here
 - `packages/otel/src/index.ts` — public OTEL exports
 - `packages/otel/README.md` — documented metric/attribute names
-- `docs/src/content/docs/advanced/otel-metrics.md` — reference doc for emitted
+- `docs/src/content/docs/integrations/opentelemetry/metrics.tsx` — reference doc for emitted
   metrics
 - `packages/core/src/observability-adapter/observability-adapter.ts` (and the
   hook/event payloads it consumes) — the source of attribute _values_ the OTEL
@@ -115,7 +115,7 @@ For every attribute set on a metric or span:
 
 ### 6. Documentation Parity
 
-- Every metric/attribute documented in `docs/src/content/docs/advanced/otel-metrics.md`
+- Every metric/attribute documented in `docs/src/content/docs/integrations/opentelemetry/metrics.tsx`
   and `packages/otel/README.md` must match what the adapter actually emits
   (name, unit, instrument kind, attribute set).
 - Metrics emitted but not documented are a WARNING.

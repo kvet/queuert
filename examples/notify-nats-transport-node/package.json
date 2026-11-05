@@ -12,6 +12,7 @@
   "type": "module",
   "scripts": {
     "start": "tsx src/index.ts",
+    "test": "vitest --run",
     "typecheck": "tsc --noEmit"
   },
   "devDependencies": {

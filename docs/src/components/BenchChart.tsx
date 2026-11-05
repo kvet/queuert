@@ -1,5 +1,7 @@
 import { Box, Chip } from "@queuert/ui/components";
-import { For, Show } from "solid-js";
+import { For, Show, onMount } from "solid-js";
+
+import { revealOnView } from "./reveal.ts";
 
 type BenchRow = {
   label: string;
@@ -33,6 +35,10 @@ export const BenchChart = (props: {
       minimumFractionDigits: props.decimals ?? 0,
       maximumFractionDigits: props.decimals ?? 0,
     })}`;
+  let list: HTMLUListElement | undefined = undefined;
+  onMount(() => {
+    revealOnView(list);
+  });
   const seriesWidth = () => `${Math.max(...props.series.map((name) => name.length), 1) + 1}ch`;
 
   return (
@@ -53,7 +59,7 @@ export const BenchChart = (props: {
           </For>
         </div>
       </Show>
-      <ul class="row-list divide-y divide-border">
+      <ul ref={list} class="row-list divide-y divide-border">
         <For each={props.groups}>
           {(group) => (
             <>
@@ -95,12 +101,18 @@ export const BenchChart = (props: {
                             </Show>
                             <div class="flex min-w-0 flex-1 items-center gap-2">
                               <span
-                                class={`h-2 shrink-0 rounded-r-xs ${shades()[index()]}`}
+                                class={`reveal-bar h-2 shrink-0 rounded-r-xs ${shades()[index()]}`}
                                 style={{
                                   width: `max(2px, ${(value / max()) * 74}%)`,
+                                  "--reveal-delay": `${index() * 120}ms`,
                                 }}
                               />{" "}
-                              <span class="shrink-0 text-fg tabular-nums">{format(value)}</span>
+                              <span
+                                class="reveal-fade shrink-0 text-fg tabular-nums"
+                                style={{ "--reveal-delay": `${380 + index() * 120}ms` }}
+                              >
+                                {format(value)}
+                              </span>
                             </div>
                           </div>
                         )}

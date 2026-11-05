@@ -7,7 +7,7 @@ sidebar:
 
 When your code throws during job processing, your transaction rolls back any partial work and the worker reschedules the job with backoff. This happens automatically — no defensive error handling is needed inside your handler.
 
-This guide covers the engine's safety guarantees. For user-level error strategies (discriminated unions, compensation, rescheduling), see [Error Handling](../error-handling/). For the architectural overview, see [Job Processing](/queuert/advanced/job-processing/#errors-and-commit-detection).
+This guide covers the engine's safety guarantees. For user-level error strategies (discriminated unions, compensation, rescheduling), see [Error Handling](../error-handling/). For the architectural overview, see [Job Processing](/queuert/how-it-works/job-processing/#errors-and-commit-detection).
 
 ## The Short Version
 
@@ -131,4 +131,4 @@ Keep work that must succeed for the job to count as done inside the transaction 
 
 ## See Also
 
-See [examples/showcase-error-recovery](https://github.com/kvet/queuert/tree/main/examples/showcase-error-recovery) for a complete working example. See also [Error Handling](../error-handling/) for user-level error strategy, [Timeouts](../timeouts/) for the worker lease, and [Job Processing](/queuert/advanced/job-processing/) reference.
+See [examples/showcase-error-recovery](https://github.com/kvet/queuert/tree/main/examples/showcase-error-recovery) for a complete working example. See also [Error Handling](../error-handling/) for user-level error strategy, [Timeouts](../timeouts/) for the worker lease, and [Job Processing](/queuert/how-it-works/job-processing/) reference.

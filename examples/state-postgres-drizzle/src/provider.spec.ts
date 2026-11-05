@@ -7,6 +7,7 @@ import { test } from "vitest";
 
 import { createDrizzlePgStateProvider } from "./provider.js";
 
+// #region conformance
 test("state-postgres-drizzle provider passes state adapter conformance", async () => {
   await using pg = await acquirePostgres("postgres:18", import.meta.url);
 
@@ -29,3 +30,4 @@ test("state-postgres-drizzle provider passes state adapter conformance", async (
     };
   });
 }, 60_000);
+// #endregion

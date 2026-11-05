@@ -15,7 +15,8 @@
   },
   "scripts": {
     "start": "tsx src/index.ts",
-    "test": "vitest --run",
+    "test": "vitest --run && tsx --test src/provider.node-test.ts",
+    "test:node": "tsx --test src/provider.node-test.ts",
     "typecheck": "tsc --noEmit"
   },
   "devDependencies": {

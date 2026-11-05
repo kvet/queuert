@@ -65,8 +65,7 @@ describe("siteSections", () => {
 
   it.each([
     ["Guides", "guides"],
-    ["Integrations", "integrations"],
-    ["Advanced", "advanced"],
+    ["How It Works", "how-it-works"],
   ])("orders the %s group by sidebar.order, then title", async (label, directory) => {
     expect(docsGroup(label)).toEqual(await sidebarOrder(directory));
   });
@@ -76,6 +75,7 @@ describe("sectionForPath", () => {
   it("finds the section of a listed page, with or without the trailing slash", () => {
     expect(sectionForPath("/guides/scheduling/")?.id).toBe("docs");
     expect(sectionForPath("/comparison/pg-boss")?.id).toBe("compare");
+    expect(sectionForPath("/integrations/state-adapters/postgres/")?.id).toBe("integrations");
     expect(sectionForPath("/benchmarks/")?.id).toBe("benchmarks");
   });
 

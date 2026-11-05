@@ -1039,6 +1039,34 @@ importers:
         specifier: workspace:*
         version: link:../../packages-internal/tsconfig
 
+  examples/showcase-onboarding:
+    dependencies:
+      '@queuert/postgres':
+        specifier: workspace:*
+        version: link:../../packages/postgres
+      drizzle-orm:
+        specifier: 0.45.4
+        version: 0.45.4(@electric-sql/pglite@0.4.3)(@opentelemetry/api@1.10.0)(@prisma/client@7.10.1(prisma@7.10.0(@types/react@19.3.0)(better-sqlite3@13.0.3)(react-dom@19.3.1(react@19.3.1))(react@19.3.1)(typescript@7.0.2))(typescript@7.0.2))(@types/better-sqlite3@9.6.0)(@types/pg@8.23.1)(better-sqlite3@13.0.3)(bun-types@1.4.4)(knex@3.3.0(better-sqlite3@13.0.3)(mysql2@3.15.3)(pg@8.23.1))(kysely@0.29.8)(mysql2@3.15.3)(pg@8.23.1)(postgres@3.4.9)(prisma@7.10.0(@types/react@19.3.0)(better-sqlite3@13.0.3)(react-dom@19.3.1(react@19.3.1))(react@19.3.1)(typescript@7.0.2))
+      example-state-postgres-drizzle:
+        specifier: workspace:*
+        version: link:../state-postgres-drizzle
+      pg:
+        specifier: 8.23.1
+        version: 8.23.1
+      queuert:
+        specifier: workspace:*
+        version: link:../../packages/core
+    devDependencies:
+      '@queuert/testcontainers':
+        specifier: workspace:*
+        version: link:../../packages-internal/testcontainers
+      '@queuert/tsconfig':
+        specifier: workspace:*
+        version: link:../../packages-internal/tsconfig
+      '@types/pg':
+        specifier: 8.23.1
+        version: 8.23.1
+
   examples/showcase-queries:
     dependencies:
       '@queuert/postgres':

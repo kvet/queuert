@@ -6,6 +6,7 @@ import { test } from "vitest";
 
 import { createPgPoolNotifyProvider } from "./provider.js";
 
+// #region conformance
 test("notify-postgres-pg provider passes notify adapter conformance", async () => {
   await using pg = await acquirePostgres("postgres:18", import.meta.url);
 
@@ -26,3 +27,4 @@ test("notify-postgres-pg provider passes notify adapter conformance", async () =
     };
   });
 }, 60_000);
+// #endregion

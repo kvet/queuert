@@ -6,6 +6,7 @@ import { runStateAdapterConformance } from "queuert/conformance";
 
 import { createBunSqlSqliteStateProvider } from "./provider.js";
 
+// #region conformance
 test("state-sqlite-bun-sql provider passes state adapter conformance", async () => {
   await runStateAdapterConformance(async () => {
     const sql = new SQL("sqlite://:memory:");
@@ -26,3 +27,4 @@ test("state-sqlite-bun-sql provider passes state adapter conformance", async () 
     };
   });
 }, 30_000);
+// #endregion

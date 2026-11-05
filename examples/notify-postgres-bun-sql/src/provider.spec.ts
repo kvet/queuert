@@ -7,6 +7,7 @@ import { runNotifyAdapterConformance } from "queuert/conformance";
 
 import { createBunSqlNotifyProvider } from "./provider.js";
 
+// #region conformance
 test("notify-postgres-bun-sql provider passes notify adapter conformance", async () => {
   await using pg = await acquirePostgres("postgres:18", import.meta.url);
 
@@ -27,3 +28,4 @@ test("notify-postgres-bun-sql provider passes notify adapter conformance", async
     };
   });
 }, 120_000);
+// #endregion

@@ -21,7 +21,7 @@ yarn add @queuert/postgres
 
 ## Documentation
 
-- [State Adapters Guide](https://kvet.github.io/queuert/integrations/state-adapters/)
-- [Notify Adapters Guide](https://kvet.github.io/queuert/integrations/notify-adapters/)
+- [State Adapters Guide](https://kvet.github.io/queuert/integrations/state-adapters/postgres/)
+- [Notify Adapters Guide](https://kvet.github.io/queuert/integrations/notify-adapters/postgres/)
 - [API Reference](https://kvet.github.io/queuert/api/postgres/readme/)
 - [Full Documentation](https://kvet.github.io/queuert/)

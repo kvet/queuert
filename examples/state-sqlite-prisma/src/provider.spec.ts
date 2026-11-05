@@ -13,6 +13,7 @@ import { createPrismaSqliteStateProvider } from "./provider.js";
 
 const EXAMPLE_DIR = dirname(dirname(fileURLToPath(import.meta.url)));
 
+// #region conformance
 test("state-sqlite-prisma provider passes state adapter conformance", async () => {
   await runStateAdapterConformance(async () => {
     const tempDir = mkdtempSync(join(tmpdir(), "queuert-sqlite-prisma-spec-"));
@@ -42,3 +43,4 @@ test("state-sqlite-prisma provider passes state adapter conformance", async () =
     };
   });
 }, 60_000);
+// #endregion

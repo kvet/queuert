@@ -5,7 +5,7 @@ sidebar:
   order: 2
 ---
 
-import { Steps, Tabs, TabItem, Badge } from "@astrojs/starlight/components";
+import { Aside, Steps, Tabs, TabItem } from "@astrojs/starlight/components";
 
 ## Requirements
 
@@ -41,7 +41,7 @@ import { Steps, Tabs, TabItem, Badge } from "@astrojs/starlight/components";
    <Tabs>
      <TabItem label="PostgreSQL">
        Recommended for production. Supports horizontal scaling and all Queuert features.
-       Requires PostgreSQL 14+.
+       Requires PostgreSQL 14+. See [PostgreSQL State Adapter](/queuert/integrations/state-adapters/postgres/).
 
        <Tabs syncKey="pkg">
          <TabItem label="npm">
@@ -62,8 +62,12 @@ import { Steps, Tabs, TabItem, Badge } from "@astrojs/starlight/components";
        </Tabs>
      </TabItem>
      <TabItem label="SQLite">
-       <Badge text="Experimental" variant="caution" /> Suitable for local development, CLI tools,
-       and embedded applications. Requires SQLite 3.42+.
+       <Aside type="caution" title="Experimental">
+         `@queuert/sqlite` is experimental: its API may change in a minor release.
+       </Aside>
+
+       Suitable for local development, CLI tools, and embedded applications. Requires SQLite 3.42+.
+       See [SQLite State Adapter](/queuert/integrations/state-adapters/sqlite/).
 
        <Tabs syncKey="pkg">
          <TabItem label="npm">
@@ -89,7 +93,8 @@ import { Steps, Tabs, TabItem, Badge } from "@astrojs/starlight/components";
 
    <Tabs>
      <TabItem label="Redis">
-       Recommended for production. Uses Redis pub/sub. Requires Redis 6+.
+       Recommended for production. Uses Redis pub/sub. Requires Redis 6+. See
+       [Redis Notify Adapter](/queuert/integrations/notify-adapters/redis/).
 
        <Tabs syncKey="pkg">
          <TabItem label="npm">
@@ -110,29 +115,35 @@ import { Steps, Tabs, TabItem, Badge } from "@astrojs/starlight/components";
        </Tabs>
      </TabItem>
      <TabItem label="NATS">
-       <Badge text="Experimental" variant="caution" /> Uses NATS pub/sub. Requires NATS 2.2+.
+       <Aside type="caution" title="Experimental">
+         `@queuert/nats` is experimental: its API may change in a minor release.
+       </Aside>
+
+       Uses NATS pub/sub. Requires NATS 2.2+. See
+       [NATS Notify Adapter](/queuert/integrations/notify-adapters/nats/).
 
        <Tabs syncKey="pkg">
          <TabItem label="npm">
            ```bash
-           npm install @queuert/nats
+           npm install @queuert/nats @nats-io/nats-core @nats-io/transport-node
            ```
          </TabItem>
          <TabItem label="pnpm">
            ```bash
-           pnpm add @queuert/nats
+           pnpm add @queuert/nats @nats-io/nats-core @nats-io/transport-node
            ```
          </TabItem>
          <TabItem label="yarn">
            ```bash
-           yarn add @queuert/nats
+           yarn add @queuert/nats @nats-io/nats-core @nats-io/transport-node
            ```
          </TabItem>
        </Tabs>
      </TabItem>
      <TabItem label="PostgreSQL LISTEN/NOTIFY">
        Uses PostgreSQL's built-in `LISTEN`/`NOTIFY`. No additional infrastructure beyond your
-       existing PostgreSQL database — already included in `@queuert/postgres`.
+       existing PostgreSQL database — already included in `@queuert/postgres`. See
+       [PostgreSQL Notify Adapter](/queuert/integrations/notify-adapters/postgres/).
 
        <Tabs syncKey="pkg">
          <TabItem label="npm">
@@ -155,10 +166,11 @@ import { Steps, Tabs, TabItem, Badge } from "@astrojs/starlight/components";
      <TabItem label="None (polling)">
        Workers poll the database on a configurable interval. No extra packages or infrastructure
        required. Suitable for low-throughput workloads where millisecond latency is not critical.
+       See [Without a notify adapter](/queuert/integrations/notify-adapters/#polling).
      </TabItem>
    </Tabs>
 
-4. (Optional) Install additional packages:
+4. (Optional) Install additional packages, covered in [Observability](/queuert/integrations/observability/):
 
    <Tabs syncKey="pkg">
      <TabItem label="npm">
@@ -183,6 +195,6 @@ import { Steps, Tabs, TabItem, Badge } from "@astrojs/starlight/components";
 
 </Steps>
 
-For detailed adapter configuration (ORM setup, driver options, provider interfaces), see the [Integrations](/queuert/integrations/state-adapters/) section.
+For detailed adapter configuration (ORM setup, driver options, provider interfaces), see the [Integrations](/queuert/integrations/) section.
 
 Next up: **[Core Concepts](/queuert/getting-started/core-concepts/)** — learn the building blocks before diving into guides.

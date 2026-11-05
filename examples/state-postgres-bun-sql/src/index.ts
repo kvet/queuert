@@ -12,10 +12,10 @@ import {
 
 import { createBunSqlStateProvider } from "./provider.js";
 
-// 1. Start PostgreSQL using testcontainers
+// Start PostgreSQL using testcontainers
 await using pg = await acquirePostgres("postgres:18", import.meta.url);
 
-// 2. Create database connection and schema
+// Create database connection and schema
 const sql = new SQL(pg.connectionString, { max: 10 });
 
 await sql`
@@ -26,7 +26,7 @@ await sql`
   )
 `;
 
-// 3. Define job types
+// Define job types
 const jobTypes = defineJobTypes<{
   send_welcome_email: {
     entry: true;
@@ -35,10 +35,12 @@ const jobTypes = defineJobTypes<{
   };
 }>();
 
-// 4. Create providers and adapters
+// Create providers and adapters
+// #region adapter
 const stateProvider = createBunSqlStateProvider({ sql });
 const stateAdapter = await createPgStateAdapter({ stateProvider });
 await stateAdapter.migrateToLatest();
+// #endregion
 
 const notifyAdapter = await createInProcessNotifyAdapter();
 
@@ -77,7 +79,7 @@ const worker = await createInProcessWorker({
 
 const stopWorker = await worker.start();
 
-// 5. Register a new user and queue welcome email atomically
+// Register a new user and queue welcome email atomically
 const chain = await withTransactionHooks(async (transactionHooks) =>
   sql.begin(async (txSql) => {
     const [user]: { id: number }[] = await txSql`
@@ -93,11 +95,11 @@ const chain = await withTransactionHooks(async (transactionHooks) =>
   }),
 );
 
-// 6. Wait for the chain to complete
+// Wait for the chain to complete
 const result = await client.awaitChain(chain, { timeoutMs: 5000 });
 console.log(`Welcome email sent at: ${result.output.sentAt}`);
 
-// 7. Cleanup
+// Cleanup
 await stopWorker();
 await notifyAdapter.close();
 await stateAdapter.close();

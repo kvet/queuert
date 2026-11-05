@@ -12,17 +12,17 @@ import {
 
 import { createKnexPgStateProvider } from "./provider.js";
 
-// 1. Start PostgreSQL using testcontainers
+// Start PostgreSQL using testcontainers
 await using pg = await acquirePostgres("postgres:18", import.meta.url);
 
-// 2. Create database connection
+// Create database connection
 const knex = knexFactory({
   client: "pg",
   connection: pg.connectionString,
   pool: { min: 0, max: 10 },
 });
 
-// 3. Create application schema
+// Create application schema
 await knex.raw(`
   CREATE TABLE IF NOT EXISTS users (
     id SERIAL PRIMARY KEY,
@@ -31,7 +31,7 @@ await knex.raw(`
   );
 `);
 
-// 4. Define job types
+// Define job types
 const jobTypes = defineJobTypes<{
   send_welcome_email: {
     entry: true;
@@ -40,14 +40,14 @@ const jobTypes = defineJobTypes<{
   };
 }>();
 
-// 5. Create state provider for Knex
+// Create state provider for Knex
+// #region adapter
 const stateProvider = createKnexPgStateProvider({ knex });
-
-// 6. Create adapters and queuert client/worker
 const stateAdapter = await createPgStateAdapter({
   stateProvider,
 });
 await stateAdapter.migrateToLatest();
+// #endregion
 
 const notifyAdapter = await createInProcessNotifyAdapter();
 
@@ -57,7 +57,7 @@ const client = await createClient({
   jobTypes,
 });
 
-// 7. Create worker with job type processors
+// Create worker with job type processors
 const worker = await createInProcessWorker({
   client,
   processors: createProcessors({
@@ -87,7 +87,7 @@ const worker = await createInProcessWorker({
 
 const stopWorker = await worker.start();
 
-// 8. Register a new user and queue welcome email atomically
+// Register a new user and queue welcome email atomically
 const chain = await withTransactionHooks(async (transactionHooks) =>
   knex.transaction(async (trx) => {
     const [user] = await trx<{ id: number; name: string; email: string }>("users")
@@ -104,11 +104,11 @@ const chain = await withTransactionHooks(async (transactionHooks) =>
   }),
 );
 
-// 9. Wait for the chain to complete
+// Wait for the chain to complete
 const result = await client.awaitChain(chain, { timeoutMs: 5000 });
 console.log(`Welcome email sent at: ${result.output.sentAt}`);
 
-// 10. Cleanup
+// Cleanup
 await stopWorker();
 await notifyAdapter.close();
 await stateAdapter.close();

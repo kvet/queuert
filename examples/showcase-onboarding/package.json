@@ -1,0 +1,23 @@
+{
+  "name": "example-showcase-onboarding",
+  "version": "0.0.1",
+  "private": true,
+  "description": "The three-step onboarding chain from the docs home page, runnable end to end on PostgreSQL with Drizzle.",
+  "type": "module",
+  "scripts": {
+    "start": "tsx src/index.ts",
+    "typecheck": "tsc --noEmit"
+  },
+  "dependencies": {
+    "@queuert/postgres": "workspace:*",
+    "drizzle-orm": "0.45.4",
+    "example-state-postgres-drizzle": "workspace:*",
+    "pg": "8.23.1",
+    "queuert": "workspace:*"
+  },
+  "devDependencies": {
+    "@queuert/testcontainers": "workspace:*",
+    "@queuert/tsconfig": "workspace:*",
+    "@types/pg": "8.23.1"
+  }
+}

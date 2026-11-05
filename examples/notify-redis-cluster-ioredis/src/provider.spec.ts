@@ -6,6 +6,7 @@ import { test } from "vitest";
 
 import { createIoredisClusterNotifyProvider } from "./provider.js";
 
+// #region conformance
 test("notify-redis-cluster-ioredis provider passes notify adapter conformance", async () => {
   await using rc = await acquireRedisCluster("redis:8");
 
@@ -30,3 +31,4 @@ test("notify-redis-cluster-ioredis provider passes notify adapter conformance", 
     };
   });
 }, 60_000);
+// #endregion

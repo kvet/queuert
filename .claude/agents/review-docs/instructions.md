@@ -17,7 +17,7 @@ This project has multiple documentation layers:
 
 The primary API documentation lives as TSDoc comments on all public exports in `packages/*/src/**/*.ts`. This includes type descriptions, parameter documentation, `@experimental` tags, and `{@link}` cross-references. Reference docs and READMEs defer to TSDoc for API-level details.
 
-### Reference Documents (`docs/src/content/docs/advanced/`)
+### Reference Documents (`docs/src/content/docs/how-it-works/`, plus the schema and OpenTelemetry catalogue pages under `docs/src/content/docs/integrations/`)
 
 Architectural documentation published as part of the docs site. These cover design philosophy, patterns, and conceptual explanations — not API signatures (which are in TSDoc).
 
@@ -67,11 +67,11 @@ Read `CLAUDE.md` and the docs it links; they define the expected mapping.
 
 For each changed file, identify relevant documentation:
 
-- **Package source** (`packages/*/src/**`) → TSDoc on the changed exports + relevant reference docs in `docs/src/content/docs/advanced/` + `integrations/` page for that adapter
+- **Package source** (`packages/*/src/**`) → TSDoc on the changed exports + relevant reference docs in `docs/src/content/docs/how-it-works/` + the `integrations/` pages for that adapter (setup, configuration, schema, OTel catalogue)
 - **Package exports** (`packages/*/src/index.ts`) → TSDoc on the export + every docs page that mentions the symbol (grep `docs/src/content/docs/` and `README.md` for it)
 - **Examples** (`examples/**`) → `docs/src/data/examples.ts`, the examples page that lists it (`docs/src/content/docs/examples/`), and the matching guide
 
-Look in `docs/src/content/docs/advanced/` to identify which reference docs are relevant for a given subsystem.
+Look in `docs/src/content/docs/how-it-works/` and `docs/src/content/docs/integrations/` to identify which reference docs are relevant for a given subsystem.
 
 ### 3. Check for Sync Issues
 
@@ -106,7 +106,7 @@ Look in `docs/src/content/docs/advanced/` to identify which reference docs are r
 
 - Internal links and referenced file paths in docs the diff touches still resolve.
 - A new `examples/*` directory is listed in `docs/src/data/examples.ts` and on its examples page in `docs/src/content/docs/examples/`, and for a `showcase-*` example the matching guide in `docs/src/content/docs/guides/` links to it (`See [examples/showcase-...](https://github.com/kvet/queuert/tree/main/examples/showcase-...)`).
-- A new or renamed OTEL metric, span, or attribute is reflected in `docs/src/content/docs/advanced/otel-metrics.md` / `otel-tracing.md`.
+- A new or renamed OTEL metric, span, or attribute is reflected in `docs/src/content/docs/integrations/opentelemetry/metrics.tsx` / `tracing.tsx`.
 
 ### 4. Assess Impact Severity
 
@@ -136,7 +136,7 @@ Look in `docs/src/content/docs/advanced/` to identify which reference docs are r
 ### Be Specific
 
 Bad: "The adapters documentation may need updating"
-Good: "In docs/src/content/docs/advanced/adapters.mdx, the StateAdapter interface example at line 45 uses `createJob()` but the method was renamed to `enqueueJob()` in packages/core/src/state-adapter/state-adapter.ts:123"
+Good: "In docs/src/content/docs/integrations/state-adapters/index.tsx, the StateAdapter interface example at line 45 uses `createJob()` but the method was renamed to `enqueueJob()` in packages/core/src/state-adapter/state-adapter.ts:123"
 
 ### Provide Context
 
@@ -172,7 +172,7 @@ When `packages/*/src/index.ts` changes:
 
 When adapter interfaces, worker logic, job processing, or other core subsystems change:
 
-- Identify the relevant reference doc(s) in `docs/src/content/docs/advanced/`
+- Identify the relevant reference doc(s) in `docs/src/content/docs/how-it-works/` and `docs/src/content/docs/integrations/`
 - Check the `integrations/` and `guides/` pages that describe the subsystem
 - Check examples that use the subsystem
 

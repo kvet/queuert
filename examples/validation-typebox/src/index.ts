@@ -20,10 +20,11 @@ import {
 
 import { createTypeBoxJobTypes } from "./typebox-adapter.js";
 
+// #region usage
 // URL format for TypeBox (simplified pattern)
 const UrlString = Type.String({ pattern: "^https?://" });
 
-// 1. Define job types with TypeBox schemas
+// Define job types with TypeBox schemas
 const jobTypes = createTypeBoxJobTypes({
   // Entry point with nominal continuation validation
   "fetch-data": {
@@ -77,8 +78,9 @@ const jobTypes = createTypeBoxJobTypes({
     }),
   },
 });
+// #endregion
 
-// 2. Create queuert client and worker with the jobTypes
+// Create queuert client with the jobTypes
 const stateAdapter = await createInProcessStateAdapter();
 const notifyAdapter = await createInProcessNotifyAdapter();
 
@@ -88,7 +90,7 @@ const client = await createClient({
   jobTypes,
 });
 
-// 3. Create and start worker with job type processors
+// Create and start worker with job type processors
 const worker = await createInProcessWorker({
   client,
   processors: createProcessors({
@@ -168,7 +170,7 @@ const worker = await createInProcessWorker({
 
 const stopWorker = await worker.start();
 
-// 4. Run a chain
+// Run a chain
 console.log("\n=== Running fetch-data chain ===");
 const chain = await withTransactionHooks(async (transactionHooks) =>
   stateAdapter.withTransaction(async (ctx) =>
@@ -184,7 +186,7 @@ const chain = await withTransactionHooks(async (transactionHooks) =>
 const result = await client.awaitChain(chain, { timeoutMs: 5000 });
 console.log("Chain completed:", result.output);
 
-// 5. Cleanup
+// Cleanup
 await stopWorker();
 await notifyAdapter.close();
 await stateAdapter.close();

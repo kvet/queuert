@@ -135,6 +135,8 @@ export const withTransaction = async <T>(
   }
 };
 
+// #region in-process-notify
 export const notifyAdapter = await createInProcessNotifyAdapter();
+// #endregion
 
 export const client = await createClient({ stateAdapter, notifyAdapter, jobTypes });

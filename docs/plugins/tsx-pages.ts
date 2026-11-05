@@ -1,3 +1,7 @@
+import { readFileSync } from "node:fs";
+import { extname, join, relative } from "node:path";
+import { fileURLToPath } from "node:url";
+
 import GithubSlugger from "github-slugger";
 import MagicString, { type SourceMap } from "magic-string";
 import {
@@ -120,10 +124,130 @@ const codeSource = (element: JSXElement): string | undefined => {
 
 const jsxString = (value: string) => `{${JSON.stringify(value)}}`;
 
+export const examplesDirectory = fileURLToPath(new URL("../../examples", import.meta.url));
+export const packagesDirectory = fileURLToPath(new URL("../../packages", import.meta.url));
+
+const regionMarker = /^[ \t]*\/\/ #(region|endregion)\b[ \t]*(\S*)[ \t]*$/;
+const hideMarker = /^[ \t]*\/\/ #(hide|endhide)[ \t]*$/;
+
+const dropHidden = (lines: string[], label: string): string[] => {
+  const kept: string[] = [];
+  let hidden = false;
+  for (const line of lines) {
+    const kind = hideMarker.exec(line)?.[1];
+    if (kind === "hide") {
+      if (hidden) throw new Error(`${label}: nested "// #hide"`);
+      hidden = true;
+    } else if (kind === "endhide") {
+      if (!hidden) throw new Error(`${label}: "// #endhide" without "// #hide"`);
+      hidden = false;
+    } else if (!hidden) kept.push(line);
+  }
+  if (hidden) throw new Error(`${label}: "// #hide" has no "// #endhide"`);
+  return kept;
+};
+
+const fileLangs: Record<string, string> = {
+  ".ts": "ts",
+  ".tsx": "tsx",
+  ".js": "js",
+  ".mjs": "js",
+  ".json": "json",
+  ".sql": "sql",
+  ".prisma": "text",
+  ".yaml": "yaml",
+  ".yml": "yaml",
+};
+
+/**
+ * Cuts `// #region <name>` … `// #endregion` out of an example file. Without a region the whole
+ * file is returned. Marker lines of any region are dropped from the output either way, and so is
+ * everything between `// #hide` and `// #endhide` (code the file needs but the docs elide).
+ */
+export const extractRegion = (
+  source: string,
+  region: string | undefined,
+  label: string,
+): string => {
+  const lines = source.split("\n");
+  let selected = lines;
+  if (region !== undefined) {
+    const start = lines.findIndex((line) => {
+      const match = regionMarker.exec(line);
+      return match?.[1] === "region" && match[2] === region;
+    });
+    if (start === -1) throw new Error(`${label}: no "// #region ${region}"`);
+    let depth = 0;
+    let end = -1;
+    for (let index = start + 1; index < lines.length; index++) {
+      const kind = regionMarker.exec(lines[index])?.[1];
+      if (kind === "region") depth++;
+      if (kind === "endregion") {
+        if (depth === 0) {
+          end = index;
+          break;
+        }
+        depth--;
+      }
+    }
+    if (end === -1) throw new Error(`${label}: "// #region ${region}" has no "// #endregion"`);
+    selected = lines.slice(start + 1, end);
+  }
+  return dedent(
+    dropHidden(selected, label)
+      .filter((line) => !regionMarker.test(line))
+      .join("\n"),
+  );
+};
+
+export type ExampleSource = {
+  /** `examples/<example>` or `packages/<package>`, the directory `file` is relative to. */
+  root: { kind: "example" | "package"; name: string };
+  file: string;
+  path: string;
+  code: string;
+  lang: string;
+};
+
+export const readExampleSource = (
+  attributes: {
+    root: ExampleSource["root"];
+    file: string;
+    region?: string;
+    lang?: string;
+  },
+  directories: { examples?: string; packages?: string } = {},
+): ExampleSource => {
+  const { root } = attributes;
+  const directory =
+    root.kind === "example"
+      ? (directories.examples ?? examplesDirectory)
+      : (directories.packages ?? packagesDirectory);
+  const top = root.kind === "example" ? "examples" : "packages";
+  const path = join(directory, root.name, attributes.file);
+  if (
+    relative(join(directory, root.name), path).startsWith("..") ||
+    root.name.includes("/") ||
+    root.name.startsWith(".")
+  ) {
+    throw new Error(`<ExampleCode> file escapes ${top}/: ${root.name}/${attributes.file}`);
+  }
+  const label = `${top}/${root.name}/${attributes.file}`;
+  const source = readFileSync(path, "utf8");
+  return {
+    root,
+    file: attributes.file,
+    path,
+    code: extractRegion(source, attributes.region, label),
+    lang: attributes.lang ?? fileLangs[extname(path)] ?? "text",
+  };
+};
+
 export const transformPage = async (
   source: string,
   file: string,
-): Promise<{ code: string; map: SourceMap; headings: PageHeading[] }> => {
+  options: { examplesDirectory?: string; packagesDirectory?: string } = {},
+): Promise<{ code: string; map: SourceMap; headings: PageHeading[]; dependencies: string[] }> => {
   const program = parsePage(source, file);
   const output = new MagicString(source);
   const slugger = new GithubSlugger();
@@ -134,6 +258,8 @@ export const transformPage = async (
     title: string | undefined;
     code: string;
   }[] = [];
+  const exampleBlocks: { element: JSXElement; title: string | undefined; source: ExampleSource }[] =
+    [];
 
   new Visitor({
     JSXElement: (element) => {
@@ -151,6 +277,33 @@ export const transformPage = async (
           `<a class="heading-anchor" href=${jsxString(`#${id}`)} aria-hidden="true" tabIndex={-1}>#</a>`,
         );
         if (depth <= 3) headings.push({ depth, text, id });
+        return;
+      }
+      if (name === "ExampleCode" && !attributeOf(element, "html")) {
+        const example = stringAttribute(element, "example");
+        const packageName = stringAttribute(element, "package");
+        const exampleFile = stringAttribute(element, "file");
+        if ((example === undefined) === (packageName === undefined) || exampleFile === undefined) {
+          throw new Error(
+            `${file}: <ExampleCode> needs a static file and exactly one of example or package`,
+          );
+        }
+        exampleBlocks.push({
+          element,
+          title: stringAttribute(element, "title"),
+          source: readExampleSource(
+            {
+              root:
+                example === undefined
+                  ? { kind: "package", name: packageName! }
+                  : { kind: "example", name: example },
+              file: exampleFile,
+              region: stringAttribute(element, "region"),
+              lang: stringAttribute(element, "lang"),
+            },
+            { examples: options.examplesDirectory, packages: options.packagesDirectory },
+          ),
+        });
         return;
       }
       if (name !== "Code" || attributeOf(element, "html")) return;
@@ -173,11 +326,24 @@ export const transformPage = async (
     output.overwrite(element.start, element.end, `<Code ${attributes.join(" ")} />`);
   }
 
+  for (const { element, title, source: example } of exampleBlocks) {
+    const attributes = [
+      `lang=${jsxString(example.lang)}`,
+      `${example.root.kind}=${jsxString(example.root.name)}`,
+      `file=${jsxString(example.file)}`,
+      ...(title === undefined ? [] : [`title=${jsxString(title)}`]),
+      `code=${jsxString(example.code)}`,
+      `html=${jsxString(await highlight(example.code, example.lang))}`,
+    ];
+    output.overwrite(element.start, element.end, `<ExampleCode ${attributes.join(" ")} />`);
+  }
+
   output.append(`\nexport const headings = ${JSON.stringify(headings)};\n`);
   return {
     code: output.toString(),
     map: output.generateMap({ hires: true, source: file }),
     headings,
+    dependencies: exampleBlocks.map((block) => block.source.path),
   };
 };
 
@@ -217,10 +383,11 @@ export const readPageMeta = (source: string, file: string): PageMeta => {
 export const tsxPages = (options: { contentDirectory: string }): Plugin => ({
   name: "queuert:tsx-pages",
   enforce: "pre",
-  transform: async (source, id) => {
+  async transform(source, id) {
     const [file = id] = id.split("?");
     if (!file.startsWith(options.contentDirectory) || !file.endsWith(".tsx")) return;
-    const { code, map } = await transformPage(source, file);
+    const { code, map, dependencies } = await transformPage(source, file);
+    for (const dependency of dependencies) this.addWatchFile(dependency);
     return { code, map };
   },
 });

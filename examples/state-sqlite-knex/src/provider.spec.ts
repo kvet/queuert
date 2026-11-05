@@ -5,6 +5,7 @@ import { test } from "vitest";
 
 import { createKnexSqliteStateProvider } from "./provider.js";
 
+// #region conformance
 test("state-sqlite-knex provider passes state adapter conformance", async () => {
   await runStateAdapterConformance(async () => {
     const knex = knexFactory({
@@ -28,3 +29,4 @@ test("state-sqlite-knex provider passes state adapter conformance", async () => 
     };
   });
 }, 30_000);
+// #endregion

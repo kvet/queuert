@@ -49,7 +49,7 @@ const Page = () => (
       fragmentation and free pages as retention.
     </p>
     <KeyValueList title="Test setup" items={setup} />
-    <FieldList title="Columns" items={columns} />
+    <FieldList title="Columns" items={columns} proseNames />
     <BenchChart
       title="Memory per lifecycle"
       unit="KB"

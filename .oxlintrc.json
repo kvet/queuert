@@ -177,6 +177,5 @@
   "env": {
     "builtin": true
   },
-  "globals": {},
-  "ignorePatterns": ["docs/src/snippets/**"]
+  "globals": {}
 }

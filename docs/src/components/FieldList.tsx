@@ -32,7 +32,11 @@ const FieldChips = (props: { chips: FieldChip[] }) => (
   </For>
 );
 
-const FieldRow = (props: { item: FieldItem; idPrefix?: string }) => {
+/** Names are identifiers (options, metrics, spans, channels) and read as mono, like the dashboard. */
+const nameClass = (proseNames: boolean | undefined) =>
+  `break-all text-fg ${proseNames ? "font-medium" : "font-mono text-[13px]"}`;
+
+const FieldRow = (props: { item: FieldItem; idPrefix?: string; proseNames?: boolean }) => {
   const id = () =>
     props.item.id ??
     (props.idPrefix === undefined ? undefined : `${props.idPrefix}-${props.item.name}`);
@@ -42,12 +46,12 @@ const FieldRow = (props: { item: FieldItem; idPrefix?: string }) => {
       <div class="flex min-w-0 flex-wrap items-center gap-x-2 gap-y-1 leading-6">
         <Show
           when={id()}
-          fallback={<span class="font-medium break-all text-fg">{props.item.name}</span>}
+          fallback={<span class={nameClass(props.proseNames)}>{props.item.name}</span>}
         >
           {(anchor) => (
             <a
               href={`#${anchor()}`}
-              class="unstyled font-medium break-all text-fg no-underline hover:text-accent-fg"
+              class={`unstyled no-underline hover:text-accent-fg ${nameClass(props.proseNames)}`}
             >
               {props.item.name}
             </a>
@@ -55,7 +59,9 @@ const FieldRow = (props: { item: FieldItem; idPrefix?: string }) => {
         </Show>
         <Show when={props.item.chips}>{(chips) => <FieldChips chips={chips()} />}</Show>
       </div>
-      <div class="text-xs text-fg-subtle">{props.item.meta}</div>
+      <div class="text-xs text-fg-subtle [&_code]:border-0 [&_code]:bg-transparent [&_code]:p-0">
+        {props.item.meta}
+      </div>
       <SubLine tone="muted" class="leading-5 [&_code]:text-xs">
         {props.item.description}
       </SubLine>
@@ -89,11 +95,15 @@ export const FieldList = (props: {
   actions?: JSX.Element;
   items: FieldItem[];
   idPrefix?: string;
+  /** Set when the names are plain words ("Home page") rather than identifiers. */
+  proseNames?: boolean;
   class?: string;
 }) => (
   <Box title={props.title} actions={props.actions} class={`my-6 ${props.class ?? ""}`} bodyClass="">
     <ul class="row-list divide-y divide-border">
-      <For each={props.items}>{(item) => <FieldRow item={item} idPrefix={props.idPrefix} />}</For>
+      <For each={props.items}>
+        {(item) => <FieldRow item={item} idPrefix={props.idPrefix} proseNames={props.proseNames} />}
+      </For>
     </ul>
   </Box>
 );

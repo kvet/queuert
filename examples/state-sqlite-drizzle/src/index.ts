@@ -14,10 +14,10 @@ import {
 
 import { createDrizzleSqliteStateProvider } from "./provider.js";
 
-// 1. Create in-memory SQLite database
+// Create in-memory SQLite database
 const sqlite = new Database(":memory:");
 
-// 2. Define Drizzle schema
+// Define Drizzle schema
 const users = sqliteTable("users", {
   id: integer("id").primaryKey({ autoIncrement: true }),
   name: text("name").notNull(),
@@ -26,7 +26,7 @@ const users = sqliteTable("users", {
 
 const schema = { users };
 
-// 3. Create Drizzle database connection
+// Create Drizzle database connection
 const db = drizzle(sqlite, { schema });
 
 db.run(sql`
@@ -37,7 +37,7 @@ db.run(sql`
   )
 `);
 
-// 4. Define job types
+// Define job types
 const jobTypes = defineJobTypes<{
   send_welcome_email: {
     entry: true;
@@ -46,13 +46,13 @@ const jobTypes = defineJobTypes<{
   };
 }>();
 
-// 5. Create state provider for Drizzle with better-sqlite3
+// Create state provider for Drizzle with better-sqlite3
+// #region adapter
 const lock = createAsyncRwLock();
 const stateProvider = createDrizzleSqliteStateProvider({ db: sqlite, lock });
-
-// 6. Create adapters and queuert client/worker
 const stateAdapter = await createSqliteStateAdapter({ stateProvider });
 await stateAdapter.migrateToLatest();
+// #endregion
 
 const notifyAdapter = await createInProcessNotifyAdapter();
 
@@ -110,10 +110,11 @@ const worker = await createInProcessWorker({
   }),
 });
 
-// 7. Start worker
+// Start worker
 const stopWorker = await worker.start();
 
-// 8. Register a new user and queue welcome email atomically
+// Register a new user and queue welcome email atomically
+// #region create-chain
 const chain = await withTransactionHooks(async (transactionHooks) => {
   using _h = await lock.acquireWrite();
   sqlite.exec("BEGIN");
@@ -146,12 +147,13 @@ const chain = await withTransactionHooks(async (transactionHooks) => {
     throw error;
   }
 });
+// #endregion
 
-// 9. Wait for the chain to complete
+// Wait for the chain to complete
 const result = await client.awaitChain(chain, { timeoutMs: 5000 });
 console.log(`Welcome email sent at: ${result.output.sentAt}`);
 
-// 10. Cleanup
+// Cleanup
 await stopWorker();
 await notifyAdapter.close();
 await stateAdapter.close();

@@ -167,7 +167,7 @@ These checks keep the library consistent change by change, so `publish-review` d
 - Every schema change has a migration, and both PostgreSQL and SQLite change together.
 - Locking is consistent with the surrounding queries (`FOR UPDATE` / `SKIP LOCKED` on PostgreSQL; SQLite serializes writes).
 
-**Observability** — new or renamed metrics, spans, or attributes in `packages/otel`: follow the rules in `.claude/agents/publish-review/otel-conventions.md` §1 and §3 (dotted lowercase names, `queuert.*` namespace for custom attributes, seconds for durations, low-cardinality attributes on counters), and the change is reflected in `docs/src/content/docs/advanced/otel-metrics.md`.
+**Observability** — new or renamed metrics, spans, or attributes in `packages/otel`: follow the rules in `.claude/agents/publish-review/otel-conventions.md` §1 and §3 (dotted lowercase names, `queuert.*` namespace for custom attributes, seconds for durations, low-cardinality attributes on counters), and the change is reflected in `docs/src/content/docs/integrations/opentelemetry/metrics.tsx`.
 
 ## Alternative Approaches Framework
 

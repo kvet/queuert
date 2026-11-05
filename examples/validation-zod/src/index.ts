@@ -20,7 +20,8 @@ import { z } from "zod";
 
 import { createZodJobTypes } from "./zod-adapter.js";
 
-// 1. Define job types with Zod schemas
+// #region usage
+// Define job types with Zod schemas
 const jobTypes = createZodJobTypes({
   // Entry point with nominal continuation validation
   "fetch-data": {
@@ -74,18 +75,21 @@ const jobTypes = createZodJobTypes({
     }),
   },
 });
+// #endregion
 
-// 2. Create queuert client and worker with the jobTypes
+// #region in-process-adapters
 const stateAdapter = await createInProcessStateAdapter();
 const notifyAdapter = await createInProcessNotifyAdapter();
+// #endregion
 
+// Create queuert client with the jobTypes
 const client = await createClient({
   stateAdapter,
   notifyAdapter,
   jobTypes,
 });
 
-// 3. Create and start worker with job type processors
+// Create and start worker with job type processors
 const worker = await createInProcessWorker({
   client,
   processors: createProcessors({
@@ -165,7 +169,7 @@ const worker = await createInProcessWorker({
 
 const stopWorker = await worker.start();
 
-// 4. Run a chain
+// Run a chain
 console.log("\n=== Running fetch-data chain ===");
 const chain = await withTransactionHooks(async (transactionHooks) =>
   stateAdapter.withTransaction(async (ctx) =>
@@ -181,7 +185,7 @@ const chain = await withTransactionHooks(async (transactionHooks) =>
 const result = await client.awaitChain(chain, { timeoutMs: 5000 });
 console.log("Chain completed:", result.output);
 
-// 5. Cleanup
+// Cleanup
 await stopWorker();
 await notifyAdapter.close();
 await stateAdapter.close();

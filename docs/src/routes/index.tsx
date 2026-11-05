@@ -3,6 +3,12 @@ import { Meta, Title } from "@solidjs/meta";
 import { A } from "@solidjs/router";
 import { For, type JSX, Show } from "solid-js";
 
+// oxlint-disable-next-line import/default, import/no-duplicates -- a region of examples/showcase-onboarding, served by the queuert:highlight plugin in plugins/content.ts
+import defineSnippet from "../../../examples/showcase-onboarding/src/index.ts?region=define&highlight";
+// oxlint-disable-next-line import/default, import/no-duplicates -- a region of examples/showcase-onboarding, served by the queuert:highlight plugin in plugins/content.ts
+import enqueueSnippet from "../../../examples/showcase-onboarding/src/index.ts?region=create-chain&highlight";
+// oxlint-disable-next-line import/default, import/no-duplicates -- a region of examples/showcase-onboarding, served by the queuert:highlight plugin in plugins/content.ts
+import processSnippet from "../../../examples/showcase-onboarding/src/index.ts?region=process&highlight";
 import { CopyButton } from "../components/CopyButton.tsx";
 import { Arrow, Diagram, Flow, Node, Rows } from "../components/diagrams/flow/Diagram.tsx";
 import {
@@ -22,12 +28,6 @@ import { CodeTour } from "../components/landing/CodeTour.tsx";
 import { LiveChain } from "../components/landing/LiveChain.tsx";
 import { LinkCard } from "../components/mdx/Cards.tsx";
 import { compareNeighbors } from "../data/comparison.ts";
-// oxlint-disable-next-line import/default -- served by the queuert:highlight plugin in plugins/content.ts
-import defineSnippet from "../snippets/define.ts?highlight";
-// oxlint-disable-next-line import/default -- served by the queuert:highlight plugin in plugins/content.ts
-import enqueueSnippet from "../snippets/enqueue.ts?highlight";
-// oxlint-disable-next-line import/default -- served by the queuert:highlight plugin in plugins/content.ts
-import processSnippet from "../snippets/process.ts?highlight";
 
 const github = "https://github.com/kvet/queuert";
 
@@ -91,7 +91,11 @@ const integrations: {
 }[] = [
   {
     title: "Databases",
-    items: ["PostgreSQL", "SQLite", "in-process"],
+    items: [
+      { label: "PostgreSQL", href: "/integrations/state-adapters/postgres/" },
+      { label: "SQLite", href: "/integrations/state-adapters/sqlite/" },
+      { label: "in-process", href: "/integrations/state-adapters/in-process/" },
+    ],
     href: "/integrations/state-adapters/",
     customAdapter: true,
   },
@@ -109,19 +113,28 @@ const integrations: {
   },
   {
     title: "Notifications",
-    items: ["Redis", "LISTEN/NOTIFY", "NATS", "in-process"],
+    items: [
+      { label: "Redis", href: "/integrations/notify-adapters/redis/" },
+      { label: "LISTEN/NOTIFY", href: "/integrations/notify-adapters/postgres/" },
+      { label: "NATS", href: "/integrations/notify-adapters/nats/" },
+      { label: "in-process", href: "/integrations/notify-adapters/in-process/" },
+    ],
     href: "/integrations/notify-adapters/",
     customAdapter: true,
   },
   {
     title: "Validation",
     items: ["Zod", "ArkType", "Valibot", "TypeBox"],
-    href: "/integrations/validation-adapters/",
+    href: "/integrations/validation/",
     customAdapter: true,
   },
   {
     title: "Observability",
-    items: ["OpenTelemetry", { label: "Dashboard", href: "/integrations/dashboard/" }],
+    items: [
+      { label: "OpenTelemetry", href: "/integrations/opentelemetry/" },
+      { label: "Logging", href: "/integrations/logging/" },
+      { label: "Dashboard", href: "/integrations/dashboard/" },
+    ],
     href: "/integrations/observability/",
     customAdapter: true,
   },
@@ -238,7 +251,7 @@ const Home = () => (
         </Flow>
       </Diagram>
       <A
-        href="/advanced/adapters/"
+        href="/integrations/"
         class="mt-4 inline-flex items-center gap-1.5 text-[13px] text-fg-muted hover:text-fg"
       >
         How the adapters fit together

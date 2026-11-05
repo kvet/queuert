@@ -5,6 +5,7 @@ import { test } from "vitest";
 
 import { createBetterSqlite3StateProvider } from "./provider.js";
 
+// #region conformance
 test("state-sqlite-better-sqlite3 provider passes state adapter conformance", async () => {
   await runStateAdapterConformance(async () => {
     const db = new Database(":memory:");
@@ -25,3 +26,4 @@ test("state-sqlite-better-sqlite3 provider passes state adapter conformance", as
     };
   });
 }, 30_000);
+// #endregion

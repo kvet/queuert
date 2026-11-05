@@ -6,6 +6,7 @@ import { test } from "vitest";
 
 import { createNodeRedisNotifyProvider } from "./provider.js";
 
+// #region conformance
 test("notify-redis-redis provider passes notify adapter conformance", async () => {
   await using redis = await acquireRedis("redis:8");
 
@@ -30,3 +31,4 @@ test("notify-redis-redis provider passes notify adapter conformance", async () =
     };
   });
 }, 60_000);
+// #endregion

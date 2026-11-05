@@ -6,6 +6,7 @@ import { test } from "vitest";
 
 import { createPgPoolStateProvider } from "./provider.js";
 
+// #region conformance
 test("state-postgres-pg provider passes state adapter conformance", async () => {
   await using pg = await acquirePostgres("postgres:18", import.meta.url);
 
@@ -34,3 +35,4 @@ test("state-postgres-pg provider passes state adapter conformance", async () => 
     };
   });
 }, 60_000);
+// #endregion

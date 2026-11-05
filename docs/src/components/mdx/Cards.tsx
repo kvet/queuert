@@ -3,8 +3,9 @@ import { type JSX } from "solid-js";
 
 import { ArrowRightIcon } from "../icons.tsx";
 
+/** Boxed cards need extra row gap for their border titles; link cards keep an even gap. */
 export const CardGrid = (props: { children: JSX.Element }) => (
-  <div class="my-8 grid gap-x-4 gap-y-6 sm:grid-cols-2">{props.children}</div>
+  <div class="my-8 grid gap-x-4 gap-y-6 sm:grid-cols-2 has-[>a]:gap-y-4">{props.children}</div>
 );
 
 export const Card = (props: { title: string; children: JSX.Element }) => (

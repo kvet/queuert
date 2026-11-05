@@ -12,30 +12,11 @@ import { createCluster, type RedisClusterType } from "redis";
 
 import { createNodeRedisClusterNotifyProvider } from "./provider.js";
 
-// 1. Start a Redis Cluster using testcontainers
+// Start a Redis Cluster using testcontainers
 console.log("Starting Redis Cluster...");
 await using rc = await acquireRedisCluster("redis:8");
 
-// 2. Create Redis Cluster connections
-const cluster = createCluster({ rootNodes: rc.rootNodes }) as RedisClusterType;
-cluster.on("error", (err) => {
-  console.error("Redis Cluster Error", err);
-});
-await cluster.connect();
-
-const subscribeCluster = createCluster({ rootNodes: rc.rootNodes }) as RedisClusterType;
-subscribeCluster.on("error", (err) => {
-  console.error("Redis Cluster Subscription Error", err);
-});
-await subscribeCluster.connect();
-
-// 3. Create the notify provider using node-redis cluster
-const notifyProvider = createNodeRedisClusterNotifyProvider({
-  cluster,
-  subscribeCluster,
-});
-
-// 4. Define job types
+// Define job types
 const jobTypes = defineJobTypes<{
   generate_report: {
     entry: true;
@@ -44,11 +25,38 @@ const jobTypes = defineJobTypes<{
   };
 }>();
 
-// 5. Create adapters
+// Create the state adapter
 const stateAdapter = await createInProcessStateAdapter();
-const notifyAdapter = await createRedisNotifyAdapter({ notifyProvider });
 
-// 6. Create client and worker
+// #region setup
+// Create Redis Cluster connections
+const cluster = createCluster({ rootNodes: rc.rootNodes }) as RedisClusterType;
+// #hide
+cluster.on("error", (err) => {
+  console.error("Redis Cluster Error", err);
+});
+// #endhide
+await cluster.connect();
+
+const subscribeCluster = createCluster({ rootNodes: rc.rootNodes }) as RedisClusterType;
+// #hide
+subscribeCluster.on("error", (err) => {
+  console.error("Redis Cluster Subscription Error", err);
+});
+// #endhide
+await subscribeCluster.connect();
+
+// Create the notify provider using node-redis cluster
+const notifyProvider = createNodeRedisClusterNotifyProvider({
+  cluster,
+  subscribeCluster,
+});
+
+// Create the notify adapter
+const notifyAdapter = await createRedisNotifyAdapter({ notifyProvider });
+// #endregion
+
+// Create client and worker
 const client = await createClient({
   stateAdapter,
   notifyAdapter,
@@ -85,7 +93,7 @@ const worker = await createInProcessWorker({
   }),
 });
 
-// 7. Start worker and queue a job
+// Start worker and queue a job
 const stopWorker = await worker.start();
 
 console.log("Requesting sales report...");
@@ -100,22 +108,24 @@ const chain = await withTransactionHooks(async (transactionHooks) =>
   ),
 );
 
-// 8. Main thread continues with other work while job processes
+// Main thread continues with other work while job processes
 console.log("Report queued! Continuing with other work...");
 console.log("Preparing email template...");
 await new Promise((resolve) => setTimeout(resolve, 100));
 console.log("Loading recipient list...");
 await new Promise((resolve) => setTimeout(resolve, 100));
 
-// 9. Now wait for the report to be ready
+// Now wait for the report to be ready
 console.log("Waiting for report...");
 const result = await client.awaitChain(chain, { timeoutMs: 5000 });
 console.log(`Report ready! ID: ${result.output.reportId}, Rows: ${result.output.rowCount}`);
 
-// 10. Cleanup
+// Cleanup
 await stopWorker();
+// #region cleanup
 await notifyAdapter.close();
 await stateAdapter.close();
 await cluster.close();
 await subscribeCluster.close();
+// #endregion
 console.log("Done!");

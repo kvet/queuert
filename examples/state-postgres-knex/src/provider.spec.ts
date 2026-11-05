@@ -6,6 +6,7 @@ import { test } from "vitest";
 
 import { createKnexPgStateProvider } from "./provider.js";
 
+// #region conformance
 test("state-postgres-knex provider passes state adapter conformance", async () => {
   await using pg = await acquirePostgres("postgres:18", import.meta.url);
 
@@ -31,3 +32,4 @@ test("state-postgres-knex provider passes state adapter conformance", async () =
     };
   });
 }, 60_000);
+// #endregion

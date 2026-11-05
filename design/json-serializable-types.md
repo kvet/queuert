@@ -251,7 +251,7 @@ This is a **major** version bump.
 | `packages/core/src/conformance/validation-adapter.spec.ts`         | Update conformance for codec API                                                                                                                                                       |
 | `packages/core/src/client.merge.spec.ts`                           | Update routing tests                                                                                                                                                                   |
 | `benchmarks/type-complexity/`                                      | Re-measure after type changes                                                                                                                                                          |
-| `docs/src/content/docs/advanced/`                                  | Reference docs update                                                                                                                                                                  |
+| `docs/src/content/docs/how-it-works/`                              | Reference docs update                                                                                                                                                                  |
 | `.changeset/codec-job-types.md`                                    | Major changeset across affected packages                                                                                                                                               |
 
 ## Implementation plan
@@ -317,7 +317,7 @@ Goal: replace `parseInput`/`parseOutput` with the four batch async codec methods
 
 ### Phase 6 — Reference docs and changeset
 
-- [ ] Update `docs/src/content/docs/advanced/` reference doc(s) covering job-type registries to describe the codec contract, the runtime-vs-encoded split, and the observability-decode open question.
+- [ ] Update `docs/src/content/docs/how-it-works/` reference doc(s) covering job-type registries to describe the codec contract, the runtime-vs-encoded split, and the observability-decode open question.
 - [ ] Migration guide section: how to port a `parseInput`/`parseOutput` adapter to the four codec methods (identity case + codec case).
 - [ ] `.changeset/codec-job-types.md` — major bump for `queuert` and any package that re-exports the registry surface; one-paragraph user-facing note + flat bullet list of changes.
 

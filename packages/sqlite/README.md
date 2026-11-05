@@ -24,6 +24,6 @@ yarn add @queuert/sqlite
 
 ## Documentation
 
-- [State Adapters Guide](https://kvet.github.io/queuert/integrations/state-adapters/)
+- [State Adapters Guide](https://kvet.github.io/queuert/integrations/state-adapters/sqlite/)
 - [API Reference](https://kvet.github.io/queuert/api/sqlite/readme/)
 - [Full Documentation](https://kvet.github.io/queuert/)

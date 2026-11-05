@@ -88,12 +88,26 @@
     & strong {
       font-weight: 600;
     }
+    /* Inline code reads as a small chip, like the dashboard's: a visible edge, so its padding never
+       looks like a stray space next to punctuation. */
     & :not(pre) > code {
+      border: 1px solid var(--color-border);
       border-radius: var(--radius-xs);
-      background-color: var(--color-surface-2);
-      padding: 0.0625rem 0.3rem;
+      background-color: var(--color-surface);
+      padding: 0 0.25rem;
       font-size: 0.875em;
       overflow-wrap: anywhere;
+      box-decoration-break: clone;
+    }
+    & a > code {
+      border-color: color-mix(in srgb, var(--color-accent-fg) 30%, transparent);
+    }
+    /* Headings are already mono, so code inside them needs no chip. */
+    & :is(h2, h3, h4) code {
+      border: none;
+      background: none;
+      padding: 0;
+      font-size: inherit;
     }
     & ul,
     & ol {
@@ -185,6 +199,7 @@
       color: var(--color-syntax-key);
     }
     & :is(.api-field-type, .api-field-default, .api-type-section) code {
+      border: none;
       background: none;
       padding: 0;
       color: var(--color-fg);
@@ -264,9 +279,21 @@
   .code-html pre {
     overflow-x: auto;
     padding: 1rem 1.125rem;
-    font-size: 0.875rem;
-    line-height: 1.7;
+    font-size: 0.8125rem;
+    line-height: 1.65;
     background: transparent !important;
+  }
+  /* Long embedded files scroll inside their box (about 30 lines), so tabbed blocks stay short. */
+  /* The scroller starts below the border title, so scrolled lines never slide under it: half of the
+     top padding sits outside the scroll area. */
+  .code-scroll {
+    padding-block: 0.5rem;
+  }
+  .code-scroll pre {
+    max-height: 48rem;
+    overflow-y: auto;
+    overscroll-behavior: contain;
+    padding-block: 0.5rem;
   }
   .code-signature pre {
     white-space: pre-wrap;
@@ -306,8 +333,31 @@
   }
 }
 
+/* Once-on-view reveals (`revealOnView`): bars grow from their start edge, labels fade in after
+   them. `--reveal-delay` staggers them; nothing moves on reduced motion. */
+[data-reveal] :is(.reveal-bar, .reveal-fade) {
+  transition:
+    transform 600ms cubic-bezier(0.2, 0.7, 0.2, 1),
+    opacity 300ms ease-out;
+  transition-delay: var(--reveal-delay, 0ms);
+}
+[data-reveal] .reveal-bar {
+  transform-origin: left center;
+}
+[data-reveal="pending"] .reveal-bar {
+  transform: scaleX(0);
+}
+[data-reveal="pending"] .reveal-fade {
+  opacity: 0;
+}
+
 @media (prefers-reduced-motion: reduce) {
   .animate-fade-in {
     animation: none;
+  }
+  [data-reveal] :is(.reveal-bar, .reveal-fade) {
+    transition: none;
+    transform: none;
+    opacity: 1;
   }
 }

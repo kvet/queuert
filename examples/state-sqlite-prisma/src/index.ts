@@ -16,11 +16,11 @@ import {
 
 import { createPrismaSqliteStateProvider } from "./provider.js";
 
-// 1. Create temp directory and set DATABASE_URL
+// Create temp directory and set DATABASE_URL
 const tempDir = mkdtempSync(join(tmpdir(), "queuert-sqlite-prisma-"));
 const dbPath = join(tempDir, "test.db");
 
-// 2. Push Prisma schema to database and generate client
+// Push Prisma schema to database and generate client
 process.env.DATABASE_URL = `file:${dbPath}`;
 execSync("npx prisma db push", {
   stdio: "inherit",
@@ -32,10 +32,7 @@ const { PrismaClient } = await import("../prisma/generated/prisma/client.js");
 const adapter = new PrismaBetterSqlite3({ url: `file:${dbPath}` });
 const prisma = new PrismaClient({ adapter });
 
-// 3. Create async RW lock for write serialization (SQLite requirement)
-const lock = createAsyncRwLock();
-
-// 4. Define job types
+// Define job types
 const jobTypes = defineJobTypes<{
   send_welcome_email: {
     entry: true;
@@ -44,14 +41,15 @@ const jobTypes = defineJobTypes<{
   };
 }>();
 
-// 5. Create state provider for Prisma
+// Create state provider for Prisma
+// #region adapter
+const lock = createAsyncRwLock();
 const stateProvider = createPrismaSqliteStateProvider({ prisma: prisma as any, lock });
-
-// 6. Create adapters and queuert client/worker
 const stateAdapter = await createSqliteStateAdapter({
   stateProvider,
 });
 await stateAdapter.migrateToLatest();
+// #endregion
 
 const notifyAdapter = await createInProcessNotifyAdapter();
 
@@ -61,7 +59,7 @@ const client = await createClient({
   jobTypes,
 });
 
-// 7. Create and start worker
+// Create and start worker
 const worker = await createInProcessWorker({
   client,
   processors: createProcessors({
@@ -96,7 +94,8 @@ const worker = await createInProcessWorker({
 
 const stopWorker = await worker.start();
 
-// 8. Register a new user and queue welcome email atomically
+// Register a new user and queue welcome email atomically
+// #region create-chain
 const chain = await withTransactionHooks(async (transactionHooks) => {
   using _h = await lock.acquireWrite();
   return await prisma.$transaction(async (prisma) => {
@@ -113,12 +112,13 @@ const chain = await withTransactionHooks(async (transactionHooks) => {
     });
   });
 });
+// #endregion
 
-// 10. Wait for the chain to complete
+// Wait for the chain to complete
 const result = await client.awaitChain(chain, { timeoutMs: 5000 });
 console.log(`Welcome email sent at: ${result.output.sentAt}`);
 
-// 11. Cleanup
+// Cleanup
 await stopWorker();
 await notifyAdapter.close();
 await stateAdapter.close();

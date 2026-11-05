@@ -12,10 +12,10 @@ import {
 
 import { createPgPoolStateProvider } from "./provider.js";
 
-// 1. Start PostgreSQL using testcontainers
+// Start PostgreSQL using testcontainers
 await using pg = await acquirePostgres("postgres:18", import.meta.url);
 
-// 2. Create database connection and schema
+// Create database connection and schema
 const db = new Pool({
   connectionString: pg.connectionString,
   max: 10,
@@ -29,7 +29,7 @@ await db.query(`
   );
 `);
 
-// 3. Define job types
+// Define job types
 const jobTypes = defineJobTypes<{
   send_welcome_email: {
     entry: true;
@@ -38,14 +38,14 @@ const jobTypes = defineJobTypes<{
   };
 }>();
 
-// 4. Create state provider for pg
+// Create state provider for pg
+// #region adapter
 const stateProvider = createPgPoolStateProvider({ pool: db });
-
-// 5. Create adapters and queuert client/worker
 const stateAdapter = await createPgStateAdapter({
   stateProvider,
 });
 await stateAdapter.migrateToLatest();
+// #endregion
 
 const notifyAdapter = await createInProcessNotifyAdapter();
 
@@ -55,7 +55,7 @@ const client = await createClient({
   jobTypes,
 });
 
-// 6. Create and start worker
+// Create and start worker
 const worker = await createInProcessWorker({
   client,
   processors: createProcessors({
@@ -100,7 +100,7 @@ const worker = await createInProcessWorker({
 
 const stopWorker = await worker.start();
 
-// 7. Register a new user and queue welcome email atomically
+// Register a new user and queue welcome email atomically
 const chain = await withTransactionHooks(async (transactionHooks) => {
   const poolClient = await db.connect();
   try {
@@ -130,11 +130,11 @@ const chain = await withTransactionHooks(async (transactionHooks) => {
   }
 });
 
-// 8. Wait for the chain to complete
+// Wait for the chain to complete
 const result = await client.awaitChain(chain, { timeoutMs: 5000 });
 console.log(`Welcome email sent at: ${result.output.sentAt}`);
 
-// 9. Cleanup
+// Cleanup
 await stopWorker();
 await notifyAdapter.close();
 await stateAdapter.close();

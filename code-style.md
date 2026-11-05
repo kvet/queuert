@@ -148,7 +148,7 @@ Adapter packages use their domain-specific prefixes (not "Queuert"):
 
 ## Reference Documentation
 
-Architecture and API-contract prose lives in `docs/src/content/docs/advanced/`. The per-symbol **API reference** for every public package is generated from source TSDoc by TypeDoc at docs-site build time (configured in `docs/plugins/typedoc.ts`, packages listed in `apiPackages` in `docs/src/docs/sections.ts`) — there are no hand-written reference pages, so the TSDoc comment on each exported symbol is the source of truth for its documentation. Keep those comments accurate and complete.
+Architecture and API-contract prose lives in `docs/src/content/docs/how-it-works/` (core); the `docs/src/content/docs/integrations/` pages are user-facing setup and configuration (plus the schema and the OpenTelemetry metric/span catalogue). The per-symbol **API reference** for every public package is generated from source TSDoc by TypeDoc at docs-site build time (configured in `docs/plugins/typedoc.ts`, packages listed in `apiPackages` in `docs/src/docs/sections.ts`) — there are no hand-written reference pages, so the TSDoc comment on each exported symbol is the source of truth for its documentation. Keep those comments accurate and complete.
 
 ### Documenting options-object parameters
 
@@ -288,7 +288,7 @@ state-sqlite-bun-sql        # Bun.SQL
 
 ```
 
-Each implements a state provider (`PgStateProvider` or `SqliteStateProvider`) with `withTransaction` and `executeSql` methods specific to that client library.
+Each implements a state provider (`PgStateProvider` or `SqliteStateProvider`) with `withTransaction`, `isTransaction` and `executeSql` methods specific to that client library.
 
 ### Notify Examples
 
@@ -346,6 +346,7 @@ Examples should follow these conventions for clarity and readability:
 - **Simple patterns**: Prefer straightforward code over abstraction layers — examples should be copy-paste friendly
 - **No obvious comments**: Users are smart
 - **Workflow visualization**: Examples with job chains should include ASCII workflow diagrams as comments inside the `defineJobTypes` generic, directly above the relevant job type definitions
+- **Region markers are load-bearing**: `// #region <name>` markers in `examples/` are embedded by the docs site, so renaming or removing one breaks `pnpm docs:build`; update the `<ExampleCode>` (or `?region=`) reference in the same change
 
 ### Guides and Examples Stay in Sync
 
@@ -372,9 +373,9 @@ When making changes:
 
 ### Dashboard Screenshots
 
-`docs/src/content/docs/integrations/dashboard.mdx` embeds ten screenshots from `docs/src/assets/dashboard/`. Every visible dashboard change regenerates all ten in the same change, and the prose and alt text next to each image are updated to match. Capture them from the `examples/dashboard` example (run `start` to populate, then `dashboard`) with Playwright, using exactly these settings so the set stays consistent:
+`docs/src/content/docs/integrations/dashboard.tsx` embeds ten screenshots from `docs/src/assets/dashboard/` and their dark counterparts from `docs/src/assets/dashboard/dark/`; the page shows the set matching the site theme. Every visible dashboard change regenerates all twenty from the same run in the same change, and the prose and alt text next to each image are updated to match. Capture them from the `examples/dashboard` example (run `start` to populate, then `dashboard`) with Playwright, using exactly these settings so the set stays consistent:
 
 - Viewport 800×640, device scale factor 1, the viewport only (never a full-page capture)
-- Light color scheme and reduced motion, so the running-status pulse doesn't show up mid-animation
+- Reduced motion, so the running-status pulse doesn't show up mid-animation; the light color scheme for `docs/src/assets/dashboard/`, then the dark color scheme for `docs/src/assets/dashboard/dark/` (same file names)
 - At least a minute after `start` exits, so one leftover worker shows its lost lease
 - Views: `overview.png` (`/`), `chain-types-list.png` (`/chains/types`), `job-types-list.png` (`/jobs/types`), `chains-list.png` (`/chains?typeName=greet`), `chain-detail.png` (a `process-with-blockers` chain), `jobs-list.png` (`/jobs?typeName=greet`), `job-detail.png` (a `might-fail` job), `workers-list.png` (`/workers`), `worker-detail.png` (the worker running the `long-runner-live` job), `find.png` (`/` with the find dialog open and `order` typed)

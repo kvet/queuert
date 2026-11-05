@@ -11,10 +11,10 @@ import {
 
 import { createBunSqlSqliteStateProvider } from "./provider.js";
 
-// 1. Create in-memory SQLite database
+// Create in-memory SQLite database
 const sql = new SQL("sqlite://:memory:");
 
-// 2. Create application schema
+// Create application schema
 await sql`
   CREATE TABLE IF NOT EXISTS users (
     id INTEGER PRIMARY KEY AUTOINCREMENT,
@@ -23,7 +23,7 @@ await sql`
   )
 `;
 
-// 3. Define job types
+// Define job types
 const jobTypes = defineJobTypes<{
   send_welcome_email: {
     entry: true;
@@ -32,11 +32,13 @@ const jobTypes = defineJobTypes<{
   };
 }>();
 
-// 4. Create providers and adapters
+// Create providers and adapters
+// #region adapter
 const lock = createAsyncRwLock();
 const stateProvider = createBunSqlSqliteStateProvider({ sql, lock });
 const stateAdapter = await createSqliteStateAdapter({ stateProvider });
 await stateAdapter.migrateToLatest();
+// #endregion
 
 const notifyAdapter = await createInProcessNotifyAdapter();
 
@@ -80,8 +82,9 @@ const worker = await createInProcessWorker({
 
 const stopWorker = await worker.start();
 
-// 5. Register a new user and queue welcome email atomically
-//    Bun.SQL does not queue SQLite transactions on its single connection, so take the same lock
+// Register a new user and queue welcome email atomically
+// Bun.SQL does not queue SQLite transactions on its single connection, so take the same lock
+// #region create-chain
 const chain = await withTransactionHooks(async (transactionHooks) => {
   using _h = await lock.acquireWrite();
   return await sql.begin(async (txSql) => {
@@ -97,12 +100,13 @@ const chain = await withTransactionHooks(async (transactionHooks) => {
     });
   });
 });
+// #endregion
 
-// 6. Wait for the chain to complete
+// Wait for the chain to complete
 const result = await client.awaitChain(chain, { timeoutMs: 5000 });
 console.log(`Welcome email sent at: ${result.output.sentAt}`);
 
-// 7. Cleanup
+// Cleanup
 await stopWorker();
 await notifyAdapter.close();
 await stateAdapter.close();

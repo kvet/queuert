@@ -145,12 +145,14 @@ const jobTypes = defineJobTypes<{
 const stateAdapter = await createInProcessStateAdapter();
 const notifyAdapter = await createInProcessNotifyAdapter();
 
+// #region client
 const client = await createClient({
   stateAdapter,
   notifyAdapter,
   observabilityAdapter,
   jobTypes,
 });
+// #endregion
 
 // Create worker with processors
 const worker = await createInProcessWorker({

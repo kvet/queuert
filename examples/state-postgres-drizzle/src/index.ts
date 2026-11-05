@@ -15,10 +15,10 @@ import {
 
 import { createDrizzlePgStateProvider } from "./provider.js";
 
-// 1. Start PostgreSQL using testcontainers
+// Start PostgreSQL using testcontainers
 await using pg = await acquirePostgres("postgres:18", import.meta.url);
 
-// 2. Define Drizzle schema
+// Define Drizzle schema
 const users = pgTable("users", {
   id: serial("id").primaryKey(),
   name: text("name").notNull(),
@@ -27,7 +27,7 @@ const users = pgTable("users", {
 
 const schema = { users };
 
-// 3. Create database connection and schema
+// Create database connection and schema
 const pool = new Pool({
   connectionString: pg.connectionString,
   max: 10,
@@ -43,7 +43,7 @@ await db.execute(sql`
   )
 `);
 
-// 4. Define job types
+// Define job types
 const jobTypes = defineJobTypes<{
   send_welcome_email: {
     entry: true;
@@ -52,14 +52,14 @@ const jobTypes = defineJobTypes<{
   };
 }>();
 
-// 5. Create state provider for Drizzle
+// Create state provider for Drizzle
+// #region adapter
 const stateProvider = createDrizzlePgStateProvider({ db });
-
-// 6. Create adapters and queuert client/worker
 const stateAdapter = await createPgStateAdapter({
   stateProvider,
 });
 await stateAdapter.migrateToLatest();
+// #endregion
 
 const notifyAdapter = await createInProcessNotifyAdapter();
 
@@ -93,10 +93,10 @@ const worker = await createInProcessWorker({
   }),
 });
 
-// 7. Start worker
+// Start worker
 const stopWorker = await worker.start();
 
-// 8. Register a new user and queue welcome email atomically
+// Register a new user and queue welcome email atomically
 const chain = await withTransactionHooks(async (transactionHooks) =>
   db.transaction(async (tx) => {
     const [user] = await tx
@@ -114,11 +114,11 @@ const chain = await withTransactionHooks(async (transactionHooks) =>
   }),
 );
 
-// 9. Wait for the chain to complete
+// Wait for the chain to complete
 const result = await client.awaitChain(chain, { timeoutMs: 5000 });
 console.log(`Welcome email sent at: ${result.output.sentAt}`);
 
-// 10. Cleanup
+// Cleanup
 await stopWorker();
 await notifyAdapter.close();
 await stateAdapter.close();

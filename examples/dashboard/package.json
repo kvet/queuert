@@ -12,6 +12,7 @@
   "type": "module",
   "scripts": {
     "dashboard": "pnpm --filter '@queuert/dashboard' build && tsx src/dashboard.ts",
+    "dashboard:mounted": "pnpm --filter '@queuert/dashboard' build && tsx src/dashboard-mounted.ts",
     "start": "tsx src/populator.ts",
     "typecheck": "tsc --noEmit"
   },

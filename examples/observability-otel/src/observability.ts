@@ -44,10 +44,12 @@ const meterProvider = new MeterProvider({
 metrics.setGlobalMeterProvider(meterProvider);
 
 // --- Queuert Observability Adapter ---
+// #region adapter
 export const observabilityAdapter = await createOtelObservabilityAdapter({
   meter: metrics.getMeter("queuert"),
   tracer: trace.getTracer("queuert"),
 });
+// #endregion
 
 // --- Flush & Shutdown ---
 // Errors are swallowed - example should work even without a collector running
