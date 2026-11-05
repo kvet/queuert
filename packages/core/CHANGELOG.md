@@ -1,5 +1,135 @@
 # queuert
 
+## 0.17.0
+
+### Major Changes
+
+- 7a80970: A worker that loses its attempt now reports it through one signal, `jobAttemptLost`, whatever the cause — another worker took the job, it was completed elsewhere, or it was deleted. Like `jobAttemptFailed`, it is reported once by the worker after the handler returns; previously deleted jobs and attempts that never reached `complete` reported no loss at all. The typed errors thrown by `complete` are unchanged. The per-heartbeat `extended` and the `expired` attempt signals are removed, since a lost attempt is reported by `jobAttemptLost` and a successful heartbeat is not worth an event.
+
+  - `ObservabilityAdapter`: `jobAttemptTakenByAnotherWorker` and `jobAttemptAlreadyCompleted` are replaced by `jobAttemptLost(data: JobAttemptData & WorkerBasicData)`.
+  - `ObservabilityAdapter`: `jobAttemptExtended` and `jobAttemptExpired` are removed.
+  - `jobAttemptCompleted` is buffered on the `transactionHooks` passed to `complete` and reported when that transaction commits, after the other events `complete` buffers.
+  - Logs: `job_attempt_taken_by_another_worker` and `job_attempt_already_completed` are replaced by `job_attempt_lost` (`warn`); the `completedBy` field is gone. `job_attempt_extended` and `job_attempt_expired` are removed.
+  - `@queuert/otel`: the `queuert.job.attempt.taken_by_another_worker` and `queuert.job.attempt.already_completed` counters are replaced by `queuert.job.attempt.lost`; `queuert.job.attempt.extended` and `queuert.job.attempt.expired` are removed.
+  - Deleting a chain whose job is running notifies that attempt as lost, so with a notify adapter configured the handler's `signal` aborts and its `complete` throws `JobNotFoundError`.
+
+- 690c5cf: The notify adapter publishes in batches and drops the wake budget. A commit that schedules several job types, completes several chains or loses several attempts, and a worker that reclaims the jobs of an expired worker, pay one round-trip per method instead of one per item: one `EVAL` on Redis, one `pg_notify` statement on PostgreSQL, one flush on NATS. Every idle worker listening for a type wakes on its job-scheduled notification and the database's batch acquisition settles which worker gets each job, as the PostgreSQL adapter already did. Listeners still receive one notification per type, chain or job, and a batch that fails to publish loses all of its notifications, which are hints that workers recover from by polling. Custom notify adapters and providers must be updated.
+
+  - `NotifyAdapter`: `notifyJobScheduled(typeName)` is replaced by `notifyJobsScheduled(typeNames)`, `notifyChainCompleted(chainId)` by `notifyChainsCompleted(chainIds)`, and `notifyJobAttemptLost(jobId)` by `notifyJobAttemptsLost(jobIds)`. Batches are never empty, and items in a batch are expected to be unique. The `listen*` methods are unchanged.
+  - `NotifyAdapter.provideWakeHint` and `NotifyAdapter.consumeWakeHint` are removed.
+  - `createNatsNotifyAdapter` no longer accepts `kv`; the JetStream KV bucket is no longer used.
+  - `PgNotifyProvider.publish` takes `messages: string[]` and publishes them in one statement, e.g. `SELECT pg_notify($1, message) FROM unnest($2::text[]) AS message`.
+  - `RedisNotifyProvider.publish` is removed; the Redis adapter publishes from a Lua script through `eval`.
+  - Redis hint keys (`<prefix>:hint:<typeName>`) and NATS KV hint entries are no longer written. During a rolling upgrade, older publishers still write them and older workers still read them: an older worker that finds a budget already claimed skips the wake and picks the job up on its next poll, until the entries expire within 60 seconds. Older workers that find no entry wake on every notification.
+  - The `operation` reported by `notify_adapter_error` logs and the `queuert.adapter.operation` attribute of the `queuert.notify_adapter.error` metric use the new method names.
+
+- 1a6d8c7: The type-name and per-key count methods on the client and the `StateAdapter` interface are renamed so `list*` always means a paginated method and each count names what it counts. Signatures and results are unchanged; rename the calls, and custom state adapters rename the methods they implement.
+
+  - `listChainTypeNames` → `getChainTypeNames`, `listJobTypeNames` → `getJobTypeNames`.
+  - `countByChainTypeNames` → `countChainsByTypeName`, `countByJobTypeNames` → `countJobsByTypeName`.
+  - The `operation` reported on `state_adapter_error` logs and the `queuert.state_adapter.error` metric uses the new method names.
+
+- 1a6d8c7: The state adapter options for job IDs now name the job explicitly, matching `InvalidJobIdError`.
+
+  - `generateId` and `validateId` are renamed to `generateJobId` and `validateJobId`, as options of `createPgStateAdapter`, `createSqliteStateAdapter` and `createInProcessStateAdapter`.
+  - The `idType` option of `createPgStateAdapter` and `createSqliteStateAdapter` is renamed to `jobIdType`.
+
+- 4327b34: The in-process worker acquires jobs in batches sized to its idle slots, so filling `N` slots costs one database round-trip instead of `N`, and throughput at higher `concurrency` is no longer capped by the latency of a single acquisition. Custom state adapters must implement the batched methods.
+
+  - `StateAdapter.startJobAttempt` is replaced by `startJobAttempts`, which takes a `limit` and returns an array of up to `limit` acquired jobs.
+
+- 88e70f4: The attempt handler's `signal` is now a plain `AbortSignal` with no typed reason. Handlers react to every abort the same way: stop working, then commit a `complete` to keep progress or throw to reschedule. If this worker lost the attempt, `complete` writes nothing and throws the matching error (`JobTakenByAnotherWorkerError`, `JobNotFoundError` or `JobAlreadyCompletedError`), so code that branched on `signal.reason` should drop the check or catch those errors instead.
+
+  - Removed the `JobAbortReason` and `TypedAbortSignal` type exports; `signal` is typed as `AbortSignal`.
+  - `@queuert/otel` no longer records the `abort` span event or the `queuert.abort.reason` attribute on attempt spans.
+
+- Queuert 0.17 moves job completion into your own database transactions and replaces per-job attempt leases with a worker registry, so ownership is fenced end to end. It also batches acquisition and notifications to cut database and broker round trips. This is a breaking release: read the migration notes before upgrading, and run the `002_worker_liveness` migration.
+- bc5cc1a: The `workerStopping` observability event is removed. A worker's stop begins with your own call to the function returned by `start()`, so the event only repeated what the caller already knew; `workerStopped` still marks the end of shutdown.
+
+  - `ObservabilityAdapter.workerStopping` is removed; custom observability adapters drop the method.
+  - The `worker_stopping` log type is removed.
+  - The `queuert.worker.stopping` OTEL counter is removed.
+
+- cfdc0f4: State adapters now expose their configuration as `stateAdapter.config`, and core uses it to generate and validate job IDs and enforce the blocker limit before anything is written. The per-job blocker limit and the per-status count cap are no longer hardcoded, and `transactionConcurrency` moves out of the adapter contract into the conformance fixture, since nothing at runtime used it. Defaults are unchanged, so existing setups behave the same.
+
+  - New `maxBlockersPerJob` (default `100`) and `countCap` (default `10_000`) options on `createPgStateAdapter`, `createSqliteStateAdapter`, and `createInProcessStateAdapter`; non-positive or non-integer values throw at creation.
+  - `StateAdapter` gains a required `config: StateAdapterConfig` (`generateJobId`, `validateJobId`, `maxBlockersPerJob`, `countCap`), exported from `queuert`; custom state adapters must provide it.
+  - `validateJobId` now runs in core on caller-supplied and generated IDs, throwing `InvalidJobIdError` before any write; `id` is now required on every job passed to `StateAdapter.createJobs` and `continueJobs`, and adapters no longer generate or validate IDs.
+  - Removed `transactionConcurrency` from `StateAdapter`, `PgStateProvider`, and `SqliteStateProvider`; delete it from custom providers and adapters.
+  - `runStateAdapterConformance` fixtures now require `transactionConcurrency: "concurrent" | "serialized"` (`"serialized"` skips the concurrent-transaction cases) and no longer take `generateId` or `generateInvalidId`.
+
+- d6e1c62: Mutating client methods now reject a transaction context that is not inside an open transaction. Previously, passing a pool, the root ORM handle, or an idle connection where the transaction belonged was accepted: each statement of a multi-statement write committed on its own, so a failure partway could leave a job completed with its dependents still blocked, and `lock: "exclusive"` locks were released immediately, reopening the blocker-attach race. The check reads the driver's own transaction state synchronously and adds no database round trip.
+
+  - `PgStateProvider` and `SqliteStateProvider` gain a required `isTransaction(txCtx)` method; custom providers must implement it from the driver's state (e.g. Kysely `db.isTransaction`, Knex `trx.isTransaction`, pg `client.getTransactionStatus()`, better-sqlite3 `db.inTransaction`, node:sqlite `db.isTransaction`).
+  - `StateAdapter` gains a required `isTransaction(txCtx)` method; the built-in adapters forward it to the provider.
+  - `createChain`, `createChains`, `completeChain`, `deleteChain(s)` and `rescheduleJob(s)` throw when the adapter reports the context as outside a transaction.
+  - The state adapter conformance suite checks `isTransaction` and accepts an optional `withNonTransactionContext` fixture to verify the negative case.
+
+- ce2bfff: Job processing runs in your own transaction. The handler does its work, opens a transaction with your database client, calls `complete({ ...txCtx, transactionHooks, output | continueWith | reschedule })` inside it and returns the result, so the outcome commits or rolls back together with your domain writes. Move the work from `prepare` and the old `complete` callback into your own transaction; the worker's own bookkeeping runs as atomic writes conditional on the attempt still owning the job.
+
+  - Removed `prepare`, `step`, the old `complete` callback, the atomic and staged processing modes and auto-setup; `AttemptMiddleware` keeps only `wrapHandler`, which is required and returns `next`'s result.
+  - `complete` (formerly `finish`) requires the transaction context and `transactionHooks`, throws `JobTakenByAnotherWorkerError`, `JobAlreadyCompletedError` or `JobNotFoundError` when the attempt no longer owns the job, and succeeds at most once per `transactionHooks` (open `withTransactionHooks` outside your transaction, once per try); wrap a `complete` that may be rolled back to a savepoint in `transactionHooks.withSavepoint`.
+  - A handler that returns without a committed `complete` is rescheduled with backoff; an error thrown after a committed `complete` is reported as a `workerError` and keeps the completion.
+  - Rescheduling after a failed attempt notifies workers like every other reschedule.
+  - PostgreSQL: job acquisition locks only the job row, so a transaction holding a chain's head does not hold back its later jobs.
+  - SQLite: every transaction you pass to `complete` or to client methods must be serialized with the provider's own transactions, for example by holding its `AsyncRwLock` write lock.
+  - `@queuert/otel`: each attempt is a single span; the `prepare`, `step` and `complete` child spans and the `queuert.step.index`, `queuert.rescheduled_at` and `queuert.rescheduled_after_ms` attributes are removed (use the `queuert.job.rescheduled` metric).
+  - Custom observability adapters, state providers and state adapters: the attempt span handle drops `startPrepare` and `startComplete`, `withSavepoint` is removed from the providers and `StateAdapter`, `completeJobs` drops `hasBlockedJobs`, and `startJobAttempts` and `rescheduleJobs` must work without a `txCtx`.
+  - Workerless completion renames its callback argument the same way: `completeJob(job, async ({ complete }) => complete({ output }))`.
+  - The `chain_created` and `job_created` logs and events report the parsed input (the stored `job.input`).
+
+- 1a6d8c7: The attempt lease moves from jobs to workers. Each in-process worker registers a row in a new `worker` table with a lease that one heartbeat renews (`createInProcessWorker({ leaseConfig: { durationMs, heartbeatMs } })`, defaults 60s / 15s), and a running job is live exactly while its worker's lease is live. A worker that loses its lease aborts its attempts and registers again; an idle worker reclaims expired workers' running jobs as failed attempts with no backoff. The `002_worker_liveness` migration creates the `worker` table, adds `job.attempt_token`, drops `job.attempt_until` and returns every running job to pending. Processes on the previous version can keep running while new ones deploy: they still create chains, but an attempt they run fails to complete, and an upgraded worker reschedules a job they claimed, without an attempt token, once its attempt is older than `leaseConfig.durationMs`, so the job runs again. On PostgreSQL the migration gives up after 5s if it cannot take its locks, instead of waiting behind old processes.
+
+  - Removed `attemptConfig`, `AttemptConfig`, the `defaults` option of `createInProcessWorker`, `InProcessWorkerDefaults`, `Job.attemptUntil` and the unused `RetryConfig` type; `createInProcessWorker` takes a top-level `backoffConfig` fallback, and `WorkerLeaseConfig` is exported.
+  - The `workerName` option is replaced by `workerId`, defaulting to the state adapter's new `generateWorkerId` and checked with `validateWorkerId` (throwing the new `InvalidWorkerIdError`); two in-process workers with the same id never run at once, reported through the new `WorkerAlreadyLiveError` and `WorkerLeaseLostError`.
+  - `start()` registers the worker in the background, and throws when called again before its `stop` resolved; `stop()` reschedules the worker's running jobs and deletes its row; `recoveryBackoffConfig` covers failed registrations, loop errors and restarts.
+  - Attempt-scoped writes carry an attempt token, so a stale attempt's `complete` writes nothing and throws.
+  - An idle worker reclaims one expired worker at a time, picked at random among the oldest eight, and reschedules its own running jobs that no attempt runs after an error and otherwise at most once per `leaseConfig.heartbeatMs`.
+  - A reclaimed job records a serialized `JobAttemptReclaimedError` (new export) as its last attempt error and emits `jobRescheduled`; `jobAttemptReclaimed` carries `reclaimedFrom`, and `workerLeaseLost` is added with the `queuert.worker.lease_lost` metric.
+  - `createPgStateAdapter` and `createSqliteStateAdapter` take a `workerIdType` option; on PostgreSQL the migration recreates `job.attempt_by` and `job.completed_by` with that type, clearing stored worker IDs, while SQLite keeps them.
+  - `StateAdapter`, `StateAdapterConfig`, `PgStateAdapter`, `SqliteStateAdapter` and `Job` gain a `TWorkerId` type parameter right after `TJobId`, shifting the later parameters by one.
+  - PostgreSQL compares schedules and leases against the statement's time rather than the transaction's start.
+  - `Worker` is exported and the client gains `getWorker`, `getWorkers`, `countWorkers`, `countWorkersByTypeName`, `countRunningJobsByWorkerId`, `listWorkers` and `listWorkerJobs`.
+  - Custom state adapters implement the new worker methods and attempt-token checks, list the running jobs that hold no attempt token for `listWorkerJobs({ workerId: null })`, and drop `extendJobAttempt` and `reclaimExpiredJobAttempts`; the [state adapter interface](https://kvet.github.io/queuert/integrations/state-adapters/#the-stateadapter-interface) lists the contract.
+  - The dashboard adds Workers pages, links a running job's worker, warns about workers that lost their lease and job types with no live worker, and drops the "Deadline" sort.
+
+### Minor Changes
+
+- 51fa015: The attempt handler receives `fence`, which checks attempt ownership inside the other transactions a handler opens besides the one that calls `complete`, such as batch deletes or checkpoints. Call `fence({ ...txCtx })` at the start of such a transaction: it locks the job row and its chain head and throws, aborting `signal`, if the attempt no longer owns the job, so the transaction's writes commit only while the attempt owns the job. Reclaiming, completing or deleting the job waits for a fenced transaction to end, so keep fenced transactions short.
+
+  - `fence` throws `JobTakenByAnotherWorkerError`, `JobAlreadyCompletedError` or `JobNotFoundError`, the same errors as `complete`.
+  - `fence` writes nothing and can be called any number of times; in the transaction that calls `complete`, call it before `complete`.
+
+- 8586b33: Blockers can now be passed by ID, so a chain you only stored the ID of no longer needs a `getChain` round trip before `createChain`, `createChains`, or `continueWith`. Core already loads each blocker chain under lock while creating the job, and it now validates that stored chain instead of trusting the object the caller passed.
+
+  - `blockers` accepts `{ id, typeName? }` per slot; full chain objects still work unchanged. When given, `typeName` is checked against the slot at compile time.
+  - A `typeName` that differs from the stored chain's type throws `ChainTypeMismatchError`.
+  - The job type's `validateBlockers` now receives the stored chain's `typeName` and `input`, read under lock, rather than the caller-supplied values. It now runs after the blocker chains are loaded and locked, so a missing blocker chain throws `ChainNotFoundError` before blocker validation runs.
+  - Object literals that list chain fields other than `id` and `typeName` explicitly (e.g. `{ ...chain, input }`) are now rejected by the type checker; pass the chain itself or `{ id }`.
+
+- 488a10a: Add `pickProcessors` and `omitProcessors` to split one processor registry across several workers, for example to give CPU-heavy job types a dedicated low-concurrency worker without defining their handlers twice.
+
+  - `pickProcessors(processors, typeNames)` returns a registry with only the listed job types; `omitProcessors(processors, typeNames)` returns one with every other job type.
+  - Picked processors keep their handler, their slice's middleware chain, and their `backoffConfig`, so `requiredAttemptMiddleware` checks still pass.
+  - Job type names are type-checked against the registry; an unknown name, an empty list, or omitting every processor is a type error and throws at runtime.
+  - `createInProcessWorker` now reports overlapping job types across a `processors` array at compile time when the array's length is known statically (inline arrays and `as const` tuples); arrays built at runtime are still checked at runtime only.
+
+### Patch Changes
+
+- 6f3903d: `createInProcessWorker` now rejects invalid concurrency, poll interval, backoff and lease config when it is created, instead of failing later while processing jobs.
+
+  - Throws a `TypeError` naming each invalid field when `recoveryBackoffConfig`, a `backoffConfig` (worker-level or per processor) or `leaseConfig` holds `NaN`, a negative value, or a zero `multiplier`, `durationMs` or `heartbeatMs`.
+  - Throws the same `TypeError` when `concurrency` is not a positive integer or `pollIntervalMs` is not a positive finite number.
+  - `Infinity` is rejected everywhere except `maxDelayMs`, where it still means no cap.
+
+- ed1c13b: Schedules and `awaitChain` timeouts longer than about 24.8 days (2^31-1 ms) now work. The PostgreSQL adapter rejected them, and a pending job scheduled that far ahead made every idle worker's main loop fail and restart with an ever-growing backoff.
+
+  - PostgreSQL: `schedule: { afterMs }` on `createChain`, `continueWith`, and `reschedule` above 2^31-1 ms no longer fail with "interval field value out of range" ([#5](https://github.com/kvet/queuert/issues/5)).
+  - PostgreSQL: a pending job scheduled more than about 24.8 days ahead no longer makes `getStartAttemptDelayMs` fail with "integer out of range" on every idle worker cycle ([#6](https://github.com/kvet/queuert/issues/6)).
+  - The worker's `recoveryBackoffConfig` backoff now resets once the worker starts a job again, so an isolated error later on waits the initial delay, not the maximum ([#6](https://github.com/kvet/queuert/issues/6)).
+  - `awaitChain` with a `timeoutMs` above 2^31-1 ms no longer times out almost immediately.
+  - PostgreSQL: fractional millisecond delays (`schedule: { afterMs }`, retry backoff with a non-integer `multiplier` such as `1.5`) no longer fail with "invalid input syntax for type bigint".
+
 ## 0.16.0
 
 ### Major Changes

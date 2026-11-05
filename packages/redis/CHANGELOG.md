@@ -1,5 +1,42 @@
 # @queuert/redis
 
+## 0.17.0
+
+### Major Changes
+
+- 690c5cf: The notify adapter publishes in batches and drops the wake budget. A commit that schedules several job types, completes several chains or loses several attempts, and a worker that reclaims the jobs of an expired worker, pay one round-trip per method instead of one per item: one `EVAL` on Redis, one `pg_notify` statement on PostgreSQL, one flush on NATS. Every idle worker listening for a type wakes on its job-scheduled notification and the database's batch acquisition settles which worker gets each job, as the PostgreSQL adapter already did. Listeners still receive one notification per type, chain or job, and a batch that fails to publish loses all of its notifications, which are hints that workers recover from by polling. Custom notify adapters and providers must be updated.
+
+  - `NotifyAdapter`: `notifyJobScheduled(typeName)` is replaced by `notifyJobsScheduled(typeNames)`, `notifyChainCompleted(chainId)` by `notifyChainsCompleted(chainIds)`, and `notifyJobAttemptLost(jobId)` by `notifyJobAttemptsLost(jobIds)`. Batches are never empty, and items in a batch are expected to be unique. The `listen*` methods are unchanged.
+  - `NotifyAdapter.provideWakeHint` and `NotifyAdapter.consumeWakeHint` are removed.
+  - `createNatsNotifyAdapter` no longer accepts `kv`; the JetStream KV bucket is no longer used.
+  - `PgNotifyProvider.publish` takes `messages: string[]` and publishes them in one statement, e.g. `SELECT pg_notify($1, message) FROM unnest($2::text[]) AS message`.
+  - `RedisNotifyProvider.publish` is removed; the Redis adapter publishes from a Lua script through `eval`.
+  - Redis hint keys (`<prefix>:hint:<typeName>`) and NATS KV hint entries are no longer written. During a rolling upgrade, older publishers still write them and older workers still read them: an older worker that finds a budget already claimed skips the wake and picks the job up on its next poll, until the entries expire within 60 seconds. Older workers that find no entry wake on every notification.
+  - The `operation` reported by `notify_adapter_error` logs and the `queuert.adapter.operation` attribute of the `queuert.notify_adapter.error` metric use the new method names.
+
+- Queuert 0.17 moves job completion into your own database transactions and replaces per-job attempt leases with a worker registry, so ownership is fenced end to end. It also batches acquisition and notifications to cut database and broker round trips. This is a breaking release: read the migration notes before upgrading, and run the `002_worker_liveness` migration.
+
+### Patch Changes
+
+- Updated dependencies [51fa015]
+- Updated dependencies [7a80970]
+- Updated dependencies [690c5cf]
+- Updated dependencies [8586b33]
+- Updated dependencies [1a6d8c7]
+- Updated dependencies [6f3903d]
+- Updated dependencies [1a6d8c7]
+- Updated dependencies [ed1c13b]
+- Updated dependencies [4327b34]
+- Updated dependencies [488a10a]
+- Updated dependencies [88e70f4]
+- Updated dependencies
+- Updated dependencies [bc5cc1a]
+- Updated dependencies [cfdc0f4]
+- Updated dependencies [d6e1c62]
+- Updated dependencies [ce2bfff]
+- Updated dependencies [1a6d8c7]
+  - queuert@0.17.0
+
 ## 0.16.0
 
 ### Major Changes

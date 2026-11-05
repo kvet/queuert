@@ -1,5 +1,75 @@
 # @queuert/dashboard
 
+## 0.17.0
+
+### Major Changes
+
+- Queuert 0.17 moves job completion into your own database transactions and replaces per-job attempt leases with a worker registry, so ownership is fenced end to end. It also batches acquisition and notifications to cut database and broker round trips. This is a breaking release: read the migration notes before upgrading, and run the `002_worker_liveness` migration.
+- 1a6d8c7: The attempt lease moves from jobs to workers. Each in-process worker registers a row in a new `worker` table with a lease that one heartbeat renews (`createInProcessWorker({ leaseConfig: { durationMs, heartbeatMs } })`, defaults 60s / 15s), and a running job is live exactly while its worker's lease is live. A worker that loses its lease aborts its attempts and registers again; an idle worker reclaims expired workers' running jobs as failed attempts with no backoff. The `002_worker_liveness` migration creates the `worker` table, adds `job.attempt_token`, drops `job.attempt_until` and returns every running job to pending. Processes on the previous version can keep running while new ones deploy: they still create chains, but an attempt they run fails to complete, and an upgraded worker reschedules a job they claimed, without an attempt token, once its attempt is older than `leaseConfig.durationMs`, so the job runs again. On PostgreSQL the migration gives up after 5s if it cannot take its locks, instead of waiting behind old processes.
+
+  - Removed `attemptConfig`, `AttemptConfig`, the `defaults` option of `createInProcessWorker`, `InProcessWorkerDefaults`, `Job.attemptUntil` and the unused `RetryConfig` type; `createInProcessWorker` takes a top-level `backoffConfig` fallback, and `WorkerLeaseConfig` is exported.
+  - The `workerName` option is replaced by `workerId`, defaulting to the state adapter's new `generateWorkerId` and checked with `validateWorkerId` (throwing the new `InvalidWorkerIdError`); two in-process workers with the same id never run at once, reported through the new `WorkerAlreadyLiveError` and `WorkerLeaseLostError`.
+  - `start()` registers the worker in the background, and throws when called again before its `stop` resolved; `stop()` reschedules the worker's running jobs and deletes its row; `recoveryBackoffConfig` covers failed registrations, loop errors and restarts.
+  - Attempt-scoped writes carry an attempt token, so a stale attempt's `complete` writes nothing and throws.
+  - An idle worker reclaims one expired worker at a time, picked at random among the oldest eight, and reschedules its own running jobs that no attempt runs after an error and otherwise at most once per `leaseConfig.heartbeatMs`.
+  - A reclaimed job records a serialized `JobAttemptReclaimedError` (new export) as its last attempt error and emits `jobRescheduled`; `jobAttemptReclaimed` carries `reclaimedFrom`, and `workerLeaseLost` is added with the `queuert.worker.lease_lost` metric.
+  - `createPgStateAdapter` and `createSqliteStateAdapter` take a `workerIdType` option; on PostgreSQL the migration recreates `job.attempt_by` and `job.completed_by` with that type, clearing stored worker IDs, while SQLite keeps them.
+  - `StateAdapter`, `StateAdapterConfig`, `PgStateAdapter`, `SqliteStateAdapter` and `Job` gain a `TWorkerId` type parameter right after `TJobId`, shifting the later parameters by one.
+  - PostgreSQL compares schedules and leases against the statement's time rather than the transaction's start.
+  - `Worker` is exported and the client gains `getWorker`, `getWorkers`, `countWorkers`, `countWorkersByTypeName`, `countRunningJobsByWorkerId`, `listWorkers` and `listWorkerJobs`.
+  - Custom state adapters implement the new worker methods and attempt-token checks, list the running jobs that hold no attempt token for `listWorkerJobs({ workerId: null })`, and drop `extendJobAttempt` and `reclaimExpiredJobAttempts`; the [state adapter interface](https://kvet.github.io/queuert/integrations/state-adapters/#the-stateadapter-interface) lists the contract.
+  - The dashboard adds Workers pages, links a running job's worker, warns about workers that lost their lease and job types with no live worker, and drops the "Deadline" sort.
+
+### Minor Changes
+
+- fa33ee2: Removed auto-refresh, the refresh button and the "List has changed" banner: reload the page or navigate to see fresh data. The dashboard is also easier to read and shows which version you are running: body text uses the system sans-serif font, with monospace kept for headings, labels, type names, IDs and JSON, and the top bar carries the dashboard's version.
+
+  - Body text uses the system sans-serif font; headings, labels, status pills, type names, IDs and JSON stay monospace
+  - The top bar shows the `@queuert/dashboard` version next to the logo
+  - The auto-refresh interval picker is removed, and a stored auto-refresh setting is ignored
+  - The refresh button and its "last loaded" label are removed from the top bar
+  - The "List has changed · Show" banner on chain and job lists is removed, since lists no longer refresh in place
+  - The top bar and page width match the docs site: translucent page-colored background, a brand underline under the active section, and a wider content column
+
+### Patch Changes
+
+- 6700274: Fix the chain and job list status selector, group the list filters into one filter bar, and restyle the selects.
+
+  - Only the selected status is highlighted now; previously every status tab showed the active underline.
+  - The status selector no longer shows a stray vertical scrollbar.
+  - The status filter, the chain role select (All / Independent / Used as blocker), and sorting share a single labelled filter bar that sits on one line on wide screens and wraps on narrow ones.
+  - The type switcher and the sort selects share one style, and browsers with customizable selects (`appearance: base-select`) show a matching styled picker; other browsers keep their native picker.
+
+- 4c54665: Rescheduling a job or deleting a chain from the dashboard notifies workers only after the change commits, so a worker woken by the notification no longer looks for the job before it is visible.
+- cee9361: The dashboard's type pages now share the lists' status filter, the find dialog also finds types, and type rows are simpler.
+
+  - The chain and job type pages have the same status filter as the chain and job lists, with the number of matching types per status; types with nothing in the selected status are hidden. The pages always list types by name; the name filter and sort control are gone, since the find dialog now finds types.
+  - The home page's chain and job type lists leave out types with no running chains or no blocked, pending or running jobs.
+  - Type rows no longer show a total next to the type name.
+  - The find dialog (`⌘K` / `Ctrl+K`) now also finds chain and job types by name and opens the chosen type's list.
+  - The Overview tab is folded into the home page, opened by the Queuert logo.
+  - Type search in the find dialog works like fzf: letters in order, space-separated words in any order, smart case, and best matches first. `Enter` opens the top matching type when the text is no chain, job or worker ID.
+  - Completed chains and jobs are now shown in gray instead of green, so blocked, pending and running work stands out.
+
+- Updated dependencies [51fa015]
+- Updated dependencies [7a80970]
+- Updated dependencies [690c5cf]
+- Updated dependencies [8586b33]
+- Updated dependencies [1a6d8c7]
+- Updated dependencies [6f3903d]
+- Updated dependencies [1a6d8c7]
+- Updated dependencies [ed1c13b]
+- Updated dependencies [4327b34]
+- Updated dependencies [488a10a]
+- Updated dependencies [88e70f4]
+- Updated dependencies
+- Updated dependencies [bc5cc1a]
+- Updated dependencies [cfdc0f4]
+- Updated dependencies [d6e1c62]
+- Updated dependencies [ce2bfff]
+- Updated dependencies [1a6d8c7]
+  - queuert@0.17.0
+
 ## 0.16.0
 
 ### Major Changes

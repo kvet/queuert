@@ -1,5 +1,84 @@
 # @queuert/otel
 
+## 0.17.0
+
+### Major Changes
+
+- 7a80970: A worker that loses its attempt now reports it through one signal, `jobAttemptLost`, whatever the cause — another worker took the job, it was completed elsewhere, or it was deleted. Like `jobAttemptFailed`, it is reported once by the worker after the handler returns; previously deleted jobs and attempts that never reached `complete` reported no loss at all. The typed errors thrown by `complete` are unchanged. The per-heartbeat `extended` and the `expired` attempt signals are removed, since a lost attempt is reported by `jobAttemptLost` and a successful heartbeat is not worth an event.
+
+  - `ObservabilityAdapter`: `jobAttemptTakenByAnotherWorker` and `jobAttemptAlreadyCompleted` are replaced by `jobAttemptLost(data: JobAttemptData & WorkerBasicData)`.
+  - `ObservabilityAdapter`: `jobAttemptExtended` and `jobAttemptExpired` are removed.
+  - `jobAttemptCompleted` is buffered on the `transactionHooks` passed to `complete` and reported when that transaction commits, after the other events `complete` buffers.
+  - Logs: `job_attempt_taken_by_another_worker` and `job_attempt_already_completed` are replaced by `job_attempt_lost` (`warn`); the `completedBy` field is gone. `job_attempt_extended` and `job_attempt_expired` are removed.
+  - `@queuert/otel`: the `queuert.job.attempt.taken_by_another_worker` and `queuert.job.attempt.already_completed` counters are replaced by `queuert.job.attempt.lost`; `queuert.job.attempt.extended` and `queuert.job.attempt.expired` are removed.
+  - Deleting a chain whose job is running notifies that attempt as lost, so with a notify adapter configured the handler's `signal` aborts and its `complete` throws `JobNotFoundError`.
+
+- b0c286c: Metrics from `@queuert/otel` no longer carry the `queuert.worker.id` attribute. Worker IDs are random for each process start by default, so every restart or deploy created a new set of time series and metric cardinality grew without limit. The worker ID stays on job attempt spans. If you need per-process metrics, use an OTEL resource attribute such as `service.instance.id`.
+
+  - Removed `queuert.worker.id` from `queuert.worker.*` counters, `queuert.job.attempt.*` counters, the `queuert.job.attempt.duration` histogram, and the `queuert.job_type.idle` / `queuert.job_type.processing` gauges.
+  - Dashboards or alerts that group or filter these metrics by `queuert.worker.id` need updating.
+
+- 88e70f4: The attempt handler's `signal` is now a plain `AbortSignal` with no typed reason. Handlers react to every abort the same way: stop working, then commit a `complete` to keep progress or throw to reschedule. If this worker lost the attempt, `complete` writes nothing and throws the matching error (`JobTakenByAnotherWorkerError`, `JobNotFoundError` or `JobAlreadyCompletedError`), so code that branched on `signal.reason` should drop the check or catch those errors instead.
+
+  - Removed the `JobAbortReason` and `TypedAbortSignal` type exports; `signal` is typed as `AbortSignal`.
+  - `@queuert/otel` no longer records the `abort` span event or the `queuert.abort.reason` attribute on attempt spans.
+
+- Queuert 0.17 moves job completion into your own database transactions and replaces per-job attempt leases with a worker registry, so ownership is fenced end to end. It also batches acquisition and notifications to cut database and broker round trips. This is a breaking release: read the migration notes before upgrading, and run the `002_worker_liveness` migration.
+- bc5cc1a: The `workerStopping` observability event is removed. A worker's stop begins with your own call to the function returned by `start()`, so the event only repeated what the caller already knew; `workerStopped` still marks the end of shutdown.
+
+  - `ObservabilityAdapter.workerStopping` is removed; custom observability adapters drop the method.
+  - The `worker_stopping` log type is removed.
+  - The `queuert.worker.stopping` OTEL counter is removed.
+
+- ce2bfff: Job processing runs in your own transaction. The handler does its work, opens a transaction with your database client, calls `complete({ ...txCtx, transactionHooks, output | continueWith | reschedule })` inside it and returns the result, so the outcome commits or rolls back together with your domain writes. Move the work from `prepare` and the old `complete` callback into your own transaction; the worker's own bookkeeping runs as atomic writes conditional on the attempt still owning the job.
+
+  - Removed `prepare`, `step`, the old `complete` callback, the atomic and staged processing modes and auto-setup; `AttemptMiddleware` keeps only `wrapHandler`, which is required and returns `next`'s result.
+  - `complete` (formerly `finish`) requires the transaction context and `transactionHooks`, throws `JobTakenByAnotherWorkerError`, `JobAlreadyCompletedError` or `JobNotFoundError` when the attempt no longer owns the job, and succeeds at most once per `transactionHooks` (open `withTransactionHooks` outside your transaction, once per try); wrap a `complete` that may be rolled back to a savepoint in `transactionHooks.withSavepoint`.
+  - A handler that returns without a committed `complete` is rescheduled with backoff; an error thrown after a committed `complete` is reported as a `workerError` and keeps the completion.
+  - Rescheduling after a failed attempt notifies workers like every other reschedule.
+  - PostgreSQL: job acquisition locks only the job row, so a transaction holding a chain's head does not hold back its later jobs.
+  - SQLite: every transaction you pass to `complete` or to client methods must be serialized with the provider's own transactions, for example by holding its `AsyncRwLock` write lock.
+  - `@queuert/otel`: each attempt is a single span; the `prepare`, `step` and `complete` child spans and the `queuert.step.index`, `queuert.rescheduled_at` and `queuert.rescheduled_after_ms` attributes are removed (use the `queuert.job.rescheduled` metric).
+  - Custom observability adapters, state providers and state adapters: the attempt span handle drops `startPrepare` and `startComplete`, `withSavepoint` is removed from the providers and `StateAdapter`, `completeJobs` drops `hasBlockedJobs`, and `startJobAttempts` and `rescheduleJobs` must work without a `txCtx`.
+  - Workerless completion renames its callback argument the same way: `completeJob(job, async ({ complete }) => complete({ output }))`.
+  - The `chain_created` and `job_created` logs and events report the parsed input (the stored `job.input`).
+
+- 1a6d8c7: The attempt lease moves from jobs to workers. Each in-process worker registers a row in a new `worker` table with a lease that one heartbeat renews (`createInProcessWorker({ leaseConfig: { durationMs, heartbeatMs } })`, defaults 60s / 15s), and a running job is live exactly while its worker's lease is live. A worker that loses its lease aborts its attempts and registers again; an idle worker reclaims expired workers' running jobs as failed attempts with no backoff. The `002_worker_liveness` migration creates the `worker` table, adds `job.attempt_token`, drops `job.attempt_until` and returns every running job to pending. Processes on the previous version can keep running while new ones deploy: they still create chains, but an attempt they run fails to complete, and an upgraded worker reschedules a job they claimed, without an attempt token, once its attempt is older than `leaseConfig.durationMs`, so the job runs again. On PostgreSQL the migration gives up after 5s if it cannot take its locks, instead of waiting behind old processes.
+
+  - Removed `attemptConfig`, `AttemptConfig`, the `defaults` option of `createInProcessWorker`, `InProcessWorkerDefaults`, `Job.attemptUntil` and the unused `RetryConfig` type; `createInProcessWorker` takes a top-level `backoffConfig` fallback, and `WorkerLeaseConfig` is exported.
+  - The `workerName` option is replaced by `workerId`, defaulting to the state adapter's new `generateWorkerId` and checked with `validateWorkerId` (throwing the new `InvalidWorkerIdError`); two in-process workers with the same id never run at once, reported through the new `WorkerAlreadyLiveError` and `WorkerLeaseLostError`.
+  - `start()` registers the worker in the background, and throws when called again before its `stop` resolved; `stop()` reschedules the worker's running jobs and deletes its row; `recoveryBackoffConfig` covers failed registrations, loop errors and restarts.
+  - Attempt-scoped writes carry an attempt token, so a stale attempt's `complete` writes nothing and throws.
+  - An idle worker reclaims one expired worker at a time, picked at random among the oldest eight, and reschedules its own running jobs that no attempt runs after an error and otherwise at most once per `leaseConfig.heartbeatMs`.
+  - A reclaimed job records a serialized `JobAttemptReclaimedError` (new export) as its last attempt error and emits `jobRescheduled`; `jobAttemptReclaimed` carries `reclaimedFrom`, and `workerLeaseLost` is added with the `queuert.worker.lease_lost` metric.
+  - `createPgStateAdapter` and `createSqliteStateAdapter` take a `workerIdType` option; on PostgreSQL the migration recreates `job.attempt_by` and `job.completed_by` with that type, clearing stored worker IDs, while SQLite keeps them.
+  - `StateAdapter`, `StateAdapterConfig`, `PgStateAdapter`, `SqliteStateAdapter` and `Job` gain a `TWorkerId` type parameter right after `TJobId`, shifting the later parameters by one.
+  - PostgreSQL compares schedules and leases against the statement's time rather than the transaction's start.
+  - `Worker` is exported and the client gains `getWorker`, `getWorkers`, `countWorkers`, `countWorkersByTypeName`, `countRunningJobsByWorkerId`, `listWorkers` and `listWorkerJobs`.
+  - Custom state adapters implement the new worker methods and attempt-token checks, list the running jobs that hold no attempt token for `listWorkerJobs({ workerId: null })`, and drop `extendJobAttempt` and `reclaimExpiredJobAttempts`; the [state adapter interface](https://kvet.github.io/queuert/integrations/state-adapters/#the-stateadapter-interface) lists the contract.
+  - The dashboard adds Workers pages, links a running job's worker, warns about workers that lost their lease and job types with no live worker, and drops the "Deadline" sort.
+
+### Patch Changes
+
+- Updated dependencies [51fa015]
+- Updated dependencies [7a80970]
+- Updated dependencies [690c5cf]
+- Updated dependencies [8586b33]
+- Updated dependencies [1a6d8c7]
+- Updated dependencies [6f3903d]
+- Updated dependencies [1a6d8c7]
+- Updated dependencies [ed1c13b]
+- Updated dependencies [4327b34]
+- Updated dependencies [488a10a]
+- Updated dependencies [88e70f4]
+- Updated dependencies
+- Updated dependencies [bc5cc1a]
+- Updated dependencies [cfdc0f4]
+- Updated dependencies [d6e1c62]
+- Updated dependencies [ce2bfff]
+- Updated dependencies [1a6d8c7]
+  - queuert@0.17.0
+
 ## 0.16.0
 
 ### Major Changes
