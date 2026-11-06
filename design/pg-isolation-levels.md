@@ -123,7 +123,7 @@ Migrations touch only Queuert's tables and run once per deploy, so the pin takes
 
 A 40001 or 40P01 raised in a transaction passed to `complete` fails the attempt like any other error, and the job is rescheduled with backoff. Client methods throw it to the caller. Retrying is the caller's concern and is documented. Different user transactions may run at different levels.
 
-A caller that retries a transaction needs fresh `transactionHooks` for each try, because a `complete` that succeeded in a rolled-back try refuses to run again with the same hooks. That is a separate task (TODO: transactionHooks reset for REPEATABLE READ and SERIALIZABLE).
+A caller that retries a transaction needs fresh `transactionHooks` for each try, because a `complete` that succeeded in a rolled-back try refuses to run again with the same hooks. A retry loop inside `withTxHooks` wraps each try in `txHooks.perTry`; see `design/tx-hooks.md`.
 
 ### SQLite and in-process
 

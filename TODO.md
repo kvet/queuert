@@ -5,7 +5,7 @@
 
 # Short term
 
-- [TASK] support transactionHooks reset for REPEATABLE READ and SERIALIZABLE
+- [TASK] Tx hooks — sync and async variants, `txHooks.perTry` for reruns and retries (REPEATABLE READ / SERIALIZABLE, MongoDB `withTransaction`), disposable handles, library-wide `transactionHooks` → `txHooks` rename. See `design/tx-hooks.md`.
 - [TASK] PostgreSQL REPEATABLE READ and SERIALIZABLE support — counter-based blocker bookkeeping (`has_dependents`, `blockers_remaining`), a worker-row write on acquisition, adapter retries of 40001/40P01 for Queuert's own work, and migrations pinned to READ COMMITTED. Every 0.17 process must stop before `003_blocker_counters`. See `design/pg-isolation-levels.md`.
 - [TASK] Built-in cleanup. See `design/builtin-cleanup.md`.
 - [TASK] Enforce json-serializable inputs and outputs (like no Date in job definitions) — see `design/json-serializable-types.md`
