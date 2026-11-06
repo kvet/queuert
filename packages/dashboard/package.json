@@ -61,7 +61,7 @@
     "queuert": "workspace:*"
   },
   "engines": {
-    "node": ">=22"
+    "node": ">=24"
   },
   "inlinedDependencies": {
     "seroval": "1.7.7"
