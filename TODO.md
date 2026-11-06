@@ -28,6 +28,7 @@
   - [TASK] No multi-worker example
   - [TASK] Promote transactions via a dedicated sentinel table (like migration lock in PG) to prevent WAL contention
 - [EPIC] MySQL/MariaDB adapter
+- [EPIC] MongoDB adapter — state and notify adapters for replica sets, write-based bookkeeping at snapshot isolation, `withMongoTransaction` for user transactions. See `design/mongodb-adapter.md`.
 - [TASK] Support numeric job and worker IDs — `TJobId` and `TWorkerId` extend `string`, so an `INTEGER`/`bigint` `jobIdType` or `workerIdType` is accepted by the adapters but its IDs still have to round-trip as strings. Allow `number`/`bigint` ID types end to end, including making the `State*` entity types (`StateJobInfo`, `StateChainInfo`, `StateJobBlockerInfo`, `StateWorkerInfo`, …) generic over `TJobId`/`TWorkerId` instead of using `string`.
 
 # Long term
