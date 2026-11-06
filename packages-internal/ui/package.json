@@ -13,6 +13,7 @@
   "exports": {
     "./components": "./src/components/index.ts",
     "./lib": "./src/lib/index.ts",
+    "./logo": "./src/lib/logo.ts",
     "./tokens.css": "./src/styles/tokens.css",
     "./base.css": "./src/styles/base.css",
     "./package.json": "./package.json"
