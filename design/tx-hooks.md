@@ -125,7 +125,7 @@ await sql.begin(async (tx) => client.createChain({ tx, txHooks: handle.txHooks, 
 await handle.flush();
 ```
 
-A forgotten `flush()` now ends in a discard instead of state left behind. Both symbols exist on Node 22. The `using` syntax itself needs Node 24 or a transpiler, so the docs keep the `try`/`catch` form as well.
+A forgotten `flush()` now ends in a discard instead of state left behind. Node 24, the minimum supported version, runs `using` and `await using` natively.
 
 ### Rename
 
