@@ -1,5 +1,4 @@
-import { readFile } from "node:fs/promises";
-
+import { faviconDataUri } from "@queuert/ui/logo";
 import { describe, expect, it } from "vitest";
 
 import { renderHtml } from "../api/html.js";
@@ -26,15 +25,12 @@ describe("renderHtml", () => {
 });
 
 describe("favicon", () => {
-  it("inlines the docs favicon", async () => {
-    const html = await readFile(new URL("../frontend/index.html", import.meta.url), "utf8");
-    const docsSvg = await readFile(
-      new URL("../../../../docs/public/favicon.svg", import.meta.url),
-      "utf8",
-    );
-    const href = /href="data:image\/svg\+xml,([^"]+)"/.exec(html)?.[1];
+  // Needs the frontend build (`pnpm build`), which embeds it into assets.generated.ts.
+  it("inlines the shared Queuert favicon into the built page", async () => {
+    const { assets } = await import("../api/routes/assets.generated.js");
+    const html = assets["/index.html"]?.content;
 
-    expect(href).toBeDefined();
-    expect(decodeURIComponent(href!)).toBe(docsSvg.replace(/>\s+</g, "><").trim());
+    expect(html).toBeDefined();
+    expect(html).toContain(`<link rel="icon" type="image/svg+xml" href="${faviconDataUri}">`);
   });
 });

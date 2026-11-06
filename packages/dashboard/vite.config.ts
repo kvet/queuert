@@ -1,6 +1,7 @@
 import { readFileSync, readdirSync, writeFileSync } from "node:fs";
 import { join, relative, resolve } from "node:path";
 
+import { faviconDataUri } from "@queuert/ui/logo";
 import tailwindcss from "@tailwindcss/vite";
 import { type Plugin, defineConfig } from "vite";
 import solidPlugin from "vite-plugin-solid";
@@ -61,6 +62,19 @@ function embedAssetsPlugin(): Plugin {
   };
 }
 
+function faviconPlugin(): Plugin {
+  return {
+    name: "favicon",
+    transformIndexHtml: () => [
+      {
+        tag: "link",
+        attrs: { rel: "icon", type: "image/svg+xml", href: faviconDataUri },
+        injectTo: "head",
+      },
+    ],
+  };
+}
+
 const { version } = JSON.parse(
   readFileSync(resolve(import.meta.dirname, "package.json"), "utf-8"),
 ) as {
@@ -68,7 +82,7 @@ const { version } = JSON.parse(
 };
 
 export default defineConfig({
-  plugins: [solidPlugin(), tailwindcss(), embedAssetsPlugin()],
+  plugins: [solidPlugin(), tailwindcss(), faviconPlugin(), embedAssetsPlugin()],
   define: { __DASHBOARD_VERSION__: JSON.stringify(version) },
   root: resolve(import.meta.dirname, "src/frontend"),
   base: "./",

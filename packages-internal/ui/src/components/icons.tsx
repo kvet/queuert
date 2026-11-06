@@ -1,5 +1,7 @@
 import { type JSX, createUniqueId } from "solid-js";
 
+import { logoMarkup, logoViewBox } from "../lib/logo.js";
+
 export type IconProps = { class?: string; size?: number };
 
 export const Icon = (props: IconProps & { children: JSX.Element; viewBox?: string }) => (
@@ -21,30 +23,15 @@ export const Icon = (props: IconProps & { children: JSX.Element; viewBox?: strin
 
 export const LogoIcon = (props: IconProps) => {
   const id = createUniqueId();
-  const link = (x: number, attrs: JSX.SvgSVGAttributes<SVGRectElement> = {}) => (
-    <rect x={x} y="17" width="40" height="40" rx="15" {...attrs} />
-  );
-  const under = (maskId: string, overX: number, crossY: number) => (
-    <mask id={maskId} maskUnits="userSpaceOnUse" x="0" y="0" width="78.8" height="78.8">
-      <rect width="78.8" height="78.8" fill="white" stroke="none" />
-      <clipPath id={`${maskId}-clip`}>
-        <circle cx="37" cy={crossY} r="16" />
-      </clipPath>
-      {link(overX, { stroke: "black", "stroke-width": 16, "clip-path": `url(#${maskId}-clip)` })}
-    </mask>
-  );
   return (
-    <Icon {...props} viewBox="0 0 78.8 78.8">
-      {under(`${id}-a`, 29, 55.27)}
-      {under(`${id}-b`, 5, 18.73)}
-      <g stroke-width="10">
-        {link(5, { mask: `url(#${id}-a)` })}
-        <g mask={`url(#${id}-b)`}>
-          {link(29)}
-          <line x1="64.61" y1="52.61" x2="73.8" y2="61.8" />
-        </g>
-      </g>
-    </Icon>
+    <svg
+      width={props.size ?? 16}
+      height={props.size ?? 16}
+      viewBox={logoViewBox}
+      class={props.class}
+      aria-hidden="true"
+      innerHTML={logoMarkup({ id, color: "currentColor" })}
+    />
   );
 };
 
