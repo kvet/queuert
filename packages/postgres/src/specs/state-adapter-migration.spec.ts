@@ -21,6 +21,7 @@ import { LEASE_TTL_MS, MARKER } from "./state-adapter-migration.process.js";
 
 const INSTALL = "001_initial_schema";
 const WORKER_LIVENESS = "002_worker_liveness";
+const BLOCKER_COUNTERS = "003_blocker_counters";
 const ALL = migrations.map((migration) => migration.name);
 const spawnDeployment = createDeploymentSpawner<MigrationResult>(
   join(import.meta.dirname, "state-adapter-migration.process.ts"),
@@ -219,7 +220,7 @@ describe("migrateToLatest", () => {
       );
 
       expect(await adapter.migrateToLatest()).toEqual({
-        applied: [WORKER_LIVENESS],
+        applied: [WORKER_LIVENESS, BLOCKER_COUNTERS],
         skipped: [INSTALL],
         unrecognized: [],
       });
@@ -261,7 +262,7 @@ describe("migrateToLatest", () => {
       }
 
       expect(await adapter.migrateToLatest()).toEqual({
-        applied: [WORKER_LIVENESS],
+        applied: [WORKER_LIVENESS, BLOCKER_COUNTERS],
         skipped: [INSTALL],
         unrecognized: [],
       });

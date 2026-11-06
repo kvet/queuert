@@ -15,7 +15,7 @@ import {
   stateAdapterConformanceTestSuite,
   withWorkers,
 } from "queuert/testing";
-import { it as baseIt, describe, expectTypeOf, vi } from "vitest";
+import { it as baseIt, describe, expect, expectTypeOf, vi } from "vitest";
 
 import { createPgNotifyAdapter } from "../notify-adapter/notify-adapter.pg.js";
 import { createPgPoolNotifyProvider } from "../notify-provider/notify-provider.pg-pool.js";
@@ -34,12 +34,41 @@ const it = extendWithResourceLeakDetection(
 
 it("index");
 
+const ISOLATION_LEVELS = ["read committed", "repeatable read", "serializable"] as const;
+
+const BLOCKER_BOOKKEEPING_VIOLATIONS_SQL = `
+SELECT j.id AS job_id, 'blockers_remaining below incomplete blockers' AS problem
+FROM queuert_job j
+WHERE j.status = 'blocked'
+  AND j.blockers_remaining < (
+    SELECT count(*)
+    FROM queuert_job_blocker jb
+    LEFT JOIN queuert_job h ON h.id = jb.blocked_by_chain_id
+    WHERE jb.job_id = j.id
+      AND h.chain_status IS DISTINCT FROM 'completed'
+  )
+UNION ALL
+SELECT j.id, 'blocked with no blockers remaining'
+FROM queuert_job j
+WHERE j.status = 'blocked'
+  AND j.blockers_remaining <= 0
+UNION ALL
+SELECT h.id, 'referenced head without has_dependents'
+FROM queuert_job h
+WHERE NOT h.has_dependents
+  AND EXISTS (SELECT 1 FROM queuert_job_blocker jb WHERE jb.blocked_by_chain_id = h.id)
+`;
+
 describe("PostgreSQL State Adapter Conformance", () => {
   const conformanceIt = it.extend<{
     pool: Pool;
     stateAdapter: StateAdapter<{ $test: true }, string, string>;
     transactionConcurrency: "concurrent" | "serialized";
     withNonTransactionContext: <T>(fn: (txCtx: { $test: true }) => Promise<T>) => Promise<T>;
+    isolationVariants: {
+      name: string;
+      stateAdapter: StateAdapter<{ $test: true }, string, string>;
+    }[];
   }>({
     pool: [
       async ({ postgresConnectionString }, use) => {
@@ -69,7 +98,35 @@ describe("PostgreSQL State Adapter Conformance", () => {
         const stateProvider = createPgPoolProvider({ pool });
         const adapter = await createPgStateAdapter({ stateProvider });
         await adapter.migrateToLatest();
-        return use(adapter as unknown as StateAdapter<{ $test: true }, string, string>);
+        await use(adapter as unknown as StateAdapter<{ $test: true }, string, string>);
+
+        const { rows } = await pool.query<{ job_id: string; problem: string }>(
+          BLOCKER_BOOKKEEPING_VIOLATIONS_SQL,
+        );
+        expect(rows).toEqual([]);
+      },
+      { scope: "test" },
+    ],
+    isolationVariants: [
+      async ({ postgresConnectionString, stateAdapter }, use) => {
+        const pools = ISOLATION_LEVELS.map(
+          (level) =>
+            new Pool({
+              connectionString: postgresConnectionString,
+              idleTimeoutMillis: 0,
+              options: `-c default_transaction_isolation=${level.replace(" ", "\\ ")}`,
+            }),
+        );
+        const variants = await Promise.all(
+          ISOLATION_LEVELS.map(async (level, index) => ({
+            name: level,
+            stateAdapter: (await createPgStateAdapter({
+              stateProvider: createPgPoolProvider({ pool: pools[index] }),
+            })) as unknown as typeof stateAdapter,
+          })),
+        );
+        await use(variants);
+        await Promise.all(pools.map(async (pool) => pool.end()));
       },
       { scope: "test" },
     ],

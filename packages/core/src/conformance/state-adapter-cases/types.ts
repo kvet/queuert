@@ -20,6 +20,14 @@ export type StateConformanceFixture = {
    */
   withNonTransactionContext?: <T>(fn: (txCtx: any) => Promise<T>) => Promise<T>;
   /**
+   * Adapters over the same store as `stateAdapter` whose transactions and autocommit statements
+   * run at different isolation levels (e.g. one pool per `default_transaction_isolation`). Cases
+   * that interleave two transactions run once per ordered pair of variants, opening the first
+   * transaction through one variant and the second through the other. When omitted, those cases
+   * run once with `stateAdapter` on both sides.
+   */
+  isolationVariants?: { name: string; stateAdapter: StateAdapter<any, any, any> }[];
+  /**
    * Called before each conformance case to restore a clean state. Typically
    * `() => adapter.truncate()`. Consumed by the runner — cases ignore it.
    */

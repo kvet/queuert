@@ -378,6 +378,20 @@ export const fastSeedAllStates = async <TTxContext extends BaseTxContext>(
     );
   }
 
+  await exec(
+    `UPDATE ${job} h SET has_dependents = true
+     WHERE h.chain_index = 0
+       AND EXISTS (SELECT 1 FROM ${blockerTable} jb WHERE jb.blocked_by_chain_id = h.id)`,
+  );
+  await exec(
+    `UPDATE ${job} j SET blockers_remaining = (
+       SELECT count(*) FROM ${blockerTable} jb
+       LEFT JOIN ${job} h ON h.id = jb.blocked_by_chain_id
+       WHERE jb.job_id = j.id AND h.chain_status IS DISTINCT FROM 'completed'
+     )
+     WHERE j.status = 'blocked'`,
+  );
+
   return {
     pending: {
       jobId: pendingIds[seedConfig.pendingTypes[0]],

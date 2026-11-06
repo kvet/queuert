@@ -1,4 +1,5 @@
 import { type ConformanceGroup } from "../runner.js";
+import { forEachIsolationPair } from "./isolation-pairs.js";
 import { type StateConformanceFixture } from "./types.js";
 
 export const withTransactionGroup: ConformanceGroup<StateConformanceFixture> = {
@@ -46,6 +47,60 @@ export const withTransactionGroup: ConformanceGroup<StateConformanceFixture> = {
         if (rolledBackJobId) {
           expect(await stateAdapter.getJobs({ jobIds: [rolledBackJobId] })).toEqual([undefined]);
         }
+      },
+    },
+    {
+      name: "a transaction whose snapshot predates a committed write to a row it then writes still commits its write",
+      run: async (fixture, expect) => {
+        const { stateAdapter, transactionConcurrency } = fixture;
+        if (transactionConcurrency !== "concurrent") {
+          expect.skip("requires concurrent transactions");
+          return;
+        }
+
+        await forEachIsolationPair(fixture, async ({ first, second }) => {
+          const [stateChain] = await stateAdapter.withTransaction(async (txCtx) =>
+            stateAdapter.createJobs({
+              txCtx,
+              jobs: [
+                {
+                  id: stateAdapter.config.generateJobId(),
+                  typeName: "write-conflict",
+                  input: null,
+                },
+              ],
+            }),
+          );
+          const earlierAt = new Date(Date.now() + 60_000);
+          const laterAt = new Date(Date.now() + 120_000);
+
+          const snapshotTaken = Promise.withResolvers<void>();
+          const earlierCommitted = Promise.withResolvers<void>();
+
+          const laterTx = second.withTransaction(async (txCtx) => {
+            await stateAdapter.getJobs({ txCtx, jobIds: [stateChain.head.id] });
+            snapshotTaken.resolve();
+            await earlierCommitted.promise;
+            return stateAdapter.rescheduleJobs({
+              txCtx,
+              jobs: [{ jobId: stateChain.head.id, schedule: { at: laterAt } }],
+            });
+          });
+
+          await snapshotTaken.promise;
+          await first.withTransaction(async (txCtx) =>
+            stateAdapter.rescheduleJobs({
+              txCtx,
+              jobs: [{ jobId: stateChain.head.id, schedule: { at: earlierAt } }],
+            }),
+          );
+          earlierCommitted.resolve();
+
+          const [rescheduled] = await laterTx;
+          expect(rescheduled!.scheduledAt.getTime()).toBe(laterAt.getTime());
+          const [stored] = await stateAdapter.getJobs({ jobIds: [stateChain.head.id] });
+          expect(stored!.scheduledAt.getTime()).toBe(laterAt.getTime());
+        });
       },
     },
     {

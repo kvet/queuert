@@ -31,12 +31,18 @@ const it = extendWithResourceLeakDetection(
 
 it("index");
 
+const ISOLATION_LEVELS = ["read committed", "repeatable read", "serializable"] as const;
+
 describe("PostgreSQL State Adapter Conformance (postgres.js)", () => {
   const conformanceIt = it.extend<{
     sql: postgres.Sql;
     stateAdapter: StateAdapter<{ $test: true }, string, string>;
     transactionConcurrency: "concurrent" | "serialized";
     withNonTransactionContext: <T>(fn: (txCtx: { $test: true }) => Promise<T>) => Promise<T>;
+    isolationVariants: {
+      name: string;
+      stateAdapter: StateAdapter<{ $test: true }, string, string>;
+    }[];
   }>({
     sql: [
       async ({ postgresConnectionString }, use) => {
@@ -69,6 +75,29 @@ describe("PostgreSQL State Adapter Conformance (postgres.js)", () => {
     withNonTransactionContext: [
       async ({ sql }, use) => {
         await use(async (fn) => fn({ txSql: sql } as unknown as { $test: true }));
+      },
+      { scope: "test" },
+    ],
+    isolationVariants: [
+      async ({ postgresConnectionString, stateAdapter }, use) => {
+        const clients = ISOLATION_LEVELS.map((level) =>
+          postgres(postgresConnectionString, {
+            max: 10,
+            onnotice: () => {},
+            connection: { default_transaction_isolation: level },
+          }),
+        );
+        await Promise.all(clients.map(async (client) => client.unsafe("SELECT 1")));
+        const variants = await Promise.all(
+          ISOLATION_LEVELS.map(async (level, index) => ({
+            name: level,
+            stateAdapter: (await createPgStateAdapter({
+              stateProvider: createPostgresJsProvider({ sql: clients[index] }),
+            })) as unknown as typeof stateAdapter,
+          })),
+        );
+        await use(variants);
+        await Promise.all(clients.map(async (client) => client.end()));
       },
       { scope: "test" },
     ],

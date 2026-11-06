@@ -1,5 +1,6 @@
 import { type UUID } from "node:crypto";
 
+import { sleep } from "@queuert/helpers";
 import {
   type DataType,
   type InferColumns,
@@ -232,6 +233,50 @@ ON {{schema}}.{{table_prefix}}job (type_name, attempt_at)
 WHERE status = 'running'`),
     ],
   },
+  {
+    name: "003_blocker_counters",
+    type: "transactional",
+    statements: [
+      sql(/* sql */ `SET LOCAL lock_timeout = '5000ms'`),
+      sql(/* sql */ `
+ALTER TABLE {{schema}}.{{table_prefix}}job
+  ADD COLUMN has_dependents boolean NOT NULL DEFAULT false,
+  ADD COLUMN blockers_remaining integer NOT NULL DEFAULT 0`),
+      sql(/* sql */ `
+UPDATE {{schema}}.{{table_prefix}}job h
+SET has_dependents = true
+WHERE h.chain_index = 0
+  AND EXISTS (
+    SELECT 1 FROM {{schema}}.{{table_prefix}}job_blocker jb WHERE jb.blocked_by_chain_id = h.id
+  )`),
+      sql(/* sql */ `
+UPDATE {{schema}}.{{table_prefix}}job j
+SET blockers_remaining = (
+  SELECT count(*)
+  FROM {{schema}}.{{table_prefix}}job_blocker jb
+  LEFT JOIN {{schema}}.{{table_prefix}}job h ON h.id = jb.blocked_by_chain_id
+  WHERE jb.job_id = j.id
+    AND h.chain_status IS DISTINCT FROM 'completed'
+)
+WHERE j.status = 'blocked'`),
+      sql(/* sql */ `
+UPDATE {{schema}}.{{table_prefix}}job
+SET status = 'pending',
+  scheduled_at = GREATEST(scheduled_at, now())
+WHERE status = 'blocked'
+  AND blockers_remaining = 0`),
+      sql(/* sql */ `
+UPDATE {{schema}}.{{table_prefix}}job j
+SET status = 'pending',
+  attempt_at = NULL,
+  attempt_by = NULL,
+  attempt_token = NULL
+WHERE j.status = 'running'
+  AND NOT EXISTS (
+    SELECT 1 FROM {{schema}}.{{table_prefix}}worker w WHERE w.id = j.attempt_by
+  )`),
+    ],
+  },
 ];
 
 /** @internal */
@@ -291,6 +336,13 @@ CREATE TABLE IF NOT EXISTS {{schema}}.{{table_prefix}}migration (
       { id: "serializeMigrationTransaction", params: [], columns: {}, readOnly: true },
     ),
   );
+  const readCommittedTransactionSql = applyTemplate(
+    sql(`SET TRANSACTION ISOLATION LEVEL READ COMMITTED`, {
+      params: [],
+      columns: {},
+      readOnly: true,
+    }),
+  );
   const createMigrationLockTableSql = applyTemplate(
     sql(
       `
@@ -339,16 +391,22 @@ RETURNING 1 AS extended`,
     }),
   );
 
+  const withReadCommittedTransaction = async <T>(fn: (txCtx: TTxContext) => Promise<T>) =>
+    stateProvider.withTransaction(async (txCtx) => {
+      await exec({ txCtx, sql: readCommittedTransactionSql });
+      return fn(txCtx);
+    });
+
   return {
     initialize: async () => {
-      await stateProvider.withTransaction(async (txCtx) => {
+      await withReadCommittedTransaction(async (txCtx) => {
         await exec({ txCtx, sql: serializeMigrationTransactionSql });
         await exec({ txCtx, sql: createMigrationTableSql });
         await exec({ txCtx, sql: createMigrationLockTableSql });
       });
     },
     runInTransaction: async (fn) =>
-      stateProvider.withTransaction(async (txCtx) => {
+      withReadCommittedTransaction(async (txCtx) => {
         await exec({ txCtx, sql: serializeMigrationTransactionSql });
         return fn(txCtx);
       }),
@@ -378,17 +436,43 @@ RETURNING 1 AS extended`,
       await exec({ txCtx, sql: recordMigrationSql, params: [name] });
     },
     acquireMigrationLock: async (ownerId, ttlMs) => {
-      const rows = await exec({ sql: acquireMigrationLockSql, params: [ownerId, ttlMs] });
+      const rows = await withReadCommittedTransaction(async (txCtx) =>
+        exec({ txCtx, sql: acquireMigrationLockSql, params: [ownerId, ttlMs] }),
+      );
       return rows.length > 0;
     },
     extendMigrationLock: async (ownerId, ttlMs) => {
-      const rows = await exec({ sql: extendMigrationLockSql, params: [ownerId, ttlMs] });
+      const rows = await withReadCommittedTransaction(async (txCtx) =>
+        exec({ txCtx, sql: extendMigrationLockSql, params: [ownerId, ttlMs] }),
+      );
       return rows.length > 0;
     },
     releaseMigrationLock: async (ownerId) => {
-      await exec({ sql: releaseMigrationLockSql, params: [ownerId] });
+      await withReadCommittedTransaction(async (txCtx) =>
+        exec({ txCtx, sql: releaseMigrationLockSql, params: [ownerId] }),
+      );
     },
   };
+};
+
+const RETRYABLE_SQLSTATES = new Set(["40001", "40P01"]);
+const RETRY_MAX_ATTEMPTS = 5;
+const RETRY_MIN_DELAY_MS = 5;
+const RETRY_MAX_DELAY_MS = 50;
+
+const isRetryableSqlError = (error: unknown): boolean =>
+  typeof error === "object" &&
+  error !== null &&
+  RETRYABLE_SQLSTATES.has(String((error as { code?: unknown }).code));
+
+const retryOnSerializationFailure = async <T>(fn: () => Promise<T>, attempt = 1): Promise<T> => {
+  try {
+    return await fn();
+  } catch (error) {
+    if (attempt >= RETRY_MAX_ATTEMPTS || !isRetryableSqlError(error)) throw error;
+    await sleep(RETRY_MIN_DELAY_MS + Math.random() * (RETRY_MAX_DELAY_MS - RETRY_MIN_DELAY_MS));
+    return retryOnSerializationFailure(fn, attempt + 1);
+  }
 };
 
 /** Clamps a count read with `LIMIT countCap + 1` to `countCap`, flagging that more exist. */
@@ -689,21 +773,25 @@ LEFT JOIN LATERAL (
     sql: TypedSql<TParams, TColumns>;
   } & (TParams extends readonly []
     ? { params?: undefined }
-    : { params: [...InferParams<TParams>] })): Promise<InferColumns<TColumns>[]> =>
-    stateProvider.executeSql({
-      txCtx,
-      id: typedSql.id,
-      sql: typedSql.sql,
-      params: params ?? [],
-      paramTypes: extractParamTypes(typedSql.params),
-      columnTypes: extractColumnTypes(typedSql.columns),
-      readOnly: typedSql.readOnly,
-    }) as Promise<InferColumns<TColumns>[]>;
+    : { params: [...InferParams<TParams>] })): Promise<InferColumns<TColumns>[]> => {
+    const execute = async () =>
+      stateProvider.executeSql({
+        txCtx,
+        id: typedSql.id,
+        sql: typedSql.sql,
+        params: params ?? [],
+        paramTypes: extractParamTypes(typedSql.params),
+        columnTypes: extractColumnTypes(typedSql.columns),
+        readOnly: typedSql.readOnly,
+      }) as Promise<InferColumns<TColumns>[]>;
+    return txCtx === undefined ? retryOnSerializationFailure(execute) : execute();
+  };
 
   return {
     config,
 
-    withTransaction: stateProvider.withTransaction,
+    withTransaction: async (fn) =>
+      retryOnSerializationFailure(async () => stateProvider.withTransaction(fn)),
 
     isTransaction: stateProvider.isTransaction,
 
@@ -1369,12 +1457,12 @@ SELECT
             sql(
               `
 WITH live_worker AS (
-  SELECT w.id
-  FROM {{schema}}.{{table_prefix}}worker w
+  UPDATE {{schema}}.{{table_prefix}}worker w
+  SET lease_until = w.lease_until
   WHERE w.id = $2::{{worker_id_type}}
     AND w.token = $4::uuid
     AND w.lease_until > statement_timestamp()
-  FOR KEY SHARE
+  RETURNING w.id
 ),
 acquired_jobs AS (
   SELECT j.id
@@ -1533,24 +1621,44 @@ inserted_blockers AS (
   JOIN locked_blocker_heads h ON h.id = d.blocked_by_chain_id
   RETURNING job_id, blocked_by_chain_id
 ),
-has_incomplete_blockers AS (
-  SELECT DISTINCT d.job_id
+incomplete_blocker_counts AS (
+  SELECT d.job_id AS id, count(*)::integer AS incomplete_blockers
   FROM input_data d
   JOIN locked_blocker_heads h ON h.id = d.blocked_by_chain_id
   WHERE h.chain_status = 'running'
+  GROUP BY d.job_id
+),
+written_jobs AS (
+  SELECT id, bool_or(is_blocker_head) AS is_blocker_head, sum(incomplete_blockers)::integer AS incomplete_blockers
+  FROM (
+    SELECT id, true AS is_blocker_head, 0 AS incomplete_blockers FROM locked_blocker_heads
+    UNION ALL
+    SELECT id, false, incomplete_blockers FROM incomplete_blocker_counts
+  ) w
+  GROUP BY id
 ),
 updated_jobs AS (
   UPDATE {{schema}}.{{table_prefix}}job j
-  SET status = 'blocked'
-  WHERE j.id IN (SELECT job_id FROM has_incomplete_blockers)
-    AND j.status = 'pending'
+  SET has_dependents = j.has_dependents OR w.is_blocker_head,
+    blockers_remaining = CASE
+      WHEN w.incomplete_blockers = 0 THEN j.blockers_remaining
+      WHEN j.status = 'blocked' THEN j.blockers_remaining + w.incomplete_blockers
+      WHEN j.status = 'pending' THEN w.incomplete_blockers
+      ELSE j.blockers_remaining
+    END,
+    status = CASE
+      WHEN w.incomplete_blockers > 0 AND j.status = 'pending' THEN 'blocked'
+      ELSE j.status
+    END
+  FROM written_jobs w
+  WHERE j.id = w.id
   RETURNING j.*
 ),
 distinct_job_ids AS (
   SELECT DISTINCT job_id FROM input_data
 ),
 final_jobs AS (
-  SELECT * FROM updated_jobs
+  SELECT u.* FROM updated_jobs u JOIN distinct_job_ids dj ON dj.job_id = u.id
   UNION ALL
   SELECT j.* FROM {{schema}}.{{table_prefix}}job j
   JOIN distinct_job_ids dj ON dj.job_id = j.id
@@ -1631,66 +1739,49 @@ ORDER BY b.index ASC
     },
 
     unblockJobs: async ({ txCtx, blockedByChainId }) => {
-      const [lockResult] = await executeTypedSql({
-        txCtx,
-        sql: templateCache.getOrCompute("lockBlockedJobs", () =>
-          applyTemplate(
-            sql(
-              `
-WITH locked_blocked_dependents AS (
-  SELECT j.id
-  FROM {{schema}}.{{table_prefix}}job j
-  WHERE j.id IN (
-    SELECT DISTINCT jb.job_id
-    FROM {{schema}}.{{table_prefix}}job_blocker jb
-    WHERE jb.blocked_by_chain_id = $1
-  )
-  AND j.status = 'blocked'
-  ORDER BY j.id
-  FOR UPDATE
-)
-SELECT
-  EXISTS (
-    SELECT 1 FROM {{schema}}.{{table_prefix}}job_blocker jb
-    WHERE jb.blocked_by_chain_id = $1
-  ) AS has_dependents
-FROM (SELECT count(*) FROM locked_blocked_dependents) AS all_blocked_dependents_locked
-`,
-              {
-                id: "lockBlockedJobs",
-                params: [idDataType],
-                columns: { has_dependents: t.boolean() },
-              },
-            ),
-          ),
-        ),
-        params: [blockedByChainId],
-      });
-      if (!lockResult.has_dependents) return [];
-
       const [result] = await executeTypedSql({
         txCtx,
         sql: templateCache.getOrCompute("unblockJobs", () =>
           applyTemplate(
             sql(
               `
-WITH updated AS (
-  UPDATE {{schema}}.{{table_prefix}}job j
-  SET status = 'pending',
-    scheduled_at = GREATEST(j.scheduled_at, statement_timestamp())
-  WHERE j.id IN (
-      SELECT jb.job_id
-      FROM {{schema}}.{{table_prefix}}job_blocker jb
-      WHERE jb.blocked_by_chain_id = $1
-    )
+WITH completed_blocker_head AS (
+  SELECT h.id
+  FROM {{schema}}.{{table_prefix}}job h
+  WHERE h.id = $1
+    AND h.chain_index = 0
+    AND h.chain_status = 'completed'
+),
+completed_blocker_counts AS (
+  SELECT jb.job_id, count(*)::integer AS completed_blockers
+  FROM {{schema}}.{{table_prefix}}job_blocker jb
+  WHERE jb.blocked_by_chain_id IN (SELECT id FROM completed_blocker_head)
+  GROUP BY jb.job_id
+),
+locked_blocked_dependents AS MATERIALIZED (
+  SELECT j.id
+  FROM {{schema}}.{{table_prefix}}job j
+  WHERE j.id IN (SELECT job_id FROM completed_blocker_counts)
     AND j.status = 'blocked'
-    AND NOT EXISTS (
-      SELECT 1
-      FROM {{schema}}.{{table_prefix}}job_blocker jb
-      LEFT JOIN {{schema}}.{{table_prefix}}job h ON h.id = jb.blocked_by_chain_id
-      WHERE jb.job_id = j.id
-        AND h.chain_status IS DISTINCT FROM 'completed'
-    )
+  ORDER BY j.id
+  FOR UPDATE OF j
+),
+updated AS (
+  UPDATE {{schema}}.{{table_prefix}}job j
+  SET blockers_remaining = j.blockers_remaining - c.completed_blockers,
+    status = CASE
+      WHEN j.blockers_remaining - c.completed_blockers <= 0 THEN 'pending'
+      ELSE j.status
+    END,
+    scheduled_at = CASE
+      WHEN j.blockers_remaining - c.completed_blockers <= 0
+        THEN GREATEST(j.scheduled_at, statement_timestamp())
+      ELSE j.scheduled_at
+    END
+  FROM locked_blocked_dependents l
+  JOIN completed_blocker_counts c ON c.job_id = l.id
+  WHERE j.id = l.id
+    AND j.status = 'blocked'
   RETURNING j.*
 ),
 blocker_rows AS (

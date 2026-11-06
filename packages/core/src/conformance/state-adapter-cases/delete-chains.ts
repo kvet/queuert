@@ -2,6 +2,7 @@ import { sleep } from "@queuert/helpers";
 
 import { type StateBlockedJob, type StateChain } from "../../state-adapter/state-adapter.js";
 import { type ConformanceGroup } from "../runner.js";
+import { forEachIsolationPair } from "./isolation-pairs.js";
 import { type StateConformanceFixture } from "./types.js";
 
 const LOCK_BLOCK_OBSERVATION_MS = 100;
@@ -402,151 +403,157 @@ export const deleteChainsGroup: ConformanceGroup<StateConformanceFixture> = {
     },
     {
       name: "sees a blocker reference committed while it waited on the head lock",
-      run: async ({ stateAdapter, transactionConcurrency }, expect) => {
-        if (transactionConcurrency !== "concurrent") {
-          expect.skip("requires concurrent transactions");
-          return;
-        }
+      run: async (fixture, expect) => {
+        const { stateAdapter, transactionConcurrency } = fixture;
+        await forEachIsolationPair(fixture, async ({ first, second }) => {
+          if (transactionConcurrency !== "concurrent") {
+            expect.skip("requires concurrent transactions");
+            return;
+          }
 
-        const [blockerChain] = await stateAdapter.withTransaction(async (txCtx) =>
-          stateAdapter.createJobs({
-            txCtx,
-            jobs: [
-              {
-                id: stateAdapter.config.generateJobId(),
-                typeName: "late-reference-blocker",
-                input: null,
-              },
-            ],
-          }),
-        );
+          const [blockerChain] = await stateAdapter.withTransaction(async (txCtx) =>
+            stateAdapter.createJobs({
+              txCtx,
+              jobs: [
+                {
+                  id: stateAdapter.config.generateJobId(),
+                  typeName: "late-reference-blocker",
+                  input: null,
+                },
+              ],
+            }),
+          );
 
-        let signalBlockerAdded: (() => void) | undefined;
-        const blockerAdded = new Promise<void>((r) => {
-          signalBlockerAdded = r;
-        });
-        let releaseAdder: (() => void) | undefined;
-        const adderGate = new Promise<void>((r) => {
-          releaseAdder = r;
-        });
-
-        const adderTx = stateAdapter.withTransaction(async (txCtx) => {
-          const [blockedChain] = await stateAdapter.createJobs({
-            txCtx,
-            jobs: [
-              {
-                id: stateAdapter.config.generateJobId(),
-                typeName: "late-reference-blocked",
-                input: null,
-              },
-            ],
+          let signalBlockerAdded: (() => void) | undefined;
+          const blockerAdded = new Promise<void>((r) => {
+            signalBlockerAdded = r;
           });
-          await stateAdapter.addJobsBlockers({
-            txCtx,
-            jobBlockers: [{ jobId: blockedChain.head.id, blockedByChainIds: [blockerChain.id] }],
-          });
-          signalBlockerAdded!();
-          await adderGate;
-          return blockedChain;
-        });
-
-        await blockerAdded;
-
-        let deleteSettled = false;
-        const deleteTx = stateAdapter
-          .withTransaction(async (txCtx) =>
-            stateAdapter.deleteChains({ txCtx, chainIds: [blockerChain.id] }),
-          )
-          .finally(() => {
-            deleteSettled = true;
+          let releaseAdder: (() => void) | undefined;
+          const adderGate = new Promise<void>((r) => {
+            releaseAdder = r;
           });
 
-        await sleep(LOCK_BLOCK_OBSERVATION_MS);
-        expect(deleteSettled).toBe(false);
+          const adderTx = first.withTransaction(async (txCtx) => {
+            const [blockedChain] = await stateAdapter.createJobs({
+              txCtx,
+              jobs: [
+                {
+                  id: stateAdapter.config.generateJobId(),
+                  typeName: "late-reference-blocked",
+                  input: null,
+                },
+              ],
+            });
+            await stateAdapter.addJobsBlockers({
+              txCtx,
+              jobBlockers: [{ jobId: blockedChain.head.id, blockedByChainIds: [blockerChain.id] }],
+            });
+            signalBlockerAdded!();
+            await adderGate;
+            return blockedChain;
+          });
 
-        releaseAdder!();
-        const blockedChain = await adderTx;
+          await blockerAdded;
 
-        const [result] = await deleteTx;
-        expect(Array.isArray(result)).toBe(true);
-        expect((result as StateBlockedJob[]).map((ref) => ref.jobId)).toEqual([
-          blockedChain.head.id,
-        ]);
+          let deleteSettled = false;
+          const deleteTx = second
+            .withTransaction(async (txCtx) =>
+              stateAdapter.deleteChains({ txCtx, chainIds: [blockerChain.id] }),
+            )
+            .finally(() => {
+              deleteSettled = true;
+            });
 
-        const [blockerStillThere] = await stateAdapter.getChains({ chainIds: [blockerChain.id] });
-        expect(blockerStillThere?.id).toBe(blockerChain.id);
+          await sleep(LOCK_BLOCK_OBSERVATION_MS);
+          expect(deleteSettled).toBe(false);
+
+          releaseAdder!();
+          const blockedChain = await adderTx;
+
+          const [result] = await deleteTx;
+          expect(Array.isArray(result)).toBe(true);
+          expect((result as StateBlockedJob[]).map((ref) => ref.jobId)).toEqual([
+            blockedChain.head.id,
+          ]);
+
+          const [blockerStillThere] = await stateAdapter.getChains({ chainIds: [blockerChain.id] });
+          expect(blockerStillThere?.id).toBe(blockerChain.id);
+        });
       },
     },
     {
       name: "deletes a continuation committed while it waited on the head lock",
-      run: async ({ stateAdapter, transactionConcurrency }, expect) => {
-        if (transactionConcurrency !== "concurrent") {
-          expect.skip("requires concurrent transactions");
-          return;
-        }
+      run: async (fixture, expect) => {
+        const { stateAdapter, transactionConcurrency } = fixture;
+        await forEachIsolationPair(fixture, async ({ first, second }) => {
+          if (transactionConcurrency !== "concurrent") {
+            expect.skip("requires concurrent transactions");
+            return;
+          }
 
-        const [stateChain] = await stateAdapter.withTransaction(async (txCtx) =>
-          stateAdapter.createJobs({
-            txCtx,
-            jobs: [
-              {
-                id: stateAdapter.config.generateJobId(),
-                typeName: "late-continuation",
-                input: null,
-              },
-            ],
-          }),
-        );
+          const [stateChain] = await stateAdapter.withTransaction(async (txCtx) =>
+            stateAdapter.createJobs({
+              txCtx,
+              jobs: [
+                {
+                  id: stateAdapter.config.generateJobId(),
+                  typeName: "late-continuation",
+                  input: null,
+                },
+              ],
+            }),
+          );
 
-        let signalContinued: (() => void) | undefined;
-        const continued = new Promise<void>((r) => {
-          signalContinued = r;
-        });
-        let releaseContinuer: (() => void) | undefined;
-        const continuerGate = new Promise<void>((r) => {
-          releaseContinuer = r;
-        });
-
-        const continuerTx = stateAdapter.withTransaction(async (txCtx) => {
-          await stateAdapter.getJobs({ txCtx, jobIds: [stateChain.head.id], lock: "exclusive" });
-          const [result] = await stateAdapter.continueJobs({
-            txCtx,
-            jobs: [
-              {
-                id: stateAdapter.config.generateJobId(),
-                typeName: "late-continuation:step",
-                input: null,
-                continueFromId: stateChain.head.id,
-              },
-            ],
+          let signalContinued: (() => void) | undefined;
+          const continued = new Promise<void>((r) => {
+            signalContinued = r;
           });
-          signalContinued!();
-          await continuerGate;
-          return result!.continuation;
-        });
-
-        await continued;
-
-        let deleteSettled = false;
-        const deleteTx = stateAdapter
-          .withTransaction(async (txCtx) =>
-            stateAdapter.deleteChains({ txCtx, chainIds: [stateChain.id] }),
-          )
-          .finally(() => {
-            deleteSettled = true;
+          let releaseContinuer: (() => void) | undefined;
+          const continuerGate = new Promise<void>((r) => {
+            releaseContinuer = r;
           });
 
-        await sleep(LOCK_BLOCK_OBSERVATION_MS);
-        expect(deleteSettled).toBe(false);
+          const continuerTx = first.withTransaction(async (txCtx) => {
+            await stateAdapter.getJobs({ txCtx, jobIds: [stateChain.head.id], lock: "exclusive" });
+            const [result] = await stateAdapter.continueJobs({
+              txCtx,
+              jobs: [
+                {
+                  id: stateAdapter.config.generateJobId(),
+                  typeName: "late-continuation:step",
+                  input: null,
+                  continueFromId: stateChain.head.id,
+                },
+              ],
+            });
+            signalContinued!();
+            await continuerGate;
+            return result!.continuation;
+          });
 
-        releaseContinuer!();
-        const continuation = await continuerTx;
+          await continued;
 
-        const [deleted] = await deleteTx;
-        expect((deleted as StateChain).tail?.id).toBe(continuation.id);
-        expect(
-          await stateAdapter.getJobs({ jobIds: [stateChain.head.id, continuation.id] }),
-        ).toEqual([undefined, undefined]);
+          let deleteSettled = false;
+          const deleteTx = second
+            .withTransaction(async (txCtx) =>
+              stateAdapter.deleteChains({ txCtx, chainIds: [stateChain.id] }),
+            )
+            .finally(() => {
+              deleteSettled = true;
+            });
+
+          await sleep(LOCK_BLOCK_OBSERVATION_MS);
+          expect(deleteSettled).toBe(false);
+
+          releaseContinuer!();
+          const continuation = await continuerTx;
+
+          const [deleted] = await deleteTx;
+          expect((deleted as StateChain).tail?.id).toBe(continuation.id);
+          expect(
+            await stateAdapter.getJobs({ jobIds: [stateChain.head.id, continuation.id] }),
+          ).toEqual([undefined, undefined]);
+        });
       },
     },
   ],

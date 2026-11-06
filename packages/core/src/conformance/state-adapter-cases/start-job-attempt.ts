@@ -1,6 +1,7 @@
 import { sleep } from "@queuert/helpers";
 
 import { type ConformanceGroup } from "../runner.js";
+import { forEachIsolationPair } from "./isolation-pairs.js";
 import { type StateConformanceFixture } from "./types.js";
 
 const LOCK_BLOCK_OBSERVATION_MS = 100;
@@ -918,59 +919,204 @@ export const startJobAttemptGroup: ConformanceGroup<StateConformanceFixture> = {
     },
     {
       name: "a claim waiting on a transaction that locks and deletes the worker claims nothing",
-      run: async ({ stateAdapter }, expect) => {
-        const worker = await stateAdapter.startWorker({
-          workerId: stateAdapter.config.generateWorkerId(),
-          typeNames: ["gate-reclaimed"],
-          concurrency: 1,
-          leaseMs: 60_000,
-        });
-        const [createdChain] = await stateAdapter.withTransaction(async (txCtx) =>
-          stateAdapter.createJobs({
-            txCtx,
-            jobs: [
-              { id: stateAdapter.config.generateJobId(), typeName: "gate-reclaimed", input: null },
-            ],
-          }),
-        );
+      run: async (fixture, expect) => {
+        const { stateAdapter } = fixture;
+        await forEachIsolationPair(fixture, async ({ first, second }) => {
+          const worker = await stateAdapter.startWorker({
+            workerId: stateAdapter.config.generateWorkerId(),
+            typeNames: ["gate-reclaimed"],
+            concurrency: 1,
+            leaseMs: 60_000,
+          });
+          const [createdChain] = await stateAdapter.withTransaction(async (txCtx) =>
+            stateAdapter.createJobs({
+              txCtx,
+              jobs: [
+                {
+                  id: stateAdapter.config.generateJobId(),
+                  typeName: "gate-reclaimed",
+                  input: null,
+                },
+              ],
+            }),
+          );
 
-        const reclaimerGate = Promise.withResolvers<void>();
-        const workerLocked = Promise.withResolvers<void>();
+          const reclaimerGate = Promise.withResolvers<void>();
+          const workerLocked = Promise.withResolvers<void>();
 
-        const reclaimerTx = stateAdapter.withTransaction(async (txCtx) => {
-          await stateAdapter.getWorkers({ txCtx, workerIds: [worker.id], lock: "exclusive" });
-          workerLocked.resolve();
-          await reclaimerGate.promise;
-          await stateAdapter.stopWorker({
-            txCtx,
+          const reclaimerTx = first.withTransaction(async (txCtx) => {
+            await stateAdapter.getWorkers({ txCtx, workerIds: [worker.id], lock: "exclusive" });
+            workerLocked.resolve();
+            await reclaimerGate.promise;
+            await stateAdapter.stopWorker({
+              txCtx,
+              workerId: worker.id,
+              workerToken: worker.token,
+            });
+          });
+
+          await workerLocked.promise;
+
+          const claim = second.startJobAttempts({
             workerId: worker.id,
             workerToken: worker.token,
+            typeNames: ["gate-reclaimed"],
+            limit: 1,
           });
+
+          expect(
+            await Promise.race([
+              claim.then(() => "resolved"),
+              sleep(LOCK_BLOCK_OBSERVATION_MS).then(() => "waiting"),
+            ]),
+          ).toBe("waiting");
+
+          reclaimerGate.resolve();
+          await reclaimerTx;
+
+          expect(await claim).toEqual([]);
+          const [stored] = await stateAdapter.getJobs({ jobIds: [createdChain.head.id] });
+          expect(stored!.status).toBe("pending");
+          expect(stored!.attemptBy).toBeNull();
         });
+      },
+    },
+    {
+      name: "a reclaim waiting on a claim's worker lock sees the job the claim acquired",
+      run: async (fixture, expect) => {
+        const { stateAdapter } = fixture;
+        await forEachIsolationPair(fixture, async ({ first, second }) => {
+          const worker = await stateAdapter.startWorker({
+            workerId: stateAdapter.config.generateWorkerId(),
+            typeNames: ["gate-claim-first"],
+            concurrency: 1,
+            leaseMs: 60_000,
+          });
+          const [createdChain] = await stateAdapter.withTransaction(async (txCtx) =>
+            stateAdapter.createJobs({
+              txCtx,
+              jobs: [
+                {
+                  id: stateAdapter.config.generateJobId(),
+                  typeName: "gate-claim-first",
+                  input: null,
+                },
+              ],
+            }),
+          );
 
-        await workerLocked.promise;
+          const claimerGate = Promise.withResolvers<void>();
+          const claimed = Promise.withResolvers<void>();
 
-        const claim = stateAdapter.startJobAttempts({
-          workerId: worker.id,
-          workerToken: worker.token,
-          typeNames: ["gate-reclaimed"],
-          limit: 1,
+          const claimerTx = first.withTransaction(async (txCtx) => {
+            const jobs = await stateAdapter.startJobAttempts({
+              txCtx,
+              workerId: worker.id,
+              workerToken: worker.token,
+              typeNames: ["gate-claim-first"],
+              limit: 1,
+            });
+            claimed.resolve();
+            await claimerGate.promise;
+            return jobs;
+          });
+
+          await claimed.promise;
+
+          const reclaimerTx = second.withTransaction(async (txCtx) => {
+            await stateAdapter.getWorkers({ txCtx, workerIds: [worker.id], lock: "exclusive" });
+            const { items } = await stateAdapter.listWorkerJobs({
+              txCtx,
+              workerId: worker.id,
+              orderDirection: "asc",
+              page: { limit: 10 },
+            });
+            return items.map((job) => job.id);
+          });
+
+          expect(
+            await Promise.race([
+              reclaimerTx.then(() => "resolved"),
+              sleep(LOCK_BLOCK_OBSERVATION_MS).then(() => "waiting"),
+            ]),
+          ).toBe("waiting");
+
+          claimerGate.resolve();
+          expect((await claimerTx).map((job) => job.id)).toEqual([createdChain.head.id]);
+          expect(await reclaimerTx).toEqual([createdChain.head.id]);
         });
+      },
+    },
+    {
+      name: "a claim whose statement waited on its worker row skips a job another worker claimed meanwhile",
+      run: async (fixture, expect) => {
+        const { stateAdapter, transactionConcurrency } = fixture;
+        if (transactionConcurrency !== "concurrent") {
+          expect.skip("requires concurrent transactions");
+          return;
+        }
 
-        expect(
-          await Promise.race([
-            claim.then(() => "resolved"),
-            sleep(LOCK_BLOCK_OBSERVATION_MS).then(() => "waiting"),
-          ]),
-        ).toBe("waiting");
+        await forEachIsolationPair(fixture, async ({ first, second }) => {
+          const [workerA, workerB] = await Promise.all(
+            [0, 1].map(async () =>
+              stateAdapter.startWorker({
+                workerId: stateAdapter.config.generateWorkerId(),
+                typeNames: ["gate-claim-race"],
+                concurrency: 1,
+                leaseMs: 60_000,
+              }),
+            ),
+          );
+          const [olderChain, newerChain] = await stateAdapter.withTransaction(async (txCtx) =>
+            stateAdapter.createJobs({
+              txCtx,
+              jobs: [2, 1].map((minutesAgo) => ({
+                id: stateAdapter.config.generateJobId(),
+                typeName: "gate-claim-race",
+                input: null,
+                schedule: { at: new Date(Date.now() - minutesAgo * 60_000) },
+              })),
+            }),
+          );
 
-        reclaimerGate.resolve();
-        await reclaimerTx;
+          const holderGate = Promise.withResolvers<void>();
+          const workerBLocked = Promise.withResolvers<void>();
 
-        expect(await claim).toEqual([]);
-        const [stored] = await stateAdapter.getJobs({ jobIds: [createdChain.head.id] });
-        expect(stored!.status).toBe("pending");
-        expect(stored!.attemptBy).toBeNull();
+          const holderTx = stateAdapter.withTransaction(async (txCtx) => {
+            await stateAdapter.getWorkers({ txCtx, workerIds: [workerB.id], lock: "exclusive" });
+            workerBLocked.resolve();
+            await holderGate.promise;
+          });
+
+          await workerBLocked.promise;
+
+          const claimB = second.startJobAttempts({
+            workerId: workerB.id,
+            workerToken: workerB.token,
+            typeNames: ["gate-claim-race"],
+            limit: 2,
+          });
+
+          expect(
+            await Promise.race([
+              claimB.then(() => "resolved"),
+              sleep(LOCK_BLOCK_OBSERVATION_MS).then(() => "waiting"),
+            ]),
+          ).toBe("waiting");
+
+          const claimA = await first.startJobAttempts({
+            workerId: workerA.id,
+            workerToken: workerA.token,
+            typeNames: ["gate-claim-race"],
+            limit: 1,
+          });
+          expect(claimA.map((job) => job.id)).toEqual([olderChain.head.id]);
+
+          holderGate.resolve();
+          await holderTx;
+
+          expect((await claimB).map((job) => job.id)).toEqual([newerChain.head.id]);
+        });
       },
     },
     {
