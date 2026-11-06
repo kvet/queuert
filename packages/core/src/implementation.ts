@@ -338,10 +338,9 @@ export const completeChain = async (
   });
   bufferNotifyChainCompletion(transactionHooks, helpers.notifyAdapter, completed);
 
-  const dependentJobs = await helpers.stateAdapter.unblockJobs({
-    txCtx,
-    blockedByChainId: chain.id,
-  });
+  const dependentJobs = completed.hasDependents
+    ? await helpers.stateAdapter.unblockJobs({ txCtx, blockedByChainId: chain.id })
+    : [];
 
   for (const { traceContext } of dependentJobs) {
     if (traceContext === null) continue;

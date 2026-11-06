@@ -122,6 +122,12 @@ export const schemaTables: Record<SchemaDialect, SchemaTable[]> = {
           head: true,
           description: "W3C traceparent for the chain",
         },
+        {
+          name: "has_dependents",
+          type: "boolean",
+          head: true,
+          description: "Set once a job_blocker row references the chain; never cleared",
+        },
       ],
     },
     {

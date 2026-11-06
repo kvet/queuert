@@ -21,6 +21,7 @@ import { LEASE_TTL_MS, MARKER } from "./state-adapter-migration.process.js";
 
 const INSTALL = "001_initial_schema";
 const WORKER_LIVENESS = "002_worker_liveness";
+const BLOCKER_COUNTERS = "003_blocker_counters";
 const ALL = migrations.map((migration) => migration.name);
 const spawnDeployment = createDeploymentSpawner<MigrationResult>(
   join(import.meta.dirname, "state-adapter-migration.process.ts"),
@@ -98,12 +99,17 @@ const indexNames = async (provider: Provider): Promise<string[]> =>
     )
   ).map((row) => row.indexname);
 
-const migrateToInstall = async (provider: Provider): Promise<void> => {
+const migrateUpTo = async (provider: Provider, lastName: string): Promise<void> => {
   await createMigrator<PgPoolContext>({
-    migrations: migrations.filter((migration) => migration.name === INSTALL),
+    migrations: migrations.filter((migration) => migration.name <= lastName),
     store: createMigrationStore(
       provider,
-      createTemplateApplier({ schema: "public", table_prefix: "queuert_", job_id_type: "uuid" }),
+      createTemplateApplier({
+        schema: "public",
+        table_prefix: "queuert_",
+        job_id_type: "uuid",
+        worker_id_type: "uuid",
+      }),
     ),
   }).migrateToLatest();
 };
@@ -204,7 +210,7 @@ describe("migrateToLatest", () => {
     "upgrades a database with jobs of the previous version, returning running jobs to pending and clearing their worker IDs",
     { timeout: 120_000 },
     async ({ database: { provider, adapter } }) => {
-      await migrateToInstall(provider);
+      await migrateUpTo(provider, INSTALL);
       const jobId = randomUUID();
       const completedJobId = randomUUID();
       await query(
@@ -219,7 +225,7 @@ describe("migrateToLatest", () => {
       );
 
       expect(await adapter.migrateToLatest()).toEqual({
-        applied: [WORKER_LIVENESS],
+        applied: [WORKER_LIVENESS, BLOCKER_COUNTERS],
         skipped: [INSTALL],
         unrecognized: [],
       });
@@ -243,10 +249,56 @@ describe("migrateToLatest", () => {
   );
 
   it(
+    "upgrades a database with blocked jobs of the previous version, flagging the blocker chains their dependents reference",
+    { timeout: 120_000 },
+    async ({ database: { provider, adapter } }) => {
+      await migrateUpTo(provider, WORKER_LIVENESS);
+      const blockerChainId = randomUUID();
+      const continuedBlockerChainId = randomUUID();
+      const continuedBlockerTailId = randomUUID();
+      const unreferencedChainId = randomUUID();
+      const dependentId = randomUUID();
+      await query(
+        provider,
+        `INSERT INTO queuert_job (id, type_name, chain_id, chain_index, status, chain_status, continued_to_id)
+         VALUES ('${blockerChainId}', 'legacy', '${blockerChainId}', 0, 'pending', 'running', NULL),
+                ('${continuedBlockerChainId}', 'legacy', '${continuedBlockerChainId}', 0, 'completed', 'running', '${continuedBlockerTailId}'),
+                ('${continuedBlockerTailId}', 'legacy', '${continuedBlockerChainId}', 1, 'pending', NULL, NULL),
+                ('${unreferencedChainId}', 'legacy', '${unreferencedChainId}', 0, 'pending', 'running', NULL),
+                ('${dependentId}', 'legacy', '${dependentId}', 0, 'blocked', 'running', NULL)`,
+      );
+      await query(
+        provider,
+        `INSERT INTO queuert_job_blocker (job_id, blocked_by_chain_id, "index")
+         VALUES ('${dependentId}', '${blockerChainId}', 0),
+                ('${dependentId}', '${continuedBlockerChainId}', 1)`,
+      );
+
+      expect(await adapter.migrateToLatest()).toEqual({
+        applied: [BLOCKER_COUNTERS],
+        skipped: [INSTALL, WORKER_LIVENESS],
+        unrecognized: [],
+      });
+
+      const completed = await adapter.withTransaction(async (txCtx) =>
+        adapter.completeJobs({
+          txCtx,
+          jobs: [
+            { jobId: blockerChainId, output: null },
+            { jobId: continuedBlockerTailId, output: null },
+            { jobId: unreferencedChainId, output: null },
+          ],
+        }),
+      );
+      expect(completed.map((job) => job!.hasDependents)).toEqual([true, true, false]);
+    },
+  );
+
+  it(
     "gives up when an open transaction holds a lock on the job table, and applies once it ends",
     { timeout: 120_000 },
     async ({ database: { connectionString, provider, adapter } }) => {
-      await migrateToInstall(provider);
+      await migrateUpTo(provider, INSTALL);
       const blocker = new Client({ connectionString });
       await blocker.connect();
       try {
@@ -261,7 +313,7 @@ describe("migrateToLatest", () => {
       }
 
       expect(await adapter.migrateToLatest()).toEqual({
-        applied: [WORKER_LIVENESS],
+        applied: [WORKER_LIVENESS, BLOCKER_COUNTERS],
         skipped: [INSTALL],
         unrecognized: [],
       });
@@ -272,7 +324,7 @@ describe("migrateToLatest", () => {
     "upgrades without rewriting the job table",
     { timeout: 120_000 },
     async ({ database: { provider, adapter } }) => {
-      await migrateToInstall(provider);
+      await migrateUpTo(provider, INSTALL);
       const filenodeQuery = `SELECT pg_relation_filenode('queuert_job')::text AS filenode`;
       const [before] = await query(provider, filenodeQuery);
 

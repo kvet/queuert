@@ -943,7 +943,10 @@ export const createInProcessStateAdapter = async ({
               });
             }
 
-            return jobView(updatedJob);
+            return {
+              ...jobView(updatedJob),
+              hasDependents: idx.blockedByChain.has(job.chainId),
+            };
           });
         }),
       ),

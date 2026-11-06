@@ -171,7 +171,7 @@ export type StateAdapter<
     }[];
   }) => Promise<((StateJob & { continuation: StateJobInfo }) | undefined)[]>;
 
-  /** Completes each job with its output, ending its chain and recording `workerId` as `completedBy`; `undefined` on a miss. */
+  /** Completes each job with its output, ending its chain and recording `workerId` as `completedBy`, with `hasDependents` set if a blocker row may reference the chain; `undefined` on a miss. */
   completeJobs: (
     params: {
       jobs: {
@@ -181,7 +181,7 @@ export type StateAdapter<
         workerId?: TWorkerId;
       }[];
     } & TransactionTxContextParam<TTxContext>,
-  ) => Promise<(StateJob | undefined)[]>;
+  ) => Promise<((StateJob & { hasDependents: boolean }) | undefined)[]>;
 
   /** Returns jobs to pending, clearing any running attempt, or moves a blocked job's `scheduledAt`; `undefined` on a miss. */
   rescheduleJobs: (
@@ -230,7 +230,7 @@ export type StateAdapter<
     params: { jobId: TJobId } & AutocommitTxContextParam<TTxContext>,
   ) => Promise<StateChain[]>;
 
-  /** Moves a completed chain's dependents to pending once all their blockers completed; one entry per blocker row. */
+  /** Moves a completed chain's dependents to pending once all their blockers completed; one entry per blocker row. Called only when `completeJobs` reports `hasDependents`. */
   unblockJobs: (
     params: { blockedByChainId: TJobId } & TransactionTxContextParam<TTxContext>,
   ) => Promise<StateDependentJob[]>;

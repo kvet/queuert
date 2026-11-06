@@ -67,6 +67,8 @@ type DbJob = {
 
   chain_trace_context: string | null;
   trace_context: string | null;
+
+  has_dependents: boolean;
 };
 
 type DbWorker = {
@@ -230,6 +232,21 @@ ALTER TABLE {{schema}}.{{table_prefix}}job DROP COLUMN attempt_until`),
 CREATE INDEX {{table_prefix}}job_running_idx
 ON {{schema}}.{{table_prefix}}job (type_name, attempt_at)
 WHERE status = 'running'`),
+    ],
+  },
+  {
+    name: "003_blocker_counters",
+    type: "transactional",
+    statements: [
+      sql(/* sql */ `SET LOCAL lock_timeout = '5000ms'`),
+      sql(/* sql */ `
+ALTER TABLE {{schema}}.{{table_prefix}}job
+  ADD COLUMN has_dependents boolean NOT NULL DEFAULT false`),
+      sql(/* sql */ `
+UPDATE {{schema}}.{{table_prefix}}job h
+SET has_dependents = true
+WHERE h.chain_index = 0
+  AND h.id IN (SELECT jb.blocked_by_chain_id FROM {{schema}}.{{table_prefix}}job_blocker jb)`),
     ],
   },
 ];
@@ -629,6 +646,7 @@ export const createPgStateAdapter = async <
     chain_deduplication_key: t["string?"](),
     chain_trace_context: t["string?"](),
     trace_context: t["string?"](),
+    has_dependents: t.boolean(),
   } as const;
 
   const dbChainColumns = {
@@ -1169,6 +1187,7 @@ LEFT JOIN done dh ON dh.id = d.chain_id
         return {
           ...mapDbJobToStateJobInfo(row.job_row),
           chain: mapDbHeadToStateChainInfo(row.head_job),
+          hasDependents: row.head_job.has_dependents,
         };
       });
     },
@@ -1539,11 +1558,20 @@ has_incomplete_blockers AS (
   JOIN locked_blocker_heads h ON h.id = d.blocked_by_chain_id
   WHERE h.chain_status = 'running'
 ),
+update_targets AS (
+  SELECT id FROM locked_blocker_heads
+  UNION
+  SELECT job_id FROM has_incomplete_blockers
+),
 updated_jobs AS (
   UPDATE {{schema}}.{{table_prefix}}job j
-  SET status = 'blocked'
-  WHERE j.id IN (SELECT job_id FROM has_incomplete_blockers)
-    AND j.status = 'pending'
+  SET status = CASE
+      WHEN j.status = 'pending' AND j.id IN (SELECT job_id FROM has_incomplete_blockers)
+      THEN 'blocked' ELSE j.status END,
+    has_dependents = j.has_dependents OR j.id IN (SELECT id FROM locked_blocker_heads)
+  FROM update_targets t
+  WHERE j.id = t.id
+    AND (j.status = 'pending' OR j.id IN (SELECT id FROM locked_blocker_heads))
   RETURNING j.*
 ),
 distinct_job_ids AS (

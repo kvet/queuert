@@ -1335,12 +1335,16 @@ SET status = CASE WHEN e.completes_job THEN 'completed' ELSE {{table_prefix}}job
                             THEN datetime('now', 'subsec') ELSE {{table_prefix}}job.chain_completed_at END
 FROM row_effects e
 WHERE {{table_prefix}}job.id = e.id
-RETURNING *
+RETURNING *,
+  EXISTS (
+    SELECT 1 FROM {{table_prefix}}job_blocker jb
+    WHERE jb.blocked_by_chain_id = {{table_prefix}}job.id
+  ) AS has_dependents
 `,
               {
                 id: "completeJobs",
                 params: [t.string()],
-                columns: { ...dbJobColumns },
+                columns: { ...dbJobColumns, has_dependents: t.number() },
               },
             ),
           ),
@@ -1353,9 +1357,11 @@ RETURNING *
       return jobs.map((job) => {
         const row = rowById.get(job.jobId);
         if (!row) return undefined;
+        const headRow = rowById.get(row.chain_id)!;
         return {
           ...mapDbJobToStateJob(row),
-          chain: mapDbHeadToStateChain(rowById.get(row.chain_id)!),
+          chain: mapDbHeadToStateChain(headRow),
+          hasDependents: headRow.has_dependents === 1,
         };
       });
     },

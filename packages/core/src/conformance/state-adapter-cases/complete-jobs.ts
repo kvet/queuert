@@ -338,6 +338,7 @@ export const completeJobsGroup: ConformanceGroup<StateConformanceFixture> = {
         expect(completed!.chain.id).toBe(createdChain.head.chainId);
         expect(completed!.chain.status).toBe("completed");
         expect(completed!.chain.completedAt).toBeInstanceOf(Date);
+        expect(completed!.hasDependents).toBe(false);
 
         const [chain] = await stateAdapter.getChains({ chainIds: [createdChain.head.chainId] });
         expect(chain!.tail).toBeUndefined();
@@ -391,12 +392,70 @@ export const completeJobsGroup: ConformanceGroup<StateConformanceFixture> = {
         expect(completed!.chain.id).toBe(headChain.head.chainId);
         expect(completed!.chain.status).toBe("completed");
         expect(completed!.chain.completedAt).toBeInstanceOf(Date);
+        expect(completed!.hasDependents).toBe(false);
 
         const [chain] = await stateAdapter.getChains({ chainIds: [headChain.head.chainId] });
         expect(chain!.status).toBe("completed");
         expect(chain!.completedAt).toBeInstanceOf(Date);
         expect(chain!.tail!.id).toBe(tail.id);
         expect(chain!.tail!.output).toEqual({ final: true });
+      },
+    },
+    {
+      name: "reports hasDependents for a chain a blocker row references, completed by its head or by its tail",
+      run: async ({ stateAdapter }, expect) => {
+        const [singleJobChain, multiJobChain, dependentChain] = await stateAdapter.withTransaction(
+          async (txCtx) =>
+            stateAdapter.createJobs({
+              txCtx,
+              jobs: [
+                {
+                  id: stateAdapter.config.generateJobId(),
+                  typeName: "single-blocker",
+                  input: null,
+                },
+                { id: stateAdapter.config.generateJobId(), typeName: "multi-blocker", input: null },
+                { id: stateAdapter.config.generateJobId(), typeName: "dependent", input: null },
+              ],
+            }),
+        );
+        const [continuedTail] = await stateAdapter.withTransaction(async (txCtx) =>
+          stateAdapter.continueJobs({
+            txCtx,
+            jobs: [
+              {
+                id: stateAdapter.config.generateJobId(),
+                typeName: "multi-blocker",
+                input: null,
+                continueFromId: multiJobChain.head.id,
+              },
+            ],
+          }),
+        );
+        await stateAdapter.withTransaction(async (txCtx) =>
+          stateAdapter.addJobsBlockers({
+            txCtx,
+            jobBlockers: [
+              {
+                jobId: dependentChain.head.id,
+                blockedByChainIds: [singleJobChain.id, multiJobChain.id],
+              },
+            ],
+          }),
+        );
+
+        const [completedHead, completedTail] = await stateAdapter.withTransaction(async (txCtx) =>
+          stateAdapter.completeJobs({
+            txCtx,
+            jobs: [
+              { jobId: singleJobChain.head.id, output: null },
+              { jobId: continuedTail!.continuation.id, output: null },
+            ],
+          }),
+        );
+
+        expect(completedHead!.hasDependents).toBe(true);
+        expect(completedTail!.hasDependents).toBe(true);
       },
     },
     {

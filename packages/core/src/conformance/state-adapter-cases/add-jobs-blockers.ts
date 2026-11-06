@@ -621,5 +621,77 @@ export const addJobsBlockersGroup: ConformanceGroup<StateConformanceFixture> = {
         expect(added.blockers.map((blocker) => blocker?.status)).toEqual(["completed"]);
       },
     },
+    {
+      name: "unblocks a dependent attached while the completion of its blocker waited on the head lock",
+      run: async ({ stateAdapter, transactionConcurrency }, expect) => {
+        if (transactionConcurrency !== "concurrent") {
+          expect.skip("requires concurrent transactions");
+          return;
+        }
+
+        const [blockerChain, mainChain] = await stateAdapter.withTransaction(async (txCtx) =>
+          stateAdapter.createJobs({
+            txCtx,
+            jobs: [
+              {
+                id: stateAdapter.config.generateJobId(),
+                typeName: "attached-blocker",
+                input: null,
+              },
+              { id: stateAdapter.config.generateJobId(), typeName: "main", input: null },
+            ],
+          }),
+        );
+
+        let signalAttached: (() => void) | undefined;
+        const attached = new Promise<void>((r) => {
+          signalAttached = r;
+        });
+        let releaseAttacher: (() => void) | undefined;
+        const attacherGate = new Promise<void>((r) => {
+          releaseAttacher = r;
+        });
+
+        const addTx = stateAdapter.withTransaction(async (txCtx) => {
+          const result = await stateAdapter.addJobsBlockers({
+            txCtx,
+            jobBlockers: [{ jobId: mainChain.head.id, blockedByChainIds: [blockerChain.id] }],
+          });
+          signalAttached!();
+          await attacherGate;
+          return result;
+        });
+
+        await attached;
+
+        let completeSettled = false;
+        const completerTx = stateAdapter
+          .withTransaction(async (txCtx) => {
+            const [completed] = await stateAdapter.completeJobs({
+              txCtx,
+              jobs: [{ jobId: blockerChain.head.id, output: null }],
+            });
+            const dependents = await stateAdapter.unblockJobs({
+              txCtx,
+              blockedByChainId: blockerChain.id,
+            });
+            return { completed: completed!, dependents };
+          })
+          .finally(() => {
+            completeSettled = true;
+          });
+
+        await sleep(LOCK_BLOCK_OBSERVATION_MS);
+        expect(completeSettled).toBe(false);
+
+        releaseAttacher!();
+        const [added] = await addTx;
+        expect(added.status).toBe("blocked");
+
+        const { completed, dependents } = await completerTx;
+        expect(completed.hasDependents).toBe(true);
+        expect(dependents.map((dependent) => dependent.job.status)).toEqual(["pending"]);
+      },
+    },
   ],
 };
