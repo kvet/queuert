@@ -307,6 +307,11 @@ WHERE status = 'running'`),
   },
 ];
 
+const takeWriteLockStatement = sql(
+  /* sql */ `UPDATE {{table_prefix}}write_lock SET id = id WHERE 0`,
+  { id: "takeWriteLock", params: [], columns: {} },
+);
+
 /** @internal */
 export const createMigrationStore = <TTxContext extends BaseTxContext>(
   stateProvider: SqliteStateProvider<TTxContext>,
@@ -352,13 +357,7 @@ CREATE TABLE IF NOT EXISTS {{table_prefix}}migration (
       columns: {},
     }),
   );
-  const takeWriteLockSql = applyTemplate(
-    sql(/* sql */ `UPDATE {{table_prefix}}write_lock SET id = id WHERE 0`, {
-      id: "takeWriteLock",
-      params: [],
-      columns: {},
-    }),
-  );
+  const takeWriteLockSql = applyTemplate(takeWriteLockStatement);
   const getAppliedMigrationsSql = applyTemplate(
     sql(/* sql */ `SELECT name FROM {{table_prefix}}migration ORDER BY name`, {
       id: "getAppliedMigrations",
@@ -773,6 +772,13 @@ export const createSqliteStateAdapter = async <
     }) as Promise<InferColumns<TColumns>[]>;
   };
 
+  const takeWriteLock = async (txCtx: TTxContext): Promise<void> => {
+    await executeTypedSql({
+      txCtx,
+      sql: templateCache.getOrCompute("takeWriteLock", () => applyTemplate(takeWriteLockStatement)),
+    });
+  };
+
   return {
     config,
 
@@ -792,27 +798,7 @@ export const createSqliteStateAdapter = async <
       if (chainIds.length === 0) return [];
       const idsJson = JSON.stringify(chainIds);
       if (lock === "exclusive" && txCtx) {
-        await executeTypedSql({
-          txCtx,
-          sql: templateCache.getOrCompute("lockChainHeads", () =>
-            applyTemplate(
-              sql(
-                `
-UPDATE {{table_prefix}}job
-SET attempt = attempt
-WHERE id IN (SELECT value FROM json_each(?))
-  AND chain_index = 0
-`,
-                {
-                  id: "lockChainHeads",
-                  params: [t.string()],
-                  columns: {},
-                },
-              ),
-            ),
-          ),
-          params: [idsJson],
-        });
+        await takeWriteLock(txCtx);
       }
       const rows = await executeTypedSql({
         txCtx,
@@ -858,30 +844,7 @@ ORDER BY head_job.id
       if (jobIds.length === 0) return [];
       const idsJson = JSON.stringify(jobIds);
       if (lock === "exclusive" && txCtx) {
-        await executeTypedSql({
-          txCtx,
-          sql: templateCache.getOrCompute("lockJobs", () =>
-            applyTemplate(
-              sql(
-                `
-UPDATE {{table_prefix}}job
-SET attempt = attempt
-WHERE id IN (
-  SELECT value FROM json_each(?)
-  UNION
-  SELECT chain_id FROM {{table_prefix}}job WHERE id IN (SELECT value FROM json_each(?))
-)
-`,
-                {
-                  id: "lockJobs",
-                  params: [t.string(), t.string()],
-                  columns: {},
-                },
-              ),
-            ),
-          ),
-          params: [idsJson, idsJson],
-        });
+        await takeWriteLock(txCtx);
       }
       const rows = await executeTypedSql({
         txCtx,
@@ -924,26 +887,7 @@ WHERE j.id IN (SELECT value FROM json_each(?))
       if (workerIds.length === 0) return [];
       const idsJson = JSON.stringify(workerIds);
       if (lock === "exclusive" && txCtx) {
-        await executeTypedSql({
-          txCtx,
-          sql: templateCache.getOrCompute("lockWorkers", () =>
-            applyTemplate(
-              sql(
-                `
-UPDATE {{table_prefix}}worker
-SET lease_until = lease_until
-WHERE id IN (SELECT value FROM json_each(?))
-`,
-                {
-                  id: "lockWorkers",
-                  params: [t.string()],
-                  columns: {},
-                },
-              ),
-            ),
-          ),
-          params: [idsJson],
-        });
+        await takeWriteLock(txCtx);
       }
       const rows = await executeTypedSql({
         txCtx,

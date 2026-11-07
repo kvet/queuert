@@ -107,7 +107,7 @@ The rule from `design/pg-isolation-levels.md`, with one MongoDB addition: **the 
 | Claim vs reclaim of the claiming worker             | the worker                 | `startJobAttempts` extends the lease in its transaction  | reclaim deletes the worker                      |
 | Two chains created with one deduplication key       | the deduplication document | upsert                                                   | upsert                                          |
 
-`lock: "exclusive"` is this write. SQLite already emulates locks with a no-op write (`UPDATE job SET attempt = attempt`); on MongoDB it has to be a real change. Lock order no longer matters, because a conflict aborts instead of waiting.
+`lock: "exclusive"` is this write. SQLite already emulates locks with a no-op write to its `write_lock` table; on MongoDB it has to be a real change. Lock order no longer matters, because a conflict aborts instead of waiting.
 
 ### Conflicts abort instead of waiting: retries
 

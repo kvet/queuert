@@ -3,20 +3,20 @@
 - [TASK] Revise factories. See `design/sync-factories.md`.
 - [TASK] Rename `InProcessWorker`. See `design/worker-runner.md`.
 - [REF] txHooks provider
-- [TASK] Coded. See `design/json-serializable-types.md`
+- [TASK] Codec. See `design/json-serializable-types.md`
 - [TASK] Profiling in the processing-capacity benchmark — capture a CPU profile (`node --cpu-prof`) alongside each run in `benchmarks/processing-capacity`, so hot paths are measured before optimizing.
 - [REF] Generator-based core — rewrite core's internal job lifecycle on generators to cut `await` hops and promise allocations per job, keeping the public API (client, workers, adapters) unchanged.
-- [REF] sync sqlite api
 - [REF] PostgreSQL pipelining.
 - [EPIC] SQLite production-readiness
-  - [TASK] Get rid of `createAsyncRwLock()`
-  - [TASK] No multi-worker example
-  - [TASK] Promote transactions via a dedicated sentinel table (like migration lock in PG) to prevent WAL contention
+  - [REF] sync sqlite api
   - [TASK] IPC notify adapter in a new `@queuert/ipc` package — sync-ready, socket per process, one registry file per process in a shared `directory`. See `design/ipc-notify.md`.
+  - [TASK] No multi-worker example
+  - [TASK] Get rid of `createAsyncRwLock()` in sync apis
 
 # Medium term
 
 - [TASK] Handle drivers whose transaction resolves after a rollback — knex resolves `knex.transaction(cb)` after a bare `trx.rollback()` (`doNotRejectOnRollback` defaults to `true`, per call and again for nested savepoints), so tx hooks flush for writes that never committed. Today users must pass `{ doNotRejectOnRollback: false }` on every call (see the knex section of `docs/src/content/docs/guides/tx-hooks.mdx`). Options: a knex helper that always sets the option, or a way for the hooks to learn the transaction's real outcome.
+- [TASK] Multi-process SQLite conformance — the SQLite conformance suite runs every transaction on one `:memory:` connection behind the in-process `AsyncRwLock`, so the `lock: "exclusive"` cases pass without exercising SQLite's own write lock. Add a mode that contends from a second connection in a worker thread or child process against a WAL file (better-sqlite3 blocks the event loop while it waits on `busy_timeout`, so both connections cannot share one thread).
 - [TASK] Built-in cleanup. See `design/builtin-cleanup.md`.
 - [TASK] PostgreSQL REPEATABLE READ and SERIALIZABLE support — counter-based blocker bookkeeping (`has_dependents`, `blockers_remaining`), a worker-row write on acquisition, adapter retries of 40001/40P01 for Queuert's own work, and migrations pinned to READ COMMITTED. Every 0.17 process must stop before `003_blocker_counters`. See `design/pg-isolation-levels.md`.
 - [TASK] Best-effort `rescheduleJobs` — today it fails the whole batch if any job is not pending, so apps hand-roll "wake a sleeping chain" loops (`listChainJobs` + `rescheduleJob` + catch `JobNotReschedulableError`). Add an option such as `skipNotReschedulable: true` that returns a per-job outcome (`rescheduled` / `not-pending` / `completed`) instead of throwing.

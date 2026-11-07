@@ -367,7 +367,8 @@ const Page = () => (
       configurable prefix (default: <code>queuert_</code>, shown as <code>{"{prefix}"}</code>). The{" "}
       <code>{"{prefix}"}write_lock</code> table is always empty: every migration transaction starts
       with a no-op write to it, which takes SQLite's write lock before the transaction reads
-      anything, whatever <code>BEGIN</code> the provider sends.
+      anything, whatever <code>BEGIN</code> the provider sends. Reads that lock chains, jobs or
+      workers inside a transaction make the same no-op write first.
     </p>
     <SchemaTables dialect="sqlite" />
 
