@@ -15,7 +15,7 @@ test("state-sqlite-knex provider passes state adapter conformance", async () => 
     });
 
     const stateProvider = createKnexSqliteStateProvider({ knex });
-    const adapter = await createSqliteStateAdapter({ stateProvider });
+    const adapter = createSqliteStateAdapter({ stateProvider });
     await adapter.migrateToLatest();
 
     return {

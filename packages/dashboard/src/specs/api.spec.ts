@@ -12,9 +12,9 @@ import { createDashboard } from "../api/dashboard.ts";
 const parseBody = async (res: Response) => deserialize<any>(await res.text());
 
 const createTestDashboard = async (basePath?: string) => {
-  const stateAdapter = await createInProcessStateAdapter();
-  const client = await createClient({ stateAdapter, jobTypes: defineJobTypes() });
-  const dashboard = await createDashboard({ client, basePath });
+  const stateAdapter = createInProcessStateAdapter();
+  const client = createClient({ stateAdapter, jobTypes: defineJobTypes() });
+  const dashboard = createDashboard({ client, basePath });
   const prefix = basePath ?? "";
   const request = async (path: string, init?: RequestInit) =>
     dashboard.fetch(new Request(`http://test${prefix}${path}`, init));
@@ -22,7 +22,7 @@ const createTestDashboard = async (basePath?: string) => {
 };
 
 const createJob = async (
-  stateAdapter: Awaited<ReturnType<typeof createInProcessStateAdapter>>,
+  stateAdapter: ReturnType<typeof createInProcessStateAdapter>,
   typeName: string,
   input: unknown,
 ) => {
@@ -36,7 +36,7 @@ const createJob = async (
 };
 
 const createContinuation = async (
-  stateAdapter: Awaited<ReturnType<typeof createInProcessStateAdapter>>,
+  stateAdapter: ReturnType<typeof createInProcessStateAdapter>,
   typeName: string,
   continueFromId: string,
   input: unknown,
@@ -51,7 +51,7 @@ const createContinuation = async (
 };
 
 const startAttempt = async (
-  stateAdapter: Awaited<ReturnType<typeof createInProcessStateAdapter>>,
+  stateAdapter: ReturnType<typeof createInProcessStateAdapter>,
   typeName: string,
 ) => {
   const [worker] = await stateAdapter.getWorkers({ workerIds: ["worker-1"] });
@@ -64,13 +64,13 @@ const startAttempt = async (
 };
 
 const startWorker = async (
-  stateAdapter: Awaited<ReturnType<typeof createInProcessStateAdapter>>,
+  stateAdapter: ReturnType<typeof createInProcessStateAdapter>,
   workerId: string,
   typeNames: string[],
 ) => stateAdapter.startWorker({ workerId, typeNames, concurrency: 2, leaseMs: 60_000 });
 
 const completeJob = async (
-  stateAdapter: Awaited<ReturnType<typeof createInProcessStateAdapter>>,
+  stateAdapter: ReturnType<typeof createInProcessStateAdapter>,
   jobId: string,
   output: unknown,
 ) =>
@@ -93,7 +93,7 @@ const UUID_PATTERN = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{
  * valid ID throw, which stands in for a transient database error.
  */
 const createUuidStrictDashboard = async () => {
-  const inner = await createInProcessStateAdapter();
+  const inner = createInProcessStateAdapter();
   const failures = { probe: false, reschedule: false };
   const assertUuids = (ids: string[]) => {
     const malformed = ids.find((id) => !UUID_PATTERN.test(id));
@@ -137,8 +137,8 @@ const createUuidStrictDashboard = async () => {
       return inner.getChainTypeNames(params);
     },
   };
-  const client = await createClient({ stateAdapter, jobTypes: defineJobTypes() });
-  const dashboard = await createDashboard({ client });
+  const client = createClient({ stateAdapter, jobTypes: defineJobTypes() });
+  const dashboard = createDashboard({ client });
   const request = async (path: string, init?: RequestInit) =>
     dashboard.fetch(new Request(`http://test${path}`, init));
   return { request, stateAdapter: inner, failures };
@@ -1043,7 +1043,7 @@ describe("Dashboard API", () => {
 
     it("notifies workers only after the reschedule commits", async () => {
       const events: string[] = [];
-      const innerStateAdapter = await createInProcessStateAdapter();
+      const innerStateAdapter = createInProcessStateAdapter();
       const stateAdapter: typeof innerStateAdapter = {
         ...innerStateAdapter,
         withTransaction: async (fn) => {
@@ -1052,8 +1052,8 @@ describe("Dashboard API", () => {
           return result;
         },
       };
-      const innerNotifyAdapter = await createInProcessNotifyAdapter();
-      const client = await createClient({
+      const innerNotifyAdapter = createInProcessNotifyAdapter();
+      const client = createClient({
         stateAdapter,
         notifyAdapter: {
           ...innerNotifyAdapter,
@@ -1064,7 +1064,7 @@ describe("Dashboard API", () => {
         },
         jobTypes: defineJobTypes(),
       });
-      const dashboard = await createDashboard({ client });
+      const dashboard = createDashboard({ client });
       const job = await createJob(stateAdapter, "test-type", null);
       events.length = 0;
 
@@ -1417,9 +1417,9 @@ describe("Dashboard API", () => {
     });
 
     it("returns 404 for requests outside basePath", async () => {
-      const dashboard = await createDashboard({
-        client: await createClient({
-          stateAdapter: await createInProcessStateAdapter(),
+      const dashboard = createDashboard({
+        client: createClient({
+          stateAdapter: createInProcessStateAdapter(),
           jobTypes: defineJobTypes(),
         }),
         basePath: "/internal/queuert",
@@ -1429,9 +1429,9 @@ describe("Dashboard API", () => {
     });
 
     it("returns 404 for paths that share a prefix with basePath", async () => {
-      const dashboard = await createDashboard({
-        client: await createClient({
-          stateAdapter: await createInProcessStateAdapter(),
+      const dashboard = createDashboard({
+        client: createClient({
+          stateAdapter: createInProcessStateAdapter(),
           jobTypes: defineJobTypes(),
         }),
         basePath: "/app",

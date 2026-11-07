@@ -56,7 +56,7 @@ describe("transformPage", () => {
       page(
         [
           '    <Code lang="ts" title="client.ts">{`',
-          "      const client = await createClient();",
+          "      const client = createClient();",
           "",
           "      if (ready) {",
           "        start(\\`\\${name}\\`);",
@@ -67,7 +67,7 @@ describe("transformPage", () => {
       file,
     );
 
-    const source = "const client = await createClient();\n\nif (ready) {\n  start(`${name}`);\n}";
+    const source = "const client = createClient();\n\nif (ready) {\n  start(`${name}`);\n}";
     expect(code).toContain(
       `<Code lang={"ts"} title={"client.ts"} code={${JSON.stringify(source)}} html={`,
     );

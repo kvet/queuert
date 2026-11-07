@@ -18,7 +18,7 @@ test("state-sqlite-kysely provider passes state adapter conformance", async () =
     });
 
     const stateProvider = createKyselySqliteStateProvider({ db });
-    const adapter = await createSqliteStateAdapter({ stateProvider });
+    const adapter = createSqliteStateAdapter({ stateProvider });
     await adapter.migrateToLatest();
 
     return {

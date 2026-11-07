@@ -21,7 +21,7 @@ export const extendWithNotifyNats = <
       async ({ natsConnectionOptions }, use) => {
         const nc = await connect(natsConnectionOptions);
 
-        const notifyAdapter = await createNatsNotifyAdapter({
+        const notifyAdapter = createNatsNotifyAdapter({
           nc,
           subjectPrefix: `queuert.${Date.now()}.${Math.random().toString(36).slice(2)}`,
         });

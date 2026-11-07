@@ -16,7 +16,7 @@ describe("NATS Notify Adapter Conformance - Default Subject Prefix", () => {
       async ({ natsConnectionOptions }, use) => {
         const nc = await connect(natsConnectionOptions);
 
-        const notifyAdapter = await createNatsNotifyAdapter({ nc });
+        const notifyAdapter = createNatsNotifyAdapter({ nc });
 
         await use(notifyAdapter);
 
@@ -35,7 +35,7 @@ describe("NATS Notify Adapter Conformance - Custom Subject Prefix", () => {
       async ({ natsConnectionOptions }, use) => {
         const nc = await connect(natsConnectionOptions);
 
-        const notifyAdapter = await createNatsNotifyAdapter({
+        const notifyAdapter = createNatsNotifyAdapter({
           nc,
           subjectPrefix: `myapp.notifications.${crypto.randomUUID()}`,
         });

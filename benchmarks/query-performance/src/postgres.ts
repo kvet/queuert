@@ -63,7 +63,7 @@ const stateProvider = {
   },
 };
 
-const stateAdapter = await createPgStateAdapter<PgPoolContext, string>({ stateProvider });
+const stateAdapter = createPgStateAdapter<PgPoolContext, string>({ stateProvider });
 await stateAdapter.migrateToLatest();
 
 console.log(`Seeding data (scale=${scale})...`);

@@ -61,7 +61,7 @@ const stateProvider = {
   },
 };
 
-const stateAdapter = await createSqliteStateAdapter<BetterSqlite3Context, string>({
+const stateAdapter = createSqliteStateAdapter<BetterSqlite3Context, string>({
   stateProvider,
 });
 await stateAdapter.migrateToLatest();

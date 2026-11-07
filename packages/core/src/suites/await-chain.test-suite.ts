@@ -23,7 +23,7 @@ export const awaitChainTestSuite = ({ it }: { it: TestAPI<TestSuiteContext> }): 
       };
     }>();
 
-    const client = await createClient({
+    const client = createClient({
       stateAdapter,
       notifyAdapter,
       observabilityAdapter,
@@ -72,7 +72,7 @@ export const awaitChainTestSuite = ({ it }: { it: TestAPI<TestSuiteContext> }): 
       };
     }>();
 
-    const client = await createClient({
+    const client = createClient({
       stateAdapter,
       notifyAdapter,
       observabilityAdapter,
@@ -127,7 +127,7 @@ export const awaitChainTestSuite = ({ it }: { it: TestAPI<TestSuiteContext> }): 
       };
     }>();
 
-    const client = await createClient({
+    const client = createClient({
       stateAdapter,
       notifyAdapter,
       observabilityAdapter,
@@ -166,7 +166,7 @@ export const awaitChainTestSuite = ({ it }: { it: TestAPI<TestSuiteContext> }): 
       };
     }>();
 
-    const client = await createClient({
+    const client = createClient({
       stateAdapter,
       notifyAdapter,
       observabilityAdapter,
@@ -199,7 +199,7 @@ export const awaitChainTestSuite = ({ it }: { it: TestAPI<TestSuiteContext> }): 
       };
     }>();
 
-    const client = await createClient({
+    const client = createClient({
       stateAdapter,
       notifyAdapter,
       observabilityAdapter,
@@ -225,7 +225,7 @@ export const awaitChainTestSuite = ({ it }: { it: TestAPI<TestSuiteContext> }): 
       notification: { entry: true; input: { message: string }; output: { sent: boolean } };
     }>();
 
-    const client = await createClient({
+    const client = createClient({
       stateAdapter,
       notifyAdapter,
       observabilityAdapter,

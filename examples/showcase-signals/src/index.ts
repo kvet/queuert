@@ -17,7 +17,7 @@ import { createPostgresJsStateProvider } from "example-state-postgres-postgres-j
 import postgres from "postgres";
 import {
   createClient,
-  createInProcessWorker,
+  createWorkerRunner,
   createProcessors,
   defineJobTypes,
   withTxHooks,
@@ -43,12 +43,12 @@ await using pg = await acquirePostgres("postgres:18", import.meta.url);
 const sql = postgres(pg.connectionString, { max: 10 });
 
 const stateProvider = createPostgresJsStateProvider({ sql });
-const stateAdapter = await createPgStateAdapter({ stateProvider });
+const stateAdapter = createPgStateAdapter({ stateProvider });
 await stateAdapter.migrateToLatest();
 const notifyProvider = createPostgresJsNotifyProvider({ sql });
-const notifyAdapter = await createPgNotifyAdapter({ notifyProvider });
+const notifyAdapter = createPgNotifyAdapter({ notifyProvider });
 
-const client = await createClient({
+const client = createClient({
   stateAdapter,
   notifyAdapter,
   jobTypes,
@@ -147,8 +147,8 @@ const externalTask = await withTxHooks(async (txHooks) =>
   ),
 );
 
-const worker1 = await createInProcessWorker({ client, processors });
-const stopWorker1 = await worker1.start();
+const workerRunner1 = createWorkerRunner({ client, processors });
+const stopWorkerRunner1 = await workerRunner1.start();
 
 await externalResultStarted;
 await new Promise((r) => setTimeout(r, 100));
@@ -178,7 +178,7 @@ const externalResult = await client.awaitChain(externalTask, { timeoutMs: 5000 }
 console.log(`Result: ${JSON.stringify(externalResult.output)}`);
 assert.equal(externalResult.output.source, "external");
 
-await stopWorker1();
+await stopWorkerRunner1();
 
 // Scenario 2: Worker stopping
 console.log("\n--- Scenario 2: Worker Stopping ---");
@@ -195,14 +195,14 @@ const batch = await withTxHooks(async (txHooks) =>
   ),
 );
 
-const worker2 = await createInProcessWorker({ client, processors });
-const stopWorker2 = await worker2.start();
+const workerRunner2 = createWorkerRunner({ client, processors });
+const stopWorkerRunner2 = await workerRunner2.start();
 
 await batchStarted;
 await new Promise((r) => setTimeout(r, 200));
 
 console.log(`Stopping worker...`);
-await stopWorker2();
+await stopWorkerRunner2();
 
 const batchResult = await client.awaitChain(batch, { timeoutMs: 5000 });
 console.log(`Result: ${JSON.stringify(batchResult.output)}`);

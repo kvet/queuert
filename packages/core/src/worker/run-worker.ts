@@ -15,7 +15,7 @@ import {
   WorkerLeaseLostError,
 } from "../errors.ts";
 import {
-  type InProcessWorkerProcessor,
+  type Processor,
   processorAttemptMiddlewareSymbol,
 } from "../job-type-processors/job-type-processors.ts";
 import type { Helpers } from "../setup-helpers.ts";
@@ -24,7 +24,7 @@ import { type TxHooks, createTxHooks, withTxHooks } from "../tx-hooks/tx-hooks.t
 import { type WorkerLeaseConfig, holdLease } from "./worker-lease.ts";
 
 /** Per-processor runtime stamp carrying the middleware tuple of the originating slice. @internal */
-export type StampedProcessor = InProcessWorkerProcessor<any, any, any, any> & {
+export type StampedProcessor = Processor<any, any, any, any> & {
   readonly [processorAttemptMiddlewareSymbol]: readonly AnyAttemptMiddleware[];
 };
 

@@ -65,13 +65,13 @@ await sql`
 `;
 
 const stateProvider = createPostgresJsStateProvider({ sql });
-const stateAdapter = await createPgStateAdapter({ stateProvider });
+const stateAdapter = createPgStateAdapter({ stateProvider });
 await stateAdapter.migrateToLatest();
 
 const notifyProvider = createPostgresJsNotifyProvider({ sql });
-const notifyAdapter = await createPgNotifyAdapter({ notifyProvider });
+const notifyAdapter = createPgNotifyAdapter({ notifyProvider });
 
-const client = await createClient({
+const client = createClient({
   stateAdapter,
   notifyAdapter,
   jobTypes,

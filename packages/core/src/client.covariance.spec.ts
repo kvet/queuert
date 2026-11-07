@@ -24,8 +24,8 @@ type Defs2 = {
 const registry1 = defineJobTypes<Defs1>();
 const registry2 = defineJobTypes<Defs2>();
 
-const stateAdapter = await createInProcessStateAdapter();
-const mergedClient = await createClient({
+const stateAdapter = createInProcessStateAdapter();
+const mergedClient = createClient({
   stateAdapter,
   jobTypes: [registry1, registry2],
 });

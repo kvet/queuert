@@ -168,7 +168,7 @@ export const schemaTables: Record<SchemaDialect, SchemaTable[]> = {
           name: "id",
           type: "workerIdType (default: uuid)",
           primaryKey: true,
-          description: "Worker ID, the in-process worker's workerId",
+          description: "Worker ID, the worker runner's workerId",
         },
         { name: "type_names", type: "text[]", description: "Job types the worker processes" },
       ],
@@ -335,7 +335,7 @@ export const schemaTables: Record<SchemaDialect, SchemaTable[]> = {
           name: "id",
           type: "workerIdType (default: TEXT)",
           primaryKey: true,
-          description: "Worker ID, the in-process worker's workerId",
+          description: "Worker ID, the worker runner's workerId",
         },
         {
           name: "type_names",

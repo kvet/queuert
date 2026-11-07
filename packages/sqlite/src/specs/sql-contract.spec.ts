@@ -185,7 +185,7 @@ describe("SQLite SQL contract", () => {
     stateAdapter: [
       async ({ db }, use) => {
         const stateProvider = createValidatingProvider(db);
-        const adapter = await createSqliteStateAdapter({ stateProvider });
+        const adapter = createSqliteStateAdapter({ stateProvider });
         await adapter.migrateToLatest();
         await adapter.truncate();
         await use(adapter as unknown as StateAdapter<{ $test: true }, string, string>);

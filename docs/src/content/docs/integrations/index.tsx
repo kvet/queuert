@@ -38,8 +38,8 @@ const Page = () => (
   <>
     <p>
       Queuert reaches your database, message broker, schema library and telemetry through adapters,
-      which <code>createClient</code> and <code>createInProcessWorker</code> consume. This section
-      has an overview page per adapter kind and a page per backend.
+      which <code>createClient</code> and <code>createWorkerRunner</code> consume. This section has
+      an overview page per adapter kind and a page per backend.
     </p>
     <AdapterLayers />
 

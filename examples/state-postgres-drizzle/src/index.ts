@@ -6,7 +6,7 @@ import { pgTable, serial, text } from "drizzle-orm/pg-core";
 import { Pool } from "pg";
 import {
   createClient,
-  createInProcessWorker,
+  createWorkerRunner,
   createProcessors,
   defineJobTypes,
   withTxHooks,
@@ -55,20 +55,20 @@ const jobTypes = defineJobTypes<{
 // Create state provider for Drizzle
 // #region adapter
 const stateProvider = createDrizzlePgStateProvider({ db });
-const stateAdapter = await createPgStateAdapter({
+const stateAdapter = createPgStateAdapter({
   stateProvider,
 });
 await stateAdapter.migrateToLatest();
 // #endregion
 
-const notifyAdapter = await createInProcessNotifyAdapter();
+const notifyAdapter = createInProcessNotifyAdapter();
 
-const client = await createClient({
+const client = createClient({
   stateAdapter,
   notifyAdapter,
   jobTypes,
 });
-const worker = await createInProcessWorker({
+const workerRunner = createWorkerRunner({
   client,
   processors: createProcessors({
     client,
@@ -93,8 +93,8 @@ const worker = await createInProcessWorker({
   }),
 });
 
-// Start worker
-const stopWorker = await worker.start();
+// Start worker runner
+const stopWorkerRunner = await workerRunner.start();
 
 // Register a new user and queue welcome email atomically
 const chain = await withTxHooks(async (txHooks) =>
@@ -119,7 +119,7 @@ const result = await client.awaitChain(chain, { timeoutMs: 5000 });
 console.log(`Welcome email sent at: ${result.output.sentAt}`);
 
 // Cleanup
-await stopWorker();
+await stopWorkerRunner();
 await notifyAdapter.close();
 await stateAdapter.close();
 await db.$client.end();

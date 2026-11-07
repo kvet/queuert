@@ -7,7 +7,7 @@ import {
   createClient,
   createInProcessNotifyAdapter,
   createInProcessStateAdapter,
-  createInProcessWorker,
+  createWorkerRunner,
   createProcessors,
   withTxHooks,
 } from "queuert";
@@ -39,8 +39,8 @@ await runDoubleRunBenchmark<Record<string, never>>({
       createDashboard({ client }),
     );
 
-    const stopWorker = await step("After creating worker", async () => {
-      const worker = await createInProcessWorker({
+    const stopWorkerRunner = await step("After creating worker", async () => {
+      const workerRunner = createWorkerRunner({
         client,
         processors: createProcessors({
           client,
@@ -57,7 +57,7 @@ await runDoubleRunBenchmark<Record<string, never>>({
           },
         }),
       });
-      return worker.start();
+      return workerRunner.start();
     });
 
     await processStep("After processing 100 jobs", async () => {
@@ -82,7 +82,7 @@ await runDoubleRunBenchmark<Record<string, never>>({
       await dashboard.fetch(new Request("http://localhost/api/chains"));
     });
 
-    await stopWorker();
+    await stopWorkerRunner();
     await notifyAdapter.close();
     await stateAdapter.close();
   },

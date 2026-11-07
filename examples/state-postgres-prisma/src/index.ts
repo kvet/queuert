@@ -5,7 +5,7 @@ import { createPgStateAdapter } from "@queuert/postgres";
 import { acquirePostgres } from "@queuert/testcontainers";
 import {
   createClient,
-  createInProcessWorker,
+  createWorkerRunner,
   createProcessors,
   defineJobTypes,
   withTxHooks,
@@ -41,7 +41,7 @@ const jobTypes = defineJobTypes<{
 // Create state provider for Prisma
 // #region adapter
 const stateProvider = createPrismaPgStateProvider({ prisma: prisma as any });
-const stateAdapter = await createPgStateAdapter({
+const stateAdapter = createPgStateAdapter({
   stateProvider,
   // Prisma v4+ removed implicit type coercion, so $queryRawUnsafe doesn't cast
   // string parameters to UUID, causing "operator does not exist: uuid = text".
@@ -51,16 +51,16 @@ const stateAdapter = await createPgStateAdapter({
 await stateAdapter.migrateToLatest();
 // #endregion
 
-const notifyAdapter = await createInProcessNotifyAdapter();
+const notifyAdapter = createInProcessNotifyAdapter();
 
-const client = await createClient({
+const client = createClient({
   stateAdapter,
   notifyAdapter,
   jobTypes,
 });
 
-// Create and start worker
-const worker = await createInProcessWorker({
+// Create and start worker runner
+const workerRunner = createWorkerRunner({
   client,
   processors: createProcessors({
     client,
@@ -84,7 +84,7 @@ const worker = await createInProcessWorker({
   }),
 });
 
-const stopWorker = await worker.start();
+const stopWorkerRunner = await workerRunner.start();
 
 // Register a new user and queue welcome email atomically
 const chain = await withTxHooks(async (txHooks) =>
@@ -108,7 +108,7 @@ const result = await client.awaitChain(chain, { timeoutMs: 5000 });
 console.log(`Welcome email sent at: ${result.output.sentAt}`);
 
 // Cleanup
-await stopWorker();
+await stopWorkerRunner();
 await notifyAdapter.close();
 await stateAdapter.close();
 await prisma.$disconnect();

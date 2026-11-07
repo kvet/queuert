@@ -19,7 +19,7 @@ import { createPostgresJsStateProvider } from "example-state-postgres-postgres-j
 import postgres from "postgres";
 import {
   createClient,
-  createInProcessWorker,
+  createWorkerRunner,
   createProcessors,
   defineJobTypes,
   withTxHooks,
@@ -90,10 +90,10 @@ await using pg = await acquirePostgres("postgres:18", import.meta.url);
 const sql = postgres(pg.connectionString, { max: 10 });
 
 const stateProvider = createPostgresJsStateProvider({ sql });
-const stateAdapter = await createPgStateAdapter({ stateProvider });
+const stateAdapter = createPgStateAdapter({ stateProvider });
 await stateAdapter.migrateToLatest();
 const notifyProvider = createPostgresJsNotifyProvider({ sql });
-const notifyAdapter = await createPgNotifyAdapter({ notifyProvider });
+const notifyAdapter = createPgNotifyAdapter({ notifyProvider });
 
 // Create schema
 await sql`
@@ -110,13 +110,13 @@ await sql`
   )
 `;
 
-const client = await createClient({
+const client = createClient({
   stateAdapter,
   notifyAdapter,
   jobTypes,
 });
 
-const worker = await createInProcessWorker({
+const workerRunner = createWorkerRunner({
   client,
   processors: createProcessors({
     client,
@@ -325,7 +325,7 @@ const worker = await createInProcessWorker({
   }),
 });
 
-const stopWorker = await worker.start();
+const stopWorkerRunner = await workerRunner.start();
 
 // Scenario 1: User converts and goes through billing cycles
 console.log("\n--- Scenario 1: User Converts Trial to Paid ---");
@@ -399,7 +399,7 @@ assert.equal(sub2.current_cycle, 0);
 assert.equal(Number(sub2.total_charged), 0);
 assert.ok("expiredAt" in result2.output);
 
-await stopWorker();
+await stopWorkerRunner();
 await notifyAdapter.close();
 await stateAdapter.close();
 await sql.end();

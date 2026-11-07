@@ -17,7 +17,7 @@ import { createPostgresJsStateProvider } from "example-state-postgres-postgres-j
 import postgres from "postgres";
 import {
   createClient,
-  createInProcessWorker,
+  createWorkerRunner,
   createProcessors,
   defineJobTypes,
   withTxHooks,
@@ -59,18 +59,18 @@ await using pg = await acquirePostgres("postgres:18", import.meta.url);
 const sql = postgres(pg.connectionString, { max: 10 });
 
 const stateProvider = createPostgresJsStateProvider({ sql });
-const stateAdapter = await createPgStateAdapter({ stateProvider });
+const stateAdapter = createPgStateAdapter({ stateProvider });
 await stateAdapter.migrateToLatest();
 const notifyProvider = createPostgresJsNotifyProvider({ sql });
-const notifyAdapter = await createPgNotifyAdapter({ notifyProvider });
+const notifyAdapter = createPgNotifyAdapter({ notifyProvider });
 
-const client = await createClient({
+const client = createClient({
   stateAdapter,
   notifyAdapter,
   jobTypes,
 });
 
-const worker = await createInProcessWorker({
+const workerRunner = createWorkerRunner({
   client,
   leaseConfig: { durationMs: 600, heartbeatMs: 150 },
   processors: createProcessors({
@@ -132,7 +132,7 @@ const worker = await createInProcessWorker({
   }),
 });
 
-const stopWorker = await worker.start();
+const stopWorkerRunner = await workerRunner.start();
 
 // Scenario 1a: Cooperative timeout - completes in time
 console.log("\n--- Scenario 1a: Cooperative Timeout (Success) ---");
@@ -189,7 +189,7 @@ console.log(`Result: ${JSON.stringify(result3.output)}`);
 assert.ok("completed" in result3.output);
 assert.equal(result3.output.attempt, 1);
 
-await stopWorker();
+await stopWorkerRunner();
 await notifyAdapter.close();
 await stateAdapter.close();
 await sql.end();

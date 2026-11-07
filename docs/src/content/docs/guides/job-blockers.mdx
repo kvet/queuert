@@ -66,7 +66,7 @@ await withTxHooks(async (txHooks) =>
 );
 
 // Access completed blockers in worker
-const worker = await createInProcessWorker({
+const workerRunner = createWorkerRunner({
   client,
   processors: createProcessors({
     client,
@@ -84,7 +84,7 @@ const worker = await createInProcessWorker({
   }),
 });
 
-const stop = await worker.start();
+const stop = await workerRunner.start();
 ```
 
 ## Passing Blockers by ID

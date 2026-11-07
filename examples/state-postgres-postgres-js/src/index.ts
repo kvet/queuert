@@ -3,7 +3,7 @@ import { acquirePostgres } from "@queuert/testcontainers";
 import postgres from "postgres";
 import {
   createClient,
-  createInProcessWorker,
+  createWorkerRunner,
   createProcessors,
   defineJobTypes,
   withTxHooks,
@@ -38,19 +38,19 @@ const jobTypes = defineJobTypes<{
 // Create providers and adapters
 // #region adapter
 const stateProvider = createPostgresJsStateProvider({ sql });
-const stateAdapter = await createPgStateAdapter({ stateProvider });
+const stateAdapter = createPgStateAdapter({ stateProvider });
 await stateAdapter.migrateToLatest();
 // #endregion
 
-const notifyAdapter = await createInProcessNotifyAdapter();
+const notifyAdapter = createInProcessNotifyAdapter();
 
-const client = await createClient({
+const client = createClient({
   stateAdapter,
   notifyAdapter,
   jobTypes,
 });
 
-const worker = await createInProcessWorker({
+const workerRunner = createWorkerRunner({
   client,
   processors: createProcessors({
     client,
@@ -77,7 +77,7 @@ const worker = await createInProcessWorker({
   }),
 });
 
-const stopWorker = await worker.start();
+const stopWorkerRunner = await workerRunner.start();
 
 // Register a new user and queue welcome email atomically
 const chain = await withTxHooks(async (txHooks) =>
@@ -101,7 +101,7 @@ const result = await client.awaitChain(chain, { timeoutMs: 5000 });
 console.log(`Welcome email sent at: ${result.output.sentAt}`);
 
 // Cleanup
-await stopWorker();
+await stopWorkerRunner();
 await notifyAdapter.close();
 await stateAdapter.close();
 await sql.end();

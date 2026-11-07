@@ -3,7 +3,7 @@ import { createLatch } from "@queuert/helpers";
 import type { NotifyAdapter } from "./notify-adapter.ts";
 
 /** Creates an in-memory notify adapter for single-process deployments, delivering notifications through in-process callbacks. */
-export const createInProcessNotifyAdapter = async (): Promise<NotifyAdapter> => {
+export const createInProcessNotifyAdapter = (): NotifyAdapter => {
   const jobScheduledListeners = new Map<string, Set<(typeName: string) => void>>();
   const chainCompletedListeners = new Map<string, Set<() => void>>();
   const jobAttemptLostListeners = new Map<string, Set<() => void>>();

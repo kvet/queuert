@@ -35,7 +35,7 @@ const chain = await withTxHooks(async (txHooks) =>
 );
 
 // The worker handles the timeout case (auto-reject) and processes approved requests
-const worker = await createInProcessWorker({
+const workerRunner = createWorkerRunner({
   client,
   processors: createProcessors({
     client,
@@ -63,7 +63,7 @@ const worker = await createInProcessWorker({
   }),
 });
 
-const stop = await worker.start();
+const stop = await workerRunner.start();
 
 // The job can be completed early without a worker (e.g., via API call)
 await withTxHooks(async (txHooks) =>

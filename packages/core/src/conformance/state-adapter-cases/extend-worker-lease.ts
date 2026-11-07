@@ -75,7 +75,7 @@ export const extendWorkerLeaseGroup: ConformanceGroup<StateConformanceFixture> =
       },
     },
     {
-      name: "returns undefined for a stale run of the worker",
+      name: "returns undefined for a stale registration of the worker",
       run: async ({ stateAdapter }, expect) => {
         const workerId = stateAdapter.config.generateWorkerId();
         const staleRun = await stateAdapter.startWorker({

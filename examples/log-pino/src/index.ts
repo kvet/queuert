@@ -4,7 +4,7 @@ import {
   createClient,
   createInProcessNotifyAdapter,
   createInProcessStateAdapter,
-  createInProcessWorker,
+  createWorkerRunner,
   createProcessors,
   defineJobTypes,
   withTxHooks,
@@ -41,12 +41,12 @@ const jobTypes = defineJobTypes<{
 }>();
 
 // Create adapters and queuert client
-const stateAdapter = await createInProcessStateAdapter();
-const notifyAdapter = await createInProcessNotifyAdapter();
+const stateAdapter = createInProcessStateAdapter();
+const notifyAdapter = createInProcessNotifyAdapter();
 // #region client
 const log = createPinoLog(logger);
 
-const client = await createClient({
+const client = createClient({
   stateAdapter,
   notifyAdapter,
   log,
@@ -71,8 +71,8 @@ const loggerInjectionMiddleware: AttemptMiddleware<any, { log: Logger }> = {
     }),
 };
 
-// Create and start the worker with the middleware
-const worker = await createInProcessWorker({
+// Create and start the worker runner with the middleware
+const workerRunner = createWorkerRunner({
   client,
   processors: createProcessors({
     client,
@@ -119,8 +119,8 @@ const worker = await createInProcessWorker({
   }),
 });
 
-// Start worker
-const stopWorker = await worker.start();
+// Start worker runner
+const stopWorkerRunner = await workerRunner.start();
 
 // Run successful job
 logger.info("--- Running successful job ---");
@@ -151,6 +151,6 @@ const failThenSucceedChain = await withTxHooks(async (txHooks) =>
 await client.awaitChain(failThenSucceedChain, { timeoutMs: 5000 });
 
 // Cleanup
-await stopWorker();
+await stopWorkerRunner();
 await notifyAdapter.close();
 await stateAdapter.close();

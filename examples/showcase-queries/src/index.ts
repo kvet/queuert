@@ -23,7 +23,7 @@ import { createPostgresJsStateProvider } from "example-state-postgres-postgres-j
 import postgres from "postgres";
 import {
   createClient,
-  createInProcessWorker,
+  createWorkerRunner,
   createProcessors,
   defineJobTypes,
   withTxHooks,
@@ -69,18 +69,18 @@ await using pg = await acquirePostgres("postgres:18", import.meta.url);
 const sql = postgres(pg.connectionString, { max: 10 });
 
 const stateProvider = createPostgresJsStateProvider({ sql });
-const stateAdapter = await createPgStateAdapter({ stateProvider });
+const stateAdapter = createPgStateAdapter({ stateProvider });
 await stateAdapter.migrateToLatest();
 const notifyProvider = createPostgresJsNotifyProvider({ sql });
-const notifyAdapter = await createPgNotifyAdapter({ notifyProvider });
+const notifyAdapter = createPgNotifyAdapter({ notifyProvider });
 
-const client = await createClient({
+const client = createClient({
   stateAdapter,
   notifyAdapter,
   jobTypes,
 });
 
-const worker = await createInProcessWorker({
+const workerRunner = createWorkerRunner({
   client,
   processors: createProcessors({
     client,
@@ -151,7 +151,7 @@ const worker = await createInProcessWorker({
   }),
 });
 
-const stopWorker = await worker.start();
+const stopWorkerRunner = await workerRunner.start();
 
 // Create test data: an order workflow with blockers + some notifications
 const [validateChain, _stockChain, orderChain] = await withTxHooks(async (txHooks) =>
@@ -394,7 +394,7 @@ console.log(`Jobs running under the worker: ${runningJobCount}`);
 assert.equal(runningJobCount, 0);
 assert.equal(runningJobs.items.length, 0);
 
-await stopWorker();
+await stopWorkerRunner();
 await notifyAdapter.close();
 await stateAdapter.close();
 await sql.end();

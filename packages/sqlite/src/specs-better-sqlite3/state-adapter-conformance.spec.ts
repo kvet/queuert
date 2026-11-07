@@ -6,12 +6,12 @@ import {
   type StateAdapter,
   createClient,
   createInProcessNotifyAdapter,
-  createInProcessWorker,
+  createWorkerRunner,
   createProcessors,
   defineJobTypes,
   withTxHooks,
 } from "queuert";
-import { stateAdapterConformanceTestSuite, withWorkers } from "queuert/testing";
+import { stateAdapterConformanceTestSuite, withWorkerRunners } from "queuert/testing";
 import { describe, expectTypeOf, it, vi } from "vitest";
 
 import { createSqliteStateAdapter } from "../state-adapter/state-adapter.sqlite.ts";
@@ -48,7 +48,7 @@ describe("SQLite State Adapter Conformance", () => {
     stateAdapter: [
       async ({ db }, use) => {
         const stateProvider = createBetterSqlite3Provider({ db });
-        const adapter = await createSqliteStateAdapter({ stateProvider, tablePrefix });
+        const adapter = createSqliteStateAdapter({ stateProvider, tablePrefix });
         await adapter.migrateToLatest();
         return use(adapter as unknown as StateAdapter<{ $test: true }, string, string>);
       },
@@ -70,7 +70,7 @@ const typeInferenceIt = extendWithStateSqlite(it);
 typeInferenceIt("infers custom ID types through the full stack", async ({ db }) => {
   const lock = createAsyncRwLock();
   const stateProvider = createBetterSqlite3Provider({ db, lock });
-  const stateAdapter = await createSqliteStateAdapter({
+  const stateAdapter = createSqliteStateAdapter({
     stateProvider,
     tablePrefix: "myapp_",
     jobIdType: "TEXT",
@@ -79,7 +79,7 @@ typeInferenceIt("infers custom ID types through the full stack", async ({ db }) 
 
   await stateAdapter.migrateToLatest();
 
-  const notifyAdapter = await createInProcessNotifyAdapter();
+  const notifyAdapter = createInProcessNotifyAdapter();
   const log = vi.fn();
   const jobTypes = defineJobTypes<{
     test: {
@@ -89,7 +89,7 @@ typeInferenceIt("infers custom ID types through the full stack", async ({ db }) 
     };
   }>();
 
-  const client = await createClient({
+  const client = createClient({
     stateAdapter,
     notifyAdapter,
     log,
@@ -109,7 +109,7 @@ typeInferenceIt("infers custom ID types through the full stack", async ({ db }) 
     }
   };
 
-  const worker = await createInProcessWorker({
+  const workerRunner = createWorkerRunner({
     client,
     processors: createProcessors({
       client,
@@ -146,7 +146,7 @@ typeInferenceIt("infers custom ID types through the full stack", async ({ db }) 
   );
   expectTypeOf(chain.id).toEqualTypeOf<`job.${UUID}`>();
 
-  await withWorkers([await worker.start()], async () => {
+  await withWorkerRunners([await workerRunner.start()], async () => {
     await client.awaitChain(chain, { timeoutMs: 1000 });
   });
 });

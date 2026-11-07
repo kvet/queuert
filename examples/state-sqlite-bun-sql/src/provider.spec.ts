@@ -13,7 +13,7 @@ test("state-sqlite-bun-sql provider passes state adapter conformance", async () 
 
     const lock = createAsyncRwLock();
     const stateProvider = createBunSqlSqliteStateProvider({ sql, lock });
-    const adapter = await createSqliteStateAdapter({ stateProvider });
+    const adapter = createSqliteStateAdapter({ stateProvider });
     await adapter.migrateToLatest();
 
     return {

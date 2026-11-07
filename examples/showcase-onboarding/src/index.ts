@@ -10,7 +10,7 @@ import { Pool } from "pg";
 import {
   createClient,
   createInProcessNotifyAdapter,
-  createInProcessWorker,
+  createWorkerRunner,
   createProcessors,
   defineJobTypes,
   withTxHooks,
@@ -30,11 +30,11 @@ await db.execute(sql`
   CREATE TABLE users (id UUID PRIMARY KEY DEFAULT gen_random_uuid(), name TEXT NOT NULL, email TEXT NOT NULL);
 `);
 
-const stateAdapter = await createPgStateAdapter({
+const stateAdapter = createPgStateAdapter({
   stateProvider: createDrizzlePgStateProvider({ db }),
 });
 await stateAdapter.migrateToLatest();
-const notifyAdapter = await createInProcessNotifyAdapter();
+const notifyAdapter = createInProcessNotifyAdapter();
 
 const provisionAccount = async (userId: string): Promise<string> => {
   console.log(`Provisioning an account for user ${userId}`);
@@ -64,11 +64,11 @@ const jobTypes = defineJobTypes<{
     output: { syncedAt: string };
   };
 }>();
-const client = await createClient({ stateAdapter, notifyAdapter, jobTypes });
+const client = createClient({ stateAdapter, notifyAdapter, jobTypes });
 // #endregion
 
 // #region process
-const worker = await createInProcessWorker({
+const workerRunner = createWorkerRunner({
   client,
   processors: createProcessors({
     client,
@@ -124,7 +124,7 @@ const worker = await createInProcessWorker({
   }),
 });
 
-const stop = await worker.start();
+const stop = await workerRunner.start();
 // #endregion
 
 // #region create-chain

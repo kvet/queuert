@@ -4,9 +4,9 @@ import { type TestAPI, expect, expectTypeOf } from "vitest";
 import { createClient } from "../client.ts";
 import type { Chain } from "../entities/chain.ts";
 import { BlockerLimitExceededError, ChainTypeMismatchError } from "../errors.ts";
-import { createInProcessWorker } from "../in-process-worker.ts";
 import { createProcessors } from "../job-type-processors/create-job-type-processors.ts";
 import { defineJobTypes } from "../job-types/define-job-types.ts";
+import { createWorkerRunner } from "../worker-runner.ts";
 import type { TestSuiteContext } from "./spec-context.spec-helper.ts";
 
 export const blockerChainsTestSuite = ({ it }: { it: TestAPI<TestSuiteContext> }): void => {
@@ -19,7 +19,7 @@ export const blockerChainsTestSuite = ({ it }: { it: TestAPI<TestSuiteContext> }
     stateAdapter,
     notifyAdapter,
     withTransaction,
-    withWorkers,
+    withWorkerRunners,
     observabilityAdapter,
     log,
   }) => {
@@ -38,7 +38,7 @@ export const blockerChainsTestSuite = ({ it }: { it: TestAPI<TestSuiteContext> }
       };
     }>();
 
-    const client = await createClient({
+    const client = createClient({
       stateAdapter,
       notifyAdapter,
       observabilityAdapter,
@@ -47,7 +47,7 @@ export const blockerChainsTestSuite = ({ it }: { it: TestAPI<TestSuiteContext> }
     });
     let blockerChainId: string;
 
-    const worker = await createInProcessWorker({
+    const workerRunner = createWorkerRunner({
       client,
       concurrency: 1,
       processors: createProcessors({
@@ -123,7 +123,7 @@ export const blockerChainsTestSuite = ({ it }: { it: TestAPI<TestSuiteContext> }
       return chain;
     });
 
-    await withWorkers([await worker.start()], async () => {
+    await withWorkerRunners([await workerRunner.start()], async () => {
       const succeededChain = await client.awaitChain(chain, completionOptions);
 
       expect(succeededChain.output).toEqual({ finalResult: 2 });
@@ -134,7 +134,7 @@ export const blockerChainsTestSuite = ({ it }: { it: TestAPI<TestSuiteContext> }
     stateAdapter,
     notifyAdapter,
     withTransaction,
-    withWorkers,
+    withWorkerRunners,
     observabilityAdapter,
     log,
   }) => {
@@ -152,14 +152,14 @@ export const blockerChainsTestSuite = ({ it }: { it: TestAPI<TestSuiteContext> }
       };
     }>();
 
-    const client = await createClient({
+    const client = createClient({
       stateAdapter,
       notifyAdapter,
       observabilityAdapter,
       log,
       jobTypes,
     });
-    const worker = await createInProcessWorker({
+    const workerRunner = createWorkerRunner({
       client,
       concurrency: 1,
       processors: createProcessors({
@@ -223,7 +223,7 @@ export const blockerChainsTestSuite = ({ it }: { it: TestAPI<TestSuiteContext> }
       }),
     );
 
-    await withWorkers([await worker.start()], async () => {
+    await withWorkerRunners([await workerRunner.start()], async () => {
       const succeededChain = await client.awaitChain(chain, completionOptions);
 
       expect(succeededChain.output).toEqual({
@@ -253,7 +253,7 @@ export const blockerChainsTestSuite = ({ it }: { it: TestAPI<TestSuiteContext> }
       };
     }>();
 
-    const client = await createClient({
+    const client = createClient({
       stateAdapter,
       notifyAdapter,
       observabilityAdapter,
@@ -300,7 +300,7 @@ export const blockerChainsTestSuite = ({ it }: { it: TestAPI<TestSuiteContext> }
     stateAdapter,
     notifyAdapter,
     withTransaction,
-    withWorkers,
+    withWorkerRunners,
     observabilityAdapter,
     log,
   }) => {
@@ -323,7 +323,7 @@ export const blockerChainsTestSuite = ({ it }: { it: TestAPI<TestSuiteContext> }
       };
     }>();
 
-    const client = await createClient({
+    const client = createClient({
       stateAdapter,
       notifyAdapter,
       observabilityAdapter,
@@ -340,7 +340,7 @@ export const blockerChainsTestSuite = ({ it }: { it: TestAPI<TestSuiteContext> }
       }),
     );
 
-    const worker = await createInProcessWorker({
+    const workerRunner = createWorkerRunner({
       client,
       concurrency: 1,
       processors: createProcessors({
@@ -401,7 +401,7 @@ export const blockerChainsTestSuite = ({ it }: { it: TestAPI<TestSuiteContext> }
       }),
     );
 
-    await withWorkers([await worker.start()], async () => {
+    await withWorkerRunners([await workerRunner.start()], async () => {
       await client.awaitChain(chain, completionOptions);
     });
   });
@@ -410,7 +410,7 @@ export const blockerChainsTestSuite = ({ it }: { it: TestAPI<TestSuiteContext> }
     stateAdapter,
     notifyAdapter,
     withTransaction,
-    withWorkers,
+    withWorkerRunners,
     observabilityAdapter,
     log,
   }) => {
@@ -427,7 +427,7 @@ export const blockerChainsTestSuite = ({ it }: { it: TestAPI<TestSuiteContext> }
       };
     }>();
 
-    const client = await createClient({
+    const client = createClient({
       stateAdapter,
       notifyAdapter,
       observabilityAdapter,
@@ -436,7 +436,7 @@ export const blockerChainsTestSuite = ({ it }: { it: TestAPI<TestSuiteContext> }
     });
     const childChains: Chain<string, "inner", null, null>[] = [];
 
-    const worker = await createInProcessWorker({
+    const workerRunner = createWorkerRunner({
       client,
       concurrency: 1,
       processors: createProcessors({
@@ -489,7 +489,7 @@ export const blockerChainsTestSuite = ({ it }: { it: TestAPI<TestSuiteContext> }
       }),
     );
 
-    await withWorkers([await worker.start()], async () => {
+    await withWorkerRunners([await workerRunner.start()], async () => {
       await client.awaitChain(chain, completionOptions);
 
       const succeededChildChains = await Promise.all(
@@ -504,7 +504,7 @@ export const blockerChainsTestSuite = ({ it }: { it: TestAPI<TestSuiteContext> }
     stateAdapter,
     notifyAdapter,
     withTransaction,
-    withWorkers,
+    withWorkerRunners,
     observabilityAdapter,
     log,
   }) => {
@@ -520,14 +520,14 @@ export const blockerChainsTestSuite = ({ it }: { it: TestAPI<TestSuiteContext> }
       };
     }>();
 
-    const client = await createClient({
+    const client = createClient({
       stateAdapter,
       notifyAdapter,
       observabilityAdapter,
       log,
       jobTypes,
     });
-    const worker1 = await createInProcessWorker({
+    const workerRunner1 = createWorkerRunner({
       client,
       concurrency: 1,
       pollIntervalMs: 100,
@@ -552,7 +552,7 @@ export const blockerChainsTestSuite = ({ it }: { it: TestAPI<TestSuiteContext> }
         },
       }),
     });
-    const worker2 = await createInProcessWorker({
+    const workerRunner2 = createWorkerRunner({
       client,
       concurrency: 1,
       pollIntervalMs: 100,
@@ -584,18 +584,21 @@ export const blockerChainsTestSuite = ({ it }: { it: TestAPI<TestSuiteContext> }
       }),
     );
 
-    await withWorkers([await worker1.start(), await worker2.start()], async () => {
-      const finishedChain = await client.awaitChain(chain, completionOptions);
+    await withWorkerRunners(
+      [await workerRunner1.start(), await workerRunner2.start()],
+      async () => {
+        const finishedChain = await client.awaitChain(chain, completionOptions);
 
-      expect(finishedChain.output).toEqual({ result: 3 });
-    });
+        expect(finishedChain.output).toEqual({ result: 3 });
+      },
+    );
   });
 
   it("handles multiple blocker chains", async ({
     stateAdapter,
     notifyAdapter,
     withTransaction,
-    withWorkers,
+    withWorkerRunners,
     observabilityAdapter,
     log,
   }) => {
@@ -613,14 +616,14 @@ export const blockerChainsTestSuite = ({ it }: { it: TestAPI<TestSuiteContext> }
       };
     }>();
 
-    const client = await createClient({
+    const client = createClient({
       stateAdapter,
       notifyAdapter,
       observabilityAdapter,
       log,
       jobTypes,
     });
-    const worker = await createInProcessWorker({
+    const workerRunner = createWorkerRunner({
       client,
       concurrency: 1,
       processors: createProcessors({
@@ -669,7 +672,7 @@ export const blockerChainsTestSuite = ({ it }: { it: TestAPI<TestSuiteContext> }
       });
     });
 
-    await withWorkers([await worker.start()], async () => {
+    await withWorkerRunners([await workerRunner.start()], async () => {
       const succeededChain = await client.awaitChain(chain, completionOptions);
 
       expect(succeededChain.output).toEqual({
@@ -682,7 +685,7 @@ export const blockerChainsTestSuite = ({ it }: { it: TestAPI<TestSuiteContext> }
     stateAdapter,
     notifyAdapter,
     withTransaction,
-    withWorkers,
+    withWorkerRunners,
     observabilityAdapter,
     log,
   }) => {
@@ -704,14 +707,14 @@ export const blockerChainsTestSuite = ({ it }: { it: TestAPI<TestSuiteContext> }
       };
     }>();
 
-    const client = await createClient({
+    const client = createClient({
       stateAdapter,
       notifyAdapter,
       observabilityAdapter,
       log,
       jobTypes,
     });
-    const worker = await createInProcessWorker({
+    const workerRunner = createWorkerRunner({
       client,
       concurrency: 1,
       processors: createProcessors({
@@ -771,7 +774,7 @@ export const blockerChainsTestSuite = ({ it }: { it: TestAPI<TestSuiteContext> }
       }),
     );
 
-    await withWorkers([await worker.start()], async () => {
+    await withWorkerRunners([await workerRunner.start()], async () => {
       const succeededChain = await client.awaitChain(chain, completionOptions);
 
       expect(succeededChain.output).toEqual({ finalResult: 50 });
@@ -782,7 +785,7 @@ export const blockerChainsTestSuite = ({ it }: { it: TestAPI<TestSuiteContext> }
     stateAdapter,
     notifyAdapter,
     withTransaction,
-    withWorkers,
+    withWorkerRunners,
     observabilityAdapter,
     log,
   }) => {
@@ -809,14 +812,14 @@ export const blockerChainsTestSuite = ({ it }: { it: TestAPI<TestSuiteContext> }
       };
     }>();
 
-    const client = await createClient({
+    const client = createClient({
       stateAdapter,
       notifyAdapter,
       observabilityAdapter,
       log,
       jobTypes,
     });
-    const worker = await createInProcessWorker({
+    const workerRunner = createWorkerRunner({
       client,
       concurrency: 1,
       processors: createProcessors({
@@ -930,7 +933,7 @@ export const blockerChainsTestSuite = ({ it }: { it: TestAPI<TestSuiteContext> }
       }),
     );
 
-    await withWorkers([await worker.start()], async () => {
+    await withWorkerRunners([await workerRunner.start()], async () => {
       const succeededChain = await client.awaitChain(chain, completionOptions);
 
       expect(succeededChain.output).toEqual({ sum: 11 });
@@ -941,7 +944,7 @@ export const blockerChainsTestSuite = ({ it }: { it: TestAPI<TestSuiteContext> }
     stateAdapter,
     notifyAdapter,
     withTransaction,
-    withWorkers,
+    withWorkerRunners,
     observabilityAdapter,
     log,
   }) => {
@@ -964,14 +967,14 @@ export const blockerChainsTestSuite = ({ it }: { it: TestAPI<TestSuiteContext> }
       };
     }>();
 
-    const client = await createClient({
+    const client = createClient({
       stateAdapter,
       notifyAdapter,
       observabilityAdapter,
       log,
       jobTypes,
     });
-    const worker = await createInProcessWorker({
+    const workerRunner = createWorkerRunner({
       client,
       concurrency: 1,
       processors: createProcessors({
@@ -1061,7 +1064,7 @@ export const blockerChainsTestSuite = ({ it }: { it: TestAPI<TestSuiteContext> }
       ),
     ).rejects.toThrow(ChainTypeMismatchError);
 
-    await withWorkers([await worker.start()], async () => {
+    await withWorkerRunners([await workerRunner.start()], async () => {
       const succeededChain = await client.awaitChain(chain, completionOptions);
 
       expect(succeededChain.output).toEqual({ sum: 12 });
@@ -1072,7 +1075,7 @@ export const blockerChainsTestSuite = ({ it }: { it: TestAPI<TestSuiteContext> }
     stateAdapter,
     notifyAdapter,
     withTransaction,
-    withWorkers,
+    withWorkerRunners,
     observabilityAdapter,
     log,
   }) => {
@@ -1090,14 +1093,14 @@ export const blockerChainsTestSuite = ({ it }: { it: TestAPI<TestSuiteContext> }
       };
     }>();
 
-    const client = await createClient({
+    const client = createClient({
       stateAdapter,
       notifyAdapter,
       observabilityAdapter,
       log,
       jobTypes,
     });
-    const worker = await createInProcessWorker({
+    const workerRunner = createWorkerRunner({
       client,
       concurrency: 1,
       processors: createProcessors({
@@ -1164,7 +1167,7 @@ export const blockerChainsTestSuite = ({ it }: { it: TestAPI<TestSuiteContext> }
       });
     });
 
-    await withWorkers([await worker.start()], async () => {
+    await withWorkerRunners([await workerRunner.start()], async () => {
       const succeededChain = await client.awaitChain(chain, completionOptions);
 
       expect(succeededChain.output).toEqual({
@@ -1177,7 +1180,7 @@ export const blockerChainsTestSuite = ({ it }: { it: TestAPI<TestSuiteContext> }
     stateAdapter,
     notifyAdapter,
     withTransaction,
-    withWorkers,
+    withWorkerRunners,
     observabilityAdapter,
     log,
   }) => {
@@ -1195,14 +1198,14 @@ export const blockerChainsTestSuite = ({ it }: { it: TestAPI<TestSuiteContext> }
       };
     }>();
 
-    const client = await createClient({
+    const client = createClient({
       stateAdapter,
       notifyAdapter,
       observabilityAdapter,
       log,
       jobTypes,
     });
-    const worker = await createInProcessWorker({
+    const workerRunner = createWorkerRunner({
       client,
       concurrency: 2,
       processors: createProcessors({
@@ -1261,7 +1264,7 @@ export const blockerChainsTestSuite = ({ it }: { it: TestAPI<TestSuiteContext> }
     expect(jobA!.status).toBe("blocked");
     expect(jobB!.status).toBe("blocked");
 
-    await withWorkers([await worker.start()], async () => {
+    await withWorkerRunners([await workerRunner.start()], async () => {
       const [resultA, resultB] = await Promise.all([
         client.awaitChain(mainA, completionOptions),
         client.awaitChain(mainB, completionOptions),
@@ -1277,7 +1280,7 @@ export const blockerChainsTestSuite = ({ it }: { it: TestAPI<TestSuiteContext> }
     stateAdapter,
     notifyAdapter,
     withTransaction,
-    withWorkers,
+    withWorkerRunners,
     observabilityAdapter,
     log,
     skip,
@@ -1300,7 +1303,7 @@ export const blockerChainsTestSuite = ({ it }: { it: TestAPI<TestSuiteContext> }
       };
     }>();
 
-    const client = await createClient({
+    const client = createClient({
       stateAdapter,
       notifyAdapter,
       observabilityAdapter,
@@ -1312,7 +1315,7 @@ export const blockerChainsTestSuite = ({ it }: { it: TestAPI<TestSuiteContext> }
     const allBlockersReady = Promise.withResolvers<void>();
     const releaseBlockers = Promise.withResolvers<void>();
 
-    const worker = await createInProcessWorker({
+    const workerRunner = createWorkerRunner({
       client,
       concurrency: blockerCount + mainCount,
       processors: createProcessors({
@@ -1369,7 +1372,7 @@ export const blockerChainsTestSuite = ({ it }: { it: TestAPI<TestSuiteContext> }
       expect(job!.status).toBe("blocked");
     }
 
-    await withWorkers([await worker.start()], async () => {
+    await withWorkerRunners([await workerRunner.start()], async () => {
       await allBlockersReady.promise;
       releaseBlockers.resolve();
 
@@ -1387,7 +1390,7 @@ export const blockerChainsTestSuite = ({ it }: { it: TestAPI<TestSuiteContext> }
     stateAdapter,
     notifyAdapter,
     withTransaction,
-    withWorkers,
+    withWorkerRunners,
     observabilityAdapter,
     log,
   }) => {
@@ -1405,7 +1408,7 @@ export const blockerChainsTestSuite = ({ it }: { it: TestAPI<TestSuiteContext> }
       };
     }>();
 
-    const client = await createClient({
+    const client = createClient({
       stateAdapter,
       notifyAdapter,
       observabilityAdapter,
@@ -1413,7 +1416,7 @@ export const blockerChainsTestSuite = ({ it }: { it: TestAPI<TestSuiteContext> }
       jobTypes,
     });
 
-    const worker = await createInProcessWorker({
+    const workerRunner = createWorkerRunner({
       client,
       concurrency: 2,
       processors: createProcessors({
@@ -1459,7 +1462,7 @@ export const blockerChainsTestSuite = ({ it }: { it: TestAPI<TestSuiteContext> }
     expect(mainJob).toBeDefined();
     expect(mainJob!.status).toBe("blocked");
 
-    await withWorkers([await worker.start()], async () => {
+    await withWorkerRunners([await workerRunner.start()], async () => {
       const result = await client.awaitChain(mainChain, completionOptions);
       expect(result.output).toEqual({ done: true });
     });
@@ -1469,7 +1472,7 @@ export const blockerChainsTestSuite = ({ it }: { it: TestAPI<TestSuiteContext> }
     stateAdapter,
     notifyAdapter,
     withTransaction,
-    withWorkers,
+    withWorkerRunners,
     observabilityAdapter,
     log,
   }) => {
@@ -1487,7 +1490,7 @@ export const blockerChainsTestSuite = ({ it }: { it: TestAPI<TestSuiteContext> }
       };
     }>();
 
-    const client = await createClient({
+    const client = createClient({
       stateAdapter,
       notifyAdapter,
       observabilityAdapter,
@@ -1495,7 +1498,7 @@ export const blockerChainsTestSuite = ({ it }: { it: TestAPI<TestSuiteContext> }
       jobTypes,
     });
 
-    const worker = await createInProcessWorker({
+    const workerRunner = createWorkerRunner({
       client,
       concurrency: 2,
       processors: createProcessors({
@@ -1547,7 +1550,7 @@ export const blockerChainsTestSuite = ({ it }: { it: TestAPI<TestSuiteContext> }
     expect((await client.getJob({ id: mainA.id }))!.status).toBe("blocked");
     expect((await client.getJob({ id: mainB.id }))!.status).toBe("blocked");
 
-    await withWorkers([await worker.start()], async () => {
+    await withWorkerRunners([await workerRunner.start()], async () => {
       const [resultA, resultB] = await Promise.all([
         client.awaitChain(mainA, completionOptions),
         client.awaitChain(mainB, completionOptions),
@@ -1561,7 +1564,7 @@ export const blockerChainsTestSuite = ({ it }: { it: TestAPI<TestSuiteContext> }
     stateAdapter,
     notifyAdapter,
     withTransaction,
-    withWorkers,
+    withWorkerRunners,
     observabilityAdapter,
     log,
   }) => {
@@ -1579,7 +1582,7 @@ export const blockerChainsTestSuite = ({ it }: { it: TestAPI<TestSuiteContext> }
       };
     }>();
 
-    const client = await createClient({
+    const client = createClient({
       stateAdapter,
       notifyAdapter,
       observabilityAdapter,
@@ -1610,7 +1613,7 @@ export const blockerChainsTestSuite = ({ it }: { it: TestAPI<TestSuiteContext> }
     expect(mainAtCreation).toBeDefined();
     const creationScheduledAt = mainAtCreation!.scheduledAt.getTime();
 
-    const worker = await createInProcessWorker({
+    const workerRunner = createWorkerRunner({
       client,
       concurrency: 1,
       processors: createProcessors({
@@ -1636,7 +1639,7 @@ export const blockerChainsTestSuite = ({ it }: { it: TestAPI<TestSuiteContext> }
       }),
     });
 
-    await withWorkers([await worker.start()], async () => {
+    await withWorkerRunners([await workerRunner.start()], async () => {
       await blockerHeld.promise;
       await sleep(10);
       releaseBlocker.resolve();

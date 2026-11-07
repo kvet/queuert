@@ -8,7 +8,7 @@ import type { PgNotifyProvider } from "../notify-provider/notify-provider.pg.ts"
  *
  * @param options - PostgreSQL notify adapter configuration.
  */
-export const createPgNotifyAdapter = async ({
+export const createPgNotifyAdapter = ({
   notifyProvider,
   channelPrefix = "queuert",
 }: {
@@ -16,7 +16,7 @@ export const createPgNotifyAdapter = async ({
   notifyProvider: PgNotifyProvider;
   /** Prefix for all LISTEN/NOTIFY channel names. @defaultValue `"queuert"` */
   channelPrefix?: string;
-}): Promise<NotifyAdapter> => {
+}): NotifyAdapter => {
   const jobScheduledChannel = `${channelPrefix}_sched`;
   const chainCompletedChannel = `${channelPrefix}_chainc`;
   const attemptLostChannel = `${channelPrefix}_atls`;

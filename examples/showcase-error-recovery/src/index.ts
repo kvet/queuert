@@ -20,7 +20,7 @@ import { createPostgresJsStateProvider } from "example-state-postgres-postgres-j
 import postgres from "postgres";
 import {
   createClient,
-  createInProcessWorker,
+  createWorkerRunner,
   createProcessors,
   defineJobTypes,
   withTxHooks,
@@ -89,10 +89,10 @@ await using pg = await acquirePostgres("postgres:18", import.meta.url);
 const sql = postgres(pg.connectionString, { max: 10 });
 
 const stateProvider = createPostgresJsStateProvider({ sql });
-const stateAdapter = await createPgStateAdapter({ stateProvider });
+const stateAdapter = createPgStateAdapter({ stateProvider });
 await stateAdapter.migrateToLatest();
 const notifyProvider = createPostgresJsNotifyProvider({ sql });
-const notifyAdapter = await createPgNotifyAdapter({ notifyProvider });
+const notifyAdapter = createPgNotifyAdapter({ notifyProvider });
 
 await sql`
   CREATE TABLE IF NOT EXISTS accounts (
@@ -106,13 +106,13 @@ await sql`
 await sql`INSERT INTO accounts (name, balance) VALUES ('Alice', 100)`;
 await sql`INSERT INTO accounts (name, balance) VALUES ('Bob', 50)`;
 
-const client = await createClient({
+const client = createClient({
   stateAdapter,
   notifyAdapter,
   jobTypes,
 });
 
-const worker = await createInProcessWorker({
+const workerRunner = createWorkerRunner({
   client,
   processors: createProcessors({
     client,
@@ -234,7 +234,7 @@ const worker = await createInProcessWorker({
   }),
 });
 
-const stopWorker = await worker.start();
+const stopWorkerRunner = await workerRunner.start();
 
 // Scenario 1: Constraint violation
 console.log("\n--- Scenario 1: Constraint Violation ---");
@@ -358,7 +358,7 @@ const flakyResult = await client.awaitChain(flakyChain, { timeoutMs: 5000 });
 console.log(`Completed on attempt ${flakyResult.output.attempt}`);
 assert.equal(flakyResult.output.attempt, 3);
 
-await stopWorker();
+await stopWorkerRunner();
 await notifyAdapter.close();
 await stateAdapter.close();
 await sql.end();

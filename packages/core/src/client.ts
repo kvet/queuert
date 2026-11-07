@@ -67,7 +67,7 @@ import { normalizeTxCtx, requireTxCtx, requireTxHooks } from "./state-adapter/tx
 import type { TxHooks } from "./tx-hooks/tx-hooks.ts";
 
 /**
- * @internal Used by `createInProcessWorker` and `createDashboard` to access
+ * @internal Used by `createWorkerRunner` and `createDashboard` to access
  * client internals. Not part of the public API.
  */
 export const helpersSymbol: unique symbol = Symbol("queuert.helpers");
@@ -679,7 +679,7 @@ const assertChainTypeName = (
  *
  * @param options - Client configuration.
  */
-export const createClient = async <
+export const createClient = <
   const TJobTypes extends JobTypes<any> | readonly [JobTypes<any>, ...JobTypes<any>[]],
   TStateAdapter extends StateAdapter<any, any, any>,
 >({
@@ -704,7 +704,7 @@ export const createClient = async <
     : TJobTypes;
   /** Optional structured log function. */
   log?: Log;
-}): Promise<Client<JobTypesDefinitions<TJobTypes>, TStateAdapter>> => {
+}): Client<JobTypesDefinitions<TJobTypes>, TStateAdapter> => {
   type TJobTypeDefinitions = JobTypesDefinitions<TJobTypes>;
   type TJobId = GetStateAdapterJobId<TStateAdapter>;
   type TWorkerId = GetStateAdapterWorkerId<TStateAdapter>;

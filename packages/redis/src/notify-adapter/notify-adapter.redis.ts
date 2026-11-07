@@ -9,7 +9,7 @@ import { PUBLISH_MESSAGES_SCRIPT } from "./lua.ts";
  *
  * @param options - Redis notify adapter configuration.
  */
-export const createRedisNotifyAdapter = async ({
+export const createRedisNotifyAdapter = ({
   notifyProvider,
   channelPrefix = "queuert",
 }: {
@@ -17,7 +17,7 @@ export const createRedisNotifyAdapter = async ({
   notifyProvider: RedisNotifyProvider;
   /** Prefix for all pub/sub channel names. @defaultValue `"queuert"` */
   channelPrefix?: string;
-}): Promise<NotifyAdapter> => {
+}): NotifyAdapter => {
   const jobScheduledChannel = `${channelPrefix}:sched`;
   const chainCompletedChannel = `${channelPrefix}:chainc`;
   const attemptLostChannel = `${channelPrefix}:atls`;

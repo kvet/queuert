@@ -151,7 +151,7 @@ These checks keep the library consistent change by change, so `publish-review` d
 
 **New or changed public exports** (anything reachable from a `package.json` `exports` entry point):
 
-- Factories: async if they do I/O, sync if pure (`code-style.md`).
+- Factories are synchronous and do no I/O; startup I/O lives in an explicit method they return, and only non-fatal I/O runs lazily on first use, reporting its failure (`code-style.md`).
 - Nullability: `undefined` for not found, `null` for explicitly empty.
 - New error classes follow the Error Class Shape in `code-style.md`.
 - `@experimental` present on new SQLite, NATS, and Dashboard exports.

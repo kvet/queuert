@@ -3,7 +3,7 @@ import { SQL } from "bun";
 import {
   createClient,
   createInProcessNotifyAdapter,
-  createInProcessWorker,
+  createWorkerRunner,
   createProcessors,
   defineJobTypes,
   withTxHooks,
@@ -36,19 +36,19 @@ const jobTypes = defineJobTypes<{
 // #region adapter
 const lock = createAsyncRwLock();
 const stateProvider = createBunSqlSqliteStateProvider({ sql, lock });
-const stateAdapter = await createSqliteStateAdapter({ stateProvider });
+const stateAdapter = createSqliteStateAdapter({ stateProvider });
 await stateAdapter.migrateToLatest();
 // #endregion
 
-const notifyAdapter = await createInProcessNotifyAdapter();
+const notifyAdapter = createInProcessNotifyAdapter();
 
-const client = await createClient({
+const client = createClient({
   stateAdapter,
   notifyAdapter,
   jobTypes,
 });
 
-const worker = await createInProcessWorker({
+const workerRunner = createWorkerRunner({
   client,
   processors: createProcessors({
     client,
@@ -80,7 +80,7 @@ const worker = await createInProcessWorker({
   }),
 });
 
-const stopWorker = await worker.start();
+const stopWorkerRunner = await workerRunner.start();
 
 // Register a new user and queue welcome email atomically
 // Bun.SQL does not queue SQLite transactions on its single connection, so take the same lock
@@ -107,7 +107,7 @@ const result = await client.awaitChain(chain, { timeoutMs: 5000 });
 console.log(`Welcome email sent at: ${result.output.sentAt}`);
 
 // Cleanup
-await stopWorker();
+await stopWorkerRunner();
 await notifyAdapter.close();
 await stateAdapter.close();
 await sql.close();

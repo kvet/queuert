@@ -2,10 +2,10 @@ import { sleep } from "@queuert/helpers";
 import { type TestAPI, expect } from "vitest";
 
 import { createClient } from "../client.ts";
-import { createInProcessWorker } from "../in-process-worker.ts";
 import { createProcessors } from "../job-type-processors/create-job-type-processors.ts";
 import { defineJobTypes } from "../job-types/define-job-types.ts";
 import { withTxHooks } from "../tx-hooks/tx-hooks.ts";
+import { createWorkerRunner } from "../worker-runner.ts";
 import type { TestSuiteContext } from "./spec-context.spec-helper.ts";
 
 export const stateResilienceTestSuite = ({ it }: { it: TestAPI<TestSuiteContext> }): void => {
@@ -21,7 +21,7 @@ export const stateResilienceTestSuite = ({ it }: { it: TestAPI<TestSuiteContext>
       stateAdapter,
       notifyAdapter,
       withTransaction,
-      withWorkers,
+      withWorkerRunners,
       observabilityAdapter,
       log,
     }) => {
@@ -33,21 +33,21 @@ export const stateResilienceTestSuite = ({ it }: { it: TestAPI<TestSuiteContext>
         };
       }>();
 
-      const client = await createClient({
+      const client = createClient({
         stateAdapter,
         notifyAdapter,
         observabilityAdapter,
         log,
         jobTypes,
       });
-      const flakyWorkerClient = await createClient({
+      const flakyWorkerClient = createClient({
         stateAdapter: flakyStateAdapter,
         notifyAdapter,
         observabilityAdapter,
         log,
         jobTypes,
       });
-      const flakyWorker = await createInProcessWorker({
+      const flakyWorkerRunner = createWorkerRunner({
         client: flakyWorkerClient,
         concurrency: 1,
         // should be processed in a single worker loop
@@ -93,7 +93,7 @@ export const stateResilienceTestSuite = ({ it }: { it: TestAPI<TestSuiteContext>
         }),
       );
 
-      await withWorkers([await flakyWorker.start()], async () => {
+      await withWorkerRunners([await flakyWorkerRunner.start()], async () => {
         await Promise.all(chains.map(async (chain) => client.awaitChain(chain, completionOptions)));
       });
     },
@@ -108,7 +108,7 @@ export const stateResilienceTestSuite = ({ it }: { it: TestAPI<TestSuiteContext>
       stateAdapter,
       notifyAdapter,
       withTransaction,
-      withWorkers,
+      withWorkerRunners,
       observabilityAdapter,
       log,
       skip,
@@ -122,21 +122,21 @@ export const stateResilienceTestSuite = ({ it }: { it: TestAPI<TestSuiteContext>
         };
       }>();
 
-      const client = await createClient({
+      const client = createClient({
         stateAdapter,
         notifyAdapter,
         observabilityAdapter,
         log,
         jobTypes,
       });
-      const flakyWorkerClient = await createClient({
+      const flakyWorkerClient = createClient({
         stateAdapter: flakyStateAdapter,
         notifyAdapter,
         observabilityAdapter,
         log,
         jobTypes,
       });
-      const flakyWorker = await createInProcessWorker({
+      const flakyWorkerRunner = createWorkerRunner({
         client: flakyWorkerClient,
         concurrency: 5,
         // Short poll interval so the worker retries promptly after a transient error.
@@ -184,7 +184,7 @@ export const stateResilienceTestSuite = ({ it }: { it: TestAPI<TestSuiteContext>
         }),
       );
 
-      await withWorkers([await flakyWorker.start()], async () => {
+      await withWorkerRunners([await flakyWorkerRunner.start()], async () => {
         await Promise.all(chains.map(async (chain) => client.awaitChain(chain, completionOptions)));
       });
     },
@@ -199,7 +199,7 @@ export const stateResilienceTestSuite = ({ it }: { it: TestAPI<TestSuiteContext>
       stateAdapter,
       notifyAdapter,
       withTransaction,
-      withWorkers,
+      withWorkerRunners,
       observabilityAdapter,
       log,
       skip,
@@ -213,14 +213,14 @@ export const stateResilienceTestSuite = ({ it }: { it: TestAPI<TestSuiteContext>
         };
       }>();
 
-      const client = await createClient({
+      const client = createClient({
         stateAdapter,
         notifyAdapter,
         observabilityAdapter,
         log,
         jobTypes,
       });
-      const flakyWorkerClient = await createClient({
+      const flakyWorkerClient = createClient({
         stateAdapter: flakyStateAdapter,
         notifyAdapter,
         observabilityAdapter,
@@ -247,7 +247,7 @@ export const stateResilienceTestSuite = ({ it }: { it: TestAPI<TestSuiteContext>
           maxDelayMs: 1,
         },
       };
-      const flakyWorker1 = await createInProcessWorker({
+      const flakyWorkerRunner1 = createWorkerRunner({
         ...workerConfig,
         processors: createProcessors({
           client,
@@ -269,7 +269,7 @@ export const stateResilienceTestSuite = ({ it }: { it: TestAPI<TestSuiteContext>
           },
         }),
       });
-      const flakyWorker2 = await createInProcessWorker({
+      const flakyWorkerRunner2 = createWorkerRunner({
         ...workerConfig,
         processors: createProcessors({
           client,
@@ -303,9 +303,14 @@ export const stateResilienceTestSuite = ({ it }: { it: TestAPI<TestSuiteContext>
         }),
       );
 
-      await withWorkers([await flakyWorker1.start(), await flakyWorker2.start()], async () => {
-        await Promise.all(chains.map(async (chain) => client.awaitChain(chain, completionOptions)));
-      });
+      await withWorkerRunners(
+        [await flakyWorkerRunner1.start(), await flakyWorkerRunner2.start()],
+        async () => {
+          await Promise.all(
+            chains.map(async (chain) => client.awaitChain(chain, completionOptions)),
+          );
+        },
+      );
     },
   );
 
@@ -317,7 +322,7 @@ export const stateResilienceTestSuite = ({ it }: { it: TestAPI<TestSuiteContext>
       stateAdapter,
       notifyAdapter,
       withTransaction,
-      withWorkers,
+      withWorkerRunners,
       observabilityAdapter,
       log,
       skip,
@@ -332,21 +337,21 @@ export const stateResilienceTestSuite = ({ it }: { it: TestAPI<TestSuiteContext>
         };
       }>();
 
-      const client = await createClient({
+      const client = createClient({
         stateAdapter,
         notifyAdapter,
         observabilityAdapter,
         log,
         jobTypes,
       });
-      const flakyWorkerClient = await createClient({
+      const flakyWorkerClient = createClient({
         stateAdapter: flakyDbStateAdapter,
         notifyAdapter,
         observabilityAdapter,
         log,
         jobTypes,
       });
-      const flakyWorker = await createInProcessWorker({
+      const flakyWorkerRunner = createWorkerRunner({
         client: flakyWorkerClient,
         concurrency: 1,
         pollIntervalMs: 10_000,
@@ -391,7 +396,7 @@ export const stateResilienceTestSuite = ({ it }: { it: TestAPI<TestSuiteContext>
         }),
       );
 
-      await withWorkers([await flakyWorker.start()], async () => {
+      await withWorkerRunners([await flakyWorkerRunner.start()], async () => {
         await Promise.all(chains.map(async (chain) => client.awaitChain(chain, completionOptions)));
       });
     },
@@ -406,7 +411,7 @@ export const stateResilienceTestSuite = ({ it }: { it: TestAPI<TestSuiteContext>
       stateAdapter,
       notifyAdapter,
       withTransaction,
-      withWorkers,
+      withWorkerRunners,
       observabilityAdapter,
       log,
       skip,
@@ -422,21 +427,21 @@ export const stateResilienceTestSuite = ({ it }: { it: TestAPI<TestSuiteContext>
         };
       }>();
 
-      const client = await createClient({
+      const client = createClient({
         stateAdapter,
         notifyAdapter,
         observabilityAdapter,
         log,
         jobTypes,
       });
-      const flakyWorkerClient = await createClient({
+      const flakyWorkerClient = createClient({
         stateAdapter: flakyDbStateAdapter,
         notifyAdapter,
         observabilityAdapter,
         log,
         jobTypes,
       });
-      const flakyWorker = await createInProcessWorker({
+      const flakyWorkerRunner = createWorkerRunner({
         client: flakyWorkerClient,
         concurrency: 5,
         pollIntervalMs: 250,
@@ -481,7 +486,7 @@ export const stateResilienceTestSuite = ({ it }: { it: TestAPI<TestSuiteContext>
         }),
       );
 
-      await withWorkers([await flakyWorker.start()], async () => {
+      await withWorkerRunners([await flakyWorkerRunner.start()], async () => {
         await Promise.all(chains.map(async (chain) => client.awaitChain(chain, completionOptions)));
       });
     },
@@ -496,7 +501,7 @@ export const stateResilienceTestSuite = ({ it }: { it: TestAPI<TestSuiteContext>
       stateAdapter,
       notifyAdapter,
       withTransaction,
-      withWorkers,
+      withWorkerRunners,
       observabilityAdapter,
       log,
       skip,
@@ -512,14 +517,14 @@ export const stateResilienceTestSuite = ({ it }: { it: TestAPI<TestSuiteContext>
         };
       }>();
 
-      const client = await createClient({
+      const client = createClient({
         stateAdapter,
         notifyAdapter,
         observabilityAdapter,
         log,
         jobTypes,
       });
-      const flakyWorkerClient = await createClient({
+      const flakyWorkerClient = createClient({
         stateAdapter: flakyDbStateAdapter,
         notifyAdapter,
         observabilityAdapter,
@@ -543,7 +548,7 @@ export const stateResilienceTestSuite = ({ it }: { it: TestAPI<TestSuiteContext>
           maxDelayMs: 1,
         },
       };
-      const flakyWorker1 = await createInProcessWorker({
+      const flakyWorkerRunner1 = createWorkerRunner({
         ...workerConfig,
         processors: createProcessors({
           client,
@@ -565,7 +570,7 @@ export const stateResilienceTestSuite = ({ it }: { it: TestAPI<TestSuiteContext>
           },
         }),
       });
-      const flakyWorker2 = await createInProcessWorker({
+      const flakyWorkerRunner2 = createWorkerRunner({
         ...workerConfig,
         processors: createProcessors({
           client,
@@ -599,9 +604,14 @@ export const stateResilienceTestSuite = ({ it }: { it: TestAPI<TestSuiteContext>
         }),
       );
 
-      await withWorkers([await flakyWorker1.start(), await flakyWorker2.start()], async () => {
-        await Promise.all(chains.map(async (chain) => client.awaitChain(chain, completionOptions)));
-      });
+      await withWorkerRunners(
+        [await flakyWorkerRunner1.start(), await flakyWorkerRunner2.start()],
+        async () => {
+          await Promise.all(
+            chains.map(async (chain) => client.awaitChain(chain, completionOptions)),
+          );
+        },
+      );
     },
   );
 
@@ -612,7 +622,7 @@ export const stateResilienceTestSuite = ({ it }: { it: TestAPI<TestSuiteContext>
       stateAdapter,
       notifyAdapter,
       withTransaction,
-      withWorkers,
+      withWorkerRunners,
       observabilityAdapter,
       log,
     }) => {
@@ -632,21 +642,21 @@ export const stateResilienceTestSuite = ({ it }: { it: TestAPI<TestSuiteContext>
         },
       };
 
-      const client = await createClient({
+      const client = createClient({
         stateAdapter,
         notifyAdapter,
         observabilityAdapter,
         log,
         jobTypes,
       });
-      const workerClient = await createClient({
+      const workerClient = createClient({
         stateAdapter: flakyStartStateAdapter,
         notifyAdapter,
         observabilityAdapter,
         log,
         jobTypes,
       });
-      const worker = await createInProcessWorker({
+      const workerRunner = createWorkerRunner({
         client: workerClient,
         pollIntervalMs: 100,
         // Delays of 10ms, 1s, then 60s: only a reset keeps the third failure short.
@@ -669,7 +679,7 @@ export const stateResilienceTestSuite = ({ it }: { it: TestAPI<TestSuiteContext>
         client.createChain({ ...txCtx, txHooks, typeName: "test", input: null }),
       );
 
-      await withWorkers([await worker.start()], async () => {
+      await withWorkerRunners([await workerRunner.start()], async () => {
         await client.awaitChain(firstChain, { pollIntervalMs: 100, timeoutMs: 5000 });
 
         failuresLeft = 1;
@@ -685,7 +695,7 @@ export const stateResilienceTestSuite = ({ it }: { it: TestAPI<TestSuiteContext>
     stateAdapter,
     notifyAdapter,
     withTransaction,
-    withWorkers,
+    withWorkerRunners,
     observabilityAdapter,
     log,
   }) => {
@@ -694,7 +704,7 @@ export const stateResilienceTestSuite = ({ it }: { it: TestAPI<TestSuiteContext>
     }>();
 
     const firstRenewal = new AbortController();
-    const workerClient = await createClient({
+    const workerClient = createClient({
       stateAdapter: {
         ...stateAdapter,
         extendWorkerLease: async (params) => {
@@ -708,14 +718,14 @@ export const stateResilienceTestSuite = ({ it }: { it: TestAPI<TestSuiteContext>
       log,
       jobTypes,
     });
-    const client = await createClient({
+    const client = createClient({
       stateAdapter,
       notifyAdapter,
       observabilityAdapter,
       log,
       jobTypes,
     });
-    const worker = await createInProcessWorker({
+    const workerRunner = createWorkerRunner({
       client: workerClient,
       concurrency: 2,
       pollIntervalMs: 50,
@@ -752,7 +762,7 @@ export const stateResilienceTestSuite = ({ it }: { it: TestAPI<TestSuiteContext>
       }),
     );
 
-    await withWorkers([await worker.start()], async () => {
+    await withWorkerRunners([await workerRunner.start()], async () => {
       await Promise.all(chains.map(async (chain) => client.awaitChain(chain, completionOptions)));
     });
 

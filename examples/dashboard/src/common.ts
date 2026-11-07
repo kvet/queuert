@@ -117,7 +117,7 @@ db.pragma("journal_mode = WAL");
 const lock = createAsyncRwLock();
 const stateProvider = createBetterSqlite3StateProvider({ db, lock });
 
-export const stateAdapter = await createSqliteStateAdapter({ stateProvider });
+export const stateAdapter = createSqliteStateAdapter({ stateProvider });
 await stateAdapter.migrateToLatest();
 
 export const withTransaction = async <T>(
@@ -136,7 +136,7 @@ export const withTransaction = async <T>(
 };
 
 // #region in-process-notify
-export const notifyAdapter = await createInProcessNotifyAdapter();
+export const notifyAdapter = createInProcessNotifyAdapter();
 // #endregion
 
-export const client = await createClient({ stateAdapter, notifyAdapter, jobTypes });
+export const client = createClient({ stateAdapter, notifyAdapter, jobTypes });

@@ -4,7 +4,7 @@ import { createPostgresJsStateProvider } from "example-state-postgres-postgres-j
 import postgres from "postgres";
 import {
   createClient,
-  createInProcessWorker,
+  createWorkerRunner,
   createProcessors,
   defineJobTypes,
   withTxHooks,
@@ -24,14 +24,14 @@ const processName = process.env.PROCESS_NAME!;
 const sql = postgres(connectionString, { max: 5 });
 
 const stateProvider = createPostgresJsStateProvider({ sql });
-const stateAdapter = await createPgStateAdapter({ stateProvider });
+const stateAdapter = createPgStateAdapter({ stateProvider });
 
 const notifyProvider = createPostgresJsNotifyProvider({ sql });
-const notifyAdapter = await createPgNotifyAdapter({ notifyProvider });
+const notifyAdapter = createPgNotifyAdapter({ notifyProvider });
 
-const client = await createClient({ stateAdapter, notifyAdapter, jobTypes });
+const client = createClient({ stateAdapter, notifyAdapter, jobTypes });
 
-const worker = await createInProcessWorker({
+const workerRunner = createWorkerRunner({
   client,
   concurrency: 2,
   processors: createProcessors({
@@ -72,7 +72,7 @@ const worker = await createInProcessWorker({
   }),
 });
 
-const stop = await worker.start();
+const stop = await workerRunner.start();
 process.send!({ type: "ready" });
 
 process.on("message", (msg) => {

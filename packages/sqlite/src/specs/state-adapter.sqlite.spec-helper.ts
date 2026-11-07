@@ -59,7 +59,7 @@ export const extendWithStateSqlite = <T>(
     _dbMigrateToLatest: [
       async ({ db }, use) => {
         const stateProvider = createBetterSqlite3Provider({ db });
-        const stateAdapter = await createSqliteStateAdapter({ stateProvider });
+        const stateAdapter = createSqliteStateAdapter({ stateProvider });
 
         await stateAdapter.migrateToLatest();
 
@@ -123,14 +123,14 @@ export const extendWithStateSqlite = <T>(
     ],
     stateAdapter: [
       async ({ stateProvider }, use) => {
-        return use(await createSqliteStateAdapter({ stateProvider }));
+        return use(createSqliteStateAdapter({ stateProvider }));
       },
       { scope: "test" },
     ],
     flakyStateAdapter: [
       async ({ flakyStateProvider }, use) => {
         return use(
-          await createSqliteStateAdapter({
+          createSqliteStateAdapter({
             stateProvider: flakyStateProvider,
           }),
         );
@@ -221,7 +221,7 @@ export const extendWithStateSqlite = <T>(
     flakyDbStateAdapter: [
       async ({ flakyDbStateProvider }, use) => {
         return use(
-          await createSqliteStateAdapter({
+          createSqliteStateAdapter({
             stateProvider: flakyDbStateProvider,
           }),
         );

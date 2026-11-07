@@ -86,7 +86,7 @@ export const siteSections: SiteSection[] = [
           "how-it-works/chain-model",
           "how-it-works/job-processing",
           "how-it-works/processing-reliability",
-          "how-it-works/in-process-worker",
+          "how-it-works/worker-runner",
           "how-it-works/job-type-references",
         ],
       },

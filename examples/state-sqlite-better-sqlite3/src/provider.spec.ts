@@ -12,7 +12,7 @@ test("state-sqlite-better-sqlite3 provider passes state adapter conformance", as
 
     const lock = createAsyncRwLock();
     const stateProvider = createBetterSqlite3StateProvider({ db, lock });
-    const adapter = await createSqliteStateAdapter({ stateProvider });
+    const adapter = createSqliteStateAdapter({ stateProvider });
     await adapter.migrateToLatest();
 
     return {

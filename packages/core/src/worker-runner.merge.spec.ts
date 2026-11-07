@@ -2,7 +2,6 @@ import { describe, expect, expectTypeOf, it } from "vitest";
 
 import { createClient } from "./client.ts";
 import { DuplicateJobTypeError } from "./errors.ts";
-import { createInProcessWorker } from "./in-process-worker.ts";
 import { createProcessors } from "./job-type-processors/create-job-type-processors.ts";
 import {
   type ProcessorDefinitions,
@@ -16,6 +15,7 @@ import type { JobTypeDefinitions } from "./job-types/job-types.ts";
 import { mergeJobTypes } from "./job-types/merge-job-types.ts";
 import { createInProcessStateAdapter } from "./state-adapter/state-adapter.in-process.ts";
 import { withTxHooks } from "./tx-hooks/tx-hooks.ts";
+import { createWorkerRunner } from "./worker-runner.ts";
 
 type OrderDefs = {
   "orders.create": { entry: true; input: { userId: string }; output: { orderId: string } };
@@ -34,8 +34,8 @@ const orderJobTypes = defineJobTypes<OrderDefs>();
 const notificationJobTypes = defineJobTypes<NotificationDefs>();
 const billingJobTypes = defineJobTypes<BillingDefs>();
 
-const stateAdapter = await createInProcessStateAdapter();
-const client = await createClient({
+const stateAdapter = createInProcessStateAdapter();
+const client = createClient({
   stateAdapter,
   jobTypes: mergeJobTypes([orderJobTypes, notificationJobTypes, billingJobTypes]),
 });
@@ -97,7 +97,7 @@ describe("createProcessors", () => {
   });
 
   it("rejects client missing required job types", async () => {
-    const orderOnlyClient = await createClient({
+    const orderOnlyClient = createClient({
       stateAdapter,
       jobTypes: orderJobTypes,
     });
@@ -363,8 +363,8 @@ describe("cross-slice blocker type resolution", () => {
     >();
 
     const mergedJobTypes = mergeJobTypes([notifJobTypes, orderJobTypes]);
-    const stateAdapter = await createInProcessStateAdapter();
-    const client = await createClient({ stateAdapter, jobTypes: mergedJobTypes });
+    const stateAdapter = createInProcessStateAdapter();
+    const client = createClient({ stateAdapter, jobTypes: mergedJobTypes });
 
     const notifProcessors = createProcessors({
       client,
@@ -446,8 +446,8 @@ describe("cross-slice blocker type resolution", () => {
     >();
 
     const mergedJobTypes = mergeJobTypes([notifJobTypes, orderJobTypes]);
-    const stateAdapter = await createInProcessStateAdapter();
-    const client = await createClient({ stateAdapter, jobTypes: mergedJobTypes });
+    const stateAdapter = createInProcessStateAdapter();
+    const client = createClient({ stateAdapter, jobTypes: mergedJobTypes });
 
     createProcessors({
       client,
@@ -517,8 +517,8 @@ describe("cross-slice blocker type resolution", () => {
     >();
 
     const mergedJobTypes = mergeJobTypes([extAJobTypes, extBJobTypes, localJobTypes]);
-    const stateAdapter = await createInProcessStateAdapter();
-    const client = await createClient({ stateAdapter, jobTypes: mergedJobTypes });
+    const stateAdapter = createInProcessStateAdapter();
+    const client = createClient({ stateAdapter, jobTypes: mergedJobTypes });
 
     createProcessors({
       client,
@@ -572,8 +572,8 @@ describe("cross-slice blocker type resolution", () => {
     >();
 
     const mergedJobTypes = mergeJobTypes([extAJobTypes, extBJobTypes, localJobTypes]);
-    const stateAdapter = await createInProcessStateAdapter();
-    const client = await createClient({ stateAdapter, jobTypes: mergedJobTypes });
+    const stateAdapter = createInProcessStateAdapter();
+    const client = createClient({ stateAdapter, jobTypes: mergedJobTypes });
 
     createProcessors({
       client,
@@ -637,8 +637,8 @@ describe("cross-slice blocker type resolution", () => {
     >();
 
     const mergedJobTypes = mergeJobTypes([extAJobTypes, extBJobTypes, localJobTypes]);
-    const stateAdapter = await createInProcessStateAdapter();
-    const client = await createClient({ stateAdapter, jobTypes: mergedJobTypes });
+    const stateAdapter = createInProcessStateAdapter();
+    const client = createClient({ stateAdapter, jobTypes: mergedJobTypes });
 
     createProcessors({
       client,
@@ -704,8 +704,8 @@ describe("cross-slice blocker type resolution in workerless completion", () => {
     >();
 
     const mergedJobTypes = mergeJobTypes([extAJobTypes, extBJobTypes, localJobTypes]);
-    const stateAdapter = await createInProcessStateAdapter();
-    const client = await createClient({ stateAdapter, jobTypes: mergedJobTypes });
+    const stateAdapter = createInProcessStateAdapter();
+    const client = createClient({ stateAdapter, jobTypes: mergedJobTypes });
 
     const blockerChain = await withTxHooks(async (txHooks) =>
       stateAdapter.withTransaction(async (txCtx) =>
@@ -787,27 +787,27 @@ describe("2-level merge (merge of merges)", () => {
   });
 });
 
-describe("createInProcessWorker with partial processor registries", () => {
+describe("createWorkerRunner with partial processor registries", () => {
   it("accepts a processor jobTypes covering a single slice of the client's job types", async () => {
-    const worker = await createInProcessWorker({
+    const workerRunner = createWorkerRunner({
       client,
       processors: orderProcessors,
     });
-    const stop = await worker.start();
+    const stop = await workerRunner.start();
     await stop();
   });
 
   it("accepts a processor jobTypes covering a different single slice", async () => {
-    const worker = await createInProcessWorker({
+    const workerRunner = createWorkerRunner({
       client,
       processors: notificationProcessors,
     });
-    const stop = await worker.start();
+    const stop = await workerRunner.start();
     await stop();
   });
 
   it("rejects a plain object that is not a processor jobTypes", () => {
-    void createInProcessWorker({
+    void createWorkerRunner({
       client,
       // @ts-expect-error — plain object is not a Processors
       processors: { "orders.create": { attemptHandler: async () => {} } },
@@ -818,8 +818,8 @@ describe("createInProcessWorker with partial processor registries", () => {
     const unrelatedJobTypes = defineJobTypes<{
       "unrelated.task": { entry: true; input: { x: number }; output: { y: number } };
     }>();
-    const unrelatedClient = await createClient({
-      stateAdapter: await createInProcessStateAdapter(),
+    const unrelatedClient = createClient({
+      stateAdapter: createInProcessStateAdapter(),
       jobTypes: unrelatedJobTypes,
     });
     const unrelatedProcessors = createProcessors({
@@ -837,7 +837,7 @@ describe("createInProcessWorker with partial processor registries", () => {
       },
     });
 
-    void createInProcessWorker({
+    void createWorkerRunner({
       client,
       // @ts-expect-error — processor jobTypes contains job types not known to the client
       processors: unrelatedProcessors,
@@ -845,36 +845,36 @@ describe("createInProcessWorker with partial processor registries", () => {
   });
 
   it("rejects overlapping slices in the processors array", async () => {
-    await expect(
-      createInProcessWorker({
+    expect(() => {
+      createWorkerRunner({
         client,
         // @ts-expect-error — "orders.create" and "orders.fulfill" are in both slices
         processors: [orderProcessors, orderProcessors],
-      }),
-    ).rejects.toThrow(DuplicateJobTypeError);
+      });
+    }).toThrow(DuplicateJobTypeError);
   });
 
   it("leaves overlap checks of variable-length arrays to runtime", async () => {
     const slices: Processors[] = [orderProcessors, notificationProcessors];
     const includeNotifications = slices.length > 1;
 
-    await createInProcessWorker({ client, processors: slices });
-    await createInProcessWorker({
+    createWorkerRunner({ client, processors: slices });
+    createWorkerRunner({
       client,
       processors: [orderProcessors, ...(includeNotifications ? [notificationProcessors] : [])],
     });
-    await expect(
-      createInProcessWorker({ client, processors: [...slices, orderProcessors] }),
-    ).rejects.toThrow(DuplicateJobTypeError);
+    expect(() => {
+      createWorkerRunner({ client, processors: [...slices, orderProcessors] });
+    }).toThrow(DuplicateJobTypeError);
   });
 
   it("still accepts a fully merged processor jobTypes", async () => {
     const merged = mergeProcessors([orderProcessors, notificationProcessors]);
-    const worker = await createInProcessWorker({
+    const workerRunner = createWorkerRunner({
       client,
       processors: merged,
     });
-    const stop = await worker.start();
+    const stop = await workerRunner.start();
     await stop();
   });
 });

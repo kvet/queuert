@@ -16,7 +16,7 @@ import { client, db, notifyAdapter, stateAdapter } from "./common.ts";
 const PORT = 3333;
 
 // #region dashboard
-const dashboard = await createDashboard({ client });
+const dashboard = createDashboard({ client });
 // #endregion
 
 // #region server

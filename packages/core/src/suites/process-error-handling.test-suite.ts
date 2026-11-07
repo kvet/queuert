@@ -1,9 +1,9 @@
 import { type TestAPI, expect } from "vitest";
 
 import { createClient } from "../client.ts";
-import { createInProcessWorker } from "../in-process-worker.ts";
 import { createProcessors } from "../job-type-processors/create-job-type-processors.ts";
 import { defineJobTypes } from "../job-types/define-job-types.ts";
+import { createWorkerRunner } from "../worker-runner.ts";
 import type { TestSuiteContext } from "./spec-context.spec-helper.ts";
 
 export const processErrorHandlingTestSuite = ({ it }: { it: TestAPI<TestSuiteContext> }): void => {
@@ -17,7 +17,7 @@ export const processErrorHandlingTestSuite = ({ it }: { it: TestAPI<TestSuiteCon
     stateAdapter,
     notifyAdapter,
     withTransaction,
-    withWorkers,
+    withWorkerRunners,
     observabilityAdapter,
     log,
   }) => {
@@ -29,14 +29,14 @@ export const processErrorHandlingTestSuite = ({ it }: { it: TestAPI<TestSuiteCon
       };
     }>();
 
-    const client = await createClient({
+    const client = createClient({
       stateAdapter,
       notifyAdapter,
       observabilityAdapter,
       log,
       jobTypes,
     });
-    const worker = await createInProcessWorker({
+    const workerRunner = createWorkerRunner({
       client,
       concurrency: 1,
       processors: createProcessors({
@@ -68,7 +68,7 @@ export const processErrorHandlingTestSuite = ({ it }: { it: TestAPI<TestSuiteCon
       }),
     );
 
-    await withWorkers([await worker.start()], async () => {
+    await withWorkerRunners([await workerRunner.start()], async () => {
       const completed = await client.awaitChain(chain, completionOptions);
       expect(completed.output).toEqual({ result: 20 });
     });
@@ -80,7 +80,7 @@ export const processErrorHandlingTestSuite = ({ it }: { it: TestAPI<TestSuiteCon
     stateAdapter,
     notifyAdapter,
     withTransaction,
-    withWorkers,
+    withWorkerRunners,
     observabilityAdapter,
     log,
   }) => {
@@ -92,14 +92,14 @@ export const processErrorHandlingTestSuite = ({ it }: { it: TestAPI<TestSuiteCon
       };
     }>();
 
-    const client = await createClient({
+    const client = createClient({
       stateAdapter,
       notifyAdapter,
       observabilityAdapter,
       log,
       jobTypes,
     });
-    const worker = await createInProcessWorker({
+    const workerRunner = createWorkerRunner({
       client,
       concurrency: 1,
       processors: createProcessors({
@@ -137,7 +137,7 @@ export const processErrorHandlingTestSuite = ({ it }: { it: TestAPI<TestSuiteCon
       }),
     );
 
-    await withWorkers([await worker.start()], async () => {
+    await withWorkerRunners([await workerRunner.start()], async () => {
       const completed = await client.awaitChain(chain, completionOptions);
       expect(completed.output).toEqual({ result: 20 });
     });
@@ -149,7 +149,7 @@ export const processErrorHandlingTestSuite = ({ it }: { it: TestAPI<TestSuiteCon
     stateAdapter,
     notifyAdapter,
     withTransaction,
-    withWorkers,
+    withWorkerRunners,
     observabilityAdapter,
     log,
   }) => {
@@ -161,14 +161,14 @@ export const processErrorHandlingTestSuite = ({ it }: { it: TestAPI<TestSuiteCon
       };
     }>();
 
-    const client = await createClient({
+    const client = createClient({
       stateAdapter,
       notifyAdapter,
       observabilityAdapter,
       log,
       jobTypes,
     });
-    const worker = await createInProcessWorker({
+    const workerRunner = createWorkerRunner({
       client,
       concurrency: 1,
       processors: createProcessors({
@@ -207,7 +207,7 @@ export const processErrorHandlingTestSuite = ({ it }: { it: TestAPI<TestSuiteCon
       }),
     );
 
-    await withWorkers([await worker.start()], async () => {
+    await withWorkerRunners([await workerRunner.start()], async () => {
       const completed = await client.awaitChain(chain, completionOptions);
       expect(completed.output).toEqual({ result: 20 });
     });
@@ -219,7 +219,7 @@ export const processErrorHandlingTestSuite = ({ it }: { it: TestAPI<TestSuiteCon
     stateAdapter,
     notifyAdapter,
     withTransaction,
-    withWorkers,
+    withWorkerRunners,
     observabilityAdapter,
     log,
   }) => {
@@ -231,14 +231,14 @@ export const processErrorHandlingTestSuite = ({ it }: { it: TestAPI<TestSuiteCon
       };
     }>();
 
-    const client = await createClient({
+    const client = createClient({
       stateAdapter,
       notifyAdapter,
       observabilityAdapter,
       log,
       jobTypes,
     });
-    const worker = await createInProcessWorker({
+    const workerRunner = createWorkerRunner({
       client,
       concurrency: 1,
       processors: createProcessors({
@@ -268,7 +268,7 @@ export const processErrorHandlingTestSuite = ({ it }: { it: TestAPI<TestSuiteCon
       client.createChain({ ...txCtx, txHooks, typeName: "test", input: null }),
     );
 
-    await withWorkers([await worker.start()], async () => {
+    await withWorkerRunners([await workerRunner.start()], async () => {
       await client.awaitChain(chain, completionOptions);
     });
 
@@ -280,7 +280,7 @@ export const processErrorHandlingTestSuite = ({ it }: { it: TestAPI<TestSuiteCon
     notifyAdapter,
     withTransaction,
     poisonTransaction,
-    withWorkers,
+    withWorkerRunners,
     observabilityAdapter,
     log,
     skip,
@@ -295,14 +295,14 @@ export const processErrorHandlingTestSuite = ({ it }: { it: TestAPI<TestSuiteCon
       };
     }>();
 
-    const client = await createClient({
+    const client = createClient({
       stateAdapter,
       notifyAdapter,
       observabilityAdapter,
       log,
       jobTypes,
     });
-    const worker = await createInProcessWorker({
+    const workerRunner = createWorkerRunner({
       client,
       concurrency: 1,
       processors: createProcessors({
@@ -336,7 +336,7 @@ export const processErrorHandlingTestSuite = ({ it }: { it: TestAPI<TestSuiteCon
       }),
     );
 
-    await withWorkers([await worker.start()], async () => {
+    await withWorkerRunners([await workerRunner.start()], async () => {
       const completed = await client.awaitChain(chain, completionOptions);
       expect(completed.output).toEqual({ result: 20 });
     });
@@ -349,7 +349,7 @@ export const processErrorHandlingTestSuite = ({ it }: { it: TestAPI<TestSuiteCon
     notifyAdapter,
     withTransaction,
     poisonTransaction,
-    withWorkers,
+    withWorkerRunners,
     observabilityAdapter,
     log,
     skip,
@@ -364,14 +364,14 @@ export const processErrorHandlingTestSuite = ({ it }: { it: TestAPI<TestSuiteCon
       };
     }>();
 
-    const client = await createClient({
+    const client = createClient({
       stateAdapter,
       notifyAdapter,
       observabilityAdapter,
       log,
       jobTypes,
     });
-    const worker = await createInProcessWorker({
+    const workerRunner = createWorkerRunner({
       client,
       concurrency: 1,
       processors: createProcessors({
@@ -404,7 +404,7 @@ export const processErrorHandlingTestSuite = ({ it }: { it: TestAPI<TestSuiteCon
       }),
     );
 
-    await withWorkers([await worker.start()], async () => {
+    await withWorkerRunners([await workerRunner.start()], async () => {
       const completed = await client.awaitChain(chain, completionOptions);
       expect(completed.output).toEqual({ result: 20 });
     });
@@ -414,7 +414,7 @@ export const processErrorHandlingTestSuite = ({ it }: { it: TestAPI<TestSuiteCon
     stateAdapter,
     notifyAdapter,
     withTransaction,
-    withWorkers,
+    withWorkerRunners,
     observabilityAdapter,
     log,
   }) => {
@@ -430,14 +430,14 @@ export const processErrorHandlingTestSuite = ({ it }: { it: TestAPI<TestSuiteCon
       };
     }>();
 
-    const client = await createClient({
+    const client = createClient({
       stateAdapter,
       notifyAdapter,
       observabilityAdapter,
       log,
       jobTypes,
     });
-    const worker = await createInProcessWorker({
+    const workerRunner = createWorkerRunner({
       client,
       concurrency: 1,
       processors: createProcessors({
@@ -478,7 +478,7 @@ export const processErrorHandlingTestSuite = ({ it }: { it: TestAPI<TestSuiteCon
       }),
     );
 
-    await withWorkers([await worker.start()], async () => {
+    await withWorkerRunners([await workerRunner.start()], async () => {
       const completed = await client.awaitChain(chain, completionOptions);
       expect(completed.output).toEqual({ result: 20 });
     });
@@ -492,7 +492,7 @@ export const processErrorHandlingTestSuite = ({ it }: { it: TestAPI<TestSuiteCon
     stateAdapter,
     notifyAdapter,
     withTransaction,
-    withWorkers,
+    withWorkerRunners,
     observabilityAdapter,
     log,
   }) => {
@@ -510,14 +510,14 @@ export const processErrorHandlingTestSuite = ({ it }: { it: TestAPI<TestSuiteCon
       };
     }>();
 
-    const client = await createClient({
+    const client = createClient({
       stateAdapter,
       notifyAdapter,
       observabilityAdapter,
       log,
       jobTypes,
     });
-    const worker = await createInProcessWorker({
+    const workerRunner = createWorkerRunner({
       client,
       concurrency: 1,
       processors: createProcessors({
@@ -570,7 +570,7 @@ export const processErrorHandlingTestSuite = ({ it }: { it: TestAPI<TestSuiteCon
       }),
     );
 
-    await withWorkers([await worker.start()], async () => {
+    await withWorkerRunners([await workerRunner.start()], async () => {
       const completed = await client.awaitChain(dependentChain, completionOptions);
       expect(completed.output).toEqual({ result: "ok" });
     });
@@ -580,7 +580,7 @@ export const processErrorHandlingTestSuite = ({ it }: { it: TestAPI<TestSuiteCon
     stateAdapter,
     notifyAdapter,
     withTransaction,
-    withWorkers,
+    withWorkerRunners,
     observabilityAdapter,
     log,
   }) => {
@@ -592,14 +592,14 @@ export const processErrorHandlingTestSuite = ({ it }: { it: TestAPI<TestSuiteCon
       };
     }>();
 
-    const client = await createClient({
+    const client = createClient({
       stateAdapter,
       notifyAdapter,
       observabilityAdapter,
       log,
       jobTypes,
     });
-    const worker = await createInProcessWorker({
+    const workerRunner = createWorkerRunner({
       client,
       concurrency: 1,
       processors: createProcessors({
@@ -646,7 +646,7 @@ export const processErrorHandlingTestSuite = ({ it }: { it: TestAPI<TestSuiteCon
       }),
     );
 
-    await withWorkers([await worker.start()], async () => {
+    await withWorkerRunners([await workerRunner.start()], async () => {
       await client.awaitChain(chain, completionOptions);
     });
   });
@@ -655,7 +655,7 @@ export const processErrorHandlingTestSuite = ({ it }: { it: TestAPI<TestSuiteCon
     stateAdapter,
     notifyAdapter,
     withTransaction,
-    withWorkers,
+    withWorkerRunners,
     observabilityAdapter,
     log,
   }) => {
@@ -667,14 +667,14 @@ export const processErrorHandlingTestSuite = ({ it }: { it: TestAPI<TestSuiteCon
       };
     }>();
 
-    const client = await createClient({
+    const client = createClient({
       stateAdapter,
       notifyAdapter,
       observabilityAdapter,
       log,
       jobTypes,
     });
-    const worker = await createInProcessWorker({
+    const workerRunner = createWorkerRunner({
       client,
       concurrency: 1,
       processors: createProcessors({
@@ -708,7 +708,7 @@ export const processErrorHandlingTestSuite = ({ it }: { it: TestAPI<TestSuiteCon
       }),
     );
 
-    await withWorkers([await worker.start()], async () => {
+    await withWorkerRunners([await workerRunner.start()], async () => {
       await client.awaitChain(chain, completionOptions);
     });
   });
@@ -717,7 +717,7 @@ export const processErrorHandlingTestSuite = ({ it }: { it: TestAPI<TestSuiteCon
     stateAdapter,
     notifyAdapter,
     withTransaction,
-    withWorkers,
+    withWorkerRunners,
     observabilityAdapter,
     log,
   }) => {
@@ -729,14 +729,14 @@ export const processErrorHandlingTestSuite = ({ it }: { it: TestAPI<TestSuiteCon
       };
     }>();
 
-    const client = await createClient({
+    const client = createClient({
       stateAdapter,
       notifyAdapter,
       observabilityAdapter,
       log,
       jobTypes,
     });
-    const worker = await createInProcessWorker({
+    const workerRunner = createWorkerRunner({
       client,
       concurrency: 1,
       processors: createProcessors({
@@ -768,7 +768,7 @@ export const processErrorHandlingTestSuite = ({ it }: { it: TestAPI<TestSuiteCon
       }),
     );
 
-    await withWorkers([await worker.start()], async () => {
+    await withWorkerRunners([await workerRunner.start()], async () => {
       const completed = await client.awaitChain(chain, completionOptions);
       expect(completed.output).toEqual({ result: 20 });
     });

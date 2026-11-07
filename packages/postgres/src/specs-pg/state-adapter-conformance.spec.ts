@@ -5,7 +5,7 @@ import { Pool, type PoolClient } from "pg";
 import {
   type StateAdapter,
   createClient,
-  createInProcessWorker,
+  createWorkerRunner,
   createProcessors,
   defineJobTypes,
   withTxHooks,
@@ -13,7 +13,7 @@ import {
 import {
   extendWithResourceLeakDetection,
   stateAdapterConformanceTestSuite,
-  withWorkers,
+  withWorkerRunners,
 } from "queuert/testing";
 import { it as baseIt, describe, expectTypeOf, vi } from "vitest";
 
@@ -67,7 +67,7 @@ describe("PostgreSQL State Adapter Conformance", () => {
         client.release();
 
         const stateProvider = createPgPoolProvider({ pool });
-        const adapter = await createPgStateAdapter({ stateProvider });
+        const adapter = createPgStateAdapter({ stateProvider });
         await adapter.migrateToLatest();
         return use(adapter as unknown as StateAdapter<{ $test: true }, string, string>);
       },
@@ -97,7 +97,7 @@ it("infers custom ID types through the full stack", async ({ postgresConnectionS
 
   try {
     const stateProvider = createPgPoolProvider({ pool });
-    const stateAdapter = await createPgStateAdapter({
+    const stateAdapter = createPgStateAdapter({
       stateProvider,
       jobIdType: "text",
       generateJobId: (): `job.${UUID}` => `job.${randomUUID()}`,
@@ -106,7 +106,7 @@ it("infers custom ID types through the full stack", async ({ postgresConnectionS
     await stateAdapter.migrateToLatest();
 
     const notifyProvider = createPgPoolNotifyProvider({ pool });
-    const notifyAdapter = await createPgNotifyAdapter({
+    const notifyAdapter = createPgNotifyAdapter({
       notifyProvider,
       channelPrefix: `spec_${Date.now()}_${Math.random().toString(36).slice(2)}`,
     });
@@ -120,7 +120,7 @@ it("infers custom ID types through the full stack", async ({ postgresConnectionS
       };
     }>();
 
-    const client = await createClient({
+    const client = createClient({
       stateAdapter,
       notifyAdapter,
       log,
@@ -141,7 +141,7 @@ it("infers custom ID types through the full stack", async ({ postgresConnectionS
       }
     };
 
-    const worker = await createInProcessWorker({
+    const workerRunner = createWorkerRunner({
       client,
       processors: createProcessors({
         client,
@@ -178,7 +178,7 @@ it("infers custom ID types through the full stack", async ({ postgresConnectionS
     );
     expectTypeOf(chain.id).toEqualTypeOf<`job.${UUID}`>();
 
-    await withWorkers([await worker.start()], async () => {
+    await withWorkerRunners([await workerRunner.start()], async () => {
       await client.awaitChain(chain, { timeoutMs: 1000 });
     });
   } finally {

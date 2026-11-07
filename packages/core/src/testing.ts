@@ -48,7 +48,7 @@ export {
 } from "./state-adapter/state-adapter.spy.spec-helper.ts";
 
 // Worker Test Helper
-export { withWorkers } from "@queuert/helpers";
+export { withWorkerRunners } from "@queuert/helpers";
 
 // Migration fixture seeding
 export { seedAllStates, seedConfig, type SeedSentinels } from "./conformance/seed-all-states.ts";

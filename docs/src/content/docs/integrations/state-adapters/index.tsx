@@ -157,7 +157,7 @@ const Page = () => (
       State adapters abstract database operations for job persistence. They handle job creation,
       status transitions, attempt tracking, and queries. Every option below implements the same{" "}
       <code>StateAdapter</code> interface, which <code>createClient</code> and{" "}
-      <code>createInProcessWorker</code> consume.
+      <code>createWorkerRunner</code> consume.
     </p>
     <OptionCards items={adapters} />
 

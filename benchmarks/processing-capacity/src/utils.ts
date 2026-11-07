@@ -5,7 +5,7 @@ import {
   type NotifyAdapter,
   type StateAdapter,
   createClient,
-  createInProcessWorker,
+  createWorkerRunner,
   createProcessors,
   defineJobTypes,
   withTxHooks,
@@ -94,7 +94,7 @@ const completeChainsForWindow =
       measured.resolve();
     };
 
-    const worker = await createInProcessWorker({
+    const workerRunner = createWorkerRunner({
       client,
       concurrency,
       processors: createProcessors({
@@ -119,13 +119,13 @@ const completeChainsForWindow =
     });
 
     begin = performance.now();
-    const stopWorker = await worker.start();
+    const stopWorkerRunner = await workerRunner.start();
     const windowTimer = setTimeout(() => {
       finish(performance.now());
     }, WINDOW_MS);
     await measured.promise;
     clearTimeout(windowTimer);
-    await stopWorker();
+    await stopWorkerRunner();
     return measurement!;
   };
 
@@ -210,7 +210,7 @@ export const runBenchmark = async ({
 }): Promise<void> => {
   const name = parseScenarioName();
   const scenario = scenarios[name];
-  const client = await createClient({ stateAdapter, notifyAdapter, jobTypes });
+  const client = createClient({ stateAdapter, notifyAdapter, jobTypes });
   const context: BenchmarkContext = { client, withTransaction: stateAdapter.withTransaction };
 
   console.log(`\n${title} — ${name}`);

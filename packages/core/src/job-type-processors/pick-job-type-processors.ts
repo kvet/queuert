@@ -41,7 +41,7 @@ const selectProcessors = (
  * `backoffConfig`.
  *
  * @example
- * const imageWorker = await createInProcessWorker({
+ * const imageWorkerRunner = createWorkerRunner({
  *   client,
  *   processors: pickProcessors(appProcessors, ["images.resize", "images.transcode"]),
  * });
@@ -73,7 +73,7 @@ export const pickProcessors = <
  * Each remaining processor keeps its handler, its middleware chain and its `backoffConfig`.
  *
  * @example
- * const defaultWorker = await createInProcessWorker({
+ * const defaultWorkerRunner = createWorkerRunner({
  *   client,
  *   processors: omitProcessors(appProcessors, ["images.resize", "images.transcode"]),
  * });

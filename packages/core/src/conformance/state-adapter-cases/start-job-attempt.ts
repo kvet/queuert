@@ -865,7 +865,7 @@ export const startJobAttemptGroup: ConformanceGroup<StateConformanceFixture> = {
       },
     },
     {
-      name: "claims nothing for a stale run of the worker",
+      name: "claims nothing for a stale registration of the worker",
       run: async ({ stateAdapter }, expect) => {
         const workerId = stateAdapter.config.generateWorkerId();
         const staleRun = await stateAdapter.startWorker({

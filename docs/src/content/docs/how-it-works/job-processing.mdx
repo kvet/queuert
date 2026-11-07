@@ -88,7 +88,7 @@ Observability events and notifications produced by `complete` are buffered in `t
   </Flow>
 </Diagram>
 
-1. **Acquire.** The worker starts an attempt under its id, which it holds while the worker's lease is live; see [In-Process Worker](../in-process-worker/#worker-lease).
+1. **Acquire.** The worker starts an attempt under its id, which it holds while the worker's lease is live; see [Worker Runner](../worker-runner/#worker-lease).
 2. **Handler.** Your handler does its work, then opens a transaction, calls `complete` in it, and returns the `complete` result.
 3. **Commit detection.** The worker records the attempt as completed if a `complete` call's `txHooks` flushed, and otherwise fails it; see [Errors and Commit Detection](#errors-and-commit-detection).
 
@@ -144,7 +144,7 @@ Flushed hooks stand for a committed write only when these preconditions hold:
 - **A `complete` inside a callback the driver may rerun is wrapped in `txHooks.retryBoundary`**, so a rolled-back try's write is not counted. See [Tx Hooks](../../guides/tx-hooks/#drivers-that-rerun-the-callback).
 - **The transaction rejects when it rolls back**, so the hooks discard. A knex transaction resolves after a bare `trx.rollback()` unless it is given `{ doNotRejectOnRollback: false }`. See [Tx Hooks](../../guides/tx-hooks/#a-resolved-transaction-counts-as-committed).
 
-If any of them is broken, the worker can count the attempt as completed although nothing was written. The job then stays `running` until the worker is next idle and reclaims it as a failed attempt; see [In-Process Worker](../in-process-worker/#reclaim).
+If any of them is broken, the worker can count the attempt as completed although nothing was written. The job then stays `running` until the worker is next idle and reclaims it as a failed attempt; see [Worker Runner](../worker-runner/#reclaim).
 
 See [Job Processing Reliability](../processing-reliability/) for each scenario with code examples, and [Error Handling](../../guides/error-handling/) for handling permanently failing jobs.
 
@@ -170,7 +170,7 @@ attemptHandler: async ({ signal, complete }) => {
 
 - [Job Processing Reliability](../processing-reliability/) — What happens when a handler throws, before and after `complete`
 - [Client API](/queuert/api/core/type-aliases/client/) — Mutation methods, query methods, awaitChain
-- [In-Process Worker](../in-process-worker/) — Worker lifecycle, worker lease, reclaim
+- [Worker Runner](../worker-runner/) — Worker lifecycle, worker lease, reclaim
 - [State Adapters — the transaction context](/queuert/integrations/state-adapters/#transaction-context) — what the transaction context represents and how it is passed
 - [`showcase-timeouts`](https://github.com/kvet/queuert/tree/main/examples/showcase-timeouts) — Runnable example: work that outlasts the worker lease while the heartbeat renews it, then `complete` in your own transaction
 - [`showcase-signals`](https://github.com/kvet/queuert/tree/main/examples/showcase-signals) — Runnable example: external completion via `completeChain`, graceful shutdown with partial results

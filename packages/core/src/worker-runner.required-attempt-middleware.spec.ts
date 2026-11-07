@@ -2,7 +2,6 @@ import { describe, expect, it } from "vitest";
 
 import type { AttemptMiddleware } from "./attempt-middleware/attempt-middleware.ts";
 import { createClient } from "./client.ts";
-import { createInProcessWorker } from "./in-process-worker.ts";
 import { createProcessors } from "./job-type-processors/create-job-type-processors.ts";
 import { defineJobTypes } from "./job-types/define-job-types.ts";
 import {
@@ -10,6 +9,7 @@ import {
   createInProcessStateAdapter,
 } from "./state-adapter/state-adapter.in-process.ts";
 import { withTxHooks } from "./tx-hooks/tx-hooks.ts";
+import { createWorkerRunner } from "./worker-runner.ts";
 
 type Defs = {
   foo: { entry: true; input: null; output: null };
@@ -37,13 +37,13 @@ const metricsMiddleware: AttemptMiddleware<
   wrapHandler: async ({ next }) => next({ metricsSink: { count: 0 } }),
 };
 
-describe("createInProcessWorker requiredAttemptMiddleware", () => {
+describe("createWorkerRunner requiredAttemptMiddleware", () => {
   it("constructs when the single slice contains required middleware in order", async () => {
     const jobTypes = defineJobTypes<Defs>();
-    const stateAdapter = await createInProcessStateAdapter();
-    const client = await createClient({ stateAdapter, jobTypes });
+    const stateAdapter = createInProcessStateAdapter();
+    const client = createClient({ stateAdapter, jobTypes });
 
-    const worker = await createInProcessWorker({
+    const workerRunner = createWorkerRunner({
       client,
       requiredAttemptMiddleware: [authMiddleware, traceMiddleware],
       processors: createProcessors({
@@ -63,16 +63,16 @@ describe("createInProcessWorker requiredAttemptMiddleware", () => {
       }),
     });
 
-    const stop = await worker.start();
+    const stop = await workerRunner.start();
     await stop();
   });
 
   it("allows extra middleware around the required entries", async () => {
     const jobTypes = defineJobTypes<Defs>();
-    const stateAdapter = await createInProcessStateAdapter();
-    const client = await createClient({ stateAdapter, jobTypes });
+    const stateAdapter = createInProcessStateAdapter();
+    const client = createClient({ stateAdapter, jobTypes });
 
-    const worker = await createInProcessWorker({
+    const workerRunner = createWorkerRunner({
       client,
       requiredAttemptMiddleware: [authMiddleware, traceMiddleware],
       processors: createProcessors({
@@ -92,17 +92,17 @@ describe("createInProcessWorker requiredAttemptMiddleware", () => {
       }),
     });
 
-    const stop = await worker.start();
+    const stop = await workerRunner.start();
     await stop();
   });
 
   it("throws when a slice is missing a required middleware instance", async () => {
     const jobTypes = defineJobTypes<Defs>();
-    const stateAdapter = await createInProcessStateAdapter();
-    const client = await createClient({ stateAdapter, jobTypes });
+    const stateAdapter = createInProcessStateAdapter();
+    const client = createClient({ stateAdapter, jobTypes });
 
-    await expect(
-      createInProcessWorker({
+    expect(() => {
+      createWorkerRunner({
         client,
         requiredAttemptMiddleware: [authMiddleware, traceMiddleware],
         // @ts-expect-error — slice is missing traceMiddleware; the compile-time
@@ -122,17 +122,17 @@ describe("createInProcessWorker requiredAttemptMiddleware", () => {
             },
           },
         }),
-      }),
-    ).rejects.toThrow(/missing requiredAttemptMiddleware at position\(s\) \[1\]/);
+      });
+    }).toThrow(/missing requiredAttemptMiddleware at position\(s\) \[1\]/);
   });
 
   it("throws when required middleware appear out of order", async () => {
     const jobTypes = defineJobTypes<Defs>();
-    const stateAdapter = await createInProcessStateAdapter();
-    const client = await createClient({ stateAdapter, jobTypes });
+    const stateAdapter = createInProcessStateAdapter();
+    const client = createClient({ stateAdapter, jobTypes });
 
-    await expect(
-      createInProcessWorker({
+    expect(() => {
+      createWorkerRunner({
         client,
         requiredAttemptMiddleware: [authMiddleware, traceMiddleware],
         // @ts-expect-error — order reversed; with distinct middleware types the
@@ -152,14 +152,14 @@ describe("createInProcessWorker requiredAttemptMiddleware", () => {
             },
           },
         }),
-      }),
-    ).rejects.toThrow(/missing requiredAttemptMiddleware/);
+      });
+    }).toThrow(/missing requiredAttemptMiddleware/);
   });
 
   it("identity check uses reference equality at runtime (structural twin still fails)", async () => {
     const jobTypes = defineJobTypes<Defs>();
-    const stateAdapter = await createInProcessStateAdapter();
-    const client = await createClient({ stateAdapter, jobTypes });
+    const stateAdapter = createInProcessStateAdapter();
+    const client = createClient({ stateAdapter, jobTypes });
 
     // Two structurally-identical middleware values: same injected ctx shape, so
     // the compile-time check cannot tell them apart and accepts the call. The
@@ -171,8 +171,8 @@ describe("createInProcessWorker requiredAttemptMiddleware", () => {
       wrapHandler: async ({ next }) => next({ traceId: "impostor" }),
     };
 
-    await expect(
-      createInProcessWorker({
+    expect(() => {
+      createWorkerRunner({
         client,
         requiredAttemptMiddleware: [required],
         processors: createProcessors({
@@ -190,15 +190,15 @@ describe("createInProcessWorker requiredAttemptMiddleware", () => {
             },
           },
         }),
-      }),
-    ).rejects.toThrow(/missing requiredAttemptMiddleware/);
+      });
+    }).toThrow(/missing requiredAttemptMiddleware/);
   });
 
   it("aggregates violations across multiple slices in one error", async () => {
     const fooJobTypes = defineJobTypes<Defs>();
     const barJobTypes = defineJobTypes<OtherDefs>();
-    const stateAdapter = await createInProcessStateAdapter();
-    const client = await createClient({
+    const stateAdapter = createInProcessStateAdapter();
+    const client = createClient({
       stateAdapter,
       jobTypes: [fooJobTypes, barJobTypes],
     });
@@ -234,14 +234,14 @@ describe("createInProcessWorker requiredAttemptMiddleware", () => {
       },
     });
 
-    await expect(
-      createInProcessWorker({
+    expect(() => {
+      createWorkerRunner({
         client,
         requiredAttemptMiddleware: [authMiddleware],
         // @ts-expect-error — second slice is missing authMiddleware
         processors: [goodSlice, badSlice],
-      }),
-    ).rejects.toThrow(/"bar": missing requiredAttemptMiddleware at position\(s\) \[0\]/);
+      });
+    }).toThrow(/"bar": missing requiredAttemptMiddleware at position\(s\) \[0\]/);
   });
 
   it("accepts a slice typed against a user-supplied StateAdapter alias", async () => {
@@ -250,10 +250,10 @@ describe("createInProcessWorker requiredAttemptMiddleware", () => {
     };
 
     const jobTypes = defineJobTypes<Defs>();
-    const stateAdapter = await createInProcessStateAdapter();
-    const client = await createClient({ stateAdapter, jobTypes });
+    const stateAdapter = createInProcessStateAdapter();
+    const client = createClient({ stateAdapter, jobTypes });
 
-    const worker = await createInProcessWorker({
+    const workerRunner = createWorkerRunner({
       client,
       requiredAttemptMiddleware: [mw],
       processors: createProcessors({
@@ -273,7 +273,7 @@ describe("createInProcessWorker requiredAttemptMiddleware", () => {
       }),
     });
 
-    const stop = await worker.start();
+    const stop = await workerRunner.start();
     await stop();
   });
 
@@ -286,11 +286,11 @@ describe("createInProcessWorker requiredAttemptMiddleware", () => {
     };
 
     const jobTypes = defineJobTypes<Defs>();
-    const stateAdapter = await createInProcessStateAdapter();
-    const client = await createClient({ stateAdapter, jobTypes });
+    const stateAdapter = createInProcessStateAdapter();
+    const client = createClient({ stateAdapter, jobTypes });
 
-    await expect(
-      createInProcessWorker({
+    expect(() => {
+      createWorkerRunner({
         client,
         requiredAttemptMiddleware: [required],
         // @ts-expect-error — slice has a distinct middleware shape; the
@@ -311,16 +311,16 @@ describe("createInProcessWorker requiredAttemptMiddleware", () => {
             },
           },
         }),
-      }),
-    ).rejects.toThrow(/missing requiredAttemptMiddleware/);
+      });
+    }).toThrow(/missing requiredAttemptMiddleware/);
   });
 
   it("is a no-op when requiredAttemptMiddleware is omitted", async () => {
     const jobTypes = defineJobTypes<Defs>();
-    const stateAdapter = await createInProcessStateAdapter();
-    const client = await createClient({ stateAdapter, jobTypes });
+    const stateAdapter = createInProcessStateAdapter();
+    const client = createClient({ stateAdapter, jobTypes });
 
-    const worker = await createInProcessWorker({
+    const workerRunner = createWorkerRunner({
       client,
       processors: createProcessors({
         client,
@@ -338,7 +338,7 @@ describe("createInProcessWorker requiredAttemptMiddleware", () => {
       }),
     });
 
-    const stop = await worker.start();
+    const stop = await workerRunner.start();
     await stop();
   });
 });

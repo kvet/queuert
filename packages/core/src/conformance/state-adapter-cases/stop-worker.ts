@@ -110,7 +110,7 @@ export const stopWorkerGroup: ConformanceGroup<StateConformanceFixture> = {
       },
     },
     {
-      name: "returns undefined for a stale run and keeps the current row",
+      name: "returns undefined for a stale registration and keeps the current row",
       run: async ({ stateAdapter }, expect) => {
         const workerId = stateAdapter.config.generateWorkerId();
         const staleRun = await stateAdapter.startWorker({

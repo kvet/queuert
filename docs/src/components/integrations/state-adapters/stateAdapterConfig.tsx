@@ -50,8 +50,8 @@ export const stateAdapterConfigItems = (): FieldItem[] => [
     chips: [{ label: "crypto.randomUUID", mono: true }],
     description: (
       <>
-        Called once for each in-process worker created without a <code>workerId</code>; must return
-        a new id on every call.
+        Called once for each worker runner created without a <code>workerId</code>; must return a
+        new id on every call.
       </>
     ),
   },
@@ -60,7 +60,7 @@ export const stateAdapterConfigItems = (): FieldItem[] => [
     chips: [{ label: "accept all", mono: true }],
     description: (
       <>
-        Runs on the configured or generated worker id; <code>createInProcessWorker</code> throws{" "}
+        Runs on the configured or generated worker id; <code>createWorkerRunner</code> throws{" "}
         <code>InvalidWorkerIdError</code> on failure.
       </>
     ),

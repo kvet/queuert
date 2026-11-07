@@ -10,7 +10,7 @@ test("notify-nats-transport-node adapter passes notify adapter conformance", asy
 
   await runNotifyAdapterConformance(async () => {
     const nc = await connect(nats.connectionOptions);
-    const notifyAdapter = await createNatsNotifyAdapter({
+    const notifyAdapter = createNatsNotifyAdapter({
       nc,
       subjectPrefix: `queuert.spec.${Date.now()}.${Math.random().toString(36).slice(2)}`,
     });

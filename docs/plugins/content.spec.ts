@@ -100,7 +100,7 @@ describe("pagesFromSources", () => {
         { file: "api/core/functions/createClient.md", source: apiPage("Function: createClient()") },
         { file: "api/core/README.md", source: "Start with `createClient(`." },
         { file: "guides/inline.md", source: "Call `createClient` once per process." },
-        { file: "guides/fenced.md", source: "```ts\nconst client = await createClient({});\n```" },
+        { file: "guides/fenced.md", source: "```ts\nconst client = createClient({});\n```" },
         { file: "guides/call.md", source: "Call `createClient({ stateAdapter })`." },
         { file: "guides/mdx.mdx", source: "<p>Use <code>createClient</code> here.</p>" },
         {

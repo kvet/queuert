@@ -9,7 +9,7 @@ const schema = benchmarkNamespace();
 await sql.unsafe(`CREATE SCHEMA ${schema}`);
 const stateProvider = createPostgresJsStateProvider({ sql });
 
-const stateAdapter = await createPgStateAdapter({ stateProvider, schema });
+const stateAdapter = createPgStateAdapter({ stateProvider, schema });
 await stateAdapter.migrateToLatest();
 
 await runBenchmark({

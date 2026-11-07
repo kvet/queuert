@@ -2,7 +2,6 @@ import { describe, expect, it } from "vitest";
 
 import type { AttemptMiddleware } from "./attempt-middleware/attempt-middleware.ts";
 import { createClient } from "./client.ts";
-import { createInProcessWorker } from "./in-process-worker.ts";
 import { createProcessors } from "./job-type-processors/create-job-type-processors.ts";
 import { defineJobTypes } from "./job-types/define-job-types.ts";
 import {
@@ -10,14 +9,15 @@ import {
   type InProcessStateAdapter,
 } from "./state-adapter/state-adapter.in-process.ts";
 import { withTxHooks } from "./tx-hooks/tx-hooks.ts";
+import { createWorkerRunner } from "./worker-runner.ts";
 
 type Defs = {
   foo: { entry: true; input: { v: number }; output: { ok: true } };
 };
 const jobTypes = defineJobTypes<Defs>();
 
-const stateAdapter = await createInProcessStateAdapter();
-const client = await createClient({ stateAdapter, jobTypes });
+const stateAdapter = createInProcessStateAdapter();
+const client = createClient({ stateAdapter, jobTypes });
 
 describe("middleware ctx cannot shadow built-in handler keys", () => {
   it("handler built-ins (signal, job, complete) win over middleware-injected ctx", async () => {
@@ -55,7 +55,7 @@ describe("middleware ctx cannot shadow built-in handler keys", () => {
       },
     });
 
-    const worker = await createInProcessWorker({
+    const workerRunner = createWorkerRunner({
       client,
       processors: registry,
     });
@@ -64,7 +64,7 @@ describe("middleware ctx cannot shadow built-in handler keys", () => {
         client.createChain({ ...txCtx, txHooks, typeName: "foo", input: { v: 1 } }),
       ),
     );
-    const stop = await worker.start();
+    const stop = await workerRunner.start();
     await client.awaitChain(chain, { timeoutMs: 5000, pollIntervalMs: 50 });
     await stop();
 
@@ -118,7 +118,7 @@ describe("middleware ctx flows into the handler through wrapHandler", () => {
       },
     });
 
-    const worker = await createInProcessWorker({
+    const workerRunner = createWorkerRunner({
       client,
       processors: registry,
     });
@@ -127,7 +127,7 @@ describe("middleware ctx flows into the handler through wrapHandler", () => {
         client.createChain({ ...txCtx, txHooks, typeName: "foo", input: { v: 1 } }),
       ),
     );
-    const stop = await worker.start();
+    const stop = await workerRunner.start();
     await client.awaitChain(chain, { timeoutMs: 5000, pollIntervalMs: 50 });
     await stop();
 
@@ -169,8 +169,8 @@ describe("registry-level attemptMiddleware — runtime per-slice isolation", () 
     type BDefs = { b: { entry: true; input: Record<string, never>; output: null } };
     const aReg = defineJobTypes<ADefs>();
     const bReg = defineJobTypes<BDefs>();
-    const sa = await createInProcessStateAdapter();
-    const abClient = await createClient({
+    const sa = createInProcessStateAdapter();
+    const abClient = createClient({
       stateAdapter: sa,
       jobTypes: [aReg, bReg],
     });
@@ -202,7 +202,7 @@ describe("registry-level attemptMiddleware — runtime per-slice isolation", () 
       },
     });
 
-    const worker = await createInProcessWorker({
+    const workerRunner = createWorkerRunner({
       client: abClient,
       processors: [aProcessors, bProcessors],
     });
@@ -217,7 +217,7 @@ describe("registry-level attemptMiddleware — runtime per-slice isolation", () 
         abClient.createChain({ ...txCtx, txHooks, typeName: "b", input: {} }),
       ),
     );
-    const stop = await worker.start();
+    const stop = await workerRunner.start();
     await abClient.awaitChain(chainA, { timeoutMs: 5000, pollIntervalMs: 100 });
     await abClient.awaitChain(chainB, { timeoutMs: 5000, pollIntervalMs: 100 });
     await stop();

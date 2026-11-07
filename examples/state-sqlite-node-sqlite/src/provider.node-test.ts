@@ -13,7 +13,7 @@ const createFixture = async (): Promise<StateConformanceFixture> => {
 
   const lock = createAsyncRwLock();
   const stateProvider = createNodeSqliteStateProvider({ db, lock });
-  const adapter = await createSqliteStateAdapter({ stateProvider });
+  const adapter = createSqliteStateAdapter({ stateProvider });
   await adapter.migrateToLatest();
 
   return {

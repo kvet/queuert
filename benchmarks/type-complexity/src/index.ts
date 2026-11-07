@@ -199,7 +199,7 @@ const generateMiddleware = (count: number): string => {
   for (let i = 0; i < count; i++) {
     decls.push(
       `const middleware${i}: AttemptMiddleware<
-  Awaited<ReturnType<typeof createInProcessStateAdapter>>,
+  ReturnType<typeof createInProcessStateAdapter>,
   { ctx${i}: number }
 > = {
   wrapHandler: async ({ job, next }) => {
@@ -223,7 +223,7 @@ const wrapInScenario = (defs: JobTypeDef[], middlewareCount = 1): string => {
   const mwList = middlewareList(middlewareCount);
   const mwPart = mwList ? `attemptMiddleware: [${mwList}], ` : "";
 
-  return `import { defineJobTypes, createProcessors, createInProcessWorker, createClient, withTxHooks, type AttemptMiddleware, createInProcessStateAdapter, createInProcessNotifyAdapter } from "queuert";
+  return `import { defineJobTypes, createProcessors, createWorkerRunner, createClient, withTxHooks, type AttemptMiddleware, createInProcessStateAdapter, createInProcessNotifyAdapter } from "queuert";
 
 type Defs = {
 ${typeStrings.join("\n")}
@@ -231,22 +231,22 @@ ${typeStrings.join("\n")}
 
 const jobTypes = defineJobTypes<Defs>();
 
-const stateAdapter = await createInProcessStateAdapter();
-const notifyAdapter = await createInProcessNotifyAdapter();
+const stateAdapter = createInProcessStateAdapter();
+const notifyAdapter = createInProcessNotifyAdapter();
 
-const client = await createClient({
+const client = createClient({
   stateAdapter,
   notifyAdapter,
   jobTypes,
 });
 
 ${middleware}
-const worker = await createInProcessWorker({
+const workerRunner = createWorkerRunner({
   client,
   processors: createProcessors({ client, jobTypes, ${mwPart}processors: ${processors} }),
 });
 
-const stop = await worker.start();
+const stop = await workerRunner.start();
 ${clientCalls}
 await stop();
 `;
@@ -280,13 +280,13 @@ const ${slice.name}Registry = defineJobTypes<${slice.name}Defs>();`;
   const clientCalls = generateClientCalls(allDefs);
   const middleware = generateMiddleware(middlewareCount);
 
-  return `import { defineJobTypes, createProcessors, createInProcessWorker, createClient, withTxHooks, type AttemptMiddleware, createInProcessStateAdapter, createInProcessNotifyAdapter } from "queuert";
+  return `import { defineJobTypes, createProcessors, createWorkerRunner, createClient, withTxHooks, type AttemptMiddleware, createInProcessStateAdapter, createInProcessNotifyAdapter } from "queuert";
 ${sliceTypeDecls.join("\n")}
 
-const stateAdapter = await createInProcessStateAdapter();
-const notifyAdapter = await createInProcessNotifyAdapter();
+const stateAdapter = createInProcessStateAdapter();
+const notifyAdapter = createInProcessNotifyAdapter();
 
-const client = await createClient({
+const client = createClient({
   stateAdapter,
   notifyAdapter,
   jobTypes: [${registryNames.join(", ")}],
@@ -295,12 +295,12 @@ const client = await createClient({
 ${middleware}
 ${sliceProcessorDecls.join("\n")}
 
-const worker = await createInProcessWorker({
+const workerRunner = createWorkerRunner({
   client,
   processors: [${processorNames.join(", ")}],
 });
 
-const stop = await worker.start();
+const stop = await workerRunner.start();
 ${clientCalls}
 await stop();
 `;

@@ -25,7 +25,7 @@ const natsSubjectOpen =
  * @param options - NATS notify adapter configuration.
  * @experimental
  */
-export const createNatsNotifyAdapter = async ({
+export const createNatsNotifyAdapter = ({
   nc,
   subjectPrefix = "queuert",
 }: {
@@ -33,7 +33,7 @@ export const createNatsNotifyAdapter = async ({
   nc: NatsConnection;
   /** Prefix for all NATS subject names. @defaultValue `"queuert"` */
   subjectPrefix?: string;
-}): Promise<NotifyAdapter> => {
+}): NotifyAdapter => {
   const jobScheduledSubject = `${subjectPrefix}.sched`;
   const chainCompletedSubject = `${subjectPrefix}.chainc`;
   const attemptLostSubject = `${subjectPrefix}.atls`;

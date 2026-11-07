@@ -39,7 +39,7 @@ export const extendWithVarianceStateSqlite = <T>(
     stateAdapter: [
       async ({ db }, use) => {
         const stateProvider = createBetterSqlite3Provider({ db });
-        const adapter = await createSqliteStateAdapter({ stateProvider, ...options });
+        const adapter = createSqliteStateAdapter({ stateProvider, ...options });
         await adapter.migrateToLatest();
         return use(adapter as unknown as StateAdapter<{ $test: true }, string, string>);
       },

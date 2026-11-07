@@ -43,7 +43,7 @@ describe("releaseToHtml", () => {
   });
 
   it("highlights fenced code into a release-code block", async () => {
-    const { html } = await releaseToHtml("```ts\nconst client = await createClient({});\n```");
+    const { html } = await releaseToHtml("```ts\nconst client = createClient({});\n```");
 
     expect(html).toContain('<div class="release-code">');
     expect(html).toContain("shiki");

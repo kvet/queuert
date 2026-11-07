@@ -27,10 +27,10 @@ const ApiOverview = () => (
         </A>{" "}
         and{" "}
         <A
-          href="/api/core/functions/createinprocessworker/"
+          href="/api/core/functions/createworkerrunner/"
           class="text-accent-fg underline decoration-accent-fg/35 underline-offset-3 hover:decoration-current"
         >
-          createInProcessWorker
+          createWorkerRunner
         </A>
         , then pick the adapters for your stack.
       </p>

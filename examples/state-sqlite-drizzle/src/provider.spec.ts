@@ -12,7 +12,7 @@ test("state-sqlite-drizzle provider passes state adapter conformance", async () 
 
     const lock = createAsyncRwLock();
     const stateProvider = createDrizzleSqliteStateProvider({ db, lock });
-    const adapter = await createSqliteStateAdapter({ stateProvider });
+    const adapter = createSqliteStateAdapter({ stateProvider });
     await adapter.migrateToLatest();
 
     return {

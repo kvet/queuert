@@ -4,5 +4,5 @@ import { runBenchmark } from "./utils.ts";
 
 await runBenchmark({
   title: "PROCESSING CAPACITY — IN-PROCESS",
-  stateAdapter: await createInProcessStateAdapter(),
+  stateAdapter: createInProcessStateAdapter(),
 });

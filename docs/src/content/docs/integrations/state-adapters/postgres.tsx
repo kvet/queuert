@@ -172,7 +172,7 @@ const Page = () => (
     <h2>Configuration</h2>
     <FieldList title="createPgStateAdapter" idPrefix="option" items={options()} />
     <Code lang="ts">{`
-      const stateAdapter = await createPgStateAdapter({
+      const stateAdapter = createPgStateAdapter({
         stateProvider,
         maxBlockersPerJob: 500,
         countCap: 50_000,

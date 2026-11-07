@@ -61,26 +61,26 @@ export const orderProcessors = createProcessors({
 });
 ```
 
-`createProcessors` type-checks each handler against the slice's own definitions (plus any external defs it declares), then returns a `Processors` that's plugged into `createInProcessWorker`.
+`createProcessors` type-checks each handler against the slice's own definitions (plus any external defs it declares), then returns a `Processors` that's plugged into `createWorkerRunner`.
 
 ## Composing Slices
 
-At the application level, pass arrays of slices directly to `createClient` and `createInProcessWorker`:
+At the application level, pass arrays of slices directly to `createClient` and `createWorkerRunner`:
 
 ```ts
-import { createClient, createInProcessWorker } from "queuert";
+import { createClient, createWorkerRunner } from "queuert";
 import { orderJobTypes } from "./slice-orders-definitions.js";
 import { orderProcessors } from "./slice-orders-processors.js";
 import { notificationJobTypes } from "./slice-notifications-definitions.js";
 import { notificationProcessors } from "./slice-notifications-processors.js";
 
-const client = await createClient({
+const client = createClient({
   stateAdapter,
   notifyAdapter,
   jobTypes: [orderJobTypes, notificationJobTypes],
 });
 
-const worker = await createInProcessWorker({
+const workerRunner = createWorkerRunner({
   client,
   processors: [orderProcessors, notificationProcessors],
 });
@@ -89,7 +89,7 @@ const worker = await createInProcessWorker({
 Both fields accept a single slice or an array of slices. When an array is passed, duplicate type/processor keys are detected:
 
 - **`createClient` / `jobTypes`** — overlapping type names produce a TypeScript error at compile time; validated registries with overlapping `getTypeNames()` throw `DuplicateJobTypeError` at runtime.
-- **`createInProcessWorker` / `processors`** — overlapping processor keys produce a TypeScript error at compile time and throw `DuplicateJobTypeError` at runtime.
+- **`createWorkerRunner` / `processors`** — overlapping processor keys produce a TypeScript error at compile time and throw `DuplicateJobTypeError` at runtime.
 
 To run a slice's job types on different workers, split its registry with `pickProcessors` / `omitProcessors` — see [Splitting a Registry](../horizontal-scaling/#splitting-a-registry).
 

@@ -38,7 +38,7 @@ const jobTypes = defineJobTypes<{
 Start the chain _inside_ your application's DB transaction. If the transaction rolls back (because, say, user creation fails a constraint check), the chain is never created. There's no separate queue to keep in sync — your DB transaction is the boundary. (See [transactional outbox pattern](https://microservices.io/patterns/data/transactional-outbox.html).)
 
 ```ts
-const client = await createClient({ stateAdapter, jobTypes });
+const client = createClient({ stateAdapter, jobTypes });
 
 await withTxHooks(async (txHooks) =>
   db.transaction(async (tx) => {
@@ -58,7 +58,7 @@ await withTxHooks(async (txHooks) =>
 A worker picks up each step and continues to the next. The compiler enforces that `continueWith` matches the declared next type's input.
 
 ```ts
-const worker = await createInProcessWorker({
+const workerRunner = createWorkerRunner({
   client,
   processors: createProcessors({
     client,
@@ -88,7 +88,7 @@ const worker = await createInProcessWorker({
   }),
 });
 
-const stop = await worker.start();
+const stop = await workerRunner.start();
 ```
 
 ## Where it fits

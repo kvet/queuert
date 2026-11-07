@@ -11,7 +11,7 @@
 import { Type } from "@sinclair/typebox";
 import {
   createClient,
-  createInProcessWorker,
+  createWorkerRunner,
   createProcessors,
   withTxHooks,
   createInProcessNotifyAdapter,
@@ -81,17 +81,17 @@ const jobTypes = createTypeBoxJobTypes({
 // #endregion
 
 // Create queuert client with the jobTypes
-const stateAdapter = await createInProcessStateAdapter();
-const notifyAdapter = await createInProcessNotifyAdapter();
+const stateAdapter = createInProcessStateAdapter();
+const notifyAdapter = createInProcessNotifyAdapter();
 
-const client = await createClient({
+const client = createClient({
   stateAdapter,
   notifyAdapter,
   jobTypes,
 });
 
-// Create and start worker with job type processors
-const worker = await createInProcessWorker({
+// Create and start worker runner with job type processors
+const workerRunner = createWorkerRunner({
   client,
   processors: createProcessors({
     client,
@@ -168,7 +168,7 @@ const worker = await createInProcessWorker({
   }),
 });
 
-const stopWorker = await worker.start();
+const stopWorkerRunner = await workerRunner.start();
 
 // Run a chain
 console.log("\n=== Running fetch-data chain ===");
@@ -187,7 +187,7 @@ const result = await client.awaitChain(chain, { timeoutMs: 5000 });
 console.log("Chain completed:", result.output);
 
 // Cleanup
-await stopWorker();
+await stopWorkerRunner();
 await notifyAdapter.close();
 await stateAdapter.close();
 console.log("\n=== Done ===");

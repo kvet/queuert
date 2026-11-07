@@ -6,7 +6,7 @@ import type { JobTypeNames, JobTypeReachingEntry } from "../job-types/job-types.
 import type { StateAdapter } from "../state-adapter/state-adapter.ts";
 
 /** Configuration for processing a single job type. */
-export type InProcessWorkerProcessor<
+export type Processor<
   TStateAdapter extends StateAdapter<any, any, any>,
   TJobTypeDefinitions extends BaseJobTypeDefinitions,
   TJobTypeName extends string,
@@ -20,7 +20,7 @@ export type InProcessWorkerProcessor<
     JobTypeReachingEntry<TJobTypeDefinitions, TJobTypeName>,
     THandlerCtx
   >;
-  /** Per-job-type backoff configuration (overrides registry/worker defaults) */
+  /** Per-job-type backoff configuration (overrides registry/worker runner defaults) */
   backoffConfig?: BackoffConfig;
 };
 
@@ -43,7 +43,7 @@ export const processorAttemptMiddlewareSymbol: unique symbol = Symbol(
 
 /**
  * Symbol used to carry the slice's middleware tuple type on a processor registry,
- * so the worker can compile-time-check it against `requiredAttemptMiddleware`.
+ * so the worker runner can compile-time-check it against `requiredAttemptMiddleware`.
  * The runtime tuple is also stamped per processor under
  * `processorAttemptMiddlewareSymbol`; this is purely a type-level carrier.
  * @internal
@@ -62,14 +62,14 @@ export type ProcessorMiddlewareTuple<T extends Processors> = T[typeof processors
  *
  * Created via {@link createProcessors}, or narrowed from an existing registry with
  * {@link pickProcessors} / {@link omitProcessors}. Pass an array of slices to
- * `createInProcessWorker` to merge multiple slices into one worker; slices must not share
+ * `createWorkerRunner` to merge multiple slices into one worker runner; slices must not share
  * job types.
  */
 export type Processors<
   TJobTypeDefinitions extends BaseJobTypeDefinitions = BaseJobTypeDefinitions,
   TAttemptMiddleware extends readonly AnyAttemptMiddleware[] = readonly AnyAttemptMiddleware[],
 > = {
-  readonly [K in JobTypeNames<TJobTypeDefinitions>]: InProcessWorkerProcessor<any, any, any, any>;
+  readonly [K in JobTypeNames<TJobTypeDefinitions>]: Processor<any, any, any, any>;
 } & {
   readonly [processorsDefinitionsSymbol]: TJobTypeDefinitions;
   readonly [processorsMiddlewareSymbol]: TAttemptMiddleware;

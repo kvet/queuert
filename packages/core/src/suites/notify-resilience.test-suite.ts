@@ -1,10 +1,10 @@
 import type { TestAPI } from "vitest";
 
 import { createClient } from "../client.ts";
-import { createInProcessWorker } from "../in-process-worker.ts";
 import { createProcessors } from "../job-type-processors/create-job-type-processors.ts";
 import { defineJobTypes } from "../job-types/define-job-types.ts";
 import type { NotifyAdapter } from "../notify-adapter/notify-adapter.ts";
+import { createWorkerRunner } from "../worker-runner.ts";
 import type { TestSuiteContext } from "./spec-context.spec-helper.ts";
 
 export const notifyResilienceTestSuite = ({
@@ -15,7 +15,7 @@ export const notifyResilienceTestSuite = ({
   it("handles transient notify adapter errors gracefully", async ({
     stateAdapter,
     flakyNotifyAdapter,
-    withWorkers,
+    withWorkerRunners,
     withTransaction,
     observabilityAdapter,
     log,
@@ -28,14 +28,14 @@ export const notifyResilienceTestSuite = ({
       };
     }>();
 
-    const client = await createClient({
+    const client = createClient({
       stateAdapter,
       notifyAdapter: flakyNotifyAdapter,
       observabilityAdapter,
       log,
       jobTypes,
     });
-    const worker = await createInProcessWorker({
+    const workerRunner = createWorkerRunner({
       client,
       concurrency: 1,
       recoveryBackoffConfig: {
@@ -63,7 +63,7 @@ export const notifyResilienceTestSuite = ({
       }),
     });
 
-    await withWorkers([await worker.start()], async () => {
+    await withWorkerRunners([await workerRunner.start()], async () => {
       // at least one notify pushes worker to process jobs
       const chains = await withTransaction(async (txCtx, txHooks) =>
         client.createChains({

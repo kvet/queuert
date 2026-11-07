@@ -2,11 +2,11 @@ import { type TestAPI, describe, expect, onTestFinished, vi } from "vitest";
 
 import { createClient } from "../client.ts";
 import { ChainNotFoundError } from "../errors.ts";
-import { createInProcessWorker } from "../in-process-worker.ts";
 import { createProcessors } from "../job-type-processors/create-job-type-processors.ts";
 import { defineJobTypes } from "../job-types/define-job-types.ts";
 import { createInProcessNotifyAdapter } from "../notify-adapter/notify-adapter.in-process.ts";
 import { withTxHooks } from "../tx-hooks/tx-hooks.ts";
+import { createWorkerRunner } from "../worker-runner.ts";
 import type { TestSuiteContext } from "./spec-context.spec-helper.ts";
 
 export const createChainsTestSuite = ({ it }: { it: TestAPI<TestSuiteContext> }): void => {
@@ -27,7 +27,7 @@ export const createChainsTestSuite = ({ it }: { it: TestAPI<TestSuiteContext> })
         test: { entry: true; input: { value: number }; output: null };
       }>();
 
-      const client = await createClient({
+      const client = createClient({
         stateAdapter,
         notifyAdapter,
         observabilityAdapter,
@@ -63,7 +63,7 @@ export const createChainsTestSuite = ({ it }: { it: TestAPI<TestSuiteContext> })
         test: { entry: true; input: { value: number }; output: null };
       }>();
 
-      const client = await createClient({
+      const client = createClient({
         stateAdapter,
         notifyAdapter,
         observabilityAdapter,
@@ -113,7 +113,7 @@ export const createChainsTestSuite = ({ it }: { it: TestAPI<TestSuiteContext> })
         };
       }>();
 
-      const client = await createClient({
+      const client = createClient({
         stateAdapter,
         notifyAdapter,
         observabilityAdapter,
@@ -164,8 +164,8 @@ export const createChainsTestSuite = ({ it }: { it: TestAPI<TestSuiteContext> })
         sentinel: { entry: true; input: null; output: null };
       }>();
 
-      const notifyAdapter = fixtureNotifyAdapter ?? (await createInProcessNotifyAdapter());
-      const client = await createClient({
+      const notifyAdapter = fixtureNotifyAdapter ?? createInProcessNotifyAdapter();
+      const client = createClient({
         stateAdapter,
         notifyAdapter,
         observabilityAdapter,
@@ -241,7 +241,7 @@ export const createChainsTestSuite = ({ it }: { it: TestAPI<TestSuiteContext> })
         };
       }>();
 
-      const client = await createClient({
+      const client = createClient({
         stateAdapter,
         notifyAdapter,
         observabilityAdapter,
@@ -356,7 +356,7 @@ export const createChainsTestSuite = ({ it }: { it: TestAPI<TestSuiteContext> })
         test: { entry: true; input: null; output: null };
       }>();
 
-      const client = await createClient({
+      const client = createClient({
         stateAdapter,
         notifyAdapter,
         observabilityAdapter,
@@ -390,7 +390,7 @@ export const createChainsTestSuite = ({ it }: { it: TestAPI<TestSuiteContext> })
         test: { entry: true; input: { value: number }; output: null };
       }>();
 
-      const client = await createClient({
+      const client = createClient({
         stateAdapter,
         notifyAdapter,
         observabilityAdapter,
@@ -421,7 +421,7 @@ export const createChainsTestSuite = ({ it }: { it: TestAPI<TestSuiteContext> })
         test: { entry: true; input: { value: number }; output: null };
       }>();
 
-      const client = await createClient({
+      const client = createClient({
         stateAdapter,
         notifyAdapter,
         observabilityAdapter,
@@ -457,7 +457,7 @@ export const createChainsTestSuite = ({ it }: { it: TestAPI<TestSuiteContext> })
         test: { entry: true; input: { value: number }; output: null };
       }>();
 
-      const client = await createClient({
+      const client = createClient({
         stateAdapter,
         notifyAdapter,
         observabilityAdapter,
@@ -487,7 +487,7 @@ export const createChainsTestSuite = ({ it }: { it: TestAPI<TestSuiteContext> })
         test: { entry: true; input: { value: number }; output: null };
       }>();
 
-      const client = await createClient({
+      const client = createClient({
         stateAdapter,
         notifyAdapter,
         observabilityAdapter,
@@ -523,7 +523,7 @@ export const createChainsTestSuite = ({ it }: { it: TestAPI<TestSuiteContext> })
         };
       }>();
 
-      const client = await createClient({
+      const client = createClient({
         stateAdapter,
         notifyAdapter,
         observabilityAdapter,
@@ -554,7 +554,7 @@ export const createChainsTestSuite = ({ it }: { it: TestAPI<TestSuiteContext> })
         test: { entry: true; input: { value: number }; output: null };
       }>();
 
-      const client = await createClient({
+      const client = createClient({
         stateAdapter,
         notifyAdapter,
         observabilityAdapter,
@@ -590,7 +590,7 @@ export const createChainsTestSuite = ({ it }: { it: TestAPI<TestSuiteContext> })
         test: { entry: true; input: { value: number }; output: { result: number } };
       }>();
 
-      const client = await createClient({
+      const client = createClient({
         stateAdapter,
         notifyAdapter,
         observabilityAdapter,
@@ -635,7 +635,7 @@ export const createChainsTestSuite = ({ it }: { it: TestAPI<TestSuiteContext> })
         test: { entry: true; input: { value: number }; output: null };
       }>();
 
-      const client = await createClient({
+      const client = createClient({
         stateAdapter,
         notifyAdapter,
         observabilityAdapter,
@@ -665,7 +665,7 @@ export const createChainsTestSuite = ({ it }: { it: TestAPI<TestSuiteContext> })
         test: { entry: true; input: { value: number }; output: null };
       }>();
 
-      const client = await createClient({
+      const client = createClient({
         stateAdapter,
         notifyAdapter,
         observabilityAdapter,
@@ -726,7 +726,7 @@ export const createChainsTestSuite = ({ it }: { it: TestAPI<TestSuiteContext> })
         };
       }>();
 
-      const client = await createClient({
+      const client = createClient({
         stateAdapter,
         notifyAdapter,
         observabilityAdapter,
@@ -783,7 +783,7 @@ export const createChainsTestSuite = ({ it }: { it: TestAPI<TestSuiteContext> })
         test: { entry: true; input: { value: number }; output: null };
       }>();
 
-      const client = await createClient({
+      const client = createClient({
         stateAdapter,
         notifyAdapter,
         observabilityAdapter,
@@ -824,7 +824,7 @@ export const createChainsTestSuite = ({ it }: { it: TestAPI<TestSuiteContext> })
         typeB: { entry: true; input: { b: string }; output: null };
       }>();
 
-      const client = await createClient({
+      const client = createClient({
         stateAdapter,
         notifyAdapter,
         observabilityAdapter,
@@ -868,7 +868,7 @@ export const createChainsTestSuite = ({ it }: { it: TestAPI<TestSuiteContext> })
         unblocked: { entry: true; input: { value: number }; output: null };
       }>();
 
-      const client = await createClient({
+      const client = createClient({
         stateAdapter,
         notifyAdapter,
         observabilityAdapter,
@@ -909,7 +909,7 @@ export const createChainsTestSuite = ({ it }: { it: TestAPI<TestSuiteContext> })
       stateAdapter,
       notifyAdapter,
       withTransaction,
-      withWorkers,
+      withWorkerRunners,
       observabilityAdapter,
       log,
     }) => {
@@ -927,7 +927,7 @@ export const createChainsTestSuite = ({ it }: { it: TestAPI<TestSuiteContext> })
         };
       }>();
 
-      const client = await createClient({
+      const client = createClient({
         stateAdapter,
         notifyAdapter,
         observabilityAdapter,
@@ -962,7 +962,7 @@ export const createChainsTestSuite = ({ it }: { it: TestAPI<TestSuiteContext> })
         expect(job!.status).toBe("blocked");
       }
 
-      const worker = await createInProcessWorker({
+      const workerRunner = createWorkerRunner({
         client,
         concurrency: 3,
         processors: createProcessors({
@@ -993,7 +993,7 @@ export const createChainsTestSuite = ({ it }: { it: TestAPI<TestSuiteContext> })
         }),
       });
 
-      await withWorkers([await worker.start()], async () => {
+      await withWorkerRunners([await workerRunner.start()], async () => {
         const results = await Promise.all(
           chains.map(async (jc) => client.awaitChain(jc, completionOptions)),
         );
@@ -1008,7 +1008,7 @@ export const createChainsTestSuite = ({ it }: { it: TestAPI<TestSuiteContext> })
       stateAdapter,
       notifyAdapter,
       withTransaction,
-      withWorkers,
+      withWorkerRunners,
       observabilityAdapter,
       log,
     }) => {
@@ -1016,7 +1016,7 @@ export const createChainsTestSuite = ({ it }: { it: TestAPI<TestSuiteContext> })
         test: { entry: true; input: { value: number }; output: { result: number } };
       }>();
 
-      const client = await createClient({
+      const client = createClient({
         stateAdapter,
         notifyAdapter,
         observabilityAdapter,
@@ -1036,7 +1036,7 @@ export const createChainsTestSuite = ({ it }: { it: TestAPI<TestSuiteContext> })
         }),
       );
 
-      const worker = await createInProcessWorker({
+      const workerRunner = createWorkerRunner({
         client,
         concurrency: 3,
         processors: createProcessors({
@@ -1054,7 +1054,7 @@ export const createChainsTestSuite = ({ it }: { it: TestAPI<TestSuiteContext> })
         }),
       });
 
-      await withWorkers([await worker.start()], async () => {
+      await withWorkerRunners([await workerRunner.start()], async () => {
         const results = await Promise.all(
           chains.map(async (jc) => client.awaitChain(jc, completionOptions)),
         );
@@ -1076,7 +1076,7 @@ export const createChainsTestSuite = ({ it }: { it: TestAPI<TestSuiteContext> })
         test: { entry: true; input: { value: number }; output: null };
       }>();
 
-      const client = await createClient({
+      const client = createClient({
         stateAdapter,
         notifyAdapter,
         observabilityAdapter,
@@ -1109,7 +1109,7 @@ export const createChainsTestSuite = ({ it }: { it: TestAPI<TestSuiteContext> })
         test: { entry: true; input: { value: number }; output: null };
       }>();
 
-      const client = await createClient({
+      const client = createClient({
         stateAdapter,
         notifyAdapter,
         observabilityAdapter,
@@ -1144,7 +1144,7 @@ export const createChainsTestSuite = ({ it }: { it: TestAPI<TestSuiteContext> })
         test: { entry: true; input: { value: number }; output: null };
       }>();
 
-      const client = await createClient({
+      const client = createClient({
         stateAdapter,
         notifyAdapter,
         observabilityAdapter,
@@ -1175,7 +1175,7 @@ export const createChainsTestSuite = ({ it }: { it: TestAPI<TestSuiteContext> })
         test: { entry: true; input: { value: number }; output: null };
       }>();
 
-      const client = await createClient({
+      const client = createClient({
         stateAdapter,
         notifyAdapter,
         observabilityAdapter,
@@ -1212,7 +1212,7 @@ export const createChainsTestSuite = ({ it }: { it: TestAPI<TestSuiteContext> })
         };
       }>();
 
-      const client = await createClient({
+      const client = createClient({
         stateAdapter,
         notifyAdapter,
         observabilityAdapter,
@@ -1244,7 +1244,7 @@ export const createChainsTestSuite = ({ it }: { it: TestAPI<TestSuiteContext> })
         test: { entry: true; input: { value: number }; output: null };
       }>();
 
-      const client = await createClient({
+      const client = createClient({
         stateAdapter,
         notifyAdapter,
         observabilityAdapter,
@@ -1280,7 +1280,7 @@ export const createChainsTestSuite = ({ it }: { it: TestAPI<TestSuiteContext> })
         test: { entry: true; input: null; output: null };
       }>();
 
-      const client = await createClient({
+      const client = createClient({
         stateAdapter: {
           ...stateAdapter,
           config: { ...stateAdapter.config, validateJobId: (id) => id !== "bad-id" },
@@ -1315,7 +1315,7 @@ export const createChainsTestSuite = ({ it }: { it: TestAPI<TestSuiteContext> })
         test: { entry: true; input: null; output: null };
       }>();
 
-      const client = await createClient({
+      const client = createClient({
         stateAdapter: {
           ...stateAdapter,
           config: {
@@ -1354,7 +1354,7 @@ export const createChainsTestSuite = ({ it }: { it: TestAPI<TestSuiteContext> })
         test: { entry: true; input: null; output: null };
       }>();
 
-      const client = await createClient({
+      const client = createClient({
         stateAdapter,
         notifyAdapter,
         observabilityAdapter,

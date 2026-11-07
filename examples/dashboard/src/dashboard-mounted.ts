@@ -16,7 +16,7 @@ import { client, db, notifyAdapter, stateAdapter } from "./common.ts";
 const PORT = 3334;
 
 // #region base-path
-const dashboard = await createDashboard({
+const dashboard = createDashboard({
   client,
   basePath: "/internal/queuert",
 });

@@ -9,7 +9,7 @@ import postgres from "postgres";
 import {
   createClient,
   createInProcessNotifyAdapter,
-  createInProcessWorker,
+  createWorkerRunner,
   createProcessors,
   withTxHooks,
 } from "queuert";
@@ -61,14 +61,14 @@ await runDoubleRunBenchmark<Infra>({
     );
 
     const stateAdapter = await step("After creating state adapter (with migrations)", async () => {
-      const adapter = await createPgStateAdapter({ stateProvider, schema: "public" });
+      const adapter = createPgStateAdapter({ stateProvider, schema: "public" });
       await adapter.migrateToLatest();
       return adapter;
     });
 
     const setup = await step("After creating client + worker", async () => {
-      const client = await createClient({ stateAdapter, notifyAdapter, jobTypes });
-      const worker = await createInProcessWorker({
+      const client = createClient({ stateAdapter, notifyAdapter, jobTypes });
+      const workerRunner = createWorkerRunner({
         client,
         processors: createProcessors({
           client,
@@ -85,8 +85,8 @@ await runDoubleRunBenchmark<Infra>({
           },
         }),
       });
-      const stopWorker = await worker.start();
-      return { client, stopWorker };
+      const stopWorkerRunner = await workerRunner.start();
+      return { client, stopWorkerRunner };
     });
 
     await processStep("After processing 100 jobs", async () => {
@@ -107,7 +107,7 @@ await runDoubleRunBenchmark<Infra>({
       await Promise.all(promises);
     });
 
-    await setup.stopWorker();
+    await setup.stopWorkerRunner();
     await stateAdapter.close();
     await notifyAdapter.close();
   },

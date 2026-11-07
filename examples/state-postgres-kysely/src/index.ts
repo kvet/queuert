@@ -4,7 +4,7 @@ import { CompiledQuery, type Generated, Kysely, PostgresDialect } from "kysely";
 import { Pool } from "pg";
 import {
   createClient,
-  createInProcessWorker,
+  createWorkerRunner,
   createProcessors,
   defineJobTypes,
   withTxHooks,
@@ -53,22 +53,22 @@ const jobTypes = defineJobTypes<{
 // Create state provider for Kysely
 // #region adapter
 const stateProvider = createKyselyPgStateProvider({ db });
-const stateAdapter = await createPgStateAdapter({
+const stateAdapter = createPgStateAdapter({
   stateProvider,
 });
 await stateAdapter.migrateToLatest();
 // #endregion
 
-const notifyAdapter = await createInProcessNotifyAdapter();
+const notifyAdapter = createInProcessNotifyAdapter();
 
-const client = await createClient({
+const client = createClient({
   stateAdapter,
   notifyAdapter,
   jobTypes,
 });
 
-// Create worker with job type processors
-const worker = await createInProcessWorker({
+// Create worker runner with job type processors
+const workerRunner = createWorkerRunner({
   client,
   processors: createProcessors({
     client,
@@ -98,7 +98,7 @@ const worker = await createInProcessWorker({
   }),
 });
 
-const stopWorker = await worker.start();
+const stopWorkerRunner = await workerRunner.start();
 
 // Register a new user and queue welcome email atomically
 const chain = await withTxHooks(async (txHooks) =>
@@ -124,7 +124,7 @@ const result = await client.awaitChain(chain, { timeoutMs: 5000 });
 console.log(`Welcome email sent at: ${result.output.sentAt}`);
 
 // Cleanup
-await stopWorker();
+await stopWorkerRunner();
 await notifyAdapter.close();
 await stateAdapter.close();
 await db.destroy();

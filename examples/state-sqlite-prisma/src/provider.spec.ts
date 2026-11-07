@@ -28,7 +28,7 @@ test("state-sqlite-prisma provider passes state adapter conformance", async () =
 
     const lock = createAsyncRwLock();
     const stateProvider = createPrismaSqliteStateProvider({ prisma, lock });
-    const adapter = await createSqliteStateAdapter({ stateProvider });
+    const adapter = createSqliteStateAdapter({ stateProvider });
     await adapter.migrateToLatest();
 
     return {

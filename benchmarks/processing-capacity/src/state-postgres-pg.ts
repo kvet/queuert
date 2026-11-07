@@ -9,7 +9,7 @@ const schema = benchmarkNamespace();
 await pool.query(`CREATE SCHEMA ${schema}`);
 const stateProvider = createPgPoolStateProvider({ pool });
 
-const stateAdapter = await createPgStateAdapter({ stateProvider, schema });
+const stateAdapter = createPgStateAdapter({ stateProvider, schema });
 await stateAdapter.migrateToLatest();
 
 await runBenchmark({

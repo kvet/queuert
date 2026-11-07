@@ -1,6 +1,6 @@
 # Batched Processors
 
-Opt-in batched processing for in-process workers: an attempt handler that receives N jobs of one type and calls `complete` once per batch, in the user's own transaction. Non-batched processors are unchanged.
+Opt-in batched processing for worker runners: an attempt handler that receives N jobs of one type and calls `complete` once per batch, in the user's own transaction. Non-batched processors are unchanged.
 
 ## Problem
 

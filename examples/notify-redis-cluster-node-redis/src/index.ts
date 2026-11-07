@@ -2,7 +2,7 @@ import { createRedisNotifyAdapter } from "@queuert/redis";
 import { acquireRedisCluster } from "@queuert/testcontainers";
 import {
   createClient,
-  createInProcessWorker,
+  createWorkerRunner,
   createProcessors,
   defineJobTypes,
   withTxHooks,
@@ -26,7 +26,7 @@ const jobTypes = defineJobTypes<{
 }>();
 
 // Create the state adapter
-const stateAdapter = await createInProcessStateAdapter();
+const stateAdapter = createInProcessStateAdapter();
 
 // #region setup
 // Create Redis Cluster connections
@@ -53,17 +53,17 @@ const notifyProvider = createNodeRedisClusterNotifyProvider({
 });
 
 // Create the notify adapter
-const notifyAdapter = await createRedisNotifyAdapter({ notifyProvider });
+const notifyAdapter = createRedisNotifyAdapter({ notifyProvider });
 // #endregion
 
-// Create client and worker
-const client = await createClient({
+// Create client and worker runner
+const client = createClient({
   stateAdapter,
   notifyAdapter,
   jobTypes,
 });
 
-const worker = await createInProcessWorker({
+const workerRunner = createWorkerRunner({
   client,
   processors: createProcessors({
     client,
@@ -93,8 +93,8 @@ const worker = await createInProcessWorker({
   }),
 });
 
-// Start worker and queue a job
-const stopWorker = await worker.start();
+// Start worker runner and queue a job
+const stopWorkerRunner = await workerRunner.start();
 
 console.log("Requesting sales report...");
 const chain = await withTxHooks(async (txHooks) =>
@@ -121,7 +121,7 @@ const result = await client.awaitChain(chain, { timeoutMs: 5000 });
 console.log(`Report ready! ID: ${result.output.reportId}, Rows: ${result.output.rowCount}`);
 
 // Cleanup
-await stopWorker();
+await stopWorkerRunner();
 // #region cleanup
 await notifyAdapter.close();
 await stateAdapter.close();

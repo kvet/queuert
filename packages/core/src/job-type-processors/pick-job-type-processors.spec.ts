@@ -3,13 +3,13 @@ import { describe, expect, expectTypeOf, it } from "vitest";
 import type { AttemptMiddleware } from "../attempt-middleware/attempt-middleware.ts";
 import { createClient } from "../client.ts";
 import { DuplicateJobTypeError } from "../errors.ts";
-import { createInProcessWorker } from "../in-process-worker.ts";
 import { defineJobTypes } from "../job-types/define-job-types.ts";
 import {
   createInProcessStateAdapter,
   type InProcessStateAdapter,
 } from "../state-adapter/state-adapter.in-process.ts";
 import { withTxHooks } from "../tx-hooks/tx-hooks.ts";
+import { createWorkerRunner } from "../worker-runner.ts";
 import { createProcessors } from "./create-job-type-processors.ts";
 import {
   type ProcessorDefinitions,
@@ -31,8 +31,8 @@ type BillingDefs = {
 const imageJobTypes = defineJobTypes<ImageDefs>();
 const billingJobTypes = defineJobTypes<BillingDefs>();
 
-const stateAdapter = await createInProcessStateAdapter();
-const client = await createClient({
+const stateAdapter = createInProcessStateAdapter();
+const client = createClient({
   stateAdapter,
   jobTypes: [imageJobTypes, billingJobTypes],
 });
@@ -166,21 +166,21 @@ describe("omitProcessors", () => {
 
 describe("picked registries in a worker's processors array", () => {
   it("rejects overlapping picks from the same registry", async () => {
-    await expect(
-      createInProcessWorker({
+    expect(() => {
+      createWorkerRunner({
         client,
         processors: [
           pickProcessors(imageProcessors, ["images.resize", "images.transcode"]),
           // @ts-expect-error — "images.transcode" is picked twice
           pickProcessors(imageProcessors, ["images.transcode", "images.notify"]),
         ],
-      }),
-    ).rejects.toThrow(DuplicateJobTypeError);
+      });
+    }).toThrow(DuplicateJobTypeError);
   });
 
   it("checks requiredAttemptMiddleware against each picked slice", async () => {
-    await expect(
-      createInProcessWorker({
+    expect(() => {
+      createWorkerRunner({
         client,
         requiredAttemptMiddleware: [traceMiddleware],
         processors: [
@@ -188,7 +188,7 @@ describe("picked registries in a worker's processors array", () => {
           // @ts-expect-error — the billing slice has no traceMiddleware
           pickProcessors(billingProcessors, ["billing.charge"]),
         ],
-      }),
-    ).rejects.toThrow("missing requiredAttemptMiddleware");
+      });
+    }).toThrow("missing requiredAttemptMiddleware");
   });
 });

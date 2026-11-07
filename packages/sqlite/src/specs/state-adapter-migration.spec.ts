@@ -90,7 +90,7 @@ const it = baseIt.extend<{
   database: {
     path: string;
     provider: Provider;
-    adapter: Awaited<ReturnType<typeof createSqliteStateAdapter<BetterSqlite3Context, string>>>;
+    adapter: ReturnType<typeof createSqliteStateAdapter<BetterSqlite3Context, string>>;
   };
 }>({
   // oxlint-disable-next-line no-empty-pattern
@@ -99,7 +99,7 @@ const it = baseIt.extend<{
     const db = new Database(path, { timeout: 30_000 });
     db.pragma("journal_mode = WAL");
     const provider = createBetterSqlite3Provider({ db });
-    const adapter = await createSqliteStateAdapter({
+    const adapter = createSqliteStateAdapter({
       stateProvider: provider,
       generateJobId: (): string => randomUUID(),
     });

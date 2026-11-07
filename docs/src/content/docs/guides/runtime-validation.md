@@ -29,7 +29,7 @@ const jobTypes = createZodJobTypes({
   },
 });
 
-const client = await createClient({ stateAdapter, notifyAdapter, jobTypes });
+const client = createClient({ stateAdapter, notifyAdapter, jobTypes });
 ```
 
 Handlers keep full type inference — `job.input` is typed from the Zod schema. The adapter itself is ~60 lines; copy it from [examples/validation-zod](https://github.com/kvet/queuert/tree/main/examples/validation-zod) or pick another library from the integration page.

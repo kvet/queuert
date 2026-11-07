@@ -70,7 +70,7 @@ export type ValidatedProcessorSlices<
 
 /**
  * Merge Processors slices into a single registry. Internal — invoked by
- * {@link createInProcessWorker} when users pass an array of slices.
+ * {@link createWorkerRunner} when users pass an array of slices.
  *
  * Detects duplicate job-type names at compile time via {@link ValidatedProcessorSlices}
  * and at runtime via overlapping keys across slices.

@@ -13,7 +13,7 @@ This document describes code style conventions, testing patterns, and project or
 - **Merge similar functionality**: Look for patterns and consolidate before adding new code
 - **Search before implementing**: Check for similar existing implementations before adding new features
 - **Typed error classes**: Use specific error types for all thrown errors (`JobNotFoundError`, `JobAlreadyCompletedError`, etc.) to enable proper error handling by consumers. Generic `Error` should only be used for truly unreachable code paths (assertion-style guards). If a caller could reasonably need to catch and handle an error, it must have a specific type. Throws that are not recoverable — programmer-error invariants, corrupted internal input (e.g., malformed cursors), and configuration mistakes that surface at setup time and require a code change to fix — stay as bare `Error`; a typed class adds API surface without enabling any new caller behavior. The same goes for caller misuse the type system already rejects: the runtime throw is a backstop for JavaScript callers and for `any` erasing the signature, so it needs a clear message, not a class nobody can meaningfully catch. `requireTxCtx` in `packages/core/src/state-adapter/tx-context.ts` is the reference case — the transaction context is required by the method's type, and the throw only fires when the types were bypassed.
-- **Factory functions over classes**: Expose `createClient()` instead of `new Client()`. Classes can be used internally, but the public API should always be factory functions. This keeps constructors private, allows async initialization, and makes the API consistent.
+- **Factory functions over classes**: Expose `createClient()` instead of `new Client()`. Classes can be used internally, but the public API should always be factory functions. This keeps constructors private and makes the API consistent.
 - **Nullable conventions**: Use `undefined` for "not found/not present" and `null` for "explicitly set to no value". For example, `getJobById` returns `undefined` when job doesn't exist, while `job.completedAt` is `null` before completion.
 - **List methods are paginated, get methods are capped**: A `list*` method on the state adapter or the client takes a cursor and a limit (`PageParams` on the adapter, `cursor` / `limit` options on the client) and returns a `Page`, ordered by a unique key so the cursor stays stable. Only a `get*` method returns a plain array, and only when its length is bounded: by its input (`getJobs` returns one entry per requested id), by a configured limit (`getJobBlockers` returns at most `maxBlockersPerJob` chains), or by the type names an app writes (`getJobTypeNames`, `getChainTypeNames`). A collection the data alone sizes is a `list*` method and is paginated. A screen that needs a total or a sum over such a collection gets it from a `count*` method, never by fetching every page.
 - **Prefer explicit context passing over async context**: Use parameters, callbacks, and handles to pass context rather than relying on `AsyncLocalStorage` or `async_hooks`. The library does not bind or snapshot async context internally — callers (e.g., OTEL adapters) are responsible for propagating their own async context.
@@ -22,7 +22,7 @@ This document describes code style conventions, testing patterns, and project or
 - **No underscore prefix on type names or type parameters**: Don't mark file-local helper types or "internal" type parameters with a leading `_` (e.g., `_ChainWalk`, `_TComplete`). All types in TypeScript are file-local unless exported, so the underscore conveys nothing — just give them descriptive names. For unused `infer` positions in conditional types, use `any` instead of `infer _TFoo`.
 - **Consistent pluralization**: Keep singular/plural consistent across related names — including functions, types, type parameters, variables, and file names. If a function is `defineJobTypes` (plural), related type parameters and variables should also use plural — e.g., `TJobTypeDefinitions` not `TJobTypeDefinition`, `jobTypes` not `jobType` (when referring to the collection).
 - **Arrow functions over function declarations**: Use `export const fn = () => {}` instead of `export function fn() {}`. This applies to all exports — named functions, factories, helpers, etc.
-- **Async factory functions**: Factory functions that perform I/O (database setup, network connections) should be async. Pure configuration factories like `createConsoleLog` or `createJobTypes` should be sync. Note: `createOtelObservabilityAdapter` is async for future-proofing even though current OTEL instrument creation is synchronous.
+- **Sync factory functions**: Factory functions are synchronous and do no I/O. Startup I/O goes in an explicit method the factory returns (`start()`, `migrateToLatest()`), so a caller can see it fail. Only I/O whose failure is not fatal may run lazily on first use, and its failure is reported through the observability adapter rather than swallowed. When an adapter needs startup work, such as checking its schema, it gets an explicit method, never an `async` factory.
 - **No barrel files**: Do not create barrel re-export files within subdirectories. The only barrels are a package's declared entry points — the files listed in its `package.json` `exports`, one per subpath: `index.ts` for the package root, plus subpath entries like `internal.ts` (cross-package internals with no stability guarantee), `testing.ts` (test suites and helpers), and `conformance.ts`. Adding a barrel means adding an `exports` subpath; a re-export file that is not an entry point is the thing to avoid. Internal modules import directly from the source file they need.
 - **No type re-exports from non-owning modules**: A module should only export types it defines. Do not import a type from its source module just to re-export it — consumers should import directly from the module that owns the type. The only exception is each package's top-level `index.ts` entry point.
 - **Justify every lint suppression**: An `oxlint-disable*` comment always carries the rule name and a `--` reason explaining why the rule is wrong here, e.g. `// oxlint-disable-next-line typescript/only-throw-error -- re-throwing caught error`. A bare disable is not acceptable; if the reason is long, point at the file or spec that demonstrates it.
@@ -38,9 +38,9 @@ Public exports should not include the package name as a prefix. Since imports al
 
 ```typescript
 // Good - context from import is sufficient
-import { createClient, createInProcessWorker, type Client } from "queuert";
+import { createClient, createWorkerRunner, type Client } from "queuert";
 // Bad - redundant prefix
-import { createQueuertClient, createQueuertInProcessWorker, type QueuertClient } from "queuert";
+import { createQueuertClient, createQueuertWorkerRunner, type QueuertClient } from "queuert";
 ```
 
 ### Use `chain`, not `jobChain`
@@ -70,7 +70,7 @@ Once a concept has a word, that word is the only one for it — everywhere, incl
 - **`entry`**: an `entry` job type is one that can start a chain; don't reuse "entry" for list items or other inputs.
 - **`input`**: a job's payload; don't use it as a suffix for "what a caller passes" when the type also carries an `input` field.
 - **`worker`**: one row in the `worker` table — an id, its job types, its concurrency and a lease. Its id is the `workerId` in `attemptBy`, `completedBy` and worker events. A worker starts and stops.
-- **In-process worker**: what `createInProcessWorker` returns.
+- **worker runner**: what `createWorkerRunner` returns. It runs one worker at a time and registers it again under the same `workerId` after a lost lease. Each time it registers the worker is a **registration**, identified by the row's `token`; a registration is never called a "run". It is always "worker runner", never "runner" alone, which keeps its meaning for the `queuert/conformance` runner and test runners.
 - **`lease`**: a worker's `lease_until`, live while it is in the future in database time; a worker whose lease is gone has lost it.
 
 ### Type Naming Scheme
@@ -121,12 +121,12 @@ Batch operations get a plural sibling that reports **every** offending input rat
 
 The core `queuert` package exports these primary factory functions and types:
 
-| Export                  | Description                                           |
-| ----------------------- | ----------------------------------------------------- |
-| `createClient`          | Creates a client for starting and managing job chains |
-| `Client`                | Type for the client instance                          |
-| `createInProcessWorker` | Creates an in-process worker for processing jobs      |
-| `InProcessWorker`       | Type for the worker instance                          |
+| Export               | Description                                           |
+| -------------------- | ----------------------------------------------------- |
+| `createClient`       | Creates a client for starting and managing job chains |
+| `Client`             | Type for the client instance                          |
+| `createWorkerRunner` | Creates a worker runner for processing jobs           |
+| `WorkerRunner`       | Type for the worker runner instance                   |
 
 ### Adapter Package Exports
 
@@ -155,7 +155,7 @@ Architecture and API-contract prose lives in `docs/src/content/docs/how-it-works
 
 ### Documenting options-object parameters
 
-Factory functions that take a single destructured options object (`createClient`, `createInProcessWorker`, the adapter factories, etc.) follow one convention so TypeDoc renders them consistently:
+Factory functions that take a single destructured options object (`createClient`, `createWorkerRunner`, the adapter factories, etc.) follow one convention so TypeDoc renders them consistently:
 
 - Add a single bare `@param options - <summary>` tag to the function's doc comment. This is **required**: without it TypeDoc labels the parameter `__namedParameters` and silently drops any per-field descriptions.
 - Document each field with an inline TSDoc comment on the type-literal member (colocated with the type), including `@defaultValue` where relevant.
@@ -167,7 +167,7 @@ Factory functions that take a single destructured options object (`createClient`
  *
  * @param options - Client configuration.
  */
-export const createClient = async ({
+export const createClient = ({
   stateAdapter,
   log,
 }: {
@@ -175,7 +175,7 @@ export const createClient = async ({
   stateAdapter: TStateAdapter;
   /** Optional structured log function. @defaultValue no-op */
   log?: Log;
-}): Promise<Client> => {
+}): Client => {
   // ...
 };
 ```

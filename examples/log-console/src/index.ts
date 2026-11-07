@@ -3,7 +3,7 @@ import {
   createConsoleLog,
   createInProcessNotifyAdapter,
   createInProcessStateAdapter,
-  createInProcessWorker,
+  createWorkerRunner,
   createProcessors,
   defineJobTypes,
   withTxHooks,
@@ -24,12 +24,12 @@ const jobTypes = defineJobTypes<{
 }>();
 
 // Create adapters with console logging
-const stateAdapter = await createInProcessStateAdapter();
-const notifyAdapter = await createInProcessNotifyAdapter();
+const stateAdapter = createInProcessStateAdapter();
+const notifyAdapter = createInProcessNotifyAdapter();
 // #region client
 const log = createConsoleLog();
 
-const client = await createClient({
+const client = createClient({
   stateAdapter,
   notifyAdapter,
   log,
@@ -37,8 +37,8 @@ const client = await createClient({
 });
 // #endregion
 
-// Create and start worker
-const worker = await createInProcessWorker({
+// Create and start worker runner
+const workerRunner = createWorkerRunner({
   client,
   processors: createProcessors({
     client,
@@ -79,7 +79,7 @@ const worker = await createInProcessWorker({
   }),
 });
 
-const stopWorker = await worker.start();
+const stopWorkerRunner = await workerRunner.start();
 
 // Run successful job
 console.log("\n--- Running successful job ---\n");
@@ -110,6 +110,6 @@ const failThenSucceedChain = await withTxHooks(async (txHooks) =>
 await client.awaitChain(failThenSucceedChain, { timeoutMs: 5000 });
 
 // Cleanup
-await stopWorker();
+await stopWorkerRunner();
 await notifyAdapter.close();
 await stateAdapter.close();

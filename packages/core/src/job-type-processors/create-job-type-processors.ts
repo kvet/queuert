@@ -10,7 +10,7 @@ import type { JobTypeNames } from "../job-types/job-types.resolvers.ts";
 import type { JobTypes } from "../job-types/job-types.ts";
 import type { StateAdapter } from "../state-adapter/state-adapter.ts";
 import {
-  type InProcessWorkerProcessor,
+  type Processor,
   type Processors,
   processorAttemptMiddlewareSymbol,
   processorsDefinitionsSymbol,
@@ -29,7 +29,7 @@ type MergedDefs<
  * Define a processor registry for a job type slice with full type inference.
  * Handlers are type-checked against the slice's own definitions plus any
  * external definitions it declares (for cross-slice blocker / continueWith
- * references). The returned registry is plugged into `createInProcessWorker`.
+ * references). The returned registry is plugged into `createWorkerRunner`.
  *
  * A registry-level `backoffConfig` cascades onto every processor in this
  * registry unless that processor overrides it.
@@ -68,7 +68,7 @@ export const createProcessors = <
   attemptMiddleware?: TAttemptMiddleware & readonly AttemptMiddleware<TStateAdapter, any>[];
   backoffConfig?: BackoffConfig;
   processors: {
-    [K in TProcessors]: InProcessWorkerProcessor<
+    [K in TProcessors]: Processor<
       TStateAdapter,
       TMergedJobTypeDefinitions,
       K,
@@ -79,7 +79,7 @@ export const createProcessors = <
   const middleware = options.attemptMiddleware ?? [];
   const stampedProcessors: Record<string, unknown> = {};
   for (const [typeName, processor] of Object.entries(
-    options.processors as Record<string, InProcessWorkerProcessor<any, any, any, any>>,
+    options.processors as Record<string, Processor<any, any, any, any>>,
   )) {
     stampedProcessors[typeName] = Object.assign(
       {},

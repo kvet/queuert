@@ -31,7 +31,7 @@ type Provider = PgStateProvider<PgPoolContext>;
 type Database = {
   connectionString: string;
   provider: Provider;
-  adapter: Awaited<ReturnType<typeof createPgStateAdapter<PgPoolContext, string, string>>>;
+  adapter: ReturnType<typeof createPgStateAdapter<PgPoolContext, string, string>>;
 };
 
 const query = async <T = Record<string, unknown>>(provider: Provider, text: string): Promise<T[]> =>
@@ -67,7 +67,7 @@ const it = baseIt.extend<{ database: Database }>({
     const pg = await acquirePostgres("postgres:14", `pg-migration-${randomUUID()}`);
     const pool = new Pool({ connectionString: pg.connectionString });
     const provider = createPgPoolProvider({ pool });
-    const adapter = await createPgStateAdapter({
+    const adapter = createPgStateAdapter({
       stateProvider: provider,
       generateJobId: (): string => randomUUID(),
       generateWorkerId: (): string => randomUUID(),

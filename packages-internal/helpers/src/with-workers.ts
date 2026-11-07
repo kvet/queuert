@@ -1,4 +1,4 @@
-export const withWorkers = async <T>(
+export const withWorkerRunners = async <T>(
   workers: (() => Promise<void>)[],
   cb: () => Promise<T>,
 ): Promise<T> => {

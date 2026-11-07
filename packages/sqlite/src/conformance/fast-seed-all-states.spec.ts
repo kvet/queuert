@@ -82,7 +82,7 @@ describe("fast seed conformance", { timeout: 120_000 }, () => {
       // Correct seed
       const correctDb = new Database(":memory:");
       const correctProvider = createBetterSqlite3Provider({ db: correctDb });
-      const correctAdapter = await createSqliteStateAdapter<BetterSqlite3Context, string>({
+      const correctAdapter = createSqliteStateAdapter<BetterSqlite3Context, string>({
         stateProvider: correctProvider,
       });
       await correctAdapter.migrateToLatest();
@@ -95,7 +95,7 @@ describe("fast seed conformance", { timeout: 120_000 }, () => {
       // Fast seed
       const fastDb = new Database(":memory:");
       const fastProvider = createBetterSqlite3Provider({ db: fastDb });
-      const fastAdapter = await createSqliteStateAdapter<BetterSqlite3Context, string>({
+      const fastAdapter = createSqliteStateAdapter<BetterSqlite3Context, string>({
         stateProvider: fastProvider,
       });
       await fastAdapter.migrateToLatest();

@@ -82,21 +82,21 @@ const ChipRow = (props: { items: string[]; mono?: boolean }) => (
 );
 
 /**
- * The integration layers: your code calls the client and worker, which talk only to the four
+ * The integration layers: your code calls the client and worker runner, which talk only to the four
  * adapter kinds, each backed by a database, broker or library you choose. Each adapter box names
  * the `createClient` option(s) it plugs into.
  */
 export const AdapterLayers = () => (
   <figure
     class="my-8"
-    aria-label="Your application code calls the Queuert client and worker. They use a state adapter (required), a notify adapter (optional), observability through a log function and an observability adapter (optional), and job types (required), optionally validated by a schema library. Each adapter is backed by a database, broker or library you choose: PostgreSQL, SQLite or in-process for state; PostgreSQL LISTEN/NOTIFY, Redis, NATS or in-process for notify; console, Pino, Winston or OpenTelemetry for observability; optionally Zod, Valibot, TypeBox or ArkType for validation."
+    aria-label="Your application code calls the Queuert client and worker runner. They use a state adapter (required), a notify adapter (optional), observability through a log function and an observability adapter (optional), and job types (required), optionally validated by a schema library. Each adapter is backed by a database, broker or library you choose: PostgreSQL, SQLite or in-process for state; PostgreSQL LISTEN/NOTIFY, Redis, NATS or in-process for notify; console, Pino, Winston or OpenTelemetry for observability; optionally Zod, Valibot, TypeBox or ArkType for validation."
   >
     <Box title="your app" bodyClass="px-4 pt-3 pb-3">
       <ChipRow mono items={["client.createChain(…)", "attemptHandler", "complete(…)"]} />
     </Box>
     <DownArrow label="calls" />
     <Box title="queuert" bodyClass="px-4 pt-3 pb-3">
-      <ChipRow mono items={["createClient", "createInProcessWorker"]} />
+      <ChipRow mono items={["createClient", "createWorkerRunner"]} />
     </Box>
     <DownArrow label="uses" />
     <ul class="row-list m-0 grid list-none grid-cols-2 gap-3 p-0 lg:grid-cols-4">

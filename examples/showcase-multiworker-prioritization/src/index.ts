@@ -25,7 +25,7 @@ import { createPostgresJsStateProvider } from "example-state-postgres-postgres-j
 import postgres from "postgres";
 import {
   createClient,
-  createInProcessWorker,
+  createWorkerRunner,
   createProcessors,
   defineJobTypes,
   withTxHooks,
@@ -68,12 +68,12 @@ await using pg = await acquirePostgres("postgres:18", import.meta.url);
 const sql = postgres(pg.connectionString, { max: 10 });
 
 const stateProvider = createPostgresJsStateProvider({ sql });
-const stateAdapter = await createPgStateAdapter({ stateProvider });
+const stateAdapter = createPgStateAdapter({ stateProvider });
 await stateAdapter.migrateToLatest();
 const notifyProvider = createPostgresJsNotifyProvider({ sql });
-const notifyAdapter = await createPgNotifyAdapter({ notifyProvider });
+const notifyAdapter = createPgNotifyAdapter({ notifyProvider });
 
-const client = await createClient({
+const client = createClient({
   stateAdapter,
   notifyAdapter,
   jobTypes,
@@ -86,7 +86,7 @@ const simulateWork = async (durationMs: number): Promise<void> => {
   await new Promise((resolve) => setTimeout(resolve, durationMs));
 };
 
-const urgentWorker = await createInProcessWorker({
+const urgentWorkerRunner = createWorkerRunner({
   client,
   concurrency: 3,
   processors: createProcessors({
@@ -140,7 +140,7 @@ const urgentWorker = await createInProcessWorker({
   }),
 });
 
-const bulkWorker = await createInProcessWorker({
+const bulkWorkerRunner = createWorkerRunner({
   client,
   concurrency: 1,
   processors: createProcessors({
@@ -181,8 +181,8 @@ const bulkWorker = await createInProcessWorker({
   }),
 });
 
-const stopUrgent = await urgentWorker.start();
-const stopBulk = await bulkWorker.start();
+const stopUrgent = await urgentWorkerRunner.start();
+const stopBulk = await bulkWorkerRunner.start();
 
 // --- Scenario 1: urgent jobs overtake a long bulk backlog thanks to reserved capacity ---
 

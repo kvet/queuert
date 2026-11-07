@@ -1,7 +1,5 @@
 # Short term
 
-- [TASK] Revise factories. See `design/sync-factories.md`.
-- [TASK] Rename `InProcessWorker`. See `design/worker-runner.md`.
 - [REF] txHooks provider
 - [TASK] Codec. See `design/json-serializable-types.md`
 - [TASK] Profiling in the processing-capacity benchmark — capture a CPU profile (`node --cpu-prof`) alongside each run in `benchmarks/processing-capacity`, so hot paths are measured before optimizing.

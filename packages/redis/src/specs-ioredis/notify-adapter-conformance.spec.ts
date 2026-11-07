@@ -19,7 +19,7 @@ describe("Redis Notify Adapter Conformance (ioredis) - Default Channel Prefix", 
         const subscribeClient = new Redis(redisConnectionUrl);
 
         const notifyProvider = createIoredisNotifyProvider({ client, subscribeClient });
-        const notifyAdapter = await createRedisNotifyAdapter({
+        const notifyAdapter = createRedisNotifyAdapter({
           notifyProvider,
           channelPrefix: `queuert:ioredis:${Date.now()}:${Math.random().toString(36).slice(2)}`,
         });
@@ -44,7 +44,7 @@ describe("Redis Notify Adapter Conformance (ioredis) - Custom Channel Prefix", (
         const subscribeClient = new Redis(redisConnectionUrl);
 
         const notifyProvider = createIoredisNotifyProvider({ client, subscribeClient });
-        const notifyAdapter = await createRedisNotifyAdapter({
+        const notifyAdapter = createRedisNotifyAdapter({
           notifyProvider,
           channelPrefix: `myapp:notifications:${Date.now()}:${Math.random().toString(36).slice(2)}`,
         });

@@ -19,7 +19,7 @@ const columns = [
   {
     name: "Setup",
     description:
-      "Heap allocated by the state adapter, notify adapter, client and in-process worker once built, before any job runs.",
+      "Heap allocated by the state adapter, notify adapter, client and worker runner once built, before any job runs.",
   },
   {
     name: "In-flight peak",

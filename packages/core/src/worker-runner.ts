@@ -56,7 +56,7 @@ type SliceMiddleware<T> =
  * For each slice in the array, check whether its middleware tuple contains
  * `TReq` as an in-order subsequence; replace the slice element with an error
  * string when it does not. The mapped-tuple form lets TS pinpoint which slice
- * fails when the worker is constructed with an array of slices.
+ * fails when the worker runner is constructed with an array of slices.
  * @internal
  */
 type ValidateRequiredMiddlewareForSlices<
@@ -72,7 +72,7 @@ type ValidateRequiredMiddlewareForSlices<
 };
 
 /**
- * Combined constraint result for the worker's `processors` option: either the
+ * Combined constraint result for the worker runner's `processors` option: either the
  * input unchanged (all checks pass), a single error string (single-slice form),
  * or a tuple with error strings substituted into the failing positions
  * (array-of-slices form).
@@ -89,41 +89,43 @@ type ValidateRequiredMiddleware<TProcessorsInput, TReq extends readonly AnyAttem
       : "Error: processors slice does not include all requiredAttemptMiddleware in the declared order";
 
 /**
- * A worker that processes jobs in the current process. Created via {@link createInProcessWorker}.
+ * A worker runner that processes jobs in the current process. Created via {@link createWorkerRunner}.
  *
  * Call `start()` to begin processing. It returns a `stop` function — call it to gracefully shut down.
  */
-export type InProcessWorker = {
+export type WorkerRunner = {
   /**
-   * Begin processing jobs. Returns a `stop` function that gracefully shuts down the worker.
+   * Begin processing jobs. Returns a `stop` function that gracefully shuts down the worker runner.
    *
-   * @throws {Error} if the worker is already started and its `stop` function has not resolved.
+   * @throws {Error} if the worker runner is already started and its `stop` function has not resolved.
    */
   start: () => Promise<() => Promise<void>>;
 };
 
 /**
- * Create an in-process worker for processing jobs.
+ * Create a worker runner for processing jobs.
  *
  * Per-attempt configuration (`attemptMiddleware`, `backoffConfig`) lives on the **processor
- * registry** (see {@link createProcessors}). The worker dispatches to whichever processor
- * matches the job's typeName and runs that slice's middleware chain. The worker-level
+ * registry** (see {@link createProcessors}). The worker runner dispatches to whichever processor
+ * matches the job's typeName and runs that slice's middleware chain. The worker runner's
  * `backoffConfig` is the fallback for processors that don't set their own; precedence is
- * processor > processor registry > worker > built-in default.
+ * processor > processor registry > worker runner > built-in default.
  *
- * The in-process worker registers one worker at a time under `workerId`, a row with a lease it
+ * The worker runner registers one worker at a time under `workerId`, a row with a lease it
  * renews. When the lease is lost, it aborts the attempts' signals, waits for every attempt to
  * end and registers again under the same id.
  *
- * @param options - Worker configuration.
+ * @param options - Worker runner configuration.
  * @throws {TypeError} When `concurrency`, `pollIntervalMs`, `recoveryBackoffConfig`, `leaseConfig`,
  * `backoffConfig` or any processor's `backoffConfig` holds an invalid value; the message lists
  * every invalid field.
  * @throws {@link InvalidWorkerIdError} if `workerId` fails the state adapter's
  * `validateWorkerId`.
  * @throws {@link DuplicateJobTypeError} if slices in a `processors` array share job types.
+ * @throws {Error} if a processor's slice is missing `requiredAttemptMiddleware` or has it out of
+ * order.
  */
-export const createInProcessWorker = async <
+export const createWorkerRunner = <
   TJobTypeDefinitions extends BaseJobTypeDefinitions,
   TStateAdapter extends StateAdapter<any, any, any>,
   const TProcessorsInput extends Processors | readonly Processors[] = Processors,
@@ -143,8 +145,8 @@ export const createInProcessWorker = async <
   client: Client<TJobTypeDefinitions, TStateAdapter>;
   /**
    * Id the worker registers under, kept when it registers again after a lost lease. Pass a fixed
-   * id to keep it across process restarts. While a live worker holds it, the worker waits for
-   * that lease to expire before it starts.
+   * id to keep it across process restarts. While a live worker holds it, the worker runner waits
+   * for that lease to expire before it starts.
    *
    * @defaultValue the state adapter's `generateWorkerId()`
    */
@@ -170,7 +172,7 @@ export const createInProcessWorker = async <
    */
   recoveryBackoffConfig?: BackoffConfig;
   /**
-   * The lease the in-process worker registers its worker with. Both fields are required when it
+   * The lease the worker runner registers its worker with. Both fields are required when it
    * is passed.
    *
    * @defaultValue `{ durationMs: 60_000, heartbeatMs: 15_000 }`
@@ -182,7 +184,10 @@ export const createInProcessWorker = async <
    * @defaultValue `{ initialDelayMs: 10_000, multiplier: 2, maxDelayMs: 300_000 }`
    */
   backoffConfig?: BackoffConfig;
-  /** Middleware every processor's slice must include, in this order. The worker does not run it. */
+  /**
+   * Middleware every processor's slice must include, in this order. The worker runner does not
+   * run it.
+   */
   requiredAttemptMiddleware?: TRequiredAttemptMiddleware &
     readonly AttemptMiddleware<TStateAdapter, any>[];
   /**
@@ -201,11 +206,11 @@ export const createInProcessWorker = async <
             : ValidatedProcessorSlices<TProcessorsInput>
           : unknown)
     : `Error: processors contain job types unknown to the client: ${ExtraProcessorTypeNames<WorkerProcessorDefs<TProcessorsInput>, TJobTypeDefinitions> & string}`;
-}): Promise<InProcessWorker> => {
+}): WorkerRunner => {
   const merged = Array.isArray(processorsOption)
     ? processorsOption.length === 1
       ? (processorsOption[0] as Processors)
-      : // ValidatedProcessorSlices duplicate-check is enforced at the createInProcessWorker signature
+      : // ValidatedProcessorSlices duplicate-check is enforced at the createWorkerRunner signature
         // for fixed-length arrays only; mergeProcessors re-checks at runtime either way.
         mergeProcessors(processorsOption as never)
     : (processorsOption as unknown as Processors);
@@ -237,7 +242,7 @@ export const createInProcessWorker = async <
     }
     if (violations.length > 0) {
       throw new Error(
-        `createInProcessWorker: one or more processors are missing requiredAttemptMiddleware (each slice must include every required middleware instance as an in-order subsequence):\n${violations.join("\n")}`,
+        `createWorkerRunner: one or more processors are missing requiredAttemptMiddleware (each slice must include every required middleware instance as an in-order subsequence):\n${violations.join("\n")}`,
       );
     }
   }
@@ -274,13 +279,13 @@ export const createInProcessWorker = async <
   ];
   if (configViolations.length > 0) {
     throw new TypeError(
-      `createInProcessWorker: invalid configuration:\n${configViolations.map((v) => `  - ${v}`).join("\n")}`,
+      `createWorkerRunner: invalid configuration:\n${configViolations.map((v) => `  - ${v}`).join("\n")}`,
     );
   }
   const workerId = resolveWorkerId(client[helpersSymbol].stateAdapter.config, workerIdOption);
 
   const started = createResettableLatch(
-    "createInProcessWorker: the worker is already started; await the stop function returned by start() before starting it again",
+    "createWorkerRunner: the worker runner is already started; await the stop function returned by start() before starting it again",
   );
   return {
     start: async (): Promise<() => Promise<void>> => {

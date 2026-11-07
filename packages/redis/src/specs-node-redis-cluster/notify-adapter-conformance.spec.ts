@@ -21,7 +21,7 @@ describe("Redis Cluster Notify Adapter Conformance - Default Channel Prefix", ()
         await subscribeCluster.connect();
 
         const notifyProvider = createNodeRedisClusterNotifyProvider({ cluster, subscribeCluster });
-        const notifyAdapter = await createRedisNotifyAdapter({
+        const notifyAdapter = createRedisNotifyAdapter({
           notifyProvider,
           channelPrefix: `queuert:node-redis-cluster:${Date.now()}:${Math.random().toString(36).slice(2)}`,
         });
@@ -48,7 +48,7 @@ describe("Redis Cluster Notify Adapter Conformance - Custom Channel Prefix", () 
         await subscribeCluster.connect();
 
         const notifyProvider = createNodeRedisClusterNotifyProvider({ cluster, subscribeCluster });
-        const notifyAdapter = await createRedisNotifyAdapter({
+        const notifyAdapter = createRedisNotifyAdapter({
           notifyProvider,
           channelPrefix: `myapp:notifications:${Date.now()}:${Math.random().toString(36).slice(2)}`,
         });

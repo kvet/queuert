@@ -7,7 +7,7 @@ import { runBenchmark } from "./utils.ts";
 const db = new Database(":memory:");
 
 const stateProvider = createBetterSqlite3StateProvider({ db, lock: createAsyncRwLock() });
-const stateAdapter = await createSqliteStateAdapter({ stateProvider });
+const stateAdapter = createSqliteStateAdapter({ stateProvider });
 await stateAdapter.migrateToLatest();
 console.log("SQLite ready (in-memory).");
 

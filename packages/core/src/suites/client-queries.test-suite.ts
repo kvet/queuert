@@ -3,9 +3,9 @@ import { type TestAPI, assert, describe, expect, expectTypeOf } from "vitest";
 
 import { createClient } from "../client.ts";
 import { ChainTypeMismatchError, JobTypeMismatchError } from "../errors.ts";
-import { createInProcessWorker } from "../in-process-worker.ts";
 import { createProcessors } from "../job-type-processors/create-job-type-processors.ts";
 import { defineJobTypes } from "../job-types/define-job-types.ts";
+import { createWorkerRunner } from "../worker-runner.ts";
 import type { TestSuiteContext } from "./spec-context.spec-helper.ts";
 
 export const clientQueriesTestSuite = ({ it }: { it: TestAPI<TestSuiteContext> }): void => {
@@ -45,7 +45,7 @@ export const clientQueriesTestSuite = ({ it }: { it: TestAPI<TestSuiteContext> }
       observabilityAdapter,
       log,
     }) => {
-      const client = await createClient({
+      const client = createClient({
         stateAdapter,
         notifyAdapter,
         observabilityAdapter,
@@ -68,7 +68,7 @@ export const clientQueriesTestSuite = ({ it }: { it: TestAPI<TestSuiteContext> }
       log,
       withTransaction,
     }) => {
-      const client = await createClient({
+      const client = createClient({
         stateAdapter,
         notifyAdapter,
         observabilityAdapter,
@@ -101,7 +101,7 @@ export const clientQueriesTestSuite = ({ it }: { it: TestAPI<TestSuiteContext> }
       log,
       withTransaction,
     }) => {
-      const client = await createClient({
+      const client = createClient({
         stateAdapter,
         notifyAdapter,
         observabilityAdapter,
@@ -131,7 +131,7 @@ export const clientQueriesTestSuite = ({ it }: { it: TestAPI<TestSuiteContext> }
       log,
       withTransaction,
     }) => {
-      const client = await createClient({
+      const client = createClient({
         stateAdapter,
         notifyAdapter,
         observabilityAdapter,
@@ -161,7 +161,7 @@ export const clientQueriesTestSuite = ({ it }: { it: TestAPI<TestSuiteContext> }
       log,
       withTransaction,
     }) => {
-      const client = await createClient({
+      const client = createClient({
         stateAdapter,
         notifyAdapter,
         observabilityAdapter,
@@ -191,7 +191,7 @@ export const clientQueriesTestSuite = ({ it }: { it: TestAPI<TestSuiteContext> }
       observabilityAdapter,
       log,
     }) => {
-      const client = await createClient({
+      const client = createClient({
         stateAdapter,
         notifyAdapter,
         observabilityAdapter,
@@ -210,7 +210,7 @@ export const clientQueriesTestSuite = ({ it }: { it: TestAPI<TestSuiteContext> }
       observabilityAdapter,
       log,
     }) => {
-      const client = await createClient({
+      const client = createClient({
         stateAdapter,
         notifyAdapter,
         observabilityAdapter,
@@ -232,7 +232,7 @@ export const clientQueriesTestSuite = ({ it }: { it: TestAPI<TestSuiteContext> }
       log,
       withTransaction,
     }) => {
-      const client = await createClient({
+      const client = createClient({
         stateAdapter,
         notifyAdapter,
         observabilityAdapter,
@@ -271,7 +271,7 @@ export const clientQueriesTestSuite = ({ it }: { it: TestAPI<TestSuiteContext> }
       log,
       withTransaction,
     }) => {
-      const client = await createClient({
+      const client = createClient({
         stateAdapter,
         notifyAdapter,
         observabilityAdapter,
@@ -304,7 +304,7 @@ export const clientQueriesTestSuite = ({ it }: { it: TestAPI<TestSuiteContext> }
       log,
       withTransaction,
     }) => {
-      const client = await createClient({
+      const client = createClient({
         stateAdapter,
         notifyAdapter,
         observabilityAdapter,
@@ -337,7 +337,7 @@ export const clientQueriesTestSuite = ({ it }: { it: TestAPI<TestSuiteContext> }
       log,
       withTransaction,
     }) => {
-      const client = await createClient({
+      const client = createClient({
         stateAdapter,
         notifyAdapter,
         observabilityAdapter,
@@ -365,7 +365,7 @@ export const clientQueriesTestSuite = ({ it }: { it: TestAPI<TestSuiteContext> }
       observabilityAdapter,
       log,
     }) => {
-      const client = await createClient({
+      const client = createClient({
         stateAdapter,
         notifyAdapter,
         observabilityAdapter,
@@ -389,7 +389,7 @@ export const clientQueriesTestSuite = ({ it }: { it: TestAPI<TestSuiteContext> }
       observabilityAdapter,
       log,
     }) => {
-      const client = await createClient({
+      const client = createClient({
         stateAdapter,
         notifyAdapter,
         observabilityAdapter,
@@ -412,7 +412,7 @@ export const clientQueriesTestSuite = ({ it }: { it: TestAPI<TestSuiteContext> }
       log,
       withTransaction,
     }) => {
-      const client = await createClient({
+      const client = createClient({
         stateAdapter,
         notifyAdapter,
         observabilityAdapter,
@@ -445,7 +445,7 @@ export const clientQueriesTestSuite = ({ it }: { it: TestAPI<TestSuiteContext> }
       log,
       withTransaction,
     }) => {
-      const client = await createClient({
+      const client = createClient({
         stateAdapter,
         notifyAdapter,
         observabilityAdapter,
@@ -475,7 +475,7 @@ export const clientQueriesTestSuite = ({ it }: { it: TestAPI<TestSuiteContext> }
       log,
       withTransaction,
     }) => {
-      const client = await createClient({
+      const client = createClient({
         stateAdapter,
         notifyAdapter,
         observabilityAdapter,
@@ -505,7 +505,7 @@ export const clientQueriesTestSuite = ({ it }: { it: TestAPI<TestSuiteContext> }
       observabilityAdapter,
       log,
     }) => {
-      const client = await createClient({
+      const client = createClient({
         stateAdapter,
         notifyAdapter,
         observabilityAdapter,
@@ -524,7 +524,7 @@ export const clientQueriesTestSuite = ({ it }: { it: TestAPI<TestSuiteContext> }
       observabilityAdapter,
       log,
     }) => {
-      const client = await createClient({
+      const client = createClient({
         stateAdapter,
         notifyAdapter,
         observabilityAdapter,
@@ -546,7 +546,7 @@ export const clientQueriesTestSuite = ({ it }: { it: TestAPI<TestSuiteContext> }
       log,
       withTransaction,
     }) => {
-      const client = await createClient({
+      const client = createClient({
         stateAdapter,
         notifyAdapter,
         observabilityAdapter,
@@ -585,7 +585,7 @@ export const clientQueriesTestSuite = ({ it }: { it: TestAPI<TestSuiteContext> }
       log,
       withTransaction,
     }) => {
-      const client = await createClient({
+      const client = createClient({
         stateAdapter,
         notifyAdapter,
         observabilityAdapter,
@@ -618,7 +618,7 @@ export const clientQueriesTestSuite = ({ it }: { it: TestAPI<TestSuiteContext> }
       log,
       withTransaction,
     }) => {
-      const client = await createClient({
+      const client = createClient({
         stateAdapter,
         notifyAdapter,
         observabilityAdapter,
@@ -651,7 +651,7 @@ export const clientQueriesTestSuite = ({ it }: { it: TestAPI<TestSuiteContext> }
       log,
       withTransaction,
     }) => {
-      const client = await createClient({
+      const client = createClient({
         stateAdapter,
         notifyAdapter,
         observabilityAdapter,
@@ -679,7 +679,7 @@ export const clientQueriesTestSuite = ({ it }: { it: TestAPI<TestSuiteContext> }
       observabilityAdapter,
       log,
     }) => {
-      const client = await createClient({
+      const client = createClient({
         stateAdapter,
         notifyAdapter,
         observabilityAdapter,
@@ -703,7 +703,7 @@ export const clientQueriesTestSuite = ({ it }: { it: TestAPI<TestSuiteContext> }
       observabilityAdapter,
       log,
     }) => {
-      const client = await createClient({
+      const client = createClient({
         stateAdapter,
         notifyAdapter,
         observabilityAdapter,
@@ -723,7 +723,7 @@ export const clientQueriesTestSuite = ({ it }: { it: TestAPI<TestSuiteContext> }
       log,
       withTransaction,
     }) => {
-      const client = await createClient({
+      const client = createClient({
         stateAdapter,
         notifyAdapter,
         observabilityAdapter,
@@ -768,7 +768,7 @@ export const clientQueriesTestSuite = ({ it }: { it: TestAPI<TestSuiteContext> }
       log,
       withTransaction,
     }) => {
-      const client = await createClient({
+      const client = createClient({
         stateAdapter,
         notifyAdapter,
         observabilityAdapter,
@@ -815,7 +815,7 @@ export const clientQueriesTestSuite = ({ it }: { it: TestAPI<TestSuiteContext> }
       observabilityAdapter,
       log,
     }) => {
-      const client = await createClient({
+      const client = createClient({
         stateAdapter,
         notifyAdapter,
         observabilityAdapter,
@@ -835,7 +835,7 @@ export const clientQueriesTestSuite = ({ it }: { it: TestAPI<TestSuiteContext> }
       log,
       withTransaction,
     }) => {
-      const client = await createClient({
+      const client = createClient({
         stateAdapter,
         notifyAdapter,
         observabilityAdapter,
@@ -880,7 +880,7 @@ export const clientQueriesTestSuite = ({ it }: { it: TestAPI<TestSuiteContext> }
       log,
       withTransaction,
     }) => {
-      const client = await createClient({
+      const client = createClient({
         stateAdapter,
         notifyAdapter,
         observabilityAdapter,
@@ -927,7 +927,7 @@ export const clientQueriesTestSuite = ({ it }: { it: TestAPI<TestSuiteContext> }
       observabilityAdapter,
       log,
     }) => {
-      const client = await createClient({
+      const client = createClient({
         stateAdapter,
         notifyAdapter,
         observabilityAdapter,
@@ -946,7 +946,7 @@ export const clientQueriesTestSuite = ({ it }: { it: TestAPI<TestSuiteContext> }
       log,
       withTransaction,
     }) => {
-      const client = await createClient({
+      const client = createClient({
         stateAdapter,
         notifyAdapter,
         observabilityAdapter,
@@ -983,13 +983,13 @@ export const clientQueriesTestSuite = ({ it }: { it: TestAPI<TestSuiteContext> }
       observabilityAdapter,
       log,
       withTransaction,
-      withWorkers,
+      withWorkerRunners,
     }) => {
       const jobTypes = defineJobTypes<{
         task_a: { entry: true; input: null; output: null };
         task_b: { entry: true; input: null; output: null };
       }>();
-      const client = await createClient({
+      const client = createClient({
         stateAdapter,
         notifyAdapter,
         observabilityAdapter,
@@ -1007,7 +1007,7 @@ export const clientQueriesTestSuite = ({ it }: { it: TestAPI<TestSuiteContext> }
         client.createChain({ ...txCtx, txHooks, typeName: "task_b", input: null }),
       );
 
-      const worker = await createInProcessWorker({
+      const workerRunner = createWorkerRunner({
         client,
         concurrency: 1,
         processors: createProcessors({
@@ -1030,7 +1030,7 @@ export const clientQueriesTestSuite = ({ it }: { it: TestAPI<TestSuiteContext> }
         }),
       });
 
-      await withWorkers([await worker.start()], async () => {
+      await withWorkerRunners([await workerRunner.start()], async () => {
         await client.awaitChain(chainA, completionOptions);
       });
 
@@ -1049,7 +1049,7 @@ export const clientQueriesTestSuite = ({ it }: { it: TestAPI<TestSuiteContext> }
       observabilityAdapter,
       log,
     }) => {
-      const client = await createClient({
+      const client = createClient({
         stateAdapter,
         notifyAdapter,
         observabilityAdapter,
@@ -1068,7 +1068,7 @@ export const clientQueriesTestSuite = ({ it }: { it: TestAPI<TestSuiteContext> }
       log,
       withTransaction,
     }) => {
-      const client = await createClient({
+      const client = createClient({
         stateAdapter,
         notifyAdapter,
         observabilityAdapter,
@@ -1123,13 +1123,13 @@ export const clientQueriesTestSuite = ({ it }: { it: TestAPI<TestSuiteContext> }
       observabilityAdapter,
       log,
       withTransaction,
-      withWorkers,
+      withWorkerRunners,
     }) => {
       const jobTypes = defineJobTypes<{
         task_a: { entry: true; input: null; output: null };
         task_b: { entry: true; input: null; output: null };
       }>();
-      const client = await createClient({
+      const client = createClient({
         stateAdapter,
         notifyAdapter,
         observabilityAdapter,
@@ -1147,7 +1147,7 @@ export const clientQueriesTestSuite = ({ it }: { it: TestAPI<TestSuiteContext> }
         client.createChain({ ...txCtx, txHooks, typeName: "task_b", input: null }),
       );
 
-      const worker = await createInProcessWorker({
+      const workerRunner = createWorkerRunner({
         client,
         concurrency: 1,
         processors: createProcessors({
@@ -1170,7 +1170,7 @@ export const clientQueriesTestSuite = ({ it }: { it: TestAPI<TestSuiteContext> }
         }),
       });
 
-      await withWorkers([await worker.start()], async () => {
+      await withWorkerRunners([await workerRunner.start()], async () => {
         await client.awaitChain(toComplete, completionOptions);
       });
 
@@ -1191,7 +1191,7 @@ export const clientQueriesTestSuite = ({ it }: { it: TestAPI<TestSuiteContext> }
       observabilityAdapter,
       log,
     }) => {
-      const client = await createClient({
+      const client = createClient({
         stateAdapter,
         notifyAdapter,
         observabilityAdapter,
@@ -1212,7 +1212,7 @@ export const clientQueriesTestSuite = ({ it }: { it: TestAPI<TestSuiteContext> }
       log,
       withTransaction,
     }) => {
-      const client = await createClient({
+      const client = createClient({
         stateAdapter,
         notifyAdapter,
         observabilityAdapter,
@@ -1250,7 +1250,7 @@ export const clientQueriesTestSuite = ({ it }: { it: TestAPI<TestSuiteContext> }
       log,
       withTransaction,
     }) => {
-      const client = await createClient({
+      const client = createClient({
         stateAdapter,
         notifyAdapter,
         observabilityAdapter,
@@ -1290,7 +1290,7 @@ export const clientQueriesTestSuite = ({ it }: { it: TestAPI<TestSuiteContext> }
       log,
       withTransaction,
     }) => {
-      const client = await createClient({
+      const client = createClient({
         stateAdapter,
         notifyAdapter,
         observabilityAdapter,
@@ -1336,7 +1336,7 @@ export const clientQueriesTestSuite = ({ it }: { it: TestAPI<TestSuiteContext> }
       log,
       withTransaction,
     }) => {
-      const client = await createClient({
+      const client = createClient({
         stateAdapter,
         notifyAdapter,
         observabilityAdapter,
@@ -1378,7 +1378,7 @@ export const clientQueriesTestSuite = ({ it }: { it: TestAPI<TestSuiteContext> }
       log,
       withTransaction,
     }) => {
-      const client = await createClient({
+      const client = createClient({
         stateAdapter,
         notifyAdapter,
         observabilityAdapter,
@@ -1434,7 +1434,7 @@ export const clientQueriesTestSuite = ({ it }: { it: TestAPI<TestSuiteContext> }
       log,
       withTransaction,
     }) => {
-      const client = await createClient({
+      const client = createClient({
         stateAdapter,
         notifyAdapter,
         observabilityAdapter,
@@ -1484,7 +1484,7 @@ export const clientQueriesTestSuite = ({ it }: { it: TestAPI<TestSuiteContext> }
       observabilityAdapter,
       log,
       withTransaction,
-      withWorkers,
+      withWorkerRunners,
     }) => {
       const jobTypes = defineJobTypes<{
         task_a: {
@@ -1499,7 +1499,7 @@ export const clientQueriesTestSuite = ({ it }: { it: TestAPI<TestSuiteContext> }
         };
       }>();
 
-      const client = await createClient({
+      const client = createClient({
         stateAdapter,
         notifyAdapter,
         observabilityAdapter,
@@ -1507,7 +1507,7 @@ export const clientQueriesTestSuite = ({ it }: { it: TestAPI<TestSuiteContext> }
         jobTypes,
       });
 
-      const worker = await createInProcessWorker({
+      const workerRunner = createWorkerRunner({
         client,
         concurrency: 1,
         processors: createProcessors({
@@ -1538,7 +1538,7 @@ export const clientQueriesTestSuite = ({ it }: { it: TestAPI<TestSuiteContext> }
         client.createChain({ ...txCtx, txHooks, typeName: "task_a", input: null }),
       );
 
-      await withWorkers([await worker.start()], async () => {
+      await withWorkerRunners([await workerRunner.start()], async () => {
         await client.awaitChain(chainA, completionOptions);
         await client.awaitChain(chainB, completionOptions);
       });
@@ -1574,7 +1574,7 @@ export const clientQueriesTestSuite = ({ it }: { it: TestAPI<TestSuiteContext> }
       log,
       withTransaction,
     }) => {
-      const client = await createClient({
+      const client = createClient({
         stateAdapter,
         notifyAdapter,
         observabilityAdapter,
@@ -1613,7 +1613,7 @@ export const clientQueriesTestSuite = ({ it }: { it: TestAPI<TestSuiteContext> }
       observabilityAdapter,
       log,
     }) => {
-      const client = await createClient({
+      const client = createClient({
         stateAdapter,
         notifyAdapter,
         observabilityAdapter,
@@ -1634,7 +1634,7 @@ export const clientQueriesTestSuite = ({ it }: { it: TestAPI<TestSuiteContext> }
       log,
       withTransaction,
     }) => {
-      const client = await createClient({
+      const client = createClient({
         stateAdapter,
         notifyAdapter,
         observabilityAdapter,
@@ -1671,7 +1671,7 @@ export const clientQueriesTestSuite = ({ it }: { it: TestAPI<TestSuiteContext> }
       log,
       withTransaction,
     }) => {
-      const client = await createClient({
+      const client = createClient({
         stateAdapter,
         notifyAdapter,
         observabilityAdapter,
@@ -1726,7 +1726,7 @@ export const clientQueriesTestSuite = ({ it }: { it: TestAPI<TestSuiteContext> }
       log,
       withTransaction,
     }) => {
-      const client = await createClient({
+      const client = createClient({
         stateAdapter,
         notifyAdapter,
         observabilityAdapter,
@@ -1768,7 +1768,7 @@ export const clientQueriesTestSuite = ({ it }: { it: TestAPI<TestSuiteContext> }
       log,
       withTransaction,
     }) => {
-      const client = await createClient({
+      const client = createClient({
         stateAdapter,
         notifyAdapter,
         observabilityAdapter,
@@ -1821,7 +1821,7 @@ export const clientQueriesTestSuite = ({ it }: { it: TestAPI<TestSuiteContext> }
       log,
       withTransaction,
     }) => {
-      const client = await createClient({
+      const client = createClient({
         stateAdapter,
         notifyAdapter,
         observabilityAdapter,
@@ -1876,7 +1876,7 @@ export const clientQueriesTestSuite = ({ it }: { it: TestAPI<TestSuiteContext> }
       observabilityAdapter,
       log,
       withTransaction,
-      withWorkers,
+      withWorkerRunners,
     }) => {
       const jobTypes = defineJobTypes<{
         job_a: {
@@ -1891,7 +1891,7 @@ export const clientQueriesTestSuite = ({ it }: { it: TestAPI<TestSuiteContext> }
         };
       }>();
 
-      const client = await createClient({
+      const client = createClient({
         stateAdapter,
         notifyAdapter,
         observabilityAdapter,
@@ -1899,7 +1899,7 @@ export const clientQueriesTestSuite = ({ it }: { it: TestAPI<TestSuiteContext> }
         jobTypes,
       });
 
-      const worker = await createInProcessWorker({
+      const workerRunner = createWorkerRunner({
         client,
         concurrency: 1,
         processors: createProcessors({
@@ -1930,7 +1930,7 @@ export const clientQueriesTestSuite = ({ it }: { it: TestAPI<TestSuiteContext> }
         client.createChain({ ...txCtx, txHooks, typeName: "job_a", input: null }),
       );
 
-      await withWorkers([await worker.start()], async () => {
+      await withWorkerRunners([await workerRunner.start()], async () => {
         await client.awaitChain(chainA, completionOptions);
         await client.awaitChain(chainB, completionOptions);
       });
@@ -1966,7 +1966,7 @@ export const clientQueriesTestSuite = ({ it }: { it: TestAPI<TestSuiteContext> }
       log,
       withTransaction,
     }) => {
-      const client = await createClient({
+      const client = createClient({
         stateAdapter,
         notifyAdapter,
         observabilityAdapter,
@@ -2011,7 +2011,7 @@ export const clientQueriesTestSuite = ({ it }: { it: TestAPI<TestSuiteContext> }
       log,
       withTransaction,
     }) => {
-      const client = await createClient({
+      const client = createClient({
         stateAdapter,
         notifyAdapter,
         observabilityAdapter,
@@ -2049,7 +2049,7 @@ export const clientQueriesTestSuite = ({ it }: { it: TestAPI<TestSuiteContext> }
       observabilityAdapter,
       log,
     }) => {
-      const client = await createClient({
+      const client = createClient({
         stateAdapter,
         notifyAdapter,
         observabilityAdapter,
@@ -2070,7 +2070,7 @@ export const clientQueriesTestSuite = ({ it }: { it: TestAPI<TestSuiteContext> }
       observabilityAdapter,
       log,
       withTransaction,
-      withWorkers,
+      withWorkerRunners,
     }) => {
       const jobTypes = defineJobTypes<{
         step: {
@@ -2081,7 +2081,7 @@ export const clientQueriesTestSuite = ({ it }: { it: TestAPI<TestSuiteContext> }
         };
       }>();
 
-      const client = await createClient({
+      const client = createClient({
         stateAdapter,
         notifyAdapter,
         observabilityAdapter,
@@ -2089,7 +2089,7 @@ export const clientQueriesTestSuite = ({ it }: { it: TestAPI<TestSuiteContext> }
         jobTypes,
       });
 
-      const worker = await createInProcessWorker({
+      const workerRunner = createWorkerRunner({
         client,
         concurrency: 1,
         processors: createProcessors({
@@ -2116,7 +2116,7 @@ export const clientQueriesTestSuite = ({ it }: { it: TestAPI<TestSuiteContext> }
         client.createChain({ ...txCtx, txHooks, typeName: "step", input: { n: 0 } }),
       );
 
-      await withWorkers([await worker.start()], async () => {
+      await withWorkerRunners([await workerRunner.start()], async () => {
         await client.awaitChain(chain, completionOptions);
       });
 
@@ -2147,7 +2147,7 @@ export const clientQueriesTestSuite = ({ it }: { it: TestAPI<TestSuiteContext> }
       observabilityAdapter,
       log,
       withTransaction,
-      withWorkers,
+      withWorkerRunners,
     }) => {
       const jobTypes = defineJobTypes<{
         step: {
@@ -2158,7 +2158,7 @@ export const clientQueriesTestSuite = ({ it }: { it: TestAPI<TestSuiteContext> }
         };
       }>();
 
-      const client = await createClient({
+      const client = createClient({
         stateAdapter,
         notifyAdapter,
         observabilityAdapter,
@@ -2166,7 +2166,7 @@ export const clientQueriesTestSuite = ({ it }: { it: TestAPI<TestSuiteContext> }
         jobTypes,
       });
 
-      const worker = await createInProcessWorker({
+      const workerRunner = createWorkerRunner({
         client,
         concurrency: 1,
         processors: createProcessors({
@@ -2193,7 +2193,7 @@ export const clientQueriesTestSuite = ({ it }: { it: TestAPI<TestSuiteContext> }
         client.createChain({ ...txCtx, txHooks, typeName: "step", input: { n: 0 } }),
       );
 
-      await withWorkers([await worker.start()], async () => {
+      await withWorkerRunners([await workerRunner.start()], async () => {
         await client.awaitChain(chain, completionOptions);
       });
 
@@ -2219,7 +2219,7 @@ export const clientQueriesTestSuite = ({ it }: { it: TestAPI<TestSuiteContext> }
       observabilityAdapter,
       log,
       withTransaction,
-      withWorkers,
+      withWorkerRunners,
     }) => {
       const jobTypes = defineJobTypes<{
         step: {
@@ -2230,7 +2230,7 @@ export const clientQueriesTestSuite = ({ it }: { it: TestAPI<TestSuiteContext> }
         };
       }>();
 
-      const client = await createClient({
+      const client = createClient({
         stateAdapter,
         notifyAdapter,
         observabilityAdapter,
@@ -2238,7 +2238,7 @@ export const clientQueriesTestSuite = ({ it }: { it: TestAPI<TestSuiteContext> }
         jobTypes,
       });
 
-      const worker = await createInProcessWorker({
+      const workerRunner = createWorkerRunner({
         client,
         concurrency: 1,
         processors: createProcessors({
@@ -2265,7 +2265,7 @@ export const clientQueriesTestSuite = ({ it }: { it: TestAPI<TestSuiteContext> }
         client.createChain({ ...txCtx, txHooks, typeName: "step", input: { n: 0 } }),
       );
 
-      await withWorkers([await worker.start()], async () => {
+      await withWorkerRunners([await workerRunner.start()], async () => {
         await client.awaitChain(chain, completionOptions);
       });
 
@@ -2293,7 +2293,7 @@ export const clientQueriesTestSuite = ({ it }: { it: TestAPI<TestSuiteContext> }
       log,
       withTransaction,
     }) => {
-      const client = await createClient({
+      const client = createClient({
         stateAdapter,
         notifyAdapter,
         observabilityAdapter,
@@ -2331,7 +2331,7 @@ export const clientQueriesTestSuite = ({ it }: { it: TestAPI<TestSuiteContext> }
       log,
       withTransaction,
     }) => {
-      const client = await createClient({
+      const client = createClient({
         stateAdapter,
         notifyAdapter,
         observabilityAdapter,
@@ -2363,7 +2363,7 @@ export const clientQueriesTestSuite = ({ it }: { it: TestAPI<TestSuiteContext> }
       log,
       withTransaction,
     }) => {
-      const client = await createClient({
+      const client = createClient({
         stateAdapter,
         notifyAdapter,
         observabilityAdapter,
@@ -2394,7 +2394,7 @@ export const clientQueriesTestSuite = ({ it }: { it: TestAPI<TestSuiteContext> }
       log,
       withTransaction,
     }) => {
-      const client = await createClient({
+      const client = createClient({
         stateAdapter,
         notifyAdapter,
         observabilityAdapter,
@@ -2423,7 +2423,7 @@ export const clientQueriesTestSuite = ({ it }: { it: TestAPI<TestSuiteContext> }
       log,
       withTransaction,
     }) => {
-      const client = await createClient({
+      const client = createClient({
         stateAdapter,
         notifyAdapter,
         observabilityAdapter,
@@ -2464,7 +2464,7 @@ export const clientQueriesTestSuite = ({ it }: { it: TestAPI<TestSuiteContext> }
       log,
       withTransaction,
     }) => {
-      const client = await createClient({
+      const client = createClient({
         stateAdapter,
         notifyAdapter,
         observabilityAdapter,
@@ -2509,7 +2509,7 @@ export const clientQueriesTestSuite = ({ it }: { it: TestAPI<TestSuiteContext> }
       log,
       withTransaction,
     }) => {
-      const client = await createClient({
+      const client = createClient({
         stateAdapter,
         notifyAdapter,
         observabilityAdapter,
@@ -2546,7 +2546,7 @@ export const clientQueriesTestSuite = ({ it }: { it: TestAPI<TestSuiteContext> }
       observabilityAdapter,
       log,
       withTransaction,
-      withWorkers,
+      withWorkerRunners,
     }) => {
       const jobTypes = defineJobTypes<{
         dep: {
@@ -2562,7 +2562,7 @@ export const clientQueriesTestSuite = ({ it }: { it: TestAPI<TestSuiteContext> }
         };
       }>();
 
-      const client = await createClient({
+      const client = createClient({
         stateAdapter,
         notifyAdapter,
         observabilityAdapter,
@@ -2570,7 +2570,7 @@ export const clientQueriesTestSuite = ({ it }: { it: TestAPI<TestSuiteContext> }
         jobTypes,
       });
 
-      const worker = await createInProcessWorker({
+      const workerRunner = createWorkerRunner({
         client,
         concurrency: 1,
         processors: createProcessors({
@@ -2613,7 +2613,7 @@ export const clientQueriesTestSuite = ({ it }: { it: TestAPI<TestSuiteContext> }
       const blockersBefore = await client.getJobBlockers({ jobId: mainChain.id });
       expect(blockersBefore[0].status).not.toBe("completed");
 
-      await withWorkers([await worker.start()], async () => {
+      await withWorkerRunners([await workerRunner.start()], async () => {
         await client.awaitChain(mainChain, completionOptions);
       });
 
@@ -2630,7 +2630,7 @@ export const clientQueriesTestSuite = ({ it }: { it: TestAPI<TestSuiteContext> }
       log,
       withTransaction,
     }) => {
-      const client = await createClient({
+      const client = createClient({
         stateAdapter,
         notifyAdapter,
         observabilityAdapter,
@@ -2660,7 +2660,7 @@ export const clientQueriesTestSuite = ({ it }: { it: TestAPI<TestSuiteContext> }
       log,
       withTransaction,
     }) => {
-      const client = await createClient({
+      const client = createClient({
         stateAdapter,
         notifyAdapter,
         observabilityAdapter,
@@ -2701,7 +2701,7 @@ export const clientQueriesTestSuite = ({ it }: { it: TestAPI<TestSuiteContext> }
       log,
       withTransaction,
     }) => {
-      const client = await createClient({
+      const client = createClient({
         stateAdapter,
         notifyAdapter,
         observabilityAdapter,
@@ -2765,7 +2765,7 @@ export const clientQueriesTestSuite = ({ it }: { it: TestAPI<TestSuiteContext> }
       log,
       withTransaction,
     }) => {
-      const client = await createClient({
+      const client = createClient({
         stateAdapter,
         notifyAdapter,
         observabilityAdapter,
@@ -2811,7 +2811,7 @@ export const clientQueriesTestSuite = ({ it }: { it: TestAPI<TestSuiteContext> }
       log,
       withTransaction,
     }) => {
-      const client = await createClient({
+      const client = createClient({
         stateAdapter,
         notifyAdapter,
         observabilityAdapter,
@@ -2849,7 +2849,7 @@ export const clientQueriesTestSuite = ({ it }: { it: TestAPI<TestSuiteContext> }
       log,
       withTransaction,
     }) => {
-      const client = await createClient({
+      const client = createClient({
         stateAdapter,
         notifyAdapter,
         observabilityAdapter,
@@ -2902,13 +2902,13 @@ export const clientQueriesTestSuite = ({ it }: { it: TestAPI<TestSuiteContext> }
       observabilityAdapter,
       log,
       withTransaction,
-      withWorkers,
+      withWorkerRunners,
     }) => {
       const jobTypes = defineJobTypes<{
         send_email: { entry: true; input: null; output: null };
         sync_crm: { entry: true; input: null; output: null };
       }>();
-      const client = await createClient({
+      const client = createClient({
         stateAdapter,
         notifyAdapter,
         observabilityAdapter,
@@ -2917,7 +2917,7 @@ export const clientQueriesTestSuite = ({ it }: { it: TestAPI<TestSuiteContext> }
       });
       const attemptStarted = Promise.withResolvers<void>();
       const releaseAttempt = Promise.withResolvers<void>();
-      const worker = await createInProcessWorker({
+      const workerRunner = createWorkerRunner({
         client,
         concurrency: 2,
         processors: createProcessors({
@@ -2946,7 +2946,7 @@ export const clientQueriesTestSuite = ({ it }: { it: TestAPI<TestSuiteContext> }
         client.createChain({ ...txCtx, txHooks, typeName: "send_email", input: null }),
       );
 
-      await withWorkers([await worker.start()], async () => {
+      await withWorkerRunners([await workerRunner.start()], async () => {
         await attemptStarted.promise;
         const job = await client.getJob({ id: chain.id, typeName: "send_email" });
         assert(job?.status === "running");
@@ -2971,13 +2971,13 @@ export const clientQueriesTestSuite = ({ it }: { it: TestAPI<TestSuiteContext> }
       observabilityAdapter,
       log,
       withTransaction,
-      withWorkers,
+      withWorkerRunners,
     }) => {
       const jobTypes = defineJobTypes<{
         send_email: { entry: true; input: null; output: null };
         sync_crm: { entry: true; input: null; output: null };
       }>();
-      const client = await createClient({
+      const client = createClient({
         stateAdapter,
         notifyAdapter,
         observabilityAdapter,
@@ -2986,7 +2986,7 @@ export const clientQueriesTestSuite = ({ it }: { it: TestAPI<TestSuiteContext> }
       });
       const attemptStarted = Promise.withResolvers<void>();
       const releaseAttempt = Promise.withResolvers<void>();
-      const worker = await createInProcessWorker({
+      const workerRunner = createWorkerRunner({
         client,
         concurrency: 2,
         processors: createProcessors({
@@ -3015,7 +3015,7 @@ export const clientQueriesTestSuite = ({ it }: { it: TestAPI<TestSuiteContext> }
         client.createChain({ ...txCtx, txHooks, typeName: "send_email", input: null }),
       );
 
-      const job = await withWorkers([await worker.start()], async () => {
+      const job = await withWorkerRunners([await workerRunner.start()], async () => {
         await attemptStarted.promise;
         const runningJob = await client.getJob({ id: chain.id, typeName: "send_email" });
         releaseAttempt.resolve();
@@ -3035,13 +3035,13 @@ export const clientQueriesTestSuite = ({ it }: { it: TestAPI<TestSuiteContext> }
       observabilityAdapter,
       log,
       withTransaction,
-      withWorkers,
+      withWorkerRunners,
     }) => {
       const jobTypes = defineJobTypes<{
         send_email: { entry: true; input: null; output: null };
         sync_crm: { entry: true; input: null; output: null };
       }>();
-      const client = await createClient({
+      const client = createClient({
         stateAdapter,
         notifyAdapter,
         observabilityAdapter,
@@ -3050,7 +3050,7 @@ export const clientQueriesTestSuite = ({ it }: { it: TestAPI<TestSuiteContext> }
       });
       const attemptStarted = Promise.withResolvers<void>();
       const releaseAttempt = Promise.withResolvers<void>();
-      const worker = await createInProcessWorker({
+      const workerRunner = createWorkerRunner({
         client,
         concurrency: 2,
         processors: createProcessors({
@@ -3079,7 +3079,7 @@ export const clientQueriesTestSuite = ({ it }: { it: TestAPI<TestSuiteContext> }
         client.createChain({ ...txCtx, txHooks, typeName: "send_email", input: null }),
       );
 
-      await withWorkers([await worker.start()], async () => {
+      await withWorkerRunners([await workerRunner.start()], async () => {
         await attemptStarted.promise;
         const job = await client.getJob({ id: chain.id, typeName: "send_email" });
         assert(job?.status === "running");
@@ -3106,13 +3106,13 @@ export const clientQueriesTestSuite = ({ it }: { it: TestAPI<TestSuiteContext> }
       observabilityAdapter,
       log,
       withTransaction,
-      withWorkers,
+      withWorkerRunners,
     }) => {
       const jobTypes = defineJobTypes<{
         send_email: { entry: true; input: null; output: null };
         sync_crm: { entry: true; input: null; output: null };
       }>();
-      const client = await createClient({
+      const client = createClient({
         stateAdapter,
         notifyAdapter,
         observabilityAdapter,
@@ -3121,7 +3121,7 @@ export const clientQueriesTestSuite = ({ it }: { it: TestAPI<TestSuiteContext> }
       });
       const attemptStarted = Promise.withResolvers<void>();
       const releaseAttempt = Promise.withResolvers<void>();
-      const worker = await createInProcessWorker({
+      const workerRunner = createWorkerRunner({
         client,
         concurrency: 2,
         processors: createProcessors({
@@ -3150,7 +3150,7 @@ export const clientQueriesTestSuite = ({ it }: { it: TestAPI<TestSuiteContext> }
         client.createChain({ ...txCtx, txHooks, typeName: "send_email", input: null }),
       );
 
-      await withWorkers([await worker.start()], async () => {
+      await withWorkerRunners([await workerRunner.start()], async () => {
         await attemptStarted.promise;
         const job = await client.getJob({ id: chain.id, typeName: "send_email" });
         assert(job?.status === "running");
@@ -3170,13 +3170,13 @@ export const clientQueriesTestSuite = ({ it }: { it: TestAPI<TestSuiteContext> }
       observabilityAdapter,
       log,
       withTransaction,
-      withWorkers,
+      withWorkerRunners,
     }) => {
       const jobTypes = defineJobTypes<{
         send_email: { entry: true; input: null; output: null };
         sync_crm: { entry: true; input: null; output: null };
       }>();
-      const client = await createClient({
+      const client = createClient({
         stateAdapter,
         notifyAdapter,
         observabilityAdapter,
@@ -3185,7 +3185,7 @@ export const clientQueriesTestSuite = ({ it }: { it: TestAPI<TestSuiteContext> }
       });
       const attemptStarted = Promise.withResolvers<void>();
       const releaseAttempt = Promise.withResolvers<void>();
-      const worker = await createInProcessWorker({
+      const workerRunner = createWorkerRunner({
         client,
         concurrency: 2,
         processors: createProcessors({
@@ -3214,7 +3214,7 @@ export const clientQueriesTestSuite = ({ it }: { it: TestAPI<TestSuiteContext> }
         client.createChain({ ...txCtx, txHooks, typeName: "send_email", input: null }),
       );
 
-      await withWorkers([await worker.start()], async () => {
+      await withWorkerRunners([await workerRunner.start()], async () => {
         await attemptStarted.promise;
         const job = await client.getJob({ id: chain.id, typeName: "send_email" });
         assert(job?.status === "running");
@@ -3238,12 +3238,12 @@ export const clientQueriesTestSuite = ({ it }: { it: TestAPI<TestSuiteContext> }
       observabilityAdapter,
       log,
       withTransaction,
-      withWorkers,
+      withWorkerRunners,
     }) => {
       const jobTypes = defineJobTypes<{
         send_email: { entry: true; input: { index: number }; output: null };
       }>();
-      const client = await createClient({
+      const client = createClient({
         stateAdapter,
         notifyAdapter,
         observabilityAdapter,
@@ -3271,8 +3271,8 @@ export const clientQueriesTestSuite = ({ it }: { it: TestAPI<TestSuiteContext> }
           },
         },
       });
-      const workers = await Promise.all(
-        [0, 1, 2].map(async () => createInProcessWorker({ client, concurrency: 1, processors })),
+      const workerRunners = [0, 1, 2].map(() =>
+        createWorkerRunner({ client, concurrency: 1, processors }),
       );
       const chains = await withTransaction(async (txCtx, txHooks) =>
         client.createChains({
@@ -3282,8 +3282,8 @@ export const clientQueriesTestSuite = ({ it }: { it: TestAPI<TestSuiteContext> }
         }),
       );
 
-      await withWorkers(
-        await Promise.all(workers.map(async (worker) => worker.start())),
+      await withWorkerRunners(
+        await Promise.all(workerRunners.map(async (workerRunner) => workerRunner.start())),
         async () => {
           await Promise.all(attemptsStarted.map(async (attemptStarted) => attemptStarted.promise));
           const allWorkerIds = (await client.listWorkers()).items.map((listed) => listed.id);
@@ -3314,13 +3314,13 @@ export const clientQueriesTestSuite = ({ it }: { it: TestAPI<TestSuiteContext> }
       observabilityAdapter,
       log,
       withTransaction,
-      withWorkers,
+      withWorkerRunners,
     }) => {
       const jobTypes = defineJobTypes<{
         send_email: { entry: true; input: null; output: null };
         sync_crm: { entry: true; input: null; output: null };
       }>();
-      const client = await createClient({
+      const client = createClient({
         stateAdapter,
         notifyAdapter,
         observabilityAdapter,
@@ -3329,7 +3329,7 @@ export const clientQueriesTestSuite = ({ it }: { it: TestAPI<TestSuiteContext> }
       });
       const attemptStarted = Promise.withResolvers<void>();
       const releaseAttempt = Promise.withResolvers<void>();
-      const worker = await createInProcessWorker({
+      const workerRunner = createWorkerRunner({
         client,
         concurrency: 2,
         processors: createProcessors({
@@ -3358,7 +3358,7 @@ export const clientQueriesTestSuite = ({ it }: { it: TestAPI<TestSuiteContext> }
         client.createChain({ ...txCtx, txHooks, typeName: "send_email", input: null }),
       );
 
-      await withWorkers([await worker.start()], async () => {
+      await withWorkerRunners([await workerRunner.start()], async () => {
         await attemptStarted.promise;
         const job = await client.getJob({ id: chain.id, typeName: "send_email" });
         assert(job?.status === "running");
@@ -3390,13 +3390,13 @@ export const clientQueriesTestSuite = ({ it }: { it: TestAPI<TestSuiteContext> }
       observabilityAdapter,
       log,
       withTransaction,
-      withWorkers,
+      withWorkerRunners,
     }) => {
       const jobTypes = defineJobTypes<{
         send_email: { entry: true; input: null; output: null };
         sync_crm: { entry: true; input: null; output: null };
       }>();
-      const client = await createClient({
+      const client = createClient({
         stateAdapter,
         notifyAdapter,
         observabilityAdapter,
@@ -3405,7 +3405,7 @@ export const clientQueriesTestSuite = ({ it }: { it: TestAPI<TestSuiteContext> }
       });
       const attemptStarted = Promise.withResolvers<void>();
       const releaseAttempt = Promise.withResolvers<void>();
-      const worker = await createInProcessWorker({
+      const workerRunner = createWorkerRunner({
         client,
         concurrency: 2,
         processors: createProcessors({
@@ -3434,7 +3434,7 @@ export const clientQueriesTestSuite = ({ it }: { it: TestAPI<TestSuiteContext> }
         client.createChain({ ...txCtx, txHooks, typeName: "send_email", input: null }),
       );
 
-      await withWorkers([await worker.start()], async () => {
+      await withWorkerRunners([await workerRunner.start()], async () => {
         await attemptStarted.promise;
         const job = await client.getJob({ id: chain.id, typeName: "send_email" });
         assert(job?.status === "running");
@@ -3462,12 +3462,12 @@ export const clientQueriesTestSuite = ({ it }: { it: TestAPI<TestSuiteContext> }
       observabilityAdapter,
       log,
       withTransaction,
-      withWorkers,
+      withWorkerRunners,
     }) => {
       const jobTypes = defineJobTypes<{
         send_email: { entry: true; input: { index: number }; output: null };
       }>();
-      const client = await createClient({
+      const client = createClient({
         stateAdapter,
         notifyAdapter,
         observabilityAdapter,
@@ -3495,7 +3495,7 @@ export const clientQueriesTestSuite = ({ it }: { it: TestAPI<TestSuiteContext> }
           },
         },
       });
-      const worker = await createInProcessWorker({ client, concurrency: 3, processors });
+      const workerRunner = createWorkerRunner({ client, concurrency: 3, processors });
       const chains = await withTransaction(async (txCtx, txHooks) =>
         client.createChains({
           ...txCtx,
@@ -3504,7 +3504,7 @@ export const clientQueriesTestSuite = ({ it }: { it: TestAPI<TestSuiteContext> }
         }),
       );
 
-      await withWorkers([await worker.start()], async () => {
+      await withWorkerRunners([await workerRunner.start()], async () => {
         await Promise.all(attemptsStarted.map(async (attemptStarted) => attemptStarted.promise));
         const job = await client.getJob({ id: chains[0].id, typeName: "send_email" });
         assert(job?.status === "running");
@@ -3541,7 +3541,7 @@ export const clientQueriesTestSuite = ({ it }: { it: TestAPI<TestSuiteContext> }
       observabilityAdapter,
       log,
       withTransaction,
-      withWorkers,
+      withWorkerRunners,
     }) => {
       const jobTypes = defineJobTypes<{
         task: {
@@ -3556,7 +3556,7 @@ export const clientQueriesTestSuite = ({ it }: { it: TestAPI<TestSuiteContext> }
         };
       }>();
 
-      const client = await createClient({
+      const client = createClient({
         stateAdapter,
         notifyAdapter,
         observabilityAdapter,
@@ -3564,7 +3564,7 @@ export const clientQueriesTestSuite = ({ it }: { it: TestAPI<TestSuiteContext> }
         jobTypes,
       });
 
-      const worker = await createInProcessWorker({
+      const workerRunner = createWorkerRunner({
         client,
         concurrency: 1,
         processors: createProcessors({
@@ -3595,7 +3595,7 @@ export const clientQueriesTestSuite = ({ it }: { it: TestAPI<TestSuiteContext> }
         client.createChain({ ...txCtx, txHooks, typeName: "task", input: { n: 1 } }),
       );
 
-      await withWorkers([await worker.start()], async () => {
+      await withWorkerRunners([await workerRunner.start()], async () => {
         await client.awaitChain(chain, completionOptions);
       });
 
@@ -3625,7 +3625,7 @@ export const clientQueriesTestSuite = ({ it }: { it: TestAPI<TestSuiteContext> }
       observabilityAdapter,
       log,
       withTransaction,
-      withWorkers,
+      withWorkerRunners,
     }) => {
       const jobTypes = defineJobTypes<{
         dep: {
@@ -3641,7 +3641,7 @@ export const clientQueriesTestSuite = ({ it }: { it: TestAPI<TestSuiteContext> }
         };
       }>();
 
-      const client = await createClient({
+      const client = createClient({
         stateAdapter,
         notifyAdapter,
         observabilityAdapter,
@@ -3649,7 +3649,7 @@ export const clientQueriesTestSuite = ({ it }: { it: TestAPI<TestSuiteContext> }
         jobTypes,
       });
 
-      const worker = await createInProcessWorker({
+      const workerRunner = createWorkerRunner({
         client,
         concurrency: 1,
         processors: createProcessors({
@@ -3700,7 +3700,7 @@ export const clientQueriesTestSuite = ({ it }: { it: TestAPI<TestSuiteContext> }
       expect(blockers).toHaveLength(1);
       expect(blockers[0].id).toBe(depChain.id);
 
-      await withWorkers([await worker.start()], async () => {
+      await withWorkerRunners([await workerRunner.start()], async () => {
         await client.awaitChain(mainChain, completionOptions);
       });
 
@@ -3718,7 +3718,7 @@ export const clientQueriesTestSuite = ({ it }: { it: TestAPI<TestSuiteContext> }
       log,
       withTransaction,
     }) => {
-      const client = await createClient({
+      const client = createClient({
         stateAdapter,
         notifyAdapter,
         observabilityAdapter,

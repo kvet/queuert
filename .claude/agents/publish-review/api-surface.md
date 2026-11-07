@@ -7,7 +7,7 @@ You review the public API of the Queuert library as a whole: design footguns and
 - `packages/*/src/index.ts` — public exports (start here; read each once)
 - The source files those exports point at, as needed — factories (`create*`), option types, error classes
 - `packages/*/src/testing.ts` and other `package.json` `exports` subpaths
-- `code-style.md` — Naming Conventions, Error Class Shape, Nullable conventions, Async factory functions
+- `code-style.md` — Naming Conventions, Error Class Shape, Nullable conventions, Sync factory functions
 
 ## Checks
 

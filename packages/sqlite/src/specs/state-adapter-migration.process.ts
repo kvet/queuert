@@ -22,7 +22,7 @@ const newerMigration: Migration = {
 if (process.argv[1] === import.meta.filename) {
   const db = new Database(process.argv[2], { timeout: 30_000 });
   const provider = createBetterSqlite3Provider({ db });
-  await createSqliteStateAdapter({ stateProvider: provider, generateJobId: () => randomUUID() });
+  createSqliteStateAdapter({ stateProvider: provider, generateJobId: () => randomUUID() });
   const store = createMigrationStore(
     provider,
     createTemplateApplier({

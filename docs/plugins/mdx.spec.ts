@@ -89,12 +89,12 @@ describe("mdxOptions", () => {
   it("highlights fenced code into a Code block with the raw source and title", async () => {
     const output = await compilePage(
       "guides/a.md",
-      '```ts title="client.ts"\nconst client = await createClient();\n```',
+      '```ts title="client.ts"\nconst client = createClient();\n```',
     );
 
     expect(output).toContain('<Code lang="ts"');
     expect(output).toContain('title="client.ts"');
-    expect(output).toContain('code="const client = await createClient();"');
+    expect(output).toContain('code="const client = createClient();"');
     expect(output).toContain("--shiki-token-keyword");
   });
 });

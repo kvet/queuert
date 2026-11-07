@@ -16,7 +16,7 @@ import {
   createClient,
   createInProcessNotifyAdapter,
   createInProcessStateAdapter,
-  createInProcessWorker,
+  createWorkerRunner,
   createProcessors,
   defineJobTypes,
   withTxHooks,
@@ -142,11 +142,11 @@ const jobTypes = defineJobTypes<{
 }>();
 
 // Create adapters
-const stateAdapter = await createInProcessStateAdapter();
-const notifyAdapter = await createInProcessNotifyAdapter();
+const stateAdapter = createInProcessStateAdapter();
+const notifyAdapter = createInProcessNotifyAdapter();
 
 // #region client
-const client = await createClient({
+const client = createClient({
   stateAdapter,
   notifyAdapter,
   observabilityAdapter,
@@ -154,8 +154,8 @@ const client = await createClient({
 });
 // #endregion
 
-// Create worker with processors
-const worker = await createInProcessWorker({
+// Create worker runner with processors
+const workerRunner = createWorkerRunner({
   client,
   processors: createProcessors({
     client,
@@ -322,7 +322,7 @@ const worker = await createInProcessWorker({
   }),
 });
 
-const stopWorker = await worker.start();
+const stopWorkerRunner = await workerRunner.start();
 
 // Run all scenarios
 console.log("\n=== OpenTelemetry Observability Showcase ===\n");
@@ -449,7 +449,7 @@ if (approvalResult.status === "completed") {
 }
 
 // Cleanup
-await stopWorker();
+await stopWorkerRunner();
 await notifyAdapter.close();
 await stateAdapter.close();
 console.log("\nFlushing telemetry...");

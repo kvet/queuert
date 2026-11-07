@@ -41,14 +41,14 @@ Deploy multiple worker processes sharing the same database for horizontal scalin
 The simplest approach: deploy the same worker configuration on multiple machines or processes.
 
 ```ts
-const worker = await createInProcessWorker({
+const workerRunner = createWorkerRunner({
   client,
   concurrency: 10,
   processors: createProcessors({ client, jobTypes, processors: { ... } }),
 });
 ```
 
-Each in-process worker registers under a new id from the state adapter's `generateWorkerId`, a random UUID by default, so processes running the same code never share an id. A restarted process registers under a new id, and once the lease of its previous run expires, an idle worker reclaims the jobs that run left behind. To keep a stable id per process (a pod name, for example), pass `workerId`; a process restarting under it waits until the previous run's lease expires, then reclaims it and starts. Workers compete for available jobs — when one acquires a job, others skip it. The notify adapter (Redis, PostgreSQL LISTEN/NOTIFY, etc.) ensures workers wake up immediately when new jobs are queued.
+Each worker runner registers under a new id from the state adapter's `generateWorkerId`, a random UUID by default, so processes running the same code never share an id. A restarted process registers under a new id, and once the lease of its previous registration expires, an idle worker runner reclaims the jobs that registration left behind. To keep a stable id per process (a pod name, for example), pass `workerId`; a process restarting under it waits until the previous registration's lease expires, then reclaims it and starts. Worker runners compete for available jobs — when one acquires a job, others skip it. The notify adapter (Redis, PostgreSQL LISTEN/NOTIFY, etc.) ensures worker runners wake up immediately when new jobs are queued.
 
 ## Specialized Workers
 
@@ -58,14 +58,14 @@ For CPU-heavy work, spawn each worker in its own thread so they get true paralle
 
 ```ts title="image-worker-thread.ts"
 // Each thread runs independently with its own database connection
-const stateAdapter = await createPgStateAdapter({ stateProvider });
-const client = await createClient({
+const stateAdapter = createPgStateAdapter({ stateProvider });
+const client = createClient({
   stateAdapter,
   notifyAdapter,
   jobTypes: imageJobTypes,
 });
 
-const worker = await createInProcessWorker({
+const workerRunner = createWorkerRunner({
   client,
   concurrency: 1,
   processors: createProcessors({
@@ -88,7 +88,7 @@ for (let i = 0; i < 10; i++) {
 }
 
 // Lightweight async I/O — single worker in main thread, high concurrency
-const notificationWorker = await createInProcessWorker({
+const notificationWorkerRunner = createWorkerRunner({
   client,
   concurrency: 100,
   processors: createProcessors({
@@ -107,7 +107,7 @@ This works because chains are stored in the database, not in worker memory. A ch
 You can also combine slices when a single worker should handle multiple domains:
 
 ```ts
-const worker = await createInProcessWorker({
+const workerRunner = createWorkerRunner({
   client,
   processors: [orderProcessors, notificationProcessors],
 });
@@ -124,13 +124,13 @@ import { omitProcessors, pickProcessors } from "queuert";
 
 const imageJobTypeNames = ["images.resize", "images.transcode"] as const;
 
-const imageWorker = await createInProcessWorker({
+const imageWorkerRunner = createWorkerRunner({
   client,
   concurrency: 1,
   processors: pickProcessors(appProcessors, imageJobTypeNames),
 });
 
-const defaultWorker = await createInProcessWorker({
+const defaultWorkerRunner = createWorkerRunner({
   client,
   concurrency: 100,
   processors: omitProcessors(appProcessors, imageJobTypeNames),
@@ -143,5 +143,5 @@ Job type names are type-checked against the registry, and both functions throw o
 
 - [examples/state-postgres-multi-worker](https://github.com/kvet/queuert/tree/main/examples/state-postgres-multi-worker) — multiple workers sharing a PostgreSQL database
 - [Prioritization](../prioritization/) — reserving worker capacity for urgent workloads
-- [In-Process Worker](/queuert/how-it-works/in-process-worker/) — worker lifecycle and configuration
+- [Worker Runner](/queuert/how-it-works/worker-runner/) — worker lifecycle and configuration
 - [State Adapters](/queuert/integrations/state-adapters/) — database adapter setup

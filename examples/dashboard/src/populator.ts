@@ -6,7 +6,7 @@
  * Then open http://localhost:3333 to view results in the dashboard.
  */
 
-import { createInProcessWorker, createProcessors, withTxHooks } from "queuert";
+import { createWorkerRunner, createProcessors, withTxHooks } from "queuert";
 
 import { client, jobTypes, stateAdapter, withTransaction } from "./common.ts";
 
@@ -15,7 +15,7 @@ const delay = async (ms: number) => {
   return new Promise((r) => setTimeout(r, ms));
 };
 
-const worker = await createInProcessWorker({
+const workerRunner = createWorkerRunner({
   client,
   processors: createProcessors({
     client,
@@ -218,7 +218,7 @@ const worker = await createInProcessWorker({
 
 await stateAdapter.truncate();
 
-const stopWorker = await worker.start();
+const stopWorkerRunner = await workerRunner.start();
 
 console.log("\n=== Dashboard Job Populator ===\n");
 
@@ -343,7 +343,7 @@ await withTxHooks(async (txHooks) =>
   ),
 );
 
-await stopWorker();
+await stopWorkerRunner();
 
 // Scenario 8: Bulk volume — many root chains/jobs (chain-list + job-list pagination)
 console.log("\n--- Scenario 8: Bulk volume ---");
@@ -368,7 +368,7 @@ const startLeftoverWorker = async (options: {
   leaseConfig?: { durationMs: number; heartbeatMs: number };
 }) => {
   const claimed = Promise.withResolvers<void>();
-  const leftoverWorker = await createInProcessWorker({
+  const leftoverWorkerRunner = createWorkerRunner({
     client,
     concurrency: 1,
     leaseConfig: options.leaseConfig,
@@ -385,7 +385,7 @@ const startLeftoverWorker = async (options: {
       },
     }),
   });
-  await leftoverWorker.start();
+  await leftoverWorkerRunner.start();
   await withTxHooks(async (txHooks) =>
     withTransaction(async (ctx) =>
       client.createChain({

@@ -26,46 +26,46 @@ describe("SQL identifier validation", () => {
 
   describe("rejects invalid schema", () => {
     for (const { label, value } of identifierInjectionCases) {
-      it(label, async () => {
-        await expect(
-          createPgStateAdapter({ stateProvider: dummyProvider, schema: value }),
-        ).rejects.toThrow(/Invalid schema/);
+      it(label, () => {
+        expect(() => {
+          createPgStateAdapter({ stateProvider: dummyProvider, schema: value });
+        }).toThrow(/Invalid schema/);
       });
     }
   });
 
   describe("rejects invalid tablePrefix", () => {
     for (const { label, value } of identifierInjectionCases) {
-      it(label, async () => {
-        await expect(
-          createPgStateAdapter({ stateProvider: dummyProvider, tablePrefix: value }),
-        ).rejects.toThrow(/Invalid tablePrefix/);
+      it(label, () => {
+        expect(() => {
+          createPgStateAdapter({ stateProvider: dummyProvider, tablePrefix: value });
+        }).toThrow(/Invalid tablePrefix/);
       });
     }
   });
 
   describe("rejects invalid jobIdType", () => {
     for (const { label, value } of identifierInjectionCases) {
-      it(label, async () => {
-        await expect(
-          createPgStateAdapter({ stateProvider: dummyProvider, jobIdType: value }),
-        ).rejects.toThrow(/Invalid jobIdType/);
+      it(label, () => {
+        expect(() => {
+          createPgStateAdapter({ stateProvider: dummyProvider, jobIdType: value });
+        }).toThrow(/Invalid jobIdType/);
       });
     }
   });
 
   describe("rejects invalid workerIdType", () => {
     for (const { label, value } of identifierInjectionCases) {
-      it(label, async () => {
-        await expect(
-          createPgStateAdapter({ stateProvider: dummyProvider, workerIdType: value }),
-        ).rejects.toThrow(/Invalid workerIdType/);
+      it(label, () => {
+        expect(() => {
+          createPgStateAdapter({ stateProvider: dummyProvider, workerIdType: value });
+        }).toThrow(/Invalid workerIdType/);
       });
     }
   });
 
-  it("accepts valid schema and tablePrefix", async () => {
-    const adapter = await createPgStateAdapter({
+  it("accepts valid schema and tablePrefix", () => {
+    const adapter = createPgStateAdapter({
       stateProvider: dummyProvider,
       schema: "my_schema",
       tablePrefix: "qrt_",
@@ -73,29 +73,29 @@ describe("SQL identifier validation", () => {
     expect(adapter).toBeDefined();
   });
 
-  it("accepts default values", async () => {
-    const adapter = await createPgStateAdapter({ stateProvider: dummyProvider });
+  it("accepts default values", () => {
+    const adapter = createPgStateAdapter({ stateProvider: dummyProvider });
     expect(adapter).toBeDefined();
   });
 
-  it("accepts typical jobIdType value", async () => {
-    const adapter = await createPgStateAdapter({
+  it("accepts typical jobIdType value", () => {
+    const adapter = createPgStateAdapter({
       stateProvider: dummyProvider,
       jobIdType: "text",
     });
     expect(adapter).toBeDefined();
   });
 
-  it("accepts typical workerIdType value", async () => {
-    const adapter = await createPgStateAdapter({
+  it("accepts typical workerIdType value", () => {
+    const adapter = createPgStateAdapter({
       stateProvider: dummyProvider,
       workerIdType: "uuid",
     });
     expect(adapter).toBeDefined();
   });
 
-  it("accepts custom generateJobId", async () => {
-    const adapter = await createPgStateAdapter({
+  it("accepts custom generateJobId", () => {
+    const adapter = createPgStateAdapter({
       stateProvider: dummyProvider,
       generateJobId: () => "custom-id",
     });
@@ -106,18 +106,18 @@ describe("SQL identifier validation", () => {
 describe("limit validation", () => {
   for (const option of ["maxBlockersPerJob", "countCap"] as const) {
     for (const value of [0, -1, 1.5, Number.NaN]) {
-      it(`rejects ${option} = ${value}`, async () => {
-        await expect(
-          createPgStateAdapter({ stateProvider: dummyProvider, [option]: value }),
-        ).rejects.toThrow(new RegExp(`Invalid ${option}`));
+      it(`rejects ${option} = ${value}`, () => {
+        expect(() => {
+          createPgStateAdapter({ stateProvider: dummyProvider, [option]: value });
+        }).toThrow(new RegExp(`Invalid ${option}`));
       });
     }
   }
 });
 
 describe("config", () => {
-  it("applies defaults", async () => {
-    const { config } = await createPgStateAdapter({ stateProvider: dummyProvider });
+  it("applies defaults", () => {
+    const { config } = createPgStateAdapter({ stateProvider: dummyProvider });
     expect(config.generateJobId()).toMatch(
       /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/,
     );
@@ -131,12 +131,12 @@ describe("config", () => {
     expect(config.countCap).toBe(10_000);
   });
 
-  it("exposes the configured options", async () => {
+  it("exposes the configured options", () => {
     const generateJobId = () => `job-${crypto.randomUUID()}`;
     const validateJobId = (id: string) => id.startsWith("job-");
     const generateWorkerId = () => `worker-${crypto.randomUUID()}`;
     const validateWorkerId = (id: string) => id.startsWith("worker-");
-    const { config } = await createPgStateAdapter({
+    const { config } = createPgStateAdapter({
       stateProvider: dummyProvider,
       generateJobId,
       validateJobId,

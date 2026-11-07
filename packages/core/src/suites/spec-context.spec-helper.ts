@@ -26,7 +26,10 @@ export type TestSuiteContext = {
     | undefined;
   flakyStateAdapter: StateAdapter<{ $test: true }, string, string>;
   flakyDbStateAdapter: StateAdapter<{ $test: true }, string, string> | undefined;
-  withWorkers: <T>(workers: (() => Promise<void>)[], cb: () => Promise<T>) => Promise<T>;
+  withWorkerRunners: <T>(
+    stopWorkerRunners: (() => Promise<void>)[],
+    cb: () => Promise<T>,
+  ) => Promise<T>;
   log: MockedFunction<Log>;
   observabilityAdapter: ObservabilityAdapter;
 };
@@ -41,13 +44,13 @@ export const extendWithCommon = <
   T &
     Pick<
       TestSuiteContext,
-      "withTransaction" | "withWorkers" | "log" | "observabilityAdapter" | "generateJobId"
+      "withTransaction" | "withWorkerRunners" | "log" | "observabilityAdapter" | "generateJobId"
     >
 > =>
   it.extend<
     Pick<
       TestSuiteContext,
-      "withTransaction" | "withWorkers" | "log" | "observabilityAdapter" | "generateJobId"
+      "withTransaction" | "withWorkerRunners" | "log" | "observabilityAdapter" | "generateJobId"
     >
   >({
     generateJobId: [
@@ -68,13 +71,15 @@ export const extendWithCommon = <
       },
       { scope: "test" },
     ],
-    withWorkers: [
+    withWorkerRunners: [
       async ({}, use) => {
-        await use(async (workers, cb) => {
+        await use(async (stopWorkerRunners, cb) => {
           try {
             return await cb();
           } finally {
-            await Promise.all(workers.map(async (w) => w()));
+            await Promise.all(
+              stopWorkerRunners.map(async (stopWorkerRunner) => stopWorkerRunner()),
+            );
           }
         });
       },
@@ -107,7 +112,7 @@ export const extendWithNotifyInProcess = <T extends Record<string, unknown>>(
   it.extend<Pick<TestSuiteContext, "notifyAdapter"> & { flakyNotifyAdapter: NotifyAdapter }>({
     notifyAdapter: [
       async ({}, use) => {
-        await use(await createInProcessNotifyAdapter());
+        await use(createInProcessNotifyAdapter());
       },
       { scope: "test" },
     ],

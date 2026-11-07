@@ -27,7 +27,7 @@ const it = baseIt.extend<{
   },
   adapter: async ({ db, executed }, use) => {
     const provider = createBetterSqlite3Provider({ db });
-    const adapter = await createSqliteStateAdapter<BetterSqlite3Context, string>({
+    const adapter = createSqliteStateAdapter<BetterSqlite3Context, string>({
       stateProvider: {
         ...provider,
         executeSql: async (options) => {

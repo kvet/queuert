@@ -76,7 +76,7 @@ export const extendWithStatePg = <
         const stateProvider = createPgPoolProvider({
           pool: statePool,
         });
-        const stateAdapter = await createPgStateAdapter({
+        const stateAdapter = createPgStateAdapter({
           stateProvider,
         });
 
@@ -142,14 +142,14 @@ export const extendWithStatePg = <
     ],
     stateAdapter: [
       async ({ stateProvider }, use) => {
-        return use(await createPgStateAdapter({ stateProvider }));
+        return use(createPgStateAdapter({ stateProvider }));
       },
       { scope: "test" },
     ],
     flakyStateAdapter: [
       async ({ flakyStateProvider }, use) => {
         return use(
-          await createPgStateAdapter({
+          createPgStateAdapter({
             stateProvider: flakyStateProvider,
           }),
         );
@@ -248,7 +248,7 @@ export const extendWithStatePg = <
     flakyDbStateAdapter: [
       async ({ flakyDbStateProvider }, use) => {
         return use(
-          await createPgStateAdapter({
+          createPgStateAdapter({
             stateProvider: flakyDbStateProvider,
           }),
         );

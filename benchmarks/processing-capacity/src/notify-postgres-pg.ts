@@ -9,8 +9,8 @@ const pool = new Pool({ connectionString: requireEnv("BENCHMARK_POSTGRES_URL"), 
 
 await runBenchmark({
   title: "PROCESSING CAPACITY — PG NOTIFY (pg)",
-  stateAdapter: await createInProcessStateAdapter(),
-  notifyAdapter: await createPgNotifyAdapter({
+  stateAdapter: createInProcessStateAdapter(),
+  notifyAdapter: createPgNotifyAdapter({
     notifyProvider: createPgPoolNotifyProvider({ pool }),
     channelPrefix: benchmarkNamespace(),
   }),

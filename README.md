@@ -34,7 +34,7 @@ const jobTypes = defineJobTypes<{
 Start the chain _inside_ your DB transaction. If the transaction rolls back, the chain is never created. No outbox glue, no dual-write window.
 
 ```ts
-const client = await createClient({ stateAdapter, jobTypes });
+const client = createClient({ stateAdapter, jobTypes });
 
 await withTxHooks(async (txHooks) =>
   db.transaction(async (tx) => {
@@ -54,7 +54,7 @@ await withTxHooks(async (txHooks) =>
 Each handler continues with the next step. The compiler enforces that `continueWith` matches the declared next type's input.
 
 ```ts
-const worker = await createInProcessWorker({
+const workerRunner = createWorkerRunner({
   client,
   processors: createProcessors({
     client,
@@ -84,7 +84,7 @@ const worker = await createInProcessWorker({
   }),
 });
 
-const stop = await worker.start();
+const stop = await workerRunner.start();
 ```
 
 ## Where it fits

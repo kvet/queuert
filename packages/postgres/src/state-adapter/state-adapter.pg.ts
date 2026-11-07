@@ -502,7 +502,7 @@ const mapDbWorkerToStateWorkerInfo = (row: DbWorker): StateWorkerInfo => ({
  * @throws Error if `schema`, `tablePrefix`, `jobIdType` or `workerIdType` is not a valid SQL
  * identifier.
  */
-export const createPgStateAdapter = async <
+export const createPgStateAdapter = <
   TTxContext extends BaseTxContext,
   TJobId extends string = UUID,
   TWorkerId extends string = UUID,
@@ -542,8 +542,8 @@ export const createPgStateAdapter = async <
    */
   validateJobId?: (id: TJobId) => boolean;
   /**
-   * Function to generate the worker ID of an in-process worker created without a `workerId`.
-   * Called once per in-process worker, which keeps the ID across restarts. Must return a new ID
+   * Function to generate the worker ID of a worker runner created without a `workerId`.
+   * Called once per worker runner, which keeps the ID across restarts. Must return a new ID
    * on every call.
    *
    * @defaultValue `() => crypto.randomUUID()`
@@ -551,7 +551,7 @@ export const createPgStateAdapter = async <
   generateWorkerId?: () => TWorkerId;
   /**
    * Predicate returning `true` if the worker ID is acceptable. Core runs it on both generated
-   * and caller-supplied worker IDs when the in-process worker is created; failures throw
+   * and caller-supplied worker IDs when the worker runner is created; failures throw
    * `InvalidWorkerIdError`.
    */
   validateWorkerId?: (id: TWorkerId) => boolean;
@@ -569,14 +569,12 @@ export const createPgStateAdapter = async <
    * @defaultValue `10_000`
    */
   countCap?: number;
-}): Promise<
-  StateAdapter<TTxContext, TJobId, TWorkerId> & {
-    /** Create or upgrade the schema. */
-    migrateToLatest: () => Promise<MigrationResult>;
-    /** Delete all job, blocker and worker rows. Intended for tests. */
-    truncate: () => Promise<void>;
-  }
-> => {
+}): StateAdapter<TTxContext, TJobId, TWorkerId> & {
+  /** Create or upgrade the schema. */
+  migrateToLatest: () => Promise<MigrationResult>;
+  /** Delete all job, blocker and worker rows. Intended for tests. */
+  truncate: () => Promise<void>;
+} => {
   validateSqlIdentifier(schema, "schema");
   validateSqlIdentifier(tablePrefix, "tablePrefix");
   validateSqlIdentifier(jobIdType, "jobIdType");

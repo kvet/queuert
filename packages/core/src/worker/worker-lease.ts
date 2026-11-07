@@ -1,6 +1,6 @@
 import { isPositiveFinite, raceWithSleep, sleep } from "@queuert/helpers";
 
-/** The lease the in-process worker registers its worker with. */
+/** The lease the worker runner registers its worker with. */
 export type WorkerLeaseConfig = {
   /** How long a worker's lease lasts without a renewal. Must be finite and positive. */
   durationMs: number;

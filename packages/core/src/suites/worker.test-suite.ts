@@ -5,11 +5,11 @@ import type { AttemptMiddleware } from "../attempt-middleware/attempt-middleware
 import { createClient } from "../client.ts";
 import type { Chain } from "../entities/chain.ts";
 import { JobAlreadyCompletedError, JobTakenByAnotherWorkerError } from "../errors.ts";
-import { createInProcessWorker } from "../in-process-worker.ts";
 import { createProcessors } from "../job-type-processors/create-job-type-processors.ts";
 import { omitProcessors, pickProcessors } from "../job-type-processors/pick-job-type-processors.ts";
 import { defineJobTypes } from "../job-types/define-job-types.ts";
 import { createSpyStateAdapter } from "../state-adapter/state-adapter.spy.spec-helper.ts";
+import { createWorkerRunner } from "../worker-runner.ts";
 import type { TestSuiteContext } from "./spec-context.spec-helper.ts";
 
 export const workerTestSuite = ({ it }: { it: TestAPI<TestSuiteContext> }): void => {
@@ -22,7 +22,7 @@ export const workerTestSuite = ({ it }: { it: TestAPI<TestSuiteContext> }): void
     stateAdapter,
     notifyAdapter,
     withTransaction,
-    withWorkers,
+    withWorkerRunners,
     observabilityAdapter,
     log,
   }) => {
@@ -34,14 +34,14 @@ export const workerTestSuite = ({ it }: { it: TestAPI<TestSuiteContext> }): void
       };
     }>();
 
-    const client = await createClient({
+    const client = createClient({
       stateAdapter,
       notifyAdapter,
       observabilityAdapter,
       log,
       jobTypes,
     });
-    const worker = await createInProcessWorker({
+    const workerRunner = createWorkerRunner({
       client,
       concurrency: 1,
       processors: createProcessors({
@@ -68,7 +68,7 @@ export const workerTestSuite = ({ it }: { it: TestAPI<TestSuiteContext> }): void
       }),
     );
 
-    await withWorkers([await worker.start()], async () => {
+    await withWorkerRunners([await workerRunner.start()], async () => {
       await client.awaitChain(chain, completionOptions);
     });
   });
@@ -77,7 +77,7 @@ export const workerTestSuite = ({ it }: { it: TestAPI<TestSuiteContext> }): void
     stateAdapter,
     notifyAdapter,
     withTransaction,
-    withWorkers,
+    withWorkerRunners,
     observabilityAdapter,
     log,
   }) => {
@@ -88,14 +88,14 @@ export const workerTestSuite = ({ it }: { it: TestAPI<TestSuiteContext> }): void
       sms: { entry: true; input: { phone: string }; output: { sent: boolean } };
     }>();
 
-    const client = await createClient({
+    const client = createClient({
       stateAdapter,
       notifyAdapter,
       observabilityAdapter,
       log,
       jobTypes,
     });
-    const worker = await createInProcessWorker({
+    const workerRunner = createWorkerRunner({
       client,
       concurrency: 1,
       processors: createProcessors({
@@ -139,7 +139,7 @@ export const workerTestSuite = ({ it }: { it: TestAPI<TestSuiteContext> }): void
       }),
     );
 
-    await withWorkers([await worker.start()], async () => {
+    await withWorkerRunners([await workerRunner.start()], async () => {
       await Promise.all([
         client.awaitChain(emailChain, completionOptions),
         client.awaitChain(smsChain, completionOptions),
@@ -155,7 +155,7 @@ export const workerTestSuite = ({ it }: { it: TestAPI<TestSuiteContext> }): void
     stateAdapter,
     notifyAdapter,
     withTransaction,
-    withWorkers,
+    withWorkerRunners,
     observabilityAdapter,
     log,
   }) => {
@@ -169,7 +169,7 @@ export const workerTestSuite = ({ it }: { it: TestAPI<TestSuiteContext> }): void
       "billing.charge": { entry: true; input: null; output: null };
     }>();
 
-    const client = await createClient({
+    const client = createClient({
       stateAdapter,
       notifyAdapter,
       observabilityAdapter,
@@ -218,14 +218,14 @@ export const workerTestSuite = ({ it }: { it: TestAPI<TestSuiteContext> }): void
       },
     });
 
-    const dedicatedWorker = await createInProcessWorker({
+    const dedicatedWorkerRunner = createWorkerRunner({
       client,
       processors: [
         pickProcessors(imageProcessors, ["images.resize"]),
         pickProcessors(billingProcessors, ["billing.charge"]),
       ],
     });
-    const restWorker = await createInProcessWorker({
+    const restWorkerRunner = createWorkerRunner({
       client,
       processors: omitProcessors(imageProcessors, ["images.resize"]),
     });
@@ -253,14 +253,14 @@ export const workerTestSuite = ({ it }: { it: TestAPI<TestSuiteContext> }): void
       ]),
     );
 
-    await withWorkers([await restWorker.start()], async () => {
+    await withWorkerRunners([await restWorkerRunner.start()], async () => {
       await client.awaitChain(notifyChain, completionOptions);
     });
     expect(processed).toEqual(["images.notify:trace-1"]);
     expect((await client.getChain({ id: resizeChain.id }))?.status).toBe("running");
     expect((await client.getChain({ id: chargeChain.id }))?.status).toBe("running");
 
-    await withWorkers([await dedicatedWorker.start()], async () => {
+    await withWorkerRunners([await dedicatedWorkerRunner.start()], async () => {
       await Promise.all([
         client.awaitChain(resizeChain, completionOptions),
         client.awaitChain(chargeChain, completionOptions),
@@ -277,7 +277,7 @@ export const workerTestSuite = ({ it }: { it: TestAPI<TestSuiteContext> }): void
     stateAdapter,
     notifyAdapter,
     withTransaction,
-    withWorkers,
+    withWorkerRunners,
     observabilityAdapter,
     log,
   }) => {
@@ -289,14 +289,14 @@ export const workerTestSuite = ({ it }: { it: TestAPI<TestSuiteContext> }): void
       };
     }>();
 
-    const client = await createClient({
+    const client = createClient({
       stateAdapter,
       notifyAdapter,
       observabilityAdapter,
       log,
       jobTypes,
     });
-    const worker = await createInProcessWorker({
+    const workerRunner = createWorkerRunner({
       client,
       concurrency: 1,
       pollIntervalMs: 100,
@@ -315,7 +315,7 @@ export const workerTestSuite = ({ it }: { it: TestAPI<TestSuiteContext> }): void
       }),
     });
 
-    await withWorkers([await worker.start()], async () => {
+    await withWorkerRunners([await workerRunner.start()], async () => {
       const chain = await withTransaction(async (txCtx, txHooks) =>
         client.createChain({
           ...txCtx,
@@ -333,7 +333,7 @@ export const workerTestSuite = ({ it }: { it: TestAPI<TestSuiteContext> }): void
     stateAdapter,
     notifyAdapter,
     withTransaction,
-    withWorkers,
+    withWorkerRunners,
     observabilityAdapter,
     log,
   }) => {
@@ -347,14 +347,14 @@ export const workerTestSuite = ({ it }: { it: TestAPI<TestSuiteContext> }): void
       };
     }>();
 
-    const client = await createClient({
+    const client = createClient({
       stateAdapter,
       notifyAdapter,
       observabilityAdapter,
       log,
       jobTypes,
     });
-    const worker = await createInProcessWorker({
+    const workerRunner = createWorkerRunner({
       client,
       concurrency: 1,
       processors: createProcessors({
@@ -389,7 +389,7 @@ export const workerTestSuite = ({ it }: { it: TestAPI<TestSuiteContext> }): void
       );
     }
 
-    await withWorkers([await worker.start()], async () => {
+    await withWorkerRunners([await workerRunner.start()], async () => {
       await Promise.all(chains.map(async (chain) => client.awaitChain(chain, completionOptions)));
     });
 
@@ -400,7 +400,7 @@ export const workerTestSuite = ({ it }: { it: TestAPI<TestSuiteContext> }): void
     stateAdapter,
     notifyAdapter,
     withTransaction,
-    withWorkers,
+    withWorkerRunners,
     observabilityAdapter,
     log,
   }) => {
@@ -411,7 +411,7 @@ export const workerTestSuite = ({ it }: { it: TestAPI<TestSuiteContext> }): void
       test: { entry: true; input: { value: number }; output: null };
     }>();
 
-    const client = await createClient({
+    const client = createClient({
       stateAdapter,
       notifyAdapter,
       observabilityAdapter,
@@ -436,7 +436,7 @@ export const workerTestSuite = ({ it }: { it: TestAPI<TestSuiteContext> }): void
         return result;
       },
     };
-    const worker = await createInProcessWorker({
+    const workerRunner = createWorkerRunner({
       client,
       concurrency: 1,
       processors: createProcessors({
@@ -468,7 +468,7 @@ export const workerTestSuite = ({ it }: { it: TestAPI<TestSuiteContext> }): void
       }),
     );
 
-    await withWorkers([await worker.start()], async () => {
+    await withWorkerRunners([await workerRunner.start()], async () => {
       await client.awaitChain(chain, completionOptions);
     });
 
@@ -480,7 +480,7 @@ export const workerTestSuite = ({ it }: { it: TestAPI<TestSuiteContext> }): void
     stateAdapter,
     notifyAdapter,
     withTransaction,
-    withWorkers,
+    withWorkerRunners,
     observabilityAdapter,
     log,
   }) => {
@@ -490,7 +490,7 @@ export const workerTestSuite = ({ it }: { it: TestAPI<TestSuiteContext> }): void
       test: { entry: true; input: { value: number }; output: null };
     }>();
 
-    const client = await createClient({
+    const client = createClient({
       stateAdapter,
       notifyAdapter,
       observabilityAdapter,
@@ -510,7 +510,7 @@ export const workerTestSuite = ({ it }: { it: TestAPI<TestSuiteContext> }): void
         }
       },
     };
-    const worker = await createInProcessWorker({
+    const workerRunner = createWorkerRunner({
       client,
       concurrency: 1,
       processors: createProcessors({
@@ -542,7 +542,7 @@ export const workerTestSuite = ({ it }: { it: TestAPI<TestSuiteContext> }): void
       }),
     );
 
-    await withWorkers([await worker.start()], async () => {
+    await withWorkerRunners([await workerRunner.start()], async () => {
       await client.awaitChain(chain, completionOptions);
     });
 
@@ -566,14 +566,14 @@ export const workerTestSuite = ({ it }: { it: TestAPI<TestSuiteContext> }): void
       test: { entry: true; input: null; output: null };
     }>();
 
-    const client = await createClient({
+    const client = createClient({
       stateAdapter,
       notifyAdapter,
       observabilityAdapter,
       log,
       jobTypes,
     });
-    const worker = await createInProcessWorker({
+    const workerRunner = createWorkerRunner({
       client,
       concurrency: 1,
       processors: createProcessors({
@@ -614,7 +614,7 @@ export const workerTestSuite = ({ it }: { it: TestAPI<TestSuiteContext> }): void
       }),
     );
 
-    const stop = await worker.start();
+    const stop = await workerRunner.start();
     await handlerStarted;
     await stop();
 
@@ -637,14 +637,14 @@ export const workerTestSuite = ({ it }: { it: TestAPI<TestSuiteContext> }): void
       test: { entry: true; input: null; output: { source: string } };
     }>();
 
-    const client = await createClient({
+    const client = createClient({
       stateAdapter,
       notifyAdapter,
       observabilityAdapter,
       log,
       jobTypes,
     });
-    const worker = await createInProcessWorker({
+    const workerRunner = createWorkerRunner({
       client,
       concurrency: 1,
       processors: createProcessors({
@@ -687,7 +687,7 @@ export const workerTestSuite = ({ it }: { it: TestAPI<TestSuiteContext> }): void
       }),
     );
 
-    const stop = await worker.start();
+    const stop = await workerRunner.start();
     await handlerStarted.promise;
     const stopped = stop();
     await handlerAborted.promise;
@@ -715,7 +715,7 @@ export const workerTestSuite = ({ it }: { it: TestAPI<TestSuiteContext> }): void
     stateAdapter,
     notifyAdapter,
     withTransaction,
-    withWorkers,
+    withWorkerRunners,
     observabilityAdapter,
     log,
   }) => {
@@ -736,14 +736,14 @@ export const workerTestSuite = ({ it }: { it: TestAPI<TestSuiteContext> }): void
       },
     };
 
-    const client = await createClient({
+    const client = createClient({
       stateAdapter: countingStateAdapter,
       notifyAdapter,
       observabilityAdapter,
       log,
       jobTypes,
     });
-    const worker = await createInProcessWorker({
+    const workerRunner = createWorkerRunner({
       client,
       concurrency: 1,
       processors: createProcessors({
@@ -770,7 +770,7 @@ export const workerTestSuite = ({ it }: { it: TestAPI<TestSuiteContext> }): void
       }),
     );
 
-    await withWorkers([await worker.start()], async () => {
+    await withWorkerRunners([await workerRunner.start()], async () => {
       await Promise.all(chains.map(async (chain) => client.awaitChain(chain, completionOptions)));
     });
 
@@ -783,7 +783,7 @@ export const workerTestSuite = ({ it }: { it: TestAPI<TestSuiteContext> }): void
     stateAdapter,
     notifyAdapter,
     withTransaction,
-    withWorkers,
+    withWorkerRunners,
     observabilityAdapter,
     log,
   }) => {
@@ -791,7 +791,7 @@ export const workerTestSuite = ({ it }: { it: TestAPI<TestSuiteContext> }): void
       test: { entry: true; input: null; output: null };
     }>();
     const spyStateAdapter = createSpyStateAdapter(stateAdapter);
-    const client = await createClient({
+    const client = createClient({
       stateAdapter: spyStateAdapter,
       notifyAdapter,
       observabilityAdapter,
@@ -802,7 +802,7 @@ export const workerTestSuite = ({ it }: { it: TestAPI<TestSuiteContext> }): void
     const concurrency = 4;
     let startedCount = 0;
     const allStarted = Promise.withResolvers<void>();
-    const worker = await createInProcessWorker({
+    const workerRunner = createWorkerRunner({
       client,
       concurrency,
       processors: createProcessors({
@@ -830,7 +830,7 @@ export const workerTestSuite = ({ it }: { it: TestAPI<TestSuiteContext> }): void
       ),
     );
 
-    await withWorkers([await worker.start()], async () => {
+    await withWorkerRunners([await workerRunner.start()], async () => {
       await allStarted.promise;
       expect(spyStateAdapter.calls.filter((call) => call.name === "startJobAttempts")).toHaveLength(
         1,
@@ -843,7 +843,7 @@ export const workerTestSuite = ({ it }: { it: TestAPI<TestSuiteContext> }): void
     stateAdapter,
     notifyAdapter,
     withTransaction,
-    withWorkers,
+    withWorkerRunners,
     observabilityAdapter,
     log,
   }) => {
@@ -851,7 +851,7 @@ export const workerTestSuite = ({ it }: { it: TestAPI<TestSuiteContext> }): void
       test: { entry: true; input: null; output: null };
     }>();
 
-    const client = await createClient({
+    const client = createClient({
       stateAdapter,
       notifyAdapter,
       observabilityAdapter,
@@ -859,7 +859,7 @@ export const workerTestSuite = ({ it }: { it: TestAPI<TestSuiteContext> }): void
       jobTypes,
     });
     const leaseConfig = { durationMs: 300, heartbeatMs: 50 };
-    const worker = await createInProcessWorker({
+    const workerRunner = createWorkerRunner({
       client,
       leaseConfig,
       processors: createProcessors({
@@ -883,7 +883,7 @@ export const workerTestSuite = ({ it }: { it: TestAPI<TestSuiteContext> }): void
       client.createChain({ ...txCtx, txHooks, typeName: "test", input: null }),
     );
 
-    await withWorkers([await worker.start()], async () => {
+    await withWorkerRunners([await workerRunner.start()], async () => {
       await client.awaitChain(chain, completionOptions);
     });
 
@@ -896,7 +896,7 @@ export const workerTestSuite = ({ it }: { it: TestAPI<TestSuiteContext> }): void
   it("registers under the configured workerId", async ({
     stateAdapter,
     notifyAdapter,
-    withWorkers,
+    withWorkerRunners,
     observabilityAdapter,
     log,
   }) => {
@@ -904,7 +904,7 @@ export const workerTestSuite = ({ it }: { it: TestAPI<TestSuiteContext> }): void
       test: { entry: true; input: null; output: null };
     }>();
 
-    const client = await createClient({
+    const client = createClient({
       stateAdapter,
       notifyAdapter,
       observabilityAdapter,
@@ -912,7 +912,7 @@ export const workerTestSuite = ({ it }: { it: TestAPI<TestSuiteContext> }): void
       jobTypes,
     });
     const workerId = stateAdapter.config.generateWorkerId();
-    const worker = await createInProcessWorker({
+    const workerRunner = createWorkerRunner({
       client,
       workerId,
       processors: createProcessors({
@@ -922,7 +922,7 @@ export const workerTestSuite = ({ it }: { it: TestAPI<TestSuiteContext> }): void
       }),
     });
 
-    await withWorkers([await worker.start()], async () => {
+    await withWorkerRunners([await workerRunner.start()], async () => {
       await expect.poll(async () => client.getWorker({ id: workerId })).toBeDefined();
     });
   });
@@ -930,7 +930,7 @@ export const workerTestSuite = ({ it }: { it: TestAPI<TestSuiteContext> }): void
   it("registers under the state adapter's generateWorkerId by default", async ({
     stateAdapter,
     notifyAdapter,
-    withWorkers,
+    withWorkerRunners,
     observabilityAdapter,
     log,
   }) => {
@@ -939,7 +939,7 @@ export const workerTestSuite = ({ it }: { it: TestAPI<TestSuiteContext> }): void
     }>();
 
     const workerId = stateAdapter.config.generateWorkerId();
-    const client = await createClient({
+    const client = createClient({
       stateAdapter: {
         ...stateAdapter,
         config: { ...stateAdapter.config, generateWorkerId: () => workerId },
@@ -949,7 +949,7 @@ export const workerTestSuite = ({ it }: { it: TestAPI<TestSuiteContext> }): void
       log,
       jobTypes,
     });
-    const worker = await createInProcessWorker({
+    const workerRunner = createWorkerRunner({
       client,
       processors: createProcessors({
         client,
@@ -958,7 +958,7 @@ export const workerTestSuite = ({ it }: { it: TestAPI<TestSuiteContext> }): void
       }),
     });
 
-    await withWorkers([await worker.start()], async () => {
+    await withWorkerRunners([await workerRunner.start()], async () => {
       await expect.poll(async () => client.getWorker({ id: workerId })).toBeDefined();
     });
   });
@@ -966,7 +966,7 @@ export const workerTestSuite = ({ it }: { it: TestAPI<TestSuiteContext> }): void
   it("deletes its worker row on stop", async ({
     stateAdapter,
     notifyAdapter,
-    withWorkers,
+    withWorkerRunners,
     observabilityAdapter,
     log,
   }) => {
@@ -974,7 +974,7 @@ export const workerTestSuite = ({ it }: { it: TestAPI<TestSuiteContext> }): void
       test: { entry: true; input: null; output: null };
     }>();
 
-    const client = await createClient({
+    const client = createClient({
       stateAdapter,
       notifyAdapter,
       observabilityAdapter,
@@ -982,7 +982,7 @@ export const workerTestSuite = ({ it }: { it: TestAPI<TestSuiteContext> }): void
       jobTypes,
     });
     const workerId = stateAdapter.config.generateWorkerId();
-    const worker = await createInProcessWorker({
+    const workerRunner = createWorkerRunner({
       client,
       workerId,
       processors: createProcessors({
@@ -992,7 +992,7 @@ export const workerTestSuite = ({ it }: { it: TestAPI<TestSuiteContext> }): void
       }),
     });
 
-    await withWorkers([await worker.start()], async () => {
+    await withWorkerRunners([await workerRunner.start()], async () => {
       await expect.poll(async () => client.getWorker({ id: workerId })).toBeDefined();
     });
 
@@ -1003,7 +1003,7 @@ export const workerTestSuite = ({ it }: { it: TestAPI<TestSuiteContext> }): void
     stateAdapter,
     notifyAdapter,
     withTransaction,
-    withWorkers,
+    withWorkerRunners,
     observabilityAdapter,
     log,
   }) => {
@@ -1012,14 +1012,14 @@ export const workerTestSuite = ({ it }: { it: TestAPI<TestSuiteContext> }): void
       other: { entry: true; input: null; output: null };
     }>();
 
-    const client = await createClient({
+    const client = createClient({
       stateAdapter,
       notifyAdapter,
       observabilityAdapter,
       log,
       jobTypes,
     });
-    const leaseLosingClient = await createClient({
+    const leaseLosingClient = createClient({
       stateAdapter: { ...stateAdapter, extendWorkerLease: async () => undefined },
       notifyAdapter,
       observabilityAdapter,
@@ -1031,7 +1031,7 @@ export const workerTestSuite = ({ it }: { it: TestAPI<TestSuiteContext> }): void
     const handlerReleased = Promise.withResolvers<void>();
     const lateComplete = Promise.withResolvers<unknown>();
 
-    const leaseLosingWorker = await createInProcessWorker({
+    const leaseLosingWorkerRunner = createWorkerRunner({
       client: leaseLosingClient,
       leaseConfig: { durationMs: 200, heartbeatMs: 50 },
       processors: createProcessors({
@@ -1057,7 +1057,7 @@ export const workerTestSuite = ({ it }: { it: TestAPI<TestSuiteContext> }): void
         },
       }),
     });
-    const otherTypeWorker = await createInProcessWorker({
+    const otherTypeWorkerRunner = createWorkerRunner({
       client,
       pollIntervalMs: 20,
       processors: pickProcessors(
@@ -1077,9 +1077,9 @@ export const workerTestSuite = ({ it }: { it: TestAPI<TestSuiteContext> }): void
       client.createChain({ ...txCtx, txHooks, typeName: "test", input: null }),
     );
 
-    await withWorkers([await leaseLosingWorker.start()], async () => {
+    await withWorkerRunners([await leaseLosingWorkerRunner.start()], async () => {
       await jobStarted.promise;
-      await withWorkers([await otherTypeWorker.start()], async () => {
+      await withWorkerRunners([await otherTypeWorkerRunner.start()], async () => {
         await expect
           .poll(async () => client.getJob({ id: chain.id }), { interval: 20, timeout: 5000 })
           .toMatchObject({
@@ -1096,7 +1096,7 @@ export const workerTestSuite = ({ it }: { it: TestAPI<TestSuiteContext> }): void
     stateAdapter,
     notifyAdapter,
     withTransaction,
-    withWorkers,
+    withWorkerRunners,
     observabilityAdapter,
     log,
   }) => {
@@ -1105,7 +1105,7 @@ export const workerTestSuite = ({ it }: { it: TestAPI<TestSuiteContext> }): void
     }>();
 
     const firstRenewal = new AbortController();
-    const client = await createClient({
+    const client = createClient({
       stateAdapter: {
         ...stateAdapter,
         extendWorkerLease: async (params) => {
@@ -1120,7 +1120,7 @@ export const workerTestSuite = ({ it }: { it: TestAPI<TestSuiteContext> }): void
       jobTypes,
     });
     const workerId = stateAdapter.config.generateWorkerId();
-    const worker = await createInProcessWorker({
+    const workerRunner = createWorkerRunner({
       client,
       workerId,
       leaseConfig: { durationMs: 200, heartbeatMs: 50 },
@@ -1151,7 +1151,7 @@ export const workerTestSuite = ({ it }: { it: TestAPI<TestSuiteContext> }): void
       client.createChain({ ...txCtx, txHooks, typeName: "test", input: null }),
     );
 
-    await withWorkers([await worker.start()], async () => {
+    await withWorkerRunners([await workerRunner.start()], async () => {
       await client.awaitChain(chain, completionOptions);
     });
 
@@ -1166,7 +1166,7 @@ export const workerTestSuite = ({ it }: { it: TestAPI<TestSuiteContext> }): void
     stateAdapter,
     notifyAdapter,
     withTransaction,
-    withWorkers,
+    withWorkerRunners,
     observabilityAdapter,
     log,
   }) => {
@@ -1174,14 +1174,14 @@ export const workerTestSuite = ({ it }: { it: TestAPI<TestSuiteContext> }): void
       test: { entry: true; input: null; output: null };
     }>();
 
-    const client = await createClient({
+    const client = createClient({
       stateAdapter,
       notifyAdapter,
       observabilityAdapter,
       log,
       jobTypes,
     });
-    const leaseLosingClient = await createClient({
+    const leaseLosingClient = createClient({
       stateAdapter: { ...stateAdapter, extendWorkerLease: async () => undefined },
       notifyAdapter,
       observabilityAdapter,
@@ -1192,7 +1192,7 @@ export const workerTestSuite = ({ it }: { it: TestAPI<TestSuiteContext> }): void
     const jobStarted = Promise.withResolvers<void>();
     const handlerReleased = Promise.withResolvers<void>();
 
-    const leaseLosingWorker = await createInProcessWorker({
+    const leaseLosingWorkerRunner = createWorkerRunner({
       client: leaseLosingClient,
       workerId,
       leaseConfig: { durationMs: 200, heartbeatMs: 50 },
@@ -1210,7 +1210,7 @@ export const workerTestSuite = ({ it }: { it: TestAPI<TestSuiteContext> }): void
         },
       }),
     });
-    const sameIdWorker = await createInProcessWorker({
+    const sameIdWorkerRunner = createWorkerRunner({
       client,
       workerId,
       recoveryBackoffConfig: { initialDelayMs: 20, multiplier: 1, maxDelayMs: 20 },
@@ -1232,9 +1232,9 @@ export const workerTestSuite = ({ it }: { it: TestAPI<TestSuiteContext> }): void
       client.createChain({ ...txCtx, txHooks, typeName: "test", input: null }),
     );
 
-    await withWorkers([await leaseLosingWorker.start()], async () => {
+    await withWorkerRunners([await leaseLosingWorkerRunner.start()], async () => {
       await jobStarted.promise;
-      await withWorkers([await sameIdWorker.start()], async () => {
+      await withWorkerRunners([await sameIdWorkerRunner.start()], async () => {
         await client.awaitChain(chain, completionOptions);
       });
       handlerReleased.resolve();
@@ -1247,11 +1247,11 @@ export const workerTestSuite = ({ it }: { it: TestAPI<TestSuiteContext> }): void
     });
   });
 
-  it("keeps the row of the run that replaced a frozen run under the same id", async ({
+  it("keeps the row of the registration that replaced a frozen registration under the same id", async ({
     stateAdapter,
     notifyAdapter,
     withTransaction,
-    withWorkers,
+    withWorkerRunners,
     observabilityAdapter,
     log,
   }) => {
@@ -1259,14 +1259,14 @@ export const workerTestSuite = ({ it }: { it: TestAPI<TestSuiteContext> }): void
       test: { entry: true; input: null; output: null };
     }>();
 
-    const client = await createClient({
+    const client = createClient({
       stateAdapter,
       notifyAdapter,
       observabilityAdapter,
       log,
       jobTypes,
     });
-    const frozenClient = await createClient({
+    const frozenClient = createClient({
       stateAdapter: {
         ...stateAdapter,
         extendWorkerLease: async ({ txCtx, workerId }) =>
@@ -1280,7 +1280,7 @@ export const workerTestSuite = ({ it }: { it: TestAPI<TestSuiteContext> }): void
     const workerId = stateAdapter.config.generateWorkerId();
     const jobStarted = Promise.withResolvers<void>();
 
-    const frozenWorker = await createInProcessWorker({
+    const frozenWorkerRunner = createWorkerRunner({
       client: frozenClient,
       workerId,
       leaseConfig: { durationMs: 200, heartbeatMs: 50 },
@@ -1301,7 +1301,7 @@ export const workerTestSuite = ({ it }: { it: TestAPI<TestSuiteContext> }): void
         },
       }),
     });
-    const sameIdWorker = await createInProcessWorker({
+    const sameIdWorkerRunner = createWorkerRunner({
       client,
       workerId,
       recoveryBackoffConfig: { initialDelayMs: 20, multiplier: 1, maxDelayMs: 20 },
@@ -1323,12 +1323,12 @@ export const workerTestSuite = ({ it }: { it: TestAPI<TestSuiteContext> }): void
       client.createChain({ ...txCtx, txHooks, typeName: "test", input: null }),
     );
 
-    const stopFrozenWorker = await frozenWorker.start();
-    await withWorkers([stopFrozenWorker], async () => {
+    const stopFrozenWorkerRunner = await frozenWorkerRunner.start();
+    await withWorkerRunners([stopFrozenWorkerRunner], async () => {
       await jobStarted.promise;
-      await withWorkers([await sameIdWorker.start()], async () => {
+      await withWorkerRunners([await sameIdWorkerRunner.start()], async () => {
         await client.awaitChain(chain, completionOptions);
-        await stopFrozenWorker();
+        await stopFrozenWorkerRunner();
 
         expect(await client.getWorker({ id: workerId })).toMatchObject({ id: workerId });
       });
@@ -1345,7 +1345,7 @@ export const workerTestSuite = ({ it }: { it: TestAPI<TestSuiteContext> }): void
     stateAdapter,
     notifyAdapter,
     withTransaction,
-    withWorkers,
+    withWorkerRunners,
     observabilityAdapter,
     log,
   }) => {
@@ -1354,7 +1354,7 @@ export const workerTestSuite = ({ it }: { it: TestAPI<TestSuiteContext> }): void
     }>();
 
     const firstReschedule = new AbortController();
-    const client = await createClient({
+    const client = createClient({
       stateAdapter: {
         ...stateAdapter,
         rescheduleJobs: async (params) => {
@@ -1368,7 +1368,7 @@ export const workerTestSuite = ({ it }: { it: TestAPI<TestSuiteContext> }): void
       log,
       jobTypes,
     });
-    const worker = await createInProcessWorker({
+    const workerRunner = createWorkerRunner({
       client,
       pollIntervalMs: 20,
       processors: createProcessors({
@@ -1391,7 +1391,7 @@ export const workerTestSuite = ({ it }: { it: TestAPI<TestSuiteContext> }): void
       client.createChain({ ...txCtx, txHooks, typeName: "test", input: null }),
     );
 
-    await withWorkers([await worker.start()], async () => {
+    await withWorkerRunners([await workerRunner.start()], async () => {
       await client.awaitChain(chain, completionOptions);
     });
 
@@ -1405,7 +1405,7 @@ export const workerTestSuite = ({ it }: { it: TestAPI<TestSuiteContext> }): void
     stateAdapter,
     notifyAdapter,
     withTransaction,
-    withWorkers,
+    withWorkerRunners,
     observabilityAdapter,
     log,
   }) => {
@@ -1414,7 +1414,7 @@ export const workerTestSuite = ({ it }: { it: TestAPI<TestSuiteContext> }): void
     }>();
 
     const firstClaim = new AbortController();
-    const client = await createClient({
+    const client = createClient({
       stateAdapter: {
         ...stateAdapter,
         startJobAttempts: async (params) => {
@@ -1429,7 +1429,7 @@ export const workerTestSuite = ({ it }: { it: TestAPI<TestSuiteContext> }): void
       log,
       jobTypes,
     });
-    const worker = await createInProcessWorker({
+    const workerRunner = createWorkerRunner({
       client,
       pollIntervalMs: 20,
       recoveryBackoffConfig: { initialDelayMs: 10, multiplier: 1, maxDelayMs: 10 },
@@ -1451,7 +1451,7 @@ export const workerTestSuite = ({ it }: { it: TestAPI<TestSuiteContext> }): void
       client.createChain({ ...txCtx, txHooks, typeName: "test", input: null }),
     );
 
-    await withWorkers([await worker.start()], async () => {
+    await withWorkerRunners([await workerRunner.start()], async () => {
       await client.awaitChain(chain, completionOptions);
     });
 
@@ -1464,7 +1464,7 @@ export const workerTestSuite = ({ it }: { it: TestAPI<TestSuiteContext> }): void
   it("reclaims its own jobs at most once per heartbeat while idle", async ({
     stateAdapter,
     notifyAdapter,
-    withWorkers,
+    withWorkerRunners,
     observabilityAdapter,
     log,
   }) => {
@@ -1475,7 +1475,7 @@ export const workerTestSuite = ({ it }: { it: TestAPI<TestSuiteContext> }): void
     const workerId = stateAdapter.config.generateWorkerId();
     let ownJobListings = 0;
     let idleIterations = 0;
-    const client = await createClient({
+    const client = createClient({
       stateAdapter: {
         ...stateAdapter,
         listWorkerJobs: async (params) => {
@@ -1492,7 +1492,7 @@ export const workerTestSuite = ({ it }: { it: TestAPI<TestSuiteContext> }): void
       log,
       jobTypes,
     });
-    const worker = await createInProcessWorker({
+    const workerRunner = createWorkerRunner({
       client,
       workerId,
       pollIntervalMs: 20,
@@ -1510,7 +1510,7 @@ export const workerTestSuite = ({ it }: { it: TestAPI<TestSuiteContext> }): void
       }),
     });
 
-    await withWorkers([await worker.start()], async () => {
+    await withWorkerRunners([await workerRunner.start()], async () => {
       await expect.poll(() => idleIterations).toBeGreaterThanOrEqual(5);
       expect(ownJobListings).toBe(1);
     });
@@ -1520,7 +1520,7 @@ export const workerTestSuite = ({ it }: { it: TestAPI<TestSuiteContext> }): void
     stateAdapter,
     notifyAdapter,
     withTransaction,
-    withWorkers,
+    withWorkerRunners,
     observabilityAdapter,
     log,
   }) => {
@@ -1532,7 +1532,7 @@ export const workerTestSuite = ({ it }: { it: TestAPI<TestSuiteContext> }): void
     const releaseSlow = Promise.withResolvers<void>();
     const fastCompleted = new AbortController();
     const reclaimPassed = Promise.withResolvers<void>();
-    const client = await createClient({
+    const client = createClient({
       stateAdapter: {
         ...stateAdapter,
         listWorkerJobs: async (params) => {
@@ -1546,7 +1546,7 @@ export const workerTestSuite = ({ it }: { it: TestAPI<TestSuiteContext> }): void
       log,
       jobTypes,
     });
-    const worker = await createInProcessWorker({
+    const workerRunner = createWorkerRunner({
       client,
       concurrency: 2,
       pollIntervalMs: 20,
@@ -1574,7 +1574,7 @@ export const workerTestSuite = ({ it }: { it: TestAPI<TestSuiteContext> }): void
       client.createChain({ ...txCtx, txHooks, typeName: "test", input: { slow: true } }),
     );
 
-    await withWorkers([await worker.start()], async () => {
+    await withWorkerRunners([await workerRunner.start()], async () => {
       await slowStarted.promise;
       const fastChain = await withTransaction(async (txCtx, txHooks) =>
         client.createChain({
@@ -1601,7 +1601,7 @@ export const workerTestSuite = ({ it }: { it: TestAPI<TestSuiteContext> }): void
     stateAdapter,
     notifyAdapter,
     withTransaction,
-    withWorkers,
+    withWorkerRunners,
     observabilityAdapter,
     log,
     generateJobId,
@@ -1616,7 +1616,7 @@ export const workerTestSuite = ({ it }: { it: TestAPI<TestSuiteContext> }): void
     const releaseRecreated = Promise.withResolvers<void>();
     const deletedFinished = new AbortController();
     const reclaimPassed = Promise.withResolvers<void>();
-    const client = await createClient({
+    const client = createClient({
       stateAdapter: {
         ...stateAdapter,
         listWorkerJobs: async (params) => {
@@ -1630,7 +1630,7 @@ export const workerTestSuite = ({ it }: { it: TestAPI<TestSuiteContext> }): void
       log,
       jobTypes,
     });
-    const worker = await createInProcessWorker({
+    const workerRunner = createWorkerRunner({
       client,
       concurrency: 2,
       pollIntervalMs: 20,
@@ -1669,7 +1669,7 @@ export const workerTestSuite = ({ it }: { it: TestAPI<TestSuiteContext> }): void
       }),
     );
 
-    await withWorkers([await worker.start()], async () => {
+    await withWorkerRunners([await workerRunner.start()], async () => {
       await deletedStarted.promise;
       await withTransaction(async (txCtx, txHooks) =>
         client.deleteChain({ ...txCtx, txHooks, id: chainId }),
@@ -1700,7 +1700,7 @@ export const workerTestSuite = ({ it }: { it: TestAPI<TestSuiteContext> }): void
     stateAdapter,
     notifyAdapter,
     withTransaction,
-    withWorkers,
+    withWorkerRunners,
     observabilityAdapter,
     log,
   }) => {
@@ -1708,14 +1708,14 @@ export const workerTestSuite = ({ it }: { it: TestAPI<TestSuiteContext> }): void
       test: { entry: true; input: null; output: null };
     }>();
 
-    const client = await createClient({
+    const client = createClient({
       stateAdapter,
       notifyAdapter,
       observabilityAdapter,
       log,
       jobTypes,
     });
-    const worker = await createInProcessWorker({
+    const workerRunner = createWorkerRunner({
       client,
       pollIntervalMs: 20,
       backoffConfig: { initialDelayMs: 1, multiplier: 1, maxDelayMs: 1 },
@@ -1739,7 +1739,7 @@ export const workerTestSuite = ({ it }: { it: TestAPI<TestSuiteContext> }): void
       client.createChain({ ...txCtx, txHooks, typeName: "test", input: null }),
     );
 
-    await withWorkers([await worker.start()], async () => {
+    await withWorkerRunners([await workerRunner.start()], async () => {
       await client.awaitChain(chain, completionOptions);
     });
 
@@ -1753,7 +1753,7 @@ export const workerTestSuite = ({ it }: { it: TestAPI<TestSuiteContext> }): void
     stateAdapter,
     notifyAdapter,
     withTransaction,
-    withWorkers,
+    withWorkerRunners,
     observabilityAdapter,
     log,
   }) => {
@@ -1761,14 +1761,14 @@ export const workerTestSuite = ({ it }: { it: TestAPI<TestSuiteContext> }): void
       test: { entry: true; input: null; output: null };
     }>();
 
-    const client = await createClient({
+    const client = createClient({
       stateAdapter,
       notifyAdapter,
       observabilityAdapter,
       log,
       jobTypes,
     });
-    const worker = await createInProcessWorker({
+    const workerRunner = createWorkerRunner({
       client,
       pollIntervalMs: 20,
       backoffConfig: { initialDelayMs: 60_000, multiplier: 1, maxDelayMs: 60_000 },
@@ -1793,7 +1793,7 @@ export const workerTestSuite = ({ it }: { it: TestAPI<TestSuiteContext> }): void
       client.createChain({ ...txCtx, txHooks, typeName: "test", input: null }),
     );
 
-    await withWorkers([await worker.start()], async () => {
+    await withWorkerRunners([await workerRunner.start()], async () => {
       await client.awaitChain(chain, completionOptions);
     });
 
@@ -1806,7 +1806,7 @@ export const workerTestSuite = ({ it }: { it: TestAPI<TestSuiteContext> }): void
   it("registers with a 60s lease by default", async ({
     stateAdapter,
     notifyAdapter,
-    withWorkers,
+    withWorkerRunners,
     observabilityAdapter,
     log,
   }) => {
@@ -1814,7 +1814,7 @@ export const workerTestSuite = ({ it }: { it: TestAPI<TestSuiteContext> }): void
       test: { entry: true; input: null; output: null };
     }>();
 
-    const client = await createClient({
+    const client = createClient({
       stateAdapter,
       notifyAdapter,
       observabilityAdapter,
@@ -1822,7 +1822,7 @@ export const workerTestSuite = ({ it }: { it: TestAPI<TestSuiteContext> }): void
       jobTypes,
     });
     const workerId = stateAdapter.config.generateWorkerId();
-    const worker = await createInProcessWorker({
+    const workerRunner = createWorkerRunner({
       client,
       workerId,
       processors: createProcessors({
@@ -1832,7 +1832,7 @@ export const workerTestSuite = ({ it }: { it: TestAPI<TestSuiteContext> }): void
       }),
     });
 
-    await withWorkers([await worker.start()], async () => {
+    await withWorkerRunners([await workerRunner.start()], async () => {
       await expect
         .poll(async () => {
           const registered = await client.getWorker({ id: workerId });

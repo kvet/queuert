@@ -8,8 +8,8 @@ const nc = await connect(JSON.parse(requireEnv("BENCHMARK_NATS_OPTIONS")));
 
 await runBenchmark({
   title: "PROCESSING CAPACITY — NATS NOTIFY (nats)",
-  stateAdapter: await createInProcessStateAdapter(),
-  notifyAdapter: await createNatsNotifyAdapter({ nc, subjectPrefix: benchmarkNamespace() }),
+  stateAdapter: createInProcessStateAdapter(),
+  notifyAdapter: createNatsNotifyAdapter({ nc, subjectPrefix: benchmarkNamespace() }),
 });
 
 await nc.close();

@@ -578,7 +578,7 @@ export const examples: Example[] = [
       "Graceful shutdown: the handler stops on signal and completes with partial results.",
       "External completion via completeChain: the running handler stops and the worker discards its attempt.",
     ],
-    guide: { title: "In-Process Worker", href: "/how-it-works/in-process-worker/" },
+    guide: { title: "Worker Runner", href: "/how-it-works/worker-runner/" },
   },
   {
     name: "showcase-multiworker-prioritization",

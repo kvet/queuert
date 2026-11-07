@@ -621,7 +621,7 @@ export type InProcessStateAdapter = StateAdapter<InProcessContext, string, strin
 /**
  * @param options - Optional ID generation, validation, and limit overrides.
  */
-export const createInProcessStateAdapter = async ({
+export const createInProcessStateAdapter = ({
   generateJobId: generateJobIdOption,
   validateJobId: validateJobIdOption,
   generateWorkerId: generateWorkerIdOption,
@@ -642,8 +642,8 @@ export const createInProcessStateAdapter = async ({
    */
   validateJobId?: (id: string) => boolean;
   /**
-   * Function to generate the worker ID of an in-process worker created without a `workerId`.
-   * Called once per in-process worker, which keeps the ID across restarts. Must return a new ID
+   * Function to generate the worker ID of a worker runner created without a `workerId`.
+   * Called once per worker runner, which keeps the ID across restarts. Must return a new ID
    * on every call.
    *
    * @defaultValue `() => crypto.randomUUID()`
@@ -651,7 +651,7 @@ export const createInProcessStateAdapter = async ({
   generateWorkerId?: () => string;
   /**
    * Predicate returning `true` if the worker ID is acceptable. Core runs it on both generated
-   * and caller-supplied worker IDs when the in-process worker is created; failures throw
+   * and caller-supplied worker IDs when the worker runner is created; failures throw
    * `InvalidWorkerIdError`.
    */
   validateWorkerId?: (id: string) => boolean;
@@ -669,7 +669,7 @@ export const createInProcessStateAdapter = async ({
    * @defaultValue `10_000`
    */
   countCap?: number;
-} = {}): Promise<InProcessStateAdapter> => {
+} = {}): InProcessStateAdapter => {
   const config = resolveStateAdapterConfig({
     generateJobId: generateJobIdOption,
     validateJobId: validateJobIdOption,

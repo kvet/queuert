@@ -25,9 +25,9 @@ Abstracts database operations for job persistence. The adapter handles job creat
 
 Handles pub/sub notifications for efficient job scheduling. When a job is created, workers are notified immediately instead of polling. This reduces latency from seconds to milliseconds. Without one, workers poll. Some adapters run through a notify provider you implement for your pub/sub client, for publishing messages and subscribing to channels. See [Notify Adapters](/queuert/integrations/notify-adapters/) for the available backends, and the notify provider for [PostgreSQL](/queuert/integrations/notify-adapters/postgres/#notify-provider) or [Redis](/queuert/integrations/notify-adapters/redis/#notify-provider).
 
-### Worker
+### Worker Runner
 
-Processes jobs by polling for available work. Each worker holds a lease it keeps renewing, so its attempts can run however long they take, reclaims the jobs of workers whose lease expired, and handles retries with configurable backoff. See [In-Process Worker](/queuert/how-it-works/in-process-worker/) and [Job Processing](/queuert/how-it-works/job-processing/).
+A worker runner, created with `createWorkerRunner`, processes jobs by polling for available work. It runs one worker at a time, a row in the `worker` table with a lease it keeps renewing, so its attempts can run however long they take. It reclaims the jobs of workers whose lease expired and handles retries with configurable backoff. See [Worker Runner](/queuert/how-it-works/worker-runner/) and [Job Processing](/queuert/how-it-works/job-processing/).
 
 ### Logging
 

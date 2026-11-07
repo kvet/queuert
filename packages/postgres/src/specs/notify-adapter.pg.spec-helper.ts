@@ -34,7 +34,7 @@ export const extendWithNotifyPg = <
     notifyAdapter: [
       async ({ notifyPool }, use) => {
         const notifyProvider = createPgPoolNotifyProvider({ pool: notifyPool });
-        const notifyAdapter = await createPgNotifyAdapter({
+        const notifyAdapter = createPgNotifyAdapter({
           notifyProvider,
           channelPrefix: `queuert_${Date.now()}_${Math.random().toString(36).slice(2)}`,
         });

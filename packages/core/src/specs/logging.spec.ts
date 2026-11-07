@@ -5,7 +5,7 @@ import {
   JobAlreadyCompletedError,
   type NotifyAdapter,
   createClient,
-  createInProcessWorker,
+  createWorkerRunner,
   createProcessors,
   defineJobTypes,
 } from "../index.ts";
@@ -55,7 +55,7 @@ describe("Logging", () => {
     stateAdapter,
     notifyAdapter,
     withTransaction,
-    withWorkers,
+    withWorkerRunners,
     observabilityAdapter,
     log,
     expectLogs,
@@ -68,14 +68,14 @@ describe("Logging", () => {
       };
     }>();
 
-    const client = await createClient({
+    const client = createClient({
       stateAdapter,
       notifyAdapter,
       observabilityAdapter,
       log,
       jobTypes,
     });
-    const worker = await createInProcessWorker({
+    const workerRunner = createWorkerRunner({
       client,
       concurrency: 1,
       processors: createProcessors({
@@ -102,7 +102,7 @@ describe("Logging", () => {
       }),
     );
 
-    await withWorkers([await worker.start()], async () => {
+    await withWorkerRunners([await workerRunner.start()], async () => {
       await client.awaitChain(chain, completionOptions);
     });
 
@@ -153,7 +153,7 @@ describe("Logging", () => {
     stateAdapter,
     notifyAdapter,
     withTransaction,
-    withWorkers,
+    withWorkerRunners,
     observabilityAdapter,
     log,
     expectLogs,
@@ -166,14 +166,14 @@ describe("Logging", () => {
       };
     }>();
 
-    const client = await createClient({
+    const client = createClient({
       stateAdapter,
       notifyAdapter,
       observabilityAdapter,
       log,
       jobTypes,
     });
-    const worker = await createInProcessWorker({
+    const workerRunner = createWorkerRunner({
       client,
       concurrency: 1,
       processors: createProcessors({
@@ -208,7 +208,7 @@ describe("Logging", () => {
       }),
     );
 
-    await withWorkers([await worker.start()], async () => {
+    await withWorkerRunners([await workerRunner.start()], async () => {
       await client.awaitChain(chain, completionOptions);
     });
 
@@ -231,7 +231,7 @@ describe("Logging", () => {
     stateAdapter,
     notifyAdapter,
     withTransaction,
-    withWorkers,
+    withWorkerRunners,
     observabilityAdapter,
     log,
     expectLogs,
@@ -244,14 +244,14 @@ describe("Logging", () => {
       };
     }>();
 
-    const client = await createClient({
+    const client = createClient({
       stateAdapter,
       notifyAdapter,
       observabilityAdapter,
       log,
       jobTypes,
     });
-    const worker = await createInProcessWorker({
+    const workerRunner = createWorkerRunner({
       client,
       concurrency: 1,
       processors: createProcessors({
@@ -283,7 +283,7 @@ describe("Logging", () => {
       }),
     );
 
-    await withWorkers([await worker.start()], async () => {
+    await withWorkerRunners([await workerRunner.start()], async () => {
       await client.awaitChain(chain, completionOptions);
     });
 
@@ -306,7 +306,7 @@ describe("Logging", () => {
     stateAdapter,
     notifyAdapter,
     withTransaction,
-    withWorkers,
+    withWorkerRunners,
     observabilityAdapter,
     log,
     expectLogs,
@@ -327,14 +327,14 @@ describe("Logging", () => {
       };
     }>();
 
-    const client = await createClient({
+    const client = createClient({
       stateAdapter,
       notifyAdapter,
       observabilityAdapter,
       log,
       jobTypes,
     });
-    const worker = await createInProcessWorker({
+    const workerRunner = createWorkerRunner({
       client,
       concurrency: 1,
       processors: createProcessors({
@@ -392,7 +392,7 @@ describe("Logging", () => {
       }),
     );
 
-    await withWorkers([await worker.start()], async () => {
+    await withWorkerRunners([await workerRunner.start()], async () => {
       await client.awaitChain(chain, completionOptions);
     });
 
@@ -434,7 +434,7 @@ describe("Logging", () => {
     stateAdapter,
     notifyAdapter,
     withTransaction,
-    withWorkers,
+    withWorkerRunners,
     observabilityAdapter,
     log,
     expectLogs,
@@ -454,7 +454,7 @@ describe("Logging", () => {
       };
     }>();
 
-    const client = await createClient({
+    const client = createClient({
       stateAdapter,
       notifyAdapter,
       observabilityAdapter,
@@ -463,7 +463,7 @@ describe("Logging", () => {
     });
     let blockerChainId: string;
 
-    const worker = await createInProcessWorker({
+    const workerRunner = createWorkerRunner({
       client,
       concurrency: 1,
       processors: createProcessors({
@@ -528,7 +528,7 @@ describe("Logging", () => {
       return chain;
     });
 
-    await withWorkers([await worker.start()], async () => {
+    await withWorkerRunners([await workerRunner.start()], async () => {
       await client.awaitChain(chain, completionOptions);
     });
 
@@ -612,7 +612,7 @@ describe("Logging", () => {
       sentinel: { entry: true; input: null; output: null };
     }>();
 
-    const client = await createClient({
+    const client = createClient({
       stateAdapter,
       notifyAdapter,
       observabilityAdapter,
@@ -706,7 +706,7 @@ describe("Logging", () => {
       };
     }>();
 
-    const client = await createClient({
+    const client = createClient({
       stateAdapter,
       notifyAdapter,
       observabilityAdapter,
@@ -746,7 +746,7 @@ describe("Logging", () => {
     stateAdapter,
     notifyAdapter,
     withTransaction,
-    withWorkers,
+    withWorkerRunners,
     observabilityAdapter,
     log,
   }) => {
@@ -754,14 +754,14 @@ describe("Logging", () => {
       test: { entry: true; input: null; output: null };
     }>();
 
-    const client = await createClient({
+    const client = createClient({
       stateAdapter,
       notifyAdapter,
       observabilityAdapter,
       log,
       jobTypes,
     });
-    const leaseLosingClient = await createClient({
+    const leaseLosingClient = createClient({
       stateAdapter: { ...stateAdapter, extendWorkerLease: async () => undefined },
       notifyAdapter,
       observabilityAdapter,
@@ -772,7 +772,7 @@ describe("Logging", () => {
     const jobStarted = Promise.withResolvers<void>();
     const handlerReleased = Promise.withResolvers<void>();
 
-    const leaseLosingWorker = await createInProcessWorker({
+    const leaseLosingWorkerRunner = createWorkerRunner({
       client: leaseLosingClient,
       leaseConfig: { durationMs: 150, heartbeatMs: 40 },
       processors: createProcessors({
@@ -791,7 +791,7 @@ describe("Logging", () => {
         },
       }),
     });
-    const reclaimingWorker = await createInProcessWorker({
+    const reclaimingWorkerRunner = createWorkerRunner({
       client,
       pollIntervalMs: 20,
       processors: createProcessors({
@@ -813,10 +813,10 @@ describe("Logging", () => {
     );
 
     let attemptStartedAt = new Date();
-    await withWorkers([await leaseLosingWorker.start()], async () => {
+    await withWorkerRunners([await leaseLosingWorkerRunner.start()], async () => {
       await jobStarted.promise;
       attemptStartedAt = new Date();
-      await withWorkers([await reclaimingWorker.start()], async () => {
+      await withWorkerRunners([await reclaimingWorkerRunner.start()], async () => {
         await client.awaitChain(chain, completionOptions);
       });
       handlerReleased.resolve();
@@ -834,7 +834,7 @@ describe("Logging", () => {
   it("logs a lost worker lease", async ({
     stateAdapter,
     notifyAdapter,
-    withWorkers,
+    withWorkerRunners,
     observabilityAdapter,
     log,
   }) => {
@@ -842,7 +842,7 @@ describe("Logging", () => {
       test: { entry: true; input: null; output: null };
     }>();
 
-    const client = await createClient({
+    const client = createClient({
       stateAdapter: { ...stateAdapter, extendWorkerLease: async () => undefined },
       notifyAdapter,
       observabilityAdapter,
@@ -850,7 +850,7 @@ describe("Logging", () => {
       jobTypes,
     });
 
-    const worker = await createInProcessWorker({
+    const workerRunner = createWorkerRunner({
       client,
       leaseConfig: { durationMs: 1000, heartbeatMs: 20 },
       processors: createProcessors({
@@ -866,7 +866,7 @@ describe("Logging", () => {
       }),
     });
 
-    await withWorkers([await worker.start()], async () => {
+    await withWorkerRunners([await workerRunner.start()], async () => {
       await expect
         .poll(() => log)
         .toHaveBeenCalledWith({
@@ -882,7 +882,7 @@ describe("Logging", () => {
     stateAdapter,
     notifyAdapter,
     withTransaction,
-    withWorkers,
+    withWorkerRunners,
     observabilityAdapter,
     log,
     expectLogs,
@@ -891,7 +891,7 @@ describe("Logging", () => {
       test: { entry: true; input: null; output: { by: string } };
     }>();
 
-    const client = await createClient({
+    const client = createClient({
       stateAdapter,
       notifyAdapter,
       observabilityAdapter,
@@ -900,7 +900,7 @@ describe("Logging", () => {
     });
     const started = Promise.withResolvers<void>();
     const takenOver = Promise.withResolvers<void>();
-    const worker = await createInProcessWorker({
+    const workerRunner = createWorkerRunner({
       client,
       concurrency: 1,
       processors: createProcessors({
@@ -927,7 +927,7 @@ describe("Logging", () => {
       client.createChain({ ...txCtx, txHooks, typeName: "test", input: null }),
     );
 
-    await withWorkers([await worker.start()], async () => {
+    await withWorkerRunners([await workerRunner.start()], async () => {
       await started.promise;
       await withTransaction(async (txCtx, txHooks) =>
         client.completeChain({
@@ -963,7 +963,7 @@ describe("Logging", () => {
     stateAdapter,
     notifyAdapter,
     withTransaction,
-    withWorkers,
+    withWorkerRunners,
     observabilityAdapter,
     log,
     expectLogs,
@@ -972,7 +972,7 @@ describe("Logging", () => {
       test: { entry: true; input: null; output: null };
     }>();
 
-    const client = await createClient({
+    const client = createClient({
       stateAdapter,
       notifyAdapter,
       observabilityAdapter,
@@ -981,7 +981,7 @@ describe("Logging", () => {
     });
     const started = Promise.withResolvers<void>();
     const deleted = Promise.withResolvers<void>();
-    const worker = await createInProcessWorker({
+    const workerRunner = createWorkerRunner({
       client,
       concurrency: 1,
       processors: createProcessors({
@@ -1005,7 +1005,7 @@ describe("Logging", () => {
       client.createChain({ ...txCtx, txHooks, typeName: "test", input: null }),
     );
 
-    await withWorkers([await worker.start()], async () => {
+    await withWorkerRunners([await workerRunner.start()], async () => {
       await started.promise;
       await withTransaction(async (txCtx, txHooks) =>
         client.deleteChains({ ...txCtx, txHooks, ids: [chain.id] }),
@@ -1034,7 +1034,7 @@ describe("Logging", () => {
     stateAdapter,
     notifyAdapter,
     withTransaction,
-    withWorkers,
+    withWorkerRunners,
     observabilityAdapter,
     log,
     expectLogs,
@@ -1043,14 +1043,14 @@ describe("Logging", () => {
       test: { entry: true; input: null; output: null };
     }>();
 
-    const client = await createClient({
+    const client = createClient({
       stateAdapter,
       notifyAdapter,
       observabilityAdapter,
       log,
       jobTypes,
     });
-    const worker = await createInProcessWorker({
+    const workerRunner = createWorkerRunner({
       client,
       concurrency: 1,
       processors: createProcessors({
@@ -1073,7 +1073,7 @@ describe("Logging", () => {
       client.createChain({ ...txCtx, txHooks, typeName: "test", input: null }),
     );
 
-    await withWorkers([await worker.start()], async () => {
+    await withWorkerRunners([await workerRunner.start()], async () => {
       await client.awaitChain(chain, completionOptions);
       await vi.waitFor(
         () => {
@@ -1097,7 +1097,7 @@ describe("Logging", () => {
     stateAdapter,
     notifyAdapter,
     withTransaction,
-    withWorkers,
+    withWorkerRunners,
     observabilityAdapter,
     log,
   }) => {
@@ -1119,21 +1119,21 @@ describe("Logging", () => {
       },
     };
 
-    const client = await createClient({
+    const client = createClient({
       stateAdapter,
       notifyAdapter,
       observabilityAdapter,
       log,
       jobTypes,
     });
-    const workerClient = await createClient({
+    const workerClient = createClient({
       stateAdapter: erroringStateAdapter,
       notifyAdapter,
       observabilityAdapter,
       log,
       jobTypes,
     });
-    const worker = await createInProcessWorker({
+    const workerRunner = createWorkerRunner({
       client: workerClient,
       concurrency: 1,
       recoveryBackoffConfig: { initialDelayMs: 10, multiplier: 1, maxDelayMs: 10 },
@@ -1157,7 +1157,7 @@ describe("Logging", () => {
       client.createChain({ ...txCtx, txHooks, typeName: "test", input: null }),
     );
 
-    await withWorkers([await worker.start()], async () => {
+    await withWorkerRunners([await workerRunner.start()], async () => {
       await client.awaitChain(chain, completionOptions);
     });
 
@@ -1170,7 +1170,7 @@ describe("Logging", () => {
     stateAdapter,
     notifyAdapter,
     withTransaction,
-    withWorkers,
+    withWorkerRunners,
     observabilityAdapter,
     log,
   }) => {
@@ -1185,14 +1185,14 @@ describe("Logging", () => {
       },
     };
 
-    const client = await createClient({
+    const client = createClient({
       stateAdapter,
       notifyAdapter: failingNotifyAdapter,
       observabilityAdapter,
       log,
       jobTypes,
     });
-    const worker = await createInProcessWorker({
+    const workerRunner = createWorkerRunner({
       client,
       concurrency: 1,
       pollIntervalMs: 100,
@@ -1215,7 +1215,7 @@ describe("Logging", () => {
       client.createChain({ ...txCtx, txHooks, typeName: "test", input: null }),
     );
 
-    await withWorkers([await worker.start()], async () => {
+    await withWorkerRunners([await workerRunner.start()], async () => {
       await client.awaitChain(chain, {
         pollIntervalMs: 100,
         timeoutMs: 5000,
@@ -1250,7 +1250,7 @@ describe("Logging rollback", () => {
       test: { entry: true; input: null; output: null };
     }>();
 
-    const client = await createClient({
+    const client = createClient({
       stateAdapter,
       notifyAdapter,
       observabilityAdapter,
@@ -1285,7 +1285,7 @@ describe("Logging rollback", () => {
       };
     }>();
 
-    const client = await createClient({
+    const client = createClient({
       stateAdapter,
       notifyAdapter,
       observabilityAdapter,
@@ -1327,7 +1327,7 @@ describe("Logging rollback", () => {
       test: { entry: true; input: null; output: { result: number } };
     }>();
 
-    const client = await createClient({
+    const client = createClient({
       stateAdapter,
       notifyAdapter,
       observabilityAdapter,
@@ -1361,7 +1361,7 @@ describe("Logging rollback", () => {
     stateAdapter,
     notifyAdapter,
     withTransaction,
-    withWorkers,
+    withWorkerRunners,
     observabilityAdapter,
     log,
   }) => {
@@ -1381,21 +1381,21 @@ describe("Logging rollback", () => {
       },
     };
 
-    const client = await createClient({
+    const client = createClient({
       stateAdapter,
       notifyAdapter,
       observabilityAdapter,
       log,
       jobTypes,
     });
-    const workerClient = await createClient({
+    const workerClient = createClient({
       stateAdapter: erroringStateAdapter,
       notifyAdapter,
       observabilityAdapter,
       log,
       jobTypes,
     });
-    const worker = await createInProcessWorker({
+    const workerRunner = createWorkerRunner({
       client: workerClient,
       concurrency: 1,
       pollIntervalMs: 100,
@@ -1418,7 +1418,7 @@ describe("Logging rollback", () => {
       client.createChain({ ...txCtx, txHooks, typeName: "test", input: null }),
     );
 
-    await withWorkers([await worker.start()], async () => {
+    await withWorkerRunners([await workerRunner.start()], async () => {
       await client.awaitChain(chain, completionOptions);
     });
 
@@ -1438,7 +1438,7 @@ describe("Logging rollback", () => {
     stateAdapter,
     notifyAdapter,
     withTransaction,
-    withWorkers,
+    withWorkerRunners,
     observabilityAdapter,
     log,
   }) => {
@@ -1459,21 +1459,21 @@ describe("Logging rollback", () => {
       },
     };
 
-    const client = await createClient({
+    const client = createClient({
       stateAdapter,
       notifyAdapter,
       observabilityAdapter,
       log,
       jobTypes,
     });
-    const workerClient = await createClient({
+    const workerClient = createClient({
       stateAdapter: erroringStateAdapter,
       notifyAdapter,
       observabilityAdapter,
       log,
       jobTypes,
     });
-    const worker = await createInProcessWorker({
+    const workerRunner = createWorkerRunner({
       client: workerClient,
       concurrency: 1,
       pollIntervalMs: 50,
@@ -1500,7 +1500,7 @@ describe("Logging rollback", () => {
       client.createChain({ ...txCtx, txHooks, typeName: "test", input: null }),
     );
 
-    await withWorkers([await worker.start()], async () => {
+    await withWorkerRunners([await workerRunner.start()], async () => {
       await client.awaitChain(chain, completionOptions);
     });
 
@@ -1513,7 +1513,7 @@ describe("Logging rollback", () => {
     stateAdapter,
     notifyAdapter,
     withTransaction,
-    withWorkers,
+    withWorkerRunners,
     observabilityAdapter,
     log,
   }) => {
@@ -1529,7 +1529,7 @@ describe("Logging rollback", () => {
       };
     }>();
 
-    const client = await createClient({
+    const client = createClient({
       stateAdapter,
       notifyAdapter,
       observabilityAdapter,
@@ -1538,7 +1538,7 @@ describe("Logging rollback", () => {
     });
 
     let throwOnce = true;
-    const worker = await createInProcessWorker({
+    const workerRunner = createWorkerRunner({
       client,
       concurrency: 1,
       pollIntervalMs: 100,
@@ -1576,7 +1576,7 @@ describe("Logging rollback", () => {
       client.createChain({ ...txCtx, txHooks, typeName: "linear", input: null }),
     );
 
-    await withWorkers([await worker.start()], async () => {
+    await withWorkerRunners([await workerRunner.start()], async () => {
       await client.awaitChain(chain, completionOptions);
     });
 
@@ -1598,7 +1598,7 @@ describe("Logging rollback", () => {
     stateAdapter,
     notifyAdapter,
     withTransaction,
-    withWorkers,
+    withWorkerRunners,
     observabilityAdapter,
     log,
   }) => {
@@ -1624,21 +1624,21 @@ describe("Logging rollback", () => {
       },
     };
 
-    const client = await createClient({
+    const client = createClient({
       stateAdapter,
       notifyAdapter,
       observabilityAdapter,
       log,
       jobTypes,
     });
-    const workerClient = await createClient({
+    const workerClient = createClient({
       stateAdapter: erroringStateAdapter,
       notifyAdapter,
       observabilityAdapter,
       log,
       jobTypes,
     });
-    const worker = await createInProcessWorker({
+    const workerRunner = createWorkerRunner({
       client: workerClient,
       concurrency: 1,
       pollIntervalMs: 100,
@@ -1674,7 +1674,7 @@ describe("Logging rollback", () => {
       return created;
     });
 
-    await withWorkers([await worker.start()], async () => {
+    await withWorkerRunners([await workerRunner.start()], async () => {
       await client.awaitChain(chain, completionOptions);
     });
 
@@ -1721,14 +1721,14 @@ describe("Logging rollback", () => {
       },
     };
 
-    const client = await createClient({
+    const client = createClient({
       stateAdapter,
       notifyAdapter,
       observabilityAdapter,
       log,
       jobTypes,
     });
-    const erroringClient = await createClient({
+    const erroringClient = createClient({
       stateAdapter: erroringStateAdapter,
       notifyAdapter,
       observabilityAdapter,
@@ -1792,7 +1792,7 @@ describe("Logging rollback", () => {
     stateAdapter,
     notifyAdapter,
     withTransaction,
-    withWorkers,
+    withWorkerRunners,
     observabilityAdapter,
     log,
   }) => {
@@ -1820,21 +1820,21 @@ describe("Logging rollback", () => {
       },
     };
 
-    const client = await createClient({
+    const client = createClient({
       stateAdapter,
       notifyAdapter,
       observabilityAdapter,
       log,
       jobTypes,
     });
-    const workerClient = await createClient({
+    const workerClient = createClient({
       stateAdapter: erroringStateAdapter,
       notifyAdapter,
       observabilityAdapter,
       log,
       jobTypes,
     });
-    const worker = await createInProcessWorker({
+    const workerRunner = createWorkerRunner({
       client: workerClient,
       concurrency: 1,
       pollIntervalMs: 100,
@@ -1867,7 +1867,7 @@ describe("Logging rollback", () => {
       client.createChain({ ...txCtx, txHooks, typeName: "linear", input: null }),
     );
 
-    await withWorkers([await worker.start()], async () => {
+    await withWorkerRunners([await workerRunner.start()], async () => {
       await client.awaitChain(chain, completionOptions);
     });
 
@@ -1893,7 +1893,7 @@ describe("Logging rollback", () => {
       test: { entry: true; input: null; output: null };
     }>();
 
-    const client = await createClient({
+    const client = createClient({
       stateAdapter,
       notifyAdapter,
       observabilityAdapter,
@@ -1937,7 +1937,7 @@ describe("Logging rollback", () => {
       test: { entry: true; input: { value: number }; output: null };
     }>();
 
-    const client = await createClient({
+    const client = createClient({
       stateAdapter,
       notifyAdapter,
       observabilityAdapter,
@@ -1994,7 +1994,7 @@ describe("Logging rollback", () => {
       beta: { entry: true; input: null; output: null; blockers: [{ typeName: "blocker" }] };
     }>();
 
-    const client = await createClient({
+    const client = createClient({
       stateAdapter,
       notifyAdapter,
       observabilityAdapter,
@@ -2040,7 +2040,7 @@ describe("Logging rollback", () => {
       test: { entry: true; input: null; output: null };
     }>();
 
-    const client = await createClient({
+    const client = createClient({
       stateAdapter,
       notifyAdapter,
       observabilityAdapter,
@@ -2075,7 +2075,7 @@ describe("Logging rollback", () => {
       test: { entry: true; input: null; output: null };
     }>();
 
-    const client = await createClient({
+    const client = createClient({
       stateAdapter,
       notifyAdapter,
       observabilityAdapter,

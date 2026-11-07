@@ -3,7 +3,7 @@ import knexFactory from "knex";
 import {
   createClient,
   createInProcessNotifyAdapter,
-  createInProcessWorker,
+  createWorkerRunner,
   createProcessors,
   defineJobTypes,
   withTxHooks,
@@ -39,22 +39,22 @@ const jobTypes = defineJobTypes<{
 // Create state provider for Knex
 // #region adapter
 const stateProvider = createKnexSqliteStateProvider({ knex });
-const stateAdapter = await createSqliteStateAdapter({
+const stateAdapter = createSqliteStateAdapter({
   stateProvider,
 });
 await stateAdapter.migrateToLatest();
 // #endregion
 
-const notifyAdapter = await createInProcessNotifyAdapter();
+const notifyAdapter = createInProcessNotifyAdapter();
 
-const client = await createClient({
+const client = createClient({
   stateAdapter,
   notifyAdapter,
   jobTypes,
 });
 
-// Create worker with job type processors
-const worker = await createInProcessWorker({
+// Create worker runner with job type processors
+const workerRunner = createWorkerRunner({
   client,
   processors: createProcessors({
     client,
@@ -85,7 +85,7 @@ const worker = await createInProcessWorker({
   }),
 });
 
-const stopWorker = await worker.start();
+const stopWorkerRunner = await workerRunner.start();
 
 // Register a new user and queue welcome email atomically
 // #region create-chain
@@ -114,7 +114,7 @@ const result = await client.awaitChain(chain, { timeoutMs: 5000 });
 console.log(`Welcome email sent at: ${result.output.sentAt}`);
 
 // Cleanup
-await stopWorker();
+await stopWorkerRunner();
 await notifyAdapter.close();
 await stateAdapter.close();
 await knex.destroy();

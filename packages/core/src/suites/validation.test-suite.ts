@@ -2,10 +2,10 @@ import { type TestAPI, assert, expect } from "vitest";
 
 import { createClient } from "../client.ts";
 import { JobTypeValidationError } from "../errors.ts";
-import { createInProcessWorker } from "../in-process-worker.ts";
 import { createProcessors } from "../job-type-processors/create-job-type-processors.ts";
 import type { BaseJobTypeDefinitions } from "../job-types/job-type.ts";
 import { createJobTypes } from "../job-types/job-types.ts";
+import { createWorkerRunner } from "../worker-runner.ts";
 import type { TestSuiteContext } from "./spec-context.spec-helper.ts";
 
 // --- Mini schema adapter (mirrors real adapter pattern) ---
@@ -139,7 +139,7 @@ export const validationTestSuite = ({ it }: { it: TestAPI<TestSuiteContext> }): 
     observabilityAdapter,
     log,
   }) => {
-    const client = await createClient({
+    const client = createClient({
       stateAdapter,
       notifyAdapter,
       observabilityAdapter,
@@ -169,7 +169,7 @@ export const validationTestSuite = ({ it }: { it: TestAPI<TestSuiteContext> }): 
     observabilityAdapter,
     log,
   }) => {
-    const client = await createClient({
+    const client = createClient({
       stateAdapter,
       notifyAdapter,
       observabilityAdapter,
@@ -217,7 +217,7 @@ export const validationTestSuite = ({ it }: { it: TestAPI<TestSuiteContext> }): 
     observabilityAdapter,
     log,
   }) => {
-    const client = await createClient({
+    const client = createClient({
       stateAdapter,
       notifyAdapter,
       observabilityAdapter,
@@ -245,7 +245,7 @@ export const validationTestSuite = ({ it }: { it: TestAPI<TestSuiteContext> }): 
     observabilityAdapter,
     log,
   }) => {
-    const client = await createClient({
+    const client = createClient({
       stateAdapter,
       notifyAdapter,
       observabilityAdapter,
@@ -273,7 +273,7 @@ export const validationTestSuite = ({ it }: { it: TestAPI<TestSuiteContext> }): 
     observabilityAdapter,
     log,
   }) => {
-    const client = await createClient({
+    const client = createClient({
       stateAdapter,
       notifyAdapter,
       observabilityAdapter,
@@ -320,7 +320,7 @@ export const validationTestSuite = ({ it }: { it: TestAPI<TestSuiteContext> }): 
         validatedBlockers.push(...blockers);
       },
     });
-    const client = await createClient({
+    const client = createClient({
       stateAdapter,
       notifyAdapter,
       observabilityAdapter,
@@ -362,18 +362,18 @@ export const validationTestSuite = ({ it }: { it: TestAPI<TestSuiteContext> }): 
     stateAdapter,
     notifyAdapter,
     withTransaction,
-    withWorkers,
+    withWorkerRunners,
     observabilityAdapter,
     log,
   }) => {
-    const client = await createClient({
+    const client = createClient({
       stateAdapter,
       notifyAdapter,
       observabilityAdapter,
       log,
       jobTypes: simpleJobTypes,
     });
-    const worker = await createInProcessWorker({
+    const workerRunner = createWorkerRunner({
       client,
       concurrency: 1,
       processors: createProcessors({
@@ -399,7 +399,7 @@ export const validationTestSuite = ({ it }: { it: TestAPI<TestSuiteContext> }): 
       }),
     );
 
-    await withWorkers([await worker.start()], async () => {
+    await withWorkerRunners([await workerRunner.start()], async () => {
       const completed = await client.awaitChain(chain, completionOptions);
       expect(completed.output).toEqual({ result: 84 });
     });
@@ -409,20 +409,20 @@ export const validationTestSuite = ({ it }: { it: TestAPI<TestSuiteContext> }): 
     stateAdapter,
     notifyAdapter,
     withTransaction,
-    withWorkers,
+    withWorkerRunners,
     observabilityAdapter,
     log,
   }) => {
     const validationFailed = Promise.withResolvers<unknown>();
 
-    const client = await createClient({
+    const client = createClient({
       stateAdapter,
       notifyAdapter,
       observabilityAdapter,
       log,
       jobTypes: simpleJobTypes,
     });
-    const worker = await createInProcessWorker({
+    const workerRunner = createWorkerRunner({
       client,
       concurrency: 1,
       processors: createProcessors({
@@ -455,7 +455,7 @@ export const validationTestSuite = ({ it }: { it: TestAPI<TestSuiteContext> }): 
       }),
     );
 
-    await withWorkers([await worker.start()], async () => {
+    await withWorkerRunners([await workerRunner.start()], async () => {
       const error = await validationFailed.promise;
       expect(error).toBeInstanceOf(JobTypeValidationError);
     });
@@ -465,18 +465,18 @@ export const validationTestSuite = ({ it }: { it: TestAPI<TestSuiteContext> }): 
     stateAdapter,
     notifyAdapter,
     withTransaction,
-    withWorkers,
+    withWorkerRunners,
     observabilityAdapter,
     log,
   }) => {
-    const client = await createClient({
+    const client = createClient({
       stateAdapter,
       notifyAdapter,
       observabilityAdapter,
       log,
       jobTypes: continuationJobTypes,
     });
-    const worker = await createInProcessWorker({
+    const workerRunner = createWorkerRunner({
       client,
       concurrency: 1,
       processors: createProcessors({
@@ -512,7 +512,7 @@ export const validationTestSuite = ({ it }: { it: TestAPI<TestSuiteContext> }): 
       }),
     );
 
-    await withWorkers([await worker.start()], async () => {
+    await withWorkerRunners([await workerRunner.start()], async () => {
       const completed = await client.awaitChain(chain, completionOptions);
       expect(completed.output).toEqual({ result: 42 });
     });
@@ -522,20 +522,20 @@ export const validationTestSuite = ({ it }: { it: TestAPI<TestSuiteContext> }): 
     stateAdapter,
     notifyAdapter,
     withTransaction,
-    withWorkers,
+    withWorkerRunners,
     observabilityAdapter,
     log,
   }) => {
     const validationFailed = Promise.withResolvers<unknown>();
 
-    const client = await createClient({
+    const client = createClient({
       stateAdapter,
       notifyAdapter,
       observabilityAdapter,
       log,
       jobTypes: continuationNoFollowUpJobTypes,
     });
-    const worker = await createInProcessWorker({
+    const workerRunner = createWorkerRunner({
       client,
       concurrency: 1,
       processors: createProcessors({
@@ -577,7 +577,7 @@ export const validationTestSuite = ({ it }: { it: TestAPI<TestSuiteContext> }): 
       }),
     );
 
-    await withWorkers([await worker.start()], async () => {
+    await withWorkerRunners([await workerRunner.start()], async () => {
       const error = await validationFailed.promise;
       expect(error).toBeInstanceOf(JobTypeValidationError);
     });
@@ -590,7 +590,7 @@ export const validationTestSuite = ({ it }: { it: TestAPI<TestSuiteContext> }): 
     observabilityAdapter,
     log,
   }) => {
-    const client = await createClient({
+    const client = createClient({
       stateAdapter,
       notifyAdapter,
       observabilityAdapter,
@@ -628,7 +628,7 @@ export const validationTestSuite = ({ it }: { it: TestAPI<TestSuiteContext> }): 
     observabilityAdapter,
     log,
   }) => {
-    const client = await createClient({
+    const client = createClient({
       stateAdapter,
       notifyAdapter,
       observabilityAdapter,
@@ -665,18 +665,18 @@ export const validationTestSuite = ({ it }: { it: TestAPI<TestSuiteContext> }): 
     stateAdapter,
     notifyAdapter,
     withTransaction,
-    withWorkers,
+    withWorkerRunners,
     observabilityAdapter,
     log,
   }) => {
-    const client = await createClient({
+    const client = createClient({
       stateAdapter,
       notifyAdapter,
       observabilityAdapter,
       log,
       jobTypes: continuationJobTypes,
     });
-    const worker = await createInProcessWorker({
+    const workerRunner = createWorkerRunner({
       client,
       concurrency: 1,
       processors: createProcessors({
@@ -725,7 +725,7 @@ export const validationTestSuite = ({ it }: { it: TestAPI<TestSuiteContext> }): 
     });
     expect(partialTail.items[0].status).toBe("pending");
 
-    await withWorkers([await worker.start()], async () => {
+    await withWorkerRunners([await workerRunner.start()], async () => {
       const completed = await client.awaitChain(partialChain, completionOptions);
       expect(completed.output).toEqual({ result: 42 });
     });
@@ -738,7 +738,7 @@ export const validationTestSuite = ({ it }: { it: TestAPI<TestSuiteContext> }): 
     observabilityAdapter,
     log,
   }) => {
-    const client = await createClient({
+    const client = createClient({
       stateAdapter,
       notifyAdapter,
       observabilityAdapter,
