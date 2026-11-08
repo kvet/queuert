@@ -1,41 +1,43 @@
+import { noop } from "@queuert/helpers";
+
 import type { ObservabilityAdapter } from "./observability-adapter.ts";
 
 export const createNoopObservabilityAdapter = (): ObservabilityAdapter => ({
-  workerStarted: () => {},
-  workerError: () => {},
-  workerLeaseLost: () => {},
-  workerStopped: () => {},
+  workerStarted: noop,
+  workerError: noop,
+  workerLeaseLost: noop,
+  workerStopped: noop,
 
-  chainCreated: () => {},
-  chainCompleted: () => {},
-  chainDeleted: () => {},
+  chainCreated: noop,
+  chainCompleted: noop,
+  chainDeleted: noop,
 
-  jobCreated: () => {},
-  jobCompleted: () => {},
-  jobRescheduled: () => {},
-  jobBlocked: () => {},
-  jobUnblocked: () => {},
+  jobCreated: noop,
+  jobCompleted: noop,
+  jobRescheduled: noop,
+  jobBlocked: noop,
+  jobUnblocked: noop,
 
-  jobAttemptStarted: () => {},
-  jobAttemptLost: () => {},
-  jobAttemptFailed: () => {},
-  jobAttemptCompleted: () => {},
-  jobAttemptReclaimed: () => {},
+  jobAttemptStarted: noop,
+  jobAttemptLost: noop,
+  jobAttemptFailed: noop,
+  jobAttemptCompleted: noop,
+  jobAttemptReclaimed: noop,
 
-  notifyAdapterError: () => {},
+  notifyAdapterError: noop,
 
-  stateAdapterError: () => {},
+  stateAdapterError: noop,
 
-  chainDuration: () => {},
-  jobDuration: () => {},
-  jobAttemptDuration: () => {},
+  chainDuration: noop,
+  jobDuration: noop,
+  jobAttemptDuration: noop,
 
-  jobTypeIdleChange: () => {},
-  jobTypeProcessingChange: () => {},
+  jobTypeIdleChange: noop,
+  jobTypeProcessingChange: noop,
 
-  startJobSpan: () => undefined,
-  startBlockerSpan: () => undefined,
-  completeBlockerSpan: () => undefined,
-  startAttemptSpan: () => undefined,
-  completeJobSpan: () => undefined,
+  startJobSpan: noop,
+  startBlockerSpan: noop,
+  completeBlockerSpan: noop,
+  startAttemptSpan: noop,
+  completeJobSpan: noop,
 });

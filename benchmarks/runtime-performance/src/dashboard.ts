@@ -12,7 +12,7 @@ import {
   withTxHooks,
 } from "queuert";
 
-import { jobTypes, printHeader, runDoubleRunBenchmark } from "./utils.ts";
+import { createCompletionCounter, jobTypes, printHeader, runDoubleRunBenchmark } from "./utils.ts";
 
 printHeader("DASHBOARD");
 
@@ -22,7 +22,9 @@ await runDoubleRunBenchmark<Record<string, never>>({
     infra: {},
     teardown: async () => {},
   }),
-  runLifecycle: async (_infra, { step, processStep }) => {
+  runLifecycle: async (_infra, { step, processStep, jobCount }) => {
+    const completions = createCompletionCounter(jobCount);
+
     const stateAdapter = await step("After creating state adapter", async () =>
       createInProcessStateAdapter(),
     );
@@ -47,12 +49,15 @@ await runDoubleRunBenchmark<Record<string, never>>({
           jobTypes,
           processors: {
             "test-job": {
-              attemptHandler: async ({ complete }) =>
-                withTxHooks(async (txHooks) =>
+              attemptHandler: async ({ complete }) => {
+                const result = await withTxHooks(async (txHooks) =>
                   stateAdapter.withTransaction(async (ctx) =>
                     complete({ ...ctx, txHooks, output: { processed: true } }),
                   ),
-                ),
+                );
+                completions.record();
+                return result;
+              },
             },
           },
         }),
@@ -60,10 +65,9 @@ await runDoubleRunBenchmark<Record<string, never>>({
       return workerRunner.start();
     });
 
-    await processStep("After processing 100 jobs", async () => {
-      const promises = [];
-      for (let i = 0; i < 100; i++) {
-        const chain = await withTxHooks(async (txHooks) =>
+    await processStep(`After processing ${jobCount} jobs`, async () => {
+      for (let i = 0; i < jobCount; i++) {
+        await withTxHooks(async (txHooks) =>
           stateAdapter.withTransaction(async (ctx) =>
             client.createChain({
               ...ctx,
@@ -73,9 +77,8 @@ await runDoubleRunBenchmark<Record<string, never>>({
             }),
           ),
         );
-        promises.push(client.awaitChain(chain, { timeoutMs: 5000 }));
       }
-      await Promise.all(promises);
+      await completions.done;
     });
 
     await step("After first dashboard API request", async () => {

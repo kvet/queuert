@@ -31,23 +31,14 @@ export const createBunSqliteStateProvider = ({
       }
     },
     isTransaction: (txCtx) => txCtx.db.inTransaction,
-    executeSql: async ({ txCtx, id, sql, params, columnTypes, readOnly }) => {
+    executeSql: async ({ txCtx, id, sql, params, readOnly }) => {
       const run = (): unknown[] => {
         const database = txCtx?.db ?? db;
-        const bindings = (params ?? []) as SQLQueryBindings[];
-        const prepare = () =>
+        const statement =
           id !== undefined
             ? database.query<unknown, SQLQueryBindings[]>(sql)
             : database.prepare<unknown, SQLQueryBindings[]>(sql);
-        if (Object.keys(columnTypes).length > 0) {
-          return prepare().all(...bindings);
-        }
-        if (bindings.length > 0) {
-          prepare().run(...bindings);
-        } else {
-          database.run(sql);
-        }
-        return [];
+        return statement.all(...(params as SQLQueryBindings[]));
       };
       if (txCtx) return run();
       using _h = readOnly ? await lock.acquireRead() : await lock.acquireWrite();

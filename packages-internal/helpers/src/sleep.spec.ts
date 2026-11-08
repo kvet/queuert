@@ -1,6 +1,6 @@
 import { describe, expect, test, vi } from "vitest";
 
-import { setLongTimeout, sleep } from "./sleep.ts";
+import { raceWithSleep, setLongTimeout, sleep } from "./sleep.ts";
 
 describe("sleep", () => {
   test("resolves after specified duration", async () => {
@@ -142,5 +142,81 @@ describe("sleep beyond the 2^31-1 ms timer limit", () => {
     } finally {
       vi.useRealTimers();
     }
+  });
+});
+
+describe("raceWithSleep", () => {
+  test("resolves with the promise value when the promise wins and clears the timer", async () => {
+    vi.useFakeTimers();
+    try {
+      const result = await raceWithSleep(Promise.resolve("value"), 1000);
+
+      expect(result).toBe("value");
+      expect(vi.getTimerCount()).toBe(0);
+    } finally {
+      vi.useRealTimers();
+    }
+  });
+
+  test("resolves undefined when the sleep wins", async () => {
+    vi.useFakeTimers();
+    try {
+      const race = raceWithSleep(new Promise<string>(() => {}), 1000);
+      await vi.advanceTimersByTimeAsync(1000);
+
+      expect(await race).toBeUndefined();
+    } finally {
+      vi.useRealTimers();
+    }
+  });
+
+  test("rejects with the promise error and clears the timer", async () => {
+    vi.useFakeTimers();
+    try {
+      const error = new Error("boom");
+
+      await expect(raceWithSleep(Promise.reject(error), 1000)).rejects.toBe(error);
+      expect(vi.getTimerCount()).toBe(0);
+    } finally {
+      vi.useRealTimers();
+    }
+  });
+
+  test("resolves undefined when the signal aborts and removes its listener", async () => {
+    vi.useFakeTimers();
+    try {
+      const controller = new AbortController();
+      const removeSpy = vi.spyOn(controller.signal, "removeEventListener");
+      const race = raceWithSleep(new Promise<string>(() => {}), 1000, {
+        signal: controller.signal,
+      });
+      controller.abort();
+
+      expect(await race).toBeUndefined();
+      expect(removeSpy).toHaveBeenCalledTimes(1);
+      expect(vi.getTimerCount()).toBe(0);
+    } finally {
+      vi.useRealTimers();
+    }
+  });
+
+  test("prefers an already settled promise over an already aborted signal", async () => {
+    const controller = new AbortController();
+    controller.abort();
+
+    expect(await raceWithSleep(Promise.resolve("value"), 1000, { signal: controller.signal })).toBe(
+      "value",
+    );
+  });
+
+  test("removes its abort listener when the promise wins", async () => {
+    const controller = new AbortController();
+    const addSpy = vi.spyOn(controller.signal, "addEventListener");
+    const removeSpy = vi.spyOn(controller.signal, "removeEventListener");
+
+    await raceWithSleep(Promise.resolve("value"), 1000, { signal: controller.signal });
+
+    expect(addSpy).toHaveBeenCalledTimes(1);
+    expect(removeSpy).toHaveBeenCalledTimes(1);
   });
 });

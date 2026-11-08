@@ -1,10 +1,13 @@
-# Memory Footprint Benchmark
+# Runtime Performance Benchmark
 
-Measures Queuert's steady-state heap footprint per adapter. The headline question: **once you close queuert, does it release its allocated heap?** Yes for live JS state — what remains is V8 metadata (hidden classes, JIT-compiled code) that's tied to module load, not to queuert holding references.
+Measures what Queuert costs at runtime per adapter, in two phases:
 
-Headline numbers live in the [Memory Footprint docs page](../../docs/src/content/docs/benchmarks/memory-footprint.tsx) (numbers in [`docs/src/data/benchmarks.ts`](../../docs/src/data/benchmarks.ts)) — this README covers methodology and how to reproduce them.
+- **Memory** — Queuert's steady-state heap footprint. The headline question: **once you close queuert, does it release its allocated heap?** Yes for live JS state — what remains is V8 metadata (hidden classes, JIT-compiled code) that's tied to module load, not to queuert holding references.
+- **Profile** — where CPU time and allocations go per job, so hot paths are measured before optimizing.
 
-## Methodology
+Headline numbers live in the [Runtime Performance docs page](../../docs/src/content/docs/benchmarks/runtime-performance.tsx) (numbers in [`docs/src/data/benchmarks.ts`](../../docs/src/data/benchmarks.ts)) — this README covers methodology and how to reproduce them.
+
+## Memory phase
 
 Each benchmark runs in its own child process (`node --expose-gc --no-flush-bytecode`, so V8 does not drop compiled code mid-measurement) and follows this pattern:
 
@@ -16,11 +19,40 @@ Each benchmark runs in its own child process (`node --expose-gc --no-flush-bytec
 
 The lifecycle is wrapped in a function so its locals (adapter references captured by `measureMemory` tuples) truly go out of scope when it returns — without that, destructured refs would pin adapters past `close()`.
 
-## Why heap snapshot beats `process.memoryUsage().heapUsed`
+### Why heap snapshot beats `process.memoryUsage().heapUsed`
 
 `heapUsed` over-reports retention significantly: it includes V8 heap fragmentation, the code arena, and internal accounting that isn't part of the live JS object graph. On the same workload, `heapUsed` shows +330–600 KB of "retention" while the snapshot shows ~10 KB of live JS objects plus 40–190 KB of JIT-compiled code. The snapshot is the truth — `heapUsed` includes a lot of V8 free-list pages and metadata that aren't actually retained anything.
 
 The framework reports `heapUsed` for transparency but the snapshot-based numbers (live JS + JIT code) are the meaningful ones.
+
+## Profile phase
+
+Each adapter runs the same `runLifecycle` in a separate child process from the memory phase, so heap snapshots and forced GC never overlap a profile:
+
+1. **Bring up infrastructure**, as in the memory phase.
+2. **Warmup run** of 2,000 jobs, discarded.
+3. **Profiled run** of 2,000 jobs. The CPU profiler (100 µs sampling) and the sampling heap profiler (4 KB interval, counting objects already collected by GC) run through `node:inspector/promises` only around the work step, so setup, migrations and `close()` stay out of the profile.
+
+The work step creates chains one transaction at a time while a worker completes them, and finishes once the attempt handler has completed every job, so the cost per job covers creation and processing.
+
+Queuert packages load from their built `dist` output, the code published to npm: `src/dist-hooks.ts` resolves `queuert` and `@queuert/*` to their `publishConfig.exports`, while the benchmark itself runs as TypeScript through Node's type stripping. Before writing the profiles, every frame is mapped back to its TypeScript file, line and function name through the source maps of `dist`.
+
+Each sample is put in one category by the file of its frame:
+
+- `core` — `packages/core` and `packages-internal/helpers`
+- `adapter` — the other `packages/*` and `packages-internal/typed-sql`
+- `dependencies` — anything under `node_modules` (drivers, OpenTelemetry SDK, …)
+- `runtime` — Node internals, V8 builtins, `(program)` and `(garbage collector)`
+- `harness` — the benchmark itself and the example providers it uses
+- `idle` — waiting on I/O; left out of the CPU total
+
+## Output
+
+- `results/memory/<adapter>.txt` — the memory summary.
+- `results/profile/<adapter>.txt` — CPU µs and allocated KB per job by category, the process CPU time from `process.cpuUsage()`, and the top functions by self time and by self allocation.
+- `profiles/<adapter>.cpuprofile` and `profiles/<adapter>.heapprofile` — the raw profiles with TypeScript locations, for Chrome DevTools (Performance / Memory panels) or [speedscope](https://www.speedscope.app/).
+
+`results/`, `profiles/` and `heap-dumps/` are git-ignored.
 
 ## Running
 
@@ -33,11 +65,13 @@ pnpm start:notify-postgres # PostgreSQL notify adapter
 pnpm start:notify-nats     # NATS notify adapter
 pnpm start:otel            # OpenTelemetry observability adapter
 pnpm start:dashboard       # Dashboard
+
+pnpm start:state-sqlite --profile  # one phase only (--memory or --profile)
 ```
 
-Container-based measurements require Docker.
+Both phases run by default. Each run first builds the queuert packages; pass `--skip-build` to reuse the existing `dist` output. The measurements require Node.js 24 (see `.nvmrc`), and container-based ones require Docker.
 
-Heap snapshots are streamed in-memory by default — no disk I/O. Set `HEAP_DUMPS=1` to also persist them to `heap-dumps/` for inspection in Chrome DevTools' Memory → Comparison view (or via `scripts/diff-snapshots.ts`).
+Heap snapshots are streamed in-memory by default — no disk I/O. Set `HEAP_DUMPS=1` to also persist them to `heap-dumps/` for inspection in Chrome DevTools' Memory → Comparison view.
 
 ## Adding a new benchmark
 
@@ -45,7 +79,7 @@ Use the `runDoubleRunBenchmark` scaffold in `src/utils.ts`. Provide:
 
 - `name` — slug used in heap snapshot filenames
 - `setupInfrastructure()` — returns shared infra (containers, driver clients) plus a teardown function. Logs its own per-step deltas using `measureMemory`/`diffMemory`.
-- `runLifecycle(infra, ctx)` — builds queuert adapters, does work, closes everything. Called twice (warmup + measured). Use `ctx.step` for setup steps and `ctx.processStep` for the work step (the latter records the in-flight peak).
+- `runLifecycle(infra, ctx)` — builds queuert adapters, does work, closes everything. Called twice per phase (warmup + measured). Use `ctx.step` for setup steps and `ctx.processStep` for the work step (it records the in-flight peak in the memory phase and is the profiled window in the profile phase). The work step processes `ctx.jobCount` jobs: 100 in the memory phase, 2,000 in the profile phase.
 
 ## Reading the per-step output
 

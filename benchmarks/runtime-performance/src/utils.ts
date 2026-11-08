@@ -1,5 +1,5 @@
 /**
- * Shared utilities for memory footprint measurements.
+ * Shared utilities for runtime performance measurements.
  *
  * The {@link runDoubleRunBenchmark} helper drives the full benchmark lifecycle:
  * a discarded warmup run (which JIT-compiles queuert code paths and triggers
@@ -11,9 +11,12 @@
 
 import * as fs from "node:fs";
 import * as path from "node:path";
+import { fileURLToPath } from "node:url";
 import * as v8 from "node:v8";
 
 import { defineJobTypes } from "queuert";
+
+import { runProfile } from "./profile.ts";
 
 // ============================================================================
 // Memory measurement utilities
@@ -101,13 +104,17 @@ export function printHeader(title: string): void {
   }
 }
 
-export function printSummary(rows: [string, number][]): void {
+export function printSummary(name: string, rows: [string, number][]): void {
   console.log("\n───────────────────────────────────────────────────────────────");
   console.log("  SUMMARY");
   console.log("───────────────────────────────────────────────────────────────");
-  for (const [label, bytes] of rows) {
-    console.log(`  ${label.padEnd(28)}`, formatBytes(bytes));
-  }
+  const lines = rows.map(([label, bytes]) => `  ${label.padEnd(31)}${formatBytes(bytes)}`);
+  console.log(lines.join("\n"));
+  fs.mkdirSync(MEMORY_RESULTS_DIR, { recursive: true });
+  fs.writeFileSync(
+    path.join(MEMORY_RESULTS_DIR, `${name}.txt`),
+    [`-- ${name}, ${MEMORY_JOB_COUNT} jobs`, "", ...lines].join("\n") + "\n",
+  );
 }
 
 // ============================================================================
@@ -122,11 +129,28 @@ export const jobTypes = defineJobTypes<{
   };
 }>();
 
+/** Resolves `done` once `record` has been called `target` times. */
+export const createCompletionCounter = (
+  target: number,
+): { record: () => void; done: Promise<void> } => {
+  const { promise, resolve } = Promise.withResolvers<void>();
+  let recorded = 0;
+  return {
+    record: () => {
+      recorded++;
+      if (recorded === target) resolve();
+    },
+    done: promise,
+  };
+};
+
 // ============================================================================
 // Double-run benchmark scaffold
 // ============================================================================
 
 const HEAP_DUMP_DIR = path.resolve(process.cwd(), "heap-dumps");
+const MEMORY_RESULTS_DIR = fileURLToPath(new URL("../results/memory/", import.meta.url));
+const MEMORY_JOB_COUNT = 100;
 
 /**
  * Capture a heap snapshot and return the live-object size, split into
@@ -199,6 +223,8 @@ const liveSizeFromSnapshotJson = (json: string): { code: number; nonCode: number
  * track the peak.
  */
 export type LifecycleContext = {
+  /** Number of chains the work step creates and awaits. */
+  jobCount: number;
   /** Wrap a queuert setup step: runs `fn`, logs delta from infra baseline, returns the result. */
   step: <T>(label: string, fn: () => Promise<T>) => Promise<T>;
   /** Wrap the job-processing step: same as `step` but also records the post-step heap delta as the in-flight peak. */
@@ -224,7 +250,7 @@ export type DoubleRunBenchmarkOptions<TInfra> = {
   runLifecycle: (infra: TInfra, ctx: LifecycleContext) => Promise<void>;
 };
 
-export async function runDoubleRunBenchmark<TInfra>({
+async function runMemory<TInfra>({
   name,
   setupInfrastructure,
   runLifecycle,
@@ -248,6 +274,7 @@ export async function runDoubleRunBenchmark<TInfra>({
   const originalWrite = process.stdout.write.bind(process.stdout);
   process.stdout.write = () => true;
   const warmupCtx: LifecycleContext = {
+    jobCount: MEMORY_JOB_COUNT,
     step: async <T>(label: string, fn: () => Promise<T>): Promise<T> => {
       const [before, after, result] = await measureMemory(fn);
       console.log(`\n${label} (warmup):`);
@@ -282,6 +309,7 @@ export async function runDoubleRunBenchmark<TInfra>({
   let peakHeapDelta = 0;
   let setupHeapDelta = 0;
   const measuredCtx: LifecycleContext = {
+    jobCount: MEMORY_JOB_COUNT,
     step: async <T>(label: string, fn: () => Promise<T>): Promise<T> => {
       const [, after, result] = await measureMemory(fn);
       console.log(`\n${label} (delta from infra baseline):`);
@@ -314,7 +342,7 @@ export async function runDoubleRunBenchmark<TInfra>({
   // ─── Phase 7: tear down infrastructure ───
   await teardown();
 
-  printSummary([
+  printSummary(name, [
     ["Queuert setup overhead:", setupHeapDelta],
     ["Queuert in-flight (peak):", peakHeapDelta],
     ["After close (heapUsed):", afterQueuertClose.heapUsed - infraBaseline.heapUsed],
@@ -322,3 +350,18 @@ export async function runDoubleRunBenchmark<TInfra>({
     ["After close (V8 JIT code):", afterCloseLive.code - infraBaselineLive.code],
   ]);
 }
+
+/**
+ * Runs one phase of the benchmark, picked by `--phase=memory` (the default) or `--phase=profile`.
+ * Each phase runs in its own child process.
+ */
+export const runDoubleRunBenchmark = async <TInfra>(
+  options: DoubleRunBenchmarkOptions<TInfra>,
+): Promise<void> => {
+  const phase = process.argv.find((arg) => arg.startsWith("--phase="))?.split("=")[1] ?? "memory";
+  if (phase === "profile") {
+    await runProfile(options);
+    return;
+  }
+  await runMemory(options);
+};

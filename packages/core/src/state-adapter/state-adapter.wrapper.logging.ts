@@ -15,15 +15,21 @@ export const wrapStateAdapterWithLogging = <
   const wrap = <T extends (...args: never[]) => Promise<unknown>>(
     operationName: keyof StateAdapter<any, any, any>,
     fn: T,
-  ): T =>
-    (async (...args) => {
+  ): T => {
+    const onError = (error: unknown): never => {
+      observabilityHelper.stateAdapterError(operationName, error);
+      throw error;
+    };
+    // oxlint-disable-next-line typescript/promise-function-async -- an async wrapper would add a promise per adapter call
+    return ((...args) => {
       try {
-        return await fn(...args);
+        return fn(...args).catch(onError);
       } catch (error) {
-        observabilityHelper.stateAdapterError(operationName, error);
-        throw error;
+        // oxlint-disable-next-line typescript/prefer-promise-reject-errors -- re-rejecting a caught error
+        return Promise.reject(error).catch(onError);
       }
     }) as T;
+  };
 
   return {
     // Infrastructure methods - pass through without wrapping

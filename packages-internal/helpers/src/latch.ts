@@ -8,33 +8,33 @@ export type ResettableLatch = Latch & {
   reset: () => void;
 };
 
-export const createResettableLatch = (defaultMessage = "Latch is tripped"): ResettableLatch => {
-  let tripped = false;
-  return {
-    get tripped() {
-      return tripped;
-    },
-    trip: () => {
-      if (tripped) return false;
-      tripped = true;
-      return true;
-    },
-    throwIfTripped: (message = defaultMessage) => {
-      if (tripped) throw new Error(message);
-    },
-    reset: () => {
-      tripped = false;
-    },
-  };
-};
+class OneShotLatch implements Latch {
+  tripped = false;
+  private readonly defaultMessage: string;
 
-export const createLatch = (defaultMessage?: string): Latch => {
-  const latch = createResettableLatch(defaultMessage);
-  return {
-    get tripped() {
-      return latch.tripped;
-    },
-    trip: latch.trip,
-    throwIfTripped: latch.throwIfTripped,
-  };
-};
+  constructor(defaultMessage: string) {
+    this.defaultMessage = defaultMessage;
+  }
+
+  trip(): boolean {
+    if (this.tripped) return false;
+    this.tripped = true;
+    return true;
+  }
+
+  throwIfTripped(message = this.defaultMessage): void {
+    if (this.tripped) throw new Error(message);
+  }
+}
+
+class ResettableLatchImpl extends OneShotLatch implements ResettableLatch {
+  reset(): void {
+    this.tripped = false;
+  }
+}
+
+export const createResettableLatch = (defaultMessage = "Latch is tripped"): ResettableLatch =>
+  new ResettableLatchImpl(defaultMessage);
+
+export const createLatch = (defaultMessage = "Latch is tripped"): Latch =>
+  new OneShotLatch(defaultMessage);

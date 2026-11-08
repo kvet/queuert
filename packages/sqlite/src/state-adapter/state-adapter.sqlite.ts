@@ -1534,7 +1534,7 @@ WHERE EXISTS (
       AND status = 'pending'
       AND scheduled_at <= datetime('now', 'subsec')
     ORDER BY scheduled_at ASC
-    LIMIT ?
+    LIMIT CAST(? AS INTEGER)
   )
 RETURNING *, ${chainColumnsReturning("{{table_prefix}}job")}, EXISTS (
   SELECT 1 FROM {{table_prefix}}job_blocker jb WHERE jb.job_id = {{table_prefix}}job.id
@@ -1760,6 +1760,29 @@ ORDER BY b."index" ASC
     },
 
     unblockJobs: async ({ txCtx, blockedByChainId }) => {
+      const [dependents] = await executeTypedSql({
+        txCtx,
+        sql: templateCache.getOrCompute("hasChainDependents", () =>
+          applyTemplate(
+            sql(
+              `
+SELECT EXISTS (
+  SELECT 1 FROM {{table_prefix}}job_blocker jb WHERE jb.blocked_by_chain_id = ?
+) AS has_dependents
+`,
+              {
+                id: "hasChainDependents",
+                params: [idDataType],
+                columns: { has_dependents: t.number() },
+                readOnly: true,
+              },
+            ),
+          ),
+        ),
+        params: [blockedByChainId],
+      });
+      if (dependents.has_dependents === 0) return [];
+
       await executeTypedSql({
         txCtx,
         sql: templateCache.getOrCompute("scheduleBlockedJobs", () =>

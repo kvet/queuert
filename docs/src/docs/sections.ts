@@ -198,9 +198,9 @@ export const siteSections: SiteSection[] = [
         label: "Suites",
         slugs: [
           "benchmarks/processing-capacity",
-          "benchmarks/memory-footprint",
           "benchmarks/query-performance",
           "benchmarks/type-complexity",
+          "benchmarks/runtime-performance",
         ],
       },
     ],

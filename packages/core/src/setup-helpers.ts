@@ -7,6 +7,7 @@ import { type NotifyHelper, createNotifyHelper } from "./notify-adapter/notify-h
 import type { Log } from "./observability-adapter/log.ts";
 import { createNoopObservabilityAdapter } from "./observability-adapter/observability-adapter.noop.ts";
 import type { ObservabilityAdapter } from "./observability-adapter/observability-adapter.ts";
+import { createNoopObservabilityHelper } from "./observability-adapter/observability-helper.noop.ts";
 import {
   type ObservabilityHelper,
   createObservabilityHelper,
@@ -32,8 +33,13 @@ export const createHelpers = ({
   observabilityHelper: ObservabilityHelper;
   jobTypes: JobTypes;
 } => {
-  const observabilityAdapter = observabilityAdapterOption ?? createNoopObservabilityAdapter();
-  const observabilityHelper = createObservabilityHelper({ log, adapter: observabilityAdapter });
+  const observabilityHelper =
+    log === undefined && observabilityAdapterOption === undefined
+      ? createNoopObservabilityHelper()
+      : createObservabilityHelper({
+          log,
+          adapter: observabilityAdapterOption ?? createNoopObservabilityAdapter(),
+        });
   const stateAdapter = wrapStateAdapterWithLogging({
     stateAdapter: stateAdapterOption,
     observabilityHelper,

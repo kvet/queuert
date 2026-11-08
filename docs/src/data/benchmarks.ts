@@ -63,6 +63,34 @@ export const memoryGroups = [
   },
 ] satisfies BenchGroup[];
 
+export const cpuGroups = [
+  {
+    rows: [
+      { label: "notify-redis", values: [202, 5, 52, 292] },
+      { label: "notify-postgres", values: [252, 5, 149, 356] },
+      { label: "notify-nats", values: [188, 4, 39, 226] },
+      { label: "state-sqlite", values: [97, 56, 23, 361] },
+      { label: "state-postgres", values: [419, 214, 752, 1375] },
+      { label: "dashboard", values: [96, 0, 0, 64] },
+      { label: "otel", values: [115, 1, 15, 72] },
+    ],
+  },
+] satisfies BenchGroup[];
+
+export const allocationGroups = [
+  {
+    rows: [
+      { label: "notify-redis", values: [120.3] },
+      { label: "notify-postgres", values: [122.7] },
+      { label: "notify-nats", values: [110.0] },
+      { label: "state-sqlite", values: [134.8] },
+      { label: "state-postgres", values: [183.8] },
+      { label: "dashboard", values: [87.0] },
+      { label: "otel", values: [99.2] },
+    ],
+  },
+] satisfies BenchGroup[];
+
 export const typeGroups = [
   {
     rows: [
@@ -353,6 +381,10 @@ export const benchmarkHeadlines = {
   retainedAfterClose: {
     min: Math.min(...allValues(memoryGroups, 2)),
     max: Math.max(...allValues(memoryGroups, 2)),
+  },
+  coreCpuPerJob: {
+    min: Math.min(...allValues(cpuGroups, 0)),
+    max: Math.max(...allValues(cpuGroups, 0)),
   },
   postgresOperational: {
     min: Math.min(...allValues(operationalGroups, 0)),

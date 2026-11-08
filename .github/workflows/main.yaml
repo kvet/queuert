@@ -121,13 +121,13 @@ jobs:
         env:
           GITHUB_TOKEN: ${{ github.token }}
 
-  benchmark-memory-footprint:
+  benchmark-runtime-performance:
     needs: [check]
 
-    name: Benchmark / Memory Footprint
+    name: Benchmark / Runtime Performance
     runs-on: ubuntu-latest
 
-    timeout-minutes: 5
+    timeout-minutes: 10
 
     steps:
       - uses: actions/checkout@v4
@@ -136,8 +136,8 @@ jobs:
 
       - uses: ./.github/actions/setup-repo
 
-      - name: Memory Footprint
-        run: pnpm --filter './benchmarks/memory-footprint' start
+      - name: Runtime Performance
+        run: pnpm --filter './benchmarks/runtime-performance' start
 
   benchmark-processing-capacity:
     needs: [check]
@@ -203,7 +203,7 @@ jobs:
         test,
         examples,
         docs,
-        benchmark-memory-footprint,
+        benchmark-runtime-performance,
         benchmark-processing-capacity,
         benchmark-query-performance,
         benchmark-type-complexity,

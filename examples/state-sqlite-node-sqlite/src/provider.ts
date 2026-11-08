@@ -44,20 +44,11 @@ export const createNodeSqliteStateProvider = ({
       }
     },
     isTransaction: (txCtx) => txCtx.db.isTransaction,
-    executeSql: async ({ txCtx, id, sql, params, columnTypes, readOnly }) => {
+    executeSql: async ({ txCtx, id, sql, params, readOnly }) => {
       const run = (): unknown[] => {
         const database = txCtx?.db ?? db;
-        const prepare = (): StatementSync =>
-          id !== undefined ? prepareCached(id, sql) : database.prepare(sql);
-        if (Object.keys(columnTypes).length > 0) {
-          return prepare().all(...((params ?? []) as SQLInputValue[]));
-        }
-        if (params && params.length > 0) {
-          prepare().run(...(params as SQLInputValue[]));
-        } else {
-          database.exec(sql);
-        }
-        return [] as unknown[];
+        const statement = id !== undefined ? prepareCached(id, sql) : database.prepare(sql);
+        return statement.all(...(params as SQLInputValue[]));
       };
       if (txCtx) return run();
       using _h = readOnly ? await lock.acquireRead() : await lock.acquireWrite();

@@ -9,7 +9,7 @@ import {
 export const meta = {
   title: "Benchmarks",
   description:
-    "Throughput, memory, query latency and type-checking cost, measured by the suites in the repository.",
+    "Throughput, query latency, type-checking cost, memory and CPU, measured by the suites in the repository.",
 };
 
 const count = (value: number) => `~${value.toLocaleString("en-US")}`;
@@ -37,14 +37,6 @@ const Page = () => (
           detail: `${count(headlines.sqliteCompletion)} jobs/s on SQLite; ${count(headlines.postgresBatchedCreation)} chains/s batched creation on PostgreSQL.`,
         },
         {
-          suite: "Memory footprint",
-          href: "/benchmarks/memory-footprint/",
-          value: `~${headlines.retainedAfterClose.min}–${headlines.retainedAfterClose.max}`,
-          unit: "KB",
-          caption: "Live JS heap left after close(), for every package.",
-          detail: "V8 hidden classes, not Queuert state: nothing grows per job or per lifecycle.",
-        },
-        {
           suite: "Query performance",
           href: "/benchmarks/query-performance/",
           value: `${Math.floor(headlines.postgresOperational.min)}–${Math.ceil(headlines.postgresOperational.max)}`,
@@ -59,6 +51,14 @@ const Page = () => (
           unit: "ms",
           caption: "TypeScript 7 type-check of a 100-type chain.",
           detail: `${seconds(headlines.typeCheck2500[1])} for 2,500 job types; cost grows roughly linearly beyond a fixed baseline.`,
+        },
+        {
+          suite: "Runtime performance",
+          href: "/benchmarks/runtime-performance/",
+          value: `~${headlines.retainedAfterClose.min}–${headlines.retainedAfterClose.max}`,
+          unit: "KB",
+          caption: "Live JS heap left after close(), for every package.",
+          detail: `${count(headlines.coreCpuPerJob.min)}–${headlines.coreCpuPerJob.max} µs of Queuert core CPU per job; nothing left after close grows per job or per lifecycle.`,
         },
       ]}
     />

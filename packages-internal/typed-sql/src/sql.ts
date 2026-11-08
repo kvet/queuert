@@ -93,20 +93,34 @@ export const sql = <
   columns: types?.columns ?? ({} as TColumns),
 });
 
-export const extractParamTypes = (params: readonly DataType[]): Record<number, RuntimeType> => {
+const paramTypesCache = new WeakMap<readonly DataType[], Readonly<Record<number, RuntimeType>>>();
+const columnTypesCache = new WeakMap<
+  Record<string, DataType>,
+  Readonly<Record<string, RuntimeType>>
+>();
+
+export const extractParamTypes = (
+  params: readonly DataType[],
+): Readonly<Record<number, RuntimeType>> => {
+  const cached = paramTypesCache.get(params);
+  if (cached !== undefined) return cached;
   const result: Record<number, RuntimeType> = {};
   for (let i = 0; i < params.length; i++) {
     result[i] = params[i].type;
   }
+  paramTypesCache.set(params, Object.freeze(result));
   return result;
 };
 
 export const extractColumnTypes = (
   columns: Record<string, DataType>,
-): Record<string, RuntimeType> => {
+): Readonly<Record<string, RuntimeType>> => {
+  const cached = columnTypesCache.get(columns);
+  if (cached !== undefined) return cached;
   const result: Record<string, RuntimeType> = {};
   for (const [key, value] of Object.entries(columns)) {
     result[key] = value.type;
   }
+  columnTypesCache.set(columns, Object.freeze(result));
   return result;
 };

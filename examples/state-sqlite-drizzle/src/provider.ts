@@ -23,6 +23,26 @@ export const createDrizzleSqliteStateProvider = ({
     return stmt;
   };
 
+  const runSql = (
+    database: Database.Database,
+    {
+      id,
+      sql,
+      params,
+      columnTypes,
+    }: {
+      id: string | undefined;
+      sql: string;
+      params: unknown[];
+      columnTypes: Record<string, unknown>;
+    },
+  ): unknown[] => {
+    const statement = id !== undefined ? prepareCached(id, sql) : database.prepare(sql);
+    if (Object.keys(columnTypes).length > 0) return statement.all(...params);
+    statement.run(...params);
+    return [];
+  };
+
   return {
     withTransaction: async (fn) => {
       using _h = await lock.acquireWrite();
@@ -44,23 +64,9 @@ export const createDrizzleSqliteStateProvider = ({
     },
     isTransaction: (txCtx) => txCtx.db.inTransaction,
     executeSql: async ({ txCtx, id, sql, params, columnTypes, readOnly }) => {
-      const run = (): unknown[] => {
-        const database = txCtx?.db ?? db;
-        const prepare = (): Database.Statement =>
-          id !== undefined ? prepareCached(id, sql) : database.prepare(sql);
-        if (Object.keys(columnTypes).length > 0) {
-          return prepare().all(...(params ?? []));
-        }
-        if (params && params.length > 0) {
-          prepare().run(...params);
-        } else {
-          database.exec(sql);
-        }
-        return [];
-      };
-      if (txCtx) return run();
+      if (txCtx) return runSql(txCtx.db, { id, sql, params, columnTypes });
       using _h = readOnly ? await lock.acquireRead() : await lock.acquireWrite();
-      return run();
+      return runSql(db, { id, sql, params, columnTypes });
     },
     close: async () => {
       stmtCache.clear();

@@ -33,4 +33,13 @@ describe("extractParamTypes / extractColumnTypes", () => {
       tags: "array",
     });
   });
+
+  it("returns the same record for the same params tuple or columns record", () => {
+    const params = [t.number()];
+    const columns = { id: t.uuid() };
+
+    expect(extractParamTypes(params)).toBe(extractParamTypes(params));
+    expect(extractColumnTypes(columns)).toBe(extractColumnTypes(columns));
+    expect(extractColumnTypes({ id: t.uuid() })).not.toBe(extractColumnTypes(columns));
+  });
 });

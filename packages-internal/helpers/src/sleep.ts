@@ -55,22 +55,42 @@ export const sleep = async (
  * @param options - Optional jitter and abort signal
  * @returns the promise's value when it resolves first, `undefined` when the sleep completes first
  */
-export const raceWithSleep = async <T>(
+// oxlint-disable-next-line typescript/promise-function-async -- an async wrapper would add a promise and ticks per wait
+export const raceWithSleep = <T>(
   promise: Promise<T>,
   ms: number,
-  options?: { jitterMs?: number; signal?: AbortSignal },
-): Promise<T | undefined> => {
-  const cleanupController = new AbortController();
-  const sleepSignal = options?.signal
-    ? AbortSignal.any([options.signal, cleanupController.signal])
-    : cleanupController.signal;
+  { jitterMs = 0, signal }: { jitterMs?: number; signal?: AbortSignal } = {},
+): Promise<T | undefined> =>
+  new Promise<T | undefined>((resolve, reject) => {
+    let clearLongTimeout = (): void => {};
+    const settle = (): void => {
+      clearLongTimeout();
+      signal?.removeEventListener("abort", onAbort);
+    };
+    const onAbort = (): void => {
+      settle();
+      resolve(undefined);
+    };
 
-  try {
-    return await Promise.race([
-      promise,
-      sleep(ms, { jitterMs: options?.jitterMs, signal: sleepSignal }).then(() => undefined),
-    ]);
-  } finally {
-    cleanupController.abort();
-  }
-};
+    promise.then(
+      (value) => {
+        settle();
+        resolve(value);
+      },
+      (error: unknown) => {
+        settle();
+        // oxlint-disable-next-line typescript/prefer-promise-reject-errors -- forwarding the raced promise's rejection
+        reject(error);
+      },
+    );
+
+    if (signal?.aborted) {
+      queueMicrotask(onAbort);
+      return;
+    }
+    clearLongTimeout = setLongTimeout(
+      onAbort,
+      Math.max(0, ms + (jitterMs ? Math.floor(Math.random() * jitterMs) - jitterMs / 2 : 0)),
+    );
+    signal?.addEventListener("abort", onAbort, { once: true });
+  });

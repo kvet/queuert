@@ -1,17 +1,17 @@
 {
-  "name": "benchmark-memory-footprint",
+  "name": "benchmark-runtime-performance",
   "version": "0.0.1",
   "private": true,
   "type": "module",
   "scripts": {
-    "start": "node --expose-gc --no-flush-bytecode src/index.ts --all",
-    "start:state-postgres": "node --expose-gc --no-flush-bytecode src/index.ts --state-postgres",
-    "start:state-sqlite": "node --expose-gc --no-flush-bytecode src/index.ts --state-sqlite",
-    "start:notify-redis": "node --expose-gc --no-flush-bytecode src/index.ts --notify-redis",
-    "start:notify-postgres": "node --expose-gc --no-flush-bytecode src/index.ts --notify-postgres",
-    "start:notify-nats": "node --expose-gc --no-flush-bytecode src/index.ts --notify-nats",
-    "start:otel": "node --expose-gc --no-flush-bytecode src/index.ts --otel",
-    "start:dashboard": "node --expose-gc --no-flush-bytecode src/index.ts --dashboard",
+    "start": "node src/index.ts --all",
+    "start:state-postgres": "node src/index.ts --state-postgres",
+    "start:state-sqlite": "node src/index.ts --state-sqlite",
+    "start:notify-redis": "node src/index.ts --notify-redis",
+    "start:notify-postgres": "node src/index.ts --notify-postgres",
+    "start:notify-nats": "node src/index.ts --notify-nats",
+    "start:otel": "node src/index.ts --otel",
+    "start:dashboard": "node src/index.ts --dashboard",
     "typecheck": "tsc --noEmit"
   },
   "dependencies": {

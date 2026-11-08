@@ -14,6 +14,7 @@ import {
 } from "queuert";
 
 import {
+  createCompletionCounter,
   diffMemory,
   jobTypes,
   measureMemory,
@@ -46,7 +47,9 @@ await runDoubleRunBenchmark<Infra>({
       },
     };
   },
-  runLifecycle: async ({ stateProvider }, { step, processStep }) => {
+  runLifecycle: async ({ stateProvider }, { step, processStep, jobCount }) => {
+    const completions = createCompletionCounter(jobCount);
+
     const notifyAdapter = await step("After creating notify adapter", async () =>
       createInProcessNotifyAdapter(),
     );
@@ -66,12 +69,15 @@ await runDoubleRunBenchmark<Infra>({
           jobTypes,
           processors: {
             "test-job": {
-              attemptHandler: async ({ complete }) =>
-                withTxHooks(async (txHooks) =>
+              attemptHandler: async ({ complete }) => {
+                const result = await withTxHooks(async (txHooks) =>
                   stateProvider.withTransaction(async (ctx) =>
                     complete({ ...ctx, txHooks, output: { processed: true } }),
                   ),
-                ),
+                );
+                completions.record();
+                return result;
+              },
             },
           },
         }),
@@ -80,10 +86,9 @@ await runDoubleRunBenchmark<Infra>({
       return { client, stopWorkerRunner };
     });
 
-    await processStep("After processing 100 jobs", async () => {
-      const promises = [];
-      for (let i = 0; i < 100; i++) {
-        const chain = await withTxHooks(async (txHooks) =>
+    await processStep(`After processing ${jobCount} jobs`, async () => {
+      for (let i = 0; i < jobCount; i++) {
+        await withTxHooks(async (txHooks) =>
           stateProvider.withTransaction(async (ctx) =>
             setup.client.createChain({
               ...ctx,
@@ -93,9 +98,8 @@ await runDoubleRunBenchmark<Infra>({
             }),
           ),
         );
-        promises.push(setup.client.awaitChain(chain, { timeoutMs: 5000 }));
       }
-      await Promise.all(promises);
+      await completions.done;
     });
 
     await setup.stopWorkerRunner();
