@@ -4,7 +4,7 @@ import { Redis } from "ioredis";
 import { runNotifyAdapterConformance } from "queuert/conformance";
 import { test } from "vitest";
 
-import { createIoredisNotifyProvider } from "./provider.js";
+import { createIoredisNotifyProvider } from "./provider.ts";
 
 // #region conformance
 test("notify-redis-ioredis provider passes notify adapter conformance", async () => {

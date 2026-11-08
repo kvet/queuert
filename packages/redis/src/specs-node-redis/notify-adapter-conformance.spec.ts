@@ -3,8 +3,8 @@ import { type NotifyConformanceFixture, notifyAdapterConformanceTestSuite } from
 import { type RedisClientType, createClient } from "redis";
 import { it as baseIt, describe } from "vitest";
 
-import { createRedisNotifyAdapter } from "../notify-adapter/notify-adapter.redis.js";
-import { createNodeRedisNotifyProvider } from "./notify-provider.node-redis.js";
+import { createRedisNotifyAdapter } from "../notify-adapter/notify-adapter.redis.ts";
+import { createNodeRedisNotifyProvider } from "./notify-provider.node-redis.ts";
 
 const it = extendWithRedis(baseIt, import.meta.url);
 

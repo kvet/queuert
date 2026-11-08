@@ -1,23 +1,23 @@
 import { describe, it } from "vitest";
 
-import { extendWithStateInProcess } from "../state-adapter/state-adapter.in-process.spec-helper.js";
-import { awaitChainTestSuite } from "../suites/await-chain.test-suite.js";
-import { blockerChainsTestSuite } from "../suites/blocker-chains.test-suite.js";
-import { chainsTestSuite } from "../suites/chains.test-suite.js";
-import { createChainsTestSuite } from "../suites/create-chains.test-suite.js";
-import { notifyTestSuite } from "../suites/notify.test-suite.js";
-import { processErrorHandlingTestSuite } from "../suites/process-error-handling.test-suite.js";
-import { processTestSuite } from "../suites/process.test-suite.js";
-import { rescheduleJobTestSuite } from "../suites/reschedule-job.test-suite.js";
-import { schedulingTestSuite } from "../suites/scheduling.test-suite.js";
+import { extendWithStateInProcess } from "../state-adapter/state-adapter.in-process.spec-helper.ts";
+import { awaitChainTestSuite } from "../suites/await-chain.test-suite.ts";
+import { blockerChainsTestSuite } from "../suites/blocker-chains.test-suite.ts";
+import { chainsTestSuite } from "../suites/chains.test-suite.ts";
+import { createChainsTestSuite } from "../suites/create-chains.test-suite.ts";
+import { notifyTestSuite } from "../suites/notify.test-suite.ts";
+import { processErrorHandlingTestSuite } from "../suites/process-error-handling.test-suite.ts";
+import { processTestSuite } from "../suites/process.test-suite.ts";
+import { rescheduleJobTestSuite } from "../suites/reschedule-job.test-suite.ts";
+import { schedulingTestSuite } from "../suites/scheduling.test-suite.ts";
 import {
   extendWithCommon,
   extendWithNotifyInProcess,
   extendWithResourceLeakDetection,
-} from "../suites/spec-context.spec-helper.js";
-import { workerTestSuite } from "../suites/worker.test-suite.js";
-import { workerlessCompletionTestSuite } from "../suites/workerless-completion.test-suite.js";
-import { notifyResilienceTestSuite, stateResilienceTestSuite } from "../testing.js";
+} from "../suites/spec-context.spec-helper.ts";
+import { workerTestSuite } from "../suites/worker.test-suite.ts";
+import { workerlessCompletionTestSuite } from "../suites/workerless-completion.test-suite.ts";
+import { notifyResilienceTestSuite, stateResilienceTestSuite } from "../testing.ts";
 
 const inProcessInProcessIt = extendWithResourceLeakDetection(
   extendWithNotifyInProcess(extendWithCommon(extendWithStateInProcess(it))),

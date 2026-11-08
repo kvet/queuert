@@ -1,5 +1,5 @@
-import { type PgStateProvider } from "@queuert/postgres";
-import { type Knex } from "knex";
+import type { PgStateProvider } from "@queuert/postgres";
+import type { Knex } from "knex";
 
 export type KnexPgContext = { trx: Knex.Transaction };
 

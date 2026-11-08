@@ -1,4 +1,4 @@
-import { type Chain, type Job, type Worker } from "queuert";
+import type { Chain, Job, Worker } from "queuert";
 import { deserialize } from "seroval";
 
 export type UnknownJob = Job<string, string, string, string, unknown, unknown, true>;

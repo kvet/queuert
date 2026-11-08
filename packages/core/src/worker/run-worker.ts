@@ -6,26 +6,22 @@ import {
   sleep,
 } from "@queuert/helpers";
 
-import { type AnyAttemptMiddleware } from "../attempt-middleware/attempt-middleware.js";
-import { runAttempt } from "../attempt/attempt-handler.js";
-import { type BackoffConfig, calculateBackoffMs } from "../entities/backoff.js";
+import type { AnyAttemptMiddleware } from "../attempt-middleware/attempt-middleware.ts";
+import { runAttempt } from "../attempt/attempt-handler.ts";
+import { type BackoffConfig, calculateBackoffMs } from "../entities/backoff.ts";
 import {
   JobAttemptReclaimedError,
   WorkerAlreadyLiveError,
   WorkerLeaseLostError,
-} from "../errors.js";
+} from "../errors.ts";
 import {
   type InProcessWorkerProcessor,
   processorAttemptMiddlewareSymbol,
-} from "../job-type-processors/job-type-processors.js";
-import { type NotifyAdapter } from "../notify-adapter/notify-adapter.js";
-import { type Helpers } from "../setup-helpers.js";
-import {
-  type StateAdapter,
-  type StateJob,
-  type StateWorkerInfo,
-} from "../state-adapter/state-adapter.js";
-import { type WorkerLeaseConfig, holdLease } from "./worker-lease.js";
+} from "../job-type-processors/job-type-processors.ts";
+import type { NotifyAdapter } from "../notify-adapter/notify-adapter.ts";
+import type { Helpers } from "../setup-helpers.ts";
+import type { StateAdapter, StateJob, StateWorkerInfo } from "../state-adapter/state-adapter.ts";
+import { type WorkerLeaseConfig, holdLease } from "./worker-lease.ts";
 
 /** Per-processor runtime stamp carrying the middleware tuple of the originating slice. @internal */
 export type StampedProcessor = InProcessWorkerProcessor<any, any, any, any> & {

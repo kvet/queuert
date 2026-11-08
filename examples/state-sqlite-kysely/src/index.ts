@@ -10,7 +10,7 @@ import {
   withTransactionHooks,
 } from "queuert";
 
-import { createKyselySqliteStateProvider } from "./provider.js";
+import { createKyselySqliteStateProvider } from "./provider.ts";
 
 // Create in-memory SQLite database
 const sqliteDb = new BetterSqlite3(":memory:");

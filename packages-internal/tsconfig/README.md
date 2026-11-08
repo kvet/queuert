@@ -22,5 +22,7 @@ The base configuration includes:
 - `noEmit: true` - Type checking only (builds use tsdown)
 - `composite: true` - Project references support
 - `strict: true` - Maximum type safety
-- `isolatedModules: true` - Compatible with single-file transpilers
+- `allowImportingTsExtensions: true` - Relative imports use `.ts` specifiers, which Node resolves directly
+- `erasableSyntaxOnly: true` - Only syntax Node's type stripping can remove (no enums, namespaces, or parameter properties)
+- `verbatimModuleSyntax: true` - Imports are kept as written, so type-only imports must be marked with `type`
 - `skipLibCheck: true` - Skip type checking of declaration files

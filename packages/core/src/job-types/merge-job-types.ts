@@ -1,12 +1,12 @@
-import { DuplicateJobTypeError, UnknownJobTypeError } from "../errors.js";
-import { type BaseJobTypeDefinitions } from "./job-type.js";
+import { DuplicateJobTypeError, UnknownJobTypeError } from "../errors.ts";
+import type { BaseJobTypeDefinitions } from "./job-type.ts";
 import {
   type JobTypes,
   createNoopJobTypes,
   definitionsSymbol,
   externalDefinitionsSymbol,
   noopRegistries,
-} from "./job-types.js";
+} from "./job-types.ts";
 
 /** @internal Recursively union the definitions of each slice in a tuple, 4-at-a-time to avoid TS2589. */
 type SliceUnion<T> = T extends readonly [

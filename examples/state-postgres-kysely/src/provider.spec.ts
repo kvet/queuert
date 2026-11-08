@@ -5,7 +5,7 @@ import { Pool } from "pg";
 import { runStateAdapterConformance } from "queuert/conformance";
 import { test } from "vitest";
 
-import { createKyselyPgStateProvider } from "./provider.js";
+import { createKyselyPgStateProvider } from "./provider.ts";
 
 type Database = Record<string, never>;
 

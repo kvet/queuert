@@ -3,7 +3,7 @@ import { createHash } from "node:crypto";
 import { GenericContainer, Wait } from "testcontainers";
 import { type TestAPI, beforeAll } from "vitest";
 
-import { withContainerLock } from "./with-container-lock.js";
+import { withContainerLock } from "./with-container-lock.ts";
 
 /**
  * Runs a 6-node cluster (3 masters + 3 replicas) inside a single stock `redis` container, so the

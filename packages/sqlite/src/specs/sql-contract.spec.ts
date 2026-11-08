@@ -1,15 +1,15 @@
-import { type RuntimeType } from "@queuert/typed-sql";
+import type { RuntimeType } from "@queuert/typed-sql";
 import Database from "better-sqlite3";
-import { type StateAdapter } from "queuert";
+import type { StateAdapter } from "queuert";
 import { stateAdapterConformanceTestSuite } from "queuert/testing";
 import { describe, expect, it } from "vitest";
 
-import { createSqliteStateAdapter } from "../state-adapter/state-adapter.sqlite.js";
+import { createSqliteStateAdapter } from "../state-adapter/state-adapter.sqlite.ts";
 import {
   type BetterSqlite3Context,
   createBetterSqlite3Provider,
-} from "../state-provider/state-provider.better-sqlite3.js";
-import { type SqliteStateProvider } from "../state-provider/state-provider.sqlite.js";
+} from "../state-provider/state-provider.better-sqlite3.ts";
+import type { SqliteStateProvider } from "../state-provider/state-provider.sqlite.ts";
 
 const sqliteTypeMatchesRuntime = (sqliteType: string, runtime: RuntimeType): boolean => {
   const normalized = sqliteType.toUpperCase();

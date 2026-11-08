@@ -8,10 +8,10 @@ import {
   createInProcessWorker,
   createProcessors,
   defineJobTypes,
-} from "../index.js";
-import { extendWithStateInProcess } from "../state-adapter/state-adapter.in-process.spec-helper.js";
-import { extendWithCommon, extendWithNotifyInProcess } from "../suites/spec-context.spec-helper.js";
-import { createTransactionHooks } from "../transaction-hooks.js";
+} from "../index.ts";
+import { extendWithStateInProcess } from "../state-adapter/state-adapter.in-process.spec-helper.ts";
+import { extendWithCommon, extendWithNotifyInProcess } from "../suites/spec-context.spec-helper.ts";
+import { createTransactionHooks } from "../transaction-hooks.ts";
 
 type ExpectLogs = (
   expected: {

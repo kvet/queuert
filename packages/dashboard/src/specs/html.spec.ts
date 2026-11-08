@@ -1,7 +1,7 @@
 import { faviconDataUri } from "@queuert/ui/logo";
 import { describe, expect, it } from "vitest";
 
-import { renderHtml } from "../api/html.js";
+import { renderHtml } from "../api/html.ts";
 
 const MOCK_HTML = [
   "<!DOCTYPE html><html>",
@@ -27,7 +27,7 @@ describe("renderHtml", () => {
 describe("favicon", () => {
   // Needs the frontend build (`pnpm build`), which embeds it into assets.generated.ts.
   it("inlines the shared Queuert favicon into the built page", async () => {
-    const { assets } = await import("../api/routes/assets.generated.js");
+    const { assets } = await import("../api/routes/assets.generated.ts");
     const html = assets["/index.html"]?.content;
 
     expect(html).toBeDefined();

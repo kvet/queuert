@@ -1,6 +1,6 @@
-import { type Redis } from "ioredis";
+import type { Redis } from "ioredis";
 
-import { type RedisNotifyProvider } from "../notify-provider/notify-provider.redis.js";
+import type { RedisNotifyProvider } from "../notify-provider/notify-provider.redis.ts";
 
 export const createIoredisNotifyProvider = ({
   client,

@@ -1,7 +1,7 @@
-import { type StateChain } from "../state-adapter/state-adapter.js";
-import { type AnyChain } from "./chain.types.js";
+import type { StateChain } from "../state-adapter/state-adapter.ts";
+import type { AnyChain } from "./chain.types.ts";
 
-export type * from "./chain.types.js";
+export type * from "./chain.types.ts";
 
 export const mapStateChainToChain = (stateChain: StateChain): AnyChain => {
   const base = {

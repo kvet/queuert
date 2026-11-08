@@ -1,4 +1,4 @@
-import { WarningIcon } from "./icons.js";
+import { WarningIcon } from "./icons.tsx";
 
 export const ErrorMark = (props: { text: string }) => (
   <span class="inline-flex shrink-0 items-center gap-1 font-medium text-error-fg">

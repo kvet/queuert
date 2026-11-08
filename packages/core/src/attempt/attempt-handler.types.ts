@@ -1,25 +1,25 @@
-import { type AnyChain } from "../entities/chain.js";
-import { type AnyJob } from "../entities/job.js";
-import { type ScheduleOptions } from "../entities/schedule.js";
-import { type BaseJobTypeDefinitions } from "../job-types/job-type.js";
-import {
-  type AnyNewJob,
-  type ContinuedJob,
-  type JobTypeContinuation,
-  type JobTypeProperty,
-  type NewJob,
-  type OutputJob,
-  type RescheduledJob,
-  type ResolvedRunningJob,
-} from "../job-types/job-types.resolvers.js";
-import {
-  type BaseTxContext,
-  type GetStateAdapterJobId,
-  type GetStateAdapterTxContext,
-  type GetStateAdapterWorkerId,
-  type StateAdapter,
-} from "../state-adapter/state-adapter.js";
-import { type TransactionHooks } from "../transaction-hooks.js";
+import type { AnyChain } from "../entities/chain.ts";
+import type { AnyJob } from "../entities/job.ts";
+import type { ScheduleOptions } from "../entities/schedule.ts";
+import type { BaseJobTypeDefinitions } from "../job-types/job-type.ts";
+import type {
+  AnyNewJob,
+  ContinuedJob,
+  JobTypeContinuation,
+  JobTypeProperty,
+  NewJob,
+  OutputJob,
+  RescheduledJob,
+  ResolvedRunningJob,
+} from "../job-types/job-types.resolvers.ts";
+import type {
+  BaseTxContext,
+  GetStateAdapterJobId,
+  GetStateAdapterTxContext,
+  GetStateAdapterWorkerId,
+  StateAdapter,
+} from "../state-adapter/state-adapter.ts";
+import type { TransactionHooks } from "../transaction-hooks.ts";
 
 type AttemptContinueWithOutcome<
   TStateAdapter extends StateAdapter<any, any, any>,

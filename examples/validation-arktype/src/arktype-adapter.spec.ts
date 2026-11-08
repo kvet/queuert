@@ -2,7 +2,7 @@ import { type } from "arktype";
 import { runValidationAdapterConformance } from "queuert/conformance";
 import { test } from "vitest";
 
-import { createArkTypeJobTypes } from "./arktype-adapter.js";
+import { createArkTypeJobTypes } from "./arktype-adapter.ts";
 
 test("arktype adapter passes validation conformance", async () => {
   await runValidationAdapterConformance(async () => ({

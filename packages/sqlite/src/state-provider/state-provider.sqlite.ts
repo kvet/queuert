@@ -1,5 +1,5 @@
-import { type RuntimeType } from "@queuert/typed-sql";
-import { type BaseTxContext } from "queuert";
+import type { RuntimeType } from "@queuert/typed-sql";
+import type { BaseTxContext } from "queuert";
 
 /**
  * SQLite state provider interface.

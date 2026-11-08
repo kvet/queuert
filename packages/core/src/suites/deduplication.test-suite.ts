@@ -1,8 +1,8 @@
 import { type TestAPI, assert, expect } from "vitest";
 
-import { createClient } from "../client.js";
-import { defineJobTypes } from "../job-types/define-job-types.js";
-import { type TestSuiteContext } from "./spec-context.spec-helper.js";
+import { createClient } from "../client.ts";
+import { defineJobTypes } from "../job-types/define-job-types.ts";
+import type { TestSuiteContext } from "./spec-context.spec-helper.ts";
 
 export const deduplicationTestSuite = ({ it }: { it: TestAPI<TestSuiteContext> }): void => {
   it("deduplicates chains with same deduplication key", async ({

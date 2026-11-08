@@ -2,7 +2,7 @@ import { createAsyncRwLock, createSqliteStateAdapter } from "@queuert/sqlite";
 import Database from "better-sqlite3";
 import { createBetterSqlite3StateProvider } from "example-state-sqlite-better-sqlite3/provider";
 
-import { runBenchmark } from "./utils.js";
+import { runBenchmark } from "./utils.ts";
 
 const db = new Database(":memory:");
 

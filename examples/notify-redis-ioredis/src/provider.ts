@@ -1,5 +1,5 @@
-import { type RedisNotifyProvider } from "@queuert/redis";
-import { type Redis } from "ioredis";
+import type { RedisNotifyProvider } from "@queuert/redis";
+import type { Redis } from "ioredis";
 
 export const createIoredisNotifyProvider = ({
   client,

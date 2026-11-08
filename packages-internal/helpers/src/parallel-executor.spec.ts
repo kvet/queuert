@@ -1,6 +1,6 @@
 import { describe, expect, test } from "vitest";
 
-import { createParallelExecutor } from "./parallel-executor.js";
+import { createParallelExecutor } from "./parallel-executor.ts";
 
 describe("createParallelExecutor", () => {
   test("executes task and returns result", async () => {

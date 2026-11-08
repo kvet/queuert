@@ -1,7 +1,7 @@
-import { type StateJob, type StateJobInfo } from "../state-adapter/state-adapter.js";
-import { type AnyJob } from "./job.types.js";
+import type { StateJob, StateJobInfo } from "../state-adapter/state-adapter.ts";
+import type { AnyJob } from "./job.types.ts";
 
-export type * from "./job.types.js";
+export type * from "./job.types.ts";
 
 export const mapStateJobToJob = (
   stateJob: StateJob & { continuation?: StateJobInfo },

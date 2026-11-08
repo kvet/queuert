@@ -1,23 +1,23 @@
 import { describe, it } from "vitest";
 
-import { extendWithStateInProcess } from "../state-adapter/state-adapter.in-process.spec-helper.js";
-import { awaitChainTestSuite } from "../suites/await-chain.test-suite.js";
-import { blockerChainsTestSuite } from "../suites/blocker-chains.test-suite.js";
-import { chainsTestSuite } from "../suites/chains.test-suite.js";
-import { clientQueriesTestSuite } from "../suites/client-queries.test-suite.js";
-import { createChainsTestSuite } from "../suites/create-chains.test-suite.js";
-import { deduplicationTestSuite } from "../suites/deduplication.test-suite.js";
-import { deletionTestSuite } from "../suites/deletion.test-suite.js";
-import { rescheduleJobTestSuite } from "../suites/reschedule-job.test-suite.js";
-import { schedulingTestSuite } from "../suites/scheduling.test-suite.js";
+import { extendWithStateInProcess } from "../state-adapter/state-adapter.in-process.spec-helper.ts";
+import { awaitChainTestSuite } from "../suites/await-chain.test-suite.ts";
+import { blockerChainsTestSuite } from "../suites/blocker-chains.test-suite.ts";
+import { chainsTestSuite } from "../suites/chains.test-suite.ts";
+import { clientQueriesTestSuite } from "../suites/client-queries.test-suite.ts";
+import { createChainsTestSuite } from "../suites/create-chains.test-suite.ts";
+import { deduplicationTestSuite } from "../suites/deduplication.test-suite.ts";
+import { deletionTestSuite } from "../suites/deletion.test-suite.ts";
+import { rescheduleJobTestSuite } from "../suites/reschedule-job.test-suite.ts";
+import { schedulingTestSuite } from "../suites/scheduling.test-suite.ts";
 import {
   extendWithCommon,
   extendWithNotifyNoop,
   extendWithResourceLeakDetection,
-} from "../suites/spec-context.spec-helper.js";
-import { validationTestSuite } from "../suites/validation.test-suite.js";
-import { workerlessCompletionTestSuite } from "../suites/workerless-completion.test-suite.js";
-import { stateResilienceTestSuite } from "../testing.js";
+} from "../suites/spec-context.spec-helper.ts";
+import { validationTestSuite } from "../suites/validation.test-suite.ts";
+import { workerlessCompletionTestSuite } from "../suites/workerless-completion.test-suite.ts";
+import { stateResilienceTestSuite } from "../testing.ts";
 
 const inProcessNoopIt = extendWithResourceLeakDetection(
   extendWithNotifyNoop(extendWithCommon(extendWithStateInProcess(it))),

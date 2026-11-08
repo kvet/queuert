@@ -3,13 +3,13 @@ import { type AnyStatus, CHAIN_STATUSES, JOB_STATUSES, statusClasses } from "@qu
 import { A } from "@solidjs/router";
 import { For, Match, Show, Switch, createMemo } from "solid-js";
 
-import { countWorkers } from "../api.js";
-import { type CappedCount, formatSum, sumCounts } from "../domain/counts.js";
-import { TypeRow } from "../rows/TypeRow.js";
-import { createLoader } from "../state/createLoader.js";
-import { EmptyState, ErrorState, SkeletonRows, WarningBox, linkClass } from "../ui/kit.js";
-import { type TypeEntry, countOf, loadChainTypes, loadJobTypes, typeListHref } from "./typeData.js";
-import { type TypeKind, chainKind, jobKind } from "./Types.js";
+import { countWorkers } from "../api.ts";
+import { type CappedCount, formatSum, sumCounts } from "../domain/counts.ts";
+import { TypeRow } from "../rows/TypeRow.tsx";
+import { createLoader } from "../state/createLoader.ts";
+import { EmptyState, ErrorState, SkeletonRows, WarningBox, linkClass } from "../ui/kit.tsx";
+import { type TypeEntry, countOf, loadChainTypes, loadJobTypes, typeListHref } from "./typeData.ts";
+import { type TypeKind, chainKind, jobKind } from "./Types.tsx";
 
 const TOP = 5;
 

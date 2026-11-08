@@ -8,8 +8,8 @@ import {
   createMigrationStore,
   createSqliteStateAdapter,
   migrations,
-} from "../state-adapter/state-adapter.sqlite.js";
-import { createBetterSqlite3Provider } from "../state-provider/state-provider.better-sqlite3.js";
+} from "../state-adapter/state-adapter.sqlite.ts";
+import { createBetterSqlite3Provider } from "../state-provider/state-provider.better-sqlite3.ts";
 
 export const MARKER = "999_deployment_marker";
 

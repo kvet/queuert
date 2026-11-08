@@ -1,8 +1,8 @@
-import { type Client, type Worker } from "queuert";
+import type { Client, Worker } from "queuert";
 
-import { serovalResponse } from "../response.js";
-import { MAX_IDS, lookupEachOrNotFound, lookupOrNotFound, parseIds } from "./lookup.js";
-import { parseCursor, parseLimit } from "./params.js";
+import { serovalResponse } from "../response.ts";
+import { MAX_IDS, lookupEachOrNotFound, lookupOrNotFound, parseIds } from "./lookup.ts";
+import { parseCursor, parseLimit } from "./params.ts";
 
 const withRunningJobCounts = async (
   client: Client<any, any>,

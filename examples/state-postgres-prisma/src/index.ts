@@ -12,7 +12,7 @@ import {
   createInProcessNotifyAdapter,
 } from "queuert";
 
-import { createPrismaPgStateProvider } from "./provider.js";
+import { createPrismaPgStateProvider } from "./provider.ts";
 
 // Start PostgreSQL using testcontainers
 await using pg = await acquirePostgres("postgres:18", import.meta.url);
@@ -24,7 +24,7 @@ execSync("npx prisma db push", {
 });
 
 // Dynamic import after generate to get the freshly generated client
-const { PrismaClient } = await import("../prisma/generated/prisma/client.js");
+const { PrismaClient } = await import("../prisma/generated/prisma/client.ts");
 
 const adapter = new PrismaPg({ connectionString: pg.connectionString });
 const prisma = new PrismaClient({ adapter });

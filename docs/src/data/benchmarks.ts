@@ -1,5 +1,5 @@
-import { type BenchGroup } from "../components/BenchChart.tsx";
-import { type KeyValueItem } from "../components/KeyValueList.tsx";
+import type { BenchGroup } from "../components/BenchChart.tsx";
+import type { KeyValueItem } from "../components/KeyValueList.tsx";
 
 export const creationGroups = [
   {

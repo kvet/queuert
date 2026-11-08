@@ -1,4 +1,4 @@
-import { type SqliteStateProvider } from "@queuert/sqlite";
+import type { SqliteStateProvider } from "@queuert/sqlite";
 import { CompiledQuery, type Kysely } from "kysely";
 
 export type KyselySqliteContext<TDatabase> = { db: Kysely<TDatabase> };

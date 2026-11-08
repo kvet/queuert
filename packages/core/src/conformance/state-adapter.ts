@@ -1,8 +1,8 @@
-import { type ConformanceReport, type ConformanceResult, runConformance } from "./runner.js";
+import { type ConformanceReport, type ConformanceResult, runConformance } from "./runner.ts";
 import {
   type StateConformanceFixture,
   stateAdapterConformanceGroups,
-} from "./state-adapter-cases.js";
+} from "./state-adapter-cases.ts";
 
 export type StateConformanceOptions = {
   caseTimeoutMs?: number;
@@ -48,4 +48,4 @@ export const runStateAdapterConformance = async (
   }
 };
 
-export { type StateConformanceFixture } from "./state-adapter-cases.js";
+export { type StateConformanceFixture } from "./state-adapter-cases.ts";

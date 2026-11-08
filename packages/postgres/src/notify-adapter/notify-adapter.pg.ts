@@ -1,7 +1,7 @@
 import { createSharedListener } from "@queuert/helpers";
-import { type NotifyAdapter } from "queuert";
+import type { NotifyAdapter } from "queuert";
 
-import { type PgNotifyProvider } from "../notify-provider/notify-provider.pg.js";
+import type { PgNotifyProvider } from "../notify-provider/notify-provider.pg.ts";
 
 /**
  * Create a notify adapter backed by PostgreSQL LISTEN/NOTIFY.

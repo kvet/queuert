@@ -1,4 +1,4 @@
-import { type UnknownJob } from "../api.js";
+import type { UnknownJob } from "../api.ts";
 
 /**
  * A derived view of a job's state for the chain detail sequence and job detail. It is not a

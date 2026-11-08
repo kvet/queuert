@@ -6,7 +6,7 @@
  * or any other validation library.
  */
 
-import { type Type } from "arktype";
+import type { Type } from "arktype";
 import {
   type BaseJobTypeDefinitions,
   type JobTypeDefinitionErrors,

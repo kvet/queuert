@@ -1,7 +1,7 @@
 import { RedisContainer, type StartedRedisContainer } from "@testcontainers/redis";
 import { type TestAPI, beforeAll } from "vitest";
 
-import { withContainerLock } from "./with-container-lock.js";
+import { withContainerLock } from "./with-container-lock.ts";
 
 export type AcquiredRedis = {
   connectionUrl: string;

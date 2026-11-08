@@ -1,4 +1,4 @@
-import { createAsyncRwLock } from "./async-rw-lock.js";
+import { createAsyncRwLock } from "./async-rw-lock.ts";
 
 /**
  * Opens an underlying subscription that pushes payloads to `dispatch`, and

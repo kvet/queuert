@@ -3,7 +3,7 @@ import Database from "better-sqlite3";
 import { runStateAdapterConformance } from "queuert/conformance";
 import { test } from "vitest";
 
-import { createBetterSqlite3StateProvider } from "./provider.js";
+import { createBetterSqlite3StateProvider } from "./provider.ts";
 
 // #region conformance
 test("state-sqlite-better-sqlite3 provider passes state adapter conformance", async () => {

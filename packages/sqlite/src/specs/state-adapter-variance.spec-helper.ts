@@ -1,9 +1,9 @@
 import Database from "better-sqlite3";
-import { type StateAdapter } from "queuert";
-import { type TestAPI } from "vitest";
+import type { StateAdapter } from "queuert";
+import type { TestAPI } from "vitest";
 
-import { createSqliteStateAdapter } from "../state-adapter/state-adapter.sqlite.js";
-import { createBetterSqlite3Provider } from "../state-provider/state-provider.better-sqlite3.js";
+import { createSqliteStateAdapter } from "../state-adapter/state-adapter.sqlite.ts";
+import { createBetterSqlite3Provider } from "../state-provider/state-provider.better-sqlite3.ts";
 
 export type VarianceFixtures = {
   db: Database.Database;

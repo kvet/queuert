@@ -1,4 +1,4 @@
-import { type UnknownChain, type UnknownJob } from "../api.js";
+import type { UnknownChain, UnknownJob } from "../api.ts";
 
 export type JobEntry =
   | { kind: "job"; job: UnknownJob }

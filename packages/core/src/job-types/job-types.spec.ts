@@ -1,7 +1,7 @@
 import { describe, expect, it, vi } from "vitest";
 
-import { JobTypeValidationError } from "../errors.js";
-import { createJobTypes, createNoopJobTypes } from "./job-types.js";
+import { JobTypeValidationError } from "../errors.ts";
+import { createJobTypes, createNoopJobTypes } from "./job-types.ts";
 
 describe("createJobTypes", () => {
   const createMockConfig = (

@@ -1,22 +1,15 @@
 import { describe, expectTypeOf, it } from "vitest";
 
-import {
-  type CompletedBlockerChains,
-  type ContinuedJob,
-  type OutputJob,
-  type RescheduledJob,
-} from "../job-types/job-types.resolvers.js";
-import { type InProcessStateAdapter } from "../state-adapter/state-adapter.in-process.js";
-import {
-  type GetStateAdapterTxContext,
-  type StateAdapter,
-} from "../state-adapter/state-adapter.js";
-import { type TransactionHooks } from "../transaction-hooks.js";
-import {
-  type AttemptComplete,
-  type AttemptFence,
-  type AttemptHandler,
-} from "./attempt-handler.types.js";
+import type {
+  CompletedBlockerChains,
+  ContinuedJob,
+  OutputJob,
+  RescheduledJob,
+} from "../job-types/job-types.resolvers.ts";
+import type { InProcessStateAdapter } from "../state-adapter/state-adapter.in-process.ts";
+import type { GetStateAdapterTxContext, StateAdapter } from "../state-adapter/state-adapter.ts";
+import type { TransactionHooks } from "../transaction-hooks.ts";
+import type { AttemptComplete, AttemptFence, AttemptHandler } from "./attempt-handler.types.ts";
 
 type LinearDefs = {
   entry: {

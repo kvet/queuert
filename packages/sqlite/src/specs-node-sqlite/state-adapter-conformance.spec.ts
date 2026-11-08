@@ -1,4 +1,4 @@
-import { type UUID } from "node:crypto";
+import type { UUID } from "node:crypto";
 import { DatabaseSync } from "node:sqlite";
 
 import { createAsyncRwLock } from "@queuert/helpers";
@@ -14,8 +14,8 @@ import {
 import { stateAdapterConformanceTestSuite, withWorkers } from "queuert/testing";
 import { describe, expectTypeOf, it, vi } from "vitest";
 
-import { createSqliteStateAdapter } from "../state-adapter/state-adapter.sqlite.js";
-import { createNodeSqliteProvider } from "../state-provider/state-provider.node-sqlite.js";
+import { createSqliteStateAdapter } from "../state-adapter/state-adapter.sqlite.ts";
+import { createNodeSqliteProvider } from "../state-provider/state-provider.node-sqlite.ts";
 
 it("index");
 

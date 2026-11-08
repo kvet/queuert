@@ -33,8 +33,8 @@ async function runMeasurementInChildProcess(name: string): Promise<void> {
 
     const fullPath = join(__dirname, modulePath);
 
-    // Spawn a new Node.js process with --expose-gc, bytecode flushing off (V8 would otherwise drop compiled code mid-measurement) and the tsx loader
-    const child = spawn("node", ["--expose-gc", "--no-flush-bytecode", "--import=tsx", fullPath], {
+    // Spawn a new Node.js process with --expose-gc, bytecode flushing off (V8 would otherwise drop compiled code mid-measurement)
+    const child = spawn(process.execPath, ["--expose-gc", "--no-flush-bytecode", fullPath], {
       stdio: "inherit",
       env: { ...process.env },
     });

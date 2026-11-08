@@ -10,7 +10,7 @@ import {
 } from "queuert";
 import { type RedisClientType, createClient as createRedisClient } from "redis";
 
-import { createNodeRedisNotifyProvider } from "./provider.js";
+import { createNodeRedisNotifyProvider } from "./provider.ts";
 
 // Start Redis using testcontainers
 console.log("Starting Redis...");

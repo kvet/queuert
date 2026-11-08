@@ -13,7 +13,7 @@ import {
   onMount,
 } from "solid-js";
 
-import { type SearchEntry } from "../../plugins/search-index.ts";
+import type { SearchEntry } from "../../plugins/search-index.ts";
 import { fetchSearchEntries } from "./searchEntries.ts";
 
 const [open, setOpen] = createSignal(false);

@@ -6,15 +6,15 @@ import {
 } from "queuert";
 import { helpersSymbol } from "queuert/internal";
 
-import { serovalResponse } from "../response.js";
-import { MAX_IDS, lookupEachOrNotFound, lookupOrNotFound, parseIds } from "./lookup.js";
+import { serovalResponse } from "../response.ts";
+import { MAX_IDS, lookupEachOrNotFound, lookupOrNotFound, parseIds } from "./lookup.ts";
 import {
   parseCursor,
   parseJobStatusFilter,
   parseLimit,
   parseOrderBy,
   parseOrderDirection,
-} from "./params.js";
+} from "./params.ts";
 
 export const handleJobsList = async (url: URL, client: Client<any, any>): Promise<Response> => {
   const typeName = url.searchParams.get("typeName");

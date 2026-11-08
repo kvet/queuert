@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 
-import { createHistoryTracker } from "./navigation.js";
+import { createHistoryTracker } from "./navigation.ts";
 
 const createHistory = (startDepth: number) => {
   let depth = startDepth;

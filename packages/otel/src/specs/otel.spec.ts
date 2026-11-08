@@ -15,7 +15,7 @@ import {
 } from "queuert/testing";
 import { it as baseIt, describe, expect, expectTypeOf } from "vitest";
 
-import { extendWithObservabilityOtel } from "./observability-adapter.otel.spec-helper.js";
+import { extendWithObservabilityOtel } from "./observability-adapter.otel.spec-helper.ts";
 
 const it = extendWithObservabilityOtel(
   extendWithNotifyInProcess(extendWithCommon(extendWithStateInProcess(baseIt))),

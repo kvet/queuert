@@ -1,12 +1,12 @@
 import { sleep } from "@queuert/helpers";
 import { type TestAPI, assert, describe, expect, expectTypeOf } from "vitest";
 
-import { createClient } from "../client.js";
-import { ChainTypeMismatchError, JobTypeMismatchError } from "../errors.js";
-import { createInProcessWorker } from "../in-process-worker.js";
-import { createProcessors } from "../job-type-processors/create-job-type-processors.js";
-import { defineJobTypes } from "../job-types/define-job-types.js";
-import { type TestSuiteContext } from "./spec-context.spec-helper.js";
+import { createClient } from "../client.ts";
+import { ChainTypeMismatchError, JobTypeMismatchError } from "../errors.ts";
+import { createInProcessWorker } from "../in-process-worker.ts";
+import { createProcessors } from "../job-type-processors/create-job-type-processors.ts";
+import { defineJobTypes } from "../job-types/define-job-types.ts";
+import type { TestSuiteContext } from "./spec-context.spec-helper.ts";
 
 export const clientQueriesTestSuite = ({ it }: { it: TestAPI<TestSuiteContext> }): void => {
   const completionOptions = {

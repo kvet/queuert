@@ -2,7 +2,7 @@ import { extendWithPostgres } from "@queuert/testcontainers";
 import { stateAdapterConformanceTestSuite } from "queuert/testing";
 import { it as baseIt, describe, expect } from "vitest";
 
-import { extendWithVarianceStatePg } from "./state-adapter-variance.spec-helper.js";
+import { extendWithVarianceStatePg } from "./state-adapter-variance.spec-helper.ts";
 
 const it = extendWithVarianceStatePg(extendWithPostgres(baseIt, import.meta.url), {
   schema: "myapp_jobs",

@@ -8,7 +8,7 @@
 
 import { createInProcessWorker, createProcessors, withTransactionHooks } from "queuert";
 
-import { client, jobTypes, stateAdapter, withTransaction } from "./common.js";
+import { client, jobTypes, stateAdapter, withTransaction } from "./common.ts";
 
 const DASHBOARD_PAGE_SIZE = 100;
 const delay = async (ms: number) => {

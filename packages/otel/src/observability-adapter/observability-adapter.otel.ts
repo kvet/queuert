@@ -8,7 +8,7 @@ import {
   context,
   trace,
 } from "@opentelemetry/api";
-import { type ObservabilityAdapter } from "queuert";
+import type { ObservabilityAdapter } from "queuert";
 
 const serializeSpanContext = (ctx: SpanContext): string =>
   `00-${ctx.traceId}-${ctx.spanId}-0${ctx.traceFlags}`;

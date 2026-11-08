@@ -9,7 +9,7 @@ import {
   withTransactionHooks,
 } from "queuert";
 
-import { createKnexSqliteStateProvider } from "./provider.js";
+import { createKnexSqliteStateProvider } from "./provider.ts";
 
 // Create in-memory SQLite database
 const knex = knexFactory({

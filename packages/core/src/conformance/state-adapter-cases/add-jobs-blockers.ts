@@ -1,8 +1,8 @@
 import { sleep } from "@queuert/helpers";
 
-import { type StateChain } from "../../state-adapter/state-adapter.js";
-import { type ConformanceGroup } from "../runner.js";
-import { type StateConformanceFixture } from "./types.js";
+import type { StateChain } from "../../state-adapter/state-adapter.ts";
+import type { ConformanceGroup } from "../runner.ts";
+import type { StateConformanceFixture } from "./types.ts";
 
 const LOCK_BLOCK_OBSERVATION_MS = 100;
 

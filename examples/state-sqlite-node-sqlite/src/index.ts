@@ -10,7 +10,7 @@ import {
   withTransactionHooks,
 } from "queuert";
 
-import { createNodeSqliteStateProvider } from "./provider.js";
+import { createNodeSqliteStateProvider } from "./provider.ts";
 
 // Create in-memory SQLite database
 const db = new DatabaseSync(":memory:");

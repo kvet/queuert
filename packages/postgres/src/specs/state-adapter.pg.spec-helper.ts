@@ -1,14 +1,14 @@
 import { Pool } from "pg";
-import { type StateAdapter } from "queuert";
+import type { StateAdapter } from "queuert";
 import { createFlakyBatchGenerator } from "queuert/testing";
 import { type TestAPI, expect } from "vitest";
 
-import { createPgStateAdapter } from "../state-adapter/state-adapter.pg.js";
+import { createPgStateAdapter } from "../state-adapter/state-adapter.pg.ts";
 import {
   type PgPoolContext,
   type PgPoolProvider,
   createPgPoolProvider,
-} from "../state-provider/state-provider.pg-pool.js";
+} from "../state-provider/state-provider.pg-pool.ts";
 
 export type PgPoolStateAdapter = StateAdapter<PgPoolContext, string, string>;
 

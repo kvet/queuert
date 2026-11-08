@@ -1,10 +1,10 @@
 import { useIsRouting, useLocation } from "@solidjs/router";
 import { type ParentProps, createEffect, onCleanup } from "solid-js";
 
-import { toLocalPath } from "./base.js";
-import { FindDialog, handleFindShortcut } from "./shell/FindDialog.js";
-import { TopBar } from "./shell/TopBar.js";
-import { recordLocation } from "./state/navigation.js";
+import { toLocalPath } from "./base.ts";
+import { FindDialog, handleFindShortcut } from "./shell/FindDialog.tsx";
+import { TopBar } from "./shell/TopBar.tsx";
+import { recordLocation } from "./state/navigation.ts";
 
 export const App = (props: ParentProps) => {
   const location = useLocation();

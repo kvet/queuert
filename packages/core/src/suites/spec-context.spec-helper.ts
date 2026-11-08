@@ -3,15 +3,15 @@ import inspector from "node:inspector";
 
 import { type MockedFunction, type TestAPI, expect, vi } from "vitest";
 
-import { createInProcessNotifyAdapter } from "../notify-adapter/notify-adapter.in-process.js";
-import { type NotifyAdapter } from "../notify-adapter/notify-adapter.js";
-import { createConsoleLog } from "../observability-adapter/log.console.js";
-import { type Log } from "../observability-adapter/log.js";
-import { type ObservabilityAdapter } from "../observability-adapter/observability-adapter.js";
-import { createNoopObservabilityAdapter } from "../observability-adapter/observability-adapter.noop.js";
-import { type StateAdapter } from "../state-adapter/state-adapter.js";
-import { type TransactionHooks, withTransactionHooks } from "../transaction-hooks.js";
-import { createFlakyBatchGenerator } from "./flaky-test-helper.spec-helper.js";
+import { createInProcessNotifyAdapter } from "../notify-adapter/notify-adapter.in-process.ts";
+import type { NotifyAdapter } from "../notify-adapter/notify-adapter.ts";
+import { createConsoleLog } from "../observability-adapter/log.console.ts";
+import type { Log } from "../observability-adapter/log.ts";
+import { createNoopObservabilityAdapter } from "../observability-adapter/observability-adapter.noop.ts";
+import type { ObservabilityAdapter } from "../observability-adapter/observability-adapter.ts";
+import type { StateAdapter } from "../state-adapter/state-adapter.ts";
+import { type TransactionHooks, withTransactionHooks } from "../transaction-hooks.ts";
+import { createFlakyBatchGenerator } from "./flaky-test-helper.spec-helper.ts";
 
 export type TestSuiteContext = {
   stateAdapter: StateAdapter<{ $test: true }, string, string>;

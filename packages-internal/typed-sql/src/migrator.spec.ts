@@ -1,7 +1,7 @@
 import { describe, expect, it } from "vitest";
 
-import { type Migration, type MigrationStore, createMigrator } from "./migrator.js";
-import { sql } from "./sql.js";
+import { type Migration, type MigrationStore, createMigrator } from "./migrator.ts";
+import { sql } from "./sql.ts";
 
 type TxCtx = { tx: true };
 

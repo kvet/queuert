@@ -1,6 +1,6 @@
-import { JobTypeValidationError } from "../errors.js";
-import { type ObservabilityHelper } from "../observability-adapter/observability-helper.js";
-import { type JobTypes, definitionsSymbol, externalDefinitionsSymbol } from "./job-types.js";
+import { JobTypeValidationError } from "../errors.ts";
+import type { ObservabilityHelper } from "../observability-adapter/observability-helper.ts";
+import { type JobTypes, definitionsSymbol, externalDefinitionsSymbol } from "./job-types.ts";
 
 export const wrapJobTypesWithLogging = <TJobTypeDefinitions>({
   jobTypes,

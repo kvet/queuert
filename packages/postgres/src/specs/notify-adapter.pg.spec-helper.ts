@@ -1,10 +1,10 @@
 import { Pool } from "pg";
-import { type NotifyAdapter } from "queuert";
+import type { NotifyAdapter } from "queuert";
 import { type TestSuiteContext, createFlakyBatchGenerator } from "queuert/testing";
 import { type TestAPI, expect } from "vitest";
 
-import { createPgNotifyAdapter } from "../notify-adapter/notify-adapter.pg.js";
-import { createPgPoolNotifyProvider } from "../notify-provider/notify-provider.pg-pool.js";
+import { createPgNotifyAdapter } from "../notify-adapter/notify-adapter.pg.ts";
+import { createPgPoolNotifyProvider } from "../notify-provider/notify-provider.pg-pool.ts";
 
 export const extendWithNotifyPg = <
   T extends {

@@ -1,7 +1,7 @@
 import { type JSX, Show } from "solid-js";
 import { Dynamic } from "solid-js/web";
 
-import { type LinkComponent } from "./Row.js";
+import type { LinkComponent } from "./Row.tsx";
 
 export const iconButtonClass =
   "inline-flex size-8 items-center justify-center rounded-xs text-fg-muted hover:bg-surface-2 hover:text-fg";

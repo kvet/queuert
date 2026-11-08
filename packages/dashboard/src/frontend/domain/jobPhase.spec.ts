@@ -6,8 +6,8 @@ import {
   tailJob,
   pendingJob,
   runningJob,
-} from "./fixtures.spec-helper.js";
-import { jobPhase } from "./jobPhase.js";
+} from "./fixtures.spec-helper.ts";
+import { jobPhase } from "./jobPhase.ts";
 
 const now = 10_000;
 

@@ -1,6 +1,6 @@
-import { type Pool, type PoolClient } from "pg";
+import type { Pool, PoolClient } from "pg";
 
-import { type PgNotifyProvider } from "./notify-provider.pg.js";
+import type { PgNotifyProvider } from "./notify-provider.pg.ts";
 
 export const createPgPoolNotifyProvider = ({ pool }: { pool: Pool }): PgNotifyProvider => {
   let listenClient: PoolClient | null = null;

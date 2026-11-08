@@ -10,7 +10,7 @@ import {
   withTransactionHooks,
 } from "queuert";
 
-import { createKnexPgStateProvider } from "./provider.js";
+import { createKnexPgStateProvider } from "./provider.ts";
 
 // Start PostgreSQL using testcontainers
 await using pg = await acquirePostgres("postgres:18", import.meta.url);

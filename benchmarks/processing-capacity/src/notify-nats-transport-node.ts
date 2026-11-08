@@ -2,7 +2,7 @@ import { connect } from "@nats-io/transport-node";
 import { createNatsNotifyAdapter } from "@queuert/nats";
 import { createInProcessStateAdapter } from "queuert";
 
-import { benchmarkNamespace, requireEnv, runBenchmark } from "./utils.js";
+import { benchmarkNamespace, requireEnv, runBenchmark } from "./utils.ts";
 
 const nc = await connect(JSON.parse(requireEnv("BENCHMARK_NATS_OPTIONS")));
 

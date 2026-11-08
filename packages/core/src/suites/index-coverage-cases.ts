@@ -1,5 +1,5 @@
-import { type SeedSentinels } from "../conformance/seed-all-states.js";
-import { type StateAdapter } from "../state-adapter/state-adapter.js";
+import type { SeedSentinels } from "../conformance/seed-all-states.ts";
+import type { StateAdapter } from "../state-adapter/state-adapter.ts";
 
 export type IndexCoverageCaseKey =
   // type discovery

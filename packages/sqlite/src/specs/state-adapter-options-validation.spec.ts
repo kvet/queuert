@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 
-import { createSqliteStateAdapter } from "../state-adapter/state-adapter.sqlite.js";
+import { createSqliteStateAdapter } from "../state-adapter/state-adapter.sqlite.ts";
 
 const dummyProvider = {
   withTransaction: async <T>(fn: (ctx: any) => Promise<T>) => fn({}),

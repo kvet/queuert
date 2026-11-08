@@ -1,7 +1,7 @@
-import { type RuntimeType } from "@queuert/typed-sql";
+import type { RuntimeType } from "@queuert/typed-sql";
 import type postgres from "postgres";
 
-import { type PgStateProvider } from "./state-provider.pg.js";
+import type { PgStateProvider } from "./state-provider.pg.ts";
 
 export type PostgresJsContext = { txSql: postgres.TransactionSql };
 export type PostgresJsProvider = PgStateProvider<PostgresJsContext>;

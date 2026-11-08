@@ -22,7 +22,7 @@ import {
   withTransactionHooks,
 } from "queuert";
 
-import { flush, observabilityAdapter, shutdown } from "./observability.js";
+import { flush, observabilityAdapter, shutdown } from "./observability.ts";
 
 const jobTypes = defineJobTypes<{
   /*

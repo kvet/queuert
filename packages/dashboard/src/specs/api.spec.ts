@@ -7,7 +7,7 @@ import {
 import { deserialize } from "seroval";
 import { describe, expect, it } from "vitest";
 
-import { createDashboard } from "../api/dashboard.js";
+import { createDashboard } from "../api/dashboard.ts";
 
 const parseBody = async (res: Response) => deserialize<any>(await res.text());
 

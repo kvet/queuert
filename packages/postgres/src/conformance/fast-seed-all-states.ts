@@ -1,7 +1,7 @@
-import { type BaseTxContext } from "queuert";
+import type { BaseTxContext } from "queuert";
 import { type SeedSentinels, seedConfig } from "queuert/testing";
 
-import { type PgStateProvider } from "../state-provider/state-provider.pg.js";
+import type { PgStateProvider } from "../state-provider/state-provider.pg.ts";
 
 export const fastSeedAllStates = async <TTxContext extends BaseTxContext>(
   stateProvider: PgStateProvider<TTxContext>,

@@ -1,4 +1,4 @@
-import { type StateAdapter } from "../../state-adapter/state-adapter.js";
+import type { StateAdapter } from "../../state-adapter/state-adapter.ts";
 
 /**
  * Fixture for the state adapter conformance suite. Used both as the factory

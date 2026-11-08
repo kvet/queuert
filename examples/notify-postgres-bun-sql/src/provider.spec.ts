@@ -5,7 +5,7 @@ import { acquirePostgres } from "@queuert/testcontainers";
 import { SQL } from "bun";
 import { runNotifyAdapterConformance } from "queuert/conformance";
 
-import { createBunSqlNotifyProvider } from "./provider.js";
+import { createBunSqlNotifyProvider } from "./provider.ts";
 
 // #region conformance
 test("notify-postgres-bun-sql provider passes notify adapter conformance", async () => {

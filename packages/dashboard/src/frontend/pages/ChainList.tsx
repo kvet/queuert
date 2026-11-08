@@ -2,16 +2,16 @@ import { CHAIN_STATUSES } from "@queuert/ui/lib";
 import { useSearchParams } from "@solidjs/router";
 import { Match, Switch, createMemo } from "solid-js";
 
-import { PAGE_SIZE, countChainsByTypeName, getChainTypeNames, listChains } from "../api.js";
-import { ChainRow } from "../rows/ChainRow.js";
-import { createLoader } from "../state/createLoader.js";
-import { createPagedList } from "../state/createPagedList.js";
-import { EmptyState, buttonClass } from "../ui/kit.js";
-import { Select } from "../ui/Select.js";
-import { FilterBar, SortControls, StatusFilter } from "./filters.js";
-import { ListHeader, PagedListBody, TypeGate } from "./listParts.js";
-import { toStatusCounts } from "./typeData.js";
-import { chainKind } from "./Types.js";
+import { PAGE_SIZE, countChainsByTypeName, getChainTypeNames, listChains } from "../api.ts";
+import { ChainRow } from "../rows/ChainRow.tsx";
+import { createLoader } from "../state/createLoader.ts";
+import { createPagedList } from "../state/createPagedList.ts";
+import { EmptyState, buttonClass } from "../ui/kit.tsx";
+import { Select } from "../ui/Select.tsx";
+import { FilterBar, SortControls, StatusFilter } from "./filters.tsx";
+import { ListHeader, PagedListBody, TypeGate } from "./listParts.tsx";
+import { toStatusCounts } from "./typeData.ts";
+import { chainKind } from "./Types.tsx";
 
 const roles = [
   { value: "", label: "All" },

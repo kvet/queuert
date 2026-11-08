@@ -26,6 +26,7 @@ This document describes code style conventions, testing patterns, and project or
 - **No barrel files**: Do not create barrel re-export files within subdirectories. The only barrels are a package's declared entry points — the files listed in its `package.json` `exports`, one per subpath: `index.ts` for the package root, plus subpath entries like `internal.ts` (cross-package internals with no stability guarantee), `testing.ts` (test suites and helpers), and `conformance.ts`. Adding a barrel means adding an `exports` subpath; a re-export file that is not an entry point is the thing to avoid. Internal modules import directly from the source file they need.
 - **No type re-exports from non-owning modules**: A module should only export types it defines. Do not import a type from its source module just to re-export it — consumers should import directly from the module that owns the type. The only exception is each package's top-level `index.ts` entry point.
 - **Justify every lint suppression**: An `oxlint-disable*` comment always carries the rule name and a `--` reason explaining why the rule is wrong here, e.g. `// oxlint-disable-next-line typescript/only-throw-error -- re-throwing caught error`. A bare disable is not acceptable; if the reason is long, point at the file or spec that demonstrates it.
+- **TypeScript runs on Node's type stripping**: Examples, benchmarks, and spawned scripts run as `node file.ts` with no loader, so source must be erasable TypeScript (no enums, namespaces, or constructor parameter properties; `erasableSyntaxOnly` enforces this). Relative imports name the real file with its `.ts` extension (`./client.ts`, not `./client.js`). Import types with `import type { A, B }` when every specifier is a type and with inline `type` when mixed with values (`import { createClient, type Client }`); `verbatimModuleSyntax` and `typescript/no-import-type-side-effects` enforce this. Child processes are spawned with `process.execPath`, not `"node"`, so they inherit the running Node.
 - **Symbol descriptions prefixed with `queuert.`**: All internal `Symbol()` instances must use a `"queuert."` prefix in their description string, e.g. `Symbol("queuert.helpers")`. This makes symbols identifiable in debugging and avoids collisions.
 
 ## Naming Conventions
@@ -36,9 +37,9 @@ Public exports should not include the package name as a prefix. Since imports al
 
 ```typescript
 // Good - context from import is sufficient
-import { createClient, createInProcessWorker, Client } from "queuert";
+import { createClient, createInProcessWorker, type Client } from "queuert";
 // Bad - redundant prefix
-import { createQueuertClient, createQueuertInProcessWorker, QueuertClient } from "queuert";
+import { createQueuertClient, createQueuertInProcessWorker, type QueuertClient } from "queuert";
 ```
 
 ### Use `chain`, not `jobChain`

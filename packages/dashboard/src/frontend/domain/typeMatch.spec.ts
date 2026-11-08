@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 
-import { matchTypeNames, scoreTypeName } from "./typeMatch.js";
+import { matchTypeNames, scoreTypeName } from "./typeMatch.ts";
 
 describe("type name matching", () => {
   const names = ["order:validate", "greet", "order:process", "fetch-user", "user-greeting"];

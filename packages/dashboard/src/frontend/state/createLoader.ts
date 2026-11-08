@@ -1,6 +1,6 @@
 import { type Accessor, createEffect, createSignal, on, onCleanup } from "solid-js";
 
-import { isAbort } from "../api.js";
+import { isAbort } from "../api.ts";
 
 export const createLoader = <TSource, TData>(
   source: () => TSource | false | null | undefined,

@@ -9,7 +9,7 @@ import {
   withTransactionHooks,
 } from "queuert";
 
-import { createBetterSqlite3StateProvider } from "./provider.js";
+import { createBetterSqlite3StateProvider } from "./provider.ts";
 
 // Create in-memory SQLite database
 const db = new Database(":memory:");

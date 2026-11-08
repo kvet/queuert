@@ -1,10 +1,10 @@
 import { describe, it } from "vitest";
 
-import { createInProcessNotifyAdapter } from "../notify-adapter/notify-adapter.in-process.js";
+import { createInProcessNotifyAdapter } from "../notify-adapter/notify-adapter.in-process.ts";
 import {
   type NotifyConformanceFixture,
   notifyAdapterConformanceTestSuite,
-} from "../suites/notify-adapter-conformance.test-suite.js";
+} from "../suites/notify-adapter-conformance.test-suite.ts";
 
 it("index");
 

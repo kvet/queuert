@@ -3,7 +3,7 @@ import { DatabaseSync } from "node:sqlite";
 import { createAsyncRwLock, createSqliteStateAdapter } from "@queuert/sqlite";
 import { createNodeSqliteStateProvider } from "example-state-sqlite-node-sqlite/provider";
 
-import { runBenchmark } from "./utils.js";
+import { runBenchmark } from "./utils.ts";
 
 const db = new DatabaseSync(":memory:");
 

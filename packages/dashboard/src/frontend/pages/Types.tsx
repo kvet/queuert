@@ -2,17 +2,17 @@ import { type AnyStatus, CHAIN_STATUSES, JOB_STATUSES } from "@queuert/ui/lib";
 import { useSearchParams } from "@solidjs/router";
 import { For, Match, Switch, createMemo } from "solid-js";
 
-import { TypeRow } from "../rows/TypeRow.js";
-import { createLoader } from "../state/createLoader.js";
-import { EmptyState, ErrorState, SkeletonRows, buttonClass } from "../ui/kit.js";
-import { FilterBar, StatusFilter } from "./filters.js";
+import { TypeRow } from "../rows/TypeRow.tsx";
+import { createLoader } from "../state/createLoader.ts";
+import { EmptyState, ErrorState, SkeletonRows, buttonClass } from "../ui/kit.tsx";
+import { FilterBar, StatusFilter } from "./filters.tsx";
 import {
   type TypeEntry,
   loadChainTypes,
   loadJobTypes,
   narrowToStatuses,
   typeListHref,
-} from "./typeData.js";
+} from "./typeData.ts";
 
 export type TypeKind = {
   noun: "chain" | "job";

@@ -1,1 +1,1 @@
-export { createDashboard } from "./api/dashboard.js";
+export { createDashboard } from "./api/dashboard.ts";

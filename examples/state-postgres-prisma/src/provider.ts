@@ -1,4 +1,4 @@
-import { type PgStateProvider } from "@queuert/postgres";
+import type { PgStateProvider } from "@queuert/postgres";
 
 export type PrismaLikeClient = {
   $transaction: <T>(fn: (prisma: any) => Promise<T>) => Promise<T>;

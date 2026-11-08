@@ -1,9 +1,9 @@
 import { describe, expectTypeOf, it } from "vitest";
 
-import { type Client, createClient } from "./client.js";
-import { defineJobTypes } from "./job-types/define-job-types.js";
-import { createInProcessStateAdapter } from "./state-adapter/state-adapter.in-process.js";
-import { type BaseTxContext, type StateAdapter } from "./state-adapter/state-adapter.js";
+import { type Client, createClient } from "./client.ts";
+import { defineJobTypes } from "./job-types/define-job-types.ts";
+import { createInProcessStateAdapter } from "./state-adapter/state-adapter.in-process.ts";
+import type { BaseTxContext, StateAdapter } from "./state-adapter/state-adapter.ts";
 
 type Defs1 = {
   "slice1.entry": {

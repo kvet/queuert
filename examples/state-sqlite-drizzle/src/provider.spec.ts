@@ -3,7 +3,7 @@ import Database from "better-sqlite3";
 import { runStateAdapterConformance } from "queuert/conformance";
 import { test } from "vitest";
 
-import { createDrizzleSqliteStateProvider } from "./provider.js";
+import { createDrizzleSqliteStateProvider } from "./provider.ts";
 
 // #region conformance
 test("state-sqlite-drizzle provider passes state adapter conformance", async () => {

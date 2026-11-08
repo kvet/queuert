@@ -16,7 +16,7 @@ import {
 } from "queuert/testing";
 import { describe, it } from "vitest";
 
-import { extendWithStateSqlite } from "./state-adapter.sqlite.spec-helper.js";
+import { extendWithStateSqlite } from "./state-adapter.sqlite.spec-helper.ts";
 
 const sqliteInProcessIt = extendWithResourceLeakDetection(
   extendWithNotifyInProcess(extendWithCommon(extendWithStateSqlite(it))),

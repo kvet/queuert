@@ -1,6 +1,6 @@
-import { type PgStateProvider } from "@queuert/postgres";
-import { type ExtractTablesWithRelations } from "drizzle-orm";
-import { type NodePgDatabase, type NodePgQueryResultHKT } from "drizzle-orm/node-postgres";
+import type { PgStateProvider } from "@queuert/postgres";
+import type { ExtractTablesWithRelations } from "drizzle-orm";
+import type { NodePgDatabase, NodePgQueryResultHKT } from "drizzle-orm/node-postgres";
 import { PgTransaction } from "drizzle-orm/pg-core";
 
 export type DrizzlePgTransaction<TSchema extends Record<string, unknown>> = PgTransaction<

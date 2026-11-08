@@ -1,11 +1,11 @@
 import { describe, expect, it } from "vitest";
 
-import { createClient } from "./client.js";
-import { InvalidWorkerIdError } from "./errors.js";
-import { createInProcessWorker } from "./in-process-worker.js";
-import { createProcessors } from "./job-type-processors/create-job-type-processors.js";
-import { defineJobTypes } from "./job-types/define-job-types.js";
-import { createInProcessStateAdapter } from "./state-adapter/state-adapter.in-process.js";
+import { createClient } from "./client.ts";
+import { InvalidWorkerIdError } from "./errors.ts";
+import { createInProcessWorker } from "./in-process-worker.ts";
+import { createProcessors } from "./job-type-processors/create-job-type-processors.ts";
+import { defineJobTypes } from "./job-types/define-job-types.ts";
+import { createInProcessStateAdapter } from "./state-adapter/state-adapter.in-process.ts";
 
 type Defs = {
   foo: { entry: true; input: null; output: null };

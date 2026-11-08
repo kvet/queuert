@@ -1,5 +1,5 @@
-import { type Helpers } from "../setup-helpers.js";
-import { type StateJob } from "../state-adapter/state-adapter.js";
+import type { Helpers } from "../setup-helpers.ts";
+import type { StateJob } from "../state-adapter/state-adapter.ts";
 
 export type AttemptOwnership = {
   signal: AbortSignal;

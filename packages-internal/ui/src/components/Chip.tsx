@@ -1,9 +1,9 @@
 import { type JSX, Show } from "solid-js";
 import { Dynamic } from "solid-js/web";
 
-import { type AnyStatus } from "../lib/status.js";
-import { type LinkComponent } from "./Row.js";
-import { StatusDot } from "./StatusPill.js";
+import type { AnyStatus } from "../lib/status.ts";
+import type { LinkComponent } from "./Row.tsx";
+import { StatusDot } from "./StatusPill.tsx";
 
 const chipTones = {
   default: "border-border text-fg-muted",

@@ -1,4 +1,4 @@
-import { type UUID } from "node:crypto";
+import type { UUID } from "node:crypto";
 
 import {
   type DataType,
@@ -17,7 +17,7 @@ import {
   sql,
   t,
 } from "@queuert/typed-sql";
-import { type BaseTxContext, type StateAdapter } from "queuert";
+import type { BaseTxContext, StateAdapter } from "queuert";
 import {
   type StateBlockedJob,
   type StateChain,
@@ -35,7 +35,7 @@ import {
   resolveStateAdapterConfig,
 } from "queuert/internal";
 
-import { type SqliteStateProvider } from "../state-provider/state-provider.sqlite.js";
+import type { SqliteStateProvider } from "../state-provider/state-provider.sqlite.ts";
 
 const jobColumns = [
   "created_at",

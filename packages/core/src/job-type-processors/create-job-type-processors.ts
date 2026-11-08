@@ -1,21 +1,21 @@
-import {
-  type AnyAttemptMiddleware,
-  type AttemptMiddleware,
-  type MergedAttemptHandlerCtx,
-} from "../attempt-middleware/attempt-middleware.js";
-import { type Client } from "../client.js";
-import { type BackoffConfig } from "../entities/backoff.js";
-import { type BaseJobTypeDefinitions } from "../job-types/job-type.js";
-import { type JobTypes } from "../job-types/job-types.js";
-import { type JobTypeNames } from "../job-types/job-types.resolvers.js";
-import { type StateAdapter } from "../state-adapter/state-adapter.js";
+import type {
+  AnyAttemptMiddleware,
+  AttemptMiddleware,
+  MergedAttemptHandlerCtx,
+} from "../attempt-middleware/attempt-middleware.ts";
+import type { Client } from "../client.ts";
+import type { BackoffConfig } from "../entities/backoff.ts";
+import type { BaseJobTypeDefinitions } from "../job-types/job-type.ts";
+import type { JobTypeNames } from "../job-types/job-types.resolvers.ts";
+import type { JobTypes } from "../job-types/job-types.ts";
+import type { StateAdapter } from "../state-adapter/state-adapter.ts";
 import {
   type InProcessWorkerProcessor,
   type Processors,
   processorAttemptMiddlewareSymbol,
   processorsDefinitionsSymbol,
   processorsMiddlewareSymbol,
-} from "./job-type-processors.js";
+} from "./job-type-processors.ts";
 
 /** Merged definitions: union of own + external defs for typing handler continueWith / blockers. */
 type MergedDefs<

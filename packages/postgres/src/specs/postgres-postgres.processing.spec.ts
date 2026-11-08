@@ -8,8 +8,8 @@ import {
 } from "queuert/testing";
 import { describe, it } from "vitest";
 
-import { extendWithNotifyPg } from "./notify-adapter.pg.spec-helper.js";
-import { extendWithStatePg } from "./state-adapter.pg.spec-helper.js";
+import { extendWithNotifyPg } from "./notify-adapter.pg.spec-helper.ts";
+import { extendWithStatePg } from "./state-adapter.pg.spec-helper.ts";
 
 const postgresPostgresIt = extendWithResourceLeakDetection(
   extendWithNotifyPg(extendWithCommon(extendWithStatePg(extendWithPostgres(it, import.meta.url)))),

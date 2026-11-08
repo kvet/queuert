@@ -4,7 +4,7 @@ import {
   type ColumnContract,
   type ReconcilerRow,
   createMigrationReconciler,
-} from "./migration-reconciler.js";
+} from "./migration-reconciler.ts";
 
 const keyById = (row: ReconcilerRow): string => String(row.id);
 

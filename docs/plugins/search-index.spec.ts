@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 
-import { type SourcePage } from "./content.ts";
+import type { SourcePage } from "./content.ts";
 import { pageIndex, pageSearchEntries, pageSections } from "./search-index.ts";
 
 const html = `<!doctype html><html><body>

@@ -1,9 +1,9 @@
 import { Pool } from "pg";
-import { type StateAdapter } from "queuert";
-import { type TestAPI } from "vitest";
+import type { StateAdapter } from "queuert";
+import type { TestAPI } from "vitest";
 
-import { createPgStateAdapter } from "../state-adapter/state-adapter.pg.js";
-import { createPgPoolProvider } from "../state-provider/state-provider.pg-pool.js";
+import { createPgStateAdapter } from "../state-adapter/state-adapter.pg.ts";
+import { createPgPoolProvider } from "../state-provider/state-provider.pg-pool.ts";
 
 export type VarianceFixtures = {
   pool: Pool;

@@ -1,4 +1,4 @@
-import { type TypedSqlTemplate } from "./sql.js";
+import type { TypedSqlTemplate } from "./sql.ts";
 
 export type Migration = {
   name: string;

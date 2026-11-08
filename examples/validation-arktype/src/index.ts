@@ -18,7 +18,7 @@ import {
   withTransactionHooks,
 } from "queuert";
 
-import { createArkTypeJobTypes } from "./arktype-adapter.js";
+import { createArkTypeJobTypes } from "./arktype-adapter.ts";
 
 // #region usage
 // Define job types with ArkType schemas

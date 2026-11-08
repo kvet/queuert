@@ -1,14 +1,14 @@
-import { type NotifyAdapter } from "../notify-adapter/notify-adapter.js";
-import { type StateAdapter } from "../state-adapter/state-adapter.js";
-import {
-  type ChainBasicData,
-  type JobAttemptData,
-  type JobBasicData,
-  type JobCompletionData,
-  type JobProcessingData,
-  type JobReclaimData,
-  type WorkerBasicData,
-} from "./log.js";
+import type { NotifyAdapter } from "../notify-adapter/notify-adapter.ts";
+import type { StateAdapter } from "../state-adapter/state-adapter.ts";
+import type {
+  ChainBasicData,
+  JobAttemptData,
+  JobBasicData,
+  JobCompletionData,
+  JobProcessingData,
+  JobReclaimData,
+  WorkerBasicData,
+} from "./log.ts";
 
 /** Input data for creating a job span. */
 export type JobSpanInputData = {

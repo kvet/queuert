@@ -1,1 +1,1 @@
-export { createNatsNotifyAdapter } from "./notify-adapter/notify-adapter.nats.js";
+export { createNatsNotifyAdapter } from "./notify-adapter/notify-adapter.nats.ts";

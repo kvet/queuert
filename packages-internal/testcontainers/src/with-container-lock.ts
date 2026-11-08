@@ -4,7 +4,7 @@ import * as path from "node:path";
 
 import Docker from "dockerode";
 import * as lockfile from "proper-lockfile";
-import { type StartedTestContainer } from "testcontainers";
+import type { StartedTestContainer } from "testcontainers";
 
 // Container names are machine-wide, so the lock must be too: a per-checkout lock lets parallel
 // worktrees race to create the same container and remove the one another run is using.

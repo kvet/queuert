@@ -1,5 +1,5 @@
 import { Box } from "@queuert/ui/components";
-import { type JSX } from "solid-js";
+import type { JSX } from "solid-js";
 
 const defaultTitles = { note: "Note", tip: "Tip", caution: "Caution", danger: "Danger" } as const;
 

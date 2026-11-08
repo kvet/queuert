@@ -1,6 +1,6 @@
-import { type Database, type SQLQueryBindings } from "bun:sqlite";
+import type { Database, SQLQueryBindings } from "bun:sqlite";
 
-import { type AsyncRwLock, type SqliteStateProvider } from "@queuert/sqlite";
+import type { AsyncRwLock, SqliteStateProvider } from "@queuert/sqlite";
 
 export type BunSqliteContext = { db: Database };
 

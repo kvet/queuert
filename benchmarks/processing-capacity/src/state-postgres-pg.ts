@@ -2,7 +2,7 @@ import { createPgStateAdapter } from "@queuert/postgres";
 import { createPgPoolStateProvider } from "example-state-postgres-pg/provider";
 import { Pool } from "pg";
 
-import { benchmarkNamespace, requireEnv, runBenchmark } from "./utils.js";
+import { benchmarkNamespace, requireEnv, runBenchmark } from "./utils.ts";
 
 const pool = new Pool({ connectionString: requireEnv("BENCHMARK_POSTGRES_URL"), max: 20 });
 const schema = benchmarkNamespace();

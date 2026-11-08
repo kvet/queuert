@@ -1,6 +1,6 @@
 import { describe, expect, test, vi } from "vitest";
 
-import { createSharedListener, type SharedListenerOpen } from "./shared-listener.js";
+import { createSharedListener, type SharedListenerOpen } from "./shared-listener.ts";
 
 const createFakeTransport = () => {
   const dispatchers: ((key: string, payload: string) => void)[] = [];

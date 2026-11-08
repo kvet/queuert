@@ -1,10 +1,10 @@
-import { type BaseJobTypeDefinitions } from "../job-types/job-type.js";
-import { type ResolvedRunningJob } from "../job-types/job-types.resolvers.js";
-import {
-  type GetStateAdapterJobId,
-  type GetStateAdapterWorkerId,
-  type StateAdapter,
-} from "../state-adapter/state-adapter.js";
+import type { BaseJobTypeDefinitions } from "../job-types/job-type.ts";
+import type { ResolvedRunningJob } from "../job-types/job-types.resolvers.ts";
+import type {
+  GetStateAdapterJobId,
+  GetStateAdapterWorkerId,
+  StateAdapter,
+} from "../state-adapter/state-adapter.ts";
 
 type RunningJob<TStateAdapter extends StateAdapter<any, any, any>> = ResolvedRunningJob<
   GetStateAdapterJobId<TStateAdapter>,

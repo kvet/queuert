@@ -1,7 +1,7 @@
 import { raceWithSleep, sleep } from "@queuert/helpers";
 
-import { type NotifyAdapter } from "../notify-adapter/notify-adapter.js";
-import { type ConformanceGroup } from "./runner.js";
+import type { NotifyAdapter } from "../notify-adapter/notify-adapter.ts";
+import type { ConformanceGroup } from "./runner.ts";
 
 /**
  * Fixture for the notify adapter conformance suite. Used both as the factory

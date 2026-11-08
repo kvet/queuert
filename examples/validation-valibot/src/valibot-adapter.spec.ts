@@ -2,7 +2,7 @@ import { runValidationAdapterConformance } from "queuert/conformance";
 import * as v from "valibot";
 import { test } from "vitest";
 
-import { createValibotJobTypes } from "./valibot-adapter.js";
+import { createValibotJobTypes } from "./valibot-adapter.ts";
 
 test("valibot adapter passes validation conformance", async () => {
   await runValidationAdapterConformance(async () => ({

@@ -2,7 +2,7 @@ import { runValidationAdapterConformance } from "queuert/conformance";
 import { test } from "vitest";
 import { z } from "zod";
 
-import { createZodJobTypes } from "./zod-adapter.js";
+import { createZodJobTypes } from "./zod-adapter.ts";
 
 test("zod adapter passes validation conformance", async () => {
   await runValidationAdapterConformance(async () => ({

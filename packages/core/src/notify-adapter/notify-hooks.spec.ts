@@ -1,15 +1,15 @@
 import { describe, expect, test } from "vitest";
 
-import { type StateJob } from "../state-adapter/state-adapter.js";
-import { type TransactionHooks, createTransactionHooks } from "../transaction-hooks.js";
-import { type NotifyAdapter } from "./notify-adapter.js";
-import { createNoopNotifyAdapter } from "./notify-adapter.noop.js";
-import { createSpyNotifyAdapter } from "./notify-adapter.spy.spec-helper.js";
+import type { StateJob } from "../state-adapter/state-adapter.ts";
+import { type TransactionHooks, createTransactionHooks } from "../transaction-hooks.ts";
+import { createNoopNotifyAdapter } from "./notify-adapter.noop.ts";
+import { createSpyNotifyAdapter } from "./notify-adapter.spy.spec-helper.ts";
+import type { NotifyAdapter } from "./notify-adapter.ts";
 import {
   bufferNotifyChainCompletion,
   bufferNotifyJobAttemptLost,
   bufferNotifyJobScheduled,
-} from "./notify-hooks.js";
+} from "./notify-hooks.ts";
 
 const bufferNotifyAll = (
   transactionHooks: TransactionHooks,

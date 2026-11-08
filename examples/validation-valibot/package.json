@@ -4,7 +4,7 @@
   "private": true,
   "type": "module",
   "scripts": {
-    "start": "tsx src/index.ts",
+    "start": "node src/index.ts",
     "test": "vitest --run",
     "typecheck": "tsc --noEmit"
   },

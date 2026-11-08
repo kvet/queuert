@@ -15,7 +15,7 @@ import {
   type ValidatedJobTypeDefinitions,
   createJobTypes,
 } from "queuert";
-import { type z } from "zod";
+import type { z } from "zod";
 
 /**
  * Schema definition for a single job type using Zod.

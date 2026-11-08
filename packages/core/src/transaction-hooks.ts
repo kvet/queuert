@@ -1,4 +1,4 @@
-import { HookNotRegisteredError } from "./errors.js";
+import { HookNotRegisteredError } from "./errors.ts";
 
 /** Defines a named hook with mutable state, a flush callback for commit, an optional discard callback for rollback, and an optional checkpoint callback for savepoint support. */
 export type HookDefinition<T> = {

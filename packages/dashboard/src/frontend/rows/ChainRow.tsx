@@ -2,10 +2,10 @@ import { Row, SubLine, StatusPill } from "@queuert/ui/components";
 import { A } from "@solidjs/router";
 import { Show } from "solid-js";
 
-import { type UnknownChain } from "../api.js";
-import { jsonPreview } from "../domain/json.js";
-import { IdChip } from "../ui/IdChip.js";
-import { Time } from "../ui/Time.js";
+import type { UnknownChain } from "../api.ts";
+import { jsonPreview } from "../domain/json.ts";
+import { IdChip } from "../ui/IdChip.tsx";
+import { Time } from "../ui/Time.tsx";
 
 const DataPreview = (props: { label: string; value: unknown }) => (
   <Show when={props.value != null}>

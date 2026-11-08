@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 
-import { CHAIN_STATUSES, JOB_STATUSES, statusClasses } from "./status.js";
+import { CHAIN_STATUSES, JOB_STATUSES, statusClasses } from "./status.ts";
 
 describe("statusClasses", () => {
   it("styles every job and chain status with a pill and a dot", () => {

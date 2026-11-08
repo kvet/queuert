@@ -12,10 +12,10 @@ import {
   InMemorySpanExporter,
   SimpleSpanProcessor,
 } from "@opentelemetry/sdk-trace";
-import { type ObservabilityAdapter } from "queuert";
+import type { ObservabilityAdapter } from "queuert";
 import { type TestAPI, expect } from "vitest";
 
-import { createOtelObservabilityAdapter } from "../observability-adapter/observability-adapter.otel.js";
+import { createOtelObservabilityAdapter } from "../observability-adapter/observability-adapter.otel.ts";
 
 // Map method names to OTEL metric names
 const methodToMetricName: Record<string, string> = {

@@ -1,6 +1,6 @@
-import { type DatabaseSync, type SQLInputValue, type StatementSync } from "node:sqlite";
+import type { DatabaseSync, SQLInputValue, StatementSync } from "node:sqlite";
 
-import { type AsyncRwLock, type SqliteStateProvider } from "@queuert/sqlite";
+import type { AsyncRwLock, SqliteStateProvider } from "@queuert/sqlite";
 
 export type NodeSqliteContext = { db: DatabaseSync };
 

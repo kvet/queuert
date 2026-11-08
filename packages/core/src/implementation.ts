@@ -1,35 +1,35 @@
-import { type Chain, mapStateChainToChain } from "./entities/chain.js";
-import { type DeduplicationOptions } from "./entities/deduplication.js";
-import { type ScheduleOptions } from "./entities/schedule.js";
+import { type Chain, mapStateChainToChain } from "./entities/chain.ts";
+import type { DeduplicationOptions } from "./entities/deduplication.ts";
+import type { ScheduleOptions } from "./entities/schedule.ts";
 import {
   BlockerLimitExceededError,
   ChainNotFoundError,
   ChainTypeMismatchError,
   JobNotFoundError,
-} from "./errors.js";
-import { type AnyNewJob } from "./job-types/job-types.resolvers.js";
+} from "./errors.ts";
+import type { AnyNewJob } from "./job-types/job-types.resolvers.ts";
 import {
   bufferNotifyChainCompletion,
   bufferNotifyJobScheduled,
-} from "./notify-adapter/notify-hooks.js";
-import {
-  type BlockerSpanHandle,
-  type JobSpanHandle,
-} from "./observability-adapter/observability-adapter.js";
+} from "./notify-adapter/notify-hooks.ts";
+import type {
+  BlockerSpanHandle,
+  JobSpanHandle,
+} from "./observability-adapter/observability-adapter.ts";
 import {
   bufferObservabilityEvent,
   bufferObservabilityRollback,
-} from "./observability-adapter/observability-hooks.js";
-import { type Helpers } from "./setup-helpers.js";
-import { resolveJobId } from "./state-adapter/adapter-config.js";
-import {
-  type BaseTxContext,
-  type StateChain,
-  type StateChainInfo,
-  type StateJob,
-  type StateJobInfo,
-} from "./state-adapter/state-adapter.js";
-import { type TransactionHooks } from "./transaction-hooks.js";
+} from "./observability-adapter/observability-hooks.ts";
+import type { Helpers } from "./setup-helpers.ts";
+import { resolveJobId } from "./state-adapter/adapter-config.ts";
+import type {
+  BaseTxContext,
+  StateChain,
+  StateChainInfo,
+  StateJob,
+  StateJobInfo,
+} from "./state-adapter/state-adapter.ts";
+import type { TransactionHooks } from "./transaction-hooks.ts";
 
 type BlockerSpan = { blockerChain: StateChain; blockerSpan: BlockerSpanHandle | undefined };
 

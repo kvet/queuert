@@ -1,5 +1,5 @@
-import { type AsyncRwLock, type SqliteStateProvider } from "@queuert/sqlite";
-import { type SQL, type TransactionSQL } from "bun";
+import type { AsyncRwLock, SqliteStateProvider } from "@queuert/sqlite";
+import type { SQL, TransactionSQL } from "bun";
 
 export type BunSqlSqliteContext = { txSql: TransactionSQL };
 

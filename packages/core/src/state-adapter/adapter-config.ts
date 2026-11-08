@@ -2,8 +2,8 @@ import { randomUUID } from "node:crypto";
 
 import { isPositiveSafeInteger } from "@queuert/helpers";
 
-import { InvalidJobIdError, InvalidWorkerIdError } from "../errors.js";
-import { type StateAdapterConfig } from "./state-adapter.js";
+import { InvalidJobIdError, InvalidWorkerIdError } from "../errors.ts";
+import type { StateAdapterConfig } from "./state-adapter.ts";
 
 const assertPositiveInteger = (value: number, name: string): void => {
   if (!isPositiveSafeInteger(value)) {

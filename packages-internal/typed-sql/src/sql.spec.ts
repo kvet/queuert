@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 
-import { extractColumnTypes, extractParamTypes, sql, t } from "./sql.js";
+import { extractColumnTypes, extractParamTypes, sql, t } from "./sql.ts";
 
 describe("sql", () => {
   it("defaults readOnly, params, and columns when omitted", () => {

@@ -1,6 +1,6 @@
 import { type JSX, createUniqueId } from "solid-js";
 
-import { logoMarkup, logoViewBox } from "../lib/logo.js";
+import { logoMarkup, logoViewBox } from "../lib/logo.ts";
 
 export type IconProps = { class?: string; size?: number };
 

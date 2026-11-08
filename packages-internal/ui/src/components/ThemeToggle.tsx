@@ -1,8 +1,8 @@
 import { Show } from "solid-js";
 
-import { type Theme, type ThemePreference, nextThemePreference } from "../lib/theme.js";
-import { MonitorIcon, MoonIcon, SunIcon } from "./icons.js";
-import { iconButtonClass } from "./TopBar.js";
+import { type Theme, type ThemePreference, nextThemePreference } from "../lib/theme.ts";
+import { MonitorIcon, MoonIcon, SunIcon } from "./icons.tsx";
+import { iconButtonClass } from "./TopBar.tsx";
 
 const labels: Record<ThemePreference, string> = { system: "System", light: "Light", dark: "Dark" };
 

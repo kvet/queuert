@@ -2,7 +2,7 @@ import { rename, rm } from "node:fs/promises";
 import { fileURLToPath } from "node:url";
 
 import { Application, Converter, ReflectionKind } from "typedoc";
-import { type Plugin } from "vite";
+import type { Plugin } from "vite";
 
 import { apiPackages } from "../src/docs/sections.ts";
 

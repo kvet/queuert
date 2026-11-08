@@ -20,7 +20,7 @@ import {
   measureMemory,
   printHeader,
   runDoubleRunBenchmark,
-} from "./utils.js";
+} from "./utils.ts";
 
 printHeader("REDIS NOTIFY ADAPTER");
 

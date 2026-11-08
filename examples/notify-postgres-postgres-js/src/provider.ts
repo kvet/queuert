@@ -1,4 +1,4 @@
-import { type PgNotifyProvider } from "@queuert/postgres";
+import type { PgNotifyProvider } from "@queuert/postgres";
 import type postgres from "postgres";
 
 export const createPostgresJsNotifyProvider = ({

@@ -1,29 +1,29 @@
 // Test Suites
-export { awaitChainTestSuite } from "./suites/await-chain.test-suite.js";
-export { blockerChainsTestSuite } from "./suites/blocker-chains.test-suite.js";
-export { chainsTestSuite } from "./suites/chains.test-suite.js";
-export { clientQueriesTestSuite } from "./suites/client-queries.test-suite.js";
-export { createChainsTestSuite } from "./suites/create-chains.test-suite.js";
-export { deduplicationTestSuite } from "./suites/deduplication.test-suite.js";
-export { deletionTestSuite } from "./suites/deletion.test-suite.js";
+export { awaitChainTestSuite } from "./suites/await-chain.test-suite.ts";
+export { blockerChainsTestSuite } from "./suites/blocker-chains.test-suite.ts";
+export { chainsTestSuite } from "./suites/chains.test-suite.ts";
+export { clientQueriesTestSuite } from "./suites/client-queries.test-suite.ts";
+export { createChainsTestSuite } from "./suites/create-chains.test-suite.ts";
+export { deduplicationTestSuite } from "./suites/deduplication.test-suite.ts";
+export { deletionTestSuite } from "./suites/deletion.test-suite.ts";
 export {
   notifyAdapterConformanceTestSuite,
   type NotifyConformanceFixture,
-} from "./suites/notify-adapter-conformance.test-suite.js";
-export { notifyResilienceTestSuite } from "./suites/notify-resilience.test-suite.js";
-export { notifyTestSuite } from "./suites/notify.test-suite.js";
-export { processErrorHandlingTestSuite } from "./suites/process-error-handling.test-suite.js";
-export { processTestSuite } from "./suites/process.test-suite.js";
-export { rescheduleJobTestSuite } from "./suites/reschedule-job.test-suite.js";
-export { schedulingTestSuite } from "./suites/scheduling.test-suite.js";
+} from "./suites/notify-adapter-conformance.test-suite.ts";
+export { notifyResilienceTestSuite } from "./suites/notify-resilience.test-suite.ts";
+export { notifyTestSuite } from "./suites/notify.test-suite.ts";
+export { processErrorHandlingTestSuite } from "./suites/process-error-handling.test-suite.ts";
+export { processTestSuite } from "./suites/process.test-suite.ts";
+export { rescheduleJobTestSuite } from "./suites/reschedule-job.test-suite.ts";
+export { schedulingTestSuite } from "./suites/scheduling.test-suite.ts";
 export {
   stateAdapterConformanceTestSuite,
   type StateConformanceFixture,
-} from "./suites/state-adapter-conformance.test-suite.js";
-export { stateResilienceTestSuite } from "./suites/state-resilience.test-suite.js";
-export { validationTestSuite } from "./suites/validation.test-suite.js";
-export { workerTestSuite } from "./suites/worker.test-suite.js";
-export { workerlessCompletionTestSuite } from "./suites/workerless-completion.test-suite.js";
+} from "./suites/state-adapter-conformance.test-suite.ts";
+export { stateResilienceTestSuite } from "./suites/state-resilience.test-suite.ts";
+export { validationTestSuite } from "./suites/validation.test-suite.ts";
+export { workerTestSuite } from "./suites/worker.test-suite.ts";
+export { workerlessCompletionTestSuite } from "./suites/workerless-completion.test-suite.ts";
 
 // Test Context Helpers
 export {
@@ -32,29 +32,29 @@ export {
   extendWithNotifyNoop,
   extendWithResourceLeakDetection,
   type TestSuiteContext,
-} from "./suites/spec-context.spec-helper.js";
+} from "./suites/spec-context.spec-helper.ts";
 
 // Flaky Test Helpers
 export {
   createFlakyBatchGenerator,
   createSeededRandom,
-} from "./suites/flaky-test-helper.spec-helper.js";
+} from "./suites/flaky-test-helper.spec-helper.ts";
 
-export { extendWithStateInProcess } from "./state-adapter/state-adapter.in-process.spec-helper.js";
+export { extendWithStateInProcess } from "./state-adapter/state-adapter.in-process.spec-helper.ts";
 export {
   createSpyStateAdapter,
   type SpyCall,
   type SpyStateAdapter,
-} from "./state-adapter/state-adapter.spy.spec-helper.js";
+} from "./state-adapter/state-adapter.spy.spec-helper.ts";
 
 // Worker Test Helper
 export { withWorkers } from "@queuert/helpers";
 
 // Migration fixture seeding
-export { seedAllStates, seedConfig, type SeedSentinels } from "./conformance/seed-all-states.js";
+export { seedAllStates, seedConfig, type SeedSentinels } from "./conformance/seed-all-states.ts";
 
 // Index coverage
 export {
   observabilityCoverageGroups,
   operationalCoverageGroups,
-} from "./suites/index-coverage-cases.js";
+} from "./suites/index-coverage-cases.ts";

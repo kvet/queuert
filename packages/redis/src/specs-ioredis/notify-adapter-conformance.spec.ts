@@ -3,8 +3,8 @@ import { Redis } from "ioredis";
 import { type NotifyConformanceFixture, notifyAdapterConformanceTestSuite } from "queuert/testing";
 import { it as baseIt, describe } from "vitest";
 
-import { createRedisNotifyAdapter } from "../notify-adapter/notify-adapter.redis.js";
-import { createIoredisNotifyProvider } from "./notify-provider.ioredis.js";
+import { createRedisNotifyAdapter } from "../notify-adapter/notify-adapter.redis.ts";
+import { createIoredisNotifyProvider } from "./notify-provider.ioredis.ts";
 
 const it = extendWithRedis(baseIt, import.meta.url);
 

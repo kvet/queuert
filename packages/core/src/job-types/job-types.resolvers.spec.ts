@@ -1,19 +1,19 @@
 import { describe, expectTypeOf, it } from "vitest";
 
-import {
-  type BlockerChains,
-  type CompletedBlockerChains,
-  type ContinuationJob,
-  type ContinuedJob,
-  type JobTypeReachingEntry,
-  type OutputJob,
-  type RescheduledJob,
-  type ResolvedChain,
-  type ResolvedCompletedChain,
-  type ResolvedJob,
-  type ResolvedRunningChain,
-  type ResolvedRunningJob,
-} from "./job-types.resolvers.js";
+import type {
+  BlockerChains,
+  CompletedBlockerChains,
+  ContinuationJob,
+  ContinuedJob,
+  JobTypeReachingEntry,
+  OutputJob,
+  RescheduledJob,
+  ResolvedChain,
+  ResolvedCompletedChain,
+  ResolvedJob,
+  ResolvedRunningChain,
+  ResolvedRunningJob,
+} from "./job-types.resolvers.ts";
 
 type LinearDefs = {
   entry: {

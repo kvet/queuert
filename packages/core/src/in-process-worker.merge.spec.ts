@@ -1,21 +1,21 @@
 import { describe, expect, expectTypeOf, it } from "vitest";
 
-import { createClient } from "./client.js";
-import { DuplicateJobTypeError } from "./errors.js";
-import { createInProcessWorker } from "./in-process-worker.js";
-import { createProcessors } from "./job-type-processors/create-job-type-processors.js";
+import { createClient } from "./client.ts";
+import { DuplicateJobTypeError } from "./errors.ts";
+import { createInProcessWorker } from "./in-process-worker.ts";
+import { createProcessors } from "./job-type-processors/create-job-type-processors.ts";
 import {
   type ProcessorDefinitions,
   type Processors,
   processorsDefinitionsSymbol,
-} from "./job-type-processors/job-type-processors.js";
-import { mergeProcessors } from "./job-type-processors/merge-job-type-processors.js";
-import { defineJobTypes } from "./job-types/define-job-types.js";
-import { type JobTypeDefinitions } from "./job-types/job-types.js";
-import { type JobTypeProperty } from "./job-types/job-types.resolvers.js";
-import { mergeJobTypes } from "./job-types/merge-job-types.js";
-import { createInProcessStateAdapter } from "./state-adapter/state-adapter.in-process.js";
-import { withTransactionHooks } from "./transaction-hooks.js";
+} from "./job-type-processors/job-type-processors.ts";
+import { mergeProcessors } from "./job-type-processors/merge-job-type-processors.ts";
+import { defineJobTypes } from "./job-types/define-job-types.ts";
+import type { JobTypeProperty } from "./job-types/job-types.resolvers.ts";
+import type { JobTypeDefinitions } from "./job-types/job-types.ts";
+import { mergeJobTypes } from "./job-types/merge-job-types.ts";
+import { createInProcessStateAdapter } from "./state-adapter/state-adapter.in-process.ts";
+import { withTransactionHooks } from "./transaction-hooks.ts";
 
 type OrderDefs = {
   "orders.create": { entry: true; input: { userId: string }; output: { orderId: string } };

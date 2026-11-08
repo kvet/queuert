@@ -3,21 +3,21 @@ import { shortId } from "@queuert/ui/lib";
 import { A, useParams } from "@solidjs/router";
 import { For, Match, Show, Switch } from "solid-js";
 
-import { type UnknownJob, getJobDetail, getWorker, isNotFound } from "../api.js";
-import { elapsedMs, formatDuration } from "../domain/duration.js";
-import { jobPhase } from "../domain/jobPhase.js";
-import { formatRelative } from "../domain/time.js";
-import { jobLease } from "../domain/workers.js";
-import { BlockerChainRow } from "../rows/BlockerChainRow.js";
-import { blockerProgress } from "../rows/BlockerChips.js";
-import { ErrorText, RescheduleButton } from "../rows/JobItem.js";
-import { PageHeader } from "../shell/PageHeader.js";
-import { now } from "../state/clock.js";
-import { createLoader } from "../state/createLoader.js";
-import { CopyButton, IdChip } from "../ui/IdChip.js";
-import { JsonViewer } from "../ui/JsonViewer.js";
-import { ErrorState, Fact, NotFoundState, SkeletonRows, linkClass } from "../ui/kit.js";
-import { Time } from "../ui/Time.js";
+import { type UnknownJob, getJobDetail, getWorker, isNotFound } from "../api.ts";
+import { elapsedMs, formatDuration } from "../domain/duration.ts";
+import { jobPhase } from "../domain/jobPhase.ts";
+import { formatRelative } from "../domain/time.ts";
+import { jobLease } from "../domain/workers.ts";
+import { BlockerChainRow } from "../rows/BlockerChainRow.tsx";
+import { blockerProgress } from "../rows/BlockerChips.tsx";
+import { ErrorText, RescheduleButton } from "../rows/JobItem.tsx";
+import { PageHeader } from "../shell/PageHeader.tsx";
+import { now } from "../state/clock.ts";
+import { createLoader } from "../state/createLoader.ts";
+import { CopyButton, IdChip } from "../ui/IdChip.tsx";
+import { JsonViewer } from "../ui/JsonViewer.tsx";
+import { ErrorState, Fact, NotFoundState, SkeletonRows, linkClass } from "../ui/kit.tsx";
+import { Time } from "../ui/Time.tsx";
 
 export const JobDetail = () => {
   const params = useParams<{ id: string }>();

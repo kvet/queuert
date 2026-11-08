@@ -4,7 +4,7 @@ import knexFactory from "knex";
 import { runStateAdapterConformance } from "queuert/conformance";
 import { test } from "vitest";
 
-import { createKnexPgStateProvider } from "./provider.js";
+import { createKnexPgStateProvider } from "./provider.ts";
 
 // #region conformance
 test("state-postgres-knex provider passes state adapter conformance", async () => {

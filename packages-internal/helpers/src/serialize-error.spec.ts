@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 
-import { serializeError } from "./serialize-error.js";
+import { serializeError } from "./serialize-error.ts";
 
 describe("serializeError", () => {
   it("returns the string as-is for string errors", () => {

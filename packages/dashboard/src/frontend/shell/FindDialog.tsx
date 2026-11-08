@@ -12,11 +12,11 @@ import {
   getWorkersByIds,
   getChainTypeNames,
   getJobTypeNames,
-} from "../api.js";
-import { MAX_IDS, parseIdList } from "../domain/ids.js";
-import { matchTypeNames } from "../domain/typeMatch.js";
-import { createLoader } from "../state/createLoader.js";
-import { Dialog, buttonClass } from "../ui/kit.js";
+} from "../api.ts";
+import { MAX_IDS, parseIdList } from "../domain/ids.ts";
+import { matchTypeNames } from "../domain/typeMatch.ts";
+import { createLoader } from "../state/createLoader.ts";
+import { Dialog, buttonClass } from "../ui/kit.tsx";
 
 const [findOpen, setFindOpen] = createSignal(false);
 

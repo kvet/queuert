@@ -4,7 +4,7 @@ import { Cluster } from "ioredis";
 import { runNotifyAdapterConformance } from "queuert/conformance";
 import { test } from "vitest";
 
-import { createIoredisClusterNotifyProvider } from "./provider.js";
+import { createIoredisClusterNotifyProvider } from "./provider.ts";
 
 // #region conformance
 test("notify-redis-cluster-ioredis provider passes notify adapter conformance", async () => {

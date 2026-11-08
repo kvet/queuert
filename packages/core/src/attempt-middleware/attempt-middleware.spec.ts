@@ -1,12 +1,12 @@
 import { describe, expectTypeOf, it } from "vitest";
 
-import { type Client, createClient } from "../client.js";
-import { createProcessors } from "../job-type-processors/create-job-type-processors.js";
-import { defineJobTypes } from "../job-types/define-job-types.js";
-import { createInProcessStateAdapter } from "../state-adapter/state-adapter.in-process.js";
-import { type StateAdapter } from "../state-adapter/state-adapter.js";
-import { withTransactionHooks } from "../transaction-hooks.js";
-import { type AttemptMiddleware, type MergedAttemptHandlerCtx } from "./attempt-middleware.js";
+import { type Client, createClient } from "../client.ts";
+import { createProcessors } from "../job-type-processors/create-job-type-processors.ts";
+import { defineJobTypes } from "../job-types/define-job-types.ts";
+import { createInProcessStateAdapter } from "../state-adapter/state-adapter.in-process.ts";
+import type { StateAdapter } from "../state-adapter/state-adapter.ts";
+import { withTransactionHooks } from "../transaction-hooks.ts";
+import type { AttemptMiddleware, MergedAttemptHandlerCtx } from "./attempt-middleware.ts";
 
 type Defs = {
   foo: { entry: true; input: { v: number }; output: { ok: true } };

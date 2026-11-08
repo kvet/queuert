@@ -1,6 +1,6 @@
 import { type JSX, Show, children } from "solid-js";
 
-import { type SiteSection } from "../docs/sections.ts";
+import type { SiteSection } from "../docs/sections.ts";
 import { SectionNav } from "./Sidebar.tsx";
 
 export const DocsShell = (props: { section: SiteSection["id"]; children: JSX.Element }) => (

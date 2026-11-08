@@ -1,4 +1,4 @@
-import { type DataType, type TypedSql } from "./sql.js";
+import type { DataType, TypedSql } from "./sql.ts";
 
 export const createTemplateCache = (): {
   getOrCompute: <TParams extends readonly DataType[], TColumns extends Record<string, DataType>>(

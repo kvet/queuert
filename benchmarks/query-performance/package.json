@@ -4,9 +4,9 @@
   "private": true,
   "type": "module",
   "scripts": {
-    "start": "node --import=tsx src/postgres.ts && node --import=tsx src/sqlite.ts",
-    "start:postgres": "node --import=tsx src/postgres.ts",
-    "start:sqlite": "node --import=tsx src/sqlite.ts"
+    "start": "node src/postgres.ts && node src/sqlite.ts",
+    "start:postgres": "node src/postgres.ts",
+    "start:sqlite": "node src/sqlite.ts"
   },
   "dependencies": {
     "@queuert/postgres": "workspace:*",

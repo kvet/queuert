@@ -1,6 +1,6 @@
 import { describe, expect, test, vi } from "vitest";
 
-import { setLongTimeout, sleep } from "./sleep.js";
+import { setLongTimeout, sleep } from "./sleep.ts";
 
 describe("sleep", () => {
   test("resolves after specified duration", async () => {

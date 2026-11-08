@@ -2,9 +2,9 @@ import { StatusPill } from "@queuert/ui/components";
 import { shortId } from "@queuert/ui/lib";
 import { A } from "@solidjs/router";
 
-import { type UnknownJob } from "../api.js";
-import { IdChip } from "../ui/IdChip.js";
-import { Time } from "../ui/Time.js";
+import type { UnknownJob } from "../api.ts";
+import { IdChip } from "../ui/IdChip.tsx";
+import { Time } from "../ui/Time.tsx";
 
 export const BlockedJobRow = (props: { job: UnknownJob }) => (
   <li class="grid grid-cols-[minmax(0,1fr)_auto] items-center gap-x-3 px-4 py-2.5">

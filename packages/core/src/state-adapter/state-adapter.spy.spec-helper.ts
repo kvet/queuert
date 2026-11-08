@@ -1,4 +1,4 @@
-import { type BaseTxContext, type StateAdapter } from "./state-adapter.js";
+import type { BaseTxContext, StateAdapter } from "./state-adapter.ts";
 
 export type SpyCall = {
   name: string;

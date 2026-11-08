@@ -1,10 +1,10 @@
-import {
-  type BaseTxContext,
-  type StateAdapter,
-  type StateJob,
-  type StateJobInfo,
-  type StateWorkerInfo,
-} from "../state-adapter/state-adapter.js";
+import type {
+  BaseTxContext,
+  StateAdapter,
+  StateJob,
+  StateJobInfo,
+  StateWorkerInfo,
+} from "../state-adapter/state-adapter.ts";
 
 export type SeedSentinels = {
   pending: {

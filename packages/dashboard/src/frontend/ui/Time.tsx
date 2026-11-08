@@ -1,5 +1,5 @@
-import { formatAbsolute, formatRelative } from "../domain/time.js";
-import { now } from "../state/clock.js";
+import { formatAbsolute, formatRelative } from "../domain/time.ts";
+import { now } from "../state/clock.ts";
 
 /** Relative time from the shared clock, with the absolute local date-time in `title`. */
 export const Time = (props: { date: Date; class?: string }) => {

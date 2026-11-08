@@ -10,7 +10,7 @@ import {
 } from "queuert";
 import winston from "winston";
 
-import { createWinstonLog } from "./log.js";
+import { createWinstonLog } from "./log.ts";
 
 // ============================================================
 // Contextual Logging via logger injection (attemptMiddleware)

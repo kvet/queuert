@@ -1,4 +1,4 @@
-import { type DataType, type TypedSql, type TypedSqlTemplate } from "./sql.js";
+import type { DataType, TypedSql, TypedSqlTemplate } from "./sql.ts";
 
 const fnv1aHex = (input: string): string => {
   const len = input.length;

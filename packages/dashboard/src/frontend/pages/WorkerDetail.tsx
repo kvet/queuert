@@ -3,16 +3,23 @@ import { shortId } from "@queuert/ui/lib";
 import { A, useParams } from "@solidjs/router";
 import { For, Match, Show, Switch } from "solid-js";
 
-import { PAGE_SIZE, getWorker, isNotFound, listWorkerJobs } from "../api.js";
-import { decodeWorkerId } from "../domain/workers.js";
-import { JobRow } from "../rows/JobRow.js";
-import { PageHeader } from "../shell/PageHeader.js";
-import { createLoader } from "../state/createLoader.js";
-import { createPagedList } from "../state/createPagedList.js";
-import { IdChip } from "../ui/IdChip.js";
-import { EmptyState, ErrorState, Fact, NotFoundState, SkeletonRows, linkClass } from "../ui/kit.js";
-import { Time } from "../ui/Time.js";
-import { LoadMoreFooter } from "./listParts.js";
+import { PAGE_SIZE, getWorker, isNotFound, listWorkerJobs } from "../api.ts";
+import { decodeWorkerId } from "../domain/workers.ts";
+import { JobRow } from "../rows/JobRow.tsx";
+import { PageHeader } from "../shell/PageHeader.tsx";
+import { createLoader } from "../state/createLoader.ts";
+import { createPagedList } from "../state/createPagedList.ts";
+import { IdChip } from "../ui/IdChip.tsx";
+import {
+  EmptyState,
+  ErrorState,
+  Fact,
+  NotFoundState,
+  SkeletonRows,
+  linkClass,
+} from "../ui/kit.tsx";
+import { Time } from "../ui/Time.tsx";
+import { LoadMoreFooter } from "./listParts.tsx";
 
 export const WorkerDetail = () => {
   const params = useParams<{ id: string }>();

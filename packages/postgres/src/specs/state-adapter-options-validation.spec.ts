@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 
-import { createPgStateAdapter } from "../state-adapter/state-adapter.pg.js";
+import { createPgStateAdapter } from "../state-adapter/state-adapter.pg.ts";
 
 const dummyProvider = {
   withTransaction: async <T>(fn: (ctx: any) => Promise<T>) => fn({}),

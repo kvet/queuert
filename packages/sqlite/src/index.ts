@@ -2,6 +2,6 @@ export { createAsyncRwLock, type AsyncRwLock, type LockHandle } from "@queuert/h
 export {
   createSqliteStateAdapter,
   type SqliteStateAdapter,
-} from "./state-adapter/state-adapter.sqlite.js";
-export { type SqliteStateProvider } from "./state-provider/state-provider.sqlite.js";
+} from "./state-adapter/state-adapter.sqlite.ts";
+export { type SqliteStateProvider } from "./state-provider/state-provider.sqlite.ts";
 export { type MigrationResult, type RuntimeType } from "@queuert/typed-sql";

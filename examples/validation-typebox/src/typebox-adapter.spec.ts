@@ -2,7 +2,7 @@ import { Type } from "@sinclair/typebox";
 import { runValidationAdapterConformance } from "queuert/conformance";
 import { test } from "vitest";
 
-import { createTypeBoxJobTypes } from "./typebox-adapter.js";
+import { createTypeBoxJobTypes } from "./typebox-adapter.ts";
 
 test("typebox adapter passes validation conformance", async () => {
   await runValidationAdapterConformance(async () => ({

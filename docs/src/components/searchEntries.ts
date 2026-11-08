@@ -1,4 +1,4 @@
-import { type SearchEntry } from "../../plugins/search-index.ts";
+import type { SearchEntry } from "../../plugins/search-index.ts";
 
 export const fetchSearchEntries = async (
   url: string,

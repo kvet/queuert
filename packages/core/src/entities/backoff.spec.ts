@@ -1,6 +1,6 @@
 import { describe, expect, test } from "vitest";
 
-import { calculateBackoffMs } from "./backoff.js";
+import { calculateBackoffMs } from "./backoff.ts";
 
 describe("calculateBackoffMs", () => {
   test("returns initial delay on first attempt", () => {

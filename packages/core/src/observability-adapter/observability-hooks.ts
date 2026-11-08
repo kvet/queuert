@@ -1,4 +1,4 @@
-import { type TransactionHooks } from "../transaction-hooks.js";
+import type { TransactionHooks } from "../transaction-hooks.ts";
 
 type Callback = () => void | Promise<void>;
 

@@ -1,4 +1,4 @@
-import { type TraceSpan } from "../components/integrations/observability/TraceWaterfall.tsx";
+import type { TraceSpan } from "../components/integrations/observability/TraceWaterfall.tsx";
 
 /** render-invoice-pdf → sync-to-crm, with one failed attempt and a retry. */
 export const invoiceTrace: TraceSpan[] = [

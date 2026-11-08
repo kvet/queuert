@@ -1,4 +1,4 @@
-import { type ChainStatus, type JobStatus } from "queuert";
+import type { ChainStatus, JobStatus } from "queuert";
 
 export type AnyStatus = JobStatus | ChainStatus;
 

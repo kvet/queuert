@@ -14,29 +14,29 @@
  * - `JobTypeReachingEntry<TJobTypeDefinitions, K>` — which entry types can reach K via chain walking
  */
 
-import {
-  type Chain,
-  type ChainFields,
-  type CompletedChainFields,
-  type RunningChainFields,
-} from "../entities/chain.types.js";
-import { type DeduplicationOptions } from "../entities/deduplication.js";
-import {
-  type CompletedJobFields,
-  type ContinuedJobFields,
-  type Job,
-  type JobFields,
-  type PendingJobFields,
-  type RunningJobFields,
-  type TerminalJobFields,
-} from "../entities/job.js";
-import { type ScheduleOptions } from "../entities/schedule.js";
-import {
-  type BaseJobTypeDefinitions,
-  type JobTypeReference,
-  type NominalJobTypeReference,
-  type StructuralJobTypeReference,
-} from "./job-type.js";
+import type {
+  Chain,
+  ChainFields,
+  CompletedChainFields,
+  RunningChainFields,
+} from "../entities/chain.types.ts";
+import type { DeduplicationOptions } from "../entities/deduplication.ts";
+import type {
+  CompletedJobFields,
+  ContinuedJobFields,
+  Job,
+  JobFields,
+  PendingJobFields,
+  RunningJobFields,
+  TerminalJobFields,
+} from "../entities/job.ts";
+import type { ScheduleOptions } from "../entities/schedule.ts";
+import type {
+  BaseJobTypeDefinitions,
+  JobTypeReference,
+  NominalJobTypeReference,
+  StructuralJobTypeReference,
+} from "./job-type.ts";
 
 // ─── Distributive accessors ───
 

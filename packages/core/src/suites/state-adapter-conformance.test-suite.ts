@@ -1,13 +1,13 @@
 import { type TestAPI, describe } from "vitest";
 
-import { expect as defaultExpect } from "../conformance/expect.js";
-import { SkipSignalError } from "../conformance/runner.js";
+import { expect as defaultExpect } from "../conformance/expect.ts";
+import { SkipSignalError } from "../conformance/runner.ts";
 import {
   type StateConformanceFixture,
   stateAdapterConformanceGroups,
-} from "../conformance/state-adapter-cases.js";
+} from "../conformance/state-adapter-cases.ts";
 
-export { type StateConformanceFixture } from "../conformance/state-adapter-cases.js";
+export { type StateConformanceFixture } from "../conformance/state-adapter-cases.ts";
 
 /**
  * Run the state adapter conformance cases inside a vitest suite.

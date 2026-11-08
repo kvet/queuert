@@ -4,7 +4,7 @@ import { Pool } from "pg";
 import { runNotifyAdapterConformance } from "queuert/conformance";
 import { test } from "vitest";
 
-import { createPgPoolNotifyProvider } from "./provider.js";
+import { createPgPoolNotifyProvider } from "./provider.ts";
 
 // #region conformance
 test("notify-postgres-pg provider passes notify adapter conformance", async () => {

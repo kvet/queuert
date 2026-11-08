@@ -1,7 +1,7 @@
 import { stateAdapterConformanceTestSuite } from "queuert/testing";
 import { it as baseIt, describe, expect } from "vitest";
 
-import { extendWithVarianceStateSqlite } from "./state-adapter-variance.spec-helper.js";
+import { extendWithVarianceStateSqlite } from "./state-adapter-variance.spec-helper.ts";
 
 const tablePrefix = "myapp_queue_";
 

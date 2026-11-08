@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 
-import { narrowToStatuses } from "./typeData.js";
+import { narrowToStatuses } from "./typeData.ts";
 
 const count = (value: number) => ({ count: value, hasMore: false });
 

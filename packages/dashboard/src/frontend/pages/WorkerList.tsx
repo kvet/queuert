@@ -1,14 +1,14 @@
 import { useSearchParams } from "@solidjs/router";
 import { Show } from "solid-js";
 
-import { PAGE_SIZE, getJobTypeNames, listWorkers } from "../api.js";
-import { WorkerRow } from "../rows/WorkerRow.js";
-import { createLoader } from "../state/createLoader.js";
-import { createPagedList } from "../state/createPagedList.js";
-import { EmptyState, buttonClass } from "../ui/kit.js";
-import { Select } from "../ui/Select.js";
-import { FilterBar } from "./filters.js";
-import { PagedListBody } from "./listParts.js";
+import { PAGE_SIZE, getJobTypeNames, listWorkers } from "../api.ts";
+import { WorkerRow } from "../rows/WorkerRow.tsx";
+import { createLoader } from "../state/createLoader.ts";
+import { createPagedList } from "../state/createPagedList.ts";
+import { EmptyState, buttonClass } from "../ui/kit.tsx";
+import { Select } from "../ui/Select.tsx";
+import { FilterBar } from "./filters.tsx";
+import { PagedListBody } from "./listParts.tsx";
 
 export const WorkerList = () => {
   const [searchParams, setSearchParams] = useSearchParams();

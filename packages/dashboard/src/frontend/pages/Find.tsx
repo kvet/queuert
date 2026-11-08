@@ -3,13 +3,13 @@ import { shortId } from "@queuert/ui/lib";
 import { useSearchParams } from "@solidjs/router";
 import { For, Match, Show, Switch, createSignal } from "solid-js";
 
-import { getChainsByIds, getJobsByIds, getWorkersByIds } from "../api.js";
-import { MAX_IDS, parseIdList } from "../domain/ids.js";
-import { ChainRow } from "../rows/ChainRow.js";
-import { JobRow } from "../rows/JobRow.js";
-import { WorkerRow } from "../rows/WorkerRow.js";
-import { createLoader } from "../state/createLoader.js";
-import { EmptyState, ErrorState, SkeletonRows } from "../ui/kit.js";
+import { getChainsByIds, getJobsByIds, getWorkersByIds } from "../api.ts";
+import { MAX_IDS, parseIdList } from "../domain/ids.ts";
+import { ChainRow } from "../rows/ChainRow.tsx";
+import { JobRow } from "../rows/JobRow.tsx";
+import { WorkerRow } from "../rows/WorkerRow.tsx";
+import { createLoader } from "../state/createLoader.ts";
+import { EmptyState, ErrorState, SkeletonRows } from "../ui/kit.tsx";
 
 const IdChipsInput = (props: {
   ids: string[];

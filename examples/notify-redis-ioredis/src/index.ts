@@ -10,7 +10,7 @@ import {
   createInProcessStateAdapter,
 } from "queuert";
 
-import { createIoredisNotifyProvider } from "./provider.js";
+import { createIoredisNotifyProvider } from "./provider.ts";
 
 // Start Redis using testcontainers
 console.log("Starting Redis...");

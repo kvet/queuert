@@ -1,5 +1,5 @@
 import { A } from "@solidjs/router";
-import { type JSX } from "solid-js";
+import type { JSX } from "solid-js";
 
 import { type FieldItem, FieldList } from "../../../../components/FieldList.tsx";
 import { TraceWaterfall } from "../../../../components/integrations/observability/TraceWaterfall.tsx";

@@ -11,13 +11,13 @@ import {
   createMigrationStore,
   createPgStateAdapter,
   migrations,
-} from "../state-adapter/state-adapter.pg.js";
+} from "../state-adapter/state-adapter.pg.ts";
 import {
   type PgPoolContext,
   createPgPoolProvider,
-} from "../state-provider/state-provider.pg-pool.js";
-import { type PgStateProvider } from "../state-provider/state-provider.pg.js";
-import { LEASE_TTL_MS, MARKER } from "./state-adapter-migration.process.js";
+} from "../state-provider/state-provider.pg-pool.ts";
+import type { PgStateProvider } from "../state-provider/state-provider.pg.ts";
+import { LEASE_TTL_MS, MARKER } from "./state-adapter-migration.process.ts";
 
 const INSTALL = "001_initial_schema";
 const WORKER_LIVENESS = "002_worker_liveness";

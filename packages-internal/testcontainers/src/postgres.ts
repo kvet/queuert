@@ -4,7 +4,7 @@ import { PostgreSqlContainer, type StartedPostgreSqlContainer } from "@testconta
 import { Client } from "pg";
 import { type TestAPI, beforeAll } from "vitest";
 
-import { withContainerLock } from "./with-container-lock.js";
+import { withContainerLock } from "./with-container-lock.ts";
 
 export type AcquiredPostgres = {
   connectionString: string;

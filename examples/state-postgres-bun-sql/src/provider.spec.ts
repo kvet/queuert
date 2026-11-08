@@ -5,7 +5,7 @@ import { acquirePostgres } from "@queuert/testcontainers";
 import { SQL } from "bun";
 import { runStateAdapterConformance } from "queuert/conformance";
 
-import { createBunSqlStateProvider } from "./provider.js";
+import { createBunSqlStateProvider } from "./provider.ts";
 
 // #region conformance
 test("state-postgres-bun-sql provider passes state adapter conformance", async () => {

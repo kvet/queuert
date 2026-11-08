@@ -1,4 +1,4 @@
-import { type PgStateProvider } from "@queuert/postgres";
+import type { PgStateProvider } from "@queuert/postgres";
 import { CompiledQuery, type Kysely } from "kysely";
 
 export type KyselyPgContext<TDatabase> = { db: Kysely<TDatabase> };

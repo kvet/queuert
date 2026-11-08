@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 
-import { faviconDataUri, faviconSvg, logoMarkup } from "./logo.js";
+import { faviconDataUri, faviconSvg, logoMarkup } from "./logo.ts";
 
 const ids = (markup: string) => [...markup.matchAll(/ id="([^"]+)"/g)].map((match) => match[1]);
 const references = (markup: string) =>

@@ -1,7 +1,7 @@
 import { describe, expect, expectTypeOf, it } from "vitest";
 
-import { type StateJobInfo } from "../state-adapter/state-adapter.js";
-import { type Job, mapStateJobToJob } from "./job.js";
+import type { StateJobInfo } from "../state-adapter/state-adapter.ts";
+import { type Job, mapStateJobToJob } from "./job.ts";
 
 const chainInfo = {
   id: "chain-1",

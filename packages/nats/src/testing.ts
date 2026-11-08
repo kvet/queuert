@@ -1,1 +1,1 @@
-export { extendWithNotifyNats } from "./specs/notify-adapter.nats.spec-helper.js";
+export { extendWithNotifyNats } from "./specs/notify-adapter.nats.spec-helper.ts";

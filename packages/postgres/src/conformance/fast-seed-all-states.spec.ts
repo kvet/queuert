@@ -3,12 +3,12 @@ import { Pool } from "pg";
 import { extendWithResourceLeakDetection, seedAllStates } from "queuert/testing";
 import { it as baseIt, describe, expect } from "vitest";
 
-import { createPgStateAdapter } from "../state-adapter/state-adapter.pg.js";
+import { createPgStateAdapter } from "../state-adapter/state-adapter.pg.ts";
 import {
   type PgPoolContext,
   createPgPoolProvider,
-} from "../state-provider/state-provider.pg-pool.js";
-import { fastSeedAllStates } from "./fast-seed-all-states.js";
+} from "../state-provider/state-provider.pg-pool.ts";
+import { fastSeedAllStates } from "./fast-seed-all-states.ts";
 
 const jobQuery = `
   SELECT

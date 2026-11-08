@@ -1,6 +1,6 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
-import { holdLease, workerLeaseConfigViolations } from "./worker-lease.js";
+import { holdLease, workerLeaseConfigViolations } from "./worker-lease.ts";
 
 const config = { durationMs: 100, heartbeatMs: 20 };
 

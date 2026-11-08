@@ -1,12 +1,12 @@
 import { readFile, writeFile } from "node:fs/promises";
 import { join } from "node:path";
 
-import { type Element, type Root, type RootContent } from "hast";
+import type { Element, Root, RootContent } from "hast";
 import { fromHtml } from "hast-util-from-html";
-import { type Plugin } from "vite";
+import type { Plugin } from "vite";
 
 import { apiPackages, siteSections } from "../src/docs/sections.ts";
-import { type SourcePage } from "./content.ts";
+import type { SourcePage } from "./content.ts";
 
 export type SearchEntry = {
   id: number;

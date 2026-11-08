@@ -1,7 +1,7 @@
 import { Box, ChevronRightIcon } from "@queuert/ui/components";
 import { For, Match, Show, Switch, createSignal, onCleanup, onMount } from "solid-js";
 
-import { CopyButton } from "./IdChip.js";
+import { CopyButton } from "./IdChip.tsx";
 
 const COLLAPSE_DEPTH = 2;
 const COLLAPSE_SIZE = 20;

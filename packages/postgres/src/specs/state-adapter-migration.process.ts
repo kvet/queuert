@@ -2,8 +2,8 @@ import { runDeploymentProcess } from "@queuert/helpers/testing";
 import { type Migration, createMigrator, createTemplateApplier, sql } from "@queuert/typed-sql";
 import { Pool } from "pg";
 
-import { createMigrationStore, migrations } from "../state-adapter/state-adapter.pg.js";
-import { createPgPoolProvider } from "../state-provider/state-provider.pg-pool.js";
+import { createMigrationStore, migrations } from "../state-adapter/state-adapter.pg.ts";
+import { createPgPoolProvider } from "../state-provider/state-provider.pg-pool.ts";
 
 export const MARKER = "999_deployment_marker";
 

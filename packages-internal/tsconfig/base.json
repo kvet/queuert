@@ -7,7 +7,9 @@
     "noEmit": true,
     "composite": true,
     "strict": true,
-    "isolatedModules": true,
+    "allowImportingTsExtensions": true,
+    "erasableSyntaxOnly": true,
+    "verbatimModuleSyntax": true,
     "skipLibCheck": true,
     "skipDefaultLibCheck": true,
     "types": ["node"]

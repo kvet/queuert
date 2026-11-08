@@ -14,7 +14,7 @@
     "./provider": "./src/provider.ts"
   },
   "scripts": {
-    "start": "tsx src/index.ts",
+    "start": "node src/index.ts",
     "test": "vitest --run",
     "postinstall": "prisma generate",
     "typecheck": "prisma generate < /dev/null && tsc --noEmit"

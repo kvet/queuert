@@ -3,7 +3,7 @@ import { createNodeRedisNotifyProvider } from "example-notify-redis-redis/provid
 import { createInProcessStateAdapter } from "queuert";
 import { type RedisClientType, createClient as createRedisClient } from "redis";
 
-import { benchmarkNamespace, requireEnv, runBenchmark } from "./utils.js";
+import { benchmarkNamespace, requireEnv, runBenchmark } from "./utils.ts";
 
 const redisUrl = requireEnv("BENCHMARK_REDIS_URL");
 const redis = createRedisClient({ url: redisUrl }) as RedisClientType;

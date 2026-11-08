@@ -2,12 +2,12 @@ import Database from "better-sqlite3";
 import { seedAllStates } from "queuert/testing";
 import { describe, expect, it } from "vitest";
 
-import { createSqliteStateAdapter } from "../state-adapter/state-adapter.sqlite.js";
+import { createSqliteStateAdapter } from "../state-adapter/state-adapter.sqlite.ts";
 import {
   type BetterSqlite3Context,
   createBetterSqlite3Provider,
-} from "../state-provider/state-provider.better-sqlite3.js";
-import { fastSeedAllStates } from "./fast-seed-all-states.js";
+} from "../state-provider/state-provider.better-sqlite3.ts";
+import { fastSeedAllStates } from "./fast-seed-all-states.ts";
 
 const jobQuery = `
   SELECT

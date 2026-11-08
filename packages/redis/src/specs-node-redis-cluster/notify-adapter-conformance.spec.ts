@@ -3,8 +3,8 @@ import { type NotifyConformanceFixture, notifyAdapterConformanceTestSuite } from
 import { createCluster, type RedisClusterType } from "redis";
 import { it as baseIt, describe } from "vitest";
 
-import { createRedisNotifyAdapter } from "../notify-adapter/notify-adapter.redis.js";
-import { createNodeRedisClusterNotifyProvider } from "./notify-provider.node-redis-cluster.js";
+import { createRedisNotifyAdapter } from "../notify-adapter/notify-adapter.redis.ts";
+import { createNodeRedisClusterNotifyProvider } from "./notify-provider.node-redis-cluster.ts";
 
 const it = extendWithRedisCluster(baseIt, import.meta.url);
 

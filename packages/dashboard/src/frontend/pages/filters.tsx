@@ -1,12 +1,12 @@
 import { ArrowDownIcon, ArrowUpIcon, StatusDot } from "@queuert/ui/components";
-import { type AnyStatus } from "@queuert/ui/lib";
+import type { AnyStatus } from "@queuert/ui/lib";
 import { useLocation, useSearchParams } from "@solidjs/router";
 import { For, type JSX, Show } from "solid-js";
 
-import { basePath } from "../base.js";
-import { type CappedCount, formatCount, formatSum, sumCounts } from "../domain/counts.js";
-import { buttonClass } from "../ui/kit.js";
-import { Select } from "../ui/Select.js";
+import { basePath } from "../base.ts";
+import { type CappedCount, formatCount, formatSum, sumCounts } from "../domain/counts.ts";
+import { buttonClass } from "../ui/kit.tsx";
+import { Select } from "../ui/Select.tsx";
 
 const segmentGroupClass = "flex max-w-full min-w-0 flex-wrap rounded-xs bg-surface-2 p-0.5";
 const segmentClass =

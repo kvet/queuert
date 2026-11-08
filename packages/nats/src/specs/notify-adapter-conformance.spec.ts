@@ -3,7 +3,7 @@ import { extendWithNats } from "@queuert/testcontainers";
 import { type NotifyConformanceFixture, notifyAdapterConformanceTestSuite } from "queuert/testing";
 import { it as baseIt, describe } from "vitest";
 
-import { createNatsNotifyAdapter } from "../notify-adapter/notify-adapter.nats.js";
+import { createNatsNotifyAdapter } from "../notify-adapter/notify-adapter.nats.ts";
 
 const it = extendWithNats(baseIt, import.meta.url);
 

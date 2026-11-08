@@ -1,5 +1,5 @@
-import { type SqliteStateProvider } from "@queuert/sqlite";
-import { type Knex } from "knex";
+import type { SqliteStateProvider } from "@queuert/sqlite";
+import type { Knex } from "knex";
 
 export type KnexSqliteContext = { trx: Knex.Transaction };
 

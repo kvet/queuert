@@ -1,9 +1,9 @@
-import { type ConformanceReport, type ConformanceResult, runConformance } from "./runner.js";
+import { type ConformanceReport, type ConformanceResult, runConformance } from "./runner.ts";
 import {
   type ValidationAdapterConformanceContext,
   type ValidationConformanceFixture,
   validationAdapterConformanceGroups,
-} from "./validation-adapter-cases.js";
+} from "./validation-adapter-cases.ts";
 
 export type ValidationConformanceOptions = {
   caseTimeoutMs?: number;
@@ -64,4 +64,4 @@ export const runValidationAdapterConformance = async (
 export {
   type ValidationAdapterConformanceContext,
   type ValidationConformanceFixture,
-} from "./validation-adapter-cases.js";
+} from "./validation-adapter-cases.ts";

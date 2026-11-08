@@ -1,7 +1,7 @@
 import { Box } from "@queuert/ui/components";
 import { For, Show, createSignal, onCleanup, onMount } from "solid-js";
 
-import { type DocHeading } from "../docs/pages.ts";
+import type { DocHeading } from "../docs/pages.ts";
 
 export const Toc = (props: { headings: DocHeading[] }) => {
   const [active, setActive] = createSignal<string>();

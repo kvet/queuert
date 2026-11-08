@@ -1,9 +1,9 @@
 import { randomUUID } from "node:crypto";
 
-import { type BaseTxContext } from "queuert";
+import type { BaseTxContext } from "queuert";
 import { type SeedSentinels, seedConfig } from "queuert/testing";
 
-import { type SqliteStateProvider } from "../state-provider/state-provider.sqlite.js";
+import type { SqliteStateProvider } from "../state-provider/state-provider.sqlite.ts";
 
 const CHUNK = 200;
 

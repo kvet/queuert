@@ -1,6 +1,6 @@
 import { describe, expect, test, vi } from "vitest";
 
-import { createCallOnce } from "./call-once.js";
+import { createCallOnce } from "./call-once.ts";
 
 describe("createCallOnce", () => {
   test("passes arguments through and returns the result", async () => {

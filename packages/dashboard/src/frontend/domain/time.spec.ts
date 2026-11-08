@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 
-import { formatRelative } from "./time.js";
+import { formatRelative } from "./time.ts";
 
 describe("formatRelative", () => {
   const now = 1_000_000_000;

@@ -4,10 +4,10 @@
   "private": true,
   "type": "module",
   "scripts": {
-    "start": "node --import=tsx src/index.ts",
-    "start:ts6": "node --import=tsx src/index.ts ts6",
-    "start:ts7": "node --import=tsx src/index.ts ts7",
-    "start:tsrs": "node --import=tsx src/index.ts tsrs",
+    "start": "node src/index.ts",
+    "start:ts6": "node src/index.ts ts6",
+    "start:ts7": "node src/index.ts ts7",
+    "start:tsrs": "node src/index.ts tsrs",
     "typecheck": "tsc --noEmit"
   },
   "dependencies": {

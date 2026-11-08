@@ -3,7 +3,7 @@ import { createPostgresJsNotifyProvider } from "example-notify-postgres-postgres
 import postgres from "postgres";
 import { createInProcessStateAdapter } from "queuert";
 
-import { benchmarkNamespace, requireEnv, runBenchmark } from "./utils.js";
+import { benchmarkNamespace, requireEnv, runBenchmark } from "./utils.ts";
 
 const sql = postgres(requireEnv("BENCHMARK_POSTGRES_URL"), { max: 20 });
 

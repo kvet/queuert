@@ -1,7 +1,7 @@
 import { describe, expect, it } from "vitest";
 
-import { sql, t } from "./sql.js";
-import { createTemplateApplier } from "./template-applier.js";
+import { sql, t } from "./sql.ts";
+import { createTemplateApplier } from "./template-applier.ts";
 
 describe("createTemplateApplier", () => {
   describe("resolved id", () => {

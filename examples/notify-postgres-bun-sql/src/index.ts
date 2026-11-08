@@ -10,7 +10,7 @@ import {
   createInProcessStateAdapter,
 } from "queuert";
 
-import { createBunSqlNotifyProvider } from "./provider.js";
+import { createBunSqlNotifyProvider } from "./provider.ts";
 
 // Start PostgreSQL using testcontainers
 console.log("Starting PostgreSQL...");

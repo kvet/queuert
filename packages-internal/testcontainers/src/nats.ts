@@ -5,7 +5,7 @@ import {
 } from "@testcontainers/nats";
 import { type TestAPI, beforeAll } from "vitest";
 
-import { withContainerLock } from "./with-container-lock.js";
+import { withContainerLock } from "./with-container-lock.ts";
 
 export type { NatsConnectionOptions };
 

@@ -1,8 +1,8 @@
 import { it as baseIt, describe, expect } from "vitest";
 
-import { sql } from "./sql.js";
-import { type TemplateApplier, createTemplateApplier } from "./template-applier.js";
-import { createTemplateCache } from "./template-cache.js";
+import { sql } from "./sql.ts";
+import { type TemplateApplier, createTemplateApplier } from "./template-applier.ts";
+import { createTemplateCache } from "./template-cache.ts";
 
 const it = baseIt.extend<{ applyTemplate: TemplateApplier }>({
   // oxlint-disable-next-line no-empty-pattern

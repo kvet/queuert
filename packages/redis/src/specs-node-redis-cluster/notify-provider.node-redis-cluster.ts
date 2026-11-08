@@ -1,6 +1,6 @@
-import { type RedisClusterType } from "redis";
+import type { RedisClusterType } from "redis";
 
-import { type RedisNotifyProvider } from "../notify-provider/notify-provider.redis.js";
+import type { RedisNotifyProvider } from "../notify-provider/notify-provider.redis.ts";
 
 export const createNodeRedisClusterNotifyProvider = ({
   cluster,

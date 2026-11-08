@@ -3,7 +3,7 @@ import { extname, join } from "node:path";
 import { fileURLToPath } from "node:url";
 
 import mdx from "@mdx-js/rollup";
-import { type Plugin, type ViteDevServer } from "vite";
+import type { Plugin, ViteDevServer } from "vite";
 import { parse as parseYaml } from "yaml";
 
 import { changelog } from "./changelog.ts";

@@ -8,7 +8,7 @@ import { acquirePostgres } from "@queuert/testcontainers";
 import { runStateAdapterConformance } from "queuert/conformance";
 import { test } from "vitest";
 
-import { createPrismaPgStateProvider } from "./provider.js";
+import { createPrismaPgStateProvider } from "./provider.ts";
 
 const EXAMPLE_DIR = dirname(dirname(fileURLToPath(import.meta.url)));
 
@@ -30,7 +30,7 @@ test("state-postgres-prisma provider passes state adapter conformance", async ()
       stdio: "inherit",
     });
 
-    const { PrismaClient } = await import("../prisma/generated/prisma/client.js");
+    const { PrismaClient } = await import("../prisma/generated/prisma/client.ts");
     const prismaAdapter = new PrismaPg({ connectionString: pg.connectionString });
     const prisma = new PrismaClient({ adapter: prismaAdapter }) as unknown as PrismaLike;
 

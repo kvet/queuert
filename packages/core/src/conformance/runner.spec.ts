@@ -6,7 +6,7 @@ import {
   type ConformanceGroup,
   type ConformanceResult,
   runConformance,
-} from "./runner.js";
+} from "./runner.ts";
 
 type Ctx = { counter: { value: number } };
 

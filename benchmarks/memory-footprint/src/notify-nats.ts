@@ -19,7 +19,7 @@ import {
   measureMemory,
   printHeader,
   runDoubleRunBenchmark,
-} from "./utils.js";
+} from "./utils.ts";
 
 printHeader("NATS NOTIFY ADAPTER");
 

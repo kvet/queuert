@@ -1,23 +1,23 @@
 import { describe, expect, expectTypeOf, it } from "vitest";
 
-import { type AttemptMiddleware } from "../attempt-middleware/attempt-middleware.js";
-import { createClient } from "../client.js";
-import { DuplicateJobTypeError } from "../errors.js";
-import { createInProcessWorker } from "../in-process-worker.js";
-import { defineJobTypes } from "../job-types/define-job-types.js";
+import type { AttemptMiddleware } from "../attempt-middleware/attempt-middleware.ts";
+import { createClient } from "../client.ts";
+import { DuplicateJobTypeError } from "../errors.ts";
+import { createInProcessWorker } from "../in-process-worker.ts";
+import { defineJobTypes } from "../job-types/define-job-types.ts";
 import {
   createInProcessStateAdapter,
   type InProcessStateAdapter,
-} from "../state-adapter/state-adapter.in-process.js";
-import { withTransactionHooks } from "../transaction-hooks.js";
-import { createProcessors } from "./create-job-type-processors.js";
+} from "../state-adapter/state-adapter.in-process.ts";
+import { withTransactionHooks } from "../transaction-hooks.ts";
+import { createProcessors } from "./create-job-type-processors.ts";
 import {
   type ProcessorDefinitions,
   type ProcessorMiddlewareTuple,
   processorAttemptMiddlewareSymbol,
   processorsMiddlewareSymbol,
-} from "./job-type-processors.js";
-import { omitProcessors, pickProcessors } from "./pick-job-type-processors.js";
+} from "./job-type-processors.ts";
+import { omitProcessors, pickProcessors } from "./pick-job-type-processors.ts";
 
 type ImageDefs = {
   "images.resize": { entry: true; input: { url: string }; output: { url: string } };

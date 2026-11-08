@@ -18,7 +18,7 @@ import {
   createInProcessStateAdapter,
 } from "queuert";
 
-import { createTypeBoxJobTypes } from "./typebox-adapter.js";
+import { createTypeBoxJobTypes } from "./typebox-adapter.ts";
 
 // #region usage
 // URL format for TypeBox (simplified pattern)

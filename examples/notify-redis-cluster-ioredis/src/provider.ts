@@ -1,5 +1,5 @@
-import { type RedisNotifyProvider } from "@queuert/redis";
-import { type Cluster } from "ioredis";
+import type { RedisNotifyProvider } from "@queuert/redis";
+import type { Cluster } from "ioredis";
 
 export const createIoredisClusterNotifyProvider = ({
   cluster,

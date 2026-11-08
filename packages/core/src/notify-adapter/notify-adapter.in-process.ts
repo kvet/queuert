@@ -1,4 +1,4 @@
-import { type NotifyAdapter } from "./notify-adapter.js";
+import type { NotifyAdapter } from "./notify-adapter.ts";
 
 /** Creates an in-memory notify adapter for single-process deployments, delivering notifications through in-process callbacks. */
 export const createInProcessNotifyAdapter = async (): Promise<NotifyAdapter> => {

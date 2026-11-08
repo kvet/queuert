@@ -3,8 +3,8 @@ import postgres from "postgres";
 import { type NotifyConformanceFixture, notifyAdapterConformanceTestSuite } from "queuert/testing";
 import { it as baseIt, describe } from "vitest";
 
-import { createPgNotifyAdapter } from "../notify-adapter/notify-adapter.pg.js";
-import { createPostgresJsNotifyProvider } from "../notify-provider/notify-provider.postgres-js.js";
+import { createPgNotifyAdapter } from "../notify-adapter/notify-adapter.pg.ts";
+import { createPostgresJsNotifyProvider } from "../notify-provider/notify-provider.postgres-js.ts";
 
 const it = extendWithPostgres(baseIt, import.meta.url);
 

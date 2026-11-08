@@ -1,5 +1,5 @@
-import { type PgNotifyProvider } from "@queuert/postgres";
-import { type Pool, type PoolClient } from "pg";
+import type { PgNotifyProvider } from "@queuert/postgres";
+import type { Pool, PoolClient } from "pg";
 
 export const createPgPoolNotifyProvider = ({ pool }: { pool: Pool }): PgNotifyProvider => {
   let listenClient: PoolClient | null = null;

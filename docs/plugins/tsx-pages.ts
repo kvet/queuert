@@ -13,7 +13,7 @@ import {
   Visitor,
   parseSync,
 } from "oxc-parser";
-import { type Plugin } from "vite";
+import type { Plugin } from "vite";
 
 import { highlight } from "./highlight.ts";
 

@@ -20,7 +20,7 @@ import {
   measureMemory,
   printHeader,
   runDoubleRunBenchmark,
-} from "./utils.js";
+} from "./utils.ts";
 
 class NoopMetricExporter {
   export(_metrics: unknown, resultCallback: (result: { code: number }) => void): void {

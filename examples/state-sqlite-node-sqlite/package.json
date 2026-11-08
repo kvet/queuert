@@ -14,9 +14,9 @@
     "./provider": "./src/provider.ts"
   },
   "scripts": {
-    "start": "tsx src/index.ts",
-    "test": "vitest --run && tsx --test src/provider.node-test.ts",
-    "test:node": "tsx --test src/provider.node-test.ts",
+    "start": "node src/index.ts",
+    "test": "vitest --run && node --test src/provider.node-test.ts",
+    "test:node": "node --test src/provider.node-test.ts",
     "typecheck": "tsc --noEmit"
   },
   "devDependencies": {

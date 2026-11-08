@@ -2,7 +2,7 @@ import { AssertionError } from "node:assert";
 
 import { describe, expect as vitestExpect, it } from "vitest";
 
-import { expect } from "./expect.js";
+import { expect } from "./expect.ts";
 
 const assertThrows = (fn: () => void): Error => {
   try {
@@ -326,7 +326,7 @@ describe("expect shim", () => {
 
   describe("expect.skip", () => {
     it("throws a SkipSignalError carrying the reason", async () => {
-      const { SkipSignalError } = await import("./runner.js");
+      const { SkipSignalError } = await import("./runner.ts");
       const err = assertThrows(() => expect.skip("no capability on this backend"));
       vitestExpect(err).toBeInstanceOf(SkipSignalError);
       vitestExpect((err as InstanceType<typeof SkipSignalError>).reason).toBe(

@@ -1,8 +1,8 @@
 import { type Accessor, createEffect, createSignal, on, onCleanup } from "solid-js";
 
-import { type PageResult, isAbort } from "../api.js";
-import { appendPage } from "../domain/pages.js";
-import { createAutoLoadMore } from "./createAutoLoadMore.js";
+import { type PageResult, isAbort } from "../api.ts";
+import { appendPage } from "../domain/pages.ts";
+import { createAutoLoadMore } from "./createAutoLoadMore.ts";
 
 export const createPagedList = <TParams, TItem extends { id: string }>(
   params: () => TParams | null,

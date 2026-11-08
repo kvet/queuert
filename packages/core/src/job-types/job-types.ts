@@ -1,5 +1,5 @@
-import { JobTypeValidationError } from "../errors.js";
-import { type BaseJobTypeDefinitions, type ResolvedJobTypeReference } from "./job-type.js";
+import { JobTypeValidationError } from "../errors.ts";
+import type { BaseJobTypeDefinitions, ResolvedJobTypeReference } from "./job-type.ts";
 
 /** Symbol used to carry phantom job type definitions on a registry. */
 export const definitionsSymbol: unique symbol = Symbol("queuert.definitions");

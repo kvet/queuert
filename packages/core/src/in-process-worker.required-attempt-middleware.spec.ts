@@ -1,15 +1,15 @@
 import { describe, expect, it } from "vitest";
 
-import { type AttemptMiddleware } from "./attempt-middleware/attempt-middleware.js";
-import { createClient } from "./client.js";
-import { createInProcessWorker } from "./in-process-worker.js";
-import { createProcessors } from "./job-type-processors/create-job-type-processors.js";
-import { defineJobTypes } from "./job-types/define-job-types.js";
+import type { AttemptMiddleware } from "./attempt-middleware/attempt-middleware.ts";
+import { createClient } from "./client.ts";
+import { createInProcessWorker } from "./in-process-worker.ts";
+import { createProcessors } from "./job-type-processors/create-job-type-processors.ts";
+import { defineJobTypes } from "./job-types/define-job-types.ts";
 import {
   type InProcessStateAdapter,
   createInProcessStateAdapter,
-} from "./state-adapter/state-adapter.in-process.js";
-import { withTransactionHooks } from "./transaction-hooks.js";
+} from "./state-adapter/state-adapter.in-process.ts";
+import { withTransactionHooks } from "./transaction-hooks.ts";
 
 type Defs = {
   foo: { entry: true; input: null; output: null };

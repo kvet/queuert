@@ -12,7 +12,7 @@ import {
   withTransactionHooks,
 } from "queuert";
 
-import { createDrizzleSqliteStateProvider } from "./provider.js";
+import { createDrizzleSqliteStateProvider } from "./provider.ts";
 
 // Create in-memory SQLite database
 const sqlite = new Database(":memory:");

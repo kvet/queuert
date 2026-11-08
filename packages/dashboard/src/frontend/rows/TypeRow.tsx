@@ -1,10 +1,10 @@
 import { Chip, RowLink, WarningIcon } from "@queuert/ui/components";
-import { type AnyStatus } from "@queuert/ui/lib";
+import type { AnyStatus } from "@queuert/ui/lib";
 import { A } from "@solidjs/router";
 import { For, Match, Show, Switch } from "solid-js";
 
-import { type CappedCount, formatCount } from "../domain/counts.js";
-import { type TypeWorkers } from "../domain/workers.js";
+import { type CappedCount, formatCount } from "../domain/counts.ts";
+import type { TypeWorkers } from "../domain/workers.ts";
 
 const WorkersChip = (props: { typeName: string; workers: TypeWorkers }) => (
   <Switch>

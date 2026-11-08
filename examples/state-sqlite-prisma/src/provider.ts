@@ -1,4 +1,4 @@
-import { type AsyncRwLock, type SqliteStateProvider } from "@queuert/sqlite";
+import type { AsyncRwLock, SqliteStateProvider } from "@queuert/sqlite";
 
 export type PrismaLikeClient = {
   $transaction: <T>(fn: (prisma: any) => Promise<T>) => Promise<T>;

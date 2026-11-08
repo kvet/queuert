@@ -2,9 +2,9 @@ import { Row, WarningIcon } from "@queuert/ui/components";
 import { A } from "@solidjs/router";
 import { Show } from "solid-js";
 
-import { type WorkerWithRunningJobs } from "../api.js";
-import { IdChip } from "../ui/IdChip.js";
-import { Time } from "../ui/Time.js";
+import type { WorkerWithRunningJobs } from "../api.ts";
+import { IdChip } from "../ui/IdChip.tsx";
+import { Time } from "../ui/Time.tsx";
 
 export const WorkerRow = (props: { worker: WorkerWithRunningJobs }) => (
   <Row

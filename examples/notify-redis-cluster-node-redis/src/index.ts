@@ -10,7 +10,7 @@ import {
 } from "queuert";
 import { createCluster, type RedisClusterType } from "redis";
 
-import { createNodeRedisClusterNotifyProvider } from "./provider.js";
+import { createNodeRedisClusterNotifyProvider } from "./provider.ts";
 
 // Start a Redis Cluster using testcontainers
 console.log("Starting Redis Cluster...");

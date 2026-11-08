@@ -1,5 +1,5 @@
-import { type PgNotifyProvider } from "@queuert/postgres";
-import { type SQL } from "bun";
+import type { PgNotifyProvider } from "@queuert/postgres";
+import type { SQL } from "bun";
 
 export const createBunSqlNotifyProvider = ({ sql }: { sql: SQL }): PgNotifyProvider => {
   return {

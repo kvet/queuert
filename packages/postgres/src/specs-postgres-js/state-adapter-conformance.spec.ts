@@ -17,10 +17,10 @@ import {
 } from "queuert/testing";
 import { it as baseIt, describe, expectTypeOf, vi } from "vitest";
 
-import { createPgNotifyAdapter } from "../notify-adapter/notify-adapter.pg.js";
-import { createPostgresJsNotifyProvider } from "../notify-provider/notify-provider.postgres-js.js";
-import { createPgStateAdapter } from "../state-adapter/state-adapter.pg.js";
-import { createPostgresJsProvider } from "../state-provider/state-provider.postgres-js.js";
+import { createPgNotifyAdapter } from "../notify-adapter/notify-adapter.pg.ts";
+import { createPostgresJsNotifyProvider } from "../notify-provider/notify-provider.postgres-js.ts";
+import { createPgStateAdapter } from "../state-adapter/state-adapter.pg.ts";
+import { createPostgresJsProvider } from "../state-provider/state-provider.postgres-js.ts";
 
 const it = extendWithResourceLeakDetection(
   extendWithPostgres(baseIt, import.meta.url, { expectedTestContexts: 2 }),

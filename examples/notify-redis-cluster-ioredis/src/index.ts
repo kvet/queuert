@@ -10,7 +10,7 @@ import {
   createInProcessStateAdapter,
 } from "queuert";
 
-import { createIoredisClusterNotifyProvider } from "./provider.js";
+import { createIoredisClusterNotifyProvider } from "./provider.ts";
 
 // Start a Redis Cluster using testcontainers
 console.log("Starting Redis Cluster...");

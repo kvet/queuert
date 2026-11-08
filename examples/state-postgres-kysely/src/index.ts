@@ -11,7 +11,7 @@ import {
   createInProcessNotifyAdapter,
 } from "queuert";
 
-import { createKyselyPgStateProvider } from "./provider.js";
+import { createKyselyPgStateProvider } from "./provider.ts";
 
 // Start PostgreSQL using testcontainers
 await using pg = await acquirePostgres("postgres:18", import.meta.url);

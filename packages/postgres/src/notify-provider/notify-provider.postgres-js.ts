@@ -1,6 +1,6 @@
 import type postgres from "postgres";
 
-import { type PgNotifyProvider } from "./notify-provider.pg.js";
+import type { PgNotifyProvider } from "./notify-provider.pg.ts";
 
 export const createPostgresJsNotifyProvider = ({
   sql,

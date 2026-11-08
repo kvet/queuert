@@ -1,8 +1,8 @@
 import { type JSX, Show } from "solid-js";
 import { Dynamic } from "solid-js/web";
 
-import { shortId } from "../lib/ids.js";
-import { type LinkComponent } from "./Row.js";
+import { shortId } from "../lib/ids.ts";
+import type { LinkComponent } from "./Row.tsx";
 
 export const IdChip = (props: {
   id: string;

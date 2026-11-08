@@ -1,11 +1,11 @@
 import { describe, expect, test, vi } from "vitest";
 
-import { HookNotRegisteredError } from "./errors.js";
+import { HookNotRegisteredError } from "./errors.ts";
 import {
   bufferObservabilityEvent as bufferOnCommit,
   bufferObservabilityRollback as bufferOnRollback,
-} from "./observability-adapter/observability-hooks.js";
-import { createTransactionHooks, withTransactionHooks } from "./transaction-hooks.js";
+} from "./observability-adapter/observability-hooks.ts";
+import { createTransactionHooks, withTransactionHooks } from "./transaction-hooks.ts";
 
 const arrayHook = (initial: string[] = []) => ({
   state: [...initial],

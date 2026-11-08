@@ -1,6 +1,6 @@
-import { type PgStateProvider } from "@queuert/postgres";
-import { type RuntimeType } from "@queuert/typed-sql";
-import { type SQL, type TransactionSQL } from "bun";
+import type { PgStateProvider } from "@queuert/postgres";
+import type { RuntimeType } from "@queuert/typed-sql";
+import type { SQL, TransactionSQL } from "bun";
 
 export type BunSqlContext = { txSql: TransactionSQL };
 

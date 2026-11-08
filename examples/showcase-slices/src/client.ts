@@ -1,8 +1,8 @@
 import { createClient } from "queuert";
 
-import { notifyAdapter, stateAdapter } from "./adapters.js";
-import { notificationJobTypes } from "./slice-notifications-definitions.js";
-import { orderJobTypes } from "./slice-orders-definitions.js";
+import { notifyAdapter, stateAdapter } from "./adapters.ts";
+import { notificationJobTypes } from "./slice-notifications-definitions.ts";
+import { orderJobTypes } from "./slice-orders-definitions.ts";
 
 export const client = await createClient({
   stateAdapter,

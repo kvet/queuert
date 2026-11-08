@@ -3,7 +3,7 @@ import { createIoredisNotifyProvider } from "example-notify-redis-ioredis/provid
 import { Redis } from "ioredis";
 import { createInProcessStateAdapter } from "queuert";
 
-import { benchmarkNamespace, requireEnv, runBenchmark } from "./utils.js";
+import { benchmarkNamespace, requireEnv, runBenchmark } from "./utils.ts";
 
 const redisUrl = requireEnv("BENCHMARK_REDIS_URL");
 const redis = new Redis(redisUrl);

@@ -14,10 +14,10 @@ import assert from "node:assert/strict";
 
 import { createInProcessWorker, withTransactionHooks } from "queuert";
 
-import { sql, stopContainer } from "./adapters.js";
-import { client } from "./client.js";
-import { notificationProcessors } from "./slice-notifications-processors.js";
-import { orderProcessors } from "./slice-orders-processors.js";
+import { sql, stopContainer } from "./adapters.ts";
+import { client } from "./client.ts";
+import { notificationProcessors } from "./slice-notifications-processors.ts";
+import { orderProcessors } from "./slice-orders-processors.ts";
 
 const worker = await createInProcessWorker({
   client,

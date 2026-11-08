@@ -8,7 +8,7 @@ import {
 } from "queuert/testing";
 import { describe, it } from "vitest";
 
-import { extendWithNotifyRedis } from "./notify-adapter.node-redis.spec-helper.js";
+import { extendWithNotifyRedis } from "./notify-adapter.node-redis.spec-helper.ts";
 
 const inProcessInProcessIt = extendWithResourceLeakDetection(
   extendWithNotifyRedis(

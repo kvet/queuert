@@ -12,9 +12,9 @@ import {
 import { A, useLocation } from "@solidjs/router";
 import { For, Show, createSignal } from "solid-js";
 
-import { toLocalPath } from "../base.js";
-import { theme } from "../state/theme.js";
-import { openFind } from "./FindDialog.js";
+import { toLocalPath } from "../base.ts";
+import { theme } from "../state/theme.ts";
+import { openFind } from "./FindDialog.tsx";
 
 const isMac = (): boolean => /Mac|iPhone|iPad/.test(navigator.userAgent);
 

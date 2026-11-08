@@ -1,13 +1,13 @@
 import { describe, expect, it } from "vitest";
 
-import { type BaseJobTypeDefinitions } from "../job-types/job-type.js";
-import { type JobTypes, createJobTypes } from "../job-types/job-types.js";
-import { type JobTypesDefinitions } from "../job-types/merge-job-types.js";
-import { ConformanceError } from "./runner.js";
+import type { BaseJobTypeDefinitions } from "../job-types/job-type.ts";
+import { type JobTypes, createJobTypes } from "../job-types/job-types.ts";
+import type { JobTypesDefinitions } from "../job-types/merge-job-types.ts";
+import { ConformanceError } from "./runner.ts";
 import {
   type ValidationConformanceFixture,
   runValidationAdapterConformance,
-} from "./validation-adapter.js";
+} from "./validation-adapter.ts";
 
 type FieldType = "string" | "number" | "boolean";
 type FieldShape = Record<string, FieldType>;

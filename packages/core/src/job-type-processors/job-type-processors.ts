@@ -1,9 +1,9 @@
-import { type AnyAttemptMiddleware } from "../attempt-middleware/attempt-middleware.js";
-import { type AttemptHandler } from "../attempt/attempt-handler.types.js";
-import { type BackoffConfig } from "../entities/backoff.js";
-import { type BaseJobTypeDefinitions } from "../job-types/job-type.js";
-import { type JobTypeNames, type JobTypeReachingEntry } from "../job-types/job-types.resolvers.js";
-import { type StateAdapter } from "../state-adapter/state-adapter.js";
+import type { AnyAttemptMiddleware } from "../attempt-middleware/attempt-middleware.ts";
+import type { AttemptHandler } from "../attempt/attempt-handler.types.ts";
+import type { BackoffConfig } from "../entities/backoff.ts";
+import type { BaseJobTypeDefinitions } from "../job-types/job-type.ts";
+import type { JobTypeNames, JobTypeReachingEntry } from "../job-types/job-types.resolvers.ts";
+import type { StateAdapter } from "../state-adapter/state-adapter.ts";
 
 /** Configuration for processing a single job type. */
 export type InProcessWorkerProcessor<

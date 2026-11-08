@@ -1,6 +1,6 @@
-import { type DeduplicationOptions } from "../entities/deduplication.js";
-import { type OrderDirection, type Page, type PageParams } from "../entities/pagination.js";
-import { type ScheduleOptions } from "../entities/schedule.js";
+import type { DeduplicationOptions } from "../entities/deduplication.ts";
+import type { OrderDirection, Page, PageParams } from "../entities/pagination.ts";
+import type { ScheduleOptions } from "../entities/schedule.ts";
 
 export type StateJobStatus = "blocked" | "pending" | "running" | "completed";
 

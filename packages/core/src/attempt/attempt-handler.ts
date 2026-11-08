@@ -3,28 +3,24 @@ import { serializeError } from "@queuert/helpers";
 import {
   type AnyAttemptMiddleware,
   runHandlerMiddlewareChain,
-} from "../attempt-middleware/attempt-middleware.js";
-import { type BackoffConfig, calculateBackoffMs } from "../entities/backoff.js";
-import { mapStateChainToChain } from "../entities/chain.js";
-import { type AnyJob, mapStateJobToJob } from "../entities/job.js";
+} from "../attempt-middleware/attempt-middleware.ts";
+import { type BackoffConfig, calculateBackoffMs } from "../entities/backoff.ts";
+import { mapStateChainToChain } from "../entities/chain.ts";
+import { type AnyJob, mapStateJobToJob } from "../entities/job.ts";
 import {
   JobAlreadyCompletedError,
   JobNotFoundError,
   JobTakenByAnotherWorkerError,
-} from "../errors.js";
-import { completeChain, continueChain, rescheduleJobs } from "../implementation.js";
-import { type JobAttemptSpanHandle } from "../observability-adapter/observability-adapter.js";
-import { bufferObservabilityEvent } from "../observability-adapter/observability-hooks.js";
-import { type Helpers } from "../setup-helpers.js";
-import {
-  type BaseTxContext,
-  type StateJob,
-  type StateJobInfo,
-} from "../state-adapter/state-adapter.js";
-import { requireTxCtx } from "../state-adapter/tx-context.js";
-import { createTransactionHooks, requireTransactionHooks } from "../transaction-hooks.js";
-import { type AnyAttemptHandler, type AnyCompleteOptions } from "./attempt-handler.types.js";
-import { type AttemptOwnership, startAttemptOwnership } from "./attempt-ownership.js";
+} from "../errors.ts";
+import { completeChain, continueChain, rescheduleJobs } from "../implementation.ts";
+import type { JobAttemptSpanHandle } from "../observability-adapter/observability-adapter.ts";
+import { bufferObservabilityEvent } from "../observability-adapter/observability-hooks.ts";
+import type { Helpers } from "../setup-helpers.ts";
+import type { BaseTxContext, StateJob, StateJobInfo } from "../state-adapter/state-adapter.ts";
+import { requireTxCtx } from "../state-adapter/tx-context.ts";
+import { createTransactionHooks, requireTransactionHooks } from "../transaction-hooks.ts";
+import type { AnyAttemptHandler, AnyCompleteOptions } from "./attempt-handler.types.ts";
+import { type AttemptOwnership, startAttemptOwnership } from "./attempt-ownership.ts";
 
 type CompleteWrite = {
   stateJob: StateJob & { continuation?: StateJobInfo };

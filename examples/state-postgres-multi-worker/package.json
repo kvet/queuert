@@ -11,7 +11,7 @@
   },
   "type": "module",
   "scripts": {
-    "start": "tsx src/index.ts",
+    "start": "node src/index.ts",
     "typecheck": "tsc --noEmit"
   },
   "devDependencies": {

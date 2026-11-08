@@ -1,17 +1,17 @@
 import { type TestAPI, expect } from "vitest";
 
-import { createClient } from "../client.js";
+import { createClient } from "../client.ts";
 import {
   JobNotFoundError,
   JobNotReschedulableError,
   JobsNotFoundError,
   JobsNotReschedulableError,
-} from "../errors.js";
-import { createInProcessWorker } from "../in-process-worker.js";
-import { createProcessors } from "../job-type-processors/create-job-type-processors.js";
-import { defineJobTypes } from "../job-types/define-job-types.js";
-import { withTransactionHooks } from "../transaction-hooks.js";
-import { type TestSuiteContext } from "./spec-context.spec-helper.js";
+} from "../errors.ts";
+import { createInProcessWorker } from "../in-process-worker.ts";
+import { createProcessors } from "../job-type-processors/create-job-type-processors.ts";
+import { defineJobTypes } from "../job-types/define-job-types.ts";
+import { withTransactionHooks } from "../transaction-hooks.ts";
+import type { TestSuiteContext } from "./spec-context.spec-helper.ts";
 
 export const rescheduleJobTestSuite = ({ it }: { it: TestAPI<TestSuiteContext> }): void => {
   it("reschedules a future-scheduled pending job to run now", async ({

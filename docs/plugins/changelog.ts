@@ -1,6 +1,6 @@
-import { type Element, type Root as HastRoot } from "hast";
+import type { Element, Root as HastRoot } from "hast";
 import { toString as hastToString } from "hast-util-to-string";
-import { type Root as MdastRoot } from "mdast";
+import type { Root as MdastRoot } from "mdast";
 import { toString as mdastToString } from "mdast-util-to-string";
 import rehypeSanitize from "rehype-sanitize";
 import rehypeStringify from "rehype-stringify";
@@ -9,7 +9,7 @@ import remarkParse from "remark-parse";
 import remarkRehype from "remark-rehype";
 import { unified } from "unified";
 import { visit } from "unist-util-visit";
-import { type Plugin } from "vite";
+import type { Plugin } from "vite";
 
 import { highlight } from "./highlight.ts";
 

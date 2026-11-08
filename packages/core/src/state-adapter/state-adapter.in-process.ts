@@ -1,22 +1,22 @@
 import { createAsyncRwLock } from "@queuert/helpers";
 
-import { type DeduplicationOptions } from "../entities/deduplication.js";
-import { type OrderDirection, type Page, type PageParams } from "../entities/pagination.js";
-import { type ScheduleOptions } from "../entities/schedule.js";
-import { resolveStateAdapterConfig } from "./adapter-config.js";
-import { decodeIdCursor, decodeTimestampWithIdCursor, encodeCursor } from "./cursor.js";
-import {
-  type StateAdapter,
-  type StateBlockedJob,
-  type StateChain,
-  type StateChainInfo,
-  type StateChainStatus,
-  type StateCount,
-  type StateDependentJob,
-  type StateJob,
-  type StateJobInfo,
-  type StateWorkerInfo,
-} from "./state-adapter.js";
+import type { DeduplicationOptions } from "../entities/deduplication.ts";
+import type { OrderDirection, Page, PageParams } from "../entities/pagination.ts";
+import type { ScheduleOptions } from "../entities/schedule.ts";
+import { resolveStateAdapterConfig } from "./adapter-config.ts";
+import { decodeIdCursor, decodeTimestampWithIdCursor, encodeCursor } from "./cursor.ts";
+import type {
+  StateAdapter,
+  StateBlockedJob,
+  StateChain,
+  StateChainInfo,
+  StateChainStatus,
+  StateCount,
+  StateDependentJob,
+  StateJob,
+  StateJobInfo,
+  StateWorkerInfo,
+} from "./state-adapter.ts";
 
 type DbJob = StateJobInfo & {
   chainStatus: StateChainStatus | null;
@@ -188,7 +188,10 @@ const paginateByChainIndex = (
 
 class SortedSet<T> {
   private readonly items: T[] = [];
-  constructor(private readonly cmp: Comparator<T>) {}
+  private readonly cmp: Comparator<T>;
+  constructor(cmp: Comparator<T>) {
+    this.cmp = cmp;
+  }
 
   get size(): number {
     return this.items.length;

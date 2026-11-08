@@ -1,7 +1,7 @@
-import { type Expect, expect as defaultExpect } from "./expect.js";
-import { SkipSignalError } from "./skip-signal-error.js";
+import { type Expect, expect as defaultExpect } from "./expect.ts";
+import { SkipSignalError } from "./skip-signal-error.ts";
 
-export { SkipSignalError } from "./skip-signal-error.js";
+export { SkipSignalError } from "./skip-signal-error.ts";
 
 export type ConformanceCase<TContext> = {
   name: string;

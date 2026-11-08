@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 
-import { shortId } from "./ids.js";
+import { shortId } from "./ids.ts";
 
 describe("shortId", () => {
   it("keeps IDs of up to 16 characters unchanged", () => {

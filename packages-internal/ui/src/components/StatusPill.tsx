@@ -1,4 +1,4 @@
-import { type AnyStatus, statusClasses } from "../lib/status.js";
+import { type AnyStatus, statusClasses } from "../lib/status.ts";
 
 export const StatusDot = (props: { status: AnyStatus; label?: string; class?: string }) => {
   return (

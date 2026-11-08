@@ -1,8 +1,8 @@
 import { createProcessors, withTransactionHooks } from "queuert";
 
-import { sql } from "./adapters.js";
-import { client } from "./client.js";
-import { orderJobTypes } from "./slice-orders-definitions.js";
+import { sql } from "./adapters.ts";
+import { client } from "./client.ts";
+import { orderJobTypes } from "./slice-orders-definitions.ts";
 
 export const orderProcessors = createProcessors({
   client,

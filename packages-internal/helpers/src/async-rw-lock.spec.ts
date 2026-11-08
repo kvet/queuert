@@ -1,6 +1,6 @@
 import { describe, expect, test } from "vitest";
 
-import { createAsyncRwLock } from "./async-rw-lock.js";
+import { createAsyncRwLock } from "./async-rw-lock.ts";
 
 describe("createAsyncRwLock", () => {
   describe("acquireWrite", () => {

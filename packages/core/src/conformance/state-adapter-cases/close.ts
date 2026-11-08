@@ -1,5 +1,5 @@
-import { type ConformanceGroup } from "../runner.js";
-import { type StateConformanceFixture } from "./types.js";
+import type { ConformanceGroup } from "../runner.ts";
+import type { StateConformanceFixture } from "./types.ts";
 
 /**
  * Verifies `close()` contract: idempotent, provider resources released.

@@ -1,25 +1,25 @@
-import { type JobTypeValidationError } from "../errors.js";
-import { type NotifyAdapter } from "../notify-adapter/notify-adapter.js";
-import {
-  type StateAdapter,
-  type StateChainInfo,
-  type StateJob,
-  type StateJobInfo,
-} from "../state-adapter/state-adapter.js";
-import {
-  type ChainBasicData,
-  type JobAttemptData,
-  type JobBasicData,
-  type JobCompletionData,
-  type JobProcessingData,
-  type Log,
-} from "./log.js";
-import {
-  type BlockerSpanHandle,
-  type JobAttemptSpanHandle,
-  type JobSpanHandle,
-  type ObservabilityAdapter,
-} from "./observability-adapter.js";
+import type { JobTypeValidationError } from "../errors.ts";
+import type { NotifyAdapter } from "../notify-adapter/notify-adapter.ts";
+import type {
+  StateAdapter,
+  StateChainInfo,
+  StateJob,
+  StateJobInfo,
+} from "../state-adapter/state-adapter.ts";
+import type {
+  ChainBasicData,
+  JobAttemptData,
+  JobBasicData,
+  JobCompletionData,
+  JobProcessingData,
+  Log,
+} from "./log.ts";
+import type {
+  BlockerSpanHandle,
+  JobAttemptSpanHandle,
+  JobSpanHandle,
+  ObservabilityAdapter,
+} from "./observability-adapter.ts";
 
 const mapStateJobToJobBasicData = (stateJob: StateJob): JobBasicData => ({
   id: stateJob.id,

@@ -1,23 +1,20 @@
 import { raceWithSleep, setLongTimeout, createCallOnce, type IsUnion } from "@queuert/helpers";
 
-import {
-  type AttemptCompleteResult,
-  type AttemptOutcome,
-} from "./attempt/attempt-handler.types.js";
+import type { AttemptCompleteResult, AttemptOutcome } from "./attempt/attempt-handler.types.ts";
 import {
   type ChainFields,
   type CompletedChainFields,
   mapStateChainToChain,
-} from "./entities/chain.js";
+} from "./entities/chain.ts";
 import {
   type AnyJob,
   type CompletedJob,
   type JobStatus,
   mapStateJobToJob,
-} from "./entities/job.js";
-import { type OrderDirection, type Page } from "./entities/pagination.js";
-import { type ScheduleOptions } from "./entities/schedule.js";
-import { type Worker, mapStateWorkerToWorker } from "./entities/worker.js";
+} from "./entities/job.ts";
+import type { OrderDirection, Page } from "./entities/pagination.ts";
+import type { ScheduleOptions } from "./entities/schedule.ts";
+import { type Worker, mapStateWorkerToWorker } from "./entities/worker.ts";
 import {
   BlockerReferenceError,
   ChainNotFoundError,
@@ -29,47 +26,47 @@ import {
   JobsNotFoundError,
   JobsNotReschedulableError,
   WaitChainTimeoutError,
-} from "./errors.js";
-import { completeChain, continueChain, createChains, rescheduleJobs } from "./implementation.js";
-import { type BaseJobTypeDefinitions } from "./job-types/job-type.js";
-import { type JobTypes } from "./job-types/job-types.js";
-import {
-  type BlockerChains,
-  type JobTypeBlockedNames,
-  type JobTypeChainNames,
-  type JobTypeEntryNames,
-  type JobTypeNames,
-  type JobTypeProperty,
-  type NewChain,
-  type AnyNewJob,
-  type ResolvedChain,
-  type ResolvedChainJobs,
-  type ResolvedJob,
-  type ResolvedRunningChain,
-} from "./job-types/job-types.resolvers.js";
+} from "./errors.ts";
+import { completeChain, continueChain, createChains, rescheduleJobs } from "./implementation.ts";
+import type { BaseJobTypeDefinitions } from "./job-types/job-type.ts";
+import type {
+  BlockerChains,
+  JobTypeBlockedNames,
+  JobTypeChainNames,
+  JobTypeEntryNames,
+  JobTypeNames,
+  JobTypeProperty,
+  NewChain,
+  AnyNewJob,
+  ResolvedChain,
+  ResolvedChainJobs,
+  ResolvedJob,
+  ResolvedRunningChain,
+} from "./job-types/job-types.resolvers.ts";
+import type { JobTypes } from "./job-types/job-types.ts";
 import {
   type JobTypesDefinitions,
   type ValidatedSlices,
   mergeJobTypes,
-} from "./job-types/merge-job-types.js";
-import { type NotifyAdapter } from "./notify-adapter/notify-adapter.js";
-import { bufferNotifyJobAttemptLost } from "./notify-adapter/notify-hooks.js";
-import { type Log } from "./observability-adapter/log.js";
-import { type ObservabilityAdapter } from "./observability-adapter/observability-adapter.js";
-import { bufferObservabilityEvent } from "./observability-adapter/observability-hooks.js";
-import { type Helpers, createHelpers } from "./setup-helpers.js";
-import {
-  type BaseTxContext,
-  type GetStateAdapterJobId,
-  type GetStateAdapterWorkerId,
-  type GetStateAdapterTxContext,
-  type StateAdapter,
-  type StateChain,
-  type StateJob,
-  type StateJobInfo,
-} from "./state-adapter/state-adapter.js";
-import { normalizeTxCtx, requireTxCtx } from "./state-adapter/tx-context.js";
-import { type TransactionHooks, requireTransactionHooks } from "./transaction-hooks.js";
+} from "./job-types/merge-job-types.ts";
+import type { NotifyAdapter } from "./notify-adapter/notify-adapter.ts";
+import { bufferNotifyJobAttemptLost } from "./notify-adapter/notify-hooks.ts";
+import type { Log } from "./observability-adapter/log.ts";
+import type { ObservabilityAdapter } from "./observability-adapter/observability-adapter.ts";
+import { bufferObservabilityEvent } from "./observability-adapter/observability-hooks.ts";
+import { type Helpers, createHelpers } from "./setup-helpers.ts";
+import type {
+  BaseTxContext,
+  GetStateAdapterJobId,
+  GetStateAdapterWorkerId,
+  GetStateAdapterTxContext,
+  StateAdapter,
+  StateChain,
+  StateJob,
+  StateJobInfo,
+} from "./state-adapter/state-adapter.ts";
+import { normalizeTxCtx, requireTxCtx } from "./state-adapter/tx-context.ts";
+import { type TransactionHooks, requireTransactionHooks } from "./transaction-hooks.ts";
 
 /**
  * @internal Used by `createInProcessWorker` and `createDashboard` to access

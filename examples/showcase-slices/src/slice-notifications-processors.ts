@@ -1,8 +1,8 @@
 import { createProcessors, withTransactionHooks } from "queuert";
 
-import { sql } from "./adapters.js";
-import { client } from "./client.js";
-import { notificationJobTypes } from "./slice-notifications-definitions.js";
+import { sql } from "./adapters.ts";
+import { client } from "./client.ts";
+import { notificationJobTypes } from "./slice-notifications-definitions.ts";
 
 export const notificationProcessors = createProcessors({
   client,

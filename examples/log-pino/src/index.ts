@@ -10,7 +10,7 @@ import {
   withTransactionHooks,
 } from "queuert";
 
-import { createPinoLog } from "./log.js";
+import { createPinoLog } from "./log.ts";
 
 // ============================================================
 // Contextual Logging via logger injection (attemptMiddleware)

@@ -1,14 +1,14 @@
 import { CHAIN_STATUSES, JOB_STATUSES } from "@queuert/ui/lib";
-import { type ChainStatus, type JobStatus } from "queuert";
+import type { ChainStatus, JobStatus } from "queuert";
 
 import {
   countChainsByTypeName,
   countJobsByTypeName,
   getChainTypeNames,
   getJobTypeNames,
-} from "../api.js";
-import { type CappedCount } from "../domain/counts.js";
-import { type TypeWorkers, isStrandedType } from "../domain/workers.js";
+} from "../api.ts";
+import type { CappedCount } from "../domain/counts.ts";
+import { type TypeWorkers, isStrandedType } from "../domain/workers.ts";
 
 const COUNT_CHUNK = 50;
 

@@ -3,18 +3,18 @@ import { Navigate, Route, Router, useSearchParams } from "@solidjs/router";
 import { type Component, Show } from "solid-js";
 import { render } from "solid-js/web";
 
-import { App } from "./App.js";
-import { basePath } from "./base.js";
-import { ChainDetail } from "./pages/ChainDetail.js";
-import { ChainList } from "./pages/ChainList.js";
-import { Find } from "./pages/Find.js";
-import { JobDetail } from "./pages/JobDetail.js";
-import { JobList } from "./pages/JobList.js";
-import { Overview } from "./pages/Overview.js";
-import { ChainTypes, JobTypes } from "./pages/Types.js";
-import { WorkerDetail } from "./pages/WorkerDetail.js";
-import { WorkerList } from "./pages/WorkerList.js";
-import { theme } from "./state/theme.js";
+import { App } from "./App.tsx";
+import { basePath } from "./base.ts";
+import { ChainDetail } from "./pages/ChainDetail.tsx";
+import { ChainList } from "./pages/ChainList.tsx";
+import { Find } from "./pages/Find.tsx";
+import { JobDetail } from "./pages/JobDetail.tsx";
+import { JobList } from "./pages/JobList.tsx";
+import { Overview } from "./pages/Overview.tsx";
+import { ChainTypes, JobTypes } from "./pages/Types.tsx";
+import { WorkerDetail } from "./pages/WorkerDetail.tsx";
+import { WorkerList } from "./pages/WorkerList.tsx";
+import { theme } from "./state/theme.ts";
 
 import "./styles/index.css";
 

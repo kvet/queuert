@@ -3,7 +3,7 @@ import { createPgPoolNotifyProvider } from "example-notify-postgres-pg/provider"
 import { Pool } from "pg";
 import { createInProcessStateAdapter } from "queuert";
 
-import { benchmarkNamespace, requireEnv, runBenchmark } from "./utils.js";
+import { benchmarkNamespace, requireEnv, runBenchmark } from "./utils.ts";
 
 const pool = new Pool({ connectionString: requireEnv("BENCHMARK_POSTGRES_URL"), max: 20 });
 

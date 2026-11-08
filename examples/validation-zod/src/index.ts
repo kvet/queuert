@@ -18,7 +18,7 @@ import {
 } from "queuert";
 import { z } from "zod";
 
-import { createZodJobTypes } from "./zod-adapter.js";
+import { createZodJobTypes } from "./zod-adapter.ts";
 
 // #region usage
 // Define job types with Zod schemas

@@ -24,15 +24,15 @@ import {
   getChainJobs,
   isAbort,
   isNotFound,
-} from "../api.js";
-import { elapsedMs, formatDuration } from "../domain/duration.js";
-import { type JobEntry, foldJobs } from "../domain/foldJobs.js";
-import { BlockedJobRow } from "../rows/BlockedJobRow.js";
-import { FoldItem, JobItem } from "../rows/JobItem.js";
-import { PageHeader } from "../shell/PageHeader.js";
-import { createAutoLoadMore } from "../state/createAutoLoadMore.js";
-import { IdChip } from "../ui/IdChip.js";
-import { JsonViewer } from "../ui/JsonViewer.js";
+} from "../api.ts";
+import { elapsedMs, formatDuration } from "../domain/duration.ts";
+import { type JobEntry, foldJobs } from "../domain/foldJobs.ts";
+import { BlockedJobRow } from "../rows/BlockedJobRow.tsx";
+import { FoldItem, JobItem } from "../rows/JobItem.tsx";
+import { PageHeader } from "../shell/PageHeader.tsx";
+import { createAutoLoadMore } from "../state/createAutoLoadMore.ts";
+import { IdChip } from "../ui/IdChip.tsx";
+import { JsonViewer } from "../ui/JsonViewer.tsx";
 import {
   Dialog,
   ErrorState,
@@ -40,9 +40,9 @@ import {
   NotFoundState,
   SkeletonRows,
   buttonClass,
-} from "../ui/kit.js";
-import { Time } from "../ui/Time.js";
-import { LoadMoreFooter } from "./listParts.js";
+} from "../ui/kit.tsx";
+import { Time } from "../ui/Time.tsx";
+import { LoadMoreFooter } from "./listParts.tsx";
 
 const chainListHref = (typeName: string): string =>
   `/chains?typeName=${encodeURIComponent(typeName)}`;

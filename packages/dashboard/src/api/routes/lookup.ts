@@ -1,4 +1,4 @@
-import { type Client } from "queuert";
+import type { Client } from "queuert";
 
 export const MAX_IDS = 100;
 

@@ -1,4 +1,4 @@
-import { type UnknownChain, type UnknownJob } from "../api.js";
+import type { UnknownChain, UnknownJob } from "../api.ts";
 
 const base = {
   chainId: "chain-1",

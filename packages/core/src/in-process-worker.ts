@@ -1,30 +1,30 @@
 import { isPositiveFinite, sleep } from "@queuert/helpers";
 
-import {
-  type AnyAttemptMiddleware,
-  type AttemptMiddleware,
-  type IsAttemptMiddlewareSubsequence,
-} from "./attempt-middleware/attempt-middleware.js";
-import { type Client, helpersSymbol } from "./client.js";
+import type {
+  AnyAttemptMiddleware,
+  AttemptMiddleware,
+  IsAttemptMiddlewareSubsequence,
+} from "./attempt-middleware/attempt-middleware.ts";
+import { type Client, helpersSymbol } from "./client.ts";
 import {
   type BackoffConfig,
   backoffConfigViolations,
   calculateBackoffMs,
-} from "./entities/backoff.js";
+} from "./entities/backoff.ts";
 import {
   type Processors,
   processorAttemptMiddlewareSymbol,
-} from "./job-type-processors/job-type-processors.js";
+} from "./job-type-processors/job-type-processors.ts";
 import {
   type MergedProcessorDefinitions,
   type ValidatedProcessorSlices,
   mergeProcessors,
-} from "./job-type-processors/merge-job-type-processors.js";
-import { type BaseJobTypeDefinitions } from "./job-types/job-type.js";
-import { resolveWorkerId } from "./state-adapter/adapter-config.js";
-import { type GetStateAdapterWorkerId, type StateAdapter } from "./state-adapter/state-adapter.js";
-import { type StampedProcessor, runWorker } from "./worker/run-worker.js";
-import { type WorkerLeaseConfig, workerLeaseConfigViolations } from "./worker/worker-lease.js";
+} from "./job-type-processors/merge-job-type-processors.ts";
+import type { BaseJobTypeDefinitions } from "./job-types/job-type.ts";
+import { resolveWorkerId } from "./state-adapter/adapter-config.ts";
+import type { GetStateAdapterWorkerId, StateAdapter } from "./state-adapter/state-adapter.ts";
+import { type StampedProcessor, runWorker } from "./worker/run-worker.ts";
+import { type WorkerLeaseConfig, workerLeaseConfigViolations } from "./worker/worker-lease.ts";
 
 /** Merged-processor view of a scalar-or-array input. @internal */
 type WorkerProcessorDefs<T> = T extends readonly Processors[]

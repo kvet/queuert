@@ -1,4 +1,4 @@
-import { type AsyncRwLock, type SqliteStateProvider } from "@queuert/sqlite";
+import type { AsyncRwLock, SqliteStateProvider } from "@queuert/sqlite";
 import type Database from "better-sqlite3";
 
 export type DrizzleSqliteContext = { db: Database.Database };

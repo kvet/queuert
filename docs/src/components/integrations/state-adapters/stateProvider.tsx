@@ -1,4 +1,4 @@
-import { type FieldItem } from "../../FieldList.tsx";
+import type { FieldItem } from "../../FieldList.tsx";
 
 /** Members of `PgStateProvider` / `SqliteStateProvider`, listed on each backend's page. */
 export const stateProviderMembers = (dialect: "postgres" | "sqlite"): FieldItem[] => [

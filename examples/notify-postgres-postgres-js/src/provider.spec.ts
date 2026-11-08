@@ -4,7 +4,7 @@ import postgres from "postgres";
 import { runNotifyAdapterConformance } from "queuert/conformance";
 import { test } from "vitest";
 
-import { createPostgresJsNotifyProvider } from "./provider.js";
+import { createPostgresJsNotifyProvider } from "./provider.ts";
 
 // #region conformance
 test("notify-postgres-postgres-js provider passes notify adapter conformance", async () => {

@@ -1,13 +1,13 @@
 import { type TestAPI, describe, expect, onTestFinished, vi } from "vitest";
 
-import { createClient } from "../client.js";
-import { ChainNotFoundError } from "../errors.js";
-import { createInProcessWorker } from "../in-process-worker.js";
-import { createProcessors } from "../job-type-processors/create-job-type-processors.js";
-import { defineJobTypes } from "../job-types/define-job-types.js";
-import { createInProcessNotifyAdapter } from "../notify-adapter/notify-adapter.in-process.js";
-import { withTransactionHooks } from "../transaction-hooks.js";
-import { type TestSuiteContext } from "./spec-context.spec-helper.js";
+import { createClient } from "../client.ts";
+import { ChainNotFoundError } from "../errors.ts";
+import { createInProcessWorker } from "../in-process-worker.ts";
+import { createProcessors } from "../job-type-processors/create-job-type-processors.ts";
+import { defineJobTypes } from "../job-types/define-job-types.ts";
+import { createInProcessNotifyAdapter } from "../notify-adapter/notify-adapter.in-process.ts";
+import { withTransactionHooks } from "../transaction-hooks.ts";
+import type { TestSuiteContext } from "./spec-context.spec-helper.ts";
 
 export const createChainsTestSuite = ({ it }: { it: TestAPI<TestSuiteContext> }): void => {
   const completionOptions = {

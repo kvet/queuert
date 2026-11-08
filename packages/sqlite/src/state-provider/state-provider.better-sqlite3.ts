@@ -1,7 +1,7 @@
 import { type AsyncRwLock, createAsyncRwLock } from "@queuert/helpers";
 import type Database from "better-sqlite3";
 
-import { type SqliteStateProvider } from "./state-provider.sqlite.js";
+import type { SqliteStateProvider } from "./state-provider.sqlite.ts";
 
 export type BetterSqlite3Context = { db: Database.Database };
 

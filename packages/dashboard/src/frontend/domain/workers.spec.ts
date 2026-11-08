@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 
-import { decodeWorkerId, isStrandedType, jobLease } from "./workers.js";
+import { decodeWorkerId, isStrandedType, jobLease } from "./workers.ts";
 
 describe("jobLease", () => {
   it("is live while the worker has not lost its lease", () => {

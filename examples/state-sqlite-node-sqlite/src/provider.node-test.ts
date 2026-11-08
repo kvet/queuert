@@ -4,7 +4,7 @@ import test from "node:test";
 import { createAsyncRwLock, createSqliteStateAdapter } from "@queuert/sqlite";
 import { runStateAdapterConformance, type StateConformanceFixture } from "queuert/conformance";
 
-import { createNodeSqliteStateProvider } from "./provider.js";
+import { createNodeSqliteStateProvider } from "./provider.ts";
 
 // The suite from provider.spec.ts under Node's built-in test runner: `pnpm test:node`.
 // #region conformance

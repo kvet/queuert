@@ -1,4 +1,4 @@
-import { type CappedCount } from "./counts.js";
+import type { CappedCount } from "./counts.ts";
 
 export type JobLease =
   | { state: "live"; leaseUntil: Date }

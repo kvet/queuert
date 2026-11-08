@@ -1,5 +1,5 @@
-import { type PgStateProvider } from "@queuert/postgres";
-import { type Pool, type PoolClient } from "pg";
+import type { PgStateProvider } from "@queuert/postgres";
+import type { Pool, PoolClient } from "pg";
 
 export type PgPoolContext = { poolClient: PoolClient };
 

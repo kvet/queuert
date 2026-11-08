@@ -1,12 +1,12 @@
 import { type TestAPI, expect } from "vitest";
 
-import { createFlakyBatchGenerator } from "../suites/flaky-test-helper.spec-helper.js";
+import { createFlakyBatchGenerator } from "../suites/flaky-test-helper.spec-helper.ts";
 import {
   type InProcessContext,
   type InProcessStateAdapter,
   createInProcessStateAdapter,
-} from "./state-adapter.in-process.js";
-import { type StateAdapter } from "./state-adapter.js";
+} from "./state-adapter.in-process.ts";
+import type { StateAdapter } from "./state-adapter.ts";
 
 export const extendWithStateInProcess = <T>(
   api: TestAPI<T>,

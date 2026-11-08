@@ -1,10 +1,10 @@
 import { describe, expect, it } from "vitest";
 
-import { createClient } from "../client.js";
-import { defineJobTypes } from "../job-types/define-job-types.js";
-import { createInProcessStateAdapter } from "../state-adapter/state-adapter.in-process.js";
-import { withTransactionHooks } from "../transaction-hooks.js";
-import { createProcessors } from "./create-job-type-processors.js";
+import { createClient } from "../client.ts";
+import { defineJobTypes } from "../job-types/define-job-types.ts";
+import { createInProcessStateAdapter } from "../state-adapter/state-adapter.in-process.ts";
+import { withTransactionHooks } from "../transaction-hooks.ts";
+import { createProcessors } from "./create-job-type-processors.ts";
 
 type Defs = {
   foo: { entry: true; input: { v: number }; output: { ok: true } };

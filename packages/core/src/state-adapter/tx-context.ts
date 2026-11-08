@@ -1,4 +1,4 @@
-import { type StateAdapter } from "./state-adapter.js";
+import type { StateAdapter } from "./state-adapter.ts";
 
 /** The transaction context fields spread into an options object, or `undefined` when none were. */
 export const normalizeTxCtx = <T extends Record<string, unknown>>(rest: T): T | undefined =>

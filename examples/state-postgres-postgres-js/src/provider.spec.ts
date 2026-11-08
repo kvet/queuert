@@ -4,7 +4,7 @@ import postgres from "postgres";
 import { runStateAdapterConformance } from "queuert/conformance";
 import { test } from "vitest";
 
-import { createPostgresJsStateProvider } from "./provider.js";
+import { createPostgresJsStateProvider } from "./provider.ts";
 
 // #region conformance
 test("state-postgres-postgres-js provider passes state adapter conformance", async () => {

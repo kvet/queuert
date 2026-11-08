@@ -2,15 +2,15 @@ import { JOB_STATUSES } from "@queuert/ui/lib";
 import { useSearchParams } from "@solidjs/router";
 import { Show, createMemo } from "solid-js";
 
-import { PAGE_SIZE, countJobsByTypeName, getJobTypeNames, listJobs } from "../api.js";
-import { JobRow, type JobSortKey } from "../rows/JobRow.js";
-import { createLoader } from "../state/createLoader.js";
-import { createPagedList } from "../state/createPagedList.js";
-import { EmptyState, buttonClass } from "../ui/kit.js";
-import { FilterBar, SortControls, StatusFilter } from "./filters.js";
-import { ListHeader, PagedListBody, TypeGate } from "./listParts.js";
-import { toStatusCounts } from "./typeData.js";
-import { jobKind } from "./Types.js";
+import { PAGE_SIZE, countJobsByTypeName, getJobTypeNames, listJobs } from "../api.ts";
+import { JobRow, type JobSortKey } from "../rows/JobRow.tsx";
+import { createLoader } from "../state/createLoader.ts";
+import { createPagedList } from "../state/createPagedList.ts";
+import { EmptyState, buttonClass } from "../ui/kit.tsx";
+import { FilterBar, SortControls, StatusFilter } from "./filters.tsx";
+import { ListHeader, PagedListBody, TypeGate } from "./listParts.tsx";
+import { toStatusCounts } from "./typeData.ts";
+import { jobKind } from "./Types.tsx";
 
 const orderByOptionsFor = (status: string): readonly { value: JobSortKey; label: string }[] => {
   if (status === "blocked" || status === "pending")

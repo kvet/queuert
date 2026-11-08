@@ -1,7 +1,7 @@
-import { type StateWorkerInfo } from "../state-adapter/state-adapter.js";
-import { type Worker } from "./worker.types.js";
+import type { StateWorkerInfo } from "../state-adapter/state-adapter.ts";
+import type { Worker } from "./worker.types.ts";
 
-export type * from "./worker.types.js";
+export type * from "./worker.types.ts";
 
 export const mapStateWorkerToWorker = (stateWorker: StateWorkerInfo): Worker<string> => ({
   id: stateWorker.id,

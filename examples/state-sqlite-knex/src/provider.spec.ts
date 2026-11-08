@@ -3,7 +3,7 @@ import knexFactory from "knex";
 import { runStateAdapterConformance } from "queuert/conformance";
 import { test } from "vitest";
 
-import { createKnexSqliteStateProvider } from "./provider.js";
+import { createKnexSqliteStateProvider } from "./provider.ts";
 
 // #region conformance
 test("state-sqlite-knex provider passes state adapter conformance", async () => {

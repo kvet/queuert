@@ -1,7 +1,7 @@
-import { type BaseJobTypeDefinitions, type Client, type StateAdapter } from "queuert";
+import type { BaseJobTypeDefinitions, Client, StateAdapter } from "queuert";
 
-import { renderHtml } from "./html.js";
-import { serovalResponse } from "./response.js";
+import { renderHtml } from "./html.ts";
+import { serovalResponse } from "./response.ts";
 import {
   handleChainBlocking,
   handleChainDelete,
@@ -11,7 +11,7 @@ import {
   handleChainTypesList,
   handleChainsByIds,
   handleChainsList,
-} from "./routes/chains.js";
+} from "./routes/chains.ts";
 import {
   handleJobDetail,
   handleJobReschedule,
@@ -19,14 +19,14 @@ import {
   handleJobTypesList,
   handleJobsByIds,
   handleJobsList,
-} from "./routes/jobs.js";
+} from "./routes/jobs.ts";
 import {
   handleWorkerDetail,
   handleWorkerJobs,
   handleWorkersByIds,
   handleWorkersCounts,
   handleWorkersList,
-} from "./routes/workers.js";
+} from "./routes/workers.ts";
 
 type Assets = Record<string, { content: string; contentType: string }>;
 
@@ -35,7 +35,7 @@ let cachedAssets: Assets | null | undefined;
 const loadAssets = async (): Promise<Assets | null> => {
   if (cachedAssets !== undefined) return cachedAssets;
   try {
-    const assetsModule = await import("./routes/assets.generated.js");
+    const assetsModule = await import("./routes/assets.generated.ts");
     cachedAssets = assetsModule.assets;
   } catch {
     cachedAssets = null;

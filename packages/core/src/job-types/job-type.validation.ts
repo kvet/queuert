@@ -1,9 +1,9 @@
-import {
-  type BaseJobTypeDefinitions,
-  type JobTypeReference,
-  type NominalJobTypeReference,
-  type StructuralJobTypeReference,
-} from "./job-type.js";
+import type {
+  BaseJobTypeDefinitions,
+  JobTypeReference,
+  NominalJobTypeReference,
+  StructuralJobTypeReference,
+} from "./job-type.ts";
 
 type NoVoid<T> = [T] extends [void] ? never : T;
 type NoVoidOrUndefined<T> = [T] extends [void | undefined] ? never : T;

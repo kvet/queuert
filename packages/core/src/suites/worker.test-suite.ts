@@ -1,16 +1,16 @@
 import { sleep } from "@queuert/helpers";
 import { type TestAPI, expect, expectTypeOf } from "vitest";
 
-import { type AttemptMiddleware } from "../attempt-middleware/attempt-middleware.js";
-import { createClient } from "../client.js";
-import { type Chain } from "../entities/chain.js";
-import { JobAlreadyCompletedError, JobTakenByAnotherWorkerError } from "../errors.js";
-import { createInProcessWorker } from "../in-process-worker.js";
-import { createProcessors } from "../job-type-processors/create-job-type-processors.js";
-import { omitProcessors, pickProcessors } from "../job-type-processors/pick-job-type-processors.js";
-import { defineJobTypes } from "../job-types/define-job-types.js";
-import { createSpyStateAdapter } from "../state-adapter/state-adapter.spy.spec-helper.js";
-import { type TestSuiteContext } from "./spec-context.spec-helper.js";
+import type { AttemptMiddleware } from "../attempt-middleware/attempt-middleware.ts";
+import { createClient } from "../client.ts";
+import type { Chain } from "../entities/chain.ts";
+import { JobAlreadyCompletedError, JobTakenByAnotherWorkerError } from "../errors.ts";
+import { createInProcessWorker } from "../in-process-worker.ts";
+import { createProcessors } from "../job-type-processors/create-job-type-processors.ts";
+import { omitProcessors, pickProcessors } from "../job-type-processors/pick-job-type-processors.ts";
+import { defineJobTypes } from "../job-types/define-job-types.ts";
+import { createSpyStateAdapter } from "../state-adapter/state-adapter.spy.spec-helper.ts";
+import type { TestSuiteContext } from "./spec-context.spec-helper.ts";
 
 export const workerTestSuite = ({ it }: { it: TestAPI<TestSuiteContext> }): void => {
   const completionOptions = {

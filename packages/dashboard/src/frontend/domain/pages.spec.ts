@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 
-import { appendPage } from "./pages.js";
+import { appendPage } from "./pages.ts";
 
 describe("appendPage", () => {
   it("appends the next page", () => {

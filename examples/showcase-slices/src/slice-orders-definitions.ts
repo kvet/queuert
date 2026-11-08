@@ -1,6 +1,6 @@
 import { type JobTypeDefinitions, defineJobTypes } from "queuert";
 
-import { type notificationJobTypes } from "./slice-notifications-definitions.js";
+import type { notificationJobTypes } from "./slice-notifications-definitions.ts";
 
 export const orderJobTypes = defineJobTypes<
   {

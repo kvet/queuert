@@ -1,6 +1,6 @@
 import { A } from "@solidjs/router";
 
-import { type FieldItem } from "../../FieldList.tsx";
+import type { FieldItem } from "../../FieldList.tsx";
 
 /** The ID and limit options every state adapter factory takes, listed on each backend's page. */
 export const stateAdapterConfigItems = (): FieldItem[] => [

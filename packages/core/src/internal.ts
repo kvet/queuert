@@ -1,12 +1,12 @@
-export { helpersSymbol } from "./client.js";
-export { resolveStateAdapterConfig } from "./state-adapter/adapter-config.js";
+export { helpersSymbol } from "./client.ts";
+export { resolveStateAdapterConfig } from "./state-adapter/adapter-config.ts";
 export {
   decodeIdCursor,
   decodeTimestampWithIdCursor,
   encodeCursor,
   type IdCursor,
   type TimestampWithIdCursor,
-} from "./state-adapter/cursor.js";
+} from "./state-adapter/cursor.ts";
 export {
   type StateBlockedJob,
   type StateChain,
@@ -20,4 +20,4 @@ export {
   type StateJobInfo,
   type StateJobStatus,
   type StateWorkerInfo,
-} from "./state-adapter/state-adapter.js";
+} from "./state-adapter/state-adapter.ts";

@@ -1,8 +1,8 @@
 import { createSharedListener } from "@queuert/helpers";
-import { type NotifyAdapter } from "queuert";
+import type { NotifyAdapter } from "queuert";
 
-import { type RedisNotifyProvider } from "../notify-provider/notify-provider.redis.js";
-import { PUBLISH_MESSAGES_SCRIPT } from "./lua.js";
+import type { RedisNotifyProvider } from "../notify-provider/notify-provider.redis.ts";
+import { PUBLISH_MESSAGES_SCRIPT } from "./lua.ts";
 
 /**
  * Create a notify adapter backed by Redis pub/sub.

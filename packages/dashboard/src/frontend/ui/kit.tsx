@@ -2,7 +2,7 @@ import { CloseIcon, WarningIcon } from "@queuert/ui/components";
 import { A } from "@solidjs/router";
 import { For, type JSX, Show, createEffect } from "solid-js";
 
-import { errorMessage } from "../api.js";
+import { errorMessage } from "../api.ts";
 
 export const buttonClass = {
   primary:

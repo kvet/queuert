@@ -6,7 +6,7 @@
  * or any other validation library.
  */
 
-import { type Static, type TSchema } from "@sinclair/typebox";
+import type { Static, TSchema } from "@sinclair/typebox";
 import { Value } from "@sinclair/typebox/value";
 import {
   type BaseJobTypeDefinitions,
@@ -93,11 +93,11 @@ type InferTypeBoxJobTypes<T extends Record<string, TypeBoxJobTypeSchema>> = {
  * Validation error thrown when TypeBox validation fails.
  */
 class TypeBoxValidationError extends Error {
-  constructor(
-    message: string,
-    public readonly errors: ReturnType<typeof Value.Errors>,
-  ) {
+  readonly errors: ReturnType<typeof Value.Errors>;
+
+  constructor(message: string, errors: ReturnType<typeof Value.Errors>) {
     super(message);
+    this.errors = errors;
     this.name = "TypeBoxValidationError";
   }
 }

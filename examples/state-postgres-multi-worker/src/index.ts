@@ -89,7 +89,6 @@ const workerPath = join(__dirname, "worker.ts");
 for (let i = 0; i < WORKER_COUNT; i++) {
   const processName = processNames[i];
   const child = fork(workerPath, [], {
-    execArgv: ["--import=tsx"],
     env: { ...process.env, CONNECTION_STRING: pg.connectionString, PROCESS_NAME: processName },
     stdio: ["inherit", "inherit", "inherit", "ipc"],
   });

@@ -4,7 +4,7 @@ import { Pool } from "pg";
 import { runStateAdapterConformance } from "queuert/conformance";
 import { test } from "vitest";
 
-import { createPgPoolStateProvider } from "./provider.js";
+import { createPgPoolStateProvider } from "./provider.ts";
 
 // #region conformance
 test("state-postgres-pg provider passes state adapter conformance", async () => {

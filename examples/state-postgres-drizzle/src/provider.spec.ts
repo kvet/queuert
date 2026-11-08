@@ -5,7 +5,7 @@ import { Pool } from "pg";
 import { runStateAdapterConformance } from "queuert/conformance";
 import { test } from "vitest";
 
-import { createDrizzlePgStateProvider } from "./provider.js";
+import { createDrizzlePgStateProvider } from "./provider.ts";
 
 // #region conformance
 test("state-postgres-drizzle provider passes state adapter conformance", async () => {

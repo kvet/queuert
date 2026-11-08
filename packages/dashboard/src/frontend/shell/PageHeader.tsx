@@ -2,7 +2,7 @@ import { ArrowLeftIcon, ChevronRightIcon } from "@queuert/ui/components";
 import { A, useNavigate } from "@solidjs/router";
 import { For, type JSX, Show } from "solid-js";
 
-import { canGoBack, previousLocation } from "../state/navigation.js";
+import { canGoBack, previousLocation } from "../state/navigation.ts";
 
 const isPlainClick = (event: MouseEvent) =>
   !(event.metaKey || event.ctrlKey || event.shiftKey || event.altKey || event.button !== 0);

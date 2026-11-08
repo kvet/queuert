@@ -14,7 +14,7 @@ import {
   withTransactionHooks,
 } from "queuert";
 
-import { createPrismaSqliteStateProvider } from "./provider.js";
+import { createPrismaSqliteStateProvider } from "./provider.ts";
 
 // Create temp directory and set DATABASE_URL
 const tempDir = mkdtempSync(join(tmpdir(), "queuert-sqlite-prisma-"));
@@ -27,7 +27,7 @@ execSync("npx prisma db push", {
 });
 
 // Dynamic import after generate to get the freshly generated client
-const { PrismaClient } = await import("../prisma/generated/prisma/client.js");
+const { PrismaClient } = await import("../prisma/generated/prisma/client.ts");
 
 const adapter = new PrismaBetterSqlite3({ url: `file:${dbPath}` });
 const prisma = new PrismaClient({ adapter });

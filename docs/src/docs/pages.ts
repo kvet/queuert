@@ -1,4 +1,4 @@
-import { type Component } from "solid-js";
+import type { Component } from "solid-js";
 import pages from "virtual:docs-pages";
 
 import { type SiteSection, apiPackages, siteSections } from "./sections.ts";

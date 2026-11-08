@@ -3,15 +3,15 @@ import { type AnyStatus, statusClasses } from "@queuert/ui/lib";
 import { A } from "@solidjs/router";
 import { type JSX, Show, createSignal } from "solid-js";
 
-import { type UnknownChain, type UnknownJob, errorMessage, rescheduleJob } from "../api.js";
-import { jobPhase } from "../domain/jobPhase.js";
-import { formatRelative } from "../domain/time.js";
-import { now } from "../state/clock.js";
-import { IdChip } from "../ui/IdChip.js";
-import { JsonViewer } from "../ui/JsonViewer.js";
-import { buttonClass } from "../ui/kit.js";
-import { Time } from "../ui/Time.js";
-import { BlockerChips, blockerProgress } from "./BlockerChips.js";
+import { type UnknownChain, type UnknownJob, errorMessage, rescheduleJob } from "../api.ts";
+import { jobPhase } from "../domain/jobPhase.ts";
+import { formatRelative } from "../domain/time.ts";
+import { now } from "../state/clock.ts";
+import { IdChip } from "../ui/IdChip.tsx";
+import { JsonViewer } from "../ui/JsonViewer.tsx";
+import { buttonClass } from "../ui/kit.tsx";
+import { Time } from "../ui/Time.tsx";
+import { BlockerChips, blockerProgress } from "./BlockerChips.tsx";
 
 const SequenceItem = (props: {
   label: string;

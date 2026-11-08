@@ -1,9 +1,9 @@
 import { type TestAPI, expect } from "vitest";
 
-import { createClient } from "../client.js";
-import { ChainTypeMismatchError, WaitChainTimeoutError } from "../errors.js";
-import { defineJobTypes } from "../job-types/define-job-types.js";
-import { type TestSuiteContext } from "./spec-context.spec-helper.js";
+import { createClient } from "../client.ts";
+import { ChainTypeMismatchError, WaitChainTimeoutError } from "../errors.ts";
+import { defineJobTypes } from "../job-types/define-job-types.ts";
+import type { TestSuiteContext } from "./spec-context.spec-helper.ts";
 
 export const awaitChainTestSuite = ({ it }: { it: TestAPI<TestSuiteContext> }): void => {
   // check completion scenario with workers completing jobs

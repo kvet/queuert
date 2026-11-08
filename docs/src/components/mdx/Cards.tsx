@@ -1,5 +1,5 @@
 import { Box } from "@queuert/ui/components";
-import { type JSX } from "solid-js";
+import type { JSX } from "solid-js";
 
 import { ArrowRightIcon } from "../icons.tsx";
 

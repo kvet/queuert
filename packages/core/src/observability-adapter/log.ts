@@ -1,6 +1,6 @@
-import { type JobStatus } from "../entities/job.js";
-import { type NotifyAdapter } from "../notify-adapter/notify-adapter.js";
-import { type StateAdapter } from "../state-adapter/state-adapter.js";
+import type { JobStatus } from "../entities/job.ts";
+import type { NotifyAdapter } from "../notify-adapter/notify-adapter.ts";
+import type { StateAdapter } from "../state-adapter/state-adapter.ts";
 
 type LogLevel = "info" | "warn" | "error";
 type LogEntry<

@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 
-import { formatCount, formatSum, sumCounts } from "./counts.js";
+import { formatCount, formatSum, sumCounts } from "./counts.ts";
 
 describe("counts", () => {
   it("formats a capped count with a trailing +", () => {

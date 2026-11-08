@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 
-import { nextThemePreference, parseThemePreference, resolveTheme } from "./theme.js";
+import { nextThemePreference, parseThemePreference, resolveTheme } from "./theme.ts";
 
 describe("parseThemePreference", () => {
   it("keeps a stored light or dark preference", () => {

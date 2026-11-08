@@ -1,6 +1,6 @@
-import { JobTypeValidationError } from "../errors.js";
-import { type JobTypes } from "../job-types/job-types.js";
-import { type ConformanceGroup } from "./runner.js";
+import { JobTypeValidationError } from "../errors.ts";
+import type { JobTypes } from "../job-types/job-types.ts";
+import type { ConformanceGroup } from "./runner.ts";
 
 /**
  * Builders that the adapter author supplies to satisfy the validation

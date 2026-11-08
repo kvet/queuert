@@ -55,11 +55,10 @@ export type DeploymentProcess<TResult> = {
 export const createDeploymentSpawner =
   <TResult>(script: string, cwd: string) =>
   (target: string, version: DeploymentVersion, pause: DeploymentPause = "none") => {
-    const child: ChildProcess = spawn(
-      process.execPath,
-      ["--import", "tsx", script, target, version, pause],
-      { cwd, stdio: ["pipe", "pipe", "inherit"] },
-    );
+    const child: ChildProcess = spawn(process.execPath, [script, target, version, pause], {
+      cwd,
+      stdio: ["pipe", "pipe", "inherit"],
+    });
     const lines: string[] = [];
     const waiters: { predicate: (line: string) => boolean; resolve: (line: string) => void }[] = [];
     createInterface({ input: child.stdout! }).on("line", (line) => {

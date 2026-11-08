@@ -35,7 +35,6 @@
     "oxlint": "1.91.0",
     "oxlint-tsgolint": "7.0.2005",
     "tsdown": "0.23.5",
-    "tsx": "4.23.15",
     "typescript": "7.0.2",
     "vitest": "5.1.0"
   },

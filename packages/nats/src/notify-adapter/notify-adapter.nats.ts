@@ -1,6 +1,6 @@
-import { type NatsConnection } from "@nats-io/nats-core";
+import type { NatsConnection } from "@nats-io/nats-core";
 import { createSharedListener, type SharedListenerOpen } from "@queuert/helpers";
-import { type NotifyAdapter } from "queuert";
+import type { NotifyAdapter } from "queuert";
 
 const decoder = new TextDecoder();
 const encoder = new TextEncoder();

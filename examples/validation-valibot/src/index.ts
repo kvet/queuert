@@ -18,7 +18,7 @@ import {
 } from "queuert";
 import * as v from "valibot";
 
-import { createValibotJobTypes } from "./valibot-adapter.js";
+import { createValibotJobTypes } from "./valibot-adapter.ts";
 
 // #region usage
 // Define job types with Valibot schemas

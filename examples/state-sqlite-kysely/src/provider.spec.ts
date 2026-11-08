@@ -4,7 +4,7 @@ import { Kysely, SqliteDialect } from "kysely";
 import { runStateAdapterConformance } from "queuert/conformance";
 import { test } from "vitest";
 
-import { createKyselySqliteStateProvider } from "./provider.js";
+import { createKyselySqliteStateProvider } from "./provider.ts";
 
 type Database = Record<string, never>;
 

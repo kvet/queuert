@@ -9,7 +9,7 @@ import { createAsyncRwLock, createSqliteStateAdapter } from "@queuert/sqlite";
 import { runStateAdapterConformance } from "queuert/conformance";
 import { test } from "vitest";
 
-import { createPrismaSqliteStateProvider } from "./provider.js";
+import { createPrismaSqliteStateProvider } from "./provider.ts";
 
 const EXAMPLE_DIR = dirname(dirname(fileURLToPath(import.meta.url)));
 
@@ -22,7 +22,7 @@ test("state-sqlite-prisma provider passes state adapter conformance", async () =
     process.env.DATABASE_URL = `file:${dbPath}`;
     execSync("npx prisma db push", { stdio: "inherit", cwd: EXAMPLE_DIR });
 
-    const { PrismaClient } = await import("../prisma/generated/prisma/client.js");
+    const { PrismaClient } = await import("../prisma/generated/prisma/client.ts");
     const prismaAdapter = new PrismaBetterSqlite3({ url: `file:${dbPath}` });
     const prisma = new PrismaClient({ adapter: prismaAdapter });
 

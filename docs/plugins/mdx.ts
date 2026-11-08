@@ -1,30 +1,20 @@
 import { posix } from "node:path";
 
-import { type CompileOptions } from "@mdx-js/mdx";
-import { type Node, type Program } from "estree-jsx";
+import type { CompileOptions } from "@mdx-js/mdx";
+import type { Node, Program } from "estree-jsx";
 import { valueToEstree } from "estree-util-value-to-estree";
 import { visit as visitEstree } from "estree-util-visit";
 import GithubSlugger from "github-slugger";
-import { type Element, type ElementContent, type Root as HastRoot } from "hast";
+import type { Element, ElementContent, Root as HastRoot } from "hast";
 import { toString as hastToString } from "hast-util-to-string";
-import {
-  type ListItem,
-  type PhrasingContent,
-  type Root as MdastRoot,
-  type RootContent,
-  type Table,
-} from "mdast";
-import {
-  type MdxJsxAttribute,
-  type MdxJsxFlowElement,
-  type MdxJsxFlowElementHast,
-} from "mdast-util-mdx-jsx";
-import { type MdxjsEsmHast } from "mdast-util-mdxjs-esm";
+import type { ListItem, PhrasingContent, Root as MdastRoot, RootContent, Table } from "mdast";
+import type { MdxJsxAttribute, MdxJsxFlowElement, MdxJsxFlowElementHast } from "mdast-util-mdx-jsx";
+import type { MdxjsEsmHast } from "mdast-util-mdxjs-esm";
 import { toString as mdastToString } from "mdast-util-to-string";
 import remarkFrontmatter from "remark-frontmatter";
 import remarkGfm from "remark-gfm";
 import { SKIP, visit } from "unist-util-visit";
-import { type VFile } from "vfile";
+import type { VFile } from "vfile";
 
 import { highlight } from "./highlight.ts";
 

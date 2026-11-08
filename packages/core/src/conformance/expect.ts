@@ -2,7 +2,7 @@ import assert from "node:assert/strict";
 
 import { sleep } from "@queuert/helpers";
 
-import { SkipSignalError } from "./skip-signal-error.js";
+import { SkipSignalError } from "./skip-signal-error.ts";
 
 /**
  * Minimal vitest/jest-compatible `expect` shim, backed by `node:assert/strict`.

@@ -1,11 +1,11 @@
 import { useSearchParams } from "@solidjs/router";
 import { For, type JSX, Match, Show, Switch } from "solid-js";
 
-import { type createAutoLoadMore } from "../state/createAutoLoadMore.js";
-import { type createPagedList } from "../state/createPagedList.js";
-import { ErrorState, LiveRegion, SkeletonRows, buttonClass } from "../ui/kit.js";
-import { Select } from "../ui/Select.js";
-import { type TypeKind, TypePicker } from "./Types.js";
+import type { createAutoLoadMore } from "../state/createAutoLoadMore.ts";
+import type { createPagedList } from "../state/createPagedList.ts";
+import { ErrorState, LiveRegion, SkeletonRows, buttonClass } from "../ui/kit.tsx";
+import { Select } from "../ui/Select.tsx";
+import { type TypeKind, TypePicker } from "./Types.tsx";
 
 export const TypeGate = (props: {
   title: string;

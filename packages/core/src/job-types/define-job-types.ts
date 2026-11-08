@@ -1,6 +1,6 @@
-import { type BaseJobTypeDefinitions } from "./job-type.js";
-import { type ValidatedJobTypeDefinitions } from "./job-type.validation.js";
-import { type JobTypes, createNoopJobTypes } from "./job-types.js";
+import type { BaseJobTypeDefinitions } from "./job-type.ts";
+import type { ValidatedJobTypeDefinitions } from "./job-type.validation.ts";
+import { type JobTypes, createNoopJobTypes } from "./job-types.ts";
 
 /**
  * Define job types with compile-time type checking only (no runtime validation).

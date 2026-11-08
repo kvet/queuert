@@ -1,4 +1,4 @@
-import { type UUID } from "node:crypto";
+import type { UUID } from "node:crypto";
 
 import { createAsyncRwLock } from "@queuert/helpers";
 import Database from "better-sqlite3";
@@ -14,9 +14,9 @@ import {
 import { stateAdapterConformanceTestSuite, withWorkers } from "queuert/testing";
 import { describe, expectTypeOf, it, vi } from "vitest";
 
-import { createSqliteStateAdapter } from "../state-adapter/state-adapter.sqlite.js";
-import { createBetterSqlite3Provider } from "../state-provider/state-provider.better-sqlite3.js";
-import { extendWithStateSqlite } from "../testing.js";
+import { createSqliteStateAdapter } from "../state-adapter/state-adapter.sqlite.ts";
+import { createBetterSqlite3Provider } from "../state-provider/state-provider.better-sqlite3.ts";
+import { extendWithStateSqlite } from "../testing.ts";
 
 it("index");
 

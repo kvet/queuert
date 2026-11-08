@@ -1,14 +1,14 @@
 import { sleep } from "@queuert/helpers";
 import { type TestAPI, expect, expectTypeOf } from "vitest";
 
-import { createClient } from "../client.js";
-import { ChainNotFoundError, JobAlreadyCompletedError } from "../errors.js";
-import { createInProcessWorker } from "../in-process-worker.js";
-import { createProcessors } from "../job-type-processors/create-job-type-processors.js";
-import { defineJobTypes } from "../job-types/define-job-types.js";
-import { createSpyStateAdapter } from "../state-adapter/state-adapter.spy.spec-helper.js";
-import { type TransactionHooks, withTransactionHooks } from "../transaction-hooks.js";
-import { type TestSuiteContext } from "./spec-context.spec-helper.js";
+import { createClient } from "../client.ts";
+import { ChainNotFoundError, JobAlreadyCompletedError } from "../errors.ts";
+import { createInProcessWorker } from "../in-process-worker.ts";
+import { createProcessors } from "../job-type-processors/create-job-type-processors.ts";
+import { defineJobTypes } from "../job-types/define-job-types.ts";
+import { createSpyStateAdapter } from "../state-adapter/state-adapter.spy.spec-helper.ts";
+import { type TransactionHooks, withTransactionHooks } from "../transaction-hooks.ts";
+import type { TestSuiteContext } from "./spec-context.spec-helper.ts";
 
 export const processTestSuite = ({ it }: { it: TestAPI<TestSuiteContext> }): void => {
   const completionOptions = {

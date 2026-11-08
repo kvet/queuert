@@ -1,10 +1,10 @@
 import { connect } from "@nats-io/transport-node";
-import { type NatsConnectionOptions } from "@queuert/testcontainers";
-import { type NotifyAdapter } from "queuert";
+import type { NatsConnectionOptions } from "@queuert/testcontainers";
+import type { NotifyAdapter } from "queuert";
 import { type TestSuiteContext, createFlakyBatchGenerator } from "queuert/testing";
 import { type TestAPI, expect } from "vitest";
 
-import { createNatsNotifyAdapter } from "../notify-adapter/notify-adapter.nats.js";
+import { createNatsNotifyAdapter } from "../notify-adapter/notify-adapter.nats.ts";
 
 export const extendWithNotifyNats = <
   T extends {

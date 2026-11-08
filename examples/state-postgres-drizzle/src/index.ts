@@ -13,7 +13,7 @@ import {
   createInProcessNotifyAdapter,
 } from "queuert";
 
-import { createDrizzlePgStateProvider } from "./provider.js";
+import { createDrizzlePgStateProvider } from "./provider.ts";
 
 // Start PostgreSQL using testcontainers
 await using pg = await acquirePostgres("postgres:18", import.meta.url);

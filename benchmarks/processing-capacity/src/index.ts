@@ -4,8 +4,8 @@ import { tmpdir } from "node:os";
 import { dirname, join } from "node:path";
 import { fileURLToPath } from "node:url";
 
-import { type ServiceKind, startService } from "./services.js";
-import { type ScenarioResult, formatRate, scenarioNames, summaryTables } from "./utils.js";
+import { type ServiceKind, startService } from "./services.ts";
+import { type ScenarioResult, formatRate, scenarioNames, summaryTables } from "./utils.ts";
 
 const __dirname = dirname(fileURLToPath(import.meta.url));
 
@@ -95,7 +95,7 @@ const runBenchmarkInChildProcess = async (
 
     const fullPath = join(__dirname, benchmarkModule.modulePath);
 
-    const child = spawn("node", ["--import=tsx", fullPath, ...extraArgs], {
+    const child = spawn(process.execPath, [fullPath, ...extraArgs], {
       stdio: "inherit",
       env: { ...process.env, ...extraEnv },
     });

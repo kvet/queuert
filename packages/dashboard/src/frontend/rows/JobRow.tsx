@@ -3,10 +3,10 @@ import { shortId } from "@queuert/ui/lib";
 import { A } from "@solidjs/router";
 import { Show } from "solid-js";
 
-import { type UnknownJob } from "../api.js";
-import { IdChip } from "../ui/IdChip.js";
-import { Time } from "../ui/Time.js";
-import { DataLine } from "./ChainRow.js";
+import type { UnknownJob } from "../api.ts";
+import { IdChip } from "../ui/IdChip.tsx";
+import { Time } from "../ui/Time.tsx";
+import { DataLine } from "./ChainRow.tsx";
 
 export type JobSortKey = "createdAt" | "scheduledAt" | "attemptAt" | "completedAt";
 

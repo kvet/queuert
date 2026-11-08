@@ -1,7 +1,7 @@
 import { describe, expect, it } from "vitest";
 
-import { continuedJob, tailJob, runningChain, runningJob } from "./fixtures.spec-helper.js";
-import { foldJobs } from "./foldJobs.js";
+import { continuedJob, tailJob, runningChain, runningJob } from "./fixtures.spec-helper.ts";
+import { foldJobs } from "./foldJobs.ts";
 
 const shape = (entries: ReturnType<typeof foldJobs>) =>
   entries.map((entry) =>

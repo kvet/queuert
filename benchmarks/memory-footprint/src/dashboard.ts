@@ -12,7 +12,7 @@ import {
   withTransactionHooks,
 } from "queuert";
 
-import { jobTypes, printHeader, runDoubleRunBenchmark } from "./utils.js";
+import { jobTypes, printHeader, runDoubleRunBenchmark } from "./utils.ts";
 
 printHeader("DASHBOARD");
 

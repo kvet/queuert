@@ -1,6 +1,6 @@
-import { type Pool, type PoolClient } from "pg";
+import type { Pool, PoolClient } from "pg";
 
-import { type PgStateProvider } from "./state-provider.pg.js";
+import type { PgStateProvider } from "./state-provider.pg.ts";
 
 export type PgPoolContext = { poolClient: PoolClient };
 export type PgPoolProvider = PgStateProvider<PgPoolContext>;

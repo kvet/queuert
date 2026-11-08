@@ -5,7 +5,7 @@
   "description": "The three-step onboarding chain from the docs home page, runnable end to end on PostgreSQL with Drizzle.",
   "type": "module",
   "scripts": {
-    "start": "tsx src/index.ts",
+    "start": "node src/index.ts",
     "typecheck": "tsc --noEmit"
   },
   "dependencies": {

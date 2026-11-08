@@ -4,7 +4,7 @@ import { createAsyncRwLock, createSqliteStateAdapter } from "@queuert/sqlite";
 import { runStateAdapterConformance } from "queuert/conformance";
 import { test } from "vitest";
 
-import { createNodeSqliteStateProvider } from "./provider.js";
+import { createNodeSqliteStateProvider } from "./provider.ts";
 
 // #region conformance
 test("state-sqlite-node-sqlite provider passes state adapter conformance", async () => {

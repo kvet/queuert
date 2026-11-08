@@ -11,7 +11,7 @@ import { createServer } from "node:http";
 
 import { createDashboard } from "@queuert/dashboard";
 
-import { client, db, notifyAdapter, stateAdapter } from "./common.js";
+import { client, db, notifyAdapter, stateAdapter } from "./common.ts";
 
 const PORT = 3333;
 

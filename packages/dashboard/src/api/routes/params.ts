@@ -1,4 +1,4 @@
-import { type ChainStatus, type JobStatus } from "queuert";
+import type { ChainStatus, JobStatus } from "queuert";
 import { decodeIdCursor, decodeTimestampWithIdCursor } from "queuert/internal";
 
 const VALID_JOB_STATUSES = new Set<string>(["blocked", "pending", "running", "completed"]);

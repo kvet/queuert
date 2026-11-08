@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 
-import { storageKey } from "./storage.js";
+import { storageKey } from "./storage.ts";
 
 describe("storageKey", () => {
   it("namespaces preferences by mount path", () => {

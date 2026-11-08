@@ -12,13 +12,13 @@ import {
   createMigrationStore,
   createSqliteStateAdapter,
   migrations,
-} from "../state-adapter/state-adapter.sqlite.js";
+} from "../state-adapter/state-adapter.sqlite.ts";
 import {
   type BetterSqlite3Context,
   createBetterSqlite3Provider,
-} from "../state-provider/state-provider.better-sqlite3.js";
-import { type SqliteStateProvider } from "../state-provider/state-provider.sqlite.js";
-import { MARKER } from "./state-adapter-migration.process.js";
+} from "../state-provider/state-provider.better-sqlite3.ts";
+import type { SqliteStateProvider } from "../state-provider/state-provider.sqlite.ts";
+import { MARKER } from "./state-adapter-migration.process.ts";
 
 const INSTALL = "001_initial_schema";
 const WORKER_LIVENESS = "002_worker_liveness";

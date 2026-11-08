@@ -1,13 +1,13 @@
 import { type TestAPI, describe } from "vitest";
 
-import { expect as defaultExpect } from "../conformance/expect.js";
+import { expect as defaultExpect } from "../conformance/expect.ts";
 import {
   type NotifyConformanceFixture,
   notifyAdapterConformanceGroups,
-} from "../conformance/notify-adapter-cases.js";
-import { SkipSignalError } from "../conformance/runner.js";
+} from "../conformance/notify-adapter-cases.ts";
+import { SkipSignalError } from "../conformance/runner.ts";
 
-export { type NotifyConformanceFixture } from "../conformance/notify-adapter-cases.js";
+export { type NotifyConformanceFixture } from "../conformance/notify-adapter-cases.ts";
 
 /**
  * Run the notify adapter conformance cases inside a vitest suite.

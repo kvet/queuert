@@ -17,7 +17,7 @@ import {
 } from "queuert/testing";
 import { describe, it } from "vitest";
 
-import { extendWithStatePg } from "./state-adapter.pg.spec-helper.js";
+import { extendWithStatePg } from "./state-adapter.pg.spec-helper.ts";
 
 const postgresInProcessIt = extendWithResourceLeakDetection(
   extendWithNotifyInProcess(

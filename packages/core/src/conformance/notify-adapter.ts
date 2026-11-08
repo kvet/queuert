@@ -1,8 +1,8 @@
 import {
   type NotifyConformanceFixture,
   notifyAdapterConformanceGroups,
-} from "./notify-adapter-cases.js";
-import { type ConformanceReport, type ConformanceResult, runConformance } from "./runner.js";
+} from "./notify-adapter-cases.ts";
+import { type ConformanceReport, type ConformanceResult, runConformance } from "./runner.ts";
 
 export type NotifyConformanceOptions = {
   caseTimeoutMs?: number;
@@ -45,4 +45,4 @@ export const runNotifyAdapterConformance = async (
   }
 };
 
-export { type NotifyConformanceFixture } from "./notify-adapter-cases.js";
+export { type NotifyConformanceFixture } from "./notify-adapter-cases.ts";

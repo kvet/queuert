@@ -5,7 +5,7 @@ import { acquireRedis } from "@queuert/testcontainers";
 import { RedisClient } from "bun";
 import { runNotifyAdapterConformance } from "queuert/conformance";
 
-import { createBunRedisNotifyProvider } from "./provider.js";
+import { createBunRedisNotifyProvider } from "./provider.ts";
 
 // #region conformance
 test("notify-redis-bun provider passes notify adapter conformance", async () => {

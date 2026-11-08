@@ -4,11 +4,11 @@ import { it as baseIt, describe, expect } from "vitest";
 import {
   type SqliteStateAdapter,
   createSqliteStateAdapter,
-} from "../state-adapter/state-adapter.sqlite.js";
+} from "../state-adapter/state-adapter.sqlite.ts";
 import {
   type BetterSqlite3Context,
   createBetterSqlite3Provider,
-} from "../state-provider/state-provider.better-sqlite3.js";
+} from "../state-provider/state-provider.better-sqlite3.ts";
 
 const it = baseIt.extend<{
   db: Database.Database;

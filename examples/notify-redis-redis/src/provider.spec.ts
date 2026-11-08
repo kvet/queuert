@@ -4,7 +4,7 @@ import { runNotifyAdapterConformance } from "queuert/conformance";
 import { type RedisClientType, createClient } from "redis";
 import { test } from "vitest";
 
-import { createNodeRedisNotifyProvider } from "./provider.js";
+import { createNodeRedisNotifyProvider } from "./provider.ts";
 
 // #region conformance
 test("notify-redis-redis provider passes notify adapter conformance", async () => {
