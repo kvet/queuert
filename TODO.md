@@ -1,16 +1,16 @@
 # Short term
 
 - [REF] txHooks provider
-- [REF] PostgreSQL pipelining.
 - [EPIC] SQLite production-readiness
   - [REF] sync sqlite api
   - [TASK] IPC notify adapter in a new `@queuert/ipc` package — sync-ready, socket per process, one registry file per process in a shared `directory`. See `design/ipc-notify.md`.
   - [TASK] No multi-worker example
   - [TASK] Get rid of `createAsyncRwLock()` in sync apis
+- [REF] Decouple conformance tests
 
 # Medium term
 
-- [REF] Decouple conformance tests
+- [REF] PostgreSQL pipelining
 - [TASK] Multi-process SQLite conformance — the SQLite conformance suite runs every transaction on one `:memory:` connection behind the in-process `AsyncRwLock`, so the `lock: "exclusive"` cases pass without exercising SQLite's own write lock. Add a mode that contends from a second connection in a worker thread or child process against a WAL file (better-sqlite3 blocks the event loop while it waits on `busy_timeout`, so both connections cannot share one thread).
 - [TASK] Built-in cleanup. See `design/builtin-cleanup.md`.
 - [TASK] PostgreSQL REPEATABLE READ and SERIALIZABLE support — counter-based blocker bookkeeping (`has_dependents`, `blockers_remaining`), a worker-row write on acquisition, adapter retries of 40001/40P01 for Queuert's own work, and migrations pinned to READ COMMITTED. Every 0.17 process must stop before `003_blocker_counters`. See `design/pg-isolation-levels.md`.

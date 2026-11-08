@@ -10,6 +10,9 @@
     "url": "git+https://github.com/kvet/queuert.git"
   },
   "type": "module",
+  "exports": {
+    "./scenarios": "./src/scenarios.ts"
+  },
   "scripts": {
     "dashboard": "pnpm --filter '@queuert/dashboard' build && node src/dashboard.ts",
     "dashboard:mounted": "pnpm --filter '@queuert/dashboard' build && node src/dashboard-mounted.ts",

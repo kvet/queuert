@@ -1,29 +1,9 @@
 import { A } from "@solidjs/router";
 
-import chainDetailShot from "../../../assets/dashboard/chain-detail.png";
-import chainTypesShot from "../../../assets/dashboard/chain-types-list.png";
-import chainsListShot from "../../../assets/dashboard/chains-list.png";
-import chainDetailDarkShot from "../../../assets/dashboard/dark/chain-detail.png";
-import chainTypesDarkShot from "../../../assets/dashboard/dark/chain-types-list.png";
-import chainsListDarkShot from "../../../assets/dashboard/dark/chains-list.png";
-import findDarkShot from "../../../assets/dashboard/dark/find.png";
-import jobDetailDarkShot from "../../../assets/dashboard/dark/job-detail.png";
-import jobTypesDarkShot from "../../../assets/dashboard/dark/job-types-list.png";
-import jobsListDarkShot from "../../../assets/dashboard/dark/jobs-list.png";
-import overviewDarkShot from "../../../assets/dashboard/dark/overview.png";
-import workerDetailDarkShot from "../../../assets/dashboard/dark/worker-detail.png";
-import workersListDarkShot from "../../../assets/dashboard/dark/workers-list.png";
-import findShot from "../../../assets/dashboard/find.png";
-import jobDetailShot from "../../../assets/dashboard/job-detail.png";
-import jobTypesShot from "../../../assets/dashboard/job-types-list.png";
-import jobsListShot from "../../../assets/dashboard/jobs-list.png";
-import overviewShot from "../../../assets/dashboard/overview.png";
-import workerDetailShot from "../../../assets/dashboard/worker-detail.png";
-import workersListShot from "../../../assets/dashboard/workers-list.png";
 import { ExampleCode } from "../../../components/ExampleCode.tsx";
 import { ExampleRows } from "../../../components/ExampleList.tsx";
 import { FieldList } from "../../../components/FieldList.tsx";
-import { DashboardShot } from "../../../components/integrations/dashboard/DashboardShot.tsx";
+import { DashboardDemo } from "../../../components/integrations/dashboard/DashboardDemo.tsx";
 import { ExperimentalAside } from "../../../components/integrations/ExperimentalAside.tsx";
 import { Code } from "../../../components/mdx/Code.tsx";
 import { Steps } from "../../../components/mdx/Steps.tsx";
@@ -162,11 +142,7 @@ const Page = () => (
     </p>
 
     <h3>Home page</h3>
-    <DashboardShot
-      light={overviewShot}
-      dark={overviewDarkShot}
-      alt="Home page with a lost-lease warning, chain and job status bars, worker counts and the busiest chain and job types"
-    />
+    <DashboardDemo view="overview" title="Dashboard home page" />
     <p>
       The home page (<code>/</code>), opened by the logo. A warning at the top counts the workers
       that lost their lease, linking to the worker list, and another counts the job types with
@@ -188,16 +164,8 @@ const Page = () => (
     </p>
 
     <h3>Chain and job types</h3>
-    <DashboardShot
-      light={chainTypesShot}
-      dark={chainTypesDarkShot}
-      alt="Chain types with a chip per status"
-    />
-    <DashboardShot
-      light={jobTypesShot}
-      dark={jobTypesDarkShot}
-      alt="Job types with a chip per status and each type's live workers"
-    />
+    <DashboardDemo view="chain-types" title="Dashboard chain types" />
+    <DashboardDemo view="job-types" title="Dashboard job types" />
     <p>
       <code>/chains/types</code> and <code>/jobs/types</code> list the types by name, one row each:
       the name and a chip for each status with a non-zero count, which links to the list filtered by
@@ -211,11 +179,7 @@ const Page = () => (
     </p>
 
     <h3>Chain list</h3>
-    <DashboardShot
-      light={chainsListShot}
-      dark={chainsListDarkShot}
-      alt="Chain list with the status and role filter bar and input previews"
-    />
+    <DashboardDemo view="chains-list" title="Dashboard chain list" />
     <p>
       Lists the chains of one type, newest first by default; the selector next to the title switches
       to another chain type. A filter bar holds the status filter (All, Running, Completed, each
@@ -226,11 +190,7 @@ const Page = () => (
     </p>
 
     <h3>Chain detail</h3>
-    <DashboardShot
-      light={chainDetailShot}
-      dark={chainDetailDarkShot}
-      alt="Chain detail with the chain input and output"
-    />
+    <DashboardDemo view="chain-detail" title="Dashboard chain detail" />
     <p>
       Shows one chain with its jobs as a vertical sequence, oldest first. Each job shows its status,
       the last error and attempt count if it was rescheduled after an error (with a{" "}
@@ -250,11 +210,7 @@ const Page = () => (
     </p>
 
     <h3>Job list</h3>
-    <DashboardShot
-      light={jobsListShot}
-      dark={jobsListDarkShot}
-      alt="Job list with the status filter bar and input previews"
-    />
+    <DashboardDemo view="jobs-list" title="Dashboard job list" />
     <p>
       Lists the jobs of one type, with a filter bar holding the status filter (All, Blocked,
       Pending, Running and Completed, each with its count) and the sort options. Each row links to
@@ -265,11 +221,7 @@ const Page = () => (
     </p>
 
     <h3>Job detail</h3>
-    <DashboardShot
-      light={jobDetailShot}
-      dark={jobDetailDarkShot}
-      alt="Job detail with the job input and output"
-    />
+    <DashboardDemo view="job-detail" title="Dashboard job detail" />
     <p>
       Shows one job, top to bottom: its attempts and timing, the current attempt's worker, linked to
       its page, with its start time and its deadline while it runs, or the worker that completed it,
@@ -279,11 +231,7 @@ const Page = () => (
     </p>
 
     <h3>Worker list</h3>
-    <DashboardShot
-      light={workersListShot}
-      dark={workersListDarkShot}
-      alt="Worker list with the job type select and a worker whose lease is lost"
-    />
+    <DashboardDemo view="workers-list" title="Dashboard worker list" />
     <p>
       <code>/workers</code> lists every worker, oldest first, including a worker whose lease is gone
       and that was not reclaimed yet. A job type select narrows the list to the workers that process
@@ -293,11 +241,7 @@ const Page = () => (
     </p>
 
     <h3>Worker detail</h3>
-    <DashboardShot
-      light={workerDetailShot}
-      dark={workerDetailDarkShot}
-      alt="Worker detail with the worker's lease, concurrency and running job"
-    />
+    <DashboardDemo view="worker-detail" title="Dashboard worker detail" />
     <p>
       Shows one worker: its ID, start time, lease end, concurrency, running job count, and its job
       types, each linking to that type's running jobs. A worker that lost its lease gets a notice.{" "}
@@ -308,11 +252,6 @@ const Page = () => (
     </p>
 
     <h3>Find by ID or type</h3>
-    <DashboardShot
-      light={findShot}
-      dark={findDarkShot}
-      alt="Find dialog listing the chain and job types that match the typed text"
-    />
     <p>
       Press <kbd>⌘K</kbd> (<kbd>Ctrl+K</kbd>) or click the find box (a search icon on narrow
       screens) and type part of a type name or paste one or more IDs. While the text could be a type
@@ -324,6 +263,7 @@ const Page = () => (
       <kbd>Enter</kbd> to open that type's chain or job list; <kbd>Enter</kbd> in the box also opens
       the top type when no chain, job or worker has that ID.
     </p>
+    <DashboardDemo view="find" title="Dashboard find results" />
     <p>
       To look up by ID, paste one or more IDs, separated by commas, spaces or new lines (up to 100).
       A single ID opens the chain, job or worker directly; a chain and its head job share an ID, and

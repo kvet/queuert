@@ -3,15 +3,16 @@
   "private": true,
   "type": "module",
   "scripts": {
-    "dev": "vite dev",
-    "build": "vite build",
+    "dev": "pnpm --filter @queuert/dashboard build && vite dev",
+    "build": "pnpm --filter @queuert/dashboard build && vite build",
     "preview": "vite preview",
-    "typecheck": "tsc --noEmit",
+    "typecheck": "tsc --noEmit && tsc --noEmit -p src/components/integrations/dashboard/demo",
     "test": "vitest --run"
   },
   "devDependencies": {
     "@mdx-js/mdx": "3.1.1",
     "@mdx-js/rollup": "3.1.1",
+    "@queuert/dashboard": "workspace:*",
     "@queuert/tsconfig": "workspace:*",
     "@queuert/ui": "workspace:*",
     "@solidjs/meta": "0.29.8",
@@ -24,6 +25,7 @@
     "@types/node": "24.19.1",
     "estree-util-value-to-estree": "3.5.0",
     "estree-util-visit": "2.0.0",
+    "example-dashboard": "workspace:*",
     "github-slugger": "2.0.0",
     "hast-util-from-html": "2.0.3",
     "hast-util-to-string": "3.0.1",

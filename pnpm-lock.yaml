@@ -452,6 +452,9 @@ importers:
       '@mdx-js/rollup':
         specifier: 3.1.1
         version: 3.1.1(rollup@4.65.1)
+      '@queuert/dashboard':
+        specifier: workspace:*
+        version: link:../packages/dashboard
       '@queuert/tsconfig':
         specifier: workspace:*
         version: link:../packages-internal/tsconfig
@@ -488,6 +491,9 @@ importers:
       estree-util-visit:
         specifier: 2.0.0
         version: 2.0.0
+      example-dashboard:
+        specifier: workspace:*
+        version: link:../examples/dashboard
       github-slugger:
         specifier: 2.0.0
         version: 2.0.0

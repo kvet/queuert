@@ -1,6 +1,5 @@
-import { type Theme, createTheme } from "@queuert/ui/lib";
+import { type Theme, createTheme, dashboardStorageKey } from "@queuert/ui/lib";
 
 import { basePath } from "../base.ts";
-import { storageKey } from "./storage.ts";
 
-export const theme: Theme = createTheme(storageKey(basePath, "theme"));
+export const theme: Theme = createTheme(dashboardStorageKey(basePath, "theme"));

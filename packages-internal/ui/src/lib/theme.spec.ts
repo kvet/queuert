@@ -1,6 +1,11 @@
 import { describe, expect, it } from "vitest";
 
-import { nextThemePreference, parseThemePreference, resolveTheme } from "./theme.ts";
+import {
+  nextThemePreference,
+  parseThemePreference,
+  resolveTheme,
+  storedThemePreferenceChange,
+} from "./theme.ts";
 
 describe("parseThemePreference", () => {
   it("keeps a stored light or dark preference", () => {
@@ -29,5 +34,26 @@ describe("nextThemePreference", () => {
     expect(nextThemePreference("system")).toBe("light");
     expect(nextThemePreference("light")).toBe("dark");
     expect(nextThemePreference("dark")).toBe("system");
+  });
+});
+
+describe("storedThemePreferenceChange", () => {
+  it("reads the preference another document stored under the same key", () => {
+    expect(storedThemePreferenceChange("site:theme", { key: "site:theme", newValue: "dark" })).toBe(
+      "dark",
+    );
+    expect(storedThemePreferenceChange("site:theme", { key: "site:theme", newValue: null })).toBe(
+      "system",
+    );
+  });
+
+  it("falls back to system when another document clears the storage", () => {
+    expect(storedThemePreferenceChange("site:theme", { key: null, newValue: null })).toBe("system");
+  });
+
+  it("ignores changes to other keys", () => {
+    expect(
+      storedThemePreferenceChange("site:theme", { key: "other:theme", newValue: "dark" }),
+    ).toBeUndefined();
   });
 });

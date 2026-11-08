@@ -370,17 +370,17 @@ When making changes:
 - Update `docs/src/content/docs/` if there were architectural changes or naming convention updates
 - Update package READMEs (`packages/*/README.md`) if there were changes to adapter exports or configuration
 - Update `TODO.md` if any items were addressed
-- Update the dashboard screenshots whenever a change to `packages/dashboard` alters what the UI looks like (see below)
+- Update the dashboard demo seed whenever a change to `packages/dashboard` needs new data to show a documented view (see below)
 
 ### Docs Site
 
 [Docs Style](docs-style.md) is the source of truth for the docs site in `docs/`: site layout, the MDX pipeline, where a page's sidebar entry goes, visual language and how to verify a docs change. Read it before changing a page.
 
-### Dashboard Screenshots
+### Dashboard Demo
 
-`docs/src/content/docs/integrations/dashboard.tsx` embeds ten screenshots from `docs/src/assets/dashboard/` and their dark counterparts from `docs/src/assets/dashboard/dark/`; the page shows the set matching the site theme. Every visible dashboard change regenerates all twenty from the same run in the same change, and the prose and alt text next to each image are updated to match. Capture them from the `examples/dashboard` example (run `start` to populate, then `dashboard`) with Playwright, using exactly these settings so the set stays consistent:
+`docs/src/content/docs/integrations/dashboard.tsx` shows the live dashboard in place of screenshots: each `<DashboardDemo view="…">` frame (`docs/src/components/integrations/dashboard/DashboardDemo.tsx`) opens one view. A service worker (`demo/service-worker.ts`, bundled by `docs/plugins/dashboard-demo-worker.ts` to `/queuert/dashboard-demo.js`) runs a `createDashboard` fetch handler in the browser, so the frames load the regular `@queuert/dashboard` build, which `pnpm docs:dev` and `pnpm docs:build` build first.
 
-- Viewport 800×640, device scale factor 1, the viewport only (never a full-page capture)
-- Reduced motion, so the running-status pulse doesn't show up mid-animation; the light color scheme for `docs/src/assets/dashboard/`, then the dark color scheme for `docs/src/assets/dashboard/dark/` (same file names)
-- At least a minute after `start` exits, so one leftover worker shows its lost lease
-- Views: `overview.png` (`/`), `chain-types-list.png` (`/chains/types`), `job-types-list.png` (`/jobs/types`), `chains-list.png` (`/chains?typeName=greet`), `chain-detail.png` (a `process-with-blockers` chain), `jobs-list.png` (`/jobs?typeName=greet`), `job-detail.png` (a `might-fail` job), `workers-list.png` (`/workers`), `worker-detail.png` (the worker running the `long-runner-live` job), `find.png` (`/` with the find dialog open and `order` typed)
+- The data comes from `examples/dashboard/src/scenarios.ts`, which both the example's populator (SQLite) and the demo's `demo/seed.ts` (in-process adapter) run, so the example and the docs show the same chains, jobs and workers
+- IDs come from the scenarios' seeded `createIdGenerator` and each scenario's writes are awaited before the next starts, so a run always yields the same IDs; the demo relies on it, since the browser stops an idle service worker and the reseed must keep open frames working
+- `seedDashboardDemo` returns the path of every documented view, and the frame opens `__view/<view>`, which the service worker redirects to that path; a new view gets its path there and a `view` value on the page
+- A dashboard change that needs data no scenario has (a new status, a new kind of row) adds a scenario to `scenarios.ts`, and the prose next to the frame is updated to match

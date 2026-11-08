@@ -781,7 +781,13 @@ export const examples: Example[] = [
       "@queuert/dashboard embedded as a fetch handler with Node's built-in HTTP server. Run the populator to generate chains, jobs and workers, browse them through the web UI.",
     runtime: "Node.js",
     services: [],
-    files: ["src/dashboard.ts", "src/dashboard-mounted.ts", "src/populator.ts", "src/common.ts"],
+    files: [
+      "src/dashboard.ts",
+      "src/dashboard-mounted.ts",
+      "src/populator.ts",
+      "src/scenarios.ts",
+      "src/common.ts",
+    ],
     commands: [
       { label: "Terminal 1: dashboard", script: "dashboard" },
       {

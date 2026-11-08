@@ -1,0 +1,11 @@
+{
+  "extends": "@queuert/tsconfig/base",
+  "compilerOptions": {
+    "composite": false,
+    "module": "esnext",
+    "moduleResolution": "bundler",
+    "lib": ["esnext", "webworker"],
+    "types": []
+  },
+  "include": ["service-worker.ts"]
+}

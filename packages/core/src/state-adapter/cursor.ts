@@ -10,14 +10,27 @@ export type IdCursor = {
   id: string;
 };
 
+const encodeBase64Url = (text: string): string => {
+  let binary = "";
+  for (const byte of new TextEncoder().encode(text)) binary += String.fromCharCode(byte);
+  return btoa(binary).replaceAll("+", "-").replaceAll("/", "_").replace(/=+$/, "");
+};
+
+const decodeBase64Url = (encoded: string): string =>
+  new TextDecoder().decode(
+    Uint8Array.from(atob(encoded.replaceAll("-", "+").replaceAll("_", "/")), (char) =>
+      char.charCodeAt(0),
+    ),
+  );
+
 export const encodeCursor = (payload: TimestampWithIdCursor | IdCursor): string =>
-  Buffer.from(JSON.stringify(payload)).toString("base64url");
+  encodeBase64Url(JSON.stringify(payload));
 
 export const decodeTimestampWithIdCursor = (
   cursor: string,
   expectedSortKey: string,
 ): TimestampWithIdCursor => {
-  const obj = JSON.parse(Buffer.from(cursor, "base64url").toString()) as Record<string, unknown>;
+  const obj = JSON.parse(decodeBase64Url(cursor)) as Record<string, unknown>;
 
   if (
     obj.type === "timestampWithId" &&
@@ -37,7 +50,7 @@ export const decodeTimestampWithIdCursor = (
 };
 
 export const decodeIdCursor = (cursor: string): IdCursor => {
-  const obj = JSON.parse(Buffer.from(cursor, "base64url").toString()) as Record<string, unknown>;
+  const obj = JSON.parse(decodeBase64Url(cursor)) as Record<string, unknown>;
   if (obj.type === "id" && typeof obj.id === "string") {
     return obj as unknown as IdCursor;
   }

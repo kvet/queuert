@@ -8,6 +8,12 @@ export const parseThemePreference = (stored: string | null): ThemePreference =>
 export const resolveTheme = (preference: ThemePreference, systemDark: boolean): "light" | "dark" =>
   preference === "system" ? (systemDark ? "dark" : "light") : preference;
 
+export const storedThemePreferenceChange = (
+  storageKey: string,
+  event: { key: string | null; newValue: string | null },
+): ThemePreference | undefined =>
+  event.key === storageKey || event.key === null ? parseThemePreference(event.newValue) : undefined;
+
 const order: ThemePreference[] = ["system", "light", "dark"];
 
 export const nextThemePreference = (preference: ThemePreference): ThemePreference =>
@@ -43,6 +49,12 @@ export const createTheme = (storageKey: string): Theme => {
       apply();
       media().addEventListener("change", () => {
         if (preference() === "system") apply();
+      });
+      window.addEventListener("storage", (event) => {
+        const next = storedThemePreferenceChange(storageKey, event);
+        if (next === undefined) return;
+        setPreferenceSignal(next);
+        apply();
       });
     },
   };

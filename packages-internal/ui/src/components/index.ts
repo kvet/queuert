@@ -20,6 +20,7 @@ export {
   type IconProps,
 } from "./icons.tsx";
 export { IdChip } from "./IdChip.tsx";
+export { LoadingLogo } from "./LoadingLogo.tsx";
 export { Pips } from "./Pips.tsx";
 export { Row, RowLink, SubLine, type LinkComponent } from "./Row.tsx";
 export { StatusDot, StatusPill } from "./StatusPill.tsx";

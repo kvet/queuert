@@ -1,5 +1,3 @@
-import { randomUUID } from "node:crypto";
-
 import { isPositiveSafeInteger } from "@queuert/helpers";
 
 import { InvalidJobIdError, InvalidWorkerIdError } from "../errors.ts";
@@ -13,9 +11,9 @@ const assertPositiveInteger = (value: number, name: string): void => {
 
 /** Applies the defaults to a state adapter factory's options and rejects invalid limits. */
 export const resolveStateAdapterConfig = <TJobId extends string, TWorkerId extends string>({
-  generateJobId = () => randomUUID() as TJobId,
+  generateJobId = () => crypto.randomUUID() as TJobId,
   validateJobId = () => true,
-  generateWorkerId = () => randomUUID() as TWorkerId,
+  generateWorkerId = () => crypto.randomUUID() as TWorkerId,
   validateWorkerId = () => true,
   maxBlockersPerJob = 100,
   countCap = 10_000,

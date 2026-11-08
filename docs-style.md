@@ -81,4 +81,4 @@ Each topic is owned by exactly one page. Every other page that touches it says o
 - From `docs/`, run `pnpm typecheck` and `pnpm test` (covers `sections.spec.ts`, `examples.spec.ts` and the plugin specs in `docs/plugins/`).
 - Run `pnpm fmt` from the repo root, then re-check your diff: the oxlint autofix can add `async` or strip `await` on sync-or-async code.
 - When the page cites an example you changed, run it (`pnpm --filter example-<name> start`).
-- Dashboard screenshots embedded in the docs are regenerated per Code Style, "Dashboard Screenshots".
+- The dashboard page embeds the live dashboard; its demo data follows Code Style, "Dashboard Demo".
