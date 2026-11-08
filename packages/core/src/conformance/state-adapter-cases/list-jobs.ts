@@ -852,12 +852,49 @@ export const listJobsGroup: ConformanceGroup<StateConformanceFixture> = {
       },
     },
     {
+      name: "listJobs paginates jobs created at the same time by id in both directions",
+      run: async ({ stateAdapter }, expect) => {
+        const created = await stateAdapter.withTransaction(async (txCtx) =>
+          stateAdapter.createJobs({
+            txCtx,
+            jobs: [0, 1, 2].map(() => ({
+              id: stateAdapter.config.generateJobId(),
+              typeName: "same-time-job",
+              input: null,
+            })),
+          }),
+        );
+        const [firstId, secondId, thirdId] = created.map((chain) => chain.head.id).toSorted();
+        const listSameTimeJobs = async (orderDirection: "asc" | "desc", cursor?: string) =>
+          stateAdapter.listJobs({
+            typeName: "same-time-job",
+            orderBy: "createdAt",
+            orderDirection,
+            page: { limit: 2, cursor },
+          });
+
+        const ascPage = await listSameTimeJobs("asc");
+        expect(ascPage.items.map((job) => job.id)).toEqual([firstId, secondId]);
+        expect(
+          (await listSameTimeJobs("asc", ascPage.nextCursor!)).items.map((job) => job.id),
+        ).toEqual([thirdId]);
+
+        const descPage = await listSameTimeJobs("desc");
+        expect(descPage.items.map((job) => job.id)).toEqual([thirdId, secondId]);
+        expect(
+          (await listSameTimeJobs("desc", descPage.nextCursor!)).items.map((job) => job.id),
+        ).toEqual([firstId]);
+      },
+    },
+  ],
+};
+
+export const listJobsConcurrentTransactionsGroup: ConformanceGroup<StateConformanceFixture> = {
+  name: "listJobs",
+  cases: [
+    {
       name: "non-transactional listJobs does not observe an uncommitted insert",
-      run: async ({ stateAdapter, transactionConcurrency }, expect) => {
-        if (transactionConcurrency !== "concurrent") {
-          expect.skip("requires concurrent transactions");
-          return;
-        }
+      run: async ({ stateAdapter }, expect) => {
         let release: (() => void) | undefined;
         const gate = new Promise<void>((r) => {
           release = r;
@@ -893,41 +930,6 @@ export const listJobsGroup: ConformanceGroup<StateConformanceFixture> = {
 
         const { items } = await listPromise;
         expect(items).toHaveLength(0);
-      },
-    },
-    {
-      name: "listJobs paginates jobs created at the same time by id in both directions",
-      run: async ({ stateAdapter }, expect) => {
-        const created = await stateAdapter.withTransaction(async (txCtx) =>
-          stateAdapter.createJobs({
-            txCtx,
-            jobs: [0, 1, 2].map(() => ({
-              id: stateAdapter.config.generateJobId(),
-              typeName: "same-time-job",
-              input: null,
-            })),
-          }),
-        );
-        const [firstId, secondId, thirdId] = created.map((chain) => chain.head.id).toSorted();
-        const listSameTimeJobs = async (orderDirection: "asc" | "desc", cursor?: string) =>
-          stateAdapter.listJobs({
-            typeName: "same-time-job",
-            orderBy: "createdAt",
-            orderDirection,
-            page: { limit: 2, cursor },
-          });
-
-        const ascPage = await listSameTimeJobs("asc");
-        expect(ascPage.items.map((job) => job.id)).toEqual([firstId, secondId]);
-        expect(
-          (await listSameTimeJobs("asc", ascPage.nextCursor!)).items.map((job) => job.id),
-        ).toEqual([thirdId]);
-
-        const descPage = await listSameTimeJobs("desc");
-        expect(descPage.items.map((job) => job.id)).toEqual([thirdId, secondId]);
-        expect(
-          (await listSameTimeJobs("desc", descPage.nextCursor!)).items.map((job) => job.id),
-        ).toEqual([firstId]);
       },
     },
   ],

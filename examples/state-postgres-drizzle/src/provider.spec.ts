@@ -1,29 +1,24 @@
-import { createPgStateAdapter } from "@queuert/postgres";
+import { runPgStateProviderConformance } from "@queuert/postgres/conformance";
 import { acquirePostgres } from "@queuert/testcontainers";
 import { drizzle } from "drizzle-orm/node-postgres";
 import { Pool } from "pg";
-import { runStateAdapterConformance } from "queuert/conformance";
 import { test } from "vitest";
 
 import { createDrizzlePgStateProvider } from "./provider.ts";
 
 // #region conformance
-test("state-postgres-drizzle provider passes state adapter conformance", async () => {
+test("state-postgres-drizzle provider passes state provider conformance", async () => {
   await using pg = await acquirePostgres("postgres:18", import.meta.url);
 
-  await runStateAdapterConformance(async () => {
+  await runPgStateProviderConformance(async () => {
     const pool = new Pool({ connectionString: pg.connectionString, idleTimeoutMillis: 0 });
     const db = drizzle(pool, { schema: {} });
 
     const stateProvider = createDrizzlePgStateProvider({ db });
-    const adapter = createPgStateAdapter({ stateProvider });
-    await adapter.migrateToLatest();
 
     return {
-      stateAdapter: adapter,
-      transactionConcurrency: "concurrent",
+      stateProvider,
       withNonTransactionContext: async (fn) => fn({ tx: db }),
-      reset: async () => adapter.truncate(),
       dispose: async () => {
         await pool.end();
       },

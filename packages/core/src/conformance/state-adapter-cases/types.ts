@@ -8,12 +8,6 @@ import type { StateAdapter } from "../../state-adapter/state-adapter.ts";
 export type StateConformanceFixture = {
   stateAdapter: StateAdapter<any, any, any>;
   /**
-   * Whether two `withTransaction` callbacks can run at the same time — `"concurrent"` for a
-   * connection pool, `"serialized"` for a single connection (e.g. SQLite). Cases that need
-   * concurrent transactions run only when this is `"concurrent"`.
-   */
-  transactionConcurrency: "concurrent" | "serialized";
-  /**
    * Runs the callback with a context of the adapter's shape that is not inside a transaction
    * (e.g. a pool client with no `BEGIN`, or the root ORM handle), so the suite can verify
    * `isTransaction` rejects it. Cases that need it are skipped when omitted.

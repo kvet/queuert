@@ -1,4 +1,5 @@
-import { stateAdapterConformanceTestSuite } from "queuert/testing";
+import { stateAdapterBaseGroups } from "queuert/conformance-internal";
+import { conformanceTestSuite } from "queuert/testing";
 import { it as baseIt, describe, expect } from "vitest";
 
 import { extendWithVarianceStateSqlite } from "./state-adapter-variance.spec-helper.ts";
@@ -20,5 +21,5 @@ describe("SQLite State Adapter Variance - Limits", () => {
     expect(tableNames).toContain(`${tablePrefix}migration`);
   });
 
-  stateAdapterConformanceTestSuite({ it });
+  conformanceTestSuite({ it, groups: stateAdapterBaseGroups });
 });

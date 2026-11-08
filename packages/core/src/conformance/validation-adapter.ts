@@ -1,14 +1,9 @@
-import { type ConformanceReport, type ConformanceResult, runConformance } from "./runner.ts";
+import { type ConformanceOptions, type ConformanceReport, runConformance } from "./runner.ts";
 import {
   type ValidationAdapterConformanceContext,
   type ValidationConformanceFixture,
   validationAdapterConformanceGroups,
 } from "./validation-adapter-cases.ts";
-
-export type ValidationConformanceOptions = {
-  caseTimeoutMs?: number;
-  onResult?: (result: ConformanceResult) => void;
-};
 
 /**
  * Run the validation adapter conformance suite against a user-supplied
@@ -40,7 +35,7 @@ export type ValidationConformanceOptions = {
  */
 export const runValidationAdapterConformance = async (
   factory: () => Promise<ValidationConformanceFixture>,
-  options?: ValidationConformanceOptions,
+  options?: ConformanceOptions,
 ): Promise<ConformanceReport> => {
   const fixture = await factory();
   try {

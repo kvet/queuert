@@ -1,5 +1,9 @@
 import { extendWithPostgres } from "@queuert/testcontainers";
-import { stateAdapterConformanceTestSuite } from "queuert/testing";
+import {
+  stateAdapterBaseGroups,
+  stateAdapterConcurrentTransactionGroups,
+} from "queuert/conformance-internal";
+import { conformanceTestSuite } from "queuert/testing";
 import { it as baseIt, describe, expect } from "vitest";
 
 import { extendWithVarianceStatePg } from "./state-adapter-variance.spec-helper.ts";
@@ -19,5 +23,8 @@ describe("PostgreSQL State Adapter Variance - Limits", () => {
     expect(tableNames).toContain("queuert_migration");
   });
 
-  stateAdapterConformanceTestSuite({ it });
+  conformanceTestSuite({
+    it,
+    groups: [...stateAdapterBaseGroups, ...stateAdapterConcurrentTransactionGroups],
+  });
 });

@@ -221,3 +221,30 @@ export const runConformance = async <TContext>(
   }
   return report;
 };
+
+export type ConformanceOptions = {
+  /** Timeout for each case's body, in milliseconds. No timeout by default. */
+  caseTimeoutMs?: number;
+  /** Called after each case finishes. Errors it throws are logged and do not abort the run. */
+  onResult?: (result: ConformanceResult) => void;
+};
+
+export const runFixtureConformance = async <TContext>(
+  groups: ConformanceGroup<TContext>[],
+  factory: () => Promise<TContext & { reset?: () => Promise<void>; dispose?: () => Promise<void> }>,
+  options?: ConformanceOptions,
+): Promise<ConformanceReport> => {
+  const { reset, dispose, ...context } = await factory();
+  try {
+    return await runConformance(groups, {
+      setup: async () => {
+        if (reset) await reset();
+        return { context: context as TContext };
+      },
+      caseTimeoutMs: options?.caseTimeoutMs,
+      onResult: options?.onResult,
+    });
+  } finally {
+    if (dispose) await dispose();
+  }
+};

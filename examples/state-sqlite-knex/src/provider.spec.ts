@@ -1,13 +1,12 @@
-import { createSqliteStateAdapter } from "@queuert/sqlite";
+import { runSqliteStateProviderConformance } from "@queuert/sqlite/conformance";
 import knexFactory from "knex";
-import { runStateAdapterConformance } from "queuert/conformance";
 import { test } from "vitest";
 
 import { createKnexSqliteStateProvider } from "./provider.ts";
 
 // #region conformance
-test("state-sqlite-knex provider passes state adapter conformance", async () => {
-  await runStateAdapterConformance(async () => {
+test("state-sqlite-knex provider passes state provider conformance", async () => {
+  await runSqliteStateProviderConformance(async () => {
     const knex = knexFactory({
       client: "better-sqlite3",
       connection: { filename: ":memory:" },
@@ -15,14 +14,10 @@ test("state-sqlite-knex provider passes state adapter conformance", async () => 
     });
 
     const stateProvider = createKnexSqliteStateProvider({ knex });
-    const adapter = createSqliteStateAdapter({ stateProvider });
-    await adapter.migrateToLatest();
 
     return {
-      stateAdapter: adapter,
-      transactionConcurrency: "serialized",
+      stateProvider,
       withNonTransactionContext: async (fn) => fn({ trx: knex }),
-      reset: async () => adapter.truncate(),
       dispose: async () => {
         await knex.destroy();
       },

@@ -6,20 +6,13 @@ export { clientQueriesTestSuite } from "./suites/client-queries.test-suite.ts";
 export { createChainsTestSuite } from "./suites/create-chains.test-suite.ts";
 export { deduplicationTestSuite } from "./suites/deduplication.test-suite.ts";
 export { deletionTestSuite } from "./suites/deletion.test-suite.ts";
-export {
-  notifyAdapterConformanceTestSuite,
-  type NotifyConformanceFixture,
-} from "./suites/notify-adapter-conformance.test-suite.ts";
+export { conformanceTestSuite, type ConformanceFixtures } from "./suites/conformance.test-suite.ts";
 export { notifyResilienceTestSuite } from "./suites/notify-resilience.test-suite.ts";
 export { notifyTestSuite } from "./suites/notify.test-suite.ts";
 export { processErrorHandlingTestSuite } from "./suites/process-error-handling.test-suite.ts";
 export { processTestSuite } from "./suites/process.test-suite.ts";
 export { rescheduleJobTestSuite } from "./suites/reschedule-job.test-suite.ts";
 export { schedulingTestSuite } from "./suites/scheduling.test-suite.ts";
-export {
-  stateAdapterConformanceTestSuite,
-  type StateConformanceFixture,
-} from "./suites/state-adapter-conformance.test-suite.ts";
 export { stateResilienceTestSuite } from "./suites/state-resilience.test-suite.ts";
 export { validationTestSuite } from "./suites/validation.test-suite.ts";
 export { workerTestSuite } from "./suites/worker.test-suite.ts";

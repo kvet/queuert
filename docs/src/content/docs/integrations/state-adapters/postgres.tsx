@@ -192,10 +192,16 @@ const Page = () => (
       items={stateProviderMembers("postgres")}
     />
 
-    <h2>Conformance</h2>
+    <h2 id="testing-your-provider">Testing your provider</h2>
     <p>
-      Each example checks its provider with <code>runStateAdapterConformance</code>; see{" "}
-      <A href="/integrations/state-adapters/custom/#conformance">Custom State Adapter</A>.
+      <code>runPgStateProviderConformance</code> from <code>@queuert/postgres/conformance</code>{" "}
+      checks a provider you write. It builds the adapter over your provider, migrates it and
+      truncates its tables before every case, then runs every case a state adapter must pass and the
+      cases that hold two transactions open at once. Its fixture is <code>stateProvider</code>, an
+      optional <code>withNonTransactionContext</code> that runs a callback with a context outside
+      any transaction (cases that need it are skipped without it), and an optional{" "}
+      <code>dispose</code>. The runner is framework-agnostic: it throws on failure, so embed it in a
+      single <code>test()</code> block, as each example does:
     </p>
     <Tabs syncKey="postgres-driver">
       <TabItem label="pg">

@@ -249,13 +249,15 @@ export const listChainJobsGroup: ConformanceGroup<StateConformanceFixture> = {
         expect(result.items[0].id).toBe(chain1.head.id);
       },
     },
+  ],
+};
+
+export const listChainJobsConcurrentTransactionsGroup: ConformanceGroup<StateConformanceFixture> = {
+  name: "listChainJobs",
+  cases: [
     {
       name: "non-transactional listChainJobs does not observe an uncommitted continuation",
-      run: async ({ stateAdapter, transactionConcurrency }, expect) => {
-        if (transactionConcurrency !== "concurrent") {
-          expect.skip("requires concurrent transactions");
-          return;
-        }
+      run: async ({ stateAdapter }, expect) => {
         const [seedChain] = await stateAdapter.withTransaction(async (txCtx) =>
           stateAdapter.createJobs({
             txCtx,

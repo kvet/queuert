@@ -1,8 +1,16 @@
 import { TESTCONTAINERS_RESOURCE_TYPES, extendWithPostgres } from "@queuert/testcontainers";
 import type { RuntimeType } from "@queuert/typed-sql";
 import { Client, Pool } from "pg";
-import type { StateAdapter } from "queuert";
-import { extendWithResourceLeakDetection, stateAdapterConformanceTestSuite } from "queuert/testing";
+import type { StateConformanceFixture } from "queuert/conformance";
+import {
+  stateAdapterBaseGroups,
+  stateAdapterConcurrentTransactionGroups,
+} from "queuert/conformance-internal";
+import {
+  type ConformanceFixtures,
+  conformanceTestSuite,
+  extendWithResourceLeakDetection,
+} from "queuert/testing";
 import { it as baseIt, describe, expect } from "vitest";
 
 import { createPgStateAdapter } from "../state-adapter/state-adapter.pg.ts";
@@ -294,45 +302,26 @@ const it = extendWithResourceLeakDetection(extendWithPostgres(baseIt, import.met
       { scope: "worker" },
     ],
   })
-  .extend<{
-    pool: Pool;
-    stateAdapter: StateAdapter<{ $test: true }, string, string>;
-    transactionConcurrency: "concurrent" | "serialized";
-  }>({
-    pool: [
-      async ({ postgresConnectionString }, use) => {
+  .extend<ConformanceFixtures<StateConformanceFixture>>({
+    conformance: [
+      async ({ postgresConnectionString, validationClient, formatType, enumTypes }, use) => {
         const pool = new Pool({ connectionString: postgresConnectionString, idleTimeoutMillis: 0 });
-        await use(pool);
+        const stateAdapter = createPgStateAdapter({
+          stateProvider: createValidatingProvider(pool, validationClient, formatType, enumTypes),
+        });
+        await stateAdapter.migrateToLatest();
+        await use({ stateAdapter, reset: async () => stateAdapter.truncate() });
         await pool.end();
       },
-      { scope: "test" },
-    ],
-    transactionConcurrency: [
-      // oxlint-disable-next-line no-empty-pattern
-      async ({}, use) => {
-        await use("concurrent");
-      },
-      { scope: "test" },
-    ],
-    stateAdapter: [
-      async ({ pool, validationClient, formatType, enumTypes }, use) => {
-        const stateProvider = createValidatingProvider(
-          pool,
-          validationClient,
-          formatType,
-          enumTypes,
-        );
-        const adapter = createPgStateAdapter({ stateProvider });
-        await adapter.migrateToLatest();
-        await adapter.truncate();
-        await use(adapter as unknown as StateAdapter<{ $test: true }, string, string>);
-      },
-      { scope: "test" },
+      { scope: "file" },
     ],
   });
 
 it("index");
 
 describe("PostgreSQL SQL contract", () => {
-  stateAdapterConformanceTestSuite({ it });
+  conformanceTestSuite({
+    it,
+    groups: [...stateAdapterBaseGroups, ...stateAdapterConcurrentTransactionGroups],
+  });
 });

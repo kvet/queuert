@@ -1,23 +1,27 @@
-import { describe, it } from "vitest";
+import { it as baseIt, describe } from "vitest";
 
-import { createInProcessNotifyAdapter } from "../notify-adapter/notify-adapter.in-process.ts";
 import {
   type NotifyConformanceFixture,
-  notifyAdapterConformanceTestSuite,
-} from "../suites/notify-adapter-conformance.test-suite.ts";
+  notifyAdapterBaseGroups,
+} from "../conformance/notify-adapter-cases.ts";
+import { createInProcessNotifyAdapter } from "../notify-adapter/notify-adapter.in-process.ts";
+import {
+  type ConformanceFixtures,
+  conformanceTestSuite,
+} from "../suites/conformance.test-suite.ts";
+
+const it = baseIt.extend<ConformanceFixtures<NotifyConformanceFixture>>({
+  conformance: [
+    // oxlint-disable-next-line no-empty-pattern -- vitest fixtures must destructure their context
+    async ({}, use) => {
+      await use({ notifyAdapter: createInProcessNotifyAdapter() });
+    },
+    { scope: "file" },
+  ],
+});
 
 it("index");
 
 describe("In-Process Notify Adapter Conformance", () => {
-  const conformanceIt = it.extend<NotifyConformanceFixture>({
-    notifyAdapter: [
-      // oxlint-disable-next-line no-empty-pattern
-      async ({}, use) => {
-        await use(createInProcessNotifyAdapter());
-      },
-      { scope: "test" },
-    ],
-  });
-
-  notifyAdapterConformanceTestSuite({ it: conformanceIt });
+  conformanceTestSuite({ it, groups: notifyAdapterBaseGroups });
 });

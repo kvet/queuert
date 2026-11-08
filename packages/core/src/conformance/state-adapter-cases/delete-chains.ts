@@ -400,14 +400,15 @@ export const deleteChainsGroup: ConformanceGroup<StateConformanceFixture> = {
         expect(jobs.map((job) => job?.id)).toEqual([stateChain.id, continuationId]);
       },
     },
+  ],
+};
+
+export const deleteChainsConcurrentTransactionsGroup: ConformanceGroup<StateConformanceFixture> = {
+  name: "deleteChains",
+  cases: [
     {
       name: "sees a blocker reference committed while it waited on the head lock",
-      run: async ({ stateAdapter, transactionConcurrency }, expect) => {
-        if (transactionConcurrency !== "concurrent") {
-          expect.skip("requires concurrent transactions");
-          return;
-        }
-
+      run: async ({ stateAdapter }, expect) => {
         const [blockerChain] = await stateAdapter.withTransaction(async (txCtx) =>
           stateAdapter.createJobs({
             txCtx,
@@ -479,12 +480,7 @@ export const deleteChainsGroup: ConformanceGroup<StateConformanceFixture> = {
     },
     {
       name: "deletes a continuation committed while it waited on the head lock",
-      run: async ({ stateAdapter, transactionConcurrency }, expect) => {
-        if (transactionConcurrency !== "concurrent") {
-          expect.skip("requires concurrent transactions");
-          return;
-        }
-
+      run: async ({ stateAdapter }, expect) => {
         const [stateChain] = await stateAdapter.withTransaction(async (txCtx) =>
           stateAdapter.createJobs({
             txCtx,

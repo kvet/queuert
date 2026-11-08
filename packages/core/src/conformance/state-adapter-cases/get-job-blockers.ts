@@ -149,69 +149,76 @@ export const getJobBlockersGroup: ConformanceGroup<StateConformanceFixture> = {
         expect(blockers).toHaveLength(0);
       },
     },
-    {
-      name: "non-transactional getJobBlockers does not observe an uncommitted blocker insert",
-      run: async ({ stateAdapter, transactionConcurrency }, expect) => {
-        if (transactionConcurrency !== "concurrent") {
-          expect.skip("requires concurrent transactions");
-          return;
-        }
-        const [blockerChain] = await stateAdapter.withTransaction(async (txCtx) =>
-          stateAdapter.createJobs({
-            txCtx,
-            jobs: [
-              { id: stateAdapter.config.generateJobId(), typeName: "iso-blocker-src", input: null },
-            ],
-          }),
-        );
-        const [targetChain] = await stateAdapter.withTransaction(async (txCtx) =>
-          stateAdapter.createJobs({
-            txCtx,
-            jobs: [
-              {
-                id: stateAdapter.config.generateJobId(),
-                typeName: "iso-blocker-target",
-                input: null,
-              },
-            ],
-          }),
-        );
-
-        let release: (() => void) | undefined;
-        const gate = new Promise<void>((r) => {
-          release = r;
-        });
-        let signalTxReady: (() => void) | undefined;
-        const txReady = new Promise<void>((r) => {
-          signalTxReady = r;
-        });
-
-        const txPromise = stateAdapter
-          .withTransaction(async (txCtx) => {
-            await stateAdapter.addJobsBlockers({
-              txCtx,
-              jobBlockers: [
-                { jobId: targetChain.head.id, blockedByChainIds: [blockerChain.head.chainId] },
-              ],
-            });
-            signalTxReady!();
-            await gate;
-            throw new Error("rollback");
-          })
-          .catch(() => {});
-
-        await txReady;
-        const blockersPromise = stateAdapter.getJobBlockers({ jobId: targetChain.head.id });
-        const targetReadPromise = stateAdapter.getJobs({ jobIds: [targetChain.head.id] });
-        release!();
-        await txPromise;
-
-        const observedBlockers = await blockersPromise;
-        const [observedTarget] = await targetReadPromise;
-        expect(observedBlockers).toHaveLength(0);
-        expect(observedTarget?.completedAt).toBeNull();
-        expect(observedTarget?.attemptAt).toBeNull();
-      },
-    },
   ],
 };
+
+export const getJobBlockersConcurrentTransactionsGroup: ConformanceGroup<StateConformanceFixture> =
+  {
+    name: "getJobBlockers",
+    cases: [
+      {
+        name: "non-transactional getJobBlockers does not observe an uncommitted blocker insert",
+        run: async ({ stateAdapter }, expect) => {
+          const [blockerChain] = await stateAdapter.withTransaction(async (txCtx) =>
+            stateAdapter.createJobs({
+              txCtx,
+              jobs: [
+                {
+                  id: stateAdapter.config.generateJobId(),
+                  typeName: "iso-blocker-src",
+                  input: null,
+                },
+              ],
+            }),
+          );
+          const [targetChain] = await stateAdapter.withTransaction(async (txCtx) =>
+            stateAdapter.createJobs({
+              txCtx,
+              jobs: [
+                {
+                  id: stateAdapter.config.generateJobId(),
+                  typeName: "iso-blocker-target",
+                  input: null,
+                },
+              ],
+            }),
+          );
+
+          let release: (() => void) | undefined;
+          const gate = new Promise<void>((r) => {
+            release = r;
+          });
+          let signalTxReady: (() => void) | undefined;
+          const txReady = new Promise<void>((r) => {
+            signalTxReady = r;
+          });
+
+          const txPromise = stateAdapter
+            .withTransaction(async (txCtx) => {
+              await stateAdapter.addJobsBlockers({
+                txCtx,
+                jobBlockers: [
+                  { jobId: targetChain.head.id, blockedByChainIds: [blockerChain.head.chainId] },
+                ],
+              });
+              signalTxReady!();
+              await gate;
+              throw new Error("rollback");
+            })
+            .catch(() => {});
+
+          await txReady;
+          const blockersPromise = stateAdapter.getJobBlockers({ jobId: targetChain.head.id });
+          const targetReadPromise = stateAdapter.getJobs({ jobIds: [targetChain.head.id] });
+          release!();
+          await txPromise;
+
+          const observedBlockers = await blockersPromise;
+          const [observedTarget] = await targetReadPromise;
+          expect(observedBlockers).toHaveLength(0);
+          expect(observedTarget?.completedAt).toBeNull();
+          expect(observedTarget?.attemptAt).toBeNull();
+        },
+      },
+    ],
+  };

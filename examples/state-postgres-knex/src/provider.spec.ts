@@ -1,16 +1,15 @@
-import { createPgStateAdapter } from "@queuert/postgres";
+import { runPgStateProviderConformance } from "@queuert/postgres/conformance";
 import { acquirePostgres } from "@queuert/testcontainers";
 import knexFactory from "knex";
-import { runStateAdapterConformance } from "queuert/conformance";
 import { test } from "vitest";
 
 import { createKnexPgStateProvider } from "./provider.ts";
 
 // #region conformance
-test("state-postgres-knex provider passes state adapter conformance", async () => {
+test("state-postgres-knex provider passes state provider conformance", async () => {
   await using pg = await acquirePostgres("postgres:18", import.meta.url);
 
-  await runStateAdapterConformance(async () => {
+  await runPgStateProviderConformance(async () => {
     const knex = knexFactory({
       client: "pg",
       connection: pg.connectionString,
@@ -18,14 +17,10 @@ test("state-postgres-knex provider passes state adapter conformance", async () =
     });
 
     const stateProvider = createKnexPgStateProvider({ knex });
-    const adapter = createPgStateAdapter({ stateProvider });
-    await adapter.migrateToLatest();
 
     return {
-      stateAdapter: adapter,
-      transactionConcurrency: "concurrent",
+      stateProvider,
       withNonTransactionContext: async (fn) => fn({ trx: knex }),
-      reset: async () => adapter.truncate(),
       dispose: async () => {
         await knex.destroy();
       },

@@ -3,9 +3,8 @@ import { dirname } from "node:path";
 import { fileURLToPath } from "node:url";
 
 import { PrismaPg } from "@prisma/adapter-pg";
-import { createPgStateAdapter } from "@queuert/postgres";
+import { runPgStateProviderConformance } from "@queuert/postgres/conformance";
 import { acquirePostgres } from "@queuert/testcontainers";
-import { runStateAdapterConformance } from "queuert/conformance";
 import { test } from "vitest";
 
 import { createPrismaPgStateProvider } from "./provider.ts";
@@ -20,10 +19,10 @@ type PrismaLike = {
 };
 
 // #region conformance
-test("state-postgres-prisma provider passes state adapter conformance", async () => {
+test("state-postgres-prisma provider passes state provider conformance", async () => {
   await using pg = await acquirePostgres("postgres:18", import.meta.url);
 
-  await runStateAdapterConformance(async () => {
+  await runPgStateProviderConformance(async () => {
     execSync("npx prisma db push", {
       cwd: EXAMPLE_DIR,
       env: { ...process.env, DATABASE_URL: pg.connectionString },
@@ -35,17 +34,10 @@ test("state-postgres-prisma provider passes state adapter conformance", async ()
     const prisma = new PrismaClient({ adapter: prismaAdapter }) as unknown as PrismaLike;
 
     const stateProvider = createPrismaPgStateProvider<PrismaLike>({ prisma });
-    const adapter = createPgStateAdapter({
-      stateProvider,
-      jobIdType: "text",
-    });
-    await adapter.migrateToLatest();
 
     return {
-      stateAdapter: adapter,
-      transactionConcurrency: "concurrent",
+      stateProvider,
       withNonTransactionContext: async (fn) => fn({ prisma }),
-      reset: async () => adapter.truncate(),
       dispose: async () => {
         await prisma.$disconnect();
       },

@@ -1,19 +1,22 @@
-import { type ConformanceReport, type ConformanceResult, runConformance } from "./runner.ts";
 import {
+  type ConformanceOptions,
+  type ConformanceReport,
+  runFixtureConformance,
+} from "./runner.ts";
+import {
+  stateAdapterBaseGroups,
+  stateAdapterConcurrentTransactionGroups,
   type StateConformanceFixture,
-  stateAdapterConformanceGroups,
 } from "./state-adapter-cases.ts";
 
-export type StateConformanceOptions = {
-  caseTimeoutMs?: number;
-  onResult?: (result: ConformanceResult) => void;
-};
-
 /**
- * Run the state adapter conformance suite against a user-supplied adapter.
- * Test-framework agnostic: designed to be embedded in a single test
- * (vitest `test()`, bun `test()`, `node:test`, etc.). Throws
+ * Run the state adapter conformance suite against a user-supplied adapter: the cases every
+ * adapter must pass, with transactions run one at a time. Test-framework agnostic: designed to be
+ * embedded in a single test (vitest `test()`, bun `test()`, `node:test`, etc.). Throws
  * {@link ConformanceError} with an aggregated report on any failure.
+ *
+ * An adapter that runs transactions in parallel, such as one over a connection pool, also runs
+ * {@link runConcurrentStateAdapterConformance}.
  *
  * @example
  * ```ts
@@ -22,7 +25,6 @@ export type StateConformanceOptions = {
  *   await adapter.migrateToLatest();
  *   return {
  *     stateAdapter: adapter,
- *     transactionConcurrency: "concurrent",
  *     reset: async () => adapter.truncate(),
  *     dispose: async () => adapter.close(),
  *   };
@@ -31,21 +33,31 @@ export type StateConformanceOptions = {
  */
 export const runStateAdapterConformance = async (
   factory: () => Promise<StateConformanceFixture>,
-  options?: StateConformanceOptions,
-): Promise<ConformanceReport> => {
-  const { reset, dispose, ...context } = await factory();
-  try {
-    return await runConformance(stateAdapterConformanceGroups, {
-      setup: async () => {
-        if (reset) await reset();
-        return { context };
-      },
-      caseTimeoutMs: options?.caseTimeoutMs,
-      onResult: options?.onResult,
-    });
-  } finally {
-    if (dispose) await dispose();
-  }
-};
+  options?: ConformanceOptions,
+): Promise<ConformanceReport> => runFixtureConformance(stateAdapterBaseGroups, factory, options);
 
-export { type StateConformanceFixture } from "./state-adapter-cases.ts";
+/**
+ * Run the state adapter conformance cases that hold two transactions open at once: blocker races,
+ * concurrent deletes, row locks, and reads that must not see uncommitted rows. For adapters that
+ * run transactions in parallel, such as one over a connection pool; run it next to
+ * {@link runStateAdapterConformance}. Throws {@link ConformanceError} with an aggregated report
+ * on any failure.
+ *
+ * @example
+ * ```ts
+ * await runConcurrentStateAdapterConformance(async () => {
+ *   const adapter = await createMyStateAdapter();
+ *   await adapter.migrateToLatest();
+ *   return {
+ *     stateAdapter: adapter,
+ *     reset: async () => adapter.truncate(),
+ *     dispose: async () => adapter.close(),
+ *   };
+ * });
+ * ```
+ */
+export const runConcurrentStateAdapterConformance = async (
+  factory: () => Promise<StateConformanceFixture>,
+  options?: ConformanceOptions,
+): Promise<ConformanceReport> =>
+  runFixtureConformance(stateAdapterConcurrentTransactionGroups, factory, options);

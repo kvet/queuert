@@ -1,14 +1,13 @@
 import Database from "better-sqlite3";
-import type { StateAdapter } from "queuert";
+import type { StateConformanceFixture } from "queuert/conformance";
+import type { ConformanceFixtures } from "queuert/testing";
 import type { TestAPI } from "vitest";
 
 import { createSqliteStateAdapter } from "../state-adapter/state-adapter.sqlite.ts";
 import { createBetterSqlite3Provider } from "../state-provider/state-provider.better-sqlite3.ts";
 
-export type VarianceFixtures = {
+export type VarianceFixtures = ConformanceFixtures<StateConformanceFixture> & {
   db: Database.Database;
-  stateAdapter: StateAdapter<{ $test: true }, string, string>;
-  transactionConcurrency: "concurrent" | "serialized";
   tableNames: string[];
 };
 
@@ -28,38 +27,33 @@ export const extendWithVarianceStateSqlite = <T>(
 ): TestAPI<T & VarianceFixtures> => {
   return api.extend<VarianceFixtures>({
     db: [
-      // oxlint-disable-next-line no-empty-pattern
+      // oxlint-disable-next-line no-empty-pattern -- vitest fixtures must destructure their context
       async ({}, use) => {
         const db = new Database(":memory:");
         await use(db);
         db.close();
       },
-      { scope: "test" },
+      { scope: "file" },
     ],
-    stateAdapter: [
+    conformance: [
       async ({ db }, use) => {
-        const stateProvider = createBetterSqlite3Provider({ db });
-        const adapter = createSqliteStateAdapter({ stateProvider, ...options });
-        await adapter.migrateToLatest();
-        return use(adapter as unknown as StateAdapter<{ $test: true }, string, string>);
+        const stateAdapter = createSqliteStateAdapter({
+          stateProvider: createBetterSqlite3Provider({ db }),
+          ...options,
+        });
+        await stateAdapter.migrateToLatest();
+        await use({ stateAdapter, reset: async () => stateAdapter.truncate() });
       },
-      { scope: "test" },
-    ],
-    transactionConcurrency: [
-      // oxlint-disable-next-line no-empty-pattern
-      async ({}, use) => {
-        await use("serialized");
-      },
-      { scope: "test" },
+      { scope: "file" },
     ],
     tableNames: [
-      async ({ db, stateAdapter: _ }, use) => {
+      async ({ db, conformance: _ }, use) => {
         const tables = db
           .prepare(`SELECT name FROM sqlite_master WHERE type = 'table' AND name LIKE ?`)
           .all(`${options.tablePrefix}%`) as { name: string }[];
         await use(tables.map((table) => table.name));
       },
-      { scope: "test" },
+      { scope: "file" },
     ],
   }) as ReturnType<typeof extendWithVarianceStateSqlite<T>>;
 };

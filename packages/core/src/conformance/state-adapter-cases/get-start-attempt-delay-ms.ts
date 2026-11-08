@@ -17,7 +17,7 @@ export const getStartAttemptDelayMsGroup: ConformanceGroup<StateConformanceFixtu
         );
 
         const ms = await stateAdapter.getStartAttemptDelayMs({ typeNames: ["avail-test"] });
-        expect(ms).toBe(0);
+        expect(ms!).toBe(0);
       },
     },
     {
@@ -86,7 +86,7 @@ export const getStartAttemptDelayMsGroup: ConformanceGroup<StateConformanceFixtu
         );
 
         const ms = await stateAdapter.getStartAttemptDelayMs({ typeNames: ["mixed-test"] });
-        expect(ms).toBe(0);
+        expect(ms!).toBe(0);
       },
     },
     {
@@ -95,7 +95,7 @@ export const getStartAttemptDelayMsGroup: ConformanceGroup<StateConformanceFixtu
         const ms = await stateAdapter.getStartAttemptDelayMs({
           typeNames: ["nonexistent-type"],
         });
-        expect(ms).toBeNull();
+        expect(ms!).toBeNull();
       },
     },
     {
@@ -136,52 +136,55 @@ export const getStartAttemptDelayMsGroup: ConformanceGroup<StateConformanceFixtu
         const ms = await stateAdapter.getStartAttemptDelayMs({
           typeNames: ["delay-blocked"],
         });
-        expect(ms).toBeNull();
-      },
-    },
-    {
-      name: "non-transactional getStartAttemptDelayMs does not observe an uncommitted insert",
-      run: async ({ stateAdapter, transactionConcurrency }, expect) => {
-        if (transactionConcurrency !== "concurrent") {
-          expect.skip("requires concurrent transactions");
-          return;
-        }
-        let release: (() => void) | undefined;
-        const gate = new Promise<void>((r) => {
-          release = r;
-        });
-        let signalTxReady: (() => void) | undefined;
-        const txReady = new Promise<void>((r) => {
-          signalTxReady = r;
-        });
-
-        const txPromise = stateAdapter
-          .withTransaction(async (txCtx) => {
-            await stateAdapter.createJobs({
-              txCtx,
-              jobs: [
-                {
-                  id: stateAdapter.config.generateJobId(),
-                  typeName: "iso-next",
-                  input: null,
-                  schedule: { afterMs: 5000 },
-                },
-              ],
-            });
-            signalTxReady!();
-            await gate;
-            throw new Error("rollback");
-          })
-          .catch(() => {});
-
-        await txReady;
-        const readPromise = stateAdapter.getStartAttemptDelayMs({ typeNames: ["iso-next"] });
-        release!();
-        await txPromise;
-
-        const observed = await readPromise;
-        expect(observed).toBeNull();
+        expect(ms!).toBeNull();
       },
     },
   ],
 };
+
+export const getStartAttemptDelayMsConcurrentTransactionsGroup: ConformanceGroup<StateConformanceFixture> =
+  {
+    name: "getStartAttemptDelayMs",
+    cases: [
+      {
+        name: "non-transactional getStartAttemptDelayMs does not observe an uncommitted insert",
+        run: async ({ stateAdapter }, expect) => {
+          let release: (() => void) | undefined;
+          const gate = new Promise<void>((r) => {
+            release = r;
+          });
+          let signalTxReady: (() => void) | undefined;
+          const txReady = new Promise<void>((r) => {
+            signalTxReady = r;
+          });
+
+          const txPromise = stateAdapter
+            .withTransaction(async (txCtx) => {
+              await stateAdapter.createJobs({
+                txCtx,
+                jobs: [
+                  {
+                    id: stateAdapter.config.generateJobId(),
+                    typeName: "iso-next",
+                    input: null,
+                    schedule: { afterMs: 5000 },
+                  },
+                ],
+              });
+              signalTxReady!();
+              await gate;
+              throw new Error("rollback");
+            })
+            .catch(() => {});
+
+          await txReady;
+          const readPromise = stateAdapter.getStartAttemptDelayMs({ typeNames: ["iso-next"] });
+          release!();
+          await txPromise;
+
+          const observed = await readPromise;
+          expect(observed).toBeNull();
+        },
+      },
+    ],
+  };

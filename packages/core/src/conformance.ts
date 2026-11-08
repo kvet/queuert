@@ -1,23 +1,19 @@
-export { type Expect } from "./conformance/expect.ts";
 export {
-  runNotifyAdapterConformance,
-  type NotifyConformanceFixture,
-  type NotifyConformanceOptions,
-} from "./conformance/notify-adapter.ts";
+  ConformanceError,
+  type ConformanceOptions,
+  type ConformanceReport,
+  type ConformanceResult,
+} from "./conformance/runner.ts";
+export type { Expect } from "./conformance/expect.ts";
+export type { NotifyConformanceFixture } from "./conformance/notify-adapter-cases.ts";
+export type { StateConformanceFixture } from "./conformance/state-adapter-cases.ts";
+export { runNotifyAdapterConformance } from "./conformance/notify-adapter.ts";
 export {
+  runConcurrentStateAdapterConformance,
   runStateAdapterConformance,
-  type StateConformanceFixture,
-  type StateConformanceOptions,
 } from "./conformance/state-adapter.ts";
 export {
   runValidationAdapterConformance,
   type ValidationAdapterConformanceContext,
   type ValidationConformanceFixture,
-  type ValidationConformanceOptions,
 } from "./conformance/validation-adapter.ts";
-export {
-  ConformanceError,
-  type ConformanceReport,
-  type ConformanceResult,
-  type ConformanceRunOptions,
-} from "./conformance/runner.ts";

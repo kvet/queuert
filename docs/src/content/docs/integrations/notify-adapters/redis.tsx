@@ -126,12 +126,14 @@ const Page = () => (
       ]}
     />
 
-    <h2 id="conformance">Conformance</h2>
+    <h2 id="testing-your-provider">Testing your provider</h2>
     <p>
-      Every example's <code>src/provider.spec.ts</code> runs{" "}
-      <code>runNotifyAdapterConformance</code> and is a working template. To run it under another
-      test runner, see{" "}
-      <A href="/integrations/notify-adapters/custom/#conformance">Custom Notify Adapter</A>.
+      <code>runRedisNotifyProviderConformance</code> from <code>@queuert/redis/conformance</code>{" "}
+      checks a provider you write. It builds the notify adapter over your provider and runs every
+      case a notify adapter must pass. Its fixture is <code>notifyProvider</code> and an optional{" "}
+      <code>dispose</code>. The runner is framework-agnostic: it throws on failure, so embed it in a
+      single <code>test()</code> block. Every example's <code>src/provider.spec.ts</code> is a
+      working template:
     </p>
     <Tabs syncKey="redis-driver">
       <TabItem label="node-redis">

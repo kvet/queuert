@@ -1098,12 +1098,49 @@ export const listChainsGroup: ConformanceGroup<StateConformanceFixture> = {
       },
     },
     {
+      name: "listChains paginates chains created at the same time by id in both directions",
+      run: async ({ stateAdapter }, expect) => {
+        const created = await stateAdapter.withTransaction(async (txCtx) =>
+          stateAdapter.createJobs({
+            txCtx,
+            jobs: [0, 1, 2].map(() => ({
+              id: stateAdapter.config.generateJobId(),
+              typeName: "same-time-chain",
+              input: null,
+            })),
+          }),
+        );
+        const [firstId, secondId, thirdId] = created.map((chain) => chain.id).toSorted();
+        const listSameTimeChains = async (orderDirection: "asc" | "desc", cursor?: string) =>
+          stateAdapter.listChains({
+            typeName: "same-time-chain",
+            orderBy: "createdAt",
+            orderDirection,
+            page: { limit: 2, cursor },
+          });
+
+        const ascPage = await listSameTimeChains("asc");
+        expect(ascPage.items.map((chain) => chain.id)).toEqual([firstId, secondId]);
+        expect(
+          (await listSameTimeChains("asc", ascPage.nextCursor!)).items.map((chain) => chain.id),
+        ).toEqual([thirdId]);
+
+        const descPage = await listSameTimeChains("desc");
+        expect(descPage.items.map((chain) => chain.id)).toEqual([thirdId, secondId]);
+        expect(
+          (await listSameTimeChains("desc", descPage.nextCursor!)).items.map((chain) => chain.id),
+        ).toEqual([firstId]);
+      },
+    },
+  ],
+};
+
+export const listChainsConcurrentTransactionsGroup: ConformanceGroup<StateConformanceFixture> = {
+  name: "listChains",
+  cases: [
+    {
       name: "non-transactional listChains does not observe an uncommitted chain creation",
-      run: async ({ stateAdapter, transactionConcurrency }, expect) => {
-        if (transactionConcurrency !== "concurrent") {
-          expect.skip("requires concurrent transactions");
-          return;
-        }
+      run: async ({ stateAdapter }, expect) => {
         let release: (() => void) | undefined;
         const gate = new Promise<void>((r) => {
           release = r;
@@ -1143,41 +1180,6 @@ export const listChainsGroup: ConformanceGroup<StateConformanceFixture> = {
 
         const { items } = await listPromise;
         expect(items).toHaveLength(0);
-      },
-    },
-    {
-      name: "listChains paginates chains created at the same time by id in both directions",
-      run: async ({ stateAdapter }, expect) => {
-        const created = await stateAdapter.withTransaction(async (txCtx) =>
-          stateAdapter.createJobs({
-            txCtx,
-            jobs: [0, 1, 2].map(() => ({
-              id: stateAdapter.config.generateJobId(),
-              typeName: "same-time-chain",
-              input: null,
-            })),
-          }),
-        );
-        const [firstId, secondId, thirdId] = created.map((chain) => chain.id).toSorted();
-        const listSameTimeChains = async (orderDirection: "asc" | "desc", cursor?: string) =>
-          stateAdapter.listChains({
-            typeName: "same-time-chain",
-            orderBy: "createdAt",
-            orderDirection,
-            page: { limit: 2, cursor },
-          });
-
-        const ascPage = await listSameTimeChains("asc");
-        expect(ascPage.items.map((chain) => chain.id)).toEqual([firstId, secondId]);
-        expect(
-          (await listSameTimeChains("asc", ascPage.nextCursor!)).items.map((chain) => chain.id),
-        ).toEqual([thirdId]);
-
-        const descPage = await listSameTimeChains("desc");
-        expect(descPage.items.map((chain) => chain.id)).toEqual([thirdId, secondId]);
-        expect(
-          (await listSameTimeChains("desc", descPage.nextCursor!)).items.map((chain) => chain.id),
-        ).toEqual([firstId]);
       },
     },
   ],

@@ -1,7 +1,6 @@
-import { createSqliteStateAdapter } from "@queuert/sqlite";
+import { runSqliteStateProviderConformance } from "@queuert/sqlite/conformance";
 import BetterSqlite3 from "better-sqlite3";
 import { Kysely, SqliteDialect } from "kysely";
-import { runStateAdapterConformance } from "queuert/conformance";
 import { test } from "vitest";
 
 import { createKyselySqliteStateProvider } from "./provider.ts";
@@ -9,8 +8,8 @@ import { createKyselySqliteStateProvider } from "./provider.ts";
 type Database = Record<string, never>;
 
 // #region conformance
-test("state-sqlite-kysely provider passes state adapter conformance", async () => {
-  await runStateAdapterConformance(async () => {
+test("state-sqlite-kysely provider passes state provider conformance", async () => {
+  await runSqliteStateProviderConformance(async () => {
     const sqliteDb = new BetterSqlite3(":memory:");
 
     const db = new Kysely<Database>({
@@ -18,14 +17,10 @@ test("state-sqlite-kysely provider passes state adapter conformance", async () =
     });
 
     const stateProvider = createKyselySqliteStateProvider({ db });
-    const adapter = createSqliteStateAdapter({ stateProvider });
-    await adapter.migrateToLatest();
 
     return {
-      stateAdapter: adapter,
-      transactionConcurrency: "serialized",
+      stateProvider,
       withNonTransactionContext: async (fn) => fn({ db }),
-      reset: async () => adapter.truncate(),
       dispose: async () => {
         await db.destroy();
       },

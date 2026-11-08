@@ -1,27 +1,22 @@
-import { createPgNotifyAdapter } from "@queuert/postgres";
+import { runPgNotifyProviderConformance } from "@queuert/postgres/conformance";
 import { acquirePostgres } from "@queuert/testcontainers";
 import { Pool } from "pg";
-import { runNotifyAdapterConformance } from "queuert/conformance";
 import { test } from "vitest";
 
 import { createPgPoolNotifyProvider } from "./provider.ts";
 
 // #region conformance
-test("notify-postgres-pg provider passes notify adapter conformance", async () => {
+test("notify-postgres-pg provider passes notify provider conformance", async () => {
   await using pg = await acquirePostgres("postgres:18", import.meta.url);
 
-  await runNotifyAdapterConformance(async () => {
+  await runPgNotifyProviderConformance(async () => {
     const pool = new Pool({ connectionString: pg.connectionString, max: 10 });
     const notifyProvider = createPgPoolNotifyProvider({ pool });
-    const notifyAdapter = createPgNotifyAdapter({
-      notifyProvider,
-      channelPrefix: `qrt_spec_${Date.now()}_${Math.random().toString(36).slice(2)}`,
-    });
 
     return {
-      notifyAdapter,
+      notifyProvider,
       dispose: async () => {
-        await notifyAdapter.close();
+        await notifyProvider.close?.();
         await pool.end();
       },
     };

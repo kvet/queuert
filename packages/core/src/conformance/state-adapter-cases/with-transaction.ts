@@ -21,8 +21,8 @@ export const withTransactionGroup: ConformanceGroup<StateConformanceFixture> = {
         );
 
         let rolledBackJobId: string | undefined;
-        try {
-          await stateAdapter.withTransaction(async (txCtx) => {
+        await expect(
+          stateAdapter.withTransaction(async (txCtx) => {
             const [innerChain] = await stateAdapter.createJobs({
               txCtx,
               jobs: [
@@ -35,17 +35,52 @@ export const withTransactionGroup: ConformanceGroup<StateConformanceFixture> = {
             });
             rolledBackJobId = innerChain.head.id;
             throw new Error("Intentional rollback");
-          });
-        } catch {
-          // Expected
-        }
+          }),
+        ).rejects.toThrow("Intentional rollback");
 
         const [original] = await stateAdapter.getJobs({ jobIds: [stateChain.head.id] });
         expect(original).toBeDefined();
+        expect(await stateAdapter.getJobs({ jobIds: [rolledBackJobId!] })).toEqual([undefined]);
+      },
+    },
+    {
+      name: "a call without a transaction context is not swept into an open transaction's rollback",
+      run: async ({ stateAdapter }, expect) => {
+        const inTransaction = Promise.withResolvers<void>();
+        const release = Promise.withResolvers<void>();
+        let rolledBackJobId: string | undefined;
+        const transaction = stateAdapter.withTransaction(async (txCtx) => {
+          const [chain] = await stateAdapter.createJobs({
+            txCtx,
+            jobs: [
+              {
+                id: stateAdapter.config.generateJobId(),
+                typeName: "autocommit-vs-tx",
+                input: null,
+              },
+            ],
+          });
+          rolledBackJobId = chain.head.id;
+          inTransaction.resolve();
+          await release.promise;
+          throw new Error("rollback");
+        });
+        await inTransaction.promise;
 
-        if (rolledBackJobId) {
-          expect(await stateAdapter.getJobs({ jobIds: [rolledBackJobId] })).toEqual([undefined]);
-        }
+        const workerId = stateAdapter.config.generateWorkerId();
+        const autocommit = stateAdapter.startWorker({
+          workerId,
+          typeNames: ["autocommit-vs-tx"],
+          concurrency: 1,
+          leaseMs: 60_000,
+        });
+        release.resolve();
+        await expect(transaction).rejects.toThrow("rollback");
+        await autocommit;
+
+        const [worker] = await stateAdapter.getWorkers({ workerIds: [workerId] });
+        expect(worker?.id).toBe(workerId);
+        expect(await stateAdapter.getJobs({ jobIds: [rolledBackJobId!] })).toEqual([undefined]);
       },
     },
     {
@@ -199,66 +234,6 @@ export const withTransactionGroup: ConformanceGroup<StateConformanceFixture> = {
       },
     },
     {
-      name: "an independent transaction's writes are not swept into a concurrent transaction's rollback",
-      run: async ({ stateAdapter, transactionConcurrency }, expect) => {
-        if (transactionConcurrency !== "concurrent") {
-          expect.skip("requires concurrent transactions");
-          return;
-        }
-
-        let release: (() => void) | undefined;
-        const gate = new Promise<void>((r) => {
-          release = r;
-        });
-
-        let signalTxReady: (() => void) | undefined;
-        const txReady = new Promise<void>((r) => {
-          signalTxReady = r;
-        });
-
-        const txPromise = stateAdapter
-          .withTransaction(async (txCtx) => {
-            await stateAdapter.createJobs({
-              txCtx,
-              jobs: [
-                {
-                  id: stateAdapter.config.generateJobId(),
-                  typeName: "independent-vs-tx",
-                  input: { side: "tx" },
-                },
-              ],
-            });
-            signalTxReady!();
-            await gate;
-            throw new Error("rollback");
-          })
-          .catch(() => {});
-
-        await txReady;
-
-        const outsidePromise = stateAdapter.withTransaction(async (outsideTxCtx) =>
-          stateAdapter.createJobs({
-            txCtx: outsideTxCtx,
-            jobs: [
-              {
-                id: stateAdapter.config.generateJobId(),
-                typeName: "independent-vs-tx",
-                input: { side: "outside" },
-              },
-            ],
-          }),
-        );
-
-        release!();
-        await txPromise;
-        const [outsideChain] = await outsidePromise;
-
-        const [survived] = await stateAdapter.getJobs({ jobIds: [outsideChain.head.id] });
-        expect(survived?.id).toBe(outsideChain.head.id);
-        expect(survived?.input).toEqual({ side: "outside" });
-      },
-    },
-    {
       name: "rolls back mixed mutations atomically with consistent indexes",
       run: async ({ stateAdapter }, expect) => {
         const worker = await stateAdapter.startWorker({
@@ -406,87 +381,141 @@ export const withTransactionGroup: ConformanceGroup<StateConformanceFixture> = {
         ]);
       },
     },
-    {
-      name: "parallel withTransaction calls all commit successfully",
-      run: async ({ stateAdapter, transactionConcurrency }, expect) => {
-        if (transactionConcurrency !== "concurrent") {
-          expect.skip("requires concurrent transactions");
-          return;
-        }
-        const count = 5;
-        const results = await Promise.all(
-          Array.from({ length: count }, async (_, i) =>
-            stateAdapter.withTransaction(async (txCtx) =>
-              stateAdapter.createJobs({
-                txCtx,
-                jobs: [
-                  {
-                    id: stateAdapter.config.generateJobId(),
-                    typeName: "parallel-tx",
-                    input: { index: i },
-                  },
-                ],
-              }),
-            ),
-          ),
-        );
-
-        const ids = new Set(results.map(([r]) => r.head.id));
-        expect(ids.size).toBe(count);
-
-        for (const [stateChain] of results) {
-          const [fetched] = await stateAdapter.getJobs({ jobIds: [stateChain.head.id] });
-          expect(fetched).toBeDefined();
-        }
-      },
-    },
-    {
-      name: "parallel withTransaction and non-transactional reads do not deadlock",
-      run: async ({ stateAdapter, transactionConcurrency }, expect) => {
-        if (transactionConcurrency !== "concurrent") {
-          expect.skip("requires concurrent transactions");
-          return;
-        }
-        const [seedChain] = await stateAdapter.withTransaction(async (txCtx) =>
-          stateAdapter.createJobs({
-            txCtx,
-            jobs: [
-              {
-                id: stateAdapter.config.generateJobId(),
-                typeName: "mixed-concurrency",
-                input: null,
-              },
-            ],
-          }),
-        );
-
-        const txWork = Promise.all(
-          Array.from({ length: 3 }, async (_, i) =>
-            stateAdapter.withTransaction(async (txCtx) =>
-              stateAdapter.createJobs({
-                txCtx,
-                jobs: [
-                  {
-                    id: stateAdapter.config.generateJobId(),
-                    typeName: "mixed-tx",
-                    input: { index: i },
-                  },
-                ],
-              }),
-            ),
-          ),
-        );
-
-        const readWork = Promise.all(
-          Array.from({ length: 5 }, async () =>
-            stateAdapter.getJobs({ jobIds: [seedChain.head.id] }),
-          ),
-        );
-
-        const [txResults, readResults] = await Promise.all([txWork, readWork]);
-        expect(txResults).toHaveLength(3);
-        expect(readResults.every(([job]) => job?.id === seedChain.head.id)).toBe(true);
-      },
-    },
   ],
 };
+
+export const withTransactionConcurrentTransactionsGroup: ConformanceGroup<StateConformanceFixture> =
+  {
+    name: "withTransaction",
+    cases: [
+      {
+        name: "an independent transaction's writes are not swept into a concurrent transaction's rollback",
+        run: async ({ stateAdapter }, expect) => {
+          let release: (() => void) | undefined;
+          const gate = new Promise<void>((r) => {
+            release = r;
+          });
+
+          let signalTxReady: (() => void) | undefined;
+          const txReady = new Promise<void>((r) => {
+            signalTxReady = r;
+          });
+
+          const txPromise = stateAdapter
+            .withTransaction(async (txCtx) => {
+              await stateAdapter.createJobs({
+                txCtx,
+                jobs: [
+                  {
+                    id: stateAdapter.config.generateJobId(),
+                    typeName: "independent-vs-tx",
+                    input: { side: "tx" },
+                  },
+                ],
+              });
+              signalTxReady!();
+              await gate;
+              throw new Error("rollback");
+            })
+            .catch(() => {});
+
+          await txReady;
+
+          const outsidePromise = stateAdapter.withTransaction(async (outsideTxCtx) =>
+            stateAdapter.createJobs({
+              txCtx: outsideTxCtx,
+              jobs: [
+                {
+                  id: stateAdapter.config.generateJobId(),
+                  typeName: "independent-vs-tx",
+                  input: { side: "outside" },
+                },
+              ],
+            }),
+          );
+
+          release!();
+          await txPromise;
+          const [outsideChain] = await outsidePromise;
+
+          const [survived] = await stateAdapter.getJobs({ jobIds: [outsideChain.head.id] });
+          expect(survived?.id).toBe(outsideChain.head.id);
+          expect(survived?.input).toEqual({ side: "outside" });
+        },
+      },
+      {
+        name: "parallel withTransaction calls all commit successfully",
+        run: async ({ stateAdapter }, expect) => {
+          const count = 5;
+          const results = await Promise.all(
+            Array.from({ length: count }, async (_, i) =>
+              stateAdapter.withTransaction(async (txCtx) =>
+                stateAdapter.createJobs({
+                  txCtx,
+                  jobs: [
+                    {
+                      id: stateAdapter.config.generateJobId(),
+                      typeName: "parallel-tx",
+                      input: { index: i },
+                    },
+                  ],
+                }),
+              ),
+            ),
+          );
+
+          const ids = new Set(results.map(([r]) => r.head.id));
+          expect(ids.size).toBe(count);
+
+          for (const [stateChain] of results) {
+            const [fetched] = await stateAdapter.getJobs({ jobIds: [stateChain.head.id] });
+            expect(fetched).toBeDefined();
+          }
+        },
+      },
+      {
+        name: "parallel withTransaction and non-transactional reads do not deadlock",
+        run: async ({ stateAdapter }, expect) => {
+          const [seedChain] = await stateAdapter.withTransaction(async (txCtx) =>
+            stateAdapter.createJobs({
+              txCtx,
+              jobs: [
+                {
+                  id: stateAdapter.config.generateJobId(),
+                  typeName: "mixed-concurrency",
+                  input: null,
+                },
+              ],
+            }),
+          );
+
+          const txWork = Promise.all(
+            Array.from({ length: 3 }, async (_, i) =>
+              stateAdapter.withTransaction(async (txCtx) =>
+                stateAdapter.createJobs({
+                  txCtx,
+                  jobs: [
+                    {
+                      id: stateAdapter.config.generateJobId(),
+                      typeName: "mixed-tx",
+                      input: { index: i },
+                    },
+                  ],
+                }),
+              ),
+            ),
+          );
+
+          const readWork = Promise.all(
+            Array.from({ length: 5 }, async () =>
+              stateAdapter.getJobs({ jobIds: [seedChain.head.id] }),
+            ),
+          );
+
+          const [txResults, readResults] = await Promise.all([txWork, readWork]);
+          expect(txResults).toHaveLength(3);
+          expect(readResults.every(([job]) => job?.id === seedChain.head.id)).toBe(true);
+        },
+      },
+    ],
+  };

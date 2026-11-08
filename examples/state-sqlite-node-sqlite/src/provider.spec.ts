@@ -1,26 +1,22 @@
 import { DatabaseSync } from "node:sqlite";
 
-import { createAsyncRwLock, createSqliteStateAdapter } from "@queuert/sqlite";
-import { runStateAdapterConformance } from "queuert/conformance";
+import { createAsyncRwLock } from "@queuert/sqlite";
+import { runSqliteStateProviderConformance } from "@queuert/sqlite/conformance";
 import { test } from "vitest";
 
 import { createNodeSqliteStateProvider } from "./provider.ts";
 
 // #region conformance
-test("state-sqlite-node-sqlite provider passes state adapter conformance", async () => {
-  await runStateAdapterConformance(async () => {
+test("state-sqlite-node-sqlite provider passes state provider conformance", async () => {
+  await runSqliteStateProviderConformance(async () => {
     const db = new DatabaseSync(":memory:");
 
     const lock = createAsyncRwLock();
     const stateProvider = createNodeSqliteStateProvider({ db, lock });
-    const adapter = createSqliteStateAdapter({ stateProvider });
-    await adapter.migrateToLatest();
 
     return {
-      stateAdapter: adapter,
-      transactionConcurrency: "serialized",
+      stateProvider,
       withNonTransactionContext: async (fn) => fn({ db }),
-      reset: async () => adapter.truncate(),
       dispose: async () => {
         db.close();
       },

@@ -40,7 +40,7 @@ const waitFor = async <T>(promise: Promise<T>, label: string): Promise<T> => {
   return captured.value;
 };
 
-export const notifyAdapterConformanceGroups: ConformanceGroup<NotifyConformanceFixture>[] = [
+export const notifyAdapterBaseGroups: ConformanceGroup<NotifyConformanceFixture>[] = [
   {
     name: "notifyJobsScheduled / listenJobScheduled",
     cases: [
@@ -152,9 +152,9 @@ export const notifyAdapterConformanceGroups: ConformanceGroup<NotifyConformanceF
       {
         name: "publish without listeners does not error",
         run: async ({ notifyAdapter }) => {
-          await notifyAdapter.notifyJobsScheduled(["type-a"]);
-          await notifyAdapter.notifyChainsCompleted(["chain-1"]);
-          await notifyAdapter.notifyJobAttemptsLost(["job-1"]);
+          await notifyAdapter.notifyJobsScheduled(["unheard-type"]);
+          await notifyAdapter.notifyChainsCompleted(["unheard-chain"]);
+          await notifyAdapter.notifyJobAttemptsLost(["unheard-job"]);
         },
       },
     ],
@@ -355,6 +355,41 @@ export const notifyAdapterConformanceGroups: ConformanceGroup<NotifyConformanceF
   {
     name: "cross-cutting behavior",
     cases: [
+      {
+        name: "a notification reaches only the listeners of its own kind",
+        run: async ({ notifyAdapter }, expect) => {
+          const sharedId = "shared-id";
+          const received: string[] = [];
+          const unsubscribeScheduled = await notifyAdapter.listenJobScheduled([sharedId], () => {
+            received.push("scheduled");
+          });
+          const unsubscribeCompleted = await notifyAdapter.listenChainCompleted(sharedId, () => {
+            received.push("completed");
+          });
+          const unsubscribeLost = await notifyAdapter.listenJobAttemptLost(sharedId, () => {
+            received.push("lost");
+          });
+
+          await notifyAdapter.notifyJobsScheduled([sharedId]);
+          await expect
+            .poll(() => received, { timeout: DELIVERY_TIMEOUT_MS })
+            .toEqual(["scheduled"]);
+          await notifyAdapter.notifyChainsCompleted([sharedId]);
+          await expect
+            .poll(() => received, { timeout: DELIVERY_TIMEOUT_MS })
+            .toEqual(["scheduled", "completed"]);
+          await notifyAdapter.notifyJobAttemptsLost([sharedId]);
+          await expect
+            .poll(() => received, { timeout: DELIVERY_TIMEOUT_MS })
+            .toEqual(["scheduled", "completed", "lost"]);
+          await sleep(NEGATIVE_ASSERTION_DELAY_MS);
+          expect(received).toEqual(["scheduled", "completed", "lost"]);
+
+          await unsubscribeScheduled();
+          await unsubscribeCompleted();
+          await unsubscribeLost();
+        },
+      },
       {
         name: "listen methods return async unsubscribe functions",
         run: async ({ notifyAdapter }, expect) => {

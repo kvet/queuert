@@ -5,8 +5,8 @@ import { dirname, join } from "node:path";
 import { fileURLToPath } from "node:url";
 
 import { PrismaBetterSqlite3 } from "@prisma/adapter-better-sqlite3";
-import { createAsyncRwLock, createSqliteStateAdapter } from "@queuert/sqlite";
-import { runStateAdapterConformance } from "queuert/conformance";
+import { createAsyncRwLock } from "@queuert/sqlite";
+import { runSqliteStateProviderConformance } from "@queuert/sqlite/conformance";
 import { test } from "vitest";
 
 import { createPrismaSqliteStateProvider } from "./provider.ts";
@@ -14,8 +14,8 @@ import { createPrismaSqliteStateProvider } from "./provider.ts";
 const EXAMPLE_DIR = dirname(dirname(fileURLToPath(import.meta.url)));
 
 // #region conformance
-test("state-sqlite-prisma provider passes state adapter conformance", async () => {
-  await runStateAdapterConformance(async () => {
+test("state-sqlite-prisma provider passes state provider conformance", async () => {
+  await runSqliteStateProviderConformance(async () => {
     const tempDir = mkdtempSync(join(tmpdir(), "queuert-sqlite-prisma-spec-"));
     const dbPath = join(tempDir, "test.db");
 
@@ -28,14 +28,10 @@ test("state-sqlite-prisma provider passes state adapter conformance", async () =
 
     const lock = createAsyncRwLock();
     const stateProvider = createPrismaSqliteStateProvider({ prisma, lock });
-    const adapter = createSqliteStateAdapter({ stateProvider });
-    await adapter.migrateToLatest();
 
     return {
-      stateAdapter: adapter,
-      transactionConcurrency: "serialized",
+      stateProvider,
       withNonTransactionContext: async (fn) => fn({ prisma }),
-      reset: async () => adapter.truncate(),
       dispose: async () => {
         await prisma.$disconnect();
         rmSync(tempDir, { recursive: true, force: true });

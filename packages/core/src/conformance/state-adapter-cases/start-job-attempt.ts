@@ -239,49 +239,6 @@ export const startJobAttemptGroup: ConformanceGroup<StateConformanceFixture> = {
       },
     },
     {
-      name: "parallel calls return distinct jobs (no double-dispatch)",
-      run: async ({ stateAdapter, transactionConcurrency }, expect) => {
-        const worker = await stateAdapter.startWorker({
-          workerId: stateAdapter.config.generateWorkerId(),
-          typeNames: ["acquire-concurrency"],
-          concurrency: 1,
-          leaseMs: 60_000,
-        });
-        if (transactionConcurrency !== "concurrent") {
-          expect.skip("requires concurrent transactions");
-          return;
-        }
-        const count = 5;
-        await stateAdapter.withTransaction(async (txCtx) =>
-          stateAdapter.createJobs({
-            txCtx,
-            jobs: Array.from({ length: count }, (_, i) => ({
-              id: stateAdapter.config.generateJobId(),
-              typeName: "acquire-concurrency",
-              input: { index: i },
-            })),
-          }),
-        );
-
-        const results = await Promise.all(
-          Array.from({ length: count }, async () =>
-            stateAdapter.startJobAttempts({
-              workerId: worker.id,
-              workerToken: worker.token,
-              typeNames: ["acquire-concurrency"],
-              limit: 1,
-            }),
-          ),
-        );
-
-        const acquiredJobs = results.flat();
-        const acquiredIds = new Set(acquiredJobs.map((result) => result.id));
-
-        expect(acquiredJobs).toHaveLength(count);
-        expect(acquiredIds.size).toBe(count);
-      },
-    },
-    {
       name: "acquires up to limit jobs, oldest first",
       run: async ({ stateAdapter }, expect) => {
         const worker = await stateAdapter.startWorker({
@@ -365,57 +322,6 @@ export const startJobAttemptGroup: ConformanceGroup<StateConformanceFixture> = {
           expect(job.chain.id).toBe(job.chainId);
           expect(job.hasBlockers).toBe(false);
         }
-      },
-    },
-    {
-      name: "parallel batched calls return disjoint jobs",
-      run: async ({ stateAdapter, transactionConcurrency }, expect) => {
-        const worker = await stateAdapter.startWorker({
-          workerId: stateAdapter.config.generateWorkerId(),
-          typeNames: ["acquire-batch-concurrency"],
-          concurrency: 1,
-          leaseMs: 60_000,
-        });
-        if (transactionConcurrency !== "concurrent") {
-          expect.skip("requires concurrent transactions");
-          return;
-        }
-        const count = 10;
-        await stateAdapter.withTransaction(async (txCtx) =>
-          stateAdapter.createJobs({
-            txCtx,
-            jobs: Array.from({ length: count }, (_, index) => ({
-              id: stateAdapter.config.generateJobId(),
-              typeName: "acquire-batch-concurrency",
-              input: { index },
-            })),
-          }),
-        );
-
-        const results = await Promise.all(
-          Array.from({ length: 4 }, async () =>
-            stateAdapter.startJobAttempts({
-              workerId: worker.id,
-              workerToken: worker.token,
-              typeNames: ["acquire-batch-concurrency"],
-              limit: 3,
-            }),
-          ),
-        );
-        const acquiredIds = results.flat().map((job) => job.id);
-
-        expect(new Set(acquiredIds).size).toBe(acquiredIds.length);
-        for (const batch of results) {
-          expect(batch.length).toBeLessThanOrEqual(3);
-        }
-
-        const remaining = await stateAdapter.startJobAttempts({
-          workerId: worker.id,
-          workerToken: worker.token,
-          typeNames: ["acquire-batch-concurrency"],
-          limit: count,
-        });
-        expect(acquiredIds.length + remaining.length).toBe(count);
       },
     },
     {
@@ -531,154 +437,6 @@ export const startJobAttemptGroup: ConformanceGroup<StateConformanceFixture> = {
 
         expect(acquiredWithoutBlockers).toBeDefined();
         expect(acquiredWithoutBlockers.hasBlockers).toBe(false);
-      },
-    },
-    {
-      name: "acquires a due job while only its chain head is locked",
-      run: async ({ stateAdapter, transactionConcurrency }, expect) => {
-        const worker = await stateAdapter.startWorker({
-          workerId: stateAdapter.config.generateWorkerId(),
-          typeNames: ["locked-head-acquire"],
-          concurrency: 1,
-          leaseMs: 60_000,
-        });
-        if (transactionConcurrency !== "concurrent") {
-          expect.skip("requires concurrent transactions");
-          return;
-        }
-
-        const [lockedChain] = await stateAdapter.withTransaction(async (txCtx) =>
-          stateAdapter.createJobs({
-            txCtx,
-            jobs: [
-              { id: stateAdapter.config.generateJobId(), typeName: "locked-head", input: null },
-            ],
-          }),
-        );
-        const [continued] = await stateAdapter.withTransaction(async (txCtx) =>
-          stateAdapter.continueJobs({
-            txCtx,
-            jobs: [
-              {
-                id: stateAdapter.config.generateJobId(),
-                typeName: "locked-head-acquire",
-                input: null,
-                continueFromId: lockedChain.head.id,
-              },
-            ],
-          }),
-        );
-        const continuation = continued!.continuation;
-
-        let signalHeadLocked: (() => void) | undefined;
-        const headLocked = new Promise<void>((r) => {
-          signalHeadLocked = r;
-        });
-        let releaseHead: (() => void) | undefined;
-        const headGate = new Promise<void>((r) => {
-          releaseHead = r;
-        });
-
-        const lockerTx = stateAdapter.withTransaction(async (txCtx) => {
-          await stateAdapter.getChains({ txCtx, chainIds: [lockedChain.id], lock: "exclusive" });
-          signalHeadLocked!();
-          await headGate;
-        });
-
-        await headLocked;
-
-        try {
-          expect(
-            await stateAdapter.getStartAttemptDelayMs({ typeNames: ["locked-head-acquire"] }),
-          ).toBe(0);
-
-          const [acquired] = await stateAdapter.startJobAttempts({
-            workerId: worker.id,
-            workerToken: worker.token,
-            typeNames: ["locked-head-acquire"],
-            limit: 1,
-          });
-          expect(acquired?.id).toBe(continuation.id);
-        } finally {
-          releaseHead!();
-          await lockerTx;
-        }
-      },
-    },
-    {
-      name: "skips a due job whose row is locked and getStartAttemptDelayMs ignores it",
-      run: async ({ stateAdapter, transactionConcurrency }, expect) => {
-        const worker = await stateAdapter.startWorker({
-          workerId: stateAdapter.config.generateWorkerId(),
-          typeNames: ["locked-job"],
-          concurrency: 1,
-          leaseMs: 60_000,
-        });
-        if (transactionConcurrency === "serialized") {
-          expect.skip("requires concurrent transactions");
-          return;
-        }
-
-        const [lockedChain] = await stateAdapter.withTransaction(async (txCtx) =>
-          stateAdapter.createJobs({
-            txCtx,
-            jobs: [
-              { id: stateAdapter.config.generateJobId(), typeName: "locked-job", input: null },
-            ],
-          }),
-        );
-
-        let signalJobLocked: (() => void) | undefined;
-        const jobLocked = new Promise<void>((r) => {
-          signalJobLocked = r;
-        });
-        let releaseJob: (() => void) | undefined;
-        const jobGate = new Promise<void>((r) => {
-          releaseJob = r;
-        });
-
-        const lockerTx = stateAdapter.withTransaction(async (txCtx) => {
-          await stateAdapter.getJobs({ txCtx, jobIds: [lockedChain.head.id], lock: "exclusive" });
-          signalJobLocked!();
-          await jobGate;
-        });
-
-        await jobLocked;
-
-        try {
-          expect(
-            await stateAdapter.getStartAttemptDelayMs({ typeNames: ["locked-job"] }),
-          ).toBeNull();
-
-          const [otherChain] = await stateAdapter.withTransaction(async (txCtx) =>
-            stateAdapter.createJobs({
-              txCtx,
-              jobs: [
-                { id: stateAdapter.config.generateJobId(), typeName: "locked-job", input: null },
-              ],
-            }),
-          );
-          expect(await stateAdapter.getStartAttemptDelayMs({ typeNames: ["locked-job"] })).toBe(0);
-
-          const [acquired] = await stateAdapter.startJobAttempts({
-            workerId: worker.id,
-            workerToken: worker.token,
-            typeNames: ["locked-job"],
-            limit: 1,
-          });
-          expect(acquired?.id).toBe(otherChain.head.id);
-        } finally {
-          releaseJob!();
-          await lockerTx;
-        }
-
-        const [acquiredAfterRelease] = await stateAdapter.startJobAttempts({
-          workerId: worker.id,
-          workerToken: worker.token,
-          typeNames: ["locked-job"],
-          limit: 1,
-        });
-        expect(acquiredAfterRelease?.id).toBe(lockedChain.head.id);
       },
     },
     {
@@ -1012,3 +770,238 @@ export const startJobAttemptGroup: ConformanceGroup<StateConformanceFixture> = {
     },
   ],
 };
+
+export const startJobAttemptConcurrentTransactionsGroup: ConformanceGroup<StateConformanceFixture> =
+  {
+    name: "startJobAttempts",
+    cases: [
+      {
+        name: "parallel calls return distinct jobs (no double-dispatch)",
+        run: async ({ stateAdapter }, expect) => {
+          const worker = await stateAdapter.startWorker({
+            workerId: stateAdapter.config.generateWorkerId(),
+            typeNames: ["acquire-concurrency"],
+            concurrency: 1,
+            leaseMs: 60_000,
+          });
+          const count = 5;
+          await stateAdapter.withTransaction(async (txCtx) =>
+            stateAdapter.createJobs({
+              txCtx,
+              jobs: Array.from({ length: count }, (_, i) => ({
+                id: stateAdapter.config.generateJobId(),
+                typeName: "acquire-concurrency",
+                input: { index: i },
+              })),
+            }),
+          );
+
+          const results = await Promise.all(
+            Array.from({ length: count }, async () =>
+              stateAdapter.startJobAttempts({
+                workerId: worker.id,
+                workerToken: worker.token,
+                typeNames: ["acquire-concurrency"],
+                limit: 1,
+              }),
+            ),
+          );
+
+          const acquiredJobs = results.flat();
+          const acquiredIds = new Set(acquiredJobs.map((result) => result.id));
+
+          expect(acquiredJobs).toHaveLength(count);
+          expect(acquiredIds.size).toBe(count);
+        },
+      },
+      {
+        name: "parallel batched calls return disjoint jobs",
+        run: async ({ stateAdapter }, expect) => {
+          const worker = await stateAdapter.startWorker({
+            workerId: stateAdapter.config.generateWorkerId(),
+            typeNames: ["acquire-batch-concurrency"],
+            concurrency: 1,
+            leaseMs: 60_000,
+          });
+          const count = 10;
+          await stateAdapter.withTransaction(async (txCtx) =>
+            stateAdapter.createJobs({
+              txCtx,
+              jobs: Array.from({ length: count }, (_, index) => ({
+                id: stateAdapter.config.generateJobId(),
+                typeName: "acquire-batch-concurrency",
+                input: { index },
+              })),
+            }),
+          );
+
+          const results = await Promise.all(
+            Array.from({ length: 4 }, async () =>
+              stateAdapter.startJobAttempts({
+                workerId: worker.id,
+                workerToken: worker.token,
+                typeNames: ["acquire-batch-concurrency"],
+                limit: 3,
+              }),
+            ),
+          );
+          const acquiredIds = results.flat().map((job) => job.id);
+
+          expect(new Set(acquiredIds).size).toBe(acquiredIds.length);
+          for (const batch of results) {
+            expect(batch.length).toBeLessThanOrEqual(3);
+          }
+
+          const remaining = await stateAdapter.startJobAttempts({
+            workerId: worker.id,
+            workerToken: worker.token,
+            typeNames: ["acquire-batch-concurrency"],
+            limit: count,
+          });
+          expect(acquiredIds.length + remaining.length).toBe(count);
+        },
+      },
+      {
+        name: "acquires a due job while only its chain head is locked",
+        run: async ({ stateAdapter }, expect) => {
+          const worker = await stateAdapter.startWorker({
+            workerId: stateAdapter.config.generateWorkerId(),
+            typeNames: ["locked-head-acquire"],
+            concurrency: 1,
+            leaseMs: 60_000,
+          });
+
+          const [lockedChain] = await stateAdapter.withTransaction(async (txCtx) =>
+            stateAdapter.createJobs({
+              txCtx,
+              jobs: [
+                { id: stateAdapter.config.generateJobId(), typeName: "locked-head", input: null },
+              ],
+            }),
+          );
+          const [continued] = await stateAdapter.withTransaction(async (txCtx) =>
+            stateAdapter.continueJobs({
+              txCtx,
+              jobs: [
+                {
+                  id: stateAdapter.config.generateJobId(),
+                  typeName: "locked-head-acquire",
+                  input: null,
+                  continueFromId: lockedChain.head.id,
+                },
+              ],
+            }),
+          );
+          const continuation = continued!.continuation;
+
+          let signalHeadLocked: (() => void) | undefined;
+          const headLocked = new Promise<void>((r) => {
+            signalHeadLocked = r;
+          });
+          let releaseHead: (() => void) | undefined;
+          const headGate = new Promise<void>((r) => {
+            releaseHead = r;
+          });
+
+          const lockerTx = stateAdapter.withTransaction(async (txCtx) => {
+            await stateAdapter.getChains({ txCtx, chainIds: [lockedChain.id], lock: "exclusive" });
+            signalHeadLocked!();
+            await headGate;
+          });
+
+          await headLocked;
+
+          try {
+            expect(
+              await stateAdapter.getStartAttemptDelayMs({ typeNames: ["locked-head-acquire"] }),
+            ).toBe(0);
+
+            const [acquired] = await stateAdapter.startJobAttempts({
+              workerId: worker.id,
+              workerToken: worker.token,
+              typeNames: ["locked-head-acquire"],
+              limit: 1,
+            });
+            expect(acquired?.id).toBe(continuation.id);
+          } finally {
+            releaseHead!();
+            await lockerTx;
+          }
+        },
+      },
+      {
+        name: "skips a due job whose row is locked and getStartAttemptDelayMs ignores it",
+        run: async ({ stateAdapter }, expect) => {
+          const worker = await stateAdapter.startWorker({
+            workerId: stateAdapter.config.generateWorkerId(),
+            typeNames: ["locked-job"],
+            concurrency: 1,
+            leaseMs: 60_000,
+          });
+
+          const [lockedChain] = await stateAdapter.withTransaction(async (txCtx) =>
+            stateAdapter.createJobs({
+              txCtx,
+              jobs: [
+                { id: stateAdapter.config.generateJobId(), typeName: "locked-job", input: null },
+              ],
+            }),
+          );
+
+          let signalJobLocked: (() => void) | undefined;
+          const jobLocked = new Promise<void>((r) => {
+            signalJobLocked = r;
+          });
+          let releaseJob: (() => void) | undefined;
+          const jobGate = new Promise<void>((r) => {
+            releaseJob = r;
+          });
+
+          const lockerTx = stateAdapter.withTransaction(async (txCtx) => {
+            await stateAdapter.getJobs({ txCtx, jobIds: [lockedChain.head.id], lock: "exclusive" });
+            signalJobLocked!();
+            await jobGate;
+          });
+
+          await jobLocked;
+
+          try {
+            expect(
+              await stateAdapter.getStartAttemptDelayMs({ typeNames: ["locked-job"] }),
+            ).toBeNull();
+
+            const [otherChain] = await stateAdapter.withTransaction(async (txCtx) =>
+              stateAdapter.createJobs({
+                txCtx,
+                jobs: [
+                  { id: stateAdapter.config.generateJobId(), typeName: "locked-job", input: null },
+                ],
+              }),
+            );
+            expect(await stateAdapter.getStartAttemptDelayMs({ typeNames: ["locked-job"] })).toBe(
+              0,
+            );
+
+            const [acquired] = await stateAdapter.startJobAttempts({
+              workerId: worker.id,
+              workerToken: worker.token,
+              typeNames: ["locked-job"],
+              limit: 1,
+            });
+            expect(acquired?.id).toBe(otherChain.head.id);
+          } finally {
+            releaseJob!();
+            await lockerTx;
+          }
+
+          const [acquiredAfterRelease] = await stateAdapter.startJobAttempts({
+            workerId: worker.id,
+            workerToken: worker.token,
+            typeNames: ["locked-job"],
+            limit: 1,
+          });
+          expect(acquiredAfterRelease?.id).toBe(lockedChain.head.id);
+        },
+      },
+    ],
+  };

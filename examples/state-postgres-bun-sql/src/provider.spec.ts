@@ -1,28 +1,23 @@
 import { test } from "bun:test";
 
-import { createPgStateAdapter } from "@queuert/postgres";
+import { runPgStateProviderConformance } from "@queuert/postgres/conformance";
 import { acquirePostgres } from "@queuert/testcontainers";
 import { SQL } from "bun";
-import { runStateAdapterConformance } from "queuert/conformance";
 
 import { createBunSqlStateProvider } from "./provider.ts";
 
 // #region conformance
-test("state-postgres-bun-sql provider passes state adapter conformance", async () => {
+test("state-postgres-bun-sql provider passes state provider conformance", async () => {
   await using pg = await acquirePostgres("postgres:18", import.meta.url);
 
-  await runStateAdapterConformance(async () => {
+  await runPgStateProviderConformance(async () => {
     const sql = new SQL(pg.connectionString, { max: 10 });
 
     const stateProvider = createBunSqlStateProvider({ sql });
-    const adapter = createPgStateAdapter({ stateProvider });
-    await adapter.migrateToLatest();
 
     return {
-      stateAdapter: adapter,
-      transactionConcurrency: "concurrent",
+      stateProvider,
       withNonTransactionContext: async (fn) => fn({ txSql: sql }),
-      reset: async () => adapter.truncate(),
       dispose: async () => {
         await sql.close();
       },

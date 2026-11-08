@@ -1,29 +1,24 @@
-import { createRedisNotifyAdapter } from "@queuert/redis";
+import { runRedisNotifyProviderConformance } from "@queuert/redis/conformance";
 import { acquireRedis } from "@queuert/testcontainers";
-import { runNotifyAdapterConformance } from "queuert/conformance";
 import { type RedisClientType, createClient } from "redis";
 import { test } from "vitest";
 
 import { createNodeRedisNotifyProvider } from "./provider.ts";
 
 // #region conformance
-test("notify-redis-redis provider passes notify adapter conformance", async () => {
+test("notify-redis-redis provider passes notify provider conformance", async () => {
   await using redis = await acquireRedis("redis:8");
 
-  await runNotifyAdapterConformance(async () => {
+  await runRedisNotifyProviderConformance(async () => {
     const client = createClient({ url: redis.connectionUrl }) as RedisClientType;
     const subscribeClient = createClient({ url: redis.connectionUrl }) as RedisClientType;
     await client.connect();
     await subscribeClient.connect();
 
     const notifyProvider = createNodeRedisNotifyProvider({ client, subscribeClient });
-    const notifyAdapter = createRedisNotifyAdapter({
-      notifyProvider,
-      channelPrefix: `queuert:spec:${Date.now()}:${Math.random().toString(36).slice(2)}`,
-    });
 
     return {
-      notifyAdapter,
+      notifyProvider,
       dispose: async () => {
         await client.close();
         await subscribeClient.close();

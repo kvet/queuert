@@ -1,14 +1,13 @@
 import { Pool } from "pg";
-import type { StateAdapter } from "queuert";
+import type { StateConformanceFixture } from "queuert/conformance";
+import type { ConformanceFixtures } from "queuert/testing";
 import type { TestAPI } from "vitest";
 
 import { createPgStateAdapter } from "../state-adapter/state-adapter.pg.ts";
 import { createPgPoolProvider } from "../state-provider/state-provider.pg-pool.ts";
 
-export type VarianceFixtures = {
+export type VarianceFixtures = ConformanceFixtures<StateConformanceFixture> & {
   pool: Pool;
-  stateAdapter: StateAdapter<{ $test: true }, string, string>;
-  transactionConcurrency: "concurrent" | "serialized";
   tableNames: string[];
 };
 
@@ -34,38 +33,30 @@ export const extendWithVarianceStatePg = <T extends { postgresConnectionString: 
         await use(pool);
         await pool.end();
       },
-      { scope: "test" },
+      { scope: "file" },
     ],
-    stateAdapter: [
+    conformance: [
       async ({ pool }, use) => {
-        const client = await pool.connect();
-        await client.query(`DROP SCHEMA IF EXISTS ${options.schema} CASCADE`).catch(() => {});
-        await client.query(`CREATE SCHEMA IF NOT EXISTS ${options.schema}`);
-        client.release();
-
-        const stateProvider = createPgPoolProvider({ pool });
-        const adapter = createPgStateAdapter({ stateProvider, ...options });
-        await adapter.migrateToLatest();
-        return use(adapter as unknown as StateAdapter<{ $test: true }, string, string>);
+        await pool.query(`DROP SCHEMA IF EXISTS ${options.schema} CASCADE`);
+        await pool.query(`CREATE SCHEMA ${options.schema}`);
+        const stateAdapter = createPgStateAdapter({
+          stateProvider: createPgPoolProvider({ pool }),
+          ...options,
+        });
+        await stateAdapter.migrateToLatest();
+        await use({ stateAdapter, reset: async () => stateAdapter.truncate() });
       },
-      { scope: "test" },
-    ],
-    transactionConcurrency: [
-      // oxlint-disable-next-line no-empty-pattern
-      async ({}, use) => {
-        await use("concurrent");
-      },
-      { scope: "test" },
+      { scope: "file" },
     ],
     tableNames: [
-      async ({ pool, stateAdapter: _ }, use) => {
+      async ({ pool, conformance: _ }, use) => {
         const result = await pool.query<{ table_name: string }>(
           `SELECT table_name FROM information_schema.tables WHERE table_schema = $1`,
           [options.schema],
         );
         await use(result.rows.map((row) => row.table_name));
       },
-      { scope: "test" },
+      { scope: "file" },
     ],
   }) as ReturnType<typeof extendWithVarianceStatePg<T>>;
 };

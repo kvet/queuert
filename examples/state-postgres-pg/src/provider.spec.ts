@@ -1,25 +1,21 @@
-import { createPgStateAdapter } from "@queuert/postgres";
+import { runPgStateProviderConformance } from "@queuert/postgres/conformance";
 import { acquirePostgres } from "@queuert/testcontainers";
 import { Pool } from "pg";
-import { runStateAdapterConformance } from "queuert/conformance";
 import { test } from "vitest";
 
 import { createPgPoolStateProvider } from "./provider.ts";
 
 // #region conformance
-test("state-postgres-pg provider passes state adapter conformance", async () => {
+test("state-postgres-pg provider passes state provider conformance", async () => {
   await using pg = await acquirePostgres("postgres:18", import.meta.url);
 
-  await runStateAdapterConformance(async () => {
+  await runPgStateProviderConformance(async () => {
     const pool = new Pool({ connectionString: pg.connectionString, idleTimeoutMillis: 0 });
 
     const stateProvider = createPgPoolStateProvider({ pool });
-    const adapter = createPgStateAdapter({ stateProvider });
-    await adapter.migrateToLatest();
 
     return {
-      stateAdapter: adapter,
-      transactionConcurrency: "concurrent",
+      stateProvider,
       withNonTransactionContext: async (fn) => {
         const poolClient = await pool.connect();
         try {
@@ -28,7 +24,6 @@ test("state-postgres-pg provider passes state adapter conformance", async () => 
           poolClient.release();
         }
       },
-      reset: async () => adapter.truncate(),
       dispose: async () => {
         await pool.end();
       },

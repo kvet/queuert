@@ -1,13 +1,9 @@
+import { type NotifyConformanceFixture, notifyAdapterBaseGroups } from "./notify-adapter-cases.ts";
 import {
-  type NotifyConformanceFixture,
-  notifyAdapterConformanceGroups,
-} from "./notify-adapter-cases.ts";
-import { type ConformanceReport, type ConformanceResult, runConformance } from "./runner.ts";
-
-export type NotifyConformanceOptions = {
-  caseTimeoutMs?: number;
-  onResult?: (result: ConformanceResult) => void;
-};
+  type ConformanceOptions,
+  type ConformanceReport,
+  runFixtureConformance,
+} from "./runner.ts";
 
 /**
  * Run the notify adapter conformance suite against a user-supplied adapter.
@@ -28,21 +24,5 @@ export type NotifyConformanceOptions = {
  */
 export const runNotifyAdapterConformance = async (
   factory: () => Promise<NotifyConformanceFixture>,
-  options?: NotifyConformanceOptions,
-): Promise<ConformanceReport> => {
-  const { reset, dispose, ...context } = await factory();
-  try {
-    return await runConformance(notifyAdapterConformanceGroups, {
-      setup: async () => {
-        if (reset) await reset();
-        return { context };
-      },
-      caseTimeoutMs: options?.caseTimeoutMs,
-      onResult: options?.onResult,
-    });
-  } finally {
-    if (dispose) await dispose();
-  }
-};
-
-export { type NotifyConformanceFixture } from "./notify-adapter-cases.ts";
+  options?: ConformanceOptions,
+): Promise<ConformanceReport> => runFixtureConformance(notifyAdapterBaseGroups, factory, options);

@@ -1,25 +1,21 @@
-import { createAsyncRwLock, createSqliteStateAdapter } from "@queuert/sqlite";
+import { createAsyncRwLock } from "@queuert/sqlite";
+import { runSqliteStateProviderConformance } from "@queuert/sqlite/conformance";
 import Database from "better-sqlite3";
-import { runStateAdapterConformance } from "queuert/conformance";
 import { test } from "vitest";
 
 import { createDrizzleSqliteStateProvider } from "./provider.ts";
 
 // #region conformance
-test("state-sqlite-drizzle provider passes state adapter conformance", async () => {
-  await runStateAdapterConformance(async () => {
+test("state-sqlite-drizzle provider passes state provider conformance", async () => {
+  await runSqliteStateProviderConformance(async () => {
     const db = new Database(":memory:");
 
     const lock = createAsyncRwLock();
     const stateProvider = createDrizzleSqliteStateProvider({ db, lock });
-    const adapter = createSqliteStateAdapter({ stateProvider });
-    await adapter.migrateToLatest();
 
     return {
-      stateAdapter: adapter,
-      transactionConcurrency: "serialized",
+      stateProvider,
       withNonTransactionContext: async (fn) => fn({ db }),
-      reset: async () => adapter.truncate(),
       dispose: async () => {
         db.close();
       },

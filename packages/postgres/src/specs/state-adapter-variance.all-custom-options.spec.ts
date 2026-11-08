@@ -1,5 +1,9 @@
 import { extendWithPostgres } from "@queuert/testcontainers";
-import { stateAdapterConformanceTestSuite } from "queuert/testing";
+import {
+  stateAdapterBaseGroups,
+  stateAdapterConcurrentTransactionGroups,
+} from "queuert/conformance-internal";
+import { conformanceTestSuite } from "queuert/testing";
 import { it as baseIt, describe, expect } from "vitest";
 
 import { extendWithVarianceStatePg } from "./state-adapter-variance.spec-helper.ts";
@@ -30,7 +34,7 @@ describe("PostgreSQL State Adapter Variance - All Custom Options", () => {
     expect(tableNames).toContain(`${tablePrefix}migration`);
   });
 
-  it("stores worker IDs in columns of the configured type", async ({ pool, stateAdapter: _ }) => {
+  it("stores worker IDs in columns of the configured type", async ({ pool, conformance: _ }) => {
     const { rows } = await pool.query<{ column: string; udt_name: string }>(
       `SELECT table_name || '.' || column_name AS column, udt_name
        FROM information_schema.columns
@@ -46,5 +50,8 @@ describe("PostgreSQL State Adapter Variance - All Custom Options", () => {
     ]);
   });
 
-  stateAdapterConformanceTestSuite({ it });
+  conformanceTestSuite({
+    it,
+    groups: [...stateAdapterBaseGroups, ...stateAdapterConcurrentTransactionGroups],
+  });
 });

@@ -1,7 +1,13 @@
 import { defineConfig } from "tsdown";
 
 export default defineConfig({
-  entry: ["./src/index.ts", "./src/internal.ts", "./src/testing.ts", "./src/conformance.ts"],
+  entry: [
+    "./src/index.ts",
+    "./src/internal.ts",
+    "./src/testing.ts",
+    "./src/conformance.ts",
+    "./src/conformance-internal.ts",
+  ],
   dts: true,
   sourcemap: true,
   outputOptions: {

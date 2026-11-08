@@ -1,30 +1,25 @@
 import { test } from "bun:test";
 
-import { createRedisNotifyAdapter } from "@queuert/redis";
+import { runRedisNotifyProviderConformance } from "@queuert/redis/conformance";
 import { acquireRedis } from "@queuert/testcontainers";
 import { RedisClient } from "bun";
-import { runNotifyAdapterConformance } from "queuert/conformance";
 
 import { createBunRedisNotifyProvider } from "./provider.ts";
 
 // #region conformance
-test("notify-redis-bun provider passes notify adapter conformance", async () => {
+test("notify-redis-bun provider passes notify provider conformance", async () => {
   await using redis = await acquireRedis("redis:8");
 
-  await runNotifyAdapterConformance(async () => {
+  await runRedisNotifyProviderConformance(async () => {
     const client = new RedisClient(redis.connectionUrl);
     const subscribeClient = new RedisClient(redis.connectionUrl);
     await client.connect();
     await subscribeClient.connect();
 
     const notifyProvider = createBunRedisNotifyProvider({ client, subscribeClient });
-    const notifyAdapter = createRedisNotifyAdapter({
-      notifyProvider,
-      channelPrefix: `queuert:spec:${Date.now()}:${Math.random().toString(36).slice(2)}`,
-    });
 
     return {
-      notifyAdapter,
+      notifyProvider,
       dispose: async () => {
         client.close();
         subscribeClient.close();

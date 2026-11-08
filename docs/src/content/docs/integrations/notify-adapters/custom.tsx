@@ -1,7 +1,6 @@
 import { A } from "@solidjs/router";
 
-import { ExampleCode } from "../../../../components/ExampleCode.tsx";
-import { TabItem, Tabs } from "../../../../components/mdx/Tabs.tsx";
+import { Code } from "../../../../components/mdx/Code.tsx";
 
 export const meta = {
   title: "Custom Notify Adapter",
@@ -34,19 +33,41 @@ const Page = () => (
     <h2 id="conformance">Conformance</h2>
     <p>
       Run <code>runNotifyAdapterConformance</code> from <code>queuert/conformance</code> against
-      your adapter. The runner is framework-agnostic — it throws on failure, so any test runner that
-      reports a thrown error as a failure works. Every notify example's spec (
-      <code>src/provider.spec.ts</code>, or <code>src/adapter.spec.ts</code> for NATS) is a working
-      template:
+      your adapter. The runner is framework-agnostic: it throws a <code>ConformanceError</code> with
+      an aggregated report on failure, so any test runner that reports a thrown error as a failure
+      works. Embed it in a single <code>test()</code> block:
     </p>
-    <Tabs syncKey="test-runner">
-      <TabItem label="vitest">
-        <ExampleCode example="notify-postgres-pg" file="src/provider.spec.ts" />
-      </TabItem>
-      <TabItem label="bun test">
-        <ExampleCode example="notify-redis-bun" file="src/provider.spec.ts" />
-      </TabItem>
-    </Tabs>
+    <Code lang="ts" title="src/notify-adapter.spec.ts">{`
+import { runNotifyAdapterConformance, type NotifyConformanceFixture } from "queuert/conformance";
+import { test } from "vitest";
+
+import { createMyNotifyAdapter } from "./notify-adapter.ts";
+
+const createFixture = async (): Promise<NotifyConformanceFixture> => {
+  const notifyAdapter = createMyNotifyAdapter({ url: process.env.BROKER_URL });
+  return {
+    notifyAdapter,
+    dispose: async () => notifyAdapter.close(),
+  };
+};
+
+test("notify adapter passes conformance", async () => {
+  await runNotifyAdapterConformance(createFixture);
+}, 60_000);
+`}</Code>
+    <p>
+      The factory resolves to a fixture with the <code>notifyAdapter</code> under test, an optional{" "}
+      <code>reset</code> that runs before every case, and an optional <code>dispose</code> that runs
+      once after all cases finish. For per-case progress, pass <code>{"{ onResult }"}</code> as the
+      second argument. The full API is in the{" "}
+      <A href="/api/conformance/readme/">conformance reference</A>.
+    </p>
+    <p>
+      A provider for PostgreSQL or Redis has its own runner, which builds the adapter over the
+      provider for you: see{" "}
+      <A href="/integrations/notify-adapters/postgres/#testing-your-provider">PostgreSQL</A> or{" "}
+      <A href="/integrations/notify-adapters/redis/#testing-your-provider">Redis</A>.
+    </p>
   </>
 );
 

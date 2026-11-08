@@ -1,27 +1,22 @@
 import { test } from "bun:test";
 
-import { createPgNotifyAdapter } from "@queuert/postgres";
+import { runPgNotifyProviderConformance } from "@queuert/postgres/conformance";
 import { acquirePostgres } from "@queuert/testcontainers";
 import { SQL } from "bun";
-import { runNotifyAdapterConformance } from "queuert/conformance";
 
 import { createBunSqlNotifyProvider } from "./provider.ts";
 
 // #region conformance
-test("notify-postgres-bun-sql provider passes notify adapter conformance", async () => {
+test("notify-postgres-bun-sql provider passes notify provider conformance", async () => {
   await using pg = await acquirePostgres("postgres:18", import.meta.url);
 
-  await runNotifyAdapterConformance(async () => {
+  await runPgNotifyProviderConformance(async () => {
     const sql = new SQL(pg.connectionString, { max: 10 });
 
     const notifyProvider = createBunSqlNotifyProvider({ sql });
-    const notifyAdapter = createPgNotifyAdapter({
-      notifyProvider,
-      channelPrefix: `queuert_spec_${Date.now()}_${Math.random().toString(36).slice(2)}`,
-    });
 
     return {
-      notifyAdapter,
+      notifyProvider,
       dispose: async () => {
         await sql.close();
       },

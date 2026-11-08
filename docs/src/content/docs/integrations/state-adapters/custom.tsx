@@ -1,8 +1,7 @@
 import { A } from "@solidjs/router";
 
-import { ExampleCode } from "../../../../components/ExampleCode.tsx";
 import { FieldList, type FieldItem } from "../../../../components/FieldList.tsx";
-import { TabItem, Tabs } from "../../../../components/mdx/Tabs.tsx";
+import { Code } from "../../../../components/mdx/Code.tsx";
 
 export const meta = {
   title: "Custom State Adapter",
@@ -11,26 +10,24 @@ export const meta = {
 };
 
 const fixture = (): FieldItem[] => [
-  { name: "stateAdapter", chips: ["required"], description: "The adapter under test." },
-  {
-    name: "transactionConcurrency",
-    chips: ["required"],
-    description: (
-      <>
-        <code>"concurrent"</code> when your backend can run two <code>withTransaction</code>{" "}
-        callbacks at once (a connection pool), so the suite also exercises concurrent-transaction
-        cases; <code>"serialized"</code> for a single-connection backend, which skips them.
-      </>
-    ),
-  },
+  { name: "stateAdapter", chips: ["required"], description: "The adapter under test, migrated." },
   {
     name: "withNonTransactionContext",
     chips: ["optional"],
     description:
       "Runs a callback with the root handle, not a transaction. Cases that need it are skipped when it is omitted.",
   },
-  { name: "reset", chips: ["optional"], description: "Truncates the tables between cases." },
-  { name: "dispose", chips: ["optional"], description: "Closes connections." },
+  {
+    name: "reset",
+    chips: ["optional"],
+    description:
+      "Runs before every case to restore a clean state, typically by truncating the tables.",
+  },
+  {
+    name: "dispose",
+    chips: ["optional"],
+    description: "Runs once after all cases finish, pass or fail, to release resources.",
+  },
 ];
 
 const Page = () => (
@@ -40,7 +37,8 @@ const Page = () => (
       yourself. The conformance suite validates that your implementation behaves correctly. To use
       another client with PostgreSQL or SQLite, write a provider instead: see{" "}
       <A href="/integrations/state-adapters/postgres/#state-provider">PostgreSQL</A> or{" "}
-      <A href="/integrations/state-adapters/sqlite/#state-provider">SQLite</A>.
+      <A href="/integrations/state-adapters/sqlite/#state-provider">SQLite</A>, each of which has
+      its own conformance runner for providers.
     </p>
 
     <h2>Write a state adapter</h2>
@@ -55,44 +53,61 @@ const Page = () => (
       on each member states its contract.
     </p>
 
-    <h2>Conformance</h2>
+    <h2 id="conformance">Conformance</h2>
     <p>
-      <code>runStateAdapterConformance</code> from <code>queuert/conformance</code> runs the same
-      suite Queuert uses internally against your adapter, and every backend example runs it against
-      its provider. It is framework-agnostic: it throws on failure, so any test framework that
-      reports a thrown error as a failure works. Embed it in a single <code>test()</code> block:
+      <code>queuert/conformance</code> runs the same suite Queuert uses internally against your
+      adapter. It has two runners:
     </p>
-    <Tabs syncKey="test-runner">
-      <TabItem label="vitest">
-        <ExampleCode
-          example="state-sqlite-better-sqlite3"
-          file="src/provider.spec.ts"
-          region="conformance"
-          title="src/provider.spec.ts"
-        />
-      </TabItem>
-      <TabItem label="bun test">
-        <ExampleCode
-          example="state-sqlite-bun-sqlite"
-          file="src/provider.spec.ts"
-          region="conformance"
-          title="src/provider.spec.ts"
-        />
-      </TabItem>
-      <TabItem label="node:test">
-        <ExampleCode
-          example="state-sqlite-node-sqlite"
-          file="src/provider.node-test.ts"
-          region="conformance"
-          title="src/provider.node-test.ts"
-        />
-      </TabItem>
-    </Tabs>
+    <ul>
+      <li>
+        <code>runStateAdapterConformance</code> runs the cases every state adapter must pass, with
+        transactions run one at a time.
+      </li>
+      <li>
+        <code>runConcurrentStateAdapterConformance</code> runs the cases that hold two transactions
+        open at once: blocker races, concurrent deletes, row locks, and reads that must not see
+        uncommitted rows. Run it next to the first when your adapter can run transactions in
+        parallel, such as one over a connection pool.
+      </li>
+    </ul>
+    <p>
+      Both are framework-agnostic: they throw a <code>ConformanceError</code> with an aggregated
+      report on failure, so any test framework that reports a thrown error as a failure works. Embed
+      each in a single <code>test()</code> block:
+    </p>
+    <Code lang="ts" title="src/state-adapter.spec.ts">{`
+import {
+  runConcurrentStateAdapterConformance,
+  runStateAdapterConformance,
+  type StateConformanceFixture,
+} from "queuert/conformance";
+import { test } from "vitest";
+
+import { createMyStateAdapter } from "./state-adapter.ts";
+
+const createFixture = async (): Promise<StateConformanceFixture> => {
+  const stateAdapter = createMyStateAdapter({ connectionString: process.env.DATABASE_URL });
+  await stateAdapter.migrateToLatest();
+  return {
+    stateAdapter,
+    reset: async () => stateAdapter.truncate(),
+    dispose: async () => stateAdapter.close(),
+  };
+};
+
+test("state adapter passes conformance", async () => {
+  await runStateAdapterConformance(createFixture);
+}, 60_000);
+
+test("state adapter passes concurrent transaction conformance", async () => {
+  await runConcurrentStateAdapterConformance(createFixture);
+}, 60_000);
+`}</Code>
     <p>The factory resolves to a fixture:</p>
     <FieldList title="StateConformanceFixture" items={fixture()} />
     <p>
-      For per-case progress, pass <code>{"{ onResult }"}</code> as the second argument, as the
-      node:test tab does. The full API is in the{" "}
+      For per-case progress, pass <code>{"{ onResult }"}</code> as the second argument; for a
+      per-case timeout, <code>{"{ caseTimeoutMs }"}</code>. The full API is in the{" "}
       <A href="/api/conformance/readme/">conformance reference</A>.
     </p>
   </>

@@ -207,13 +207,15 @@ export const getChainsGroup: ConformanceGroup<StateConformanceFixture> = {
         expect(observed!.tail!.id).toBe(continuation.id);
       },
     },
+  ],
+};
+
+export const getChainsConcurrentTransactionsGroup: ConformanceGroup<StateConformanceFixture> = {
+  name: "getChains",
+  cases: [
     {
       name: "non-transactional getChain does not observe an uncommitted chain creation",
-      run: async ({ stateAdapter, transactionConcurrency }, expect) => {
-        if (transactionConcurrency !== "concurrent") {
-          expect.skip("requires concurrent transactions");
-          return;
-        }
+      run: async ({ stateAdapter }, expect) => {
         let release: (() => void) | undefined;
         const gate = new Promise<void>((r) => {
           release = r;
@@ -253,11 +255,7 @@ export const getChainsGroup: ConformanceGroup<StateConformanceFixture> = {
     },
     {
       name: "locked getChain in a separate transaction does not observe an uncommitted continuation",
-      run: async ({ stateAdapter, transactionConcurrency }, expect) => {
-        if (transactionConcurrency !== "concurrent") {
-          expect.skip("requires concurrent transactions");
-          return;
-        }
+      run: async ({ stateAdapter }, expect) => {
         const [seedChain] = await stateAdapter.withTransaction(async (txCtx) =>
           stateAdapter.createJobs({
             txCtx,

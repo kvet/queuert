@@ -1,5 +1,8 @@
 import type { ConformanceGroup } from "./runner.ts";
-import { addJobsBlockersGroup } from "./state-adapter-cases/add-jobs-blockers.ts";
+import {
+  addJobsBlockersGroup,
+  addJobsBlockersConcurrentTransactionsGroup,
+} from "./state-adapter-cases/add-jobs-blockers.ts";
 import { closeGroup } from "./state-adapter-cases/close.ts";
 import { completeJobsGroup } from "./state-adapter-cases/complete-jobs.ts";
 import { continueJobsGroup } from "./state-adapter-cases/continue-jobs.ts";
@@ -9,33 +12,69 @@ import { countRunningJobsByWorkerIdGroup } from "./state-adapter-cases/count-run
 import { countWorkersByTypeNameGroup } from "./state-adapter-cases/count-workers-by-type-name.ts";
 import { countWorkersGroup } from "./state-adapter-cases/count-workers.ts";
 import { createJobsGroup } from "./state-adapter-cases/create-jobs.ts";
-import { deleteChainsGroup } from "./state-adapter-cases/delete-chains.ts";
+import {
+  deleteChainsGroup,
+  deleteChainsConcurrentTransactionsGroup,
+} from "./state-adapter-cases/delete-chains.ts";
 import { extendWorkerLeaseGroup } from "./state-adapter-cases/extend-worker-lease.ts";
 import { getChainTypeNamesGroup } from "./state-adapter-cases/get-chain-type-names.ts";
-import { getChainsGroup } from "./state-adapter-cases/get-chains.ts";
-import { getJobBlockersGroup } from "./state-adapter-cases/get-job-blockers.ts";
+import {
+  getChainsGroup,
+  getChainsConcurrentTransactionsGroup,
+} from "./state-adapter-cases/get-chains.ts";
+import {
+  getJobBlockersGroup,
+  getJobBlockersConcurrentTransactionsGroup,
+} from "./state-adapter-cases/get-job-blockers.ts";
 import { getJobTypeNamesGroup } from "./state-adapter-cases/get-job-type-names.ts";
-import { getJobsGroup } from "./state-adapter-cases/get-jobs.ts";
-import { getStartAttemptDelayMsGroup } from "./state-adapter-cases/get-start-attempt-delay-ms.ts";
+import {
+  getJobsGroup,
+  getJobsConcurrentTransactionsGroup,
+} from "./state-adapter-cases/get-jobs.ts";
+import {
+  getStartAttemptDelayMsGroup,
+  getStartAttemptDelayMsConcurrentTransactionsGroup,
+} from "./state-adapter-cases/get-start-attempt-delay-ms.ts";
 import { getWorkersGroup } from "./state-adapter-cases/get-workers.ts";
 import { isTransactionGroup } from "./state-adapter-cases/is-transaction.ts";
-import { listBlockedJobsGroup } from "./state-adapter-cases/list-blocked-jobs.ts";
-import { listChainJobsGroup } from "./state-adapter-cases/list-chain-jobs.ts";
-import { listChainsGroup } from "./state-adapter-cases/list-chains.ts";
-import { listJobsGroup } from "./state-adapter-cases/list-jobs.ts";
+import {
+  listBlockedJobsGroup,
+  listBlockedJobsConcurrentTransactionsGroup,
+} from "./state-adapter-cases/list-blocked-jobs.ts";
+import {
+  listChainJobsGroup,
+  listChainJobsConcurrentTransactionsGroup,
+} from "./state-adapter-cases/list-chain-jobs.ts";
+import {
+  listChainsGroup,
+  listChainsConcurrentTransactionsGroup,
+} from "./state-adapter-cases/list-chains.ts";
+import {
+  listJobsGroup,
+  listJobsConcurrentTransactionsGroup,
+} from "./state-adapter-cases/list-jobs.ts";
 import { listWorkerJobsGroup } from "./state-adapter-cases/list-worker-jobs.ts";
 import { listWorkersGroup } from "./state-adapter-cases/list-workers.ts";
 import { rescheduleJobsGroup } from "./state-adapter-cases/reschedule-jobs.ts";
-import { startJobAttemptGroup } from "./state-adapter-cases/start-job-attempt.ts";
+import {
+  startJobAttemptGroup,
+  startJobAttemptConcurrentTransactionsGroup,
+} from "./state-adapter-cases/start-job-attempt.ts";
 import { startWorkerGroup } from "./state-adapter-cases/start-worker.ts";
 import { stopWorkerGroup } from "./state-adapter-cases/stop-worker.ts";
 import type { StateConformanceFixture } from "./state-adapter-cases/types.ts";
-import { unblockJobsGroup } from "./state-adapter-cases/unblock-jobs.ts";
-import { withTransactionGroup } from "./state-adapter-cases/with-transaction.ts";
+import {
+  unblockJobsGroup,
+  unblockJobsConcurrentTransactionsGroup,
+} from "./state-adapter-cases/unblock-jobs.ts";
+import {
+  withTransactionGroup,
+  withTransactionConcurrentTransactionsGroup,
+} from "./state-adapter-cases/with-transaction.ts";
 
 export { type StateConformanceFixture } from "./state-adapter-cases/types.ts";
 
-export const stateAdapterConformanceGroups: ConformanceGroup<StateConformanceFixture>[] = [
+export const stateAdapterBaseGroups: ConformanceGroup<StateConformanceFixture>[] = [
   withTransactionGroup,
   isTransactionGroup,
   getChainsGroup,
@@ -69,3 +108,20 @@ export const stateAdapterConformanceGroups: ConformanceGroup<StateConformanceFix
   listWorkerJobsGroup,
   closeGroup,
 ];
+
+export const stateAdapterConcurrentTransactionGroups: ConformanceGroup<StateConformanceFixture>[] =
+  [
+    withTransactionConcurrentTransactionsGroup,
+    getChainsConcurrentTransactionsGroup,
+    getJobsConcurrentTransactionsGroup,
+    addJobsBlockersConcurrentTransactionsGroup,
+    getJobBlockersConcurrentTransactionsGroup,
+    unblockJobsConcurrentTransactionsGroup,
+    startJobAttemptConcurrentTransactionsGroup,
+    getStartAttemptDelayMsConcurrentTransactionsGroup,
+    deleteChainsConcurrentTransactionsGroup,
+    listChainsConcurrentTransactionsGroup,
+    listJobsConcurrentTransactionsGroup,
+    listChainJobsConcurrentTransactionsGroup,
+    listBlockedJobsConcurrentTransactionsGroup,
+  ];

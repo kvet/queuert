@@ -1,7 +1,8 @@
 import type { RuntimeType } from "@queuert/typed-sql";
 import Database from "better-sqlite3";
-import type { StateAdapter } from "queuert";
-import { stateAdapterConformanceTestSuite } from "queuert/testing";
+import type { StateConformanceFixture } from "queuert/conformance";
+import { stateAdapterBaseGroups } from "queuert/conformance-internal";
+import { type ConformanceFixtures, conformanceTestSuite } from "queuert/testing";
 import { describe, expect, it } from "vitest";
 
 import { createSqliteStateAdapter } from "../state-adapter/state-adapter.sqlite.ts";
@@ -160,39 +161,22 @@ const createValidatingProvider = (
   };
 };
 
-describe("SQLite SQL contract", () => {
-  const conformanceIt = it.extend<{
-    db: Database.Database;
-    stateAdapter: StateAdapter<{ $test: true }, string, string>;
-    transactionConcurrency: "concurrent" | "serialized";
-  }>({
-    db: [
-      // oxlint-disable-next-line no-empty-pattern
-      async ({}, use) => {
-        const db = new Database(":memory:");
-        await use(db);
-        db.close();
-      },
-      { scope: "test" },
-    ],
-    transactionConcurrency: [
-      // oxlint-disable-next-line no-empty-pattern
-      async ({}, use) => {
-        await use("serialized");
-      },
-      { scope: "test" },
-    ],
-    stateAdapter: [
-      async ({ db }, use) => {
-        const stateProvider = createValidatingProvider(db);
-        const adapter = createSqliteStateAdapter({ stateProvider });
-        await adapter.migrateToLatest();
-        await adapter.truncate();
-        await use(adapter as unknown as StateAdapter<{ $test: true }, string, string>);
-      },
-      { scope: "test" },
-    ],
-  });
+const contractIt = it.extend<ConformanceFixtures<StateConformanceFixture>>({
+  conformance: [
+    // oxlint-disable-next-line no-empty-pattern -- vitest fixtures must destructure their context
+    async ({}, use) => {
+      const db = new Database(":memory:");
+      const stateAdapter = createSqliteStateAdapter({
+        stateProvider: createValidatingProvider(db),
+      });
+      await stateAdapter.migrateToLatest();
+      await use({ stateAdapter, reset: async () => stateAdapter.truncate() });
+      db.close();
+    },
+    { scope: "file" },
+  ],
+});
 
-  stateAdapterConformanceTestSuite({ it: conformanceIt });
+describe("SQLite SQL contract", () => {
+  conformanceTestSuite({ it: contractIt, groups: stateAdapterBaseGroups });
 });
