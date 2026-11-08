@@ -23,7 +23,6 @@ export {
   ChainNotFoundError,
   ChainTypeMismatchError,
   DuplicateJobTypeError,
-  HookNotRegisteredError,
   InvalidJobIdError,
   InvalidWorkerIdError,
   JobAlreadyCompletedError,
@@ -61,13 +60,12 @@ export {
   type StateAdapterConfig,
 } from "./state-adapter/state-adapter.ts";
 export {
-  createTransactionHooks,
-  withTransactionHooks,
-  type HookDefinition,
-  type TransactionHooks,
-  type TransactionHooksHandle,
-  type TransactionHooksSavepoint,
-} from "./transaction-hooks.ts";
+  createTxHooks,
+  withTxHooks,
+  type TxHooks,
+  type TxHooksHandle,
+  type TxHooksSavepoint,
+} from "./tx-hooks/tx-hooks.ts";
 export { type AttemptMiddleware } from "./attempt-middleware/attempt-middleware.ts";
 export { createProcessors } from "./job-type-processors/create-job-type-processors.ts";
 export { omitProcessors, pickProcessors } from "./job-type-processors/pick-job-type-processors.ts";

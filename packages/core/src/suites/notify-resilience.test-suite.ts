@@ -55,8 +55,8 @@ export const notifyResilienceTestSuite = ({
         processors: {
           test: {
             attemptHandler: async ({ job, complete }) =>
-              withTransaction(async (txCtx, transactionHooks) =>
-                complete({ ...txCtx, transactionHooks, output: { result: job.input.value * 2 } }),
+              withTransaction(async (txCtx, txHooks) =>
+                complete({ ...txCtx, txHooks, output: { result: job.input.value * 2 } }),
               ),
           },
         },
@@ -65,10 +65,10 @@ export const notifyResilienceTestSuite = ({
 
     await withWorkers([await worker.start()], async () => {
       // at least one notify pushes worker to process jobs
-      const chains = await withTransaction(async (txCtx, transactionHooks) =>
+      const chains = await withTransaction(async (txCtx, txHooks) =>
         client.createChains({
           ...txCtx,
-          transactionHooks,
+          txHooks,
           items: Array.from({ length: 20 }, (_, i) => ({
             typeName: "test",
             input: { value: i },

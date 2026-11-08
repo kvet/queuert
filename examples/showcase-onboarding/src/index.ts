@@ -13,7 +13,7 @@ import {
   createInProcessWorker,
   createProcessors,
   defineJobTypes,
-  withTransactionHooks,
+  withTxHooks,
 } from "queuert";
 
 await using pg = await acquirePostgres("postgres:18", import.meta.url);
@@ -78,11 +78,11 @@ const worker = await createInProcessWorker({
         attemptHandler: async ({ job, complete }) => {
           const accountId = await provisionAccount(job.input.userId);
 
-          return withTransactionHooks(async (transactionHooks) =>
+          return withTxHooks(async (txHooks) =>
             db.transaction(async (tx) =>
               complete({
                 tx,
-                transactionHooks,
+                txHooks,
                 continueWith: {
                   typeName: "send-welcome-email",
                   input: { userId: job.input.userId, accountId },
@@ -99,11 +99,11 @@ const worker = await createInProcessWorker({
         attemptHandler: async ({ job, complete }) => {
           await sendWelcomeEmail(job.input.userId);
 
-          return withTransactionHooks(async (transactionHooks) =>
+          return withTxHooks(async (txHooks) =>
             db.transaction(async (tx) =>
               complete({
                 tx,
-                transactionHooks,
+                txHooks,
                 continueWith: { typeName: "sync-to-crm", input: job.input },
               }),
             ),
@@ -114,8 +114,8 @@ const worker = await createInProcessWorker({
         attemptHandler: async ({ job, complete }) => {
           const syncedAt = await syncToCrm(job.input.userId, job.input.accountId);
 
-          return withTransactionHooks(async (transactionHooks) =>
-            db.transaction(async (tx) => complete({ tx, transactionHooks, output: { syncedAt } })),
+          return withTxHooks(async (txHooks) =>
+            db.transaction(async (tx) => complete({ tx, txHooks, output: { syncedAt } })),
           );
         },
       },
@@ -128,7 +128,7 @@ const stop = await worker.start();
 // #endregion
 
 // #region create-chain
-const chain = await withTransactionHooks(async (transactionHooks) =>
+const chain = await withTxHooks(async (txHooks) =>
   db.transaction(async (tx) => {
     const [user] = await tx
       .insert(users)
@@ -137,7 +137,7 @@ const chain = await withTransactionHooks(async (transactionHooks) =>
 
     return client.createChain({
       tx,
-      transactionHooks,
+      txHooks,
       typeName: "provision-account",
       input: { userId: user.id },
       //         ↑ wrong shape here is a compile error

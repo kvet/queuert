@@ -1760,9 +1760,6 @@ importers:
       pg:
         specifier: 8.23.1
         version: 8.23.1
-      postgres:
-        specifier: 3.4.9
-        version: 3.4.9
       queuert:
         specifier: workspace:*
         version: link:../core

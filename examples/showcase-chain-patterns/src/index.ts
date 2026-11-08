@@ -22,7 +22,7 @@ import {
   createInProcessWorker,
   createProcessors,
   defineJobTypes,
-  withTransactionHooks,
+  withTxHooks,
 } from "queuert";
 
 const jobTypes = defineJobTypes<{
@@ -126,7 +126,7 @@ const worker = await createInProcessWorker({
         attemptHandler: async ({ job, complete }) => {
           console.log(`\n[create-subscription] Creating subscription for user ${job.input.userId}`);
 
-          return withTransactionHooks(async (transactionHooks) =>
+          return withTxHooks(async (txHooks) =>
             sql.begin(async (txSql) => {
               const [sub] = (await txSql.unsafe(
                 "INSERT INTO subscriptions (user_id, plan_id, status) VALUES ($1, $2, 'pending') RETURNING id",
@@ -136,7 +136,7 @@ const worker = await createInProcessWorker({
 
               return complete({
                 txSql,
-                transactionHooks,
+                txHooks,
                 continueWith: {
                   typeName: "activate-trial",
                   input: { subscriptionId: sub.id, trialDays: TRIAL_DAYS },
@@ -151,7 +151,7 @@ const worker = await createInProcessWorker({
         attemptHandler: async ({ job, complete }) => {
           console.log(`\n[activate-trial] Activating ${job.input.trialDays}-day trial`);
 
-          return withTransactionHooks(async (transactionHooks) =>
+          return withTxHooks(async (txHooks) =>
             sql.begin(async (txSql) => {
               const trialEndsAt = new Date(Date.now() + job.input.trialDays * 24 * 60 * 60 * 1000);
               await txSql.unsafe(
@@ -162,7 +162,7 @@ const worker = await createInProcessWorker({
 
               return complete({
                 txSql,
-                transactionHooks,
+                txHooks,
                 continueWith: {
                   typeName: "trial-decision",
                   input: { subscriptionId: job.input.subscriptionId },
@@ -182,12 +182,12 @@ const worker = await createInProcessWorker({
           const shouldConvert = userConverts;
           console.log(`  User decision: ${shouldConvert ? "CONVERT to paid" : "LET EXPIRE"}`);
 
-          return withTransactionHooks(async (transactionHooks) =>
+          return withTxHooks(async (txHooks) =>
             sql.begin(async (txSql) => {
               if (shouldConvert) {
                 return complete({
                   txSql,
-                  transactionHooks,
+                  txHooks,
                   continueWith: {
                     typeName: "convert-to-paid",
                     input: { subscriptionId: job.input.subscriptionId },
@@ -196,7 +196,7 @@ const worker = await createInProcessWorker({
               } else {
                 return complete({
                   txSql,
-                  transactionHooks,
+                  txHooks,
                   continueWith: {
                     typeName: "expire-trial",
                     input: { subscriptionId: job.input.subscriptionId },
@@ -214,7 +214,7 @@ const worker = await createInProcessWorker({
             `\n[expire-trial] Trial expired for subscription #${job.input.subscriptionId}`,
           );
 
-          return withTransactionHooks(async (transactionHooks) =>
+          return withTxHooks(async (txHooks) =>
             sql.begin(async (txSql) => {
               await txSql.unsafe("UPDATE subscriptions SET status = 'expired' WHERE id = $1", [
                 job.input.subscriptionId,
@@ -222,7 +222,7 @@ const worker = await createInProcessWorker({
               const expiredAt = new Date().toISOString();
               console.log(`  Subscription expired at ${expiredAt}`);
 
-              return complete({ txSql, transactionHooks, output: { expiredAt } });
+              return complete({ txSql, txHooks, output: { expiredAt } });
             }),
           );
         },
@@ -234,7 +234,7 @@ const worker = await createInProcessWorker({
             `\n[convert-to-paid] Converting subscription #${job.input.subscriptionId} to paid`,
           );
 
-          return withTransactionHooks(async (transactionHooks) =>
+          return withTxHooks(async (txHooks) =>
             sql.begin(async (txSql) => {
               await txSql.unsafe("UPDATE subscriptions SET status = 'active' WHERE id = $1", [
                 job.input.subscriptionId,
@@ -243,7 +243,7 @@ const worker = await createInProcessWorker({
 
               return complete({
                 txSql,
-                transactionHooks,
+                txHooks,
                 continueWith: {
                   typeName: "charge-billing",
                   input: { subscriptionId: job.input.subscriptionId, cycle: 1 },
@@ -261,7 +261,7 @@ const worker = await createInProcessWorker({
           await new Promise((r) => setTimeout(r, 100));
           console.log(`  Charged $${PRICE_PER_CYCLE} for cycle ${job.input.cycle}`);
 
-          return withTransactionHooks(async (transactionHooks) =>
+          return withTxHooks(async (txHooks) =>
             sql.begin(async (txSql) => {
               const [sub] = (await txSql.unsafe(
                 "UPDATE subscriptions SET current_cycle = $1, total_charged = total_charged + $2 WHERE id = $3 RETURNING total_charged",
@@ -275,7 +275,7 @@ const worker = await createInProcessWorker({
                 console.log(`  Scheduling next billing cycle...`);
                 return complete({
                   txSql,
-                  transactionHooks,
+                  txHooks,
                   continueWith: {
                     typeName: "charge-billing",
                     input: { subscriptionId: job.input.subscriptionId, cycle: job.input.cycle + 1 },
@@ -285,7 +285,7 @@ const worker = await createInProcessWorker({
                 console.log(`  Max cycles reached, cancelling subscription...`);
                 return complete({
                   txSql,
-                  transactionHooks,
+                  txHooks,
                   continueWith: {
                     typeName: "cancel-subscription",
                     input: {
@@ -307,7 +307,7 @@ const worker = await createInProcessWorker({
           );
           console.log(`  Reason: ${job.input.reason}`);
 
-          return withTransactionHooks(async (transactionHooks) =>
+          return withTxHooks(async (txHooks) =>
             sql.begin(async (txSql) => {
               const cancelledAt = new Date().toISOString();
               await txSql.unsafe(
@@ -316,7 +316,7 @@ const worker = await createInProcessWorker({
               );
               console.log(`  Subscription cancelled at ${cancelledAt}`);
 
-              return complete({ txSql, transactionHooks, output: { cancelledAt } });
+              return complete({ txSql, txHooks, output: { cancelledAt } });
             }),
           );
         },
@@ -333,11 +333,11 @@ console.log("Linear -> Branched (convert) -> Loop (billing) -> Go-To (cancel)\n"
 
 userConverts = true;
 
-const chain1 = await withTransactionHooks(async (transactionHooks) =>
+const chain1 = await withTxHooks(async (txHooks) =>
   sql.begin(async (txSql) =>
     client.createChain({
       txSql,
-      transactionHooks,
+      txHooks,
       typeName: "create-subscription",
       input: { userId: "user-123", planId: "pro-monthly" },
     }),
@@ -370,11 +370,11 @@ console.log("Linear -> Branched (expire) -> Terminal\n");
 
 userConverts = false;
 
-const chain2 = await withTransactionHooks(async (transactionHooks) =>
+const chain2 = await withTxHooks(async (txHooks) =>
   sql.begin(async (txSql) =>
     client.createChain({
       txSql,
-      transactionHooks,
+      txHooks,
       typeName: "create-subscription",
       input: { userId: "user-456", planId: "pro-monthly" },
     }),

@@ -132,8 +132,8 @@ const Page = () => (
         <strong>Trigger model.</strong> Inngest is event-first: you{" "}
         <code>{"inngest.send({ name, data })"}</code> and matching functions run. Queuert is
         transaction-first: you{" "}
-        <code>{"client.createChain({ ...txCtx, transactionHooks, typeName, input })"}</code> inside
-        a DB transaction.
+        <code>{"client.createChain({ ...txCtx, txHooks, typeName, input })"}</code> inside a DB
+        transaction.
       </li>
       <li>
         <strong>Where execution happens.</strong> Inngest functions run in your HTTP handlers or

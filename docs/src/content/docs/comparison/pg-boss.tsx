@@ -153,12 +153,12 @@ const Page = () => (
       enqueue path that bypasses it:
     </p>
     <Code lang="ts">{`
-      await withTransactionHooks(async (transactionHooks) =>
+      await withTxHooks(async (txHooks) =>
         sql.begin(async (txSql) => {
           const [user] = await txSql\`insert into users (email) values (\${email}) returning id\`;
           await client.createChain({
             txSql,
-            transactionHooks,
+            txHooks,
             typeName: "send-welcome-email",
             input: { userId: user.id },
           });
@@ -202,10 +202,10 @@ const Page = () => (
     <Code lang="ts">{`
       "send-welcome-email": {
         attemptHandler: async ({ job, complete }) =>
-          withTransactionHooks(async (transactionHooks) =>
+          withTxHooks(async (txHooks) =>
             sql.begin(async (txSql) => {
               await txSql\`insert into email_log (user_id) values (\${job.input.userId})\`;
-              return complete({ txSql, transactionHooks, continueWith: { typeName: "log-sent", input: { ... } } });
+              return complete({ txSql, txHooks, continueWith: { typeName: "log-sent", input: { ... } } });
             }),
           ),
       },

@@ -12,7 +12,7 @@
 
 import assert from "node:assert/strict";
 
-import { createInProcessWorker, withTransactionHooks } from "queuert";
+import { createInProcessWorker, withTxHooks } from "queuert";
 
 import { sql, stopContainer } from "./adapters.ts";
 import { client } from "./client.ts";
@@ -33,11 +33,11 @@ const stopWorker = await worker.start();
 
 console.log("\n--- Pattern 1: Independent Slices ---\n");
 
-const orderChain = await withTransactionHooks(async (transactionHooks) =>
+const orderChain = await withTxHooks(async (txHooks) =>
   sql.begin(async (txSql) =>
     client.createChain({
       txSql,
-      transactionHooks,
+      txHooks,
       typeName: "orders.create-order",
       input: {
         userId: "user-10",
@@ -61,11 +61,11 @@ assert.ok(orderResult.output.fulfilledAt);
 
 console.log("\n--- Pattern 2: Fire-and-forget ---\n");
 
-const orderChain2 = await withTransactionHooks(async (transactionHooks) =>
+const orderChain2 = await withTxHooks(async (txHooks) =>
   sql.begin(async (txSql) =>
     client.createChain({
       txSql,
-      transactionHooks,
+      txHooks,
       typeName: "orders.create-order",
       input: {
         userId: "user-42",
@@ -98,11 +98,11 @@ assert.ok(orderResult2.output.orderId > 0);
 
 console.log("\n--- Pattern 3: Cross-slice Blockers ---\n");
 
-const placeOrderChain = await withTransactionHooks(async (transactionHooks) =>
+const placeOrderChain = await withTxHooks(async (txHooks) =>
   sql.begin(async (txSql) =>
     client.createChain({
       txSql,
-      transactionHooks,
+      txHooks,
       typeName: "orders.place-order",
       input: {
         userId: "user-42",

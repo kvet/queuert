@@ -28,24 +28,24 @@ export const deduplicationTestSuite = ({ it }: { it: TestAPI<TestSuiteContext> }
       jobTypes,
     });
 
-    const [chain1, chain2, chain3] = await withTransaction(async (txCtx, transactionHooks) => [
+    const [chain1, chain2, chain3] = await withTransaction(async (txCtx, txHooks) => [
       await client.createChain({
         ...txCtx,
-        transactionHooks,
+        txHooks,
         typeName: "test",
         input: { value: 1 },
         deduplication: { key: "same-key", scope: "running" },
       }),
       await client.createChain({
         ...txCtx,
-        transactionHooks,
+        txHooks,
         typeName: "test",
         input: { value: 2 },
         deduplication: { key: "same-key", scope: "running" },
       }),
       await client.createChain({
         ...txCtx,
-        transactionHooks,
+        txHooks,
         typeName: "test",
         input: { value: 3 },
         deduplication: { key: "different-key", scope: "running" },
@@ -58,10 +58,10 @@ export const deduplicationTestSuite = ({ it }: { it: TestAPI<TestSuiteContext> }
     expect(chain3.deduplicated).toBe(false);
     expect(chain3.id).not.toBe(chain1.id);
 
-    const completed1 = await withTransaction(async (txCtx, transactionHooks) =>
+    const completed1 = await withTransaction(async (txCtx, txHooks) =>
       client.completeChain({
         ...txCtx,
-        transactionHooks,
+        txHooks,
         ...chain1,
         handler: async ({ job, completeJob }) => {
           return completeJob(job, async ({ complete }) =>
@@ -71,10 +71,10 @@ export const deduplicationTestSuite = ({ it }: { it: TestAPI<TestSuiteContext> }
       }),
     );
 
-    const completed3 = await withTransaction(async (txCtx, transactionHooks) =>
+    const completed3 = await withTransaction(async (txCtx, txHooks) =>
       client.completeChain({
         ...txCtx,
-        transactionHooks,
+        txHooks,
         ...chain3,
         handler: async ({ job, completeJob }) => {
           return completeJob(job, async ({ complete }) =>
@@ -123,10 +123,10 @@ export const deduplicationTestSuite = ({ it }: { it: TestAPI<TestSuiteContext> }
       jobTypes,
     });
 
-    const chain1 = await withTransaction(async (txCtx, transactionHooks) =>
+    const chain1 = await withTransaction(async (txCtx, txHooks) =>
       client.createChain({
         ...txCtx,
-        transactionHooks,
+        txHooks,
         typeName: "step1",
         input: { value: 1 },
         deduplication: { key: "multi-step-key", scope: "running" },
@@ -135,10 +135,10 @@ export const deduplicationTestSuite = ({ it }: { it: TestAPI<TestSuiteContext> }
 
     expect(chain1.deduplicated).toBe(false);
 
-    await withTransaction(async (txCtx, transactionHooks) =>
+    await withTransaction(async (txCtx, txHooks) =>
       client.completeChain({
         ...txCtx,
-        transactionHooks,
+        txHooks,
         ...chain1,
         handler: async ({ job, completeJob }) => {
           if (job.typeName === "step1") {
@@ -150,10 +150,10 @@ export const deduplicationTestSuite = ({ it }: { it: TestAPI<TestSuiteContext> }
       }),
     );
 
-    const chain2 = await withTransaction(async (txCtx, transactionHooks) =>
+    const chain2 = await withTransaction(async (txCtx, txHooks) =>
       client.createChain({
         ...txCtx,
-        transactionHooks,
+        txHooks,
         typeName: "step1",
         input: { value: 2 },
         deduplication: { key: "multi-step-key", scope: "running" },
@@ -163,10 +163,10 @@ export const deduplicationTestSuite = ({ it }: { it: TestAPI<TestSuiteContext> }
     expect(chain2.deduplicated).toBe(true);
     expect(chain2.id).toBe(chain1.id);
 
-    await withTransaction(async (txCtx, transactionHooks) =>
+    await withTransaction(async (txCtx, txHooks) =>
       client.completeChain({
         ...txCtx,
-        transactionHooks,
+        txHooks,
         ...chain1,
         handler: async ({ job, completeJob }) => {
           if (job.typeName === "step2") {
@@ -176,10 +176,10 @@ export const deduplicationTestSuite = ({ it }: { it: TestAPI<TestSuiteContext> }
       }),
     );
 
-    const chain3 = await withTransaction(async (txCtx, transactionHooks) =>
+    const chain3 = await withTransaction(async (txCtx, txHooks) =>
       client.createChain({
         ...txCtx,
-        transactionHooks,
+        txHooks,
         typeName: "step1",
         input: { value: 3 },
         deduplication: { key: "multi-step-key", scope: "running" },
@@ -213,20 +213,20 @@ export const deduplicationTestSuite = ({ it }: { it: TestAPI<TestSuiteContext> }
       jobTypes,
     });
 
-    const chain1 = await withTransaction(async (txCtx, transactionHooks) =>
+    const chain1 = await withTransaction(async (txCtx, txHooks) =>
       client.createChain({
         ...txCtx,
-        transactionHooks,
+        txHooks,
         typeName: "test",
         input: { value: 1 },
         deduplication: { key: "coexist-key", scope: "running" },
       }),
     );
 
-    await withTransaction(async (txCtx, transactionHooks) =>
+    await withTransaction(async (txCtx, txHooks) =>
       client.completeChain({
         ...txCtx,
-        transactionHooks,
+        txHooks,
         ...chain1,
         handler: async ({ job, completeJob }) => {
           return completeJob(job, async ({ complete }) => complete({ output: { result: 1 } }));
@@ -234,10 +234,10 @@ export const deduplicationTestSuite = ({ it }: { it: TestAPI<TestSuiteContext> }
       }),
     );
 
-    const chain2 = await withTransaction(async (txCtx, transactionHooks) =>
+    const chain2 = await withTransaction(async (txCtx, txHooks) =>
       client.createChain({
         ...txCtx,
-        transactionHooks,
+        txHooks,
         typeName: "test",
         input: { value: 2 },
         deduplication: { key: "coexist-key", scope: "running" },
@@ -247,10 +247,10 @@ export const deduplicationTestSuite = ({ it }: { it: TestAPI<TestSuiteContext> }
     expect(chain2.deduplicated).toBe(false);
     expect(chain2.id).not.toBe(chain1.id);
 
-    const chain3 = await withTransaction(async (txCtx, transactionHooks) =>
+    const chain3 = await withTransaction(async (txCtx, txHooks) =>
       client.createChain({
         ...txCtx,
-        transactionHooks,
+        txHooks,
         typeName: "test",
         input: { value: 3 },
         deduplication: { key: "coexist-key", scope: "running" },
@@ -285,20 +285,20 @@ export const deduplicationTestSuite = ({ it }: { it: TestAPI<TestSuiteContext> }
     });
 
     // Test 'any' scope - deduplicates against completed jobs
-    const allChain1 = await withTransaction(async (txCtx, transactionHooks) =>
+    const allChain1 = await withTransaction(async (txCtx, txHooks) =>
       client.createChain({
         ...txCtx,
-        transactionHooks,
+        txHooks,
         typeName: "test",
         input: { value: 1 },
         deduplication: { key: "all-key", scope: "any" },
       }),
     );
 
-    await withTransaction(async (txCtx, transactionHooks) =>
+    await withTransaction(async (txCtx, txHooks) =>
       client.completeChain({
         ...txCtx,
-        transactionHooks,
+        txHooks,
         ...allChain1,
         handler: async ({ job, completeJob }) => {
           await completeJob(job, async ({ complete }) =>
@@ -308,10 +308,10 @@ export const deduplicationTestSuite = ({ it }: { it: TestAPI<TestSuiteContext> }
       }),
     );
 
-    const allChain2 = await withTransaction(async (txCtx, transactionHooks) =>
+    const allChain2 = await withTransaction(async (txCtx, txHooks) =>
       client.createChain({
         ...txCtx,
-        transactionHooks,
+        txHooks,
         typeName: "test",
         input: { value: 2 },
         deduplication: { key: "all-key", scope: "any" },
@@ -322,20 +322,20 @@ export const deduplicationTestSuite = ({ it }: { it: TestAPI<TestSuiteContext> }
     expect(allChain2.id).toBe(allChain1.id);
 
     // Test 'running' scope - does NOT deduplicate against completed jobs
-    const completedChain1 = await withTransaction(async (txCtx, transactionHooks) =>
+    const completedChain1 = await withTransaction(async (txCtx, txHooks) =>
       client.createChain({
         ...txCtx,
-        transactionHooks,
+        txHooks,
         typeName: "test",
         input: { value: 3 },
         deduplication: { key: "completed-key", scope: "running" },
       }),
     );
 
-    await withTransaction(async (txCtx, transactionHooks) =>
+    await withTransaction(async (txCtx, txHooks) =>
       client.completeChain({
         ...txCtx,
-        transactionHooks,
+        txHooks,
         ...completedChain1,
         handler: async ({ job, completeJob }) => {
           await completeJob(job, async ({ complete }) =>
@@ -345,10 +345,10 @@ export const deduplicationTestSuite = ({ it }: { it: TestAPI<TestSuiteContext> }
       }),
     );
 
-    const completedChain2 = await withTransaction(async (txCtx, transactionHooks) =>
+    const completedChain2 = await withTransaction(async (txCtx, txHooks) =>
       client.createChain({
         ...txCtx,
-        transactionHooks,
+        txHooks,
         typeName: "test",
         input: { value: 4 },
         deduplication: { key: "completed-key", scope: "running" },
@@ -358,10 +358,10 @@ export const deduplicationTestSuite = ({ it }: { it: TestAPI<TestSuiteContext> }
     expect(completedChain2.deduplicated).toBe(false);
     expect(completedChain2.id).not.toBe(completedChain1.id);
 
-    const completed2 = await withTransaction(async (txCtx, transactionHooks) =>
+    const completed2 = await withTransaction(async (txCtx, txHooks) =>
       client.completeChain({
         ...txCtx,
-        transactionHooks,
+        txHooks,
         ...completedChain2,
         handler: async ({ job, completeJob }) => {
           return completeJob(job, async ({ complete }) =>
@@ -402,17 +402,17 @@ export const deduplicationTestSuite = ({ it }: { it: TestAPI<TestSuiteContext> }
       jobTypes,
     });
 
-    const [chainA, chainB] = await withTransaction(async (txCtx, transactionHooks) => [
+    const [chainA, chainB] = await withTransaction(async (txCtx, txHooks) => [
       await client.createChain({
         ...txCtx,
-        transactionHooks,
+        txHooks,
         typeName: "typeA",
         input: { value: 1 },
         deduplication: { key: "shared-key", scope: "running" },
       }),
       await client.createChain({
         ...txCtx,
-        transactionHooks,
+        txHooks,
         typeName: "typeB",
         input: { value: 2 },
         deduplication: { key: "shared-key", scope: "running" },
@@ -447,10 +447,10 @@ export const deduplicationTestSuite = ({ it }: { it: TestAPI<TestSuiteContext> }
       jobTypes,
     });
 
-    const [chain1, chain2, chain3] = await withTransaction(async (txCtx, transactionHooks) =>
+    const [chain1, chain2, chain3] = await withTransaction(async (txCtx, txHooks) =>
       client.createChains({
         ...txCtx,
-        transactionHooks,
+        txHooks,
         items: [
           {
             typeName: "test",
@@ -501,20 +501,20 @@ export const deduplicationTestSuite = ({ it }: { it: TestAPI<TestSuiteContext> }
       jobTypes,
     });
 
-    const existing = await withTransaction(async (txCtx, transactionHooks) =>
+    const existing = await withTransaction(async (txCtx, txHooks) =>
       client.createChain({
         ...txCtx,
-        transactionHooks,
+        txHooks,
         typeName: "test",
         input: { value: 100 },
         deduplication: { key: "existing-key", scope: "running" },
       }),
     );
 
-    const [chain1, chain2] = await withTransaction(async (txCtx, transactionHooks) =>
+    const [chain1, chain2] = await withTransaction(async (txCtx, txHooks) =>
       client.createChains({
         ...txCtx,
-        transactionHooks,
+        txHooks,
         items: [
           {
             typeName: "test",
@@ -560,20 +560,20 @@ export const deduplicationTestSuite = ({ it }: { it: TestAPI<TestSuiteContext> }
     });
 
     // Create and complete a chain with 'any' scope key
-    const anyChain = await withTransaction(async (txCtx, transactionHooks) =>
+    const anyChain = await withTransaction(async (txCtx, txHooks) =>
       client.createChain({
         ...txCtx,
-        transactionHooks,
+        txHooks,
         typeName: "test",
         input: { value: 1 },
         deduplication: { key: "any-key", scope: "any" },
       }),
     );
 
-    await withTransaction(async (txCtx, transactionHooks) =>
+    await withTransaction(async (txCtx, txHooks) =>
       client.completeChain({
         ...txCtx,
-        transactionHooks,
+        txHooks,
         ...anyChain,
         handler: async ({ job, completeJob }) => {
           await completeJob(job, async ({ complete }) =>
@@ -584,20 +584,20 @@ export const deduplicationTestSuite = ({ it }: { it: TestAPI<TestSuiteContext> }
     );
 
     // Create and complete a chain with 'running' scope key
-    const incompleteChain = await withTransaction(async (txCtx, transactionHooks) =>
+    const incompleteChain = await withTransaction(async (txCtx, txHooks) =>
       client.createChain({
         ...txCtx,
-        transactionHooks,
+        txHooks,
         typeName: "test",
         input: { value: 2 },
         deduplication: { key: "incomplete-key", scope: "running" },
       }),
     );
 
-    await withTransaction(async (txCtx, transactionHooks) =>
+    await withTransaction(async (txCtx, txHooks) =>
       client.completeChain({
         ...txCtx,
-        transactionHooks,
+        txHooks,
         ...incompleteChain,
         handler: async ({ job, completeJob }) => {
           await completeJob(job, async ({ complete }) =>
@@ -608,10 +608,10 @@ export const deduplicationTestSuite = ({ it }: { it: TestAPI<TestSuiteContext> }
     );
 
     // Batch: 'any' should dedup against completed, 'running' should not
-    const [anyResult, incompleteResult] = await withTransaction(async (txCtx, transactionHooks) =>
+    const [anyResult, incompleteResult] = await withTransaction(async (txCtx, txHooks) =>
       client.createChains({
         ...txCtx,
-        transactionHooks,
+        txHooks,
         items: [
           {
             typeName: "test",
@@ -661,10 +661,10 @@ export const deduplicationTestSuite = ({ it }: { it: TestAPI<TestSuiteContext> }
       jobTypes,
     });
 
-    const [chainA, chainB] = await withTransaction(async (txCtx, transactionHooks) =>
+    const [chainA, chainB] = await withTransaction(async (txCtx, txHooks) =>
       client.createChains({
         ...txCtx,
-        transactionHooks,
+        txHooks,
         items: [
           {
             typeName: "typeA",
@@ -710,10 +710,10 @@ export const deduplicationTestSuite = ({ it }: { it: TestAPI<TestSuiteContext> }
 
     for (const deduplication of [{ key: "k" }, { key: "k", scope: "incomplete" }]) {
       await expect(
-        withTransaction(async (txCtx, transactionHooks) =>
+        withTransaction(async (txCtx, txHooks) =>
           client.createChain({
             ...txCtx,
-            transactionHooks,
+            txHooks,
             typeName: "test",
             input: null,
             deduplication: deduplication as any,

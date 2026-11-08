@@ -6,7 +6,7 @@ import {
   createInProcessWorker,
   createProcessors,
   defineJobTypes,
-  withTransactionHooks,
+  withTxHooks,
 } from "queuert";
 
 // Define job types
@@ -48,11 +48,11 @@ const worker = await createInProcessWorker({
         attemptHandler: async ({ job, complete }) => {
           console.log(`[app] Processing greeting for ${job.input.name}`);
 
-          return withTransactionHooks(async (transactionHooks) =>
+          return withTxHooks(async (txHooks) =>
             stateAdapter.withTransaction(async (ctx) =>
               complete({
                 ...ctx,
-                transactionHooks,
+                txHooks,
                 output: { greeting: `Hello, ${job.input.name}!` },
               }),
             ),
@@ -67,9 +67,9 @@ const worker = await createInProcessWorker({
             throw new Error("Simulated failure for demonstration");
           }
 
-          return withTransactionHooks(async (transactionHooks) =>
+          return withTxHooks(async (txHooks) =>
             stateAdapter.withTransaction(async (ctx) =>
-              complete({ ...ctx, transactionHooks, output: { success: true as const } }),
+              complete({ ...ctx, txHooks, output: { success: true as const } }),
             ),
           );
         },
@@ -83,11 +83,11 @@ const stopWorker = await worker.start();
 
 // Run successful job
 console.log("\n--- Running successful job ---\n");
-const successChain = await withTransactionHooks(async (transactionHooks) =>
+const successChain = await withTxHooks(async (txHooks) =>
   stateAdapter.withTransaction(async (ctx) =>
     client.createChain({
       ...ctx,
-      transactionHooks,
+      txHooks,
       typeName: "greet",
       input: { name: "World" },
     }),
@@ -97,11 +97,11 @@ await client.awaitChain(successChain, { timeoutMs: 5000 });
 
 // Run job that fails then succeeds (demonstrates error logging)
 console.log("\n--- Running job that fails first attempt ---\n");
-const failThenSucceedChain = await withTransactionHooks(async (transactionHooks) =>
+const failThenSucceedChain = await withTxHooks(async (txHooks) =>
   stateAdapter.withTransaction(async (ctx) =>
     client.createChain({
       ...ctx,
-      transactionHooks,
+      txHooks,
       typeName: "might-fail",
       input: { shouldFail: true },
     }),

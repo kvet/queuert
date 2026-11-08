@@ -14,8 +14,8 @@ Four exports, from a dedicated `queuert/cleanup` entrypoint:
 
 1. **`createCleanupJobTypes()`** — job-type registry, mounted on the client via array merge.
 2. **`createCleanupProcessors({ client, batchSize?, attemptMiddleware? })`** — the processor slice, mounted on the worker via array merge. **Policy-free**: execution mechanics only.
-3. **`scheduleCleanup({ ...txCtx, transactionHooks, client, name, typeNames?, retentionMs, intervalMs })`** — upsert a named, recurring cleanup schedule.
-4. **`unscheduleCleanup({ ...txCtx, transactionHooks, client, name })`** — cancel one schedule.
+3. **`scheduleCleanup({ ...txCtx, txHooks, client, name, typeNames?, retentionMs, intervalMs })`** — upsert a named, recurring cleanup schedule.
+4. **`unscheduleCleanup({ ...txCtx, txHooks, client, name })`** — cancel one schedule.
 
 Policy (what to sweep, how long to keep, how often) lives on the **schedule**, addressed by `name`; mechanics (batch size, middleware) live on the **processor**. `cleanupJobTypeName`, `CleanupJobInput`, and `CleanupJobTypeDefinitions` are **not** exported — the helpers absorb every place a user would have needed them.
 
@@ -50,7 +50,7 @@ A schedule is identified by a required user `name`, realized as a chain with ide
 ```ts
 await scheduleCleanup({
   ...txCtx,
-  transactionHooks,
+  txHooks,
   client,
   name: "short",
   typeNames: ["email.send"],
@@ -59,7 +59,7 @@ await scheduleCleanup({
 });
 await scheduleCleanup({
   ...txCtx,
-  transactionHooks,
+  txHooks,
   client,
   name: "long",
   typeNames: ["report.build"],
@@ -79,10 +79,10 @@ const identity = { key: `__queuert/cleanup:${name}`, scope: "running" } as const
 
 const existing = await client.getChain({ ...txCtx, identity, lock: true });
 if (!existing) {
-  await client.createChain({ ...txCtx, transactionHooks, identity /* new schedule */ });
+  await client.createChain({ ...txCtx, txHooks, identity /* new schedule */ });
 } else if (configDiffers(existing.input, next)) {
-  await client.deleteChain({ ...txCtx, transactionHooks, id: existing.id });
-  await client.createChain({ ...txCtx, transactionHooks, identity /* new schedule */ });
+  await client.deleteChain({ ...txCtx, txHooks, id: existing.id });
+  await client.createChain({ ...txCtx, txHooks, identity /* new schedule */ });
 }
 // config unchanged → no-op: no delete, no timer reset
 ```
@@ -109,18 +109,18 @@ When `configDiffers` and the running chain is currently _executing_, `deleteChai
         ...(cursor ? { cursor } : {}),
       });
       const ids = page.items.filter((c) => c.id !== job.chainId).map((c) => c.id);
-      if (ids.length) await withTransactionHooks(async (transactionHooks) =>
+      if (ids.length) await withTxHooks(async (txHooks) =>
         withTransaction(async (txCtx) => {
           await fence({ ...txCtx });
-          return client.deleteChains({ ...txCtx, transactionHooks, ids });
+          return client.deleteChains({ ...txCtx, txHooks, ids });
         }));
       cursor = page.nextCursor;
     } while (cursor && !signal.aborted);
 
-    return withTransactionHooks(async (transactionHooks) =>
+    return withTxHooks(async (txHooks) =>
       withTransaction(async (txCtx) => {
-        const completedJob = await complete({ ...txCtx, transactionHooks, output: null });
-        await client.createChain({ ...txCtx, transactionHooks,
+        const completedJob = await complete({ ...txCtx, txHooks, output: null });
+        await client.createChain({ ...txCtx, txHooks,
           typeName: "__queuert/cleanup", input: job.input,
           schedule: { afterMs: intervalMs },
           identity: { key: `__queuert/cleanup:${name}`, scope: "running" } });
@@ -148,11 +148,11 @@ const worker = await createInProcessWorker({
   processors: [createCleanupProcessors({ client }), myProcessors],
 });
 
-await withTransactionHooks((transactionHooks) =>
+await withTxHooks((txHooks) =>
   sql.begin((txSql) =>
     scheduleCleanup({
       sql: txSql,
-      transactionHooks,
+      txHooks,
       client,
       name: "main",
       retentionMs: 7 * DAY,

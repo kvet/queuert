@@ -9,7 +9,7 @@ import {
   createInProcessStateAdapter,
   type InProcessStateAdapter,
 } from "./state-adapter/state-adapter.in-process.ts";
-import { withTransactionHooks } from "./transaction-hooks.ts";
+import { withTxHooks } from "./tx-hooks/tx-hooks.ts";
 
 type Defs = {
   foo: { entry: true; input: { v: number }; output: { ok: true } };
@@ -45,9 +45,9 @@ describe("middleware ctx cannot shadow built-in handler keys", () => {
             observedSignalIsAbortSignal = typeof signal?.aborted === "boolean";
             observedJobHasId = typeof job?.id === "string";
             observedCompleteIsFn = typeof complete === "function";
-            return withTransactionHooks(async (transactionHooks) =>
+            return withTxHooks(async (txHooks) =>
               stateAdapter.withTransaction(async (txCtx) =>
-                complete({ ...txCtx, transactionHooks, output: { ok: true as const } }),
+                complete({ ...txCtx, txHooks, output: { ok: true as const } }),
               ),
             );
           },
@@ -59,9 +59,9 @@ describe("middleware ctx cannot shadow built-in handler keys", () => {
       client,
       processors: registry,
     });
-    const chain = await withTransactionHooks(async (transactionHooks) =>
+    const chain = await withTxHooks(async (txHooks) =>
       stateAdapter.withTransaction(async (txCtx) =>
-        client.createChain({ ...txCtx, transactionHooks, typeName: "foo", input: { v: 1 } }),
+        client.createChain({ ...txCtx, txHooks, typeName: "foo", input: { v: 1 } }),
       ),
     );
     const stop = await worker.start();
@@ -108,9 +108,9 @@ describe("middleware ctx flows into the handler through wrapHandler", () => {
           attemptHandler: async ({ tenant, source, complete }) => {
             events.push("handler");
             observedCtx = { tenant, source };
-            return withTransactionHooks(async (transactionHooks) =>
+            return withTxHooks(async (txHooks) =>
               stateAdapter.withTransaction(async (txCtx) =>
-                complete({ ...txCtx, transactionHooks, output: { ok: true as const } }),
+                complete({ ...txCtx, txHooks, output: { ok: true as const } }),
               ),
             );
           },
@@ -122,9 +122,9 @@ describe("middleware ctx flows into the handler through wrapHandler", () => {
       client,
       processors: registry,
     });
-    const chain = await withTransactionHooks(async (transactionHooks) =>
+    const chain = await withTxHooks(async (txHooks) =>
       stateAdapter.withTransaction(async (txCtx) =>
-        client.createChain({ ...txCtx, transactionHooks, typeName: "foo", input: { v: 1 } }),
+        client.createChain({ ...txCtx, txHooks, typeName: "foo", input: { v: 1 } }),
       ),
     );
     const stop = await worker.start();
@@ -182,10 +182,8 @@ describe("registry-level attemptMiddleware — runtime per-slice isolation", () 
       processors: {
         a: {
           attemptHandler: async ({ complete }) =>
-            withTransactionHooks(async (transactionHooks) =>
-              sa.withTransaction(async (txCtx) =>
-                complete({ ...txCtx, transactionHooks, output: null }),
-              ),
+            withTxHooks(async (txHooks) =>
+              sa.withTransaction(async (txCtx) => complete({ ...txCtx, txHooks, output: null })),
             ),
         },
       },
@@ -197,10 +195,8 @@ describe("registry-level attemptMiddleware — runtime per-slice isolation", () 
       processors: {
         b: {
           attemptHandler: async ({ complete }) =>
-            withTransactionHooks(async (transactionHooks) =>
-              sa.withTransaction(async (txCtx) =>
-                complete({ ...txCtx, transactionHooks, output: null }),
-              ),
+            withTxHooks(async (txHooks) =>
+              sa.withTransaction(async (txCtx) => complete({ ...txCtx, txHooks, output: null })),
             ),
         },
       },
@@ -211,14 +207,14 @@ describe("registry-level attemptMiddleware — runtime per-slice isolation", () 
       processors: [aProcessors, bProcessors],
     });
 
-    const chainA = await withTransactionHooks(async (transactionHooks) =>
+    const chainA = await withTxHooks(async (txHooks) =>
       sa.withTransaction(async (txCtx) =>
-        abClient.createChain({ ...txCtx, transactionHooks, typeName: "a", input: {} }),
+        abClient.createChain({ ...txCtx, txHooks, typeName: "a", input: {} }),
       ),
     );
-    const chainB = await withTransactionHooks(async (transactionHooks) =>
+    const chainB = await withTxHooks(async (txHooks) =>
       sa.withTransaction(async (txCtx) =>
-        abClient.createChain({ ...txCtx, transactionHooks, typeName: "b", input: {} }),
+        abClient.createChain({ ...txCtx, txHooks, typeName: "b", input: {} }),
       ),
     );
     const stop = await worker.start();

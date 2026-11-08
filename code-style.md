@@ -28,6 +28,7 @@ This document describes code style conventions, testing patterns, and project or
 - **Justify every lint suppression**: An `oxlint-disable*` comment always carries the rule name and a `--` reason explaining why the rule is wrong here, e.g. `// oxlint-disable-next-line typescript/only-throw-error -- re-throwing caught error`. A bare disable is not acceptable; if the reason is long, point at the file or spec that demonstrates it.
 - **TypeScript runs on Node's type stripping**: Examples, benchmarks, and spawned scripts run as `node file.ts` with no loader, so source must be erasable TypeScript (no enums, namespaces, or constructor parameter properties; `erasableSyntaxOnly` enforces this). Relative imports name the real file with its `.ts` extension (`./client.ts`, not `./client.js`). Import types with `import type { A, B }` when every specifier is a type and with inline `type` when mixed with values (`import { createClient, type Client }`); `verbatimModuleSyntax` and `typescript/no-import-type-side-effects` enforce this. Child processes are spawned with `process.execPath`, not `"node"`, so they inherit the running Node.
 - **Symbol descriptions prefixed with `queuert.`**: All internal `Symbol()` instances must use a `"queuert."` prefix in their description string, e.g. `Symbol("queuert.helpers")`. This makes symbols identifiable in debugging and avoids collisions.
+- **Synchronous callbacks return `void`**: A callback whose result is ignored and that must not be async (`txHooks.onRollback` callbacks) is typed `() => void`, and its TSDoc says it runs synchronously and a returned promise is not awaited. `typescript/no-misused-promises` flags an async function passed there. Don't type it `() => undefined` to reject async functions: it also rejects callbacks that return a value by accident and standalone helpers inferred as `() => void`.
 
 ## Naming Conventions
 
@@ -62,7 +63,8 @@ Once a concept has a word, that word is the only one for it — everywhere, incl
 
 - **Job and chain state**: a job is `blocked`, `pending`, `running`, or `completed`; a chain is `running` or `completed`. These are persisted in the schema and exposed on the public API. No `open`/`closed`, `active`/`done`, `queued`/`finished`.
 - **`head` and `tail`**: a chain's ends are its `head` and `tail` job, never "first"/"last" or "root"/"leaf".
-- **`attempt`**: a job has `attempt`s, not "tries" or "runs".
+- **`attempt`**: a job has `attempt`s, not "tries" or "runs"; "try" is reserved for transaction callbacks (below).
+- **`try`**: one run of a transaction callback that a driver or loop may rerun; `txHooks.retryBoundary` separates tries. It is never called an "attempt", which is a job's.
 - **`reschedule`**: a job is `reschedule`d, not "requeued" or "retried".
 - **`continueWith`**: a chain `continueWith`s, not "chains to" or "forwards".
 - **`entry`**: an `entry` job type is one that can start a chain; don't reuse "entry" for list items or other inputs.
@@ -73,7 +75,7 @@ Once a concept has a word, that word is the only one for it — everywhere, incl
 
 ### Type Naming Scheme
 
-- **`New<Entity>` for something a caller asks to create**: `NewJob` (`typeName`, `id?`, `input`, `schedule?`, `blockers`) is the job passed to `continueWith`; `NewChain` adds `deduplication?` and is what `createChain` and the `createChains` items accept. Method option types build on these (`NewChain & { transactionHooks } & tx context`) instead of restating their fields.
+- **`New<Entity>` for something a caller asks to create**: `NewJob` (`typeName`, `id?`, `input`, `schedule?`, `blockers`) is the job passed to `continueWith`; `NewChain` adds `deduplication?` and is what `createChain` and the `createChains` items accept. Method option types build on these (`NewChain & { txHooks } & tx context`) instead of restating their fields.
 - **`Any<Name>` only for the type-erased counterpart of a generic public type**, used by internal code that handles every job type and so cannot be generic over the definitions (`AnyJob`, `AnyChain`, `AnyNewJob`, `AnyAttemptMiddleware`). Define it next to the generic type it mirrors, never inside the implementation file that consumes it. A union over all type names is not erased — express it with the generic type and its default type parameter (`NewChain<TJobId, TJobTypeDefinitions>`), not a separate `Any…` name.
 - **Define a shape once.** When the same fields appear in a client method, a handler outcome and the implementation, extract the generic type plus its `Any…` counterpart rather than keeping parallel copies.
 
@@ -186,6 +188,7 @@ export const createClient = async ({
 - Test the relevant outcomes of an attempt: work before the transaction, `complete` committed, `complete` rolled back, and errors before and after the commit
 - Prefer descriptive test names that match what's being tested
 - To enable verbose logging when debugging tests, run with `DEBUG=1` environment variable
+- **Sync and async variants have matching specs**: When a module ships a synchronous and an asynchronous variant of the same API (`tx-hooks.spec.ts` and `tx-hooks.sync.spec.ts`), their spec files mirror each other: the same `describe` blocks in the same order and a test with the same name for every behavior both variants share. Only behavior one variant alone has (awaiting async flushes, rejecting a callback that returns a promise) gets a test in just that file. A change that adds or edits a shared-behavior test updates both files.
 - **Import `expect` from `vitest`**: Use the module-level `import { expect } from "vitest"` and don't destructure `expect` from the test context. Tests here run sequentially and use no snapshots, so the test-scoped `expect` adds nothing but a line in every parameter list. Reach for the context `expect` only in a test that runs with `.concurrent` or asserts snapshots, where Vitest needs it to attribute results to the right test. The conformance `expect` in `packages/core/src/conformance/expect.ts` is a separate runner-agnostic shim and is unaffected.
 
 ### Test Suites

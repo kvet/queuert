@@ -14,11 +14,11 @@ Jobs can be scheduled to start at a future time using the `schedule` option. The
 <Tabs>
   <TabItem label="Relative delay (afterMs)">
     ```ts
-    await withTransactionHooks(async (transactionHooks) =>
+    await withTxHooks(async (txHooks) =>
       stateProvider.withTransaction(async (txCtx) =>
         client.createChain({
           ...txCtx,
-          transactionHooks,
+          txHooks,
           typeName: "send-reminder",
           input: { userId: "123" },
           schedule: { afterMs: 5 * 60 * 1000 }, // 5 minutes from now
@@ -29,11 +29,11 @@ Jobs can be scheduled to start at a future time using the `schedule` option. The
   </TabItem>
   <TabItem label="Specific time (at)">
     ```ts
-    await withTransactionHooks(async (transactionHooks) =>
+    await withTxHooks(async (txHooks) =>
       stateProvider.withTransaction(async (txCtx) =>
         client.createChain({
           ...txCtx,
-          transactionHooks,
+          txHooks,
           typeName: "send-reminder",
           input: { userId: "123" },
           schedule: { at: scheduledDate },
@@ -47,11 +47,11 @@ Jobs can be scheduled to start at a future time using the `schedule` option. The
 The same `schedule` option works with `continueWith` for deferred continuations:
 
 ```ts
-return withTransactionHooks(async (transactionHooks) =>
+return withTxHooks(async (txHooks) =>
   stateProvider.withTransaction(async (txCtx) =>
     complete({
       ...txCtx,
-      transactionHooks,
+      txHooks,
       continueWith: {
         typeName: "follow-up",
         input: { userId: job.input.userId },
@@ -78,9 +78,9 @@ attemptHandler: async ({ job, complete }) => {
 
   if (response.status === 429) {
     const retryAfter = parseInt(response.headers.get("Retry-After") || "60", 10);
-    return withTransactionHooks(async (transactionHooks) =>
+    return withTxHooks(async (txHooks) =>
       stateProvider.withTransaction(async (txCtx) =>
-        complete({ ...txCtx, transactionHooks, reschedule: { afterMs: retryAfter * 1000 } }),
+        complete({ ...txCtx, txHooks, reschedule: { afterMs: retryAfter * 1000 } }),
       ),
     );
   }
@@ -90,9 +90,9 @@ attemptHandler: async ({ job, complete }) => {
   }
 
   const data = await response.json();
-  return withTransactionHooks(async (transactionHooks) =>
+  return withTxHooks(async (txHooks) =>
     stateProvider.withTransaction(async (txCtx) =>
-      complete({ ...txCtx, transactionHooks, output: { data } }),
+      complete({ ...txCtx, txHooks, output: { data } }),
     ),
   );
 },
@@ -101,8 +101,8 @@ attemptHandler: async ({ job, complete }) => {
 Because `complete({ reschedule })` is a normal outcome — not an error — the job keeps a clean slate: no `lastAttemptError`, no failure event, no error span. The attempt counter still increments, so backoff reflects total attempts if the job later fails for real.
 
 ```ts
-complete({ ...txCtx, transactionHooks, reschedule: { afterMs: 30_000 } }); // 30 seconds from now
-complete({ ...txCtx, transactionHooks, reschedule: { at: new Date("2026-06-15T09:00:00Z") } }); // specific time
+complete({ ...txCtx, txHooks, reschedule: { afterMs: 30_000 } }); // 30 seconds from now
+complete({ ...txCtx, txHooks, reschedule: { at: new Date("2026-06-15T09:00:00Z") } }); // specific time
 ```
 
 ## Rescheduling Pending Jobs
@@ -111,18 +111,18 @@ A scheduled job is just a pending job with a future `scheduledAt`. Use `reschedu
 
 ```ts
 // Run now
-await withTransactionHooks(async (transactionHooks) =>
+await withTxHooks(async (txHooks) =>
   stateProvider.withTransaction(async (txCtx) =>
-    client.rescheduleJob({ ...txCtx, transactionHooks, id: jobId }),
+    client.rescheduleJob({ ...txCtx, txHooks, id: jobId }),
   ),
 );
 
 // Push 30 minutes out
-await withTransactionHooks(async (transactionHooks) =>
+await withTxHooks(async (txHooks) =>
   stateProvider.withTransaction(async (txCtx) =>
     client.rescheduleJob({
       ...txCtx,
-      transactionHooks,
+      txHooks,
       id: jobId,
       schedule: { afterMs: 30 * 60 * 1000 },
     }),
@@ -132,7 +132,7 @@ await withTransactionHooks(async (transactionHooks) =>
 
 `rescheduleJob` throws `JobNotFoundError` if the job does not exist and `JobNotReschedulableError` if it is not `pending` (blocked, running or completed).
 
-`rescheduleJobs` validates atomically — if any id in the batch is missing or not pending, the entire call fails and no job is rescheduled. Both methods are mutating and require `transactionHooks` + a transaction context.
+`rescheduleJobs` validates atomically — if any id in the batch is missing or not pending, the entire call fails and no job is rescheduled. Both methods are mutating and require `txHooks` + a transaction context.
 
 ## Recurring Jobs
 
@@ -152,18 +152,18 @@ const jobTypes = defineJobTypes<{
   attemptHandler: async ({ job, complete }) => {
     await sendDigestEmail(job.input.userId);
 
-    return withTransactionHooks(async (transactionHooks) =>
+    return withTxHooks(async (txHooks) =>
       stateProvider.withTransaction(async (txCtx) => {
         const completedJob = await complete({
           ...txCtx,
-          transactionHooks,
+          txHooks,
           output: { sentAt: new Date().toISOString() },
         });
 
         if (userStillSubscribed) {
           await client.createChain({
             ...txCtx,
-            transactionHooks,
+            txHooks,
             typeName: 'daily-digest',
             input: { userId: job.input.userId },
             schedule: { afterMs: 24 * 60 * 60 * 1000 }, // Run again tomorrow
@@ -180,4 +180,4 @@ const jobTypes = defineJobTypes<{
 }
 ```
 
-See [examples/showcase-scheduling](https://github.com/kvet/queuert/tree/main/examples/showcase-scheduling) for a complete working example demonstrating recurring jobs, deduplication, trigger-early, and rescheduling from a handler. See also [Deduplication](../deduplication/) and [Transaction Hooks](../transaction-hooks/).
+See [examples/showcase-scheduling](https://github.com/kvet/queuert/tree/main/examples/showcase-scheduling) for a complete working example demonstrating recurring jobs, deduplication, trigger-early, and rescheduling from a handler. See also [Deduplication](../deduplication/) and [Tx Hooks](../tx-hooks/).

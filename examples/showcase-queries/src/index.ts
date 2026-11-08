@@ -26,7 +26,7 @@ import {
   createInProcessWorker,
   createProcessors,
   defineJobTypes,
-  withTransactionHooks,
+  withTxHooks,
 } from "queuert";
 
 const jobTypes = defineJobTypes<{
@@ -89,10 +89,8 @@ const worker = await createInProcessWorker({
       "validate-input": {
         attemptHandler: async ({ job, complete }) => {
           console.log(`[validate-input] Validating order ${job.input.orderId}`);
-          return withTransactionHooks(async (transactionHooks) =>
-            sql.begin(async (txSql) =>
-              complete({ txSql, transactionHooks, output: { valid: true } }),
-            ),
+          return withTxHooks(async (txHooks) =>
+            sql.begin(async (txSql) => complete({ txSql, txHooks, output: { valid: true } })),
           );
         },
       },
@@ -100,10 +98,8 @@ const worker = await createInProcessWorker({
       "check-stock": {
         attemptHandler: async ({ job, complete }) => {
           console.log(`[check-stock] Checking stock for order ${job.input.orderId}`);
-          return withTransactionHooks(async (transactionHooks) =>
-            sql.begin(async (txSql) =>
-              complete({ txSql, transactionHooks, output: { available: true } }),
-            ),
+          return withTxHooks(async (txHooks) =>
+            sql.begin(async (txSql) => complete({ txSql, txHooks, output: { available: true } })),
           );
         },
       },
@@ -111,11 +107,11 @@ const worker = await createInProcessWorker({
       "process-order": {
         attemptHandler: async ({ job, complete }) => {
           console.log(`[process-order] Processing order ${job.input.orderId}`);
-          return withTransactionHooks(async (transactionHooks) =>
+          return withTxHooks(async (txHooks) =>
             sql.begin(async (txSql) =>
               complete({
                 txSql,
-                transactionHooks,
+                txHooks,
                 continueWith: {
                   typeName: "ship-order",
                   input: { orderId: job.input.orderId, total: 99.99 },
@@ -129,11 +125,11 @@ const worker = await createInProcessWorker({
       "ship-order": {
         attemptHandler: async ({ job, complete }) => {
           console.log(`[ship-order] Shipping order ${job.input.orderId}`);
-          return withTransactionHooks(async (transactionHooks) =>
+          return withTxHooks(async (txHooks) =>
             sql.begin(async (txSql) =>
               complete({
                 txSql,
-                transactionHooks,
+                txHooks,
                 output: { trackingId: `TRACK-${job.input.orderId}` },
               }),
             ),
@@ -144,9 +140,9 @@ const worker = await createInProcessWorker({
       "send-notification": {
         attemptHandler: async ({ job, complete }) => {
           console.log(`[send-notification] Sending to ${job.input.userId}`);
-          return withTransactionHooks(async (transactionHooks) =>
+          return withTxHooks(async (txHooks) =>
             sql.begin(async (txSql) =>
-              complete({ txSql, transactionHooks, output: { sentAt: new Date().toISOString() } }),
+              complete({ txSql, txHooks, output: { sentAt: new Date().toISOString() } }),
             ),
           );
         },
@@ -158,36 +154,35 @@ const worker = await createInProcessWorker({
 const stopWorker = await worker.start();
 
 // Create test data: an order workflow with blockers + some notifications
-const [validateChain, _stockChain, orderChain] = await withTransactionHooks(
-  async (transactionHooks) =>
-    sql.begin(async (txSql) => {
-      const [validate, stock] = await client.createChains({
-        txSql,
-        transactionHooks,
-        items: [
-          {
-            typeName: "validate-input",
-            input: { orderId: "ORD-001", items: ["widget", "gadget"] },
-          },
-          { typeName: "check-stock", input: { orderId: "ORD-001", items: ["widget", "gadget"] } },
-        ],
-      });
-      const order = await client.createChain({
-        txSql,
-        transactionHooks,
-        typeName: "process-order",
-        input: { orderId: "ORD-001" },
-        blockers: [validate, stock],
-      });
-      return [validate, stock, order] as const;
-    }),
+const [validateChain, _stockChain, orderChain] = await withTxHooks(async (txHooks) =>
+  sql.begin(async (txSql) => {
+    const [validate, stock] = await client.createChains({
+      txSql,
+      txHooks,
+      items: [
+        {
+          typeName: "validate-input",
+          input: { orderId: "ORD-001", items: ["widget", "gadget"] },
+        },
+        { typeName: "check-stock", input: { orderId: "ORD-001", items: ["widget", "gadget"] } },
+      ],
+    });
+    const order = await client.createChain({
+      txSql,
+      txHooks,
+      typeName: "process-order",
+      input: { orderId: "ORD-001" },
+      blockers: [validate, stock],
+    });
+    return [validate, stock, order] as const;
+  }),
 );
 
-const notifyChains = await withTransactionHooks(async (transactionHooks) =>
+const notifyChains = await withTxHooks(async (txHooks) =>
   sql.begin(async (txSql) =>
     client.createChains({
       txSql,
-      transactionHooks,
+      txHooks,
       items: [
         { typeName: "send-notification", input: { userId: "alice", message: "Order placed" } },
         { typeName: "send-notification", input: { userId: "bob", message: "Welcome aboard" } },

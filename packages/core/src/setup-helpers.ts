@@ -1,8 +1,9 @@
 import type { JobTypes } from "./job-types/job-types.ts";
 import { wrapJobTypesWithLogging } from "./job-types/job-types.wrapper.logging.ts";
-import { createNoopNotifyAdapter } from "./notify-adapter/notify-adapter.noop.ts";
 import type { NotifyAdapter } from "./notify-adapter/notify-adapter.ts";
 import { wrapNotifyAdapterWithLogging } from "./notify-adapter/notify-adapter.wrapper.logging.ts";
+import { createNoopNotifyHelper } from "./notify-adapter/notify-helper.noop.ts";
+import { type NotifyHelper, createNotifyHelper } from "./notify-adapter/notify-helper.ts";
 import type { Log } from "./observability-adapter/log.ts";
 import { createNoopObservabilityAdapter } from "./observability-adapter/observability-adapter.noop.ts";
 import type { ObservabilityAdapter } from "./observability-adapter/observability-adapter.ts";
@@ -27,7 +28,7 @@ export const createHelpers = ({
   log?: Log;
 }): {
   stateAdapter: StateAdapter<any, any, any>;
-  notifyAdapter: NotifyAdapter;
+  notifyHelper: NotifyHelper;
   observabilityHelper: ObservabilityHelper;
   jobTypes: JobTypes;
 } => {
@@ -37,12 +38,14 @@ export const createHelpers = ({
     stateAdapter: stateAdapterOption,
     observabilityHelper,
   });
-  const notifyAdapter = notifyAdapterOption
-    ? wrapNotifyAdapterWithLogging({
-        notifyAdapter: notifyAdapterOption,
-        observabilityHelper,
+  const notifyHelper = notifyAdapterOption
+    ? createNotifyHelper({
+        adapter: wrapNotifyAdapterWithLogging({
+          notifyAdapter: notifyAdapterOption,
+          observabilityHelper,
+        }),
       })
-    : createNoopNotifyAdapter();
+    : createNoopNotifyHelper();
   const jobTypes = wrapJobTypesWithLogging({
     jobTypes: jobTypesOption,
     observabilityHelper,
@@ -50,7 +53,7 @@ export const createHelpers = ({
 
   return {
     stateAdapter,
-    notifyAdapter,
+    notifyHelper,
     observabilityHelper,
     jobTypes,
   };

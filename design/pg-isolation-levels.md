@@ -123,7 +123,7 @@ Migrations touch only Queuert's tables and run once per deploy, so the pin takes
 
 A 40001 or 40P01 raised in a transaction passed to `complete` fails the attempt like any other error, and the job is rescheduled with backoff. Client methods throw it to the caller. Retrying is the caller's concern and is documented. Different user transactions may run at different levels.
 
-A caller that retries a transaction needs fresh `transactionHooks` for each try, because a `complete` that succeeded in a rolled-back try refuses to run again with the same hooks. A retry loop inside `withTxHooks` wraps each try in `txHooks.perTry`; see `design/tx-hooks.md`.
+A `complete` that succeeded in a rolled-back try refuses to run again with the same hooks, so a caller that retries a transaction either opens fresh `txHooks` for each try (a retry loop outside `withTxHooks`) or wraps each try in `txHooks.retryBoundary` (a retry loop inside it).
 
 ### SQLite and in-process
 
@@ -221,7 +221,7 @@ The release therefore requires every 0.17 process to stop before `003` runs, and
 - Docs: the "Isolation level" section of the PostgreSQL integration page states the following:
   - READ COMMITTED, REPEATABLE READ and SERIALIZABLE are supported for every transaction, as a session default or per transaction, including mixed levels.
   - Migrations always run at READ COMMITTED.
-  - Transactions passed to Queuert can raise 40001/40P01 at the stricter levels and should be retried by the caller, with fresh `transactionHooks`.
+  - Transactions passed to Queuert can raise 40001/40P01 at the stricter levels and should be retried by the caller, with fresh `txHooks` or inside `txHooks.retryBoundary`.
   - Queuert retries its own.
   - Contention costs: attaching many dependents to one blocker, and acquisition with many workers at the stricter levels, with the READ COMMITTED pool default as the way out.
 - The schema reference lists the two columns.

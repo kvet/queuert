@@ -1,4 +1,4 @@
-import { createAsyncRwLock } from "@queuert/helpers";
+import { createAsyncRwLock, createLatch } from "@queuert/helpers";
 
 import type { DeduplicationOptions } from "../entities/deduplication.ts";
 import type { OrderDirection, Page, PageParams } from "../entities/pagination.ts";
@@ -681,23 +681,19 @@ export const createInProcessStateAdapter = async ({
   const { countCap } = config;
   const idx = new JobIndex();
   const lock = createAsyncRwLock();
-  let closed = false;
-
-  const assertOpen = (): void => {
-    if (closed) throw new Error("StateAdapter is closed");
-  };
+  const closed = createLatch("StateAdapter is closed");
 
   const withWriteLock = async <T>(txCtx: InProcessContext | undefined, fn: () => T): Promise<T> => {
     if (txCtx?.inTransaction) return fn();
     using _h = await lock.acquireWrite();
-    assertOpen();
+    closed.throwIfTripped();
     return fn();
   };
 
   const withReadLock = async <T>(txCtx: InProcessContext | undefined, fn: () => T): Promise<T> => {
     if (txCtx?.inTransaction) return fn();
     using _h = await lock.acquireRead();
-    assertOpen();
+    closed.throwIfTripped();
     return fn();
   };
 
@@ -764,7 +760,7 @@ export const createInProcessStateAdapter = async ({
 
     withTransaction: async (fn) => {
       using _h = await lock.acquireWrite();
-      assertOpen();
+      closed.throwIfTripped();
       const journal: JournalEntry[] = [];
       const txCtx: InProcessContext = { inTransaction: true, journal };
       try {
@@ -1462,8 +1458,7 @@ export const createInProcessStateAdapter = async ({
 
     close: async () => {
       using _h = await lock.acquireWrite();
-      if (closed) return;
-      closed = true;
+      if (!closed.trip()) return;
       idx.clear();
     },
   };

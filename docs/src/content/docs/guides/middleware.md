@@ -40,11 +40,11 @@ Inside the handler, `traceId` is typed:
 
 ```ts
 attemptHandler: async ({ traceId, complete }) => {
-  return withTransactionHooks(async (transactionHooks) =>
+  return withTxHooks(async (txHooks) =>
     sql.begin(async (txSql) =>
       complete({
         txSql,
-        transactionHooks,
+        txHooks,
         output: {/* ... */},
       }),
     ),
@@ -72,11 +72,11 @@ The handler receives the injected ctx directly:
 
 ```ts
 attemptHandler: async ({ user, complete }) => {
-  return withTransactionHooks(async (transactionHooks) =>
+  return withTxHooks(async (txHooks) =>
     sql.begin(async (txSql) =>
       complete({
         txSql,
-        transactionHooks,
+        txHooks,
         output: {/* ... */},
       }),
     ),
@@ -104,12 +104,12 @@ const audit: AttemptMiddleware<
 Because the helper writes through the handler's transaction, its rows commit with the job — and roll back with it if `complete` throws or the transaction fails.
 
 ```ts
-return withTransactionHooks(async (transactionHooks) =>
+return withTxHooks(async (txHooks) =>
   sql.begin(async (txSql) => {
     await audit(txSql, "order-placed");
     return complete({
       txSql,
-      transactionHooks,
+      txHooks,
       output: {/* ... */},
     });
   }),

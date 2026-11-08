@@ -40,8 +40,8 @@ export const schedulingTestSuite = ({ it }: { it: TestAPI<TestSuiteContext> }): 
         processors: {
           test: {
             attemptHandler: async ({ job, complete }) => {
-              return withTransaction(async (txCtx, transactionHooks) =>
-                complete({ ...txCtx, transactionHooks, output: { result: job.input.value * 2 } }),
+              return withTransaction(async (txCtx, txHooks) =>
+                complete({ ...txCtx, txHooks, output: { result: job.input.value * 2 } }),
               );
             },
           },
@@ -49,10 +49,10 @@ export const schedulingTestSuite = ({ it }: { it: TestAPI<TestSuiteContext> }): 
       }),
     });
 
-    const chain = await withTransaction(async (txCtx, transactionHooks) =>
+    const chain = await withTransaction(async (txCtx, txHooks) =>
       client.createChain({
         ...txCtx,
-        transactionHooks,
+        txHooks,
         typeName: "test",
         input: { value: 1 },
         schedule: { afterMs: 300 },
@@ -104,8 +104,8 @@ export const schedulingTestSuite = ({ it }: { it: TestAPI<TestSuiteContext> }): 
         processors: {
           test: {
             attemptHandler: async ({ job, complete }) => {
-              return withTransaction(async (txCtx, transactionHooks) =>
-                complete({ ...txCtx, transactionHooks, output: { result: job.input.value * 2 } }),
+              return withTransaction(async (txCtx, txHooks) =>
+                complete({ ...txCtx, txHooks, output: { result: job.input.value * 2 } }),
               );
             },
           },
@@ -113,10 +113,10 @@ export const schedulingTestSuite = ({ it }: { it: TestAPI<TestSuiteContext> }): 
       }),
     });
 
-    const chain = await withTransaction(async (txCtx, transactionHooks) =>
+    const chain = await withTransaction(async (txCtx, txHooks) =>
       client.createChain({
         ...txCtx,
-        transactionHooks,
+        txHooks,
         typeName: "test",
         input: { value: 1 },
         schedule: { at: new Date(Date.now() + 300) },
@@ -176,10 +176,10 @@ export const schedulingTestSuite = ({ it }: { it: TestAPI<TestSuiteContext> }): 
           first: {
             attemptHandler: async ({ complete }) => {
               try {
-                return await withTransaction(async (txCtx, transactionHooks) =>
+                return await withTransaction(async (txCtx, txHooks) =>
                   complete({
                     ...txCtx,
-                    transactionHooks,
+                    txHooks,
                     continueWith: {
                       typeName: "second",
                       input: { continued: true },
@@ -194,8 +194,8 @@ export const schedulingTestSuite = ({ it }: { it: TestAPI<TestSuiteContext> }): 
           },
           second: {
             attemptHandler: async ({ complete }) => {
-              return withTransaction(async (txCtx, transactionHooks) =>
-                complete({ ...txCtx, transactionHooks, output: { result: "done" } }),
+              return withTransaction(async (txCtx, txHooks) =>
+                complete({ ...txCtx, txHooks, output: { result: "done" } }),
               );
             },
           },
@@ -203,10 +203,10 @@ export const schedulingTestSuite = ({ it }: { it: TestAPI<TestSuiteContext> }): 
       }),
     });
 
-    const chain = await withTransaction(async (txCtx, transactionHooks) =>
+    const chain = await withTransaction(async (txCtx, txHooks) =>
       client.createChain({
         ...txCtx,
-        transactionHooks,
+        txHooks,
         typeName: "first",
         input: { value: 1 },
       }),
@@ -267,10 +267,10 @@ export const schedulingTestSuite = ({ it }: { it: TestAPI<TestSuiteContext> }): 
           first: {
             attemptHandler: async ({ complete }) => {
               try {
-                return await withTransaction(async (txCtx, transactionHooks) =>
+                return await withTransaction(async (txCtx, txHooks) =>
                   complete({
                     ...txCtx,
-                    transactionHooks,
+                    txHooks,
                     continueWith: {
                       typeName: "second",
                       input: { continued: true },
@@ -285,8 +285,8 @@ export const schedulingTestSuite = ({ it }: { it: TestAPI<TestSuiteContext> }): 
           },
           second: {
             attemptHandler: async ({ complete }) => {
-              return withTransaction(async (txCtx, transactionHooks) =>
-                complete({ ...txCtx, transactionHooks, output: { result: "done" } }),
+              return withTransaction(async (txCtx, txHooks) =>
+                complete({ ...txCtx, txHooks, output: { result: "done" } }),
               );
             },
           },
@@ -294,10 +294,10 @@ export const schedulingTestSuite = ({ it }: { it: TestAPI<TestSuiteContext> }): 
       }),
     });
 
-    const chain = await withTransaction(async (txCtx, transactionHooks) =>
+    const chain = await withTransaction(async (txCtx, txHooks) =>
       client.createChain({
         ...txCtx,
-        transactionHooks,
+        txHooks,
         typeName: "first",
         input: { value: 1 },
       }),
@@ -360,12 +360,12 @@ export const schedulingTestSuite = ({ it }: { it: TestAPI<TestSuiteContext> }): 
               }
               if (attemptCount === 1) {
                 firstAttemptDone.resolve();
-                return withTransaction(async (txCtx, transactionHooks) =>
-                  complete({ ...txCtx, transactionHooks, reschedule: { afterMs: 300 } }),
+                return withTransaction(async (txCtx, txHooks) =>
+                  complete({ ...txCtx, txHooks, reschedule: { afterMs: 300 } }),
                 );
               }
-              return withTransaction(async (txCtx, transactionHooks) =>
-                complete({ ...txCtx, transactionHooks, output: { result: job.input.value * 2 } }),
+              return withTransaction(async (txCtx, txHooks) =>
+                complete({ ...txCtx, txHooks, output: { result: job.input.value * 2 } }),
               );
             },
           },
@@ -373,10 +373,10 @@ export const schedulingTestSuite = ({ it }: { it: TestAPI<TestSuiteContext> }): 
       }),
     });
 
-    const chain = await withTransaction(async (txCtx, transactionHooks) =>
+    const chain = await withTransaction(async (txCtx, txHooks) =>
       client.createChain({
         ...txCtx,
-        transactionHooks,
+        txHooks,
         typeName: "test",
         input: { value: 1 },
       }),
@@ -435,13 +435,13 @@ export const schedulingTestSuite = ({ it }: { it: TestAPI<TestSuiteContext> }): 
         processors: {
           recurring: {
             attemptHandler: async ({ complete }) => {
-              return withTransaction(async (txCtx, transactionHooks) => {
+              return withTransaction(async (txCtx, txHooks) => {
                 completionCount++;
-                const completedJob = await complete({ ...txCtx, transactionHooks, output: null });
+                const completedJob = await complete({ ...txCtx, txHooks, output: null });
                 if (completionCount < 3) {
                   const next = await client.createChain({
                     ...txCtx,
-                    transactionHooks,
+                    txHooks,
                     typeName: "recurring",
                     input: null,
                     deduplication: { key: "recurring", scope: "running" },
@@ -458,10 +458,10 @@ export const schedulingTestSuite = ({ it }: { it: TestAPI<TestSuiteContext> }): 
       }),
     });
 
-    await withTransaction(async (txCtx, transactionHooks) =>
+    await withTransaction(async (txCtx, txHooks) =>
       client.createChain({
         ...txCtx,
-        transactionHooks,
+        txHooks,
         typeName: "recurring",
         input: null,
         deduplication: { key: "recurring", scope: "running" },
@@ -523,16 +523,16 @@ export const schedulingTestSuite = ({ it }: { it: TestAPI<TestSuiteContext> }): 
               }
               if (attemptCount === 1) {
                 firstAttemptDone.resolve();
-                return withTransaction(async (txCtx, transactionHooks) =>
+                return withTransaction(async (txCtx, txHooks) =>
                   complete({
                     ...txCtx,
-                    transactionHooks,
+                    txHooks,
                     reschedule: { at: new Date(Date.now() + 300) },
                   }),
                 );
               }
-              return withTransaction(async (txCtx, transactionHooks) =>
-                complete({ ...txCtx, transactionHooks, output: { result: job.input.value * 2 } }),
+              return withTransaction(async (txCtx, txHooks) =>
+                complete({ ...txCtx, txHooks, output: { result: job.input.value * 2 } }),
               );
             },
           },
@@ -540,10 +540,10 @@ export const schedulingTestSuite = ({ it }: { it: TestAPI<TestSuiteContext> }): 
       }),
     });
 
-    const chain = await withTransaction(async (txCtx, transactionHooks) =>
+    const chain = await withTransaction(async (txCtx, txHooks) =>
       client.createChain({
         ...txCtx,
-        transactionHooks,
+        txHooks,
         typeName: "test",
         input: { value: 1 },
       }),
@@ -593,8 +593,8 @@ export const schedulingTestSuite = ({ it }: { it: TestAPI<TestSuiteContext> }): 
         processors: {
           test: {
             attemptHandler: async ({ complete }) =>
-              withTransaction(async (txCtx, transactionHooks) =>
-                complete({ ...txCtx, transactionHooks, output: null }),
+              withTransaction(async (txCtx, txHooks) =>
+                complete({ ...txCtx, txHooks, output: null }),
               ),
           },
         },
@@ -603,10 +603,10 @@ export const schedulingTestSuite = ({ it }: { it: TestAPI<TestSuiteContext> }): 
 
     const past = new Date(Date.now() - 60 * 60 * 1000);
 
-    const chain = await withTransaction(async (txCtx, transactionHooks) =>
+    const chain = await withTransaction(async (txCtx, txHooks) =>
       client.createChain({
         ...txCtx,
-        transactionHooks,
+        txHooks,
         typeName: "test",
         input: null,
         schedule: { at: past },
@@ -654,28 +654,28 @@ export const schedulingTestSuite = ({ it }: { it: TestAPI<TestSuiteContext> }): 
         processors: {
           first: {
             attemptHandler: async ({ complete }) =>
-              withTransaction(async (txCtx, transactionHooks) =>
+              withTransaction(async (txCtx, txHooks) =>
                 complete({
                   ...txCtx,
-                  transactionHooks,
+                  txHooks,
                   continueWith: { typeName: "second", input: null, schedule: { at: past } },
                 }),
               ),
           },
           second: {
             attemptHandler: async ({ complete }) =>
-              withTransaction(async (txCtx, transactionHooks) =>
-                complete({ ...txCtx, transactionHooks, output: null }),
+              withTransaction(async (txCtx, txHooks) =>
+                complete({ ...txCtx, txHooks, output: null }),
               ),
           },
         },
       }),
     });
 
-    const chain = await withTransaction(async (txCtx, transactionHooks) =>
+    const chain = await withTransaction(async (txCtx, txHooks) =>
       client.createChain({
         ...txCtx,
-        transactionHooks,
+        txHooks,
         typeName: "first",
         input: null,
       }),
@@ -735,12 +735,12 @@ export const schedulingTestSuite = ({ it }: { it: TestAPI<TestSuiteContext> }): 
               }
               if (attempts === 1) {
                 firstAttemptDone.resolve();
-                return withTransaction(async (txCtx, transactionHooks) =>
-                  complete({ ...txCtx, transactionHooks, reschedule: { at: past } }),
+                return withTransaction(async (txCtx, txHooks) =>
+                  complete({ ...txCtx, txHooks, reschedule: { at: past } }),
                 );
               }
-              return withTransaction(async (txCtx, transactionHooks) =>
-                complete({ ...txCtx, transactionHooks, output: null }),
+              return withTransaction(async (txCtx, txHooks) =>
+                complete({ ...txCtx, txHooks, output: null }),
               );
             },
           },
@@ -748,10 +748,10 @@ export const schedulingTestSuite = ({ it }: { it: TestAPI<TestSuiteContext> }): 
       }),
     });
 
-    const chain = await withTransaction(async (txCtx, transactionHooks) =>
+    const chain = await withTransaction(async (txCtx, txHooks) =>
       client.createChain({
         ...txCtx,
-        transactionHooks,
+        txHooks,
         typeName: "test",
         input: null,
       }),

@@ -1,4 +1,4 @@
-import { createProcessors, withTransactionHooks } from "queuert";
+import { createProcessors, withTxHooks } from "queuert";
 
 import { sql } from "./adapters.ts";
 import { client } from "./client.ts";
@@ -15,11 +15,11 @@ export const orderProcessors = createProcessors({
           `[orders.create-order] User ${job.input.userId} ordered ${job.input.items.length} items ($${totalAmount.toFixed(2)})`,
         );
 
-        return withTransactionHooks(async (transactionHooks) =>
+        return withTxHooks(async (txHooks) =>
           sql.begin(async (txSql) => {
             await client.createChain({
               txSql,
-              transactionHooks,
+              txHooks,
               typeName: "notifications.send-notification",
               input: {
                 userId: job.input.userId,
@@ -30,7 +30,7 @@ export const orderProcessors = createProcessors({
 
             return complete({
               txSql,
-              transactionHooks,
+              txHooks,
               continueWith: {
                 typeName: "orders.fulfill-order",
                 input: { orderId: 1001, totalAmount },
@@ -47,11 +47,11 @@ export const orderProcessors = createProcessors({
           `[orders.fulfill-order] Fulfilling order #${job.input.orderId} ($${job.input.totalAmount.toFixed(2)})`,
         );
 
-        return withTransactionHooks(async (transactionHooks) =>
+        return withTxHooks(async (txHooks) =>
           sql.begin(async (txSql) =>
             complete({
               txSql,
-              transactionHooks,
+              txHooks,
               output: {
                 orderId: job.input.orderId,
                 fulfilledAt: new Date().toISOString(),
@@ -69,11 +69,11 @@ export const orderProcessors = createProcessors({
           `[orders.place-order] User ${job.input.userId} placed order ($${totalAmount.toFixed(2)})`,
         );
 
-        return withTransactionHooks(async (transactionHooks) =>
+        return withTxHooks(async (txHooks) =>
           sql.begin(async (txSql) => {
             const notifyChain = await client.createChain({
               txSql,
-              transactionHooks,
+              txHooks,
               typeName: "notifications.send-notification",
               input: {
                 userId: job.input.userId,
@@ -84,7 +84,7 @@ export const orderProcessors = createProcessors({
 
             return complete({
               txSql,
-              transactionHooks,
+              txHooks,
               continueWith: {
                 typeName: "orders.confirm-order",
                 input: { orderId: 2001, totalAmount },
@@ -103,11 +103,11 @@ export const orderProcessors = createProcessors({
           `[orders.confirm-order] Notification sent at ${notification.output.sentAt}, confirming order #${job.input.orderId}`,
         );
 
-        return withTransactionHooks(async (transactionHooks) =>
+        return withTxHooks(async (txHooks) =>
           sql.begin(async (txSql) =>
             complete({
               txSql,
-              transactionHooks,
+              txHooks,
               output: {
                 orderId: job.input.orderId,
                 confirmedAt: new Date().toISOString(),

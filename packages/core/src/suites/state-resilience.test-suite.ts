@@ -5,7 +5,7 @@ import { createClient } from "../client.ts";
 import { createInProcessWorker } from "../in-process-worker.ts";
 import { createProcessors } from "../job-type-processors/create-job-type-processors.ts";
 import { defineJobTypes } from "../job-types/define-job-types.ts";
-import { withTransactionHooks } from "../transaction-hooks.ts";
+import { withTxHooks } from "../tx-hooks/tx-hooks.ts";
 import type { TestSuiteContext } from "./spec-context.spec-helper.ts";
 
 export const stateResilienceTestSuite = ({ it }: { it: TestAPI<TestSuiteContext> }): void => {
@@ -68,11 +68,11 @@ export const stateResilienceTestSuite = ({ it }: { it: TestAPI<TestSuiteContext>
           processors: {
             test: {
               attemptHandler: async ({ job, complete }) =>
-                withTransactionHooks(async (transactionHooks) =>
+                withTxHooks(async (txHooks) =>
                   flakyStateAdapter.withTransaction(async (txCtx) =>
                     complete({
                       ...txCtx,
-                      transactionHooks,
+                      txHooks,
                       output: { result: job.input.value * 2 },
                     }),
                   ),
@@ -82,10 +82,10 @@ export const stateResilienceTestSuite = ({ it }: { it: TestAPI<TestSuiteContext>
         }),
       });
 
-      const chains = await withTransaction(async (txCtx, transactionHooks) =>
+      const chains = await withTransaction(async (txCtx, txHooks) =>
         client.createChains({
           ...txCtx,
-          transactionHooks,
+          txHooks,
           items: Array.from({ length: 20 }, (_, i) => ({
             typeName: "test",
             input: { value: i },
@@ -159,11 +159,11 @@ export const stateResilienceTestSuite = ({ it }: { it: TestAPI<TestSuiteContext>
           processors: {
             test: {
               attemptHandler: async ({ job, complete }) =>
-                withTransactionHooks(async (transactionHooks) =>
+                withTxHooks(async (txHooks) =>
                   flakyStateAdapter.withTransaction(async (txCtx) =>
                     complete({
                       ...txCtx,
-                      transactionHooks,
+                      txHooks,
                       output: { result: job.input.value * 2 },
                     }),
                   ),
@@ -173,10 +173,10 @@ export const stateResilienceTestSuite = ({ it }: { it: TestAPI<TestSuiteContext>
         }),
       });
 
-      const chains = await withTransaction(async (txCtx, transactionHooks) =>
+      const chains = await withTransaction(async (txCtx, txHooks) =>
         client.createChains({
           ...txCtx,
-          transactionHooks,
+          txHooks,
           items: Array.from({ length: 20 }, (_, i) => ({
             typeName: "test",
             input: { value: i },
@@ -256,11 +256,11 @@ export const stateResilienceTestSuite = ({ it }: { it: TestAPI<TestSuiteContext>
           processors: {
             test: {
               attemptHandler: async ({ job, complete }) =>
-                withTransactionHooks(async (transactionHooks) =>
+                withTxHooks(async (txHooks) =>
                   flakyStateAdapter.withTransaction(async (txCtx) =>
                     complete({
                       ...txCtx,
-                      transactionHooks,
+                      txHooks,
                       output: { result: job.input.value * 2 },
                     }),
                   ),
@@ -278,11 +278,11 @@ export const stateResilienceTestSuite = ({ it }: { it: TestAPI<TestSuiteContext>
           processors: {
             test: {
               attemptHandler: async ({ job, complete }) =>
-                withTransactionHooks(async (transactionHooks) =>
+                withTxHooks(async (txHooks) =>
                   flakyStateAdapter.withTransaction(async (txCtx) =>
                     complete({
                       ...txCtx,
-                      transactionHooks,
+                      txHooks,
                       output: { result: job.input.value * 2 },
                     }),
                   ),
@@ -292,10 +292,10 @@ export const stateResilienceTestSuite = ({ it }: { it: TestAPI<TestSuiteContext>
         }),
       });
 
-      const chains = await withTransaction(async (txCtx, transactionHooks) =>
+      const chains = await withTransaction(async (txCtx, txHooks) =>
         client.createChains({
           ...txCtx,
-          transactionHooks,
+          txHooks,
           items: Array.from({ length: 20 }, (_, i) => ({
             typeName: "test",
             input: { value: i },
@@ -366,11 +366,11 @@ export const stateResilienceTestSuite = ({ it }: { it: TestAPI<TestSuiteContext>
           processors: {
             test: {
               attemptHandler: async ({ job, complete }) =>
-                withTransactionHooks(async (transactionHooks) =>
+                withTxHooks(async (txHooks) =>
                   flakyDbStateAdapter.withTransaction(async (txCtx) =>
                     complete({
                       ...txCtx,
-                      transactionHooks,
+                      txHooks,
                       output: { result: job.input.value * 2 },
                     }),
                   ),
@@ -380,10 +380,10 @@ export const stateResilienceTestSuite = ({ it }: { it: TestAPI<TestSuiteContext>
         }),
       });
 
-      const chains = await withTransaction(async (txCtx, transactionHooks) =>
+      const chains = await withTransaction(async (txCtx, txHooks) =>
         client.createChains({
           ...txCtx,
-          transactionHooks,
+          txHooks,
           items: Array.from({ length: 20 }, (_, i) => ({
             typeName: "test",
             input: { value: i },
@@ -456,11 +456,11 @@ export const stateResilienceTestSuite = ({ it }: { it: TestAPI<TestSuiteContext>
           processors: {
             test: {
               attemptHandler: async ({ job, complete }) =>
-                withTransactionHooks(async (transactionHooks) =>
+                withTxHooks(async (txHooks) =>
                   flakyDbStateAdapter.withTransaction(async (txCtx) =>
                     complete({
                       ...txCtx,
-                      transactionHooks,
+                      txHooks,
                       output: { result: job.input.value * 2 },
                     }),
                   ),
@@ -470,10 +470,10 @@ export const stateResilienceTestSuite = ({ it }: { it: TestAPI<TestSuiteContext>
         }),
       });
 
-      const chains = await withTransaction(async (txCtx, transactionHooks) =>
+      const chains = await withTransaction(async (txCtx, txHooks) =>
         client.createChains({
           ...txCtx,
-          transactionHooks,
+          txHooks,
           items: Array.from({ length: 20 }, (_, i) => ({
             typeName: "test",
             input: { value: i },
@@ -552,11 +552,11 @@ export const stateResilienceTestSuite = ({ it }: { it: TestAPI<TestSuiteContext>
           processors: {
             test: {
               attemptHandler: async ({ job, complete }) =>
-                withTransactionHooks(async (transactionHooks) =>
+                withTxHooks(async (txHooks) =>
                   flakyDbStateAdapter.withTransaction(async (txCtx) =>
                     complete({
                       ...txCtx,
-                      transactionHooks,
+                      txHooks,
                       output: { result: job.input.value * 2 },
                     }),
                   ),
@@ -574,11 +574,11 @@ export const stateResilienceTestSuite = ({ it }: { it: TestAPI<TestSuiteContext>
           processors: {
             test: {
               attemptHandler: async ({ job, complete }) =>
-                withTransactionHooks(async (transactionHooks) =>
+                withTxHooks(async (txHooks) =>
                   flakyDbStateAdapter.withTransaction(async (txCtx) =>
                     complete({
                       ...txCtx,
-                      transactionHooks,
+                      txHooks,
                       output: { result: job.input.value * 2 },
                     }),
                   ),
@@ -588,10 +588,10 @@ export const stateResilienceTestSuite = ({ it }: { it: TestAPI<TestSuiteContext>
         }),
       });
 
-      const chains = await withTransaction(async (txCtx, transactionHooks) =>
+      const chains = await withTransaction(async (txCtx, txHooks) =>
         client.createChains({
           ...txCtx,
-          transactionHooks,
+          txHooks,
           items: Array.from({ length: 20 }, (_, i) => ({
             typeName: "test",
             input: { value: i },
@@ -657,24 +657,24 @@ export const stateResilienceTestSuite = ({ it }: { it: TestAPI<TestSuiteContext>
           processors: {
             test: {
               attemptHandler: async ({ complete }) =>
-                withTransaction(async (txCtx, transactionHooks) =>
-                  complete({ ...txCtx, transactionHooks, output: null }),
+                withTransaction(async (txCtx, txHooks) =>
+                  complete({ ...txCtx, txHooks, output: null }),
                 ),
             },
           },
         }),
       });
 
-      const firstChain = await withTransaction(async (txCtx, transactionHooks) =>
-        client.createChain({ ...txCtx, transactionHooks, typeName: "test", input: null }),
+      const firstChain = await withTransaction(async (txCtx, txHooks) =>
+        client.createChain({ ...txCtx, txHooks, typeName: "test", input: null }),
       );
 
       await withWorkers([await worker.start()], async () => {
         await client.awaitChain(firstChain, { pollIntervalMs: 100, timeoutMs: 5000 });
 
         failuresLeft = 1;
-        const secondChain = await withTransaction(async (txCtx, transactionHooks) =>
-          client.createChain({ ...txCtx, transactionHooks, typeName: "test", input: null }),
+        const secondChain = await withTransaction(async (txCtx, txHooks) =>
+          client.createChain({ ...txCtx, txHooks, typeName: "test", input: null }),
         );
         await client.awaitChain(secondChain, { pollIntervalMs: 100, timeoutMs: 5000 });
       });
@@ -732,8 +732,8 @@ export const stateResilienceTestSuite = ({ it }: { it: TestAPI<TestSuiteContext>
                 await sleep(Number.POSITIVE_INFINITY, { signal });
                 throw new Error("lease lost");
               }
-              return withTransaction(async (txCtx, transactionHooks) =>
-                complete({ ...txCtx, transactionHooks, output: null }),
+              return withTransaction(async (txCtx, txHooks) =>
+                complete({ ...txCtx, txHooks, output: null }),
               );
             },
           },
@@ -741,10 +741,10 @@ export const stateResilienceTestSuite = ({ it }: { it: TestAPI<TestSuiteContext>
       }),
     });
 
-    const chains = await withTransaction(async (txCtx, transactionHooks) =>
+    const chains = await withTransaction(async (txCtx, txHooks) =>
       client.createChains({
         ...txCtx,
-        transactionHooks,
+        txHooks,
         items: [
           { typeName: "test", input: null },
           { typeName: "test", input: null },

@@ -37,7 +37,7 @@ By default, Queuert operates silently. Enable logging with `createConsoleLog()` 
 
 Now that you understand the building blocks, follow the guides in order:
 
-1. **[Transaction Hooks](/queuert/guides/transaction-hooks/)** — How jobs are created inside database transactions (required for all usage)
+1. **[Tx Hooks](/queuert/guides/tx-hooks/)** — How jobs are created inside database transactions (required for all usage)
 2. **[Job Processing](/queuert/how-it-works/job-processing/)** — How an attempt runs and how `complete` commits its outcome in your transaction
 3. **[Chain Patterns](/queuert/guides/chain-patterns/)** — Linear chains, branching, loops, and go-to patterns
 

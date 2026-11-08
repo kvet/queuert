@@ -42,9 +42,9 @@ const jobTypes = defineJobTypes<{
 // In processor
 'create-subscription': {
   attemptHandler: async ({ job, complete }) => {
-    return withTransactionHooks(async (transactionHooks) => sql.begin(async (txSql) => {
+    return withTxHooks(async (txHooks) => sql.begin(async (txSql) => {
       const [sub] = await txSql`INSERT INTO subscriptions ... RETURNING id`;
-      return complete({ txSql, transactionHooks, continueWith: {
+      return complete({ txSql, txHooks, continueWith: {
         typeName: "activate-trial",
         input: { subscriptionId: sub.id, trialDays: 7 },
       }});
@@ -83,8 +83,8 @@ Jobs conditionally continue to different types: `trial-decision -> convert-to-pa
 'trial-decision': {
   attemptHandler: async ({ job, complete }) => {
     const shouldConvert = userWantsToConvert;
-    return withTransactionHooks(async (transactionHooks) => sql.begin(async (txSql) =>
-      complete({ txSql, transactionHooks, continueWith: {
+    return withTxHooks(async (txHooks) => sql.begin(async (txSql) =>
+      complete({ txSql, txHooks, continueWith: {
         typeName: shouldConvert ? "convert-to-paid" : "expire-trial",
         input: { subscriptionId: job.input.subscriptionId },
       }}),
@@ -120,14 +120,14 @@ const jobTypes = defineJobTypes<{
 'charge-billing': {
   attemptHandler: async ({ job, complete }) => {
     await chargePayment(job.input.subscriptionId);
-    return withTransactionHooks(async (transactionHooks) => sql.begin(async (txSql) => {
+    return withTxHooks(async (txHooks) => sql.begin(async (txSql) => {
       if (job.input.cycle < MAX_CYCLES) {
-        return complete({ txSql, transactionHooks, continueWith: {
+        return complete({ txSql, txHooks, continueWith: {
           typeName: "charge-billing",
           input: { subscriptionId: job.input.subscriptionId, cycle: job.input.cycle + 1 },
         }});
       }
-      return complete({ txSql, transactionHooks, output: { finalCycle: job.input.cycle, totalCharged: calculateTotal() } });
+      return complete({ txSql, txHooks, output: { finalCycle: job.input.cycle, totalCharged: calculateTotal() } });
     }));
   },
 },
@@ -163,14 +163,14 @@ const jobTypes = defineJobTypes<{
 // In processor - jump to cancel when max cycles reached
 'charge-billing': {
   attemptHandler: async ({ job, complete }) => {
-    return withTransactionHooks(async (transactionHooks) => sql.begin(async (txSql) => {
+    return withTxHooks(async (txHooks) => sql.begin(async (txSql) => {
       if (job.input.cycle >= MAX_CYCLES) {
-        return complete({ txSql, transactionHooks, continueWith: {
+        return complete({ txSql, txHooks, continueWith: {
           typeName: "cancel-subscription",
           input: { subscriptionId: job.input.subscriptionId, reason: "max_billing_cycles_reached" },
         }});
       }
-      return complete({ txSql, transactionHooks, continueWith: {
+      return complete({ txSql, txHooks, continueWith: {
         typeName: "charge-billing",
         input: { subscriptionId: job.input.subscriptionId, cycle: job.input.cycle + 1 },
       }});

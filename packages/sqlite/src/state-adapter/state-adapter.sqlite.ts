@@ -1,5 +1,6 @@
 import type { UUID } from "node:crypto";
 
+import { createLatch } from "@queuert/helpers";
 import {
   type DataType,
   type InferColumns,
@@ -652,7 +653,7 @@ export const createSqliteStateAdapter = async <
   validateSqlIdentifier(jobIdType, "jobIdType");
   validateSqlIdentifier(workerIdType, "workerIdType");
 
-  let closed = false;
+  const closed = createLatch();
 
   const config = resolveStateAdapterConfig<TJobId, TWorkerId>({
     generateJobId: generateJobIdOption,
@@ -2649,8 +2650,7 @@ ORDER BY w.key
     },
 
     close: async () => {
-      if (closed) return;
-      closed = true;
+      if (!closed.trip()) return;
       await stateProvider.close?.();
     },
   };

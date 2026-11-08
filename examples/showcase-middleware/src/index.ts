@@ -30,12 +30,12 @@ import { createPostgresJsStateProvider } from "example-state-postgres-postgres-j
 import postgres from "postgres";
 import {
   type AttemptMiddleware,
-  type TransactionHooks,
+  type TxHooks,
   createClient,
   createInProcessWorker,
   createProcessors,
   defineJobTypes,
-  withTransactionHooks,
+  withTxHooks,
 } from "queuert";
 
 const jobTypes = defineJobTypes<{
@@ -133,11 +133,10 @@ const tenantMiddleware: AttemptMiddleware<typeof stateAdapter, { tenant: Tenant 
   },
 };
 
-const meteringHookKey = Symbol("example.metering");
 const reportedUnits: string[] = [];
 
 type Meter = (
-  tx: { txSql: postgres.TransactionSql; transactionHooks: TransactionHooks },
+  tx: { txSql: postgres.TransactionSql; txHooks: TxHooks },
   unit: string,
   quantity: number,
 ) => Promise<void>;
@@ -150,7 +149,7 @@ type Meter = (
 const meteringMiddleware: AttemptMiddleware<typeof stateAdapter, { meter: Meter }> = {
   wrapHandler: async ({ job, next }) =>
     next({
-      meter: async ({ txSql, transactionHooks }, unit, quantity) => {
+      meter: async ({ txSql, txHooks }, unit, quantity) => {
         const inserted = await txSql`
           INSERT INTO usage_record (job_id, tenant_id, unit, quantity)
           VALUES (${job.id}, ${tenantIdOf(job)}, ${unit}, ${quantity})
@@ -161,20 +160,10 @@ const meteringMiddleware: AttemptMiddleware<typeof stateAdapter, { meter: Meter 
           console.log(`    · metering: ${unit} already billed by an earlier attempt`);
           return;
         }
-        const pending = transactionHooks.getOrInsert<string[]>(meteringHookKey, () => ({
-          state: [],
-          flush: (units) => {
-            reportedUnits.push(...units);
-            console.log(`    · metering: reported after commit — ${units.join(", ")}`);
-          },
-          checkpoint: (units) => {
-            const mark = units.length;
-            return () => {
-              units.length = mark;
-            };
-          },
-        }));
-        pending.push(unit);
+        txHooks.onCommit(() => {
+          reportedUnits.push(unit);
+          console.log(`    · metering: reported after commit — ${unit}`);
+        });
       },
     }),
 };
@@ -198,18 +187,18 @@ const worker = await createInProcessWorker({
           log(`issuing invoice for ${tenant.name}`);
 
           const invoiceId = `inv-${job.id.slice(0, 8)}`;
-          return withTransactionHooks(async (transactionHooks) =>
+          return withTxHooks(async (txHooks) =>
             sql.begin(async (txSql) => {
               await txSql`
                 INSERT INTO invoice (id, tenant_id, amount_cents)
                 VALUES (${invoiceId}, ${tenant.id}, ${job.input.amountCents})
                 ON CONFLICT (id) DO NOTHING
               `;
-              await meter({ txSql, transactionHooks }, "invoice.issued", 1);
+              await meter({ txSql, txHooks }, "invoice.issued", 1);
 
               return complete({
                 txSql,
-                transactionHooks,
+                txHooks,
                 continueWith: {
                   typeName: "send-receipt",
                   input: { tenantId: tenant.id, invoiceId },
@@ -225,20 +214,20 @@ const worker = await createInProcessWorker({
           // Rendering is billed in its own transaction: the work is already done,
           // so the unit survives a later failure. Delivery is billed in the transaction
           // that calls `complete` — only a delivered receipt is billable.
-          await withTransactionHooks(async (transactionHooks) =>
-            sql.begin(async (txSql) => meter({ txSql, transactionHooks }, "receipt.rendered", 1)),
+          await withTxHooks(async (txHooks) =>
+            sql.begin(async (txSql) => meter({ txSql, txHooks }, "receipt.rendered", 1)),
           );
 
           log(`delivering receipt to ${tenant.billingEmail}`);
 
-          return withTransactionHooks(async (transactionHooks) =>
+          return withTxHooks(async (txHooks) =>
             sql.begin(async (txSql) => {
-              await meter({ txSql, transactionHooks }, "receipt.delivered", 1);
+              await meter({ txSql, txHooks }, "receipt.delivered", 1);
               if (job.attempt === 1) {
                 log("smtp gateway unavailable — rolling back and retrying");
                 throw new Error("smtp gateway unavailable");
               }
-              return complete({ txSql, transactionHooks, output: { delivered: true } });
+              return complete({ txSql, txHooks, output: { delivered: true } });
             }),
           );
         },
@@ -250,11 +239,11 @@ const worker = await createInProcessWorker({
 const stopWorker = await worker.start();
 
 console.log("--- issuing an invoice for tenant acme ---");
-const chain = await withTransactionHooks(async (transactionHooks) =>
+const chain = await withTxHooks(async (txHooks) =>
   sql.begin(async (txSql) =>
     client.createChain({
       txSql,
-      transactionHooks,
+      txHooks,
       typeName: "issue-invoice",
       input: { tenantId: "acme", amountCents: 9900 },
     }),

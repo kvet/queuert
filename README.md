@@ -36,13 +36,13 @@ Start the chain _inside_ your DB transaction. If the transaction rolls back, the
 ```ts
 const client = await createClient({ stateAdapter, jobTypes });
 
-await withTransactionHooks(async (transactionHooks) =>
+await withTxHooks(async (txHooks) =>
   db.transaction(async (tx) => {
     const user = await tx.users.create({ name: "Alice", email: "alice@example.com" });
 
     await client.createChain({
       tx,
-      transactionHooks,
+      txHooks,
       typeName: "provision-account",
       input: { userId: user.id },
       //         ↑ wrong shape here is a compile error
@@ -64,11 +64,11 @@ const worker = await createInProcessWorker({
         attemptHandler: async ({ job, complete }) => {
           const accountId = await provisionAccount(job.input.userId);
 
-          return withTransactionHooks(async (transactionHooks) =>
+          return withTxHooks(async (txHooks) =>
             db.transaction(async (tx) =>
               complete({
                 tx,
-                transactionHooks,
+                txHooks,
                 continueWith: {
                   typeName: "send-welcome-email",
                   input: { userId: job.input.userId, accountId },
@@ -138,7 +138,7 @@ npm install @queuert/otel
 
 - [Getting Started](https://kvet.github.io/queuert/getting-started/introduction/)
 - [Chain Patterns](https://kvet.github.io/queuert/guides/chain-patterns/)
-- [Transaction Hooks](https://kvet.github.io/queuert/guides/transaction-hooks/)
+- [Tx Hooks](https://kvet.github.io/queuert/guides/tx-hooks/)
 - [Job Blockers](https://kvet.github.io/queuert/guides/job-blockers/)
 - [Comparison with other libraries](https://kvet.github.io/queuert/comparison/)
 - [Benchmarks](https://kvet.github.io/queuert/benchmarks/)

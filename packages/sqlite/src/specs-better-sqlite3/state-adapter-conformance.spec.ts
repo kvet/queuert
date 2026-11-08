@@ -9,7 +9,7 @@ import {
   createInProcessWorker,
   createProcessors,
   defineJobTypes,
-  withTransactionHooks,
+  withTxHooks,
 } from "queuert";
 import { stateAdapterConformanceTestSuite, withWorkers } from "queuert/testing";
 import { describe, expectTypeOf, it, vi } from "vitest";
@@ -122,10 +122,10 @@ typeInferenceIt("infers custom ID types through the full stack", async ({ db }) 
 
             await withTransaction(async (db) => fence({ db }));
 
-            return withTransactionHooks(async (transactionHooks) =>
+            return withTxHooks(async (txHooks) =>
               withTransaction(async (db) => {
                 await fence({ db });
-                return complete({ db, transactionHooks, output: { bar: 42 } });
+                return complete({ db, txHooks, output: { bar: 42 } });
               }),
             );
           },
@@ -134,11 +134,11 @@ typeInferenceIt("infers custom ID types through the full stack", async ({ db }) 
     }),
   });
 
-  const chain = await withTransactionHooks(async (transactionHooks) =>
+  const chain = await withTxHooks(async (txHooks) =>
     withTransaction(async (db) =>
       client.createChain({
         db,
-        transactionHooks,
+        txHooks,
         typeName: "test",
         input: { foo: "hello" },
       }),

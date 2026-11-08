@@ -6,7 +6,7 @@ import {
   createInProcessWorker,
   createProcessors,
   defineJobTypes,
-  withTransactionHooks,
+  withTxHooks,
 } from "queuert";
 
 import { createKnexSqliteStateProvider } from "./provider.ts";
@@ -72,9 +72,11 @@ const worker = await createInProcessWorker({
 
           // Knex holds its single SQLite connection for the whole transaction, so the
           // worker's own statements cannot run inside it.
-          return withTransactionHooks(async (transactionHooks) =>
-            knex.transaction(async (trx) =>
-              complete({ trx, transactionHooks, output: { sentAt: new Date().toISOString() } }),
+          return withTxHooks(async (txHooks) =>
+            knex.transaction(
+              async (trx) =>
+                complete({ trx, txHooks, output: { sentAt: new Date().toISOString() } }),
+              { doNotRejectOnRollback: false },
             ),
           );
         },
@@ -87,20 +89,23 @@ const stopWorker = await worker.start();
 
 // Register a new user and queue welcome email atomically
 // #region create-chain
-const chain = await withTransactionHooks(async (transactionHooks) =>
-  knex.transaction(async (trx) => {
-    const [user] = await trx<{ id: number; name: string; email: string }>("users")
-      .insert({ name: "Alice", email: "alice@example.com" })
-      .returning(["id"]);
+const chain = await withTxHooks(async (txHooks) =>
+  knex.transaction(
+    async (trx) => {
+      const [user] = await trx<{ id: number; name: string; email: string }>("users")
+        .insert({ name: "Alice", email: "alice@example.com" })
+        .returning(["id"]);
 
-    // Queue welcome email - if user creation fails, no email job is created
-    return client.createChain({
-      trx,
-      transactionHooks,
-      typeName: "send_welcome_email",
-      input: { userId: user.id },
-    });
-  }),
+      // Queue welcome email - if user creation fails, no email job is created
+      return client.createChain({
+        trx,
+        txHooks,
+        typeName: "send_welcome_email",
+        input: { userId: user.id },
+      });
+    },
+    { doNotRejectOnRollback: false },
+  ),
 );
 // #endregion
 

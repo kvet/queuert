@@ -1,0 +1,188 @@
+---
+title: Tx Hooks
+description: Buffer side effects during database transactions.
+sidebar:
+  order: 1
+---
+
+import { Tabs, TabItem, Aside } from "@astrojs/starlight/components";
+import { Arrow, Diagram, Flow, Group, Node, Rows } from "../../../components/diagram";
+
+`withTxHooks` buffers side effects (like notify events) during a transaction and flushes them only after the callback returns successfully. On error, all buffered side effects are discarded.
+
+<Tabs>
+  <TabItem label="Callback (recommended)">
+    Pass a callback to `withTxHooks`. Flush and discard are managed automatically — no
+    manual cleanup needed.
+
+    ```ts
+    await withTxHooks(async (txHooks) =>
+      sql.begin(async (txSql) => {
+        await client.createChain({ txSql, txHooks, typeName: "send-email", input });
+        // If the transaction rolls back, no notifications are sent
+      }),
+    );
+    ```
+
+  </TabItem>
+  <TabItem label="Manual">
+    Use `createTxHooks` directly when your database client uses explicit
+    `BEGIN`/`COMMIT`/`ROLLBACK` rather than a callback-style transaction.
+
+    <Aside type="caution">
+      You are responsible for calling `flush()` after a successful commit and `discard()` on error.
+    </Aside>
+
+    ```ts
+    const { txHooks, flush, discard } = createTxHooks();
+    const connection = await db.connect();
+    try {
+      await connection.query("BEGIN");
+      const result = await client.createChain({
+        connection,
+        txHooks,
+        typeName: "send-email",
+        input,
+      });
+      await connection.query("COMMIT");
+      await flush(); // Side effects fire only after commit
+      return result;
+    } catch (error) {
+      await connection.query("ROLLBACK").catch(() => {});
+      discard(); // Side effects discarded on error
+      throw error;
+    } finally {
+      connection.release();
+    }
+    ```
+
+  </TabItem>
+</Tabs>
+
+## How It Works
+
+<Diagram label="During the transaction, hooks buffer side effects; on commit they flush, on rollback they are discarded">
+  <Flow>
+    <Group title="transaction" dashed>
+      <Flow>
+        <Node>BEGIN</Node>
+        <Arrow />
+        <Node sub={"registers commit\ncallbacks"}>client.createChain(…)</Node>
+      </Flow>
+    </Group>
+    <Rows spine columns="minmax(6rem, auto) auto">
+      <Flow>
+        <Arrow label="COMMIT" tone="green" />
+        <Node tone="green" variant="solid" sub="side effects fire">flush()</Node>
+      </Flow>
+      <Flow>
+        <Arrow label="ROLLBACK" tone="red" />
+        <Node variant="ghost" sub="nothing leaks">discard()</Node>
+      </Flow>
+    </Rows>
+  </Flow>
+</Diagram>
+
+`TxHooks` knows nothing about Queuert itself. Queuert registers its own notifications and observability events on it, and your code can register side effects the same way:
+
+```ts
+await withTxHooks(async (txHooks) =>
+  db.transaction(async (tx) => {
+    const invoice = await tx.invoices.insert(data);
+    txHooks.onCommit(() => metrics.increment("invoice.issued"));
+    txHooks.onRollback(() => uploads.release(invoice.pdfUploadId));
+  }),
+);
+```
+
+`onCommit` callbacks run after the outer callback completes successfully. They start in registration order and run concurrently; `flush` awaits every returned promise and rethrows the first error once all of them have run. If the callback throws, the commit callbacks are dropped and the `onRollback` callbacks run instead, newest first. Rollback callbacks must be synchronous, because they also run when a savepoint or a `retryBoundary` try rolls back.
+
+One `TxHooks` instance serves one transaction: once it is flushed or discarded, registering another callback throws, so a call that reuses it fails instead of buffering side effects that never run.
+
+## Drivers that rerun the callback
+
+Some drivers rerun the transaction callback after a transient error, such as MongoDB's `session.withTransaction` and Mongoose's `connection.transaction`, and so does a retry loop placed inside `withTxHooks`. Every try then shares one `txHooks`, so side effects buffered by a rolled-back try flush after the successful one. Wrap the callback in `txHooks.retryBoundary`:
+
+```ts
+await withTxHooks(async (txHooks) =>
+  session.withTransaction(
+    txHooks.retryBoundary(async () => {
+      await orders.insertOne(order, { session });
+      await client.createChain({ session, txHooks, typeName: "send-receipt", input });
+    }),
+  ),
+);
+```
+
+Each call after the first rolls back what the previous try registered, then runs the callback with the driver's arguments. A try can fail after the callback returned, for example a serialization failure at COMMIT, so the rollback happens when the driver calls the callback again rather than when it throws. Callbacks registered before the first try are kept. The failed try's commit callbacks are dropped and its rollback callbacks run. A retry loop placed outside `withTxHooks`, `retry(() => withTxHooks(...))`, needs no wrapper, because every try gets its own instance.
+
+## A resolved transaction counts as committed
+
+`withTxHooks` and `retryBoundary` treat a callback that resolves as committed. A driver whose transaction resolves after a rollback makes the hooks flush for writes that never committed. Knex does this by default: a bare `trx.rollback()` inside `knex.transaction(cb)` resolves with `undefined`. Pass `{ doNotRejectOnRollback: false }` to every `knex.transaction` that uses `txHooks`, including nested `trx.transaction(cb)` savepoints, so a bare `trx.rollback()` rejects:
+
+```ts
+await withTxHooks(async (txHooks) =>
+  knex.transaction(
+    async (trx) => {
+      await client.createChain({ trx, txHooks, typeName: "send-email", input });
+    },
+    { doNotRejectOnRollback: false },
+  ),
+);
+```
+
+Rolling back by throwing, or with `trx.rollback(error)` and an `Error`, rejects at either setting.
+
+## Savepoints
+
+`TxHooks` supports savepoints for partial rollback of buffered side effects. This is useful when a sub-operation within a transaction may fail without invalidating the entire transaction.
+
+<Tabs>
+  <TabItem label="Callback (recommended)">
+    `withSavepoint` runs a function and automatically rolls back its callbacks on error:
+
+    ```ts
+    await txHooks.withSavepoint(async (txHooks) => {
+      // buffer side effects here
+      // if this throws, only side effects buffered inside this callback are rolled back
+    });
+    ```
+
+  </TabItem>
+  <TabItem label="Manual">
+    `createSavepoint` returns a handle for fine-grained control:
+
+    ```ts
+    const sp = txHooks.createSavepoint();
+    try {
+      // buffer side effects
+      sp.release(); // keep changes
+    } catch {
+      sp.rollback(); // discard changes since the savepoint
+    }
+    ```
+
+  </TabItem>
+</Tabs>
+
+<Diagram label="A rolled-back savepoint drops the side effects buffered inside it: after commit, only buffers A and C flush">
+  <Flow direction="column">
+    <Group title="transaction" dashed>
+      <Flow>
+        <Node sub="kept">buffer A</Node>
+        <Arrow />
+        <Group title="savepoint" tone="red" dashed>
+          <Node variant="ghost" sub="rolled back">buffer B</Node>
+        </Group>
+        <Arrow />
+        <Node sub="kept">buffer C</Node>
+      </Flow>
+    </Group>
+    <Arrow label="COMMIT" tone="green" />
+    <Node tone="green" variant="solid" sub="only A and C fire">flush()</Node>
+  </Flow>
+</Diagram>
+
+Every callback belongs to the innermost savepoint open when it was registered. Rolling a savepoint back drops the commit callbacks registered since it was created and runs the rollback callbacks registered since, newest first; a rollback callback that throws does not stop the others. Releasing a savepoint hands its callbacks to the enclosing scope. As in the database, rolling back a savepoint also releases every savepoint created after it, so rolling one of those back afterwards does nothing.
+
+`withTxHooks` manages this lifecycle automatically: it creates the `TxHooks` instance, passes it to the callback, and calls flush on success or discard on error. `createTxHooks` exposes the same lifecycle for manual control -- the caller is responsible for calling `flush()` after commit and `discard()` on error.

@@ -44,12 +44,12 @@ const jobTypes = defineJobTypes<{
   };
 }>();
 
-// Start with blockers (transactionHooks required — see Transaction Hooks guide)
-await withTransactionHooks(async (transactionHooks) =>
+// Start with blockers (txHooks required — see Tx Hooks guide)
+await withTxHooks(async (txHooks) =>
   stateProvider.withTransaction(async (txCtx) => {
     const fetchBlockers = await client.createChains({
       ...txCtx,
-      transactionHooks,
+      txHooks,
       items: [
         { typeName: "fetch-data", input: { url: "/a" } },
         { typeName: "fetch-data", input: { url: "/b" } },
@@ -57,7 +57,7 @@ await withTransactionHooks(async (transactionHooks) =>
     });
     await client.createChain({
       ...txCtx,
-      transactionHooks,
+      txHooks,
       typeName: "process-all",
       input: { ids: ["a", "b", "c"] },
       blockers: fetchBlockers,
@@ -75,8 +75,8 @@ const worker = await createInProcessWorker({
       "process-all": {
         attemptHandler: async ({ job, complete }) => {
           const results = job.blockers.map((b) => b.output.data);
-          return withTransactionHooks(async (transactionHooks) =>
-            sql.begin(async (txSql) => complete({ txSql, transactionHooks, output: { results } })),
+          return withTxHooks(async (txHooks) =>
+            sql.begin(async (txSql) => complete({ txSql, txHooks, output: { results } })),
           );
         },
       },
@@ -98,7 +98,7 @@ const [order] = await txSql`
 
 await client.createChain({
   txSql,
-  transactionHooks,
+  txHooks,
   typeName: "ship-order",
   input: { orderId: order.id },
   blockers: order.status === "awaiting_payment" ? [{ id: order.payment_chain_id }] : [],
@@ -115,4 +115,4 @@ The first example uses **nominal references** — `{ typeName: "fetch-data" }`. 
 
 A single job may declare at most **100** blocker chains by default. Declaring more throws [`BlockerLimitExceededError`](/queuert/api/core/classes/blockerlimitexceedederror/) before any state is written. The limit belongs to the state adapter — pass `maxBlockersPerJob` to `createPgStateAdapter`, `createSqliteStateAdapter`, or `createInProcessStateAdapter` to raise or lower it. Keep it bounded: the blocker model is built for fan-in of a bounded set of dependencies, not millions per job.
 
-See [examples/showcase-blockers](https://github.com/kvet/queuert/tree/main/examples/showcase-blockers) for a complete working example demonstrating fan-out/fan-in, fixed blocker slots, and blockers by ID. See also [Transaction Hooks](../transaction-hooks/) and [Chain Patterns](../chain-patterns/).
+See [examples/showcase-blockers](https://github.com/kvet/queuert/tree/main/examples/showcase-blockers) for a complete working example demonstrating fan-out/fan-in, fixed blocker slots, and blockers by ID. See also [Tx Hooks](../tx-hooks/) and [Chain Patterns](../chain-patterns/).

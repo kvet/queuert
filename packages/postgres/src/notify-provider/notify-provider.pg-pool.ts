@@ -1,3 +1,4 @@
+import { createLatch } from "@queuert/helpers";
 import type { Pool, PoolClient } from "pg";
 
 import type { PgNotifyProvider } from "./notify-provider.pg.ts";
@@ -5,7 +6,7 @@ import type { PgNotifyProvider } from "./notify-provider.pg.ts";
 export const createPgPoolNotifyProvider = ({ pool }: { pool: Pool }): PgNotifyProvider => {
   let listenClient: PoolClient | null = null;
   let connectingPromise: Promise<PoolClient> | null = null;
-  let closed = false;
+  const closed = createLatch("Provider is closed");
 
   const handlers = new Map<string, (message: string) => void>();
   let queryQueue: Promise<void> = Promise.resolve();
@@ -28,9 +29,7 @@ export const createPgPoolNotifyProvider = ({ pool }: { pool: Pool }): PgNotifyPr
   };
 
   const ensureListenClient = async (): Promise<PoolClient> => {
-    if (closed) {
-      throw new Error("Provider is closed");
-    }
+    closed.throwIfTripped();
 
     if (listenClient) {
       return listenClient;
@@ -43,9 +42,9 @@ export const createPgPoolNotifyProvider = ({ pool }: { pool: Pool }): PgNotifyPr
     connectingPromise = pool.connect().then((client) => {
       connectingPromise = null;
 
-      if (closed) {
+      if (closed.tripped) {
         client.release();
-        throw new Error("Provider is closed");
+        closed.throwIfTripped();
       }
 
       listenClient = client;
@@ -61,7 +60,7 @@ export const createPgPoolNotifyProvider = ({ pool }: { pool: Pool }): PgNotifyPr
 
   return {
     publish: async (channel, messages) => {
-      if (closed) throw new Error("Provider is closed");
+      closed.throwIfTripped();
       const client = await pool.connect();
       try {
         await client.query("SELECT pg_notify($1, message) FROM unnest($2::text[]) AS message", [
@@ -91,7 +90,7 @@ export const createPgPoolNotifyProvider = ({ pool }: { pool: Pool }): PgNotifyPr
     },
 
     close: async () => {
-      closed = true;
+      closed.trip();
       releaseListenClient();
       handlers.clear();
     },

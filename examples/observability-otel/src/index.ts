@@ -19,7 +19,7 @@ import {
   createInProcessWorker,
   createProcessors,
   defineJobTypes,
-  withTransactionHooks,
+  withTxHooks,
 } from "queuert";
 
 import { flush, observabilityAdapter, shutdown } from "./observability.ts";
@@ -165,11 +165,11 @@ const worker = await createInProcessWorker({
       greet: {
         attemptHandler: async ({ job, complete }) => {
           await new Promise((r) => setTimeout(r, 20));
-          return withTransactionHooks(async (transactionHooks) =>
+          return withTxHooks(async (txHooks) =>
             stateAdapter.withTransaction(async (ctx) =>
               complete({
                 ...ctx,
-                transactionHooks,
+                txHooks,
                 output: {
                   greeting: `Hello, ${job.input.name}!`,
                 },
@@ -183,11 +183,11 @@ const worker = await createInProcessWorker({
       "order:validate": {
         attemptHandler: async ({ job, complete }) => {
           await new Promise((r) => setTimeout(r, 50));
-          return withTransactionHooks(async (transactionHooks) =>
+          return withTxHooks(async (txHooks) =>
             stateAdapter.withTransaction(async (ctx) =>
               complete({
                 ...ctx,
-                transactionHooks,
+                txHooks,
                 continueWith: {
                   typeName: "order:process",
                   input: { orderId: job.input.orderId, validated: true },
@@ -200,11 +200,11 @@ const worker = await createInProcessWorker({
       "order:process": {
         attemptHandler: async ({ job, complete }) => {
           await new Promise((r) => setTimeout(r, 100));
-          return withTransactionHooks(async (transactionHooks) =>
+          return withTxHooks(async (txHooks) =>
             stateAdapter.withTransaction(async (ctx) =>
               complete({
                 ...ctx,
-                transactionHooks,
+                txHooks,
                 continueWith: {
                   typeName: "order:complete",
                   input: { orderId: job.input.orderId, processed: true },
@@ -217,11 +217,11 @@ const worker = await createInProcessWorker({
       "order:complete": {
         attemptHandler: async ({ job, complete }) => {
           await new Promise((r) => setTimeout(r, 30));
-          return withTransactionHooks(async (transactionHooks) =>
+          return withTxHooks(async (txHooks) =>
             stateAdapter.withTransaction(async (ctx) =>
               complete({
                 ...ctx,
-                transactionHooks,
+                txHooks,
                 output: {
                   orderId: job.input.orderId,
                   status: "completed",
@@ -236,11 +236,11 @@ const worker = await createInProcessWorker({
       "fetch-user": {
         attemptHandler: async ({ job, complete }) => {
           await new Promise((r) => setTimeout(r, 80));
-          return withTransactionHooks(async (transactionHooks) =>
+          return withTxHooks(async (txHooks) =>
             stateAdapter.withTransaction(async (ctx) =>
               complete({
                 ...ctx,
-                transactionHooks,
+                txHooks,
                 output: {
                   userId: job.input.userId,
                   name: "Alice",
@@ -253,11 +253,11 @@ const worker = await createInProcessWorker({
       "fetch-permissions": {
         attemptHandler: async ({ job, complete }) => {
           await new Promise((r) => setTimeout(r, 60));
-          return withTransactionHooks(async (transactionHooks) =>
+          return withTxHooks(async (txHooks) =>
             stateAdapter.withTransaction(async (ctx) =>
               complete({
                 ...ctx,
-                transactionHooks,
+                txHooks,
                 output: {
                   userId: job.input.userId,
                   permissions: ["read", "write"],
@@ -271,11 +271,11 @@ const worker = await createInProcessWorker({
         attemptHandler: async ({ job, complete }) => {
           const [userBlocker, permBlocker] = job.blockers;
           await new Promise((r) => setTimeout(r, 40));
-          return withTransactionHooks(async (transactionHooks) =>
+          return withTxHooks(async (txHooks) =>
             stateAdapter.withTransaction(async (ctx) =>
               complete({
                 ...ctx,
-                transactionHooks,
+                txHooks,
                 output: {
                   taskId: job.input.taskId,
                   result: `${userBlocker.output.name} has ${permBlocker.output.permissions.join(", ")}`,
@@ -296,9 +296,9 @@ const worker = await createInProcessWorker({
               return item * 2;
             });
           }
-          return withTransactionHooks(async (transactionHooks) =>
+          return withTxHooks(async (txHooks) =>
             stateAdapter.withTransaction(async (ctx) =>
-              complete({ ...ctx, transactionHooks, output: { total } }),
+              complete({ ...ctx, txHooks, output: { total } }),
             ),
           );
         },
@@ -310,9 +310,9 @@ const worker = await createInProcessWorker({
           if (job.input.shouldFail && job.attempt < 2) {
             throw new Error("Simulated failure");
           }
-          return withTransactionHooks(async (transactionHooks) =>
+          return withTxHooks(async (txHooks) =>
             stateAdapter.withTransaction(async (ctx) =>
-              complete({ ...ctx, transactionHooks, output: { success: true as const } }),
+              complete({ ...ctx, txHooks, output: { success: true as const } }),
             ),
           );
         },
@@ -331,9 +331,9 @@ console.log("Optional: Run `pnpm tui` in another terminal to view traces\n");
 // Scenario 1: Single Job
 console.log("--- Scenario 1: Single Job ---");
 console.log("One chain, one job, one attempt. Simplest trace structure.\n");
-const greetChain = await withTransactionHooks(async (transactionHooks) =>
+const greetChain = await withTxHooks(async (txHooks) =>
   stateAdapter.withTransaction(async (ctx) =>
-    client.createChain({ ...ctx, transactionHooks, typeName: "greet", input: { name: "World" } }),
+    client.createChain({ ...ctx, txHooks, typeName: "greet", input: { name: "World" } }),
   ),
 );
 const greetResult = await client.awaitChain(greetChain, { timeoutMs: 5000 });
@@ -342,11 +342,11 @@ console.log("Result:", greetResult.output);
 // Scenario 2: Continuations
 console.log("\n--- Scenario 2: Continuations ---");
 console.log("validate → process → complete. Chain span contains 3 sequential job spans.\n");
-const orderChain = await withTransactionHooks(async (transactionHooks) =>
+const orderChain = await withTxHooks(async (txHooks) =>
   stateAdapter.withTransaction(async (ctx) =>
     client.createChain({
       ...ctx,
-      transactionHooks,
+      txHooks,
       typeName: "order:validate",
       input: { orderId: "ORD-123" },
     }),
@@ -358,23 +358,23 @@ console.log("Result:", orderResult.output);
 // Scenario 3: Blockers (fan-out)
 console.log("\n--- Scenario 3: Blockers ---");
 console.log("Two blockers run in parallel, main job waits. Traces linked across chains.\n");
-const blockerChain = await withTransactionHooks(async (transactionHooks) =>
+const blockerChain = await withTxHooks(async (txHooks) =>
   stateAdapter.withTransaction(async (ctx) => {
     const userBlocker = await client.createChain({
       ...ctx,
-      transactionHooks,
+      txHooks,
       typeName: "fetch-user",
       input: { userId: "user-1" },
     });
     const permBlocker = await client.createChain({
       ...ctx,
-      transactionHooks,
+      txHooks,
       typeName: "fetch-permissions",
       input: { userId: "user-1" },
     });
     return client.createChain({
       ...ctx,
-      transactionHooks,
+      txHooks,
       typeName: "process-with-blockers",
       input: { taskId: "TASK-456" },
       blockers: [userBlocker, permBlocker],
@@ -389,11 +389,11 @@ console.log("\n--- Scenario 4: Batched Work ---");
 console.log(
   "Handler runs one transaction per batch, then finishes in its own. One attempt span, no child spans.\n",
 );
-const batchChain = await withTransactionHooks(async (transactionHooks) =>
+const batchChain = await withTxHooks(async (txHooks) =>
   stateAdapter.withTransaction(async (ctx) =>
     client.createChain({
       ...ctx,
-      transactionHooks,
+      txHooks,
       typeName: "batch-process",
       input: { items: [10, 20] },
     }),
@@ -405,11 +405,11 @@ console.log("Result:", batchResult.output);
 // Scenario 5: Retries
 console.log("\n--- Scenario 5: Retries ---");
 console.log("First attempt fails, second succeeds. Job span shows multiple attempt spans.\n");
-const retryChain = await withTransactionHooks(async (transactionHooks) =>
+const retryChain = await withTxHooks(async (txHooks) =>
   stateAdapter.withTransaction(async (ctx) =>
     client.createChain({
       ...ctx,
-      transactionHooks,
+      txHooks,
       typeName: "might-fail",
       input: { shouldFail: true },
     }),
@@ -421,21 +421,21 @@ console.log("Result:", retryResult.output);
 // Scenario 6: Workerless Completion
 console.log("\n--- Scenario 6: Workerless Completion ---");
 console.log("Job completed externally without a worker. CONSUMER job span, no attempt spans.\n");
-const approvalChain = await withTransactionHooks(async (transactionHooks) =>
+const approvalChain = await withTxHooks(async (txHooks) =>
   stateAdapter.withTransaction(async (ctx) =>
     client.createChain({
       ...ctx,
-      transactionHooks,
+      txHooks,
       typeName: "awaiting-approval",
       input: { requestId: "REQ-789" },
     }),
   ),
 );
-const approvalResult = await withTransactionHooks(async (transactionHooks) =>
+const approvalResult = await withTxHooks(async (txHooks) =>
   stateAdapter.withTransaction(async (ctx) =>
     client.completeChain({
       ...ctx,
-      transactionHooks,
+      txHooks,
       ...approvalChain,
       handler: async ({ job, completeJob }) =>
         completeJob(job, async ({ complete }) =>

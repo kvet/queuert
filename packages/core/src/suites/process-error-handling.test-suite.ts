@@ -50,8 +50,8 @@ export const processErrorHandlingTestSuite = ({ it }: { it: TestAPI<TestSuiteCon
                 throw new Error("Simulated handler error");
               }
               expect(job.lastAttemptError).toContain("Error: Simulated handler error");
-              return withTransaction(async (txCtx, transactionHooks) =>
-                complete({ ...txCtx, transactionHooks, output: { result: job.input.value * 2 } }),
+              return withTransaction(async (txCtx, txHooks) =>
+                complete({ ...txCtx, txHooks, output: { result: job.input.value * 2 } }),
               );
             },
           },
@@ -59,10 +59,10 @@ export const processErrorHandlingTestSuite = ({ it }: { it: TestAPI<TestSuiteCon
       }),
     });
 
-    const chain = await withTransaction(async (txCtx, transactionHooks) =>
+    const chain = await withTransaction(async (txCtx, txHooks) =>
       client.createChain({
         ...txCtx,
-        transactionHooks,
+        txHooks,
         typeName: "test",
         input: { value: 10 },
       }),
@@ -112,13 +112,13 @@ export const processErrorHandlingTestSuite = ({ it }: { it: TestAPI<TestSuiteCon
               if (job.attempt > 1) {
                 expect(job.lastAttemptError).toContain("Error: Simulated handler error");
               }
-              return withTransaction(async (txCtx, transactionHooks) => {
+              return withTransaction(async (txCtx, txHooks) => {
                 if (job.attempt === 1) {
                   throw new Error("Simulated handler error");
                 }
                 return complete({
                   ...txCtx,
-                  transactionHooks,
+                  txHooks,
                   output: { result: job.input.value * 2 },
                 });
               });
@@ -128,10 +128,10 @@ export const processErrorHandlingTestSuite = ({ it }: { it: TestAPI<TestSuiteCon
       }),
     });
 
-    const chain = await withTransaction(async (txCtx, transactionHooks) =>
+    const chain = await withTransaction(async (txCtx, txHooks) =>
       client.createChain({
         ...txCtx,
-        transactionHooks,
+        txHooks,
         typeName: "test",
         input: { value: 10 },
       }),
@@ -181,10 +181,10 @@ export const processErrorHandlingTestSuite = ({ it }: { it: TestAPI<TestSuiteCon
               if (job.attempt > 1) {
                 expect(job.lastAttemptError).toContain("Error: Error after complete");
               }
-              return withTransaction(async (txCtx, transactionHooks) => {
+              return withTransaction(async (txCtx, txHooks) => {
                 const result = await complete({
                   ...txCtx,
-                  transactionHooks,
+                  txHooks,
                   output: { result: job.input.value * 2 },
                 });
                 if (job.attempt === 1) {
@@ -198,10 +198,10 @@ export const processErrorHandlingTestSuite = ({ it }: { it: TestAPI<TestSuiteCon
       }),
     });
 
-    const chain = await withTransaction(async (txCtx, transactionHooks) =>
+    const chain = await withTransaction(async (txCtx, txHooks) =>
       client.createChain({
         ...txCtx,
-        transactionHooks,
+        txHooks,
         typeName: "test",
         input: { value: 10 },
       }),
@@ -255,8 +255,8 @@ export const processErrorHandlingTestSuite = ({ it }: { it: TestAPI<TestSuiteCon
               expect(job.lastAttemptError).toContain(
                 "Attempt handler returned without a committed `complete` call",
               );
-              return withTransaction(async (txCtx, transactionHooks) =>
-                complete({ ...txCtx, transactionHooks, output: { done: true } }),
+              return withTransaction(async (txCtx, txHooks) =>
+                complete({ ...txCtx, txHooks, output: { done: true } }),
               );
             },
           },
@@ -264,8 +264,8 @@ export const processErrorHandlingTestSuite = ({ it }: { it: TestAPI<TestSuiteCon
       }),
     });
 
-    const chain = await withTransaction(async (txCtx, transactionHooks) =>
-      client.createChain({ ...txCtx, transactionHooks, typeName: "test", input: null }),
+    const chain = await withTransaction(async (txCtx, txHooks) =>
+      client.createChain({ ...txCtx, txHooks, typeName: "test", input: null }),
     );
 
     await withWorkers([await worker.start()], async () => {
@@ -312,13 +312,13 @@ export const processErrorHandlingTestSuite = ({ it }: { it: TestAPI<TestSuiteCon
           test: {
             backoffConfig: fastBackoff,
             attemptHandler: async ({ job, complete }) =>
-              withTransaction(async (txCtx, transactionHooks) => {
+              withTransaction(async (txCtx, txHooks) => {
                 if (job.attempt === 1) {
                   await poisonTransaction(txCtx);
                 }
                 return complete({
                   ...txCtx,
-                  transactionHooks,
+                  txHooks,
                   output: { result: job.input.value * 2 },
                 });
               }),
@@ -327,10 +327,10 @@ export const processErrorHandlingTestSuite = ({ it }: { it: TestAPI<TestSuiteCon
       }),
     });
 
-    const chain = await withTransaction(async (txCtx, transactionHooks) =>
+    const chain = await withTransaction(async (txCtx, txHooks) =>
       client.createChain({
         ...txCtx,
-        transactionHooks,
+        txHooks,
         typeName: "test",
         input: { value: 10 },
       }),
@@ -386,8 +386,8 @@ export const processErrorHandlingTestSuite = ({ it }: { it: TestAPI<TestSuiteCon
                   await poisonTransaction(txCtx);
                 });
               }
-              return withTransaction(async (txCtx, transactionHooks) =>
-                complete({ ...txCtx, transactionHooks, output: { result: job.input.value * 2 } }),
+              return withTransaction(async (txCtx, txHooks) =>
+                complete({ ...txCtx, txHooks, output: { result: job.input.value * 2 } }),
               );
             },
           },
@@ -395,10 +395,10 @@ export const processErrorHandlingTestSuite = ({ it }: { it: TestAPI<TestSuiteCon
       }),
     });
 
-    const chain = await withTransaction(async (txCtx, transactionHooks) =>
+    const chain = await withTransaction(async (txCtx, txHooks) =>
       client.createChain({
         ...txCtx,
-        transactionHooks,
+        txHooks,
         typeName: "test",
         input: { value: 10 },
       }),
@@ -447,10 +447,10 @@ export const processErrorHandlingTestSuite = ({ it }: { it: TestAPI<TestSuiteCon
           step1: {
             backoffConfig: fastBackoff,
             attemptHandler: async ({ job, complete }) =>
-              withTransaction(async (txCtx, transactionHooks) => {
+              withTransaction(async (txCtx, txHooks) => {
                 const result = await complete({
                   ...txCtx,
-                  transactionHooks,
+                  txHooks,
                   continueWith: { typeName: "step2", input: { value: job.input.value * 2 } },
                 });
                 if (job.attempt === 1) {
@@ -461,18 +461,18 @@ export const processErrorHandlingTestSuite = ({ it }: { it: TestAPI<TestSuiteCon
           },
           step2: {
             attemptHandler: async ({ job, complete }) =>
-              withTransaction(async (txCtx, transactionHooks) =>
-                complete({ ...txCtx, transactionHooks, output: { result: job.input.value } }),
+              withTransaction(async (txCtx, txHooks) =>
+                complete({ ...txCtx, txHooks, output: { result: job.input.value } }),
               ),
           },
         },
       }),
     });
 
-    const chain = await withTransaction(async (txCtx, transactionHooks) =>
+    const chain = await withTransaction(async (txCtx, txHooks) =>
       client.createChain({
         ...txCtx,
-        transactionHooks,
+        txHooks,
         typeName: "step1",
         input: { value: 10 },
       }),
@@ -527,10 +527,10 @@ export const processErrorHandlingTestSuite = ({ it }: { it: TestAPI<TestSuiteCon
           blocker: {
             backoffConfig: fastBackoff,
             attemptHandler: async ({ job, complete }) =>
-              withTransaction(async (txCtx, transactionHooks) => {
+              withTransaction(async (txCtx, txHooks) => {
                 const result = await complete({
                   ...txCtx,
-                  transactionHooks,
+                  txHooks,
                   output: { done: true },
                 });
                 if (job.attempt === 1) {
@@ -543,8 +543,8 @@ export const processErrorHandlingTestSuite = ({ it }: { it: TestAPI<TestSuiteCon
             attemptHandler: async ({ job, complete }) => {
               const [blocker] = job.blockers;
               expect((await client.getJob({ id: blocker.id }))?.attempt).toBe(2);
-              return withTransaction(async (txCtx, transactionHooks) =>
-                complete({ ...txCtx, transactionHooks, output: { result: "ok" } }),
+              return withTransaction(async (txCtx, txHooks) =>
+                complete({ ...txCtx, txHooks, output: { result: "ok" } }),
               );
             },
           },
@@ -552,18 +552,18 @@ export const processErrorHandlingTestSuite = ({ it }: { it: TestAPI<TestSuiteCon
       }),
     });
 
-    const blockerChain = await withTransaction(async (txCtx, transactionHooks) =>
+    const blockerChain = await withTransaction(async (txCtx, txHooks) =>
       client.createChain({
         ...txCtx,
-        transactionHooks,
+        txHooks,
         typeName: "blocker",
         input: { value: 1 },
       }),
     );
-    const dependentChain = await withTransaction(async (txCtx, transactionHooks) =>
+    const dependentChain = await withTransaction(async (txCtx, txHooks) =>
       client.createChain({
         ...txCtx,
-        transactionHooks,
+        txHooks,
         typeName: "dependent",
         input: null,
         blockers: [blockerChain],
@@ -625,8 +625,8 @@ export const processErrorHandlingTestSuite = ({ it }: { it: TestAPI<TestSuiteCon
                   throw "string error";
                 case 4:
                   expect(job.lastAttemptError).toBe("string error");
-                  return withTransaction(async (txCtx, transactionHooks) =>
-                    complete({ ...txCtx, transactionHooks, output: null }),
+                  return withTransaction(async (txCtx, txHooks) =>
+                    complete({ ...txCtx, txHooks, output: null }),
                   );
                 default:
                   throw new Error(`unexpected attempt ${job.attempt}`);
@@ -637,10 +637,10 @@ export const processErrorHandlingTestSuite = ({ it }: { it: TestAPI<TestSuiteCon
       }),
     });
 
-    const chain = await withTransaction(async (txCtx, transactionHooks) =>
+    const chain = await withTransaction(async (txCtx, txHooks) =>
       client.createChain({
         ...txCtx,
-        transactionHooks,
+        txHooks,
         typeName: "test",
         input: null,
       }),
@@ -690,8 +690,8 @@ export const processErrorHandlingTestSuite = ({ it }: { it: TestAPI<TestSuiteCon
                   throw new Error("transaction boom");
                 }),
               ).rejects.toThrow("transaction boom");
-              return withTransaction(async (txCtx, transactionHooks) =>
-                complete({ ...txCtx, transactionHooks, output: null }),
+              return withTransaction(async (txCtx, txHooks) =>
+                complete({ ...txCtx, txHooks, output: null }),
               );
             },
           },
@@ -699,10 +699,10 @@ export const processErrorHandlingTestSuite = ({ it }: { it: TestAPI<TestSuiteCon
       }),
     });
 
-    const chain = await withTransaction(async (txCtx, transactionHooks) =>
+    const chain = await withTransaction(async (txCtx, txHooks) =>
       client.createChain({
         ...txCtx,
-        transactionHooks,
+        txHooks,
         typeName: "test",
         input: null,
       }),
@@ -750,8 +750,8 @@ export const processErrorHandlingTestSuite = ({ it }: { it: TestAPI<TestSuiteCon
               if (job.attempt < 3) {
                 throw new Error(`Simulated error on attempt ${job.attempt}`);
               }
-              return withTransaction(async (txCtx, transactionHooks) =>
-                complete({ ...txCtx, transactionHooks, output: { result: job.input.value * 2 } }),
+              return withTransaction(async (txCtx, txHooks) =>
+                complete({ ...txCtx, txHooks, output: { result: job.input.value * 2 } }),
               );
             },
           },
@@ -759,10 +759,10 @@ export const processErrorHandlingTestSuite = ({ it }: { it: TestAPI<TestSuiteCon
       }),
     });
 
-    const chain = await withTransaction(async (txCtx, transactionHooks) =>
+    const chain = await withTransaction(async (txCtx, txHooks) =>
       client.createChain({
         ...txCtx,
-        transactionHooks,
+        txHooks,
         typeName: "test",
         input: { value: 10 },
       }),

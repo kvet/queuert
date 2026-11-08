@@ -8,7 +8,7 @@ import type {
 } from "../job-types/job-types.resolvers.ts";
 import type { InProcessStateAdapter } from "../state-adapter/state-adapter.in-process.ts";
 import type { GetStateAdapterTxContext, StateAdapter } from "../state-adapter/state-adapter.ts";
-import type { TransactionHooks } from "../transaction-hooks.ts";
+import type { TxHooks } from "../tx-hooks/tx-hooks.ts";
 import type { AttemptComplete, AttemptFence, AttemptHandler } from "./attempt-handler.types.ts";
 
 type LinearDefs = {
@@ -83,8 +83,8 @@ type ClientContext = { client: { query: (sql: string) => Promise<unknown> } };
 type ClientStateAdapter = StateAdapter<ClientContext, string, string>;
 
 declare const txCtx: ClientContext;
-declare const transactionHooks: TransactionHooks;
-declare const tx: ClientContext & { transactionHooks: TransactionHooks };
+declare const txHooks: TxHooks;
+declare const tx: ClientContext & { txHooks: TxHooks };
 type Tx = typeof tx;
 
 declare const linearCommit: AttemptComplete<ClientStateAdapter, LinearDefs, "entry", "entry">;
@@ -137,22 +137,22 @@ describe("AttemptComplete", () => {
   });
 
   describe("transaction requirement", () => {
-    it("accepts the transaction context and transactionHooks spread alongside the outcome", () => {
+    it("accepts the transaction context and txHooks spread alongside the outcome", () => {
       expectTypeOf(async () =>
-        terminalCommit({ ...txCtx, transactionHooks, output: { y: "done" } }),
+        terminalCommit({ ...txCtx, txHooks, output: { y: "done" } }),
       ).toBeFunction();
     });
 
     it("rejects a call without the transaction context", () => {
       expectTypeOf(async () =>
         // @ts-expect-error complete must run inside the caller's transaction
-        terminalCommit({ transactionHooks, output: { y: "done" } }),
+        terminalCommit({ txHooks, output: { y: "done" } }),
       ).toBeFunction();
     });
 
-    it("rejects a call without transactionHooks", () => {
+    it("rejects a call without txHooks", () => {
       expectTypeOf(async () =>
-        // @ts-expect-error complete buffers its events in the caller's transactionHooks
+        // @ts-expect-error complete buffers its events in the caller's txHooks
         terminalCommit({ ...txCtx, output: { y: "done" } }),
       ).toBeFunction();
     });

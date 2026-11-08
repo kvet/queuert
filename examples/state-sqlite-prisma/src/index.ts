@@ -11,7 +11,7 @@ import {
   createInProcessWorker,
   createProcessors,
   defineJobTypes,
-  withTransactionHooks,
+  withTxHooks,
 } from "queuert";
 
 import { createPrismaSqliteStateProvider } from "./provider.ts";
@@ -78,12 +78,12 @@ const worker = await createInProcessWorker({
           // Simulate sending email (in real app, call email service here)
           console.log(`Sending welcome email to ${user.email} for ${user.name}`);
 
-          return withTransactionHooks(async (transactionHooks) => {
+          return withTxHooks(async (txHooks) => {
             // The handler's transaction holds the provider's write lock, so the worker's
             // autocommit statements on this connection cannot run inside it.
             using _h = await lock.acquireWrite();
             return await prisma.$transaction(async (prisma) =>
-              complete({ prisma, transactionHooks, output: { sentAt: new Date().toISOString() } }),
+              complete({ prisma, txHooks, output: { sentAt: new Date().toISOString() } }),
             );
           });
         },
@@ -96,7 +96,7 @@ const stopWorker = await worker.start();
 
 // Register a new user and queue welcome email atomically
 // #region create-chain
-const chain = await withTransactionHooks(async (transactionHooks) => {
+const chain = await withTxHooks(async (txHooks) => {
   using _h = await lock.acquireWrite();
   return await prisma.$transaction(async (prisma) => {
     const user = await prisma.user.create({
@@ -106,7 +106,7 @@ const chain = await withTransactionHooks(async (transactionHooks) => {
     // Queue welcome email - if user creation fails, no email job is created
     return client.createChain({
       prisma,
-      transactionHooks,
+      txHooks,
       typeName: "send_welcome_email",
       input: { userId: user.id },
     });

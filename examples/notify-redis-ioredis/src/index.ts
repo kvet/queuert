@@ -6,7 +6,7 @@ import {
   createInProcessWorker,
   createProcessors,
   defineJobTypes,
-  withTransactionHooks,
+  withTxHooks,
   createInProcessStateAdapter,
 } from "queuert";
 
@@ -72,11 +72,11 @@ const worker = await createInProcessWorker({
           await new Promise((r) => setTimeout(r, 500));
           const rowCount = Math.floor(Math.random() * 1000) + 100;
           console.log(`Report generated with ${rowCount} rows`);
-          return withTransactionHooks(async (transactionHooks) =>
+          return withTxHooks(async (txHooks) =>
             stateAdapter.withTransaction(async (ctx) =>
               complete({
                 ...ctx,
-                transactionHooks,
+                txHooks,
                 output: {
                   reportId: `RPT-${Date.now()}`,
                   rowCount,
@@ -94,11 +94,11 @@ const worker = await createInProcessWorker({
 const stopWorker = await worker.start();
 
 console.log("Requesting sales report...");
-const chain = await withTransactionHooks(async (transactionHooks) =>
+const chain = await withTxHooks(async (txHooks) =>
   stateAdapter.withTransaction(async (ctx) =>
     client.createChain({
       ...ctx,
-      transactionHooks,
+      txHooks,
       typeName: "generate_report",
       input: { reportType: "sales", dateRange: { from: "2024-01-01", to: "2024-12-31" } },
     }),

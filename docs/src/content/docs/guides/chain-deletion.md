@@ -8,9 +8,9 @@ sidebar:
 Chains can be deleted using `deleteChains` (plural) or `deleteChain` (singular). All jobs in the chain (its head job and continuations) are removed together.
 
 ```ts
-await withTransactionHooks(async (transactionHooks) =>
+await withTxHooks(async (txHooks) =>
   stateProvider.withTransaction(async (txCtx) =>
-    client.deleteChains({ ...txCtx, transactionHooks, ids: [chain.id] }),
+    client.deleteChains({ ...txCtx, txHooks, ids: [chain.id] }),
   ),
 );
 ```
@@ -20,9 +20,9 @@ When a deleted chain has a running job, its attempt is notified as lost: with a 
 Use `deleteChain` to target a single chain — it returns the deleted chain or `undefined` if no chain with that ID exists. `deleteChains` silently skips missing IDs and returns the chains that were actually deleted. Both calls are idempotent:
 
 ```ts
-await withTransactionHooks(async (transactionHooks) =>
+await withTxHooks(async (txHooks) =>
   stateProvider.withTransaction(async (txCtx) =>
-    client.deleteChain({ ...txCtx, transactionHooks, id: chain.id }),
+    client.deleteChain({ ...txCtx, txHooks, id: chain.id }),
   ),
 );
 ```
@@ -30,15 +30,15 @@ await withTransactionHooks(async (transactionHooks) =>
 If a chain is referenced as a blocker by another chain, deletion is rejected unless both chains are deleted together:
 
 ```ts
-await withTransactionHooks(async (transactionHooks) =>
+await withTxHooks(async (txHooks) =>
   stateProvider.withTransaction(async (txCtx) =>
-    client.deleteChains({ ...txCtx, transactionHooks, ids: [blockerChain.id] }),
+    client.deleteChains({ ...txCtx, txHooks, ids: [blockerChain.id] }),
   ),
 ); // throws
 
-await withTransactionHooks(async (transactionHooks) =>
+await withTxHooks(async (txHooks) =>
   stateProvider.withTransaction(async (txCtx) =>
-    client.deleteChains({ ...txCtx, transactionHooks, ids: [mainChain.id, blockerChain.id] }),
+    client.deleteChains({ ...txCtx, txHooks, ids: [mainChain.id, blockerChain.id] }),
   ),
 ); // ok
 ```
@@ -50,11 +50,11 @@ Deletion never follows blocker relationships on its own. To remove a chain toget
 ```ts
 const blockerChains = await client.getJobBlockers({ jobId: reportChain.id });
 
-await withTransactionHooks(async (transactionHooks) =>
+await withTxHooks(async (txHooks) =>
   stateProvider.withTransaction(async (txCtx) =>
     client.deleteChains({
       ...txCtx,
-      transactionHooks,
+      txHooks,
       ids: [reportChain.id, ...blockerChains.map((blocker) => blocker.id)],
     }),
   ),
@@ -82,4 +82,4 @@ deleteChains({ ids: [A, B] }) // Both in deletion set -- no external refs
 
 ## See Also
 
-See [examples/showcase-chain-deletion](https://github.com/kvet/queuert/tree/main/examples/showcase-chain-deletion) for a complete working example demonstrating simple deletion, blocker safety, and co-deletion. See also [Transaction Hooks](../transaction-hooks/) and [Job Blockers](../job-blockers/).
+See [examples/showcase-chain-deletion](https://github.com/kvet/queuert/tree/main/examples/showcase-chain-deletion) for a complete working example demonstrating simple deletion, blocker safety, and co-deletion. See also [Tx Hooks](../tx-hooks/) and [Job Blockers](../job-blockers/).

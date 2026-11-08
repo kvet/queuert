@@ -71,7 +71,7 @@ const TX_OPTIONS = {
 };
 ```
 
-The transaction context is `{ session }`, the name the native driver and Mongoose already use in their options objects, so `complete({ session, transactionHooks, output })` reads like any other call.
+The transaction context is `{ session }`, the name the native driver and Mongoose already use in their options objects, so `complete({ session, txHooks, output })` reads like any other call.
 
 ## Transactions and isolation
 
@@ -115,32 +115,32 @@ On PostgreSQL a second locking transaction waits. On MongoDB it fails with 112, 
 
 - **Transactions Queuert opens** (`stateAdapter.withTransaction`: worker registration, reclaim, stop, own-jobs and tokenless reclaim) go through the provider, whose `session.withTransaction` reruns the callback on `TransientTransactionError` until `transactionRetryTimeoutMs` (default 30 s, below the driver's 120 s). Every one of these callbacks in `packages/core/src/worker/run-worker.ts` touches only state, and announces reclaimed jobs after the transaction returns, so a rerun is safe. The state adapter documents this as a contract requirement for callbacks passed to `withTransaction`, and a test runs each worker transaction against an injected 112. A rerun that waits for the conflicting transaction to end is the MongoDB equivalent of PostgreSQL's lock wait.
 - **Multi-document writes without a `txCtx`** (`startJobAttempts`, `rescheduleJobs` with several jobs, `deleteChains`) are one statement on PostgreSQL. On MongoDB an `updateMany` outside a transaction is atomic per document only, so the adapter wraps these in its own retried transaction. Single-document calls (`extendWorkerLease`, `startWorker`, `stopWorker`, a one-job `rescheduleJobs`) stay autocommit; the server retries their conflicts internally.
-- **User transactions** (client methods, `complete`, `fence`) fail with 112 when they meet a concurrent worker or client write. The user retries them, and the driver's own retry is wrong for that, which is the next section.
+- **User transactions** (client methods, `complete`, `fence`) fail with 112 when they meet a concurrent worker or client write. The user retries them; the driver's own retry needs `txHooks.retryBoundary`, which is the next section.
 
 ### User transactions: `withMongoTransaction`
 
-`session.withTransaction` and Mongoose's `connection.transaction` rerun the callback after a transient error. `withTransactionHooks` must wrap the transaction from outside so its hooks flush after commit. Combined, a rerun reuses the same `transactionHooks`:
+`session.withTransaction` and Mongoose's `connection.transaction` rerun the callback after a transient error. `withTxHooks` must wrap the transaction from outside so its hooks flush after commit. Combined, a rerun reuses the same `txHooks`:
 
-- `complete` throws `complete already succeeded with these transactionHooks` on the second run (`packages/core/src/attempt/attempt-handler.ts:105`). The error is not transient, so the retry stops and the attempt fails.
+- `complete` throws `complete already succeeded with these txHooks` on the second run (`packages/core/src/attempt/attempt-handler.ts:105`). The error is not transient, so the retry stops and the attempt fails.
 - `createChain` buffers its observability events and `notifyJobsScheduled` for the rolled-back first run too, and the flush after the successful second run emits events for a chain id that was never committed.
 
-`withMongoTransaction` makes each attempt its own `withTransactionHooks`:
+`txHooks.retryBoundary` (see `docs/src/content/docs/guides/tx-hooks.mdx`) fixes both: it rolls back what the previous try buffered each time the driver calls the callback again. `withMongoTransaction` packages `withTxHooks`, `session.withTransaction` with `TX_OPTIONS`, and `retryBoundary`:
 
 ```ts
-await withMongoTransaction({ client }, async ({ session, transactionHooks }) => {
+await withMongoTransaction({ client }, async ({ session, txHooks }) => {
   await orders.insertOne(order, { session });
   await queuert.createChain({
     session,
-    transactionHooks,
+    txHooks,
     typeName: "send-receipt",
     input: { orderId },
   });
 });
 ```
 
-Per attempt: start a session transaction with `TX_OPTIONS`, open `withTransactionHooks`, run the callback, commit (retrying only the commit on `UnknownTransactionCommitResult`), and return, which flushes the hooks after the commit. On a `TransientTransactionError` the hooks are discarded and the attempt reruns after jittered backoff, until `timeoutMs`. It accepts `{ client }` or `{ session }` (an existing Mongoose or MikroORM session), and needs no state adapter. It is built only from `withTransactionHooks` and the driver, so it can live in `@queuert/mongodb`.
+The driver reruns the callback on a `TransientTransactionError` and retries only the commit on `UnknownTransactionCommitResult`; `retryBoundary` rolls back the previous try's hooks on each rerun, and `withTxHooks` flushes the last try's hooks after the commit. It accepts `{ client }` or `{ session }` (an existing Mongoose or MikroORM session), and needs no state adapter. It is built only from `withTxHooks`, `retryBoundary` and the driver, so it can live in `@queuert/mongodb`.
 
-The docs say: use `withMongoTransaction` around every transaction that calls Queuert, not `session.withTransaction` or `connection.transaction`. A test runs `createChain` and `complete` inside `session.withTransaction` with an injected conflict after the Queuert call, and asserts the two failure modes above, so the docs warning stays true.
+The docs say: use `withMongoTransaction` around every transaction that calls Queuert, or wrap the callback of `session.withTransaction` or `connection.transaction` in `txHooks.retryBoundary`. A test runs `createChain` and `complete` inside `session.withTransaction` with an injected conflict after the Queuert call, and asserts the two failure modes above without `retryBoundary` and neither with it, so the docs stay true.
 
 ### Required settings
 
@@ -152,7 +152,7 @@ The docs say: use `withMongoTransaction` around every transaction that calls Que
 
 ### Savepoints
 
-MongoDB has none. Core never issues database savepoints (`transactionHooks.withSavepoint` only snapshots hook state), so nothing in the adapter needs them. The test fixture leaves `withSavepoint` undefined, and the savepoint cases in `process.test-suite.ts` skip, as on SQLite.
+MongoDB has none. Core never issues database savepoints (`txHooks.withSavepoint` only snapshots hook state), so nothing in the adapter needs them. The test fixture leaves `withSavepoint` undefined, and the savepoint cases in `process.test-suite.ts` skip, as on SQLite.
 
 ## Data model
 
@@ -265,7 +265,7 @@ The deduplication documents are the write-write conflict that makes it exact, so
 - **Connection pool.** Each open change stream holds a pooled connection for up to `maxAwaitTimeMS`. In the spike 200 idle streams on a 100-connection pool made an ordinary `findOne` take 1.5–1.9 s, and 20 streams on a pool of 10 took 19.9 s. One stream per provider avoids that, and the docs recommend a dedicated `MongoClient` for the notify provider, like PostgreSQL's dedicated listen client.
 - **Resume.** Notifications are hints and polling is the source of truth, so the stream reopens from "now" after an error or an election instead of persisting resume tokens. Messages published while it reconnects are lost, as with Redis pub/sub.
 
-Watching the `jobs` collection directly, instead of publishing, would need no writes, but it ties the notify adapter to the MongoDB state adapter and bypasses `transactionHooks`; rejected.
+Watching the `jobs` collection directly, instead of publishing, would need no writes, but it ties the notify adapter to the MongoDB state adapter and bypasses `txHooks`; rejected.
 
 ## Migrations
 
@@ -321,7 +321,7 @@ Replication latency (`w: majority` across three nodes), failover and multi-node 
 - Conformance and the shared suites through `extendWithStateMongodb`, the `{noop,in-process,mongodb}` × `{data,processing}` matrix, the variance specs (`collectionPrefix`, limits, custom ids), options validation, `fastSeedAllStates` and its equivalence spec.
 - Migration specs: concurrent `migrateToLatest`, a migration killed mid-way, lease takeover, standalone detection.
 - Isolation: each invariant in the [table](#rule-every-invariant-is-a-write-write-conflict-on-a-shared-document) raced from two sessions in both commit orders ends correct; `blockersRemaining` equals its recomputed count after the blocker cases; a no-op lock write is rejected by a unit test on the `$inc`.
-- Retries: each worker transaction rerun after an injected 112 produces the same state and announces once; `withMongoTransaction` discards the hooks of a failed attempt and flushes once; the `session.withTransaction` misuse test above.
+- Retries: each worker transaction rerun after an injected 112 produces the same state and announces once; `withMongoTransaction` rolls back the hooks of a failed try and flushes once; the `session.withTransaction` test above, with and without `retryBoundary`.
 - Claims: 8 concurrent claimers never claim one job twice and never return a short batch while jobs remain; a claim racing a reclaim of its worker either commits first and is reclaimed, or claims nothing.
 - Notify: `notify-adapter-cases.ts` conformance with the shared stream; a test that the adapter opens one change stream regardless of subscriber count.
 - Benchmarks: `benchmarks/query-performance/src/mongodb.ts` running `index-coverage-cases.ts` with `explain("executionStats")` written to `explanations/`, so every query's plan and its index are reviewed like the PostgreSQL ones.

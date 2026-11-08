@@ -7,7 +7,7 @@ import {
   createInProcessWorker,
   createProcessors,
   defineJobTypes,
-  withTransactionHooks,
+  withTxHooks,
   createInProcessNotifyAdapter,
 } from "queuert";
 
@@ -85,11 +85,11 @@ const worker = await createInProcessWorker({
           // Simulate sending email (in real app, call email service here)
           console.log(`Sending welcome email to ${user.email} for ${user.name}`);
 
-          return withTransactionHooks(async (transactionHooks) =>
+          return withTxHooks(async (txHooks) =>
             db
               .transaction()
               .execute(async (db) =>
-                complete({ db, transactionHooks, output: { sentAt: new Date().toISOString() } }),
+                complete({ db, txHooks, output: { sentAt: new Date().toISOString() } }),
               ),
           );
         },
@@ -101,7 +101,7 @@ const worker = await createInProcessWorker({
 const stopWorker = await worker.start();
 
 // Register a new user and queue welcome email atomically
-const chain = await withTransactionHooks(async (transactionHooks) =>
+const chain = await withTxHooks(async (txHooks) =>
   db.transaction().execute(async (db) => {
     const user = await db
       .insertInto("users")
@@ -112,7 +112,7 @@ const chain = await withTransactionHooks(async (transactionHooks) =>
     // Queue welcome email - if user creation fails, no email job is created
     return client.createChain({
       db,
-      transactionHooks,
+      txHooks,
       typeName: "send_welcome_email",
       input: { userId: user.id },
     });

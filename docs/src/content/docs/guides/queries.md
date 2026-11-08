@@ -5,7 +5,7 @@ sidebar:
   order: 14
 ---
 
-The client provides read-only methods for inspecting chains, jobs and workers. All query methods accept an optional transaction context and don't require `transactionHooks`.
+The client provides read-only methods for inspecting chains, jobs and workers. All query methods accept an optional transaction context and don't require `txHooks`.
 
 ```ts
 // Look up a single chain or job by ID

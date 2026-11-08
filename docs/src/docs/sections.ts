@@ -61,8 +61,7 @@ export const siteSections: SiteSection[] = [
       {
         label: "Guides",
         slugs: [
-          "guides/transaction-hooks",
-          "guides/processing-reliability",
+          "guides/tx-hooks",
           "guides/chain-patterns",
           "guides/job-blockers",
           "guides/error-handling",
@@ -86,6 +85,7 @@ export const siteSections: SiteSection[] = [
         slugs: [
           "how-it-works/chain-model",
           "how-it-works/job-processing",
+          "how-it-works/processing-reliability",
           "how-it-works/in-process-worker",
           "how-it-works/job-type-references",
         ],

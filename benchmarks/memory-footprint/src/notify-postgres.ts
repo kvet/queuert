@@ -11,7 +11,7 @@ import {
   createInProcessStateAdapter,
   createInProcessWorker,
   createProcessors,
-  withTransactionHooks,
+  withTxHooks,
 } from "queuert";
 
 import {
@@ -71,9 +71,9 @@ await runDoubleRunBenchmark<Infra>({
           processors: {
             "test-job": {
               attemptHandler: async ({ complete }) =>
-                withTransactionHooks(async (transactionHooks) =>
+                withTxHooks(async (txHooks) =>
                   stateAdapter.withTransaction(async (ctx) =>
-                    complete({ ...ctx, transactionHooks, output: { processed: true } }),
+                    complete({ ...ctx, txHooks, output: { processed: true } }),
                   ),
                 ),
             },
@@ -87,11 +87,11 @@ await runDoubleRunBenchmark<Infra>({
     await processStep("After processing 100 jobs", async () => {
       const promises = [];
       for (let i = 0; i < 100; i++) {
-        const chain = await withTransactionHooks(async (transactionHooks) =>
+        const chain = await withTxHooks(async (txHooks) =>
           stateAdapter.withTransaction(async (ctx) =>
             setup.client.createChain({
               ...ctx,
-              transactionHooks,
+              txHooks,
               typeName: "test-job",
               input: { message: `Test message ${i}` },
             }),

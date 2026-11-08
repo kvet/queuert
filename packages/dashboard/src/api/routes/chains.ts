@@ -1,4 +1,4 @@
-import { BlockerReferenceError, type Client, withTransactionHooks } from "queuert";
+import { BlockerReferenceError, type Client, withTxHooks } from "queuert";
 import { helpersSymbol } from "queuert/internal";
 
 import { serovalResponse } from "../response.ts";
@@ -129,13 +129,15 @@ export const handleChainDelete = async (
 
   try {
     const { stateAdapter } = client[helpersSymbol];
-    const deleted = await withTransactionHooks(async (transactionHooks) =>
-      stateAdapter.withTransaction(async (txCtx) =>
-        client.deleteChains({
-          ids: [chainId],
-          transactionHooks,
-          ...txCtx,
-        }),
+    const deleted = await withTxHooks(async (txHooks) =>
+      stateAdapter.withTransaction(
+        txHooks.retryBoundary(async (txCtx) =>
+          client.deleteChains({
+            ids: [chainId],
+            txHooks,
+            ...txCtx,
+          }),
+        ),
       ),
     );
     return serovalResponse({ deleted });

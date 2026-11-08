@@ -20,7 +20,7 @@ import {
   createInProcessWorker,
   createProcessors,
   defineJobTypes,
-  withTransactionHooks,
+  withTxHooks,
 } from "queuert";
 
 const jobTypes = defineJobTypes<{
@@ -88,9 +88,9 @@ const worker = await createInProcessWorker({
           console.log(
             `[await-approval] Timeout reached for ${job.input.requestId} - auto-rejecting`,
           );
-          return withTransactionHooks(async (transactionHooks) =>
+          return withTxHooks(async (txHooks) =>
             sql.begin(async (txSql) =>
-              complete({ txSql, transactionHooks, output: { rejected: true, reason: "timeout" } }),
+              complete({ txSql, txHooks, output: { rejected: true, reason: "timeout" } }),
             ),
           );
         },
@@ -99,11 +99,11 @@ const worker = await createInProcessWorker({
       "process-approved": {
         attemptHandler: async ({ job, complete }) => {
           console.log(`[process-approved] Processing approved request ${job.input.requestId}`);
-          return withTransactionHooks(async (transactionHooks) =>
+          return withTxHooks(async (txHooks) =>
             sql.begin(async (txSql) =>
               complete({
                 txSql,
-                transactionHooks,
+                txHooks,
                 output: { processed: true, completedAt: new Date().toISOString() },
               }),
             ),
@@ -114,10 +114,8 @@ const worker = await createInProcessWorker({
       "pending-action": {
         attemptHandler: async ({ job, complete }) => {
           console.log(`[pending-action] Action ${job.input.actionId} expired`);
-          return withTransactionHooks(async (transactionHooks) =>
-            sql.begin(async (txSql) =>
-              complete({ txSql, transactionHooks, output: { expired: true } }),
-            ),
+          return withTxHooks(async (txHooks) =>
+            sql.begin(async (txSql) => complete({ txSql, txHooks, output: { expired: true } })),
           );
         },
       },
@@ -131,11 +129,11 @@ const stopWorker = await worker.start();
 console.log("\n--- Scenario 1a: Approval Workflow (Approved) ---");
 console.log("Job is completed externally before worker timeout.\n");
 
-const approval1 = await withTransactionHooks(async (transactionHooks) =>
+const approval1 = await withTxHooks(async (txHooks) =>
   sql.begin(async (txSql) =>
     client.createChain({
       txSql,
-      transactionHooks,
+      txHooks,
       typeName: "await-approval",
       input: { requestId: "req-001", requester: "alice" },
       schedule: { afterMs: 5000 }, // Would auto-reject after 5s
@@ -145,11 +143,11 @@ const approval1 = await withTransactionHooks(async (transactionHooks) =>
 console.log(`Created approval request: ${approval1.id} (scheduled for 5s timeout)`);
 
 console.log(`Approving externally...`);
-await withTransactionHooks(async (transactionHooks) =>
+await withTxHooks(async (txHooks) =>
   sql.begin(async (txSql) =>
     client.completeChain({
       txSql,
-      transactionHooks,
+      txHooks,
       ...approval1,
       handler: async ({ job, completeJob }) => {
         if (job.typeName !== "await-approval") return;
@@ -174,11 +172,11 @@ assert.ok("processed" in result1.output);
 console.log("\n--- Scenario 1b: Approval Workflow (Rejected) ---");
 console.log("Job is rejected externally.\n");
 
-const approval2 = await withTransactionHooks(async (transactionHooks) =>
+const approval2 = await withTxHooks(async (txHooks) =>
   sql.begin(async (txSql) =>
     client.createChain({
       txSql,
-      transactionHooks,
+      txHooks,
       typeName: "await-approval",
       input: { requestId: "req-002", requester: "bob" },
       schedule: { afterMs: 5000 },
@@ -188,11 +186,11 @@ const approval2 = await withTransactionHooks(async (transactionHooks) =>
 console.log(`Created approval request: ${approval2.id}`);
 
 console.log(`Rejecting externally...`);
-const result2 = await withTransactionHooks(async (transactionHooks) =>
+const result2 = await withTxHooks(async (txHooks) =>
   sql.begin(async (txSql) =>
     client.completeChain({
       txSql,
-      transactionHooks,
+      txHooks,
       ...approval2,
       handler: async ({ job, completeJob }) => {
         if (job.typeName !== "await-approval") throw new Error(`Unexpected job ${job.typeName}`);
@@ -211,11 +209,11 @@ assert.equal(result2.output.reason, "manager_denied");
 console.log("\n--- Scenario 2: Deferred Start with Early Completion ---");
 console.log("Job scheduled to expire, but completed early.\n");
 
-const action = await withTransactionHooks(async (transactionHooks) =>
+const action = await withTxHooks(async (txHooks) =>
   sql.begin(async (txSql) =>
     client.createChain({
       txSql,
-      transactionHooks,
+      txHooks,
       typeName: "pending-action",
       input: { actionId: "action-001", expiresInMs: 5000 },
       schedule: { afterMs: 5000 }, // Would expire after 5s
@@ -225,11 +223,11 @@ const action = await withTransactionHooks(async (transactionHooks) =>
 console.log(`Created pending action: ${action.id} (expires in 5s)`);
 
 console.log(`Completing early...`);
-const result3 = await withTransactionHooks(async (transactionHooks) =>
+const result3 = await withTxHooks(async (txHooks) =>
   sql.begin(async (txSql) =>
     client.completeChain({
       txSql,
-      transactionHooks,
+      txHooks,
       ...action,
       handler: async ({ job, completeJob }) =>
         completeJob(job, async ({ complete }) =>

@@ -28,7 +28,7 @@ import {
   createInProcessWorker,
   createProcessors,
   defineJobTypes,
-  withTransactionHooks,
+  withTxHooks,
 } from "queuert";
 
 const jobTypes = defineJobTypes<{
@@ -103,9 +103,9 @@ const urgentWorker = await createInProcessWorker({
             elapsedMs,
           });
           console.log(`[urgent] send ${job.input.to} done at +${elapsedMs}ms`);
-          return withTransactionHooks(async (transactionHooks) =>
+          return withTxHooks(async (txHooks) =>
             sql.begin(async (txSql) =>
-              complete({ txSql, transactionHooks, output: { finishedAt: Date.now() } }),
+              complete({ txSql, txHooks, output: { finishedAt: Date.now() } }),
             ),
           );
         },
@@ -122,11 +122,11 @@ const urgentWorker = await createInProcessWorker({
           console.log(
             `[urgent] dispatch ${job.input.alertId} done at +${elapsedMs}ms → hands off to bulk worker`,
           );
-          return withTransactionHooks(async (transactionHooks) =>
+          return withTxHooks(async (txHooks) =>
             sql.begin(async (txSql) =>
               complete({
                 txSql,
-                transactionHooks,
+                txHooks,
                 continueWith: {
                   typeName: "alert.archive",
                   input: { to: job.input.to, alertId: job.input.alertId },
@@ -153,9 +153,9 @@ const bulkWorker = await createInProcessWorker({
           const elapsedMs = Date.now() - startedAt;
           completionOrder.push({ worker: "bulk", label: `send ${job.input.to}`, elapsedMs });
           console.log(`[bulk  ] send ${job.input.to} done at +${elapsedMs}ms`);
-          return withTransactionHooks(async (transactionHooks) =>
+          return withTxHooks(async (txHooks) =>
             sql.begin(async (txSql) =>
-              complete({ txSql, transactionHooks, output: { finishedAt: Date.now() } }),
+              complete({ txSql, txHooks, output: { finishedAt: Date.now() } }),
             ),
           );
         },
@@ -170,9 +170,9 @@ const bulkWorker = await createInProcessWorker({
             elapsedMs,
           });
           console.log(`[bulk  ] archive ${job.input.alertId} done at +${elapsedMs}ms`);
-          return withTransactionHooks(async (transactionHooks) =>
+          return withTxHooks(async (txHooks) =>
             sql.begin(async (txSql) =>
-              complete({ txSql, transactionHooks, output: { archivedAt: Date.now() } }),
+              complete({ txSql, txHooks, output: { archivedAt: Date.now() } }),
             ),
           );
         },
@@ -191,11 +191,11 @@ console.log(
   "10 bulk (marketing) jobs enqueued first, then 3 urgent (transactional) jobs arrive.\n",
 );
 
-const marketingChains = await withTransactionHooks(async (transactionHooks) =>
+const marketingChains = await withTxHooks(async (txHooks) =>
   sql.begin(async (txSql) =>
     client.createChains({
       txSql,
-      transactionHooks,
+      txHooks,
       items: Array.from({ length: 10 }, (_, index) => ({
         typeName: "email.marketing" as const,
         input: { to: `digest-${index}@example.com`, subject: "Weekly digest" },
@@ -206,11 +206,11 @@ const marketingChains = await withTransactionHooks(async (transactionHooks) =>
 
 await new Promise((resolve) => setTimeout(resolve, 50));
 
-const transactionalChains = await withTransactionHooks(async (transactionHooks) =>
+const transactionalChains = await withTxHooks(async (txHooks) =>
   sql.begin(async (txSql) =>
     client.createChains({
       txSql,
-      transactionHooks,
+      txHooks,
       items: [
         {
           typeName: "email.transactional",
@@ -264,11 +264,11 @@ console.log(
   "A chain begins on the urgent worker (alert.dispatch) and continues on the bulk worker (alert.archive).\n",
 );
 
-const alertChain = await withTransactionHooks(async (transactionHooks) =>
+const alertChain = await withTxHooks(async (txHooks) =>
   sql.begin(async (txSql) =>
     client.createChain({
       txSql,
-      transactionHooks,
+      txHooks,
       typeName: "alert.dispatch",
       input: { to: "oncall@example.com", alertId: "ALT-42" },
     }),

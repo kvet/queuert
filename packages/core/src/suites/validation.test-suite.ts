@@ -147,10 +147,10 @@ export const validationTestSuite = ({ it }: { it: TestAPI<TestSuiteContext> }): 
       jobTypes: simpleJobTypes,
     });
 
-    const chain = await withTransaction(async (txCtx, transactionHooks) =>
+    const chain = await withTransaction(async (txCtx, txHooks) =>
       client.createChain({
         ...txCtx,
-        transactionHooks,
+        txHooks,
         typeName: "main",
         input: { value: 42 },
       }),
@@ -186,10 +186,10 @@ export const validationTestSuite = ({ it }: { it: TestAPI<TestSuiteContext> }): 
       }),
     });
 
-    const chain = await withTransaction(async (txCtx, transactionHooks) =>
+    const chain = await withTransaction(async (txCtx, txHooks) =>
       client.createChain({
         ...txCtx,
-        transactionHooks,
+        txHooks,
         typeName: "main",
         input: { value: 42 },
       }),
@@ -226,10 +226,10 @@ export const validationTestSuite = ({ it }: { it: TestAPI<TestSuiteContext> }): 
     });
 
     await expect(
-      withTransaction(async (txCtx, transactionHooks) =>
+      withTransaction(async (txCtx, txHooks) =>
         client.createChain({
           ...txCtx,
-          transactionHooks,
+          txHooks,
           // @ts-expect-error testing runtime validation
           typeName: "nonexistent",
           input: { value: 1 },
@@ -254,10 +254,10 @@ export const validationTestSuite = ({ it }: { it: TestAPI<TestSuiteContext> }): 
     });
 
     await expect(
-      withTransaction(async (txCtx, transactionHooks) =>
+      withTransaction(async (txCtx, txHooks) =>
         client.createChain({
           ...txCtx,
-          transactionHooks,
+          txHooks,
           typeName: "main",
           // @ts-expect-error testing runtime validation
           input: { value: "not-a-number" },
@@ -282,11 +282,11 @@ export const validationTestSuite = ({ it }: { it: TestAPI<TestSuiteContext> }): 
     });
 
     await expect(
-      withTransaction(async (txCtx, transactionHooks) =>
+      withTransaction(async (txCtx, txHooks) =>
         // @ts-expect-error testing runtime validation - no blockers
         client.createChain({
           ...txCtx,
-          transactionHooks,
+          txHooks,
           typeName: "main",
           input: { id: "main-1" },
         }),
@@ -328,24 +328,24 @@ export const validationTestSuite = ({ it }: { it: TestAPI<TestSuiteContext> }): 
       jobTypes,
     });
 
-    await withTransaction(async (txCtx, transactionHooks) => {
+    await withTransaction(async (txCtx, txHooks) => {
       const authChain = await client.createChain({
         ...txCtx,
-        transactionHooks,
+        txHooks,
         typeName: "auth",
         input: { token: "stored" },
       });
       const forgedAuthChain = { ...authChain, input: { token: "forged" } };
       await client.createChain({
         ...txCtx,
-        transactionHooks,
+        txHooks,
         typeName: "main",
         input: null,
         blockers: [forgedAuthChain],
       });
       await client.createChain({
         ...txCtx,
-        transactionHooks,
+        txHooks,
         typeName: "main",
         input: null,
         blockers: [{ id: authChain.id }],
@@ -382,18 +382,18 @@ export const validationTestSuite = ({ it }: { it: TestAPI<TestSuiteContext> }): 
         processors: {
           main: {
             attemptHandler: async ({ complete }) =>
-              withTransaction(async (txCtx, transactionHooks) =>
-                complete({ ...txCtx, transactionHooks, output: { result: 84 } }),
+              withTransaction(async (txCtx, txHooks) =>
+                complete({ ...txCtx, txHooks, output: { result: 84 } }),
               ),
           },
         },
       }),
     });
 
-    const chain = await withTransaction(async (txCtx, transactionHooks) =>
+    const chain = await withTransaction(async (txCtx, txHooks) =>
       client.createChain({
         ...txCtx,
-        transactionHooks,
+        txHooks,
         typeName: "main",
         input: { value: 42 },
       }),
@@ -432,9 +432,9 @@ export const validationTestSuite = ({ it }: { it: TestAPI<TestSuiteContext> }): 
           main: {
             attemptHandler: async ({ complete }) => {
               try {
-                return await withTransaction(async (txCtx, transactionHooks) =>
+                return await withTransaction(async (txCtx, txHooks) =>
                   // @ts-expect-error testing runtime validation
-                  complete({ ...txCtx, transactionHooks, output: { result: "not-a-number" } }),
+                  complete({ ...txCtx, txHooks, output: { result: "not-a-number" } }),
                 );
               } catch (error) {
                 validationFailed.resolve(error);
@@ -446,10 +446,10 @@ export const validationTestSuite = ({ it }: { it: TestAPI<TestSuiteContext> }): 
       }),
     });
 
-    await withTransaction(async (txCtx, transactionHooks) =>
+    await withTransaction(async (txCtx, txHooks) =>
       client.createChain({
         ...txCtx,
-        transactionHooks,
+        txHooks,
         typeName: "main",
         input: { value: 42 },
       }),
@@ -485,28 +485,28 @@ export const validationTestSuite = ({ it }: { it: TestAPI<TestSuiteContext> }): 
         processors: {
           step1: {
             attemptHandler: async ({ complete }) =>
-              withTransaction(async (txCtx, transactionHooks) =>
+              withTransaction(async (txCtx, txHooks) =>
                 complete({
                   ...txCtx,
-                  transactionHooks,
+                  txHooks,
                   continueWith: { typeName: "step2", input: { data: 1 } },
                 }),
               ),
           },
           step2: {
             attemptHandler: async ({ complete }) =>
-              withTransaction(async (txCtx, transactionHooks) =>
-                complete({ ...txCtx, transactionHooks, output: { result: 42 } }),
+              withTransaction(async (txCtx, txHooks) =>
+                complete({ ...txCtx, txHooks, output: { result: 42 } }),
               ),
           },
         },
       }),
     });
 
-    const chain = await withTransaction(async (txCtx, transactionHooks) =>
+    const chain = await withTransaction(async (txCtx, txHooks) =>
       client.createChain({
         ...txCtx,
-        transactionHooks,
+        txHooks,
         typeName: "step1",
         input: { value: 1 },
       }),
@@ -545,10 +545,10 @@ export const validationTestSuite = ({ it }: { it: TestAPI<TestSuiteContext> }): 
           step1: {
             attemptHandler: async ({ complete }) => {
               try {
-                return await withTransaction(async (txCtx, transactionHooks) =>
+                return await withTransaction(async (txCtx, txHooks) =>
                   complete({
                     ...txCtx,
-                    transactionHooks,
+                    txHooks,
                     continueWith: { typeName: "step2", input: { data: 1 } },
                   }),
                 );
@@ -560,18 +560,18 @@ export const validationTestSuite = ({ it }: { it: TestAPI<TestSuiteContext> }): 
           },
           step2: {
             attemptHandler: async ({ complete }) =>
-              withTransaction(async (txCtx, transactionHooks) =>
-                complete({ ...txCtx, transactionHooks, output: { result: 1 } }),
+              withTransaction(async (txCtx, txHooks) =>
+                complete({ ...txCtx, txHooks, output: { result: 1 } }),
               ),
           },
         },
       }),
     });
 
-    await withTransaction(async (txCtx, transactionHooks) =>
+    await withTransaction(async (txCtx, txHooks) =>
       client.createChain({
         ...txCtx,
-        transactionHooks,
+        txHooks,
         typeName: "step1",
         input: { value: 1 },
       }),
@@ -598,19 +598,19 @@ export const validationTestSuite = ({ it }: { it: TestAPI<TestSuiteContext> }): 
       jobTypes: simpleJobTypes,
     });
 
-    const chain = await withTransaction(async (txCtx, transactionHooks) =>
+    const chain = await withTransaction(async (txCtx, txHooks) =>
       client.createChain({
         ...txCtx,
-        transactionHooks,
+        txHooks,
         typeName: "main",
         input: { value: 42 },
       }),
     );
 
-    const completedChain = await withTransaction(async (txCtx, transactionHooks) =>
+    const completedChain = await withTransaction(async (txCtx, txHooks) =>
       client.completeChain({
         ...txCtx,
-        transactionHooks,
+        txHooks,
         ...chain,
         handler: async ({ job, completeJob }) =>
           completeJob(job, async ({ complete }) => complete({ output: { result: 84 } })),
@@ -636,20 +636,20 @@ export const validationTestSuite = ({ it }: { it: TestAPI<TestSuiteContext> }): 
       jobTypes: simpleJobTypes,
     });
 
-    const chain = await withTransaction(async (txCtx, transactionHooks) =>
+    const chain = await withTransaction(async (txCtx, txHooks) =>
       client.createChain({
         ...txCtx,
-        transactionHooks,
+        txHooks,
         typeName: "main",
         input: { value: 42 },
       }),
     );
 
     await expect(
-      withTransaction(async (txCtx, transactionHooks) =>
+      withTransaction(async (txCtx, txHooks) =>
         client.completeChain({
           ...txCtx,
-          transactionHooks,
+          txHooks,
           ...chain,
           handler: async ({ job, completeJob }) =>
             completeJob(job, async ({ complete }) =>
@@ -685,27 +685,27 @@ export const validationTestSuite = ({ it }: { it: TestAPI<TestSuiteContext> }): 
         processors: {
           step2: {
             attemptHandler: async ({ complete }) =>
-              withTransaction(async (txCtx, transactionHooks) =>
-                complete({ ...txCtx, transactionHooks, output: { result: 42 } }),
+              withTransaction(async (txCtx, txHooks) =>
+                complete({ ...txCtx, txHooks, output: { result: 42 } }),
               ),
           },
         },
       }),
     });
 
-    const chain = await withTransaction(async (txCtx, transactionHooks) =>
+    const chain = await withTransaction(async (txCtx, txHooks) =>
       client.createChain({
         ...txCtx,
-        transactionHooks,
+        txHooks,
         typeName: "step1",
         input: { value: 1 },
       }),
     );
 
-    const partialChain = await withTransaction(async (txCtx, transactionHooks) =>
+    const partialChain = await withTransaction(async (txCtx, txHooks) =>
       client.completeChain({
         ...txCtx,
-        transactionHooks,
+        txHooks,
         ...chain,
         handler: async ({ job, completeJob }) => {
           if (job.typeName === "step1") {
@@ -746,20 +746,20 @@ export const validationTestSuite = ({ it }: { it: TestAPI<TestSuiteContext> }): 
       jobTypes: continuationNoFollowUpJobTypes,
     });
 
-    const chain = await withTransaction(async (txCtx, transactionHooks) =>
+    const chain = await withTransaction(async (txCtx, txHooks) =>
       client.createChain({
         ...txCtx,
-        transactionHooks,
+        txHooks,
         typeName: "step1",
         input: { value: 1 },
       }),
     );
 
     await expect(
-      withTransaction(async (txCtx, transactionHooks) =>
+      withTransaction(async (txCtx, txHooks) =>
         client.completeChain({
           ...txCtx,
-          transactionHooks,
+          txHooks,
           typeName: "step1",
           id: chain.id,
           handler: async ({ job, completeJob }) => {

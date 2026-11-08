@@ -21,7 +21,7 @@ import {
   createInProcessWorker,
   createProcessors,
   defineJobTypes,
-  withTransactionHooks,
+  withTxHooks,
 } from "queuert";
 
 const jobTypes = defineJobTypes<{
@@ -107,11 +107,11 @@ const worker = await createInProcessWorker({
 
           if (job.input.amount > 1000) {
             console.log(`  Payment FAILED: Amount exceeds limit`);
-            return withTransactionHooks(async (transactionHooks) =>
+            return withTxHooks(async (txHooks) =>
               sql.begin(async (txSql) =>
                 complete({
                   txSql,
-                  transactionHooks,
+                  txHooks,
                   output: { success: false, error: "Amount exceeds limit" },
                 }),
               ),
@@ -119,11 +119,11 @@ const worker = await createInProcessWorker({
           }
 
           console.log(`  Payment SUCCESS`);
-          return withTransactionHooks(async (transactionHooks) =>
+          return withTxHooks(async (txHooks) =>
             sql.begin(async (txSql) =>
               complete({
                 txSql,
-                transactionHooks,
+                txHooks,
                 output: { success: true, transactionId: `txn_${Date.now()}` },
               }),
             ),
@@ -137,11 +137,11 @@ const worker = await createInProcessWorker({
           const chargeId = `ch_${Date.now()}`;
           console.log(`  Charge successful: ${chargeId}`);
 
-          return withTransactionHooks(async (transactionHooks) =>
+          return withTxHooks(async (txHooks) =>
             sql.begin(async (txSql) =>
               complete({
                 txSql,
-                transactionHooks,
+                txHooks,
                 continueWith: {
                   typeName: "ship-order",
                   input: { orderId: job.input.orderId, chargeId },
@@ -158,11 +158,11 @@ const worker = await createInProcessWorker({
 
           if (shipmentShouldFail) {
             console.log(`  Shipping FAILED - continuing to refund`);
-            return withTransactionHooks(async (transactionHooks) =>
+            return withTxHooks(async (txHooks) =>
               sql.begin(async (txSql) =>
                 complete({
                   txSql,
-                  transactionHooks,
+                  txHooks,
                   continueWith: {
                     typeName: "refund-charge",
                     input: { chargeId: job.input.chargeId, reason: "shipping_failed" },
@@ -173,10 +173,8 @@ const worker = await createInProcessWorker({
           }
 
           console.log(`  Shipping SUCCESS`);
-          return withTransactionHooks(async (transactionHooks) =>
-            sql.begin(async (txSql) =>
-              complete({ txSql, transactionHooks, output: { shipped: true } }),
-            ),
+          return withTxHooks(async (txHooks) =>
+            sql.begin(async (txSql) => complete({ txSql, txHooks, output: { shipped: true } })),
           );
         },
       },
@@ -186,9 +184,9 @@ const worker = await createInProcessWorker({
           console.log(`[refund-charge] Refunding ${job.input.chargeId} (${job.input.reason})`);
           const refundId = `rf_${Date.now()}`;
           console.log(`  Refund successful: ${refundId}`);
-          return withTransactionHooks(async (transactionHooks) =>
+          return withTxHooks(async (txHooks) =>
             sql.begin(async (txSql) =>
-              complete({ txSql, transactionHooks, output: { refunded: true, refundId } }),
+              complete({ txSql, txHooks, output: { refunded: true, refundId } }),
             ),
           );
         },
@@ -207,11 +205,11 @@ const worker = await createInProcessWorker({
           }
 
           console.log(`  API call SUCCESS`);
-          return withTransactionHooks(async (transactionHooks) =>
+          return withTxHooks(async (txHooks) =>
             sql.begin(async (txSql) =>
               complete({
                 txSql,
-                transactionHooks,
+                txHooks,
                 output: { data: `Response from ${job.input.endpoint}` },
               }),
             ),
@@ -228,11 +226,11 @@ const stopWorker = await worker.start();
 console.log("\n--- Scenario 1: Discriminated Union Outputs ---");
 console.log("Payment results are typed as success | failure.\n");
 
-const payment1 = await withTransactionHooks(async (transactionHooks) =>
+const payment1 = await withTxHooks(async (txHooks) =>
   sql.begin(async (txSql) => {
     const result = await client.createChain({
       txSql,
-      transactionHooks,
+      txHooks,
       typeName: "process-payment",
       input: { orderId: "order-1", amount: 500 },
     });
@@ -245,11 +243,11 @@ console.log(
 );
 assert.equal(result1.output.success, true);
 
-const payment2 = await withTransactionHooks(async (transactionHooks) =>
+const payment2 = await withTxHooks(async (txHooks) =>
   sql.begin(async (txSql) => {
     const result = await client.createChain({
       txSql,
-      transactionHooks,
+      txHooks,
       typeName: "process-payment",
       input: { orderId: "order-2", amount: 1500 },
     });
@@ -267,11 +265,11 @@ console.log("\n--- Scenario 2a: Compensation Pattern (Success) ---");
 console.log("Charge -> Ship succeeds.\n");
 
 shipmentShouldFail = false;
-const order1 = await withTransactionHooks(async (transactionHooks) =>
+const order1 = await withTxHooks(async (txHooks) =>
   sql.begin(async (txSql) => {
     const result = await client.createChain({
       txSql,
-      transactionHooks,
+      txHooks,
       typeName: "charge-card",
       input: { orderId: "order-3", amount: 100 },
     });
@@ -287,11 +285,11 @@ console.log("\n--- Scenario 2b: Compensation Pattern (Failure -> Refund) ---");
 console.log("Charge -> Ship fails -> Refund.\n");
 
 shipmentShouldFail = true;
-const order2 = await withTransactionHooks(async (transactionHooks) =>
+const order2 = await withTxHooks(async (txHooks) =>
   sql.begin(async (txSql) => {
     const result = await client.createChain({
       txSql,
-      transactionHooks,
+      txHooks,
       typeName: "charge-card",
       input: { orderId: "order-4", amount: 100 },
     });
@@ -308,11 +306,11 @@ console.log(
   "Thrown errors reschedule with exponential backoff. lastAttemptError carries context.\n",
 );
 
-const apiCall = await withTransactionHooks(async (transactionHooks) =>
+const apiCall = await withTxHooks(async (txHooks) =>
   sql.begin(async (txSql) => {
     const result = await client.createChain({
       txSql,
-      transactionHooks,
+      txHooks,
       typeName: "call-flaky-api",
       input: { endpoint: "/api/data" },
     });

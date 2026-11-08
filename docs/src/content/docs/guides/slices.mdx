@@ -37,7 +37,7 @@ export const orderJobTypes = defineJobTypes<{
 **Processors** implement the handlers, typed against the slice's definitions:
 
 ```ts title="slice-orders-processors.ts"
-import { createProcessors, withTransactionHooks } from "queuert";
+import { createProcessors, withTxHooks } from "queuert";
 import { client, sql } from "./client.js";
 import { orderJobTypes } from "./slice-orders-definitions.js";
 
@@ -47,14 +47,14 @@ export const orderProcessors = createProcessors({
   processors: {
     "orders.create": {
       attemptHandler: async ({ job, complete }) =>
-        withTransactionHooks(async (transactionHooks) =>
-          sql.begin(async (txSql) => complete({ txSql, transactionHooks, continueWith: { typeName: "orders.fulfill", input: { orderId: "123" } } })),
+        withTxHooks(async (txHooks) =>
+          sql.begin(async (txSql) => complete({ txSql, txHooks, continueWith: { typeName: "orders.fulfill", input: { orderId: "123" } } })),
         ),
     },
     "orders.fulfill": {
       attemptHandler: async ({ job, complete }) =>
-        withTransactionHooks(async (transactionHooks) =>
-          sql.begin(async (txSql) => complete({ txSql, transactionHooks, output: { fulfilled: true } })),
+        withTxHooks(async (txHooks) =>
+          sql.begin(async (txSql) => complete({ txSql, txHooks, output: { fulfilled: true } })),
         ),
     },
   },

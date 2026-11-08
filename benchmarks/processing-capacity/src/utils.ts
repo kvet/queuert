@@ -8,7 +8,7 @@ import {
   createInProcessWorker,
   createProcessors,
   defineJobTypes,
-  withTransactionHooks,
+  withTxHooks,
 } from "queuert";
 
 const WINDOW_MS = 2_000;
@@ -38,18 +38,18 @@ const createChainsForWindow =
     let count = 0;
     while (performance.now() - begin < WINDOW_MS) {
       const start = count;
-      await withTransactionHooks(async (transactionHooks) =>
+      await withTxHooks(async (txHooks) =>
         withTransaction(async (txCtx) =>
           batchSize === 1
             ? client.createChain({
                 ...txCtx,
-                transactionHooks,
+                txHooks,
                 typeName: "test-job",
                 input: { index: start },
               })
             : client.createChains({
                 ...txCtx,
-                transactionHooks,
+                txHooks,
                 items: Array.from({ length: batchSize }, (_, offset) => ({
                   typeName: "test-job" as const,
                   input: { index: start + offset },
@@ -68,8 +68,8 @@ const seedChains = async ({ client, withTransaction }: BenchmarkContext): Promis
       typeName: "test-job" as const,
       input: { index: start + i },
     }));
-    await withTransactionHooks(async (transactionHooks) =>
-      withTransaction(async (txCtx) => client.createChains({ ...txCtx, transactionHooks, items })),
+    await withTxHooks(async (txHooks) =>
+      withTransaction(async (txCtx) => client.createChains({ ...txCtx, txHooks, items })),
     );
   }
 };
@@ -103,9 +103,9 @@ const completeChainsForWindow =
         processors: {
           "test-job": {
             attemptHandler: async ({ complete }) => {
-              const result = await withTransactionHooks(async (transactionHooks) =>
+              const result = await withTxHooks(async (txHooks) =>
                 withTransaction(async (txCtx) =>
-                  complete({ ...txCtx, transactionHooks, output: { done: true } }),
+                  complete({ ...txCtx, txHooks, output: { done: true } }),
                 ),
               );
               completed++;

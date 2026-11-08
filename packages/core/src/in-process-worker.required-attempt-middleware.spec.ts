@@ -9,7 +9,7 @@ import {
   type InProcessStateAdapter,
   createInProcessStateAdapter,
 } from "./state-adapter/state-adapter.in-process.ts";
-import { withTransactionHooks } from "./transaction-hooks.ts";
+import { withTxHooks } from "./tx-hooks/tx-hooks.ts";
 
 type Defs = {
   foo: { entry: true; input: null; output: null };
@@ -53,9 +53,9 @@ describe("createInProcessWorker requiredAttemptMiddleware", () => {
         processors: {
           foo: {
             attemptHandler: async ({ complete }) =>
-              withTransactionHooks(async (transactionHooks) =>
+              withTxHooks(async (txHooks) =>
                 stateAdapter.withTransaction(async (txCtx) =>
-                  complete({ ...txCtx, transactionHooks, output: null }),
+                  complete({ ...txCtx, txHooks, output: null }),
                 ),
               ),
           },
@@ -82,9 +82,9 @@ describe("createInProcessWorker requiredAttemptMiddleware", () => {
         processors: {
           foo: {
             attemptHandler: async ({ complete }) =>
-              withTransactionHooks(async (transactionHooks) =>
+              withTxHooks(async (txHooks) =>
                 stateAdapter.withTransaction(async (txCtx) =>
-                  complete({ ...txCtx, transactionHooks, output: null }),
+                  complete({ ...txCtx, txHooks, output: null }),
                 ),
               ),
           },
@@ -114,9 +114,9 @@ describe("createInProcessWorker requiredAttemptMiddleware", () => {
           processors: {
             foo: {
               attemptHandler: async ({ complete }) =>
-                withTransactionHooks(async (transactionHooks) =>
+                withTxHooks(async (txHooks) =>
                   stateAdapter.withTransaction(async (txCtx) =>
-                    complete({ ...txCtx, transactionHooks, output: null }),
+                    complete({ ...txCtx, txHooks, output: null }),
                   ),
                 ),
             },
@@ -144,9 +144,9 @@ describe("createInProcessWorker requiredAttemptMiddleware", () => {
           processors: {
             foo: {
               attemptHandler: async ({ complete }) =>
-                withTransactionHooks(async (transactionHooks) =>
+                withTxHooks(async (txHooks) =>
                   stateAdapter.withTransaction(async (txCtx) =>
-                    complete({ ...txCtx, transactionHooks, output: null }),
+                    complete({ ...txCtx, txHooks, output: null }),
                   ),
                 ),
             },
@@ -182,9 +182,9 @@ describe("createInProcessWorker requiredAttemptMiddleware", () => {
           processors: {
             foo: {
               attemptHandler: async ({ complete }) =>
-                withTransactionHooks(async (transactionHooks) =>
+                withTxHooks(async (txHooks) =>
                   stateAdapter.withTransaction(async (txCtx) =>
-                    complete({ ...txCtx, transactionHooks, output: null }),
+                    complete({ ...txCtx, txHooks, output: null }),
                   ),
                 ),
             },
@@ -210,9 +210,9 @@ describe("createInProcessWorker requiredAttemptMiddleware", () => {
       processors: {
         foo: {
           attemptHandler: async ({ complete }) =>
-            withTransactionHooks(async (transactionHooks) =>
+            withTxHooks(async (txHooks) =>
               stateAdapter.withTransaction(async (txCtx) =>
-                complete({ ...txCtx, transactionHooks, output: null }),
+                complete({ ...txCtx, txHooks, output: null }),
               ),
             ),
         },
@@ -225,9 +225,9 @@ describe("createInProcessWorker requiredAttemptMiddleware", () => {
       processors: {
         bar: {
           attemptHandler: async ({ complete }) =>
-            withTransactionHooks(async (transactionHooks) =>
+            withTxHooks(async (txHooks) =>
               stateAdapter.withTransaction(async (txCtx) =>
-                complete({ ...txCtx, transactionHooks, output: null }),
+                complete({ ...txCtx, txHooks, output: null }),
               ),
             ),
         },
@@ -263,9 +263,9 @@ describe("createInProcessWorker requiredAttemptMiddleware", () => {
         processors: {
           foo: {
             attemptHandler: async ({ complete }) =>
-              withTransactionHooks(async (transactionHooks) =>
+              withTxHooks(async (txHooks) =>
                 stateAdapter.withTransaction(async (txCtx) =>
-                  complete({ ...txCtx, transactionHooks, output: null }),
+                  complete({ ...txCtx, txHooks, output: null }),
                 ),
               ),
           },
@@ -303,9 +303,9 @@ describe("createInProcessWorker requiredAttemptMiddleware", () => {
           processors: {
             foo: {
               attemptHandler: async ({ complete }) =>
-                withTransactionHooks(async (transactionHooks) =>
+                withTxHooks(async (txHooks) =>
                   stateAdapter.withTransaction(async (txCtx) =>
-                    complete({ ...txCtx, transactionHooks, output: null }),
+                    complete({ ...txCtx, txHooks, output: null }),
                   ),
                 ),
             },
@@ -328,9 +328,9 @@ describe("createInProcessWorker requiredAttemptMiddleware", () => {
         processors: {
           foo: {
             attemptHandler: async ({ complete }) =>
-              withTransactionHooks(async (transactionHooks) =>
+              withTxHooks(async (txHooks) =>
                 stateAdapter.withTransaction(async (txCtx) =>
-                  complete({ ...txCtx, transactionHooks, output: null }),
+                  complete({ ...txCtx, txHooks, output: null }),
                 ),
               ),
           },

@@ -184,7 +184,7 @@ ALTER TABLE job ADD COLUMN unsealed_blockers boolean NOT NULL DEFAULT false;
 //    Passing `blockers` here is a compile error for an unsealed type.
 const collector = await client.createChain({
   sql: txSql,
-  transactionHooks,
+  txHooks,
   typeName: "aggregate",
   input: { label: "report" },
 });
@@ -207,9 +207,9 @@ await client.sealJobBlockers({ sql: txSql, jobId: collector.id });
 **Fan-in pattern — each producer registers itself at completion**, sharing the completion transaction so the attached chain is guaranteed `completed` at the moment of attachment:
 
 ```ts
-return withTransactionHooks(async (transactionHooks) =>
+return withTxHooks(async (txHooks) =>
   sql.begin(async (txSql) => {
-    const completedJob = await complete({ sql: txSql, transactionHooks, output: { value } });
+    const completedJob = await complete({ sql: txSql, txHooks, output: { value } });
     await client.addJobBlockers({
       sql: txSql,
       jobId: collectorJobId,
@@ -239,9 +239,9 @@ The eagerly preloaded `job.blockers` is **removed** from the attempt handler and
 "perform-action": {
   attemptHandler: async ({ getBlockers, complete }) => {
     const [user, config] = await getBlockers();
-    return withTransactionHooks(async (transactionHooks) =>
+    return withTxHooks(async (txHooks) =>
       sql.begin(async (txSql) =>
-        complete({ sql: txSql, transactionHooks, output: { result: user.output.role } }),
+        complete({ sql: txSql, txHooks, output: { result: user.output.role } }),
       ),
     );
   },
@@ -264,8 +264,8 @@ The eagerly preloaded `job.blockers` is **removed** from the attempt handler and
         });
       }
     }
-    return withTransactionHooks(async (transactionHooks) =>
-      sql.begin(async (txSql) => complete({ sql: txSql, transactionHooks, output: { sum: total } })),
+    return withTxHooks(async (txHooks) =>
+      sql.begin(async (txSql) => complete({ sql: txSql, txHooks, output: { sum: total } })),
     );
   },
 }

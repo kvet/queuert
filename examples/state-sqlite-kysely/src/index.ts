@@ -7,7 +7,7 @@ import {
   createInProcessWorker,
   createProcessors,
   defineJobTypes,
-  withTransactionHooks,
+  withTxHooks,
 } from "queuert";
 
 import { createKyselySqliteStateProvider } from "./provider.ts";
@@ -82,11 +82,11 @@ const worker = await createInProcessWorker({
 
           // Kysely holds its single SQLite connection for the whole transaction, so the
           // worker's own statements cannot run inside it.
-          return withTransactionHooks(async (transactionHooks) =>
+          return withTxHooks(async (txHooks) =>
             db.transaction().execute(async (txDb) =>
               complete({
                 db: txDb,
-                transactionHooks,
+                txHooks,
                 output: { sentAt: new Date().toISOString() },
               }),
             ),
@@ -101,7 +101,7 @@ const stopWorker = await worker.start();
 
 // Register a new user and queue welcome email atomically
 // #region create-chain
-const chain = await withTransactionHooks(async (transactionHooks) =>
+const chain = await withTxHooks(async (txHooks) =>
   db.transaction().execute(async (txDb) => {
     const user = await txDb
       .insertInto("users")
@@ -112,7 +112,7 @@ const chain = await withTransactionHooks(async (transactionHooks) =>
     // Queue welcome email - if user creation fails, no email job is created
     return client.createChain({
       db: txDb,
-      transactionHooks,
+      txHooks,
       typeName: "send_welcome_email",
       input: { userId: user.id },
     });

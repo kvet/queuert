@@ -1,6 +1,5 @@
 # Short term
 
-- [TASK] Tx hooks — sync and async variants, `txHooks.perTry` for reruns and retries (REPEATABLE READ / SERIALIZABLE, MongoDB `withTransaction`), disposable handles, library-wide `transactionHooks` → `txHooks` rename. See `design/tx-hooks.md`.
 - [TASK] Revise factories. See `design/sync-factories.md`.
 - [TASK] Rename `InProcessWorker`. See `design/worker-runner.md`.
 - [REF] txHooks provider
@@ -9,7 +8,6 @@
 - [REF] Generator-based core — rewrite core's internal job lifecycle on generators to cut `await` hops and promise allocations per job, keeping the public API (client, workers, adapters) unchanged.
 - [REF] sync sqlite api
 - [REF] PostgreSQL pipelining.
-- [REF] Revise `void` in public API callback types — a `() => void` callback also accepts an `async` function whose promise is then dropped (e.g. `HookDefinition.discard` and the rollback returned by `checkpoint`, which run synchronously on savepoint and `retryBoundary` rollback). Decide per callback between `void`, `undefined` (rejects async, but a standalone helper inferred as `() => void` no longer fits) and a generic `NotThenable` return.
 - [EPIC] SQLite production-readiness
   - [TASK] Get rid of `createAsyncRwLock()`
   - [TASK] No multi-worker example
@@ -18,6 +16,7 @@
 
 # Medium term
 
+- [TASK] Handle drivers whose transaction resolves after a rollback — knex resolves `knex.transaction(cb)` after a bare `trx.rollback()` (`doNotRejectOnRollback` defaults to `true`, per call and again for nested savepoints), so tx hooks flush for writes that never committed. Today users must pass `{ doNotRejectOnRollback: false }` on every call (see the knex section of `docs/src/content/docs/guides/tx-hooks.mdx`). Options: a knex helper that always sets the option, or a way for the hooks to learn the transaction's real outcome.
 - [TASK] Built-in cleanup. See `design/builtin-cleanup.md`.
 - [TASK] PostgreSQL REPEATABLE READ and SERIALIZABLE support — counter-based blocker bookkeeping (`has_dependents`, `blockers_remaining`), a worker-row write on acquisition, adapter retries of 40001/40P01 for Queuert's own work, and migrations pinned to READ COMMITTED. Every 0.17 process must stop before `003_blocker_counters`. See `design/pg-isolation-levels.md`.
 - [TASK] Best-effort `rescheduleJobs` — today it fails the whole batch if any job is not pending, so apps hand-roll "wake a sleeping chain" loops (`listChainJobs` + `rescheduleJob` + catch `JobNotReschedulableError`). Add an option such as `skipNotReschedulable: true` that returns a per-job outcome (`rescheduled` / `not-pending` / `completed`) instead of throwing.

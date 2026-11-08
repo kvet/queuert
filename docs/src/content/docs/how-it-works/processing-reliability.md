@@ -7,7 +7,7 @@ sidebar:
 
 When your code throws during job processing, your transaction rolls back any partial work and the worker reschedules the job with backoff. This happens automatically — no defensive error handling is needed inside your handler.
 
-This guide covers the engine's safety guarantees. For user-level error strategies (discriminated unions, compensation, rescheduling), see [Error Handling](../error-handling/). For the architectural overview, see [Job Processing](/queuert/how-it-works/job-processing/#errors-and-commit-detection).
+This page covers the engine's safety guarantees. For user-level error strategies (discriminated unions, compensation, rescheduling), see [Error Handling](../../guides/error-handling/). For the architectural overview, see [Job Processing](/queuert/how-it-works/job-processing/#errors-and-commit-detection).
 
 ## The Short Version
 
@@ -32,10 +32,10 @@ Work before your transaction — reads, external API calls — runs without a tr
 
     const { paymentId } = await paymentAPI.charge(order.amount);
 
-    return withTransactionHooks(async (transactionHooks) =>
+    return withTxHooks(async (txHooks) =>
       sql.begin(async (txSql) => {
         await txSql`UPDATE orders SET payment_id = ${paymentId} WHERE id = ${order.id}`;
-        return complete({ txSql, transactionHooks, output: { paymentId } });
+        return complete({ txSql, txHooks, output: { paymentId } });
       }),
     );
   },
@@ -51,7 +51,7 @@ If your transaction callback throws, your database client rolls the transaction 
 ```ts
 'transfer-funds': {
   attemptHandler: async ({ job, complete }) =>
-    withTransactionHooks(async (transactionHooks) =>
+    withTxHooks(async (txHooks) =>
       sql.begin(async (txSql) => {
         // If the CHECK constraint fires, the transaction rolls back
         // and the job is rescheduled — no corrupted state
@@ -59,7 +59,7 @@ If your transaction callback throws, your database client rolls the transaction 
                   WHERE id = ${job.input.fromId}`;
         await txSql`UPDATE accounts SET balance = balance + ${job.input.amount}
                   WHERE id = ${job.input.toId}`;
-        return complete({ txSql, transactionHooks, output: { transferred: true } });
+        return complete({ txSql, txHooks, output: { transferred: true } });
       }),
     ),
 }
@@ -84,10 +84,10 @@ A handler can commit work in its own transactions before the one that calls `com
 
     const externalId = await externalAPI.sync(data); // may throw
 
-    return withTransactionHooks(async (transactionHooks) =>
+    return withTxHooks(async (txHooks) =>
       sql.begin(async (txSql) => {
         await txSql`UPDATE items SET external_id = ${externalId} WHERE id = ${data.id}`;
-        return complete({ txSql, transactionHooks, output: { externalId } });
+        return complete({ txSql, txHooks, output: { externalId } });
       }),
     );
   },
@@ -103,9 +103,9 @@ Once the transaction that called `complete` has committed, the outcome is final.
 ```ts
 'notify-account': {
   attemptHandler: async ({ job, complete }) => {
-    const result = await withTransactionHooks(async (transactionHooks) =>
+    const result = await withTxHooks(async (txHooks) =>
       sql.begin(async (txSql) =>
-        complete({ txSql, transactionHooks, output: { notified: true } }),
+        complete({ txSql, txHooks, output: { notified: true } }),
       ),
     );
 
@@ -127,8 +127,8 @@ Keep work that must succeed for the job to count as done inside the transaction 
 - **Blocked jobs stay blocked.** If a blocker job's completion is rolled back, dependent jobs remain correctly blocked.
 - **No lost-attempt writes.** `complete` only writes while this attempt still owns the job. If the attempt was reclaimed and another worker took the job, or the job was completed or deleted elsewhere, `complete` writes nothing and throws (`JobTakenByAnotherWorkerError`, `JobAlreadyCompletedError` or `JobNotFoundError`), so your transaction rolls back. Writes in your other transactions get the same guarantee when they call [`fence`](/queuert/how-it-works/job-processing/#fence) first.
 - **No defensive `try/catch` needed.** Let exceptions propagate naturally — the worker handles them.
-- **Jobs retry indefinitely.** There is no maximum retry count. Use [discriminated unions or compensation patterns](../error-handling/) to handle permanently failing jobs.
+- **Jobs retry indefinitely.** There is no maximum retry count. Use [discriminated unions or compensation patterns](../../guides/error-handling/) to handle permanently failing jobs.
 
 ## See Also
 
-See [examples/showcase-error-recovery](https://github.com/kvet/queuert/tree/main/examples/showcase-error-recovery) for a complete working example. See also [Error Handling](../error-handling/) for user-level error strategy, [Timeouts](../timeouts/) for the worker lease, and [Job Processing](/queuert/how-it-works/job-processing/) reference.
+See [examples/showcase-error-recovery](https://github.com/kvet/queuert/tree/main/examples/showcase-error-recovery) for a complete working example. See also [Error Handling](../../guides/error-handling/) for user-level error strategy, [Timeouts](../../guides/timeouts/) for the worker lease, and [Job Processing](/queuert/how-it-works/job-processing/) reference.

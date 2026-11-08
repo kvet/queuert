@@ -269,18 +269,6 @@ export class BlockerLimitExceededError extends Error {
   }
 }
 
-/** Thrown when accessing a transaction hook that has not been registered. */
-export class HookNotRegisteredError extends Error {
-  /** The hook key that was not found. */
-  readonly key: symbol;
-
-  constructor(message: string, options: { key: symbol }) {
-    super(message);
-    this.name = "HookNotRegisteredError";
-    this.key = options.key;
-  }
-}
-
 /** Thrown when merging registries that contain overlapping job type names. */
 export class DuplicateJobTypeError extends Error {
   /** The type names that appeared in more than one registry. */

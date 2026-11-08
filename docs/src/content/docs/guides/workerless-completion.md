@@ -22,11 +22,11 @@ const jobTypes = defineJobTypes<{
 }>();
 
 // Start a job that auto-rejects in 2 hours if not handled
-const chain = await withTransactionHooks(async (transactionHooks) =>
+const chain = await withTxHooks(async (txHooks) =>
   stateProvider.withTransaction(async (txCtx) =>
     client.createChain({
       ...txCtx,
-      transactionHooks,
+      txHooks,
       typeName: "await-approval",
       input: { requestId: "123" },
       schedule: { afterMs: 2 * 60 * 60 * 1000 }, // 2 hours
@@ -43,18 +43,18 @@ const worker = await createInProcessWorker({
     processors: {
       "await-approval": {
         attemptHandler: async ({ complete }) =>
-          withTransactionHooks(async (transactionHooks) =>
+          withTxHooks(async (txHooks) =>
             stateProvider.withTransaction(async (txCtx) =>
-              complete({ ...txCtx, transactionHooks, output: { rejected: true } }),
+              complete({ ...txCtx, txHooks, output: { rejected: true } }),
             ),
           ),
       },
       "process-request": {
         attemptHandler: async ({ job, complete }) => {
           await doSomethingWith(job.input.requestId);
-          return withTransactionHooks(async (transactionHooks) =>
+          return withTxHooks(async (txHooks) =>
             stateProvider.withTransaction(async (txCtx) =>
-              complete({ ...txCtx, transactionHooks, output: { processed: true } }),
+              complete({ ...txCtx, txHooks, output: { processed: true } }),
             ),
           );
         },
@@ -66,11 +66,11 @@ const worker = await createInProcessWorker({
 const stop = await worker.start();
 
 // The job can be completed early without a worker (e.g., via API call)
-await withTransactionHooks(async (transactionHooks) =>
+await withTxHooks(async (txHooks) =>
   stateProvider.withTransaction(async (txCtx) =>
     client.completeChain({
       ...txCtx,
-      transactionHooks,
+      txHooks,
       id: chain.id,
       typeName: "await-approval",
       handler: async ({ job, completeJob }) => {
@@ -98,7 +98,7 @@ await withTransactionHooks(async (transactionHooks) =>
 
 This pattern lets you interweave external actions with your chains -- waiting for user input, third-party callbacks, or manual approval steps.
 
-See [examples/showcase-workerless](https://github.com/kvet/queuert/tree/main/examples/showcase-workerless) for a complete working example demonstrating approval workflows and deferred start with early completion. See also [Transaction Hooks](../transaction-hooks/) and [Scheduling](../scheduling/) (deferred start).
+See [examples/showcase-workerless](https://github.com/kvet/queuert/tree/main/examples/showcase-workerless) for a complete working example demonstrating approval workflows and deferred start with early completion. See also [Tx Hooks](../tx-hooks/) and [Scheduling](../scheduling/) (deferred start).
 
 ## How It Works
 

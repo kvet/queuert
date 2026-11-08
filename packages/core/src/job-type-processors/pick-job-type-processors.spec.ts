@@ -9,7 +9,7 @@ import {
   createInProcessStateAdapter,
   type InProcessStateAdapter,
 } from "../state-adapter/state-adapter.in-process.ts";
-import { withTransactionHooks } from "../transaction-hooks.ts";
+import { withTxHooks } from "../tx-hooks/tx-hooks.ts";
 import { createProcessors } from "./create-job-type-processors.ts";
 import {
   type ProcessorDefinitions,
@@ -49,25 +49,25 @@ const imageProcessors = createProcessors({
   processors: {
     "images.resize": {
       attemptHandler: async ({ job, complete }) =>
-        withTransactionHooks(async (transactionHooks) =>
+        withTxHooks(async (txHooks) =>
           stateAdapter.withTransaction(async (txCtx) =>
-            complete({ ...txCtx, transactionHooks, output: { url: job.input.url } }),
+            complete({ ...txCtx, txHooks, output: { url: job.input.url } }),
           ),
         ),
     },
     "images.transcode": {
       attemptHandler: async ({ job, complete }) =>
-        withTransactionHooks(async (transactionHooks) =>
+        withTxHooks(async (txHooks) =>
           stateAdapter.withTransaction(async (txCtx) =>
-            complete({ ...txCtx, transactionHooks, output: { url: job.input.url } }),
+            complete({ ...txCtx, txHooks, output: { url: job.input.url } }),
           ),
         ),
     },
     "images.notify": {
       attemptHandler: async ({ complete }) =>
-        withTransactionHooks(async (transactionHooks) =>
+        withTxHooks(async (txHooks) =>
           stateAdapter.withTransaction(async (txCtx) =>
-            complete({ ...txCtx, transactionHooks, output: null }),
+            complete({ ...txCtx, txHooks, output: null }),
           ),
         ),
     },
@@ -80,9 +80,9 @@ const billingProcessors = createProcessors({
   processors: {
     "billing.charge": {
       attemptHandler: async ({ complete }) =>
-        withTransactionHooks(async (transactionHooks) =>
+        withTxHooks(async (txHooks) =>
           stateAdapter.withTransaction(async (txCtx) =>
-            complete({ ...txCtx, transactionHooks, output: null }),
+            complete({ ...txCtx, txHooks, output: null }),
           ),
         ),
     },

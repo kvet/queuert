@@ -13,7 +13,7 @@ import {
   createClient,
   createInProcessWorker,
   createProcessors,
-  withTransactionHooks,
+  withTxHooks,
   createInProcessNotifyAdapter,
   createInProcessStateAdapter,
 } from "queuert";
@@ -102,11 +102,11 @@ const worker = await createInProcessWorker({
           console.log(`Fetching data from ${job.input.url}`);
           const data = { items: [1, 2, 3], source: job.input.url };
 
-          return withTransactionHooks(async (transactionHooks) =>
+          return withTxHooks(async (txHooks) =>
             stateAdapter.withTransaction(async (ctx) =>
               complete({
                 ...ctx,
-                transactionHooks,
+                txHooks,
                 continueWith: {
                   typeName: "process-data",
                   input: { data },
@@ -121,11 +121,11 @@ const worker = await createInProcessWorker({
           console.log("Processing data:", job.input.data);
           const data = job.input.data as { items: number[] };
 
-          return withTransactionHooks(async (transactionHooks) =>
+          return withTxHooks(async (txHooks) =>
             stateAdapter.withTransaction(async (ctx) =>
               complete({
                 ...ctx,
-                transactionHooks,
+                txHooks,
                 output: {
                   processed: true,
                   itemCount: data.items?.length ?? 0,
@@ -140,9 +140,9 @@ const worker = await createInProcessWorker({
           console.log(`Processing batch ${job.input.batchId}`);
           console.log("Blockers completed:", job.blockers.length);
 
-          return withTransactionHooks(async (transactionHooks) =>
+          return withTxHooks(async (txHooks) =>
             stateAdapter.withTransaction(async (ctx) =>
-              complete({ ...ctx, transactionHooks, output: { success: true } }),
+              complete({ ...ctx, txHooks, output: { success: true } }),
             ),
           );
         },
@@ -151,11 +151,11 @@ const worker = await createInProcessWorker({
         attemptHandler: async ({ job, complete }) => {
           console.log(`Authenticating with token: ${job.input.token.substring(0, 8)}...`);
 
-          return withTransactionHooks(async (transactionHooks) =>
+          return withTxHooks(async (txHooks) =>
             stateAdapter.withTransaction(async (ctx) =>
               complete({
                 ...ctx,
-                transactionHooks,
+                txHooks,
                 output: {
                   userId: `user-${job.input.token.substring(0, 4)}`,
                 },
@@ -172,11 +172,11 @@ const stopWorker = await worker.start();
 
 // Run a chain
 console.log("\n=== Running fetch-data chain ===");
-const chain = await withTransactionHooks(async (transactionHooks) =>
+const chain = await withTxHooks(async (txHooks) =>
   stateAdapter.withTransaction(async (ctx) =>
     client.createChain({
       ...ctx,
-      transactionHooks,
+      txHooks,
       typeName: "fetch-data",
       input: { url: "https://api.example.com/data" },
     }),

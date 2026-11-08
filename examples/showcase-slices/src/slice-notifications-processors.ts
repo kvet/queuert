@@ -1,4 +1,4 @@
-import { createProcessors, withTransactionHooks } from "queuert";
+import { createProcessors, withTxHooks } from "queuert";
 
 import { sql } from "./adapters.ts";
 import { client } from "./client.ts";
@@ -14,9 +14,9 @@ export const notificationProcessors = createProcessors({
           `[notifications.send-notification] Sending ${job.input.channel} to user ${job.input.userId}: "${job.input.message}"`,
         );
 
-        return withTransactionHooks(async (transactionHooks) =>
+        return withTxHooks(async (txHooks) =>
           sql.begin(async (txSql) =>
-            complete({ txSql, transactionHooks, output: { sentAt: new Date().toISOString() } }),
+            complete({ txSql, txHooks, output: { sentAt: new Date().toISOString() } }),
           ),
         );
       },

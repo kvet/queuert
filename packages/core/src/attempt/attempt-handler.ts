@@ -1,4 +1,4 @@
-import { serializeError } from "@queuert/helpers";
+import { serializeError, createLatch } from "@queuert/helpers";
 
 import {
   type AnyAttemptMiddleware,
@@ -14,11 +14,10 @@ import {
 } from "../errors.ts";
 import { completeChain, continueChain, rescheduleJobs } from "../implementation.ts";
 import type { JobAttemptSpanHandle } from "../observability-adapter/observability-adapter.ts";
-import { bufferObservabilityEvent } from "../observability-adapter/observability-hooks.ts";
 import type { Helpers } from "../setup-helpers.ts";
 import type { BaseTxContext, StateJob, StateJobInfo } from "../state-adapter/state-adapter.ts";
-import { requireTxCtx } from "../state-adapter/tx-context.ts";
-import { createTransactionHooks, requireTransactionHooks } from "../transaction-hooks.ts";
+import { requireTxCtx, requireTxHooks } from "../state-adapter/tx-context.ts";
+import { type TxHooks, createTxHooks } from "../tx-hooks/tx-hooks.ts";
 import type { AnyAttemptHandler, AnyCompleteOptions } from "./attempt-handler.types.ts";
 import { type AttemptOwnership, startAttemptOwnership } from "./attempt-ownership.ts";
 
@@ -41,10 +40,20 @@ const createAttemptWrites = (
     ownership: AttemptOwnership;
   },
 ) => {
-  let closed = false;
+  const closed = createLatch();
   let committed: CompleteWrite | null = null;
 
-  const completeHookKey = Symbol("queuert.complete");
+  const completeSlots = new WeakMap<
+    TxHooks,
+    { write: CompleteWrite | null; inProgress: boolean }
+  >();
+  const getCompleteSlot = (txHooks: TxHooks) => {
+    const existing = completeSlots.get(txHooks);
+    if (existing !== undefined) return existing;
+    const created = { write: null, inProgress: false };
+    completeSlots.set(txHooks, created);
+    return created;
+  };
 
   const readLossError = async (txCtx: BaseTxContext): Promise<Error> => {
     const [job] = await helpers.stateAdapter.getJobs({ txCtx, jobIds: [stateJob.id] });
@@ -63,44 +72,27 @@ const createAttemptWrites = (
   };
 
   const complete = async (options: AnyCompleteOptions) => {
-    if (closed) {
-      throw new Error("complete cannot be called after the attempt handler has ended");
-    }
-    const { transactionHooks, output, continueWith, reschedule, ...txCtxFields } = options;
+    closed.throwIfTripped("complete cannot be called after the attempt handler has ended");
+    const { txHooks, output, continueWith, reschedule, ...txCtxFields } = options;
     const outcomeKeys = ["output", "continueWith", "reschedule"].filter((key) => key in options);
     if (outcomeKeys.length !== 1) {
       throw new Error("complete requires exactly one of output, continueWith or reschedule");
     }
-    requireTransactionHooks(transactionHooks, "complete");
+    requireTxHooks(txHooks, "complete");
     const txCtx = requireTxCtx(helpers.stateAdapter, txCtxFields, "complete");
 
-    const completeSlot = transactionHooks.getOrInsert(completeHookKey, () => {
-      const state = { write: null as CompleteWrite | null, inProgress: false };
-      return {
-        state,
-        checkpoint: (state) => {
-          const write = state.write;
-          return () => {
-            state.write = write;
-          };
-        },
-        flush: (state) => {
-          if (state.write === null) return;
-          committed = state.write;
-        },
-        discard: (state) => {
-          state.write = null;
-        },
-      };
-    });
+    const completeSlot = getCompleteSlot(txHooks);
     if (completeSlot.inProgress) {
-      throw new Error("complete is already in progress with these transactionHooks");
+      throw new Error("complete is already in progress with these txHooks");
     }
     if (completeSlot.write !== null) {
       throw new Error(
-        "complete already succeeded with these transactionHooks; a retried transaction needs its own withTransactionHooks",
+        "complete already succeeded with these txHooks; wrap a callback the driver reruns in txHooks.retryBoundary, or give a retried transaction its own withTxHooks",
       );
     }
+    txHooks.onRollback(() => {
+      completeSlot.write = null;
+    });
     completeSlot.inProgress = true;
     try {
       const stateJobWritten =
@@ -108,7 +100,7 @@ const createAttemptWrites = (
           ? (
               await rescheduleJobs(helpers, {
                 txCtx,
-                transactionHooks,
+                txHooks,
                 jobs: [{ jobId: stateJob.id, schedule: reschedule, attemptToken }],
               })
             )[0]
@@ -117,7 +109,7 @@ const createAttemptWrites = (
                 job: stateJob,
                 output,
                 txCtx,
-                transactionHooks,
+                txHooks,
                 attemptToken,
                 workerId,
               })
@@ -125,7 +117,7 @@ const createAttemptWrites = (
                 job: stateJob,
                 continueWith,
                 txCtx,
-                transactionHooks,
+                txHooks,
                 attemptToken,
                 workerId,
               });
@@ -137,14 +129,17 @@ const createAttemptWrites = (
         stateJob: stateJobWritten,
         job: mapStateJobToJob(stateJobWritten),
       };
-      bufferObservabilityEvent(transactionHooks, () => {
+      completeSlot.write = write;
+      txHooks.onCommit(() => {
         helpers.observabilityHelper.jobAttemptCompleted(stateJob, {
           output: write.stateJob.output,
           continuedWith: write.stateJob.continuation,
           workerId,
         });
       });
-      completeSlot.write = write;
+      txHooks.onCommit(() => {
+        committed = write;
+      });
       return write.job;
     } finally {
       completeSlot.inProgress = false;
@@ -152,9 +147,7 @@ const createAttemptWrites = (
   };
 
   const fence = async (options: BaseTxContext) => {
-    if (closed) {
-      throw new Error("fence cannot be called after the attempt handler has ended");
-    }
+    closed.throwIfTripped("fence cannot be called after the attempt handler has ended");
     const txCtx = requireTxCtx(helpers.stateAdapter, { ...options }, "fence");
     const [job] = await helpers.stateAdapter.getJobs({
       txCtx,
@@ -170,7 +163,7 @@ const createAttemptWrites = (
     complete,
     fence,
     close: () => {
-      closed = true;
+      closed.trip();
       return committed;
     },
   };
@@ -234,7 +227,7 @@ const rescheduleFailedAttempt = async (
     failure: unknown;
   },
 ): Promise<boolean> => {
-  const { transactionHooks, flush } = createTransactionHooks();
+  const { txHooks, flush } = createTxHooks();
   try {
     const [rescheduledJob] = await rescheduleJobs(helpers, {
       jobs: [
@@ -245,7 +238,7 @@ const rescheduleFailedAttempt = async (
           attemptToken,
         },
       ],
-      transactionHooks,
+      txHooks,
     });
     if (!rescheduledJob) return false;
   } catch (rescheduleError) {
@@ -253,10 +246,14 @@ const rescheduleFailedAttempt = async (
     throw rescheduleError;
   }
 
-  bufferObservabilityEvent(transactionHooks, () => {
+  txHooks.onCommit(() => {
     helpers.observabilityHelper.jobAttemptFailed(stateJob, { workerId, error: failure });
-    span?.end({ status: "failed", error: failure });
   });
+  if (span !== undefined) {
+    txHooks.onCommit(() => {
+      span.end({ status: "failed", error: failure });
+    });
+  }
   await flush();
   return true;
 };

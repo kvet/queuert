@@ -22,7 +22,7 @@ import {
   createInProcessWorker,
   createProcessors,
   defineJobTypes,
-  withTransactionHooks,
+  withTxHooks,
 } from "queuert";
 
 const jobTypes = defineJobTypes<{
@@ -138,7 +138,7 @@ const worker = await createInProcessWorker({
 
           await new Promise((r) => setTimeout(r, 50));
 
-          return withTransactionHooks(async (transactionHooks) =>
+          return withTxHooks(async (txHooks) =>
             sql.begin(async (txSql) => {
               await txSql.unsafe("INSERT INTO digest_logs (user_id) VALUES ($1)", [
                 job.input.userId,
@@ -150,7 +150,7 @@ const worker = await createInProcessWorker({
                 console.log(`  Scheduling next digest in ${DIGEST_INTERVAL_MS}ms...`);
                 await client.createChain({
                   txSql,
-                  transactionHooks,
+                  txHooks,
                   typeName: "daily-digest",
                   input: { userId: job.input.userId, iteration: job.input.iteration + 1 },
                   schedule: { afterMs: DIGEST_INTERVAL_MS },
@@ -161,7 +161,7 @@ const worker = await createInProcessWorker({
 
               return complete({
                 txSql,
-                transactionHooks,
+                txHooks,
                 output: { sentAt: new Date().toISOString() },
               });
             }),
@@ -178,7 +178,7 @@ const worker = await createInProcessWorker({
           const status = serviceRunning ? "healthy" : "stopped";
           console.log(`  Status: ${status}`);
 
-          return withTransactionHooks(async (transactionHooks) =>
+          return withTxHooks(async (txHooks) =>
             sql.begin(async (txSql) => {
               await txSql.unsafe("INSERT INTO health_logs (service_id, status) VALUES ($1, $2)", [
                 job.input.serviceId,
@@ -187,7 +187,7 @@ const worker = await createInProcessWorker({
 
               const completedJob = await complete({
                 txSql,
-                transactionHooks,
+                txHooks,
                 output: { status, checkedAt: new Date().toISOString() },
               });
 
@@ -197,7 +197,7 @@ const worker = await createInProcessWorker({
                 console.log(`  Scheduling next check in ${HEALTH_CHECK_INTERVAL_MS}ms...`);
                 await client.createChain({
                   txSql,
-                  transactionHooks,
+                  txHooks,
                   typeName: "health-check",
                   input: {
                     serviceId: job.input.serviceId,
@@ -221,7 +221,7 @@ const worker = await createInProcessWorker({
 
       reminder: {
         attemptHandler: async ({ job, complete }) =>
-          withTransactionHooks(async (transactionHooks) =>
+          withTxHooks(async (txHooks) =>
             sql.begin(async (txSql) => {
               console.log(`\n[reminder] "${job.input.message}" for ${job.input.userId}`);
               await txSql.unsafe("INSERT INTO reminder_logs (user_id, message) VALUES ($1, $2)", [
@@ -230,7 +230,7 @@ const worker = await createInProcessWorker({
               ]);
               return complete({
                 txSql,
-                transactionHooks,
+                txHooks,
                 output: { sentAt: new Date().toISOString() },
               });
             }),
@@ -243,19 +243,19 @@ const worker = await createInProcessWorker({
 
           if (apiRateLimited && job.attempt < 3) {
             console.log(`  Rate limited! Rescheduling in 100ms...`);
-            return withTransactionHooks(async (transactionHooks) =>
+            return withTxHooks(async (txHooks) =>
               sql.begin(async (txSql) =>
-                complete({ txSql, transactionHooks, reschedule: { afterMs: 100 } }),
+                complete({ txSql, txHooks, reschedule: { afterMs: 100 } }),
               ),
             );
           }
 
           console.log(`  API call SUCCESS`);
-          return withTransactionHooks(async (transactionHooks) =>
+          return withTxHooks(async (txHooks) =>
             sql.begin(async (txSql) =>
               complete({
                 txSql,
-                transactionHooks,
+                txHooks,
                 output: { data: `Response from ${job.input.endpoint}` },
               }),
             ),
@@ -288,11 +288,11 @@ console.log("Each execution creates a new independent chain - no cron needed!\n"
 
 userSubscribed = true;
 
-await withTransactionHooks(async (transactionHooks) =>
+await withTxHooks(async (txHooks) =>
   sql.begin(async (txSql) =>
     client.createChain({
       txSql,
-      transactionHooks,
+      txHooks,
       typeName: "daily-digest",
       input: { userId: "user-123", iteration: 1 },
     }),
@@ -323,11 +323,11 @@ console.log("Deduplication prevents duplicate recurring job instances.\n");
 serviceRunning = true;
 
 // Start first health check with deduplication
-const healthChain1 = await withTransactionHooks(async (transactionHooks) =>
+const healthChain1 = await withTxHooks(async (txHooks) =>
   sql.begin(async (txSql) =>
     client.createChain({
       txSql,
-      transactionHooks,
+      txHooks,
       typeName: "health-check",
       input: { serviceId: "api-server", checkNumber: 1 },
       deduplication: {
@@ -342,11 +342,11 @@ console.log(`Deduplicated: ${healthChain1.deduplicated}`);
 assert.equal(healthChain1.deduplicated, false);
 
 // Try to start another health check - should be deduplicated
-const healthChain2 = await withTransactionHooks(async (transactionHooks) =>
+const healthChain2 = await withTxHooks(async (txHooks) =>
   sql.begin(async (txSql) =>
     client.createChain({
       txSql,
-      transactionHooks,
+      txHooks,
       typeName: "health-check",
       input: { serviceId: "api-server", checkNumber: 1 },
       deduplication: {
@@ -384,11 +384,11 @@ console.log("Schedule a reminder for an hour from now, then trigger it immediate
 
 const ONE_HOUR_MS = 60 * 60 * 1000;
 
-const reminder = await withTransactionHooks(async (transactionHooks) =>
+const reminder = await withTxHooks(async (txHooks) =>
   sql.begin(async (txSql) =>
     client.createChain({
       txSql,
-      transactionHooks,
+      txHooks,
       typeName: "reminder",
       input: { userId: "user-123", message: "Weekly standup starts soon" },
       schedule: { afterMs: ONE_HOUR_MS },
@@ -402,8 +402,8 @@ console.log(`  scheduledAt: ${scheduled!.scheduledAt.toISOString()}`);
 
 // Admin action: run it now
 console.log(`\nRescheduling reminder ${reminder.id} to run now...`);
-await withTransactionHooks(async (transactionHooks) =>
-  sql.begin(async (txSql) => client.rescheduleJob({ txSql, transactionHooks, id: reminder.id })),
+await withTxHooks(async (txHooks) =>
+  sql.begin(async (txSql) => client.rescheduleJob({ txSql, txHooks, id: reminder.id })),
 );
 
 await client.awaitChain(reminder, { timeoutMs: 5000 });
@@ -423,11 +423,11 @@ console.log("\n--- Scenario 4: Rescheduling from a Handler ---");
 console.log("Rate-limited API defers with complete({ reschedule }) — no error, no backoff.\n");
 
 apiRateLimited = true;
-const apiCall = await withTransactionHooks(async (transactionHooks) =>
+const apiCall = await withTxHooks(async (txHooks) =>
   sql.begin(async (txSql) =>
     client.createChain({
       txSql,
-      transactionHooks,
+      txHooks,
       typeName: "call-rate-limited-api",
       input: { endpoint: "/api/data" },
     }),

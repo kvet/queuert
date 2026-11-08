@@ -1,3 +1,5 @@
+import { createLatch } from "@queuert/helpers";
+
 import type { NotifyAdapter } from "./notify-adapter.ts";
 
 /** Creates an in-memory notify adapter for single-process deployments, delivering notifications through in-process callbacks. */
@@ -6,10 +8,7 @@ export const createInProcessNotifyAdapter = async (): Promise<NotifyAdapter> => 
   const chainCompletedListeners = new Map<string, Set<() => void>>();
   const jobAttemptLostListeners = new Map<string, Set<() => void>>();
 
-  let closed = false;
-  const assertOpen = (): void => {
-    if (closed) throw new Error("NotifyAdapter is closed");
-  };
+  const closed = createLatch("NotifyAdapter is closed");
 
   const safeInvoke = (fn: () => void): void => {
     try {
@@ -35,7 +34,7 @@ export const createInProcessNotifyAdapter = async (): Promise<NotifyAdapter> => 
 
   return {
     notifyJobsScheduled: async (typeNames) => {
-      assertOpen();
+      closed.throwIfTripped();
       for (const typeName of typeNames) {
         const listeners = jobScheduledListeners.get(typeName);
         if (!listeners) continue;
@@ -48,7 +47,7 @@ export const createInProcessNotifyAdapter = async (): Promise<NotifyAdapter> => 
     },
 
     listenJobScheduled: async (typeNames, onNotification) => {
-      assertOpen();
+      closed.throwIfTripped();
       const listener = (typeName: string): void => {
         onNotification(typeName);
       };
@@ -64,7 +63,7 @@ export const createInProcessNotifyAdapter = async (): Promise<NotifyAdapter> => 
     },
 
     notifyChainsCompleted: async (chainIds) => {
-      assertOpen();
+      closed.throwIfTripped();
       for (const chainId of chainIds) {
         const listeners = chainCompletedListeners.get(chainId);
         if (!listeners) continue;
@@ -75,7 +74,7 @@ export const createInProcessNotifyAdapter = async (): Promise<NotifyAdapter> => 
     },
 
     listenChainCompleted: async (targetChainId, onNotification) => {
-      assertOpen();
+      closed.throwIfTripped();
       const listener = (): void => {
         onNotification();
       };
@@ -87,7 +86,7 @@ export const createInProcessNotifyAdapter = async (): Promise<NotifyAdapter> => 
     },
 
     notifyJobAttemptsLost: async (jobIds) => {
-      assertOpen();
+      closed.throwIfTripped();
       for (const jobId of jobIds) {
         const listeners = jobAttemptLostListeners.get(jobId);
         if (!listeners) continue;
@@ -98,7 +97,7 @@ export const createInProcessNotifyAdapter = async (): Promise<NotifyAdapter> => 
     },
 
     listenJobAttemptLost: async (targetJobId, onNotification) => {
-      assertOpen();
+      closed.throwIfTripped();
       const listener = (): void => {
         onNotification();
       };
@@ -110,8 +109,7 @@ export const createInProcessNotifyAdapter = async (): Promise<NotifyAdapter> => 
     },
 
     close: async () => {
-      if (closed) return;
-      closed = true;
+      if (!closed.trip()) return;
       jobScheduledListeners.clear();
       chainCompletedListeners.clear();
       jobAttemptLostListeners.clear();

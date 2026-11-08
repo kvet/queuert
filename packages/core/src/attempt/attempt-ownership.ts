@@ -1,3 +1,5 @@
+import { createLatch } from "@queuert/helpers";
+
 import type { Helpers } from "../setup-helpers.ts";
 import type { StateJob } from "../state-adapter/state-adapter.ts";
 
@@ -24,24 +26,21 @@ export const startAttemptOwnership = async (
   abortSignal.addEventListener("abort", abort, { once: true });
   if (abortSignal.aborted) abort();
 
-  let released = false;
-  let disposeAttemptLostListener: (() => Promise<void>) | null = null;
-  try {
-    disposeAttemptLostListener = await helpers.notifyAdapter.listenJobAttemptLost(
-      stateJob.id,
-      () => {
-        if (!released) abortController.abort();
-      },
-    );
-  } catch {}
+  const released = createLatch();
+  const disposeAttemptLostListener = await helpers.notifyHelper.listenJobAttemptLost(
+    stateJob.id,
+    () => {
+      if (!released.tripped) abortController.abort();
+    },
+  );
 
   return {
     signal: abortController.signal,
     abort,
     release: async () => {
-      released = true;
+      released.trip();
       try {
-        await disposeAttemptLostListener?.().catch(() => {});
+        await disposeAttemptLostListener().catch(() => {});
       } finally {
         abortSignal.removeEventListener("abort", abort);
       }

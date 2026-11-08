@@ -21,7 +21,7 @@ import {
   createInProcessWorker,
   createProcessors,
   defineJobTypes,
-  withTransactionHooks,
+  withTxHooks,
 } from "queuert";
 
 const jobTypes = defineJobTypes<{
@@ -117,11 +117,11 @@ const worker = await createInProcessWorker({
         attemptHandler: async ({ job, complete }) => {
           console.log(`[fetch-source] Fetching ${job.input.sourceId}...`);
           await new Promise((r) => setTimeout(r, 100));
-          return withTransactionHooks(async (transactionHooks) =>
+          return withTxHooks(async (txHooks) =>
             sql.begin(async (txSql) =>
               complete({
                 txSql,
-                transactionHooks,
+                txHooks,
                 output: {
                   sourceId: job.input.sourceId,
                   data: `Data from ${job.input.sourceId}`,
@@ -140,11 +140,11 @@ const worker = await createInProcessWorker({
             console.log(`  - ${blocker.output.sourceId}: "${blocker.output.data}"`);
           }
 
-          return withTransactionHooks(async (transactionHooks) =>
+          return withTxHooks(async (txHooks) =>
             sql.begin(async (txSql) =>
               complete({
                 txSql,
-                transactionHooks,
+                txHooks,
                 output: {
                   reportId: job.input.reportId,
                   totalSources: job.blockers.length,
@@ -159,11 +159,11 @@ const worker = await createInProcessWorker({
       "validate-user": {
         attemptHandler: async ({ job, complete }) => {
           console.log(`[validate-user] Validating ${job.input.userId}`);
-          return withTransactionHooks(async (transactionHooks) =>
+          return withTxHooks(async (txHooks) =>
             sql.begin(async (txSql) =>
               complete({
                 txSql,
-                transactionHooks,
+                txHooks,
                 output: { userId: job.input.userId, role: "admin" },
               }),
             ),
@@ -174,11 +174,11 @@ const worker = await createInProcessWorker({
       "load-config": {
         attemptHandler: async ({ job, complete }) => {
           console.log(`[load-config] Loading ${job.input.configKey}`);
-          return withTransactionHooks(async (transactionHooks) =>
+          return withTxHooks(async (txHooks) =>
             sql.begin(async (txSql) =>
               complete({
                 txSql,
-                transactionHooks,
+                txHooks,
                 output: { configKey: job.input.configKey, value: "production" },
               }),
             ),
@@ -193,11 +193,11 @@ const worker = await createInProcessWorker({
             `[perform-action] User: ${userBlocker.output.role}, Config: ${configBlocker.output.value}`,
           );
 
-          return withTransactionHooks(async (transactionHooks) =>
+          return withTxHooks(async (txHooks) =>
             sql.begin(async (txSql) =>
               complete({
                 txSql,
-                transactionHooks,
+                txHooks,
                 output: {
                   actionId: job.input.actionId,
                   result: `Completed by ${userBlocker.output.role} with ${configBlocker.output.value}`,
@@ -212,7 +212,7 @@ const worker = await createInProcessWorker({
         attemptHandler: async ({ job, complete }) => {
           console.log(`[capture-payment] Charging ${job.input.amount} for ${job.input.orderId}`);
           await new Promise((r) => setTimeout(r, 100));
-          return withTransactionHooks(async (transactionHooks) =>
+          return withTxHooks(async (txHooks) =>
             sql.begin(async (txSql) => {
               await txSql`
                 UPDATE orders SET status = 'paid', payment_chain_id = NULL
@@ -220,7 +220,7 @@ const worker = await createInProcessWorker({
               `;
               return complete({
                 txSql,
-                transactionHooks,
+                txHooks,
                 output: { transactionId: `txn-${job.input.orderId}` },
               });
             }),
@@ -233,12 +233,12 @@ const worker = await createInProcessWorker({
           console.log(
             `[ship-order] Shipping ${job.input.orderId} (waited on ${job.blockers.length} payment chain)`,
           );
-          return withTransactionHooks(async (transactionHooks) =>
+          return withTxHooks(async (txHooks) =>
             sql.begin(async (txSql) => {
               await txSql`UPDATE orders SET status = 'shipped' WHERE id = ${job.input.orderId}`;
               return complete({
                 txSql,
-                transactionHooks,
+                txHooks,
                 output: {
                   orderId: job.input.orderId,
                   trackingNumber: `track-${job.input.orderId}`,
@@ -258,11 +258,11 @@ const stopWorker = await worker.start();
 console.log("\n--- Scenario 1: Fan-out/Fan-in ---");
 console.log("Three fetch jobs run in parallel, aggregate waits for all.\n");
 
-const aggregateChain = await withTransactionHooks(async (transactionHooks) =>
+const aggregateChain = await withTxHooks(async (txHooks) =>
   sql.begin(async (txSql) => {
     const fetchBlockers = await client.createChains({
       txSql,
-      transactionHooks,
+      txHooks,
       items: [
         { typeName: "fetch-source", input: { sourceId: "users", url: "/users" } },
         { typeName: "fetch-source", input: { sourceId: "orders", url: "/orders" } },
@@ -271,7 +271,7 @@ const aggregateChain = await withTransactionHooks(async (transactionHooks) =>
     });
     return client.createChain({
       txSql,
-      transactionHooks,
+      txHooks,
       typeName: "aggregate-data",
       input: { reportId: "report-001" },
       blockers: fetchBlockers,
@@ -288,11 +288,11 @@ assert.equal(result1.output.reportId, "report-001");
 console.log("\n--- Scenario 2: Fixed Blocker Slots ---");
 console.log("Action requires exactly: validate-user + load-config.\n");
 
-const actionChain = await withTransactionHooks(async (transactionHooks) =>
+const actionChain = await withTxHooks(async (txHooks) =>
   sql.begin(async (txSql) => {
     const [userBlocker, configBlocker] = await client.createChains({
       txSql,
-      transactionHooks,
+      txHooks,
       items: [
         { typeName: "validate-user", input: { userId: "user-123" } },
         { typeName: "load-config", input: { configKey: "settings" } },
@@ -300,7 +300,7 @@ const actionChain = await withTransactionHooks(async (transactionHooks) =>
     });
     return client.createChain({
       txSql,
-      transactionHooks,
+      txHooks,
       typeName: "perform-action",
       input: { actionId: "action-001" },
       blockers: [userBlocker, configBlocker],
@@ -320,11 +320,11 @@ console.log(
   "The order stores its payment chain ID while payment is pending; shipping waits on it.\n",
 );
 
-await withTransactionHooks(async (transactionHooks) =>
+await withTxHooks(async (txHooks) =>
   sql.begin(async (txSql) => {
     const paymentChain = await client.createChain({
       txSql,
-      transactionHooks,
+      txHooks,
       typeName: "capture-payment",
       input: { orderId: "order-001", amount: 4200 },
     });
@@ -335,7 +335,7 @@ await withTransactionHooks(async (transactionHooks) =>
   }),
 );
 
-const shipChain = await withTransactionHooks(async (transactionHooks) =>
+const shipChain = await withTxHooks(async (txHooks) =>
   sql.begin(async (txSql) => {
     const [order] = await txSql<
       {
@@ -349,7 +349,7 @@ const shipChain = await withTransactionHooks(async (transactionHooks) =>
     const paymentChainId = order.status === "awaiting_payment" ? order.payment_chain_id : null;
     return client.createChain({
       txSql,
-      transactionHooks,
+      txHooks,
       typeName: "ship-order",
       input: { orderId: order.id },
       blockers: paymentChainId ? [{ id: paymentChainId }] : [],

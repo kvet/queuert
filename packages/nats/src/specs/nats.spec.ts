@@ -5,7 +5,7 @@ import {
   createInProcessWorker,
   createProcessors,
   defineJobTypes,
-  withTransactionHooks,
+  withTxHooks,
   createInProcessStateAdapter,
 } from "queuert";
 import { withWorkers } from "queuert/testing";
@@ -48,9 +48,9 @@ it("should work end-to-end with NATS notify adapter", async ({ natsConnectionOpt
       processors: {
         test: {
           attemptHandler: async ({ complete }) => {
-            return withTransactionHooks(async (transactionHooks) =>
+            return withTxHooks(async (txHooks) =>
               stateAdapter.withTransaction(async (txCtx) =>
-                complete({ ...txCtx, transactionHooks, output: { processed: true } }),
+                complete({ ...txCtx, txHooks, output: { processed: true } }),
               ),
             );
           },
@@ -59,11 +59,11 @@ it("should work end-to-end with NATS notify adapter", async ({ natsConnectionOpt
     }),
   });
 
-  const chain = await withTransactionHooks(async (transactionHooks) =>
+  const chain = await withTxHooks(async (txHooks) =>
     stateAdapter.withTransaction(async (txCtx) =>
       client.createChain({
         ...txCtx,
-        transactionHooks,
+        txHooks,
         typeName: "test",
         input: { message: "hello from nats" },
       }),

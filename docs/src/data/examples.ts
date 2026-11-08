@@ -532,7 +532,7 @@ export const examples: Example[] = [
       "A failed external call before the transaction opens.",
       "lastAttemptError inspection on retry.",
     ],
-    guide: { title: "Job Processing Reliability", href: "/guides/processing-reliability/" },
+    guide: { title: "Job Processing Reliability", href: "/how-it-works/processing-reliability/" },
   },
   {
     name: "showcase-error-handling",

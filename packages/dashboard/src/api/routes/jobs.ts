@@ -1,9 +1,4 @@
-import {
-  type Client,
-  JobNotFoundError,
-  JobNotReschedulableError,
-  withTransactionHooks,
-} from "queuert";
+import { type Client, JobNotFoundError, JobNotReschedulableError, withTxHooks } from "queuert";
 import { helpersSymbol } from "queuert/internal";
 
 import { serovalResponse } from "../response.ts";
@@ -124,9 +119,11 @@ export const handleJobReschedule = async (
 ): Promise<Response> => {
   try {
     const { stateAdapter } = client[helpersSymbol];
-    const job = await withTransactionHooks(async (transactionHooks) =>
-      stateAdapter.withTransaction(async (txCtx) =>
-        client.rescheduleJob({ id: jobId, transactionHooks, ...txCtx }),
+    const job = await withTxHooks(async (txHooks) =>
+      stateAdapter.withTransaction(
+        txHooks.retryBoundary(async (txCtx) =>
+          client.rescheduleJob({ id: jobId, txHooks, ...txCtx }),
+        ),
       ),
     );
     return serovalResponse({ job });

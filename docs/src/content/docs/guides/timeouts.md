@@ -23,8 +23,8 @@ const worker = await createInProcessWorker({
           try {
             const response = await fetch(job.input.url, { signal: combined });
             const data = await response.json();
-            return await withTransactionHooks(async (transactionHooks) =>
-              sql.begin(async (txSql) => complete({ txSql, transactionHooks, output: { data } })),
+            return await withTxHooks(async (txHooks) =>
+              sql.begin(async (txSql) => complete({ txSql, txHooks, output: { data } })),
             );
           } finally {
             clearTimeout(timer);

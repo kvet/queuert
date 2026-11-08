@@ -1,4 +1,4 @@
-import { createSharedListener } from "@queuert/helpers";
+import { createSharedListener, createLatch } from "@queuert/helpers";
 import type { NotifyAdapter } from "queuert";
 
 import type { RedisNotifyProvider } from "../notify-provider/notify-provider.redis.ts";
@@ -38,19 +38,16 @@ export const createRedisNotifyAdapter = async ({
     }),
   );
 
-  let closed = false;
-  const assertOpen = (): void => {
-    if (closed) throw new Error("NotifyAdapter is closed");
-  };
+  const closed = createLatch("NotifyAdapter is closed");
 
   return {
     notifyJobsScheduled: async (typeNames) => {
-      assertOpen();
+      closed.throwIfTripped();
       await notifyProvider.eval(PUBLISH_MESSAGES_SCRIPT, [], [jobScheduledChannel, ...typeNames]);
     },
 
     listenJobScheduled: async (typeNames, onNotification) => {
-      assertOpen();
+      closed.throwIfTripped();
       const unsubs = await Promise.all(
         typeNames.map(async (typeName) =>
           jobScheduledListener.subscribe(typeName, () => {
@@ -64,32 +61,31 @@ export const createRedisNotifyAdapter = async ({
     },
 
     notifyChainsCompleted: async (chainIds) => {
-      assertOpen();
+      closed.throwIfTripped();
       await notifyProvider.eval(PUBLISH_MESSAGES_SCRIPT, [], [chainCompletedChannel, ...chainIds]);
     },
 
     listenChainCompleted: async (chainId, onNotification) => {
-      assertOpen();
+      closed.throwIfTripped();
       return chainCompletedListener.subscribe(chainId, () => {
         onNotification();
       });
     },
 
     notifyJobAttemptsLost: async (jobIds) => {
-      assertOpen();
+      closed.throwIfTripped();
       await notifyProvider.eval(PUBLISH_MESSAGES_SCRIPT, [], [attemptLostChannel, ...jobIds]);
     },
 
     listenJobAttemptLost: async (jobId, onNotification) => {
-      assertOpen();
+      closed.throwIfTripped();
       return attemptLostListener.subscribe(jobId, () => {
         onNotification();
       });
     },
 
     close: async () => {
-      if (closed) return;
-      closed = true;
+      if (!closed.trip()) return;
       await Promise.all([
         jobScheduledListener.dispose(),
         chainCompletedListener.dispose(),

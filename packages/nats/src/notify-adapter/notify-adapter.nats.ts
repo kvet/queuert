@@ -1,5 +1,5 @@
 import type { NatsConnection } from "@nats-io/nats-core";
-import { createSharedListener, type SharedListenerOpen } from "@queuert/helpers";
+import { createSharedListener, type SharedListenerOpen, createLatch } from "@queuert/helpers";
 import type { NotifyAdapter } from "queuert";
 
 const decoder = new TextDecoder();
@@ -42,14 +42,11 @@ export const createNatsNotifyAdapter = async ({
   const chainCompletedListener = createSharedListener(natsSubjectOpen(nc, chainCompletedSubject));
   const attemptLostListener = createSharedListener(natsSubjectOpen(nc, attemptLostSubject));
 
-  let closed = false;
-  const assertOpen = (): void => {
-    if (closed) throw new Error("NotifyAdapter is closed");
-  };
+  const closed = createLatch("NotifyAdapter is closed");
 
   return {
     notifyJobsScheduled: async (typeNames) => {
-      assertOpen();
+      closed.throwIfTripped();
       for (const typeName of typeNames) {
         nc.publish(jobScheduledSubject, encoder.encode(typeName));
       }
@@ -57,7 +54,7 @@ export const createNatsNotifyAdapter = async ({
     },
 
     listenJobScheduled: async (typeNames, onNotification) => {
-      assertOpen();
+      closed.throwIfTripped();
       const unsubs = await Promise.all(
         typeNames.map(async (typeName) =>
           jobScheduledListener.subscribe(typeName, () => {
@@ -71,7 +68,7 @@ export const createNatsNotifyAdapter = async ({
     },
 
     notifyChainsCompleted: async (chainIds) => {
-      assertOpen();
+      closed.throwIfTripped();
       for (const chainId of chainIds) {
         nc.publish(chainCompletedSubject, encoder.encode(chainId));
       }
@@ -79,14 +76,14 @@ export const createNatsNotifyAdapter = async ({
     },
 
     listenChainCompleted: async (chainId, onNotification) => {
-      assertOpen();
+      closed.throwIfTripped();
       return chainCompletedListener.subscribe(chainId, () => {
         onNotification();
       });
     },
 
     notifyJobAttemptsLost: async (jobIds) => {
-      assertOpen();
+      closed.throwIfTripped();
       for (const jobId of jobIds) {
         nc.publish(attemptLostSubject, encoder.encode(jobId));
       }
@@ -94,15 +91,14 @@ export const createNatsNotifyAdapter = async ({
     },
 
     listenJobAttemptLost: async (jobId, onNotification) => {
-      assertOpen();
+      closed.throwIfTripped();
       return attemptLostListener.subscribe(jobId, () => {
         onNotification();
       });
     },
 
     close: async () => {
-      if (closed) return;
-      closed = true;
+      if (!closed.trip()) return;
       await Promise.all([
         jobScheduledListener.dispose(),
         chainCompletedListener.dispose(),

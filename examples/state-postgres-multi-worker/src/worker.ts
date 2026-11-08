@@ -7,7 +7,7 @@ import {
   createInProcessWorker,
   createProcessors,
   defineJobTypes,
-  withTransactionHooks,
+  withTxHooks,
 } from "queuert";
 
 const jobTypes = defineJobTypes<{
@@ -54,11 +54,11 @@ const worker = await createInProcessWorker({
 
           await new Promise((resolve) => setTimeout(resolve, 100 + Math.random() * 200));
 
-          return withTransactionHooks(async (transactionHooks) =>
+          return withTxHooks(async (txHooks) =>
             sql.begin(async (txSql) =>
               complete({
                 txSql,
-                transactionHooks,
+                txHooks,
                 output: {
                   processedAt: new Date().toISOString(),
                   processName,

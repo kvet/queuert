@@ -22,7 +22,7 @@ import {
   createInProcessWorker,
   createProcessors,
   defineJobTypes,
-  withTransactionHooks,
+  withTxHooks,
 } from "queuert";
 
 const jobTypes = defineJobTypes<{
@@ -80,11 +80,11 @@ const worker = await createInProcessWorker({
       "fetch-data": {
         attemptHandler: async ({ job, complete }) => {
           console.log(`[fetch-data] Fetching ${job.input.sourceId}`);
-          return withTransactionHooks(async (transactionHooks) =>
+          return withTxHooks(async (txHooks) =>
             sql.begin(async (txSql) =>
               complete({
                 txSql,
-                transactionHooks,
+                txHooks,
                 output: {
                   sourceId: job.input.sourceId,
                   data: `Data from ${job.input.sourceId}`,
@@ -99,11 +99,11 @@ const worker = await createInProcessWorker({
         attemptHandler: async ({ job, complete }) => {
           console.log(`[generate-report] Generating ${job.input.reportId}`);
           const summary = job.blockers.map((b) => b.output.data).join(", ");
-          return withTransactionHooks(async (transactionHooks) =>
+          return withTxHooks(async (txHooks) =>
             sql.begin(async (txSql) =>
               complete({
                 txSql,
-                transactionHooks,
+                txHooks,
                 continueWith: {
                   typeName: "send-report",
                   input: { reportId: job.input.reportId, summary },
@@ -117,9 +117,9 @@ const worker = await createInProcessWorker({
       "send-report": {
         attemptHandler: async ({ job, complete }) => {
           console.log(`[send-report] Sending report ${job.input.reportId}`);
-          return withTransactionHooks(async (transactionHooks) =>
+          return withTxHooks(async (txHooks) =>
             sql.begin(async (txSql) =>
-              complete({ txSql, transactionHooks, output: { sentAt: new Date().toISOString() } }),
+              complete({ txSql, txHooks, output: { sentAt: new Date().toISOString() } }),
             ),
           );
         },
@@ -128,11 +128,11 @@ const worker = await createInProcessWorker({
       "standalone-task": {
         attemptHandler: async ({ job, complete }) => {
           console.log(`[standalone-task] Running ${job.input.taskId}`);
-          return withTransactionHooks(async (transactionHooks) =>
+          return withTxHooks(async (txHooks) =>
             sql.begin(async (txSql) =>
               complete({
                 txSql,
-                transactionHooks,
+                txHooks,
                 output: { completedAt: new Date().toISOString() },
               }),
             ),
@@ -149,11 +149,11 @@ const stopWorker = await worker.start();
 console.log("\n--- Scenario 1: Simple Deletion ---");
 console.log("Delete a completed standalone chain.\n");
 
-const standalone = await withTransactionHooks(async (transactionHooks) =>
+const standalone = await withTxHooks(async (txHooks) =>
   sql.begin(async (txSql) =>
     client.createChain({
       txSql,
-      transactionHooks,
+      txHooks,
       typeName: "standalone-task",
       input: { taskId: "task-001" },
     }),
@@ -162,11 +162,11 @@ const standalone = await withTransactionHooks(async (transactionHooks) =>
 
 await client.awaitChain(standalone, { timeoutMs: 10000 });
 
-const deleted = await withTransactionHooks(async (transactionHooks) =>
+const deleted = await withTxHooks(async (txHooks) =>
   sql.begin(async (txSql) =>
     client.deleteChains({
       txSql,
-      transactionHooks,
+      txHooks,
       ids: [standalone.id],
     }),
   ),
@@ -177,11 +177,11 @@ console.log(`  Chain "${deleted[0].typeName}" (status: ${deleted[0].status})`);
 assert.equal(deleted.length, 1);
 assert.equal(deleted[0].typeName, "standalone-task");
 
-const deletedAgain = await withTransactionHooks(async (transactionHooks) =>
+const deletedAgain = await withTxHooks(async (txHooks) =>
   sql.begin(async (txSql) =>
     client.deleteChain({
       txSql,
-      transactionHooks,
+      txHooks,
       id: standalone.id,
     }),
   ),
@@ -196,11 +196,11 @@ assert.equal(deletedAgain, undefined);
 console.log("\n--- Scenario 2: Blocker Safety ---");
 console.log("Deleting a blocker chain that is still referenced is rejected.\n");
 
-const [fetchChains, reportChain] = await withTransactionHooks(async (transactionHooks) =>
+const [fetchChains, reportChain] = await withTxHooks(async (txHooks) =>
   sql.begin(async (txSql) => {
     const fetches = await client.createChains({
       txSql,
-      transactionHooks,
+      txHooks,
       items: [
         { typeName: "fetch-data", input: { sourceId: "users" } },
         { typeName: "fetch-data", input: { sourceId: "orders" } },
@@ -208,7 +208,7 @@ const [fetchChains, reportChain] = await withTransactionHooks(async (transaction
     });
     const report = await client.createChain({
       txSql,
-      transactionHooks,
+      txHooks,
       typeName: "generate-report",
       input: { reportId: "report-001" },
       blockers: fetches,
@@ -220,11 +220,11 @@ const [fetchChains, reportChain] = await withTransactionHooks(async (transaction
 await client.awaitChain(reportChain, { timeoutMs: 10000 });
 
 try {
-  await withTransactionHooks(async (transactionHooks) =>
+  await withTxHooks(async (txHooks) =>
     sql.begin(async (txSql) =>
       client.deleteChains({
         txSql,
-        transactionHooks,
+        txHooks,
         ids: [fetchChains[0].id],
       }),
     ),
@@ -242,12 +242,12 @@ try {
 console.log("\n--- Scenario 3: Co-deletion ---");
 console.log("Delete the report chain together with its blocker chains (from getJobBlockers).\n");
 
-const coDeleted = await withTransactionHooks(async (transactionHooks) =>
+const coDeleted = await withTxHooks(async (txHooks) =>
   sql.begin(async (txSql) => {
     const blockerChains = await client.getJobBlockers({ txSql, jobId: reportChain.id });
     return client.deleteChains({
       txSql,
-      transactionHooks,
+      txHooks,
       ids: [reportChain.id, ...blockerChains.map((blocker) => blocker.id)],
     });
   }),

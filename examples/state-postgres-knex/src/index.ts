@@ -7,7 +7,7 @@ import {
   createInProcessWorker,
   createProcessors,
   defineJobTypes,
-  withTransactionHooks,
+  withTxHooks,
 } from "queuert";
 
 import { createKnexPgStateProvider } from "./provider.ts";
@@ -74,9 +74,11 @@ const worker = await createInProcessWorker({
           // Simulate sending email (in real app, call email service here)
           console.log(`Sending welcome email to ${user.email} for ${user.name}`);
 
-          return withTransactionHooks(async (transactionHooks) =>
-            knex.transaction(async (trx) =>
-              complete({ trx, transactionHooks, output: { sentAt: new Date().toISOString() } }),
+          return withTxHooks(async (txHooks) =>
+            knex.transaction(
+              async (trx) =>
+                complete({ trx, txHooks, output: { sentAt: new Date().toISOString() } }),
+              { doNotRejectOnRollback: false },
             ),
           );
         },
@@ -88,20 +90,23 @@ const worker = await createInProcessWorker({
 const stopWorker = await worker.start();
 
 // Register a new user and queue welcome email atomically
-const chain = await withTransactionHooks(async (transactionHooks) =>
-  knex.transaction(async (trx) => {
-    const [user] = await trx<{ id: number; name: string; email: string }>("users")
-      .insert({ name: "Alice", email: "alice@example.com" })
-      .returning(["id"]);
+const chain = await withTxHooks(async (txHooks) =>
+  knex.transaction(
+    async (trx) => {
+      const [user] = await trx<{ id: number; name: string; email: string }>("users")
+        .insert({ name: "Alice", email: "alice@example.com" })
+        .returning(["id"]);
 
-    // Queue welcome email - if user creation fails, no email job is created
-    return client.createChain({
-      trx,
-      transactionHooks,
-      typeName: "send_welcome_email",
-      input: { userId: user.id },
-    });
-  }),
+      // Queue welcome email - if user creation fails, no email job is created
+      return client.createChain({
+        trx,
+        txHooks,
+        typeName: "send_welcome_email",
+        input: { userId: user.id },
+      });
+    },
+    { doNotRejectOnRollback: false },
+  ),
 );
 
 // Wait for the chain to complete

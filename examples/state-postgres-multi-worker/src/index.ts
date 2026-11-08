@@ -7,7 +7,7 @@ import { acquirePostgres } from "@queuert/testcontainers";
 import { createPostgresJsNotifyProvider } from "example-notify-postgres-postgres-js/provider";
 import { createPostgresJsStateProvider } from "example-state-postgres-postgres-js/provider";
 import postgres from "postgres";
-import { createClient, defineJobTypes, withTransactionHooks } from "queuert";
+import { createClient, defineJobTypes, withTxHooks } from "queuert";
 
 // ============================================================================
 // Multi-Worker Order Processing Example (with Child Processes)
@@ -133,7 +133,7 @@ const orders = Array.from({ length: JOBS_TO_PROCESS }, (_, i) => {
 
 // Orders and their jobs are created in one transaction — workers only ever see
 // orders that were committed
-const chains = await withTransactionHooks(async (transactionHooks) =>
+const chains = await withTxHooks(async (txHooks) =>
   sql.begin(async (txSql) => {
     for (const order of orders) {
       await txSql`INSERT INTO orders (id, items, total) VALUES (${order.id}, ${order.items}, ${order.total})`;
@@ -141,7 +141,7 @@ const chains = await withTransactionHooks(async (transactionHooks) =>
 
     return client.createChains({
       txSql,
-      transactionHooks,
+      txHooks,
       items: orders.map((order) => ({
         typeName: "process_order" as const,
         input: { orderId: order.id },

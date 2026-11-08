@@ -2,7 +2,7 @@
 title: Job Type References
 description: Job type definition patterns and type hierarchy.
 sidebar:
-  order: 4
+  order: 5
 ---
 
 ## Overview
@@ -144,11 +144,11 @@ const processors = createProcessors({
         const [auth, validate] = job.blockers;
         // auth.output is { userId: string }
         // validate.output is { valid: boolean }
-        return withTransactionHooks(async (transactionHooks) =>
+        return withTxHooks(async (txHooks) =>
           db.transaction(async (tx) =>
             complete({
               tx,
-              transactionHooks,
+              txHooks,
               output: { done: auth.output.userId !== "" && validate.output.valid },
             }),
           ),

@@ -20,7 +20,7 @@ import {
   createInProcessWorker,
   createProcessors,
   defineJobTypes,
-  withTransactionHooks,
+  withTxHooks,
 } from "queuert";
 
 const jobTypes = defineJobTypes<{
@@ -92,15 +92,15 @@ const worker = await createInProcessWorker({
           try {
             const data = await simulatedFetch(job.input.url, combined, 300);
             console.log(`  Fetch SUCCESS`);
-            return await withTransactionHooks(async (transactionHooks) =>
-              sql.begin(async (txSql) => complete({ txSql, transactionHooks, output: { data } })),
+            return await withTxHooks(async (txHooks) =>
+              sql.begin(async (txSql) => complete({ txSql, txHooks, output: { data } })),
             );
           } catch (error) {
             if (error instanceof DOMException && error.name === "AbortError") {
               console.log(`  Fetch TIMED OUT`);
-              return await withTransactionHooks(async (transactionHooks) =>
+              return await withTxHooks(async (txHooks) =>
                 sql.begin(async (txSql) =>
-                  complete({ txSql, transactionHooks, output: { timedOut: true } }),
+                  complete({ txSql, txHooks, output: { timedOut: true } }),
                 ),
               );
             }
@@ -121,9 +121,9 @@ const worker = await createInProcessWorker({
           await new Promise((r) => setTimeout(r, job.input.durationMs));
 
           console.log(`  Task completed on attempt ${attempt}`);
-          return withTransactionHooks(async (transactionHooks) =>
+          return withTxHooks(async (txHooks) =>
             sql.begin(async (txSql) =>
-              complete({ txSql, transactionHooks, output: { completed: true, attempt } }),
+              complete({ txSql, txHooks, output: { completed: true, attempt } }),
             ),
           );
         },
@@ -138,11 +138,11 @@ const stopWorker = await worker.start();
 console.log("\n--- Scenario 1a: Cooperative Timeout (Success) ---");
 console.log("Fetch completes before timeout.\n");
 
-const fetch1 = await withTransactionHooks(async (transactionHooks) =>
+const fetch1 = await withTxHooks(async (txHooks) =>
   sql.begin(async (txSql) =>
     client.createChain({
       txSql,
-      transactionHooks,
+      txHooks,
       typeName: "fetch-with-timeout",
       input: { url: "/api/fast", timeoutMs: 500 }, // 500ms timeout, 300ms fetch
     }),
@@ -156,11 +156,11 @@ assert.ok("data" in result1.output);
 console.log("\n--- Scenario 1b: Cooperative Timeout (Timeout) ---");
 console.log("Fetch times out before completing.\n");
 
-const fetch2 = await withTransactionHooks(async (transactionHooks) =>
+const fetch2 = await withTxHooks(async (txHooks) =>
   sql.begin(async (txSql) =>
     client.createChain({
       txSql,
-      transactionHooks,
+      txHooks,
       typeName: "fetch-with-timeout",
       input: { url: "/api/slow", timeoutMs: 100 }, // 100ms timeout, 300ms fetch
     }),
@@ -174,11 +174,11 @@ assert.ok("timedOut" in result2.output);
 console.log("\n--- Scenario 2: Worker Lease ---");
 console.log("Job outlasting the worker lease completes while the heartbeat renews the lease.\n");
 
-const longChain = await withTransactionHooks(async (transactionHooks) =>
+const longChain = await withTxHooks(async (txHooks) =>
   sql.begin(async (txSql) =>
     client.createChain({
       txSql,
-      transactionHooks,
+      txHooks,
       typeName: "long-running-job",
       input: { taskId: "task-001", durationMs: 1000 }, // 1000ms work, 600ms lease
     }),

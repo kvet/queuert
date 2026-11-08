@@ -8,18 +8,10 @@ import {
   JobNotFoundError,
 } from "./errors.ts";
 import type { AnyNewJob } from "./job-types/job-types.resolvers.ts";
-import {
-  bufferNotifyChainCompletion,
-  bufferNotifyJobScheduled,
-} from "./notify-adapter/notify-hooks.ts";
 import type {
   BlockerSpanHandle,
   JobSpanHandle,
 } from "./observability-adapter/observability-adapter.ts";
-import {
-  bufferObservabilityEvent,
-  bufferObservabilityRollback,
-} from "./observability-adapter/observability-hooks.ts";
 import type { Helpers } from "./setup-helpers.ts";
 import { resolveJobId } from "./state-adapter/adapter-config.ts";
 import type {
@@ -29,7 +21,7 @@ import type {
   StateJob,
   StateJobInfo,
 } from "./state-adapter/state-adapter.ts";
-import type { TransactionHooks } from "./transaction-hooks.ts";
+import type { TxHooks } from "./tx-hooks/tx-hooks.ts";
 
 type BlockerSpan = { blockerChain: StateChain; blockerSpan: BlockerSpanHandle | undefined };
 
@@ -62,13 +54,14 @@ const prepareJobs = <TEntry extends AnyNewJob>(
       entry,
       id: resolveJobId(helpers.stateAdapter.config, entry.id),
       parsedInput: helpers.jobTypes.parseInput(entry.typeName, entry.input),
+      jobSpan: undefined as JobSpanHandle | undefined,
     };
   });
 
-  return prepared.map((item) => ({
-    ...item,
-    jobSpan: helpers.observabilityHelper.startJobSpan(item.entry.typeName, fromJob),
-  }));
+  for (const item of prepared) {
+    item.jobSpan = helpers.observabilityHelper.startJobSpan(item.entry.typeName, fromJob);
+  }
+  return prepared;
 };
 
 const requireBlockerChain = (
@@ -170,15 +163,15 @@ const addJobsBlockers = async <TItem extends CreatedJob>(
 const reportCreatedJobs = (
   helpers: Helpers,
   items: (CreatedJob & { blockerSpans: BlockerSpan[] })[],
-  { isChainHead, transactionHooks }: { isChainHead: boolean; transactionHooks: TransactionHooks },
+  { isChainHead, txHooks }: { isChainHead: boolean; txHooks: TxHooks },
 ): void => {
   for (const { blockerChain, blockerSpan } of items.flatMap((item) => item.blockerSpans)) {
     if (!blockerSpan) continue;
-    bufferObservabilityEvent(transactionHooks, () => {
+    txHooks.onCommit(() => {
       blockerSpan.end({ blockerChainTraceContext: blockerChain.traceContext });
     });
     if (blockerChain.completedAt !== null) {
-      bufferObservabilityEvent(transactionHooks, () => {
+      txHooks.onCommit(() => {
         helpers.observabilityHelper.completeBlockerSpan(blockerSpan.traceContext, blockerChain);
       });
     }
@@ -195,23 +188,23 @@ const reportCreatedJobs = (
       continue;
     }
 
-    bufferObservabilityEvent(transactionHooks, () =>
-      jobSpan?.end({ status: "created", chainId: chain.id, jobId: job.id }),
-    );
-    if (jobSpan) {
-      bufferObservabilityRollback(transactionHooks, () => {
+    if (jobSpan !== undefined) {
+      txHooks.onCommit(() => {
+        jobSpan.end({ status: "created", chainId: chain.id, jobId: job.id });
+      });
+      txHooks.onRollback(() => {
         jobSpan.end({ status: "error", error: new Error("savepoint rolled back") });
       });
     }
 
     if (isChainHead) {
-      bufferObservabilityEvent(transactionHooks, () => {
+      txHooks.onCommit(() => {
         helpers.observabilityHelper.chainCreated(chain, { input: job.input });
       });
     }
 
     const stateJob: StateJob = { ...job, chain };
-    bufferObservabilityEvent(transactionHooks, () => {
+    txHooks.onCommit(() => {
       helpers.observabilityHelper.jobCreated(stateJob, {
         blockers: blockerChains,
       });
@@ -221,15 +214,23 @@ const reportCreatedJobs = (
       (blockerChain) => blockerChain.completedAt === null,
     );
     if (incompleteBlockerChains.length > 0) {
-      bufferObservabilityEvent(transactionHooks, () => {
+      txHooks.onCommit(() => {
         helpers.observabilityHelper.jobBlocked(stateJob, {
           blockedByChains: incompleteBlockerChains,
         });
       });
-    } else {
-      bufferNotifyJobScheduled(transactionHooks, helpers.notifyAdapter, stateJob);
     }
   }
+
+  helpers.notifyHelper.notifyJobsScheduled(
+    txHooks,
+    items
+      .filter(
+        ({ deduplicated, blockerChains }) =>
+          !deduplicated && blockerChains.every((blockerChain) => blockerChain.completedAt !== null),
+      )
+      .map(({ job }) => job.typeName),
+  );
 };
 
 export const createChains = async (
@@ -237,11 +238,11 @@ export const createChains = async (
   {
     chains,
     txCtx,
-    transactionHooks,
+    txHooks,
   }: {
     chains: (AnyNewJob & { deduplication?: DeduplicationOptions })[];
     txCtx: BaseTxContext;
-    transactionHooks: TransactionHooks;
+    txHooks: TxHooks;
   },
 ): Promise<(Chain<string, string, unknown, unknown> & { deduplicated: boolean })[]> => {
   if (chains.length === 0) return [];
@@ -282,7 +283,7 @@ export const createChains = async (
       }),
     });
 
-    reportCreatedJobs(helpers, created, { isChainHead: true, transactionHooks });
+    reportCreatedJobs(helpers, created, { isChainHead: true, txHooks });
 
     return created.map(({ createdChain }) => ({
       ...mapStateChainToChain(createdChain),
@@ -302,14 +303,14 @@ export const completeChain = async (
     job,
     output,
     txCtx,
-    transactionHooks,
+    txHooks,
     attemptToken,
     workerId,
   }: {
     job: StateJob;
     output: unknown;
     txCtx: BaseTxContext;
-    transactionHooks: TransactionHooks;
+    txHooks: TxHooks;
     attemptToken: string | null;
     workerId: string | null;
   },
@@ -330,13 +331,13 @@ export const completeChain = async (
   if (!completed) return undefined;
   const { chain } = completed;
 
-  bufferObservabilityEvent(transactionHooks, () => {
+  txHooks.onCommit(() => {
     helpers.observabilityHelper.jobCompleted(completed, { output: parsedOutput });
   });
-  bufferObservabilityEvent(transactionHooks, () => {
+  txHooks.onCommit(() => {
     helpers.observabilityHelper.chainCompleted(chain, { output: parsedOutput });
   });
-  bufferNotifyChainCompletion(transactionHooks, helpers.notifyAdapter, completed);
+  helpers.notifyHelper.notifyChainsCompleted(txHooks, [completed.chainId]);
 
   const dependentJobs = await helpers.stateAdapter.unblockJobs({
     txCtx,
@@ -345,7 +346,7 @@ export const completeChain = async (
 
   for (const { traceContext } of dependentJobs) {
     if (traceContext === null) continue;
-    bufferObservabilityEvent(transactionHooks, () => {
+    txHooks.onCommit(() => {
       helpers.observabilityHelper.completeBlockerSpan(traceContext, chain);
     });
   }
@@ -356,9 +357,12 @@ export const completeChain = async (
       .map((dependentJob) => [dependentJob.job.id, dependentJob.job]),
   );
 
+  helpers.notifyHelper.notifyJobsScheduled(
+    txHooks,
+    [...unblockedJobs.values()].map((stateJob) => stateJob.typeName),
+  );
   for (const stateJob of unblockedJobs.values()) {
-    bufferNotifyJobScheduled(transactionHooks, helpers.notifyAdapter, stateJob);
-    bufferObservabilityEvent(transactionHooks, () => {
+    txHooks.onCommit(() => {
       helpers.observabilityHelper.jobUnblocked(stateJob, { unblockedByChain: chain });
     });
   }
@@ -372,14 +376,14 @@ export const continueChain = async (
     job,
     continueWith,
     txCtx,
-    transactionHooks,
+    txHooks,
     attemptToken,
     workerId,
   }: {
     job: StateJob;
     continueWith: AnyNewJob;
     txCtx: BaseTxContext;
-    transactionHooks: TransactionHooks;
+    txHooks: TxHooks;
     attemptToken: string | null;
     workerId: string | null;
   },
@@ -423,11 +427,11 @@ export const continueChain = async (
       })),
     });
 
-    reportCreatedJobs(helpers, created, { isChainHead: false, transactionHooks });
+    reportCreatedJobs(helpers, created, { isChainHead: false, txHooks });
 
     const [{ job: continuation }] = created;
     const completed = { ...continued, continuation };
-    bufferObservabilityEvent(transactionHooks, () => {
+    txHooks.onCommit(() => {
       helpers.observabilityHelper.jobCompleted(completed, {
         output: null,
         continuedWith: continuation,
@@ -445,7 +449,7 @@ export const rescheduleJobs = async (
   {
     jobs,
     txCtx,
-    transactionHooks,
+    txHooks,
   }: {
     jobs: {
       jobId: string;
@@ -454,15 +458,18 @@ export const rescheduleJobs = async (
       attemptToken?: string;
     }[];
     txCtx?: BaseTxContext;
-    transactionHooks: TransactionHooks;
+    txHooks: TxHooks;
   },
 ): Promise<(StateJob | undefined)[]> => {
   const rescheduledJobs = await helpers.stateAdapter.rescheduleJobs({ txCtx, jobs });
 
+  helpers.notifyHelper.notifyJobsScheduled(
+    txHooks,
+    rescheduledJobs.flatMap((job) => (job === undefined ? [] : [job.typeName])),
+  );
   for (const job of rescheduledJobs) {
     if (job === undefined) continue;
-    bufferNotifyJobScheduled(transactionHooks, helpers.notifyAdapter, job);
-    bufferObservabilityEvent(transactionHooks, () => {
+    txHooks.onCommit(() => {
       helpers.observabilityHelper.jobRescheduled(job);
     });
   }

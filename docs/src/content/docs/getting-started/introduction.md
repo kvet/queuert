@@ -40,13 +40,13 @@ Start the chain _inside_ your application's DB transaction. If the transaction r
 ```ts
 const client = await createClient({ stateAdapter, jobTypes });
 
-await withTransactionHooks(async (transactionHooks) =>
+await withTxHooks(async (txHooks) =>
   db.transaction(async (tx) => {
     const user = await tx.users.create({ name: "Alice", email: "alice@example.com" });
 
     await client.createChain({
       tx,
-      transactionHooks,
+      txHooks,
       typeName: "provision-account",
       input: { userId: user.id },
       //         ↑ wrong shape here is a compile error
@@ -68,11 +68,11 @@ const worker = await createInProcessWorker({
         attemptHandler: async ({ job, complete }) => {
           const accountId = await provisionAccount(job.input.userId);
 
-          return withTransactionHooks(async (transactionHooks) =>
+          return withTxHooks(async (txHooks) =>
             db.transaction(async (tx) =>
               complete({
                 tx,
-                transactionHooks,
+                txHooks,
                 continueWith: {
                   typeName: "send-welcome-email",
                   input: { userId: job.input.userId, accountId },

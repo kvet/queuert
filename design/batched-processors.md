@@ -26,11 +26,11 @@ createProcessors({
         const results = await emailService.sendBatch(
           jobs.map((j, i) => ({ to: recipients[i].email, body: j.input.body })),
         );
-        return withTransactionHooks(async (transactionHooks) =>
+        return withTxHooks(async (txHooks) =>
           db.transaction(async (tx) =>
             complete({
               tx,
-              transactionHooks,
+              txHooks,
               outcomes: results.map((r) =>
                 r.ok
                   ? { output: { messageId: r.id } }
@@ -49,7 +49,7 @@ createProcessors({
 
 - `batchLimit` is the only opt-in. Absent or `1` = today's behavior.
 - With `batchLimit > 1` the handler receives `jobs: RunningJob[]` instead of `job: RunningJob` — length `1..batchLimit`, all one `typeName`, blockers preloaded.
-- `complete` is per batch, not per job, and is called in the user's transaction like the single-job `complete` (txCtx and `transactionHooks` required). `signal` is one signal for the batch.
+- `complete` is per batch, not per job, and is called in the user's transaction like the single-job `complete` (txCtx and `txHooks` required). `signal` is one signal for the batch.
 - `complete` takes `outcomes` aligned with `jobs` (each one of `output` / `continueWith` / `reschedule` / `fail`) and returns results aligned the same way. The handler returns the `complete` result, as its type requires.
 - `{ fail: error }` exists only in batched handlers.
 - Middleware unifies on always-array `jobs` (length 1 for non-batched). Breaking, small surface.

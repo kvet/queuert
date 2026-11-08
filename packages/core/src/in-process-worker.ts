@@ -1,4 +1,4 @@
-import { isPositiveFinite, sleep } from "@queuert/helpers";
+import { isPositiveFinite, sleep, createLatch, createResettableLatch } from "@queuert/helpers";
 
 import type {
   AnyAttemptMiddleware,
@@ -279,15 +279,13 @@ export const createInProcessWorker = async <
   }
   const workerId = resolveWorkerId(client[helpersSymbol].stateAdapter.config, workerIdOption);
 
-  let started = false;
+  const started = createResettableLatch(
+    "createInProcessWorker: the worker is already started; await the stop function returned by start() before starting it again",
+  );
   return {
     start: async (): Promise<() => Promise<void>> => {
-      if (started) {
-        throw new Error(
-          "createInProcessWorker: the worker is already started; await the stop function returned by start() before starting it again",
-        );
-      }
-      started = true;
+      started.throwIfTripped();
+      started.trip();
       const helpers = client[helpersSymbol];
       const stopController = new AbortController();
 
@@ -320,13 +318,12 @@ export const createInProcessWorker = async <
         helpers.observabilityHelper.workerError({ workerId }, error);
       });
 
-      let stopped = false;
+      const stopped = createLatch();
       return async () => {
         stopController.abort();
         await runWorkersPromise;
-        if (stopped) return;
-        stopped = true;
-        started = false;
+        if (!stopped.trip()) return;
+        started.reset();
       };
     },
   };

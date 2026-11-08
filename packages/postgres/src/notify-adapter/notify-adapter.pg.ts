@@ -1,4 +1,4 @@
-import { createSharedListener } from "@queuert/helpers";
+import { createSharedListener, createLatch } from "@queuert/helpers";
 import type { NotifyAdapter } from "queuert";
 
 import type { PgNotifyProvider } from "../notify-provider/notify-provider.pg.ts";
@@ -37,19 +37,16 @@ export const createPgNotifyAdapter = async ({
     }),
   );
 
-  let closed = false;
-  const assertOpen = (): void => {
-    if (closed) throw new Error("NotifyAdapter is closed");
-  };
+  const closed = createLatch("NotifyAdapter is closed");
 
   return {
     notifyJobsScheduled: async (typeNames) => {
-      assertOpen();
+      closed.throwIfTripped();
       await notifyProvider.publish(jobScheduledChannel, typeNames);
     },
 
     listenJobScheduled: async (typeNames, onNotification) => {
-      assertOpen();
+      closed.throwIfTripped();
       const unsubs = await Promise.all(
         typeNames.map(async (typeName) =>
           jobScheduledListener.subscribe(typeName, () => {
@@ -63,32 +60,31 @@ export const createPgNotifyAdapter = async ({
     },
 
     notifyChainsCompleted: async (chainIds) => {
-      assertOpen();
+      closed.throwIfTripped();
       await notifyProvider.publish(chainCompletedChannel, chainIds);
     },
 
     listenChainCompleted: async (chainId, onNotification) => {
-      assertOpen();
+      closed.throwIfTripped();
       return chainCompletedListener.subscribe(chainId, () => {
         onNotification();
       });
     },
 
     notifyJobAttemptsLost: async (jobIds) => {
-      assertOpen();
+      closed.throwIfTripped();
       await notifyProvider.publish(attemptLostChannel, jobIds);
     },
 
     listenJobAttemptLost: async (jobId, onNotification) => {
-      assertOpen();
+      closed.throwIfTripped();
       return attemptLostListener.subscribe(jobId, () => {
         onNotification();
       });
     },
 
     close: async () => {
-      if (closed) return;
-      closed = true;
+      if (!closed.trip()) return;
       await Promise.all([
         jobScheduledListener.dispose(),
         chainCompletedListener.dispose(),

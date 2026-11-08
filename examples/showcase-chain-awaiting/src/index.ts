@@ -23,7 +23,7 @@ import {
   createInProcessWorker,
   createProcessors,
   defineJobTypes,
-  withTransactionHooks,
+  withTxHooks,
 } from "queuert";
 
 const jobTypes = defineJobTypes<{
@@ -79,11 +79,11 @@ const worker = await createInProcessWorker({
         attemptHandler: async ({ job, complete }) => {
           const basePrice = PRICES[job.input.productId] ?? 9.99;
           console.log(`[fetch-price] ${job.input.productId}: $${basePrice}`);
-          return withTransactionHooks(async (transactionHooks) =>
+          return withTxHooks(async (txHooks) =>
             sql.begin(async (txSql) =>
               complete({
                 txSql,
-                transactionHooks,
+                txHooks,
                 continueWith: {
                   typeName: "apply-discount",
                   input: { productId: job.input.productId, basePrice },
@@ -100,11 +100,11 @@ const worker = await createInProcessWorker({
           console.log(
             `[apply-discount] ${job.input.productId}: $${job.input.basePrice} → $${finalPrice}`,
           );
-          return withTransactionHooks(async (transactionHooks) =>
+          return withTxHooks(async (txHooks) =>
             sql.begin(async (txSql) =>
               complete({
                 txSql,
-                transactionHooks,
+                txHooks,
                 output: {
                   productId: job.input.productId,
                   finalPrice,
@@ -119,11 +119,11 @@ const worker = await createInProcessWorker({
         attemptHandler: async ({ job, complete }) => {
           console.log(`[long-running] Sleeping ${job.input.durationMs}ms...`);
           await new Promise((r) => setTimeout(r, job.input.durationMs));
-          return withTransactionHooks(async (transactionHooks) =>
+          return withTxHooks(async (txHooks) =>
             sql.begin(async (txSql) =>
               complete({
                 txSql,
-                transactionHooks,
+                txHooks,
                 output: { completedAt: new Date().toISOString() },
               }),
             ),
@@ -140,11 +140,11 @@ const stopWorker = await worker.start();
 console.log("\n--- Scenario 1: Basic Awaiting ---");
 console.log("Create a price lookup chain and await its result.\n");
 
-const priceChain = await withTransactionHooks(async (transactionHooks) =>
+const priceChain = await withTxHooks(async (txHooks) =>
   sql.begin(async (txSql) =>
     client.createChain({
       txSql,
-      transactionHooks,
+      txHooks,
       typeName: "fetch-price",
       input: { productId: "widget" },
     }),
@@ -161,11 +161,11 @@ assert.equal(result.output.finalPrice, 26.99);
 console.log("\n--- Scenario 2: Parallel Awaiting ---");
 console.log("Await multiple chains concurrently with Promise.all.\n");
 
-const chains = await withTransactionHooks(async (transactionHooks) =>
+const chains = await withTxHooks(async (txHooks) =>
   sql.begin(async (txSql) =>
     client.createChains({
       txSql,
-      transactionHooks,
+      txHooks,
       items: [
         { typeName: "fetch-price", input: { productId: "widget" } },
         { typeName: "fetch-price", input: { productId: "gadget" } },
@@ -190,11 +190,11 @@ assert.deepEqual(results.map((r) => r.output.productId).sort(), ["gadget", "gizm
 console.log("\n--- Scenario 3: Timeout Handling ---");
 console.log("Await a slow chain with a short timeout.\n");
 
-const slowChain = await withTransactionHooks(async (transactionHooks) =>
+const slowChain = await withTxHooks(async (txHooks) =>
   sql.begin(async (txSql) =>
     client.createChain({
       txSql,
-      transactionHooks,
+      txHooks,
       typeName: "long-running",
       input: { durationMs: 5000 },
     }),
@@ -214,11 +214,11 @@ try {
 console.log("\n--- Scenario 4: Abort Signal ---");
 console.log("Cancel awaiting with an AbortSignal.\n");
 
-const abortChain = await withTransactionHooks(async (transactionHooks) =>
+const abortChain = await withTxHooks(async (txHooks) =>
   sql.begin(async (txSql) =>
     client.createChain({
       txSql,
-      transactionHooks,
+      txHooks,
       typeName: "long-running",
       input: { durationMs: 5000 },
     }),

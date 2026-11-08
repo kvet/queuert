@@ -20,7 +20,7 @@ import {
   createInProcessWorker,
   createProcessors,
   defineJobTypes,
-  withTransactionHooks,
+  withTxHooks,
 } from "queuert";
 
 const jobTypes = defineJobTypes<{
@@ -73,11 +73,11 @@ const processors = createProcessors({
           await processItem();
         }
 
-        return withTransactionHooks(async (transactionHooks) =>
+        return withTxHooks(async (txHooks) =>
           sql.begin(async (txSql) =>
             complete({
               txSql,
-              transactionHooks,
+              txHooks,
               output: {
                 source: "handler",
                 result: "completed-by-handler",
@@ -109,11 +109,11 @@ const processors = createProcessors({
           }
         }
 
-        return withTransactionHooks(async (transactionHooks) =>
+        return withTxHooks(async (txHooks) =>
           sql.begin(async (txSql) =>
             complete({
               txSql,
-              transactionHooks,
+              txHooks,
               output: {
                 processed,
                 total: job.input.itemCount,
@@ -136,11 +136,11 @@ const { promise: batchStarted, resolve: onBatchStarted } = Promise.withResolvers
 console.log("\n--- Scenario 1: External Completion ---");
 console.log("Handler is waiting when completeChain is called externally.\n");
 
-const externalTask = await withTransactionHooks(async (transactionHooks) =>
+const externalTask = await withTxHooks(async (txHooks) =>
   sql.begin(async (txSql) =>
     client.createChain({
       txSql,
-      transactionHooks,
+      txHooks,
       typeName: "poll-external-api",
       input: { taskId: "task-001", maxPolls: 100 },
     }),
@@ -154,11 +154,11 @@ await externalResultStarted;
 await new Promise((r) => setTimeout(r, 100));
 
 console.log(`Completing chain externally...`);
-await withTransactionHooks(async (transactionHooks) =>
+await withTxHooks(async (txHooks) =>
   sql.begin(async (txSql) =>
     client.completeChain({
       txSql,
-      transactionHooks,
+      txHooks,
       ...externalTask,
       handler: async ({ job, completeJob }) => {
         await completeJob(job, async ({ complete }) =>
@@ -184,11 +184,11 @@ await stopWorker1();
 console.log("\n--- Scenario 2: Worker Stopping ---");
 console.log("Worker stops while batch job is running. Handler wraps up gracefully.\n");
 
-const batch = await withTransactionHooks(async (transactionHooks) =>
+const batch = await withTxHooks(async (txHooks) =>
   sql.begin(async (txSql) =>
     client.createChain({
       txSql,
-      transactionHooks,
+      txHooks,
       typeName: "process-batch",
       input: { batchId: "batch-001", itemCount: 100 },
     }),

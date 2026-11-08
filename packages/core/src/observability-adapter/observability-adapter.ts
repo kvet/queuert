@@ -117,7 +117,7 @@ export type CompleteBlockerSpanData = {
 
 /**
  * Adapter for structured logging, metrics, and distributed tracing. All methods
- * are synchronous — side effects are buffered via transaction hooks and flushed
+ * are synchronous — side effects are buffered via tx hooks and flushed
  * after commit.
  */
 export type ObservabilityAdapter = {

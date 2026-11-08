@@ -48,9 +48,9 @@ const cleanupProcessorRegistry = createProcessors({
 
             do {
               if (signal.aborted) {
-                return withTransactionHooks(async (transactionHooks) =>
+                return withTxHooks(async (txHooks) =>
                   stateProvider.withTransaction(async (txCtx) =>
-                    complete({ ...txCtx, transactionHooks, reschedule: { afterMs: 0 } }),
+                    complete({ ...txCtx, txHooks, reschedule: { afterMs: 0 } }),
                   ),
                 );
               }
@@ -71,12 +71,12 @@ const cleanupProcessorRegistry = createProcessors({
               );
 
               if (chainsToDelete.length > 0) {
-                const deleted = await withTransactionHooks(async (transactionHooks) =>
+                const deleted = await withTxHooks(async (txHooks) =>
                   stateProvider.withTransaction(async (txCtx) => {
                     await fence({ ...txCtx });
                     return client.deleteChains({
                       ...txCtx,
-                      transactionHooks,
+                      txHooks,
                       ids: chainsToDelete.map((chain) => chain.id),
                     });
                   }),
@@ -90,13 +90,13 @@ const cleanupProcessorRegistry = createProcessors({
           }
         } while (!signal.aborted && roundDeletedCount > 0);
 
-        return withTransactionHooks(async (transactionHooks) =>
+        return withTxHooks(async (txHooks) =>
           stateProvider.withTransaction(async (txCtx) => {
-            const completedJob = await complete({ ...txCtx, transactionHooks, output: null });
+            const completedJob = await complete({ ...txCtx, txHooks, output: null });
 
             await client.createChain({
               ...txCtx,
-              transactionHooks,
+              txHooks,
               typeName: "queuert.cleanup",
               input: null,
               schedule: { afterMs: CLEANUP_INTERVAL_MS },
@@ -151,11 +151,11 @@ const worker = await createInProcessWorker({
 Schedule the initial cleanup at application startup. Deduplication makes this idempotent — calling it multiple times returns the same chain:
 
 ```ts
-await withTransactionHooks(async (transactionHooks) =>
+await withTxHooks(async (txHooks) =>
   stateProvider.withTransaction(async (txCtx) =>
     client.createChain({
       ...txCtx,
-      transactionHooks,
+      txHooks,
       typeName: "queuert.cleanup",
       input: null,
       deduplication: { key: "queuert.cleanup", scope: "running" },

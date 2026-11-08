@@ -1,3 +1,4 @@
+import type { TxHooks } from "../tx-hooks/tx-hooks.ts";
 import type { StateAdapter } from "./state-adapter.ts";
 
 /** The transaction context fields spread into an options object, or `undefined` when none were. */
@@ -23,4 +24,10 @@ export const requireTxCtx = <T extends Record<string, unknown>>(
     );
   }
   return rest;
+};
+
+export const requireTxHooks = (txHooks: TxHooks | undefined, caller: string): void => {
+  if (txHooks === undefined) {
+    throw new Error(`${caller} requires txHooks`);
+  }
 };

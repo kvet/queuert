@@ -10,7 +10,7 @@ import type { Log } from "../observability-adapter/log.ts";
 import { createNoopObservabilityAdapter } from "../observability-adapter/observability-adapter.noop.ts";
 import type { ObservabilityAdapter } from "../observability-adapter/observability-adapter.ts";
 import type { StateAdapter } from "../state-adapter/state-adapter.ts";
-import { type TransactionHooks, withTransactionHooks } from "../transaction-hooks.ts";
+import { type TxHooks, withTxHooks } from "../tx-hooks/tx-hooks.ts";
 import { createFlakyBatchGenerator } from "./flaky-test-helper.spec-helper.ts";
 
 export type TestSuiteContext = {
@@ -18,9 +18,7 @@ export type TestSuiteContext = {
   transactionConcurrency: "concurrent" | "serialized";
   generateJobId: () => string;
   notifyAdapter: NotifyAdapter | undefined;
-  withTransaction: <T>(
-    cb: (txCtx: { $test: true }, transactionHooks: TransactionHooks) => Promise<T>,
-  ) => Promise<T>;
+  withTransaction: <T>(cb: (txCtx: { $test: true }, txHooks: TxHooks) => Promise<T>) => Promise<T>;
   poisonTransaction: ((txCtx: { $test: true }) => Promise<void>) | undefined;
   withNonTransactionContext: <T>(fn: (txCtx: { $test: true }) => Promise<T>) => Promise<T>;
   withSavepoint:
@@ -61,8 +59,10 @@ export const extendWithCommon = <
     withTransaction: [
       async ({ stateAdapter }, use) => {
         await use(async (cb) =>
-          withTransactionHooks(async (transactionHooks) =>
-            stateAdapter.withTransaction(async (txCtx) => cb(txCtx, transactionHooks)),
+          withTxHooks(async (txHooks) =>
+            stateAdapter.withTransaction(
+              txHooks.retryBoundary(async (txCtx) => cb(txCtx, txHooks)),
+            ),
           ),
         );
       },

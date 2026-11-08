@@ -8,7 +8,7 @@ import {
   createInProcessWorker,
   createProcessors,
   defineJobTypes,
-  withTransactionHooks,
+  withTxHooks,
 } from "queuert";
 import {
   extendWithResourceLeakDetection,
@@ -154,10 +154,10 @@ it("infers custom ID types through the full stack", async ({ postgresConnectionS
 
               await withTransaction(async (poolClient) => fence({ poolClient }));
 
-              return withTransactionHooks(async (transactionHooks) =>
+              return withTxHooks(async (txHooks) =>
                 withTransaction(async (poolClient) => {
                   await fence({ poolClient });
-                  return complete({ poolClient, transactionHooks, output: { bar: 42 } });
+                  return complete({ poolClient, txHooks, output: { bar: 42 } });
                 }),
               );
             },
@@ -166,11 +166,11 @@ it("infers custom ID types through the full stack", async ({ postgresConnectionS
       }),
     });
 
-    const chain = await withTransactionHooks(async (transactionHooks) =>
+    const chain = await withTxHooks(async (txHooks) =>
       withTransaction(async (poolClient) =>
         client.createChain({
           poolClient,
-          transactionHooks,
+          txHooks,
           typeName: "test",
           input: { foo: "hello" },
         }),
