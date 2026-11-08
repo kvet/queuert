@@ -21,6 +21,17 @@ const measurementModules: Record<string, string> = {
   "notify-nats": "notify-nats.ts",
   otel: "otel.ts",
   dashboard: "dashboard.ts",
+  "validation-define": "validation-define.ts",
+  "validation-zod": "validation-zod.ts",
+  "validation-valibot": "validation-valibot.ts",
+  "validation-typebox": "validation-typebox.ts",
+  "validation-arktype": "validation-arktype.ts",
+  "validation-codec-zod": "validation-codec-zod.ts",
+  "validation-codec-superjson": "validation-codec-superjson.ts",
+};
+
+const measurementGroups: Record<string, string> = {
+  validation: "validation-",
 };
 
 const phases = ["memory", "profile"];
@@ -81,8 +92,12 @@ async function main(): Promise<void> {
   console.log("║          (Each measurement runs in a separate process)         ║");
   console.log("╚════════════════════════════════════════════════════════════════╝");
 
-  const selectedNames = Object.keys(measurementModules).filter((name) =>
-    args.includes(`--${name}`),
+  const selectedGroupPrefixes = Object.entries(measurementGroups)
+    .filter(([group]) => args.includes(`--${group}`))
+    .map(([, prefix]) => prefix);
+  const selectedNames = Object.keys(measurementModules).filter(
+    (name) =>
+      args.includes(`--${name}`) || selectedGroupPrefixes.some((prefix) => name.startsWith(prefix)),
   );
   const selectedPhases = phases.filter((phase) => args.includes(`--${phase}`));
   const toRun = args.includes("--all") ? Object.keys(measurementModules) : selectedNames;
@@ -93,6 +108,9 @@ async function main(): Promise<void> {
     console.log("\nAvailable measurements:");
     for (const name of Object.keys(measurementModules)) {
       console.log(`  --${name}`);
+    }
+    for (const group of Object.keys(measurementGroups)) {
+      console.log(`  --${group} (run every ${measurementGroups[group]}* measurement)`);
     }
     console.log("  --all (run all measurements)");
     console.log("\nPhases (both by default):");

@@ -2,7 +2,8 @@ import { ExampleRows } from "../../../components/ExampleList.tsx";
 
 export const meta = {
   title: "Validation",
-  description: "Runnable validation adapters backed by Zod, Valibot, TypeBox and ArkType.",
+  description:
+    "Runnable validation and codec adapters backed by Zod, Valibot, TypeBox and ArkType.",
 };
 
 const Page = () => (
@@ -17,6 +18,12 @@ const Page = () => (
       title="Validation adapters"
       names={["validation-zod", "validation-valibot", "validation-typebox", "validation-arktype"]}
     />
+    <p>
+      Codec adapters store a different form than the handler sees, such as a <code>Date</code> kept
+      as an ISO string: the Zod example declares the stored form per job type, the superjson example
+      uses one codec for every job type.
+    </p>
+    <ExampleRows title="Codecs" names={["codec-zod", "codec-superjson"]} />
   </>
 );
 

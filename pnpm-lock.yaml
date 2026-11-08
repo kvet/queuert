@@ -345,9 +345,21 @@ importers:
       '@queuert/sqlite':
         specifier: workspace:*
         version: link:../../packages/sqlite
+      '@sinclair/typebox':
+        specifier: 0.34.52
+        version: 0.34.52
+      arktype:
+        specifier: 2.2.9
+        version: 2.2.9
       better-sqlite3:
         specifier: 13.0.3
         version: 13.0.3
+      example-codec-superjson:
+        specifier: workspace:*
+        version: link:../../examples/codec-superjson
+      example-codec-zod:
+        specifier: workspace:*
+        version: link:../../examples/codec-zod
       example-notify-postgres-postgres-js:
         specifier: workspace:*
         version: link:../../examples/notify-postgres-postgres-js
@@ -360,6 +372,18 @@ importers:
       example-state-sqlite-better-sqlite3:
         specifier: workspace:*
         version: link:../../examples/state-sqlite-better-sqlite3
+      example-validation-arktype:
+        specifier: workspace:*
+        version: link:../../examples/validation-arktype
+      example-validation-typebox:
+        specifier: workspace:*
+        version: link:../../examples/validation-typebox
+      example-validation-valibot:
+        specifier: workspace:*
+        version: link:../../examples/validation-valibot
+      example-validation-zod:
+        specifier: workspace:*
+        version: link:../../examples/validation-zod
       pg:
         specifier: 8.23.1
         version: 8.23.1
@@ -372,6 +396,15 @@ importers:
       redis:
         specifier: 6.3.1
         version: 6.3.1(@opentelemetry/api@1.10.0)
+      superjson:
+        specifier: 2.2.6
+        version: 2.2.6
+      valibot:
+        specifier: 1.5.0
+        version: 1.5.0(typescript@7.0.2)
+      zod:
+        specifier: 4.6.7
+        version: 4.6.7
     devDependencies:
       '@queuert/tsconfig':
         specifier: workspace:*
@@ -539,6 +572,32 @@ importers:
       yaml:
         specifier: 2.9.1
         version: 2.9.1
+
+  examples/codec-superjson:
+    dependencies:
+      queuert:
+        specifier: workspace:*
+        version: link:../../packages/core
+      superjson:
+        specifier: 2.2.6
+        version: 2.2.6
+    devDependencies:
+      '@queuert/tsconfig':
+        specifier: workspace:*
+        version: link:../../packages-internal/tsconfig
+
+  examples/codec-zod:
+    dependencies:
+      queuert:
+        specifier: workspace:*
+        version: link:../../packages/core
+      zod:
+        specifier: 4.6.7
+        version: 4.6.7
+    devDependencies:
+      '@queuert/tsconfig':
+        specifier: workspace:*
+        version: link:../../packages-internal/tsconfig
 
   examples/dashboard:
     devDependencies:
@@ -4204,6 +4263,10 @@ packages:
   cookie-es@3.1.1:
     resolution: {integrity: sha512-UaXxwISYJPTr9hwQxMFYZ7kNhSXboMXP+Z3TRX6f1/NyaGPfuNUZOWP1pUEb75B2HjfklIYLVRfWiFZJyC6Npg==}
 
+  copy-anything@4.1.5:
+    resolution: {integrity: sha512-vePst2VLTSqPglW7Q98VwFpGiGpOHTyXIo81MO5VyLecA5zMbZw/P/V1vmwD1jksa2iJpn/YkDrJ3XhTfzUyhQ==}
+    engines: {node: '>=18'}
+
   core-util-is@1.0.3:
     resolution: {integrity: sha512-ZQBvi1DcpJ4GDqanjucZ2Hj3wEO5pZDS89BWbkcrvdxksJorwUDDZamX9ldFkp9aw2lmBDLgkObEA4DWNJ9FYQ==}
 
@@ -6008,6 +6071,10 @@ packages:
 
   style-to-object@1.0.14:
     resolution: {integrity: sha512-LIN7rULI0jBscWQYaSswptyderlarFkjQ+t79nzty8tcIAceVomEVlLzH5VP4Cmsv6MtKhs7qaAiwlcp+Mgaxw==}
+
+  superjson@2.2.6:
+    resolution: {integrity: sha512-H+ue8Zo4vJmV2nRjpx86P35lzwDT3nItnIsocgumgr0hHMQ+ZGq5vrERg9kJBo5AWGmxZDhzDo+WVIJqkB0cGA==}
+    engines: {node: '>=16'}
 
   supports-preserve-symlinks-flag@1.0.0:
     resolution: {integrity: sha512-ot0WnXS9fgdkgIcePe6RHNk1WA8+muPa6cSjeR3V8K27q9BB1rTE3R1p7Hv0z1ZyAc8s6Vvv8DIyWf681MAt0w==}
@@ -8468,6 +8535,8 @@ snapshots:
 
   cookie-es@3.1.1: {}
 
+  copy-anything@4.1.5: {}
+
   core-util-is@1.0.3: {}
 
   cpu-features@0.0.10:
@@ -10611,6 +10680,10 @@ snapshots:
   style-to-object@1.0.14:
     dependencies:
       inline-style-parser: 0.2.7
+
+  superjson@2.2.6:
+    dependencies:
+      copy-anything: 4.1.5
 
   supports-preserve-symlinks-flag@1.0.0: {}
 

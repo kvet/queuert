@@ -729,6 +729,30 @@ export const examples: Example[] = [
     guide: validationAdapters,
   },
   {
+    name: "codec-zod",
+    category: "validation",
+    page: "validation",
+    label: "Zod codecs",
+    description:
+      "Zod 4 codec adapter — carries a Date through a chain while storing it as an ISO string, so handlers and client reads see runtime types and the database stays JSON-safe.",
+    runtime: "Node.js",
+    services: [],
+    files: ["src/zod-codec-adapter.ts", "src/index.ts"],
+    guide: validationAdapters,
+  },
+  {
+    name: "codec-superjson",
+    category: "validation",
+    page: "validation",
+    label: "superjson",
+    description:
+      "superjson codec adapter — one codec for every job type carries Date, Map, Set and bigint through a chain, with job types declared as plain TypeScript types.",
+    runtime: "Node.js",
+    services: [],
+    files: ["src/superjson-adapter.ts", "src/index.ts"],
+    guide: validationAdapters,
+  },
+  {
     name: "observability-otel",
     category: "observability",
     page: "logging-observability",

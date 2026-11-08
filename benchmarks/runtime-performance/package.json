@@ -12,6 +12,7 @@
     "start:notify-nats": "node src/index.ts --notify-nats",
     "start:otel": "node src/index.ts --otel",
     "start:dashboard": "node src/index.ts --dashboard",
+    "start:validation": "node src/index.ts --validation",
     "typecheck": "tsc --noEmit"
   },
   "dependencies": {
@@ -24,15 +25,26 @@
     "@queuert/postgres": "workspace:*",
     "@queuert/redis": "workspace:*",
     "@queuert/sqlite": "workspace:*",
+    "@sinclair/typebox": "0.34.52",
+    "arktype": "2.2.9",
     "better-sqlite3": "13.0.3",
+    "example-codec-superjson": "workspace:*",
+    "example-codec-zod": "workspace:*",
     "example-notify-postgres-postgres-js": "workspace:*",
     "example-notify-redis-redis": "workspace:*",
     "example-state-postgres-postgres-js": "workspace:*",
     "example-state-sqlite-better-sqlite3": "workspace:*",
+    "example-validation-arktype": "workspace:*",
+    "example-validation-typebox": "workspace:*",
+    "example-validation-valibot": "workspace:*",
+    "example-validation-zod": "workspace:*",
     "pg": "8.23.1",
     "postgres": "3.4.9",
     "queuert": "workspace:*",
-    "redis": "6.3.1"
+    "redis": "6.3.1",
+    "superjson": "2.2.6",
+    "valibot": "1.5.0",
+    "zod": "4.6.7"
   },
   "devDependencies": {
     "@queuert/tsconfig": "workspace:*",

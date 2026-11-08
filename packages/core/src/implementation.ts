@@ -47,13 +47,13 @@ const prepareJobs = <TEntry extends AnyNewJob>(
   helpers: Helpers,
   entries: TEntry[],
   fromJob: StateJob | null,
-): { entry: TEntry; id: string; parsedInput: unknown; jobSpan: JobSpanHandle | undefined }[] => {
+): { entry: TEntry; id: string; encodedInput: unknown; jobSpan: JobSpanHandle | undefined }[] => {
   const prepared = entries.map((entry) => {
     assertBlockerLimit(helpers, entry.typeName, entry.blockers?.length ?? 0);
     return {
       entry,
       id: resolveJobId(helpers.stateAdapter.config, entry.id),
-      parsedInput: helpers.jobTypes.parseInput(entry.typeName, entry.input),
+      encodedInput: helpers.jobTypes.encodeInput(entry.typeName, entry.input),
       jobSpan: undefined as JobSpanHandle | undefined,
     };
   });
@@ -107,7 +107,7 @@ const lockBlockerChains = async <TItem extends { entry: AnyNewJob }>(
       item.entry.typeName,
       jobBlockerChains.map((blockerChain) => ({
         typeName: blockerChain.typeName,
-        input: blockerChain.head.input,
+        input: helpers.jobTypes.decodeInput(blockerChain.head.typeName, blockerChain.head.input),
       })),
     );
     return { ...item, blockerChains: jobBlockerChains };
@@ -267,7 +267,7 @@ export const createChains = async (
       jobs: locked.map((item) => ({
         id: item.id,
         typeName: item.entry.typeName,
-        input: item.parsedInput,
+        input: item.encodedInput,
         schedule: item.entry.schedule,
         chainTraceContext: item.jobSpan?.chainTraceContext ?? null,
         traceContext: item.jobSpan?.traceContext ?? null,
@@ -286,7 +286,7 @@ export const createChains = async (
     reportCreatedJobs(helpers, created, { isChainHead: true, txHooks });
 
     return created.map(({ createdChain }) => ({
-      ...mapStateChainToChain(createdChain),
+      ...mapStateChainToChain(createdChain, helpers.jobTypes),
       deduplicated: createdChain.deduplicated,
     }));
   } catch (error) {
@@ -315,14 +315,14 @@ export const completeChain = async (
     workerId: string | null;
   },
 ): Promise<StateJob | undefined> => {
-  const parsedOutput = helpers.jobTypes.parseOutput(job.typeName, output);
+  const encodedOutput = helpers.jobTypes.encodeOutput(job.typeName, output);
 
   const [completed] = await helpers.stateAdapter.completeJobs({
     txCtx,
     jobs: [
       {
         jobId: job.id,
-        output: parsedOutput,
+        output: encodedOutput,
         attemptToken: attemptToken ?? undefined,
         workerId: workerId ?? undefined,
       },
@@ -332,10 +332,10 @@ export const completeChain = async (
   const { chain } = completed;
 
   txHooks.onCommit(() => {
-    helpers.observabilityHelper.jobCompleted(completed, { output: parsedOutput });
+    helpers.observabilityHelper.jobCompleted(completed, { output: encodedOutput });
   });
   txHooks.onCommit(() => {
-    helpers.observabilityHelper.chainCompleted(chain, { output: parsedOutput });
+    helpers.observabilityHelper.chainCompleted(chain, { output: encodedOutput });
   });
   helpers.notifyHelper.notifyChainsCompleted(txHooks, [completed.chainId]);
 
@@ -402,7 +402,7 @@ export const continueChain = async (
       jobs: locked.map((item) => ({
         id: item.id,
         typeName: item.entry.typeName,
-        input: item.parsedInput,
+        input: item.encodedInput,
         schedule: item.entry.schedule,
         traceContext: item.jobSpan?.traceContext ?? null,
         continueFromId: job.id,

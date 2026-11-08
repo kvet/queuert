@@ -4,6 +4,11 @@
  * This is a user-land adapter that shows how to integrate ArkType with Queuert's
  * runtime validation system. The same pattern applies to Zod, Valibot,
  * or any other validation library.
+ *
+ * The stored form equals the runtime form, so one validation pass serves as both
+ * encoder and decoder and returns the value it checked. A schema that transforms
+ * would be applied again on every read; use a codec adapter such as
+ * `examples/codec-zod` for one.
  */
 
 import type { Type } from "arktype";
@@ -130,6 +135,15 @@ export const createArkTypeJobTypes = <
     return schema;
   };
 
+  const parseInput = (typeName: string, input: unknown): unknown =>
+    getSchema(typeName).input.assert(input);
+
+  const parseOutput = (typeName: string, output: unknown): unknown => {
+    const schema = getSchema(typeName).output;
+    if (!schema) throw new Error(`Job type "${typeName}" does not have an output schema`);
+    return schema.assert(output);
+  };
+
   return createJobTypes<InferArkTypeJobTypes<T>, JobTypesDefinitions<TExternal>>({
     getTypeNames: () => Object.keys(_schemas),
     validateEntry: (typeName) => {
@@ -139,18 +153,10 @@ export const createArkTypeJobTypes = <
       }
     },
 
-    parseInput: (typeName, input) => {
-      return getSchema(typeName).input.assert(input);
-    },
-
-    parseOutput: (typeName, output) => {
-      const schema = getSchema(typeName);
-      if (schema.output) {
-        return schema.output.assert(output);
-      } else {
-        throw new Error(`Job type "${typeName}" does not have an output schema`);
-      }
-    },
+    encodeInput: parseInput,
+    decodeInput: parseInput,
+    encodeOutput: parseOutput,
+    decodeOutput: parseOutput,
 
     validateContinueWith: (typeName, continuation) => {
       const schema = getSchema(typeName);

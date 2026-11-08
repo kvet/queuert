@@ -180,7 +180,7 @@ Five collections, each named `{collectionPrefix}{name}` (`collectionPrefix` defa
 
 **`migrations`** and **`migration_lock`**: as on PostgreSQL.
 
-`input`, `output` and `lastAttemptError` are stored as BSON values. The JSON-serializable inputs task (`design/json-serializable-types.md`) matters more here, because BSON round-trips `Date` as `Date` where PostgreSQL's `jsonb` returns a string; until it lands, the adapter converts through `JSON.parse(JSON.stringify(value))` on write, so both adapters return the same values. Ids are strings (`_id: string`); BSON UUIDs are a later option. Timestamps are BSON dates with millisecond precision (PostgreSQL: microseconds), so keyset cursors rely on the `_id` tiebreak more often; the cursor format in `packages/core/src/state-adapter/cursor.ts` is unchanged.
+`input`, `output` and `lastAttemptError` are stored as BSON values. Queuert hands the state adapter JSON-serializable values: `defineJobTypes` rejects non-JSON `input` and `output` types at compile time, and a `createJobTypes` registry checks every encoded value at runtime. So the adapter stores them as BSON without a JSON round-trip, and BSON's `Date` handling never comes into play. Ids are strings (`_id: string`); BSON UUIDs are a later option. Timestamps are BSON dates with millisecond precision (PostgreSQL: microseconds), so keyset cursors rely on the `_id` tiebreak more often; the cursor format in `packages/core/src/state-adapter/cursor.ts` is unchanged.
 
 Splitting chains from jobs is cheaper here than on PostgreSQL: there is no migration, and it removes head-row aliasing from the start. A claim, reschedule or reclaim writes only the job document, so it never conflicts with a user transaction that attaches the chain as a blocker or locks it.
 
@@ -346,4 +346,3 @@ The adapter does not wait on `design/chain-table.md` or `design/pg-isolation-lev
 - **PostgreSQL isolation levels** (`design/pg-isolation-levels.md`): the rule and counters this adapter uses from the start.
 - **Chain table** (`design/chain-table.md`): the chain/job split, here as two collections.
 - **Unbounded blockers** (`design/unbounded-blockers.md`): would move the embedded `blockers` array into its own collection, since the array is bounded by `maxBlockersPerJob` and a 16 MB document.
-- **JSON-serializable types** (`design/json-serializable-types.md`): removes the adapter's JSON round-trip of `input` and `output`.

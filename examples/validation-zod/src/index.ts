@@ -39,7 +39,10 @@ const jobTypes = createZodJobTypes({
   // Continuation job
   "process-data": {
     input: z.object({
-      data: z.unknown(),
+      data: z.object({
+        items: z.array(z.number()),
+        source: z.string(),
+      }),
     }),
     output: z.object({
       processed: z.boolean(),
@@ -118,7 +121,6 @@ const workerRunner = createWorkerRunner({
       "process-data": {
         attemptHandler: async ({ job, complete }) => {
           console.log("Processing data:", job.input.data);
-          const data = job.input.data as { items: number[] };
 
           return withTxHooks(async (txHooks) =>
             stateAdapter.withTransaction(async (ctx) =>
@@ -127,7 +129,7 @@ const workerRunner = createWorkerRunner({
                 txHooks,
                 output: {
                   processed: true,
-                  itemCount: data.items?.length ?? 0,
+                  itemCount: job.input.data.items.length,
                 },
               }),
             ),

@@ -9,6 +9,8 @@ import {
   cpuGroups,
   allocationGroups,
   memoryGroups,
+  validationAllocationGroups,
+  validationCpuGroups,
 } from "../../../data/benchmarks.ts";
 
 export const meta = {
@@ -129,6 +131,37 @@ const Page = () => (
       series={["Allocated"]}
       groups={allocationGroups}
     />
+    <h2 id="job-type-registries">Job type registries</h2>
+    <p>
+      The registry measurements run the same lifecycle on the in-process state and notify adapters
+      with each job type registry, creating and processing chains whose input is an order with a
+      nested customer and three line items. <code>defineJobTypes</code> is the baseline: it passes
+      values through without running anything.
+    </p>
+    <p>
+      The CPU chart shows the time spent inside the schema library. On top of it, every{" "}
+      <code>createJobTypes</code> registry adds about 1 µs of Queuert core CPU per job to call the
+      encoders and decoders and check that every encoded value is JSON-serializable. The Zod and
+      TypeBox adapters compile their schemas once with <code>z.compile</code> and{" "}
+      <code>TypeCompiler.Compile</code>, and ArkType compiles its types itself. The codec adapters
+      process the same JSON input, so they show the cost of the codec path, not of a transform.
+    </p>
+    <BenchChart
+      title="Schema library CPU per job"
+      unit="µs"
+      approximate
+      decimals={1}
+      series={["Schema library"]}
+      groups={validationCpuGroups}
+    />
+    <BenchChart
+      title="Allocated per job by registry"
+      unit="KB"
+      approximate
+      decimals={1}
+      series={["Allocated"]}
+      groups={validationAllocationGroups}
+    />
     <h2 id="reproduce">Reproduce</h2>
     <p>
       From <a href={benchmarkSourceUrl("runtime-performance")}>benchmarks/runtime-performance</a>,
@@ -139,6 +172,7 @@ const Page = () => (
       pnpm --filter benchmark-runtime-performance start
       pnpm --filter benchmark-runtime-performance start:state-postgres
       pnpm --filter benchmark-runtime-performance start:state-sqlite --profile
+      pnpm --filter benchmark-runtime-performance start:validation --profile
     `}</Code>
   </>
 );

@@ -9,7 +9,7 @@ import type { ConformanceGroup } from "./runner.ts";
  * inference correctly to type-check at the call site of
  * {@link runValidationAdapterConformance}.
  *
- * Conformance verifies the wrapper layer only — the six runtime methods and
+ * Conformance verifies the wrapper layer only — the eight runtime methods and
  * the way they integrate with core's `createJobTypes` error wrapping.
  * Compile-time validation rules (rejecting blockers that reference
  * continuation-only types, etc.) live in core's `ValidatedJobTypeDefinitions`
@@ -224,17 +224,11 @@ export type ValidationConformanceFixture = {
 
 export type ValidationAdapterConformanceContext = Omit<ValidationConformanceFixture, "dispose">;
 
-const expectJobTypeValidationError = (
-  fn: () => unknown,
+const assertJobTypeValidationError = (
+  thrown: unknown,
   expectedCode: JobTypeValidationError["code"],
   expectedTypeName: string,
 ): JobTypeValidationError => {
-  let thrown: unknown;
-  try {
-    fn();
-  } catch (error) {
-    thrown = error;
-  }
   if (!(thrown instanceof JobTypeValidationError)) {
     const description =
       thrown === undefined
@@ -251,6 +245,20 @@ const expectJobTypeValidationError = (
     throw new Error(`expected typeName "${expectedTypeName}", got "${thrown.typeName}"`);
   }
   return thrown;
+};
+
+const expectJobTypeValidationError = (
+  fn: () => unknown,
+  expectedCode: JobTypeValidationError["code"],
+  expectedTypeName: string,
+): JobTypeValidationError => {
+  let thrown: unknown;
+  try {
+    fn();
+  } catch (error) {
+    thrown = error;
+  }
+  return assertJobTypeValidationError(thrown, expectedCode, expectedTypeName);
 };
 
 export const validationAdapterConformanceGroups: ConformanceGroup<ValidationAdapterConformanceContext>[] =
@@ -306,59 +314,103 @@ export const validationAdapterConformanceGroups: ConformanceGroup<ValidationAdap
       ],
     },
     {
-      name: "parseInput",
+      name: "encodeInput",
       cases: [
         {
-          name: "returns parsed value for valid input",
+          name: "returns encoded values for valid inputs",
           run: async ({ basic }, expect) => {
-            const result = basic.buildEntry().parseInput("main", { id: "abc" });
+            const result = basic.buildEntry().encodeInput("main", { id: "abc" });
             expect(result).toEqual({ id: "abc" });
           },
         },
         {
-          name: "wraps invalid input as JobTypeValidationError(code=invalid_input + cause + details)",
+          name: "wraps invalid input as JobTypeValidationError(code=invalid_input + cause)",
           run: async ({ basic }, expect) => {
             const error = expectJobTypeValidationError(
-              () => basic.buildEntry().parseInput("main", { id: 123 }),
+              () => basic.buildEntry().encodeInput("main", { id: 123 }),
               "invalid_input",
               "main",
             );
             expect(error.cause).toBeDefined();
-            expect((error.details as { input: unknown }).input).toEqual({ id: 123 });
           },
         },
       ],
     },
     {
-      name: "parseOutput",
+      name: "decodeInput",
       cases: [
         {
-          name: "returns parsed value for valid output",
+          name: "returns decoded values for valid inputs",
           run: async ({ basic }, expect) => {
-            const result = basic.buildEntry().parseOutput("main", { ok: true });
+            const result = basic.buildEntry().decodeInput("main", { id: "abc" });
+            expect(result).toEqual({ id: "abc" });
+          },
+        },
+        {
+          name: "wraps invalid input as JobTypeValidationError(code=invalid_input + cause)",
+          run: async ({ basic }, expect) => {
+            const error = expectJobTypeValidationError(
+              () => basic.buildEntry().decodeInput("main", { id: 123 }),
+              "invalid_input",
+              "main",
+            );
+            expect(error.cause).toBeDefined();
+          },
+        },
+      ],
+    },
+    {
+      name: "encodeOutput",
+      cases: [
+        {
+          name: "returns encoded values for valid outputs",
+          run: async ({ basic }, expect) => {
+            const result = basic.buildEntry().encodeOutput("main", { ok: true });
             expect(result).toEqual({ ok: true });
           },
         },
         {
-          name: "wraps invalid output as JobTypeValidationError(code=invalid_output + cause + details)",
+          name: "wraps invalid output as JobTypeValidationError(code=invalid_output + cause)",
           run: async ({ basic }, expect) => {
             const error = expectJobTypeValidationError(
-              () => basic.buildEntry().parseOutput("main", { ok: "yes" }),
+              () => basic.buildEntry().encodeOutput("main", { ok: "yes" }),
               "invalid_output",
               "main",
             );
             expect(error.cause).toBeDefined();
-            expect((error.details as { output: unknown }).output).toEqual({ ok: "yes" });
           },
         },
         {
           name: "wraps missing output schema as JobTypeValidationError(code=invalid_output)",
           run: async ({ basic }) => {
             expectJobTypeValidationError(
-              () => basic.buildContinuationOnly().parseOutput("main", { whatever: true }),
+              () => basic.buildContinuationOnly().encodeOutput("main", { whatever: true }),
               "invalid_output",
               "main",
             );
+          },
+        },
+      ],
+    },
+    {
+      name: "decodeOutput",
+      cases: [
+        {
+          name: "returns decoded values for valid outputs",
+          run: async ({ basic }, expect) => {
+            const result = basic.buildEntry().decodeOutput("main", { ok: true });
+            expect(result).toEqual({ ok: true });
+          },
+        },
+        {
+          name: "wraps invalid output as JobTypeValidationError(code=invalid_output + cause)",
+          run: async ({ basic }, expect) => {
+            const error = expectJobTypeValidationError(
+              () => basic.buildEntry().decodeOutput("main", { ok: "yes" }),
+              "invalid_output",
+              "main",
+            );
+            expect(error.cause).toBeDefined();
           },
         },
       ],

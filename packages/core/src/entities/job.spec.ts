@@ -1,5 +1,6 @@
-import { describe, expect, expectTypeOf, it } from "vitest";
+import { describe, expect, expectTypeOf, it, vi } from "vitest";
 
+import { createNoopJobTypes } from "../job-types/job-types.ts";
 import type { StateJobInfo } from "../state-adapter/state-adapter.ts";
 import { type Job, mapStateJobToJob } from "./job.ts";
 
@@ -46,12 +47,15 @@ const runningStateJob = {
   attemptToken: "attempt-token-1",
 };
 
+const mapOne = (stateJob: Parameters<typeof mapStateJobToJob>[0]) =>
+  mapStateJobToJob(stateJob, createNoopJobTypes());
+
 describe("mapStateJobToJob", () => {
   it("maps the stored status through, blocked included", () => {
-    expect(mapStateJobToJob(pendingStateJob).status).toBe("pending");
-    expect(mapStateJobToJob({ ...pendingStateJob, status: "blocked" }).status).toBe("blocked");
+    expect(mapOne(pendingStateJob).status).toBe("pending");
+    expect(mapOne({ ...pendingStateJob, status: "blocked" }).status).toBe("blocked");
     expect(
-      mapStateJobToJob({
+      mapOne({
         ...pendingStateJob,
         status: "completed",
         completedAt: new Date("2026-01-01T00:01:00Z"),
@@ -60,12 +64,47 @@ describe("mapStateJobToJob", () => {
   });
 
   it("carries the chain position through", () => {
-    expect(mapStateJobToJob(pendingStateJob).chainIndex).toBe(0);
-    expect(mapStateJobToJob({ ...pendingStateJob, chainIndex: 3 }).chainIndex).toBe(3);
+    expect(mapOne(pendingStateJob).chainIndex).toBe(0);
+    expect(mapOne({ ...pendingStateJob, chainIndex: 3 }).chainIndex).toBe(3);
+  });
+
+  it("decodes the input of a job and its continuation, and the output of a terminal job only", () => {
+    const decodeInput = vi.fn((_typeName: string, input: unknown) => ({ decoded: input }));
+    const decodeOutput = vi.fn((_typeName: string, output: unknown) => ({ decoded: output }));
+    const continuedJob = {
+      ...pendingStateJob,
+      status: "completed" as const,
+      completedAt: new Date("2026-01-01T00:01:00Z"),
+      continuedToId: "job-2",
+      output: "ignored",
+    };
+    const continuation: StateJobInfo = {
+      ...pendingJobInfo,
+      id: "job-2",
+      chainIndex: 1,
+      input: { value: 2 },
+      status: "completed",
+      completedAt: new Date("2026-01-01T00:02:00Z"),
+      output: { result: 2 },
+    };
+
+    const job = mapStateJobToJob({ ...continuedJob, continuation }, { decodeInput, decodeOutput });
+
+    expect(decodeInput.mock.calls).toEqual([
+      ["test", { value: 1 }],
+      ["test", { value: 2 }],
+    ]);
+    expect(decodeOutput.mock.calls).toEqual([["test", { result: 2 }]]);
+    expect(job.input).toEqual({ decoded: { value: 1 } });
+    expect("output" in job).toBe(false);
+    expect(job.continuedTo).toMatchObject({
+      input: { decoded: { value: 2 } },
+      output: { decoded: { result: 2 } },
+    });
   });
 
   it("carries the attempt fields through on a running job", () => {
-    const job = mapStateJobToJob(runningStateJob);
+    const job = mapOne(runningStateJob);
 
     expect(job.status).toBe("running");
     if (job.status !== "running") throw new Error("expected a running job");

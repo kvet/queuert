@@ -24,8 +24,10 @@ export const wrapJobTypesWithLogging = <TJobTypeDefinitions>({
   return {
     getTypeNames: () => jobTypes.getTypeNames(),
     validateEntry: wrap(jobTypes.validateEntry),
-    parseInput: wrap(jobTypes.parseInput),
-    parseOutput: wrap(jobTypes.parseOutput),
+    encodeInput: wrap(jobTypes.encodeInput),
+    decodeInput: wrap(jobTypes.decodeInput),
+    encodeOutput: wrap(jobTypes.encodeOutput),
+    decodeOutput: wrap(jobTypes.decodeOutput),
     validateContinueWith: wrap(jobTypes.validateContinueWith),
     validateBlockers: wrap(jobTypes.validateBlockers),
     [definitionsSymbol]: jobTypes[definitionsSymbol],

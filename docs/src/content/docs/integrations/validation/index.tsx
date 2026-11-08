@@ -3,6 +3,7 @@ import { A } from "@solidjs/router";
 import { ExampleCode } from "../../../../components/ExampleCode.tsx";
 import { ExampleRows } from "../../../../components/ExampleList.tsx";
 import { type FieldItem, FieldList } from "../../../../components/FieldList.tsx";
+import { Aside } from "../../../../components/mdx/Aside.tsx";
 import { TabItem, Tabs } from "../../../../components/mdx/Tabs.tsx";
 
 export const meta = {
@@ -15,7 +16,8 @@ const boundaries = (): FieldItem[] => [
   {
     name: "getTypeNames",
     chips: [{ label: "(all)", mono: true }],
-    description: "Returns known type names (for merge/routing).",
+    description:
+      "Returns known type names, used to route merged slices and to pick which values are decoded.",
   },
   {
     name: "validateEntry",
@@ -23,14 +25,14 @@ const boundaries = (): FieldItem[] => [
     description: "Validates job type can start a chain.",
   },
   {
-    name: "parseInput",
+    name: "encodeInput / decodeInput",
     chips: [{ label: "input: unknown", mono: true }],
-    description: "Parses and validates job input.",
+    description: "Converts input between runtime and stored form.",
   },
   {
-    name: "parseOutput",
+    name: "encodeOutput / decodeOutput",
     chips: [{ label: "output?: unknown", mono: true }],
-    description: "Parses and validates job output.",
+    description: "Converts output between runtime and stored form.",
   },
   {
     name: "validateContinueWith",
@@ -48,9 +50,9 @@ const Page = () => (
   <>
     <p>
       Queuert's runtime validation follows an adapter pattern. The core provides{" "}
-      <code>createJobTypes</code>, which accepts raw validation functions. Schema-specific adapters
-      (Zod, Valibot, TypeBox, ArkType) are implemented in user-land, wrapping their respective
-      schema libraries into the <code>JobTypes</code> interface.
+      <code>createJobTypes</code>, which accepts raw validation and codec functions. Schema-specific
+      adapters (Zod, Valibot, TypeBox, ArkType) are implemented in user-land, wrapping their
+      respective schema libraries into the <code>JobTypes</code> interface.
     </p>
     <p>Each adapter:</p>
     <ol>
@@ -60,13 +62,48 @@ const Page = () => (
         <code>defineJobTypes</code>.
       </li>
       <li>
-        Calls <code>createJobTypes</code> with validation functions that delegate to the schema
-        library.
+        Calls <code>createJobTypes</code> with functions that delegate to the schema library.
       </li>
     </ol>
     <p>
       When to use runtime validation instead of the type-only <code>defineJobTypes</code> is covered
       in the <A href="/guides/runtime-validation/">Runtime Validation</A> guide.
+    </p>
+
+    <h2 id="runtime-form-vs-stored-form">Runtime form vs stored form</h2>
+    <p>
+      A job type definition's <code>input</code> and <code>output</code> describe the{" "}
+      <strong>runtime</strong> form — what a handler receives and what a client read returns. The{" "}
+      <strong>stored</strong> form is what the state adapter persists, and it must be
+      JSON-serializable.
+    </p>
+    <p>
+      The two forms are bridged by an encoder and a decoder for each of <code>input</code> and{" "}
+      <code>output</code>:
+    </p>
+    <ul>
+      <li>
+        <code>encodeInput</code> / <code>encodeOutput</code> run on every write, turning the runtime
+        form into the stored form.
+      </li>
+      <li>
+        <code>decodeInput</code> / <code>decodeOutput</code> run on every read, turning the stored
+        form back into the runtime form.
+      </li>
+    </ul>
+    <p>
+      For most schemas the two forms are identical and both methods are a validation pass that
+      returns the value unchanged. They diverge when a schema transforms — a <code>Date</code> in
+      the handler stored as an ISO string, for instance. Whatever an encoder returns is checked
+      against <code>isJsonSerializable</code> by <code>createJobTypes</code> itself, so an adapter
+      that lets a <code>Date</code> reach storage fails on the first write, before anything is
+      stored.
+    </p>
+    <p>
+      <code>defineJobTypes</code> has no codec, so the runtime form <em>is</em> the stored form: it
+      constrains <code>input</code> and <code>output</code> to JSON-serializable types at compile
+      time, and a definition carrying a <code>Date</code>, <code>Map</code> or <code>bigint</code>{" "}
+      is a type error.
     </p>
 
     <h2>Define job types</h2>
@@ -85,7 +122,10 @@ const Page = () => (
       </TabItem>
     </Tabs>
     <h2>The adapter</h2>
-    <p>Complete adapter implementations for each library:</p>
+    <p>
+      Complete adapter implementations for each library. What each one costs per job is on the{" "}
+      <A href="/benchmarks/runtime-performance/#job-type-registries">Runtime Performance</A> page.
+    </p>
     <Tabs syncKey="validation-library">
       <TabItem label="Zod">
         <ExampleCode example="validation-zod" file="src/zod-adapter.ts" />
@@ -111,6 +151,25 @@ const Page = () => (
       in <A href="/guides/runtime-validation/#how-errors-surface">Runtime Validation</A>.
     </p>
 
+    <h3>Codec calls</h3>
+    <p>
+      Each codec method takes the <code>typeName</code> and the value. An adapter whose schemas only
+      validate passes one function as both the encoder and the decoder of a field, so a schema that
+      transforms would be applied again on every read; transforming schemas belong in a codec
+      adapter such as the <code>codec-zod</code> example. The encoders are the gate: they run on
+      every write, and a value they reject never reaches the database. The decoders run on every
+      read and only for type names the registry lists in <code>getTypeNames</code>. When a decoder
+      throws, the read that needed the value fails with <code>JobTypeValidationError</code>.
+    </p>
+    <Aside type="caution">
+      Keep a job type, and a decoder that accepts every stored shape of it, for as long as rows of
+      that type remain in the database. A row whose job type the registry does not list is read in
+      its stored form, so its <code>input</code> and <code>output</code> do not match the declared
+      types; a decoder that rejects an older stored shape makes every read of that row — including a
+      dashboard page listing it — fail. Delete the chains of a job type before removing it, and
+      change a schema in a way that still decodes rows written under the previous one.
+    </Aside>
+
     <h2>Conformance</h2>
     <p>
       Each example checks its adapter with <code>runValidationAdapterConformance</code>; see{" "}
@@ -135,6 +194,7 @@ const Page = () => (
       title="Validation adapters"
       names={["validation-zod", "validation-valibot", "validation-typebox", "validation-arktype"]}
     />
+    <ExampleRows title="Codecs" names={["codec-zod", "codec-superjson"]} />
   </>
 );
 

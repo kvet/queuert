@@ -24,13 +24,14 @@ const Page = () => (
     </p>
     <ul>
       <li>
-        The adapter's six runtime methods (<code>getTypeNames</code>, <code>validateEntry</code>,{" "}
-        <code>parseInput</code>, <code>parseOutput</code>, <code>validateContinueWith</code>,{" "}
-        <code>validateBlockers</code>) behave correctly.
+        The adapter's eight runtime methods (<code>getTypeNames</code>, <code>validateEntry</code>,{" "}
+        <code>encodeInput</code>, <code>decodeInput</code>, <code>encodeOutput</code>,{" "}
+        <code>decodeOutput</code>, <code>validateContinueWith</code>, <code>validateBlockers</code>)
+        behave correctly.
       </li>
       <li>
         Schema validation failures are wrapped in <code>JobTypeValidationError</code> with the right{" "}
-        <code>code</code>, <code>typeName</code>, <code>cause</code>, and <code>details</code>.
+        <code>code</code>, <code>typeName</code> and <code>cause</code>.
       </li>
       <li>
         The schema-to-shape inference (<code>z.infer</code>, <code>{"Static<>"}</code>,{" "}

@@ -1,3 +1,4 @@
+import type { JobTypes } from "../job-types/job-types.ts";
 import type { StateJob, StateJobInfo } from "../state-adapter/state-adapter.ts";
 import type { AnyJob } from "./job.types.ts";
 
@@ -5,6 +6,7 @@ export type * from "./job.types.ts";
 
 export const mapStateJobToJob = (
   stateJob: StateJob & { continuation?: StateJobInfo },
+  jobTypes: Pick<JobTypes<any>, "decodeInput" | "decodeOutput">,
 ): AnyJob & { continuedTo?: AnyJob } => {
   const base = {
     id: stateJob.id,
@@ -12,14 +14,14 @@ export const mapStateJobToJob = (
     chainTypeName: stateJob.chain.typeName,
     chainIndex: stateJob.chainIndex,
     typeName: stateJob.typeName,
-    input: stateJob.input,
+    input: jobTypes.decodeInput(stateJob.typeName, stateJob.input),
     createdAt: stateJob.createdAt,
     scheduledAt: stateJob.scheduledAt,
     attempt: stateJob.attempt,
     lastAttemptAt: stateJob.lastAttemptAt,
     lastAttemptError: stateJob.lastAttemptError,
     ...(stateJob.continuation && {
-      continuedTo: mapStateJobToJob({ ...stateJob.continuation, chain: stateJob.chain }),
+      continuedTo: mapStateJobToJob({ ...stateJob.continuation, chain: stateJob.chain }, jobTypes),
     }),
   };
 
@@ -39,7 +41,7 @@ export const mapStateJobToJob = (
         status: "completed",
         completedAt: stateJob.completedAt!,
         completedBy: stateJob.completedBy,
-        output: stateJob.output,
+        output: jobTypes.decodeOutput(stateJob.typeName, stateJob.output),
         continuedToId: null,
       };
     case "running":

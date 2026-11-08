@@ -1,0 +1,21 @@
+{
+  "name": "example-codec-superjson",
+  "version": "0.0.1",
+  "private": true,
+  "type": "module",
+  "exports": {
+    "./adapter": "./src/superjson-adapter.ts"
+  },
+  "scripts": {
+    "start": "node src/index.ts",
+    "test": "vitest --run",
+    "typecheck": "tsc --noEmit"
+  },
+  "dependencies": {
+    "queuert": "workspace:*",
+    "superjson": "2.2.6"
+  },
+  "devDependencies": {
+    "@queuert/tsconfig": "workspace:*"
+  }
+}

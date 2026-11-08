@@ -36,27 +36,33 @@ const validateFields = (schema: FieldSchema, data: unknown, label: string): void
 
 const createTestSchemaRegistry = <T extends BaseJobTypeDefinitions>(
   schemas: Record<string, TestJobTypeSchema>,
-) =>
-  createJobTypes<T>({
+) => {
+  const schemaFor = (typeName: string) => {
+    const schema = schemas[typeName];
+    if (!schema) throw new Error(`Unknown job type: "${typeName}"`);
+    return schema;
+  };
+  const checkInput = (typeName: string, input: unknown): unknown => {
+    validateFields(schemaFor(typeName).input, input, "input");
+    return input;
+  };
+  const checkOutput = (typeName: string, output: unknown): unknown => {
+    const schema = schemaFor(typeName).output;
+    if (!schema) throw new Error(`"${typeName}" has no output schema`);
+    validateFields(schema, output, "output");
+    return output;
+  };
+  return createJobTypes<T>({
     getTypeNames: () => Object.keys(schemas),
     validateEntry: (typeName) => {
       const schema = schemas[typeName];
       if (!schema) throw new Error(`Unknown job type: "${typeName}"`);
       if (!schema.entry) throw new Error(`"${typeName}" is not an entry point`);
     },
-    parseInput: (typeName, input) => {
-      const schema = schemas[typeName];
-      if (!schema) throw new Error(`Unknown job type: "${typeName}"`);
-      validateFields(schema.input, input, "input");
-      return input;
-    },
-    parseOutput: (typeName, output) => {
-      const schema = schemas[typeName];
-      if (!schema) throw new Error(`Unknown job type: "${typeName}"`);
-      if (!schema.output) throw new Error(`"${typeName}" has no output schema`);
-      validateFields(schema.output, output, "output");
-      return output;
-    },
+    encodeInput: checkInput,
+    decodeInput: checkInput,
+    encodeOutput: checkOutput,
+    decodeOutput: checkOutput,
     validateContinueWith: (fromTypeName, target) => {
       const schema = schemas[fromTypeName];
       if (!schema) throw new Error(`Unknown job type: "${fromTypeName}"`);
@@ -75,6 +81,7 @@ const createTestSchemaRegistry = <T extends BaseJobTypeDefinitions>(
       }
     },
   });
+};
 
 // --- Registries ---
 
@@ -117,6 +124,46 @@ const blockerJobTypes = createTestSchemaRegistry<{
   },
   auth: { entry: true, input: { token: "string" }, output: { userId: "string" } },
 });
+
+type CodecJobTypeDefinitions = {
+  timed: { entry: true; input: { at: Date }; output: { doneAt: Date } };
+  gated: { entry: true; input: null; output: null; blockers: [{ typeName: "timed" }] };
+};
+
+const createDateCodec = (key: string) => ({
+  encode: (typeName: string, value: unknown): unknown => {
+    if (typeName !== "timed") return value;
+    const date = (value as Record<string, unknown>)[key];
+    if (!(date instanceof Date)) throw new Error(`expected a Date at "${key}"`);
+    return { [key]: date.toISOString() };
+  },
+  decode: (typeName: string, value: unknown): unknown => {
+    if (typeName !== "timed") return value;
+    const iso = (value as Record<string, unknown>)[key];
+    if (typeof iso !== "string") throw new Error(`expected a string at "${key}"`);
+    return { [key]: new Date(iso) };
+  },
+});
+
+const inputDateCodec = createDateCodec("at");
+const outputDateCodec = createDateCodec("doneAt");
+
+const codecJobTypes = createJobTypes<CodecJobTypeDefinitions>({
+  getTypeNames: () => ["timed", "gated"],
+  validateEntry: () => {},
+  encodeInput: inputDateCodec.encode,
+  decodeInput: inputDateCodec.decode,
+  encodeOutput: outputDateCodec.encode,
+  decodeOutput: outputDateCodec.decode,
+  validateContinueWith: () => {},
+  validateBlockers: (_typeName, blockers) => {
+    if (!blockers.every((blocker) => (blocker.input as { at: unknown }).at instanceof Date)) {
+      throw new Error('expected every blocker to hold a Date at "at"');
+    }
+  },
+});
+
+const passThrough = (_typeName: string, value: unknown): unknown => value;
 
 // --- Test suite ---
 
@@ -162,52 +209,39 @@ export const validationTestSuite = ({ it }: { it: TestAPI<TestSuiteContext> }): 
     expect(chain.input).toEqual({ value: 42 });
   });
 
-  it("reports the parsed input when a chain is created", async ({
+  it("reports the encoded input when a chain is created", async ({
     stateAdapter,
     notifyAdapter,
     withTransaction,
     observabilityAdapter,
     log,
   }) => {
+    const chainCreated = Promise.withResolvers<unknown>();
+    const jobCreated = Promise.withResolvers<unknown>();
     const client = createClient({
       stateAdapter,
       notifyAdapter,
-      observabilityAdapter,
+      observabilityAdapter: {
+        ...observabilityAdapter,
+        chainCreated: ({ input }) => {
+          chainCreated.resolve(input);
+        },
+        jobCreated: ({ input }) => {
+          jobCreated.resolve(input);
+        },
+      },
       log,
-      jobTypes: createJobTypes<{
-        main: { entry: true; input: { value: number }; output: null };
-      }>({
-        getTypeNames: () => ["main"],
-        validateEntry: () => {},
-        parseInput: (_typeName, input) => ({ ...(input as object), parsed: true }),
-        parseOutput: (_typeName, output) => output,
-        validateContinueWith: () => {},
-        validateBlockers: () => {},
-      }),
+      jobTypes: codecJobTypes,
     });
 
+    const at = new Date("2024-01-01T00:00:00.000Z");
     const chain = await withTransaction(async (txCtx, txHooks) =>
-      client.createChain({
-        ...txCtx,
-        txHooks,
-        typeName: "main",
-        input: { value: 42 },
-      }),
+      client.createChain({ ...txCtx, txHooks, typeName: "timed", input: { at } }),
     );
 
-    expect(chain.input).toEqual({ value: 42, parsed: true });
-    expect(log).toHaveBeenCalledWith(
-      expect.objectContaining({
-        type: "chain_created",
-        data: expect.objectContaining({ input: { value: 42, parsed: true } }),
-      }),
-    );
-    expect(log).toHaveBeenCalledWith(
-      expect.objectContaining({
-        type: "job_created",
-        data: expect.objectContaining({ input: { value: 42, parsed: true } }),
-      }),
-    );
+    expect(chain.input).toEqual({ at });
+    await expect(chainCreated.promise).resolves.toEqual({ at: at.toISOString() });
+    await expect(jobCreated.promise).resolves.toEqual({ at: at.toISOString() });
   });
 
   it("rejects non-entry type at chain start", async ({
@@ -313,8 +347,10 @@ export const validationTestSuite = ({ it }: { it: TestAPI<TestSuiteContext> }): 
     }>({
       getTypeNames: () => ["main", "auth"],
       validateEntry: () => {},
-      parseInput: (_typeName, input) => input,
-      parseOutput: (_typeName, output) => output,
+      encodeInput: (_typeName, input) => input,
+      decodeInput: (_typeName, input) => input,
+      encodeOutput: (_typeName, output) => output,
+      decodeOutput: (_typeName, output) => output,
       validateContinueWith: () => {},
       validateBlockers: (_typeName, blockers) => {
         validatedBlockers.push(...blockers);
@@ -772,5 +808,306 @@ export const validationTestSuite = ({ it }: { it: TestAPI<TestSuiteContext> }): 
         }),
       ),
     ).rejects.toThrow(JobTypeValidationError);
+  });
+
+  it("rejects an encode failure as JobTypeValidationError", async ({
+    stateAdapter,
+    notifyAdapter,
+    withTransaction,
+    observabilityAdapter,
+    log,
+  }) => {
+    const client = createClient({
+      stateAdapter,
+      notifyAdapter,
+      observabilityAdapter,
+      log,
+      jobTypes: codecJobTypes,
+    });
+
+    await expect(
+      withTransaction(async (txCtx, txHooks) =>
+        client.createChain({
+          ...txCtx,
+          txHooks,
+          typeName: "timed",
+          input: { at: "2024-01-01" as unknown as Date },
+        }),
+      ),
+    ).rejects.toThrow(JobTypeValidationError);
+  });
+
+  it("rejects an encoded value that is not JSON-serializable", async ({
+    stateAdapter,
+    notifyAdapter,
+    withTransaction,
+    observabilityAdapter,
+    log,
+  }) => {
+    const client = createClient({
+      stateAdapter,
+      notifyAdapter,
+      observabilityAdapter,
+      log,
+      jobTypes: createJobTypes<CodecJobTypeDefinitions>({
+        getTypeNames: () => ["timed"],
+        validateEntry: () => {},
+        encodeInput: passThrough,
+        decodeInput: passThrough,
+        encodeOutput: passThrough,
+        decodeOutput: passThrough,
+        validateContinueWith: () => {},
+        validateBlockers: () => {},
+      }),
+    });
+
+    await expect(
+      withTransaction(async (txCtx, txHooks) =>
+        client.createChain({
+          ...txCtx,
+          txHooks,
+          typeName: "timed",
+          input: { at: new Date("2024-01-01T00:00:00.000Z") },
+        }),
+      ),
+    ).rejects.toMatchObject({ code: "invalid_input", details: { path: ["at"] } });
+  });
+
+  it("decodes every input and every completed output on a page of jobs", async ({
+    stateAdapter,
+    notifyAdapter,
+    withTransaction,
+    withWorkerRunners,
+    observabilityAdapter,
+    log,
+  }) => {
+    const client = createClient({
+      stateAdapter,
+      notifyAdapter,
+      observabilityAdapter,
+      log,
+      jobTypes: codecJobTypes,
+    });
+    const doneAt = new Date("2024-03-01T00:00:00.000Z");
+    const workerRunner = createWorkerRunner({
+      client,
+      concurrency: 1,
+      processors: createProcessors({
+        client,
+        jobTypes: codecJobTypes,
+        processors: {
+          timed: {
+            attemptHandler: async ({ complete }) =>
+              withTransaction(async (txCtx, txHooks) =>
+                complete({ ...txCtx, txHooks, output: { doneAt } }),
+              ),
+          },
+        },
+      }),
+    });
+
+    const first = new Date("2024-01-01T00:00:00.000Z");
+    const second = new Date("2024-02-01T00:00:00.000Z");
+    const pending = new Date("2024-04-01T00:00:00.000Z");
+    const chains = await withTransaction(async (txCtx, txHooks) =>
+      client.createChains({
+        ...txCtx,
+        txHooks,
+        items: [
+          { typeName: "timed", input: { at: first } },
+          { typeName: "timed", input: { at: second } },
+        ],
+      }),
+    );
+    await withWorkerRunners([await workerRunner.start()], async () => {
+      await Promise.all(chains.map(async (chain) => client.awaitChain(chain, completionOptions)));
+    });
+    await withTransaction(async (txCtx, txHooks) =>
+      client.createChain({ ...txCtx, txHooks, typeName: "timed", input: { at: pending } }),
+    );
+
+    const page = await client.listJobs({ typeName: "timed", limit: 10 });
+
+    expect(page.items.map((job) => job.input)).toEqual(
+      expect.arrayContaining([{ at: first }, { at: second }, { at: pending }]),
+    );
+    expect(page.items.flatMap((job) => (job.status === "completed" ? [job.output] : []))).toEqual([
+      { doneAt },
+      { doneAt },
+    ]);
+  });
+
+  it("rejects a stored value the decoder rejects as JobTypeValidationError", async ({
+    stateAdapter,
+    notifyAdapter,
+    withTransaction,
+    observabilityAdapter,
+    log,
+  }) => {
+    const writer = createClient({
+      stateAdapter,
+      notifyAdapter,
+      observabilityAdapter,
+      log,
+      jobTypes: codecJobTypes,
+    });
+    const chain = await withTransaction(async (txCtx, txHooks) =>
+      writer.createChain({
+        ...txCtx,
+        txHooks,
+        typeName: "timed",
+        input: { at: new Date("2024-01-01T00:00:00.000Z") },
+      }),
+    );
+
+    const reader = createClient({
+      stateAdapter,
+      notifyAdapter,
+      observabilityAdapter,
+      log,
+      jobTypes: createJobTypes<CodecJobTypeDefinitions>({
+        getTypeNames: () => ["timed"],
+        validateEntry: () => {},
+        encodeInput: passThrough,
+        decodeInput: () => {
+          throw new Error("expected a timestamp in milliseconds");
+        },
+        encodeOutput: passThrough,
+        decodeOutput: passThrough,
+        validateContinueWith: () => {},
+        validateBlockers: () => {},
+      }),
+    });
+
+    await expect(reader.getJob({ id: chain.id })).rejects.toThrow(JobTypeValidationError);
+  });
+
+  it("reads chains created together in their stored form when the registry does not know the type", async ({
+    stateAdapter,
+    notifyAdapter,
+    withTransaction,
+    observabilityAdapter,
+    log,
+  }) => {
+    const writer = createClient({
+      stateAdapter,
+      notifyAdapter,
+      observabilityAdapter,
+      log,
+      jobTypes: codecJobTypes,
+    });
+    const [first, second] = await withTransaction(async (txCtx, txHooks) =>
+      writer.createChains({
+        ...txCtx,
+        txHooks,
+        items: [
+          { typeName: "timed", input: { at: new Date("2024-01-01T00:00:00.000Z") } },
+          { typeName: "timed", input: { at: new Date("2024-02-01T00:00:00.000Z") } },
+        ],
+      }),
+    );
+
+    const reader = createClient({
+      stateAdapter,
+      notifyAdapter,
+      observabilityAdapter,
+      log,
+      jobTypes: simpleJobTypes,
+    });
+
+    await expect(reader.getJob({ id: first.id })).resolves.toMatchObject({
+      typeName: "timed",
+      input: { at: "2024-01-01T00:00:00.000Z" },
+    });
+    await expect(reader.getJob({ id: second.id })).resolves.toMatchObject({
+      typeName: "timed",
+      input: { at: "2024-02-01T00:00:00.000Z" },
+    });
+  });
+
+  it("hands the worker the decoded input and returns the decoded output to the client", async ({
+    stateAdapter,
+    notifyAdapter,
+    withTransaction,
+    withWorkerRunners,
+    observabilityAdapter,
+    log,
+  }) => {
+    const client = createClient({
+      stateAdapter,
+      notifyAdapter,
+      observabilityAdapter,
+      log,
+      jobTypes: codecJobTypes,
+    });
+    const at = new Date("2024-01-01T00:00:00.000Z");
+    const doneAt = new Date("2024-03-01T00:00:00.000Z");
+    const workerRunner = createWorkerRunner({
+      client,
+      concurrency: 1,
+      processors: createProcessors({
+        client,
+        jobTypes: codecJobTypes,
+        processors: {
+          timed: {
+            attemptHandler: async ({ job, complete }) => {
+              expect(job.input).toEqual({ at });
+              return withTransaction(async (txCtx, txHooks) =>
+                complete({ ...txCtx, txHooks, output: { doneAt } }),
+              );
+            },
+          },
+        },
+      }),
+    });
+
+    const chain = await withTransaction(async (txCtx, txHooks) =>
+      client.createChain({ ...txCtx, txHooks, typeName: "timed", input: { at } }),
+    );
+
+    await withWorkerRunners([await workerRunner.start()], async () => {
+      const completed = await client.awaitChain(chain, completionOptions);
+      expect(completed.output).toEqual({ doneAt });
+    });
+    await expect(client.getJob({ id: chain.id, typeName: "timed" })).resolves.toMatchObject({
+      input: { at },
+    });
+  });
+
+  it("validates blockers against the decoded input of each stored chain", async ({
+    stateAdapter,
+    notifyAdapter,
+    withTransaction,
+    observabilityAdapter,
+    log,
+  }) => {
+    const client = createClient({
+      stateAdapter,
+      notifyAdapter,
+      observabilityAdapter,
+      log,
+      jobTypes: codecJobTypes,
+    });
+
+    await withTransaction(async (txCtx, txHooks) => {
+      const [first, second] = await client.createChains({
+        ...txCtx,
+        txHooks,
+        items: [
+          { typeName: "timed", input: { at: new Date("2024-01-01T00:00:00.000Z") } },
+          { typeName: "timed", input: { at: new Date("2024-02-01T00:00:00.000Z") } },
+        ],
+      });
+      await expect(
+        client.createChains({
+          ...txCtx,
+          txHooks,
+          items: [
+            { typeName: "gated", input: null, blockers: [{ id: first.id }] },
+            { typeName: "gated", input: null, blockers: [{ id: second.id }] },
+          ],
+        }),
+      ).resolves.toHaveLength(2);
+    });
   });
 };

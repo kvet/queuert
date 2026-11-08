@@ -91,6 +91,34 @@ export const allocationGroups = [
   },
 ] satisfies BenchGroup[];
 
+export const validationCpuGroups = [
+  {
+    rows: [
+      { label: "defineJobTypes", values: [0] },
+      { label: "Zod", values: [0.2] },
+      { label: "Valibot", values: [10.5] },
+      { label: "TypeBox", values: [0.1] },
+      { label: "ArkType", values: [0.4] },
+      { label: "Zod codec", values: [3.9] },
+      { label: "superjson codec", values: [37.7] },
+    ],
+  },
+] satisfies BenchGroup[];
+
+export const validationAllocationGroups = [
+  {
+    rows: [
+      { label: "defineJobTypes", values: [51.4] },
+      { label: "Zod", values: [53.4] },
+      { label: "Valibot", values: [59.7] },
+      { label: "TypeBox", values: [52.2] },
+      { label: "ArkType", values: [52.6] },
+      { label: "Zod codec", values: [57.3] },
+      { label: "superjson codec", values: [85.8] },
+    ],
+  },
+] satisfies BenchGroup[];
+
 export const typeGroups = [
   {
     rows: [
@@ -343,7 +371,7 @@ export const workerGroups = [
 
 export const benchmarkMachine = [
   { label: "Machine", value: "Apple M1 Pro" },
-  { label: "Runtime", value: "Node.js v22" },
+  { label: "Runtime", value: "Node.js v24" },
 ] satisfies KeyValueItem[];
 
 export const benchmarkContainers = {

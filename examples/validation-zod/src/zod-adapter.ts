@@ -4,6 +4,16 @@
  * This is a user-land adapter that shows how to integrate Zod with Queuert's
  * runtime validation system. The same pattern applies to Valibot, ArkType,
  * or any other validation library.
+ *
+ * Every schema here is identity: `z.input` equals `z.output`, so each field's
+ * encoder and decoder are the same validation pass. A schema that transforms
+ * would be applied again on every read; see `examples/codec-zod` for the
+ * transforming case, where the runtime form and the stored form differ (a
+ * `Date` handler-side, an ISO string at rest).
+ *
+ * Each schema is compiled once with `z.compile`, so the parse that runs on every
+ * job read and write takes Zod's generated fast path. A schema Zod cannot compile
+ * keeps its regular parser.
  */
 
 import {
@@ -15,7 +25,7 @@ import {
   type ValidatedJobTypeDefinitions,
   createJobTypes,
 } from "queuert";
-import type { z } from "zod";
+import { z } from "zod";
 
 /**
  * Schema definition for a single job type using Zod.
@@ -124,13 +134,33 @@ export const createZodJobTypes = <
     : JobTypeDefinitionErrors<InferZodJobTypes<T>, JobTypesDefinitions<TExternal>>,
   _externalDefinitions?: TExternal,
 ) => {
-  const _schemas = schemas as Record<string, ZodJobTypeSchema>;
+  const _schemas = Object.fromEntries(
+    Object.entries(schemas as Record<string, ZodJobTypeSchema>).map(([typeName, schema]) => [
+      typeName,
+      {
+        entry: schema.entry,
+        input: z.compile(schema.input),
+        output: schema.output && z.compile(schema.output),
+        continueWith: schema.continueWith && z.compile(schema.continueWith),
+        blockers: schema.blockers && z.compile(schema.blockers),
+      },
+    ]),
+  );
   const getSchema = (typeName: string): ZodJobTypeSchema => {
     const schema = _schemas[typeName];
     if (!schema) {
       throw new Error(`Unknown job type: ${typeName}`);
     }
     return schema;
+  };
+
+  const parseInput = (typeName: string, input: unknown): unknown =>
+    getSchema(typeName).input.parse(input);
+
+  const parseOutput = (typeName: string, output: unknown): unknown => {
+    const schema = getSchema(typeName).output;
+    if (!schema) throw new Error(`Job type "${typeName}" does not have an output schema`);
+    return schema.parse(output);
   };
 
   return createJobTypes<InferZodJobTypes<T>, JobTypesDefinitions<TExternal>>({
@@ -142,18 +172,10 @@ export const createZodJobTypes = <
       }
     },
 
-    parseInput: (typeName, input) => {
-      return getSchema(typeName).input.parse(input);
-    },
-
-    parseOutput: (typeName, output) => {
-      const schema = getSchema(typeName);
-      if (schema.output) {
-        return schema.output.parse(output);
-      } else {
-        throw new Error(`Job type "${typeName}" does not have an output schema`);
-      }
-    },
+    encodeInput: parseInput,
+    decodeInput: parseInput,
+    encodeOutput: parseOutput,
+    decodeOutput: parseOutput,
 
     validateContinueWith: (typeName, continuation) => {
       const schema = getSchema(typeName);

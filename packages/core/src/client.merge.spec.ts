@@ -13,19 +13,19 @@ import { mergeJobTypes } from "./job-types/merge-job-types.ts";
 
 const createValidatedRegistry = <T extends BaseJobTypeDefinitions>(typeNames: string[]) => {
   const knownTypes = new Set(typeNames);
+  const check = (typeName: string, value: unknown) => {
+    if (!knownTypes.has(typeName)) throw new Error(`Unknown type: ${typeName}`);
+    return value;
+  };
   return createJobTypes<T>({
     getTypeNames: () => typeNames,
     validateEntry: (typeName) => {
       if (!knownTypes.has(typeName)) throw new Error(`Unknown type: ${typeName}`);
     },
-    parseInput: (typeName, input) => {
-      if (!knownTypes.has(typeName)) throw new Error(`Unknown type: ${typeName}`);
-      return input;
-    },
-    parseOutput: (typeName, output) => {
-      if (!knownTypes.has(typeName)) throw new Error(`Unknown type: ${typeName}`);
-      return output;
-    },
+    encodeInput: check,
+    decodeInput: check,
+    encodeOutput: check,
+    decodeOutput: check,
     validateContinueWith: (typeName) => {
       if (!knownTypes.has(typeName)) throw new Error(`Unknown type: ${typeName}`);
     },
@@ -49,8 +49,8 @@ describe("mergeJobTypes", () => {
 
       mergedJobTypes.validateEntry("job-a");
       mergedJobTypes.validateEntry("job-b");
-      expect(mergedJobTypes.parseInput("job-a", { id: "test" })).toEqual({ id: "test" });
-      expect(mergedJobTypes.parseInput("job-b", { count: 42 })).toEqual({ count: 42 });
+      expect(mergedJobTypes.encodeInput("job-a", { id: "test" })).toEqual({ id: "test" });
+      expect(mergedJobTypes.encodeInput("job-b", { count: 42 })).toEqual({ count: 42 });
     });
 
     it("merges three noop registries", () => {
@@ -82,8 +82,8 @@ describe("mergeJobTypes", () => {
       const mergedJobTypes = mergeJobTypes([a, b]);
       const input = { id: "test" };
 
-      expect(mergedJobTypes.parseInput("job-a", input)).toBe(input);
-      expect(mergedJobTypes.parseOutput("job-a", "result")).toBe("result");
+      expect(mergedJobTypes.encodeInput("job-a", input)).toEqual(input);
+      expect(mergedJobTypes.encodeOutput("job-a", "result")).toEqual("result");
       expect(() => {
         mergedJobTypes.validateContinueWith("job-a", { typeName: "job-b", input: {} });
       }).not.toThrow();
@@ -128,7 +128,7 @@ describe("mergeJobTypes", () => {
       const mergedJobTypes = mergeJobTypes([empty, typed]);
 
       mergedJobTypes.validateEntry("job-a");
-      expect(mergedJobTypes.parseInput("job-a", "hello")).toBe("hello");
+      expect(mergedJobTypes.encodeInput("job-a", "hello")).toEqual("hello");
     });
 
     it("preserves phantom type information", () => {
@@ -198,11 +198,11 @@ describe("mergeJobTypes", () => {
 
       mergedJobTypes.validateEntry("job-a");
       mergedJobTypes.validateEntry("job-b");
-      expect(mergedJobTypes.parseInput("job-a", "hello")).toBe("hello");
-      expect(mergedJobTypes.parseInput("job-b", 42)).toBe(42);
+      expect(mergedJobTypes.encodeInput("job-a", "hello")).toEqual("hello");
+      expect(mergedJobTypes.encodeInput("job-b", 42)).toEqual(42);
     });
 
-    it("delegates parseOutput to the correct source registry", () => {
+    it("delegates encodeOutput to the correct source registry", () => {
       type TypesA = { "job-a": { entry: true; input: string; output: string } };
       type TypesB = { "job-b": { entry: true; input: number; output: number } };
 
@@ -211,8 +211,20 @@ describe("mergeJobTypes", () => {
 
       const mergedJobTypes = mergeJobTypes([a, b]);
 
-      expect(mergedJobTypes.parseOutput("job-a", "result")).toBe("result");
-      expect(mergedJobTypes.parseOutput("job-b", 99)).toBe(99);
+      expect(mergedJobTypes.encodeOutput("job-a", "result")).toEqual("result");
+      expect(mergedJobTypes.encodeOutput("job-b", 99)).toEqual(99);
+    });
+
+    it("decodes a value of a type no slice owns to its stored value", () => {
+      type TypesA = { "job-a": { entry: true; input: string; output: string } };
+      type TypesB = { "job-b": { entry: true; input: number; output: number } };
+
+      const a = createValidatedRegistry<TypesA>(["job-a"]);
+      const b = createValidatedRegistry<TypesB>(["job-b"]);
+
+      const mergedJobTypes = mergeJobTypes([a, b]);
+
+      expect(mergedJobTypes.decodeOutput("removed-job", { raw: 1 })).toEqual({ raw: 1 });
     });
 
     it("returns type names from all validated registries", () => {
@@ -266,7 +278,7 @@ describe("mergeJobTypes", () => {
       const mergedJobTypes = mergeJobTypes([a, b]);
 
       try {
-        mergedJobTypes.parseInput("job-unknown", { x: 1 });
+        mergedJobTypes.encodeInput("job-unknown", { x: 1 });
       } catch (error) {
         expect(error).toBeInstanceOf(UnknownJobTypeError);
         const unknownError = error as UnknownJobTypeError;
@@ -287,8 +299,7 @@ describe("mergeJobTypes", () => {
       expect(() => {
         mergedJobTypes.validateEntry("missing");
       }).toThrow(UnknownJobTypeError);
-      expect(() => mergedJobTypes.parseInput("missing", {})).toThrow(UnknownJobTypeError);
-      expect(() => mergedJobTypes.parseOutput("missing", {})).toThrow(UnknownJobTypeError);
+      expect(() => mergedJobTypes.encodeInput("missing", {})).toThrow(UnknownJobTypeError);
       expect(() => {
         mergedJobTypes.validateContinueWith("missing", target);
       }).toThrow(UnknownJobTypeError);
@@ -301,8 +312,10 @@ describe("mergeJobTypes", () => {
       const configA: Parameters<typeof createJobTypes>[0] = {
         getTypeNames: () => ["job-a"],
         validateEntry: vi.fn(),
-        parseInput: vi.fn((_, input) => input),
-        parseOutput: vi.fn((_, output) => output),
+        encodeInput: vi.fn((_typeName: string, input: unknown) => input),
+        decodeInput: vi.fn((_typeName: string, input: unknown) => input),
+        encodeOutput: vi.fn((_typeName: string, output: unknown) => output),
+        decodeOutput: vi.fn((_typeName: string, output: unknown) => output),
         validateContinueWith: vi.fn((typeName) => {
           if (typeName !== "job-a") throw new Error("unknown");
         }),
@@ -385,13 +398,15 @@ describe("mergeJobTypes", () => {
       const a = createJobTypes<TypesA>({
         getTypeNames: () => ["job-a"],
         validateEntry: () => {},
-        parseInput: (typeName, input) => {
-          if (typeName === "job-a" && typeof (input as any).id !== "string") {
+        encodeInput: (_typeName, input) => {
+          if (typeof (input as { id: unknown }).id !== "string") {
             throw new Error("id must be a string");
           }
           return input;
         },
-        parseOutput: (_, output) => output,
+        decodeInput: (_typeName, input) => input,
+        encodeOutput: (_typeName, output) => output,
+        decodeOutput: (_typeName, output) => output,
         validateContinueWith: () => {},
         validateBlockers: () => {},
       });
@@ -399,9 +414,9 @@ describe("mergeJobTypes", () => {
 
       const mergedJobTypes = mergeJobTypes([a, b]);
 
-      expect(() => {
-        mergedJobTypes.parseInput("job-a", { id: 123 });
-      }).toThrow(JobTypeValidationError);
+      expect(() => mergedJobTypes.encodeInput("job-a", { id: 123 })).toThrow(
+        JobTypeValidationError,
+      );
     });
   });
 
@@ -449,6 +464,10 @@ describe("mergeJobTypes", () => {
       }>();
 
       let validateEntryCalled = false;
+      const checkOnly = (typeName: string, value: unknown): unknown => {
+        if (typeName !== "validated-job") throw new Error(`Unknown: ${typeName}`);
+        return value;
+      };
       const validated = createJobTypes<{
         "validated-job": { entry: true; input: { name: string }; output: number };
       }>({
@@ -457,14 +476,10 @@ describe("mergeJobTypes", () => {
           if (typeName !== "validated-job") throw new Error(`Unknown: ${typeName}`);
           validateEntryCalled = true;
         },
-        parseInput: (typeName, input) => {
-          if (typeName !== "validated-job") throw new Error(`Unknown: ${typeName}`);
-          return input;
-        },
-        parseOutput: (typeName, output) => {
-          if (typeName !== "validated-job") throw new Error(`Unknown: ${typeName}`);
-          return output;
-        },
+        encodeInput: checkOnly,
+        decodeInput: checkOnly,
+        encodeOutput: checkOnly,
+        decodeOutput: checkOnly,
         validateContinueWith: (typeName) => {
           if (typeName !== "validated-job") throw new Error(`Unknown: ${typeName}`);
         },
@@ -479,7 +494,7 @@ describe("mergeJobTypes", () => {
       expect(validateEntryCalled).toBe(true);
 
       mergedJobTypes.validateEntry("noop-job");
-      expect(mergedJobTypes.parseInput("noop-job", { id: "test" })).toEqual({ id: "test" });
+      expect(mergedJobTypes.encodeInput("noop-job", { id: "test" })).toEqual({ id: "test" });
     });
 
     it("returns only validated registry type names from getTypeNames", () => {
@@ -495,7 +510,7 @@ describe("mergeJobTypes", () => {
       expect(mergedJobTypes.getTypeNames()).toEqual(["validated-job"]);
     });
 
-    it("passes through parseInput for noop types in mixed mode", () => {
+    it("passes values of noop types through unchanged in mixed mode", () => {
       const noop = defineJobTypes<{
         "noop-job": { entry: true; input: { id: string }; output: string };
       }>();
@@ -504,10 +519,10 @@ describe("mergeJobTypes", () => {
       }>(["validated-job"]);
 
       const mergedJobTypes = mergeJobTypes([noop, validated]);
-      const input = { id: "test" };
+      const value = { id: "test" };
 
-      expect(mergedJobTypes.parseInput("noop-job", input)).toBe(input);
-      expect(mergedJobTypes.parseInput("validated-job", 42)).toBe(42);
+      expect(mergedJobTypes.encodeInput("noop-job", value)).toBe(value);
+      expect(mergedJobTypes.decodeInput("noop-job", value)).toBe(value);
     });
   });
 

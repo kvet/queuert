@@ -1,0 +1,14 @@
+---
+"queuert": major
+---
+
+Replace the job-type registry's `parseInput`/`parseOutput` with a bidirectional codec: the encoders run on every write and produce the form stored in the database, the decoders run on every read and produce the form handlers and client reads see. Previously there was no decode step, so a schema that transformed on write handed the transformed value straight to the handler — a `Date` written as an ISO string came back as a string. Every encoded value is checked for JSON-serializability before it reaches the state adapter, which turns what used to be silent coercion (a `Date` becoming a string, a `Map` becoming `{}`) into a `JobTypeValidationError`.
+
+- `parseInput`/`parseOutput` are removed from the `createJobTypes` options and `JobTypes`, replaced by `encodeInput`, `decodeInput`, `encodeOutput` and `decodeOutput`, each taking `(typeName, value)`.
+- The decoders run only for type names the registry lists in `getTypeNames`; rows of a job type the registry does not know are read in their stored form. Keep a job type and a decoder for every stored shape of it until its rows are deleted.
+- A `JobTypeValidationError` from an encoder or decoder carries only the rejected value in `details`, under `input` or `output`. When an encoded value is not JSON-serializable, `details` holds that encoded value and the `path` to the offending part, which the message also names; for a value nested deeper than 1000 levels, such as a cycle, it holds only the first 20 keys of the path. An encoder or decoder that returns a promise is rejected the same way, since codecs run synchronously.
+- `defineJobTypes` now constrains `input` and `output` to JSON-serializable types, recursive types included. A definition carrying a `Date`, `Map`, `Set`, or `bigint` is a compile error pointing at codec adapters. `unknown` still passes, so structural job-type references are unaffected. It stays type-only: values pass through with no runtime checks.
+- New exports: `JsonSerializable`, `JsonPrimitive`, `EnsureJsonSerializable` and `isJsonSerializable`. Codec adapters should constrain their _stored_ type with `EnsureJsonSerializable` and leave the runtime type free; `examples/codec-zod` shows the pattern.
+- `validateBlockers` receives each blocker chain's input decoded to its runtime form, matching `validateContinueWith`, so structural blocker schemas can match on runtime types such as `Date`.
+- Observability hooks receive the encoded (stored) form; this is stated in the `ObservabilityAdapter` docs.
+- Validation adapters must be updated. An adapter that only validates ports mechanically — its `parseInput` becomes both `encodeInput` and `decodeInput`, its `parseOutput` both `encodeOutput` and `decodeOutput`. See `examples/validation-zod` for that case, `examples/codec-zod` for a transforming codec, and `examples/codec-superjson` for one codec shared by every job type.

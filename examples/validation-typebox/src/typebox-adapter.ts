@@ -4,10 +4,17 @@
  * This is a user-land adapter that shows how to integrate TypeBox with Queuert's
  * runtime validation system. The same pattern applies to Zod, Valibot, ArkType,
  * or any other validation library.
+ *
+ * Each schema is compiled once with `TypeCompiler.Compile`, so the check that runs
+ * on every job read and write is generated code rather than TypeBox's interpreter.
+ *
+ * The stored form equals the runtime form, so one check serves as both encoder and
+ * decoder and returns the value unchanged; transforms (`Type.Transform`) are not
+ * applied. Use a codec adapter such as `examples/codec-zod` when the two forms differ.
  */
 
 import type { Static, TSchema } from "@sinclair/typebox";
-import { Value } from "@sinclair/typebox/value";
+import { type TypeCheck, type ValueErrorIterator, TypeCompiler } from "@sinclair/typebox/compiler";
 import {
   type BaseJobTypeDefinitions,
   type JobTypesDefinitions,
@@ -93,30 +100,32 @@ type InferTypeBoxJobTypes<T extends Record<string, TypeBoxJobTypeSchema>> = {
  * Validation error thrown when TypeBox validation fails.
  */
 class TypeBoxValidationError extends Error {
-  readonly errors: ReturnType<typeof Value.Errors>;
+  readonly errors: ValueErrorIterator;
 
-  constructor(message: string, errors: ReturnType<typeof Value.Errors>) {
+  constructor(message: string, errors: ValueErrorIterator) {
     super(message);
     this.errors = errors;
     this.name = "TypeBoxValidationError";
   }
 }
 
+/** A job type's schemas, each compiled once. */
+type CompiledJobTypeSchema = {
+  entry?: boolean;
+  input: TypeCheck<TSchema>;
+  output?: TypeCheck<TSchema>;
+  continueWith?: TypeCheck<TSchema>;
+  blockers?: TypeCheck<TSchema>;
+};
+
 /**
- * Parse and validate data using a TypeBox schema.
- * Throws TypeBoxValidationError if validation fails.
- * Uses Value.Decode to apply transforms (like Type.Transform).
+ * Validate data with a compiled schema and return it unchanged.
+ * Throws TypeBoxValidationError listing every error if validation fails.
  */
-const parse = <T extends TSchema>(schema: T, data: unknown): Static<T> => {
-  // First decode (which applies transforms)
-  const decoded = Value.Decode(schema, data);
-  // Then validate the decoded value
-  const errors = [...Value.Errors(schema, decoded)];
-  if (errors.length > 0) {
-    const messages = errors.map((e) => `${e.path}: ${e.message}`).join(", ");
-    throw new TypeBoxValidationError(`Validation failed: ${messages}`, Value.Errors(schema, data));
-  }
-  return decoded;
+const parse = (check: TypeCheck<TSchema>, data: unknown): unknown => {
+  if (check.Check(data)) return data;
+  const messages = [...check.Errors(data)].map((e) => `${e.path}: ${e.message}`).join(", ");
+  throw new TypeBoxValidationError(`Validation failed: ${messages}`, check.Errors(data));
 };
 
 /**
@@ -125,7 +134,7 @@ const parse = <T extends TSchema>(schema: T, data: unknown): Static<T> => {
  * This adapter:
  * 1. Accepts TypeBox schemas for each job type
  * 2. Infers TypeScript types from the schemas
- * 3. Validates at runtime using TypeBox's Value.Check() method
+ * 3. Validates at runtime with schemas compiled by TypeBox's TypeCompiler
  *
  * Errors thrown by TypeBox are caught by the core registry and wrapped
  * in JobTypeValidationError with the appropriate error code.
@@ -157,13 +166,35 @@ export const createTypeBoxJobTypes = <
     : JobTypeDefinitionErrors<InferTypeBoxJobTypes<T>, JobTypesDefinitions<TExternal>>,
   _externalDefinitions?: TExternal,
 ) => {
-  const _schemas = schemas as Record<string, TypeBoxJobTypeSchema>;
-  const getSchema = (typeName: string): TypeBoxJobTypeSchema => {
+  const _schemas = Object.fromEntries(
+    Object.entries(schemas as Record<string, TypeBoxJobTypeSchema>).map(
+      ([typeName, schema]): [string, CompiledJobTypeSchema] => [
+        typeName,
+        {
+          entry: schema.entry,
+          input: TypeCompiler.Compile(schema.input),
+          output: schema.output && TypeCompiler.Compile(schema.output),
+          continueWith: schema.continueWith && TypeCompiler.Compile(schema.continueWith),
+          blockers: schema.blockers && TypeCompiler.Compile(schema.blockers),
+        },
+      ],
+    ),
+  );
+  const getSchema = (typeName: string): CompiledJobTypeSchema => {
     const schema = _schemas[typeName];
     if (!schema) {
       throw new Error(`Unknown job type: ${typeName}`);
     }
     return schema;
+  };
+
+  const parseInput = (typeName: string, input: unknown): unknown =>
+    parse(getSchema(typeName).input, input);
+
+  const parseOutput = (typeName: string, output: unknown): unknown => {
+    const schema = getSchema(typeName).output;
+    if (!schema) throw new Error(`Job type "${typeName}" does not have an output schema`);
+    return parse(schema, output);
   };
 
   return createJobTypes<InferTypeBoxJobTypes<T>, JobTypesDefinitions<TExternal>>({
@@ -175,18 +206,10 @@ export const createTypeBoxJobTypes = <
       }
     },
 
-    parseInput: (typeName, input) => {
-      return parse(getSchema(typeName).input, input);
-    },
-
-    parseOutput: (typeName, output) => {
-      const schema = getSchema(typeName);
-      if (schema.output) {
-        return parse(schema.output, output);
-      } else {
-        throw new Error(`Job type "${typeName}" does not have an output schema`);
-      }
-    },
+    encodeInput: parseInput,
+    decodeInput: parseInput,
+    encodeOutput: parseOutput,
+    decodeOutput: parseOutput,
 
     validateContinueWith: (typeName, continuation) => {
       const schema = getSchema(typeName);

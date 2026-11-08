@@ -3,6 +3,9 @@
   "version": "0.0.1",
   "private": true,
   "type": "module",
+  "exports": {
+    "./adapter": "./src/typebox-adapter.ts"
+  },
   "scripts": {
     "start": "node src/index.ts",
     "test": "vitest --run",
