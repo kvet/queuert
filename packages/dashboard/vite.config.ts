@@ -35,7 +35,7 @@ function collectFiles(
 
 function embedAssetsPlugin(): Plugin {
   const distDir = resolve(import.meta.dirname, "dist/frontend");
-  const outFile = resolve(import.meta.dirname, "src/api/routes/assets.generated.ts");
+  const outFile = resolve(import.meta.dirname, "src/api/assets.generated.ts");
 
   return {
     name: "embed-assets",

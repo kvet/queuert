@@ -1658,6 +1658,22 @@ importers:
         specifier: workspace:*
         version: link:../tsconfig
 
+  packages-internal/rpc:
+    dependencies:
+      '@standard-schema/spec':
+        specifier: 1.1.0
+        version: 1.1.0
+      seroval:
+        specifier: 1.7.7
+        version: 1.7.7
+    devDependencies:
+      '@queuert/tsconfig':
+        specifier: workspace:*
+        version: link:../tsconfig
+      valibot:
+        specifier: 1.5.0
+        version: 1.5.0(typescript@7.0.2)
+
   packages-internal/testcontainers:
     dependencies:
       '@testcontainers/nats':
@@ -1726,6 +1742,9 @@ importers:
 
   packages/dashboard:
     devDependencies:
+      '@queuert/rpc':
+        specifier: workspace:*
+        version: link:../../packages-internal/rpc
       '@queuert/tsconfig':
         specifier: workspace:*
         version: link:../../packages-internal/tsconfig
@@ -1741,15 +1760,15 @@ importers:
       queuert:
         specifier: workspace:*
         version: link:../core
-      seroval:
-        specifier: 1.7.7
-        version: 1.7.7
       solid-js:
         specifier: 1.9.18
         version: 1.9.18
       tailwindcss:
         specifier: 4.3.4
         version: 4.3.4
+      valibot:
+        specifier: 1.5.0
+        version: 1.5.0(typescript@7.0.2)
       vite:
         specifier: 8.3.5
         version: 8.3.5(@types/node@24.19.1)(esbuild@0.28.2)(jiti@2.7.0)(yaml@2.9.1)

@@ -13,18 +13,8 @@ import {
   onCleanup,
 } from "solid-js";
 
-import {
-  type UnknownChain,
-  type UnknownJob,
-  ApiError,
-  deleteChain,
-  errorMessage,
-  getChainBlocking,
-  getChainDetail,
-  getChainJobs,
-  isAbort,
-  isNotFound,
-} from "../api.ts";
+import type { UnknownChain, UnknownJob } from "../../shared/types.ts";
+import { PAGE_SIZE, errorMessage, isAbort, isNotFound, serverFns } from "../api.ts";
 import { elapsedMs, formatDuration } from "../domain/duration.ts";
 import { type JobEntry, foldJobs } from "../domain/foldJobs.ts";
 import { BlockedJobRow } from "../rows/BlockedJobRow.tsx";
@@ -159,7 +149,13 @@ const DeleteChainDialog = (props: {
       navigate(chainListHref(props.chain.typeName));
     };
     try {
-      await deleteChain(props.chain.id);
+      const { deleted } = await serverFns.deleteChain({ data: { id: props.chain.id } });
+      const result = await deleted;
+      if (result.outcome === "blocked") {
+        setError("Cannot delete: other jobs depend on this chain as a blocker");
+        props.onBlocked();
+        return;
+      }
       leave();
     } catch (err) {
       if (isNotFound(err)) {
@@ -167,7 +163,6 @@ const DeleteChainDialog = (props: {
         return;
       }
       setError(errorMessage(err));
-      if (err instanceof ApiError && err.status === 409) props.onBlocked();
     } finally {
       setDeleting(false);
     }
@@ -300,7 +295,10 @@ export const ChainDetail = () => {
     blockedJobsController = own;
     setBlockedJobsError(undefined);
     try {
-      const page = await getChainBlocking(id, { signal: own.signal });
+      const page = await serverFns.listBlockedJobs({
+        data: { chainId: id, limit: PAGE_SIZE },
+        signal: own.signal,
+      });
       if (own.signal.aborted) return;
       setBlockedJobs(page.items);
       setBlockedJobsCursor(page.nextCursor);
@@ -328,7 +326,10 @@ export const ChainDetail = () => {
     setDeleteOpen(false);
     void loadBlockedJobs(id);
     try {
-      const detail = await getChainDetail(id, { signal: own.signal });
+      const detail = await serverFns.getChainDetail({
+        data: { id, limit: PAGE_SIZE },
+        signal: own.signal,
+      });
       if (own.signal.aborted) return;
       setChain(detail.chain);
       setCurrentJob(detail.currentJob);
@@ -355,12 +356,15 @@ export const ChainDetail = () => {
     if (!cursor) return;
     const own = new AbortController();
     jobsMoreController = own;
-    const page = await getChainJobs(params.id, { cursor, signal: own.signal }).catch(
-      (err: unknown) => {
+    const page = await serverFns
+      .listChainJobs({
+        data: { chainId: params.id, cursor, limit: PAGE_SIZE },
+        signal: own.signal,
+      })
+      .catch((err: unknown) => {
         if (own.signal.aborted) return undefined;
         throw err;
-      },
-    );
+      });
     if (!page || own.signal.aborted) return;
     setJobs((prev) => [...prev, ...page.jobs]);
     setNextCursor(page.nextCursor);
@@ -376,7 +380,10 @@ export const ChainDetail = () => {
     const own = new AbortController();
     blockedJobsController = own;
     try {
-      const page = await getChainBlocking(params.id, { cursor, signal: own.signal });
+      const page = await serverFns.listBlockedJobs({
+        data: { chainId: params.id, cursor, limit: PAGE_SIZE },
+        signal: own.signal,
+      });
       if (own.signal.aborted) return;
       setBlockedJobs((prev) => [
         ...prev,

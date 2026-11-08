@@ -2,7 +2,7 @@ import { JOB_STATUSES } from "@queuert/ui/lib";
 import { useSearchParams } from "@solidjs/router";
 import { Show, createMemo } from "solid-js";
 
-import { PAGE_SIZE, countJobsByTypeName, getJobTypeNames, listJobs } from "../api.ts";
+import { PAGE_SIZE, serverFns } from "../api.ts";
 import { JobRow, type JobSortKey } from "../rows/JobRow.tsx";
 import { createLoader } from "../state/createLoader.ts";
 import { createPagedList } from "../state/createPagedList.ts";
@@ -33,9 +33,10 @@ const orderByOptionsFor = (status: string): readonly { value: JobSortKey; label:
 
 const JobListForType = (props: { typeName: string }) => {
   const [searchParams, setSearchParams] = useSearchParams();
-  const status = () => (searchParams.status ?? "") as string;
+  const status = () => JOB_STATUSES.find((value) => value === searchParams.status) ?? "";
   const orderBy = () => (searchParams.orderBy ?? "") as string;
-  const orderDirection = () => (searchParams.orderDirection ?? "desc") as string;
+  const orderDirection = (): "asc" | "desc" =>
+    searchParams.orderDirection === "asc" ? "asc" : "desc";
 
   const orderByOptions = createMemo(() => orderByOptionsFor(status()));
   const effectiveOrderBy = createMemo(() => {
@@ -45,11 +46,12 @@ const JobListForType = (props: { typeName: string }) => {
 
   const typeNames = createLoader(
     () => true,
-    async (_, signal) => getJobTypeNames({ signal }),
+    async (_, signal) => serverFns.getJobTypeNames({ signal }),
   );
   const counts = createLoader(
     () => props.typeName,
-    async (typeName, signal) => (await countJobsByTypeName([typeName], { signal }))[0],
+    async (typeName, signal) =>
+      (await serverFns.countJobsByTypeName({ data: { typeNames: [typeName] }, signal }))[0],
   );
   const statusCounts = () => {
     const typeCounts = counts.data();
@@ -63,7 +65,8 @@ const JobListForType = (props: { typeName: string }) => {
       orderBy: effectiveOrderBy(),
       orderDirection: orderDirection(),
     }),
-    async (params, cursor, signal) => listJobs({ ...params, cursor, limit: PAGE_SIZE, signal }),
+    async (params, cursor, signal) =>
+      serverFns.listJobs({ data: { ...params, cursor, limit: PAGE_SIZE }, signal }),
   );
 
   return (

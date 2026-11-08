@@ -1,4 +1,4 @@
-import type { UnknownJob } from "../api.ts";
+import type { UnknownJob } from "../../shared/types.ts";
 
 /**
  * A derived view of a job's state for the chain detail sequence and job detail. It is not a

@@ -1,6 +1,7 @@
+import type { Page } from "queuert";
 import { type Accessor, createEffect, createSignal, on, onCleanup } from "solid-js";
 
-import { type PageResult, isAbort } from "../api.ts";
+import { isAbort } from "../api.ts";
 import { appendPage } from "../domain/pages.ts";
 import { createAutoLoadMore } from "./createAutoLoadMore.ts";
 
@@ -10,7 +11,7 @@ export const createPagedList = <TParams, TItem extends { id: string }>(
     params: TParams,
     cursor: string | undefined,
     signal: AbortSignal,
-  ) => Promise<PageResult<TItem>>,
+  ) => Promise<Page<TItem>>,
 ): {
   items: Accessor<TItem[]>;
   cursor: Accessor<string | null>;
@@ -81,7 +82,7 @@ export const createPagedList = <TParams, TItem extends { id: string }>(
     if (!next || value === null) return;
     const own = new AbortController();
     loadMoreController = own;
-    let page: PageResult<TItem>;
+    let page: Page<TItem>;
     try {
       page = await fetchPage(value, next, own.signal);
     } catch (err) {

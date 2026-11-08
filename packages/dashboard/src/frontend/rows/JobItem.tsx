@@ -3,7 +3,8 @@ import { type AnyStatus, statusClasses } from "@queuert/ui/lib";
 import { A } from "@solidjs/router";
 import { type JSX, Show, createSignal } from "solid-js";
 
-import { type UnknownChain, type UnknownJob, errorMessage, rescheduleJob } from "../api.ts";
+import type { UnknownChain, UnknownJob } from "../../shared/types.ts";
+import { errorMessage, serverFns } from "../api.ts";
 import { jobPhase } from "../domain/jobPhase.ts";
 import { formatRelative } from "../domain/time.ts";
 import { now } from "../state/clock.ts";
@@ -55,7 +56,7 @@ export const RescheduleButton = (props: {
           onClick={() => {
             setBusy(true);
             setError(null);
-            rescheduleJob(props.job.id).then(
+            serverFns.rescheduleJob({ data: { id: props.job.id } }).then(
               (job) => {
                 setBusy(false);
                 props.onRescheduled(job);

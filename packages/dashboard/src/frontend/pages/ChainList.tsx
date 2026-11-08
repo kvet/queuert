@@ -2,7 +2,7 @@ import { CHAIN_STATUSES } from "@queuert/ui/lib";
 import { useSearchParams } from "@solidjs/router";
 import { Match, Switch, createMemo } from "solid-js";
 
-import { PAGE_SIZE, countChainsByTypeName, getChainTypeNames, listChains } from "../api.ts";
+import { PAGE_SIZE, serverFns } from "../api.ts";
 import { ChainRow } from "../rows/ChainRow.tsx";
 import { createLoader } from "../state/createLoader.ts";
 import { createPagedList } from "../state/createPagedList.ts";
@@ -21,14 +21,15 @@ const roles = [
 
 const ChainListForType = (props: { typeName: string }) => {
   const [searchParams, setSearchParams] = useSearchParams();
-  const status = () => (searchParams.status ?? "") as string;
+  const status = () => CHAIN_STATUSES.find((value) => value === searchParams.status) ?? "";
   const independentParam = () => searchParams.independent as string | undefined;
   const independent = () => {
     const value = independentParam();
     return value === "true" || value === "false" ? value === "true" : undefined;
   };
   const orderBy = () => (searchParams.orderBy ?? "") as string;
-  const orderDirection = () => (searchParams.orderDirection ?? "desc") as string;
+  const orderDirection = (): "asc" | "desc" =>
+    searchParams.orderDirection === "asc" ? "asc" : "desc";
 
   const orderByOptions = createMemo(
     (): readonly { value: "createdAt" | "completedAt"; label: string }[] =>
@@ -46,11 +47,12 @@ const ChainListForType = (props: { typeName: string }) => {
 
   const typeNames = createLoader(
     () => true,
-    async (_, signal) => getChainTypeNames({ signal }),
+    async (_, signal) => serverFns.getChainTypeNames({ signal }),
   );
   const counts = createLoader(
     () => props.typeName,
-    async (typeName, signal) => (await countChainsByTypeName([typeName], { signal }))[0],
+    async (typeName, signal) =>
+      (await serverFns.countChainsByTypeName({ data: { typeNames: [typeName] }, signal }))[0],
   );
   const statusCounts = () => {
     const typeCounts = counts.data();
@@ -65,7 +67,8 @@ const ChainListForType = (props: { typeName: string }) => {
       orderBy: effectiveOrderBy(),
       orderDirection: orderDirection(),
     }),
-    async (params, cursor, signal) => listChains({ ...params, cursor, limit: PAGE_SIZE, signal }),
+    async (params, cursor, signal) =>
+      serverFns.listChains({ data: { ...params, cursor, limit: PAGE_SIZE }, signal }),
   );
 
   return (

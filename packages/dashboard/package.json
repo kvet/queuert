@@ -46,14 +46,15 @@
     "test": "vitest --run"
   },
   "devDependencies": {
+    "@queuert/rpc": "workspace:*",
     "@queuert/tsconfig": "workspace:*",
     "@queuert/ui": "workspace:*",
     "@solidjs/router": "1.0.1",
     "@tailwindcss/vite": "4.3.4",
     "queuert": "workspace:*",
-    "seroval": "1.7.7",
     "solid-js": "1.9.18",
     "tailwindcss": "4.3.4",
+    "valibot": "1.5.0",
     "vite": "8.3.5",
     "vite-plugin-solid": "2.11.15"
   },
@@ -64,6 +65,7 @@
     "node": ">=24"
   },
   "inlinedDependencies": {
-    "seroval": "1.7.7"
+    "seroval": "1.7.7",
+    "valibot": "1.5.0"
   }
 }

@@ -2,7 +2,7 @@ import { Row, WarningIcon } from "@queuert/ui/components";
 import { A } from "@solidjs/router";
 import { Show } from "solid-js";
 
-import type { WorkerWithRunningJobs } from "../api.ts";
+import type { WorkerWithRunningJobs } from "../../shared/types.ts";
 import { IdChip } from "../ui/IdChip.tsx";
 import { Time } from "../ui/Time.tsx";
 

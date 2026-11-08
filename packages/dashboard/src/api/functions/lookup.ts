@@ -1,13 +1,7 @@
 import type { Client } from "queuert";
 
-export const MAX_IDS = 100;
-
 const PER_ID_CONCURRENCY = 8;
 
-/**
- * Probes the database after an adapter error: returns when the probe succeeds (so the error was
- * caused by the input, e.g. a malformed ID), and rethrows `err` when the probe fails too.
- */
 export const probeOrRethrow = async (client: Client<any, any>, err: unknown): Promise<void> => {
   try {
     await client.getChainTypeNames();
@@ -17,11 +11,6 @@ export const probeOrRethrow = async (client: Client<any, any>, err: unknown): Pr
   }
 };
 
-/**
- * Runs an ID lookup and maps a malformed ID to `undefined`. Core has no read-side ID validation,
- * so a junk ID against a typed column (e.g. a Postgres `uuid`) makes the adapter throw; a
- * {@link probeOrRethrow} tells that apart from a database failure.
- */
 export const lookupOrNotFound = async <T>(
   client: Client<any, any>,
   lookup: () => Promise<T>,
@@ -34,12 +23,6 @@ export const lookupOrNotFound = async <T>(
   }
 };
 
-/**
- * Batch variant of {@link lookupOrNotFound}. Tries the batch call first; if it throws, looks up
- * each ID on its own (at most {@link PER_ID_CONCURRENCY} at a time) and counts a lookup that
- * throws as not found. When every lookup throws, the probe decides between "nothing found" and
- * rethrowing the batch error.
- */
 export const lookupEachOrNotFound = async <T>(
   client: Client<any, any>,
   ids: string[],
@@ -77,12 +60,3 @@ export const lookupEachOrNotFound = async <T>(
     return present(results.map((result) => (result.ok ? result.item : undefined)));
   }
 };
-
-export const parseIds = (raw: string | null): string[] => [
-  ...new Set(
-    (raw ?? "")
-      .split(",")
-      .map((id) => id.trim())
-      .filter(Boolean),
-  ),
-];

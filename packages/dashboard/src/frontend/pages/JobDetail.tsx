@@ -3,7 +3,8 @@ import { shortId } from "@queuert/ui/lib";
 import { A, useParams } from "@solidjs/router";
 import { For, Match, Show, Switch } from "solid-js";
 
-import { type UnknownJob, getJobDetail, getWorker, isNotFound } from "../api.ts";
+import type { UnknownJob } from "../../shared/types.ts";
+import { isNotFound, serverFns } from "../api.ts";
 import { elapsedMs, formatDuration } from "../domain/duration.ts";
 import { jobPhase } from "../domain/jobPhase.ts";
 import { formatRelative } from "../domain/time.ts";
@@ -23,7 +24,7 @@ export const JobDetail = () => {
   const params = useParams<{ id: string }>();
   const detail = createLoader(
     () => params.id,
-    async (id, signal) => getJobDetail(id, { signal }),
+    async (id, signal) => serverFns.getJobDetail({ data: { id }, signal }),
   );
   const attemptWorker = createLoader(
     () => {
@@ -31,13 +32,10 @@ export const JobDetail = () => {
       return job?.status === "running" ? job.attemptBy : undefined;
     },
     async (workerId, signal) =>
-      getWorker(workerId, { signal }).then(
-        ({ worker }) => worker,
-        (error: unknown) => {
-          if (isNotFound(error)) return null;
-          throw error;
-        },
-      ),
+      serverFns.getWorker({ data: { id: workerId }, signal }).catch((error: unknown) => {
+        if (isNotFound(error)) return null;
+        throw error;
+      }),
   );
   const lease = () => {
     const worker = attemptWorker.data();

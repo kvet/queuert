@@ -3,7 +3,7 @@ import { shortId } from "@queuert/ui/lib";
 import { A, useParams } from "@solidjs/router";
 import { For, Match, Show, Switch } from "solid-js";
 
-import { PAGE_SIZE, getWorker, isNotFound, listWorkerJobs } from "../api.ts";
+import { PAGE_SIZE, isNotFound, serverFns } from "../api.ts";
 import { decodeWorkerId } from "../domain/workers.ts";
 import { JobRow } from "../rows/JobRow.tsx";
 import { PageHeader } from "../shell/PageHeader.tsx";
@@ -24,9 +24,11 @@ import { LoadMoreFooter } from "./listParts.tsx";
 export const WorkerDetail = () => {
   const params = useParams<{ id: string }>();
   const workerId = () => decodeWorkerId(params.id);
-  const detail = createLoader(workerId, async (id, signal) => getWorker(id, { signal }));
+  const detail = createLoader(workerId, async (id, signal) =>
+    serverFns.getWorker({ data: { id }, signal }),
+  );
   const runningJobs = createPagedList(workerId, async (id, cursor, signal) =>
-    listWorkerJobs(id, { cursor, limit: PAGE_SIZE, signal }),
+    serverFns.listWorkerJobs({ data: { workerId: id, cursor, limit: PAGE_SIZE }, signal }),
   );
 
   const crumbs = () => [
@@ -38,12 +40,7 @@ export const WorkerDetail = () => {
     <div>
       <PageHeader fallback="/workers" crumbs={crumbs()} />
       <Switch>
-        <Match
-          when={
-            isNotFound(detail.error()) ||
-            (detail.data() !== undefined && detail.data()?.worker === undefined)
-          }
-        >
+        <Match when={isNotFound(detail.error())}>
           <h1 class="mb-4 text-base font-semibold">
             <IdChip id={workerId()} full />
           </h1>
@@ -61,7 +58,7 @@ export const WorkerDetail = () => {
             <div class="h-4 w-48 animate-pulse rounded-xs bg-surface-2" />
           </div>
         </Match>
-        <Match when={detail.data()?.worker}>
+        <Match when={detail.data()}>
           {(worker) => (
             <div class="mb-6">
               <h1 class="flex flex-wrap items-center gap-3 text-base font-semibold">

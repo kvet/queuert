@@ -1,4 +1,4 @@
-export const MAX_IDS = 100;
+import { MAX_IDS } from "../../shared/limits.ts";
 
 export const parseIdList = (text: string): { ids: string[]; overLimit: boolean } => {
   const unique = [...new Set(text.split(/[\s,]+/).filter(Boolean))];

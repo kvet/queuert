@@ -1,4 +1,4 @@
-import type { UnknownChain, UnknownJob } from "../api.ts";
+import type { UnknownChain, UnknownJob } from "../../shared/types.ts";
 
 const base = {
   chainId: "chain-1",

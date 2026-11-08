@@ -1,2 +1,1 @@
-src/api/routes/assets.generated.ts
-src/api/routes/assets.generated.js
+src/api/assets.generated.ts

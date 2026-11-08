@@ -2,18 +2,10 @@ import { StatusPill } from "@queuert/ui/components";
 import { useNavigate } from "@solidjs/router";
 import { For, Match, Show, Switch, createMemo, createSignal } from "solid-js";
 
-import {
-  type UnknownChain,
-  type UnknownJob,
-  type WorkerWithRunningJobs,
-  errorMessage,
-  getChainsByIds,
-  getJobsByIds,
-  getWorkersByIds,
-  getChainTypeNames,
-  getJobTypeNames,
-} from "../api.ts";
-import { MAX_IDS, parseIdList } from "../domain/ids.ts";
+import { MAX_IDS } from "../../shared/limits.ts";
+import type { UnknownChain, UnknownJob, WorkerWithRunningJobs } from "../../shared/types.ts";
+import { errorMessage, serverFns } from "../api.ts";
+import { parseIdList } from "../domain/ids.ts";
 import { matchTypeNames } from "../domain/typeMatch.ts";
 import { createLoader } from "../state/createLoader.ts";
 import { Dialog, buttonClass } from "../ui/kit.tsx";
@@ -69,8 +61,8 @@ export const FindDialog = () => {
     () => findOpen(),
     async (_, signal) => {
       const [chains, jobs] = await Promise.all([
-        getChainTypeNames({ signal }),
-        getJobTypeNames({ signal }),
+        serverFns.getChainTypeNames({ signal }),
+        serverFns.getJobTypeNames({ signal }),
       ]);
       return { chains, jobs };
     },
@@ -132,15 +124,15 @@ export const FindDialog = () => {
     setChoices([]);
     try {
       const [chains, jobs, workers] = await Promise.all([
-        getChainsByIds(ids, { signal: own.signal }),
-        getJobsByIds(ids, { signal: own.signal }),
-        getWorkersByIds(ids, { signal: own.signal }),
+        serverFns.getChains({ data: { ids }, signal: own.signal }),
+        serverFns.getJobs({ data: { ids }, signal: own.signal }),
+        serverFns.getWorkers({ data: { ids }, signal: own.signal }),
       ]);
       if (own.signal.aborted) return;
       const found: Choice[] = [
-        ...chains.items.map((chain) => ({ kind: "chain" as const, chain })),
-        ...jobs.items.map((job) => ({ kind: "job" as const, job })),
-        ...workers.items.map((worker) => ({ kind: "worker" as const, worker })),
+        ...chains.map((chain) => ({ kind: "chain" as const, chain })),
+        ...jobs.map((job) => ({ kind: "job" as const, job })),
+        ...workers.map((worker) => ({ kind: "worker" as const, worker })),
       ];
       const topSuggestion = suggestions()[0];
       if (found.length === 0 && topSuggestion) goToType(topSuggestion);

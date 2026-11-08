@@ -1,7 +1,7 @@
 import { useSearchParams } from "@solidjs/router";
 import { Show } from "solid-js";
 
-import { PAGE_SIZE, getJobTypeNames, listWorkers } from "../api.ts";
+import { PAGE_SIZE, serverFns } from "../api.ts";
 import { WorkerRow } from "../rows/WorkerRow.tsx";
 import { createLoader } from "../state/createLoader.ts";
 import { createPagedList } from "../state/createPagedList.ts";
@@ -16,11 +16,12 @@ export const WorkerList = () => {
 
   const typeNames = createLoader(
     () => true,
-    async (_, signal) => getJobTypeNames({ signal }),
+    async (_, signal) => serverFns.getJobTypeNames({ signal }),
   );
   const workers = createPagedList(
     () => ({ typeName: typeName() || undefined }),
-    async (params, cursor, signal) => listWorkers({ ...params, cursor, limit: PAGE_SIZE, signal }),
+    async (params, cursor, signal) =>
+      serverFns.listWorkers({ data: { ...params, cursor, limit: PAGE_SIZE }, signal }),
   );
 
   return (

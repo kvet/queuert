@@ -67,7 +67,8 @@ const server = createServer((req, res) => {
       }),
     ).then(async (response) => {
       res.writeHead(response.status, Object.fromEntries(response.headers));
-      res.end(await response.text());
+      for await (const chunk of response.body ?? []) res.write(chunk);
+      res.end();
     });
   });
 });

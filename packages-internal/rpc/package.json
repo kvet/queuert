@@ -1,0 +1,32 @@
+{
+  "name": "@queuert/rpc",
+  "version": "0.0.1",
+  "private": true,
+  "description": "Typed server functions over a single streaming RPC endpoint, built on seroval",
+  "license": "MIT",
+  "author": "kvet",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/kvet/queuert.git"
+  },
+  "type": "module",
+  "exports": {
+    ".": "./src/index.ts",
+    "./server": "./src/server.ts",
+    "./client": "./src/client.ts",
+    "./testing": "./src/testing.ts",
+    "./package.json": "./package.json"
+  },
+  "scripts": {
+    "typecheck": "tsc --noEmit",
+    "test": "vitest --run"
+  },
+  "dependencies": {
+    "@standard-schema/spec": "1.1.0",
+    "seroval": "1.7.7"
+  },
+  "devDependencies": {
+    "@queuert/tsconfig": "workspace:*",
+    "valibot": "1.5.0"
+  }
+}

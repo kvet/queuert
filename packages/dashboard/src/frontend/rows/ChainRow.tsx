@@ -2,7 +2,7 @@ import { Row, SubLine, StatusPill } from "@queuert/ui/components";
 import { A } from "@solidjs/router";
 import { Show } from "solid-js";
 
-import type { UnknownChain } from "../api.ts";
+import type { UnknownChain } from "../../shared/types.ts";
 import { jsonPreview } from "../domain/json.ts";
 import { IdChip } from "../ui/IdChip.tsx";
 import { Time } from "../ui/Time.tsx";

@@ -3,7 +3,7 @@ import { shortId } from "@queuert/ui/lib";
 import { A } from "@solidjs/router";
 import { For, Show, createSignal } from "solid-js";
 
-import type { UnknownChain } from "../api.ts";
+import type { UnknownChain } from "../../shared/types.ts";
 
 const VISIBLE = 6;
 

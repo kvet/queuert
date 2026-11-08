@@ -2,7 +2,7 @@ import { StatusPill } from "@queuert/ui/components";
 import { shortId } from "@queuert/ui/lib";
 import { A } from "@solidjs/router";
 
-import type { UnknownJob } from "../api.ts";
+import type { UnknownJob } from "../../shared/types.ts";
 import { IdChip } from "../ui/IdChip.tsx";
 import { Time } from "../ui/Time.tsx";
 

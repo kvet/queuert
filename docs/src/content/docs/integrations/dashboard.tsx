@@ -68,7 +68,7 @@ const Page = () => (
       <code>createDashboard</code> accepts a Queuert <code>client</code> (created via{" "}
       <code>createClient</code>) and returns <code>{"{ fetch }"}</code> — a standard web{" "}
       <code>fetch</code> handler. Pass it to any server runtime (Node.js, Bun, Deno, etc.). The
-      handler serves both API routes and the pre-built frontend.
+      handler serves both the dashboard API and the pre-built frontend.
     </p>
 
     <h2>Configuration</h2>
@@ -148,10 +148,9 @@ const Page = () => (
 
     <h2>Content Security Policy</h2>
     <p>
-      The frontend uses no inline scripts and no external resources (the favicon is a{" "}
-      <code>data:</code> URI, so <code>img-src</code> must allow <code>data:</code>), but its
-      response decoding (seroval) relies on <code>eval</code>, so a CSP that blocks{" "}
-      <code>unsafe-eval</code> breaks the dashboard. Strict CSPs are not supported today.
+      The frontend uses no inline scripts, no <code>eval</code> and no external resources, so a CSP
+      without <code>unsafe-eval</code> works. The favicon is a <code>data:</code> URI, so{" "}
+      <code>img-src</code> must allow <code>data:</code>.
     </p>
 
     <h2>UI views</h2>

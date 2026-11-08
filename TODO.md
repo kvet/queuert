@@ -10,7 +10,6 @@
 
 # Medium term
 
-- [REF] Switch dashboard to RPC functions
 - [REF] Decouple conformance tests
 - [TASK] Multi-process SQLite conformance — the SQLite conformance suite runs every transaction on one `:memory:` connection behind the in-process `AsyncRwLock`, so the `lock: "exclusive"` cases pass without exercising SQLite's own write lock. Add a mode that contends from a second connection in a worker thread or child process against a WAL file (better-sqlite3 blocks the event loop while it waits on `busy_timeout`, so both connections cannot share one thread).
 - [TASK] Built-in cleanup. See `design/builtin-cleanup.md`.

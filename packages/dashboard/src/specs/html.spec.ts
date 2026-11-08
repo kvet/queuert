@@ -27,7 +27,7 @@ describe("renderHtml", () => {
 describe("favicon", () => {
   // Needs the frontend build (`pnpm build`), which embeds it into assets.generated.ts.
   it("inlines the shared Queuert favicon into the built page", async () => {
-    const { assets } = await import("../api/routes/assets.generated.ts");
+    const { assets } = await import("../api/assets.generated.ts");
     const html = assets["/index.html"]?.content;
 
     expect(html).toBeDefined();

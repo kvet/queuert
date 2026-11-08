@@ -1,32 +1,8 @@
+import { errorResponse, handleRpc } from "@queuert/rpc/server";
 import type { BaseJobTypeDefinitions, Client, StateAdapter } from "queuert";
 
 import { renderHtml } from "./html.ts";
-import { serovalResponse } from "./response.ts";
-import {
-  handleChainBlocking,
-  handleChainDelete,
-  handleChainDetail,
-  handleChainJobs,
-  handleChainTypesCounts,
-  handleChainTypesList,
-  handleChainsByIds,
-  handleChainsList,
-} from "./routes/chains.ts";
-import {
-  handleJobDetail,
-  handleJobReschedule,
-  handleJobTypesCounts,
-  handleJobTypesList,
-  handleJobsByIds,
-  handleJobsList,
-} from "./routes/jobs.ts";
-import {
-  handleWorkerDetail,
-  handleWorkerJobs,
-  handleWorkersByIds,
-  handleWorkersCounts,
-  handleWorkersList,
-} from "./routes/workers.ts";
+import { serverFns } from "./serverFns.ts";
 
 type Assets = Record<string, { content: string; contentType: string }>;
 
@@ -35,66 +11,12 @@ let cachedAssets: Assets | null | undefined;
 const loadAssets = async (): Promise<Assets | null> => {
   if (cachedAssets !== undefined) return cachedAssets;
   try {
-    const assetsModule = await import("./routes/assets.generated.ts");
+    const assetsModule = await import("./assets.generated.ts");
     cachedAssets = assetsModule.assets;
   } catch {
     cachedAssets = null;
   }
   return cachedAssets;
-};
-
-const dispatchApi = async (
-  request: Request,
-  url: URL,
-  localPath: string,
-  client: Client<any, any>,
-): Promise<Response | undefined> => {
-  let match: RegExpMatchArray | null;
-
-  if (request.method === "DELETE") {
-    match = localPath.match(/^\/api\/chains\/([^/]+)$/);
-    return match ? handleChainDelete(client, match[1]) : undefined;
-  }
-  if (request.method === "POST") {
-    match = localPath.match(/^\/api\/jobs\/([^/]+)\/reschedule$/);
-    return match ? handleJobReschedule(client, match[1]) : undefined;
-  }
-  if (request.method !== "GET") return undefined;
-
-  if (localPath === "/api/chains/by-ids") return handleChainsByIds(url, client);
-
-  match = localPath.match(/^\/api\/chains\/([^/]+)\/blocking$/);
-  if (match) return handleChainBlocking(url, client, match[1]);
-
-  match = localPath.match(/^\/api\/chains\/([^/]+)\/jobs$/);
-  if (match) return handleChainJobs(url, client, match[1]);
-
-  match = localPath.match(/^\/api\/chains\/([^/]+)$/);
-  if (match) return handleChainDetail(url, client, match[1]);
-
-  if (localPath === "/api/chain-types/counts") return handleChainTypesCounts(url, client);
-  if (localPath === "/api/chain-types") return handleChainTypesList(client);
-  if (localPath === "/api/chains") return handleChainsList(url, client);
-
-  if (localPath === "/api/jobs/by-ids") return handleJobsByIds(url, client);
-
-  match = localPath.match(/^\/api\/jobs\/([^/]+)$/);
-  if (match) return handleJobDetail(url, client, match[1]);
-
-  if (localPath === "/api/job-types/counts") return handleJobTypesCounts(url, client);
-  if (localPath === "/api/job-types") return handleJobTypesList(client);
-  if (localPath === "/api/jobs") return handleJobsList(url, client);
-
-  if (localPath === "/api/workers/by-id") return handleWorkerDetail(url, client);
-  if (localPath === "/api/workers/by-ids") return handleWorkersByIds(url, client);
-  if (localPath === "/api/workers/counts") return handleWorkersCounts(client);
-
-  match = localPath.match(/^\/api\/workers\/([^/]+)\/jobs$/);
-  if (match) return handleWorkerJobs(url, client, match[1]);
-
-  if (localPath === "/api/workers") return handleWorkersList(url, client);
-
-  return undefined;
 };
 
 /**
@@ -127,22 +49,19 @@ export const createDashboard = <
     const url = new URL(request.url);
     const { pathname } = url;
 
-    // Strip basePath prefix to get the local route path
     if (basePath && !pathname.startsWith(basePath + "/") && pathname !== basePath) {
       return new Response("Not Found", { status: 404 });
     }
     const localPath = basePath ? pathname.slice(basePath.length) || "/" : pathname;
     if (localPath === "/api" || localPath.startsWith("/api/")) {
+      if (localPath !== "/api/rpc") return errorResponse("Not found", 404);
       try {
-        const response = await dispatchApi(request, url, localPath, client);
-        if (response) return response;
+        return await handleRpc(request, { client }, serverFns);
       } catch (err) {
-        return serovalResponse({ error: err instanceof Error ? err.message : String(err) }, 500);
+        return errorResponse(err instanceof Error ? err.message : String(err), 500);
       }
-      return serovalResponse({ error: "Not found" }, 404);
     }
 
-    // Static assets + SPA fallback
     const assets = await loadAssets();
     if (!assets)
       return new Response("Dashboard assets not built. Run `pnpm build` first.", {
@@ -162,7 +81,6 @@ export const createDashboard = <
       }
     }
 
-    // SPA fallback — serve index.html with <base> tag for correct relative URLs
     const html = assets["/index.html"];
     if (!html) return new Response("Not Found", { status: 404 });
     return new Response(renderHtml(html.content, basePath), {

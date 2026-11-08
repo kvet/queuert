@@ -3,7 +3,7 @@ import { type AnyStatus, CHAIN_STATUSES, JOB_STATUSES, statusClasses } from "@qu
 import { A } from "@solidjs/router";
 import { For, Match, Show, Switch, createMemo } from "solid-js";
 
-import { countWorkers } from "../api.ts";
+import { serverFns } from "../api.ts";
 import { type CappedCount, formatSum, sumCounts } from "../domain/counts.ts";
 import { TypeRow } from "../rows/TypeRow.tsx";
 import { createLoader } from "../state/createLoader.ts";
@@ -190,7 +190,7 @@ export const Overview = () => {
       const [chains, jobs, workerCounts] = await Promise.all([
         loadChainTypes(signal),
         loadJobTypes(signal),
-        countWorkers({ signal }),
+        serverFns.countWorkers({ signal }),
       ]);
       return { chains, jobs, workerCounts };
     },

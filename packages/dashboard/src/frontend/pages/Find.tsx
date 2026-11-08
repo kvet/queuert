@@ -3,8 +3,9 @@ import { shortId } from "@queuert/ui/lib";
 import { useSearchParams } from "@solidjs/router";
 import { For, Match, Show, Switch, createSignal } from "solid-js";
 
-import { getChainsByIds, getJobsByIds, getWorkersByIds } from "../api.ts";
-import { MAX_IDS, parseIdList } from "../domain/ids.ts";
+import { MAX_IDS } from "../../shared/limits.ts";
+import { serverFns } from "../api.ts";
+import { parseIdList } from "../domain/ids.ts";
 import { ChainRow } from "../rows/ChainRow.tsx";
 import { JobRow } from "../rows/JobRow.tsx";
 import { WorkerRow } from "../rows/WorkerRow.tsx";
@@ -111,11 +112,11 @@ export const Find = () => {
     async (joined, signal) => {
       const list = joined.split(",");
       const [chains, jobs, workers] = await Promise.all([
-        getChainsByIds(list, { signal }),
-        getJobsByIds(list, { signal }),
-        getWorkersByIds(list, { signal }),
+        serverFns.getChains({ data: { ids: list }, signal }),
+        serverFns.getJobs({ data: { ids: list }, signal }),
+        serverFns.getWorkers({ data: { ids: list }, signal }),
       ]);
-      return { chains: chains.items, jobs: jobs.items, workers: workers.items };
+      return { chains, jobs, workers };
     },
   );
 

@@ -1,6 +1,7 @@
 import { describe, expect, it } from "vitest";
 
-import { MAX_IDS, parseIdList } from "./ids.ts";
+import { MAX_IDS } from "../../shared/limits.ts";
+import { parseIdList } from "./ids.ts";
 
 describe("parseIdList", () => {
   it("splits on commas, whitespace and newlines, trimming and deduplicating", () => {
