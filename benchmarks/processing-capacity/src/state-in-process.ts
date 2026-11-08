@@ -1,8 +1,9 @@
 import { createInProcessStateAdapter } from "queuert";
 
-import { runBenchmark } from "./utils.ts";
+import { noopNotifyAdapter, runBenchmark } from "./utils.ts";
 
 await runBenchmark({
   title: "PROCESSING CAPACITY — IN-PROCESS",
   stateAdapter: createInProcessStateAdapter(),
+  notifyAdapter: noopNotifyAdapter,
 });

@@ -6,6 +6,7 @@ import type { Chain } from "../entities/chain.ts";
 import { BlockerReferenceError, JobNotFoundError } from "../errors.ts";
 import { createProcessors } from "../job-type-processors/create-job-type-processors.ts";
 import { defineJobTypes } from "../job-types/define-job-types.ts";
+import { noopNotifyAdapter } from "../notify-adapter/notify-adapter.noop.spec-helper.ts";
 import { withTxHooks } from "../tx-hooks/tx-hooks.ts";
 import { createWorkerRunner } from "../worker-runner.ts";
 import type { TestSuiteContext } from "./spec-context.spec-helper.ts";
@@ -219,7 +220,7 @@ export const deletionTestSuite = ({ it }: { it: TestAPI<TestSuiteContext> }): vo
     log,
     skip,
   }) => {
-    if (!notifyAdapter) return skip();
+    if (notifyAdapter === noopNotifyAdapter) return skip();
 
     const jobTypes = defineJobTypes<{
       test: {

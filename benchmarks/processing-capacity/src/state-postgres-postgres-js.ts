@@ -2,7 +2,7 @@ import { createPgStateAdapter } from "@queuert/postgres";
 import { createPostgresJsStateProvider } from "example-state-postgres-postgres-js/provider";
 import postgres from "postgres";
 
-import { benchmarkNamespace, requireEnv, runBenchmark } from "./utils.ts";
+import { benchmarkNamespace, noopNotifyAdapter, requireEnv, runBenchmark } from "./utils.ts";
 
 const sql = postgres(requireEnv("BENCHMARK_POSTGRES_URL"), { max: 20 });
 const schema = benchmarkNamespace();
@@ -15,6 +15,7 @@ await stateAdapter.migrateToLatest();
 await runBenchmark({
   title: "PROCESSING CAPACITY — POSTGRESQL (postgres-js)",
   stateAdapter,
+  notifyAdapter: noopNotifyAdapter,
 });
 
 await sql.unsafe(`DROP SCHEMA ${schema} CASCADE`);

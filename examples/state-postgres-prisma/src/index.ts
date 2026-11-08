@@ -9,7 +9,6 @@ import {
   createProcessors,
   defineJobTypes,
   withTxHooks,
-  createInProcessNotifyAdapter,
 } from "queuert";
 
 import { createPrismaPgStateProvider } from "./provider.ts";
@@ -51,13 +50,7 @@ const stateAdapter = createPgStateAdapter({
 await stateAdapter.migrateToLatest();
 // #endregion
 
-const notifyAdapter = createInProcessNotifyAdapter();
-
-const client = createClient({
-  stateAdapter,
-  notifyAdapter,
-  jobTypes,
-});
+const client = createClient({ stateAdapter, jobTypes });
 
 // Create and start worker runner
 const workerRunner = createWorkerRunner({
@@ -109,6 +102,5 @@ console.log(`Welcome email sent at: ${result.output.sentAt}`);
 
 // Cleanup
 await stopWorkerRunner();
-await notifyAdapter.close();
 await stateAdapter.close();
 await prisma.$disconnect();

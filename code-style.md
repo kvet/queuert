@@ -268,7 +268,7 @@ Examples are organized by prefix to indicate their primary focus:
 
 Each example demonstrates **one integration concern**:
 
-- **State examples** use `createInProcessNotifyAdapter` from `queuert`
+- **State examples** pass no notify adapter, so the client's in-process default wakes their worker runner
 - **Notify examples** use `createInProcessStateAdapter` from `queuert`
 
 This ensures users can copy-paste relevant code without untangling unrelated integrations.
@@ -337,12 +337,14 @@ State adapters have configuration differences that reflect database capabilities
 
 ### In-Process Adapters
 
-The in-process adapters (`createInProcessStateAdapter`, `createInProcessNotifyAdapter`) are exported from `queuert`. They're suitable for:
+The in-process state adapter (`createInProcessStateAdapter`) is exported from `queuert`. It's suitable for:
 
 - Single-process production apps where persistence isn't required
 - Testing (used in test suites and examples)
-- Single-purpose examples (state examples use in-process notify, notify examples use in-process state)
+- Single-purpose examples (notify examples use in-process state)
 - Development/prototyping
+
+There is no public in-process notify adapter: `createClient` without `notifyAdapter` uses one internally, scoped to that client. Queuert's own specs import `createInProcessNotifyAdapter` from `queuert/testing`.
 
 Multi-process deployments (or any app that needs state to survive a restart) should use the database-backed adapters from `@queuert/postgres`, `@queuert/sqlite`, etc.
 

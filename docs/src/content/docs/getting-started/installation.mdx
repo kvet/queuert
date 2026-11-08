@@ -163,10 +163,10 @@ import { Aside, Steps, Tabs, TabItem } from "@astrojs/starlight/components";
          </TabItem>
        </Tabs>
      </TabItem>
-     <TabItem label="None (polling)">
-       Workers poll the database on a configurable interval. No extra packages or infrastructure
-       required. Suitable for low-throughput workloads where millisecond latency is not critical.
-       See [Without a notify adapter](/queuert/integrations/notify-adapters/#polling).
+     <TabItem label="None">
+       No extra packages or infrastructure required. The client wakes its own worker runners in
+       memory, and workers in other processes poll the database on a configurable interval. See
+       [Without a notify adapter](/queuert/integrations/notify-adapters/#default).
      </TabItem>
    </Tabs>
 

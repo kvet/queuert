@@ -49,7 +49,6 @@ export {
 export { type BackoffConfig } from "./entities/backoff.ts";
 export { createWorkerRunner, type WorkerRunner } from "./worker-runner.ts";
 export { type WorkerLeaseConfig } from "./worker/worker-lease.ts";
-export { createInProcessNotifyAdapter } from "./notify-adapter/notify-adapter.in-process.ts";
 export { type NotifyAdapter } from "./notify-adapter/notify-adapter.ts";
 export { createConsoleLog } from "./observability-adapter/log.console.ts";
 export { type Log } from "./observability-adapter/log.ts";

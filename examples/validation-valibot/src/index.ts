@@ -10,7 +10,6 @@
 
 import {
   createClient,
-  createInProcessNotifyAdapter,
   createInProcessStateAdapter,
   createWorkerRunner,
   createProcessors,
@@ -79,13 +78,8 @@ const jobTypes = createValibotJobTypes({
 
 // Create queuert client with the jobTypes
 const stateAdapter = createInProcessStateAdapter();
-const notifyAdapter = createInProcessNotifyAdapter();
 
-const client = createClient({
-  stateAdapter,
-  notifyAdapter,
-  jobTypes,
-});
+const client = createClient({ stateAdapter, jobTypes });
 
 // Create and start worker runner with job type processors
 const workerRunner = createWorkerRunner({
@@ -185,6 +179,5 @@ console.log("Chain completed:", result.output);
 
 // Cleanup
 await stopWorkerRunner();
-await notifyAdapter.close();
 await stateAdapter.close();
 console.log("\n=== Done ===");

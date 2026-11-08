@@ -5,13 +5,12 @@ import { processErrorHandlingTestSuite } from "../suites/process-error-handling.
 import { processTestSuite } from "../suites/process.test-suite.ts";
 import {
   extendWithCommon,
-  extendWithNotifyNoop,
   extendWithResourceLeakDetection,
 } from "../suites/spec-context.spec-helper.ts";
 import { workerTestSuite } from "../suites/worker.test-suite.ts";
 
 const inProcessNoopIt = extendWithResourceLeakDetection(
-  extendWithNotifyNoop(extendWithCommon(extendWithStateInProcess(it))),
+  extendWithCommon(extendWithStateInProcess(it)),
 );
 
 // NOTE: hack for vitest plugin

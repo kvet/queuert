@@ -12,7 +12,6 @@ import { rescheduleJobTestSuite } from "../suites/reschedule-job.test-suite.ts";
 import { schedulingTestSuite } from "../suites/scheduling.test-suite.ts";
 import {
   extendWithCommon,
-  extendWithNotifyNoop,
   extendWithResourceLeakDetection,
 } from "../suites/spec-context.spec-helper.ts";
 import { validationTestSuite } from "../suites/validation.test-suite.ts";
@@ -20,7 +19,7 @@ import { workerlessCompletionTestSuite } from "../suites/workerless-completion.t
 import { stateResilienceTestSuite } from "../testing.ts";
 
 const inProcessNoopIt = extendWithResourceLeakDetection(
-  extendWithNotifyNoop(extendWithCommon(extendWithStateInProcess(it))),
+  extendWithCommon(extendWithStateInProcess(it)),
 );
 
 // NOTE: hack for vitest plugin

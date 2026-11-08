@@ -152,7 +152,8 @@ const Page = () => (
       <li>
         <strong>Wakeup.</strong> DBOS queues are polled, at most every second by default with
         backoff under contention; a workflow started directly runs at once in the calling process.
-        With a notify adapter, Queuert workers wake when a job commits; without one they poll.
+        Queuert workers wake when a job commits: in the same process by default, across processes
+        with a notify adapter; without one, workers in other processes poll.
       </li>
       <li>
         <strong>Durable in-code waits.</strong> DBOS waits inside the workflow with{" "}

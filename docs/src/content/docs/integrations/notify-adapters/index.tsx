@@ -7,7 +7,7 @@ import { Aside } from "../../../../components/mdx/Aside.tsx";
 export const meta = {
   title: "Notify Adapters",
   description:
-    "Wake workers the moment jobs are scheduled instead of polling, and the NotifyAdapter interface every backend implements.",
+    "Wake workers in other processes the moment jobs are scheduled instead of polling, and the NotifyAdapter interface every backend implements.",
 };
 
 const adapters: OptionCard[] = [
@@ -42,20 +42,6 @@ const adapters: OptionCard[] = [
       { label: "Drivers", value: "@nats-io/transport-node" },
     ],
     action: { label: "NATS notify adapter", href: "/integrations/notify-adapters/nats/" },
-  },
-  {
-    name: "In-process",
-    status: { label: "built-in", tone: "default" },
-    pick: "Delivers notifications via in-memory subscriptions. Single-process only: workers in other processes won't receive them.",
-    facts: [
-      { label: "Package", value: "queuert" },
-      { label: "Transport", value: "in-memory subscriptions" },
-      { label: "Scope", value: "one process" },
-    ],
-    action: {
-      label: "In-process notify adapter",
-      href: "/integrations/notify-adapters/in-process/",
-    },
   },
   {
     name: "Custom",
@@ -111,20 +97,23 @@ const Page = () => (
   <>
     <p>
       Notify adapters handle pub/sub notifications for efficient job scheduling. When a job is
-      created, workers are notified immediately instead of polling. This reduces latency from
-      seconds to milliseconds.
+      created, workers in every process are notified immediately instead of polling. This reduces
+      latency from seconds to milliseconds.
     </p>
     <OptionCards items={adapters} />
 
-    <h2 id="polling">Without a notify adapter</h2>
+    <h2 id="default">Without a notify adapter</h2>
     <p>
-      The default when no notify adapter is configured. Workers poll the database on a configurable
-      interval to check for new jobs. No additional packages or infrastructure required.
+      A client created without <code>notifyAdapter</code> delivers notifications in memory to
+      itself: the worker runners created from it and its <code>awaitChain</code> calls wake the
+      moment a transaction commits. Nothing crosses the process, or even the client: a worker runner
+      in another process, or one built from a second client in the same process, polls the database
+      every <code>pollIntervalMs</code>. No additional packages or infrastructure are required.
     </p>
     <Aside type="tip">
-      Polling is a perfectly valid choice for low-throughput workloads where millisecond latency is
-      not critical. It eliminates an entire infrastructure dependency and simplifies local
-      development.
+      A single process with one client needs no notify adapter. Once workers run in other processes,
+      polling is still a valid choice for low-throughput workloads where millisecond latency is not
+      critical; pass a shared adapter when it is.
     </Aside>
 
     <h2 id="notify-adapter-interface">The NotifyAdapter interface</h2>

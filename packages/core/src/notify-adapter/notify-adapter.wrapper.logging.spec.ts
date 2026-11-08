@@ -2,7 +2,7 @@ import { describe, expect, test, vi } from "vitest";
 
 import { createNoopObservabilityAdapter } from "../observability-adapter/observability-adapter.noop.ts";
 import { createObservabilityHelper } from "../observability-adapter/observability-helper.ts";
-import { createNoopNotifyAdapter } from "./notify-adapter.noop.ts";
+import { noopNotifyAdapter } from "./notify-adapter.noop.spec-helper.ts";
 import type { NotifyAdapter } from "./notify-adapter.ts";
 import { wrapNotifyAdapterWithLogging } from "./notify-adapter.wrapper.logging.ts";
 
@@ -22,7 +22,7 @@ describe("wrapNotifyAdapterWithLogging", () => {
   test("reports a rejected call once and rejects with its error", async () => {
     const error = new Error("notify down");
     const { wrapped, log } = wrapWithLog({
-      ...createNoopNotifyAdapter(),
+      ...noopNotifyAdapter,
       notifyJobsScheduled: async () => {
         throw error;
       },
@@ -41,7 +41,7 @@ describe("wrapNotifyAdapterWithLogging", () => {
   test("reports a synchronous throw once and rejects with its error", async () => {
     const error = new Error("notify down");
     const { wrapped, log } = wrapWithLog({
-      ...createNoopNotifyAdapter(),
+      ...noopNotifyAdapter,
       notifyJobsScheduled: () => {
         throw error;
       },

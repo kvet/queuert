@@ -11,7 +11,6 @@
 
 import {
   createClient,
-  createInProcessNotifyAdapter,
   createInProcessStateAdapter,
   createWorkerRunner,
   createProcessors,
@@ -41,9 +40,8 @@ const jobTypes = createZodCodecJobTypes({
 });
 
 const stateAdapter = createInProcessStateAdapter();
-const notifyAdapter = createInProcessNotifyAdapter();
 
-const client = createClient({ stateAdapter, notifyAdapter, jobTypes });
+const client = createClient({ stateAdapter, jobTypes });
 
 const workerRunner = createWorkerRunner({
   client,
@@ -117,6 +115,5 @@ console.log(
 );
 
 await stopWorkerRunner();
-await notifyAdapter.close();
 await stateAdapter.close();
 console.log("\n=== Done ===");

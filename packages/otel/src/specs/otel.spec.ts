@@ -966,7 +966,7 @@ describe("Metrics", () => {
     }>();
 
     const failingNotifyAdapter: NotifyAdapter = {
-      ...notifyAdapter!,
+      ...notifyAdapter,
       notifyJobsScheduled: async () => {
         throw new Error("notify error");
       },

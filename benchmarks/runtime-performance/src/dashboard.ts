@@ -5,7 +5,6 @@
 import { createDashboard } from "@queuert/dashboard";
 import {
   createClient,
-  createInProcessNotifyAdapter,
   createInProcessStateAdapter,
   createWorkerRunner,
   createProcessors,
@@ -29,12 +28,8 @@ await runDoubleRunBenchmark<Record<string, never>>({
       createInProcessStateAdapter(),
     );
 
-    const notifyAdapter = await step("After creating notify adapter", async () =>
-      createInProcessNotifyAdapter(),
-    );
-
     const client = await step("After creating client", async () =>
-      createClient({ stateAdapter, notifyAdapter, jobTypes }),
+      createClient({ stateAdapter, jobTypes }),
     );
 
     const dashboard = await step("After creating dashboard", async () =>
@@ -86,7 +81,6 @@ await runDoubleRunBenchmark<Record<string, never>>({
     });
 
     await stopWorkerRunner();
-    await notifyAdapter.close();
     await stateAdapter.close();
   },
 });

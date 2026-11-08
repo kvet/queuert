@@ -656,7 +656,7 @@ describe("Logging", () => {
     const unblockedLogs = () =>
       log.mock.calls.filter(([entry]) => entry.type === "job_unblocked").map(([entry]) => entry);
     const notified: string[] = [];
-    const dispose = await notifyAdapter!.listenJobScheduled(["main", "sentinel"], (typeName) =>
+    const dispose = await notifyAdapter.listenJobScheduled(["main", "sentinel"], (typeName) =>
       notified.push(typeName),
     );
     onTestFinished(dispose);
@@ -1179,7 +1179,7 @@ describe("Logging", () => {
     }>();
 
     const failingNotifyAdapter: NotifyAdapter = {
-      ...notifyAdapter!,
+      ...notifyAdapter,
       notifyJobsScheduled: async () => {
         throw new Error("notify error");
       },

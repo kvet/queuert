@@ -12,7 +12,7 @@ const __dirname = dirname(fileURLToPath(import.meta.url));
 const args = process.argv.slice(2);
 
 const axes = [
-  { axis: "state", title: "State adapter (in-process notify)" },
+  { axis: "state", title: "State adapter (noop notify)" },
   { axis: "notify", title: "Notify adapter (in-process state)" },
 ] as const;
 

@@ -2,7 +2,6 @@ import { createAsyncRwLock, createSqliteStateAdapter } from "@queuert/sqlite";
 import Database from "better-sqlite3";
 import {
   createClient,
-  createInProcessNotifyAdapter,
   createWorkerRunner,
   createProcessors,
   defineJobTypes,
@@ -40,13 +39,7 @@ const stateAdapter = createSqliteStateAdapter({ stateProvider });
 await stateAdapter.migrateToLatest();
 // #endregion
 
-const notifyAdapter = createInProcessNotifyAdapter();
-
-const client = createClient({
-  stateAdapter,
-  notifyAdapter,
-  jobTypes,
-});
+const client = createClient({ stateAdapter, jobTypes });
 
 const workerRunner = createWorkerRunner({
   client,
@@ -137,6 +130,5 @@ console.log(`Welcome email sent at: ${result.output.sentAt}`);
 
 // Cleanup
 await stopWorkerRunner();
-await notifyAdapter.close();
 await stateAdapter.close();
 db.close();

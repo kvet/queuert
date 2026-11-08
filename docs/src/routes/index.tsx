@@ -53,7 +53,7 @@ const features: {
   },
   {
     title: "Sub-second wakeup",
-    body: "An optional notify adapter (LISTEN/NOTIFY, Redis or NATS) wakes workers right after the commit. Without one, workers poll.",
+    body: "Workers wake right after the commit: in-process by default, and across processes with a notify adapter (LISTEN/NOTIFY, Redis or NATS).",
     icon: BoltIcon,
   },
   {
@@ -117,7 +117,6 @@ const integrations: {
       { label: "Redis", href: "/integrations/notify-adapters/redis/" },
       { label: "LISTEN/NOTIFY", href: "/integrations/notify-adapters/postgres/" },
       { label: "NATS", href: "/integrations/notify-adapters/nats/" },
-      { label: "in-process", href: "/integrations/notify-adapters/in-process/" },
     ],
     href: "/integrations/notify-adapters/",
     customAdapter: true,

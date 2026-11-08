@@ -9,7 +9,6 @@
 
 import {
   createClient,
-  createInProcessNotifyAdapter,
   createInProcessStateAdapter,
   createWorkerRunner,
   createProcessors,
@@ -32,9 +31,8 @@ const jobTypes = createSuperjsonJobTypes<{
 }>({ "tally-votes": true, "publish-results": true });
 
 const stateAdapter = createInProcessStateAdapter();
-const notifyAdapter = createInProcessNotifyAdapter();
 
-const client = createClient({ stateAdapter, notifyAdapter, jobTypes });
+const client = createClient({ stateAdapter, jobTypes });
 
 const workerRunner = createWorkerRunner({
   client,
@@ -102,6 +100,5 @@ const [stored] = await stateAdapter.getJobs({ jobIds: [chain.id] });
 console.log(`\nStored input: ${JSON.stringify(stored?.input)}`);
 
 await stopWorkerRunner();
-await notifyAdapter.close();
 await stateAdapter.close();
 console.log("\n=== Done ===");

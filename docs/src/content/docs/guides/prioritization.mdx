@@ -130,7 +130,7 @@ Decide which workload a job belongs to before enqueueing, then submit to exactly
 One `createClient` owns one `jobTypes`. Two ways to split workloads across workers:
 
 - **One client, multiple workers** — the default. Each worker subsets the shared registry via its own `Processors`. Use when workloads share the same database and notify adapter.
-- **Multiple clients** — one client per workload, each with its own registry, adapters, and connection pool. Reach for this when workloads need different infrastructure: separate connection pools to cap each workload's DB load, different notify channels, or notify adapters that scale independently.
+- **Multiple clients** — one client per workload, each with its own registry, adapters, and connection pool. Reach for this when workloads need different infrastructure: separate connection pools to cap each workload's DB load, different notify channels, or notify adapters that scale independently. Clients don't share the in-process default, so clients in one process that should wake each other's workers pass a shared notify adapter.
 
 Start with one client. Split only when a concrete resource constraint forces it.
 

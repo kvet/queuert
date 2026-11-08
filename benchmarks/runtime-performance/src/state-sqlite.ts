@@ -5,13 +5,7 @@
 import { createAsyncRwLock, createSqliteStateAdapter } from "@queuert/sqlite";
 import Database from "better-sqlite3";
 import { createBetterSqlite3StateProvider } from "example-state-sqlite-better-sqlite3/provider";
-import {
-  createClient,
-  createInProcessNotifyAdapter,
-  createWorkerRunner,
-  createProcessors,
-  withTxHooks,
-} from "queuert";
+import { createClient, createWorkerRunner, createProcessors, withTxHooks } from "queuert";
 
 import {
   createCompletionCounter,
@@ -50,10 +44,6 @@ await runDoubleRunBenchmark<Infra>({
   runLifecycle: async ({ stateProvider }, { step, processStep, jobCount }) => {
     const completions = createCompletionCounter(jobCount);
 
-    const notifyAdapter = await step("After creating notify adapter", async () =>
-      createInProcessNotifyAdapter(),
-    );
-
     const stateAdapter = await step("After creating state adapter (with migrations)", async () => {
       const adapter = createSqliteStateAdapter({ stateProvider });
       await adapter.migrateToLatest();
@@ -61,7 +51,7 @@ await runDoubleRunBenchmark<Infra>({
     });
 
     const setup = await step("After creating client + worker", async () => {
-      const client = createClient({ stateAdapter, notifyAdapter, jobTypes });
+      const client = createClient({ stateAdapter, jobTypes });
       const workerRunner = createWorkerRunner({
         client,
         processors: createProcessors({
@@ -104,6 +94,5 @@ await runDoubleRunBenchmark<Infra>({
 
     await setup.stopWorkerRunner();
     await stateAdapter.close();
-    await notifyAdapter.close();
   },
 });

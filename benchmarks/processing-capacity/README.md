@@ -1,6 +1,6 @@
 # Processing Capacity Benchmark
 
-Job throughput along two independent axes: state adapter (with the in-process notify default) and notify adapter (with the in-process state default). Each adapter runs five scenarios, each in a separate child process for isolation. Every scenario measures a fixed 2 s window, so a slow adapter costs the same wall time as a fast one:
+Job throughput along two independent axes: state adapter (with a noop notify adapter, so only the state adapter is measured) and notify adapter (with the in-process state default). Each adapter runs five scenarios, each in a separate child process for isolation. Every scenario measures a fixed 2 s window, so a slow adapter costs the same wall time as a fast one:
 
 - **Single creation** (`create-single`) — chains created via `createChain`, one per transaction (chains/s).
 - **Batched creation** (`create-batched`) — chains created via `createChains` in batches of 100 (chains/s).
@@ -17,7 +17,7 @@ Each adapter has one script per provider example, so you can compare driver impl
 ```bash
 pnpm start                                # all benchmarks, all five scenarios
 
-# State axis (in-process notify)
+# State axis (noop notify)
 pnpm start:state-in-process               # in-process state
 pnpm start:state-sqlite-better-sqlite3    # SQLite state via better-sqlite3
 pnpm start:state-sqlite-node-sqlite       # SQLite state via node:sqlite

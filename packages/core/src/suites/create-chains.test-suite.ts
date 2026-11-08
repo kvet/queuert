@@ -5,6 +5,7 @@ import { ChainNotFoundError } from "../errors.ts";
 import { createProcessors } from "../job-type-processors/create-job-type-processors.ts";
 import { defineJobTypes } from "../job-types/define-job-types.ts";
 import { createInProcessNotifyAdapter } from "../notify-adapter/notify-adapter.in-process.ts";
+import { noopNotifyAdapter } from "../notify-adapter/notify-adapter.noop.spec-helper.ts";
 import { withTxHooks } from "../tx-hooks/tx-hooks.ts";
 import { createWorkerRunner } from "../worker-runner.ts";
 import type { TestSuiteContext } from "./spec-context.spec-helper.ts";
@@ -164,7 +165,10 @@ export const createChainsTestSuite = ({ it }: { it: TestAPI<TestSuiteContext> })
         sentinel: { entry: true; input: null; output: null };
       }>();
 
-      const notifyAdapter = fixtureNotifyAdapter ?? createInProcessNotifyAdapter();
+      const notifyAdapter =
+        fixtureNotifyAdapter === noopNotifyAdapter
+          ? createInProcessNotifyAdapter()
+          : fixtureNotifyAdapter;
       const client = createClient({
         stateAdapter,
         notifyAdapter,

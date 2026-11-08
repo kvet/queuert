@@ -10,7 +10,6 @@
 import {
   type JobTypes,
   createClient,
-  createInProcessNotifyAdapter,
   createInProcessStateAdapter,
   createProcessors,
   createWorkerRunner,
@@ -63,12 +62,8 @@ export const runValidationBenchmark = async ({
         createInProcessStateAdapter(),
       );
 
-      const notifyAdapter = await step("After creating notify adapter", async () =>
-        createInProcessNotifyAdapter(),
-      );
-
       const setup = await step("After creating client + worker", async () => {
-        const client = createClient({ stateAdapter, notifyAdapter, jobTypes });
+        const client = createClient({ stateAdapter, jobTypes });
         const workerRunner = createWorkerRunner({
           client,
           processors: createProcessors({
@@ -115,7 +110,6 @@ export const runValidationBenchmark = async ({
 
       await setup.stopWorkerRunner();
       await stateAdapter.close();
-      await notifyAdapter.close();
     },
   });
 };

@@ -7,7 +7,6 @@ import { PrismaBetterSqlite3 } from "@prisma/adapter-better-sqlite3";
 import { createAsyncRwLock, createSqliteStateAdapter } from "@queuert/sqlite";
 import {
   createClient,
-  createInProcessNotifyAdapter,
   createWorkerRunner,
   createProcessors,
   defineJobTypes,
@@ -51,13 +50,7 @@ const stateAdapter = createSqliteStateAdapter({
 await stateAdapter.migrateToLatest();
 // #endregion
 
-const notifyAdapter = createInProcessNotifyAdapter();
-
-const client = createClient({
-  stateAdapter,
-  notifyAdapter,
-  jobTypes,
-});
+const client = createClient({ stateAdapter, jobTypes });
 
 // Create and start worker runner
 const workerRunner = createWorkerRunner({
@@ -120,7 +113,6 @@ console.log(`Welcome email sent at: ${result.output.sentAt}`);
 
 // Cleanup
 await stopWorkerRunner();
-await notifyAdapter.close();
 await stateAdapter.close();
 await prisma.$disconnect();
 rmSync(tempDir, { recursive: true, force: true });

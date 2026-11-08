@@ -4,7 +4,6 @@ import { createAsyncRwLock } from "@queuert/helpers";
 import type Database from "better-sqlite3";
 import {
   createClient,
-  createInProcessNotifyAdapter,
   createWorkerRunner,
   createProcessors,
   defineJobTypes,
@@ -31,7 +30,6 @@ it("infers custom ID types through the full stack", async ({ db }) => {
 
   await stateAdapter.migrateToLatest();
 
-  const notifyAdapter = createInProcessNotifyAdapter();
   const log = vi.fn();
   const jobTypes = defineJobTypes<{
     test: {
@@ -43,7 +41,6 @@ it("infers custom ID types through the full stack", async ({ db }) => {
 
   const client = createClient({
     stateAdapter,
-    notifyAdapter,
     log,
     jobTypes,
   });

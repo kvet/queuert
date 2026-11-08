@@ -5,7 +5,6 @@ import { drizzle } from "drizzle-orm/better-sqlite3";
 import { integer, sqliteTable, text } from "drizzle-orm/sqlite-core";
 import {
   createClient,
-  createInProcessNotifyAdapter,
   createWorkerRunner,
   createProcessors,
   defineJobTypes,
@@ -54,13 +53,7 @@ const stateAdapter = createSqliteStateAdapter({ stateProvider });
 await stateAdapter.migrateToLatest();
 // #endregion
 
-const notifyAdapter = createInProcessNotifyAdapter();
-
-const client = createClient({
-  stateAdapter,
-  notifyAdapter,
-  jobTypes,
-});
+const client = createClient({ stateAdapter, jobTypes });
 
 const workerRunner = createWorkerRunner({
   client,
@@ -155,6 +148,5 @@ console.log(`Welcome email sent at: ${result.output.sentAt}`);
 
 // Cleanup
 await stopWorkerRunner();
-await notifyAdapter.close();
 await stateAdapter.close();
 sqlite.close();

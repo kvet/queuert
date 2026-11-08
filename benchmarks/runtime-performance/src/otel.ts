@@ -7,7 +7,6 @@ import { MeterProvider, PeriodicExportingMetricReader } from "@opentelemetry/sdk
 import { createOtelObservabilityAdapter } from "@queuert/otel";
 import {
   createClient,
-  createInProcessNotifyAdapter,
   createInProcessStateAdapter,
   createWorkerRunner,
   createProcessors,
@@ -73,14 +72,9 @@ await runDoubleRunBenchmark<Infra>({
       createInProcessStateAdapter(),
     );
 
-    const notifyAdapter = await step("After creating notify adapter", async () =>
-      createInProcessNotifyAdapter(),
-    );
-
     const setup = await step("After creating client + worker (with observability)", async () => {
       const client = createClient({
         stateAdapter,
-        notifyAdapter,
         observabilityAdapter,
         jobTypes,
       });
@@ -126,6 +120,5 @@ await runDoubleRunBenchmark<Infra>({
 
     await setup.stopWorkerRunner();
     await stateAdapter.close();
-    await notifyAdapter.close();
   },
 });

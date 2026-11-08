@@ -11,6 +11,19 @@ import {
   withTxHooks,
 } from "queuert";
 
+const noopAsync = async (): Promise<void> => {};
+const listenNothing = async (): Promise<() => Promise<void>> => noopAsync;
+
+export const noopNotifyAdapter: NotifyAdapter = {
+  notifyJobsScheduled: noopAsync,
+  listenJobScheduled: listenNothing,
+  notifyChainsCompleted: noopAsync,
+  listenChainCompleted: listenNothing,
+  notifyJobAttemptsLost: noopAsync,
+  listenJobAttemptLost: listenNothing,
+  close: noopAsync,
+};
+
 const WINDOW_MS = 2_000;
 const CREATE_BATCH_SIZE = 100;
 const SEED_COUNT = 40_000;

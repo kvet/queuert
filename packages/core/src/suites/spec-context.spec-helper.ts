@@ -4,6 +4,7 @@ import inspector from "node:inspector";
 import { type MockedFunction, type TestAPI, expect, vi } from "vitest";
 
 import { createInProcessNotifyAdapter } from "../notify-adapter/notify-adapter.in-process.ts";
+import { noopNotifyAdapter } from "../notify-adapter/notify-adapter.noop.spec-helper.ts";
 import type { NotifyAdapter } from "../notify-adapter/notify-adapter.ts";
 import { createConsoleLog } from "../observability-adapter/log.console.ts";
 import type { Log } from "../observability-adapter/log.ts";
@@ -17,7 +18,7 @@ export type TestSuiteContext = {
   stateAdapter: StateAdapter<{ $test: true }, string, string>;
   transactionConcurrency: "concurrent" | "serialized";
   generateJobId: () => string;
-  notifyAdapter: NotifyAdapter | undefined;
+  notifyAdapter: NotifyAdapter;
   withTransaction: <T>(cb: (txCtx: { $test: true }, txHooks: TxHooks) => Promise<T>) => Promise<T>;
   poisonTransaction: ((txCtx: { $test: true }) => Promise<void>) | undefined;
   withNonTransactionContext: <T>(fn: (txCtx: { $test: true }) => Promise<T>) => Promise<T>;
@@ -44,13 +45,23 @@ export const extendWithCommon = <
   T &
     Pick<
       TestSuiteContext,
-      "withTransaction" | "withWorkerRunners" | "log" | "observabilityAdapter" | "generateJobId"
+      | "withTransaction"
+      | "withWorkerRunners"
+      | "log"
+      | "observabilityAdapter"
+      | "generateJobId"
+      | "notifyAdapter"
     >
 > =>
   it.extend<
     Pick<
       TestSuiteContext,
-      "withTransaction" | "withWorkerRunners" | "log" | "observabilityAdapter" | "generateJobId"
+      | "withTransaction"
+      | "withWorkerRunners"
+      | "log"
+      | "observabilityAdapter"
+      | "generateJobId"
+      | "notifyAdapter"
     >
   >({
     generateJobId: [
@@ -104,6 +115,12 @@ export const extendWithCommon = <
       },
       { scope: "test" },
     ],
+    notifyAdapter: [
+      async ({}, use) => {
+        await use(noopNotifyAdapter);
+      },
+      { scope: "test" },
+    ],
   }) as any;
 
 export const extendWithNotifyInProcess = <T extends Record<string, unknown>>(
@@ -118,10 +135,6 @@ export const extendWithNotifyInProcess = <T extends Record<string, unknown>>(
     ],
     flakyNotifyAdapter: [
       async ({ notifyAdapter }, use) => {
-        if (!notifyAdapter) {
-          throw new Error("notifyAdapter is required for flaky notify tests");
-        }
-
         let totalCalls = 0;
         let errorCalls = 0;
         const shouldError = createFlakyBatchGenerator();
@@ -170,18 +183,6 @@ export const extendWithNotifyInProcess = <T extends Record<string, unknown>>(
         if (totalCalls > 5) {
           expect(errorCalls).toBeGreaterThan(0);
         }
-      },
-      { scope: "test" },
-    ],
-  }) as any;
-
-export const extendWithNotifyNoop = <T extends Record<string, unknown>>(
-  it: TestAPI<T>,
-): TestAPI<T & Pick<TestSuiteContext, "notifyAdapter">> =>
-  it.extend<Pick<TestSuiteContext, "notifyAdapter">>({
-    notifyAdapter: [
-      async ({}, use) => {
-        await use(undefined);
       },
       { scope: "test" },
     ],

@@ -10,7 +10,6 @@ import {
   createProcessors,
   defineJobTypes,
   withTxHooks,
-  createInProcessNotifyAdapter,
 } from "queuert";
 
 import { createDrizzlePgStateProvider } from "./provider.ts";
@@ -61,13 +60,7 @@ const stateAdapter = createPgStateAdapter({
 await stateAdapter.migrateToLatest();
 // #endregion
 
-const notifyAdapter = createInProcessNotifyAdapter();
-
-const client = createClient({
-  stateAdapter,
-  notifyAdapter,
-  jobTypes,
-});
+const client = createClient({ stateAdapter, jobTypes });
 const workerRunner = createWorkerRunner({
   client,
   processors: createProcessors({
@@ -120,6 +113,5 @@ console.log(`Welcome email sent at: ${result.output.sentAt}`);
 
 // Cleanup
 await stopWorkerRunner();
-await notifyAdapter.close();
 await stateAdapter.close();
 await db.$client.end();

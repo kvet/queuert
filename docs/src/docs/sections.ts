@@ -115,7 +115,6 @@ export const siteSections: SiteSection[] = [
           "integrations/notify-adapters/postgres",
           "integrations/notify-adapters/redis",
           "integrations/notify-adapters/nats",
-          "integrations/notify-adapters/in-process",
           "integrations/notify-adapters/custom",
         ],
       },

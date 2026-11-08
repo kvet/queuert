@@ -32,9 +32,10 @@ const setup = [
 const Page = () => (
   <>
     <p>
-      Throughput along two separate axes. When the state adapter varies, notify stays in-process;
-      when the notify adapter varies, state stays in-process. A deployment's steady-state throughput
-      is bounded by the lower of its creation and completion rates.
+      Throughput along two separate axes. When the state adapter varies, notify is a no-op, so only
+      the state adapter is measured; when the notify adapter varies, state stays in-process. A
+      deployment's steady-state throughput is bounded by the lower of its creation and completion
+      rates.
     </p>
     <KeyValueList title="Test setup" items={setup} />
     <h2 id="creation">Creation</h2>

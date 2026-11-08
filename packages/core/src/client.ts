@@ -691,7 +691,12 @@ export const createClient = <
 }: {
   /** Database adapter for job persistence. */
   stateAdapter: TStateAdapter;
-  /** Optional pub/sub adapter for real-time notifications. */
+  /**
+   * Pub/sub adapter that wakes workers and `awaitChain` callers when jobs are scheduled or chains
+   * complete. Defaults to an in-process adapter that reaches only the worker runners created from
+   * this client; pass a shared one (PostgreSQL, Redis, NATS) for workers in other processes, which
+   * otherwise poll.
+   */
   notifyAdapter?: NotifyAdapter;
   /** Optional adapter for metrics and tracing. */
   observabilityAdapter?: ObservabilityAdapter;

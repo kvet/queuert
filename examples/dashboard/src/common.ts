@@ -3,7 +3,7 @@ import { join } from "node:path";
 import { createAsyncRwLock, createSqliteStateAdapter } from "@queuert/sqlite";
 import Database from "better-sqlite3";
 import { createBetterSqlite3StateProvider } from "example-state-sqlite-better-sqlite3/provider";
-import { createClient, createInProcessNotifyAdapter } from "queuert";
+import { createClient } from "queuert";
 
 import { createIdGenerator, jobTypes } from "./scenarios.ts";
 
@@ -35,8 +35,4 @@ export const withTransaction = async <T>(
   }
 };
 
-// #region in-process-notify
-export const notifyAdapter = createInProcessNotifyAdapter();
-// #endregion
-
-export const client = createClient({ stateAdapter, notifyAdapter, jobTypes });
+export const client = createClient({ stateAdapter, jobTypes });

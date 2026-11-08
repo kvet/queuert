@@ -1,10 +1,9 @@
 import { describe, expect, test } from "vitest";
 
 import { type TxHooks, createTxHooks } from "../tx-hooks/tx-hooks.ts";
-import { createNoopNotifyAdapter } from "./notify-adapter.noop.ts";
+import { noopNotifyAdapter } from "./notify-adapter.noop.spec-helper.ts";
 import { createSpyNotifyAdapter } from "./notify-adapter.spy.spec-helper.ts";
 import type { NotifyAdapter } from "./notify-adapter.ts";
-import { createNoopNotifyHelper } from "./notify-helper.noop.ts";
 import { type NotifyHelper, createNotifyHelper } from "./notify-helper.ts";
 
 const bufferNotifyAll = (txHooks: TxHooks, notifyHelper: NotifyHelper, id: string): void => {
@@ -30,7 +29,7 @@ const failingAdapter = (): NotifyAdapter => {
 
 describe("notify helper", () => {
   test("flushes buffered notifications in one call per kind", async () => {
-    const notifyAdapter = createSpyNotifyAdapter(createNoopNotifyAdapter());
+    const notifyAdapter = createSpyNotifyAdapter(noopNotifyAdapter);
     const notifyHelper = createNotifyHelper({ adapter: notifyAdapter });
     const { txHooks, flush } = createTxHooks();
 
@@ -47,7 +46,7 @@ describe("notify helper", () => {
   });
 
   test("merges batches from several calls into one adapter call without duplicates", async () => {
-    const notifyAdapter = createSpyNotifyAdapter(createNoopNotifyAdapter());
+    const notifyAdapter = createSpyNotifyAdapter(noopNotifyAdapter);
     const notifyHelper = createNotifyHelper({ adapter: notifyAdapter });
     const { txHooks, flush } = createTxHooks();
 
@@ -62,7 +61,7 @@ describe("notify helper", () => {
   });
 
   test("merges notifications of transactions that flush together into one adapter call", async () => {
-    const notifyAdapter = createSpyNotifyAdapter(createNoopNotifyAdapter());
+    const notifyAdapter = createSpyNotifyAdapter(noopNotifyAdapter);
     const notifyHelper = createNotifyHelper({ adapter: notifyAdapter });
     const first = createTxHooks();
     const second = createTxHooks();
@@ -78,7 +77,7 @@ describe("notify helper", () => {
   });
 
   test("registers no tx hooks for an empty batch", () => {
-    const notifyHelper = createNotifyHelper({ adapter: createNoopNotifyAdapter() });
+    const notifyHelper = createNotifyHelper({ adapter: noopNotifyAdapter });
     const registered: (() => void | Promise<void>)[] = [];
     const recordingTxHooks: Pick<TxHooks, "onCommit"> = {
       onCommit: (callback) => {
@@ -94,7 +93,7 @@ describe("notify helper", () => {
   });
 
   test("savepoint rollback drops notifications buffered in scope", async () => {
-    const notifyAdapter = createSpyNotifyAdapter(createNoopNotifyAdapter());
+    const notifyAdapter = createSpyNotifyAdapter(noopNotifyAdapter);
     const notifyHelper = createNotifyHelper({ adapter: notifyAdapter });
     const { txHooks, flush } = createTxHooks();
 
@@ -113,7 +112,7 @@ describe("notify helper", () => {
   });
 
   test("does not call the notify adapter when every notification was rolled back", async () => {
-    const notifyAdapter = createSpyNotifyAdapter(createNoopNotifyAdapter());
+    const notifyAdapter = createSpyNotifyAdapter(noopNotifyAdapter);
     const notifyHelper = createNotifyHelper({ adapter: notifyAdapter });
     const { txHooks, flush } = createTxHooks();
 
@@ -143,23 +142,5 @@ describe("notify helper", () => {
       undefined,
       undefined,
     ]);
-  });
-});
-
-describe("noop notify helper", () => {
-  test("registers no tx hooks", () => {
-    const notifyHelper = createNoopNotifyHelper();
-    const registered: (() => void | Promise<void>)[] = [];
-    const recordingTxHooks: Pick<TxHooks, "onCommit"> = {
-      onCommit: (callback) => {
-        registered.push(callback);
-      },
-    };
-
-    notifyHelper.notifyJobsScheduled(recordingTxHooks, ["type-a"]);
-    notifyHelper.notifyChainsCompleted(recordingTxHooks, ["chain-a"]);
-    notifyHelper.notifyJobAttemptsLost(recordingTxHooks, ["a"]);
-
-    expect(registered).toEqual([]);
   });
 });

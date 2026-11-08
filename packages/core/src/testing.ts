@@ -22,7 +22,6 @@ export { workerlessCompletionTestSuite } from "./suites/workerless-completion.te
 export {
   extendWithCommon,
   extendWithNotifyInProcess,
-  extendWithNotifyNoop,
   extendWithResourceLeakDetection,
   type TestSuiteContext,
 } from "./suites/spec-context.spec-helper.ts";
@@ -33,6 +32,7 @@ export {
   createSeededRandom,
 } from "./suites/flaky-test-helper.spec-helper.ts";
 
+export { createInProcessNotifyAdapter } from "./notify-adapter/notify-adapter.in-process.ts";
 export { extendWithStateInProcess } from "./state-adapter/state-adapter.in-process.spec-helper.ts";
 export {
   createSpyStateAdapter,

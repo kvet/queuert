@@ -11,7 +11,7 @@ import { createServer } from "node:http";
 
 import { createDashboard } from "@queuert/dashboard";
 
-import { client, db, notifyAdapter, stateAdapter } from "./common.ts";
+import { client, db, stateAdapter } from "./common.ts";
 
 const PORT = 3334;
 
@@ -81,7 +81,6 @@ server.listen(PORT, () => {
 process.on("SIGINT", () => {
   void (async () => {
     server.close();
-    await notifyAdapter.close();
     await stateAdapter.close();
     db.close();
     process.exit(0);

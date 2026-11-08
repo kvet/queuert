@@ -9,7 +9,6 @@ import { createDrizzlePgStateProvider } from "example-state-postgres-drizzle/pro
 import { Pool } from "pg";
 import {
   createClient,
-  createInProcessNotifyAdapter,
   createWorkerRunner,
   createProcessors,
   defineJobTypes,
@@ -34,7 +33,6 @@ const stateAdapter = createPgStateAdapter({
   stateProvider: createDrizzlePgStateProvider({ db }),
 });
 await stateAdapter.migrateToLatest();
-const notifyAdapter = createInProcessNotifyAdapter();
 
 const provisionAccount = async (userId: string): Promise<string> => {
   console.log(`Provisioning an account for user ${userId}`);
@@ -64,7 +62,7 @@ const jobTypes = defineJobTypes<{
     output: { syncedAt: string };
   };
 }>();
-const client = createClient({ stateAdapter, notifyAdapter, jobTypes });
+const client = createClient({ stateAdapter, jobTypes });
 // #endregion
 
 // #region process
@@ -150,6 +148,5 @@ const result = await client.awaitChain(chain, { timeoutMs: 10_000 });
 console.log(`Onboarding finished, synced to the CRM at ${result.output.syncedAt}`);
 
 await stop();
-await notifyAdapter.close();
 await stateAdapter.close();
 await pool.end();

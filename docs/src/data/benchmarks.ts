@@ -3,7 +3,7 @@ import type { KeyValueItem } from "../components/KeyValueList.tsx";
 
 export const creationGroups = [
   {
-    label: "State adapter (in-process notify)",
+    label: "State adapter (noop notify)",
     rows: [
       { label: "In-process", values: [96052, 208109] },
       { label: "SQLite (better-sqlite3)", values: [27343, 89788] },
@@ -27,7 +27,7 @@ export const creationGroups = [
 
 export const completionGroups = [
   {
-    label: "State adapter (in-process notify)",
+    label: "State adapter (noop notify)",
     rows: [
       { label: "In-process", values: [5469, 5640, 5986] },
       { label: "SQLite (better-sqlite3)", values: [4787, 6191, 9312] },
@@ -393,7 +393,7 @@ const allValues = (groups: BenchGroup[], series: number) =>
 export const benchmarkHeadlines = {
   postgresCompletion: rowValues(
     completionGroups,
-    "State adapter (in-process notify)",
+    "State adapter (noop notify)",
     "PostgreSQL (pg)",
   )[2],
   sqliteCompletion: Math.max(

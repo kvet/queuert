@@ -7,7 +7,6 @@ import {
   deduplicationTestSuite,
   deletionTestSuite,
   extendWithCommon,
-  extendWithNotifyNoop,
   extendWithResourceLeakDetection,
   rescheduleJobTestSuite,
   schedulingTestSuite,
@@ -19,9 +18,7 @@ import { describe, it } from "vitest";
 
 import { extendWithStateSqlite } from "./state-adapter.sqlite.spec-helper.ts";
 
-const sqliteNoopIt = extendWithResourceLeakDetection(
-  extendWithNotifyNoop(extendWithCommon(extendWithStateSqlite(it))),
-);
+const sqliteNoopIt = extendWithResourceLeakDetection(extendWithCommon(extendWithStateSqlite(it)));
 
 // NOTE: hack for vitest plugin
 it("index");

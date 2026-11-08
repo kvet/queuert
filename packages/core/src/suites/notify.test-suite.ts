@@ -4,7 +4,6 @@ import { type TestAPI, expect } from "vitest";
 import { createClient } from "../client.ts";
 import { createProcessors } from "../job-type-processors/create-job-type-processors.ts";
 import { defineJobTypes } from "../job-types/define-job-types.ts";
-import { createNoopNotifyAdapter } from "../notify-adapter/notify-adapter.noop.ts";
 import { createSpyNotifyAdapter } from "../notify-adapter/notify-adapter.spy.spec-helper.ts";
 import { createWorkerRunner } from "../worker-runner.ts";
 import type { TestSuiteContext } from "./spec-context.spec-helper.ts";
@@ -82,7 +81,7 @@ export const notifyTestSuite = ({ it }: { it: TestAPI<TestSuiteContext> }): void
       second: { entry: true; input: null; output: null };
     }>();
 
-    const spyNotifyAdapter = createSpyNotifyAdapter(notifyAdapter ?? createNoopNotifyAdapter());
+    const spyNotifyAdapter = createSpyNotifyAdapter(notifyAdapter);
     const client = createClient({
       stateAdapter,
       notifyAdapter: spyNotifyAdapter,
@@ -132,9 +131,9 @@ export const notifyTestSuite = ({ it }: { it: TestAPI<TestSuiteContext> }): void
         },
       },
       notifyAdapter: {
-        ...notifyAdapter!,
+        ...notifyAdapter,
         listenJobScheduled: async (typeNames, onNotification) => {
-          const dispose = await notifyAdapter!.listenJobScheduled(typeNames, onNotification);
+          const dispose = await notifyAdapter.listenJobScheduled(typeNames, onNotification);
           listeningCount++;
           return async () => {
             listeningCount--;
@@ -191,7 +190,7 @@ export const notifyTestSuite = ({ it }: { it: TestAPI<TestSuiteContext> }): void
       test: { entry: true; input: null; output: null };
     }>();
 
-    const spyNotifyAdapter = createSpyNotifyAdapter(notifyAdapter ?? createNoopNotifyAdapter());
+    const spyNotifyAdapter = createSpyNotifyAdapter(notifyAdapter);
     const client = createClient({
       stateAdapter,
       notifyAdapter: spyNotifyAdapter,

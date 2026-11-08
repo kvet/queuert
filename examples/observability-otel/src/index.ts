@@ -14,7 +14,6 @@
 
 import {
   createClient,
-  createInProcessNotifyAdapter,
   createInProcessStateAdapter,
   createWorkerRunner,
   createProcessors,
@@ -143,12 +142,10 @@ const jobTypes = defineJobTypes<{
 
 // Create adapters
 const stateAdapter = createInProcessStateAdapter();
-const notifyAdapter = createInProcessNotifyAdapter();
 
 // #region client
 const client = createClient({
   stateAdapter,
-  notifyAdapter,
   observabilityAdapter,
   jobTypes,
 });
@@ -450,7 +447,6 @@ if (approvalResult.status === "completed") {
 
 // Cleanup
 await stopWorkerRunner();
-await notifyAdapter.close();
 await stateAdapter.close();
 console.log("\nFlushing telemetry...");
 await flush();

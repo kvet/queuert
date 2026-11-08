@@ -223,7 +223,7 @@ const wrapInScenario = (defs: JobTypeDef[], middlewareCount = 1): string => {
   const mwList = middlewareList(middlewareCount);
   const mwPart = mwList ? `attemptMiddleware: [${mwList}], ` : "";
 
-  return `import { defineJobTypes, createProcessors, createWorkerRunner, createClient, withTxHooks, type AttemptMiddleware, createInProcessStateAdapter, createInProcessNotifyAdapter } from "queuert";
+  return `import { defineJobTypes, createProcessors, createWorkerRunner, createClient, withTxHooks, type AttemptMiddleware, createInProcessStateAdapter } from "queuert";
 
 type Defs = {
 ${typeStrings.join("\n")}
@@ -232,13 +232,8 @@ ${typeStrings.join("\n")}
 const jobTypes = defineJobTypes<Defs>();
 
 const stateAdapter = createInProcessStateAdapter();
-const notifyAdapter = createInProcessNotifyAdapter();
 
-const client = createClient({
-  stateAdapter,
-  notifyAdapter,
-  jobTypes,
-});
+const client = createClient({ stateAdapter, jobTypes });
 
 ${middleware}
 const workerRunner = createWorkerRunner({
@@ -280,17 +275,12 @@ const ${slice.name}Registry = defineJobTypes<${slice.name}Defs>();`;
   const clientCalls = generateClientCalls(allDefs);
   const middleware = generateMiddleware(middlewareCount);
 
-  return `import { defineJobTypes, createProcessors, createWorkerRunner, createClient, withTxHooks, type AttemptMiddleware, createInProcessStateAdapter, createInProcessNotifyAdapter } from "queuert";
+  return `import { defineJobTypes, createProcessors, createWorkerRunner, createClient, withTxHooks, type AttemptMiddleware, createInProcessStateAdapter } from "queuert";
 ${sliceTypeDecls.join("\n")}
 
 const stateAdapter = createInProcessStateAdapter();
-const notifyAdapter = createInProcessNotifyAdapter();
 
-const client = createClient({
-  stateAdapter,
-  notifyAdapter,
-  jobTypes: [${registryNames.join(", ")}],
-});
+const client = createClient({ stateAdapter, jobTypes: [${registryNames.join(", ")}] });
 
 ${middleware}
 ${sliceProcessorDecls.join("\n")}

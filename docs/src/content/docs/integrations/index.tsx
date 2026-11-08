@@ -18,7 +18,7 @@ const kinds = [
     title: "Notify adapters",
     href: "/queuert/integrations/notify-adapters/",
     description:
-      "Optional. Wake workers the moment a job is scheduled, and callers awaiting a chain the moment it completes. Without one, workers poll.",
+      "Optional. Wake workers the moment a job is scheduled, and callers awaiting a chain the moment it completes. Without one, the client wakes only its own worker runners; workers in other processes poll.",
   },
   {
     title: "Validation",

@@ -23,7 +23,7 @@ Abstracts database operations for job persistence. The adapter handles job creat
 
 ### Notify Adapter
 
-Handles pub/sub notifications for efficient job scheduling. When a job is created, workers are notified immediately instead of polling. This reduces latency from seconds to milliseconds. Without one, workers poll. Some adapters run through a notify provider you implement for your pub/sub client, for publishing messages and subscribing to channels. See [Notify Adapters](/queuert/integrations/notify-adapters/) for the available backends, and the notify provider for [PostgreSQL](/queuert/integrations/notify-adapters/postgres/#notify-provider) or [Redis](/queuert/integrations/notify-adapters/redis/#notify-provider).
+Handles pub/sub notifications for efficient job scheduling. When a job is created, workers are notified immediately instead of polling. This reduces latency from seconds to milliseconds. Without one, the client wakes only its own worker runners and workers in other processes poll (see [Without a notify adapter](/queuert/integrations/notify-adapters/#default)). Some adapters run through a notify provider you implement for your pub/sub client, for publishing messages and subscribing to channels. See [Notify Adapters](/queuert/integrations/notify-adapters/) for the available backends, and the notify provider for [PostgreSQL](/queuert/integrations/notify-adapters/postgres/#notify-provider) or [Redis](/queuert/integrations/notify-adapters/redis/#notify-provider).
 
 ### Worker Runner
 

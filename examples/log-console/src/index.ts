@@ -1,7 +1,6 @@
 import {
   createClient,
   createConsoleLog,
-  createInProcessNotifyAdapter,
   createInProcessStateAdapter,
   createWorkerRunner,
   createProcessors,
@@ -25,13 +24,11 @@ const jobTypes = defineJobTypes<{
 
 // Create adapters with console logging
 const stateAdapter = createInProcessStateAdapter();
-const notifyAdapter = createInProcessNotifyAdapter();
 // #region client
 const log = createConsoleLog();
 
 const client = createClient({
   stateAdapter,
-  notifyAdapter,
   log,
   jobTypes,
 });
@@ -111,5 +108,4 @@ await client.awaitChain(failThenSucceedChain, { timeoutMs: 5000 });
 
 // Cleanup
 await stopWorkerRunner();
-await notifyAdapter.close();
 await stateAdapter.close();

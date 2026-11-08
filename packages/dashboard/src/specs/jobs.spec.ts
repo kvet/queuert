@@ -1,9 +1,5 @@
-import {
-  createClient,
-  createInProcessNotifyAdapter,
-  createInProcessStateAdapter,
-  defineJobTypes,
-} from "queuert";
+import { createClient, createInProcessStateAdapter, defineJobTypes } from "queuert";
+import { createInProcessNotifyAdapter } from "queuert/testing";
 import { describe, expect, it } from "vitest";
 
 import { createDashboard } from "../api/dashboard.ts";

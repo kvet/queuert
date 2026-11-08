@@ -3,7 +3,6 @@ import {
   type Client,
   type InProcessStateAdapter,
   createClient,
-  createInProcessNotifyAdapter,
   createInProcessStateAdapter,
 } from "queuert";
 
@@ -28,11 +27,7 @@ export const seedDashboardDemo = async (): Promise<{
     generateJobId: generateId,
     generateWorkerId: generateId,
   });
-  const client = createClient({
-    stateAdapter,
-    notifyAdapter: createInProcessNotifyAdapter(),
-    jobTypes,
-  });
+  const client = createClient({ stateAdapter, jobTypes });
 
   const { orderChain, blockerChain, retryChain, liveWorkerId } = await populateScenarios({
     client,

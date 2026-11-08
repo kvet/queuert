@@ -6,13 +6,7 @@ import { createPgStateAdapter } from "@queuert/postgres";
 import { PostgreSqlContainer } from "@testcontainers/postgresql";
 import { createPostgresJsStateProvider } from "example-state-postgres-postgres-js/provider";
 import postgres from "postgres";
-import {
-  createClient,
-  createInProcessNotifyAdapter,
-  createWorkerRunner,
-  createProcessors,
-  withTxHooks,
-} from "queuert";
+import { createClient, createWorkerRunner, createProcessors, withTxHooks } from "queuert";
 
 import {
   createCompletionCounter,
@@ -59,10 +53,6 @@ await runDoubleRunBenchmark<Infra>({
   runLifecycle: async ({ stateProvider }, { step, processStep, jobCount }) => {
     const completions = createCompletionCounter(jobCount);
 
-    const notifyAdapter = await step("After creating notify adapter", async () =>
-      createInProcessNotifyAdapter(),
-    );
-
     const stateAdapter = await step("After creating state adapter (with migrations)", async () => {
       const adapter = createPgStateAdapter({ stateProvider, schema: "public" });
       await adapter.migrateToLatest();
@@ -70,7 +60,7 @@ await runDoubleRunBenchmark<Infra>({
     });
 
     const setup = await step("After creating client + worker", async () => {
-      const client = createClient({ stateAdapter, notifyAdapter, jobTypes });
+      const client = createClient({ stateAdapter, jobTypes });
       const workerRunner = createWorkerRunner({
         client,
         processors: createProcessors({
@@ -113,6 +103,5 @@ await runDoubleRunBenchmark<Infra>({
 
     await setup.stopWorkerRunner();
     await stateAdapter.close();
-    await notifyAdapter.close();
   },
 });

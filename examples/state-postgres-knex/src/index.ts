@@ -3,7 +3,6 @@ import { acquirePostgres } from "@queuert/testcontainers";
 import knexFactory from "knex";
 import {
   createClient,
-  createInProcessNotifyAdapter,
   createWorkerRunner,
   createProcessors,
   defineJobTypes,
@@ -49,13 +48,7 @@ const stateAdapter = createPgStateAdapter({
 await stateAdapter.migrateToLatest();
 // #endregion
 
-const notifyAdapter = createInProcessNotifyAdapter();
-
-const client = createClient({
-  stateAdapter,
-  notifyAdapter,
-  jobTypes,
-});
+const client = createClient({ stateAdapter, jobTypes });
 
 // Create worker runner with job type processors
 const workerRunner = createWorkerRunner({
@@ -115,6 +108,5 @@ console.log(`Welcome email sent at: ${result.output.sentAt}`);
 
 // Cleanup
 await stopWorkerRunner();
-await notifyAdapter.close();
 await stateAdapter.close();
 await knex.destroy();

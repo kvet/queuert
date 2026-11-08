@@ -13,7 +13,8 @@ const Page = () => (
       Each example implements the state provider for one driver or ORM in{" "}
       <code>src/provider.ts</code>, then creates a chain and completes its job inside application
       transactions in <code>src/index.ts</code>. Pick the one that matches your stack and copy its
-      provider. Notifications use the in-process notify adapter throughout.
+      provider. The examples pass no notify adapter, so the client wakes its own worker runner in
+      memory.
     </p>
     <h2 id="postgresql">PostgreSQL</h2>
     <p>

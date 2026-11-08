@@ -5,6 +5,7 @@ import { createClient } from "../client.ts";
 import { ChainNotFoundError, JobAlreadyCompletedError } from "../errors.ts";
 import { createProcessors } from "../job-type-processors/create-job-type-processors.ts";
 import { defineJobTypes } from "../job-types/define-job-types.ts";
+import { noopNotifyAdapter } from "../notify-adapter/notify-adapter.noop.spec-helper.ts";
 import { createSpyStateAdapter } from "../state-adapter/state-adapter.spy.spec-helper.ts";
 import { type TxHooks, withTxHooks } from "../tx-hooks/tx-hooks.ts";
 import { createWorkerRunner } from "../worker-runner.ts";
@@ -1366,7 +1367,7 @@ export const processTestSuite = ({ it }: { it: TestAPI<TestSuiteContext> }): voi
     log,
     skip,
   }) => {
-    if (!notifyAdapter) return skip();
+    if (notifyAdapter === noopNotifyAdapter) return skip();
 
     const jobTypes = defineJobTypes<{
       test: { entry: true; input: null; output: { by: string } };
@@ -1430,7 +1431,7 @@ export const processTestSuite = ({ it }: { it: TestAPI<TestSuiteContext> }): voi
     log,
     skip,
   }) => {
-    if (!notifyAdapter) return skip();
+    if (notifyAdapter === noopNotifyAdapter) return skip();
 
     const jobTypes = defineJobTypes<{
       test: { entry: true; input: null; output: null };

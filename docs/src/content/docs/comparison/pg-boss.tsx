@@ -109,8 +109,8 @@ const Page = () => (
         (default 2s) unless you enable <code>useListenNotify</code> and <code>notify</code> on a
         queue; it then wakes on <code>LISTEN/NOTIFY</code> and keeps a slower poll as a backstop.
         With a notify adapter — <code>LISTEN/NOTIFY</code>, Redis, or NATS — Queuert workers wake
-        when a row commits, typically within tens of milliseconds; without one they poll, every 60 s
-        by default.
+        when a row commits, typically within tens of milliseconds; without one, workers in other
+        processes poll, every 60 s by default.
       </li>
       <li>
         <strong>Failure shape.</strong> In pg-boss, final failure routes the job to a dead-letter
