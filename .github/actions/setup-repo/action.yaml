@@ -25,6 +25,11 @@ runs:
         node-version-file: ${{ inputs.node-version == '' && '.nvmrc' || '' }}
         registry-url: ${{ inputs.registry-url || '' }}
 
+    - name: Install Bun
+      uses: oven-sh/setup-bun@v2
+      with:
+        bun-version-file: .bun-version
+
     - name: Install dependencies
       shell: bash
       run: pnpm install --frozen-lockfile

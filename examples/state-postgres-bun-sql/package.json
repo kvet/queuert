@@ -24,7 +24,6 @@
     "@queuert/tsconfig": "workspace:*",
     "@queuert/typed-sql": "workspace:*",
     "@types/bun": "1.4.4",
-    "bun": "1.4.4",
     "queuert": "workspace:*"
   }
 }
