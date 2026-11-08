@@ -5,13 +5,8 @@
 import { metrics } from "@opentelemetry/api";
 import { MeterProvider, PeriodicExportingMetricReader } from "@opentelemetry/sdk-metrics";
 import { createOtelObservabilityAdapter } from "@queuert/otel";
-import {
-  createClient,
-  createInProcessStateAdapter,
-  createWorkerRunner,
-  createProcessors,
-  withTxHooks,
-} from "queuert";
+import { createClient, createWorkerRunner, createProcessors, withTxHooks } from "queuert";
+import { createInProcessStateAdapter } from "queuert/internal";
 
 import {
   createCompletionCounter,

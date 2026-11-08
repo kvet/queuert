@@ -37,17 +37,6 @@ const adapters: OptionCard[] = [
     action: { label: "SQLite state adapter", href: "/integrations/state-adapters/sqlite/" },
   },
   {
-    name: "In-process",
-    status: { label: "built-in", tone: "default" },
-    pick: "All state is held in memory and lost on process exit. For tests and single-process apps.",
-    facts: [
-      { label: "Package", value: "queuert" },
-      { label: "Clients", value: "none" },
-      { label: "Scope", value: "one process" },
-    ],
-    action: { label: "In-process state adapter", href: "/integrations/state-adapters/in-process/" },
-  },
-  {
     name: "Custom",
     pick: "A StateAdapter of your own, for another database engine.",
     facts: [

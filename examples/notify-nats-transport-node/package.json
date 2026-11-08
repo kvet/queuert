@@ -18,8 +18,12 @@
   "devDependencies": {
     "@nats-io/transport-node": "3.4.0",
     "@queuert/nats": "workspace:*",
+    "@queuert/sqlite": "workspace:*",
     "@queuert/testcontainers": "workspace:*",
     "@queuert/tsconfig": "workspace:*",
+    "@types/better-sqlite3": "9.6.0",
+    "better-sqlite3": "13.0.3",
+    "example-state-sqlite-better-sqlite3": "workspace:*",
     "queuert": "workspace:*"
   }
 }

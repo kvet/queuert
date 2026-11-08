@@ -615,12 +615,8 @@ class JobIndex {
 /** Transaction context for the in-process state adapter. */
 export type InProcessContext = { inTransaction?: boolean; journal?: JournalEntry[] };
 
-/** State adapter backed by in-memory data structures. Suitable for testing and single-process deployments without persistence. */
 export type InProcessStateAdapter = StateAdapter<InProcessContext, string, string>;
 
-/**
- * @param options - Optional ID generation, validation, and limit overrides.
- */
 export const createInProcessStateAdapter = ({
   generateJobId: generateJobIdOption,
   validateJobId: validateJobIdOption,

@@ -1,4 +1,4 @@
-import { createInProcessStateAdapter } from "queuert";
+import { createInProcessStateAdapter } from "queuert/internal";
 
 import { noopNotifyAdapter, runBenchmark } from "./utils.ts";
 

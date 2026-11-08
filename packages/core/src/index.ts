@@ -55,11 +55,6 @@ export { type Log } from "./observability-adapter/log.ts";
 export { type ObservabilityAdapter } from "./observability-adapter/observability-adapter.ts";
 export { type OrderDirection, type Page } from "./entities/pagination.ts";
 export {
-  createInProcessStateAdapter,
-  type InProcessContext,
-  type InProcessStateAdapter,
-} from "./state-adapter/state-adapter.in-process.ts";
-export {
   type BaseTxContext,
   type StateAdapter,
   type StateAdapterConfig,

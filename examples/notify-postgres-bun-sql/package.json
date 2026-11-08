@@ -20,9 +20,11 @@
   },
   "devDependencies": {
     "@queuert/postgres": "workspace:*",
+    "@queuert/sqlite": "workspace:*",
     "@queuert/testcontainers": "workspace:*",
     "@queuert/tsconfig": "workspace:*",
     "@types/bun": "1.4.4",
+    "example-state-sqlite-bun-sql": "workspace:*",
     "queuert": "workspace:*"
   }
 }

@@ -10,11 +10,11 @@
 import {
   type JobTypes,
   createClient,
-  createInProcessStateAdapter,
   createProcessors,
   createWorkerRunner,
   withTxHooks,
 } from "queuert";
+import { createInProcessStateAdapter } from "queuert/internal";
 
 import { createCompletionCounter, printHeader, runDoubleRunBenchmark } from "./utils.ts";
 

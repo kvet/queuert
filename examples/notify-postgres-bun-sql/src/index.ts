@@ -1,13 +1,14 @@
 import { createPgNotifyAdapter } from "@queuert/postgres";
+import { createAsyncRwLock, createSqliteStateAdapter } from "@queuert/sqlite";
 import { acquirePostgres } from "@queuert/testcontainers";
 import { SQL } from "bun";
+import { createBunSqlSqliteStateProvider } from "example-state-sqlite-bun-sql/provider";
 import {
   createClient,
   createWorkerRunner,
   createProcessors,
   defineJobTypes,
   withTxHooks,
-  createInProcessStateAdapter,
 } from "queuert";
 
 import { createBunSqlNotifyProvider } from "./provider.ts";
@@ -26,7 +27,11 @@ const jobTypes = defineJobTypes<{
 }>();
 
 // Create the state adapter
-const stateAdapter = createInProcessStateAdapter();
+const sqlite = new SQL("sqlite://:memory:");
+const stateAdapter = createSqliteStateAdapter({
+  stateProvider: createBunSqlSqliteStateProvider({ sql: sqlite, lock: createAsyncRwLock() }),
+});
+await stateAdapter.migrateToLatest();
 
 // #region setup
 // Create Bun.SQL connection
@@ -106,9 +111,10 @@ console.log(`Report ready! ID: ${result.output.reportId}, Rows: ${result.output.
 
 // Cleanup
 await stopWorkerRunner();
+await stateAdapter.close();
+await sqlite.close();
 // #region cleanup
 await notifyAdapter.close();
-await stateAdapter.close();
 await sql.close();
 // #endregion
 console.log("Done!");

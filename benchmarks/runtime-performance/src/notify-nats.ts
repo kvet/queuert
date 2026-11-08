@@ -5,13 +5,8 @@
 import { type NatsConnection, connect } from "@nats-io/transport-node";
 import { createNatsNotifyAdapter } from "@queuert/nats";
 import { NatsContainer } from "@testcontainers/nats";
-import {
-  createClient,
-  createInProcessStateAdapter,
-  createWorkerRunner,
-  createProcessors,
-  withTxHooks,
-} from "queuert";
+import { createClient, createWorkerRunner, createProcessors, withTxHooks } from "queuert";
+import { createInProcessStateAdapter } from "queuert/internal";
 
 import {
   createCompletionCounter,

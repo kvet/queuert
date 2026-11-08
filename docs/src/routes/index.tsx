@@ -94,7 +94,6 @@ const integrations: {
     items: [
       { label: "PostgreSQL", href: "/integrations/state-adapters/postgres/" },
       { label: "SQLite", href: "/integrations/state-adapters/sqlite/" },
-      { label: "in-process", href: "/integrations/state-adapters/in-process/" },
     ],
     href: "/integrations/state-adapters/",
     customAdapter: true,

@@ -12,9 +12,11 @@
  * 6. Workerless Completion: Job completed externally → CONSUMER job span without attempt spans
  */
 
+import { createAsyncRwLock, createSqliteStateAdapter } from "@queuert/sqlite";
+import Database from "better-sqlite3";
+import { createBetterSqlite3StateProvider } from "example-state-sqlite-better-sqlite3/provider";
 import {
   createClient,
-  createInProcessStateAdapter,
   createWorkerRunner,
   createProcessors,
   defineJobTypes,
@@ -141,7 +143,11 @@ const jobTypes = defineJobTypes<{
 }>();
 
 // Create adapters
-const stateAdapter = createInProcessStateAdapter();
+const db = new Database(":memory:");
+const stateAdapter = createSqliteStateAdapter({
+  stateProvider: createBetterSqlite3StateProvider({ db, lock: createAsyncRwLock() }),
+});
+await stateAdapter.migrateToLatest();
 
 // #region client
 const client = createClient({
@@ -448,6 +454,7 @@ if (approvalResult.status === "completed") {
 // Cleanup
 await stopWorkerRunner();
 await stateAdapter.close();
+db.close();
 console.log("\nFlushing telemetry...");
 await flush();
 await shutdown();

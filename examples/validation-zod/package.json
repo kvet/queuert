@@ -12,6 +12,10 @@
     "typecheck": "tsc --noEmit"
   },
   "dependencies": {
+    "@queuert/sqlite": "workspace:*",
+    "@types/better-sqlite3": "9.6.0",
+    "better-sqlite3": "13.0.3",
+    "example-state-sqlite-better-sqlite3": "workspace:*",
     "queuert": "workspace:*",
     "zod": "4.6.7"
   },

@@ -1,10 +1,7 @@
-import {
-  createClient,
-  createInProcessStateAdapter,
-  createWorkerRunner,
-  createProcessors,
-  withTxHooks,
-} from "queuert";
+import { createAsyncRwLock, createSqliteStateAdapter } from "@queuert/sqlite";
+import Database from "better-sqlite3";
+import { createBetterSqlite3StateProvider } from "example-state-sqlite-better-sqlite3/provider";
+import { createClient, createWorkerRunner, createProcessors, withTxHooks } from "queuert";
 import { runValidationAdapterConformance } from "queuert/conformance";
 import { expect, test } from "vitest";
 import { z } from "zod";
@@ -25,9 +22,20 @@ const buildJobTypes = () =>
     },
   });
 
+const createStateAdapter = async () => {
+  const stateAdapter = createSqliteStateAdapter({
+    stateProvider: createBetterSqlite3StateProvider({
+      db: new Database(":memory:"),
+      lock: createAsyncRwLock(),
+    }),
+  });
+  await stateAdapter.migrateToLatest();
+  return stateAdapter;
+};
+
 test("stores the encoded form and hands the runtime form to readers", async () => {
   const jobTypes = buildJobTypes();
-  const stateAdapter = createInProcessStateAdapter();
+  const stateAdapter = await createStateAdapter();
   const client = createClient({ stateAdapter, jobTypes });
 
   const sendAt = new Date("2024-06-01T09:00:00.000Z");
@@ -48,7 +56,7 @@ test("stores the encoded form and hands the runtime form to readers", async () =
 
 test("round-trips a Date through the worker and back out of a client read", async () => {
   const jobTypes = buildJobTypes();
-  const stateAdapter = createInProcessStateAdapter();
+  const stateAdapter = await createStateAdapter();
   const client = createClient({ stateAdapter, jobTypes });
 
   const sentAt = new Date("2024-07-04T12:00:00.000Z");
@@ -123,7 +131,7 @@ test("validates structural blockers against the runtime form", async () => {
       blockers: z.array(z.object({ input: z.object({ sendAt: z.date() }) })),
     },
   });
-  const stateAdapter = createInProcessStateAdapter();
+  const stateAdapter = await createStateAdapter();
   const client = createClient({ stateAdapter, jobTypes });
 
   const digest = await withTxHooks(async (txHooks) =>

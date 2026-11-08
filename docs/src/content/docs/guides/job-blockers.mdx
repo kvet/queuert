@@ -113,6 +113,6 @@ The first example uses **nominal references** — `{ typeName: "fetch-data" }`. 
 
 ## Blocker Limit
 
-A single job may declare at most **100** blocker chains by default. Declaring more throws [`BlockerLimitExceededError`](/queuert/api/core/classes/blockerlimitexceedederror/) before any state is written. The limit belongs to the state adapter — pass `maxBlockersPerJob` to `createPgStateAdapter`, `createSqliteStateAdapter`, or `createInProcessStateAdapter` to raise or lower it. Keep it bounded: the blocker model is built for fan-in of a bounded set of dependencies, not millions per job.
+A single job may declare at most **100** blocker chains by default. Declaring more throws [`BlockerLimitExceededError`](/queuert/api/core/classes/blockerlimitexceedederror/) before any state is written. The limit belongs to the state adapter — pass `maxBlockersPerJob` to `createPgStateAdapter` or `createSqliteStateAdapter` to raise or lower it. Keep it bounded: the blocker model is built for fan-in of a bounded set of dependencies, not millions per job.
 
 See [examples/showcase-blockers](https://github.com/kvet/queuert/tree/main/examples/showcase-blockers) for a complete working example demonstrating fan-out/fan-in, fixed blocker slots, and blockers by ID. See also [Tx Hooks](../tx-hooks/) and [Chain Patterns](../chain-patterns/).

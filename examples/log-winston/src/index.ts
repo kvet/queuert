@@ -1,7 +1,9 @@
+import { createAsyncRwLock, createSqliteStateAdapter } from "@queuert/sqlite";
+import Database from "better-sqlite3";
+import { createBetterSqlite3StateProvider } from "example-state-sqlite-better-sqlite3/provider";
 import {
   type AttemptMiddleware,
   createClient,
-  createInProcessStateAdapter,
   createWorkerRunner,
   createProcessors,
   defineJobTypes,
@@ -57,7 +59,11 @@ const jobTypes = defineJobTypes<{
 }>();
 
 // Create adapters and queuert client
-const stateAdapter = createInProcessStateAdapter();
+const db = new Database(":memory:");
+const stateAdapter = createSqliteStateAdapter({
+  stateProvider: createBetterSqlite3StateProvider({ db, lock: createAsyncRwLock() }),
+});
+await stateAdapter.migrateToLatest();
 // #region client
 const log = createWinstonLog(logger);
 
@@ -70,7 +76,7 @@ const client = createClient({
 
 // Middleware that injects a child logger pre-bound to job context.
 // The handler receives `log` in its typed ctx — no AsyncLocalStorage, no mixin.
-const loggerInjectionMiddleware: AttemptMiddleware<any, { log: winston.Logger }> = {
+const loggerInjectionMiddleware: AttemptMiddleware<typeof stateAdapter, { log: winston.Logger }> = {
   wrapHandler: async ({ job, workerId, next }) =>
     next({
       log: logger.child({
@@ -167,3 +173,4 @@ await client.awaitChain(failThenSucceedChain, { timeoutMs: 5000 });
 // Cleanup
 await stopWorkerRunner();
 await stateAdapter.close();
+db.close();

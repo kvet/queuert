@@ -8,7 +8,7 @@ export const meta = {
 const Page = () => (
   <>
     <p>
-      Each example starts its broker in Docker, keeps job state in the in-process state adapter, and
+      Each example starts its broker in Docker, keeps job state in an in-memory SQLite database, and
       lets the notify adapter wake the worker as soon as a chain is created. Most implement the
       notify provider for one client in <code>src/provider.ts</code>; the NATS adapter takes the
       connection directly.

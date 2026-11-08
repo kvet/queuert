@@ -12,7 +12,7 @@ export const apiPackages = [
     label: "queuert",
     dir: "core",
     slug: "core",
-    summary: "Client, worker, job types and the in-process adapters.",
+    summary: "Client, worker runner and job types.",
   },
   {
     label: "queuert/conformance",
@@ -104,7 +104,6 @@ export const siteSections: SiteSection[] = [
           "integrations/state-adapters",
           "integrations/state-adapters/postgres",
           "integrations/state-adapters/sqlite",
-          "integrations/state-adapters/in-process",
           "integrations/state-adapters/custom",
         ],
       },

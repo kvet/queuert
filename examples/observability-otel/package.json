@@ -18,6 +18,10 @@
     "@opentelemetry/sdk-trace": "3.0.0",
     "@opentelemetry/semantic-conventions": "1.44.0",
     "@queuert/otel": "workspace:*",
+    "@queuert/sqlite": "workspace:*",
+    "@types/better-sqlite3": "9.6.0",
+    "better-sqlite3": "13.0.3",
+    "example-state-sqlite-better-sqlite3": "workspace:*",
     "queuert": "workspace:*"
   },
   "devDependencies": {

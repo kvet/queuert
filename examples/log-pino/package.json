@@ -8,6 +8,10 @@
     "typecheck": "tsc --noEmit"
   },
   "dependencies": {
+    "@queuert/sqlite": "workspace:*",
+    "@types/better-sqlite3": "9.6.0",
+    "better-sqlite3": "13.0.3",
+    "example-state-sqlite-better-sqlite3": "workspace:*",
     "pino": "10.4.0",
     "pino-pretty": "13.2.0",
     "queuert": "workspace:*"

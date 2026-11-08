@@ -269,7 +269,7 @@ Examples are organized by prefix to indicate their primary focus:
 Each example demonstrates **one integration concern**:
 
 - **State examples** pass no notify adapter, so the client's in-process default wakes their worker runner
-- **Notify examples** use `createInProcessStateAdapter` from `queuert`
+- **Every other example** keeps its state in an in-memory SQLite database through a state example's provider: `example-state-sqlite-better-sqlite3/provider` under Node and `example-state-sqlite-bun-sql/provider` under Bun
 
 This ensures users can copy-paste relevant code without untangling unrelated integrations.
 
@@ -337,16 +337,7 @@ State adapters have configuration differences that reflect database capabilities
 
 ### In-Process Adapters
 
-The in-process state adapter (`createInProcessStateAdapter`) is exported from `queuert`. It's suitable for:
-
-- Single-process production apps where persistence isn't required
-- Testing (used in test suites and examples)
-- Single-purpose examples (notify examples use in-process state)
-- Development/prototyping
-
-There is no public in-process notify adapter: `createClient` without `notifyAdapter` uses one internally, scoped to that client. Queuert's own specs import `createInProcessNotifyAdapter` from `queuert/testing`.
-
-Multi-process deployments (or any app that needs state to survive a restart) should use the database-backed adapters from `@queuert/postgres`, `@queuert/sqlite`, etc.
+The in-process adapters are not public API. Queuert's own specs import `createInProcessStateAdapter` and `createInProcessNotifyAdapter` from `queuert/testing`; code outside a test runner (benchmarks, the browser dashboard demo) imports them from `queuert/internal`, which does not load vitest. Examples never use them. `createClient` without `notifyAdapter` uses an in-process notify adapter internally, scoped to that client.
 
 ### Code Style for Examples
 

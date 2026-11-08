@@ -1,7 +1,9 @@
+import { createAsyncRwLock, createSqliteStateAdapter } from "@queuert/sqlite";
+import Database from "better-sqlite3";
+import { createBetterSqlite3StateProvider } from "example-state-sqlite-better-sqlite3/provider";
 import {
   createClient,
   createConsoleLog,
-  createInProcessStateAdapter,
   createWorkerRunner,
   createProcessors,
   defineJobTypes,
@@ -23,7 +25,11 @@ const jobTypes = defineJobTypes<{
 }>();
 
 // Create adapters with console logging
-const stateAdapter = createInProcessStateAdapter();
+const db = new Database(":memory:");
+const stateAdapter = createSqliteStateAdapter({
+  stateProvider: createBetterSqlite3StateProvider({ db, lock: createAsyncRwLock() }),
+});
+await stateAdapter.migrateToLatest();
 // #region client
 const log = createConsoleLog();
 
@@ -109,3 +115,4 @@ await client.awaitChain(failThenSucceedChain, { timeoutMs: 5000 });
 // Cleanup
 await stopWorkerRunner();
 await stateAdapter.close();
+db.close();

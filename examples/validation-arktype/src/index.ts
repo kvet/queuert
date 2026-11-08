@@ -8,14 +8,11 @@
  * 3. Structural reference validation (by input shape)
  */
 
+import { createAsyncRwLock, createSqliteStateAdapter } from "@queuert/sqlite";
 import { type } from "arktype";
-import {
-  createClient,
-  createInProcessStateAdapter,
-  createWorkerRunner,
-  createProcessors,
-  withTxHooks,
-} from "queuert";
+import Database from "better-sqlite3";
+import { createBetterSqlite3StateProvider } from "example-state-sqlite-better-sqlite3/provider";
+import { createClient, createWorkerRunner, createProcessors, withTxHooks } from "queuert";
 
 import { createArkTypeJobTypes } from "./arktype-adapter.ts";
 
@@ -75,7 +72,11 @@ const jobTypes = createArkTypeJobTypes({
 // #endregion
 
 // Create queuert client with the jobTypes
-const stateAdapter = createInProcessStateAdapter();
+const db = new Database(":memory:");
+const stateAdapter = createSqliteStateAdapter({
+  stateProvider: createBetterSqlite3StateProvider({ db, lock: createAsyncRwLock() }),
+});
+await stateAdapter.migrateToLatest();
 
 const client = createClient({ stateAdapter, jobTypes });
 
@@ -178,4 +179,5 @@ console.log("Chain completed:", result.output);
 // Cleanup
 await stopWorkerRunner();
 await stateAdapter.close();
+db.close();
 console.log("\n=== Done ===");

@@ -1,5 +1,8 @@
 import { createPgNotifyAdapter } from "@queuert/postgres";
+import { createAsyncRwLock, createSqliteStateAdapter } from "@queuert/sqlite";
 import { acquirePostgres } from "@queuert/testcontainers";
+import Database from "better-sqlite3";
+import { createBetterSqlite3StateProvider } from "example-state-sqlite-better-sqlite3/provider";
 import { Pool } from "pg";
 import {
   createClient,
@@ -7,7 +10,6 @@ import {
   createProcessors,
   defineJobTypes,
   withTxHooks,
-  createInProcessStateAdapter,
 } from "queuert";
 
 import { createPgPoolNotifyProvider } from "./provider.ts";
@@ -26,7 +28,11 @@ const jobTypes = defineJobTypes<{
 }>();
 
 // Create the state adapter
-const stateAdapter = createInProcessStateAdapter();
+const db = new Database(":memory:");
+const stateAdapter = createSqliteStateAdapter({
+  stateProvider: createBetterSqlite3StateProvider({ db, lock: createAsyncRwLock() }),
+});
+await stateAdapter.migrateToLatest();
 
 // #region setup
 // Create PostgreSQL connection pool
@@ -106,9 +112,10 @@ console.log(`Report ready! ID: ${result.output.reportId}, Rows: ${result.output.
 
 // Cleanup
 await stopWorkerRunner();
+await stateAdapter.close();
+db.close();
 // #region cleanup
 await notifyAdapter.close();
-await stateAdapter.close();
 await pool.end();
 // #endregion
 console.log("Done!");

@@ -1,7 +1,7 @@
 import { createPgNotifyAdapter } from "@queuert/postgres";
 import { createPostgresJsNotifyProvider } from "example-notify-postgres-postgres-js/provider";
 import postgres from "postgres";
-import { createInProcessStateAdapter } from "queuert";
+import { createInProcessStateAdapter } from "queuert/internal";
 
 import { benchmarkNamespace, requireEnv, runBenchmark } from "./utils.ts";
 

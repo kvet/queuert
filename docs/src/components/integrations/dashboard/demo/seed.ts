@@ -1,10 +1,6 @@
 import { createIdGenerator, jobTypes, populateScenarios } from "example-dashboard/scenarios";
-import {
-  type Client,
-  type InProcessStateAdapter,
-  createClient,
-  createInProcessStateAdapter,
-} from "queuert";
+import { type Client, createClient } from "queuert";
+import { type InProcessStateAdapter, createInProcessStateAdapter } from "queuert/internal";
 
 export type DashboardDemoView =
   | "overview"

@@ -33,6 +33,10 @@ export {
 } from "./suites/flaky-test-helper.spec-helper.ts";
 
 export { createInProcessNotifyAdapter } from "./notify-adapter/notify-adapter.in-process.ts";
+export {
+  createInProcessStateAdapter,
+  type InProcessStateAdapter,
+} from "./state-adapter/state-adapter.in-process.ts";
 export { extendWithStateInProcess } from "./state-adapter/state-adapter.in-process.spec-helper.ts";
 export {
   createSpyStateAdapter,

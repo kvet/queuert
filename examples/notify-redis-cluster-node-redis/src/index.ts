@@ -1,12 +1,14 @@
 import { createRedisNotifyAdapter } from "@queuert/redis";
+import { createAsyncRwLock, createSqliteStateAdapter } from "@queuert/sqlite";
 import { acquireRedisCluster } from "@queuert/testcontainers";
+import Database from "better-sqlite3";
+import { createBetterSqlite3StateProvider } from "example-state-sqlite-better-sqlite3/provider";
 import {
   createClient,
   createWorkerRunner,
   createProcessors,
   defineJobTypes,
   withTxHooks,
-  createInProcessStateAdapter,
 } from "queuert";
 import { createCluster, type RedisClusterType } from "redis";
 
@@ -26,7 +28,11 @@ const jobTypes = defineJobTypes<{
 }>();
 
 // Create the state adapter
-const stateAdapter = createInProcessStateAdapter();
+const db = new Database(":memory:");
+const stateAdapter = createSqliteStateAdapter({
+  stateProvider: createBetterSqlite3StateProvider({ db, lock: createAsyncRwLock() }),
+});
+await stateAdapter.migrateToLatest();
 
 // #region setup
 // Create Redis Cluster connections
@@ -122,9 +128,10 @@ console.log(`Report ready! ID: ${result.output.reportId}, Rows: ${result.output.
 
 // Cleanup
 await stopWorkerRunner();
+await stateAdapter.close();
+db.close();
 // #region cleanup
 await notifyAdapter.close();
-await stateAdapter.close();
 await cluster.close();
 await subscribeCluster.close();
 // #endregion

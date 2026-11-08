@@ -1,13 +1,14 @@
 import { createRedisNotifyAdapter } from "@queuert/redis";
+import { createAsyncRwLock, createSqliteStateAdapter } from "@queuert/sqlite";
 import { acquireRedis } from "@queuert/testcontainers";
-import { RedisClient } from "bun";
+import { RedisClient, SQL } from "bun";
+import { createBunSqlSqliteStateProvider } from "example-state-sqlite-bun-sql/provider";
 import {
   createClient,
   createWorkerRunner,
   createProcessors,
   defineJobTypes,
   withTxHooks,
-  createInProcessStateAdapter,
 } from "queuert";
 
 import { createBunRedisNotifyProvider } from "./provider.ts";
@@ -27,7 +28,11 @@ const jobTypes = defineJobTypes<{
 }>();
 
 // Create the state adapter
-const stateAdapter = createInProcessStateAdapter();
+const sqlite = new SQL("sqlite://:memory:");
+const stateAdapter = createSqliteStateAdapter({
+  stateProvider: createBunSqlSqliteStateProvider({ sql: sqlite, lock: createAsyncRwLock() }),
+});
+await stateAdapter.migrateToLatest();
 
 // #region setup
 // Create Redis connections (pub/sub needs a dedicated connection)
@@ -114,9 +119,10 @@ console.log(`Report ready! ID: ${result.output.reportId}, Rows: ${result.output.
 
 // Cleanup
 await stopWorkerRunner();
+await stateAdapter.close();
+await sqlite.close();
 // #region cleanup
 await notifyAdapter.close();
-await stateAdapter.close();
 redis.close();
 redisSubscription.close();
 // #endregion

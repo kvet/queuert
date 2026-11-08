@@ -8,8 +8,8 @@ export const meta = {
 const Page = () => (
   <>
     <p>
-      These examples run without Docker: the logging and OpenTelemetry ones keep state in the
-      in-process adapters, and the dashboard one in a SQLite file.
+      These examples run without Docker: the logging and OpenTelemetry ones keep state in an
+      in-memory SQLite database, and the dashboard one in a SQLite file.
     </p>
     <h2 id="logging">Logging</h2>
     <ExampleRows title="Loggers" names={["log-console", "log-pino", "log-winston"]} />
