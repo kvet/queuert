@@ -1,30 +1,42 @@
-import { runPgStateProviderConformance } from "@queuert/postgres/conformance";
-import { acquirePostgres } from "@queuert/testcontainers";
-import knexFactory from "knex";
-import { test } from "vitest";
+import {
+  createPgStateProviderConformanceContext,
+  type PgStateProviderConformanceContext,
+  pgStateProviderConformanceCases,
+} from "@queuert/postgres/conformance";
+import { acquirePostgres, type AcquiredPostgres } from "@queuert/testcontainers";
+import knexFactory, { type Knex } from "knex";
+import { afterAll, beforeAll, describe, test } from "vitest";
 
 import { createKnexPgStateProvider } from "./provider.ts";
 
 // #region conformance
-test("state-postgres-knex provider passes state provider conformance", async () => {
-  await using pg = await acquirePostgres("postgres:18", import.meta.url);
+describe("state-postgres-knex provider conformance", () => {
+  let pg: AcquiredPostgres;
+  let knex: Knex;
+  let context: PgStateProviderConformanceContext;
 
-  await runPgStateProviderConformance(async () => {
-    const knex = knexFactory({
+  beforeAll(async () => {
+    pg = await acquirePostgres("postgres:18", import.meta.url);
+    knex = knexFactory({
       client: "pg",
       connection: pg.connectionString,
       pool: { min: 0, max: 10 },
     });
-
-    const stateProvider = createKnexPgStateProvider({ knex });
-
-    return {
-      stateProvider,
+    context = await createPgStateProviderConformanceContext({
+      createStateProvider: async () => createKnexPgStateProvider({ knex }),
       withNonTransactionContext: async (fn) => fn({ trx: knex }),
-      dispose: async () => {
-        await knex.destroy();
-      },
-    };
+    });
+  }, 60_000);
+
+  afterAll(async () => {
+    await knex.destroy();
+    await pg[Symbol.asyncDispose]();
   });
-}, 60_000);
+
+  for (const conformanceCase of pgStateProviderConformanceCases) {
+    test(conformanceCase.title, async () => {
+      await conformanceCase.run(context);
+    });
+  }
+});
 // #endregion

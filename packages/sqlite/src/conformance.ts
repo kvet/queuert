@@ -1,10 +1,7 @@
+export { type ConformanceTestCase } from "queuert/conformance";
 export {
-  ConformanceError,
-  type ConformanceOptions,
-  type ConformanceReport,
-  type ConformanceResult,
-} from "queuert/conformance";
-export {
-  runSqliteStateProviderConformance,
-  type SqliteStateProviderConformanceFixture,
+  createSqliteStateProviderConformanceContext,
+  type SqliteStateProviderConformanceContext,
+  sqliteStateProviderConformanceCases,
+  type SqliteStateProviderConformanceContextOptions,
 } from "./conformance/state-provider-conformance.ts";

@@ -633,8 +633,6 @@ export const createSqliteStateAdapter = <
    * 0.17 migration table that records migrations 0.17 did not ship.
    */
   migrateToLatest: () => Promise<MigrationResult>;
-  /** Delete all job, blocker and worker rows. Intended for tests. */
-  truncate: () => Promise<void>;
 } => {
   validateSqlIdentifier(tablePrefix, "tablePrefix");
   validateSqlIdentifier(jobIdType, "jobIdType");
@@ -785,6 +783,11 @@ export const createSqliteStateAdapter = <
       txCtx,
       sql: templateCache.getOrCompute("takeWriteLock", () => applyTemplate(takeWriteLockStatement)),
     });
+  };
+
+  const close = async (): Promise<void> => {
+    if (!closed.trip()) return;
+    await stateProvider.close?.();
   };
 
   return {
@@ -2615,38 +2618,13 @@ ORDER BY w.key
       }).migrateToLatest();
     },
 
-    truncate: async () => {
-      await stateProvider.withTransaction(async (txCtx) => {
-        await executeTypedSql({
-          txCtx,
-          sql: applyTemplate(
-            sql(/* sql */ `DELETE FROM {{table_prefix}}job_blocker`, { params: [], columns: {} }),
-          ),
-        });
-        await executeTypedSql({
-          txCtx,
-          sql: applyTemplate(
-            sql(/* sql */ `DELETE FROM {{table_prefix}}job`, { params: [], columns: {} }),
-          ),
-        });
-        await executeTypedSql({
-          txCtx,
-          sql: applyTemplate(
-            sql(/* sql */ `DELETE FROM {{table_prefix}}worker`, { params: [], columns: {} }),
-          ),
-        });
-      });
-    },
-
-    close: async () => {
-      if (!closed.trip()) return;
-      await stateProvider.close?.();
-    },
+    close,
+    [Symbol.asyncDispose]: close,
   };
 };
 
 /**
- * SQLite state adapter type. Includes `migrateToLatest` for schema migrations and `truncate` for clearing all job data.
+ * SQLite state adapter type. Includes `migrateToLatest` for schema migrations.
  * @experimental
  */
 export type SqliteStateAdapter<
@@ -2661,6 +2639,4 @@ export type SqliteStateAdapter<
    * 0.17 migration table that records migrations 0.17 did not ship.
    */
   migrateToLatest: () => Promise<MigrationResult>;
-  /** Delete all job, blocker and worker rows. Intended for tests. */
-  truncate: () => Promise<void>;
 };

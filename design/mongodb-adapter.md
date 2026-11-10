@@ -4,7 +4,7 @@ Add `@queuert/mongodb`: a state adapter and a notify adapter for MongoDB replica
 
 ## Goals
 
-- Pass `runStateAdapterConformance` and the shared processing suites, with the divergences listed under [Contract divergences](#contract-divergences) and no others.
+- Pass `stateAdapterConformanceCases` and the shared processing suites, with the divergences listed under [Contract divergences](#contract-divergences) and no others.
 - Join the user's transaction from the official `mongodb` driver, Mongoose and MikroORM.
 - No change to the client, worker or processor API, and no state adapter contract change required to ship.
 
@@ -288,8 +288,8 @@ The fence tables of the PostgreSQL adapter's [write fence](../docs/src/content/d
 
 ## Contract divergences
 
-- **Lock waits are reruns.** A conformance case that holds a lock in transaction A and expects transaction B to wait sees B fail with 112 and rerun until A ends, so B still finishes after A. Cases that record side effects inside B's callback see them more than once. If such cases exist, the fixture gets `transactionConcurrency: "conflicting"`, and those cases count distinct effects. To verify in phase 1.
-- **`getStartAttemptDelayMs` sees held jobs.** PostgreSQL skips locked due jobs and can return `null`; MongoDB cannot tell that a job is held, so it returns 0, and the worker's claim then finds nothing. The case at `start-job-attempt.ts:609` is skipped for MongoDB. Phase 1 checks that the worker loop does not spin on a held due job (a 0 delay followed by an empty claim); if it does, the adapter reports the job's delay as `pollIntervalMs`-bounded instead.
+- **Lock waits are reruns.** A conformance case that holds a lock in transaction A and expects transaction B to wait sees B fail with 112 and rerun until A ends, so B still finishes after A. Cases that record side effects inside B's callback see them more than once. If such cases exist, they go in their own group set that the MongoDB cases leave out, or they count distinct effects. To verify in phase 1.
+- **`getStartAttemptDelayMs` sees held jobs.** PostgreSQL skips locked due jobs and can return `null`; MongoDB cannot tell that a job is held, so it returns 0, and the worker's claim then finds nothing. The case "skips a due job whose row is locked and getStartAttemptDelayMs ignores it" in `start-job-attempt.ts` goes in a group set the MongoDB cases leave out. Phase 1 checks that the worker loop does not spin on a held due job (a 0 delay followed by an empty claim); if it does, the adapter reports the job's delay as `pollIntervalMs`-bounded instead.
 - **User transactions fail with 112 where PostgreSQL waits.** For example, a fenced handler transaction and a reclaim of its job: on PostgreSQL one waits, on MongoDB the second writer reruns (Queuert's side) or throws (user's side, retried by `withMongoTransaction`). The outcome is the same; only who retries changes.
 - **Exact deduplication.** Above.
 
@@ -325,7 +325,7 @@ Replication latency (`w: majority` across three nodes), failover and multi-node 
 - Claims: 8 concurrent claimers never claim one job twice and never return a short batch while jobs remain; a claim racing a reclaim of its worker either commits first and is reclaimed, or claims nothing.
 - Notify: `notify-adapter-cases.ts` conformance with the shared stream; a test that the adapter opens one change stream regardless of subscriber count.
 - Benchmarks: `benchmarks/query-performance/src/mongodb.ts` running `index-coverage-cases.ts` with `explain("executionStats")` written to `explanations/`, so every query's plan and its index are reviewed like the PostgreSQL ones.
-- Examples: `state-mongodb-native`, `state-mongodb-mongoose`, `notify-mongodb`, each with `provider.spec.ts` running `runStateAdapterConformance`.
+- Examples: `state-mongodb-native`, `state-mongodb-mongoose`, `notify-mongodb`, each with `provider.spec.ts` running `stateAdapterConformanceCases`.
 
 ## API and docs
 

@@ -4,19 +4,15 @@ import type { NotifyAdapter } from "../notify-adapter/notify-adapter.ts";
 import type { ConformanceGroup } from "./runner.ts";
 
 /**
- * Fixture for the notify adapter conformance suite. Used both as the factory
- * return shape for {@link runNotifyAdapterConformance} and as the per-case
- * context the conformance cases receive.
+ * The context the notify adapter conformance cases run against. Create it once, before the cases.
+ * Each case creates the adapters it needs from it, and they are closed when the case ends.
  */
-export type NotifyConformanceFixture = {
-  notifyAdapter: NotifyAdapter;
-  /** Called before each conformance case. Consumed by the runner — cases ignore it. */
-  reset?: () => Promise<void>;
+export type NotifyAdapterConformanceContext = {
   /**
-   * Called once after all cases finish (pass or fail) to release resources.
-   * Consumed by the runner — cases ignore it.
+   * Creates a notify adapter. The adapters a case creates are closed when it ends, so closing one
+   * must not release resources the next one needs.
    */
-  dispose?: () => Promise<void>;
+  createNotifyAdapter: () => Promise<NotifyAdapter>;
 };
 
 const NEGATIVE_ASSERTION_DELAY_MS = 200;
@@ -40,13 +36,15 @@ const waitFor = async <T>(promise: Promise<T>, label: string): Promise<T> => {
   return captured.value;
 };
 
-export const notifyAdapterBaseGroups: ConformanceGroup<NotifyConformanceFixture>[] = [
+export const notifyAdapterBaseGroups: ConformanceGroup<NotifyAdapterConformanceContext>[] = [
   {
     name: "notifyJobsScheduled / listenJobScheduled",
     cases: [
       {
         name: "listener receives a notification for each type name in the batch",
-        run: async ({ notifyAdapter }, expect) => {
+        run: async ({ createNotifyAdapter }, expect) => {
+          await using notifyAdapter = await createNotifyAdapter();
+
           const received: string[] = [];
           const unsubscribe = await notifyAdapter.listenJobScheduled(
             ["type-a", "type-b", "type-c"],
@@ -65,7 +63,9 @@ export const notifyAdapterBaseGroups: ConformanceGroup<NotifyConformanceFixture>
       },
       {
         name: "multiple notifications all reach the listener",
-        run: async ({ notifyAdapter }, expect) => {
+        run: async ({ createNotifyAdapter }, expect) => {
+          await using notifyAdapter = await createNotifyAdapter();
+
           let count = 0;
           const unsubscribe = await notifyAdapter.listenJobScheduled(["type-a"], () => {
             count++;
@@ -81,7 +81,9 @@ export const notifyAdapterBaseGroups: ConformanceGroup<NotifyConformanceFixture>
       },
       {
         name: "listener does not receive notification for non-matching type name",
-        run: async ({ notifyAdapter }, expect) => {
+        run: async ({ createNotifyAdapter }, expect) => {
+          await using notifyAdapter = await createNotifyAdapter();
+
           let callCount = 0;
           const unsubscribe = await notifyAdapter.listenJobScheduled(["type-a"], () => {
             callCount++;
@@ -96,7 +98,9 @@ export const notifyAdapterBaseGroups: ConformanceGroup<NotifyConformanceFixture>
       },
       {
         name: "multi-type listener receives matching types",
-        run: async ({ notifyAdapter }, expect) => {
+        run: async ({ createNotifyAdapter }, expect) => {
+          await using notifyAdapter = await createNotifyAdapter();
+
           const received = Promise.withResolvers<string>();
           const unsubscribe = await notifyAdapter.listenJobScheduled(
             ["type-a", "type-b"],
@@ -115,7 +119,9 @@ export const notifyAdapterBaseGroups: ConformanceGroup<NotifyConformanceFixture>
       },
       {
         name: "every listener for a type receives each notification",
-        run: async ({ notifyAdapter }) => {
+        run: async ({ createNotifyAdapter }) => {
+          await using notifyAdapter = await createNotifyAdapter();
+
           const received1 = Promise.withResolvers<void>();
           const received2 = Promise.withResolvers<void>();
 
@@ -136,7 +142,9 @@ export const notifyAdapterBaseGroups: ConformanceGroup<NotifyConformanceFixture>
       },
       {
         name: "unsubscribe stops job scheduled notifications",
-        run: async ({ notifyAdapter }, expect) => {
+        run: async ({ createNotifyAdapter }, expect) => {
+          await using notifyAdapter = await createNotifyAdapter();
+
           let callCount = 0;
           const unsubscribe = await notifyAdapter.listenJobScheduled(["type-a"], () => {
             callCount++;
@@ -151,7 +159,9 @@ export const notifyAdapterBaseGroups: ConformanceGroup<NotifyConformanceFixture>
       },
       {
         name: "publish without listeners does not error",
-        run: async ({ notifyAdapter }) => {
+        run: async ({ createNotifyAdapter }) => {
+          await using notifyAdapter = await createNotifyAdapter();
+
           await notifyAdapter.notifyJobsScheduled(["unheard-type"]);
           await notifyAdapter.notifyChainsCompleted(["unheard-chain"]);
           await notifyAdapter.notifyJobAttemptsLost(["unheard-job"]);
@@ -164,7 +174,9 @@ export const notifyAdapterBaseGroups: ConformanceGroup<NotifyConformanceFixture>
     cases: [
       {
         name: "listener receives chain completion for each chain ID in the batch",
-        run: async ({ notifyAdapter }, expect) => {
+        run: async ({ createNotifyAdapter }, expect) => {
+          await using notifyAdapter = await createNotifyAdapter();
+
           const chainIds = ["chain-1", "chain-2", "chain-3"];
           const received: string[] = [];
           const unsubscribes = await Promise.all(
@@ -185,7 +197,9 @@ export const notifyAdapterBaseGroups: ConformanceGroup<NotifyConformanceFixture>
       },
       {
         name: "listener does not receive chain completion for different chain ID",
-        run: async ({ notifyAdapter }, expect) => {
+        run: async ({ createNotifyAdapter }, expect) => {
+          await using notifyAdapter = await createNotifyAdapter();
+
           let callCount = 0;
           const unsubscribe = await notifyAdapter.listenChainCompleted("chain-123", () => {
             callCount++;
@@ -200,7 +214,9 @@ export const notifyAdapterBaseGroups: ConformanceGroup<NotifyConformanceFixture>
       },
       {
         name: "multiple listeners for same chain ID both receive notification",
-        run: async ({ notifyAdapter }) => {
+        run: async ({ createNotifyAdapter }) => {
+          await using notifyAdapter = await createNotifyAdapter();
+
           const received1 = Promise.withResolvers<void>();
           const received2 = Promise.withResolvers<void>();
 
@@ -221,7 +237,9 @@ export const notifyAdapterBaseGroups: ConformanceGroup<NotifyConformanceFixture>
       },
       {
         name: "unsubscribe stops chain completion notifications",
-        run: async ({ notifyAdapter }, expect) => {
+        run: async ({ createNotifyAdapter }, expect) => {
+          await using notifyAdapter = await createNotifyAdapter();
+
           let callCount = 0;
           const unsubscribe = await notifyAdapter.listenChainCompleted("chain-unsubscribe", () => {
             callCount++;
@@ -241,7 +259,9 @@ export const notifyAdapterBaseGroups: ConformanceGroup<NotifyConformanceFixture>
     cases: [
       {
         name: "listener receives attempt lost for each job ID in the batch",
-        run: async ({ notifyAdapter }, expect) => {
+        run: async ({ createNotifyAdapter }, expect) => {
+          await using notifyAdapter = await createNotifyAdapter();
+
           const jobIds = ["job-1", "job-2", "job-3"];
           const received: string[] = [];
           const unsubscribes = await Promise.all(
@@ -262,7 +282,9 @@ export const notifyAdapterBaseGroups: ConformanceGroup<NotifyConformanceFixture>
       },
       {
         name: "listener does not receive attempt lost for different job ID",
-        run: async ({ notifyAdapter }, expect) => {
+        run: async ({ createNotifyAdapter }, expect) => {
+          await using notifyAdapter = await createNotifyAdapter();
+
           let callCount = 0;
           const unsubscribe = await notifyAdapter.listenJobAttemptLost("job-123", () => {
             callCount++;
@@ -277,7 +299,9 @@ export const notifyAdapterBaseGroups: ConformanceGroup<NotifyConformanceFixture>
       },
       {
         name: "multiple listeners for same job ID both receive attempt lost",
-        run: async ({ notifyAdapter }) => {
+        run: async ({ createNotifyAdapter }) => {
+          await using notifyAdapter = await createNotifyAdapter();
+
           const received1 = Promise.withResolvers<void>();
           const received2 = Promise.withResolvers<void>();
 
@@ -298,7 +322,9 @@ export const notifyAdapterBaseGroups: ConformanceGroup<NotifyConformanceFixture>
       },
       {
         name: "unsubscribe stops attempt lost notifications",
-        run: async ({ notifyAdapter }, expect) => {
+        run: async ({ createNotifyAdapter }, expect) => {
+          await using notifyAdapter = await createNotifyAdapter();
+
           let callCount = 0;
           const unsubscribe = await notifyAdapter.listenJobAttemptLost("job-unsubscribe", () => {
             callCount++;
@@ -318,7 +344,9 @@ export const notifyAdapterBaseGroups: ConformanceGroup<NotifyConformanceFixture>
     cases: [
       {
         name: "notifications dispatch during publish loop, not batched at end",
-        run: async ({ notifyAdapter }, expect) => {
+        run: async ({ createNotifyAdapter }, expect) => {
+          await using notifyAdapter = await createNotifyAdapter();
+
           const count = 50;
           const half = count / 2;
           let received = 0;
@@ -357,7 +385,9 @@ export const notifyAdapterBaseGroups: ConformanceGroup<NotifyConformanceFixture>
     cases: [
       {
         name: "a notification reaches only the listeners of its own kind",
-        run: async ({ notifyAdapter }, expect) => {
+        run: async ({ createNotifyAdapter }, expect) => {
+          await using notifyAdapter = await createNotifyAdapter();
+
           const sharedId = "shared-id";
           const received: string[] = [];
           const unsubscribeScheduled = await notifyAdapter.listenJobScheduled([sharedId], () => {
@@ -392,7 +422,9 @@ export const notifyAdapterBaseGroups: ConformanceGroup<NotifyConformanceFixture>
       },
       {
         name: "listen methods return async unsubscribe functions",
-        run: async ({ notifyAdapter }, expect) => {
+        run: async ({ createNotifyAdapter }, expect) => {
+          await using notifyAdapter = await createNotifyAdapter();
+
           const unsubscribe1 = await notifyAdapter.listenJobScheduled(["type-a"], () => {});
           const unsubscribe2 = await notifyAdapter.listenChainCompleted("chain-1", () => {});
           const unsubscribe3 = await notifyAdapter.listenJobAttemptLost("job-1", () => {});
@@ -416,7 +448,9 @@ export const notifyAdapterBaseGroups: ConformanceGroup<NotifyConformanceFixture>
       },
       {
         name: "can resubscribe after unsubscribe",
-        run: async ({ notifyAdapter }, expect) => {
+        run: async ({ createNotifyAdapter }, expect) => {
+          await using notifyAdapter = await createNotifyAdapter();
+
           const unsubscribe1 = await notifyAdapter.listenJobScheduled(["type-a"], () => {});
           await unsubscribe1();
 
@@ -435,7 +469,9 @@ export const notifyAdapterBaseGroups: ConformanceGroup<NotifyConformanceFixture>
       },
       {
         name: "unsubscribe one of two listeners, remaining still receives",
-        run: async ({ notifyAdapter }, expect) => {
+        run: async ({ createNotifyAdapter }, expect) => {
+          await using notifyAdapter = await createNotifyAdapter();
+
           let count1 = 0;
           const received2 = Promise.withResolvers<void>();
 
@@ -463,7 +499,9 @@ export const notifyAdapterBaseGroups: ConformanceGroup<NotifyConformanceFixture>
     cases: [
       {
         name: "throwing callback does not break peer callback or surface to publisher",
-        run: async ({ notifyAdapter }) => {
+        run: async ({ createNotifyAdapter }) => {
+          await using notifyAdapter = await createNotifyAdapter();
+
           const peerCalled = Promise.withResolvers<void>();
           const unsubBad = await notifyAdapter.listenChainCompleted("chain-throw", () => {
             throw new Error("bad listener");
@@ -486,7 +524,9 @@ export const notifyAdapterBaseGroups: ConformanceGroup<NotifyConformanceFixture>
     cases: [
       {
         name: "normal subscribe/notify/unsubscribe cycle does not produce unhandled rejections",
-        run: async ({ notifyAdapter }, expect) => {
+        run: async ({ createNotifyAdapter }, expect) => {
+          await using notifyAdapter = await createNotifyAdapter();
+
           const unhandled: unknown[] = [];
           const handler = (reason: unknown): void => {
             unhandled.push(reason);
@@ -522,7 +562,9 @@ export const notifyAdapterBaseGroups: ConformanceGroup<NotifyConformanceFixture>
     cases: [
       {
         name: "close is idempotent, rejects subsequent calls, and previously returned unsubscribes remain safe",
-        run: async ({ notifyAdapter }, expect) => {
+        run: async ({ createNotifyAdapter }, expect) => {
+          await using notifyAdapter = await createNotifyAdapter();
+
           const unsubscribe = await notifyAdapter.listenChainCompleted("chain-1", () => {});
 
           await notifyAdapter.close();

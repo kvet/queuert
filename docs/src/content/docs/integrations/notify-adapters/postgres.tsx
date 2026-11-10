@@ -117,12 +117,13 @@ const Page = () => (
 
     <h2 id="testing-your-provider">Testing your provider</h2>
     <p>
-      <code>runPgNotifyProviderConformance</code> from <code>@queuert/postgres/conformance</code>{" "}
-      checks a provider you write. It builds the notify adapter over your provider and runs every
-      case a notify adapter must pass. Its fixture is <code>notifyProvider</code> and an optional{" "}
-      <code>dispose</code>. The runner is framework-agnostic: it throws on failure, so embed it in a
-      single <code>test()</code> block. Every example's <code>src/provider.spec.ts</code> is a
-      working template:
+      <code>pgNotifyProviderConformanceCases</code> from <code>@queuert/postgres/conformance</code>{" "}
+      check a provider you write: they are every case a notify adapter must pass, run against the
+      context <code>createPgNotifyProviderConformanceContext({"{ createNotifyProvider }"})</code>{" "}
+      returns: each case builds its own notify adapter over a new provider from your factory and
+      closes both when it ends. The suite drives no test runner: your test file owns the connections
+      in its own hooks and registers one test per case. Every example's{" "}
+      <code>src/provider.spec.ts</code> is a working template:
     </p>
     <Tabs syncKey="postgres-driver">
       <TabItem label="pg">
@@ -147,6 +148,9 @@ const Page = () => (
         />
       </TabItem>
     </Tabs>
+    <p>
+      The full API is in the <A href="/api/postgres-conformance/readme/">conformance reference</A>.
+    </p>
 
     <h2 id="channels">Channels</h2>
     <p>

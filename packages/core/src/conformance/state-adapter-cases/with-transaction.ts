@@ -1,12 +1,14 @@
 import type { ConformanceGroup } from "../runner.ts";
-import type { StateConformanceFixture } from "./types.ts";
+import type { StateAdapterConformanceContext } from "./types.ts";
 
-export const withTransactionGroup: ConformanceGroup<StateConformanceFixture> = {
+export const withTransactionGroup: ConformanceGroup<StateAdapterConformanceContext> = {
   name: "withTransaction",
   cases: [
     {
       name: "maintains transaction isolation",
-      run: async ({ stateAdapter }, expect) => {
+      run: async ({ createStateAdapter }, expect) => {
+        await using stateAdapter = await createStateAdapter();
+
         const [stateChain] = await stateAdapter.withTransaction(async (txCtx) =>
           stateAdapter.createJobs({
             txCtx,
@@ -45,7 +47,9 @@ export const withTransactionGroup: ConformanceGroup<StateConformanceFixture> = {
     },
     {
       name: "a call without a transaction context is not swept into an open transaction's rollback",
-      run: async ({ stateAdapter }, expect) => {
+      run: async ({ createStateAdapter }, expect) => {
+        await using stateAdapter = await createStateAdapter();
+
         const inTransaction = Promise.withResolvers<void>();
         const release = Promise.withResolvers<void>();
         let rolledBackJobId: string | undefined;
@@ -85,7 +89,9 @@ export const withTransactionGroup: ConformanceGroup<StateConformanceFixture> = {
     },
     {
       name: "restores updated job state when rolled back",
-      run: async ({ stateAdapter }, expect) => {
+      run: async ({ createStateAdapter }, expect) => {
+        await using stateAdapter = await createStateAdapter();
+
         const worker = await stateAdapter.startWorker({
           workerId: stateAdapter.config.generateWorkerId(),
           typeNames: ["update-rollback"],
@@ -136,7 +142,9 @@ export const withTransactionGroup: ConformanceGroup<StateConformanceFixture> = {
     },
     {
       name: "revives deleted chains when rolled back",
-      run: async ({ stateAdapter }, expect) => {
+      run: async ({ createStateAdapter }, expect) => {
+        await using stateAdapter = await createStateAdapter();
+
         const worker = await stateAdapter.startWorker({
           workerId: stateAdapter.config.generateWorkerId(),
           typeNames: ["delete-rollback"],
@@ -178,7 +186,9 @@ export const withTransactionGroup: ConformanceGroup<StateConformanceFixture> = {
     },
     {
       name: "restores blocker state when rolled back",
-      run: async ({ stateAdapter }, expect) => {
+      run: async ({ createStateAdapter }, expect) => {
+        await using stateAdapter = await createStateAdapter();
+
         const [blockerChain] = await stateAdapter.withTransaction(async (txCtx) =>
           stateAdapter.createJobs({
             txCtx,
@@ -235,7 +245,9 @@ export const withTransactionGroup: ConformanceGroup<StateConformanceFixture> = {
     },
     {
       name: "rolls back mixed mutations atomically with consistent indexes",
-      run: async ({ stateAdapter }, expect) => {
+      run: async ({ createStateAdapter }, expect) => {
+        await using stateAdapter = await createStateAdapter();
+
         const worker = await stateAdapter.startWorker({
           workerId: stateAdapter.config.generateWorkerId(),
           typeNames: ["mixed-rollback"],
@@ -322,7 +334,9 @@ export const withTransactionGroup: ConformanceGroup<StateConformanceFixture> = {
     },
     {
       name: "rolls back completing a tail job together with its chain's head row",
-      run: async ({ stateAdapter }, expect) => {
+      run: async ({ createStateAdapter }, expect) => {
+        await using stateAdapter = await createStateAdapter();
+
         const [stateChain] = await stateAdapter.withTransaction(async (txCtx) =>
           stateAdapter.createJobs({
             txCtx,
@@ -384,13 +398,15 @@ export const withTransactionGroup: ConformanceGroup<StateConformanceFixture> = {
   ],
 };
 
-export const withTransactionConcurrentTransactionsGroup: ConformanceGroup<StateConformanceFixture> =
+export const withTransactionConcurrentTransactionsGroup: ConformanceGroup<StateAdapterConformanceContext> =
   {
     name: "withTransaction",
     cases: [
       {
         name: "an independent transaction's writes are not swept into a concurrent transaction's rollback",
-        run: async ({ stateAdapter }, expect) => {
+        run: async ({ createStateAdapter }, expect) => {
+          await using stateAdapter = await createStateAdapter();
+
           let release: (() => void) | undefined;
           const gate = new Promise<void>((r) => {
             release = r;
@@ -445,7 +461,9 @@ export const withTransactionConcurrentTransactionsGroup: ConformanceGroup<StateC
       },
       {
         name: "parallel withTransaction calls all commit successfully",
-        run: async ({ stateAdapter }, expect) => {
+        run: async ({ createStateAdapter }, expect) => {
+          await using stateAdapter = await createStateAdapter();
+
           const count = 5;
           const results = await Promise.all(
             Array.from({ length: count }, async (_, i) =>
@@ -475,7 +493,9 @@ export const withTransactionConcurrentTransactionsGroup: ConformanceGroup<StateC
       },
       {
         name: "parallel withTransaction and non-transactional reads do not deadlock",
-        run: async ({ stateAdapter }, expect) => {
+        run: async ({ createStateAdapter }, expect) => {
+          await using stateAdapter = await createStateAdapter();
+
           const [seedChain] = await stateAdapter.withTransaction(async (txCtx) =>
             stateAdapter.createJobs({
               txCtx,

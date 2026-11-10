@@ -24,6 +24,7 @@ const failingAdapter = (): NotifyAdapter => {
     notifyJobAttemptsLost: fail,
     listenJobAttemptLost: fail,
     close: fail,
+    [Symbol.asyncDispose]: fail,
   };
 };
 

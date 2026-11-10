@@ -1,12 +1,14 @@
 import type { ConformanceGroup } from "../runner.ts";
-import type { StateConformanceFixture } from "./types.ts";
+import type { StateAdapterConformanceContext } from "./types.ts";
 
-export const isTransactionGroup: ConformanceGroup<StateConformanceFixture> = {
+export const isTransactionGroup: ConformanceGroup<StateAdapterConformanceContext> = {
   name: "isTransaction",
   cases: [
     {
       name: "reports true for a withTransaction context",
-      run: async ({ stateAdapter }, expect) => {
+      run: async ({ createStateAdapter }, expect) => {
+        await using stateAdapter = await createStateAdapter();
+
         const result = await stateAdapter.withTransaction(async (txCtx) =>
           stateAdapter.isTransaction(txCtx),
         );
@@ -15,11 +17,9 @@ export const isTransactionGroup: ConformanceGroup<StateConformanceFixture> = {
     },
     {
       name: "reports false for a context outside a transaction",
-      run: async ({ stateAdapter, withNonTransactionContext }, expect) => {
-        if (!withNonTransactionContext) {
-          expect.skip("requires withNonTransactionContext");
-          return;
-        }
+      run: async ({ createStateAdapter, withNonTransactionContext }, expect) => {
+        await using stateAdapter = await createStateAdapter();
+
         const result = await withNonTransactionContext(async (txCtx) =>
           stateAdapter.isTransaction(txCtx),
         );

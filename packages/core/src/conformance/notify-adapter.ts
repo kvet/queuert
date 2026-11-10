@@ -1,28 +1,28 @@
-import { type NotifyConformanceFixture, notifyAdapterBaseGroups } from "./notify-adapter-cases.ts";
 import {
-  type ConformanceOptions,
-  type ConformanceReport,
-  runFixtureConformance,
-} from "./runner.ts";
+  type NotifyAdapterConformanceContext,
+  notifyAdapterBaseGroups,
+} from "./notify-adapter-cases.ts";
+import { type ConformanceTestCase, toConformanceTestCases } from "./suite.ts";
 
 /**
- * Run the notify adapter conformance suite against a user-supplied adapter.
- * Test-framework agnostic: designed to be embedded in a single test
- * (vitest `test()`, bun `test()`, `node:test`, etc.). Throws
- * {@link ConformanceError} with an aggregated report on any failure.
+ * The notify adapter conformance cases, to run one per test in your own test file.
+ * Each case creates its own adapter with the context's `createNotifyAdapter` and closes it when
+ * the case ends. Works with any test runner.
  *
  * @example
  * ```ts
- * await runNotifyAdapterConformance(async () => {
- *   const notifyAdapter = await createMyNotifyAdapter();
- *   return {
- *     notifyAdapter,
- *     dispose: async () => notifyAdapter.close(),
- *   };
- * });
+ * import { test } from "bun:test";
+ *
+ * const context: NotifyAdapterConformanceContext = {
+ *   createNotifyAdapter: async () => createMyNotifyAdapter({ url: process.env.BROKER_URL }),
+ * };
+ *
+ * for (const conformanceCase of notifyAdapterConformanceCases) {
+ *   test(conformanceCase.title, async () => {
+ *     await conformanceCase.run(context);
+ *   });
+ * }
  * ```
  */
-export const runNotifyAdapterConformance = async (
-  factory: () => Promise<NotifyConformanceFixture>,
-  options?: ConformanceOptions,
-): Promise<ConformanceReport> => runFixtureConformance(notifyAdapterBaseGroups, factory, options);
+export const notifyAdapterConformanceCases: ConformanceTestCase<NotifyAdapterConformanceContext>[] =
+  toConformanceTestCases(notifyAdapterBaseGroups);

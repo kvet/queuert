@@ -115,6 +115,7 @@ export const extendWithStateInProcess = <T>(
           listWorkers: wrap(stateAdapter.listWorkers),
           listWorkerJobs: wrap(stateAdapter.listWorkerJobs),
           close: stateAdapter.close,
+          [Symbol.asyncDispose]: stateAdapter.close,
         };
 
         await use(flakyStateAdapter);

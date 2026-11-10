@@ -99,6 +99,7 @@ export const createSpyStateAdapter = <
     listWorkers: wrap("listWorkers", stateAdapter.listWorkers),
     listWorkerJobs: wrap("listWorkerJobs", stateAdapter.listWorkerJobs),
     close: stateAdapter.close,
+    [Symbol.asyncDispose]: stateAdapter.close,
     record: async ({ name, ...txCtx }: { name: string } & TTxContext) =>
       record({ name, txCtx: txCtx as unknown as TTxContext }),
   };

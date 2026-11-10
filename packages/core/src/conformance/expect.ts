@@ -2,8 +2,6 @@ import assert from "node:assert/strict";
 
 import { sleep } from "@queuert/helpers";
 
-import { SkipSignalError } from "./skip-signal-error.ts";
-
 /**
  * Minimal vitest/jest-compatible `expect` shim, backed by `node:assert/strict`.
  * Zero deps. Works in Node, Bun, Deno, or any runtime with node:assert.
@@ -46,12 +44,6 @@ export type Expect = {
     toEqual: (expected: T) => Promise<void>;
   };
   fail: (message: string) => never;
-  /**
-   * Mark the current case as skipped rather than passed or failed. Useful when
-   * a case requires an optional fixture capability (e.g., `withNonTransactionContext`)
-   * that the backend under test does not provide.
-   */
-  skip: (reason: string) => never;
 };
 
 const matchesExpected = (
@@ -279,9 +271,6 @@ export const expect: Expect = Object.assign(
     },
     fail: (message: string): never => {
       throw new assert.AssertionError({ message });
-    },
-    skip: (reason: string): never => {
-      throw new SkipSignalError(reason);
     },
   },
 );

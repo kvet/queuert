@@ -1,18 +1,22 @@
 import type { ConformanceGroup } from "../runner.ts";
-import type { StateConformanceFixture } from "./types.ts";
+import type { StateAdapterConformanceContext } from "./types.ts";
 
-export const countRunningJobsByWorkerIdGroup: ConformanceGroup<StateConformanceFixture> = {
+export const countRunningJobsByWorkerIdGroup: ConformanceGroup<StateAdapterConformanceContext> = {
   name: "countRunningJobsByWorkerId",
   cases: [
     {
       name: "returns an empty array for empty ids",
-      run: async ({ stateAdapter }, expect) => {
+      run: async ({ createStateAdapter }, expect) => {
+        await using stateAdapter = await createStateAdapter();
+
         expect(await stateAdapter.countRunningJobsByWorkerId({ workerIds: [] })).toEqual([]);
       },
     },
     {
       name: "counts only the jobs running under each worker, in input order",
-      run: async ({ stateAdapter }, expect) => {
+      run: async ({ createStateAdapter }, expect) => {
+        await using stateAdapter = await createStateAdapter();
+
         const worker = await stateAdapter.startWorker({
           workerId: stateAdapter.config.generateWorkerId(),
           typeNames: ["get-count"],
@@ -71,7 +75,9 @@ export const countRunningJobsByWorkerIdGroup: ConformanceGroup<StateConformanceF
     },
     {
       name: "counts a running job whose worker row is gone",
-      run: async ({ stateAdapter }, expect) => {
+      run: async ({ createStateAdapter }, expect) => {
+        await using stateAdapter = await createStateAdapter();
+
         const worker = await stateAdapter.startWorker({
           workerId: stateAdapter.config.generateWorkerId(),
           typeNames: ["provision-account"],

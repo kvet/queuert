@@ -1,12 +1,12 @@
 import { extendWithRedisCluster } from "@queuert/testcontainers";
-import type { NotifyConformanceFixture } from "queuert/conformance";
+import type { NotifyAdapterConformanceContext } from "queuert/conformance";
 import { notifyAdapterBaseGroups } from "queuert/conformance-internal";
 import { type ConformanceFixtures, conformanceTestSuite } from "queuert/testing";
 import { createCluster, type RedisClusterType } from "redis";
 import { it as baseIt, describe } from "vitest";
 
 import {
-  createRedisNotifyConformanceContext,
+  createRedisNotifyProviderConformanceContext,
   redisNotifyProviderConformanceGroups,
 } from "../conformance/notify-provider-conformance.ts";
 import { createRedisNotifyAdapter } from "../notify-adapter/notify-adapter.redis.ts";
@@ -14,7 +14,7 @@ import { createNodeRedisClusterNotifyProvider } from "./notify-provider.node-red
 
 const it = extendWithRedisCluster(baseIt, import.meta.url);
 
-const providerIt = it.extend<ConformanceFixtures<NotifyConformanceFixture>>({
+const providerIt = it.extend<ConformanceFixtures<NotifyAdapterConformanceContext>>({
   conformance: [
     async ({ redisClusterConnection }, use) => {
       const cluster = createCluster(redisClusterConnection) as RedisClusterType;
@@ -22,8 +22,9 @@ const providerIt = it.extend<ConformanceFixtures<NotifyConformanceFixture>>({
       await cluster.connect();
       await subscribeCluster.connect();
       await use(
-        createRedisNotifyConformanceContext({
-          notifyProvider: createNodeRedisClusterNotifyProvider({ cluster, subscribeCluster }),
+        createRedisNotifyProviderConformanceContext({
+          createNotifyProvider: async () =>
+            createNodeRedisClusterNotifyProvider({ cluster, subscribeCluster }),
         }),
       );
       await cluster.close();
@@ -33,7 +34,7 @@ const providerIt = it.extend<ConformanceFixtures<NotifyConformanceFixture>>({
   ],
 });
 
-const customPrefixIt = it.extend<ConformanceFixtures<NotifyConformanceFixture>>({
+const customPrefixIt = it.extend<ConformanceFixtures<NotifyAdapterConformanceContext>>({
   conformance: [
     async ({ redisClusterConnection }, use) => {
       const cluster = createCluster(redisClusterConnection) as RedisClusterType;
@@ -41,10 +42,11 @@ const customPrefixIt = it.extend<ConformanceFixtures<NotifyConformanceFixture>>(
       await cluster.connect();
       await subscribeCluster.connect();
       await use({
-        notifyAdapter: createRedisNotifyAdapter({
-          notifyProvider: createNodeRedisClusterNotifyProvider({ cluster, subscribeCluster }),
-          channelPrefix: `myapp:notifications:${Date.now()}:${Math.random().toString(36).slice(2)}`,
-        }),
+        createNotifyAdapter: async () =>
+          createRedisNotifyAdapter({
+            notifyProvider: createNodeRedisClusterNotifyProvider({ cluster, subscribeCluster }),
+            channelPrefix: `myapp:notifications:${Date.now()}:${Math.random().toString(36).slice(2)}`,
+          }),
       });
       await cluster.close();
       await subscribeCluster.close();
@@ -57,9 +59,15 @@ const customPrefixIt = it.extend<ConformanceFixtures<NotifyConformanceFixture>>(
 it("index");
 
 describe("Redis Cluster Notify Provider Conformance", () => {
-  conformanceTestSuite({ it: providerIt, groups: redisNotifyProviderConformanceGroups });
+  conformanceTestSuite({
+    it: providerIt,
+    groups: redisNotifyProviderConformanceGroups,
+  });
 });
 
 describe("Redis Cluster Notify Adapter Conformance - Custom Channel Prefix", () => {
-  conformanceTestSuite({ it: customPrefixIt, groups: notifyAdapterBaseGroups });
+  conformanceTestSuite({
+    it: customPrefixIt,
+    groups: notifyAdapterBaseGroups,
+  });
 });

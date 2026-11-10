@@ -29,5 +29,6 @@ export const createSpyNotifyAdapter = (notifyAdapter: NotifyAdapter): SpyNotifyA
     notifyJobAttemptsLost: wrap("notifyJobAttemptsLost"),
     listenJobAttemptLost: notifyAdapter.listenJobAttemptLost,
     close: notifyAdapter.close,
+    [Symbol.asyncDispose]: notifyAdapter.close,
   };
 };

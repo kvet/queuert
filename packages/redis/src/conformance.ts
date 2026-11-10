@@ -1,10 +1,9 @@
 export {
-  ConformanceError,
-  type ConformanceOptions,
-  type ConformanceReport,
-  type ConformanceResult,
+  type ConformanceTestCase,
+  type NotifyAdapterConformanceContext,
 } from "queuert/conformance";
 export {
-  type RedisNotifyProviderConformanceFixture,
-  runRedisNotifyProviderConformance,
+  type RedisNotifyProviderConformanceContextOptions,
+  createRedisNotifyProviderConformanceContext,
+  redisNotifyProviderConformanceCases,
 } from "./conformance/notify-provider-conformance.ts";

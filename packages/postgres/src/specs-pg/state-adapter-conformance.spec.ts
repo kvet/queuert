@@ -1,27 +1,26 @@
 import { extendWithPostgres } from "@queuert/testcontainers";
 import { Pool } from "pg";
-import { type ConformanceFixtures, conformanceTestSuite } from "queuert/testing";
 import { it as baseIt, describe } from "vitest";
 
 import {
   type PgStateProviderConformanceContext,
-  createPgConformanceContext,
-  pgStateProviderConformanceGroups,
+  createPgStateProviderConformanceContext,
+  pgStateProviderConformanceCases,
 } from "../conformance/state-provider-conformance.ts";
 import {
   type PgPoolContext,
   createPgPoolProvider,
 } from "../state-provider/state-provider.pg-pool.ts";
 
-const it = extendWithPostgres(baseIt, import.meta.url).extend<
-  ConformanceFixtures<PgStateProviderConformanceContext>
->({
+const it = extendWithPostgres(baseIt, import.meta.url).extend<{
+  conformance: PgStateProviderConformanceContext;
+}>({
   conformance: [
     async ({ postgresConnectionString }, use) => {
       const pool = new Pool({ connectionString: postgresConnectionString, idleTimeoutMillis: 0 });
       await use(
-        await createPgConformanceContext({
-          stateProvider: createPgPoolProvider({ pool }),
+        await createPgStateProviderConformanceContext({
+          createStateProvider: async () => createPgPoolProvider({ pool }),
           withNonTransactionContext: async (fn) => {
             const poolClient = await pool.connect();
             try {
@@ -43,5 +42,9 @@ const it = extendWithPostgres(baseIt, import.meta.url).extend<
 it("index");
 
 describe("PostgreSQL State Provider Conformance", () => {
-  conformanceTestSuite({ it, groups: pgStateProviderConformanceGroups });
+  for (const conformanceCase of pgStateProviderConformanceCases) {
+    it(conformanceCase.title, async ({ conformance }) => {
+      await conformanceCase.run(conformance);
+    });
+  }
 });

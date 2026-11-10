@@ -1,27 +1,39 @@
-import { test } from "bun:test";
+import { afterAll, beforeAll, describe, test } from "bun:test";
 
-import { runPgStateProviderConformance } from "@queuert/postgres/conformance";
-import { acquirePostgres } from "@queuert/testcontainers";
+import {
+  createPgStateProviderConformanceContext,
+  type PgStateProviderConformanceContext,
+  pgStateProviderConformanceCases,
+} from "@queuert/postgres/conformance";
+import { acquirePostgres, type AcquiredPostgres } from "@queuert/testcontainers";
 import { SQL } from "bun";
 
 import { createBunSqlStateProvider } from "./provider.ts";
 
 // #region conformance
-test("state-postgres-bun-sql provider passes state provider conformance", async () => {
-  await using pg = await acquirePostgres("postgres:18", import.meta.url);
+describe("state-postgres-bun-sql provider conformance", () => {
+  let pg: AcquiredPostgres;
+  let sql: SQL;
+  let context: PgStateProviderConformanceContext;
 
-  await runPgStateProviderConformance(async () => {
-    const sql = new SQL(pg.connectionString, { max: 10 });
-
-    const stateProvider = createBunSqlStateProvider({ sql });
-
-    return {
-      stateProvider,
+  beforeAll(async () => {
+    pg = await acquirePostgres("postgres:18", import.meta.url);
+    sql = new SQL(pg.connectionString, { max: 10 });
+    context = await createPgStateProviderConformanceContext({
+      createStateProvider: async () => createBunSqlStateProvider({ sql }),
       withNonTransactionContext: async (fn) => fn({ txSql: sql }),
-      dispose: async () => {
-        await sql.close();
-      },
-    };
+    });
+  }, 60_000);
+
+  afterAll(async () => {
+    await sql.close();
+    await pg[Symbol.asyncDispose]();
   });
-}, 120_000);
+
+  for (const conformanceCase of pgStateProviderConformanceCases) {
+    test(conformanceCase.title, async () => {
+      await conformanceCase.run(context);
+    });
+  }
+});
 // #endregion

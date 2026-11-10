@@ -1,26 +1,36 @@
 import { Database } from "bun:sqlite";
-import { test } from "bun:test";
+import { afterAll, beforeAll, describe, test } from "bun:test";
 
 import { createAsyncRwLock } from "@queuert/sqlite";
-import { runSqliteStateProviderConformance } from "@queuert/sqlite/conformance";
+import {
+  createSqliteStateProviderConformanceContext,
+  type SqliteStateProviderConformanceContext,
+  sqliteStateProviderConformanceCases,
+} from "@queuert/sqlite/conformance";
 
 import { createBunSqliteStateProvider } from "./provider.ts";
 
 // #region conformance
-test("state-sqlite-bun-sqlite provider passes state provider conformance", async () => {
-  await runSqliteStateProviderConformance(async () => {
-    const db = new Database(":memory:");
+describe("state-sqlite-bun-sqlite provider conformance", () => {
+  const db = new Database(":memory:");
+  const lock = createAsyncRwLock();
+  let context: SqliteStateProviderConformanceContext;
 
-    const lock = createAsyncRwLock();
-    const stateProvider = createBunSqliteStateProvider({ db, lock });
-
-    return {
-      stateProvider,
+  beforeAll(async () => {
+    context = await createSqliteStateProviderConformanceContext({
+      createStateProvider: async () => createBunSqliteStateProvider({ db, lock }),
       withNonTransactionContext: async (fn) => fn({ db }),
-      dispose: async () => {
-        db.close();
-      },
-    };
+    });
   });
-}, 30_000);
+
+  afterAll(() => {
+    db.close();
+  });
+
+  for (const conformanceCase of sqliteStateProviderConformanceCases) {
+    test(conformanceCase.title, async () => {
+      await conformanceCase.run(context);
+    });
+  }
+});
 // #endregion

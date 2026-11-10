@@ -1,25 +1,37 @@
-import { runPgNotifyProviderConformance } from "@queuert/postgres/conformance";
-import { acquirePostgres } from "@queuert/testcontainers";
+import {
+  createPgNotifyProviderConformanceContext,
+  type NotifyAdapterConformanceContext,
+  pgNotifyProviderConformanceCases,
+} from "@queuert/postgres/conformance";
+import { acquirePostgres, type AcquiredPostgres } from "@queuert/testcontainers";
 import { Pool } from "pg";
-import { test } from "vitest";
+import { afterAll, beforeAll, describe, test } from "vitest";
 
 import { createPgPoolNotifyProvider } from "./provider.ts";
 
 // #region conformance
-test("notify-postgres-pg provider passes notify provider conformance", async () => {
-  await using pg = await acquirePostgres("postgres:18", import.meta.url);
+describe("notify-postgres-pg provider conformance", () => {
+  let pg: AcquiredPostgres;
+  let pool: Pool;
+  let context: NotifyAdapterConformanceContext;
 
-  await runPgNotifyProviderConformance(async () => {
-    const pool = new Pool({ connectionString: pg.connectionString, max: 10 });
-    const notifyProvider = createPgPoolNotifyProvider({ pool });
+  beforeAll(async () => {
+    pg = await acquirePostgres("postgres:18", import.meta.url);
+    pool = new Pool({ connectionString: pg.connectionString, max: 10 });
+    context = createPgNotifyProviderConformanceContext({
+      createNotifyProvider: async () => createPgPoolNotifyProvider({ pool }),
+    });
+  }, 60_000);
 
-    return {
-      notifyProvider,
-      dispose: async () => {
-        await notifyProvider.close?.();
-        await pool.end();
-      },
-    };
+  afterAll(async () => {
+    await pool.end();
+    await pg[Symbol.asyncDispose]();
   });
-}, 60_000);
+
+  for (const conformanceCase of pgNotifyProviderConformanceCases) {
+    test(conformanceCase.title, async () => {
+      await conformanceCase.run(context);
+    });
+  }
+});
 // #endregion

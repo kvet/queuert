@@ -13,11 +13,10 @@ const Page = () => (
     <p>
       For an entirely different message broker, implement the <code>NotifyAdapter</code> interface
       yourself. The conformance suite validates that your implementation behaves correctly. It's the
-      same suite Queuert uses internally, exposed as a framework-agnostic runner you embed in a
-      single <code>test()</code> block. To use another client with PostgreSQL or Redis, write a
-      provider instead: see{" "}
-      <A href="/integrations/notify-adapters/postgres/#notify-provider">PostgreSQL</A> or{" "}
-      <A href="/integrations/notify-adapters/redis/#notify-provider">Redis</A>.
+      same suite Queuert uses internally, exported as a list of cases you register one test per case
+      with any test runner. To use another client with PostgreSQL or Redis, write a provider
+      instead: see <A href="/integrations/notify-adapters/postgres/#notify-provider">PostgreSQL</A>{" "}
+      or <A href="/integrations/notify-adapters/redis/#notify-provider">Redis</A>.
     </p>
 
     <h2 id="notify-adapter">Write a notify adapter</h2>
@@ -32,39 +31,39 @@ const Page = () => (
 
     <h2 id="conformance">Conformance</h2>
     <p>
-      Run <code>runNotifyAdapterConformance</code> from <code>queuert/conformance</code> against
-      your adapter. The runner is framework-agnostic: it throws a <code>ConformanceError</code> with
-      an aggregated report on failure, so any test runner that reports a thrown error as a failure
-      works. Embed it in a single <code>test()</code> block:
+      <code>notifyAdapterConformanceCases</code> from <code>queuert/conformance</code> are the cases
+      a notify adapter must pass. The suite drives no test runner: your test file registers one test
+      per case, running each against a context with a <code>createNotifyAdapter</code> factory. Each
+      case creates its own adapter from it and closes it when the case ends:
     </p>
     <Code lang="ts" title="src/notify-adapter.spec.ts">{`
-import { runNotifyAdapterConformance, type NotifyConformanceFixture } from "queuert/conformance";
-import { test } from "vitest";
+import {
+  notifyAdapterConformanceCases,
+  type NotifyAdapterConformanceContext,
+} from "queuert/conformance";
+import { describe, test } from "vitest";
 
 import { createMyNotifyAdapter } from "./notify-adapter.ts";
 
-const createFixture = async (): Promise<NotifyConformanceFixture> => {
-  const notifyAdapter = createMyNotifyAdapter({ url: process.env.BROKER_URL });
-  return {
-    notifyAdapter,
-    dispose: async () => notifyAdapter.close(),
+describe("notify adapter conformance", () => {
+  const context: NotifyAdapterConformanceContext = {
+    createNotifyAdapter: async () => createMyNotifyAdapter({ url: process.env.BROKER_URL }),
   };
-};
 
-test("notify adapter passes conformance", async () => {
-  await runNotifyAdapterConformance(createFixture);
-}, 60_000);
+  for (const conformanceCase of notifyAdapterConformanceCases) {
+    test(conformanceCase.title, async () => {
+      await conformanceCase.run(context);
+    });
+  }
+});
 `}</Code>
     <p>
-      The factory resolves to a fixture with the <code>notifyAdapter</code> under test, an optional{" "}
-      <code>reset</code> that runs before every case, and an optional <code>dispose</code> that runs
-      once after all cases finish. For per-case progress, pass <code>{"{ onResult }"}</code> as the
-      second argument. The full API is in the{" "}
+      The cases share one context, so run them one at a time. The full API is in the{" "}
       <A href="/api/conformance/readme/">conformance reference</A>.
     </p>
     <p>
-      A provider for PostgreSQL or Redis has its own runner, which builds the adapter over the
-      provider for you: see{" "}
+      A provider for PostgreSQL or Redis has its own cases and a helper that builds the adapter over
+      the provider for you: see{" "}
       <A href="/integrations/notify-adapters/postgres/#testing-your-provider">PostgreSQL</A> or{" "}
       <A href="/integrations/notify-adapters/redis/#testing-your-provider">Redis</A>.
     </p>

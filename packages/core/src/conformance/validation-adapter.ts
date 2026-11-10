@@ -1,62 +1,32 @@
-import { type ConformanceOptions, type ConformanceReport, runConformance } from "./runner.ts";
+import { type ConformanceTestCase, toConformanceTestCases } from "./suite.ts";
 import {
   type ValidationAdapterConformanceContext,
-  type ValidationConformanceFixture,
   validationAdapterConformanceGroups,
 } from "./validation-adapter-cases.ts";
 
 /**
- * Run the validation adapter conformance suite against a user-supplied
- * adapter. Test-framework agnostic: designed to be embedded in a single test
- * (vitest `test()`, bun `test()`, `node:test`, etc.). Throws
- * {@link ConformanceError} with an aggregated report on any failure.
- *
- * Each builder under `basic`, `continuations`, `blockers`, and `external` is
- * typed with the precise phantom job type definitions the suite expects.
- * The adapter under test must thread its schema-to-shape inference correctly
- * to satisfy these return types — TypeScript rejects the factory value at
- * the runner call site otherwise. This is what makes the suite a combined
- * runtime AND type-level conformance check.
+ * The validation adapter conformance cases, to run one per test in your own test file. The
+ * context holds builders whose return types encode the job types the cases expect, so the
+ * adapter's schema-to-shape inference is checked at compile time as well as at run time. Works
+ * with any test runner.
  *
  * @example
  * ```ts
- * await runValidationAdapterConformance(async () => ({
- *   basic: {
- *     buildEntry: () => createMyJobTypes({
- *       main: { entry: true, input: schema({ id: "string" }), output: schema({ ok: "boolean" }) },
- *     }),
- *     // ... other required builders
- *   },
- *   continuations: { buildNominal: () => ..., buildStructural: () => ... },
- *   blockers:      { buildNominal: () => ..., buildStructural: () => ... },
- *   external:      { buildWithExternalSlice: () => ..., buildWithExternalSlices: () => ... },
- * }));
+ * import { test } from "vitest";
+ *
+ * const context: ValidationAdapterConformanceContext = {
+ *   basic: { buildEntry: () => createMyJobTypes({ ... }) },
+ *   // ... continuations, blockers, external
+ * };
+ *
+ * for (const conformanceCase of validationAdapterConformanceCases) {
+ *   test(conformanceCase.title, async () => {
+ *     await conformanceCase.run(context);
+ *   });
+ * }
  * ```
  */
-export const runValidationAdapterConformance = async (
-  factory: () => Promise<ValidationConformanceFixture>,
-  options?: ConformanceOptions,
-): Promise<ConformanceReport> => {
-  const fixture = await factory();
-  try {
-    return await runConformance(validationAdapterConformanceGroups, {
-      setup: async () => ({
-        context: {
-          basic: fixture.basic,
-          continuations: fixture.continuations,
-          blockers: fixture.blockers,
-          external: fixture.external,
-        } satisfies ValidationAdapterConformanceContext,
-      }),
-      caseTimeoutMs: options?.caseTimeoutMs,
-      onResult: options?.onResult,
-    });
-  } finally {
-    if (fixture.dispose) await fixture.dispose();
-  }
-};
+export const validationAdapterConformanceCases: ConformanceTestCase<ValidationAdapterConformanceContext>[] =
+  toConformanceTestCases(validationAdapterConformanceGroups);
 
-export {
-  type ValidationAdapterConformanceContext,
-  type ValidationConformanceFixture,
-} from "./validation-adapter-cases.ts";
+export { type ValidationAdapterConformanceContext } from "./validation-adapter-cases.ts";

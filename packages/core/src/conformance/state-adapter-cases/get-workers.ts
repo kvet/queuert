@@ -1,22 +1,26 @@
 import { sleep } from "@queuert/helpers";
 
 import type { ConformanceGroup } from "../runner.ts";
-import type { StateConformanceFixture } from "./types.ts";
+import type { StateAdapterConformanceContext } from "./types.ts";
 
 const LOCK_BLOCK_OBSERVATION_MS = 100;
 
-export const getWorkersGroup: ConformanceGroup<StateConformanceFixture> = {
+export const getWorkersGroup: ConformanceGroup<StateAdapterConformanceContext> = {
   name: "getWorkers",
   cases: [
     {
       name: "returns an empty array for empty ids",
-      run: async ({ stateAdapter }, expect) => {
+      run: async ({ createStateAdapter }, expect) => {
+        await using stateAdapter = await createStateAdapter();
+
         expect(await stateAdapter.getWorkers({ workerIds: [] })).toEqual([]);
       },
     },
     {
       name: "returns undefined for an unknown id",
-      run: async ({ stateAdapter }, expect) => {
+      run: async ({ createStateAdapter }, expect) => {
+        await using stateAdapter = await createStateAdapter();
+
         expect(
           await stateAdapter.getWorkers({ workerIds: [stateAdapter.config.generateWorkerId()] }),
         ).toEqual([undefined]);
@@ -24,7 +28,9 @@ export const getWorkersGroup: ConformanceGroup<StateConformanceFixture> = {
     },
     {
       name: "returns workers in input order with their type names and concurrency",
-      run: async ({ stateAdapter }, expect) => {
+      run: async ({ createStateAdapter }, expect) => {
+        await using stateAdapter = await createStateAdapter();
+
         const firstWorkerId = stateAdapter.config.generateWorkerId();
         const secondWorkerId = stateAdapter.config.generateWorkerId();
         const missingWorkerId = stateAdapter.config.generateWorkerId();
@@ -75,7 +81,9 @@ export const getWorkersGroup: ConformanceGroup<StateConformanceFixture> = {
     },
     {
       name: "returns an unreclaimed worker whose lease is no longer live, with its leaseUntil",
-      run: async ({ stateAdapter }, expect) => {
+      run: async ({ createStateAdapter }, expect) => {
+        await using stateAdapter = await createStateAdapter();
+
         const started = await stateAdapter.startWorker({
           workerId: stateAdapter.config.generateWorkerId(),
           typeNames: [],
@@ -92,7 +100,9 @@ export const getWorkersGroup: ConformanceGroup<StateConformanceFixture> = {
     },
     {
       name: "returns undefined for a stopped worker",
-      run: async ({ stateAdapter }, expect) => {
+      run: async ({ createStateAdapter }, expect) => {
+        await using stateAdapter = await createStateAdapter();
+
         const worker = await stateAdapter.startWorker({
           workerId: stateAdapter.config.generateWorkerId(),
           typeNames: [],
@@ -109,7 +119,9 @@ export const getWorkersGroup: ConformanceGroup<StateConformanceFixture> = {
     },
     {
       name: "reports expired once the lease passes",
-      run: async ({ stateAdapter }, expect) => {
+      run: async ({ createStateAdapter }, expect) => {
+        await using stateAdapter = await createStateAdapter();
+
         const workerId = stateAdapter.config.generateWorkerId();
         await stateAdapter.startWorker({
           workerId,
@@ -127,7 +139,9 @@ export const getWorkersGroup: ConformanceGroup<StateConformanceFixture> = {
     },
     {
       name: "lock: exclusive returns the workers inside a transaction",
-      run: async ({ stateAdapter }, expect) => {
+      run: async ({ createStateAdapter }, expect) => {
+        await using stateAdapter = await createStateAdapter();
+
         const workerId = stateAdapter.config.generateWorkerId();
         const missingWorkerId = stateAdapter.config.generateWorkerId();
         await stateAdapter.startWorker({
@@ -164,7 +178,9 @@ export const getWorkersGroup: ConformanceGroup<StateConformanceFixture> = {
     },
     {
       name: "lock: exclusive blocks a concurrent locked read until the holding tx commits",
-      run: async ({ stateAdapter }, expect) => {
+      run: async ({ createStateAdapter }, expect) => {
+        await using stateAdapter = await createStateAdapter();
+
         const workerId = stateAdapter.config.generateWorkerId();
         await stateAdapter.startWorker({
           workerId,
@@ -204,7 +220,9 @@ export const getWorkersGroup: ConformanceGroup<StateConformanceFixture> = {
     },
     {
       name: "reads a lease that ended during an open transaction as expired",
-      run: async ({ stateAdapter }, expect) => {
+      run: async ({ createStateAdapter }, expect) => {
+        await using stateAdapter = await createStateAdapter();
+
         const workerId = stateAdapter.config.generateWorkerId();
 
         const worker = await stateAdapter.withTransaction(async (txCtx) => {

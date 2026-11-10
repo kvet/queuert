@@ -1,5 +1,6 @@
 import {
   stateAdapterBaseGroups,
+  stateAdapterCountCapGroups,
   stateAdapterSchemaFenceGroups,
 } from "queuert/conformance-internal";
 import { conformanceTestSuite } from "queuert/testing";
@@ -26,6 +27,10 @@ describe("SQLite State Adapter Variance - Limits", () => {
 
   conformanceTestSuite({
     it,
-    groups: [...stateAdapterBaseGroups, ...stateAdapterSchemaFenceGroups],
+    groups: [
+      ...stateAdapterBaseGroups,
+      ...stateAdapterCountCapGroups,
+      ...stateAdapterSchemaFenceGroups,
+    ],
   });
 });

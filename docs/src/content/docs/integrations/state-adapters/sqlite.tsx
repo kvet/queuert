@@ -194,14 +194,17 @@ const Page = () => (
 
     <h2 id="testing-your-provider">Testing your provider</h2>
     <p>
-      <code>runSqliteStateProviderConformance</code> from <code>@queuert/sqlite/conformance</code>{" "}
-      checks a provider you write. It builds the adapter over your provider, migrates it and
-      truncates its tables before every case, then runs every case a state adapter must pass, and
-      checks that <code>classifyError</code> names a missing table. Its fixture is{" "}
-      <code>stateProvider</code>, an optional <code>withNonTransactionContext</code> that runs a
-      callback with a context outside any transaction (cases that need it are skipped without it),
-      and an optional <code>dispose</code>. The runner is framework-agnostic: it throws on failure,
-      so embed it in a single <code>test()</code> block, as each example does:
+      <code>@queuert/sqlite/conformance</code> checks a provider you write.{" "}
+      <code>sqliteStateProviderConformanceCases</code> are every case a state adapter must pass,
+      checks of the schema write fence, and checks that <code>classifyError</code> names a missing
+      table. <code>createSqliteStateProviderConformanceContext</code> prepares the context they run
+      against: it takes a <code>createStateProvider</code> factory and a{" "}
+      <code>withNonTransactionContext</code> that runs a callback with a context outside any
+      transaction, and migrates the schema once. Each case then builds its own adapter over a new
+      provider from your factory, with the tables cleared, and closes both when it ends. The suite
+      drives no test runner: your test file owns the database in its own hooks and registers one
+      test per case. The node:sqlite example runs under <code>node:test</code>, the Bun examples
+      under <code>bun:test</code> and the others under vitest:
     </p>
     <Tabs syncKey="sqlite-driver">
       <TabItem label="better-sqlite3">
@@ -269,6 +272,9 @@ const Page = () => (
         />
       </TabItem>
     </Tabs>
+    <p>
+      The full API is in the <A href="/api/sqlite-conformance/readme/">conformance reference</A>.
+    </p>
 
     <h2>Your transactions</h2>
     <p>

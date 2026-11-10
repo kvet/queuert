@@ -6,8 +6,7 @@ import type { ConformanceGroup } from "./runner.ts";
  * Builders that the adapter author supplies to satisfy the validation
  * conformance suite. Each builder's RETURN TYPE encodes the expected phantom
  * job type definitions, so the adapter's schema-to-shape mapper must thread
- * inference correctly to type-check at the call site of
- * {@link runValidationAdapterConformance}.
+ * inference correctly to type-check where the context is declared.
  *
  * Conformance verifies the wrapper layer only — the eight runtime methods and
  * the way they integrate with core's `createJobTypes` error wrapping.
@@ -16,12 +15,7 @@ import type { ConformanceGroup } from "./runner.ts";
  * and are tested there; the positive type checks below are sufficient to
  * prove the adapter feeds them correctly.
  */
-export type ValidationConformanceFixture = {
-  /**
-   * Optional hook called once after all conformance cases finish (pass or
-   * fail) to release any resources the adapter held.
-   */
-  dispose?: () => Promise<void>;
+export type ValidationAdapterConformanceContext = {
   basic: {
     /** main: entry, input { id: string }, output { ok: boolean } — no continueWith, no blockers. */
     buildEntry: () => JobTypes<{
@@ -144,7 +138,7 @@ export type ValidationConformanceFixture = {
    * Cross-slice external typing. Every adapter must thread the external
    * generic so multi-slice setups type correctly. The two-arg
    * `JobTypes<TInternal, TExternal>` return type makes this verifiable at the
-   * fixture call site.
+   * call site.
    */
   external: {
     buildWithExternalSlice: () => JobTypes<
@@ -221,8 +215,6 @@ export type ValidationConformanceFixture = {
     >;
   };
 };
-
-export type ValidationAdapterConformanceContext = Omit<ValidationConformanceFixture, "dispose">;
 
 const assertJobTypeValidationError = (
   thrown: unknown,

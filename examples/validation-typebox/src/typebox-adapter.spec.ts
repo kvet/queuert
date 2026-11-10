@@ -1,11 +1,14 @@
 import { Type } from "@sinclair/typebox";
-import { runValidationAdapterConformance } from "queuert/conformance";
-import { test } from "vitest";
+import {
+  type ValidationAdapterConformanceContext,
+  validationAdapterConformanceCases,
+} from "queuert/conformance";
+import { describe, test } from "vitest";
 
 import { createTypeBoxJobTypes } from "./typebox-adapter.ts";
 
-test("typebox adapter passes validation conformance", async () => {
-  await runValidationAdapterConformance(async () => ({
+describe("typebox adapter conformance", () => {
+  const context: ValidationAdapterConformanceContext = {
     basic: {
       buildEntry: () =>
         createTypeBoxJobTypes({
@@ -153,5 +156,11 @@ test("typebox adapter passes validation conformance", async () => {
         );
       },
     },
-  }));
+  };
+
+  for (const conformanceCase of validationAdapterConformanceCases) {
+    test(conformanceCase.title, async () => {
+      await conformanceCase.run(context);
+    });
+  }
 });

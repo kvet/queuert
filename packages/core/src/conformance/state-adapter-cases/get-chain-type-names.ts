@@ -1,19 +1,23 @@
 import type { ConformanceGroup } from "../runner.ts";
-import type { StateConformanceFixture } from "./types.ts";
+import type { StateAdapterConformanceContext } from "./types.ts";
 
-export const getChainTypeNamesGroup: ConformanceGroup<StateConformanceFixture> = {
+export const getChainTypeNamesGroup: ConformanceGroup<StateAdapterConformanceContext> = {
   name: "getChainTypeNames",
   cases: [
     {
       name: "getChainTypeNames returns empty array when no jobs exist",
-      run: async ({ stateAdapter }, expect) => {
+      run: async ({ createStateAdapter }, expect) => {
+        await using stateAdapter = await createStateAdapter();
+
         const result = await stateAdapter.getChainTypeNames({});
         expect(result).toEqual([]);
       },
     },
     {
       name: "getChainTypeNames returns distinct chain type names",
-      run: async ({ stateAdapter }, expect) => {
+      run: async ({ createStateAdapter }, expect) => {
+        await using stateAdapter = await createStateAdapter();
+
         await stateAdapter.withTransaction(async (txCtx) =>
           stateAdapter.createJobs({
             txCtx,
@@ -32,7 +36,9 @@ export const getChainTypeNamesGroup: ConformanceGroup<StateConformanceFixture> =
     },
     {
       name: "getChainTypeNames does not include continuation-only type names",
-      run: async ({ stateAdapter }, expect) => {
+      run: async ({ createStateAdapter }, expect) => {
+        await using stateAdapter = await createStateAdapter();
+
         const [headChain] = await stateAdapter.withTransaction(async (txCtx) =>
           stateAdapter.createJobs({
             txCtx,

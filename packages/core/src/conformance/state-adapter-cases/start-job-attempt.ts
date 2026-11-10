@@ -1,16 +1,18 @@
 import { sleep } from "@queuert/helpers";
 
 import type { ConformanceGroup } from "../runner.ts";
-import type { StateConformanceFixture } from "./types.ts";
+import type { StateAdapterConformanceContext } from "./types.ts";
 
 const LOCK_BLOCK_OBSERVATION_MS = 100;
 
-export const startJobAttemptGroup: ConformanceGroup<StateConformanceFixture> = {
+export const startJobAttemptGroup: ConformanceGroup<StateAdapterConformanceContext> = {
   name: "startJobAttempts",
   cases: [
     {
       name: "acquires oldest eligible pending job",
-      run: async ({ stateAdapter }, expect) => {
+      run: async ({ createStateAdapter }, expect) => {
+        await using stateAdapter = await createStateAdapter();
+
         const worker = await stateAdapter.startWorker({
           workerId: stateAdapter.config.generateWorkerId(),
           typeNames: ["acquire-test"],
@@ -62,7 +64,9 @@ export const startJobAttemptGroup: ConformanceGroup<StateConformanceFixture> = {
     },
     {
       name: "returns no jobs when no eligible jobs exist",
-      run: async ({ stateAdapter }, expect) => {
+      run: async ({ createStateAdapter }, expect) => {
+        await using stateAdapter = await createStateAdapter();
+
         const worker = await stateAdapter.startWorker({
           workerId: stateAdapter.config.generateWorkerId(),
           typeNames: ["nonexistent-type"],
@@ -81,7 +85,9 @@ export const startJobAttemptGroup: ConformanceGroup<StateConformanceFixture> = {
     },
     {
       name: "does not acquire blocked jobs",
-      run: async ({ stateAdapter }, expect) => {
+      run: async ({ createStateAdapter }, expect) => {
+        await using stateAdapter = await createStateAdapter();
+
         const worker = await stateAdapter.startWorker({
           workerId: stateAdapter.config.generateWorkerId(),
           typeNames: ["blocked-skip"],
@@ -128,7 +134,9 @@ export const startJobAttemptGroup: ConformanceGroup<StateConformanceFixture> = {
     },
     {
       name: "does not acquire blocked jobs when no unblocked jobs exist",
-      run: async ({ stateAdapter }, expect) => {
+      run: async ({ createStateAdapter }, expect) => {
+        await using stateAdapter = await createStateAdapter();
+
         const worker = await stateAdapter.startWorker({
           workerId: stateAdapter.config.generateWorkerId(),
           typeNames: ["blocked-only"],
@@ -207,7 +215,9 @@ export const startJobAttemptGroup: ConformanceGroup<StateConformanceFixture> = {
     },
     {
       name: "does not acquire jobs scheduled in the future",
-      run: async ({ stateAdapter }, expect) => {
+      run: async ({ createStateAdapter }, expect) => {
+        await using stateAdapter = await createStateAdapter();
+
         const worker = await stateAdapter.startWorker({
           workerId: stateAdapter.config.generateWorkerId(),
           typeNames: ["future-acquire"],
@@ -240,7 +250,9 @@ export const startJobAttemptGroup: ConformanceGroup<StateConformanceFixture> = {
     },
     {
       name: "acquires up to limit jobs, oldest first",
-      run: async ({ stateAdapter }, expect) => {
+      run: async ({ createStateAdapter }, expect) => {
+        await using stateAdapter = await createStateAdapter();
+
         const worker = await stateAdapter.startWorker({
           workerId: stateAdapter.config.generateWorkerId(),
           typeNames: ["acquire-limit"],
@@ -291,7 +303,9 @@ export const startJobAttemptGroup: ConformanceGroup<StateConformanceFixture> = {
     },
     {
       name: "acquires jobs of several types in one call",
-      run: async ({ stateAdapter }, expect) => {
+      run: async ({ createStateAdapter }, expect) => {
+        await using stateAdapter = await createStateAdapter();
+
         const worker = await stateAdapter.startWorker({
           workerId: stateAdapter.config.generateWorkerId(),
           typeNames: ["acquire-multi-a", "acquire-multi-b"],
@@ -326,7 +340,9 @@ export const startJobAttemptGroup: ConformanceGroup<StateConformanceFixture> = {
     },
     {
       name: "returns the acquired job's chain",
-      run: async ({ stateAdapter }, expect) => {
+      run: async ({ createStateAdapter }, expect) => {
+        await using stateAdapter = await createStateAdapter();
+
         const worker = await stateAdapter.startWorker({
           workerId: stateAdapter.config.generateWorkerId(),
           typeNames: ["acquire-chain"],
@@ -363,7 +379,9 @@ export const startJobAttemptGroup: ConformanceGroup<StateConformanceFixture> = {
     },
     {
       name: "reports hasBlockers only for jobs that have blocker rows",
-      run: async ({ stateAdapter }, expect) => {
+      run: async ({ createStateAdapter }, expect) => {
+        await using stateAdapter = await createStateAdapter();
+
         const worker = await stateAdapter.startWorker({
           workerId: stateAdapter.config.generateWorkerId(),
           typeNames: ["has-blockers", "has-no-blockers"],
@@ -441,7 +459,9 @@ export const startJobAttemptGroup: ConformanceGroup<StateConformanceFixture> = {
     },
     {
       name: "only acquires jobs of typeNames",
-      run: async ({ stateAdapter }, expect) => {
+      run: async ({ createStateAdapter }, expect) => {
+        await using stateAdapter = await createStateAdapter();
+
         const worker = await stateAdapter.startWorker({
           workerId: stateAdapter.config.generateWorkerId(),
           typeNames: ["timeout-unrelated"],
@@ -468,7 +488,9 @@ export const startJobAttemptGroup: ConformanceGroup<StateConformanceFixture> = {
     },
     {
       name: "acquires without a txCtx, committing the attempt on its own",
-      run: async ({ stateAdapter }, expect) => {
+      run: async ({ createStateAdapter }, expect) => {
+        await using stateAdapter = await createStateAdapter();
+
         const worker = await stateAdapter.startWorker({
           workerId: stateAdapter.config.generateWorkerId(),
           typeNames: ["acquire-autocommit"],
@@ -520,7 +542,9 @@ export const startJobAttemptGroup: ConformanceGroup<StateConformanceFixture> = {
     },
     {
       name: "claims nothing for a worker with no row",
-      run: async ({ stateAdapter }, expect) => {
+      run: async ({ createStateAdapter }, expect) => {
+        await using stateAdapter = await createStateAdapter();
+
         const [createdChain] = await stateAdapter.withTransaction(async (txCtx) =>
           stateAdapter.createJobs({
             txCtx,
@@ -547,7 +571,9 @@ export const startJobAttemptGroup: ConformanceGroup<StateConformanceFixture> = {
     },
     {
       name: "claims nothing once the worker's lease expired",
-      run: async ({ stateAdapter }, expect) => {
+      run: async ({ createStateAdapter }, expect) => {
+        await using stateAdapter = await createStateAdapter();
+
         const worker = await stateAdapter.startWorker({
           workerId: stateAdapter.config.generateWorkerId(),
           typeNames: ["gate-expired"],
@@ -581,7 +607,9 @@ export const startJobAttemptGroup: ConformanceGroup<StateConformanceFixture> = {
     },
     {
       name: "claims nothing after the worker stopped",
-      run: async ({ stateAdapter }, expect) => {
+      run: async ({ createStateAdapter }, expect) => {
+        await using stateAdapter = await createStateAdapter();
+
         const worker = await stateAdapter.startWorker({
           workerId: stateAdapter.config.generateWorkerId(),
           typeNames: ["gate-stopped"],
@@ -624,7 +652,9 @@ export const startJobAttemptGroup: ConformanceGroup<StateConformanceFixture> = {
     },
     {
       name: "claims nothing for a stale registration of the worker",
-      run: async ({ stateAdapter }, expect) => {
+      run: async ({ createStateAdapter }, expect) => {
+        await using stateAdapter = await createStateAdapter();
+
         const workerId = stateAdapter.config.generateWorkerId();
         const staleRun = await stateAdapter.startWorker({
           workerId,
@@ -676,7 +706,9 @@ export const startJobAttemptGroup: ConformanceGroup<StateConformanceFixture> = {
     },
     {
       name: "a claim waiting on a transaction that locks and deletes the worker claims nothing",
-      run: async ({ stateAdapter }, expect) => {
+      run: async ({ createStateAdapter }, expect) => {
+        await using stateAdapter = await createStateAdapter();
+
         const worker = await stateAdapter.startWorker({
           workerId: stateAdapter.config.generateWorkerId(),
           typeNames: ["gate-reclaimed"],
@@ -733,7 +765,9 @@ export const startJobAttemptGroup: ConformanceGroup<StateConformanceFixture> = {
     },
     {
       name: "claims a job whose schedule passed during an open transaction",
-      run: async ({ stateAdapter }, expect) => {
+      run: async ({ createStateAdapter }, expect) => {
+        await using stateAdapter = await createStateAdapter();
+
         const jobId = stateAdapter.config.generateJobId();
 
         const acquired = await stateAdapter.withTransaction(async (txCtx) => {
@@ -771,13 +805,15 @@ export const startJobAttemptGroup: ConformanceGroup<StateConformanceFixture> = {
   ],
 };
 
-export const startJobAttemptConcurrentTransactionsGroup: ConformanceGroup<StateConformanceFixture> =
+export const startJobAttemptConcurrentTransactionsGroup: ConformanceGroup<StateAdapterConformanceContext> =
   {
     name: "startJobAttempts",
     cases: [
       {
         name: "parallel calls return distinct jobs (no double-dispatch)",
-        run: async ({ stateAdapter }, expect) => {
+        run: async ({ createStateAdapter }, expect) => {
+          await using stateAdapter = await createStateAdapter();
+
           const worker = await stateAdapter.startWorker({
             workerId: stateAdapter.config.generateWorkerId(),
             typeNames: ["acquire-concurrency"],
@@ -816,7 +852,9 @@ export const startJobAttemptConcurrentTransactionsGroup: ConformanceGroup<StateC
       },
       {
         name: "parallel batched calls return disjoint jobs",
-        run: async ({ stateAdapter }, expect) => {
+        run: async ({ createStateAdapter }, expect) => {
+          await using stateAdapter = await createStateAdapter();
+
           const worker = await stateAdapter.startWorker({
             workerId: stateAdapter.config.generateWorkerId(),
             typeNames: ["acquire-batch-concurrency"],
@@ -863,7 +901,9 @@ export const startJobAttemptConcurrentTransactionsGroup: ConformanceGroup<StateC
       },
       {
         name: "acquires a due job while only its chain head is locked",
-        run: async ({ stateAdapter }, expect) => {
+        run: async ({ createStateAdapter }, expect) => {
+          await using stateAdapter = await createStateAdapter();
+
           const worker = await stateAdapter.startWorker({
             workerId: stateAdapter.config.generateWorkerId(),
             typeNames: ["locked-head-acquire"],
@@ -931,7 +971,9 @@ export const startJobAttemptConcurrentTransactionsGroup: ConformanceGroup<StateC
       },
       {
         name: "skips a due job whose row is locked and getStartAttemptDelayMs ignores it",
-        run: async ({ stateAdapter }, expect) => {
+        run: async ({ createStateAdapter }, expect) => {
+          await using stateAdapter = await createStateAdapter();
+
           const worker = await stateAdapter.startWorker({
             workerId: stateAdapter.config.generateWorkerId(),
             typeNames: ["locked-job"],

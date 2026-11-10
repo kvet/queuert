@@ -1,18 +1,22 @@
 import type { ConformanceGroup } from "../runner.ts";
-import type { StateConformanceFixture } from "./types.ts";
+import type { StateAdapterConformanceContext } from "./types.ts";
 
-export const countWorkersByTypeNameGroup: ConformanceGroup<StateConformanceFixture> = {
+export const countWorkersByTypeNameGroup: ConformanceGroup<StateAdapterConformanceContext> = {
   name: "countWorkersByTypeName",
   cases: [
     {
       name: "returns an empty array for empty type names",
-      run: async ({ stateAdapter }, expect) => {
+      run: async ({ createStateAdapter }, expect) => {
+        await using stateAdapter = await createStateAdapter();
+
         expect(await stateAdapter.countWorkersByTypeName({ typeNames: [] })).toEqual([]);
       },
     },
     {
       name: "counts the workers processing each type, in input order",
-      run: async ({ stateAdapter }, expect) => {
+      run: async ({ createStateAdapter }, expect) => {
+        await using stateAdapter = await createStateAdapter();
+
         await stateAdapter.startWorker({
           workerId: stateAdapter.config.generateWorkerId(),
           typeNames: ["send-welcome-email", "sync-to-crm"],
@@ -39,7 +43,9 @@ export const countWorkersByTypeNameGroup: ConformanceGroup<StateConformanceFixtu
     },
     {
       name: "counts a worker whose lease is no longer live as expired",
-      run: async ({ stateAdapter }, expect) => {
+      run: async ({ createStateAdapter }, expect) => {
+        await using stateAdapter = await createStateAdapter();
+
         await stateAdapter.startWorker({
           workerId: stateAdapter.config.generateWorkerId(),
           typeNames: ["render-invoice-pdf"],
@@ -60,7 +66,9 @@ export const countWorkersByTypeNameGroup: ConformanceGroup<StateConformanceFixtu
     },
     {
       name: "does not count a stopped worker",
-      run: async ({ stateAdapter }, expect) => {
+      run: async ({ createStateAdapter }, expect) => {
+        await using stateAdapter = await createStateAdapter();
+
         const worker = await stateAdapter.startWorker({
           workerId: stateAdapter.config.generateWorkerId(),
           typeNames: ["capture-payment"],

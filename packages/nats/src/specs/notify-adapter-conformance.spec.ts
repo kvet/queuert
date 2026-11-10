@@ -1,6 +1,6 @@
 import { connect } from "@nats-io/transport-node";
 import { extendWithNats } from "@queuert/testcontainers";
-import type { NotifyConformanceFixture } from "queuert/conformance";
+import type { NotifyAdapterConformanceContext } from "queuert/conformance";
 import { notifyAdapterBaseGroups } from "queuert/conformance-internal";
 import { type ConformanceFixtures, conformanceTestSuite } from "queuert/testing";
 import { it as baseIt, describe } from "vitest";
@@ -9,26 +9,27 @@ import { createNatsNotifyAdapter } from "../notify-adapter/notify-adapter.nats.t
 
 const it = extendWithNats(baseIt, import.meta.url);
 
-const defaultPrefixIt = it.extend<ConformanceFixtures<NotifyConformanceFixture>>({
+const defaultPrefixIt = it.extend<ConformanceFixtures<NotifyAdapterConformanceContext>>({
   conformance: [
     async ({ natsConnectionOptions }, use) => {
       const nc = await connect(natsConnectionOptions);
-      await use({ notifyAdapter: createNatsNotifyAdapter({ nc }) });
+      await use({ createNotifyAdapter: async () => createNatsNotifyAdapter({ nc }) });
       await nc.close();
     },
     { scope: "file" },
   ],
 });
 
-const customPrefixIt = it.extend<ConformanceFixtures<NotifyConformanceFixture>>({
+const customPrefixIt = it.extend<ConformanceFixtures<NotifyAdapterConformanceContext>>({
   conformance: [
     async ({ natsConnectionOptions }, use) => {
       const nc = await connect(natsConnectionOptions);
       await use({
-        notifyAdapter: createNatsNotifyAdapter({
-          nc,
-          subjectPrefix: `myapp.notifications.${crypto.randomUUID()}`,
-        }),
+        createNotifyAdapter: async () =>
+          createNatsNotifyAdapter({
+            nc,
+            subjectPrefix: `myapp.notifications.${crypto.randomUUID()}`,
+          }),
       });
       await nc.close();
     },
@@ -40,9 +41,15 @@ const customPrefixIt = it.extend<ConformanceFixtures<NotifyConformanceFixture>>(
 it("index");
 
 describe("NATS Notify Adapter Conformance - Default Subject Prefix", () => {
-  conformanceTestSuite({ it: defaultPrefixIt, groups: notifyAdapterBaseGroups });
+  conformanceTestSuite({
+    it: defaultPrefixIt,
+    groups: notifyAdapterBaseGroups,
+  });
 });
 
 describe("NATS Notify Adapter Conformance - Custom Subject Prefix", () => {
-  conformanceTestSuite({ it: customPrefixIt, groups: notifyAdapterBaseGroups });
+  conformanceTestSuite({
+    it: customPrefixIt,
+    groups: notifyAdapterBaseGroups,
+  });
 });

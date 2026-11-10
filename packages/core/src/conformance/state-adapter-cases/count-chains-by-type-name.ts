@@ -1,59 +1,23 @@
 import type { ConformanceGroup } from "../runner.ts";
-import type { StateConformanceFixture } from "./types.ts";
+import type { StateAdapterConformanceContext } from "./types.ts";
 
-export const countChainsByTypeNameGroup: ConformanceGroup<StateConformanceFixture> = {
+export const countChainsByTypeNameGroup: ConformanceGroup<StateAdapterConformanceContext> = {
   name: "countChainsByTypeName",
   cases: [
     {
-      name: "countChainsByTypeName and countJobsByTypeName stop counting at config.countCap",
-      run: async ({ stateAdapter }, expect) => {
-        const { countCap } = stateAdapter.config;
-        if (countCap > 50) {
-          expect.skip("countCap too large to exercise");
-          return;
-        }
-        await stateAdapter.withTransaction(async (txCtx) =>
-          stateAdapter.createJobs({
-            txCtx,
-            jobs: [
-              ...Array.from({ length: countCap + 1 }, () => ({
-                id: stateAdapter.config.generateJobId(),
-                typeName: "over-cap",
-                input: null,
-              })),
-              ...Array.from({ length: countCap }, () => ({
-                id: stateAdapter.config.generateJobId(),
-                typeName: "at-cap",
-                input: null,
-              })),
-            ],
-          }),
-        );
-
-        expect(
-          await stateAdapter.countChainsByTypeName({ typeNames: ["over-cap", "at-cap"] }),
-        ).toEqual([
-          { running: { count: countCap, hasMore: true }, completed: { count: 0, hasMore: false } },
-          { running: { count: countCap, hasMore: false }, completed: { count: 0, hasMore: false } },
-        ]);
-
-        const [over, at] = await stateAdapter.countJobsByTypeName({
-          typeNames: ["over-cap", "at-cap"],
-        });
-        expect(over.pending).toEqual({ count: countCap, hasMore: true });
-        expect(at.pending).toEqual({ count: countCap, hasMore: false });
-      },
-    },
-    {
       name: "countChainsByTypeName returns empty array for empty input",
-      run: async ({ stateAdapter }, expect) => {
+      run: async ({ createStateAdapter }, expect) => {
+        await using stateAdapter = await createStateAdapter();
+
         const result = await stateAdapter.countChainsByTypeName({ typeNames: [] });
         expect(result).toEqual([]);
       },
     },
     {
       name: "countChainsByTypeName returns zeros for unknown type names",
-      run: async ({ stateAdapter }, expect) => {
+      run: async ({ createStateAdapter }, expect) => {
+        await using stateAdapter = await createStateAdapter();
+
         const result = await stateAdapter.countChainsByTypeName({ typeNames: ["nonexistent"] });
         expect(result).toEqual([
           {
@@ -65,7 +29,9 @@ export const countChainsByTypeNameGroup: ConformanceGroup<StateConformanceFixtur
     },
     {
       name: "countChainsByTypeName counts running chains",
-      run: async ({ stateAdapter }, expect) => {
+      run: async ({ createStateAdapter }, expect) => {
+        await using stateAdapter = await createStateAdapter();
+
         await stateAdapter.withTransaction(async (txCtx) =>
           stateAdapter.createJobs({
             txCtx,
@@ -90,7 +56,9 @@ export const countChainsByTypeNameGroup: ConformanceGroup<StateConformanceFixtur
     },
     {
       name: "countChainsByTypeName counts completed chains",
-      run: async ({ stateAdapter }, expect) => {
+      run: async ({ createStateAdapter }, expect) => {
+        await using stateAdapter = await createStateAdapter();
+
         const worker = await stateAdapter.startWorker({
           workerId: stateAdapter.config.generateWorkerId(),
           typeNames: ["chain-done"],
@@ -129,7 +97,9 @@ export const countChainsByTypeNameGroup: ConformanceGroup<StateConformanceFixtur
     },
     {
       name: "countChainsByTypeName preserves input order",
-      run: async ({ stateAdapter }, expect) => {
+      run: async ({ createStateAdapter }, expect) => {
+        await using stateAdapter = await createStateAdapter();
+
         await stateAdapter.withTransaction(async (txCtx) =>
           stateAdapter.createJobs({
             txCtx,

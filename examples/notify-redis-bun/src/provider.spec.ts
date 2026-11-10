@@ -1,30 +1,43 @@
-import { test } from "bun:test";
+import { afterAll, beforeAll, describe, test } from "bun:test";
 
-import { runRedisNotifyProviderConformance } from "@queuert/redis/conformance";
-import { acquireRedis } from "@queuert/testcontainers";
+import {
+  createRedisNotifyProviderConformanceContext,
+  type NotifyAdapterConformanceContext,
+  redisNotifyProviderConformanceCases,
+} from "@queuert/redis/conformance";
+import { acquireRedis, type AcquiredRedis } from "@queuert/testcontainers";
 import { RedisClient } from "bun";
 
 import { createBunRedisNotifyProvider } from "./provider.ts";
 
 // #region conformance
-test("notify-redis-bun provider passes notify provider conformance", async () => {
-  await using redis = await acquireRedis("redis:8");
+describe("notify-redis-bun provider conformance", () => {
+  let redis: AcquiredRedis;
+  let client: RedisClient;
+  let subscribeClient: RedisClient;
+  let context: NotifyAdapterConformanceContext;
 
-  await runRedisNotifyProviderConformance(async () => {
-    const client = new RedisClient(redis.connectionUrl);
-    const subscribeClient = new RedisClient(redis.connectionUrl);
+  beforeAll(async () => {
+    redis = await acquireRedis("redis:8");
+    client = new RedisClient(redis.connectionUrl);
+    subscribeClient = new RedisClient(redis.connectionUrl);
     await client.connect();
     await subscribeClient.connect();
+    context = createRedisNotifyProviderConformanceContext({
+      createNotifyProvider: async () => createBunRedisNotifyProvider({ client, subscribeClient }),
+    });
+  }, 60_000);
 
-    const notifyProvider = createBunRedisNotifyProvider({ client, subscribeClient });
-
-    return {
-      notifyProvider,
-      dispose: async () => {
-        client.close();
-        subscribeClient.close();
-      },
-    };
+  afterAll(async () => {
+    client.close();
+    subscribeClient.close();
+    await redis[Symbol.asyncDispose]();
   });
-}, 120_000);
+
+  for (const conformanceCase of redisNotifyProviderConformanceCases) {
+    test(conformanceCase.title, async () => {
+      await conformanceCase.run(context);
+    });
+  }
+});
 // #endregion

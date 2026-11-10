@@ -1,30 +1,43 @@
-import { runPgStateProviderConformance } from "@queuert/postgres/conformance";
-import { acquirePostgres } from "@queuert/testcontainers";
+import {
+  createPgStateProviderConformanceContext,
+  type PgStateProviderConformanceContext,
+  pgStateProviderConformanceCases,
+} from "@queuert/postgres/conformance";
+import { acquirePostgres, type AcquiredPostgres } from "@queuert/testcontainers";
 import { Kysely, PostgresDialect } from "kysely";
 import { Pool } from "pg";
-import { test } from "vitest";
+import { afterAll, beforeAll, describe, test } from "vitest";
 
 import { createKyselyPgStateProvider } from "./provider.ts";
 
 type Database = Record<string, never>;
 
 // #region conformance
-test("state-postgres-kysely provider passes state provider conformance", async () => {
-  await using pg = await acquirePostgres("postgres:18", import.meta.url);
+describe("state-postgres-kysely provider conformance", () => {
+  let pg: AcquiredPostgres;
+  let db: Kysely<Database>;
+  let context: PgStateProviderConformanceContext;
 
-  await runPgStateProviderConformance(async () => {
+  beforeAll(async () => {
+    pg = await acquirePostgres("postgres:18", import.meta.url);
     const pool = new Pool({ connectionString: pg.connectionString, idleTimeoutMillis: 0 });
-    const db = new Kysely<Database>({ dialect: new PostgresDialect({ pool }) });
+    const kysely = new Kysely<Database>({ dialect: new PostgresDialect({ pool }) });
+    db = kysely;
+    context = await createPgStateProviderConformanceContext({
+      createStateProvider: async () => createKyselyPgStateProvider({ db: kysely }),
+      withNonTransactionContext: async (fn) => fn({ db: kysely }),
+    });
+  }, 60_000);
 
-    const stateProvider = createKyselyPgStateProvider({ db });
-
-    return {
-      stateProvider,
-      withNonTransactionContext: async (fn) => fn({ db }),
-      dispose: async () => {
-        await db.destroy();
-      },
-    };
+  afterAll(async () => {
+    await db.destroy();
+    await pg[Symbol.asyncDispose]();
   });
-}, 60_000);
+
+  for (const conformanceCase of pgStateProviderConformanceCases) {
+    test(conformanceCase.title, async () => {
+      await conformanceCase.run(context);
+    });
+  }
+});
 // #endregion

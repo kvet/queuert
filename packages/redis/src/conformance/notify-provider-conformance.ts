@@ -1,71 +1,69 @@
 import { randomUUID } from "node:crypto";
 
-import type {
-  ConformanceOptions,
-  ConformanceReport,
-  NotifyConformanceFixture,
-} from "queuert/conformance";
+import type { ConformanceTestCase, NotifyAdapterConformanceContext } from "queuert/conformance";
 import {
   type ConformanceGroup,
   notifyAdapterBaseGroups,
-  runFixtureConformance,
+  toConformanceTestCases,
 } from "queuert/conformance-internal";
 
 import { createRedisNotifyAdapter } from "../notify-adapter/notify-adapter.redis.ts";
 import type { RedisNotifyProvider } from "../notify-provider/notify-provider.redis.ts";
 
-/** Fixture for {@link runRedisNotifyProviderConformance}. */
-export type RedisNotifyProviderConformanceFixture = {
-  /** The provider under test. */
-  notifyProvider: RedisNotifyProvider;
-  /** Called once after all cases finish (pass or fail) to release resources. */
-  dispose?: () => Promise<void>;
+/** What {@link createRedisNotifyProviderConformanceContext} takes. */
+export type RedisNotifyProviderConformanceContextOptions = {
+  /**
+   * Creates the provider under test. Each case's adapter gets its own provider and closes it when
+   * the case ends, so closing one must not release resources the next one needs, such as the
+   * client connections.
+   */
+  createNotifyProvider: () => Promise<RedisNotifyProvider>;
 };
 
-export const redisNotifyProviderConformanceGroups: ConformanceGroup<NotifyConformanceFixture>[] =
+export const redisNotifyProviderConformanceGroups: ConformanceGroup<NotifyAdapterConformanceContext>[] =
   notifyAdapterBaseGroups;
 
-export const createRedisNotifyConformanceContext = ({
-  notifyProvider,
-  dispose,
-}: RedisNotifyProviderConformanceFixture): NotifyConformanceFixture & {
-  dispose?: () => Promise<void>;
-} => ({
-  notifyAdapter: createRedisNotifyAdapter({
-    notifyProvider,
-    channelPrefix: `queuert:conformance:${randomUUID()}`,
-  }),
-  dispose,
+/**
+ * Prepares the context the {@link redisNotifyProviderConformanceCases} run against: a notify
+ * adapter per case over a new provider, on channels of its own. The test file still owns the
+ * provider's resources and releases them itself.
+ */
+export const createRedisNotifyProviderConformanceContext = ({
+  createNotifyProvider,
+}: RedisNotifyProviderConformanceContextOptions): NotifyAdapterConformanceContext => ({
+  // A channel prefix per adapter keeps one case's notifications away from the next.
+  createNotifyAdapter: async () =>
+    createRedisNotifyAdapter({
+      notifyProvider: await createNotifyProvider(),
+      channelPrefix: `queuert:conformance:${randomUUID()}`,
+    }),
 });
 
 /**
- * Run the conformance suite against a {@link RedisNotifyProvider}: every notify adapter case, run
- * through `createRedisNotifyAdapter` over the provider. Test-framework agnostic: designed to be
- * embedded in a single test. Throws `ConformanceError` with an aggregated report on any failure.
+ * Every notify adapter case, run through `createRedisNotifyAdapter` over a provider. Run them one
+ * per test in your own test file against a context from {@link
+ * createRedisNotifyProviderConformanceContext}. Works with any test runner.
  *
  * @example
  * ```ts
- * await runRedisNotifyProviderConformance(async () => {
- *   const client = new Redis(url);
- *   const subscribeClient = new Redis(url);
- *   return {
- *     notifyProvider: createIoredisNotifyProvider({ client, subscribeClient }),
- *     dispose: async () => {
- *       await client.quit();
- *       await subscribeClient.quit();
- *     },
- *   };
+ * import { afterAll, test } from "vitest";
+ *
+ * const client = new Redis(url);
+ * const subscribeClient = new Redis(url);
+ * const context = createRedisNotifyProviderConformanceContext({
+ *   createNotifyProvider: async () => createIoredisNotifyProvider({ client, subscribeClient }),
  * });
+ * afterAll(async () => {
+ *   await client.quit();
+ *   await subscribeClient.quit();
+ * });
+ *
+ * for (const conformanceCase of redisNotifyProviderConformanceCases) {
+ *   test(conformanceCase.title, async () => {
+ *     await conformanceCase.run(context);
+ *   });
+ * }
  * ```
  */
-export const runRedisNotifyProviderConformance = async (
-  factory: () => Promise<RedisNotifyProviderConformanceFixture>,
-  options?: ConformanceOptions,
-): Promise<ConformanceReport> => {
-  const fixture = await factory();
-  return runFixtureConformance(
-    redisNotifyProviderConformanceGroups,
-    async () => createRedisNotifyConformanceContext(fixture),
-    options,
-  );
-};
+export const redisNotifyProviderConformanceCases: ConformanceTestCase<NotifyAdapterConformanceContext>[] =
+  toConformanceTestCases(redisNotifyProviderConformanceGroups);

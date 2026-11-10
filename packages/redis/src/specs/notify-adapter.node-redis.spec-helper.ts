@@ -80,6 +80,7 @@ export const extendWithNotifyRedis = <
             return notifyAdapter.listenJobAttemptLost(jobId, onNotification);
           },
           close: notifyAdapter.close,
+          [Symbol.asyncDispose]: notifyAdapter.close,
         };
 
         await use(flakyNotifyAdapter);

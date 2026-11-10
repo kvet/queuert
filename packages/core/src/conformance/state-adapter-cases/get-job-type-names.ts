@@ -1,19 +1,23 @@
 import type { ConformanceGroup } from "../runner.ts";
-import type { StateConformanceFixture } from "./types.ts";
+import type { StateAdapterConformanceContext } from "./types.ts";
 
-export const getJobTypeNamesGroup: ConformanceGroup<StateConformanceFixture> = {
+export const getJobTypeNamesGroup: ConformanceGroup<StateAdapterConformanceContext> = {
   name: "getJobTypeNames",
   cases: [
     {
       name: "getJobTypeNames returns empty array when no jobs exist",
-      run: async ({ stateAdapter }, expect) => {
+      run: async ({ createStateAdapter }, expect) => {
+        await using stateAdapter = await createStateAdapter();
+
         const result = await stateAdapter.getJobTypeNames({});
         expect(result).toEqual([]);
       },
     },
     {
       name: "getJobTypeNames returns distinct type names",
-      run: async ({ stateAdapter }, expect) => {
+      run: async ({ createStateAdapter }, expect) => {
+        await using stateAdapter = await createStateAdapter();
+
         await stateAdapter.withTransaction(async (txCtx) =>
           stateAdapter.createJobs({
             txCtx,
@@ -32,7 +36,9 @@ export const getJobTypeNamesGroup: ConformanceGroup<StateConformanceFixture> = {
     },
     {
       name: "getJobTypeNames includes continuation job type names",
-      run: async ({ stateAdapter }, expect) => {
+      run: async ({ createStateAdapter }, expect) => {
+        await using stateAdapter = await createStateAdapter();
+
         const [headChain] = await stateAdapter.withTransaction(async (txCtx) =>
           stateAdapter.createJobs({
             txCtx,

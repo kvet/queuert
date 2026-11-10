@@ -194,15 +194,16 @@ const Page = () => (
 
     <h2 id="testing-your-provider">Testing your provider</h2>
     <p>
-      <code>runPgStateProviderConformance</code> from <code>@queuert/postgres/conformance</code>{" "}
-      checks a provider you write. It builds the adapter over your provider, migrates it and
-      truncates its tables before every case, then runs every case a state adapter must pass and the
-      cases that hold two transactions open at once, and checks that <code>classifyError</code>{" "}
-      names a missing table. Its fixture is <code>stateProvider</code>, an optional{" "}
-      <code>withNonTransactionContext</code> that runs a callback with a context outside any
-      transaction (cases that need it are skipped without it), and an optional <code>dispose</code>.
-      The runner is framework-agnostic: it throws on failure, so embed it in a single{" "}
-      <code>test()</code> block, as each example does:
+      <code>@queuert/postgres/conformance</code> checks a provider you write.{" "}
+      <code>pgStateProviderConformanceCases</code> are every case a state adapter must pass, the
+      cases that hold two transactions open at once, checks of the schema write fence, and checks
+      that <code>classifyError</code> names a missing table.{" "}
+      <code>createPgStateProviderConformanceContext</code> prepares the context they run against: it
+      takes a <code>createStateProvider</code> factory and a <code>withNonTransactionContext</code>{" "}
+      that runs a callback with a context outside any transaction, and migrates the schema once.
+      Each case then builds its own adapter over a new provider from your factory, with the tables
+      cleared, and closes both when it ends. The suite drives no test runner: your test file owns
+      the database in its own hooks and registers one test per case, as each example does:
     </p>
     <Tabs syncKey="postgres-driver">
       <TabItem label="pg">
@@ -262,6 +263,9 @@ const Page = () => (
         />
       </TabItem>
     </Tabs>
+    <p>
+      The full API is in the <A href="/api/postgres-conformance/readme/">conformance reference</A>.
+    </p>
 
     <h2>Isolation level</h2>
     <p>

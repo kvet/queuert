@@ -1,27 +1,37 @@
-import { runSqliteStateProviderConformance } from "@queuert/sqlite/conformance";
+import {
+  createSqliteStateProviderConformanceContext,
+  type SqliteStateProviderConformanceContext,
+  sqliteStateProviderConformanceCases,
+} from "@queuert/sqlite/conformance";
 import knexFactory from "knex";
-import { test } from "vitest";
+import { afterAll, beforeAll, describe, test } from "vitest";
 
 import { createKnexSqliteStateProvider } from "./provider.ts";
 
 // #region conformance
-test("state-sqlite-knex provider passes state provider conformance", async () => {
-  await runSqliteStateProviderConformance(async () => {
-    const knex = knexFactory({
-      client: "better-sqlite3",
-      connection: { filename: ":memory:" },
-      useNullAsDefault: true,
-    });
-
-    const stateProvider = createKnexSqliteStateProvider({ knex });
-
-    return {
-      stateProvider,
-      withNonTransactionContext: async (fn) => fn({ trx: knex }),
-      dispose: async () => {
-        await knex.destroy();
-      },
-    };
+describe("state-sqlite-knex provider conformance", () => {
+  const knex = knexFactory({
+    client: "better-sqlite3",
+    connection: { filename: ":memory:" },
+    useNullAsDefault: true,
   });
-}, 30_000);
+  let context: SqliteStateProviderConformanceContext;
+
+  beforeAll(async () => {
+    context = await createSqliteStateProviderConformanceContext({
+      createStateProvider: async () => createKnexSqliteStateProvider({ knex }),
+      withNonTransactionContext: async (fn) => fn({ trx: knex }),
+    });
+  });
+
+  afterAll(async () => {
+    await knex.destroy();
+  });
+
+  for (const conformanceCase of sqliteStateProviderConformanceCases) {
+    test(conformanceCase.title, async () => {
+      await conformanceCase.run(context);
+    });
+  }
+});
 // #endregion

@@ -2,8 +2,11 @@ import { createAsyncRwLock, createSqliteStateAdapter } from "@queuert/sqlite";
 import Database from "better-sqlite3";
 import { createBetterSqlite3StateProvider } from "example-state-sqlite-better-sqlite3/provider";
 import { createClient, createWorkerRunner, createProcessors, withTxHooks } from "queuert";
-import { runValidationAdapterConformance } from "queuert/conformance";
-import { expect, test } from "vitest";
+import {
+  type ValidationAdapterConformanceContext,
+  validationAdapterConformanceCases,
+} from "queuert/conformance";
+import { describe, expect, test } from "vitest";
 import { z } from "zod";
 
 import { createZodCodecJobTypes } from "./zod-codec-adapter.ts";
@@ -157,8 +160,8 @@ test("validates structural blockers against the runtime form", async () => {
   await stateAdapter.close();
 });
 
-test("zod codec adapter passes validation conformance", async () => {
-  await runValidationAdapterConformance(async () => ({
+describe("zod codec adapter conformance", () => {
+  const context: ValidationAdapterConformanceContext = {
     basic: {
       buildEntry: () =>
         createZodCodecJobTypes({
@@ -306,5 +309,11 @@ test("zod codec adapter passes validation conformance", async () => {
         );
       },
     },
-  }));
+  };
+
+  for (const conformanceCase of validationAdapterConformanceCases) {
+    test(conformanceCase.title, async () => {
+      await conformanceCase.run(context);
+    });
+  }
 });

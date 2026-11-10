@@ -44,6 +44,15 @@ export const createNatsNotifyAdapter = ({
 
   const closed = createLatch("NotifyAdapter is closed");
 
+  const close = async (): Promise<void> => {
+    if (!closed.trip()) return;
+    await Promise.all([
+      jobScheduledListener.dispose(),
+      chainCompletedListener.dispose(),
+      attemptLostListener.dispose(),
+    ]);
+  };
+
   return {
     notifyJobsScheduled: async (typeNames) => {
       closed.throwIfTripped();
@@ -97,13 +106,7 @@ export const createNatsNotifyAdapter = ({
       });
     },
 
-    close: async () => {
-      if (!closed.trip()) return;
-      await Promise.all([
-        jobScheduledListener.dispose(),
-        chainCompletedListener.dispose(),
-        attemptLostListener.dispose(),
-      ]);
-    },
+    close,
+    [Symbol.asyncDispose]: close,
   };
 };

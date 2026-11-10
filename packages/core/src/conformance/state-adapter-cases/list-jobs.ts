@@ -1,14 +1,16 @@
 import { sleep } from "@queuert/helpers";
 
 import type { ConformanceGroup } from "../runner.ts";
-import type { StateConformanceFixture } from "./types.ts";
+import type { StateAdapterConformanceContext } from "./types.ts";
 
-export const listJobsGroup: ConformanceGroup<StateConformanceFixture> = {
+export const listJobsGroup: ConformanceGroup<StateAdapterConformanceContext> = {
   name: "listJobs",
   cases: [
     {
       name: "listJobs returns empty page when no jobs exist",
-      run: async ({ stateAdapter }, expect) => {
+      run: async ({ createStateAdapter }, expect) => {
+        await using stateAdapter = await createStateAdapter();
+
         const result = await stateAdapter.listJobs({
           typeName: "task",
           orderBy: "createdAt",
@@ -21,7 +23,9 @@ export const listJobsGroup: ConformanceGroup<StateConformanceFixture> = {
     },
     {
       name: "listJobs returns all jobs across chains",
-      run: async ({ stateAdapter }, expect) => {
+      run: async ({ createStateAdapter }, expect) => {
+        await using stateAdapter = await createStateAdapter();
+
         const [headChain] = await stateAdapter.withTransaction(async (txCtx) =>
           stateAdapter.createJobs({
             txCtx,
@@ -67,7 +71,9 @@ export const listJobsGroup: ConformanceGroup<StateConformanceFixture> = {
     },
     {
       name: "listJobs filters by status completed",
-      run: async ({ stateAdapter }, expect) => {
+      run: async ({ createStateAdapter }, expect) => {
+        await using stateAdapter = await createStateAdapter();
+
         const worker = await stateAdapter.startWorker({
           workerId: stateAdapter.config.generateWorkerId(),
           typeNames: ["test-type"],
@@ -113,7 +119,9 @@ export const listJobsGroup: ConformanceGroup<StateConformanceFixture> = {
     },
     {
       name: "listJobs filters by status pending",
-      run: async ({ stateAdapter }, expect) => {
+      run: async ({ createStateAdapter }, expect) => {
+        await using stateAdapter = await createStateAdapter();
+
         const worker = await stateAdapter.startWorker({
           workerId: stateAdapter.config.generateWorkerId(),
           typeNames: ["pending-type"],
@@ -157,7 +165,9 @@ export const listJobsGroup: ConformanceGroup<StateConformanceFixture> = {
     },
     {
       name: "listJobs filters by status running",
-      run: async ({ stateAdapter }, expect) => {
+      run: async ({ createStateAdapter }, expect) => {
+        await using stateAdapter = await createStateAdapter();
+
         const worker = await stateAdapter.startWorker({
           workerId: stateAdapter.config.generateWorkerId(),
           typeNames: ["running-type"],
@@ -201,7 +211,9 @@ export const listJobsGroup: ConformanceGroup<StateConformanceFixture> = {
     },
     {
       name: "listJobs separates blocked jobs from pending ones by status",
-      run: async ({ stateAdapter }, expect) => {
+      run: async ({ createStateAdapter }, expect) => {
+        await using stateAdapter = await createStateAdapter();
+
         const [blockerChain] = await stateAdapter.withTransaction(async (txCtx) =>
           stateAdapter.createJobs({
             txCtx,
@@ -268,7 +280,9 @@ export const listJobsGroup: ConformanceGroup<StateConformanceFixture> = {
     },
     {
       name: "listJobs completed status includes both terminal and continued jobs",
-      run: async ({ stateAdapter }, expect) => {
+      run: async ({ createStateAdapter }, expect) => {
+        await using stateAdapter = await createStateAdapter();
+
         const worker = await stateAdapter.startWorker({
           workerId: stateAdapter.config.generateWorkerId(),
           typeNames: ["completed-mixed"],
@@ -343,7 +357,9 @@ export const listJobsGroup: ConformanceGroup<StateConformanceFixture> = {
     },
     {
       name: "listJobs sorts completed jobs by completedAt when orderBy is completedAt",
-      run: async ({ stateAdapter }, expect) => {
+      run: async ({ createStateAdapter }, expect) => {
+        await using stateAdapter = await createStateAdapter();
+
         const worker = await stateAdapter.startWorker({
           workerId: stateAdapter.config.generateWorkerId(),
           typeNames: ["sort-complete"],
@@ -417,7 +433,9 @@ export const listJobsGroup: ConformanceGroup<StateConformanceFixture> = {
     },
     {
       name: "listJobs sorts running jobs by attemptAt when orderBy is attemptAt",
-      run: async ({ stateAdapter }, expect) => {
+      run: async ({ createStateAdapter }, expect) => {
+        await using stateAdapter = await createStateAdapter();
+
         const worker = await stateAdapter.startWorker({
           workerId: stateAdapter.config.generateWorkerId(),
           typeNames: ["sort-running"],
@@ -479,7 +497,9 @@ export const listJobsGroup: ConformanceGroup<StateConformanceFixture> = {
     },
     {
       name: "listJobs sorts pending jobs by scheduledAt when orderBy is scheduledAt",
-      run: async ({ stateAdapter }, expect) => {
+      run: async ({ createStateAdapter }, expect) => {
+        await using stateAdapter = await createStateAdapter();
+
         const future1 = new Date(Date.now() + 60_000);
         const future2 = new Date(Date.now() + 120_000);
 
@@ -537,7 +557,9 @@ export const listJobsGroup: ConformanceGroup<StateConformanceFixture> = {
     },
     {
       name: "listJobs paginates correctly with completedAt ordering",
-      run: async ({ stateAdapter }, expect) => {
+      run: async ({ createStateAdapter }, expect) => {
+        await using stateAdapter = await createStateAdapter();
+
         const worker = await stateAdapter.startWorker({
           workerId: stateAdapter.config.generateWorkerId(),
           typeNames: ["page-type"],
@@ -602,7 +624,9 @@ export const listJobsGroup: ConformanceGroup<StateConformanceFixture> = {
     },
     {
       name: "listJobs paginates with cursor",
-      run: async ({ stateAdapter }, expect) => {
+      run: async ({ createStateAdapter }, expect) => {
+        await using stateAdapter = await createStateAdapter();
+
         for (let i = 0; i < 4; i++) {
           await stateAdapter.withTransaction(async (txCtx) =>
             stateAdapter.createJobs({
@@ -645,7 +669,9 @@ export const listJobsGroup: ConformanceGroup<StateConformanceFixture> = {
     },
     {
       name: "listJobs sorts asc when orderDirection is asc",
-      run: async ({ stateAdapter }, expect) => {
+      run: async ({ createStateAdapter }, expect) => {
+        await using stateAdapter = await createStateAdapter();
+
         const [chain1] = await stateAdapter.withTransaction(async (txCtx) =>
           stateAdapter.createJobs({
             txCtx,
@@ -673,7 +699,9 @@ export const listJobsGroup: ConformanceGroup<StateConformanceFixture> = {
     },
     {
       name: "listJobs filters by from/to date range",
-      run: async ({ stateAdapter }, expect) => {
+      run: async ({ createStateAdapter }, expect) => {
+        await using stateAdapter = await createStateAdapter();
+
         const [chainA] = await stateAdapter.withTransaction(async (txCtx) =>
           stateAdapter.createJobs({
             txCtx,
@@ -718,7 +746,9 @@ export const listJobsGroup: ConformanceGroup<StateConformanceFixture> = {
     },
     {
       name: "listJobs filters pending by from/to date range",
-      run: async ({ stateAdapter }, expect) => {
+      run: async ({ createStateAdapter }, expect) => {
+        await using stateAdapter = await createStateAdapter();
+
         const [chainA] = await stateAdapter.withTransaction(async (txCtx) =>
           stateAdapter.createJobs({
             txCtx,
@@ -765,7 +795,9 @@ export const listJobsGroup: ConformanceGroup<StateConformanceFixture> = {
     },
     {
       name: "listJobs returns continuation jobs with correct status in multi-job chains",
-      run: async ({ stateAdapter }, expect) => {
+      run: async ({ createStateAdapter }, expect) => {
+        await using stateAdapter = await createStateAdapter();
+
         const worker = await stateAdapter.startWorker({
           workerId: stateAdapter.config.generateWorkerId(),
           typeNames: ["multi-step"],
@@ -853,7 +885,9 @@ export const listJobsGroup: ConformanceGroup<StateConformanceFixture> = {
     },
     {
       name: "listJobs paginates jobs created at the same time by id in both directions",
-      run: async ({ stateAdapter }, expect) => {
+      run: async ({ createStateAdapter }, expect) => {
+        await using stateAdapter = await createStateAdapter();
+
         const created = await stateAdapter.withTransaction(async (txCtx) =>
           stateAdapter.createJobs({
             txCtx,
@@ -889,48 +923,51 @@ export const listJobsGroup: ConformanceGroup<StateConformanceFixture> = {
   ],
 };
 
-export const listJobsConcurrentTransactionsGroup: ConformanceGroup<StateConformanceFixture> = {
-  name: "listJobs",
-  cases: [
-    {
-      name: "non-transactional listJobs does not observe an uncommitted insert",
-      run: async ({ stateAdapter }, expect) => {
-        let release: (() => void) | undefined;
-        const gate = new Promise<void>((r) => {
-          release = r;
-        });
-        let signalTxReady: (() => void) | undefined;
-        const txReady = new Promise<void>((r) => {
-          signalTxReady = r;
-        });
+export const listJobsConcurrentTransactionsGroup: ConformanceGroup<StateAdapterConformanceContext> =
+  {
+    name: "listJobs",
+    cases: [
+      {
+        name: "non-transactional listJobs does not observe an uncommitted insert",
+        run: async ({ createStateAdapter }, expect) => {
+          await using stateAdapter = await createStateAdapter();
 
-        const txPromise = stateAdapter
-          .withTransaction(async (txCtx) => {
-            await stateAdapter.createJobs({
-              txCtx,
-              jobs: [
-                { id: stateAdapter.config.generateJobId(), typeName: "iso-list", input: null },
-              ],
-            });
-            signalTxReady!();
-            await gate;
-            throw new Error("rollback");
-          })
-          .catch(() => {});
+          let release: (() => void) | undefined;
+          const gate = new Promise<void>((r) => {
+            release = r;
+          });
+          let signalTxReady: (() => void) | undefined;
+          const txReady = new Promise<void>((r) => {
+            signalTxReady = r;
+          });
 
-        await txReady;
-        const listPromise = stateAdapter.listJobs({
-          orderBy: "createdAt",
-          typeName: "iso-list",
-          orderDirection: "desc",
-          page: { limit: 10 },
-        });
-        release!();
-        await txPromise;
+          const txPromise = stateAdapter
+            .withTransaction(async (txCtx) => {
+              await stateAdapter.createJobs({
+                txCtx,
+                jobs: [
+                  { id: stateAdapter.config.generateJobId(), typeName: "iso-list", input: null },
+                ],
+              });
+              signalTxReady!();
+              await gate;
+              throw new Error("rollback");
+            })
+            .catch(() => {});
 
-        const { items } = await listPromise;
-        expect(items).toHaveLength(0);
+          await txReady;
+          const listPromise = stateAdapter.listJobs({
+            orderBy: "createdAt",
+            typeName: "iso-list",
+            orderDirection: "desc",
+            page: { limit: 10 },
+          });
+          release!();
+          await txPromise;
+
+          const { items } = await listPromise;
+          expect(items).toHaveLength(0);
+        },
       },
-    },
-  ],
-};
+    ],
+  };

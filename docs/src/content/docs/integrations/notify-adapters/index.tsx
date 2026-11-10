@@ -86,10 +86,12 @@ const members = (): FieldItem[] => [
     description: (
       <>
         <code>close</code> releases internal resources (shared subscriptions, listener registries)
-        and cascades into the underlying provider, when there is one.
+        and cascades into the underlying provider, when there is one.{" "}
+        <code>[Symbol.asyncDispose]</code> calls <code>close</code>, so an adapter can be held with{" "}
+        <code>await using</code>.
       </>
     ),
-    extra: ["close"],
+    extra: ["close", "[Symbol.asyncDispose]"],
   },
 ];
 

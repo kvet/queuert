@@ -3,10 +3,9 @@ import { describe, expect, it } from "vitest";
 import type { BaseJobTypeDefinitions } from "../job-types/job-type.ts";
 import { type JobTypes, createJobTypes } from "../job-types/job-types.ts";
 import type { JobTypesDefinitions } from "../job-types/merge-job-types.ts";
-import { ConformanceError } from "./runner.ts";
 import {
-  type ValidationConformanceFixture,
-  runValidationAdapterConformance,
+  type ValidationAdapterConformanceContext,
+  validationAdapterConformanceCases,
 } from "./validation-adapter.ts";
 
 type FieldType = "string" | "number" | "boolean";
@@ -96,7 +95,7 @@ const createShapeCheckJobTypes = <
   });
 };
 
-const buildPassingFixture = (): ValidationConformanceFixture => ({
+const buildPassingContext = (): ValidationAdapterConformanceContext => ({
   basic: {
     buildEntry: () =>
       createShapeCheckJobTypes({
@@ -318,88 +317,42 @@ const buildPassingFixture = (): ValidationConformanceFixture => ({
   },
 });
 
-describe("runValidationAdapterConformance", () => {
-  it("returns a passing report for a correctly-implemented adapter", async () => {
-    const report = await runValidationAdapterConformance(async () => buildPassingFixture());
+const buildBrokenEntryContext = (): ValidationAdapterConformanceContext => {
+  const context = buildPassingContext();
+  return {
+    ...context,
+    basic: {
+      ...context.basic,
+      buildEntry: () =>
+        createShapeCheckJobTypes({
+          typeNames: ["main"],
+          entryTypes: new Set(),
+          inputs: { main: { id: "string" } },
+          outputs: { main: { ok: "boolean" } },
+          continueWith: { main: null },
+          blockers: { main: null },
+        }),
+    },
+  };
+};
 
-    expect(report.failed).toBe(0);
-    expect(report.passed).toBe(report.total);
-    expect(report.total).toBeGreaterThan(0);
-  });
+describe("validationAdapterConformanceCases", () => {
+  const context = buildPassingContext();
 
-  it("invokes onResult once per case", async () => {
-    const seen: string[] = [];
-
-    const report = await runValidationAdapterConformance(async () => buildPassingFixture(), {
-      onResult: (result) => {
-        seen.push(result.name);
-      },
+  for (const conformanceCase of validationAdapterConformanceCases) {
+    it(`passes ${conformanceCase.title} for a correctly-implemented adapter`, async () => {
+      await conformanceCase.run(context);
     });
+  }
 
-    expect(seen).toHaveLength(report.total);
-  });
+  it("fails a case when a builder violates the runtime contract", async () => {
+    const context = buildBrokenEntryContext();
+    const outcomes = await Promise.allSettled(
+      validationAdapterConformanceCases.map(async (conformanceCase) =>
+        conformanceCase.run(context),
+      ),
+    );
 
-  it("invokes dispose after the run completes", async () => {
-    let disposed = false;
-
-    await runValidationAdapterConformance(async () => ({
-      ...buildPassingFixture(),
-      dispose: async () => {
-        disposed = true;
-      },
-    }));
-
-    expect(disposed).toBe(true);
-  });
-
-  it("throws ConformanceError when a builder violates the runtime contract", async () => {
-    await expect(
-      runValidationAdapterConformance(async () => {
-        const fixture = buildPassingFixture();
-        return {
-          ...fixture,
-          basic: {
-            ...fixture.basic,
-            buildEntry: () =>
-              createShapeCheckJobTypes({
-                typeNames: ["main"],
-                entryTypes: new Set(),
-                inputs: { main: { id: "string" } },
-                outputs: { main: { ok: "boolean" } },
-                continueWith: { main: null },
-                blockers: { main: null },
-              }),
-          },
-        };
-      }),
-    ).rejects.toThrow(ConformanceError);
-  });
-
-  it("disposes even when cases fail", async () => {
-    let disposed = false;
-
-    await runValidationAdapterConformance(async () => {
-      const fixture = buildPassingFixture();
-      return {
-        ...fixture,
-        basic: {
-          ...fixture.basic,
-          buildEntry: () =>
-            createShapeCheckJobTypes({
-              typeNames: ["main"],
-              entryTypes: new Set(),
-              inputs: { main: { id: "string" } },
-              outputs: { main: { ok: "boolean" } },
-              continueWith: { main: null },
-              blockers: { main: null },
-            }),
-        },
-        dispose: async () => {
-          disposed = true;
-        },
-      };
-    }).catch(() => {});
-
-    expect(disposed).toBe(true);
+    expect(outcomes.some((outcome) => outcome.status === "rejected")).toBe(true);
   });
 });

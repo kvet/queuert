@@ -10,9 +10,10 @@ export const createIoredisNotifyProvider = ({
 }): RedisNotifyProvider => {
   const handlers = new Map<string, (message: string) => void>();
 
-  subscribeClient.on("message", (channel: string, message: string) => {
+  const dispatchMessage = (channel: string, message: string) => {
     handlers.get(channel)?.(message);
-  });
+  };
+  subscribeClient.on("message", dispatchMessage);
 
   return {
     subscribe: async (channel, onMessage) => {
@@ -25,6 +26,10 @@ export const createIoredisNotifyProvider = ({
     },
     eval: async (script, keys, args) => {
       return client.eval(script, keys.length, ...keys, ...args);
+    },
+    close: async () => {
+      subscribeClient.off("message", dispatchMessage);
+      handlers.clear();
     },
   };
 };

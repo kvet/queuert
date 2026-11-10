@@ -1,14 +1,16 @@
 import { sleep } from "@queuert/helpers";
 
 import type { ConformanceGroup } from "../runner.ts";
-import type { StateConformanceFixture } from "./types.ts";
+import type { StateAdapterConformanceContext } from "./types.ts";
 
-export const listWorkerJobsGroup: ConformanceGroup<StateConformanceFixture> = {
+export const listWorkerJobsGroup: ConformanceGroup<StateAdapterConformanceContext> = {
   name: "listWorkerJobs",
   cases: [
     {
       name: "lists the jobs running under the worker across types, ordered by attemptAt",
-      run: async ({ stateAdapter }, expect) => {
+      run: async ({ createStateAdapter }, expect) => {
+        await using stateAdapter = await createStateAdapter();
+
         const worker = await stateAdapter.startWorker({
           workerId: stateAdapter.config.generateWorkerId(),
           typeNames: ["reserve-stock", "ship-order"],
@@ -66,7 +68,9 @@ export const listWorkerJobsGroup: ConformanceGroup<StateConformanceFixture> = {
     },
     {
       name: "orders jobs attempted at the same time by id",
-      run: async ({ stateAdapter }, expect) => {
+      run: async ({ createStateAdapter }, expect) => {
+        await using stateAdapter = await createStateAdapter();
+
         const worker = await stateAdapter.startWorker({
           workerId: stateAdapter.config.generateWorkerId(),
           typeNames: ["daily-digest"],
@@ -101,7 +105,9 @@ export const listWorkerJobsGroup: ConformanceGroup<StateConformanceFixture> = {
     },
     {
       name: "paginates jobs attempted at the same time by id in both directions",
-      run: async ({ stateAdapter }, expect) => {
+      run: async ({ createStateAdapter }, expect) => {
+        await using stateAdapter = await createStateAdapter();
+
         const worker = await stateAdapter.startWorker({
           workerId: stateAdapter.config.generateWorkerId(),
           typeNames: ["daily-digest"],
@@ -147,7 +153,9 @@ export const listWorkerJobsGroup: ConformanceGroup<StateConformanceFixture> = {
     },
     {
       name: "excludes jobs the worker completed and jobs reclaimed from it",
-      run: async ({ stateAdapter }, expect) => {
+      run: async ({ createStateAdapter }, expect) => {
+        await using stateAdapter = await createStateAdapter();
+
         const worker = await stateAdapter.startWorker({
           workerId: stateAdapter.config.generateWorkerId(),
           typeNames: ["capture-payment"],
@@ -204,7 +212,9 @@ export const listWorkerJobsGroup: ConformanceGroup<StateConformanceFixture> = {
     },
     {
       name: "lists a running job whose worker row is gone",
-      run: async ({ stateAdapter }, expect) => {
+      run: async ({ createStateAdapter }, expect) => {
+        await using stateAdapter = await createStateAdapter();
+
         const worker = await stateAdapter.startWorker({
           workerId: stateAdapter.config.generateWorkerId(),
           typeNames: ["provision-account"],
@@ -253,7 +263,9 @@ export const listWorkerJobsGroup: ConformanceGroup<StateConformanceFixture> = {
     },
     {
       name: "returns an empty page for an unknown worker",
-      run: async ({ stateAdapter }, expect) => {
+      run: async ({ createStateAdapter }, expect) => {
+        await using stateAdapter = await createStateAdapter();
+
         expect(
           await stateAdapter.listWorkerJobs({
             workerId: stateAdapter.config.generateWorkerId(),
@@ -265,7 +277,9 @@ export const listWorkerJobsGroup: ConformanceGroup<StateConformanceFixture> = {
     },
     {
       name: "orders jobs descending when orderDirection is desc",
-      run: async ({ stateAdapter }, expect) => {
+      run: async ({ createStateAdapter }, expect) => {
+        await using stateAdapter = await createStateAdapter();
+
         const worker = await stateAdapter.startWorker({
           workerId: stateAdapter.config.generateWorkerId(),
           typeNames: ["daily-digest"],
@@ -301,7 +315,9 @@ export const listWorkerJobsGroup: ConformanceGroup<StateConformanceFixture> = {
     },
     {
       name: "paginates with cursor",
-      run: async ({ stateAdapter }, expect) => {
+      run: async ({ createStateAdapter }, expect) => {
+        await using stateAdapter = await createStateAdapter();
+
         const worker = await stateAdapter.startWorker({
           workerId: stateAdapter.config.generateWorkerId(),
           typeNames: ["daily-digest"],
@@ -345,7 +361,9 @@ export const listWorkerJobsGroup: ConformanceGroup<StateConformanceFixture> = {
     },
     {
       name: "paginates with cursor in desc order",
-      run: async ({ stateAdapter }, expect) => {
+      run: async ({ createStateAdapter }, expect) => {
+        await using stateAdapter = await createStateAdapter();
+
         const worker = await stateAdapter.startWorker({
           workerId: stateAdapter.config.generateWorkerId(),
           typeNames: ["daily-digest"],

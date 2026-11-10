@@ -1,7 +1,7 @@
 import { it as baseIt, describe } from "vitest";
 
 import {
-  type NotifyConformanceFixture,
+  type NotifyAdapterConformanceContext,
   notifyAdapterBaseGroups,
 } from "../conformance/notify-adapter-cases.ts";
 import { createInProcessNotifyAdapter } from "../notify-adapter/notify-adapter.in-process.ts";
@@ -10,11 +10,11 @@ import {
   conformanceTestSuite,
 } from "../suites/conformance.test-suite.ts";
 
-const it = baseIt.extend<ConformanceFixtures<NotifyConformanceFixture>>({
+const it = baseIt.extend<ConformanceFixtures<NotifyAdapterConformanceContext>>({
   conformance: [
     // oxlint-disable-next-line no-empty-pattern -- vitest fixtures must destructure their context
     async ({}, use) => {
-      await use({ notifyAdapter: createInProcessNotifyAdapter() });
+      await use({ createNotifyAdapter: async () => createInProcessNotifyAdapter() });
     },
     { scope: "file" },
   ],

@@ -1,26 +1,38 @@
-import { runPgStateProviderConformance } from "@queuert/postgres/conformance";
-import { acquirePostgres } from "@queuert/testcontainers";
+import {
+  createPgStateProviderConformanceContext,
+  type PgStateProviderConformanceContext,
+  pgStateProviderConformanceCases,
+} from "@queuert/postgres/conformance";
+import { acquirePostgres, type AcquiredPostgres } from "@queuert/testcontainers";
 import postgres from "postgres";
-import { test } from "vitest";
+import { afterAll, beforeAll, describe, test } from "vitest";
 
 import { createPostgresJsStateProvider } from "./provider.ts";
 
 // #region conformance
-test("state-postgres-postgres-js provider passes state provider conformance", async () => {
-  await using pg = await acquirePostgres("postgres:18", import.meta.url);
+describe("state-postgres-postgres-js provider conformance", () => {
+  let pg: AcquiredPostgres;
+  let sql: postgres.Sql;
+  let context: PgStateProviderConformanceContext;
 
-  await runPgStateProviderConformance(async () => {
-    const sql = postgres(pg.connectionString, { max: 10 });
-
-    const stateProvider = createPostgresJsStateProvider({ sql });
-
-    return {
-      stateProvider,
+  beforeAll(async () => {
+    pg = await acquirePostgres("postgres:18", import.meta.url);
+    sql = postgres(pg.connectionString, { max: 10 });
+    context = await createPgStateProviderConformanceContext({
+      createStateProvider: async () => createPostgresJsStateProvider({ sql }),
       withNonTransactionContext: async (fn) => fn({ txSql: sql }),
-      dispose: async () => {
-        await sql.end();
-      },
-    };
+    });
+  }, 60_000);
+
+  afterAll(async () => {
+    await sql.end();
+    await pg[Symbol.asyncDispose]();
   });
-}, 60_000);
+
+  for (const conformanceCase of pgStateProviderConformanceCases) {
+    test(conformanceCase.title, async () => {
+      await conformanceCase.run(context);
+    });
+  }
+});
 // #endregion

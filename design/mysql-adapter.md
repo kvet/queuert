@@ -99,7 +99,7 @@ The adapter, not the provider, normalizes driver output using `columnTypes`. Thi
 - `state-mysql-knex`
 - `state-mysql-prisma` (not spiked)
 
-Each example runs `runStateAdapterConformance`.
+Each example runs `stateAdapterConformanceCases`.
 
 ## Schema
 

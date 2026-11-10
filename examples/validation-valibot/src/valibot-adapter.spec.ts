@@ -1,11 +1,14 @@
-import { runValidationAdapterConformance } from "queuert/conformance";
+import {
+  type ValidationAdapterConformanceContext,
+  validationAdapterConformanceCases,
+} from "queuert/conformance";
 import * as v from "valibot";
-import { test } from "vitest";
+import { describe, test } from "vitest";
 
 import { createValibotJobTypes } from "./valibot-adapter.ts";
 
-test("valibot adapter passes validation conformance", async () => {
-  await runValidationAdapterConformance(async () => ({
+describe("valibot adapter conformance", () => {
+  const context: ValidationAdapterConformanceContext = {
     basic: {
       buildEntry: () =>
         createValibotJobTypes({
@@ -153,5 +156,11 @@ test("valibot adapter passes validation conformance", async () => {
         );
       },
     },
-  }));
+  };
+
+  for (const conformanceCase of validationAdapterConformanceCases) {
+    test(conformanceCase.title, async () => {
+      await conformanceCase.run(context);
+    });
+  }
 });

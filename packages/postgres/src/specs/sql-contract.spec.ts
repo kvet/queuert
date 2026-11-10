@@ -1,7 +1,7 @@
 import { TESTCONTAINERS_RESOURCE_TYPES, extendWithPostgres } from "@queuert/testcontainers";
 import type { RuntimeType } from "@queuert/typed-sql";
 import { Client, Pool } from "pg";
-import type { StateConformanceFixture } from "queuert/conformance";
+import type { StateAdapterConformanceContext } from "queuert/conformance";
 import {
   stateAdapterBaseGroups,
   stateAdapterConcurrentTransactionGroups,
@@ -316,15 +316,35 @@ const it = extendWithResourceLeakDetection(extendWithPostgres(baseIt, import.met
       { scope: "worker" },
     ],
   })
-  .extend<ConformanceFixtures<StateConformanceFixture>>({
+  .extend<ConformanceFixtures<StateAdapterConformanceContext>>({
     conformance: [
       async ({ postgresConnectionString, validationClient, formatType, enumTypes }, use) => {
         const pool = new Pool({ connectionString: postgresConnectionString, idleTimeoutMillis: 0 });
-        const stateAdapter = createPgStateAdapter({
-          stateProvider: createValidatingProvider(pool, validationClient, formatType, enumTypes),
+        const createStateAdapter = async () =>
+          createPgStateAdapter({
+            stateProvider: createValidatingProvider(pool, validationClient, formatType, enumTypes),
+          });
+        {
+          await using stateAdapter = await createStateAdapter();
+          await stateAdapter.migrateToLatest();
+        }
+        await use({
+          createStateAdapter,
+          withNonTransactionContext: async (fn) => {
+            const poolClient = await pool.connect();
+            try {
+              const pgCtx: PgPoolContext = { poolClient };
+              return await fn(pgCtx);
+            } finally {
+              poolClient.release();
+            }
+          },
+          reset: async () => {
+            await pool.query(
+              "TRUNCATE public.queuert_job_blocker, public.queuert_job, public.queuert_worker CASCADE",
+            );
+          },
         });
-        await stateAdapter.migrateToLatest();
-        await use({ stateAdapter, reset: async () => stateAdapter.truncate() });
         await pool.end();
       },
       { scope: "file" },

@@ -1,12 +1,12 @@
 import { extendWithRedis } from "@queuert/testcontainers";
-import type { NotifyConformanceFixture } from "queuert/conformance";
+import type { NotifyAdapterConformanceContext } from "queuert/conformance";
 import { notifyAdapterBaseGroups } from "queuert/conformance-internal";
 import { type ConformanceFixtures, conformanceTestSuite } from "queuert/testing";
 import { type RedisClientType, createClient } from "redis";
 import { it as baseIt, describe } from "vitest";
 
 import {
-  createRedisNotifyConformanceContext,
+  createRedisNotifyProviderConformanceContext,
   redisNotifyProviderConformanceGroups,
 } from "../conformance/notify-provider-conformance.ts";
 import { createRedisNotifyAdapter } from "../notify-adapter/notify-adapter.redis.ts";
@@ -14,7 +14,7 @@ import { createNodeRedisNotifyProvider } from "./notify-provider.node-redis.ts";
 
 const it = extendWithRedis(baseIt, import.meta.url);
 
-const providerIt = it.extend<ConformanceFixtures<NotifyConformanceFixture>>({
+const providerIt = it.extend<ConformanceFixtures<NotifyAdapterConformanceContext>>({
   conformance: [
     async ({ redisConnectionUrl }, use) => {
       const client = createClient({ url: redisConnectionUrl }) as RedisClientType;
@@ -22,8 +22,9 @@ const providerIt = it.extend<ConformanceFixtures<NotifyConformanceFixture>>({
       await client.connect();
       await subscribeClient.connect();
       await use(
-        createRedisNotifyConformanceContext({
-          notifyProvider: createNodeRedisNotifyProvider({ client, subscribeClient }),
+        createRedisNotifyProviderConformanceContext({
+          createNotifyProvider: async () =>
+            createNodeRedisNotifyProvider({ client, subscribeClient }),
         }),
       );
       await client.close();
@@ -33,7 +34,7 @@ const providerIt = it.extend<ConformanceFixtures<NotifyConformanceFixture>>({
   ],
 });
 
-const customPrefixIt = it.extend<ConformanceFixtures<NotifyConformanceFixture>>({
+const customPrefixIt = it.extend<ConformanceFixtures<NotifyAdapterConformanceContext>>({
   conformance: [
     async ({ redisConnectionUrl }, use) => {
       const client = createClient({ url: redisConnectionUrl }) as RedisClientType;
@@ -41,10 +42,11 @@ const customPrefixIt = it.extend<ConformanceFixtures<NotifyConformanceFixture>>(
       await client.connect();
       await subscribeClient.connect();
       await use({
-        notifyAdapter: createRedisNotifyAdapter({
-          notifyProvider: createNodeRedisNotifyProvider({ client, subscribeClient }),
-          channelPrefix: `myapp:notifications:${Date.now()}:${Math.random().toString(36).slice(2)}`,
-        }),
+        createNotifyAdapter: async () =>
+          createRedisNotifyAdapter({
+            notifyProvider: createNodeRedisNotifyProvider({ client, subscribeClient }),
+            channelPrefix: `myapp:notifications:${Date.now()}:${Math.random().toString(36).slice(2)}`,
+          }),
       });
       await client.close();
       await subscribeClient.close();
@@ -57,9 +59,15 @@ const customPrefixIt = it.extend<ConformanceFixtures<NotifyConformanceFixture>>(
 it("index");
 
 describe("Redis Notify Provider Conformance", () => {
-  conformanceTestSuite({ it: providerIt, groups: redisNotifyProviderConformanceGroups });
+  conformanceTestSuite({
+    it: providerIt,
+    groups: redisNotifyProviderConformanceGroups,
+  });
 });
 
 describe("Redis Notify Adapter Conformance - Custom Channel Prefix", () => {
-  conformanceTestSuite({ it: customPrefixIt, groups: notifyAdapterBaseGroups });
+  conformanceTestSuite({
+    it: customPrefixIt,
+    groups: notifyAdapterBaseGroups,
+  });
 });

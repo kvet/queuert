@@ -1,11 +1,14 @@
-import { runValidationAdapterConformance } from "queuert/conformance";
-import { test } from "vitest";
+import {
+  type ValidationAdapterConformanceContext,
+  validationAdapterConformanceCases,
+} from "queuert/conformance";
+import { describe, test } from "vitest";
 import { z } from "zod";
 
 import { createZodJobTypes } from "./zod-adapter.ts";
 
-test("zod adapter passes validation conformance", async () => {
-  await runValidationAdapterConformance(async () => ({
+describe("zod adapter conformance", () => {
+  const context: ValidationAdapterConformanceContext = {
     basic: {
       buildEntry: () =>
         createZodJobTypes({
@@ -153,5 +156,11 @@ test("zod adapter passes validation conformance", async () => {
         );
       },
     },
-  }));
+  };
+
+  for (const conformanceCase of validationAdapterConformanceCases) {
+    test(conformanceCase.title, async () => {
+      await conformanceCase.run(context);
+    });
+  }
 });

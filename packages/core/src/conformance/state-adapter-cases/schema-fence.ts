@@ -3,15 +3,15 @@ import { sleep } from "@queuert/helpers";
 import { SchemaFencedError } from "../../errors.ts";
 import type { StateChain } from "../../state-adapter/state-adapter.ts";
 import type { ConformanceGroup } from "../runner.ts";
-import type { StateConformanceFixture } from "./types.ts";
+import type { StateAdapterConformanceContext } from "./types.ts";
 
 const LOCK_BLOCK_OBSERVATION_MS = 100;
 
 /**
- * Fixture for the schema fence cases: the state adapter fixture plus a way to fence the
+ * Context for the schema fence cases: the state adapter context plus a way to fence the
  * adapter's writes. Only adapters that fence writes behind a schema fence table run these cases.
  */
-export type SchemaFenceConformanceFixture = StateConformanceFixture & {
+export type SchemaFenceConformanceContext = StateAdapterConformanceContext & {
   /**
    * Fences the adapter's writes while the callback runs, as a later breaking migration would,
    * then lifts the fence: drop the fence table, run the callback, recreate it. The cases use it
@@ -21,12 +21,14 @@ export type SchemaFenceConformanceFixture = StateConformanceFixture & {
   withWritesFenced: <T>(fn: () => Promise<T>) => Promise<T>;
 };
 
-export const schemaFenceGroup: ConformanceGroup<SchemaFenceConformanceFixture> = {
+export const schemaFenceGroup: ConformanceGroup<SchemaFenceConformanceContext> = {
   name: "schemaFence",
   cases: [
     {
       name: "createJobs fails with SchemaFencedError once its writes are fenced, even through a statement that already ran, creating nothing",
-      run: async ({ stateAdapter, withWritesFenced }, expect) => {
+      run: async ({ createStateAdapter, withWritesFenced }, expect) => {
+        await using stateAdapter = await createStateAdapter();
+
         await stateAdapter.withTransaction(async (txCtx) =>
           stateAdapter.createJobs({
             txCtx,
@@ -55,7 +57,9 @@ export const schemaFenceGroup: ConformanceGroup<SchemaFenceConformanceFixture> =
     },
     {
       name: "continueJobs fails with SchemaFencedError once its writes are fenced, leaving the running job unchanged",
-      run: async ({ stateAdapter, withWritesFenced }, expect) => {
+      run: async ({ createStateAdapter, withWritesFenced }, expect) => {
+        await using stateAdapter = await createStateAdapter();
+
         const worker = await stateAdapter.startWorker({
           workerId: stateAdapter.config.generateWorkerId(),
           typeNames: ["fenced-continue"],
@@ -105,7 +109,9 @@ export const schemaFenceGroup: ConformanceGroup<SchemaFenceConformanceFixture> =
     },
     {
       name: "addJobsBlockers fails with SchemaFencedError once its writes are fenced, adding no blocker",
-      run: async ({ stateAdapter, withWritesFenced }, expect) => {
+      run: async ({ createStateAdapter, withWritesFenced }, expect) => {
+        await using stateAdapter = await createStateAdapter();
+
         const [blockerChain, mainChain] = await stateAdapter.withTransaction(async (txCtx) =>
           stateAdapter.createJobs({
             txCtx,
@@ -134,7 +140,9 @@ export const schemaFenceGroup: ConformanceGroup<SchemaFenceConformanceFixture> =
     },
     {
       name: "unblockJobs fails with SchemaFencedError once its writes are fenced, leaving the dependent blocked",
-      run: async ({ stateAdapter, withWritesFenced }, expect) => {
+      run: async ({ createStateAdapter, withWritesFenced }, expect) => {
+        await using stateAdapter = await createStateAdapter();
+
         const [blockerChain, mainChain] = await stateAdapter.withTransaction(async (txCtx) =>
           stateAdapter.createJobs({
             txCtx,
@@ -172,7 +180,9 @@ export const schemaFenceGroup: ConformanceGroup<SchemaFenceConformanceFixture> =
     },
     {
       name: "startWorker fails with SchemaFencedError once its writes are fenced, registering no worker",
-      run: async ({ stateAdapter, withWritesFenced }, expect) => {
+      run: async ({ createStateAdapter, withWritesFenced }, expect) => {
+        await using stateAdapter = await createStateAdapter();
+
         const workerId = stateAdapter.config.generateWorkerId();
 
         await withWritesFenced(async () =>
@@ -191,7 +201,9 @@ export const schemaFenceGroup: ConformanceGroup<SchemaFenceConformanceFixture> =
     },
     {
       name: "extendWorkerLease fails with SchemaFencedError once its writes are fenced, leaving the lease unchanged",
-      run: async ({ stateAdapter, withWritesFenced }, expect) => {
+      run: async ({ createStateAdapter, withWritesFenced }, expect) => {
+        await using stateAdapter = await createStateAdapter();
+
         const worker = await stateAdapter.startWorker({
           workerId: stateAdapter.config.generateWorkerId(),
           typeNames: ["fenced-lease"],
@@ -215,7 +227,9 @@ export const schemaFenceGroup: ConformanceGroup<SchemaFenceConformanceFixture> =
     },
     {
       name: "startJobAttempts fails with SchemaFencedError once its writes are fenced, leaving the job pending",
-      run: async ({ stateAdapter, withWritesFenced }, expect) => {
+      run: async ({ createStateAdapter, withWritesFenced }, expect) => {
+        await using stateAdapter = await createStateAdapter();
+
         const worker = await stateAdapter.startWorker({
           workerId: stateAdapter.config.generateWorkerId(),
           typeNames: ["fenced-start-attempt"],
@@ -252,7 +266,9 @@ export const schemaFenceGroup: ConformanceGroup<SchemaFenceConformanceFixture> =
     },
     {
       name: "completeJobs fails with SchemaFencedError once its writes are fenced, leaving the job unchanged",
-      run: async ({ stateAdapter, withWritesFenced }, expect) => {
+      run: async ({ createStateAdapter, withWritesFenced }, expect) => {
+        await using stateAdapter = await createStateAdapter();
+
         const [chain] = await stateAdapter.withTransaction(async (txCtx) =>
           stateAdapter.createJobs({
             txCtx,
@@ -276,7 +292,9 @@ export const schemaFenceGroup: ConformanceGroup<SchemaFenceConformanceFixture> =
     },
     {
       name: "rescheduleJobs fails with SchemaFencedError once its writes are fenced, leaving the job unchanged",
-      run: async ({ stateAdapter, withWritesFenced }, expect) => {
+      run: async ({ createStateAdapter, withWritesFenced }, expect) => {
+        await using stateAdapter = await createStateAdapter();
+
         const [chain] = await stateAdapter.withTransaction(async (txCtx) =>
           stateAdapter.createJobs({
             txCtx,
@@ -304,7 +322,9 @@ export const schemaFenceGroup: ConformanceGroup<SchemaFenceConformanceFixture> =
     },
     {
       name: "reads and deletes chains while writes are fenced",
-      run: async ({ stateAdapter, withWritesFenced }, expect) => {
+      run: async ({ createStateAdapter, withWritesFenced }, expect) => {
+        await using stateAdapter = await createStateAdapter();
+
         const [chain] = await stateAdapter.withTransaction(async (txCtx) =>
           stateAdapter.createJobs({
             txCtx,
@@ -329,13 +349,15 @@ export const schemaFenceGroup: ConformanceGroup<SchemaFenceConformanceFixture> =
   ],
 };
 
-export const schemaFenceConcurrentTransactionsGroup: ConformanceGroup<SchemaFenceConformanceFixture> =
+export const schemaFenceConcurrentTransactionsGroup: ConformanceGroup<SchemaFenceConformanceContext> =
   {
     name: "schemaFence",
     cases: [
       {
         name: "fails a write with SchemaFencedError when its writes are fenced after the transaction began",
-        run: async ({ stateAdapter, withWritesFenced }, expect) => {
+        run: async ({ createStateAdapter, withWritesFenced }, expect) => {
+          await using stateAdapter = await createStateAdapter();
+
           const [chain] = await stateAdapter.withTransaction(async (txCtx) =>
             stateAdapter.createJobs({
               txCtx,
@@ -367,7 +389,9 @@ export const schemaFenceConcurrentTransactionsGroup: ConformanceGroup<SchemaFenc
       },
       {
         name: "commits a transaction that already wrote before its writes are fenced",
-        run: async ({ stateAdapter, withWritesFenced }, expect) => {
+        run: async ({ createStateAdapter, withWritesFenced }, expect) => {
+          await using stateAdapter = await createStateAdapter();
+
           const jobId = stateAdapter.config.generateJobId();
           let dropped = false;
           let readAfterDrop: Promise<unknown> | undefined;

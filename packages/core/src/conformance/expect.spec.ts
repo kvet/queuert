@@ -324,18 +324,6 @@ describe("expect shim", () => {
     });
   });
 
-  describe("expect.skip", () => {
-    it("throws a SkipSignalError carrying the reason", async () => {
-      const { SkipSignalError } = await import("./runner.ts");
-      const err = assertThrows(() => expect.skip("no capability on this backend"));
-      vitestExpect(err).toBeInstanceOf(SkipSignalError);
-      vitestExpect((err as InstanceType<typeof SkipSignalError>).reason).toBe(
-        "no capability on this backend",
-      );
-      vitestExpect(err.message).toBe("no capability on this backend");
-    });
-  });
-
   describe("toEqual — vitest compatibility", () => {
     it("ignores keys with undefined values (matches vitest)", () => {
       expect({ a: 1, b: undefined }).toEqual({ a: 1 });

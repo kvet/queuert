@@ -1,14 +1,16 @@
 import { sleep } from "@queuert/helpers";
 
 import type { ConformanceGroup } from "../runner.ts";
-import type { StateConformanceFixture } from "./types.ts";
+import type { StateAdapterConformanceContext } from "./types.ts";
 
-export const stopWorkerGroup: ConformanceGroup<StateConformanceFixture> = {
+export const stopWorkerGroup: ConformanceGroup<StateAdapterConformanceContext> = {
   name: "stopWorker",
   cases: [
     {
       name: "deletes the row and returns the deleted worker",
-      run: async ({ stateAdapter }, expect) => {
+      run: async ({ createStateAdapter }, expect) => {
+        await using stateAdapter = await createStateAdapter();
+
         const started = await stateAdapter.startWorker({
           workerId: stateAdapter.config.generateWorkerId(),
           typeNames: ["stop-a"],
@@ -49,7 +51,9 @@ export const stopWorkerGroup: ConformanceGroup<StateConformanceFixture> = {
     },
     {
       name: "leaves jobs running under the worker untouched",
-      run: async ({ stateAdapter }, expect) => {
+      run: async ({ createStateAdapter }, expect) => {
+        await using stateAdapter = await createStateAdapter();
+
         const worker = await stateAdapter.startWorker({
           workerId: stateAdapter.config.generateWorkerId(),
           typeNames: [],
@@ -83,7 +87,9 @@ export const stopWorkerGroup: ConformanceGroup<StateConformanceFixture> = {
     },
     {
       name: "a missing worker stops to undefined",
-      run: async ({ stateAdapter }, expect) => {
+      run: async ({ createStateAdapter }, expect) => {
+        await using stateAdapter = await createStateAdapter();
+
         const worker = await stateAdapter.startWorker({
           workerId: stateAdapter.config.generateWorkerId(),
           typeNames: [],
@@ -111,7 +117,9 @@ export const stopWorkerGroup: ConformanceGroup<StateConformanceFixture> = {
     },
     {
       name: "returns undefined for a stale registration and keeps the current row",
-      run: async ({ stateAdapter }, expect) => {
+      run: async ({ createStateAdapter }, expect) => {
+        await using stateAdapter = await createStateAdapter();
+
         const workerId = stateAdapter.config.generateWorkerId();
         const staleRun = await stateAdapter.startWorker({
           workerId,
@@ -149,7 +157,9 @@ export const stopWorkerGroup: ConformanceGroup<StateConformanceFixture> = {
     },
     {
       name: "a stop rolled back with its transaction restores the worker",
-      run: async ({ stateAdapter }, expect) => {
+      run: async ({ createStateAdapter }, expect) => {
+        await using stateAdapter = await createStateAdapter();
+
         const worker = await stateAdapter.startWorker({
           workerId: stateAdapter.config.generateWorkerId(),
           typeNames: [],

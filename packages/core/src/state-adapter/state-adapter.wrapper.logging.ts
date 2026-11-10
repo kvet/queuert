@@ -72,5 +72,6 @@ export const wrapStateAdapterWithLogging = <
     listWorkerJobs: wrap("listWorkerJobs", stateAdapter.listWorkerJobs),
 
     close: stateAdapter.close,
+    [Symbol.asyncDispose]: stateAdapter.close,
   };
 };

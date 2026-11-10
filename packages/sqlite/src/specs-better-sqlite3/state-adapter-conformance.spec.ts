@@ -1,22 +1,21 @@
 import Database from "better-sqlite3";
-import { type ConformanceFixtures, conformanceTestSuite } from "queuert/testing";
 import { it as baseIt, describe } from "vitest";
 
 import {
   type SqliteStateProviderConformanceContext,
-  createSqliteConformanceContext,
-  sqliteStateProviderConformanceGroups,
+  createSqliteStateProviderConformanceContext,
+  sqliteStateProviderConformanceCases,
 } from "../conformance/state-provider-conformance.ts";
 import { createBetterSqlite3Provider } from "../state-provider/state-provider.better-sqlite3.ts";
 
-const it = baseIt.extend<ConformanceFixtures<SqliteStateProviderConformanceContext>>({
+const it = baseIt.extend<{ conformance: SqliteStateProviderConformanceContext }>({
   conformance: [
     // oxlint-disable-next-line no-empty-pattern -- vitest fixtures must destructure their context
     async ({}, use) => {
       const db = new Database(":memory:");
       await use(
-        await createSqliteConformanceContext({
-          stateProvider: createBetterSqlite3Provider({ db }),
+        await createSqliteStateProviderConformanceContext({
+          createStateProvider: async () => createBetterSqlite3Provider({ db }),
           withNonTransactionContext: async (fn) => fn({ db }),
         }),
       );
@@ -30,5 +29,9 @@ const it = baseIt.extend<ConformanceFixtures<SqliteStateProviderConformanceConte
 it("index");
 
 describe("SQLite State Provider Conformance", () => {
-  conformanceTestSuite({ it, groups: sqliteStateProviderConformanceGroups });
+  for (const conformanceCase of sqliteStateProviderConformanceCases) {
+    it(conformanceCase.title, async ({ conformance }) => {
+      await conformanceCase.run(conformance);
+    });
+  }
 });

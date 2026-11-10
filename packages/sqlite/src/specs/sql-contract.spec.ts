@@ -1,6 +1,6 @@
 import type { RuntimeType } from "@queuert/typed-sql";
 import Database from "better-sqlite3";
-import type { StateConformanceFixture } from "queuert/conformance";
+import type { StateAdapterConformanceContext } from "queuert/conformance";
 import { stateAdapterBaseGroups } from "queuert/conformance-internal";
 import { type ConformanceFixtures, conformanceTestSuite } from "queuert/testing";
 import { describe, expect, it } from "vitest";
@@ -176,7 +176,7 @@ const createValidatingProvider = (
   };
 };
 
-const contractIt = it.extend<ConformanceFixtures<StateConformanceFixture>>({
+const contractIt = it.extend<ConformanceFixtures<StateAdapterConformanceContext>>({
   conformance: [
     // oxlint-disable-next-line no-empty-pattern -- vitest fixtures must destructure their context
     async ({}, use) => {
@@ -184,10 +184,16 @@ const contractIt = it.extend<ConformanceFixtures<StateConformanceFixture>>({
       await createSqliteStateAdapter({
         stateProvider: createBetterSqlite3Provider({ db }),
       }).migrateToLatest();
-      const stateAdapter = createSqliteStateAdapter({
-        stateProvider: createValidatingProvider(db),
+      await use({
+        createStateAdapter: async () =>
+          createSqliteStateAdapter({ stateProvider: createValidatingProvider(db) }),
+        withNonTransactionContext: async (fn) => fn({ db }),
+        reset: async () => {
+          db.exec(
+            "DELETE FROM queuert_job_blocker; DELETE FROM queuert_job; DELETE FROM queuert_worker;",
+          );
+        },
       });
-      await use({ stateAdapter, reset: async () => stateAdapter.truncate() });
       db.close();
     },
     { scope: "file" },
@@ -195,5 +201,8 @@ const contractIt = it.extend<ConformanceFixtures<StateConformanceFixture>>({
 });
 
 describe("SQLite SQL contract", () => {
-  conformanceTestSuite({ it: contractIt, groups: stateAdapterBaseGroups });
+  conformanceTestSuite({
+    it: contractIt,
+    groups: stateAdapterBaseGroups,
+  });
 });

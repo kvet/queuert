@@ -365,6 +365,9 @@ export type StateAdapter<
 
   /** Releases internal resources. Idempotent. */
   close: () => Promise<void>;
+
+  /** Calls {@link close}, so the adapter can be held with `await using`. */
+  [Symbol.asyncDispose]: () => Promise<void>;
 };
 
 export type GetStateAdapterTxContext<TStateAdapter> =

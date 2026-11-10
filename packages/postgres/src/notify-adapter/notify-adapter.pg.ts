@@ -39,6 +39,16 @@ export const createPgNotifyAdapter = ({
 
   const closed = createLatch("NotifyAdapter is closed");
 
+  const close = async (): Promise<void> => {
+    if (!closed.trip()) return;
+    await Promise.all([
+      jobScheduledListener.dispose(),
+      chainCompletedListener.dispose(),
+      attemptLostListener.dispose(),
+    ]);
+    await notifyProvider.close?.();
+  };
+
   return {
     notifyJobsScheduled: async (typeNames) => {
       closed.throwIfTripped();
@@ -83,14 +93,7 @@ export const createPgNotifyAdapter = ({
       });
     },
 
-    close: async () => {
-      if (!closed.trip()) return;
-      await Promise.all([
-        jobScheduledListener.dispose(),
-        chainCompletedListener.dispose(),
-        attemptLostListener.dispose(),
-      ]);
-      await notifyProvider.close?.();
-    },
+    close,
+    [Symbol.asyncDispose]: close,
   };
 };

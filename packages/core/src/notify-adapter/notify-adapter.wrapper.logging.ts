@@ -35,5 +35,6 @@ export const wrapNotifyAdapterWithLogging = ({
     notifyJobAttemptsLost: wrap("notifyJobAttemptsLost", notifyAdapter.notifyJobAttemptsLost),
     listenJobAttemptLost: wrap("listenJobAttemptLost", notifyAdapter.listenJobAttemptLost),
     close: notifyAdapter.close,
+    [Symbol.asyncDispose]: notifyAdapter.close,
   };
 };

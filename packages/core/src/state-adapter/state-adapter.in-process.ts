@@ -1457,6 +1457,8 @@ export const createInProcessStateAdapter = ({
       if (!closed.trip()) return;
       idx.clear();
     },
+
+    [Symbol.asyncDispose]: async () => adapter.close(),
   };
 
   return adapter;

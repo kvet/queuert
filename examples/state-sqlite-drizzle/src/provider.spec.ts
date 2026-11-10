@@ -1,25 +1,35 @@
 import { createAsyncRwLock } from "@queuert/sqlite";
-import { runSqliteStateProviderConformance } from "@queuert/sqlite/conformance";
+import {
+  createSqliteStateProviderConformanceContext,
+  type SqliteStateProviderConformanceContext,
+  sqliteStateProviderConformanceCases,
+} from "@queuert/sqlite/conformance";
 import Database from "better-sqlite3";
-import { test } from "vitest";
+import { afterAll, beforeAll, describe, test } from "vitest";
 
 import { createDrizzleSqliteStateProvider } from "./provider.ts";
 
 // #region conformance
-test("state-sqlite-drizzle provider passes state provider conformance", async () => {
-  await runSqliteStateProviderConformance(async () => {
-    const db = new Database(":memory:");
+describe("state-sqlite-drizzle provider conformance", () => {
+  const db = new Database(":memory:");
+  const lock = createAsyncRwLock();
+  let context: SqliteStateProviderConformanceContext;
 
-    const lock = createAsyncRwLock();
-    const stateProvider = createDrizzleSqliteStateProvider({ db, lock });
-
-    return {
-      stateProvider,
+  beforeAll(async () => {
+    context = await createSqliteStateProviderConformanceContext({
+      createStateProvider: async () => createDrizzleSqliteStateProvider({ db, lock }),
       withNonTransactionContext: async (fn) => fn({ db }),
-      dispose: async () => {
-        db.close();
-      },
-    };
+    });
   });
-}, 30_000);
+
+  afterAll(async () => {
+    db.close();
+  });
+
+  for (const conformanceCase of sqliteStateProviderConformanceCases) {
+    test(conformanceCase.title, async () => {
+      await conformanceCase.run(context);
+    });
+  }
+});
 // #endregion

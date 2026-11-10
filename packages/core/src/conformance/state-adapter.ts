@@ -1,63 +1,48 @@
 import {
-  type ConformanceOptions,
-  type ConformanceReport,
-  runFixtureConformance,
-} from "./runner.ts";
-import {
   stateAdapterBaseGroups,
   stateAdapterConcurrentTransactionGroups,
-  type StateConformanceFixture,
+  type StateAdapterConformanceContext,
 } from "./state-adapter-cases.ts";
+import { type ConformanceTestCase, toConformanceTestCases } from "./suite.ts";
 
 /**
- * Run the state adapter conformance suite against a user-supplied adapter: the cases every
- * adapter must pass, with transactions run one at a time. Test-framework agnostic: designed to be
- * embedded in a single test (vitest `test()`, bun `test()`, `node:test`, etc.). Throws
- * {@link ConformanceError} with an aggregated report on any failure.
- *
- * An adapter that runs transactions in parallel, such as one over a connection pool, also runs
- * {@link runConcurrentStateAdapterConformance}.
+ * The state adapter conformance cases every adapter must pass, to run one per test in your own
+ * test file. An adapter that runs transactions in parallel, such as one over a connection pool,
+ * also runs {@link concurrentStateAdapterConformanceCases}.
+ * Each case creates its own adapter with the context's `createStateAdapter` and closes it when
+ * the case ends. Works with any test runner.
  *
  * @example
  * ```ts
- * await runStateAdapterConformance(async () => {
- *   const adapter = await createMyStateAdapter();
- *   await adapter.migrateToLatest();
- *   return {
- *     stateAdapter: adapter,
- *     reset: async () => adapter.truncate(),
- *     dispose: async () => adapter.close(),
- *   };
- * });
+ * import { afterAll, test } from "vitest";
+ *
+ * const db = openMyDatabase();
+ * afterAll(async () => db.close());
+ *
+ * const context: StateAdapterConformanceContext = {
+ *   createStateAdapter: async () => {
+ *     const adapter = createMyStateAdapter({ db });
+ *     await adapter.migrateToLatest();
+ *     await clearTables(db);
+ *     return adapter;
+ *   },
+ *   withNonTransactionContext: async (fn) => fn({ db }),
+ * };
+ *
+ * for (const conformanceCase of stateAdapterConformanceCases) {
+ *   test(conformanceCase.title, async () => {
+ *     await conformanceCase.run(context);
+ *   });
+ * }
  * ```
  */
-export const runStateAdapterConformance = async (
-  factory: () => Promise<StateConformanceFixture>,
-  options?: ConformanceOptions,
-): Promise<ConformanceReport> => runFixtureConformance(stateAdapterBaseGroups, factory, options);
+export const stateAdapterConformanceCases: ConformanceTestCase<StateAdapterConformanceContext>[] =
+  toConformanceTestCases(stateAdapterBaseGroups);
 
 /**
- * Run the state adapter conformance cases that hold two transactions open at once: blocker races,
+ * The state adapter conformance cases that hold two transactions open at once: blocker races,
  * concurrent deletes, row locks, and reads that must not see uncommitted rows. For adapters that
- * run transactions in parallel, such as one over a connection pool; run it next to
- * {@link runStateAdapterConformance}. Throws {@link ConformanceError} with an aggregated report
- * on any failure.
- *
- * @example
- * ```ts
- * await runConcurrentStateAdapterConformance(async () => {
- *   const adapter = await createMyStateAdapter();
- *   await adapter.migrateToLatest();
- *   return {
- *     stateAdapter: adapter,
- *     reset: async () => adapter.truncate(),
- *     dispose: async () => adapter.close(),
- *   };
- * });
- * ```
+ * run transactions in parallel; run them next to {@link stateAdapterConformanceCases}.
  */
-export const runConcurrentStateAdapterConformance = async (
-  factory: () => Promise<StateConformanceFixture>,
-  options?: ConformanceOptions,
-): Promise<ConformanceReport> =>
-  runFixtureConformance(stateAdapterConcurrentTransactionGroups, factory, options);
+export const concurrentStateAdapterConformanceCases: ConformanceTestCase<StateAdapterConformanceContext>[] =
+  toConformanceTestCases(stateAdapterConcurrentTransactionGroups);

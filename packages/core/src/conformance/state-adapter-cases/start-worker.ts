@@ -1,14 +1,16 @@
 import { sleep } from "@queuert/helpers";
 
 import type { ConformanceGroup } from "../runner.ts";
-import type { StateConformanceFixture } from "./types.ts";
+import type { StateAdapterConformanceContext } from "./types.ts";
 
-export const startWorkerGroup: ConformanceGroup<StateConformanceFixture> = {
+export const startWorkerGroup: ConformanceGroup<StateAdapterConformanceContext> = {
   name: "startWorker",
   cases: [
     {
       name: "config.generateWorkerId produces unique ids that pass config.validateWorkerId",
-      run: async ({ stateAdapter }, expect) => {
+      run: async ({ createStateAdapter }, expect) => {
+        await using stateAdapter = await createStateAdapter();
+
         const ids = Array.from({ length: 10 }, () => stateAdapter.config.generateWorkerId());
         expect(new Set(ids).size).toBe(ids.length);
         for (const id of ids) {
@@ -18,7 +20,9 @@ export const startWorkerGroup: ConformanceGroup<StateConformanceFixture> = {
     },
     {
       name: "starts a worker with a lease leaseMs from now",
-      run: async ({ stateAdapter }, expect) => {
+      run: async ({ createStateAdapter }, expect) => {
+        await using stateAdapter = await createStateAdapter();
+
         const workerId = stateAdapter.config.generateWorkerId();
         const before = Date.now();
         const worker = await stateAdapter.startWorker({
@@ -42,7 +46,9 @@ export const startWorkerGroup: ConformanceGroup<StateConformanceFixture> = {
     },
     {
       name: "rejects a worker id that already has a row, even one whose lease expired",
-      run: async ({ stateAdapter }, expect) => {
+      run: async ({ createStateAdapter }, expect) => {
+        await using stateAdapter = await createStateAdapter();
+
         const workerId = stateAdapter.config.generateWorkerId();
         const worker = await stateAdapter.startWorker({
           workerId,
@@ -71,7 +77,9 @@ export const startWorkerGroup: ConformanceGroup<StateConformanceFixture> = {
     },
     {
       name: "a worker started in a rolled-back transaction does not exist",
-      run: async ({ stateAdapter }, expect) => {
+      run: async ({ createStateAdapter }, expect) => {
+        await using stateAdapter = await createStateAdapter();
+
         const workerId = stateAdapter.config.generateWorkerId();
 
         await expect(

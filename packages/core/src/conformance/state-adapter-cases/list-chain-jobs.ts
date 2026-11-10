@@ -1,12 +1,14 @@
 import type { ConformanceGroup } from "../runner.ts";
-import type { StateConformanceFixture } from "./types.ts";
+import type { StateAdapterConformanceContext } from "./types.ts";
 
-export const listChainJobsGroup: ConformanceGroup<StateConformanceFixture> = {
+export const listChainJobsGroup: ConformanceGroup<StateAdapterConformanceContext> = {
   name: "listChainJobs",
   cases: [
     {
       name: "returns empty page for nonexistent chain",
-      run: async ({ stateAdapter }, expect) => {
+      run: async ({ createStateAdapter }, expect) => {
+        await using stateAdapter = await createStateAdapter();
+
         const result = await stateAdapter.listChainJobs({
           chainId: crypto.randomUUID(),
           orderDirection: "asc",
@@ -18,7 +20,9 @@ export const listChainJobsGroup: ConformanceGroup<StateConformanceFixture> = {
     },
     {
       name: "returns jobs in chain order asc by default",
-      run: async ({ stateAdapter }, expect) => {
+      run: async ({ createStateAdapter }, expect) => {
+        await using stateAdapter = await createStateAdapter();
+
         const [headChain] = await stateAdapter.withTransaction(async (txCtx) =>
           stateAdapter.createJobs({
             txCtx,
@@ -73,7 +77,9 @@ export const listChainJobsGroup: ConformanceGroup<StateConformanceFixture> = {
     },
     {
       name: "respects orderDirection desc",
-      run: async ({ stateAdapter }, expect) => {
+      run: async ({ createStateAdapter }, expect) => {
+        await using stateAdapter = await createStateAdapter();
+
         const [headChain] = await stateAdapter.withTransaction(async (txCtx) =>
           stateAdapter.createJobs({
             txCtx,
@@ -107,7 +113,9 @@ export const listChainJobsGroup: ConformanceGroup<StateConformanceFixture> = {
     },
     {
       name: "paginates with cursor",
-      run: async ({ stateAdapter }, expect) => {
+      run: async ({ createStateAdapter }, expect) => {
+        await using stateAdapter = await createStateAdapter();
+
         const [headChain] = await stateAdapter.withTransaction(async (txCtx) =>
           stateAdapter.createJobs({
             txCtx,
@@ -166,7 +174,9 @@ export const listChainJobsGroup: ConformanceGroup<StateConformanceFixture> = {
     },
     {
       name: "paginates with cursor in desc order",
-      run: async ({ stateAdapter }, expect) => {
+      run: async ({ createStateAdapter }, expect) => {
+        await using stateAdapter = await createStateAdapter();
+
         const [headChain] = await stateAdapter.withTransaction(async (txCtx) =>
           stateAdapter.createJobs({
             txCtx,
@@ -224,7 +234,9 @@ export const listChainJobsGroup: ConformanceGroup<StateConformanceFixture> = {
     },
     {
       name: "only returns jobs from specified chain",
-      run: async ({ stateAdapter }, expect) => {
+      run: async ({ createStateAdapter }, expect) => {
+        await using stateAdapter = await createStateAdapter();
+
         const [chain1] = await stateAdapter.withTransaction(async (txCtx) =>
           stateAdapter.createJobs({
             txCtx,
@@ -252,66 +264,69 @@ export const listChainJobsGroup: ConformanceGroup<StateConformanceFixture> = {
   ],
 };
 
-export const listChainJobsConcurrentTransactionsGroup: ConformanceGroup<StateConformanceFixture> = {
-  name: "listChainJobs",
-  cases: [
-    {
-      name: "non-transactional listChainJobs does not observe an uncommitted continuation",
-      run: async ({ stateAdapter }, expect) => {
-        const [seedChain] = await stateAdapter.withTransaction(async (txCtx) =>
-          stateAdapter.createJobs({
-            txCtx,
-            jobs: [
-              {
-                id: stateAdapter.config.generateJobId(),
-                typeName: "iso-chain-jobs-head",
-                input: null,
-              },
-            ],
-          }),
-        );
+export const listChainJobsConcurrentTransactionsGroup: ConformanceGroup<StateAdapterConformanceContext> =
+  {
+    name: "listChainJobs",
+    cases: [
+      {
+        name: "non-transactional listChainJobs does not observe an uncommitted continuation",
+        run: async ({ createStateAdapter }, expect) => {
+          await using stateAdapter = await createStateAdapter();
 
-        let release: (() => void) | undefined;
-        const gate = new Promise<void>((r) => {
-          release = r;
-        });
-        let signalTxReady: (() => void) | undefined;
-        const txReady = new Promise<void>((r) => {
-          signalTxReady = r;
-        });
-
-        const txPromise = stateAdapter
-          .withTransaction(async (txCtx) => {
-            await stateAdapter.continueJobs({
+          const [seedChain] = await stateAdapter.withTransaction(async (txCtx) =>
+            stateAdapter.createJobs({
               txCtx,
               jobs: [
                 {
                   id: stateAdapter.config.generateJobId(),
-                  typeName: "iso-chain-jobs-cont",
-                  continueFromId: seedChain.head.id,
+                  typeName: "iso-chain-jobs-head",
                   input: null,
                 },
               ],
-            });
-            signalTxReady!();
-            await gate;
-            throw new Error("rollback");
-          })
-          .catch(() => {});
+            }),
+          );
 
-        await txReady;
-        const listPromise = stateAdapter.listChainJobs({
-          chainId: seedChain.head.chainId,
-          orderDirection: "asc",
-          page: { limit: 10 },
-        });
-        release!();
-        await txPromise;
+          let release: (() => void) | undefined;
+          const gate = new Promise<void>((r) => {
+            release = r;
+          });
+          let signalTxReady: (() => void) | undefined;
+          const txReady = new Promise<void>((r) => {
+            signalTxReady = r;
+          });
 
-        const { items } = await listPromise;
-        expect(items).toHaveLength(1);
-        expect(items[0]?.id).toBe(seedChain.head.id);
+          const txPromise = stateAdapter
+            .withTransaction(async (txCtx) => {
+              await stateAdapter.continueJobs({
+                txCtx,
+                jobs: [
+                  {
+                    id: stateAdapter.config.generateJobId(),
+                    typeName: "iso-chain-jobs-cont",
+                    continueFromId: seedChain.head.id,
+                    input: null,
+                  },
+                ],
+              });
+              signalTxReady!();
+              await gate;
+              throw new Error("rollback");
+            })
+            .catch(() => {});
+
+          await txReady;
+          const listPromise = stateAdapter.listChainJobs({
+            chainId: seedChain.head.chainId,
+            orderDirection: "asc",
+            page: { limit: 10 },
+          });
+          release!();
+          await txPromise;
+
+          const { items } = await listPromise;
+          expect(items).toHaveLength(1);
+          expect(items[0]?.id).toBe(seedChain.head.id);
+        },
       },
-    },
-  ],
-};
+    ],
+  };

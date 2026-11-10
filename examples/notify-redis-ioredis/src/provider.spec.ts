@@ -1,27 +1,40 @@
-import { runRedisNotifyProviderConformance } from "@queuert/redis/conformance";
-import { acquireRedis } from "@queuert/testcontainers";
+import {
+  createRedisNotifyProviderConformanceContext,
+  type NotifyAdapterConformanceContext,
+  redisNotifyProviderConformanceCases,
+} from "@queuert/redis/conformance";
+import { acquireRedis, type AcquiredRedis } from "@queuert/testcontainers";
 import { Redis } from "ioredis";
-import { test } from "vitest";
+import { afterAll, beforeAll, describe, test } from "vitest";
 
 import { createIoredisNotifyProvider } from "./provider.ts";
 
 // #region conformance
-test("notify-redis-ioredis provider passes notify provider conformance", async () => {
-  await using redis = await acquireRedis("redis:8");
+describe("notify-redis-ioredis provider conformance", () => {
+  let redis: AcquiredRedis;
+  let client: Redis;
+  let subscribeClient: Redis;
+  let context: NotifyAdapterConformanceContext;
 
-  await runRedisNotifyProviderConformance(async () => {
-    const client = new Redis(redis.connectionUrl);
-    const subscribeClient = new Redis(redis.connectionUrl);
+  beforeAll(async () => {
+    redis = await acquireRedis("redis:8");
+    client = new Redis(redis.connectionUrl);
+    subscribeClient = new Redis(redis.connectionUrl);
+    context = createRedisNotifyProviderConformanceContext({
+      createNotifyProvider: async () => createIoredisNotifyProvider({ client, subscribeClient }),
+    });
+  }, 60_000);
 
-    const notifyProvider = createIoredisNotifyProvider({ client, subscribeClient });
-
-    return {
-      notifyProvider,
-      dispose: async () => {
-        await client.quit();
-        await subscribeClient.quit();
-      },
-    };
+  afterAll(async () => {
+    await client.quit();
+    await subscribeClient.quit();
+    await redis[Symbol.asyncDispose]();
   });
-}, 60_000);
+
+  for (const conformanceCase of redisNotifyProviderConformanceCases) {
+    test(conformanceCase.title, async () => {
+      await conformanceCase.run(context);
+    });
+  }
+});
 // #endregion

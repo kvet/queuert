@@ -12,4 +12,5 @@ export const noopNotifyAdapter: NotifyAdapter = Object.freeze({
   notifyJobAttemptsLost: noopAsync,
   listenJobAttemptLost: listenNothing,
   close: noopAsync,
+  [Symbol.asyncDispose]: noopAsync,
 });

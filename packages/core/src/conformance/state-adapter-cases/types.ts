@@ -1,26 +1,20 @@
 import type { StateAdapter } from "../../state-adapter/state-adapter.ts";
 
 /**
- * Fixture for the state adapter conformance suite. Used both as the factory
- * return shape for {@link runStateAdapterConformance} and as the per-case
- * context the conformance cases receive.
+ * The context the state adapter conformance cases run against. Create it once, before the cases.
+ * Each case creates the adapters it needs from it, and they are closed when the case ends.
  */
-export type StateConformanceFixture = {
-  stateAdapter: StateAdapter<any, any, any>;
+export type StateAdapterConformanceContext = {
+  /**
+   * Creates an adapter over a clean state: no jobs, blockers or workers, such as by clearing the
+   * tables before returning the adapter. The adapters a case creates are closed when it ends, so
+   * closing one must not release resources the next one needs.
+   */
+  createStateAdapter: () => Promise<StateAdapter<any, any, any>>;
   /**
    * Runs the callback with a context of the adapter's shape that is not inside a transaction
    * (e.g. a pool client with no `BEGIN`, or the root ORM handle), so the suite can verify
-   * `isTransaction` rejects it. Cases that need it are skipped when omitted.
+   * `isTransaction` rejects it.
    */
-  withNonTransactionContext?: <T>(fn: (txCtx: any) => Promise<T>) => Promise<T>;
-  /**
-   * Called before each conformance case to restore a clean state. Typically
-   * `() => adapter.truncate()`. Consumed by the runner — cases ignore it.
-   */
-  reset?: () => Promise<void>;
-  /**
-   * Called once after all cases finish (pass or fail) to release resources.
-   * Consumed by the runner — cases ignore it.
-   */
-  dispose?: () => Promise<void>;
+  withNonTransactionContext: <T>(fn: (txCtx: any) => Promise<T>) => Promise<T>;
 };

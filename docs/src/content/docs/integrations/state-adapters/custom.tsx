@@ -9,24 +9,18 @@ export const meta = {
     "Implement the StateAdapter interface for another database engine and validate it with the conformance suite.",
 };
 
-const fixture = (): FieldItem[] => [
-  { name: "stateAdapter", chips: ["required"], description: "The adapter under test, migrated." },
+const contextFields = (): FieldItem[] => [
+  {
+    name: "createStateAdapter",
+    chips: ["required"],
+    description:
+      "Creates an adapter over a clean state, with no jobs, blockers or workers. Each case calls it once and closes the adapter when it ends.",
+  },
   {
     name: "withNonTransactionContext",
-    chips: ["optional"],
+    chips: ["required"],
     description:
-      "Runs a callback with the root handle, not a transaction. Cases that need it are skipped when it is omitted.",
-  },
-  {
-    name: "reset",
-    chips: ["optional"],
-    description:
-      "Runs before every case to restore a clean state, typically by truncating the tables.",
-  },
-  {
-    name: "dispose",
-    chips: ["optional"],
-    description: "Runs once after all cases finish, pass or fail, to release resources.",
+      "Runs a callback with the root handle, not a transaction, so the suite can check isTransaction rejects it.",
   },
 ];
 
@@ -38,7 +32,7 @@ const Page = () => (
       another client with PostgreSQL or SQLite, write a provider instead: see{" "}
       <A href="/integrations/state-adapters/postgres/#state-provider">PostgreSQL</A> or{" "}
       <A href="/integrations/state-adapters/sqlite/#state-provider">SQLite</A>, each of which has
-      its own conformance runner for providers.
+      its own conformance cases for providers.
     </p>
 
     <h2>Write a state adapter</h2>
@@ -55,59 +49,75 @@ const Page = () => (
 
     <h2 id="conformance">Conformance</h2>
     <p>
-      <code>queuert/conformance</code> runs the same suite Queuert uses internally against your
-      adapter. It has two runners:
+      <code>queuert/conformance</code> exports the same cases Queuert uses internally, as two lists
+      to run against your adapter:
     </p>
     <ul>
       <li>
-        <code>runStateAdapterConformance</code> runs the cases every state adapter must pass, with
+        <code>stateAdapterConformanceCases</code> are the cases every state adapter must pass, with
         transactions run one at a time.
       </li>
       <li>
-        <code>runConcurrentStateAdapterConformance</code> runs the cases that hold two transactions
-        open at once: blocker races, concurrent deletes, row locks, and reads that must not see
-        uncommitted rows. Run it next to the first when your adapter can run transactions in
-        parallel, such as one over a connection pool.
+        <code>concurrentStateAdapterConformanceCases</code> hold two transactions open at once:
+        blocker races, concurrent deletes, row locks, and reads that must not see uncommitted rows.
+        Run them next to the first when your adapter can run transactions in parallel, such as one
+        over a connection pool.
       </li>
     </ul>
     <p>
-      Both are framework-agnostic: they throw a <code>ConformanceError</code> with an aggregated
-      report on failure, so any test framework that reports a thrown error as a failure works. Embed
-      each in a single <code>test()</code> block:
+      The suite drives no test runner. Your test file sets up the database in its own hooks and
+      registers one test per case. Each case creates its own adapter with the context's{" "}
+      <code>createStateAdapter</code> and closes it when it ends, so closing an adapter must leave
+      the database usable for the next one. Each case has a <code>title</code>, and its{" "}
+      <code>run(context)</code> resolves when the case passes and rejects when it fails. The cases
+      share one database, so run them one at a time:
     </p>
     <Code lang="ts" title="src/state-adapter.spec.ts">{`
 import {
-  runConcurrentStateAdapterConformance,
-  runStateAdapterConformance,
-  type StateConformanceFixture,
+  concurrentStateAdapterConformanceCases,
+  stateAdapterConformanceCases,
+  type StateAdapterConformanceContext,
 } from "queuert/conformance";
-import { test } from "vitest";
+import { afterAll, beforeAll, describe, test } from "vitest";
 
-import { createMyStateAdapter } from "./state-adapter.ts";
+import { clearTables, createMyStateAdapter, openMyDatabase } from "./state-adapter.ts";
 
-const createFixture = async (): Promise<StateConformanceFixture> => {
-  const stateAdapter = createMyStateAdapter({ connectionString: process.env.DATABASE_URL });
-  await stateAdapter.migrateToLatest();
-  return {
-    stateAdapter,
-    reset: async () => stateAdapter.truncate(),
-    dispose: async () => stateAdapter.close(),
+describe("state adapter conformance", () => {
+  const db = openMyDatabase(process.env.DATABASE_URL);
+
+  beforeAll(async () => {
+    await createMyStateAdapter({ db }).migrateToLatest();
+  });
+
+  afterAll(async () => {
+    await db.close();
+  });
+
+  const context: StateAdapterConformanceContext = {
+    createStateAdapter: async () => {
+      await clearTables(db);
+      return createMyStateAdapter({ db });
+    },
+    withNonTransactionContext: async (fn) => fn({ db }),
   };
-};
 
-test("state adapter passes conformance", async () => {
-  await runStateAdapterConformance(createFixture);
-}, 60_000);
-
-test("state adapter passes concurrent transaction conformance", async () => {
-  await runConcurrentStateAdapterConformance(createFixture);
-}, 60_000);
+  for (const conformanceCase of [
+    ...stateAdapterConformanceCases,
+    ...concurrentStateAdapterConformanceCases,
+  ]) {
+    test(conformanceCase.title, async () => {
+      await conformanceCase.run(context);
+    });
+  }
+});
 `}</Code>
-    <p>The factory resolves to a fixture:</p>
-    <FieldList title="StateConformanceFixture" items={fixture()} />
+    <p>The context holds:</p>
+    <FieldList title="StateAdapterConformanceContext" items={contextFields()} />
     <p>
-      For per-case progress, pass <code>{"{ onResult }"}</code> as the second argument; for a
-      per-case timeout, <code>{"{ caseTimeoutMs }"}</code>. The full API is in the{" "}
+      Under <code>node:test</code>, register the hooks with <code>before</code> and{" "}
+      <code>after</code>. The{" "}
+      <A href="/integrations/state-adapters/sqlite/#testing-your-provider">SQLite</A> page shows all
+      three runners. The full API is in the{" "}
       <A href="/api/conformance/readme/">conformance reference</A>.
     </p>
   </>

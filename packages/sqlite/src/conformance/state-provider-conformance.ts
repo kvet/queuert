@@ -1,8 +1,8 @@
-import type { ConformanceOptions, ConformanceReport } from "queuert/conformance";
+import type { ConformanceTestCase } from "queuert/conformance";
 import {
   type ConformanceGroup,
-  type SchemaFenceConformanceFixture,
-  runFixtureConformance,
+  type SchemaFenceConformanceContext,
+  toConformanceTestCases,
   stateAdapterBaseGroups,
   stateAdapterSchemaFenceGroups,
 } from "queuert/conformance-internal";
@@ -10,22 +10,27 @@ import {
 import { createSqliteStateAdapter } from "../state-adapter/state-adapter.sqlite.ts";
 import type { SqliteStateProvider } from "../state-provider/state-provider.sqlite.ts";
 
-/** Fixture for {@link runSqliteStateProviderConformance}. */
-export type SqliteStateProviderConformanceFixture = {
-  /** The provider under test, over an empty database. */
-  stateProvider: SqliteStateProvider<any>;
+/** What {@link createSqliteStateProviderConformanceContext} takes. */
+export type SqliteStateProviderConformanceContextOptions = {
+  /**
+   * Creates the provider under test, over a database the suite may create tables in. Each case's
+   * adapter gets its own provider and closes it when the case ends, so closing one must not
+   * release resources the next one needs, such as the pool or the database connection.
+   */
+  createStateProvider: () => Promise<SqliteStateProvider<any>>;
   /**
    * Runs the callback with a context of the provider's shape that is not inside a transaction,
-   * so the suite can check `isTransaction` rejects it. Cases that need it are skipped when
-   * omitted.
+   * so the suite can check `isTransaction` rejects it.
    */
-  withNonTransactionContext?: <T>(fn: (txCtx: any) => Promise<T>) => Promise<T>;
-  /** Called once after all cases finish (pass or fail) to release resources. */
-  dispose?: () => Promise<void>;
+  withNonTransactionContext: <T>(fn: (txCtx: any) => Promise<T>) => Promise<T>;
 };
 
-export type SqliteStateProviderConformanceContext = SchemaFenceConformanceFixture & {
-  stateProvider: SqliteStateProvider<any>;
+/**
+ * The context the {@link sqliteStateProviderConformanceCases} run against. Get it from
+ * {@link createSqliteStateProviderConformanceContext} and pass it to every case unchanged.
+ */
+export type SqliteStateProviderConformanceContext = SchemaFenceConformanceContext & {
+  createStateProvider: () => Promise<SqliteStateProvider<any>>;
 };
 
 const MISSING_TABLE = "queuert_conformance_missing";
@@ -58,48 +63,72 @@ export const classifyErrorGroup: ConformanceGroup<SqliteStateProviderConformance
   cases: [
     {
       name: "classifies a missing table as undefined_table, naming it",
-      run: async ({ stateProvider }, expect) => {
-        const error = await captureError(async () =>
-          executeSql(stateProvider, `SELECT 1 FROM ${MISSING_TABLE}`),
-        );
-        expect(stateProvider.classifyError({ error })).toEqual({
-          kind: "undefined_table",
-          tableName: MISSING_TABLE,
-        });
+      run: async ({ createStateProvider }, expect) => {
+        const stateProvider = await createStateProvider();
+
+        try {
+          const error = await captureError(async () =>
+            executeSql(stateProvider, `SELECT 1 FROM ${MISSING_TABLE}`),
+          );
+          expect(stateProvider.classifyError({ error })).toEqual({
+            kind: "undefined_table",
+            tableName: MISSING_TABLE,
+          });
+        } finally {
+          await stateProvider.close?.();
+        }
       },
     },
     {
       name: "classifies a missing table inside a transaction as undefined_table, naming it",
-      run: async ({ stateProvider }, expect) => {
-        let error: unknown;
-        await expect(
-          stateProvider.withTransaction(async (txCtx) => {
-            error = await captureError(async () =>
-              executeSql(stateProvider, `SELECT 1 FROM ${MISSING_TABLE}`, txCtx),
-            );
-            throw error;
-          }),
-        ).rejects.toThrow();
-        expect(stateProvider.classifyError({ error })).toEqual({
-          kind: "undefined_table",
-          tableName: MISSING_TABLE,
-        });
+      run: async ({ createStateProvider }, expect) => {
+        const stateProvider = await createStateProvider();
+
+        try {
+          let error: unknown;
+          await expect(
+            stateProvider.withTransaction(async (txCtx) => {
+              error = await captureError(async () =>
+                executeSql(stateProvider, `SELECT 1 FROM ${MISSING_TABLE}`, txCtx),
+              );
+              throw error;
+            }),
+          ).rejects.toThrow();
+          expect(stateProvider.classifyError({ error })).toEqual({
+            kind: "undefined_table",
+            tableName: MISSING_TABLE,
+          });
+        } finally {
+          await stateProvider.close?.();
+        }
       },
     },
     {
       name: "returns undefined for an error other than a missing table",
-      run: async ({ stateProvider }, expect) => {
-        const error = await captureError(async () =>
-          executeSql(stateProvider, "SELECT missing_column FROM queuert_job"),
-        );
-        expect(stateProvider.classifyError({ error })).toBeUndefined();
+      run: async ({ createStateProvider }, expect) => {
+        const stateProvider = await createStateProvider();
+
+        try {
+          const error = await captureError(async () =>
+            executeSql(stateProvider, "SELECT missing_column FROM queuert_job"),
+          );
+          expect(stateProvider.classifyError({ error })).toBeUndefined();
+        } finally {
+          await stateProvider.close?.();
+        }
       },
     },
     {
       name: "returns undefined for a value that is not a driver error",
-      run: async ({ stateProvider }, expect) => {
-        expect(stateProvider.classifyError({ error: new Error("unrelated") })).toBeUndefined();
-        expect(stateProvider.classifyError({ error: undefined })).toBeUndefined();
+      run: async ({ createStateProvider }, expect) => {
+        const stateProvider = await createStateProvider();
+
+        try {
+          expect(stateProvider.classifyError({ error: new Error("unrelated") })).toBeUndefined();
+          expect(stateProvider.classifyError({ error: undefined })).toBeUndefined();
+        } finally {
+          await stateProvider.close?.();
+        }
       },
     },
   ],
@@ -114,31 +143,49 @@ const sqliteStateProviderBaseGroups: ConformanceGroup<SqliteStateProviderConform
 export const sqliteStateProviderConformanceGroups: ConformanceGroup<SqliteStateProviderConformanceContext>[] =
   [...sqliteStateProviderBaseGroups];
 
-export const createSqliteConformanceContext = async ({
-  stateProvider,
+/**
+ * Prepares the context the {@link sqliteStateProviderConformanceCases} run against: migrates the
+ * schema once through a provider from `createStateProvider`. Each case then builds its own adapter
+ * over a new provider from it, with the tables cleared. Call it once the database is ready, such
+ * as in `beforeAll`; the test file owns the database and releases it itself.
+ */
+export const createSqliteStateProviderConformanceContext = async ({
+  createStateProvider,
   withNonTransactionContext,
-  dispose,
-}: SqliteStateProviderConformanceFixture): Promise<
-  SqliteStateProviderConformanceContext & {
-    reset: () => Promise<void>;
-    dispose?: () => Promise<void>;
-  }
-> => {
-  const stateAdapter = createSqliteStateAdapter({ stateProvider });
-  await stateAdapter.migrateToLatest();
+}: SqliteStateProviderConformanceContextOptions): Promise<SqliteStateProviderConformanceContext> => {
+  const ddl = { params: [], paramTypes: {}, columnTypes: {}, readOnly: false };
   const executeDdl = async (sql: string): Promise<void> => {
-    await stateProvider.executeSql({
-      sql,
-      params: [],
-      paramTypes: {},
-      columnTypes: {},
-      readOnly: false,
-    });
+    const stateProvider = await createStateProvider();
+    try {
+      await stateProvider.executeSql({ ...ddl, sql });
+    } finally {
+      await stateProvider.close?.();
+    }
   };
+
+  {
+    await using stateAdapter = createSqliteStateAdapter({
+      stateProvider: await createStateProvider(),
+    });
+    await stateAdapter.migrateToLatest();
+  }
+
   return {
-    stateAdapter,
-    stateProvider,
+    createStateProvider,
     withNonTransactionContext,
+    createStateAdapter: async () => {
+      const stateProvider = await createStateProvider();
+      const stateAdapter = createSqliteStateAdapter({ stateProvider });
+      try {
+        await stateProvider.executeSql({ ...ddl, sql: "DELETE FROM queuert_job_blocker" });
+        await stateProvider.executeSql({ ...ddl, sql: "DELETE FROM queuert_job" });
+        await stateProvider.executeSql({ ...ddl, sql: "DELETE FROM queuert_worker" });
+      } catch (error) {
+        await stateAdapter.close();
+        throw error;
+      }
+      return stateAdapter;
+    },
     withWritesFenced: async (fn) => {
       await executeDdl("DROP TABLE queuert_schema_fence_v1");
       try {
@@ -147,37 +194,35 @@ export const createSqliteConformanceContext = async ({
         await executeDdl("CREATE TABLE queuert_schema_fence_v1 (id INTEGER PRIMARY KEY)");
       }
     },
-    reset: async () => stateAdapter.truncate(),
-    dispose,
   };
 };
 
 /**
- * Run the conformance suite against a {@link SqliteStateProvider}: every state adapter case,
- * run through `createSqliteStateAdapter` over the provider, and the provider's `classifyError`.
- * The adapter is migrated once and truncated before every case. Test-framework agnostic:
- * designed to be embedded in a single test. Throws `ConformanceError` with an aggregated report
- * on any failure.
+ * Every state adapter case, run through `createSqliteStateAdapter` over a provider, plus checks of
+ * the provider's `classifyError`. Run them one per test in your own test file against a context
+ * from {@link createSqliteStateProviderConformanceContext}. Works with any test runner.
  *
  * @example
  * ```ts
- * await runSqliteStateProviderConformance(async () => {
- *   const client = createClient({ url: ":memory:" });
- *   return {
- *     stateProvider: createLibsqlStateProvider({ client }),
- *     dispose: async () => client.close(),
- *   };
+ * import { after, before, test } from "node:test";
+ *
+ * const client = createClient({ url: ":memory:" });
+ * const lock = createAsyncRwLock();
+ * let context: SqliteStateProviderConformanceContext;
+ * before(async () => {
+ *   context = await createSqliteStateProviderConformanceContext({
+ *     createStateProvider: async () => createLibsqlStateProvider({ client, lock }),
+ *     withNonTransactionContext: async (fn) => fn({ client }),
+ *   });
  * });
+ * after(() => client.close());
+ *
+ * for (const conformanceCase of sqliteStateProviderConformanceCases) {
+ *   void test(conformanceCase.title, async () => {
+ *     await conformanceCase.run(context);
+ *   });
+ * }
  * ```
  */
-export const runSqliteStateProviderConformance = async (
-  factory: () => Promise<SqliteStateProviderConformanceFixture>,
-  options?: ConformanceOptions,
-): Promise<ConformanceReport> => {
-  const fixture = await factory();
-  return runFixtureConformance(
-    sqliteStateProviderConformanceGroups,
-    async () => createSqliteConformanceContext(fixture),
-    options,
-  );
-};
+export const sqliteStateProviderConformanceCases: ConformanceTestCase<SqliteStateProviderConformanceContext>[] =
+  toConformanceTestCases(sqliteStateProviderConformanceGroups);

@@ -128,12 +128,13 @@ const Page = () => (
 
     <h2 id="testing-your-provider">Testing your provider</h2>
     <p>
-      <code>runRedisNotifyProviderConformance</code> from <code>@queuert/redis/conformance</code>{" "}
-      checks a provider you write. It builds the notify adapter over your provider and runs every
-      case a notify adapter must pass. Its fixture is <code>notifyProvider</code> and an optional{" "}
-      <code>dispose</code>. The runner is framework-agnostic: it throws on failure, so embed it in a
-      single <code>test()</code> block. Every example's <code>src/provider.spec.ts</code> is a
-      working template:
+      <code>redisNotifyProviderConformanceCases</code> from <code>@queuert/redis/conformance</code>{" "}
+      check a provider you write: they are every case a notify adapter must pass, run against the
+      context <code>createRedisNotifyProviderConformanceContext({"{ createNotifyProvider }"})</code>{" "}
+      returns: each case builds its own notify adapter over a new provider from your factory and
+      closes both when it ends. The suite drives no test runner: your test file owns the connections
+      in its own hooks and registers one test per case. Every example's{" "}
+      <code>src/provider.spec.ts</code> is a working template:
     </p>
     <Tabs syncKey="redis-driver">
       <TabItem label="node-redis">
@@ -168,6 +169,9 @@ const Page = () => (
         />
       </TabItem>
     </Tabs>
+    <p>
+      The full API is in the <A href="/api/redis-conformance/readme/">conformance reference</A>.
+    </p>
 
     <h2 id="channels">Channels</h2>
     <p>

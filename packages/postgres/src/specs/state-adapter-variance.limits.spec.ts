@@ -2,6 +2,7 @@ import { extendWithPostgres } from "@queuert/testcontainers";
 import {
   stateAdapterBaseGroups,
   stateAdapterConcurrentTransactionGroups,
+  stateAdapterCountCapGroups,
   stateAdapterSchemaFenceConcurrentTransactionGroups,
   stateAdapterSchemaFenceGroups,
 } from "queuert/conformance-internal";
@@ -29,6 +30,7 @@ describe("PostgreSQL State Adapter Variance - Limits", () => {
     it,
     groups: [
       ...stateAdapterBaseGroups,
+      ...stateAdapterCountCapGroups,
       ...stateAdapterSchemaFenceGroups,
       ...stateAdapterConcurrentTransactionGroups,
       ...stateAdapterSchemaFenceConcurrentTransactionGroups,

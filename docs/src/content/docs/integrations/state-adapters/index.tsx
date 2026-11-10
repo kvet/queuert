@@ -133,10 +133,12 @@ const members = (): FieldItem[] => [
       <>
         <code>config</code> is how the adapter was configured, with defaults applied: the ID and
         limit settings used to generate and validate job and worker IDs and enforce the blocker
-        limit. <code>close</code> releases internal resources and is idempotent.
+        limit. <code>close</code> releases internal resources and is idempotent;{" "}
+        <code>[Symbol.asyncDispose]</code> calls it, so an adapter can be held with{" "}
+        <code>await using</code>.
       </>
     ),
-    extra: ["config", "close"],
+    extra: ["config", "close", "[Symbol.asyncDispose]"],
   },
 ];
 

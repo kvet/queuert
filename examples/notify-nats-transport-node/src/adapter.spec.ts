@@ -1,27 +1,39 @@
-import { connect } from "@nats-io/transport-node";
+import { connect, type NatsConnection } from "@nats-io/transport-node";
 import { createNatsNotifyAdapter } from "@queuert/nats";
-import { acquireNats } from "@queuert/testcontainers";
-import { runNotifyAdapterConformance } from "queuert/conformance";
-import { test } from "vitest";
+import { acquireNats, type AcquiredNats } from "@queuert/testcontainers";
+import {
+  type NotifyAdapterConformanceContext,
+  notifyAdapterConformanceCases,
+} from "queuert/conformance";
+import { afterAll, beforeAll, describe, test } from "vitest";
 
 // #region conformance
-test("notify-nats-transport-node adapter passes notify adapter conformance", async () => {
-  await using nats = await acquireNats("nats:2");
+describe("notify-nats-transport-node adapter conformance", () => {
+  let nats: AcquiredNats;
+  let nc: NatsConnection;
+  let context: NotifyAdapterConformanceContext;
 
-  await runNotifyAdapterConformance(async () => {
-    const nc = await connect(nats.connectionOptions);
-    const notifyAdapter = createNatsNotifyAdapter({
-      nc,
-      subjectPrefix: `queuert.spec.${Date.now()}.${Math.random().toString(36).slice(2)}`,
-    });
-
-    return {
-      notifyAdapter,
-      dispose: async () => {
-        await notifyAdapter.close();
-        await nc.close();
-      },
+  beforeAll(async () => {
+    nats = await acquireNats("nats:2");
+    nc = await connect(nats.connectionOptions);
+    context = {
+      createNotifyAdapter: async () =>
+        createNatsNotifyAdapter({
+          nc,
+          subjectPrefix: `queuert.spec.${Date.now()}.${Math.random().toString(36).slice(2)}`,
+        }),
     };
+  }, 60_000);
+
+  afterAll(async () => {
+    await nc.close();
+    await nats[Symbol.asyncDispose]();
   });
-}, 60_000);
+
+  for (const conformanceCase of notifyAdapterConformanceCases) {
+    test(conformanceCase.title, async () => {
+      await conformanceCase.run(context);
+    });
+  }
+});
 // #endregion

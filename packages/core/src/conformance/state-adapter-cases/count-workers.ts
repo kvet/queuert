@@ -1,18 +1,22 @@
 import type { ConformanceGroup } from "../runner.ts";
-import type { StateConformanceFixture } from "./types.ts";
+import type { StateAdapterConformanceContext } from "./types.ts";
 
-export const countWorkersGroup: ConformanceGroup<StateConformanceFixture> = {
+export const countWorkersGroup: ConformanceGroup<StateAdapterConformanceContext> = {
   name: "countWorkers",
   cases: [
     {
       name: "returns zeros when no worker has a row",
-      run: async ({ stateAdapter }, expect) => {
+      run: async ({ createStateAdapter }, expect) => {
+        await using stateAdapter = await createStateAdapter();
+
         expect(await stateAdapter.countWorkers({})).toEqual({ live: 0, expired: 0 });
       },
     },
     {
       name: "counts the workers with a live lease and the expired ones",
-      run: async ({ stateAdapter }, expect) => {
+      run: async ({ createStateAdapter }, expect) => {
+        await using stateAdapter = await createStateAdapter();
+
         await stateAdapter.startWorker({
           workerId: stateAdapter.config.generateWorkerId(),
           typeNames: ["reserve-stock"],
@@ -37,7 +41,9 @@ export const countWorkersGroup: ConformanceGroup<StateConformanceFixture> = {
     },
     {
       name: "does not count a stopped worker",
-      run: async ({ stateAdapter }, expect) => {
+      run: async ({ createStateAdapter }, expect) => {
+        await using stateAdapter = await createStateAdapter();
+
         const worker = await stateAdapter.startWorker({
           workerId: stateAdapter.config.generateWorkerId(),
           typeNames: ["capture-payment"],

@@ -1,3 +1,4 @@
+import type { StateAdapter } from "../state-adapter/state-adapter.ts";
 import type { ConformanceGroup } from "./runner.ts";
 import {
   addJobsBlockersGroup,
@@ -6,6 +7,7 @@ import {
 import { closeGroup } from "./state-adapter-cases/close.ts";
 import { completeJobsGroup } from "./state-adapter-cases/complete-jobs.ts";
 import { continueJobsGroup } from "./state-adapter-cases/continue-jobs.ts";
+import { countCapGroup } from "./state-adapter-cases/count-cap.ts";
 import { countChainsByTypeNameGroup } from "./state-adapter-cases/count-chains-by-type-name.ts";
 import { countJobsByTypeNameGroup } from "./state-adapter-cases/count-jobs-by-type-name.ts";
 import { countRunningJobsByWorkerIdGroup } from "./state-adapter-cases/count-running-jobs-by-worker-id.ts";
@@ -57,7 +59,7 @@ import { listWorkerJobsGroup } from "./state-adapter-cases/list-worker-jobs.ts";
 import { listWorkersGroup } from "./state-adapter-cases/list-workers.ts";
 import { rescheduleJobsGroup } from "./state-adapter-cases/reschedule-jobs.ts";
 import {
-  type SchemaFenceConformanceFixture,
+  type SchemaFenceConformanceContext,
   schemaFenceConcurrentTransactionsGroup,
   schemaFenceGroup,
 } from "./state-adapter-cases/schema-fence.ts";
@@ -67,7 +69,7 @@ import {
 } from "./state-adapter-cases/start-job-attempt.ts";
 import { startWorkerGroup } from "./state-adapter-cases/start-worker.ts";
 import { stopWorkerGroup } from "./state-adapter-cases/stop-worker.ts";
-import type { StateConformanceFixture } from "./state-adapter-cases/types.ts";
+import type { StateAdapterConformanceContext } from "./state-adapter-cases/types.ts";
 import {
   unblockJobsGroup,
   unblockJobsConcurrentTransactionsGroup,
@@ -77,9 +79,9 @@ import {
   withTransactionConcurrentTransactionsGroup,
 } from "./state-adapter-cases/with-transaction.ts";
 
-export { type StateConformanceFixture } from "./state-adapter-cases/types.ts";
+export { type StateAdapterConformanceContext } from "./state-adapter-cases/types.ts";
 
-export const stateAdapterBaseGroups: ConformanceGroup<StateConformanceFixture>[] = [
+export const stateAdapterBaseGroups: ConformanceGroup<StateAdapterConformanceContext>[] = [
   withTransactionGroup,
   isTransactionGroup,
   getChainsGroup,
@@ -114,7 +116,7 @@ export const stateAdapterBaseGroups: ConformanceGroup<StateConformanceFixture>[]
   closeGroup,
 ];
 
-export const stateAdapterConcurrentTransactionGroups: ConformanceGroup<StateConformanceFixture>[] =
+export const stateAdapterConcurrentTransactionGroups: ConformanceGroup<StateAdapterConformanceContext>[] =
   [
     withTransactionConcurrentTransactionsGroup,
     getChainsConcurrentTransactionsGroup,
@@ -131,16 +133,24 @@ export const stateAdapterConcurrentTransactionGroups: ConformanceGroup<StateConf
     listBlockedJobsConcurrentTransactionsGroup,
   ];
 
-export { type SchemaFenceConformanceFixture } from "./state-adapter-cases/schema-fence.ts";
+export { type SchemaFenceConformanceContext } from "./state-adapter-cases/schema-fence.ts";
 
 /**
  * Cases for adapters that fence writes behind a schema fence table, such as the PostgreSQL and
  * SQLite adapters. Internal for now: the fence is not part of the public state adapter contract.
  */
-export const stateAdapterSchemaFenceGroups: ConformanceGroup<SchemaFenceConformanceFixture>[] = [
+export const stateAdapterSchemaFenceGroups: ConformanceGroup<SchemaFenceConformanceContext>[] = [
   schemaFenceGroup,
 ];
 
 /** The schema fence cases that hold two transactions open at once. */
-export const stateAdapterSchemaFenceConcurrentTransactionGroups: ConformanceGroup<SchemaFenceConformanceFixture>[] =
+export const stateAdapterSchemaFenceConcurrentTransactionGroups: ConformanceGroup<SchemaFenceConformanceContext>[] =
   [schemaFenceConcurrentTransactionsGroup];
+
+/**
+ * Cases that check the counts stop at `config.countCap`, for an adapter created with a small
+ * `countCap`. Internal: at the default cap they would create over 20,000 jobs.
+ */
+export const stateAdapterCountCapGroups: ConformanceGroup<StateAdapterConformanceContext>[] = [
+  countCapGroup,
+];

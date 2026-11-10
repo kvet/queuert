@@ -1,29 +1,42 @@
-import { runRedisNotifyProviderConformance } from "@queuert/redis/conformance";
-import { acquireRedis } from "@queuert/testcontainers";
+import {
+  createRedisNotifyProviderConformanceContext,
+  type NotifyAdapterConformanceContext,
+  redisNotifyProviderConformanceCases,
+} from "@queuert/redis/conformance";
+import { acquireRedis, type AcquiredRedis } from "@queuert/testcontainers";
 import { type RedisClientType, createClient } from "redis";
-import { test } from "vitest";
+import { afterAll, beforeAll, describe, test } from "vitest";
 
 import { createNodeRedisNotifyProvider } from "./provider.ts";
 
 // #region conformance
-test("notify-redis-redis provider passes notify provider conformance", async () => {
-  await using redis = await acquireRedis("redis:8");
+describe("notify-redis-redis provider conformance", () => {
+  let redis: AcquiredRedis;
+  let client: RedisClientType;
+  let subscribeClient: RedisClientType;
+  let context: NotifyAdapterConformanceContext;
 
-  await runRedisNotifyProviderConformance(async () => {
-    const client = createClient({ url: redis.connectionUrl }) as RedisClientType;
-    const subscribeClient = createClient({ url: redis.connectionUrl }) as RedisClientType;
+  beforeAll(async () => {
+    redis = await acquireRedis("redis:8");
+    client = createClient({ url: redis.connectionUrl });
+    subscribeClient = createClient({ url: redis.connectionUrl });
     await client.connect();
     await subscribeClient.connect();
+    context = createRedisNotifyProviderConformanceContext({
+      createNotifyProvider: async () => createNodeRedisNotifyProvider({ client, subscribeClient }),
+    });
+  }, 60_000);
 
-    const notifyProvider = createNodeRedisNotifyProvider({ client, subscribeClient });
-
-    return {
-      notifyProvider,
-      dispose: async () => {
-        await client.close();
-        await subscribeClient.close();
-      },
-    };
+  afterAll(async () => {
+    await client.close();
+    await subscribeClient.close();
+    await redis[Symbol.asyncDispose]();
   });
-}, 60_000);
+
+  for (const conformanceCase of redisNotifyProviderConformanceCases) {
+    test(conformanceCase.title, async () => {
+      await conformanceCase.run(context);
+    });
+  }
+});
 // #endregion

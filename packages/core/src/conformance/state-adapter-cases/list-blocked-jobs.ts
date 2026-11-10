@@ -1,14 +1,16 @@
 import { sleep } from "@queuert/helpers";
 
 import type { ConformanceGroup } from "../runner.ts";
-import type { StateConformanceFixture } from "./types.ts";
+import type { StateAdapterConformanceContext } from "./types.ts";
 
-export const listBlockedJobsGroup: ConformanceGroup<StateConformanceFixture> = {
+export const listBlockedJobsGroup: ConformanceGroup<StateAdapterConformanceContext> = {
   name: "listBlockedJobs",
   cases: [
     {
       name: "listBlockedJobs returns jobs blocked by a chain",
-      run: async ({ stateAdapter }, expect) => {
+      run: async ({ createStateAdapter }, expect) => {
+        await using stateAdapter = await createStateAdapter();
+
         const [blockerChain] = await stateAdapter.withTransaction(async (txCtx) =>
           stateAdapter.createJobs({
             txCtx,
@@ -55,7 +57,9 @@ export const listBlockedJobsGroup: ConformanceGroup<StateConformanceFixture> = {
     },
     {
       name: "listBlockedJobs returns empty page when no jobs are blocked",
-      run: async ({ stateAdapter }, expect) => {
+      run: async ({ createStateAdapter }, expect) => {
+        await using stateAdapter = await createStateAdapter();
+
         const [stateChain] = await stateAdapter.withTransaction(async (txCtx) =>
           stateAdapter.createJobs({
             txCtx,
@@ -73,7 +77,9 @@ export const listBlockedJobsGroup: ConformanceGroup<StateConformanceFixture> = {
     },
     {
       name: "listBlockedJobs sorts asc when orderDirection is asc",
-      run: async ({ stateAdapter }, expect) => {
+      run: async ({ createStateAdapter }, expect) => {
+        await using stateAdapter = await createStateAdapter();
+
         const [blockerChain] = await stateAdapter.withTransaction(async (txCtx) =>
           stateAdapter.createJobs({
             txCtx,
@@ -134,7 +140,9 @@ export const listBlockedJobsGroup: ConformanceGroup<StateConformanceFixture> = {
     },
     {
       name: "listBlockedJobs paginates with cursor",
-      run: async ({ stateAdapter }, expect) => {
+      run: async ({ createStateAdapter }, expect) => {
+        await using stateAdapter = await createStateAdapter();
+
         const [blockerChain] = await stateAdapter.withTransaction(async (txCtx) =>
           stateAdapter.createJobs({
             txCtx,
@@ -189,7 +197,9 @@ export const listBlockedJobsGroup: ConformanceGroup<StateConformanceFixture> = {
     },
     {
       name: "listBlockedJobs paginates jobs created at the same time by id in both directions",
-      run: async ({ stateAdapter }, expect) => {
+      run: async ({ createStateAdapter }, expect) => {
+        await using stateAdapter = await createStateAdapter();
+
         const [blockerChain] = await stateAdapter.withTransaction(async (txCtx) =>
           stateAdapter.createJobs({
             txCtx,
@@ -240,13 +250,15 @@ export const listBlockedJobsGroup: ConformanceGroup<StateConformanceFixture> = {
   ],
 };
 
-export const listBlockedJobsConcurrentTransactionsGroup: ConformanceGroup<StateConformanceFixture> =
+export const listBlockedJobsConcurrentTransactionsGroup: ConformanceGroup<StateAdapterConformanceContext> =
   {
     name: "listBlockedJobs",
     cases: [
       {
         name: "non-transactional listBlockedJobs does not observe an uncommitted blocker insert",
-        run: async ({ stateAdapter }, expect) => {
+        run: async ({ createStateAdapter }, expect) => {
+          await using stateAdapter = await createStateAdapter();
+
           const [blockerChain] = await stateAdapter.withTransaction(async (txCtx) =>
             stateAdapter.createJobs({
               txCtx,

@@ -1,26 +1,36 @@
-import { test } from "bun:test";
+import { afterAll, beforeAll, describe, test } from "bun:test";
 
 import { createAsyncRwLock } from "@queuert/sqlite";
-import { runSqliteStateProviderConformance } from "@queuert/sqlite/conformance";
+import {
+  createSqliteStateProviderConformanceContext,
+  type SqliteStateProviderConformanceContext,
+  sqliteStateProviderConformanceCases,
+} from "@queuert/sqlite/conformance";
 import { SQL } from "bun";
 
 import { createBunSqlSqliteStateProvider } from "./provider.ts";
 
 // #region conformance
-test("state-sqlite-bun-sql provider passes state provider conformance", async () => {
-  await runSqliteStateProviderConformance(async () => {
-    const sql = new SQL("sqlite://:memory:");
+describe("state-sqlite-bun-sql provider conformance", () => {
+  const sql = new SQL("sqlite://:memory:");
+  const lock = createAsyncRwLock();
+  let context: SqliteStateProviderConformanceContext;
 
-    const lock = createAsyncRwLock();
-    const stateProvider = createBunSqlSqliteStateProvider({ sql, lock });
-
-    return {
-      stateProvider,
+  beforeAll(async () => {
+    context = await createSqliteStateProviderConformanceContext({
+      createStateProvider: async () => createBunSqlSqliteStateProvider({ sql, lock }),
       withNonTransactionContext: async (fn) => fn({ txSql: sql }),
-      dispose: async () => {
-        await sql.close();
-      },
-    };
+    });
   });
-}, 30_000);
+
+  afterAll(async () => {
+    await sql.close();
+  });
+
+  for (const conformanceCase of sqliteStateProviderConformanceCases) {
+    test(conformanceCase.title, async () => {
+      await conformanceCase.run(context);
+    });
+  }
+});
 // #endregion

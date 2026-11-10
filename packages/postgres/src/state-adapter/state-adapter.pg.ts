@@ -558,8 +558,6 @@ export const createPgStateAdapter = <
    * 0.17 migration table that records migrations 0.17 did not ship.
    */
   migrateToLatest: () => Promise<MigrationResult>;
-  /** Delete all job, blocker and worker rows. Intended for tests. */
-  truncate: () => Promise<void>;
 } => {
   validateSqlIdentifier(schema, "schema");
   validateSqlIdentifier(tablePrefix, "tablePrefix");
@@ -700,6 +698,11 @@ LEFT JOIN LATERAL (
       }
       throw error;
     }
+  };
+
+  const close = async (): Promise<void> => {
+    if (!closed.trip()) return;
+    await stateProvider.close?.();
   };
 
   return {
@@ -2525,30 +2528,13 @@ ORDER BY w.ord
       }).migrateToLatest();
     },
 
-    truncate: async () => {
-      await executeTypedSql({
-        sql: applyTemplate(
-          sql(
-            /* sql */ `TRUNCATE ${schema}.${tablePrefix}job_blocker, ${schema}.${tablePrefix}job, ${schema}.${tablePrefix}worker CASCADE`,
-            {
-              params: [],
-              columns: {},
-            },
-          ),
-        ),
-      });
-    },
-
-    close: async () => {
-      if (!closed.trip()) return;
-      await stateProvider.close?.();
-    },
+    close,
+    [Symbol.asyncDispose]: close,
   };
 };
 
 /**
- * PostgreSQL state adapter type. Includes `migrateToLatest` for schema
- * migrations and `truncate` for clearing all job data.
+ * PostgreSQL state adapter type. Includes `migrateToLatest` for schema migrations.
  */
 export type PgStateAdapter<
   TTxContext extends BaseTxContext,
@@ -2562,6 +2548,4 @@ export type PgStateAdapter<
    * 0.17 migration table that records migrations 0.17 did not ship.
    */
   migrateToLatest: () => Promise<MigrationResult>;
-  /** Delete all job, blocker and worker rows. Intended for tests. */
-  truncate: () => Promise<void>;
 };

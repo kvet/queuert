@@ -1,8 +1,8 @@
-import type { ConformanceOptions, ConformanceReport } from "queuert/conformance";
+import type { ConformanceTestCase } from "queuert/conformance";
 import {
   type ConformanceGroup,
-  type SchemaFenceConformanceFixture,
-  runFixtureConformance,
+  type SchemaFenceConformanceContext,
+  toConformanceTestCases,
   stateAdapterBaseGroups,
   stateAdapterConcurrentTransactionGroups,
   stateAdapterSchemaFenceConcurrentTransactionGroups,
@@ -12,22 +12,27 @@ import {
 import { createPgStateAdapter } from "../state-adapter/state-adapter.pg.ts";
 import type { PgStateProvider } from "../state-provider/state-provider.pg.ts";
 
-/** Fixture for {@link runPgStateProviderConformance}. */
-export type PgStateProviderConformanceFixture = {
-  /** The provider under test, over a database the suite may create tables in. */
-  stateProvider: PgStateProvider<any>;
+/** What {@link createPgStateProviderConformanceContext} takes. */
+export type PgStateProviderConformanceContextOptions = {
+  /**
+   * Creates the provider under test, over a database the suite may create tables in. Each case's
+   * adapter gets its own provider and closes it when the case ends, so closing one must not
+   * release resources the next one needs, such as the pool or the database connection.
+   */
+  createStateProvider: () => Promise<PgStateProvider<any>>;
   /**
    * Runs the callback with a context of the provider's shape that is not inside a transaction
    * (e.g. a pool client with no `BEGIN`), so the suite can check `isTransaction` rejects it.
-   * Cases that need it are skipped when omitted.
    */
-  withNonTransactionContext?: <T>(fn: (txCtx: any) => Promise<T>) => Promise<T>;
-  /** Called once after all cases finish (pass or fail) to release resources. */
-  dispose?: () => Promise<void>;
+  withNonTransactionContext: <T>(fn: (txCtx: any) => Promise<T>) => Promise<T>;
 };
 
-export type PgStateProviderConformanceContext = SchemaFenceConformanceFixture & {
-  stateProvider: PgStateProvider<any>;
+/**
+ * The context the {@link pgStateProviderConformanceCases} run against. Get it from
+ * {@link createPgStateProviderConformanceContext} and pass it to every case unchanged.
+ */
+export type PgStateProviderConformanceContext = SchemaFenceConformanceContext & {
+  createStateProvider: () => Promise<PgStateProvider<any>>;
 };
 
 const MISSING_TABLE = "public.queuert_conformance_missing";
@@ -60,48 +65,72 @@ export const classifyErrorGroup: ConformanceGroup<PgStateProviderConformanceCont
   cases: [
     {
       name: "classifies a missing table as undefined_table, naming it",
-      run: async ({ stateProvider }, expect) => {
-        const error = await captureError(async () =>
-          executeSql(stateProvider, `SELECT 1 FROM ${MISSING_TABLE}`),
-        );
-        expect(stateProvider.classifyError({ error })).toEqual({
-          kind: "undefined_table",
-          tableName: MISSING_TABLE,
-        });
+      run: async ({ createStateProvider }, expect) => {
+        const stateProvider = await createStateProvider();
+
+        try {
+          const error = await captureError(async () =>
+            executeSql(stateProvider, `SELECT 1 FROM ${MISSING_TABLE}`),
+          );
+          expect(stateProvider.classifyError({ error })).toEqual({
+            kind: "undefined_table",
+            tableName: MISSING_TABLE,
+          });
+        } finally {
+          await stateProvider.close?.();
+        }
       },
     },
     {
       name: "classifies a missing table inside a transaction as undefined_table, naming it",
-      run: async ({ stateProvider }, expect) => {
-        let error: unknown;
-        await expect(
-          stateProvider.withTransaction(async (txCtx) => {
-            error = await captureError(async () =>
-              executeSql(stateProvider, `SELECT 1 FROM ${MISSING_TABLE}`, txCtx),
-            );
-            throw error;
-          }),
-        ).rejects.toThrow();
-        expect(stateProvider.classifyError({ error })).toEqual({
-          kind: "undefined_table",
-          tableName: MISSING_TABLE,
-        });
+      run: async ({ createStateProvider }, expect) => {
+        const stateProvider = await createStateProvider();
+
+        try {
+          let error: unknown;
+          await expect(
+            stateProvider.withTransaction(async (txCtx) => {
+              error = await captureError(async () =>
+                executeSql(stateProvider, `SELECT 1 FROM ${MISSING_TABLE}`, txCtx),
+              );
+              throw error;
+            }),
+          ).rejects.toThrow();
+          expect(stateProvider.classifyError({ error })).toEqual({
+            kind: "undefined_table",
+            tableName: MISSING_TABLE,
+          });
+        } finally {
+          await stateProvider.close?.();
+        }
       },
     },
     {
       name: "returns undefined for an error other than a missing table",
-      run: async ({ stateProvider }, expect) => {
-        const error = await captureError(async () =>
-          executeSql(stateProvider, "SELECT missing_column FROM public.queuert_job"),
-        );
-        expect(stateProvider.classifyError({ error })).toBeUndefined();
+      run: async ({ createStateProvider }, expect) => {
+        const stateProvider = await createStateProvider();
+
+        try {
+          const error = await captureError(async () =>
+            executeSql(stateProvider, "SELECT missing_column FROM public.queuert_job"),
+          );
+          expect(stateProvider.classifyError({ error })).toBeUndefined();
+        } finally {
+          await stateProvider.close?.();
+        }
       },
     },
     {
       name: "returns undefined for a value that is not a driver error",
-      run: async ({ stateProvider }, expect) => {
-        expect(stateProvider.classifyError({ error: new Error("unrelated") })).toBeUndefined();
-        expect(stateProvider.classifyError({ error: undefined })).toBeUndefined();
+      run: async ({ createStateProvider }, expect) => {
+        const stateProvider = await createStateProvider();
+
+        try {
+          expect(stateProvider.classifyError({ error: new Error("unrelated") })).toBeUndefined();
+          expect(stateProvider.classifyError({ error: undefined })).toBeUndefined();
+        } finally {
+          await stateProvider.close?.();
+        }
       },
     },
   ],
@@ -120,28 +149,48 @@ export const pgStateProviderConformanceGroups: ConformanceGroup<PgStateProviderC
     ...stateAdapterSchemaFenceConcurrentTransactionGroups,
   ];
 
-export const createPgConformanceContext = async ({
-  stateProvider,
+/**
+ * Prepares the context the {@link pgStateProviderConformanceCases} run against: migrates the
+ * schema once through a provider from `createStateProvider`. Each case then builds its own adapter
+ * over a new provider from it, with the tables cleared. Call it once the database is ready, such
+ * as in `beforeAll`; the test file owns the database and releases it itself.
+ */
+export const createPgStateProviderConformanceContext = async ({
+  createStateProvider,
   withNonTransactionContext,
-  dispose,
-}: PgStateProviderConformanceFixture): Promise<
-  PgStateProviderConformanceContext & { reset: () => Promise<void>; dispose?: () => Promise<void> }
-> => {
-  const stateAdapter = createPgStateAdapter({ stateProvider });
-  await stateAdapter.migrateToLatest();
+}: PgStateProviderConformanceContextOptions): Promise<PgStateProviderConformanceContext> => {
+  const ddl = { params: [], paramTypes: {}, columnTypes: {}, readOnly: false };
   const executeDdl = async (sql: string): Promise<void> => {
-    await stateProvider.executeSql({
-      sql,
-      params: [],
-      paramTypes: {},
-      columnTypes: {},
-      readOnly: false,
-    });
+    const stateProvider = await createStateProvider();
+    try {
+      await stateProvider.executeSql({ ...ddl, sql });
+    } finally {
+      await stateProvider.close?.();
+    }
   };
+
+  {
+    await using stateAdapter = createPgStateAdapter({ stateProvider: await createStateProvider() });
+    await stateAdapter.migrateToLatest();
+  }
+
   return {
-    stateAdapter,
-    stateProvider,
+    createStateProvider,
     withNonTransactionContext,
+    createStateAdapter: async () => {
+      const stateProvider = await createStateProvider();
+      const stateAdapter = createPgStateAdapter({ stateProvider });
+      try {
+        await stateProvider.executeSql({
+          ...ddl,
+          sql: "TRUNCATE public.queuert_job_blocker, public.queuert_job, public.queuert_worker CASCADE",
+        });
+      } catch (error) {
+        await stateAdapter.close();
+        throw error;
+      }
+      return stateAdapter;
+    },
     withWritesFenced: async (fn) => {
       await executeDdl("DROP TABLE public.queuert_schema_fence_v1");
       try {
@@ -150,37 +199,43 @@ export const createPgConformanceContext = async ({
         await executeDdl("CREATE TABLE public.queuert_schema_fence_v1 (id integer PRIMARY KEY)");
       }
     },
-    reset: async () => stateAdapter.truncate(),
-    dispose,
   };
 };
 
 /**
- * Run the conformance suite against a {@link PgStateProvider}: every state adapter case, run
- * through `createPgStateAdapter` over the provider, including the cases that hold two
- * transactions open at once, and the provider's `classifyError`. The adapter is migrated once
- * and truncated before every case. Test-framework agnostic: designed to be embedded in a single
- * test. Throws `ConformanceError` with an aggregated report on any failure.
+ * Every state adapter case, including those that hold two transactions open at once, run through
+ * `createPgStateAdapter` over a provider, plus checks of the provider's `classifyError`. Run them
+ * one per test in your own test file against a context from {@link
+ * createPgStateProviderConformanceContext}. Works with any test runner.
  *
  * @example
  * ```ts
- * await runPgStateProviderConformance(async () => {
- *   const pool = new Pool({ connectionString });
- *   return {
- *     stateProvider: createPgPoolStateProvider({ pool }),
- *     dispose: async () => pool.end(),
- *   };
+ * import { afterAll, beforeAll, test } from "vitest";
+ *
+ * let pool: Pool;
+ * let context: PgStateProviderConformanceContext;
+ * beforeAll(async () => {
+ *   pool = new Pool({ connectionString });
+ *   context = await createPgStateProviderConformanceContext({
+ *     createStateProvider: async () => createPgPoolStateProvider({ pool }),
+ *     withNonTransactionContext: async (fn) => {
+ *       const poolClient = await pool.connect();
+ *       try {
+ *         return await fn({ poolClient });
+ *       } finally {
+ *         poolClient.release();
+ *       }
+ *     },
+ *   });
  * });
+ * afterAll(async () => pool.end());
+ *
+ * for (const conformanceCase of pgStateProviderConformanceCases) {
+ *   test(conformanceCase.title, async () => {
+ *     await conformanceCase.run(context);
+ *   });
+ * }
  * ```
  */
-export const runPgStateProviderConformance = async (
-  factory: () => Promise<PgStateProviderConformanceFixture>,
-  options?: ConformanceOptions,
-): Promise<ConformanceReport> => {
-  const fixture = await factory();
-  return runFixtureConformance(
-    pgStateProviderConformanceGroups,
-    async () => createPgConformanceContext(fixture),
-    options,
-  );
-};
+export const pgStateProviderConformanceCases: ConformanceTestCase<PgStateProviderConformanceContext>[] =
+  toConformanceTestCases(pgStateProviderConformanceGroups);

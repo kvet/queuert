@@ -22,6 +22,7 @@ export const noopNotifyAdapter: NotifyAdapter = {
   notifyJobAttemptsLost: noopAsync,
   listenJobAttemptLost: listenNothing,
   close: noopAsync,
+  [Symbol.asyncDispose]: noopAsync,
 };
 
 const WINDOW_MS = 2_000;

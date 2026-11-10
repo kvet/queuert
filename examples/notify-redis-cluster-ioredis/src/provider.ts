@@ -10,11 +10,12 @@ export const createIoredisClusterNotifyProvider = ({
 }): RedisNotifyProvider => {
   const handlers = new Map<string, Set<(message: string) => void>>();
 
-  subscribeCluster.on("message", (channel: string, message: string) => {
+  const dispatchMessage = (channel: string, message: string) => {
     const listeners = handlers.get(channel);
     if (!listeners) return;
     for (const listener of listeners) listener(message);
-  });
+  };
+  subscribeCluster.on("message", dispatchMessage);
 
   return {
     subscribe: async (channel, onMessage) => {
@@ -37,6 +38,10 @@ export const createIoredisClusterNotifyProvider = ({
     },
     eval: async (script, keys, args) => {
       return cluster.eval(script, keys.length, ...keys, ...args);
+    },
+    close: async () => {
+      subscribeCluster.off("message", dispatchMessage);
+      handlers.clear();
     },
   };
 };

@@ -19,7 +19,7 @@ const Page = () => (
 
     <h2>Conformance</h2>
     <p>
-      <code>runValidationAdapterConformance</code> from <code>queuert/conformance</code> checks
+      <code>validationAdapterConformanceCases</code> from <code>queuert/conformance</code> check
       that:
     </p>
     <ul>
@@ -40,16 +40,16 @@ const Page = () => (
       </li>
     </ul>
     <p>
-      The last point is enforced at compile time: each builder in the fixture has a precise return
-      type, so an inference bug in your adapter trips a TypeScript error at the call site of{" "}
-      <code>runValidationAdapterConformance</code>, before the runtime suite even executes. The
-      runner throws on failure, so any test framework works. The Zod example's spec:
+      The last point is enforced at compile time: each builder in the context has a precise return
+      type, so an inference bug in your adapter trips a TypeScript error where the context is
+      declared, before any case runs. The suite drives no test runner: register one test per case
+      and run it against the context. The Zod example's spec:
     </p>
     <ExampleCode example="validation-zod" file="src/zod-adapter.spec.ts" />
     <p>
       The exact phantom shape each builder must produce is encoded in the{" "}
       <a href="https://github.com/kvet/queuert/blob/main/packages/core/src/conformance/validation-adapter-cases.ts">
-        <code>ValidationConformanceFixture</code>
+        <code>ValidationAdapterConformanceContext</code>
       </a>{" "}
       type. The full API is in the <A href="/api/conformance/readme/">conformance reference</A>.
     </p>

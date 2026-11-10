@@ -1,19 +1,15 @@
 import type { ConformanceGroup } from "../runner.ts";
-import type { StateConformanceFixture } from "./types.ts";
+import type { StateAdapterConformanceContext } from "./types.ts";
 
-/**
- * Verifies `close()` contract: idempotent, provider resources released.
- *
- * Each case constructs its own adapter-scoped context via the harness; closing
- * the adapter here does not interfere with other tests because vitest fixtures
- * are test-scoped.
- */
-export const closeGroup: ConformanceGroup<StateConformanceFixture> = {
+/** Verifies the `close()` contract on the case's own adapter. */
+export const closeGroup: ConformanceGroup<StateAdapterConformanceContext> = {
   name: "close",
   cases: [
     {
       name: "close is idempotent",
-      run: async ({ stateAdapter }) => {
+      run: async ({ createStateAdapter }) => {
+        await using stateAdapter = await createStateAdapter();
+
         await stateAdapter.close();
         await stateAdapter.close();
       },

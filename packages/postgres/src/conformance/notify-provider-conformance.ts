@@ -1,67 +1,65 @@
 import { randomUUID } from "node:crypto";
 
-import type {
-  ConformanceOptions,
-  ConformanceReport,
-  NotifyConformanceFixture,
-} from "queuert/conformance";
+import type { ConformanceTestCase, NotifyAdapterConformanceContext } from "queuert/conformance";
 import {
   type ConformanceGroup,
   notifyAdapterBaseGroups,
-  runFixtureConformance,
+  toConformanceTestCases,
 } from "queuert/conformance-internal";
 
 import { createPgNotifyAdapter } from "../notify-adapter/notify-adapter.pg.ts";
 import type { PgNotifyProvider } from "../notify-provider/notify-provider.pg.ts";
 
-/** Fixture for {@link runPgNotifyProviderConformance}. */
-export type PgNotifyProviderConformanceFixture = {
-  /** The provider under test. */
-  notifyProvider: PgNotifyProvider;
-  /** Called once after all cases finish (pass or fail) to release resources. */
-  dispose?: () => Promise<void>;
+/** What {@link createPgNotifyProviderConformanceContext} takes. */
+export type PgNotifyProviderConformanceContextOptions = {
+  /**
+   * Creates the provider under test. Each case's adapter gets its own provider and closes it when
+   * the case ends, so closing one must not release resources the next one needs, such as the
+   * client connections.
+   */
+  createNotifyProvider: () => Promise<PgNotifyProvider>;
 };
 
-export const pgNotifyProviderConformanceGroups: ConformanceGroup<NotifyConformanceFixture>[] =
+export const pgNotifyProviderConformanceGroups: ConformanceGroup<NotifyAdapterConformanceContext>[] =
   notifyAdapterBaseGroups;
 
-export const createPgNotifyConformanceContext = ({
-  notifyProvider,
-  dispose,
-}: PgNotifyProviderConformanceFixture): NotifyConformanceFixture & {
-  dispose?: () => Promise<void>;
-} => ({
-  notifyAdapter: createPgNotifyAdapter({
-    notifyProvider,
-    channelPrefix: `queuert_conformance_${randomUUID().slice(0, 8)}`,
-  }),
-  dispose,
+/**
+ * Prepares the context the {@link pgNotifyProviderConformanceCases} run against: each case gets its
+ * own notify adapter over a new provider, on channels of its own. The test file still owns the
+ * provider's resources and releases them itself.
+ */
+export const createPgNotifyProviderConformanceContext = ({
+  createNotifyProvider,
+}: PgNotifyProviderConformanceContextOptions): NotifyAdapterConformanceContext => ({
+  // A channel prefix per adapter keeps one case's notifications away from the next.
+  createNotifyAdapter: async () =>
+    createPgNotifyAdapter({
+      notifyProvider: await createNotifyProvider(),
+      channelPrefix: `queuert_conformance_${randomUUID().slice(0, 8)}`,
+    }),
 });
 
 /**
- * Run the conformance suite against a {@link PgNotifyProvider}: every notify adapter case, run
- * through `createPgNotifyAdapter` over the provider. Test-framework agnostic: designed to be
- * embedded in a single test. Throws `ConformanceError` with an aggregated report on any failure.
+ * Every notify adapter case, run through `createPgNotifyAdapter` over a provider. Run them one per
+ * test in your own test file against a context from {@link
+ * createPgNotifyProviderConformanceContext}. Works with any test runner.
  *
  * @example
  * ```ts
- * await runPgNotifyProviderConformance(async () => {
- *   const pool = new Pool({ connectionString });
- *   return {
- *     notifyProvider: createPgPoolNotifyProvider({ pool }),
- *     dispose: async () => pool.end(),
- *   };
+ * import { afterAll, test } from "vitest";
+ *
+ * const pool = new Pool({ connectionString });
+ * const context = createPgNotifyProviderConformanceContext({
+ *   createNotifyProvider: async () => createPgPoolNotifyProvider({ pool }),
  * });
+ * afterAll(async () => pool.end());
+ *
+ * for (const conformanceCase of pgNotifyProviderConformanceCases) {
+ *   test(conformanceCase.title, async () => {
+ *     await conformanceCase.run(context);
+ *   });
+ * }
  * ```
  */
-export const runPgNotifyProviderConformance = async (
-  factory: () => Promise<PgNotifyProviderConformanceFixture>,
-  options?: ConformanceOptions,
-): Promise<ConformanceReport> => {
-  const fixture = await factory();
-  return runFixtureConformance(
-    pgNotifyProviderConformanceGroups,
-    async () => createPgNotifyConformanceContext(fixture),
-    options,
-  );
-};
+export const pgNotifyProviderConformanceCases: ConformanceTestCase<NotifyAdapterConformanceContext>[] =
+  toConformanceTestCases(pgNotifyProviderConformanceGroups);

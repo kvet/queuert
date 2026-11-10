@@ -1,29 +1,43 @@
-import { runRedisNotifyProviderConformance } from "@queuert/redis/conformance";
-import { acquireRedisCluster } from "@queuert/testcontainers";
+import {
+  createRedisNotifyProviderConformanceContext,
+  type NotifyAdapterConformanceContext,
+  redisNotifyProviderConformanceCases,
+} from "@queuert/redis/conformance";
+import { acquireRedisCluster, type AcquiredRedisCluster } from "@queuert/testcontainers";
 import { createCluster, type RedisClusterType } from "redis";
-import { test } from "vitest";
+import { afterAll, beforeAll, describe, test } from "vitest";
 
 import { createNodeRedisClusterNotifyProvider } from "./provider.ts";
 
 // #region conformance
-test("notify-redis-cluster-node-redis provider passes notify provider conformance", async () => {
-  await using rc = await acquireRedisCluster("redis:8");
+describe("notify-redis-cluster-node-redis provider conformance", () => {
+  let rc: AcquiredRedisCluster;
+  let cluster: RedisClusterType;
+  let subscribeCluster: RedisClusterType;
+  let context: NotifyAdapterConformanceContext;
 
-  await runRedisNotifyProviderConformance(async () => {
-    const cluster = createCluster({ rootNodes: rc.rootNodes }) as RedisClusterType;
-    const subscribeCluster = createCluster({ rootNodes: rc.rootNodes }) as RedisClusterType;
+  beforeAll(async () => {
+    rc = await acquireRedisCluster("redis:8");
+    cluster = createCluster({ rootNodes: rc.rootNodes });
+    subscribeCluster = createCluster({ rootNodes: rc.rootNodes });
     await cluster.connect();
     await subscribeCluster.connect();
+    context = createRedisNotifyProviderConformanceContext({
+      createNotifyProvider: async () =>
+        createNodeRedisClusterNotifyProvider({ cluster, subscribeCluster }),
+    });
+  }, 60_000);
 
-    const notifyProvider = createNodeRedisClusterNotifyProvider({ cluster, subscribeCluster });
-
-    return {
-      notifyProvider,
-      dispose: async () => {
-        await cluster.close();
-        await subscribeCluster.close();
-      },
-    };
+  afterAll(async () => {
+    await cluster.close();
+    await subscribeCluster.close();
+    await rc[Symbol.asyncDispose]();
   });
-}, 60_000);
+
+  for (const conformanceCase of redisNotifyProviderConformanceCases) {
+    test(conformanceCase.title, async () => {
+      await conformanceCase.run(context);
+    });
+  }
+});
 // #endregion

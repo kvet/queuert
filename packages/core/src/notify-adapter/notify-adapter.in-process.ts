@@ -32,6 +32,13 @@ export const createInProcessNotifyAdapter = (): NotifyAdapter => {
     if (set.size === 0) map.delete(key);
   };
 
+  const close = async (): Promise<void> => {
+    if (!closed.trip()) return;
+    jobScheduledListeners.clear();
+    chainCompletedListeners.clear();
+    jobAttemptLostListeners.clear();
+  };
+
   return {
     notifyJobsScheduled: async (typeNames) => {
       closed.throwIfTripped();
@@ -108,11 +115,7 @@ export const createInProcessNotifyAdapter = (): NotifyAdapter => {
       };
     },
 
-    close: async () => {
-      if (!closed.trip()) return;
-      jobScheduledListeners.clear();
-      chainCompletedListeners.clear();
-      jobAttemptLostListeners.clear();
-    },
+    close,
+    [Symbol.asyncDispose]: close,
   };
 };

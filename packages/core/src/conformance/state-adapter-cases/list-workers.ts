@@ -1,14 +1,16 @@
 import { sleep } from "@queuert/helpers";
 
 import type { ConformanceGroup } from "../runner.ts";
-import type { StateConformanceFixture } from "./types.ts";
+import type { StateAdapterConformanceContext } from "./types.ts";
 
-export const listWorkersGroup: ConformanceGroup<StateConformanceFixture> = {
+export const listWorkersGroup: ConformanceGroup<StateAdapterConformanceContext> = {
   name: "listWorkers",
   cases: [
     {
       name: "returns an empty page when no worker has a row",
-      run: async ({ stateAdapter }, expect) => {
+      run: async ({ createStateAdapter }, expect) => {
+        await using stateAdapter = await createStateAdapter();
+
         expect(
           await stateAdapter.listWorkers({ orderDirection: "asc", page: { limit: 10 } }),
         ).toEqual({
@@ -19,7 +21,9 @@ export const listWorkersGroup: ConformanceGroup<StateConformanceFixture> = {
     },
     {
       name: "orders workers by startedAt",
-      run: async ({ stateAdapter }, expect) => {
+      run: async ({ createStateAdapter }, expect) => {
+        await using stateAdapter = await createStateAdapter();
+
         const firstWorkerId = stateAdapter.config.generateWorkerId();
         const secondWorkerId = stateAdapter.config.generateWorkerId();
         const thirdWorkerId = stateAdapter.config.generateWorkerId();
@@ -58,7 +62,9 @@ export const listWorkersGroup: ConformanceGroup<StateConformanceFixture> = {
     },
     {
       name: "orders workers by startedAt descending when orderDirection is desc",
-      run: async ({ stateAdapter }, expect) => {
+      run: async ({ createStateAdapter }, expect) => {
+        await using stateAdapter = await createStateAdapter();
+
         const firstWorkerId = stateAdapter.config.generateWorkerId();
         const secondWorkerId = stateAdapter.config.generateWorkerId();
         const thirdWorkerId = stateAdapter.config.generateWorkerId();
@@ -97,7 +103,9 @@ export const listWorkersGroup: ConformanceGroup<StateConformanceFixture> = {
     },
     {
       name: "paginates with cursor",
-      run: async ({ stateAdapter }, expect) => {
+      run: async ({ createStateAdapter }, expect) => {
+        await using stateAdapter = await createStateAdapter();
+
         const firstWorkerId = stateAdapter.config.generateWorkerId();
         const secondWorkerId = stateAdapter.config.generateWorkerId();
         const thirdWorkerId = stateAdapter.config.generateWorkerId();
@@ -139,7 +147,9 @@ export const listWorkersGroup: ConformanceGroup<StateConformanceFixture> = {
     },
     {
       name: "paginates with cursor in desc order",
-      run: async ({ stateAdapter }, expect) => {
+      run: async ({ createStateAdapter }, expect) => {
+        await using stateAdapter = await createStateAdapter();
+
         const firstWorkerId = stateAdapter.config.generateWorkerId();
         const secondWorkerId = stateAdapter.config.generateWorkerId();
         const thirdWorkerId = stateAdapter.config.generateWorkerId();
@@ -181,7 +191,9 @@ export const listWorkersGroup: ConformanceGroup<StateConformanceFixture> = {
     },
     {
       name: "keeps only the workers that process typeName",
-      run: async ({ stateAdapter }, expect) => {
+      run: async ({ createStateAdapter }, expect) => {
+        await using stateAdapter = await createStateAdapter();
+
         const emailWorkerId = stateAdapter.config.generateWorkerId();
         const bothWorkerId = stateAdapter.config.generateWorkerId();
         const crmWorkerId = stateAdapter.config.generateWorkerId();
@@ -223,7 +235,9 @@ export const listWorkersGroup: ConformanceGroup<StateConformanceFixture> = {
     },
     {
       name: "includes an unreclaimed worker whose lease is no longer live",
-      run: async ({ stateAdapter }, expect) => {
+      run: async ({ createStateAdapter }, expect) => {
+        await using stateAdapter = await createStateAdapter();
+
         const liveWorkerId = stateAdapter.config.generateWorkerId();
         const expiredWorkerId = stateAdapter.config.generateWorkerId();
         await stateAdapter.startWorker({
@@ -251,7 +265,9 @@ export const listWorkersGroup: ConformanceGroup<StateConformanceFixture> = {
     },
     {
       name: "excludes stopped workers",
-      run: async ({ stateAdapter }, expect) => {
+      run: async ({ createStateAdapter }, expect) => {
+        await using stateAdapter = await createStateAdapter();
+
         const liveWorkerId = stateAdapter.config.generateWorkerId();
         await stateAdapter.startWorker({
           workerId: liveWorkerId,
@@ -280,7 +296,9 @@ export const listWorkersGroup: ConformanceGroup<StateConformanceFixture> = {
     },
     {
       name: "filters by status, live or expired",
-      run: async ({ stateAdapter }, expect) => {
+      run: async ({ createStateAdapter }, expect) => {
+        await using stateAdapter = await createStateAdapter();
+
         const firstLiveWorkerId = stateAdapter.config.generateWorkerId();
         const expiredWorkerId = stateAdapter.config.generateWorkerId();
         const secondLiveWorkerId = stateAdapter.config.generateWorkerId();
@@ -356,7 +374,9 @@ export const listWorkersGroup: ConformanceGroup<StateConformanceFixture> = {
     },
     {
       name: "filters by status and typeName together",
-      run: async ({ stateAdapter }, expect) => {
+      run: async ({ createStateAdapter }, expect) => {
+        await using stateAdapter = await createStateAdapter();
+
         const liveEmailWorkerId = stateAdapter.config.generateWorkerId();
         const expiredEmailWorkerId = stateAdapter.config.generateWorkerId();
         const expiredCrmWorkerId = stateAdapter.config.generateWorkerId();

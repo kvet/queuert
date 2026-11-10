@@ -1,12 +1,14 @@
 import type { ConformanceGroup } from "../runner.ts";
-import type { StateConformanceFixture } from "./types.ts";
+import type { StateAdapterConformanceContext } from "./types.ts";
 
-export const completeJobsGroup: ConformanceGroup<StateConformanceFixture> = {
+export const completeJobsGroup: ConformanceGroup<StateAdapterConformanceContext> = {
   name: "completeJobs",
   cases: [
     {
       name: "completes a job with output",
-      run: async ({ stateAdapter }, expect) => {
+      run: async ({ createStateAdapter }, expect) => {
+        await using stateAdapter = await createStateAdapter();
+
         const worker = await stateAdapter.startWorker({
           workerId: stateAdapter.config.generateWorkerId(),
           typeNames: ["complete-test"],
@@ -58,7 +60,9 @@ export const completeJobsGroup: ConformanceGroup<StateConformanceFixture> = {
     },
     {
       name: "completes multiple jobs in one call, returning results in input order",
-      run: async ({ stateAdapter }, expect) => {
+      run: async ({ createStateAdapter }, expect) => {
+        await using stateAdapter = await createStateAdapter();
+
         const createdChains = await stateAdapter.withTransaction(async (txCtx) =>
           stateAdapter.createJobs({
             txCtx,
@@ -87,7 +91,9 @@ export const completeJobsGroup: ConformanceGroup<StateConformanceFixture> = {
     },
     {
       name: "reports an undefined result for a missing or already-completed job",
-      run: async ({ stateAdapter }, expect) => {
+      run: async ({ createStateAdapter }, expect) => {
+        await using stateAdapter = await createStateAdapter();
+
         const [createdChain] = await stateAdapter.withTransaction(async (txCtx) =>
           stateAdapter.createJobs({
             txCtx,
@@ -142,7 +148,9 @@ export const completeJobsGroup: ConformanceGroup<StateConformanceFixture> = {
     },
     {
       name: "completes a job without an attempt token with a null completedBy",
-      run: async ({ stateAdapter }, expect) => {
+      run: async ({ createStateAdapter }, expect) => {
+        await using stateAdapter = await createStateAdapter();
+
         const [createdChain] = await stateAdapter.withTransaction(async (txCtx) =>
           stateAdapter.createJobs({
             txCtx,
@@ -165,7 +173,9 @@ export const completeJobsGroup: ConformanceGroup<StateConformanceFixture> = {
     },
     {
       name: "completes a job whose output is undefined, storing it as null",
-      run: async ({ stateAdapter }, expect) => {
+      run: async ({ createStateAdapter }, expect) => {
+        await using stateAdapter = await createStateAdapter();
+
         const [createdChain] = await stateAdapter.withTransaction(async (txCtx) =>
           stateAdapter.createJobs({
             txCtx,
@@ -196,7 +206,9 @@ export const completeJobsGroup: ConformanceGroup<StateConformanceFixture> = {
     },
     {
       name: "leaves an already-completed job untouched on double-completion",
-      run: async ({ stateAdapter }, expect) => {
+      run: async ({ createStateAdapter }, expect) => {
+        await using stateAdapter = await createStateAdapter();
+
         const worker = await stateAdapter.startWorker({
           workerId: stateAdapter.config.generateWorkerId(),
           typeNames: ["double-complete-test"],
@@ -256,7 +268,9 @@ export const completeJobsGroup: ConformanceGroup<StateConformanceFixture> = {
     },
     {
       name: "clears lastAttemptError when completing a job that previously failed",
-      run: async ({ stateAdapter }, expect) => {
+      run: async ({ createStateAdapter }, expect) => {
+        await using stateAdapter = await createStateAdapter();
+
         const worker = await stateAdapter.startWorker({
           workerId: stateAdapter.config.generateWorkerId(),
           typeNames: ["complete-clears-error"],
@@ -315,7 +329,9 @@ export const completeJobsGroup: ConformanceGroup<StateConformanceFixture> = {
     },
     {
       name: "completing the only job in a chain completes the chain",
-      run: async ({ stateAdapter }, expect) => {
+      run: async ({ createStateAdapter }, expect) => {
+        await using stateAdapter = await createStateAdapter();
+
         const [createdChain] = await stateAdapter.withTransaction(async (txCtx) =>
           stateAdapter.createJobs({
             txCtx,
@@ -349,7 +365,9 @@ export const completeJobsGroup: ConformanceGroup<StateConformanceFixture> = {
     },
     {
       name: "completing the tail of a multi-job chain completes the chain",
-      run: async ({ stateAdapter }, expect) => {
+      run: async ({ createStateAdapter }, expect) => {
+        await using stateAdapter = await createStateAdapter();
+
         const [headChain] = await stateAdapter.withTransaction(async (txCtx) =>
           stateAdapter.createJobs({
             txCtx,
@@ -401,7 +419,9 @@ export const completeJobsGroup: ConformanceGroup<StateConformanceFixture> = {
     },
     {
       name: "reports an undefined result for a token no attempt holds, leaving the job and its chain head untouched",
-      run: async ({ stateAdapter }, expect) => {
+      run: async ({ createStateAdapter }, expect) => {
+        await using stateAdapter = await createStateAdapter();
+
         const worker = await stateAdapter.startWorker({
           workerId: stateAdapter.config.generateWorkerId(),
           typeNames: ["complete-token-unknown"],
@@ -461,7 +481,9 @@ export const completeJobsGroup: ConformanceGroup<StateConformanceFixture> = {
     },
     {
       name: "reports an undefined result for the token of an attempt the same worker has since replaced",
-      run: async ({ stateAdapter }, expect) => {
+      run: async ({ createStateAdapter }, expect) => {
+        await using stateAdapter = await createStateAdapter();
+
         const worker = await stateAdapter.startWorker({
           workerId: stateAdapter.config.generateWorkerId(),
           typeNames: ["complete-token-replaced"],
@@ -516,7 +538,9 @@ export const completeJobsGroup: ConformanceGroup<StateConformanceFixture> = {
     },
     {
       name: "reports an undefined result for the token of an attempt whose chain was deleted and recreated under the same id",
-      run: async ({ stateAdapter }, expect) => {
+      run: async ({ createStateAdapter }, expect) => {
+        await using stateAdapter = await createStateAdapter();
+
         const worker = await stateAdapter.startWorker({
           workerId: stateAdapter.config.generateWorkerId(),
           typeNames: ["complete-token-recreated"],

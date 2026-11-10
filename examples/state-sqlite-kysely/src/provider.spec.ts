@@ -1,30 +1,38 @@
-import { runSqliteStateProviderConformance } from "@queuert/sqlite/conformance";
+import {
+  createSqliteStateProviderConformanceContext,
+  type SqliteStateProviderConformanceContext,
+  sqliteStateProviderConformanceCases,
+} from "@queuert/sqlite/conformance";
 import BetterSqlite3 from "better-sqlite3";
 import { Kysely, SqliteDialect } from "kysely";
-import { test } from "vitest";
+import { afterAll, beforeAll, describe, test } from "vitest";
 
 import { createKyselySqliteStateProvider } from "./provider.ts";
 
 type Database = Record<string, never>;
 
 // #region conformance
-test("state-sqlite-kysely provider passes state provider conformance", async () => {
-  await runSqliteStateProviderConformance(async () => {
-    const sqliteDb = new BetterSqlite3(":memory:");
-
-    const db = new Kysely<Database>({
-      dialect: new SqliteDialect({ database: sqliteDb }),
-    });
-
-    const stateProvider = createKyselySqliteStateProvider({ db });
-
-    return {
-      stateProvider,
-      withNonTransactionContext: async (fn) => fn({ db }),
-      dispose: async () => {
-        await db.destroy();
-      },
-    };
+describe("state-sqlite-kysely provider conformance", () => {
+  const db = new Kysely<Database>({
+    dialect: new SqliteDialect({ database: new BetterSqlite3(":memory:") }),
   });
-}, 30_000);
+  let context: SqliteStateProviderConformanceContext;
+
+  beforeAll(async () => {
+    context = await createSqliteStateProviderConformanceContext({
+      createStateProvider: async () => createKyselySqliteStateProvider({ db }),
+      withNonTransactionContext: async (fn) => fn({ db }),
+    });
+  });
+
+  afterAll(async () => {
+    await db.destroy();
+  });
+
+  for (const conformanceCase of sqliteStateProviderConformanceCases) {
+    test(conformanceCase.title, async () => {
+      await conformanceCase.run(context);
+    });
+  }
+});
 // #endregion

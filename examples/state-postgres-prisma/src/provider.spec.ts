@@ -3,9 +3,13 @@ import { dirname } from "node:path";
 import { fileURLToPath } from "node:url";
 
 import { PrismaPg } from "@prisma/adapter-pg";
-import { runPgStateProviderConformance } from "@queuert/postgres/conformance";
-import { acquirePostgres } from "@queuert/testcontainers";
-import { test } from "vitest";
+import {
+  createPgStateProviderConformanceContext,
+  type PgStateProviderConformanceContext,
+  pgStateProviderConformanceCases,
+} from "@queuert/postgres/conformance";
+import { acquirePostgres, type AcquiredPostgres } from "@queuert/testcontainers";
+import { afterAll, beforeAll, describe, test } from "vitest";
 
 import { createPrismaPgStateProvider } from "./provider.ts";
 
@@ -19,29 +23,36 @@ type PrismaLike = {
 };
 
 // #region conformance
-test("state-postgres-prisma provider passes state provider conformance", async () => {
-  await using pg = await acquirePostgres("postgres:18", import.meta.url);
+describe("state-postgres-prisma provider conformance", () => {
+  let pg: AcquiredPostgres;
+  let prisma: PrismaLike;
+  let context: PgStateProviderConformanceContext;
 
-  await runPgStateProviderConformance(async () => {
+  beforeAll(async () => {
+    pg = await acquirePostgres("postgres:18", import.meta.url);
     execSync("npx prisma db push", {
       cwd: EXAMPLE_DIR,
       env: { ...process.env, DATABASE_URL: pg.connectionString },
       stdio: "inherit",
     });
-
     const { PrismaClient } = await import("../prisma/generated/prisma/client.ts");
     const prismaAdapter = new PrismaPg({ connectionString: pg.connectionString });
-    const prisma = new PrismaClient({ adapter: prismaAdapter }) as unknown as PrismaLike;
-
-    const stateProvider = createPrismaPgStateProvider<PrismaLike>({ prisma });
-
-    return {
-      stateProvider,
+    prisma = new PrismaClient({ adapter: prismaAdapter });
+    context = await createPgStateProviderConformanceContext({
+      createStateProvider: async () => createPrismaPgStateProvider<PrismaLike>({ prisma }),
       withNonTransactionContext: async (fn) => fn({ prisma }),
-      dispose: async () => {
-        await prisma.$disconnect();
-      },
-    };
+    });
+  }, 60_000);
+
+  afterAll(async () => {
+    await prisma?.$disconnect();
+    await pg[Symbol.asyncDispose]();
   });
-}, 60_000);
+
+  for (const conformanceCase of pgStateProviderConformanceCases) {
+    test(conformanceCase.title, async () => {
+      await conformanceCase.run(context);
+    });
+  }
+});
 // #endregion

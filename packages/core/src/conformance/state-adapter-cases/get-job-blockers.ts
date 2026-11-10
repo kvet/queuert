@@ -1,12 +1,14 @@
 import type { ConformanceGroup } from "../runner.ts";
-import type { StateConformanceFixture } from "./types.ts";
+import type { StateAdapterConformanceContext } from "./types.ts";
 
-export const getJobBlockersGroup: ConformanceGroup<StateConformanceFixture> = {
+export const getJobBlockersGroup: ConformanceGroup<StateAdapterConformanceContext> = {
   name: "getJobBlockers",
   cases: [
     {
       name: "returns blocker chain views for a job",
-      run: async ({ stateAdapter }, expect) => {
+      run: async ({ createStateAdapter }, expect) => {
+        await using stateAdapter = await createStateAdapter();
+
         const [blockerChainA] = await stateAdapter.withTransaction(async (txCtx) =>
           stateAdapter.createJobs({
             txCtx,
@@ -54,7 +56,9 @@ export const getJobBlockersGroup: ConformanceGroup<StateConformanceFixture> = {
     },
     {
       name: "returns head and tail for a multi-job blocker chain",
-      run: async ({ stateAdapter }, expect) => {
+      run: async ({ createStateAdapter }, expect) => {
+        await using stateAdapter = await createStateAdapter();
+
         const [blockerHeadChain] = await stateAdapter.withTransaction(async (txCtx) =>
           stateAdapter.createJobs({
             txCtx,
@@ -106,7 +110,9 @@ export const getJobBlockersGroup: ConformanceGroup<StateConformanceFixture> = {
     },
     {
       name: "returns one entry per position when the same chain is listed twice",
-      run: async ({ stateAdapter }, expect) => {
+      run: async ({ createStateAdapter }, expect) => {
+        await using stateAdapter = await createStateAdapter();
+
         const [blockerChain, mainChain] = await stateAdapter.withTransaction(async (txCtx) =>
           stateAdapter.createJobs({
             txCtx,
@@ -135,7 +141,9 @@ export const getJobBlockersGroup: ConformanceGroup<StateConformanceFixture> = {
     },
     {
       name: "returns empty array for job with no blockers",
-      run: async ({ stateAdapter }, expect) => {
+      run: async ({ createStateAdapter }, expect) => {
+        await using stateAdapter = await createStateAdapter();
+
         const [stateChain] = await stateAdapter.withTransaction(async (txCtx) =>
           stateAdapter.createJobs({
             txCtx,
@@ -152,13 +160,15 @@ export const getJobBlockersGroup: ConformanceGroup<StateConformanceFixture> = {
   ],
 };
 
-export const getJobBlockersConcurrentTransactionsGroup: ConformanceGroup<StateConformanceFixture> =
+export const getJobBlockersConcurrentTransactionsGroup: ConformanceGroup<StateAdapterConformanceContext> =
   {
     name: "getJobBlockers",
     cases: [
       {
         name: "non-transactional getJobBlockers does not observe an uncommitted blocker insert",
-        run: async ({ stateAdapter }, expect) => {
+        run: async ({ createStateAdapter }, expect) => {
+          await using stateAdapter = await createStateAdapter();
+
           const [blockerChain] = await stateAdapter.withTransaction(async (txCtx) =>
             stateAdapter.createJobs({
               txCtx,

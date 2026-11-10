@@ -1,12 +1,12 @@
 import Database from "better-sqlite3";
-import type { SchemaFenceConformanceFixture } from "queuert/conformance-internal";
+import type { SchemaFenceConformanceContext } from "queuert/conformance-internal";
 import type { ConformanceFixtures } from "queuert/testing";
 import type { TestAPI } from "vitest";
 
 import { createSqliteStateAdapter } from "../state-adapter/state-adapter.sqlite.ts";
 import { createBetterSqlite3Provider } from "../state-provider/state-provider.better-sqlite3.ts";
 
-export type VarianceFixtures = ConformanceFixtures<SchemaFenceConformanceFixture> & {
+export type VarianceFixtures = ConformanceFixtures<SchemaFenceConformanceContext> & {
   db: Database.Database;
   tableNames: string[];
 };
@@ -37,14 +37,19 @@ export const extendWithVarianceStateSqlite = <T>(
     ],
     conformance: [
       async ({ db }, use) => {
-        const stateAdapter = createSqliteStateAdapter({
-          stateProvider: createBetterSqlite3Provider({ db }),
-          ...options,
-        });
-        await stateAdapter.migrateToLatest();
+        const createStateAdapter = async () =>
+          createSqliteStateAdapter({
+            stateProvider: createBetterSqlite3Provider({ db }),
+            ...options,
+          });
+        {
+          await using stateAdapter = await createStateAdapter();
+          await stateAdapter.migrateToLatest();
+        }
         const fenceTable = `${options.tablePrefix}schema_fence_v1`;
         await use({
-          stateAdapter,
+          createStateAdapter,
+          withNonTransactionContext: async (fn) => fn({ db }),
           withWritesFenced: async (fn) => {
             db.exec(`DROP TABLE ${fenceTable}`);
             try {
@@ -53,7 +58,11 @@ export const extendWithVarianceStateSqlite = <T>(
               db.exec(`CREATE TABLE ${fenceTable} (id INTEGER PRIMARY KEY)`);
             }
           },
-          reset: async () => stateAdapter.truncate(),
+          reset: async () => {
+            db.exec(
+              `DELETE FROM ${options.tablePrefix}job_blocker; DELETE FROM ${options.tablePrefix}job; DELETE FROM ${options.tablePrefix}worker;`,
+            );
+          },
         });
       },
       { scope: "file" },

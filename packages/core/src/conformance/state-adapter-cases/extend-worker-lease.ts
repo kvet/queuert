@@ -1,14 +1,16 @@
 import { sleep } from "@queuert/helpers";
 
 import type { ConformanceGroup } from "../runner.ts";
-import type { StateConformanceFixture } from "./types.ts";
+import type { StateAdapterConformanceContext } from "./types.ts";
 
-export const extendWorkerLeaseGroup: ConformanceGroup<StateConformanceFixture> = {
+export const extendWorkerLeaseGroup: ConformanceGroup<StateAdapterConformanceContext> = {
   name: "extendWorkerLease",
   cases: [
     {
       name: "renews a live worker's lease to leaseMs from now",
-      run: async ({ stateAdapter }, expect) => {
+      run: async ({ createStateAdapter }, expect) => {
+        await using stateAdapter = await createStateAdapter();
+
         const started = await stateAdapter.startWorker({
           workerId: stateAdapter.config.generateWorkerId(),
           typeNames: ["render-invoice-pdf"],
@@ -34,7 +36,9 @@ export const extendWorkerLeaseGroup: ConformanceGroup<StateConformanceFixture> =
     },
     {
       name: "renews inside a transaction",
-      run: async ({ stateAdapter }, expect) => {
+      run: async ({ createStateAdapter }, expect) => {
+        await using stateAdapter = await createStateAdapter();
+
         const worker = await stateAdapter.startWorker({
           workerId: stateAdapter.config.generateWorkerId(),
           typeNames: [],
@@ -56,7 +60,9 @@ export const extendWorkerLeaseGroup: ConformanceGroup<StateConformanceFixture> =
     },
     {
       name: "an expired lease cannot be renewed",
-      run: async ({ stateAdapter }, expect) => {
+      run: async ({ createStateAdapter }, expect) => {
+        await using stateAdapter = await createStateAdapter();
+
         const worker = await stateAdapter.startWorker({
           workerId: stateAdapter.config.generateWorkerId(),
           typeNames: [],
@@ -76,7 +82,9 @@ export const extendWorkerLeaseGroup: ConformanceGroup<StateConformanceFixture> =
     },
     {
       name: "returns undefined for a stale registration of the worker",
-      run: async ({ stateAdapter }, expect) => {
+      run: async ({ createStateAdapter }, expect) => {
+        await using stateAdapter = await createStateAdapter();
+
         const workerId = stateAdapter.config.generateWorkerId();
         const staleRun = await stateAdapter.startWorker({
           workerId,
@@ -116,7 +124,9 @@ export const extendWorkerLeaseGroup: ConformanceGroup<StateConformanceFixture> =
     },
     {
       name: "a missing worker renews to undefined",
-      run: async ({ stateAdapter }, expect) => {
+      run: async ({ createStateAdapter }, expect) => {
+        await using stateAdapter = await createStateAdapter();
+
         expect(
           await stateAdapter.extendWorkerLease({
             workerId: stateAdapter.config.generateWorkerId(),

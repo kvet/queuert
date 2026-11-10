@@ -33,4 +33,7 @@ export type NotifyAdapter = {
    * no-op. After close, `notify*`/`listen*` calls reject.
    */
   close: () => Promise<void>;
+
+  /** Calls {@link close}, so the adapter can be held with `await using`. */
+  [Symbol.asyncDispose]: () => Promise<void>;
 };

@@ -87,7 +87,7 @@ Add examples when the release changes how users write code — new APIs, breakin
 
 The examples in the repo depend on the workspace, so each one has to become a standalone project in `$BUNDLE/examples/<example-name>/`:
 
-- Copy `src/` without `*.spec.ts` and `*.node-test.ts` files, plus the example's `README.md` if it has one. Rewrite the README's run instructions for the bundle: `npm install` / `npm start` instead of `pnpm --filter`, and only scripts that exist in the new `package.json`.
+- Copy `src/` without `*.spec.ts` files, plus the example's `README.md` if it has one. Rewrite the README's run instructions for the bundle: `npm install` / `npm start` instead of `pnpm --filter`, and only scripts that exist in the new `package.json`.
 - Write a `package.json` with `"type": "module"`, `"private": true`, a `start` script (`node src/index.ts`, relying on Node's built-in type stripping), an `engines.node` matching the root `package.json`, queuert packages as `file:../../packages/<tarball>.tgz`, third-party dependencies at the exact versions the example uses, and `typescript`, `@types/node` as devDependencies at the root `package.json` versions.
 - Write a `tsconfig.json` with the `compilerOptions` of [packages-internal/tsconfig/base.json](packages-internal/tsconfig/base.json) inlined, without `composite`.
 - Replace imports from other workspace examples (for example `example-state-postgres-drizzle/provider`) by copying that file into `src/` and importing it relatively. When two copied files share a name, name them by role (`state-provider.ts`, `notify-provider.ts`).
