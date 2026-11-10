@@ -315,12 +315,12 @@ DDL commits implicitly, and a failing DDL statement commits too _(spike)_. No mi
 
 ### Schema fencing
 
-The adapter uses the fence tables from [Schema fencing](schema-fencing.md) from its first migration.
+The adapter uses the fence tables of the PostgreSQL adapter's [write fence](../docs/src/content/docs/integrations/state-adapters/postgres.tsx#write-fence) from its first migration.
 
-- **The drop comes first.** DDL commits implicitly, so a breaking migration drops the old `fence_v<K>` tables in their own step, before its schema change. The fence holds before the incompatible schema exists.
+- **The drop comes first.** DDL commits implicitly, so a breaking migration drops the old `schema_fence_v<K>` tables in their own step, before its schema change. The fence holds before the incompatible schema exists.
 - **Later writes fail at any isolation level.** They fail with `ER_NO_SUCH_TABLE` (1146).
 - **An open transaction can deadlock on the drop.** A writer waiting on the drop's metadata lock inside an open transaction gets `ER_LOCK_DEADLOCK` (1213), as it would against any DDL. It then retries into the fence.
-- **The current design's `CHECK` does not port.** A stamped `writer_version` column with a raised `CHECK` cannot work: MySQL and MariaDB validate every existing row when a check is added, so raising it fails on rows written by older versions _(spike)_.
+- **A version `CHECK` does not work.** A stamped `writer_version` column with a raised `CHECK`, an alternative to fence tables, cannot work: MySQL and MariaDB validate every existing row when a check is added, so raising it fails on rows written by older versions _(spike)_.
 - **`MysqlStateProviderError` covers three kinds.** It declares `undefined_table` (1146), `lock_wait_timeout` (1205) and `deadlock` (1213).
 - **The fence costs about 4% on MariaDB.** It costs +0.6% on MySQL, inside the noise. MariaDB's 4% is the one measurable cost in the spike.
 

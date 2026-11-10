@@ -1,15 +1,15 @@
 import Database from "better-sqlite3";
-import type { StateConformanceFixture } from "queuert/conformance";
 import { type ConformanceFixtures, conformanceTestSuite } from "queuert/testing";
 import { it as baseIt, describe } from "vitest";
 
 import {
+  type SqliteStateProviderConformanceContext,
   createSqliteConformanceContext,
   sqliteStateProviderConformanceGroups,
 } from "../conformance/state-provider-conformance.ts";
 import { createBetterSqlite3Provider } from "../state-provider/state-provider.better-sqlite3.ts";
 
-const it = baseIt.extend<ConformanceFixtures<StateConformanceFixture>>({
+const it = baseIt.extend<ConformanceFixtures<SqliteStateProviderConformanceContext>>({
   conformance: [
     // oxlint-disable-next-line no-empty-pattern -- vitest fixtures must destructure their context
     async ({}, use) => {

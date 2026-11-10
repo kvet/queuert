@@ -196,9 +196,9 @@ Attach, as core issues it: `lockBlockerChains`, `createJobs`, then a single-stat
 - At REPEATABLE READ, hot-blocker attaches lose about 25% of throughput and half of them retry; 3.5% of transactions exhaust 5 retries and reach the caller. The write that makes REPEATABLE READ correct is what conflicts, so no correct variant avoids it. Cold attaches at REPEATABLE READ run like READ COMMITTED.
 - At SERIALIZABLE, about half of all attach transactions retry and about 4% exhaust their retries, even on uncontended blockers: SSI predicate-lock conflicts on `job_blocker` and index pages. This is correct but slow; it is documented, not addressed here.
 
-## Migration (`003_blocker_counters`)
+## Migration (`002_blocker_counters`)
 
-One transactional migration after `002_worker_liveness`, with `SET LOCAL lock_timeout` as in `002`:
+One breaking transactional migration after `001_initial_schema`, with a `SET LOCAL lock_timeout` so it gives up rather than queue behind running workers. Besides its schema change it creates `schema_fence_v2` and drops `schema_fence_v1`:
 
 1. Add `has_dependents` and `blockers_remaining` (constant defaults: no table rewrite).
 2. Set `has_dependents = true` on every head job referenced by a `job_blocker` row.
@@ -206,12 +206,12 @@ One transactional migration after `002_worker_liveness`, with `SET LOCAL lock_ti
 4. Move `blocked` jobs whose `blockers_remaining` is zero to `pending` with `scheduled_at = GREATEST(scheduled_at, now())`. These are dependents a previous release left stuck; none exist on a database that only ever ran at READ COMMITTED.
 5. Move `running` jobs whose `attempt_by` matches no `worker` row to `pending`, with `attempt_at`, `attempt_by` and `attempt_token` cleared. These are attempts orphaned by the acquisition race; none exist on a database that only ever ran at READ COMMITTED.
 
-`002_worker_liveness` shipped in 0.17, so `003` needs its own upgrade rule. A 0.17 process must not run alongside a process after `003`:
+No older process may write alongside a process after `002`:
 
 - A 0.17 attacher inserts `job_blocker` rows without setting `has_dependents` or `blockers_remaining`. A new completer then skips `unblockJobs` (the dependent stays `blocked`), or decrements a counter that was never set and unblocks the dependent before its other blockers complete.
 - A 0.17 completer unblocks through the recompute, which stays correct but leaves `blockers_remaining` stale on jobs it moves to `pending`. That is harmless, because the counter is read only on `blocked` jobs.
 
-The release therefore requires every 0.17 process to stop before `003` runs, and documents this alongside the existing rule that pre-0.17 processes must stop before the next release.
+Dropping `schema_fence_v1` makes every write of the release before it fail with `SchemaFencedError`, so those processes cannot corrupt state. A 0.17 process references no fence table, so the release still requires every 0.17 process to stop before `002` runs.
 
 ## API
 
@@ -256,13 +256,13 @@ Kept separate from the shared suite because it needs raw SQL and per-connection 
 - Migrations, with the session default at `repeatable read` and at `serializable`:
   - parallel deployments through the existing spawner all succeed, exactly one applies each migration, and none fails with 40001;
   - `current_setting('transaction_isolation')` inside a migration reports `read committed`.
-- Migration `003`: a database migrated to `002` and seeded with raw inserts. The seed contains:
+- Migration `002`: a database migrated to `001` and seeded with raw inserts. The seed contains:
   - blocked dependents waiting on mixed `running`/`completed` blockers
   - duplicate blocker chains
   - a stuck dependent whose blockers all completed
   - a `running` job whose worker row is missing
 
-  After `003` the counters match the recompute, and both the stuck dependent and the orphaned job are `pending`.
+  After `002` the counters match the recompute, and both the stuck dependent and the orphaned job are `pending`.
 
 **SQLite and in-process**
 

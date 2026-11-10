@@ -57,6 +57,11 @@ import { listWorkerJobsGroup } from "./state-adapter-cases/list-worker-jobs.ts";
 import { listWorkersGroup } from "./state-adapter-cases/list-workers.ts";
 import { rescheduleJobsGroup } from "./state-adapter-cases/reschedule-jobs.ts";
 import {
+  type SchemaFenceConformanceFixture,
+  schemaFenceConcurrentTransactionsGroup,
+  schemaFenceGroup,
+} from "./state-adapter-cases/schema-fence.ts";
+import {
   startJobAttemptGroup,
   startJobAttemptConcurrentTransactionsGroup,
 } from "./state-adapter-cases/start-job-attempt.ts";
@@ -125,3 +130,17 @@ export const stateAdapterConcurrentTransactionGroups: ConformanceGroup<StateConf
     listChainJobsConcurrentTransactionsGroup,
     listBlockedJobsConcurrentTransactionsGroup,
   ];
+
+export { type SchemaFenceConformanceFixture } from "./state-adapter-cases/schema-fence.ts";
+
+/**
+ * Cases for adapters that fence writes behind a schema fence table, such as the PostgreSQL and
+ * SQLite adapters. Internal for now: the fence is not part of the public state adapter contract.
+ */
+export const stateAdapterSchemaFenceGroups: ConformanceGroup<SchemaFenceConformanceFixture>[] = [
+  schemaFenceGroup,
+];
+
+/** The schema fence cases that hold two transactions open at once. */
+export const stateAdapterSchemaFenceConcurrentTransactionGroups: ConformanceGroup<SchemaFenceConformanceFixture>[] =
+  [schemaFenceConcurrentTransactionsGroup];

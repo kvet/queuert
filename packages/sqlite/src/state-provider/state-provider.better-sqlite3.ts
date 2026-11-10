@@ -62,6 +62,11 @@ export const createBetterSqlite3Provider = ({
       }
     },
     isTransaction: (txCtx) => txCtx.db.inTransaction,
+    classifyError: ({ error }) => {
+      const tableName =
+        error instanceof Error ? /^no such table: (\S+)/.exec(error.message)?.[1] : undefined;
+      return tableName === undefined ? undefined : { kind: "undefined_table", tableName };
+    },
     executeSql: async ({ txCtx, id, sql, params, columnTypes, readOnly }) => {
       if (txCtx) return runSql(txCtx.db, { id, sql, params, columnTypes });
       using _h = readOnly ? await lock.acquireRead() : await lock.acquireWrite();

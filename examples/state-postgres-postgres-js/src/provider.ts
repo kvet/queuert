@@ -46,6 +46,12 @@ export const createPostgresJsStateProvider = ({
   return {
     withTransaction: async (cb) => sql.begin(async (txSql) => cb({ txSql }) as any),
     isTransaction: (txCtx) => typeof txCtx.txSql.savepoint === "function",
+    classifyError: ({ error }) => {
+      const driverError = error as { code?: unknown; message?: unknown } | undefined;
+      if (driverError?.code !== "42P01") return undefined;
+      const tableName = /relation "([^"]+)" does not exist/.exec(String(driverError.message))?.[1];
+      return tableName === undefined ? undefined : { kind: "undefined_table", tableName };
+    },
     executeSql: async ({ txCtx, id, sql: query, params, paramTypes }) => {
       const client = txCtx?.txSql ?? sql;
       const prepare = prepareStatements && id !== undefined;

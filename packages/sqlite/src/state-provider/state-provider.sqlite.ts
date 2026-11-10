@@ -2,6 +2,16 @@ import type { RuntimeType } from "@queuert/typed-sql";
 import type { BaseTxContext } from "queuert";
 
 /**
+ * A driver error the SQLite state adapter acts on, as classified by
+ * {@link SqliteStateProvider.classifyError}.
+ *
+ * - `undefined_table` — a `no such table: <table>` error, with the missing table's name.
+ *
+ * @experimental
+ */
+export type SqliteStateProviderError = { kind: "undefined_table"; tableName: string };
+
+/**
  * SQLite state provider interface.
  *
  * Abstracts database client operations, providing context management, transaction handling,
@@ -61,6 +71,13 @@ export type SqliteStateProvider<TTxContext extends BaseTxContext> = {
     columnTypes: Record<string, RuntimeType>;
     readOnly: boolean;
   }) => Promise<unknown[]>;
+
+  /**
+   * Classifies an error thrown by this provider's driver. Returns `undefined` for an error it
+   * does not recognize. SQLite drivers report a missing table as `no such table: <name>` in the
+   * message of the error or its `cause`.
+   */
+  classifyError: (options: { error: unknown }) => SqliteStateProviderError | undefined;
 
   /**
    * Releases provider-owned resources. Optional — providers that wrap a

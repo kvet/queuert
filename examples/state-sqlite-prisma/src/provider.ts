@@ -1,5 +1,9 @@
 import type { AsyncRwLock, SqliteStateProvider } from "@queuert/sqlite";
 
+type PrismaDriverAdapterError = {
+  meta?: { driverAdapterError?: { cause?: { kind?: unknown; table?: unknown } } };
+};
+
 export type PrismaLikeClient = {
   $transaction: <T>(fn: (prisma: any) => Promise<T>) => Promise<T>;
   $queryRawUnsafe: (sql: string, ...params: unknown[]) => Promise<unknown[]>;
@@ -20,6 +24,14 @@ export const createPrismaSqliteStateProvider = <TPrisma extends PrismaLikeClient
       return await prisma.$transaction(async (prisma: TPrisma) => cb({ prisma }));
     },
     isTransaction: (txCtx) => !("$connect" in txCtx.prisma),
+    // Prisma wraps a raw query's driver error and reports a missing table on its cause.
+    classifyError: ({ error }) => {
+      const cause = (error as PrismaDriverAdapterError | undefined)?.meta?.driverAdapterError
+        ?.cause;
+      return cause?.kind === "TableDoesNotExist" && typeof cause.table === "string"
+        ? { kind: "undefined_table", tableName: cause.table }
+        : undefined;
+    },
     // `id` not forwarded: Prisma's engine caches plans by SQL text per connection.
     executeSql: async ({ txCtx, sql, params, columnTypes, readOnly }) => {
       const runQuery = async (): Promise<unknown[]> => {

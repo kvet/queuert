@@ -15,6 +15,12 @@ export const createKyselySqliteStateProvider = <TDatabase>({
   return {
     withTransaction: async (cb) => db.transaction().execute(async (txDb) => cb({ db: txDb })),
     isTransaction: (txCtx) => txCtx.db.isTransaction,
+    classifyError: ({ error }) => {
+      const tableName = /no such table: (\S+)/.exec(
+        String((error as { message?: unknown } | undefined)?.message),
+      )?.[1];
+      return tableName === undefined ? undefined : { kind: "undefined_table", tableName };
+    },
     // `id` not forwarded: Kysely's better-sqlite3 dialect re-prepares every raw
     // query; no hook to cache through the dialect. Bypass Kysely for statement
     // caching (see state-sqlite-better-sqlite3).

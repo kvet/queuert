@@ -42,6 +42,12 @@ export const createBunSqlStateProvider = ({
   return {
     withTransaction: async (cb) => sql.begin(async (txSql) => cb({ txSql })),
     isTransaction: (txCtx) => typeof txCtx.txSql.savepoint === "function",
+    classifyError: ({ error }) => {
+      const driverError = error as { errno?: unknown; message?: unknown } | undefined;
+      if (driverError?.errno !== "42P01") return undefined;
+      const tableName = /relation "([^"]+)" does not exist/.exec(String(driverError.message))?.[1];
+      return tableName === undefined ? undefined : { kind: "undefined_table", tableName };
+    },
     executeSql: async ({ txCtx, sql: query, params, paramTypes }) => {
       const client = txCtx?.txSql ?? sql;
       const serialized = (params ?? []).map((value, i) => serializeParam(value, paramTypes[i]));

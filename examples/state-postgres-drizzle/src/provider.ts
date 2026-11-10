@@ -27,6 +27,16 @@ export const createDrizzlePgStateProvider = <TSchema extends Record<string, unkn
   return {
     withTransaction: async (cb) => db.transaction(async (tx) => cb({ tx })),
     isTransaction: (txCtx) => txCtx.tx instanceof PgTransaction,
+    classifyError: ({ error }) => {
+      type DriverError = { code?: unknown; message?: unknown; cause?: DriverError };
+      const driverError = [
+        error as DriverError | undefined,
+        (error as DriverError | undefined)?.cause,
+      ].find((candidate) => candidate?.code === "42P01");
+      if (driverError === undefined) return undefined;
+      const tableName = /relation "([^"]+)" does not exist/.exec(String(driverError.message))?.[1];
+      return tableName === undefined ? undefined : { kind: "undefined_table", tableName };
+    },
     executeSql: async ({ txCtx, id, sql, params }) => {
       // Inside transaction: access Drizzle's internal pg client
       // Outside transaction (migrations): use db.$client (the pool)

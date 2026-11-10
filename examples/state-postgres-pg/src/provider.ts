@@ -50,6 +50,12 @@ export const createPgPoolStateProvider = ({
       const status = txCtx.poolClient.getTransactionStatus();
       return status === "T" || status === "E";
     },
+    classifyError: ({ error }) => {
+      const driverError = error as { code?: unknown; message?: unknown } | undefined;
+      if (driverError?.code !== "42P01") return undefined;
+      const tableName = /relation "([^"]+)" does not exist/.exec(String(driverError.message))?.[1];
+      return tableName === undefined ? undefined : { kind: "undefined_table", tableName };
+    },
     executeSql: async ({ txCtx, id, sql, params }) => {
       if (txCtx) return exec(txCtx.poolClient, id, sql, params);
       const poolClient = await pool.connect();

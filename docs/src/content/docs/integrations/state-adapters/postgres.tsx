@@ -197,11 +197,12 @@ const Page = () => (
       <code>runPgStateProviderConformance</code> from <code>@queuert/postgres/conformance</code>{" "}
       checks a provider you write. It builds the adapter over your provider, migrates it and
       truncates its tables before every case, then runs every case a state adapter must pass and the
-      cases that hold two transactions open at once. Its fixture is <code>stateProvider</code>, an
-      optional <code>withNonTransactionContext</code> that runs a callback with a context outside
-      any transaction (cases that need it are skipped without it), and an optional{" "}
-      <code>dispose</code>. The runner is framework-agnostic: it throws on failure, so embed it in a
-      single <code>test()</code> block, as each example does:
+      cases that hold two transactions open at once, and checks that <code>classifyError</code>{" "}
+      names a missing table. Its fixture is <code>stateProvider</code>, an optional{" "}
+      <code>withNonTransactionContext</code> that runs a callback with a context outside any
+      transaction (cases that need it are skipped without it), and an optional <code>dispose</code>.
+      The runner is framework-agnostic: it throws on failure, so embed it in a single{" "}
+      <code>test()</code> block, as each example does:
     </p>
     <Tabs syncKey="postgres-driver">
       <TabItem label="pg">
@@ -271,12 +272,30 @@ const Page = () => (
       fresh snapshot after it waits on a row lock.
     </p>
 
+    <h2>Write fence</h2>
+    <p>
+      Every insert or update of a job, a blocker or a worker references an empty{" "}
+      <code>{"{prefix}"}schema_fence_v1</code> table, the write fence of the adapter's schema
+      version. A breaking migration drops the fence tables of older versions, so code older than the
+      schema fails each write with <code>SchemaFencedError</code> and changes nothing, instead of
+      corrupting state. Reads and deletes still work, and older workers report the error through{" "}
+      <code>workerError</code> and keep retrying. Stop them once you have deployed the newer
+      version. Processes on 0.17 reference no fence, so stop them before the first breaking
+      migration.
+    </p>
+
     <h2>Schema</h2>
     <p>
       The adapter creates its schema via <code>migrateToLatest()</code>. All objects live under a
       configurable PostgreSQL <code>schema</code> (default: <code>public</code>) with a table name
       prefix (default: <code>queuert_</code>, shown as <code>{"{prefix}"}</code>) for namespace
       isolation.
+    </p>
+    <p>
+      A database migrated by 0.17 is carried onto the schema by adding the{" "}
+      <code>{"{prefix}"}schema_fence_v1</code> table, without touching job or worker rows, so 0.17
+      workers can keep running while <code>migrateToLatest()</code> runs. A 0.16 database is
+      refused: upgrade it with <code>@queuert/postgres</code> 0.17 first.
     </p>
     <SchemaTables dialect="postgres" />
 

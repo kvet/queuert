@@ -32,6 +32,12 @@ export const createKnexPgStateProvider = ({
     withTransaction: async (cb) =>
       knex.transaction(async (trx) => cb({ trx }), { doNotRejectOnRollback: false }),
     isTransaction: (txCtx) => txCtx.trx.isTransaction === true,
+    classifyError: ({ error }) => {
+      const driverError = error as { code?: unknown; message?: unknown } | undefined;
+      if (driverError?.code !== "42P01") return undefined;
+      const tableName = /relation "([^"]+)" does not exist/.exec(String(driverError.message))?.[1];
+      return tableName === undefined ? undefined : { kind: "undefined_table", tableName };
+    },
     // `id` not forwarded: knex has no server-side prepared statement support —
     // every `raw` call is sent unprepared. Bypass knex for prepared statements
     // (see state-postgres-pg).

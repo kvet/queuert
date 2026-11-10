@@ -39,6 +39,29 @@ export const stateProviderMembers = (dialect: "postgres" | "sqlite"): FieldItem[
     ),
   },
   {
+    name: "classifyError",
+    description: (
+      <>
+        Returns <code>{'{ kind: "undefined_table", tableName }'}</code> for a{" "}
+        {dialect === "postgres" ? (
+          <>
+            missing-table error (SQLSTATE <code>42P01</code>; most drivers expose it as{" "}
+            <code>code</code>), with <code>table</code> read from the{" "}
+            <code>{'relation "<table>" does not exist'}</code> message
+          </>
+        ) : (
+          <>
+            <code>{"no such table: <table>"}</code> error, with <code>table</code> read from the
+            message (wrappers such as Prisma report it in their own error fields)
+          </>
+        )}
+        , and <code>undefined</code> for any other error, or when it cannot read the table name. The
+        adapter uses it to turn a write that hit a dropped <a href="#write-fence">write fence</a>{" "}
+        into <code>SchemaFencedError</code>.
+      </>
+    ),
+  },
+  {
     name: "close",
     chips: ["optional"],
     description:

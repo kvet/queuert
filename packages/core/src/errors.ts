@@ -133,6 +133,22 @@ export class WorkerLeaseLostError extends Error {
   }
 }
 
+/**
+ * Thrown when a write is fenced: a breaking migration dropped the write fence of this code
+ * version, so older code can no longer change jobs, blockers or workers. The write changes nothing.
+ * Worker runners report it through `workerError` and keep retrying.
+ */
+export class SchemaFencedError extends Error {
+  /** The schema version of the code whose write was fenced. */
+  readonly codeVersion: number;
+
+  constructor(message: string, options: { codeVersion: number; cause?: unknown }) {
+    super(message, options.cause !== undefined ? { cause: options.cause } : undefined);
+    this.name = "SchemaFencedError";
+    this.codeVersion = options.codeVersion;
+  }
+}
+
 /** Thrown when attempting to complete an already-completed job. */
 export class JobAlreadyCompletedError extends Error {
   /** The job that was already completed. */

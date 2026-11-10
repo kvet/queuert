@@ -1,10 +1,10 @@
 import { extendWithPostgres } from "@queuert/testcontainers";
 import { Pool } from "pg";
-import type { StateConformanceFixture } from "queuert/conformance";
 import { type ConformanceFixtures, conformanceTestSuite } from "queuert/testing";
 import { it as baseIt, describe } from "vitest";
 
 import {
+  type PgStateProviderConformanceContext,
   createPgConformanceContext,
   pgStateProviderConformanceGroups,
 } from "../conformance/state-provider-conformance.ts";
@@ -14,7 +14,7 @@ import {
 } from "../state-provider/state-provider.pg-pool.ts";
 
 const it = extendWithPostgres(baseIt, import.meta.url).extend<
-  ConformanceFixtures<StateConformanceFixture>
+  ConformanceFixtures<PgStateProviderConformanceContext>
 >({
   conformance: [
     async ({ postgresConnectionString }, use) => {

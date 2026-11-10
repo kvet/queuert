@@ -1,12 +1,12 @@
 import { Pool } from "pg";
-import type { StateConformanceFixture } from "queuert/conformance";
+import type { SchemaFenceConformanceFixture } from "queuert/conformance-internal";
 import type { ConformanceFixtures } from "queuert/testing";
 import type { TestAPI } from "vitest";
 
 import { createPgStateAdapter } from "../state-adapter/state-adapter.pg.ts";
 import { createPgPoolProvider } from "../state-provider/state-provider.pg-pool.ts";
 
-export type VarianceFixtures = ConformanceFixtures<StateConformanceFixture> & {
+export type VarianceFixtures = ConformanceFixtures<SchemaFenceConformanceFixture> & {
   pool: Pool;
   tableNames: string[];
 };
@@ -44,7 +44,19 @@ export const extendWithVarianceStatePg = <T extends { postgresConnectionString: 
           ...options,
         });
         await stateAdapter.migrateToLatest();
-        await use({ stateAdapter, reset: async () => stateAdapter.truncate() });
+        const fenceTable = `${options.schema}.${options.tablePrefix ?? "queuert_"}schema_fence_v1`;
+        await use({
+          stateAdapter,
+          withWritesFenced: async (fn) => {
+            await pool.query(`DROP TABLE ${fenceTable}`);
+            try {
+              return await fn();
+            } finally {
+              await pool.query(`CREATE TABLE ${fenceTable} (id integer PRIMARY KEY)`);
+            }
+          },
+          reset: async () => stateAdapter.truncate(),
+        });
       },
       { scope: "file" },
     ],

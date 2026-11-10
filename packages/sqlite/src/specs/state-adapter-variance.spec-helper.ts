@@ -1,12 +1,12 @@
 import Database from "better-sqlite3";
-import type { StateConformanceFixture } from "queuert/conformance";
+import type { SchemaFenceConformanceFixture } from "queuert/conformance-internal";
 import type { ConformanceFixtures } from "queuert/testing";
 import type { TestAPI } from "vitest";
 
 import { createSqliteStateAdapter } from "../state-adapter/state-adapter.sqlite.ts";
 import { createBetterSqlite3Provider } from "../state-provider/state-provider.better-sqlite3.ts";
 
-export type VarianceFixtures = ConformanceFixtures<StateConformanceFixture> & {
+export type VarianceFixtures = ConformanceFixtures<SchemaFenceConformanceFixture> & {
   db: Database.Database;
   tableNames: string[];
 };
@@ -42,7 +42,19 @@ export const extendWithVarianceStateSqlite = <T>(
           ...options,
         });
         await stateAdapter.migrateToLatest();
-        await use({ stateAdapter, reset: async () => stateAdapter.truncate() });
+        const fenceTable = `${options.tablePrefix}schema_fence_v1`;
+        await use({
+          stateAdapter,
+          withWritesFenced: async (fn) => {
+            db.exec(`DROP TABLE ${fenceTable}`);
+            try {
+              return await fn();
+            } finally {
+              db.exec(`CREATE TABLE ${fenceTable} (id INTEGER PRIMARY KEY)`);
+            }
+          },
+          reset: async () => stateAdapter.truncate(),
+        });
       },
       { scope: "file" },
     ],

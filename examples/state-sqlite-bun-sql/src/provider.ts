@@ -18,6 +18,12 @@ export const createBunSqlSqliteStateProvider = ({
       return await sql.begin(async (txSql) => fn({ txSql }));
     },
     isTransaction: (txCtx) => typeof txCtx.txSql.savepoint === "function",
+    classifyError: ({ error }) => {
+      const tableName = /no such table: (\S+)/.exec(
+        String((error as { message?: unknown } | undefined)?.message),
+      )?.[1];
+      return tableName === undefined ? undefined : { kind: "undefined_table", tableName };
+    },
     executeSql: async ({ txCtx, sql: query, params, readOnly }) => {
       if (txCtx) return txCtx.txSql.unsafe(query, params ?? []);
       using _h = readOnly ? await lock.acquireRead() : await lock.acquireWrite();

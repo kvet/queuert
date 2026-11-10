@@ -31,6 +31,12 @@ export const createBunSqliteStateProvider = ({
       }
     },
     isTransaction: (txCtx) => txCtx.db.inTransaction,
+    classifyError: ({ error }) => {
+      const tableName = /no such table: (\S+)/.exec(
+        String((error as { message?: unknown } | undefined)?.message),
+      )?.[1];
+      return tableName === undefined ? undefined : { kind: "undefined_table", tableName };
+    },
     executeSql: async ({ txCtx, id, sql, params, readOnly }) => {
       const run = (): unknown[] => {
         const database = txCtx?.db ?? db;

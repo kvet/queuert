@@ -277,13 +277,13 @@ There is no DDL to version, but there is still state to version: collections, in
 
 ### Schema fencing
 
-The fence tables from [Schema fencing](schema-fencing.md) do not port: a write to a dropped collection silently recreates it. The `schema` document, the drain and the startup checks port as they are.
+The fence tables of the PostgreSQL adapter's [write fence](../docs/src/content/docs/integrations/state-adapters/postgres.tsx#write-fence) do not port: a write to a dropped collection silently recreates it.
 
-- **Leading candidate:** a `writerVersion` field stamped by every write, plus a `$jsonSchema` validator (`writerVersion >= min_compatible`) that each breaking migration raises with `collMod`.
+- **Leading candidate:** a `writerVersion` field stamped by every write, plus a `$jsonSchema` validator (`writerVersion >=` the oldest compatible schema version) that each breaking migration raises with `collMod`.
   - `collMod` does not scan existing documents.
   - DDL on a collection aborts or blocks open transactions that touch it, so a stale transaction cannot write past the fence.
   - Not spiked: its cost per write, and how it behaves against open transactions.
-- **Self-check against the `schema` document is rejected.** It is a snapshot read with no write-write conflict, so it breaks the rule in [Transactions and isolation](#transactions-and-isolation).
+- **A self-check against a stored schema version is rejected.** It is a snapshot read with no write-write conflict, so it breaks the rule in [Transactions and isolation](#transactions-and-isolation).
 - **A shared-document write on every transaction is rejected.** It would make all writes conflict with each other.
 
 ## Contract divergences

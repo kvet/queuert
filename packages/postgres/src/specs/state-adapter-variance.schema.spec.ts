@@ -2,6 +2,8 @@ import { extendWithPostgres } from "@queuert/testcontainers";
 import {
   stateAdapterBaseGroups,
   stateAdapterConcurrentTransactionGroups,
+  stateAdapterSchemaFenceConcurrentTransactionGroups,
+  stateAdapterSchemaFenceGroups,
 } from "queuert/conformance-internal";
 import { conformanceTestSuite } from "queuert/testing";
 import { it as baseIt, describe, expect } from "vitest";
@@ -23,6 +25,11 @@ describe("PostgreSQL State Adapter Variance - Custom Schema", () => {
 
   conformanceTestSuite({
     it,
-    groups: [...stateAdapterBaseGroups, ...stateAdapterConcurrentTransactionGroups],
+    groups: [
+      ...stateAdapterBaseGroups,
+      ...stateAdapterSchemaFenceGroups,
+      ...stateAdapterConcurrentTransactionGroups,
+      ...stateAdapterSchemaFenceConcurrentTransactionGroups,
+    ],
   });
 });

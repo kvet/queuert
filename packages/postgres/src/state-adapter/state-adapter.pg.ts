@@ -18,7 +18,7 @@ import {
   sql,
   t,
 } from "@queuert/typed-sql";
-import type { BaseTxContext, StateAdapter } from "queuert";
+import { type BaseTxContext, SchemaFencedError, type StateAdapter } from "queuert";
 import {
   type StateBlockedJob,
   type StateChain,
@@ -37,6 +37,7 @@ import {
 } from "queuert/internal";
 
 import type { PgStateProvider } from "../state-provider/state-provider.pg.ts";
+import { createLegacyUpgrade } from "./legacy-upgrade.pg.ts";
 
 type DbJob = {
   id: string;
@@ -89,19 +90,22 @@ type DbChainColumns = {
   c_trace_context: string | null;
 };
 
+const SCHEMA_VERSION = 1;
+
+const FENCE_GUARD = "NOT EXISTS (SELECT 1 FROM {{fence_table}} WHERE 1 = 0)";
+
 export const migrations: Migration[] = [
   {
     name: "001_initial_schema",
     type: "transactional",
     statements: [
       sql(/* sql */ `
-CREATE TABLE IF NOT EXISTS {{schema}}.{{table_prefix}}job (
+CREATE TABLE {{schema}}.{{table_prefix}}job (
   created_at                    timestamptz NOT NULL DEFAULT now(),
   scheduled_at                  timestamptz NOT NULL DEFAULT now(),
   completed_at                  timestamptz,
   last_attempt_at               timestamptz,
   attempt_at                    timestamptz,
-  attempt_until                 timestamptz,
   chain_completed_at            timestamptz,
 
   chain_index                   integer NOT NULL,
@@ -116,14 +120,16 @@ CREATE TABLE IF NOT EXISTS {{schema}}.{{table_prefix}}job (
   chain_status                  text
                                 CHECK (chain_status IN ('running', 'completed')),
   type_name                     text NOT NULL,
-  completed_by                  text,
-  attempt_by                    text,
   chain_deduplication_key       text,
   chain_trace_context           text,
   trace_context                 text,
   last_attempt_error            jsonb,
   input                         jsonb,
-  output                        jsonb
+  output                        jsonb,
+
+  attempt_by                    {{worker_id_type}},
+  completed_by                  {{worker_id_type}},
+  attempt_token                 uuid
 ) WITH (
   fillfactor = 75,
   autovacuum_vacuum_cost_delay = 0,
@@ -133,46 +139,50 @@ CREATE TABLE IF NOT EXISTS {{schema}}.{{table_prefix}}job (
   autovacuum_analyze_scale_factor = 0
 )`),
       sql(/* sql */ `
-CREATE UNIQUE INDEX IF NOT EXISTS {{table_prefix}}chain_index_idx
+CREATE UNIQUE INDEX {{table_prefix}}chain_index_idx
 ON {{schema}}.{{table_prefix}}job (chain_id, chain_index)
 WHERE chain_index > 0`),
       sql(/* sql */ `
-CREATE INDEX IF NOT EXISTS {{table_prefix}}chain_deduplication_idx
+CREATE INDEX {{table_prefix}}chain_deduplication_idx
 ON {{schema}}.{{table_prefix}}job (chain_deduplication_key, created_at DESC)
 WHERE chain_deduplication_key IS NOT NULL AND chain_index = 0`),
       sql(/* sql */ `
-CREATE INDEX IF NOT EXISTS {{table_prefix}}job_idx
+CREATE INDEX {{table_prefix}}job_idx
 ON {{schema}}.{{table_prefix}}job (type_name, created_at)`),
       sql(/* sql */ `
-CREATE INDEX IF NOT EXISTS {{table_prefix}}job_pending_idx
+CREATE INDEX {{table_prefix}}job_pending_idx
 ON {{schema}}.{{table_prefix}}job (type_name, scheduled_at)
 WHERE status = 'pending'`),
       sql(/* sql */ `
-CREATE INDEX IF NOT EXISTS {{table_prefix}}job_blocked_idx
+CREATE INDEX {{table_prefix}}job_blocked_idx
 ON {{schema}}.{{table_prefix}}job (type_name, scheduled_at)
 WHERE status = 'blocked'`),
       sql(/* sql */ `
-CREATE INDEX IF NOT EXISTS {{table_prefix}}job_running_idx
-ON {{schema}}.{{table_prefix}}job (type_name, attempt_until)
+CREATE INDEX {{table_prefix}}job_running_idx
+ON {{schema}}.{{table_prefix}}job (type_name, attempt_at)
 WHERE status = 'running'`),
       sql(/* sql */ `
-CREATE INDEX IF NOT EXISTS {{table_prefix}}job_completed_idx
+CREATE INDEX {{table_prefix}}job_completed_idx
 ON {{schema}}.{{table_prefix}}job (type_name, completed_at)
 WHERE status = 'completed'`),
       sql(/* sql */ `
-CREATE INDEX IF NOT EXISTS {{table_prefix}}chain_idx
+CREATE INDEX {{table_prefix}}job_attempt_by_idx
+ON {{schema}}.{{table_prefix}}job (attempt_by, attempt_at)
+WHERE status = 'running'`),
+      sql(/* sql */ `
+CREATE INDEX {{table_prefix}}chain_idx
 ON {{schema}}.{{table_prefix}}job (type_name, created_at)
 WHERE chain_index = 0`),
       sql(/* sql */ `
-CREATE INDEX IF NOT EXISTS {{table_prefix}}chain_running_idx
+CREATE INDEX {{table_prefix}}chain_running_idx
 ON {{schema}}.{{table_prefix}}job (type_name, created_at)
 WHERE chain_index = 0 AND chain_status = 'running'`),
       sql(/* sql */ `
-CREATE INDEX IF NOT EXISTS {{table_prefix}}chain_completed_idx
+CREATE INDEX {{table_prefix}}chain_completed_idx
 ON {{schema}}.{{table_prefix}}job (type_name, chain_completed_at)
 WHERE chain_index = 0 AND chain_status = 'completed'`),
       sql(/* sql */ `
-CREATE TABLE IF NOT EXISTS {{schema}}.{{table_prefix}}job_blocker (
+CREATE TABLE {{schema}}.{{table_prefix}}job_blocker (
   job_id                        {{job_id_type}} NOT NULL,
   blocked_by_chain_id           {{job_id_type}} NOT NULL,
   index                         integer NOT NULL,
@@ -186,15 +196,8 @@ CREATE TABLE IF NOT EXISTS {{schema}}.{{table_prefix}}job_blocker (
   autovacuum_analyze_scale_factor = 0
 )`),
       sql(/* sql */ `
-CREATE INDEX IF NOT EXISTS {{table_prefix}}job_blocker_chain_idx
+CREATE INDEX {{table_prefix}}job_blocker_chain_idx
 ON {{schema}}.{{table_prefix}}job_blocker (blocked_by_chain_id)`),
-    ],
-  },
-  {
-    name: "002_worker_liveness",
-    type: "transactional",
-    statements: [
-      sql(/* sql */ `SET LOCAL lock_timeout = '5000ms'`),
       sql(/* sql */ `
 CREATE TABLE {{schema}}.{{table_prefix}}worker (
   started_at                    timestamptz NOT NULL DEFAULT now(),
@@ -205,32 +208,10 @@ CREATE TABLE {{schema}}.{{table_prefix}}worker (
   type_names                    text[] NOT NULL
 ) WITH (fillfactor = 50)`),
       sql(/* sql */ `
-ALTER TABLE {{schema}}.{{table_prefix}}job
-  DROP COLUMN attempt_by,
-  DROP COLUMN completed_by,
-  ADD COLUMN attempt_by {{worker_id_type}},
-  ADD COLUMN completed_by {{worker_id_type}},
-  ADD COLUMN attempt_token uuid`),
-      sql(/* sql */ `
-CREATE INDEX {{table_prefix}}job_attempt_by_idx
-ON {{schema}}.{{table_prefix}}job (attempt_by, attempt_at)
-WHERE status = 'running'`),
-      sql(/* sql */ `
 CREATE INDEX {{table_prefix}}worker_idx
 ON {{schema}}.{{table_prefix}}worker (started_at)`),
       sql(/* sql */ `
-UPDATE {{schema}}.{{table_prefix}}job
-SET status = 'pending',
-  attempt_at = NULL
-WHERE status = 'running'`),
-      sql(/* sql */ `
-DROP INDEX {{schema}}.{{table_prefix}}job_running_idx`),
-      sql(/* sql */ `
-ALTER TABLE {{schema}}.{{table_prefix}}job DROP COLUMN attempt_until`),
-      sql(/* sql */ `
-CREATE INDEX {{table_prefix}}job_running_idx
-ON {{schema}}.{{table_prefix}}job (type_name, attempt_at)
-WHERE status = 'running'`),
+CREATE TABLE {{schema}}.{{table_prefix}}schema_fence_v1 (id integer PRIMARY KEY)`),
     ],
   },
 ];
@@ -570,7 +551,12 @@ export const createPgStateAdapter = <
    */
   countCap?: number;
 }): StateAdapter<TTxContext, TJobId, TWorkerId> & {
-  /** Create or upgrade the schema. */
+  /**
+   * Create or upgrade the schema.
+   *
+   * @throws Error if a 0.16 schema is found (upgrade it with `@queuert/postgres` 0.17 first), or a
+   * 0.17 migration table that records migrations 0.17 did not ship.
+   */
   migrateToLatest: () => Promise<MigrationResult>;
   /** Delete all job, blocker and worker rows. Intended for tests. */
   truncate: () => Promise<void>;
@@ -592,11 +578,13 @@ export const createPgStateAdapter = <
   });
   const { countCap } = config;
 
+  const fenceTable = `${schema}.${tablePrefix}schema_fence_v${SCHEMA_VERSION}`;
   const applyTemplate = createTemplateApplier({
     schema,
     table_prefix: tablePrefix,
     job_id_type: jobIdType,
     worker_id_type: workerIdType,
+    fence_table: fenceTable,
   });
   const templateCache = createTemplateCache();
 
@@ -688,16 +676,31 @@ LEFT JOIN LATERAL (
     sql: TypedSql<TParams, TColumns>;
   } & (TParams extends readonly []
     ? { params?: undefined }
-    : { params: [...InferParams<TParams>] })): Promise<InferColumns<TColumns>[]> =>
-    stateProvider.executeSql({
-      txCtx,
-      id: typedSql.id,
-      sql: typedSql.sql,
-      params: params ?? [],
-      paramTypes: extractParamTypes(typedSql.params),
-      columnTypes: extractColumnTypes(typedSql.columns),
-      readOnly: typedSql.readOnly,
-    }) as Promise<InferColumns<TColumns>[]>;
+    : { params: [...InferParams<TParams>] })): Promise<InferColumns<TColumns>[]> => {
+    try {
+      return (await stateProvider.executeSql({
+        txCtx,
+        id: typedSql.id,
+        sql: typedSql.sql,
+        params: params ?? [],
+        paramTypes: extractParamTypes(typedSql.params),
+        columnTypes: extractColumnTypes(typedSql.columns),
+        readOnly: typedSql.readOnly,
+      })) as InferColumns<TColumns>[];
+    } catch (error) {
+      const classified = stateProvider.classifyError({ error });
+      if (
+        classified?.kind === "undefined_table" &&
+        classified.tableName.toLowerCase() === fenceTable.toLowerCase()
+      ) {
+        throw new SchemaFencedError(
+          `Write fenced: the schema has no write fence of version ${SCHEMA_VERSION}. A newer schema dropped it, or migrateToLatest() has not run yet`,
+          { codeVersion: SCHEMA_VERSION, cause: error },
+        );
+      }
+      throw error;
+    }
+  };
 
   return {
     config,
@@ -929,6 +932,7 @@ inserted_jobs AS (
     GREATEST(COALESCE(ti.scheduled_at, statement_timestamp() + (ti.schedule_after_ms * interval '1 millisecond'), statement_timestamp()), statement_timestamp()),
     ti.chain_trace_context, ti.trace_context
   FROM to_insert ti
+  WHERE ${FENCE_GUARD}
   RETURNING *
 )
 SELECT ed.ord, ${jobColumnsSelect("ed")}, TRUE AS deduplicated
@@ -1022,6 +1026,7 @@ completed AS (
   WHERE j.id = d.continue_from_id
     AND j.status <> 'completed'
     AND (d.attempt_token IS NULL OR (j.status = 'running' AND j.attempt_token = d.attempt_token))
+    AND ${FENCE_GUARD}
   RETURNING j.*
 ),
 inserted AS (
@@ -1032,6 +1037,7 @@ inserted AS (
     d.trace_context
   FROM input_data d
   JOIN completed c ON c.id = d.continue_from_id
+  WHERE ${FENCE_GUARD}
   RETURNING *
 )
 SELECT
@@ -1123,6 +1129,7 @@ done AS (
   WHERE j.id = d.job_id
     AND j.status <> 'completed'
     AND (d.attempt_token IS NULL OR (j.status = 'running' AND j.attempt_token = d.attempt_token))
+    AND ${FENCE_GUARD}
   RETURNING j.*
 ),
 head_done AS (
@@ -1130,6 +1137,7 @@ head_done AS (
   SET chain_status = 'completed',
     chain_completed_at = COALESCE(h.chain_completed_at, statement_timestamp())
   WHERE h.id IN (SELECT chain_id FROM done WHERE chain_id <> id)
+    AND ${FENCE_GUARD}
   RETURNING h.*
 )
 SELECT
@@ -1198,6 +1206,7 @@ updated AS (
   WHERE j.id = d.job_id
     AND j.status <> 'completed'
     AND (d.attempt_token IS NULL OR (j.status = 'running' AND j.attempt_token = d.attempt_token))
+    AND ${FENCE_GUARD}
   RETURNING j.*
 )
 SELECT u.*, ${chainColumnsSelect("h")}
@@ -1404,6 +1413,7 @@ updated AS (
     attempt_token = gen_random_uuid()
   FROM acquired_jobs a
   WHERE job.id = a.id
+    AND ${FENCE_GUARD}
   RETURNING job.*
 )
 SELECT
@@ -1530,6 +1540,7 @@ inserted_blockers AS (
   SELECT d.job_id, d.blocked_by_chain_id, d."index", d.trace_context
   FROM input_data d
   JOIN locked_blocker_heads h ON h.id = d.blocked_by_chain_id
+  WHERE ${FENCE_GUARD}
   RETURNING job_id, blocked_by_chain_id
 ),
 has_incomplete_blockers AS (
@@ -1543,6 +1554,7 @@ updated_jobs AS (
   SET status = 'blocked'
   WHERE j.id IN (SELECT job_id FROM has_incomplete_blockers)
     AND j.status = 'pending'
+    AND ${FENCE_GUARD}
   RETURNING j.*
 ),
 distinct_job_ids AS (
@@ -1690,6 +1702,7 @@ WITH updated AS (
       WHERE jb.job_id = j.id
         AND h.chain_status IS DISTINCT FROM 'completed'
     )
+    AND ${FENCE_GUARD}
   RETURNING j.*
 ),
 blocker_rows AS (
@@ -1756,7 +1769,8 @@ SELECT COALESCE((
             sql(
               `
 INSERT INTO {{schema}}.{{table_prefix}}worker (id, type_names, concurrency, started_at, lease_until, token)
-VALUES ($1::{{worker_id_type}}, $2::text[], $3, statement_timestamp(), statement_timestamp() + ($4::double precision * interval '1 millisecond'), gen_random_uuid())
+SELECT $1::{{worker_id_type}}, $2::text[], $3, statement_timestamp(), statement_timestamp() + ($4::double precision * interval '1 millisecond'), gen_random_uuid()
+WHERE ${FENCE_GUARD}
 RETURNING *, lease_until <= statement_timestamp() AS expired
 `,
               {
@@ -1784,6 +1798,7 @@ SET lease_until = statement_timestamp() + ($2::double precision * interval '1 mi
 WHERE id = $1::{{worker_id_type}}
   AND token = $3::uuid
   AND lease_until > statement_timestamp()
+  AND ${FENCE_GUARD}
 RETURNING *, lease_until <= statement_timestamp() AS expired
 `,
               {
@@ -2501,11 +2516,14 @@ ORDER BY w.ord
       return { items, nextCursor };
     },
 
-    migrateToLatest: async () =>
-      createMigrator<TTxContext>({
+    migrateToLatest: async () => {
+      const store = createMigrationStore(stateProvider, applyTemplate);
+      return createMigrator<TTxContext>({
         migrations,
-        store: createMigrationStore(stateProvider, applyTemplate),
-      }).migrateToLatest(),
+        store,
+        before: createLegacyUpgrade(stateProvider, store, applyTemplate),
+      }).migrateToLatest();
+    },
 
     truncate: async () => {
       await executeTypedSql({
@@ -2537,7 +2555,12 @@ export type PgStateAdapter<
   TJobId extends string = UUID,
   TWorkerId extends string = UUID,
 > = StateAdapter<TTxContext, TJobId, TWorkerId> & {
-  /** Create or upgrade the schema. */
+  /**
+   * Create or upgrade the schema.
+   *
+   * @throws Error if a 0.16 schema is found (upgrade it with `@queuert/postgres` 0.17 first), or a
+   * 0.17 migration table that records migrations 0.17 did not ship.
+   */
   migrateToLatest: () => Promise<MigrationResult>;
   /** Delete all job, blocker and worker rows. Intended for tests. */
   truncate: () => Promise<void>;

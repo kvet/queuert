@@ -19,9 +19,9 @@ import {
 } from "../state-provider/state-provider.better-sqlite3.ts";
 import type { SqliteStateProvider } from "../state-provider/state-provider.sqlite.ts";
 import { MARKER } from "./state-adapter-migration.process.ts";
+import { v017Migrations } from "./v0.17-migrations.spec-helper.ts";
 
 const INSTALL = "001_initial_schema";
-const WORKER_LIVENESS = "002_worker_liveness";
 const ALL = migrations.map((migration) => migration.name);
 const spawnDeployment = createDeploymentSpawner<MigrationResult>(
   join(import.meta.dirname, "state-adapter-migration.process.ts"),
@@ -55,12 +55,19 @@ const execute = async (provider: Provider, text: string): Promise<void> => {
   });
 };
 
-const migrateToInstall = async (provider: Provider): Promise<void> => {
+const migrateTo017 = async (
+  provider: Provider,
+  { only }: { only?: string } = {},
+): Promise<void> => {
   await createMigrator<BetterSqlite3Context>({
-    migrations: migrations.filter((migration) => migration.name === INSTALL),
+    migrations: v017Migrations.filter((migration) => only === undefined || migration.name === only),
     store: createMigrationStore(
       provider,
-      createTemplateApplier({ table_prefix: "queuert_", job_id_type: "TEXT" }),
+      createTemplateApplier({
+        table_prefix: "queuert_",
+        job_id_type: "TEXT",
+        worker_id_type: "TEXT",
+      }),
     ),
   }).migrateToLatest();
 };
@@ -78,13 +85,31 @@ const jobColumnNames = async (provider: Provider): Promise<string[]> =>
     await query<{ name: string }>(provider, "SELECT name FROM pragma_table_info('queuert_job')")
   ).map((row) => row.name);
 
-const indexColumnNames = async (provider: Provider, indexName: string): Promise<string[]> =>
-  (
-    await query<{ name: string }>(
-      provider,
-      `SELECT name FROM pragma_index_info('${indexName}') ORDER BY seqno`,
-    )
-  ).map((row) => row.name);
+const schemaShape = async (provider: Provider): Promise<unknown> => {
+  const tables = await names(
+    provider,
+    "SELECT name FROM sqlite_master WHERE type = 'table' AND name LIKE 'queuert_%' AND name NOT IN ('queuert_migration', 'queuert_write_lock') ORDER BY name",
+  );
+  return Promise.all(
+    tables.map(async (table) => ({
+      table,
+      columns: await query(
+        provider,
+        `SELECT name, type, "notnull", dflt_value, pk FROM pragma_table_info('${table}') ORDER BY cid`,
+      ),
+      indexes: await query(
+        provider,
+        `SELECT name, sql FROM sqlite_master WHERE type = 'index' AND tbl_name = '${table}' ORDER BY name`,
+      ),
+      checks: (
+        await query<{ sql: string }>(
+          provider,
+          `SELECT sql FROM sqlite_master WHERE type = 'table' AND name = '${table}'`,
+        )
+      ).map((row) => row.sql.match(/CHECK \([^)]*\)/g)),
+    })),
+  );
+};
 
 const it = baseIt.extend<{
   database: {
@@ -135,6 +160,7 @@ describe("migrateToLatest", () => {
         "queuert_job_pending_idx",
         "queuert_job_running_idx",
         "queuert_migration",
+        "queuert_schema_fence_v1",
         "queuert_worker",
         "queuert_worker_idx",
         "queuert_write_lock",
@@ -163,39 +189,97 @@ describe("migrateToLatest", () => {
       unrecognized: [],
     });
   });
+});
 
+describe("upgrading from 0.17", () => {
   it(
-    "upgrades a database with running jobs of the previous version, returning them to pending",
+    "carries a 0.17 schema onto the squashed migration, matching a fresh install",
     { timeout: 60_000 },
     async ({ database: { provider, adapter } }) => {
-      await migrateToInstall(provider);
-      const jobId = randomUUID();
-      await execute(
-        provider,
-        `INSERT INTO queuert_job (id, type_name, chain_id, chain_index, status, chain_status, attempt, attempt_at, attempt_by, attempt_until)
-         VALUES ('${jobId}', 'legacy', '${jobId}', 0, 'running', 'running', 1, datetime('now', 'subsec'), 'legacy-worker', datetime('now', 'subsec', '+60 seconds'))`,
-      );
+      await migrateTo017(provider);
+      const freshDb = new Database(":memory:");
+      const freshProvider = createBetterSqlite3Provider({ db: freshDb });
+      await createSqliteStateAdapter({ stateProvider: freshProvider }).migrateToLatest();
 
       expect(await adapter.migrateToLatest()).toEqual({
-        applied: [WORKER_LIVENESS],
+        applied: [],
         skipped: [INSTALL],
         unrecognized: [],
       });
-      expect(await names(provider, "SELECT name FROM sqlite_master ORDER BY name")).toContain(
-        "queuert_worker",
+      expect(await appliedNames(provider)).toEqual([INSTALL]);
+      expect(await schemaShape(provider)).toEqual(await schemaShape(freshProvider));
+      freshDb.close();
+      expect(await adapter.migrateToLatest()).toEqual({
+        applied: [],
+        skipped: [INSTALL],
+        unrecognized: [],
+      });
+    },
+  );
+
+  it(
+    "keeps the jobs and workers of a 0.17 schema as they are",
+    { timeout: 60_000 },
+    async ({ database: { provider, adapter } }) => {
+      await migrateTo017(provider);
+      const workerId = randomUUID();
+      const token = randomUUID();
+      const jobId = randomUUID();
+      await execute(
+        provider,
+        `INSERT INTO queuert_worker (id, lease_until, token, concurrency, type_names)
+         VALUES ('${workerId}', datetime('now', 'subsec', '+60 seconds'), '${token}', 1, '["legacy"]')`,
       );
-      expect(await jobColumnNames(provider)).not.toContain("attempt_until");
-      expect(await indexColumnNames(provider, "queuert_job_running_idx")).toEqual([
-        "type_name",
-        "attempt_at",
-      ]);
+      await execute(
+        provider,
+        `INSERT INTO queuert_job (id, type_name, chain_id, chain_index, status, chain_status, attempt, attempt_at, attempt_by, attempt_token)
+         VALUES ('${jobId}', 'legacy', '${jobId}', 0, 'running', 'running', 1, datetime('now', 'subsec'), '${workerId}', '${token}')`,
+      );
+
+      await adapter.migrateToLatest();
 
       const [job] = await adapter.getJobs({ jobIds: [jobId] });
-      expect(job!.status).toBe("pending");
-      expect(job!.attempt).toBe(1);
-      expect(job!.attemptAt).toBeNull();
-      expect(job!.attemptBy).toBeNull();
-      expect(job!.attemptToken).toBeNull();
+      expect(job!.status).toBe("running");
+      expect(job!.attemptBy).toBe(workerId);
+      expect(job!.attemptToken).toBe(token);
+      const [worker] = await adapter.getWorkers({ workerIds: [workerId] });
+      expect(worker!.id).toBe(workerId);
+    },
+  );
+
+  it(
+    "refuses a 0.16 schema, changing nothing",
+    { timeout: 60_000 },
+    async ({ database: { provider, adapter } }) => {
+      await migrateTo017(provider, { only: INSTALL });
+
+      await expect(adapter.migrateToLatest()).rejects.toThrow(
+        "Cannot upgrade a 0.16 schema directly. Upgrade it with @queuert/sqlite 0.17 first, then migrate to this version.",
+      );
+      expect(await appliedNames(provider)).toEqual([INSTALL]);
+      expect(
+        await names(provider, "SELECT name FROM sqlite_master WHERE type = 'table' ORDER BY name"),
+      ).toEqual(["queuert_job", "queuert_job_blocker", "queuert_migration", "queuert_write_lock"]);
+    },
+  );
+
+  it(
+    "refuses a 0.17 schema that records a migration 0.17 did not ship, changing nothing",
+    { timeout: 60_000 },
+    async ({ database: { provider, adapter } }) => {
+      await migrateTo017(provider);
+      await execute(provider, "INSERT INTO queuert_migration (name) VALUES ('003_unknown')");
+
+      await expect(adapter.migrateToLatest()).rejects.toThrow(
+        "Cannot upgrade the 0.17 schema: the migration table records 001_initial_schema, 002_worker_liveness, 003_unknown, but a 0.17 schema records exactly 001_initial_schema and 002_worker_liveness.",
+      );
+      expect(await appliedNames(provider)).toEqual([INSTALL, "002_worker_liveness", "003_unknown"]);
+      expect(
+        await names(
+          provider,
+          "SELECT name FROM sqlite_master WHERE name = 'queuert_schema_fence_v1'",
+        ),
+      ).toEqual([]);
     },
   );
 });

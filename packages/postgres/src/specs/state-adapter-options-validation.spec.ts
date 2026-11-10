@@ -6,6 +6,7 @@ const dummyProvider = {
   withTransaction: async <T>(fn: (ctx: any) => Promise<T>) => fn({}),
   isTransaction: () => true,
   executeSql: async () => [],
+  classifyError: () => undefined,
 };
 
 it("index");

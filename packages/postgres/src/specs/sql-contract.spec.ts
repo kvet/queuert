@@ -137,6 +137,19 @@ const validateInline = async (
   const ctx = `\n  SQL: ${sql.slice(0, 160).replace(/\s+/g, " ")}${sql.length > 160 ? "..." : ""}`;
   const declaredParamCount = Object.keys(paramTypes).length;
 
+  const fencedWrites = sql.match(
+    /\b(?:INSERT INTO|UPDATE)\s+public\.queuert_(?:job|job_blocker|worker)\b/g,
+  );
+  if (fencedWrites !== null) {
+    const fenceGuards = sql.match(
+      /NOT EXISTS \(SELECT 1 FROM public\.queuert_schema_fence_v\d+ WHERE 1 = 0\)/g,
+    );
+    expect(
+      fenceGuards?.length ?? 0,
+      `every write to job, job_blocker or worker must reference the write fence${ctx}`,
+    ).toBe(fencedWrites.length);
+  }
+
   if (isPreparableQuery(sql)) {
     // Unique per call: a fixed name conflicts when concurrent ops share this client.
     const stmtName = `queuert_contract_stmt_${Math.random().toString(36).slice(2, 10)}`;
@@ -243,6 +256,7 @@ const createValidatingProvider = (
   return {
     withTransaction: inner.withTransaction,
     isTransaction: inner.isTransaction,
+    classifyError: inner.classifyError,
     executeSql: async (args) => {
       const next = validationQueue.then(async () =>
         validateInline(validationClient, args, formatType, enumTypes),

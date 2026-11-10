@@ -2,6 +2,16 @@ import type { RuntimeType } from "@queuert/typed-sql";
 import type { BaseTxContext } from "queuert";
 
 /**
+ * A driver error the PostgreSQL state adapter acts on, as classified by
+ * {@link PgStateProvider.classifyError}.
+ *
+ * - `undefined_table` — SQLSTATE `42P01`, with the missing relation's name as the server reports it
+ *   (`relation "<table>" does not exist`). Without the name the adapter cannot tell its fence
+ *   apart from another missing table, so a provider that cannot read it returns `undefined`.
+ */
+export type PgStateProviderError = { kind: "undefined_table"; tableName: string };
+
+/**
  * PostgreSQL state provider interface.
  *
  * Abstracts database client operations, providing context management, transaction handling,
@@ -53,6 +63,12 @@ export type PgStateProvider<TTxContext extends BaseTxContext> = {
     columnTypes: Record<string, RuntimeType>;
     readOnly: boolean;
   }) => Promise<unknown[]>;
+
+  /**
+   * Classifies an error thrown by this provider's driver. Returns `undefined` for an error it
+   * does not recognize. Most drivers expose the SQLSTATE as `code` on the error or its `cause`.
+   */
+  classifyError: (options: { error: unknown }) => PgStateProviderError | undefined;
 
   /**
    * Releases provider-owned resources. Optional — providers that wrap a

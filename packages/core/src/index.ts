@@ -40,6 +40,7 @@ export {
   JobTakenByAnotherWorkerError,
   JobTypeMismatchError,
   JobTypeValidationError,
+  SchemaFencedError,
   UnknownJobTypeError,
   WaitChainTimeoutError,
   WorkerAlreadyLiveError,

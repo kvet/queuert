@@ -199,6 +199,12 @@ export const schemaTables: Record<SchemaDialect, SchemaTable[]> = {
         },
       ],
     },
+    {
+      name: "schema_fence_v<N>",
+      purpose:
+        "Always empty; one per schema version N whose code may write. Every insert or update of a job, blocker or worker references its version's table, and a breaking migration drops the older ones.",
+      columns: [{ name: "id", type: "integer", primaryKey: true, description: "Never written" }],
+    },
   ],
   sqlite: [
     {
@@ -348,6 +354,12 @@ export const schemaTables: Record<SchemaDialect, SchemaTable[]> = {
       name: "write_lock",
       purpose:
         "Always empty; a no-op write to it takes SQLite's write lock at the start of every migration transaction and before every read that locks chains, jobs or workers.",
+      columns: [{ name: "id", type: "INTEGER", primaryKey: true, description: "Never written" }],
+    },
+    {
+      name: "schema_fence_v<N>",
+      purpose:
+        "Always empty; one per schema version N whose code may write. Every insert or update of a job, blocker or worker references its version's table, and a breaking migration drops the older ones.",
       columns: [{ name: "id", type: "INTEGER", primaryKey: true, description: "Never written" }],
     },
   ],

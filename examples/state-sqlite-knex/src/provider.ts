@@ -16,6 +16,12 @@ export const createKnexSqliteStateProvider = ({
     withTransaction: async (cb) =>
       knex.transaction(async (trx) => cb({ trx }), { doNotRejectOnRollback: false }),
     isTransaction: (txCtx) => txCtx.trx.isTransaction === true,
+    classifyError: ({ error }) => {
+      const tableName = /no such table: (\S+)/.exec(
+        String((error as { message?: unknown } | undefined)?.message),
+      )?.[1];
+      return tableName === undefined ? undefined : { kind: "undefined_table", tableName };
+    },
     // `id` not forwarded: knex re-prepares every raw query and exposes no hook
     // to cache statement handles through the dialect. Bypass knex for statement
     // caching (see state-sqlite-better-sqlite3).
