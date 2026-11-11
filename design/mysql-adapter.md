@@ -344,7 +344,7 @@ The adapter uses the fence tables of the PostgreSQL adapter's [write fence](../d
 - **Conformance.** The state adapter conformance suite runs on MySQL 8.0, MySQL 8.4, MariaDB 10.11, MariaDB 11.4 and MariaDB 11.8, through the mysql2 and mariadb providers. Each example provider runs it on one server. This needs `acquireMysql` / `acquireMariadb` helpers in `@queuert/testcontainers`.
 - **Races.** The races in [Isolation and locking](#isolation-and-locking), run at RC, RR and SERIALIZABLE on each server, and on 11.8 with snapshot isolation both ON and OFF. Each must end with the dependent `pending`, with retries where 1213 or 1020 is expected.
 - **Load.** Concurrent fan-in and multi-blocker attach end with no stuck dependents, and `blockers_remaining` equals its recompute.
-- **Processing suites with stricter user transactions.** They run with the session `transaction_isolation` at `REPEATABLE-READ` and at `SERIALIZABLE`. Queuert-owned transactions report `READ COMMITTED` in `information_schema.innodb_trx`.
+- **End-to-end cases with stricter user transactions.** The end-to-end process, worker and blocker-chains groups run with the session `transaction_isolation` at `REPEATABLE-READ` and at `SERIALIZABLE`. Queuert-owned transactions report `READ COMMITTED` in `information_schema.innodb_trx`.
 - **Acquisition.** Concurrent claims are disjoint. A claim locks no more rows than it returns (`performance_schema.data_locks`). A producer `INSERT` does not wait on a drained-queue claim at RC.
 - **Lease gate.** Renewal latency under continuous claims stays bounded, and a claim, a renewal and a reclaim of the same worker do not deadlock.
 - **Correctness hazards.**

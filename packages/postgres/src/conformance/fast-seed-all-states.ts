@@ -1,5 +1,5 @@
 import type { BaseTxContext } from "queuert";
-import { type SeedSentinels, seedConfig } from "queuert/testing";
+import { type SeedSentinels, seedConfig } from "queuert/conformance-internal";
 
 import type { PgStateProvider } from "../state-provider/state-provider.pg.ts";
 

@@ -48,7 +48,7 @@ const Page = () => (
     <ExampleCode example="validation-zod" file="src/zod-adapter.spec.ts" />
     <p>
       The exact phantom shape each builder must produce is encoded in the{" "}
-      <a href="https://github.com/kvet/queuert/blob/main/packages/core/src/conformance/validation-adapter-cases.ts">
+      <a href="https://github.com/kvet/queuert/blob/main/packages/core/src/conformance.validation-adapter/types.ts">
         <code>ValidationAdapterConformanceContext</code>
       </a>{" "}
       type. The full API is in the <A href="/api/conformance/readme/">conformance reference</A>.

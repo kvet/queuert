@@ -1,7 +1,9 @@
 import { readRpcResponse } from "@queuert/rpc/testing";
-import { createClient, defineJobTypes } from "queuert";
-import type { StateJobInfo } from "queuert/internal";
-import { type InProcessStateAdapter, createInProcessStateAdapter } from "queuert/testing";
+import { createClient, defineJobTypes, type StateJobInfo } from "queuert";
+import {
+  type InProcessStateAdapter,
+  createInProcessStateAdapter,
+} from "queuert/conformance-internal";
 
 import { createDashboard } from "../api/dashboard.ts";
 

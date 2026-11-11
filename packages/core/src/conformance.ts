@@ -1,13 +1,15 @@
-export type { Expect } from "./conformance/expect.ts";
-export type { NotifyAdapterConformanceContext } from "./conformance/notify-adapter-cases.ts";
-export type { StateAdapterConformanceContext } from "./conformance/state-adapter-cases.ts";
+export type { NotifyAdapterConformanceContext } from "./conformance.notify-adapter/types.ts";
+export type { StateAdapterConformanceContext } from "./conformance.state-adapter/types.ts";
 export { type ConformanceTestCase } from "./conformance/suite.ts";
-export { notifyAdapterConformanceCases } from "./conformance/notify-adapter.ts";
+export {
+  notifyAdapterConformanceCases,
+  notifyAdapterEndToEndConformanceCases,
+} from "./conformance.notify-adapter/notify-adapter-cases.ts";
 export {
   concurrentStateAdapterConformanceCases,
+  concurrentStateAdapterEndToEndConformanceCases,
   stateAdapterConformanceCases,
-} from "./conformance/state-adapter.ts";
-export {
-  validationAdapterConformanceCases,
-  type ValidationAdapterConformanceContext,
-} from "./conformance/validation-adapter.ts";
+  stateAdapterEndToEndConformanceCases,
+} from "./conformance.state-adapter/state-adapter-cases.ts";
+export type { ValidationAdapterConformanceContext } from "./conformance.validation-adapter/types.ts";
+export { validationAdapterConformanceCases } from "./conformance.validation-adapter/validation-adapter-cases.ts";

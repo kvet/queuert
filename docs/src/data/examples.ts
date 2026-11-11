@@ -38,12 +38,12 @@ export const examplePages: { slug: ExamplePageSlug; title: string; summary: stri
   {
     slug: "state-adapters",
     title: "State Adapters",
-    summary: "One example per PostgreSQL and SQLite driver or ORM.",
+    summary: "One example per PostgreSQL and SQLite driver or ORM, and a custom adapter.",
   },
   {
     slug: "notify-adapters",
     title: "Notify Adapters",
-    summary: "Redis, Redis Cluster, PostgreSQL LISTEN/NOTIFY and NATS.",
+    summary: "Redis, Redis Cluster, PostgreSQL LISTEN/NOTIFY, NATS and a custom adapter.",
   },
   {
     slug: "validation",
@@ -93,6 +93,14 @@ const notifyPostgres = {
 };
 const notifyRedis = { title: "Redis Notify Adapter", href: "/integrations/notify-adapters/redis/" };
 const notifyNats = { title: "NATS Notify Adapter", href: "/integrations/notify-adapters/nats/" };
+const stateCustom = {
+  title: "Custom State Adapter",
+  href: "/integrations/state-adapters/custom/",
+};
+const notifyCustom = {
+  title: "Custom Notify Adapter",
+  href: "/integrations/notify-adapters/custom/",
+};
 const validationAdapters = {
   title: "Validation",
   href: "/integrations/validation/",
@@ -295,6 +303,18 @@ export const examples: Example[] = [
     guide: stateSqlite,
   },
   {
+    name: "state-custom-memory",
+    category: "state",
+    page: "state-adapters",
+    label: "custom · in memory",
+    description:
+      "A StateAdapter written from scratch over plain Maps, with transactions run one at a time on a copy of the state, validated by the stateAdapterConformanceCases and stateAdapterEndToEndConformanceCases from queuert/conformance.",
+    runtime: "Node.js",
+    services: [],
+    files: ["src/state-adapter.ts", "src/state-adapter.spec.ts", "src/index.ts"],
+    guide: stateCustom,
+  },
+  {
     name: "notify-redis-ioredis",
     category: "notify",
     page: "notify-adapters",
@@ -395,6 +415,18 @@ export const examples: Example[] = [
     services: ["NATS"],
     files: ["src/index.ts"],
     guide: notifyNats,
+  },
+  {
+    name: "notify-custom-memory",
+    category: "notify",
+    page: "notify-adapters",
+    label: "custom · in memory",
+    description:
+      "A NotifyAdapter written from scratch that delivers notifications to listeners in the same process, validated by the notifyAdapterConformanceCases and notifyAdapterEndToEndConformanceCases from queuert/conformance.",
+    runtime: "Node.js",
+    services: [],
+    files: ["src/notify-adapter.ts", "src/notify-adapter.spec.ts", "src/index.ts"],
+    guide: notifyCustom,
   },
   {
     name: "showcase-onboarding",

@@ -166,7 +166,7 @@ Array merge for the two slices, one transactional call to install the schedule. 
 
 ### Export location
 
-A dedicated `queuert/cleanup` subpath (matching the existing `./conformance`, `./testing` precedent) signals an opt-in batteries-included module and keeps the core namespace lean.
+A dedicated `queuert/cleanup` subpath (matching the existing `./conformance` precedent) signals an opt-in batteries-included module and keeps the core namespace lean.
 
 ## Dependencies
 

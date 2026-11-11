@@ -4,6 +4,7 @@ import { acquireNats, type AcquiredNats } from "@queuert/testcontainers";
 import {
   type NotifyAdapterConformanceContext,
   notifyAdapterConformanceCases,
+  notifyAdapterEndToEndConformanceCases,
 } from "queuert/conformance";
 import { afterAll, beforeAll, describe, test } from "vitest";
 
@@ -31,6 +32,12 @@ describe("notify-nats-transport-node adapter conformance", () => {
   });
 
   for (const conformanceCase of notifyAdapterConformanceCases) {
+    test(conformanceCase.title, async () => {
+      await conformanceCase.run(context);
+    });
+  }
+
+  for (const conformanceCase of notifyAdapterEndToEndConformanceCases) {
     test(conformanceCase.title, async () => {
       await conformanceCase.run(context);
     });

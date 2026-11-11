@@ -2,7 +2,7 @@ import { describe, expect, test, vi } from "vitest";
 
 import { createNoopObservabilityAdapter } from "../observability-adapter/observability-adapter.noop.ts";
 import { createObservabilityHelper } from "../observability-adapter/observability-helper.ts";
-import { noopNotifyAdapter } from "./notify-adapter.noop.spec-helper.ts";
+import { noopNotifyAdapter } from "./notify-adapter.noop.ts";
 import type { NotifyAdapter } from "./notify-adapter.ts";
 import { wrapNotifyAdapterWithLogging } from "./notify-adapter.wrapper.logging.ts";
 

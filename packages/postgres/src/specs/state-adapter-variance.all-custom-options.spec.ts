@@ -1,32 +1,38 @@
-import { extendWithPostgres } from "@queuert/testcontainers";
-import {
-  stateAdapterBaseGroups,
-  stateAdapterConcurrentTransactionGroups,
-  stateAdapterSchemaFenceConcurrentTransactionGroups,
-  stateAdapterSchemaFenceGroups,
-} from "queuert/conformance-internal";
-import { conformanceTestSuite } from "queuert/testing";
+import { conformanceTestSuite } from "@queuert/helpers/conformance";
+import { acquirePostgres } from "@queuert/testcontainers";
 import { it as baseIt, describe, expect } from "vitest";
 
-import { extendWithVarianceStatePg } from "./state-adapter-variance.spec-helper.ts";
+import { pgStateAdapterConformanceGroups } from "../conformance/state-provider-conformance.ts";
+import {
+  varianceConformance,
+  variancePool,
+  varianceTableNames,
+} from "./state-adapter-variance.spec-helper.ts";
 
 const schema = "queuert_all_custom_options";
 const tablePrefix = "jobs_";
 
-const it = extendWithVarianceStatePg(extendWithPostgres(baseIt, import.meta.url), {
+const pg = await acquirePostgres("postgres:14", import.meta.url);
+
+const options = {
   schema,
   tablePrefix,
   jobIdType: "text",
   workerIdType: "varchar",
   generateJobId: () => `job-${crypto.randomUUID()}`,
-  validateJobId: (id) => id.startsWith("job-"),
+  validateJobId: (id: string) => id.startsWith("job-"),
   generateWorkerId: () => `worker-${crypto.randomUUID()}`,
-  validateWorkerId: (id) => id.startsWith("worker-"),
+  validateWorkerId: (id: string) => id.startsWith("worker-"),
   maxBlockersPerJob: 2,
   countCap: 3,
-});
+};
 
-it("index");
+const it = baseIt
+  .extend("pool", { scope: "file" }, variancePool(pg.connectionString))
+  .extend("conformance", { scope: "file" }, varianceConformance(options))
+  .extend("tableNames", { scope: "file" }, varianceTableNames(options));
+
+baseIt("index");
 
 describe("PostgreSQL State Adapter Variance - All Custom Options", () => {
   it("creates tables with correct prefix", ({ tableNames }) => {
@@ -54,11 +60,6 @@ describe("PostgreSQL State Adapter Variance - All Custom Options", () => {
 
   conformanceTestSuite({
     it,
-    groups: [
-      ...stateAdapterBaseGroups,
-      ...stateAdapterSchemaFenceGroups,
-      ...stateAdapterConcurrentTransactionGroups,
-      ...stateAdapterSchemaFenceConcurrentTransactionGroups,
-    ],
+    groups: pgStateAdapterConformanceGroups,
   });
 });

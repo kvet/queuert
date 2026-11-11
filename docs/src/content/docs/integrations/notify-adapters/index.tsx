@@ -146,6 +146,15 @@ const Page = () => (
         batch of unique items and publish each item as its own notification.
       </li>
       <li>
+        <strong>Delivery may be synchronous.</strong> A <code>notify*</code> call may run its
+        listeners before it returns.
+      </li>
+      <li>
+        <strong>Listeners are isolated.</strong> A listener that throws does not keep other
+        listeners from receiving the notification, and its error does not reach the{" "}
+        <code>notify*</code> caller.
+      </li>
+      <li>
         <strong>Listeners return a dispose function</strong> that unsubscribes.
       </li>
       <li>
@@ -153,8 +162,9 @@ const Page = () => (
           <code>close</code> is idempotent.
         </strong>{" "}
         The second call is a no-op; after close, <code>notify*</code> and <code>listen*</code> calls
-        reject. On shutdown, stop the workers, close the notify adapter, close the state adapter,
-        then close the clients and pools you own.
+        reject, while dispose functions returned before close still work. On shutdown, stop the
+        workers, close the notify adapter, close the state adapter, then close the clients and pools
+        you own.
       </li>
     </ul>
     <p>

@@ -1,55 +1,51 @@
+// oxlint-disable no-empty-pattern -- vitest fixtures must destructure their context
 import { connect } from "@nats-io/transport-node";
-import { extendWithNats } from "@queuert/testcontainers";
+import { conformanceTestSuite } from "@queuert/helpers/conformance";
+import { acquireNats } from "@queuert/testcontainers";
 import type { NotifyAdapterConformanceContext } from "queuert/conformance";
-import { notifyAdapterBaseGroups } from "queuert/conformance-internal";
-import { type ConformanceFixtures, conformanceTestSuite } from "queuert/testing";
+import { notifyAdapterBaseGroups, notifyAdapterEndToEndGroups } from "queuert/conformance-internal";
 import { it as baseIt, describe } from "vitest";
 
 import { createNatsNotifyAdapter } from "../notify-adapter/notify-adapter.nats.ts";
 
-const it = extendWithNats(baseIt, import.meta.url);
+const nats = await acquireNats("nats:2.2");
 
-const defaultPrefixIt = it.extend<ConformanceFixtures<NotifyAdapterConformanceContext>>({
-  conformance: [
-    async ({ natsConnectionOptions }, use) => {
-      const nc = await connect(natsConnectionOptions);
-      await use({ createNotifyAdapter: async () => createNatsNotifyAdapter({ nc }) });
-      await nc.close();
-    },
-    { scope: "file" },
-  ],
+const it = baseIt.extend("nc", { scope: "file" }, async ({}, { onCleanup }) => {
+  const nc = await connect(nats.connectionOptions);
+  onCleanup(async () => {
+    await nc.close();
+  });
+  return nc;
 });
 
-const customPrefixIt = it.extend<ConformanceFixtures<NotifyAdapterConformanceContext>>({
-  conformance: [
-    async ({ natsConnectionOptions }, use) => {
-      const nc = await connect(natsConnectionOptions);
-      await use({
-        createNotifyAdapter: async () =>
-          createNatsNotifyAdapter({
-            nc,
-            subjectPrefix: `myapp.notifications.${crypto.randomUUID()}`,
-          }),
-      });
-      await nc.close();
-    },
-    { scope: "file" },
-  ],
-});
+const defaultPrefixIt = it.extend(
+  "conformance",
+  { scope: "file" },
+  async ({ nc }): Promise<NotifyAdapterConformanceContext> => ({
+    createNotifyAdapter: async () => createNatsNotifyAdapter({ nc }),
+  }),
+);
+
+const customPrefixIt = it.extend(
+  "conformance",
+  { scope: "file" },
+  async ({ nc }): Promise<NotifyAdapterConformanceContext> => ({
+    createNotifyAdapter: async () =>
+      createNatsNotifyAdapter({ nc, subjectPrefix: `myapp.notifications.${crypto.randomUUID()}` }),
+  }),
+);
 
 // NOTE: hack for vitest plugin
-it("index");
+baseIt("index");
 
 describe("NATS Notify Adapter Conformance - Default Subject Prefix", () => {
-  conformanceTestSuite({
-    it: defaultPrefixIt,
-    groups: notifyAdapterBaseGroups,
-  });
+  conformanceTestSuite({ it: defaultPrefixIt, groups: notifyAdapterBaseGroups });
 });
 
 describe("NATS Notify Adapter Conformance - Custom Subject Prefix", () => {
-  conformanceTestSuite({
-    it: customPrefixIt,
-    groups: notifyAdapterBaseGroups,
-  });
+  conformanceTestSuite({ it: customPrefixIt, groups: notifyAdapterBaseGroups });
+});
+
+describe("NATS Notify Adapter End-to-End Conformance", () => {
+  conformanceTestSuite({ it: defaultPrefixIt, groups: notifyAdapterEndToEndGroups });
 });

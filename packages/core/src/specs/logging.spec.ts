@@ -1,4 +1,6 @@
-// oxlint-disable no-empty-pattern
+import inspector from "node:inspector";
+
+import { withWorkerRunners } from "@queuert/helpers";
 import { it as baseIt, describe, expect, onTestFinished, vi } from "vitest";
 
 import {
@@ -9,24 +11,43 @@ import {
   createProcessors,
   defineJobTypes,
 } from "../index.ts";
-import { extendWithStateInProcess } from "../state-adapter/state-adapter.in-process.spec-helper.ts";
-import { extendWithCommon, extendWithNotifyInProcess } from "../suites/spec-context.spec-helper.ts";
-import { createTxHooks } from "../tx-hooks/tx-hooks.ts";
+import { createInProcessNotifyAdapter } from "../notify-adapter/notify-adapter.in-process.ts";
+import { createConsoleLog } from "../observability-adapter/log.console.ts";
+import type { Log } from "../observability-adapter/log.ts";
+import { createNoopObservabilityAdapter } from "../observability-adapter/observability-adapter.noop.ts";
+import { createInProcessStateAdapter } from "../state-adapter/state-adapter.in-process.ts";
+import type { StateAdapter } from "../state-adapter/state-adapter.ts";
+import { type TxHooks, createTxHooks, withTxHooks } from "../tx-hooks/tx-hooks.ts";
 
-type ExpectLogs = (
-  expected: {
-    type: string;
-    data?: Record<string, unknown>;
-    error?: unknown;
-  }[],
-) => void;
-
-const it = extendWithNotifyInProcess(extendWithCommon(extendWithStateInProcess(baseIt))).extend<{
-  expectLogs: ExpectLogs;
-}>({
-  expectLogs: [
-    async ({ log }, use) => {
-      await use((expected) => {
+const it = baseIt
+  .extend(
+    "stateAdapter",
+    async () =>
+      createInProcessStateAdapter() as unknown as StateAdapter<{ $test: true }, string, string>,
+  )
+  .extend("notifyAdapter", async () => createInProcessNotifyAdapter())
+  .extend(
+    "withTransaction",
+    async ({ stateAdapter }) =>
+      async <T>(cb: (txCtx: { $test: true }, txHooks: TxHooks) => Promise<T>): Promise<T> =>
+        withTxHooks(async (txHooks) =>
+          stateAdapter.withTransaction(txHooks.retryBoundary(async (txCtx) => cb(txCtx, txHooks))),
+        ),
+  )
+  .extend("withWorkerRunners", async () => withWorkerRunners)
+  .extend("log", async () => {
+    const consoleLog = createConsoleLog();
+    return vi.fn<Log>((...args) => {
+      if (process.env.DEBUG || inspector.url()) {
+        consoleLog(...args);
+      }
+    });
+  })
+  .extend("observabilityAdapter", async () => createNoopObservabilityAdapter())
+  .extend(
+    "expectLogs",
+    async ({ log }) =>
+      (expected: { type: string; data?: Record<string, unknown>; error?: unknown }[]) => {
         expect(log.mock.calls.map((call) => call[0])).toEqual(
           expected.map((entry) => {
             const matcher: Record<string, unknown> = { type: entry.type };
@@ -39,11 +60,8 @@ const it = extendWithNotifyInProcess(extendWithCommon(extendWithStateInProcess(b
             return expect.objectContaining(matcher);
           }),
         );
-      });
-    },
-    { scope: "test" },
-  ],
-});
+      },
+  );
 
 const completionOptions = {
   pollIntervalMs: 100,

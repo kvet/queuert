@@ -75,7 +75,7 @@ unblockJobs(params: {
 
 - PG / SQLite: add `LIMIT` to the unblock selection (including the lock query) and an `EXISTS`/count for `hasMore`.
 - In-process: slice the candidate iteration to `limit`, set `hasMore` from the remainder.
-- Conformance: extend `packages/core/src/conformance/state-adapter-cases/unblock-jobs.ts`.
+- Conformance: extend `packages/core/src/conformance.state-adapter/cases/unblock-jobs.ts`.
 
 ## Shared runtime primitive: library-owned system chains
 
@@ -300,7 +300,7 @@ Long-running aggregations can checkpoint intermediate state in their own short t
 
 - Sealed blockers: `unblockJobs` flips `job_blocker.blocked` and uses the same `NOT EXISTS` predicate (unified path).
 - Conformance for `addJobBlockers` / `sealJobBlockers` / the unblock predicate change / `job_blocker.blocked` column across all three adapters.
-- Suites: `blocker-chains.test-suite.ts` + conformance unblock cases.
+- Cases: the `blocker-chains` end-to-end cases + conformance unblock cases.
 
 ## Changeset
 

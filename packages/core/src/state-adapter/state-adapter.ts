@@ -2,65 +2,117 @@ import type { DeduplicationOptions } from "../entities/deduplication.ts";
 import type { OrderDirection, Page, PageParams } from "../entities/pagination.ts";
 import type { ScheduleOptions } from "../entities/schedule.ts";
 
+/** A job's status as a state adapter stores it. */
 export type StateJobStatus = "blocked" | "pending" | "running" | "completed";
 
+/** A chain's status as a state adapter stores it. */
 export type StateChainStatus = "running" | "completed";
 
+/** A job row as a state adapter returns it, without its chain. */
 export type StateJobInfo = {
+  /** Job ID. */
   id: string;
+  /** Job type name. */
   typeName: string;
+  /** ID of the chain the job belongs to, equal to the ID of the chain's head job. */
   chainId: string;
+  /** Position in the chain, starting at 0 for the head. */
   chainIndex: number;
+  /** Current status. */
   status: StateJobStatus;
+  /** When the job was created. */
   createdAt: Date;
+  /** Stored input. */
   input: unknown;
+  /** When the job becomes eligible for processing. */
   scheduledAt: Date;
+  /** When the job completed, or `null` before. */
   completedAt: Date | null;
+  /** Worker that completed the job, or `null` for a workerless completion or before. */
   completedBy: string | null;
+  /** ID of the job it continued to, or `null` for a terminal or not yet completed job. */
   continuedToId: string | null;
+  /** Stored output of a terminally completed job, otherwise `null`. */
   output: unknown;
+  /** Number of processing attempts so far. */
   attempt: number;
+  /** Serialized error of the last failed or reclaimed attempt, or `null` before one. */
   lastAttemptError: string | null;
+  /** When the last failed or reclaimed attempt ended, or `null` before one. */
   lastAttemptAt: Date | null;
+  /** When the current attempt started, or `null` when the job is not running. */
   attemptAt: Date | null;
+  /** Worker that owns the current attempt, or `null` when the job is not running. */
   attemptBy: string | null;
+  /** Token of the current attempt, which attempt-scoped writes must present. */
   attemptToken: string | null;
+  /** Serialized trace context of the job, for observability adapters. */
   traceContext: string | null;
 };
 
+/** A chain row as a state adapter returns it, without its jobs. */
 export type StateChainInfo = {
+  /** Chain ID, equal to the ID of its head job. */
   id: string;
+  /** Chain type name, the type name of its head job. */
   typeName: string;
+  /** Current status. */
   status: StateChainStatus;
+  /** Deduplication key the chain was created with, or `null`. */
   deduplicationKey: string | null;
+  /** When the chain was created. */
   createdAt: Date;
+  /** When the chain completed, or `null` while running. */
   completedAt: Date | null;
+  /** Serialized trace context of the chain, for observability adapters. */
   traceContext: string | null;
 };
 
+/** One blocker of a job: the chain the job waits for, in the order its blockers were added. */
 export type StateJobBlockerInfo = {
+  /** ID of the blocked job. */
   jobId: string;
+  /** ID of the chain the job waits for. */
   blockedByChainId: string;
+  /** Position of the blocker among the job's blockers. */
   index: number;
+  /** Serialized trace context of the blocker link, for observability adapters. */
   traceContext: string | null;
 };
 
+/** A worker row as a state adapter returns it. */
 export type StateWorkerInfo = {
+  /** Worker ID. */
   id: string;
+  /** Job type names the worker processes. */
   typeNames: string[];
+  /** Maximum number of attempts the worker runs at once. */
   concurrency: number;
+  /** When the worker registered. */
   startedAt: Date;
+  /** When the worker's lease ends unless renewed. */
   leaseUntil: Date;
+  /** Token of the worker's current registration. */
   token: string;
+  /** Whether the lease has ended, in database time. */
   expired: boolean;
 };
 
+/**
+ * A chain with its head job and its tail: the latest job continued from the head, whether or not
+ * the chain completed, or `undefined` while the head is its only job.
+ */
 export type StateChain = StateChainInfo & { head: StateJobInfo; tail: StateJobInfo | undefined };
+/** A job with its chain. */
 export type StateJob = StateJobInfo & { chain: StateChainInfo };
+/** A blocker with the job it blocks. */
 export type StateBlockedJob = StateJobBlockerInfo & { job: StateJobInfo };
+/** A blocker with the blocked job and that job's chain. */
 export type StateDependentJob = StateJobBlockerInfo & { job: StateJob };
 
+/** A count that stops at the adapter's `countCap`; `hasMore` is set when it stopped. */
 export type StateCount = { count: number; hasMore: boolean };
+/** Numbers of workers whose lease is live and whose lease has ended. */
 export type StateWorkerCounts = { live: number; expired: number };
 
 /**
@@ -142,7 +194,10 @@ export type StateAdapter<
     ),
   ) => Promise<(StateWorkerInfo | undefined)[]>;
 
-  /** Creates chain heads; a deduplicated match returns `deduplicated: true`. */
+  /**
+   * Creates chain heads. A deduplicated match returns the existing chain, with its latest
+   * continuation as `tail` as `getChains` does, and `deduplicated: true`.
+   */
   createJobs: (params: {
     txCtx: TTxContext;
     jobs: {
@@ -215,7 +270,10 @@ export type StateAdapter<
     params: { typeNames: string[] } & AutocommitTxContextParam<TTxContext>,
   ) => Promise<number | null>;
 
-  /** Adds blockers to jobs, `undefined` per non-head id; the caller then rolls back. */
+  /**
+   * Adds blockers to jobs. A blocker id that does not name a chain head is reported as
+   * `undefined` among the job's blockers, and the caller then rolls back.
+   */
   addJobsBlockers: (params: {
     txCtx: TTxContext;
     jobBlockers: {

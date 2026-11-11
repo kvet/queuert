@@ -1,15 +1,10 @@
 import { it as baseIt, describe, expect } from "vitest";
 
 import { sql } from "./sql.ts";
-import { type TemplateApplier, createTemplateApplier } from "./template-applier.ts";
+import { createTemplateApplier } from "./template-applier.ts";
 import { createTemplateCache } from "./template-cache.ts";
 
-const it = baseIt.extend<{ applyTemplate: TemplateApplier }>({
-  // oxlint-disable-next-line no-empty-pattern
-  applyTemplate: async ({}, use) => {
-    await use(createTemplateApplier({}));
-  },
-});
+const it = baseIt.extend("applyTemplate", async () => createTemplateApplier({}));
 
 describe("createTemplateCache", () => {
   it("computes once per key and returns the cached result on later calls", ({ applyTemplate }) => {

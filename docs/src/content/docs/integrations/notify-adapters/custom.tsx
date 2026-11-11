@@ -1,6 +1,6 @@
 import { A } from "@solidjs/router";
 
-import { Code } from "../../../../components/mdx/Code.tsx";
+import { ExampleCode } from "../../../../components/ExampleCode.tsx";
 
 export const meta = {
   title: "Custom Notify Adapter",
@@ -13,10 +13,10 @@ const Page = () => (
     <p>
       For an entirely different message broker, implement the <code>NotifyAdapter</code> interface
       yourself. The conformance suite validates that your implementation behaves correctly. It's the
-      same suite Queuert uses internally, exported as a list of cases you register one test per case
-      with any test runner. To use another client with PostgreSQL or Redis, write a provider
-      instead: see <A href="/integrations/notify-adapters/postgres/#notify-provider">PostgreSQL</A>{" "}
-      or <A href="/integrations/notify-adapters/redis/#notify-provider">Redis</A>.
+      same suite Queuert uses internally, exported as lists of cases to register one test each with
+      any test runner. To use another client with PostgreSQL or Redis, write a provider instead: see{" "}
+      <A href="/integrations/notify-adapters/postgres/#notify-provider">PostgreSQL</A> or{" "}
+      <A href="/integrations/notify-adapters/redis/#notify-provider">Redis</A>.
     </p>
 
     <h2 id="notify-adapter">Write a notify adapter</h2>
@@ -28,35 +28,36 @@ const Page = () => (
       </A>
       .
     </p>
+    <p>
+      This adapter from{" "}
+      <A href="/examples/notify-adapters/#notify-custom-memory">
+        <code>notify-custom-memory</code>
+      </A>{" "}
+      delivers notifications to listeners in the same process and passes every case:
+    </p>
+    <ExampleCode example="notify-custom-memory" file="src/notify-adapter.ts" region="adapter" />
 
     <h2 id="conformance">Conformance</h2>
     <p>
-      <code>notifyAdapterConformanceCases</code> from <code>queuert/conformance</code> are the cases
-      a notify adapter must pass. The suite drives no test runner: your test file registers one test
-      per case, running each against a context with a <code>createNotifyAdapter</code> factory. Each
-      case creates its own adapter from it and closes it when the case ends:
+      <code>notifyAdapterConformanceCases</code> from <code>queuert/conformance</code> check your
+      adapter's own contract (delivery, filtering, unsubscribing and concurrent listeners) and run
+      fast. <code>notifyAdapterEndToEndConformanceCases</code> check what an application sees end to
+      end: each case builds a client and worker runners over your adapter and an in-memory state
+      adapter, so no database is needed, and checks worker runners waking up for scheduled jobs,{" "}
+      <code>awaitChain</code> returning once a chain completes, and recovery when the adapter's
+      calls fail. They take a few seconds in all, so you may run them apart from the contract cases,
+      such as only in CI.
     </p>
-    <Code lang="ts" title="src/notify-adapter.spec.ts">{`
-import {
-  notifyAdapterConformanceCases,
-  type NotifyAdapterConformanceContext,
-} from "queuert/conformance";
-import { describe, test } from "vitest";
-
-import { createMyNotifyAdapter } from "./notify-adapter.ts";
-
-describe("notify adapter conformance", () => {
-  const context: NotifyAdapterConformanceContext = {
-    createNotifyAdapter: async () => createMyNotifyAdapter({ url: process.env.BROKER_URL }),
-  };
-
-  for (const conformanceCase of notifyAdapterConformanceCases) {
-    test(conformanceCase.title, async () => {
-      await conformanceCase.run(context);
-    });
-  }
-});
-`}</Code>
+    <p>
+      The suite drives no test runner: your test file registers one test per case, running each
+      against a context with a <code>createNotifyAdapter</code> factory. Each case creates its own
+      adapter from it and closes it when the case ends:
+    </p>
+    <ExampleCode
+      example="notify-custom-memory"
+      file="src/notify-adapter.spec.ts"
+      region="conformance"
+    />
     <p>
       The cases share one context, so run them one at a time. The full API is in the{" "}
       <A href="/api/conformance/readme/">conformance reference</A>.

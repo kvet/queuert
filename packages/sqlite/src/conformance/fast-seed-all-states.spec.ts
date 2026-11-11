@@ -1,5 +1,5 @@
 import Database from "better-sqlite3";
-import { seedAllStates } from "queuert/testing";
+import { seedAllStates } from "queuert/conformance-internal";
 import { describe, expect, it } from "vitest";
 
 import { createSqliteStateAdapter } from "../state-adapter/state-adapter.sqlite.ts";

@@ -1,7 +1,8 @@
-import { extendWithRedis } from "@queuert/testcontainers";
-import type { NotifyAdapterConformanceContext } from "queuert/conformance";
-import { notifyAdapterBaseGroups } from "queuert/conformance-internal";
-import { type ConformanceFixtures, conformanceTestSuite } from "queuert/testing";
+// oxlint-disable no-empty-pattern -- vitest fixtures must destructure their context
+import { conformanceTestSuite } from "@queuert/helpers/conformance";
+import { detectResourceLeaks } from "@queuert/helpers/testing";
+import { TESTCONTAINERS_RESOURCE_TYPES, acquireRedis } from "@queuert/testcontainers";
+import { notifyAdapterEndToEndGroups } from "queuert/conformance-internal";
 import { type RedisClientType, createClient } from "redis";
 import { it as baseIt, describe } from "vitest";
 
@@ -9,65 +10,36 @@ import {
   createRedisNotifyProviderConformanceContext,
   redisNotifyProviderConformanceGroups,
 } from "../conformance/notify-provider-conformance.ts";
-import { createRedisNotifyAdapter } from "../notify-adapter/notify-adapter.redis.ts";
 import { createNodeRedisNotifyProvider } from "./notify-provider.node-redis.ts";
 
-const it = extendWithRedis(baseIt, import.meta.url);
+const redis = await acquireRedis("redis:6");
 
-const providerIt = it.extend<ConformanceFixtures<NotifyAdapterConformanceContext>>({
-  conformance: [
-    async ({ redisConnectionUrl }, use) => {
-      const client = createClient({ url: redisConnectionUrl }) as RedisClientType;
-      const subscribeClient = createClient({ url: redisConnectionUrl }) as RedisClientType;
-      await client.connect();
-      await subscribeClient.connect();
-      await use(
-        createRedisNotifyProviderConformanceContext({
-          createNotifyProvider: async () =>
-            createNodeRedisNotifyProvider({ client, subscribeClient }),
-        }),
-      );
+const it = baseIt
+  .extend("conformance", { scope: "file" }, async ({}, { onCleanup }) => {
+    const client = createClient({ url: redis.connectionUrl }) as RedisClientType;
+    const subscribeClient = createClient({ url: redis.connectionUrl }) as RedisClientType;
+    await client.connect();
+    await subscribeClient.connect();
+    onCleanup(async () => {
       await client.close();
       await subscribeClient.close();
-    },
-    { scope: "file" },
-  ],
-});
-
-const customPrefixIt = it.extend<ConformanceFixtures<NotifyAdapterConformanceContext>>({
-  conformance: [
-    async ({ redisConnectionUrl }, use) => {
-      const client = createClient({ url: redisConnectionUrl }) as RedisClientType;
-      const subscribeClient = createClient({ url: redisConnectionUrl }) as RedisClientType;
-      await client.connect();
-      await subscribeClient.connect();
-      await use({
-        createNotifyAdapter: async () =>
-          createRedisNotifyAdapter({
-            notifyProvider: createNodeRedisNotifyProvider({ client, subscribeClient }),
-            channelPrefix: `myapp:notifications:${Date.now()}:${Math.random().toString(36).slice(2)}`,
-          }),
-      });
-      await client.close();
-      await subscribeClient.close();
-    },
-    { scope: "file" },
-  ],
-});
+    });
+    return createRedisNotifyProviderConformanceContext({
+      createNotifyProvider: async () => createNodeRedisNotifyProvider({ client, subscribeClient }),
+    });
+  })
+  .extend(
+    "resourceLeakCheck",
+    { auto: true },
+    detectResourceLeaks({ additionalAllowedTypes: TESTCONTAINERS_RESOURCE_TYPES }),
+  );
 
 // NOTE: hack for vitest plugin
-it("index");
+baseIt("index");
 
 describe("Redis Notify Provider Conformance", () => {
   conformanceTestSuite({
-    it: providerIt,
-    groups: redisNotifyProviderConformanceGroups,
-  });
-});
-
-describe("Redis Notify Adapter Conformance - Custom Channel Prefix", () => {
-  conformanceTestSuite({
-    it: customPrefixIt,
-    groups: notifyAdapterBaseGroups,
+    it,
+    groups: [...redisNotifyProviderConformanceGroups, ...notifyAdapterEndToEndGroups],
   });
 });

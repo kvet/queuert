@@ -1,7 +1,7 @@
 import type { UUID } from "node:crypto";
 
-import { createAsyncRwLock } from "@queuert/helpers";
-import type Database from "better-sqlite3";
+import { createAsyncRwLock, withWorkerRunners } from "@queuert/helpers";
+import Database from "better-sqlite3";
 import {
   createClient,
   createWorkerRunner,
@@ -9,16 +9,16 @@ import {
   defineJobTypes,
   withTxHooks,
 } from "queuert";
-import { withWorkerRunners } from "queuert/testing";
-import { it as baseIt, expectTypeOf, vi } from "vitest";
+import { expectTypeOf, it, onTestFinished, vi } from "vitest";
 
 import { createSqliteStateAdapter } from "../state-adapter/state-adapter.sqlite.ts";
 import { createBetterSqlite3Provider } from "../state-provider/state-provider.better-sqlite3.ts";
-import { extendWithStateSqlite } from "../testing.ts";
 
-const it = extendWithStateSqlite(baseIt);
-
-it("infers custom ID types through the full stack", async ({ db }) => {
+it("infers custom ID types through the full stack", async () => {
+  const db = new Database(":memory:");
+  onTestFinished(() => {
+    db.close();
+  });
   const lock = createAsyncRwLock();
   const stateProvider = createBetterSqlite3Provider({ db, lock });
   const stateAdapter = createSqliteStateAdapter({

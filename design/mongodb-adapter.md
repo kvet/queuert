@@ -4,7 +4,7 @@ Add `@queuert/mongodb`: a state adapter and a notify adapter for MongoDB replica
 
 ## Goals
 
-- Pass `stateAdapterConformanceCases` and the shared processing suites, with the divergences listed under [Contract divergences](#contract-divergences) and no others.
+- Pass `stateAdapterConformanceCases` and `stateAdapterEndToEndConformanceCases`, with the divergences listed under [Contract divergences](#contract-divergences) and no others.
 - Join the user's transaction from the official `mongodb` driver, Mongoose and MikroORM.
 - No change to the client, worker or processor API, and no state adapter contract change required to ship.
 
@@ -152,7 +152,7 @@ The docs say: use `withMongoTransaction` around every transaction that calls Que
 
 ### Savepoints
 
-MongoDB has none. Core never issues database savepoints (`txHooks.withSavepoint` only snapshots hook state), so nothing in the adapter needs them. The test fixture leaves `withSavepoint` undefined, and the savepoint cases in `process.test-suite.ts` skip, as on SQLite.
+MongoDB has none. Core never issues database savepoints (`txHooks.withSavepoint` only snapshots hook state), so nothing in the adapter needs them. The test fixture leaves `withSavepoint` undefined, so its specs do not run `endToEndSavepointGroups`.
 
 ## Data model
 
@@ -318,7 +318,7 @@ Replication latency (`w: majority` across three nodes), failover and multi-node 
 ## Tests
 
 - `packages-internal/testcontainers/src/mongodb.ts`: a reusable `mongo:8.0` container started as a single-node replica set, a database per test file, leak detection, like `postgres.ts`.
-- Conformance and the shared suites through `extendWithStateMongodb`, the `{noop,in-process,mongodb}` × `{data,processing}` matrix, the variance specs (`collectionPrefix`, limits, custom ids), options validation, `fastSeedAllStates` and its equivalence spec.
+- Conformance and the end-to-end cases (`endToEndBaseGroups` and the capability groups the adapter supports) under noop and in-process notify, and `endToEndNotifyGroups` under in-process notify only, since a noop notify adapter delivers no notifications; the variance specs (`collectionPrefix`, limits, custom ids), options validation, `fastSeedAllStates` and its equivalence spec.
 - Migration specs: concurrent `migrateToLatest`, a migration killed mid-way, lease takeover, standalone detection.
 - Isolation: each invariant in the [table](#rule-every-invariant-is-a-write-write-conflict-on-a-shared-document) raced from two sessions in both commit orders ends correct; `blockersRemaining` equals its recomputed count after the blocker cases; a no-op lock write is rejected by a unit test on the `$inc`.
 - Retries: each worker transaction rerun after an injected 112 produces the same state and announces once; `withMongoTransaction` rolls back the hooks of a failed try and flushes once; the `session.withTransaction` test above, with and without `retryBoundary`.
@@ -335,7 +335,7 @@ Replication latency (`w: majority` across three nodes), failover and multi-node 
 ## Plan
 
 1. Testcontainers, package skeleton, provider, migrator and `001_initial`; the state adapter's read methods and `createJobs`; resolve the lock-wait conformance question.
-2. Writes, blockers, claims, workers; full conformance and suites.
+2. Writes, blockers, claims, workers; full conformance and end-to-end cases.
 3. `withMongoTransaction`, the notify adapter, examples, docs.
 4. Query-performance benchmark and the three-node throughput run; decide whether the autocommit claim and its orphan sweep are worth a follow-up.
 

@@ -1,7 +1,24 @@
-import { sleep } from "@queuert/helpers";
+// oxlint-disable no-empty-pattern -- vitest fixtures must destructure their context
+import { SpanKind, SpanStatusCode } from "@opentelemetry/api";
+import {
+  AggregationTemporality,
+  DataPointType,
+  InMemoryMetricExporter,
+  MeterProvider,
+  PeriodicExportingMetricReader,
+} from "@opentelemetry/sdk-metrics";
+import {
+  InMemorySpanExporter,
+  SimpleSpanProcessor,
+  TracerProvider,
+} from "@opentelemetry/sdk-trace";
+import { sleep, withWorkerRunners } from "@queuert/helpers";
 import {
   JobAlreadyCompletedError,
+  type Log,
   type NotifyAdapter,
+  type StateAdapter,
+  type TxHooks,
   createClient,
   createWorkerRunner,
   createProcessors,
@@ -9,17 +26,306 @@ import {
   withTxHooks,
 } from "queuert";
 import {
-  extendWithCommon,
-  extendWithNotifyInProcess,
-  extendWithStateInProcess,
-} from "queuert/testing";
-import { it as baseIt, describe, expect, expectTypeOf } from "vitest";
+  createInProcessNotifyAdapter,
+  createInProcessStateAdapter,
+} from "queuert/conformance-internal";
+import { it as baseIt, describe, expect, expectTypeOf, vi } from "vitest";
 
-import { extendWithObservabilityOtel } from "./observability-adapter.otel.spec-helper.ts";
+import { createOtelObservabilityAdapter } from "../observability-adapter/observability-adapter.otel.ts";
 
-const it = extendWithObservabilityOtel(
-  extendWithNotifyInProcess(extendWithCommon(extendWithStateInProcess(baseIt))),
-);
+// Map method names to OTEL metric names
+const methodToMetricName: Record<string, string> = {
+  workerStarted: "queuert.worker.started",
+  workerError: "queuert.worker.error",
+  workerLeaseLost: "queuert.worker.lease_lost",
+  workerStopped: "queuert.worker.stopped",
+  jobCreated: "queuert.job.created",
+  jobAttemptStarted: "queuert.job.attempt.started",
+  jobAttemptLost: "queuert.job.attempt.lost",
+  jobAttemptFailed: "queuert.job.attempt.failed",
+  jobAttemptCompleted: "queuert.job.attempt.completed",
+  jobCompleted: "queuert.job.completed",
+  jobAttemptReclaimed: "queuert.job.attempt.reclaimed",
+  chainCreated: "queuert.chain.created",
+  chainCompleted: "queuert.chain.completed",
+  chainDeleted: "queuert.chain.deleted",
+  jobRescheduled: "queuert.job.rescheduled",
+  jobBlocked: "queuert.job.blocked",
+  jobUnblocked: "queuert.job.unblocked",
+  notifyAdapterError: "queuert.notify_adapter.error",
+  stateAdapterError: "queuert.state_adapter.error",
+  // histograms
+  chainDuration: "queuert.chain.duration",
+  jobDuration: "queuert.job.duration",
+  jobAttemptDuration: "queuert.job.attempt.duration",
+  // gauges
+  jobTypeIdleChange: "queuert.job_type.idle",
+  jobTypeProcessingChange: "queuert.job_type.processing",
+};
+
+const spanKindMap: Record<string, SpanKind> = {
+  PRODUCER: SpanKind.PRODUCER,
+  CONSUMER: SpanKind.CONSUMER,
+  INTERNAL: SpanKind.INTERNAL,
+};
+
+const spanStatusMap: Record<string, SpanStatusCode> = {
+  UNSET: SpanStatusCode.UNSET,
+  OK: SpanStatusCode.OK,
+  ERROR: SpanStatusCode.ERROR,
+};
+
+// Metric attributes must have bounded values; IDs (job, chain, worker) belong on spans only
+const allowedMetricAttributes = new Set([
+  "queuert.job.type",
+  "queuert.chain.type",
+  "queuert.job.continued",
+  "queuert.adapter.operation",
+]);
+
+const expectBoundedMetricAttributes = (
+  lastExport: ReturnType<InMemoryMetricExporter["getMetrics"]>[number] | undefined,
+): void => {
+  const unexpected = new Set<string>();
+  for (const scope of lastExport?.scopeMetrics ?? []) {
+    for (const m of scope.metrics) {
+      for (const p of m.dataPoints) {
+        for (const key of Object.keys(p.attributes)) {
+          if (!allowedMetricAttributes.has(key)) unexpected.add(`${m.descriptor.name}: ${key}`);
+        }
+      }
+    }
+  }
+  expect([...unexpected]).toEqual([]);
+};
+
+const it = baseIt
+  .extend(
+    "stateAdapter",
+    async () =>
+      createInProcessStateAdapter() as unknown as StateAdapter<{ $test: true }, string, string>,
+  )
+  .extend("notifyAdapter", async (): Promise<NotifyAdapter> => createInProcessNotifyAdapter())
+  .extend(
+    "withTransaction",
+    async ({ stateAdapter }) =>
+      async <T>(cb: (txCtx: { $test: true }, txHooks: TxHooks) => Promise<T>): Promise<T> =>
+        withTxHooks(async (txHooks) =>
+          stateAdapter.withTransaction(txHooks.retryBoundary(async (txCtx) => cb(txCtx, txHooks))),
+        ),
+  )
+  .extend("withWorkerRunners", async () => withWorkerRunners)
+  .extend("log", async () => vi.fn<Log>())
+  .extend(
+    "_otelExporter",
+    async () => new InMemoryMetricExporter(AggregationTemporality.CUMULATIVE),
+  )
+  .extend(
+    "_otelReader",
+    async ({ _otelExporter }) =>
+      new PeriodicExportingMetricReader({ exporter: _otelExporter, exportIntervalMillis: 50 }),
+  )
+  .extend("_otelProvider", async ({ _otelReader }, { onCleanup }) => {
+    const provider = new MeterProvider({ readers: [_otelReader] });
+    onCleanup(async () => provider.shutdown());
+    return provider;
+  })
+  .extend("_otelTraceExporter", async () => new InMemorySpanExporter())
+  .extend("_otelTracerProvider", async ({ _otelTraceExporter }, { onCleanup }) => {
+    const provider = new TracerProvider({
+      spanProcessors: [new SimpleSpanProcessor({ exporter: _otelTraceExporter })],
+    });
+    onCleanup(async () => provider.shutdown());
+    return provider;
+  })
+  .extend("observabilityAdapter", async ({ _otelProvider, _otelTracerProvider }) =>
+    createOtelObservabilityAdapter({
+      meter: _otelProvider.getMeter("queuert-test"),
+      tracer: _otelTracerProvider.getTracer("queuert-test"),
+    }),
+  )
+  .extend(
+    "expectMetrics",
+    async ({ _otelReader, _otelExporter }) =>
+      async (expected: { method: string; args?: Record<string, unknown> }[]): Promise<void> => {
+        await _otelReader.forceFlush();
+        const lastExport = _otelExporter.getMetrics().at(-1);
+        expectBoundedMetricAttributes(lastExport);
+
+        // Collect actual metric counts (excluding gauges)
+        const gaugeNames = new Set([
+          methodToMetricName.jobTypeIdleChange,
+          methodToMetricName.jobTypeProcessingChange,
+        ]);
+        const actualCounts = new Map<string, number>();
+        for (const scope of lastExport?.scopeMetrics ?? []) {
+          for (const m of scope.metrics) {
+            if (m.dataPointType === DataPointType.SUM && !gaugeNames.has(m.descriptor.name)) {
+              let count = 0;
+              for (const p of m.dataPoints) count += p.value;
+              actualCounts.set(m.descriptor.name, count);
+            }
+          }
+        }
+
+        // Count expected metrics
+        const expectedCounts = new Map<string, number>();
+        for (const { method } of expected) {
+          const name = methodToMetricName[method] ?? method;
+          expectedCounts.set(name, (expectedCounts.get(name) ?? 0) + 1);
+        }
+
+        // Verify counts match
+        expect(Object.fromEntries(actualCounts)).toEqual(Object.fromEntries(expectedCounts));
+
+        // Note: We only verify counts here, not attribute details.
+        // The test expectations use ObservabilityAdapter method args which don't map 1:1
+        // to OTEL attributes (e.g., typeName -> chainTypeName)).
+        // Attribute verification should be done via unit tests on the adapter itself.
+      },
+  )
+  .extend(
+    "expectHistograms",
+    async ({ _otelReader, _otelExporter }) =>
+      async (expected: { method: string; args?: Record<string, unknown> }[]): Promise<void> => {
+        await _otelReader.forceFlush();
+        const lastExport = _otelExporter.getMetrics().at(-1);
+        expectBoundedMetricAttributes(lastExport);
+
+        // Collect actual histogram counts
+        const actualCounts = new Map<string, number>();
+        for (const scope of lastExport?.scopeMetrics ?? []) {
+          for (const m of scope.metrics) {
+            if (m.dataPointType === DataPointType.HISTOGRAM) {
+              let count = 0;
+              for (const p of m.dataPoints) count += p.value.count;
+              actualCounts.set(m.descriptor.name, count);
+            }
+          }
+        }
+
+        // Count expected histograms
+        const expectedCounts = new Map<string, number>();
+        for (const { method } of expected) {
+          const name = methodToMetricName[method] ?? method;
+          expectedCounts.set(name, (expectedCounts.get(name) ?? 0) + 1);
+        }
+
+        // Verify counts match
+        expect(Object.fromEntries(actualCounts)).toEqual(Object.fromEntries(expectedCounts));
+      },
+  )
+  .extend("expectGauges", async ({ _otelReader, _otelExporter }) => {
+    // Track cumulative expected values per metric (keyed by "metricName:typeName")
+    const cumulativeExpected = new Map<string, number>();
+
+    return async (expected: {
+      jobTypeIdleChange?: { delta: number; typeName?: string; workerId?: string }[];
+      jobTypeProcessingChange?: { delta: number; typeName?: string; workerId?: string }[];
+    }): Promise<void> => {
+      await _otelReader.forceFlush();
+
+      // Sum expected deltas into cumulative values (grouped by typeName)
+      for (const [method, calls] of Object.entries(expected) as [
+        "jobTypeIdleChange" | "jobTypeProcessingChange",
+        { delta: number; typeName?: string; workerId?: string }[] | undefined,
+      ][]) {
+        if (!calls) continue;
+        const metricName = methodToMetricName[method];
+        for (const { delta, typeName } of calls) {
+          const key = `${metricName}:${typeName ?? ""}`;
+          cumulativeExpected.set(key, (cumulativeExpected.get(key) ?? 0) + delta);
+        }
+      }
+
+      // Collect actual cumulative values from OTEL
+      const lastExport = _otelExporter.getMetrics().at(-1);
+      expectBoundedMetricAttributes(lastExport);
+      const actualCumulative = new Map<string, number>();
+      const gaugeNames = new Set([
+        methodToMetricName.jobTypeIdleChange,
+        methodToMetricName.jobTypeProcessingChange,
+      ]);
+
+      for (const scope of lastExport?.scopeMetrics ?? []) {
+        for (const m of scope.metrics) {
+          if (m.dataPointType === DataPointType.SUM && gaugeNames.has(m.descriptor.name)) {
+            for (const p of m.dataPoints) {
+              const attrs = p.attributes as Record<string, string>;
+              const key = `${m.descriptor.name}:${attrs["queuert.job.type"] ?? ""}`;
+              actualCumulative.set(key, (actualCumulative.get(key) ?? 0) + p.value);
+            }
+          }
+        }
+      }
+
+      // Verify cumulative values match
+      expect(Object.fromEntries(actualCumulative)).toEqual(Object.fromEntries(cumulativeExpected));
+    };
+  })
+  .extend(
+    "expectSpans",
+    async ({ _otelTraceExporter }) =>
+      async (
+        expected: {
+          name: string;
+          kind?: "PRODUCER" | "CONSUMER" | "INTERNAL";
+          attributes?: Record<string, unknown>;
+          status?: "UNSET" | "OK" | "ERROR";
+          parentName?: string;
+          links?: number;
+          events?: { name: string; attributes?: Record<string, unknown> }[];
+        }[],
+      ): Promise<void> => {
+        const spans = _otelTraceExporter.getFinishedSpans();
+
+        // Build spanId -> name map for parent lookups
+        const spanIdToName = new Map<string, string>();
+        for (const span of spans) {
+          spanIdToName.set(span.spanContext().spanId, span.name);
+        }
+
+        const actual = spans.map((span) => ({
+          name: span.name,
+          kind: span.kind,
+          attributes: span.attributes,
+          status: span.status.code,
+          parentName: span.parentSpanContext?.spanId
+            ? (spanIdToName.get(span.parentSpanContext.spanId) ?? null)
+            : undefined,
+          links: span.links.length,
+          events: span.events.map((e) => ({ name: e.name, attributes: e.attributes })),
+        }));
+
+        expect(actual).toEqual(
+          expected.map((entry) => {
+            const matcher: Record<string, unknown> = { name: entry.name };
+            if (entry.kind !== undefined) matcher.kind = spanKindMap[entry.kind];
+            if (entry.attributes) matcher.attributes = expect.objectContaining(entry.attributes);
+            if (entry.status !== undefined) matcher.status = spanStatusMap[entry.status];
+            if (entry.parentName !== undefined) matcher.parentName = entry.parentName;
+            if (entry.links !== undefined) matcher.links = entry.links;
+            if (entry.events !== undefined)
+              matcher.events = entry.events.map((e) => {
+                const eventMatcher: Record<string, unknown> = { name: e.name };
+                if (e.attributes) eventMatcher.attributes = expect.objectContaining(e.attributes);
+                return expect.objectContaining(eventMatcher);
+              });
+            return expect.objectContaining(matcher);
+          }),
+        );
+      },
+  )
+  .extend("getMetricNames", async ({ _otelReader, _otelExporter }) => async () => {
+    await _otelReader.forceFlush();
+    return new Set(
+      _otelExporter
+        .getMetrics()
+        .at(-1)
+        ?.scopeMetrics.flatMap((s) => s.metrics)
+        .map((m) => m.descriptor.name) ?? [],
+    );
+  });
 
 const completionOptions = {
   pollIntervalMs: 100,

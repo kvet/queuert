@@ -4,7 +4,7 @@ import { describe, expect, test } from "vitest";
 import { createClient } from "./client.ts";
 import { createProcessors } from "./job-type-processors/create-job-type-processors.ts";
 import { defineJobTypes } from "./job-types/define-job-types.ts";
-import { noopNotifyAdapter } from "./notify-adapter/notify-adapter.noop.spec-helper.ts";
+import { noopNotifyAdapter } from "./notify-adapter/notify-adapter.noop.ts";
 import { createInProcessStateAdapter } from "./state-adapter/state-adapter.in-process.ts";
 import { withTxHooks } from "./tx-hooks/tx-hooks.ts";
 import { createWorkerRunner } from "./worker-runner.ts";

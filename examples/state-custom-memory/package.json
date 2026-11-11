@@ -1,0 +1,22 @@
+{
+  "name": "example-state-custom-memory",
+  "version": "0.0.1",
+  "private": true,
+  "description": "An example demonstrating a custom in-memory StateAdapter validated with the state conformance cases.",
+  "license": "MIT",
+  "author": "kvet",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/kvet/queuert.git"
+  },
+  "type": "module",
+  "scripts": {
+    "start": "node src/index.ts",
+    "test": "vitest --run",
+    "typecheck": "tsc --noEmit"
+  },
+  "devDependencies": {
+    "@queuert/tsconfig": "workspace:*",
+    "queuert": "workspace:*"
+  }
+}

@@ -728,6 +728,27 @@ importers:
         specifier: workspace:*
         version: link:../../packages-internal/tsconfig
 
+  examples/notify-custom-memory:
+    devDependencies:
+      '@queuert/sqlite':
+        specifier: workspace:*
+        version: link:../../packages/sqlite
+      '@queuert/tsconfig':
+        specifier: workspace:*
+        version: link:../../packages-internal/tsconfig
+      '@types/better-sqlite3':
+        specifier: 9.6.0
+        version: 9.6.0
+      better-sqlite3:
+        specifier: 13.0.3
+        version: 13.0.3
+      example-state-sqlite-better-sqlite3:
+        specifier: workspace:*
+        version: link:../state-sqlite-better-sqlite3
+      queuert:
+        specifier: workspace:*
+        version: link:../../packages/core
+
   examples/notify-nats-transport-node:
     devDependencies:
       '@nats-io/transport-node':
@@ -1440,6 +1461,15 @@ importers:
       '@queuert/tsconfig':
         specifier: workspace:*
         version: link:../../packages-internal/tsconfig
+
+  examples/state-custom-memory:
+    devDependencies:
+      '@queuert/tsconfig':
+        specifier: workspace:*
+        version: link:../../packages-internal/tsconfig
+      queuert:
+        specifier: workspace:*
+        version: link:../../packages/core
 
   examples/state-postgres-bun-sql:
     devDependencies:

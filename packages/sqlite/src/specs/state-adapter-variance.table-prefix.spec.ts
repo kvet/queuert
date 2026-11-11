@@ -1,19 +1,25 @@
-import {
-  stateAdapterBaseGroups,
-  stateAdapterSchemaFenceGroups,
-} from "queuert/conformance-internal";
-import { conformanceTestSuite } from "queuert/testing";
+import { conformanceTestSuite } from "@queuert/helpers/conformance";
 import { it as baseIt, describe, expect } from "vitest";
 
-import { extendWithVarianceStateSqlite } from "./state-adapter-variance.spec-helper.ts";
+import { sqliteStateAdapterConformanceGroups } from "../conformance/state-provider-conformance.ts";
+import {
+  varianceConformance,
+  varianceDb,
+  varianceTableNames,
+} from "./state-adapter-variance.spec-helper.ts";
 
 const tablePrefix = "myapp_queue_";
 
-const it = extendWithVarianceStateSqlite(baseIt, {
+const options = {
   tablePrefix,
-});
+};
 
-it("index");
+const it = baseIt
+  .extend("db", { scope: "file" }, varianceDb)
+  .extend("conformance", { scope: "file" }, varianceConformance(options))
+  .extend("tableNames", { scope: "file" }, varianceTableNames(options));
+
+baseIt("index");
 
 describe("SQLite State Adapter Variance - Custom Table Prefix", () => {
   it("creates tables with correct prefix", ({ tableNames }) => {
@@ -24,6 +30,6 @@ describe("SQLite State Adapter Variance - Custom Table Prefix", () => {
 
   conformanceTestSuite({
     it,
-    groups: [...stateAdapterBaseGroups, ...stateAdapterSchemaFenceGroups],
+    groups: sqliteStateAdapterConformanceGroups,
   });
 });

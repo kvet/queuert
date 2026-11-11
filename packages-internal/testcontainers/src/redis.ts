@@ -1,5 +1,4 @@
 import { RedisContainer, type StartedRedisContainer } from "@testcontainers/redis";
-import { type TestAPI, beforeAll } from "vitest";
 
 import { withContainerLock } from "./with-container-lock.ts";
 
@@ -38,35 +37,4 @@ export const acquireRedis = async (image: string): Promise<AcquiredRedis> => {
     connectionUrl: container.getConnectionUrl(),
     [Symbol.asyncDispose]: async () => {},
   };
-};
-
-export const extendWithRedis = <T>(
-  api: TestAPI<T>,
-  _reuseId: string,
-): TestAPI<
-  T & {
-    redisConnectionUrl: string;
-  }
-> => {
-  let container: StartedRedisContainer;
-
-  beforeAll(async () => {
-    container = await startContainer("redis:6");
-  }, 60_000);
-
-  return api.extend<{
-    redisConnectionUrl: string;
-  }>({
-    redisConnectionUrl: [
-      // eslint-disable-next-line no-empty-pattern
-      async ({}, use) => {
-        await use(container.getConnectionUrl());
-      },
-      { scope: "worker" },
-    ],
-  }) as unknown as TestAPI<
-    T & {
-      redisConnectionUrl: string;
-    }
-  >;
 };

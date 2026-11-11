@@ -1,8 +1,8 @@
 import { describe, expect, test } from "vitest";
 
+import { createSpyNotifyAdapter } from "../conformance.end-to-end/support/spy-notify-adapter.ts";
 import { type TxHooks, createTxHooks } from "../tx-hooks/tx-hooks.ts";
-import { noopNotifyAdapter } from "./notify-adapter.noop.spec-helper.ts";
-import { createSpyNotifyAdapter } from "./notify-adapter.spy.spec-helper.ts";
+import { noopNotifyAdapter } from "./notify-adapter.noop.ts";
 import type { NotifyAdapter } from "./notify-adapter.ts";
 import { type NotifyHelper, createNotifyHelper } from "./notify-helper.ts";
 

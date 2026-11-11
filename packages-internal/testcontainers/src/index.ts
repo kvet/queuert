@@ -1,15 +1,9 @@
-export {
-  acquireNats,
-  type AcquiredNats,
-  extendWithNats,
-  type NatsConnectionOptions,
-} from "./nats.ts";
-export { acquirePostgres, type AcquiredPostgres, extendWithPostgres } from "./postgres.ts";
-export { acquireRedis, type AcquiredRedis, extendWithRedis } from "./redis.ts";
+export { acquireNats, type AcquiredNats, type NatsConnectionOptions } from "./nats.ts";
+export { acquirePostgres, type AcquiredPostgres } from "./postgres.ts";
+export { acquireRedis, type AcquiredRedis } from "./redis.ts";
 export {
   acquireRedisCluster,
   type AcquiredRedisCluster,
-  extendWithRedisCluster,
   type RedisClusterConnection,
 } from "./redis-cluster.ts";
 

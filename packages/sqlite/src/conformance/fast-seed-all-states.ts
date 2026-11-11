@@ -1,7 +1,7 @@
 import { randomUUID } from "node:crypto";
 
 import type { BaseTxContext } from "queuert";
-import { type SeedSentinels, seedConfig } from "queuert/testing";
+import { type SeedSentinels, seedConfig } from "queuert/conformance-internal";
 
 import type { SqliteStateProvider } from "../state-provider/state-provider.sqlite.ts";
 

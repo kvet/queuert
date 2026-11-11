@@ -1,12 +1,12 @@
 # Short term
 
 - [REF] txHooks provider
+- [TASK] `Symbol.asyncDispose` on the worker runner — `start()` returns a bare stop function, so the runner can't join `await using` / `AsyncDisposableStack` teardown alongside the adapters (which already implement `Symbol.asyncDispose`). Make the returned stop handle disposable (e.g. a callable with `[Symbol.asyncDispose]`), then consider converting example teardown to `await using`.
 - [EPIC] SQLite production-readiness
   - [REF] sync sqlite api
   - [TASK] IPC notify adapter in a new `@queuert/ipc` package — sync-ready, socket per process, one registry file per process in a shared `directory`. See `design/ipc-notify.md`.
   - [TASK] No multi-worker example
   - [TASK] Get rid of `createAsyncRwLock()` in sync apis
-- [REF] Decouple conformance tests
 
 # Medium term
 

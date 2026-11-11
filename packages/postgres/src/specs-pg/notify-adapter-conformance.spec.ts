@@ -1,65 +1,39 @@
-import { extendWithPostgres } from "@queuert/testcontainers";
+// oxlint-disable no-empty-pattern -- vitest fixtures must destructure their context
+import { conformanceTestSuite } from "@queuert/helpers/conformance";
+import { detectResourceLeaks } from "@queuert/helpers/testing";
+import { TESTCONTAINERS_RESOURCE_TYPES, acquirePostgres } from "@queuert/testcontainers";
 import { Pool } from "pg";
-import type { NotifyAdapterConformanceContext } from "queuert/conformance";
-import { notifyAdapterBaseGroups } from "queuert/conformance-internal";
-import { type ConformanceFixtures, conformanceTestSuite } from "queuert/testing";
+import { notifyAdapterEndToEndGroups } from "queuert/conformance-internal";
 import { it as baseIt, describe } from "vitest";
 
 import {
   createPgNotifyProviderConformanceContext,
   pgNotifyProviderConformanceGroups,
 } from "../conformance/notify-provider-conformance.ts";
-import { createPgNotifyAdapter } from "../notify-adapter/notify-adapter.pg.ts";
 import { createPgPoolNotifyProvider } from "../notify-provider/notify-provider.pg-pool.ts";
 
-const it = extendWithPostgres(baseIt, import.meta.url);
+const pg = await acquirePostgres("postgres:14", import.meta.url);
 
-const providerIt = it.extend<ConformanceFixtures<NotifyAdapterConformanceContext>>({
-  conformance: [
-    async ({ postgresConnectionString }, use) => {
-      const pool = new Pool({ connectionString: postgresConnectionString, idleTimeoutMillis: 0 });
-      await use(
-        createPgNotifyProviderConformanceContext({
-          createNotifyProvider: async () => createPgPoolNotifyProvider({ pool }),
-        }),
-      );
-      await pool.end();
-    },
-    { scope: "file" },
-  ],
-});
-
-const customPrefixIt = it.extend<ConformanceFixtures<NotifyAdapterConformanceContext>>({
-  conformance: [
-    async ({ postgresConnectionString }, use) => {
-      const pool = new Pool({ connectionString: postgresConnectionString, idleTimeoutMillis: 0 });
-      await use({
-        // A provider per adapter: closing an adapter closes its provider.
-        createNotifyAdapter: async () =>
-          createPgNotifyAdapter({
-            notifyProvider: createPgPoolNotifyProvider({ pool }),
-            channelPrefix: `myapp_notifications_${crypto.randomUUID().slice(0, 8)}`,
-          }),
-      });
-      await pool.end();
-    },
-    { scope: "file" },
-  ],
-});
+const it = baseIt
+  .extend("conformance", { scope: "file" }, async ({}, { onCleanup }) => {
+    const pool = new Pool({ connectionString: pg.connectionString, idleTimeoutMillis: 0 });
+    onCleanup(async () => pool.end());
+    return createPgNotifyProviderConformanceContext({
+      createNotifyProvider: async () => createPgPoolNotifyProvider({ pool }),
+    });
+  })
+  .extend(
+    "resourceLeakCheck",
+    { auto: true },
+    detectResourceLeaks({ additionalAllowedTypes: TESTCONTAINERS_RESOURCE_TYPES }),
+  );
 
 // NOTE: hack for vitest plugin
-it("index");
+baseIt("index");
 
 describe("PostgreSQL Notify Provider Conformance", () => {
   conformanceTestSuite({
-    it: providerIt,
-    groups: pgNotifyProviderConformanceGroups,
-  });
-});
-
-describe("PostgreSQL Notify Adapter Conformance - Custom Channel Prefix", () => {
-  conformanceTestSuite({
-    it: customPrefixIt,
-    groups: notifyAdapterBaseGroups,
+    it,
+    groups: [...pgNotifyProviderConformanceGroups, ...notifyAdapterEndToEndGroups],
   });
 });

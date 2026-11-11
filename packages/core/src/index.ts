@@ -59,6 +59,18 @@ export {
   type BaseTxContext,
   type StateAdapter,
   type StateAdapterConfig,
+  type StateBlockedJob,
+  type StateChain,
+  type StateChainInfo,
+  type StateChainStatus,
+  type StateCount,
+  type StateDependentJob,
+  type StateJob,
+  type StateJobBlockerInfo,
+  type StateJobInfo,
+  type StateJobStatus,
+  type StateWorkerCounts,
+  type StateWorkerInfo,
 } from "./state-adapter/state-adapter.ts";
 export {
   createTxHooks,

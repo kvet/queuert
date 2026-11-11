@@ -1,6 +1,8 @@
 import { type UUID, randomUUID } from "node:crypto";
 
-import { TESTCONTAINERS_RESOURCE_TYPES, extendWithPostgres } from "@queuert/testcontainers";
+import { withWorkerRunners } from "@queuert/helpers";
+import { detectResourceLeaks } from "@queuert/helpers/testing";
+import { TESTCONTAINERS_RESOURCE_TYPES, acquirePostgres } from "@queuert/testcontainers";
 import { Pool, type PoolClient } from "pg";
 import {
   createClient,
@@ -9,7 +11,6 @@ import {
   defineJobTypes,
   withTxHooks,
 } from "queuert";
-import { extendWithResourceLeakDetection, withWorkerRunners } from "queuert/testing";
 import { it as baseIt, expectTypeOf, vi } from "vitest";
 
 import { createPgNotifyAdapter } from "../notify-adapter/notify-adapter.pg.ts";
@@ -17,17 +18,18 @@ import { createPgPoolNotifyProvider } from "../notify-provider/notify-provider.p
 import { createPgStateAdapter } from "../state-adapter/state-adapter.pg.ts";
 import { createPgPoolProvider } from "../state-provider/state-provider.pg-pool.ts";
 
-const it = extendWithResourceLeakDetection(
-  extendWithPostgres(baseIt, import.meta.url, { expectedTestContexts: 1 }),
-  {
-    additionalAllowedTypes: TESTCONTAINERS_RESOURCE_TYPES,
-  },
+const pg = await acquirePostgres("postgres:14", import.meta.url);
+
+const it = baseIt.extend(
+  "resourceLeakCheck",
+  { auto: true },
+  detectResourceLeaks({ additionalAllowedTypes: TESTCONTAINERS_RESOURCE_TYPES }),
 );
 
 it("index");
 
-it("infers custom ID types through the full stack", async ({ postgresConnectionString }) => {
-  const pool = new Pool({ connectionString: postgresConnectionString, idleTimeoutMillis: 0 });
+it("infers custom ID types through the full stack", async () => {
+  const pool = new Pool({ connectionString: pg.connectionString, idleTimeoutMillis: 0 });
 
   try {
     const stateProvider = createPgPoolProvider({ pool });

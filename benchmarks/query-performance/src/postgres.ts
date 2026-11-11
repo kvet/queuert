@@ -2,11 +2,14 @@ import { mkdirSync, rmSync, writeFileSync } from "node:fs";
 import { dirname } from "node:path";
 
 import { createPgStateAdapter } from "@queuert/postgres";
-import { fastSeedAllStates } from "@queuert/postgres/testing";
+import { fastSeedAllStates } from "@queuert/postgres/conformance-internal";
 import { PostgreSqlContainer } from "@testcontainers/postgresql";
 import { type PgPoolContext, createPgPoolStateProvider } from "example-state-postgres-pg/provider";
 import { Pool } from "pg";
-import { observabilityCoverageGroups, operationalCoverageGroups } from "queuert/testing";
+import {
+  observabilityCoverageGroups,
+  operationalCoverageGroups,
+} from "queuert/conformance-internal";
 
 const ITERATIONS = 10;
 const EXPLANATIONS_DIR = new URL("../explanations/postgres", import.meta.url).pathname;

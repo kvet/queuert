@@ -27,7 +27,6 @@
   },
   "files": [
     "dist",
-    "!dist/testing*",
     "package.json",
     "README.md"
   ],
@@ -38,7 +37,6 @@
     "./conformance": "./src/conformance.ts",
     "./conformance-internal": "./src/conformance-internal.ts",
     "./internal": "./src/internal.ts",
-    "./testing": "./src/testing.ts",
     "./package.json": "./package.json"
   },
   "publishConfig": {
@@ -47,7 +45,6 @@
       "./conformance": "./dist/conformance.mjs",
       "./conformance-internal": "./dist/conformance-internal.mjs",
       "./internal": "./dist/internal.mjs",
-      "./testing": "./dist/testing.mjs",
       "./package.json": "./package.json"
     }
   },

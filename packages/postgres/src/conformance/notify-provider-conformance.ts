@@ -40,8 +40,8 @@ export const createPgNotifyProviderConformanceContext = ({
 });
 
 /**
- * Every notify adapter case, run through `createPgNotifyAdapter` over a provider. Run them one per
- * test in your own test file against a context from {@link
+ * Every notify adapter contract case, run through `createPgNotifyAdapter` over a provider. Run them
+ * one per test in your own test file against a context from {@link
  * createPgNotifyProviderConformanceContext}. Works with any test runner.
  *
  * @example

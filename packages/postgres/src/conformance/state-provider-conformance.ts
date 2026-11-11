@@ -1,3 +1,5 @@
+import assert from "node:assert/strict";
+
 import type { ConformanceTestCase } from "queuert/conformance";
 import {
   type ConformanceGroup,
@@ -65,14 +67,14 @@ export const classifyErrorGroup: ConformanceGroup<PgStateProviderConformanceCont
   cases: [
     {
       name: "classifies a missing table as undefined_table, naming it",
-      run: async ({ createStateProvider }, expect) => {
+      run: async ({ createStateProvider }) => {
         const stateProvider = await createStateProvider();
 
         try {
           const error = await captureError(async () =>
             executeSql(stateProvider, `SELECT 1 FROM ${MISSING_TABLE}`),
           );
-          expect(stateProvider.classifyError({ error })).toEqual({
+          assert.deepEqual(stateProvider.classifyError({ error }), {
             kind: "undefined_table",
             tableName: MISSING_TABLE,
           });
@@ -83,20 +85,20 @@ export const classifyErrorGroup: ConformanceGroup<PgStateProviderConformanceCont
     },
     {
       name: "classifies a missing table inside a transaction as undefined_table, naming it",
-      run: async ({ createStateProvider }, expect) => {
+      run: async ({ createStateProvider }) => {
         const stateProvider = await createStateProvider();
 
         try {
           let error: unknown;
-          await expect(
+          await assert.rejects(
             stateProvider.withTransaction(async (txCtx) => {
               error = await captureError(async () =>
                 executeSql(stateProvider, `SELECT 1 FROM ${MISSING_TABLE}`, txCtx),
               );
               throw error;
             }),
-          ).rejects.toThrow();
-          expect(stateProvider.classifyError({ error })).toEqual({
+          );
+          assert.deepEqual(stateProvider.classifyError({ error }), {
             kind: "undefined_table",
             tableName: MISSING_TABLE,
           });
@@ -107,14 +109,14 @@ export const classifyErrorGroup: ConformanceGroup<PgStateProviderConformanceCont
     },
     {
       name: "returns undefined for an error other than a missing table",
-      run: async ({ createStateProvider }, expect) => {
+      run: async ({ createStateProvider }) => {
         const stateProvider = await createStateProvider();
 
         try {
           const error = await captureError(async () =>
             executeSql(stateProvider, "SELECT missing_column FROM public.queuert_job"),
           );
-          expect(stateProvider.classifyError({ error })).toBeUndefined();
+          assert.equal(stateProvider.classifyError({ error }), undefined);
         } finally {
           await stateProvider.close?.();
         }
@@ -122,12 +124,12 @@ export const classifyErrorGroup: ConformanceGroup<PgStateProviderConformanceCont
     },
     {
       name: "returns undefined for a value that is not a driver error",
-      run: async ({ createStateProvider }, expect) => {
+      run: async ({ createStateProvider }) => {
         const stateProvider = await createStateProvider();
 
         try {
-          expect(stateProvider.classifyError({ error: new Error("unrelated") })).toBeUndefined();
-          expect(stateProvider.classifyError({ error: undefined })).toBeUndefined();
+          assert.equal(stateProvider.classifyError({ error: new Error("unrelated") }), undefined);
+          assert.equal(stateProvider.classifyError({ error: undefined }), undefined);
         } finally {
           await stateProvider.close?.();
         }
@@ -136,18 +138,15 @@ export const classifyErrorGroup: ConformanceGroup<PgStateProviderConformanceCont
   ],
 };
 
-const pgStateProviderBaseGroups: ConformanceGroup<PgStateProviderConformanceContext>[] = [
+export const pgStateAdapterConformanceGroups: ConformanceGroup<SchemaFenceConformanceContext>[] = [
   ...stateAdapterBaseGroups,
   ...stateAdapterSchemaFenceGroups,
-  classifyErrorGroup,
+  ...stateAdapterConcurrentTransactionGroups,
+  ...stateAdapterSchemaFenceConcurrentTransactionGroups,
 ];
 
 export const pgStateProviderConformanceGroups: ConformanceGroup<PgStateProviderConformanceContext>[] =
-  [
-    ...pgStateProviderBaseGroups,
-    ...stateAdapterConcurrentTransactionGroups,
-    ...stateAdapterSchemaFenceConcurrentTransactionGroups,
-  ];
+  [...pgStateAdapterConformanceGroups, classifyErrorGroup];
 
 /**
  * Prepares the context the {@link pgStateProviderConformanceCases} run against: migrates the
@@ -203,9 +202,9 @@ export const createPgStateProviderConformanceContext = async ({
 };
 
 /**
- * Every state adapter case, including those that hold two transactions open at once, run through
- * `createPgStateAdapter` over a provider, plus checks of the provider's `classifyError`. Run them
- * one per test in your own test file against a context from {@link
+ * Every state adapter contract case, including those that hold two transactions open at once, run
+ * through `createPgStateAdapter` over a provider, plus checks of the provider's `classifyError`.
+ * Run them one per test in your own test file against a context from {@link
  * createPgStateProviderConformanceContext}. Works with any test runner.
  *
  * @example

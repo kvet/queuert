@@ -1,69 +1,36 @@
-import { extendWithRedis } from "@queuert/testcontainers";
+// oxlint-disable no-empty-pattern -- vitest fixtures must destructure their context
+import { conformanceTestSuite } from "@queuert/helpers/conformance";
+import { acquireRedis } from "@queuert/testcontainers";
 import { Redis } from "ioredis";
-import type { NotifyAdapterConformanceContext } from "queuert/conformance";
-import { notifyAdapterBaseGroups } from "queuert/conformance-internal";
-import { type ConformanceFixtures, conformanceTestSuite } from "queuert/testing";
+import { notifyAdapterEndToEndGroups } from "queuert/conformance-internal";
 import { it as baseIt, describe } from "vitest";
 
 import {
   createRedisNotifyProviderConformanceContext,
   redisNotifyProviderConformanceGroups,
 } from "../conformance/notify-provider-conformance.ts";
-import { createRedisNotifyAdapter } from "../notify-adapter/notify-adapter.redis.ts";
 import { createIoredisNotifyProvider } from "./notify-provider.ioredis.ts";
 
-const it = extendWithRedis(baseIt, import.meta.url);
+const redis = await acquireRedis("redis:6");
 
-const providerIt = it.extend<ConformanceFixtures<NotifyAdapterConformanceContext>>({
-  conformance: [
-    async ({ redisConnectionUrl }, use) => {
-      const client = new Redis(redisConnectionUrl);
-      const subscribeClient = new Redis(redisConnectionUrl);
-      await use(
-        createRedisNotifyProviderConformanceContext({
-          createNotifyProvider: async () =>
-            createIoredisNotifyProvider({ client, subscribeClient }),
-        }),
-      );
-      await client.quit();
-      await subscribeClient.quit();
-    },
-    { scope: "file" },
-  ],
-});
-
-const customPrefixIt = it.extend<ConformanceFixtures<NotifyAdapterConformanceContext>>({
-  conformance: [
-    async ({ redisConnectionUrl }, use) => {
-      const client = new Redis(redisConnectionUrl);
-      const subscribeClient = new Redis(redisConnectionUrl);
-      await use({
-        createNotifyAdapter: async () =>
-          createRedisNotifyAdapter({
-            notifyProvider: createIoredisNotifyProvider({ client, subscribeClient }),
-            channelPrefix: `myapp:notifications:${Date.now()}:${Math.random().toString(36).slice(2)}`,
-          }),
-      });
-      await client.quit();
-      await subscribeClient.quit();
-    },
-    { scope: "file" },
-  ],
-});
-
-// NOTE: hack for vitest plugin
-it("index");
-
-describe("Redis Notify Provider Conformance (ioredis)", () => {
-  conformanceTestSuite({
-    it: providerIt,
-    groups: redisNotifyProviderConformanceGroups,
+const it = baseIt.extend("conformance", { scope: "file" }, async ({}, { onCleanup }) => {
+  const client = new Redis(redis.connectionUrl);
+  const subscribeClient = new Redis(redis.connectionUrl);
+  onCleanup(async () => {
+    await client.quit();
+    await subscribeClient.quit();
+  });
+  return createRedisNotifyProviderConformanceContext({
+    createNotifyProvider: async () => createIoredisNotifyProvider({ client, subscribeClient }),
   });
 });
 
-describe("Redis Notify Adapter Conformance (ioredis) - Custom Channel Prefix", () => {
+// NOTE: hack for vitest plugin
+baseIt("index");
+
+describe("Redis Notify Provider Conformance (ioredis)", () => {
   conformanceTestSuite({
-    it: customPrefixIt,
-    groups: notifyAdapterBaseGroups,
+    it,
+    groups: [...redisNotifyProviderConformanceGroups, ...notifyAdapterEndToEndGroups],
   });
 });

@@ -28,7 +28,9 @@ const groups: ConformanceGroup<Ctx>[] = [
     cases: [
       {
         name: "fails",
-        run: async (_ctx, expect) => expect.fail("boom"),
+        run: async () => {
+          throw new Error("boom");
+        },
       },
     ],
   },

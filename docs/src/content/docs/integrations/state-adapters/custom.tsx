@@ -1,7 +1,7 @@
 import { A } from "@solidjs/router";
 
+import { ExampleCode } from "../../../../components/ExampleCode.tsx";
 import { FieldList, type FieldItem } from "../../../../components/FieldList.tsx";
-import { Code } from "../../../../components/mdx/Code.tsx";
 
 export const meta = {
   title: "Custom State Adapter",
@@ -21,6 +21,12 @@ const contextFields = (): FieldItem[] => [
     chips: ["required"],
     description:
       "Runs a callback with the root handle, not a transaction, so the suite can check isTransaction rejects it.",
+  },
+  {
+    name: "createNotifyAdapter",
+    chips: ["optional"],
+    description:
+      "Creates the notify adapter every client and worker runner of an end-to-end case shares. Without it, each case gets an in-process notify adapter.",
   },
 ];
 
@@ -46,76 +52,65 @@ const Page = () => (
       <A href="/integrations/state-adapters/#how-adapters-behave">How adapters behave</A>. The TSDoc
       on each member states its contract.
     </p>
+    <p>
+      <A href="/examples/state-adapters/#state-custom-memory">
+        <code>state-custom-memory</code>
+      </A>{" "}
+      is a complete implementation to start from: it keeps every table in plain in-memory maps, runs
+      transactions one at a time on a copy of the state, and passes{" "}
+      <code>stateAdapterConformanceCases</code>.
+    </p>
 
     <h2 id="conformance">Conformance</h2>
     <p>
-      <code>queuert/conformance</code> exports the same cases Queuert uses internally, as two lists
+      <code>queuert/conformance</code> exports the same cases Queuert uses internally, as four lists
       to run against your adapter:
     </p>
     <ul>
       <li>
-        <code>stateAdapterConformanceCases</code> are the cases every state adapter must pass, with
-        transactions run one at a time.
+        <code>stateAdapterConformanceCases</code> check the contract every state adapter must meet,
+        calling the adapter's members directly with transactions run one at a time. They run fast.
       </li>
       <li>
         <code>concurrentStateAdapterConformanceCases</code> hold two transactions open at once:
         blocker races, concurrent deletes, row locks, and reads that must not see uncommitted rows.
-        Run them next to the first when your adapter can run transactions in parallel, such as one
-        over a connection pool.
+      </li>
+      <li>
+        <code>stateAdapterEndToEndConformanceCases</code> check what an application sees end to end:
+        each case builds a client and worker runners over your adapter and checks chains,
+        continuations, blockers, scheduling, deduplication, deletion, workerless completion,
+        queries, notifications and recovery from errors. They take a few seconds in all, so you may
+        run them apart from the contract cases, such as only in CI.
+      </li>
+      <li>
+        <code>concurrentStateAdapterEndToEndConformanceCases</code> are end-to-end cases that need
+        transactions running in parallel, such as several blocker chains completing at once, or
+        several worker runners on a database that fails.
       </li>
     </ul>
+    <p>
+      Run the two concurrent lists as well when your adapter can run transactions in parallel, such
+      as one over a connection pool.
+    </p>
     <p>
       The suite drives no test runner. Your test file sets up the database in its own hooks and
       registers one test per case. Each case creates its own adapter with the context's{" "}
       <code>createStateAdapter</code> and closes it when it ends, so closing an adapter must leave
       the database usable for the next one. Each case has a <code>title</code>, and its{" "}
       <code>run(context)</code> resolves when the case passes and rejects when it fails. The cases
-      share one database, so run them one at a time:
+      share one context, so run them one at a time:
     </p>
-    <Code lang="ts" title="src/state-adapter.spec.ts">{`
-import {
-  concurrentStateAdapterConformanceCases,
-  stateAdapterConformanceCases,
-  type StateAdapterConformanceContext,
-} from "queuert/conformance";
-import { afterAll, beforeAll, describe, test } from "vitest";
-
-import { clearTables, createMyStateAdapter, openMyDatabase } from "./state-adapter.ts";
-
-describe("state adapter conformance", () => {
-  const db = openMyDatabase(process.env.DATABASE_URL);
-
-  beforeAll(async () => {
-    await createMyStateAdapter({ db }).migrateToLatest();
-  });
-
-  afterAll(async () => {
-    await db.close();
-  });
-
-  const context: StateAdapterConformanceContext = {
-    createStateAdapter: async () => {
-      await clearTables(db);
-      return createMyStateAdapter({ db });
-    },
-    withNonTransactionContext: async (fn) => fn({ db }),
-  };
-
-  for (const conformanceCase of [
-    ...stateAdapterConformanceCases,
-    ...concurrentStateAdapterConformanceCases,
-  ]) {
-    test(conformanceCase.title, async () => {
-      await conformanceCase.run(context);
-    });
-  }
-});
-`}</Code>
+    <ExampleCode
+      example="state-custom-memory"
+      file="src/state-adapter.spec.ts"
+      region="conformance"
+    />
     <p>The context holds:</p>
     <FieldList title="StateAdapterConformanceContext" items={contextFields()} />
     <p>
-      Under <code>node:test</code>, register the hooks with <code>before</code> and{" "}
-      <code>after</code>. The{" "}
+      An adapter over a real database sets it up in <code>beforeAll</code> and releases it in{" "}
+      <code>afterAll</code>, or <code>before</code> and <code>after</code> under{" "}
+      <code>node:test</code>; the{" "}
       <A href="/integrations/state-adapters/sqlite/#testing-your-provider">SQLite</A> page shows all
       three runners. The full API is in the{" "}
       <A href="/api/conformance/readme/">conformance reference</A>.

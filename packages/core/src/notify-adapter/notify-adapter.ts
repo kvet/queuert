@@ -3,7 +3,11 @@
  *
  * Notifications are hints — the system works correctly even if they are lost or duplicated.
  * `notify*` methods take a non-empty batch of unique items and publish each item as its own
- * notification. All `listen*` methods return a dispose function to unsubscribe.
+ * notification, and may call listeners before they return. All `listen*` methods return a dispose
+ * function to unsubscribe.
+ *
+ * A listener that throws does not keep other listeners from receiving the notification, and its
+ * error does not reach the `notify*` caller.
  */
 export type NotifyAdapter = {
   /** Notify that jobs of the given types are available for processing. */
@@ -30,7 +34,8 @@ export type NotifyAdapter = {
   /**
    * Releases internal resources (shared subscriptions, listener registries) and
    * cascades into the underlying provider. Idempotent — the second call is a
-   * no-op. After close, `notify*`/`listen*` calls reject.
+   * no-op. After close, `notify*`/`listen*` calls reject, while dispose functions returned before
+   * close still work.
    */
   close: () => Promise<void>;
 

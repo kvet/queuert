@@ -1,4 +1,3 @@
-import { expect } from "./expect.ts";
 import type { ConformanceGroup } from "./runner.ts";
 
 /**
@@ -38,7 +37,7 @@ export const toConformanceTestCases = <TContext>(
             `No conformance context for "${group.name} > ${testCase.name}": the hook that creates it did not run or failed`,
           );
         }
-        await testCase.run(context, expect);
+        await testCase.run(context);
       },
     })),
   );

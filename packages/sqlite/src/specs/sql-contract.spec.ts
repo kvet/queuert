@@ -1,8 +1,9 @@
+// oxlint-disable no-empty-pattern -- vitest fixtures must destructure their context
+import { conformanceTestSuite } from "@queuert/helpers/conformance";
 import type { RuntimeType } from "@queuert/typed-sql";
 import Database from "better-sqlite3";
 import type { StateAdapterConformanceContext } from "queuert/conformance";
 import { stateAdapterBaseGroups } from "queuert/conformance-internal";
-import { type ConformanceFixtures, conformanceTestSuite } from "queuert/testing";
 import { describe, expect, it } from "vitest";
 
 import { createSqliteStateAdapter } from "../state-adapter/state-adapter.sqlite.ts";
@@ -176,29 +177,28 @@ const createValidatingProvider = (
   };
 };
 
-const contractIt = it.extend<ConformanceFixtures<StateAdapterConformanceContext>>({
-  conformance: [
-    // oxlint-disable-next-line no-empty-pattern -- vitest fixtures must destructure their context
-    async ({}, use) => {
-      const db = new Database(":memory:");
-      await createSqliteStateAdapter({
-        stateProvider: createBetterSqlite3Provider({ db }),
-      }).migrateToLatest();
-      await use({
-        createStateAdapter: async () =>
-          createSqliteStateAdapter({ stateProvider: createValidatingProvider(db) }),
-        withNonTransactionContext: async (fn) => fn({ db }),
-        reset: async () => {
-          db.exec(
-            "DELETE FROM queuert_job_blocker; DELETE FROM queuert_job; DELETE FROM queuert_worker;",
-          );
-        },
-      });
+const contractIt = it.extend(
+  "conformance",
+  { scope: "file" },
+  async ({}, { onCleanup }): Promise<StateAdapterConformanceContext> => {
+    const db = new Database(":memory:");
+    onCleanup(async () => {
       db.close();
-    },
-    { scope: "file" },
-  ],
-});
+    });
+    await createSqliteStateAdapter({
+      stateProvider: createBetterSqlite3Provider({ db }),
+    }).migrateToLatest();
+    return {
+      createStateAdapter: async () => {
+        db.exec(
+          "DELETE FROM queuert_job_blocker; DELETE FROM queuert_job; DELETE FROM queuert_worker;",
+        );
+        return createSqliteStateAdapter({ stateProvider: createValidatingProvider(db) });
+      },
+      withNonTransactionContext: async (fn) => fn({ db }),
+    };
+  },
+);
 
 describe("SQLite SQL contract", () => {
   conformanceTestSuite({

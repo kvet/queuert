@@ -1,6 +1,7 @@
-import { TESTCONTAINERS_RESOURCE_TYPES, extendWithPostgres } from "@queuert/testcontainers";
+import { detectResourceLeaks } from "@queuert/helpers/testing";
+import { TESTCONTAINERS_RESOURCE_TYPES, acquirePostgres } from "@queuert/testcontainers";
 import { Pool } from "pg";
-import { extendWithResourceLeakDetection, seedAllStates } from "queuert/testing";
+import { seedAllStates } from "queuert/conformance-internal";
 import { it as baseIt, describe, expect } from "vitest";
 
 import { createPgStateAdapter } from "../state-adapter/state-adapter.pg.ts";
@@ -75,13 +76,17 @@ const assertTemporalRelationships = (rows: TimestampRow[], label: string) => {
   }
 };
 
-const it = extendWithResourceLeakDetection(extendWithPostgres(baseIt, import.meta.url), {
-  additionalAllowedTypes: TESTCONTAINERS_RESOURCE_TYPES,
-});
+const pg = await acquirePostgres("postgres:14", import.meta.url);
+
+const it = baseIt.extend(
+  "resourceLeakCheck",
+  { auto: true },
+  detectResourceLeaks({ additionalAllowedTypes: TESTCONTAINERS_RESOURCE_TYPES }),
+);
 
 describe("fast seed conformance", { timeout: 120_000 }, () => {
-  it("produces identical data to seedAllStates", async ({ postgresConnectionString }) => {
-    const pool = new Pool({ connectionString: postgresConnectionString });
+  it("produces identical data to seedAllStates", async () => {
+    const pool = new Pool({ connectionString: pg.connectionString });
     const provider = createPgPoolProvider({ pool });
     const adapter = createPgStateAdapter<PgPoolContext, string>({
       stateProvider: provider,

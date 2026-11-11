@@ -1,23 +1,29 @@
-import {
-  stateAdapterBaseGroups,
-  stateAdapterSchemaFenceGroups,
-} from "queuert/conformance-internal";
-import { conformanceTestSuite } from "queuert/testing";
+import { conformanceTestSuite } from "@queuert/helpers/conformance";
 import { it as baseIt, describe, expect } from "vitest";
 
-import { extendWithVarianceStateSqlite } from "./state-adapter-variance.spec-helper.ts";
+import { sqliteStateAdapterConformanceGroups } from "../conformance/state-provider-conformance.ts";
+import {
+  varianceConformance,
+  varianceDb,
+  varianceTableNames,
+} from "./state-adapter-variance.spec-helper.ts";
 
 const tablePrefix = "queuert_";
 
-const it = extendWithVarianceStateSqlite(baseIt, {
+const options = {
   tablePrefix,
   generateJobId: () => `ok-${crypto.randomUUID()}`,
-  validateJobId: (id) => id.startsWith("ok-"),
+  validateJobId: (id: string) => id.startsWith("ok-"),
   generateWorkerId: () => `worker-${crypto.randomUUID()}`,
-  validateWorkerId: (id) => id.startsWith("worker-"),
-});
+  validateWorkerId: (id: string) => id.startsWith("worker-"),
+};
 
-it("index");
+const it = baseIt
+  .extend("db", { scope: "file" }, varianceDb)
+  .extend("conformance", { scope: "file" }, varianceConformance(options))
+  .extend("tableNames", { scope: "file" }, varianceTableNames(options));
+
+baseIt("index");
 
 describe("SQLite State Adapter Variance - With validateJobId", () => {
   it("creates tables with correct prefix", ({ tableNames }) => {
@@ -29,6 +35,6 @@ describe("SQLite State Adapter Variance - With validateJobId", () => {
 
   conformanceTestSuite({
     it,
-    groups: [...stateAdapterBaseGroups, ...stateAdapterSchemaFenceGroups],
+    groups: sqliteStateAdapterConformanceGroups,
   });
 });

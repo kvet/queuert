@@ -40,8 +40,8 @@ export const createRedisNotifyProviderConformanceContext = ({
 });
 
 /**
- * Every notify adapter case, run through `createRedisNotifyAdapter` over a provider. Run them one
- * per test in your own test file against a context from {@link
+ * Every notify adapter contract case, run through `createRedisNotifyAdapter` over a provider. Run
+ * them one per test in your own test file against a context from {@link
  * createRedisNotifyProviderConformanceContext}. Works with any test runner.
  *
  * @example

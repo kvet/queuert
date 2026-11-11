@@ -2,13 +2,16 @@ import { mkdirSync, rmSync, writeFileSync } from "node:fs";
 import { dirname } from "node:path";
 
 import { createAsyncRwLock, createSqliteStateAdapter } from "@queuert/sqlite";
-import { fastSeedAllStates } from "@queuert/sqlite/testing";
+import { fastSeedAllStates } from "@queuert/sqlite/conformance-internal";
 import Database from "better-sqlite3";
 import {
   type BetterSqlite3Context,
   createBetterSqlite3StateProvider,
 } from "example-state-sqlite-better-sqlite3/provider";
-import { observabilityCoverageGroups, operationalCoverageGroups } from "queuert/testing";
+import {
+  observabilityCoverageGroups,
+  operationalCoverageGroups,
+} from "queuert/conformance-internal";
 
 const ITERATIONS = 10;
 const EXPLANATIONS_DIR = new URL("../explanations/sqlite", import.meta.url).pathname;

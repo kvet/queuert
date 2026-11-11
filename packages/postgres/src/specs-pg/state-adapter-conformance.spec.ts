@@ -1,50 +1,30 @@
-import { extendWithPostgres } from "@queuert/testcontainers";
+// oxlint-disable no-empty-pattern -- vitest fixtures must destructure their context
+import { conformanceTestSuite } from "@queuert/helpers/conformance";
+import { acquirePostgres } from "@queuert/testcontainers";
 import { Pool } from "pg";
 import { it as baseIt, describe } from "vitest";
 
 import {
-  type PgStateProviderConformanceContext,
   createPgStateProviderConformanceContext,
-  pgStateProviderConformanceCases,
+  pgStateProviderConformanceGroups,
 } from "../conformance/state-provider-conformance.ts";
-import {
-  type PgPoolContext,
-  createPgPoolProvider,
-} from "../state-provider/state-provider.pg-pool.ts";
+import { withPgPoolNonTransactionContext } from "../state-provider/state-provider.pg-pool.spec-helper.ts";
+import { createPgPoolProvider } from "../state-provider/state-provider.pg-pool.ts";
 
-const it = extendWithPostgres(baseIt, import.meta.url).extend<{
-  conformance: PgStateProviderConformanceContext;
-}>({
-  conformance: [
-    async ({ postgresConnectionString }, use) => {
-      const pool = new Pool({ connectionString: postgresConnectionString, idleTimeoutMillis: 0 });
-      await use(
-        await createPgStateProviderConformanceContext({
-          createStateProvider: async () => createPgPoolProvider({ pool }),
-          withNonTransactionContext: async (fn) => {
-            const poolClient = await pool.connect();
-            try {
-              const pgCtx: PgPoolContext = { poolClient };
-              return await fn(pgCtx);
-            } finally {
-              poolClient.release();
-            }
-          },
-        }),
-      );
-      await pool.end();
-    },
-    { scope: "file" },
-  ],
+const pg = await acquirePostgres("postgres:14", import.meta.url);
+
+const it = baseIt.extend("conformance", { scope: "file" }, async ({}, { onCleanup }) => {
+  const pool = new Pool({ connectionString: pg.connectionString, idleTimeoutMillis: 0 });
+  onCleanup(async () => pool.end());
+  return createPgStateProviderConformanceContext({
+    createStateProvider: async () => createPgPoolProvider({ pool }),
+    withNonTransactionContext: withPgPoolNonTransactionContext(pool),
+  });
 });
 
 // NOTE: hack for vitest plugin
-it("index");
+baseIt("index");
 
 describe("PostgreSQL State Provider Conformance", () => {
-  for (const conformanceCase of pgStateProviderConformanceCases) {
-    it(conformanceCase.title, async ({ conformance }) => {
-      await conformanceCase.run(conformance);
-    });
-  }
+  conformanceTestSuite({ it, groups: pgStateProviderConformanceGroups });
 });

@@ -2,7 +2,6 @@ import { createHash } from "node:crypto";
 
 import { PostgreSqlContainer, type StartedPostgreSqlContainer } from "@testcontainers/postgresql";
 import { Client } from "pg";
-import { type TestAPI, beforeAll } from "vitest";
 
 import { withContainerLock } from "./with-container-lock.ts";
 
@@ -66,81 +65,4 @@ export const acquirePostgres = async (
     connectionString: baseUri.replace("base_database_for_tests", normalizedId),
     [Symbol.asyncDispose]: async () => {},
   };
-};
-
-export const extendWithPostgres = <T>(
-  api: TestAPI<T>,
-  reuseId: string,
-  {
-    expectedTestContexts = 1,
-  }: {
-    expectedTestContexts?: number;
-  } = {},
-): TestAPI<
-  T & {
-    postgresConnectionString: string;
-  }
-> => {
-  const normalizedReuseId = createHash("sha1").update(reuseId).digest("hex");
-
-  let container: StartedPostgreSqlContainer;
-  let contextCount = 0;
-
-  const withClient = async <T>(
-    connectionString: string,
-    fn: (client: Client) => Promise<T>,
-  ): Promise<T> => {
-    const client = new Client({ connectionString });
-    await client.connect();
-    try {
-      return await fn(client);
-    } finally {
-      await client.end();
-    }
-  };
-
-  beforeAll(async () => {
-    container = await startContainer("postgres:14");
-
-    await withClient(container.getConnectionUri(), async (client) => {
-      const names = await client.query(
-        `SELECT datname FROM pg_database WHERE datname LIKE '${normalizedReuseId}_%';`,
-      );
-      for (const { datname } of names.rows) {
-        await client.query(`DROP DATABASE IF EXISTS "${datname}" WITH (FORCE);`);
-      }
-
-      for (let i = 0; i < expectedTestContexts; i++) {
-        await client.query(
-          `CREATE DATABASE "${normalizedReuseId}_${i}" WITH OWNER "${container.getUsername()}" TEMPLATE template0`,
-        );
-      }
-    });
-  }, 60_000);
-
-  return api.extend<{
-    postgresConnectionString: string;
-  }>({
-    postgresConnectionString: [
-      // eslint-disable-next-line no-empty-pattern
-      async ({}, use) => {
-        const dbName = `${normalizedReuseId}_${contextCount++}`;
-
-        if (contextCount > expectedTestContexts) {
-          await withClient(container.getConnectionUri(), async (client) => {
-            await client.query(
-              `CREATE DATABASE "${dbName}" WITH OWNER "${container.getUsername()}" TEMPLATE template0`,
-            );
-          });
-        }
-
-        await use(container.getConnectionUri().replace("base_database_for_tests", dbName));
-      },
-      { scope: "worker" },
-    ],
-  }) as unknown as TestAPI<
-    T & {
-      postgresConnectionString: string;
-    }
-  >;
 };

@@ -6,7 +6,7 @@ You review the public API of the Queuert library as a whole: design footguns and
 
 - `packages/*/src/index.ts` — public exports (start here; read each once)
 - The source files those exports point at, as needed — factories (`create*`), option types, error classes
-- `packages/*/src/testing.ts` and other `package.json` `exports` subpaths
+- `packages/*/src/conformance-internal.ts` and other `package.json` `exports` subpaths
 - `code-style.md` — Naming Conventions, Error Class Shape, Nullable conventions, Sync factory functions
 
 ## Checks
@@ -26,12 +26,12 @@ You review the public API of the Queuert library as a whole: design footguns and
 
 ### 3. Cross-package consistency
 
-Compare state adapters against each other, notify adapters against each other, and the testing subpaths against each other:
+Compare state adapters against each other, notify adapters against each other, and the conformance subpaths against each other:
 
 - Same option name and type for the same concept; defaults documented in TSDoc
 - Same return types and nullability (`undefined` = not found, `null` = explicitly empty)
 - Same error types for the same condition; error classes follow the Error Class Shape in `code-style.md`
-- Type export naming, generic parameter naming, testing helper naming (`extendWith*`)
+- Type export naming, generic parameter naming, conformance helper naming (`create…ConformanceContext`)
 - Re-exports of the same symbol from several packages — intentional and documented?
 
 ### 4. Naming

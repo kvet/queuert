@@ -1,22 +1,28 @@
-import {
-  stateAdapterBaseGroups,
-  stateAdapterCountCapGroups,
-  stateAdapterSchemaFenceGroups,
-} from "queuert/conformance-internal";
-import { conformanceTestSuite } from "queuert/testing";
+import { conformanceTestSuite } from "@queuert/helpers/conformance";
+import { stateAdapterCountCapGroups } from "queuert/conformance-internal";
 import { it as baseIt, describe, expect } from "vitest";
 
-import { extendWithVarianceStateSqlite } from "./state-adapter-variance.spec-helper.ts";
+import { sqliteStateAdapterConformanceGroups } from "../conformance/state-provider-conformance.ts";
+import {
+  varianceConformance,
+  varianceDb,
+  varianceTableNames,
+} from "./state-adapter-variance.spec-helper.ts";
 
 const tablePrefix = "limits_";
 
-const it = extendWithVarianceStateSqlite(baseIt, {
+const options = {
   tablePrefix,
   maxBlockersPerJob: 2,
   countCap: 3,
-});
+};
 
-it("index");
+const it = baseIt
+  .extend("db", { scope: "file" }, varianceDb)
+  .extend("conformance", { scope: "file" }, varianceConformance(options))
+  .extend("tableNames", { scope: "file" }, varianceTableNames(options));
+
+baseIt("index");
 
 describe("SQLite State Adapter Variance - Limits", () => {
   it("creates tables with correct prefix", ({ tableNames }) => {
@@ -27,10 +33,6 @@ describe("SQLite State Adapter Variance - Limits", () => {
 
   conformanceTestSuite({
     it,
-    groups: [
-      ...stateAdapterBaseGroups,
-      ...stateAdapterCountCapGroups,
-      ...stateAdapterSchemaFenceGroups,
-    ],
+    groups: [...sqliteStateAdapterConformanceGroups, ...stateAdapterCountCapGroups],
   });
 });

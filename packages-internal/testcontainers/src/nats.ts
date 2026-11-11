@@ -3,7 +3,6 @@ import {
   NatsContainer,
   type StartedNatsContainer,
 } from "@testcontainers/nats";
-import { type TestAPI, beforeAll } from "vitest";
 
 import { withContainerLock } from "./with-container-lock.ts";
 
@@ -43,35 +42,4 @@ export const acquireNats = async (image: string): Promise<AcquiredNats> => {
     connectionOptions: container.getConnectionOptions(),
     [Symbol.asyncDispose]: async () => {},
   };
-};
-
-export const extendWithNats = <T>(
-  api: TestAPI<T>,
-  _reuseId: string,
-): TestAPI<
-  T & {
-    natsConnectionOptions: NatsConnectionOptions;
-  }
-> => {
-  let container: StartedNatsContainer;
-
-  beforeAll(async () => {
-    container = await startContainer("nats:2.2");
-  }, 60_000);
-
-  return api.extend<{
-    natsConnectionOptions: NatsConnectionOptions;
-  }>({
-    natsConnectionOptions: [
-      // eslint-disable-next-line no-empty-pattern
-      async ({}, use) => {
-        await use(container.getConnectionOptions());
-      },
-      { scope: "worker" },
-    ],
-  }) as unknown as TestAPI<
-    T & {
-      natsConnectionOptions: NatsConnectionOptions;
-    }
-  >;
 };

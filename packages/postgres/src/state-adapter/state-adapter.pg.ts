@@ -18,8 +18,10 @@ import {
   sql,
   t,
 } from "@queuert/typed-sql";
-import { type BaseTxContext, SchemaFencedError, type StateAdapter } from "queuert";
 import {
+  type BaseTxContext,
+  SchemaFencedError,
+  type StateAdapter,
   type StateBlockedJob,
   type StateChain,
   type StateChainInfo,
@@ -30,6 +32,8 @@ import {
   type StateJobInfo,
   type StateJobStatus,
   type StateWorkerInfo,
+} from "queuert";
+import {
   decodeIdCursor,
   decodeTimestampWithIdCursor,
   encodeCursor,
@@ -938,16 +942,16 @@ inserted_jobs AS (
   WHERE ${FENCE_GUARD}
   RETURNING *
 )
-SELECT ed.ord, ${jobColumnsSelect("ed")}, TRUE AS deduplicated
-FROM existing_deduplicated ed
+SELECT ed.ord, ${jobColumnsSelect("ed")}, TRUE AS deduplicated, row_to_json(tail_job) AS tail_job
+FROM existing_deduplicated ed${tailLateral("ed")}
 UNION ALL
-SELECT tia.ord, ${jobColumnsSelect("ij")}, TRUE AS deduplicated
+SELECT tia.ord, ${jobColumnsSelect("ij")}, TRUE AS deduplicated, NULL::json AS tail_job
 FROM to_insert_all tia
 JOIN to_insert ti ON ti.dedup_key = tia.dedup_key AND ti.type_name = tia.type_name
 JOIN inserted_jobs ij ON ti.chain_id = ij.chain_id AND ti.chain_index = ij.chain_index
 WHERE tia.dedup_key IS NOT NULL AND tia.ord != ti.ord
 UNION ALL
-SELECT ti.ord, ${jobColumnsSelect("ij")}, FALSE AS deduplicated
+SELECT ti.ord, ${jobColumnsSelect("ij")}, FALSE AS deduplicated, NULL::json AS tail_job
 FROM inserted_jobs ij JOIN to_insert ti ON ti.chain_id = ij.chain_id AND ti.chain_index = ij.chain_index
 ORDER BY ord
 `,
@@ -964,7 +968,12 @@ ORDER BY ord
                   t.array<string | null>(),
                   t.array<string | null>(),
                 ],
-                columns: { ...dbJobColumns, deduplicated: t.boolean(), ord: t.number() },
+                columns: {
+                  ...dbJobColumns,
+                  deduplicated: t.boolean(),
+                  ord: t.number(),
+                  tail_job: t["json?"]<DbJob>(),
+                },
               },
             ),
           ),
@@ -985,7 +994,7 @@ ORDER BY ord
       return results.map((r) => ({
         ...mapDbHeadToStateChainInfo(r),
         head: mapDbJobToStateJobInfo(r),
-        tail: undefined,
+        tail: r.tail_job ? mapDbJobToStateJobInfo(r.tail_job) : undefined,
         deduplicated: r.deduplicated,
       }));
     },

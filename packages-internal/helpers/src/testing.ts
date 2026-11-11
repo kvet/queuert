@@ -120,3 +120,5 @@ export const startPaused = async <TResult>(
   await deployment.waitFor("paused");
   return deployment;
 };
+
+export { detectResourceLeaks } from "./resource-leak-detection.ts";

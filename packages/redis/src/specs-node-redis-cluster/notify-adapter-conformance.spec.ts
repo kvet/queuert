@@ -1,7 +1,7 @@
-import { extendWithRedisCluster } from "@queuert/testcontainers";
-import type { NotifyAdapterConformanceContext } from "queuert/conformance";
-import { notifyAdapterBaseGroups } from "queuert/conformance-internal";
-import { type ConformanceFixtures, conformanceTestSuite } from "queuert/testing";
+// oxlint-disable no-empty-pattern -- vitest fixtures must destructure their context
+import { conformanceTestSuite } from "@queuert/helpers/conformance";
+import { acquireRedisCluster } from "@queuert/testcontainers";
+import { notifyAdapterEndToEndGroups } from "queuert/conformance-internal";
 import { createCluster, type RedisClusterType } from "redis";
 import { it as baseIt, describe } from "vitest";
 
@@ -9,65 +9,31 @@ import {
   createRedisNotifyProviderConformanceContext,
   redisNotifyProviderConformanceGroups,
 } from "../conformance/notify-provider-conformance.ts";
-import { createRedisNotifyAdapter } from "../notify-adapter/notify-adapter.redis.ts";
 import { createNodeRedisClusterNotifyProvider } from "./notify-provider.node-redis-cluster.ts";
 
-const it = extendWithRedisCluster(baseIt, import.meta.url);
+const redisCluster = await acquireRedisCluster("redis:6");
 
-const providerIt = it.extend<ConformanceFixtures<NotifyAdapterConformanceContext>>({
-  conformance: [
-    async ({ redisClusterConnection }, use) => {
-      const cluster = createCluster(redisClusterConnection) as RedisClusterType;
-      const subscribeCluster = createCluster(redisClusterConnection) as RedisClusterType;
-      await cluster.connect();
-      await subscribeCluster.connect();
-      await use(
-        createRedisNotifyProviderConformanceContext({
-          createNotifyProvider: async () =>
-            createNodeRedisClusterNotifyProvider({ cluster, subscribeCluster }),
-        }),
-      );
-      await cluster.close();
-      await subscribeCluster.close();
-    },
-    { scope: "file" },
-  ],
-});
-
-const customPrefixIt = it.extend<ConformanceFixtures<NotifyAdapterConformanceContext>>({
-  conformance: [
-    async ({ redisClusterConnection }, use) => {
-      const cluster = createCluster(redisClusterConnection) as RedisClusterType;
-      const subscribeCluster = createCluster(redisClusterConnection) as RedisClusterType;
-      await cluster.connect();
-      await subscribeCluster.connect();
-      await use({
-        createNotifyAdapter: async () =>
-          createRedisNotifyAdapter({
-            notifyProvider: createNodeRedisClusterNotifyProvider({ cluster, subscribeCluster }),
-            channelPrefix: `myapp:notifications:${Date.now()}:${Math.random().toString(36).slice(2)}`,
-          }),
-      });
-      await cluster.close();
-      await subscribeCluster.close();
-    },
-    { scope: "file" },
-  ],
-});
-
-// NOTE: hack for vitest plugin
-it("index");
-
-describe("Redis Cluster Notify Provider Conformance", () => {
-  conformanceTestSuite({
-    it: providerIt,
-    groups: redisNotifyProviderConformanceGroups,
+const it = baseIt.extend("conformance", { scope: "file" }, async ({}, { onCleanup }) => {
+  const cluster = createCluster(redisCluster) as RedisClusterType;
+  const subscribeCluster = createCluster(redisCluster) as RedisClusterType;
+  await cluster.connect();
+  await subscribeCluster.connect();
+  onCleanup(async () => {
+    await cluster.close();
+    await subscribeCluster.close();
+  });
+  return createRedisNotifyProviderConformanceContext({
+    createNotifyProvider: async () =>
+      createNodeRedisClusterNotifyProvider({ cluster, subscribeCluster }),
   });
 });
 
-describe("Redis Cluster Notify Adapter Conformance - Custom Channel Prefix", () => {
+// NOTE: hack for vitest plugin
+baseIt("index");
+
+describe("Redis Cluster Notify Provider Conformance", () => {
   conformanceTestSuite({
-    it: customPrefixIt,
-    groups: notifyAdapterBaseGroups,
+    it,
+    groups: [...redisNotifyProviderConformanceGroups, ...notifyAdapterEndToEndGroups],
   });
 });

@@ -4,7 +4,8 @@ import { ExampleRows } from "../../../components/ExampleList.tsx";
 
 export const meta = {
   title: "State Adapters",
-  description: "One runnable example per PostgreSQL and SQLite driver or ORM.",
+  description:
+    "One runnable example per PostgreSQL and SQLite driver or ORM, and a custom adapter.",
 };
 
 const Page = () => (
@@ -57,6 +58,14 @@ const Page = () => (
         "state-sqlite-bun-sql",
       ]}
     />
+    <h2 id="custom">Custom</h2>
+    <p>
+      The example implements the <code>StateAdapter</code> interface from scratch over plain
+      in-memory maps and validates it with the conformance cases in{" "}
+      <code>src/state-adapter.spec.ts</code>, as described in{" "}
+      <A href="/integrations/state-adapters/custom/">Custom State Adapter</A>.
+    </p>
+    <ExampleRows title="custom" names={["state-custom-memory"]} />
   </>
 );
 

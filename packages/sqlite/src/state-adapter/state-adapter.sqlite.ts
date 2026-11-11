@@ -18,8 +18,10 @@ import {
   sql,
   t,
 } from "@queuert/typed-sql";
-import { type BaseTxContext, SchemaFencedError, type StateAdapter } from "queuert";
 import {
+  type BaseTxContext,
+  SchemaFencedError,
+  type StateAdapter,
   type StateBlockedJob,
   type StateChain,
   type StateChainInfo,
@@ -30,6 +32,8 @@ import {
   type StateJobInfo,
   type StateJobStatus,
   type StateWorkerInfo,
+} from "queuert";
+import {
   decodeIdCursor,
   decodeTimestampWithIdCursor,
   encodeCursor,
@@ -961,17 +965,19 @@ WHERE id IN (SELECT value FROM json_each(?))
               applyTemplate(
                 sql(
                   `
-SELECT *
-FROM {{table_prefix}}job INDEXED BY {{table_prefix}}chain_deduplication_idx
+SELECT
+  {{job_columns:head_job}},
+  {{job_columns_prefixed:tail_job:tail_}}
+FROM {{table_prefix}}job AS head_job INDEXED BY {{table_prefix}}chain_deduplication_idx${tailJoin("head_job")}
 WHERE ? IS NOT NULL
-  AND chain_deduplication_key = ?
-  AND chain_index = 0
-  AND type_name = ?
+  AND head_job.chain_deduplication_key = ?
+  AND head_job.chain_index = 0
+  AND head_job.type_name = ?
   AND (
-    (? = 'running' AND chain_status = 'running')
+    (? = 'running' AND head_job.chain_status = 'running')
     OR (? = 'any')
   )
-ORDER BY created_at DESC
+ORDER BY head_job.created_at DESC
 LIMIT 1
 `,
                   {
@@ -983,7 +989,7 @@ LIMIT 1
                       t["string?"](),
                       t["string?"](),
                     ],
-                    columns: { ...dbJobColumns },
+                    columns: { ...dbChainRowColumns },
                     readOnly: true,
                   },
                 ),
@@ -1000,9 +1006,7 @@ LIMIT 1
 
           if (existingDeduplicated) {
             results[i] = {
-              ...mapDbHeadToStateChain(existingDeduplicated),
-              head: mapDbJobToStateJob(existingDeduplicated),
-              tail: undefined,
+              ...mapDbChainRowToStateChain(existingDeduplicated),
               deduplicated: true,
             };
             continue;

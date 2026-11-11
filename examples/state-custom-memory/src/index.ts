@@ -1,0 +1,98 @@
+import {
+  createClient,
+  createProcessors,
+  createWorkerRunner,
+  defineJobTypes,
+  withTxHooks,
+} from "queuert";
+
+import { createMemoryStateAdapter } from "./state-adapter.ts";
+
+const jobTypes = defineJobTypes<{
+  /*
+   * Workflow:
+   *   resize_image
+   *        |
+   *        v
+   *   publish_image
+   */
+  resize_image: {
+    entry: true;
+    input: { imageId: string };
+    continueWith: { typeName: "publish_image" };
+  };
+  publish_image: {
+    input: { imageId: string; width: number };
+    output: { url: string };
+  };
+}>();
+
+// #region adapter
+const stateAdapter = createMemoryStateAdapter();
+// #endregion
+
+const client = createClient({ stateAdapter, jobTypes });
+
+const workerRunner = createWorkerRunner({
+  client,
+  processors: createProcessors({
+    client,
+    jobTypes,
+    processors: {
+      resize_image: {
+        attemptHandler: async ({ job, complete }) => {
+          console.log(`Resizing image ${job.input.imageId}`);
+          return withTxHooks(async (txHooks) =>
+            stateAdapter.withTransaction(async (txCtx) =>
+              complete({
+                ...txCtx,
+                txHooks,
+                continueWith: {
+                  typeName: "publish_image",
+                  input: { imageId: job.input.imageId, width: 800 },
+                },
+              }),
+            ),
+          );
+        },
+      },
+      publish_image: {
+        attemptHandler: async ({ job, complete }) => {
+          console.log(`Publishing image ${job.input.imageId} at ${job.input.width}px`);
+          return withTxHooks(async (txHooks) =>
+            stateAdapter.withTransaction(async (txCtx) =>
+              complete({
+                ...txCtx,
+                txHooks,
+                output: {
+                  url: `https://cdn.example.com/${job.input.imageId}-${job.input.width}.jpg`,
+                },
+              }),
+            ),
+          );
+        },
+      },
+    },
+  }),
+});
+
+const stopWorkerRunner = await workerRunner.start();
+
+// #region create-chain
+const chain = await withTxHooks(async (txHooks) =>
+  stateAdapter.withTransaction(async (txCtx) =>
+    client.createChain({
+      ...txCtx,
+      txHooks,
+      typeName: "resize_image",
+      input: { imageId: "cat-42" },
+    }),
+  ),
+);
+// #endregion
+
+const result = await client.awaitChain(chain, { timeoutMs: 5000 });
+console.log(`Image published at ${result.output.url}`);
+
+await stopWorkerRunner();
+await stateAdapter.close();

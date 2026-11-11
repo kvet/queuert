@@ -124,7 +124,7 @@ Results from the spike's two-connection interleavings (PostgreSQL 18):
 
 - `Chain.id` is the chain's own id. The head job's id is exposed separately (`Chain.headJobId`, or head/tail jobs on `Chain` as in the "expand the Chain type" idea). `Job.chainId` keeps its meaning.
 - `createChain({ id })` assigns the **chain** id; the head job's id is always generated.
-- Code that uses a chain id as a job id — `getJob({ id: chain.id })`, `getJobs({ ids: [chain.id] })`, `getJobBlockers({ jobId: chain.id })`, `rescheduleJob({ id: chain.id })` — has to switch to the head job id. The examples (`showcase-queries`, `showcase-chain-deletion`) and the core test suites do this today.
+- Code that uses a chain id as a job id — `getJob({ id: chain.id })`, `getJobs({ ids: [chain.id] })`, `getJobBlockers({ jobId: chain.id })`, `rescheduleJob({ id: chain.id })` — has to switch to the head job id. The examples (`showcase-queries`, `showcase-chain-deletion`) and the end-to-end conformance cases do this today.
 - `examples/showcase-blockers` re-publishes a notification by hand to work around the lost wake-up; drop that once attaching no longer locks the blocker's head job.
 - State adapter contract: `createJobs` takes a `chainId` per head job; `completeJobs` returns `hasDependents`; `getChains({ lock })` no longer locks the head job (the conformance case "holds the chain lock implicitly for a single-job chain" asserts the old aliasing and changes); `unblockJobs` is counter-based.
 

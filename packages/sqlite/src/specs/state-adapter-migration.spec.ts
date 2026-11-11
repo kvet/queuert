@@ -111,27 +111,21 @@ const schemaShape = async (provider: Provider): Promise<unknown> => {
   );
 };
 
-const it = baseIt.extend<{
-  database: {
-    path: string;
-    provider: Provider;
-    adapter: ReturnType<typeof createSqliteStateAdapter<BetterSqlite3Context, string>>;
-  };
-}>({
-  // oxlint-disable-next-line no-empty-pattern
-  database: async ({}, use) => {
-    const path = join(tmpdir(), `queuert-migration-${randomUUID()}.sqlite`);
-    const db = new Database(path, { timeout: 30_000 });
-    db.pragma("journal_mode = WAL");
-    const provider = createBetterSqlite3Provider({ db });
-    const adapter = createSqliteStateAdapter({
-      stateProvider: provider,
-      generateJobId: (): string => randomUUID(),
-    });
-    await use({ path, provider, adapter });
+// oxlint-disable-next-line no-empty-pattern -- vitest fixtures must destructure their context
+const it = baseIt.extend("database", async ({}, { onCleanup }) => {
+  const path = join(tmpdir(), `queuert-migration-${randomUUID()}.sqlite`);
+  const db = new Database(path, { timeout: 30_000 });
+  db.pragma("journal_mode = WAL");
+  onCleanup(async () => {
     db.close();
     for (const suffix of ["", "-wal", "-shm"]) rmSync(`${path}${suffix}`, { force: true });
-  },
+  });
+  const provider = createBetterSqlite3Provider({ db });
+  const adapter = createSqliteStateAdapter({
+    stateProvider: provider,
+    generateJobId: (): string => randomUUID(),
+  });
+  return { path, provider, adapter };
 });
 
 describe("migrateToLatest", () => {

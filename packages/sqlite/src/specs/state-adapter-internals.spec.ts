@@ -1,31 +1,23 @@
 import Database from "better-sqlite3";
 import { it as baseIt, describe, expect } from "vitest";
 
-import {
-  type SqliteStateAdapter,
-  createSqliteStateAdapter,
-} from "../state-adapter/state-adapter.sqlite.ts";
+import { createSqliteStateAdapter } from "../state-adapter/state-adapter.sqlite.ts";
 import {
   type BetterSqlite3Context,
   createBetterSqlite3Provider,
 } from "../state-provider/state-provider.better-sqlite3.ts";
 
-const it = baseIt.extend<{
-  db: Database.Database;
-  executed: { sql: string; params: unknown[] }[];
-  adapter: SqliteStateAdapter<BetterSqlite3Context, string>;
-}>({
-  // oxlint-disable-next-line no-empty-pattern
-  db: async ({}, use) => {
+const it = baseIt
+  // oxlint-disable-next-line no-empty-pattern -- vitest fixtures must destructure their context
+  .extend("db", async ({}, { onCleanup }) => {
     const db = new Database(":memory:");
-    await use(db);
-    db.close();
-  },
-  // oxlint-disable-next-line no-empty-pattern
-  executed: async ({}, use) => {
-    await use([]);
-  },
-  adapter: async ({ db, executed }, use) => {
+    onCleanup(async () => {
+      db.close();
+    });
+    return db;
+  })
+  .extend("executed", async (): Promise<{ sql: string; params: unknown[] }[]> => [])
+  .extend("adapter", async ({ db, executed }) => {
     const provider = createBetterSqlite3Provider({ db });
     const adapter = createSqliteStateAdapter<BetterSqlite3Context, string>({
       stateProvider: {
@@ -37,9 +29,8 @@ const it = baseIt.extend<{
       },
     });
     await adapter.migrateToLatest();
-    await use(adapter);
-  },
-});
+    return adapter;
+  });
 
 // TODO: should be a part of conformance tests
 describe("deduplication lookup", () => {
@@ -71,7 +62,10 @@ describe("deduplication lookup", () => {
       detail: string;
     }[];
     expect(plan.map((row) => row.detail)).toEqual([
-      "SEARCH queuert_job USING INDEX queuert_chain_deduplication_idx (chain_deduplication_key=?)",
+      "SEARCH head_job USING INDEX queuert_chain_deduplication_idx (chain_deduplication_key=?)",
+      "SEARCH tail_job USING INDEX queuert_chain_index_idx (chain_id=? AND chain_index=?) LEFT-JOIN",
+      "CORRELATED SCALAR SUBQUERY 1",
+      "SEARCH t USING COVERING INDEX queuert_chain_index_idx (chain_id=? AND chain_index>?)",
     ]);
   });
 });

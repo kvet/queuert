@@ -4,7 +4,6 @@ export default defineConfig({
   entry: [
     "./src/index.ts",
     "./src/internal.ts",
-    "./src/testing.ts",
     "./src/conformance.ts",
     "./src/conformance-internal.ts",
   ],

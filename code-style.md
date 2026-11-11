@@ -23,7 +23,7 @@ This document describes code style conventions, testing patterns, and project or
 - **Consistent pluralization**: Keep singular/plural consistent across related names — including functions, types, type parameters, variables, and file names. If a function is `defineJobTypes` (plural), related type parameters and variables should also use plural — e.g., `TJobTypeDefinitions` not `TJobTypeDefinition`, `jobTypes` not `jobType` (when referring to the collection).
 - **Arrow functions over function declarations**: Use `export const fn = () => {}` instead of `export function fn() {}`. This applies to all exports — named functions, factories, helpers, etc.
 - **Sync factory functions**: Factory functions are synchronous and do no I/O. Startup I/O goes in an explicit method the factory returns (`start()`, `migrateToLatest()`), so a caller can see it fail. Only I/O whose failure is not fatal may run lazily on first use, and its failure is reported through the observability adapter rather than swallowed. When an adapter needs startup work, such as checking its schema, it gets an explicit method, never an `async` factory.
-- **No barrel files**: Do not create barrel re-export files within subdirectories. The only barrels are a package's declared entry points — the files listed in its `package.json` `exports`, one per subpath: `index.ts` for the package root, plus subpath entries like `internal.ts` (cross-package internals with no stability guarantee), `testing.ts` (test suites and helpers), `conformance.ts`, and `conformance-internal.ts` (the Node-only conformance groups and runner the adapter packages compose, kept out of the browser-safe `internal.ts`). Adding a barrel means adding an `exports` subpath; a re-export file that is not an entry point is the thing to avoid. Internal modules import directly from the source file they need.
+- **No barrel files**: Do not create barrel re-export files within subdirectories. The only barrels are a package's declared entry points — the files listed in its `package.json` `exports`, one per subpath: `index.ts` for the package root, plus subpath entries like `internal.ts` (cross-package internals with no stability guarantee), `conformance.ts`, and `conformance-internal.ts` (the Node-only conformance groups, `toConformanceTestCases` and the helpers the adapter packages and our specs compose, such as the in-process adapters and the state seeders, kept out of the browser-safe `internal.ts`). Packages publish no testing entry point; vitest-only helpers live in the private `@queuert/helpers` package (`@queuert/helpers/conformance` for `conformanceTestSuite`, `@queuert/helpers/testing` for other test helpers such as leak detection). Adding a barrel means adding an `exports` subpath; a re-export file that is not an entry point is the thing to avoid. Internal modules import directly from the source file they need.
 - **No type re-exports from non-owning modules**: A module should only export types it defines. Do not import a type from its source module just to re-export it — consumers should import directly from the module that owns the type. The only exception is each package's top-level `index.ts` entry point.
 - **Justify every lint suppression**: An `oxlint-disable*` comment always carries the rule name and a `--` reason explaining why the rule is wrong here, e.g. `// oxlint-disable-next-line typescript/only-throw-error -- re-throwing caught error`. A bare disable is not acceptable; if the reason is long, point at the file or spec that demonstrates it.
 - **TypeScript runs on Node's type stripping**: Examples, benchmarks, and spawned scripts run as `node file.ts` with no loader, so source must be erasable TypeScript (no enums, namespaces, or constructor parameter properties; `erasableSyntaxOnly` enforces this). Relative imports name the real file with its `.ts` extension (`./client.ts`, not `./client.js`). Import types with `import type { A, B }` when every specifier is a type and with inline `type` when mixed with values (`import { createClient, type Client }`); `verbatimModuleSyntax` and `typescript/no-import-type-side-effects` enforce this. Child processes are spawned with `process.execPath`, not `"node"`, so they inherit the running Node.
@@ -191,54 +191,36 @@ export const createClient = ({
 - Prefer descriptive test names that match what's being tested
 - To enable verbose logging when debugging tests, run with `DEBUG=1` environment variable
 - **Sync and async variants have matching specs**: When a module ships a synchronous and an asynchronous variant of the same API (`tx-hooks.spec.ts` and `tx-hooks.sync.spec.ts`), their spec files mirror each other: the same `describe` blocks in the same order and a test with the same name for every behavior both variants share. Only behavior one variant alone has (awaiting async flushes, rejecting a callback that returns a promise) gets a test in just that file. A change that adds or edits a shared-behavior test updates both files.
-- **Import `expect` from `vitest`**: Use the module-level `import { expect } from "vitest"` and don't destructure `expect` from the test context. Tests here run sequentially and use no snapshots, so the test-scoped `expect` adds nothing but a line in every parameter list. Reach for the context `expect` only in a test that runs with `.concurrent` or asserts snapshots, where Vitest needs it to attribute results to the right test. The conformance `expect` in `packages/core/src/conformance/expect.ts` is a separate runner-agnostic shim and is unaffected.
+- **Fixtures**: Define vitest fixtures with the builder form, `it.extend("name", { scope }, async (context, { onCleanup }) => value)`, and let their types be inferred; inline a type that only one fixture uses. A spec builds its own chain from vitest's `it`; there are no `extendWith*` wrappers that take an `it` and return another. Fixtures several specs share are exported as fixture functions and passed to `.extend` (`detectResourceLeaks` from `@queuert/helpers/testing`, the variance fixtures). Vitest requires a fixture's first parameter to be a destructuring pattern, so one that needs only `onCleanup` takes `({}, { onCleanup })` under a `no-empty-pattern` lint directive. Fixtures have no timeout of their own and their setup counts against the first test's, so specs start containers at module level (`const pg = await acquirePostgres("postgres:14", import.meta.url)`), where collection is not bounded by a test timeout.
+- **Import `expect` from `vitest`**: Use the module-level `import { expect } from "vitest"` and don't destructure `expect` from the test context. Tests here run sequentially and use no snapshots, so the test-scoped `expect` adds nothing but a line in every parameter list. Reach for the context `expect` only in a test that runs with `.concurrent` or asserts snapshots, where Vitest needs it to attribute results to the right test. Conformance cases are not tests and use no `expect`: they assert with `node:assert/strict`, so they run under any runner.
 
 ### Conformance Cases
 
-Conformance cases live in `packages/core/src/conformance/` as data (`ConformanceGroup`s). The public surface (`queuert/conformance`, the `…/conformance` entries of the adapter packages) turns them into lists of `ConformanceTestCase`s with `toConformanceTestCases`: plain data that drives no test runner, so users create and release resources in their own hooks and register one test per case with any runner (vitest, `node:test`, `bun:test`). Our own specs feed the same groups to `conformanceTestSuite` in `queuert/testing`, which registers each case as its own test and reads one file-scoped `conformance` fixture that the spec defines with `it.extend`, calling its optional `reset`, when the spec sets one, before each case. A case that needs a capability not every adapter has goes in its own group set, and each list composes the sets that apply (`stateAdapterBaseGroups` plus `stateAdapterConcurrentTransactionGroups` for PostgreSQL); a case never checks a capability flag and skips itself. Adapter packages export the composed provider cases and a `create…ConformanceContext` helper that builds their adapter from a provider, and their specs use the same composed group list and helper, so the public cases and our tests cannot drift. Cases share one context per file, so a case must not depend on what earlier cases left behind, such as a notification still in flight for a key it listens on.
+Conformance cases live in `packages/core/src/` as data (`ConformanceGroup`s): `conformance/` holds the runner-agnostic core (the group and case types, `toConformanceTestCases` and `retryUntilPasses`; cases assert with `node:assert/strict`, which needs no dependency and works under every runner), and each kind of case has a sibling `conformance.<kind>/` folder (`conformance.state-adapter/`, `conformance.notify-adapter/`, `conformance.validation-adapter/`, `conformance.end-to-end/`) with its context types in `types.ts`, its group sets in `groups.ts` (with the cases themselves in `cases/` when they span several files) and its public case lists in `*-cases.ts`. The public surface (`queuert/conformance`, the `…/conformance` entries of the adapter packages) turns them into lists of `ConformanceTestCase`s with `toConformanceTestCases`: plain data that drives no test runner, so users create and release resources in their own hooks and register one test per case with any runner (vitest, `node:test`, `bun:test`). Contract and end-to-end cases are separate public lists, so a user can run the fast contract cases on every change and the slower end-to-end ones apart, such as only in CI. Case titles are unique within every public list, and a spec checks it. Our own specs feed the same groups to `conformanceTestSuite` from the private `@queuert/helpers/conformance` entry, which registers each case as its own test and reads one file-scoped `conformance` fixture that the spec defines with `it.extend`. A case that needs a capability not every adapter has goes in its own group set, and each list composes the sets that apply (`stateAdapterBaseGroups` plus `stateAdapterConcurrentTransactionGroups` for PostgreSQL); a case never checks a capability flag and skips itself. Adapter packages export the composed provider cases and a `create…ConformanceContext` helper that builds their adapter from a provider, and their specs use the same composed group list and helper, so the public cases and our tests cannot drift. Provider case lists hold contract cases only: the adapter over the provider is ours, and our own specs run the end-to-end cases against it. Cases share one context per file, so a case must not depend on what earlier cases left behind, such as a notification still in flight for a key it listens on.
 
-### Test Suites
+### End-to-End Cases
 
-Test suites are reusable test collections exported as functions. They receive Vitest's `it` function and a typed context, allowing the same tests to run across different configurations (e.g., different database adapters):
+End-to-end cases are conformance groups in `packages/core/src/conformance.end-to-end/cases/`, one file per area (`chains.ts`, `process.ts`, `worker.ts`, …), typed `ConformanceGroup<StateAdapterConformanceContext>`. They are public lists of their own, next to the contract cases, and must stay fast: a case waits only as long as the behaviour it checks needs (a scheduling delay, a lease expiring), never on a long poll or backoff interval, so every case passes within a test runner's default timeout. Like the other conformance cases, each case creates its adapters from the context's factories with `await using` (the notify adapter through `createCaseNotifyAdapter`, which falls back to an in-process one when the context has no `createNotifyAdapter`) and builds its own client, processors and worker runners over them, so the same case runs over every state and notify adapter:
 
-```typescript
-// Define a test suite
-export const myFeatureTestSuite = ({ it }: { it: TestAPI<TestSuiteContext> }): void => {
-  it("does something", async ({ stateAdapter, withTransaction }) => {
-    // test implementation
-  });
-
-  it("does something else", async ({ stateAdapter }) => {
-    // test implementation
-  });
-};
-
-// Use the test suite in a spec file
-describe("MyFeature", () => {
-  myFeatureTestSuite({ it });
-});
-```
-
-- **No `vi` mocks or spies in suites**: Test suites don't use `vi.fn`, `vi.spyOn` or the `mock*` methods. To change what an adapter does, spread it and override the method with a plain function: `{ ...stateAdapter, extendWorkerLease: async () => undefined }`. When only the first call should differ, mark it with an `AbortController` and fall through to the real method once `signal.aborted` is set. Assert the outcome the test can observe, such as the job's state or an assertion inside the handler, rather than call counts or arguments. Spec helpers and unit specs may keep using `vi` mocks.
+- **Group sets**: `conformance.end-to-end/groups.ts` composes the base groups (every adapter), the notify groups (cases that need notifications delivered, which a noop notify adapter cannot run) and the concurrent-transaction groups (adapters that run transactions in parallel). `stateAdapterEndToEndConformanceCases` holds the base and notify groups, `concurrentStateAdapterEndToEndConformanceCases` the concurrent-transaction groups, and `notifyAdapterEndToEndConformanceCases` holds `notifyAdapterEndToEndGroups`, the notify groups run over an in-memory state adapter. The provider case lists of the adapter packages hold no end-to-end cases; the adapter packages' own specs run these sets.
+- **Capability groups**: a case that needs a capability not every adapter has (`withSavepoint`, `poisonTransaction`, `createFlakyDbStateAdapter`) goes in a group typed on the context that carries it (`EndToEndSavepointContext`, …). These sets and their context types are exported from `queuert/conformance-internal` only, and our PostgreSQL and SQLite specs build a context with the capabilities their adapter supports and run those sets, so running a group without its capability fails to compile.
+- **Type assertions** (`expectTypeOf`, type-only `@ts-expect-error` checks) live in a `<module>.types.spec.ts` next to the module whose API they check (`client.types.spec.ts` for the client methods, `job-type-processors/create-job-type-processors.types.spec.ts` for attempt handler typing), since cases run on the runner-agnostic `expect`.
+- **No `vi` mocks or spies**: to change what an adapter does, spread it and override the method with a plain function: `{ ...stateAdapter, extendWorkerLease: async () => undefined }`, or wrap it with `createSpyStateAdapter`, `createFlakyStateAdapter` or `createFlakyNotifyAdapter` from `conformance.end-to-end/support/`. When only the first call should differ, mark it with an `AbortController` and fall through to the real method once `signal.aborted` is set. Assert the outcome the test can observe, such as the job's state or an assertion inside the handler, rather than call counts or arguments. Spec helpers and unit specs may keep using `vi` mocks.
 
 ### File Organization
 
-**Test suites** (`*.test-suite.ts`):
-
-- `packages/core/src/suites/` - Reusable test suite files, exported via `queuert/testing`
-
 **Spec helpers** (`*.spec-helper.ts`):
 
-- Fixtures and context extensions consumed by suites and specs (`extendWithCommon`, the spy state adapter). Named by suffix so they are excluded from test discovery.
+- Fixtures and context extensions consumed by specs (the variance fixture functions `variancePool` or `varianceDb`, `varianceConformance` and `varianceTableNames`, and the end-to-end context helpers that build a context with an adapter's capabilities). Named by suffix so they are excluded from test discovery.
 
 **Spec files** (`*.spec.ts`):
 
 Every test file uses `.spec.ts` — both unit tests colocated next to the module they cover (`entities/backoff.spec.ts`, `entities/chain.spec.ts`) and adapter-parameterized specs in a `specs/` directory. Do not use `.test.ts`.
 
 - `packages/core/src/specs/` - Running with in-process adapters
-- `packages/postgres/src/specs/` - Running with PostgreSQL adapter
-- `packages/sqlite/src/specs/` - Running with SQLite adapter
-- `packages/redis/src/specs/` - Running with Redis notify adapter
+- `packages/postgres/src/specs/` - Running with PostgreSQL adapter; `specs-pg/` holds the conformance and end-to-end specs over the `pg` driver
+- `packages/sqlite/src/specs/` - Running with SQLite adapter; `specs-better-sqlite3/` holds the conformance and end-to-end specs over `better-sqlite3`
+- `packages/redis/src/specs/` - Running with Redis notify adapter; `specs-ioredis/`, `specs-node-redis/` and `specs-node-redis-cluster/` hold the conformance specs per client
 - `packages/nats/src/specs/` - Running with NATS notify adapter
 
 ## Commands
@@ -277,7 +259,7 @@ This ensures users can copy-paste relevant code without untangling unrelated int
 
 ### State Examples
 
-State examples showcase different database client integrations with the same database:
+State examples showcase the database client integrations for PostgreSQL and SQLite, and a custom state adapter written from scratch:
 
 ```
 state-postgres-pg           # node-postgres (pg)
@@ -297,9 +279,10 @@ state-sqlite-knex           # Knex
 state-sqlite-bun-sqlite     # bun:sqlite
 state-sqlite-bun-sql        # Bun.SQL
 
+state-custom-memory         # custom StateAdapter over in-memory maps
 ```
 
-Each implements a state provider (`PgStateProvider` or `SqliteStateProvider`) with `withTransaction`, `isTransaction` and `executeSql` methods specific to that client library.
+Each driver example implements a state provider (`PgStateProvider` or `SqliteStateProvider`) with `withTransaction`, `isTransaction` and `executeSql` methods specific to that client library. The custom example implements `StateAdapter` itself and validates it in `src/state-adapter.spec.ts` by registering one test per case of `stateAdapterConformanceCases` from `queuert/conformance`.
 
 ### Notify Examples
 
@@ -312,9 +295,10 @@ notify-redis-bun             # Bun Redis
 notify-postgres-pg           # pg (node-postgres)
 notify-postgres-postgres-js  # postgres-js
 notify-postgres-bun-sql      # Bun.SQL
+notify-custom-memory         # custom NotifyAdapter, in-process listeners
 ```
 
-Redis examples implement a `RedisNotifyProvider` with `subscribe` and `eval` methods. PostgreSQL examples implement a `PgNotifyProvider` with `publish` (a batch of messages in one statement) and `subscribe` methods using PostgreSQL's LISTEN/NOTIFY.
+Redis examples implement a `RedisNotifyProvider` with `subscribe` and `eval` methods. PostgreSQL examples implement a `PgNotifyProvider` with `publish` (a batch of messages in one statement) and `subscribe` methods using PostgreSQL's LISTEN/NOTIFY. The custom example implements `NotifyAdapter` itself and validates it in `src/notify-adapter.spec.ts` by registering one test per case of `notifyAdapterConformanceCases` from `queuert/conformance`.
 
 ### Notify Adapter Conventions
 
@@ -339,7 +323,7 @@ State adapters have configuration differences that reflect database capabilities
 
 ### In-Process Adapters
 
-The in-process adapters are not public API. Queuert's own specs import `createInProcessStateAdapter` and `createInProcessNotifyAdapter` from `queuert/testing`; code outside a test runner (benchmarks, the browser dashboard demo) imports them from `queuert/internal`, which does not load vitest. Examples never use them. `createClient` without `notifyAdapter` uses an in-process notify adapter internally, scoped to that client.
+The in-process adapters are not public API. Specs in other packages import `createInProcessStateAdapter` and `createInProcessNotifyAdapter` from `queuert/conformance-internal`; code outside a test runner (benchmarks, the browser dashboard demo) imports them from the browser-safe `queuert/internal`. Examples never use them. `createClient` without `notifyAdapter` uses an in-process notify adapter internally, scoped to that client.
 
 ### Code Style for Examples
 

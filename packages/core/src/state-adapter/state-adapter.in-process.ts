@@ -258,8 +258,9 @@ const buildDbJob = (params: {
   schedule?: ScheduleOptions;
   chainTraceContext?: string | null;
   traceContext?: string | null;
+  now: Date;
 }): DbJob => {
-  const now = new Date();
+  const { now } = params;
   const requestedScheduledAt =
     params.schedule?.at ??
     (params.schedule?.afterMs ? new Date(now.getTime() + params.schedule.afterMs) : now);
@@ -796,6 +797,7 @@ export const createInProcessStateAdapter = ({
     createJobs: async ({ txCtx, jobs: jobInputs }) =>
       withWriteLock(txCtx, () => {
         return withAtomicBatch(txCtx, (journal) => {
+          const now = new Date();
           const results: (StateChain & { deduplicated: boolean })[] = [];
           for (const jobInput of jobInputs) {
             const {
@@ -830,6 +832,7 @@ export const createInProcessStateAdapter = ({
               schedule,
               chainTraceContext,
               traceContext,
+              now,
             });
 
             idx.writeJob(journal, undefined, job);
@@ -880,6 +883,7 @@ export const createInProcessStateAdapter = ({
               schedule,
               chainTraceContext: null,
               traceContext,
+              now,
             });
             idx.writeJob(journal, undefined, continuation);
 

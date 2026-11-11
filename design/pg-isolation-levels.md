@@ -243,7 +243,7 @@ Tests are split by what can observe them. Contract behavior goes into the shared
 Kept separate from the shared suite because it needs raw SQL and per-connection levels. It is written so that a later PostgreSQL-compatible adapter can run it too.
 
 - Level matrix: the conformance spec passes `isolationVariants` built from three pools whose `default_transaction_isolation` is `read committed`, `repeatable read` and `serializable` (nine ordered pairs per interleaving case).
-- Counter invariant: the conformance fixture's `reset` first checks two things, then truncates:
+- Counter invariant: the conformance context's `createStateAdapter` first checks two things, then truncates:
   - every `blocked` job's `blockers_remaining` equals its recomputed count;
   - every head that a `job_blocker` row references has `has_dependents`.
 - Fan-in under load: 200 dependents × 16 blockers completed by 8 connections at REPEATABLE READ and at SERIALIZABLE leave no dependent `blocked`. Concurrent multi-blocker attaches raise no 40P01 at READ COMMITTED.
@@ -252,7 +252,7 @@ Kept separate from the shared suite because it needs raw SQL and per-connection 
   - an autocommit statement re-executes;
   - both throw after the fifth attempt;
   - statements on a caller's `txCtx` are never retried.
-- Processing: the `process`, `worker` and `blocker-chains` suites run again with the test pool's `default_transaction_isolation` set to `repeatable read` and to `serializable`.
+- Processing: the `process`, `worker` and `blocker-chains` end-to-end groups run again with the test pool's `default_transaction_isolation` set to `repeatable read` and to `serializable`.
 - Migrations, with the session default at `repeatable read` and at `serializable`:
   - parallel deployments through the existing spawner all succeed, exactly one applies each migration, and none fails with 40001;
   - `current_setting('transaction_isolation')` inside a migration reports `read committed`.

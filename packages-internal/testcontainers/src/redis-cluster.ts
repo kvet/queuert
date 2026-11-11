@@ -1,7 +1,6 @@
 import { createHash } from "node:crypto";
 
 import { GenericContainer, Wait } from "testcontainers";
-import { type TestAPI, beforeAll } from "vitest";
 
 import { withContainerLock } from "./with-container-lock.ts";
 
@@ -78,25 +77,4 @@ export const acquireRedisCluster = async (image: string): Promise<AcquiredRedisC
     ...connection,
     [Symbol.asyncDispose]: async () => {},
   };
-};
-
-export const extendWithRedisCluster = <T>(
-  api: TestAPI<T>,
-  _reuseId: string,
-): TestAPI<T & { redisClusterConnection: RedisClusterConnection }> => {
-  let connection: RedisClusterConnection;
-
-  beforeAll(async () => {
-    connection = await startCluster("redis:6");
-  }, 180_000);
-
-  return api.extend<{ redisClusterConnection: RedisClusterConnection }>({
-    redisClusterConnection: [
-      // eslint-disable-next-line no-empty-pattern
-      async ({}, use) => {
-        await use(connection);
-      },
-      { scope: "worker" },
-    ],
-  }) as unknown as TestAPI<T & { redisClusterConnection: RedisClusterConnection }>;
 };

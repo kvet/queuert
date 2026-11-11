@@ -1,4 +1,7 @@
-import { TESTCONTAINERS_RESOURCE_TYPES, extendWithPostgres } from "@queuert/testcontainers";
+// oxlint-disable no-empty-pattern -- vitest fixtures must destructure their context
+import { conformanceTestSuite } from "@queuert/helpers/conformance";
+import { detectResourceLeaks } from "@queuert/helpers/testing";
+import { TESTCONTAINERS_RESOURCE_TYPES, acquirePostgres } from "@queuert/testcontainers";
 import type { RuntimeType } from "@queuert/typed-sql";
 import { Client, Pool } from "pg";
 import type { StateAdapterConformanceContext } from "queuert/conformance";
@@ -6,14 +9,10 @@ import {
   stateAdapterBaseGroups,
   stateAdapterConcurrentTransactionGroups,
 } from "queuert/conformance-internal";
-import {
-  type ConformanceFixtures,
-  conformanceTestSuite,
-  extendWithResourceLeakDetection,
-} from "queuert/testing";
 import { it as baseIt, describe, expect } from "vitest";
 
 import { createPgStateAdapter } from "../state-adapter/state-adapter.pg.ts";
+import { withPgPoolNonTransactionContext } from "../state-provider/state-provider.pg-pool.spec-helper.ts";
 import {
   type PgPoolContext,
   createPgPoolProvider,
@@ -269,89 +268,70 @@ const createValidatingProvider = (
   };
 };
 
-const it = extendWithResourceLeakDetection(extendWithPostgres(baseIt, import.meta.url), {
-  additionalAllowedTypes: TESTCONTAINERS_RESOURCE_TYPES,
-})
-  .extend<{
-    validationClient: Client;
-    formatType: (oid: number) => string | undefined;
-    enumTypes: Set<string>;
-  }>({
-    validationClient: [
-      async ({ postgresConnectionString }, use) => {
-        const setupPool = new Pool({ connectionString: postgresConnectionString });
-        const setupAdapter = createPgStateAdapter({
-          stateProvider: createPgPoolProvider({ pool: setupPool }),
-        });
-        await setupAdapter.migrateToLatest();
-        await setupPool.end();
+const pg = await acquirePostgres("postgres:14", import.meta.url);
 
-        const client = new Client({ connectionString: postgresConnectionString });
-        await client.connect();
-        try {
-          await use(client);
-        } finally {
-          await client.end();
-        }
-      },
-      { scope: "worker" },
-    ],
-    formatType: [
-      async ({ validationClient }, use) => {
-        const res = await validationClient.query<{ oid: string; name: string }>(
-          `SELECT oid::text AS oid, format_type(oid, NULL) AS name FROM pg_type`,
-        );
-        const map = new Map(res.rows.map((r) => [Number(r.oid), r.name]));
-        await use((oid) => map.get(oid));
-      },
-      { scope: "worker" },
-    ],
-    enumTypes: [
-      async ({ validationClient }, use) => {
-        const res = await validationClient.query<{ name: string }>(
-          `SELECT format_type(oid, NULL) AS name FROM pg_type WHERE typtype = 'e'`,
-        );
-        await use(new Set(res.rows.map((r) => r.name)));
-      },
-      { scope: "worker" },
-    ],
+const it = baseIt
+  .extend(
+    "resourceLeakCheck",
+    { auto: true },
+    detectResourceLeaks({ additionalAllowedTypes: TESTCONTAINERS_RESOURCE_TYPES }),
+  )
+  .extend("validationClient", { scope: "file" }, async ({}, { onCleanup }) => {
+    const setupPool = new Pool({ connectionString: pg.connectionString });
+    const setupAdapter = createPgStateAdapter({
+      stateProvider: createPgPoolProvider({ pool: setupPool }),
+    });
+    await setupAdapter.migrateToLatest();
+    await setupPool.end();
+
+    const client = new Client({ connectionString: pg.connectionString });
+    await client.connect();
+    onCleanup(async () => client.end());
+    return client;
   })
-  .extend<ConformanceFixtures<StateAdapterConformanceContext>>({
-    conformance: [
-      async ({ postgresConnectionString, validationClient, formatType, enumTypes }, use) => {
-        const pool = new Pool({ connectionString: postgresConnectionString, idleTimeoutMillis: 0 });
-        const createStateAdapter = async () =>
-          createPgStateAdapter({
+  .extend("formatType", { scope: "file" }, async ({ validationClient }) => {
+    const res = await validationClient.query<{ oid: string; name: string }>(
+      `SELECT oid::text AS oid, format_type(oid, NULL) AS name FROM pg_type`,
+    );
+    const map = new Map(res.rows.map((r) => [Number(r.oid), r.name]));
+    return (oid: number): string | undefined => map.get(oid);
+  })
+  .extend("enumTypes", { scope: "file" }, async ({ validationClient }) => {
+    const res = await validationClient.query<{ name: string }>(
+      `SELECT format_type(oid, NULL) AS name FROM pg_type WHERE typtype = 'e'`,
+    );
+    return new Set(res.rows.map((r) => r.name));
+  })
+  .extend(
+    "conformance",
+    { scope: "file" },
+    async (
+      { validationClient, formatType, enumTypes },
+      { onCleanup },
+    ): Promise<StateAdapterConformanceContext> => {
+      const pool = new Pool({ connectionString: pg.connectionString, idleTimeoutMillis: 0 });
+      onCleanup(async () => pool.end());
+      {
+        await using stateAdapter = createPgStateAdapter({
+          stateProvider: createValidatingProvider(pool, validationClient, formatType, enumTypes),
+        });
+        await stateAdapter.migrateToLatest();
+      }
+      return {
+        createStateAdapter: async () => {
+          await pool.query(
+            "TRUNCATE public.queuert_job_blocker, public.queuert_job, public.queuert_worker CASCADE",
+          );
+          return createPgStateAdapter({
             stateProvider: createValidatingProvider(pool, validationClient, formatType, enumTypes),
           });
-        {
-          await using stateAdapter = await createStateAdapter();
-          await stateAdapter.migrateToLatest();
-        }
-        await use({
-          createStateAdapter,
-          withNonTransactionContext: async (fn) => {
-            const poolClient = await pool.connect();
-            try {
-              const pgCtx: PgPoolContext = { poolClient };
-              return await fn(pgCtx);
-            } finally {
-              poolClient.release();
-            }
-          },
-          reset: async () => {
-            await pool.query(
-              "TRUNCATE public.queuert_job_blocker, public.queuert_job, public.queuert_worker CASCADE",
-            );
-          },
-        });
-        await pool.end();
-      },
-      { scope: "file" },
-    ],
-  });
+        },
+        withNonTransactionContext: withPgPoolNonTransactionContext(pool),
+      };
+    },
+  );
 
-it("index");
+baseIt("index");
 
 describe("PostgreSQL SQL contract", () => {
   conformanceTestSuite({

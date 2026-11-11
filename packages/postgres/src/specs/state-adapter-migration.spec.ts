@@ -28,12 +28,6 @@ const spawnDeployment = createDeploymentSpawner<MigrationResult>(
 );
 
 type Provider = PgStateProvider<PgPoolContext>;
-type Database = {
-  connectionString: string;
-  provider: Provider;
-  adapter: ReturnType<typeof createPgStateAdapter<PgPoolContext, string, string>>;
-};
-
 const query = async <T = Record<string, unknown>>(provider: Provider, text: string): Promise<T[]> =>
   provider.executeSql({
     sql: text,
@@ -61,21 +55,21 @@ const lockRows = async (provider: Provider): Promise<{ locked_by: string }[]> =>
 const sleep = async (ms: number): Promise<void> =>
   new Promise((resolve) => setTimeout(resolve, ms));
 
-const it = baseIt.extend<{ database: Database }>({
-  // oxlint-disable-next-line no-empty-pattern
-  database: async ({}, use) => {
-    const pg = await acquirePostgres("postgres:14", `pg-migration-${randomUUID()}`);
-    const pool = new Pool({ connectionString: pg.connectionString });
-    const provider = createPgPoolProvider({ pool });
-    const adapter = createPgStateAdapter({
-      stateProvider: provider,
-      generateJobId: (): string => randomUUID(),
-      generateWorkerId: (): string => randomUUID(),
-    });
-    await use({ connectionString: pg.connectionString, provider, adapter });
+// oxlint-disable-next-line no-empty-pattern -- vitest fixtures must destructure their context
+const it = baseIt.extend("database", async ({}, { onCleanup }) => {
+  const pg = await acquirePostgres("postgres:14", `pg-migration-${randomUUID()}`);
+  const pool = new Pool({ connectionString: pg.connectionString });
+  onCleanup(async () => {
     await pool.end();
     await pg[Symbol.asyncDispose]();
-  },
+  });
+  const provider = createPgPoolProvider({ pool });
+  const adapter = createPgStateAdapter({
+    stateProvider: provider,
+    generateJobId: (): string => randomUUID(),
+    generateWorkerId: (): string => randomUUID(),
+  });
+  return { connectionString: pg.connectionString, provider, adapter };
 });
 
 const relations = async (provider: Provider): Promise<Record<string, boolean>> => {
