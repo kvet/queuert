@@ -17,5 +17,4 @@ export { createParallelExecutor, type ParallelExecutor } from "./parallel-execut
 export { isThenable, silence } from "./promise.ts";
 export { serializeError } from "./serialize-error.ts";
 export { type Branded, type IsUnion, type UnionToIntersection } from "./typescript.ts";
-export { withWorkerRunners } from "./with-workers.ts";
 export { noop, noopAsync } from "./noop.ts";

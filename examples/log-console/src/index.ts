@@ -25,8 +25,11 @@ const jobTypes = defineJobTypes<{
 }>();
 
 // Create adapters with console logging
-const db = new Database(":memory:");
-const stateAdapter = createSqliteStateAdapter({
+await using drivers = new AsyncDisposableStack();
+const db = drivers.adopt(new Database(":memory:"), (db) => {
+  db.close();
+});
+await using stateAdapter = createSqliteStateAdapter({
   stateProvider: createBetterSqlite3StateProvider({ db, lock: createAsyncRwLock() }),
 });
 await stateAdapter.migrateToLatest();
@@ -41,7 +44,7 @@ const client = createClient({
 // #endregion
 
 // Create and start worker runner
-const workerRunner = createWorkerRunner({
+await using workerRunner = createWorkerRunner({
   client,
   processors: createProcessors({
     client,
@@ -82,7 +85,7 @@ const workerRunner = createWorkerRunner({
   }),
 });
 
-const stopWorkerRunner = await workerRunner.start();
+await workerRunner.start();
 
 // Run successful job
 console.log("\n--- Running successful job ---\n");
@@ -111,8 +114,3 @@ const failThenSucceedChain = await withTxHooks(async (txHooks) =>
   ),
 );
 await client.awaitChain(failThenSucceedChain, { timeoutMs: 5000 });
-
-// Cleanup
-await stopWorkerRunner();
-await stateAdapter.close();
-db.close();

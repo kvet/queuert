@@ -50,13 +50,14 @@ const userJobTypes = defineJobTypes<{
 }>();
 
 await using pg = await acquirePostgres("postgres:18", import.meta.url);
-const sql = postgres(pg.connectionString, { max: 10 });
+await using drivers = new AsyncDisposableStack();
+const sql = drivers.adopt(postgres(pg.connectionString, { max: 10 }), async (sql) => sql.end());
 
 const stateProvider = createPostgresJsStateProvider({ sql });
-const stateAdapter = createPgStateAdapter({ stateProvider });
+await using stateAdapter = createPgStateAdapter({ stateProvider });
 await stateAdapter.migrateToLatest();
 const notifyProvider = createPostgresJsNotifyProvider({ sql });
-const notifyAdapter = createPgNotifyAdapter({ notifyProvider });
+await using notifyAdapter = createPgNotifyAdapter({ notifyProvider });
 
 const client = createClient({
   stateAdapter,
@@ -155,7 +156,7 @@ const cleanupProcessorRegistry = createProcessors({
   },
 });
 
-const workerRunner = createWorkerRunner({
+await using workerRunner = createWorkerRunner({
   client,
   processors: [
     cleanupProcessorRegistry,
@@ -182,7 +183,7 @@ const workerRunner = createWorkerRunner({
   ],
 });
 
-const stopWorkerRunner = await workerRunner.start();
+await workerRunner.start();
 
 // --- Scenario 1: Create and complete some work chains ---
 console.log("\n--- Scenario 1: Create work chains ---\n");
@@ -277,8 +278,3 @@ console.log(`Scheduled at: ${pendingCleanup.items[0].scheduledAt.toISOString()}`
 console.log("\n" + "-".repeat(40));
 console.log("SHOWCASE COMPLETED");
 console.log("-".repeat(40));
-
-await stopWorkerRunner();
-await notifyAdapter.close();
-await stateAdapter.close();
-await sql.end();

@@ -81,8 +81,8 @@ await runDoubleRunBenchmark<Infra>({
           },
         }),
       });
-      const stopWorkerRunner = await workerRunner.start();
-      return { client, stopWorkerRunner };
+      await workerRunner.start();
+      return { client, workerRunner };
     });
 
     await processStep(`After processing ${jobCount} jobs`, async () => {
@@ -101,7 +101,7 @@ await runDoubleRunBenchmark<Infra>({
       await completions.done;
     });
 
-    await setup.stopWorkerRunner();
+    await setup.workerRunner.close();
     await notifyAdapter.close();
     await stateAdapter.close();
   },

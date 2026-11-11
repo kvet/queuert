@@ -28,12 +28,12 @@ const jobTypes = defineJobTypes<{
 }>();
 
 // #region adapter
-const stateAdapter = createMemoryStateAdapter();
+await using stateAdapter = createMemoryStateAdapter();
 // #endregion
 
 const client = createClient({ stateAdapter, jobTypes });
 
-const workerRunner = createWorkerRunner({
+await using workerRunner = createWorkerRunner({
   client,
   processors: createProcessors({
     client,
@@ -76,7 +76,7 @@ const workerRunner = createWorkerRunner({
   }),
 });
 
-const stopWorkerRunner = await workerRunner.start();
+await workerRunner.start();
 
 // #region create-chain
 const chain = await withTxHooks(async (txHooks) =>
@@ -93,6 +93,3 @@ const chain = await withTxHooks(async (txHooks) =>
 
 const result = await client.awaitChain(chain, { timeoutMs: 5000 });
 console.log(`Image published at ${result.output.url}`);
-
-await stopWorkerRunner();
-await stateAdapter.close();

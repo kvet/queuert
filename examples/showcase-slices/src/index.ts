@@ -14,17 +14,20 @@ import assert from "node:assert/strict";
 
 import { createWorkerRunner, withTxHooks } from "queuert";
 
-import { sql, stopContainer } from "./adapters.ts";
+import { adapterResources, sql } from "./adapters.ts";
 import { client } from "./client.ts";
 import { notificationProcessors } from "./slice-notifications-processors.ts";
 import { orderProcessors } from "./slice-orders-processors.ts";
 
-const workerRunner = createWorkerRunner({
-  client,
-  processors: [orderProcessors, notificationProcessors],
-});
+await using resources = adapterResources;
+const workerRunner = resources.use(
+  createWorkerRunner({
+    client,
+    processors: [orderProcessors, notificationProcessors],
+  }),
+);
 
-const stopWorkerRunner = await workerRunner.start();
+await workerRunner.start();
 
 // ---------------------------------------------------------------------------
 // Pattern 1: Independent slices
@@ -121,6 +124,3 @@ console.log(
 );
 assert.ok(placeOrderResult.output.orderId > 0);
 assert.ok(placeOrderResult.output.confirmedAt);
-
-await stopWorkerRunner();
-await stopContainer();

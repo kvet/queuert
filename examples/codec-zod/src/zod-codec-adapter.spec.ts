@@ -38,7 +38,7 @@ const createStateAdapter = async () => {
 
 test("stores the encoded form and hands the runtime form to readers", async () => {
   const jobTypes = buildJobTypes();
-  const stateAdapter = await createStateAdapter();
+  await using stateAdapter = await createStateAdapter();
   const client = createClient({ stateAdapter, jobTypes });
 
   const sendAt = new Date("2024-06-01T09:00:00.000Z");
@@ -53,18 +53,16 @@ test("stores the encoded form and hands the runtime form to readers", async () =
 
   const job = await client.getJob({ id: chain.id, typeName: "remind" });
   expect(job?.input.sendAt).toBeInstanceOf(Date);
-
-  await stateAdapter.close();
 });
 
 test("round-trips a Date through the worker and back out of a client read", async () => {
   const jobTypes = buildJobTypes();
-  const stateAdapter = await createStateAdapter();
+  await using stateAdapter = await createStateAdapter();
   const client = createClient({ stateAdapter, jobTypes });
 
   const sentAt = new Date("2024-07-04T12:00:00.000Z");
 
-  const workerRunner = createWorkerRunner({
+  await using workerRunner = createWorkerRunner({
     client,
     processors: createProcessors({
       client,
@@ -95,16 +93,13 @@ test("round-trips a Date through the worker and back out of a client read", asyn
     ),
   );
 
-  const stop = await workerRunner.start();
+  await workerRunner.start();
   const result = await client.awaitChain(chain, { timeoutMs: 5000, pollIntervalMs: 10 });
-  await stop();
 
   expect(result.output.sentAt).toEqual(sentAt);
 
   const [stored] = await stateAdapter.getJobs({ jobIds: [chain.id] });
   expect(stored?.output).toEqual({ sentAt: "2024-07-04T12:00:00.000Z" });
-
-  await stateAdapter.close();
 });
 
 test("rejects a schema whose encoded form is not JSON-serializable", () => {
@@ -134,7 +129,7 @@ test("validates structural blockers against the runtime form", async () => {
       blockers: z.array(z.object({ input: z.object({ sendAt: z.date() }) })),
     },
   });
-  const stateAdapter = await createStateAdapter();
+  await using stateAdapter = await createStateAdapter();
   const client = createClient({ stateAdapter, jobTypes });
 
   const digest = await withTxHooks(async (txHooks) =>
@@ -156,8 +151,6 @@ test("validates structural blockers against the runtime form", async () => {
   );
 
   expect(digest.status).toBe("running");
-
-  await stateAdapter.close();
 });
 
 describe("zod codec adapter conformance", () => {

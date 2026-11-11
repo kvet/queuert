@@ -63,13 +63,14 @@ const jobTypes = defineJobTypes<{
 }>();
 
 await using pg = await acquirePostgres("postgres:18", import.meta.url);
-const sql = postgres(pg.connectionString, { max: 10 });
+await using drivers = new AsyncDisposableStack();
+const sql = drivers.adopt(postgres(pg.connectionString, { max: 10 }), async (sql) => sql.end());
 
 const stateProvider = createPostgresJsStateProvider({ sql });
-const stateAdapter = createPgStateAdapter({ stateProvider });
+await using stateAdapter = createPgStateAdapter({ stateProvider });
 await stateAdapter.migrateToLatest();
 const notifyProvider = createPostgresJsNotifyProvider({ sql });
-const notifyAdapter = createPgNotifyAdapter({ notifyProvider });
+await using notifyAdapter = createPgNotifyAdapter({ notifyProvider });
 
 const client = createClient({
   stateAdapter,
@@ -77,7 +78,7 @@ const client = createClient({
   jobTypes,
 });
 
-const workerRunner = createWorkerRunner({
+await using workerRunner = createWorkerRunner({
   client,
   processors: createProcessors({
     client,
@@ -123,7 +124,7 @@ const workerRunner = createWorkerRunner({
   }),
 });
 
-const stopWorkerRunner = await workerRunner.start();
+await workerRunner.start();
 
 // Scenario 1a: Approval workflow - approved externally
 console.log("\n--- Scenario 1a: Approval Workflow (Approved) ---");
@@ -239,8 +240,3 @@ const result3 = await withTxHooks(async (txHooks) =>
 console.log(`Result: ${JSON.stringify(result3.output)}`);
 assert.ok("completed" in result3.output);
 assert.ok(result3.output.result.includes("confirm"));
-
-await stopWorkerRunner();
-await notifyAdapter.close();
-await stateAdapter.close();
-await sql.end();

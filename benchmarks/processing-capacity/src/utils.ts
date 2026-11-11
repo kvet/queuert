@@ -133,13 +133,13 @@ const completeChainsForWindow =
     });
 
     begin = performance.now();
-    const stopWorkerRunner = await workerRunner.start();
+    await workerRunner.start();
     const windowTimer = setTimeout(() => {
       finish(performance.now());
     }, WINDOW_MS);
     await measured.promise;
     clearTimeout(windowTimer);
-    await stopWorkerRunner();
+    await workerRunner.close();
     return measurement!;
   };
 

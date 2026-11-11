@@ -1,6 +1,6 @@
 import assert from "node:assert/strict";
 
-import { sleep, withWorkerRunners } from "@queuert/helpers";
+import { sleep } from "@queuert/helpers";
 
 import { createClient } from "../../client.ts";
 import type { StateAdapterConformanceContext } from "../../conformance.state-adapter/types.ts";
@@ -324,7 +324,7 @@ export const deletionGroup: ConformanceGroup<StateAdapterConformanceContext> = {
         const jobStarted = Promise.withResolvers<void>();
         const completeError = Promise.withResolvers<unknown>();
 
-        const workerRunner = createWorkerRunner({
+        await using workerRunner = createWorkerRunner({
           client,
           concurrency: 1,
           processors: createProcessors({
@@ -361,37 +361,37 @@ export const deletionGroup: ConformanceGroup<StateAdapterConformanceContext> = {
           }),
         );
 
-        await withWorkerRunners([await workerRunner.start()], async () => {
-          await jobStarted.promise;
+        await workerRunner.start();
+        await jobStarted.promise;
 
-          const deletedChains = await withCaseTransaction(stateAdapter, async (txCtx, txHooks) =>
-            client.deleteChains({
-              ...txCtx,
-              txHooks,
-              ids: [chain.id],
-            }),
-          );
+        const deletedChains = await withCaseTransaction(stateAdapter, async (txCtx, txHooks) =>
+          client.deleteChains({
+            ...txCtx,
+            txHooks,
+            ids: [chain.id],
+          }),
+        );
 
-          assert.equal(deletedChains.length, 1);
-          assert.partialDeepStrictEqual(deletedChains[0], {
-            id: chain.id,
-            typeName: "test",
-            input: { deleteDuringAttempt: true },
-          });
-
-          assert.ok((await completeError.promise) instanceof JobNotFoundError);
-
-          const nextChain = await withCaseTransaction(stateAdapter, async (txCtx, txHooks) =>
-            client.createChain({
-              ...txCtx,
-              txHooks,
-              typeName: "test",
-              input: { deleteDuringAttempt: false },
-            }),
-          );
-          const completed = await client.awaitChain(nextChain, completionOptions);
-          assert.equal(completed.status, "completed");
+        assert.equal(deletedChains.length, 1);
+        assert.partialDeepStrictEqual(deletedChains[0], {
+          id: chain.id,
+          typeName: "test",
+          input: { deleteDuringAttempt: true },
         });
+
+        assert.ok((await completeError.promise) instanceof JobNotFoundError);
+
+        const nextChain = await withCaseTransaction(stateAdapter, async (txCtx, txHooks) =>
+          client.createChain({
+            ...txCtx,
+            txHooks,
+            typeName: "test",
+            input: { deleteDuringAttempt: false },
+          }),
+        );
+        const completed = await client.awaitChain(nextChain, completionOptions);
+        assert.equal(completed.status, "completed");
+        await workerRunner.close();
         assert.equal(logs.entriesOfType("job_attempt_failed").length, 0);
       },
     },
@@ -751,7 +751,7 @@ export const deletionGroup: ConformanceGroup<StateAdapterConformanceContext> = {
         }>();
         const client = createClient({ stateAdapter, notifyAdapter, jobTypes });
         const handlerAsserted = Promise.withResolvers<void>();
-        const workerRunner = createWorkerRunner({
+        await using workerRunner = createWorkerRunner({
           client,
           processors: createProcessors({
             client,
@@ -789,9 +789,8 @@ export const deletionGroup: ConformanceGroup<StateAdapterConformanceContext> = {
           client.createChain({ ...txCtx, txHooks, typeName: "test", input: null }),
         );
 
-        await withWorkerRunners([await workerRunner.start()], async () => {
-          await handlerAsserted.promise;
-        });
+        await workerRunner.start();
+        await handlerAsserted.promise;
         assert.equal(await client.getChain({ id: chain.id }), undefined);
       },
     },
@@ -819,7 +818,7 @@ export const deletionNotifyGroup: ConformanceGroup<StateAdapterConformanceContex
         const jobStarted = Promise.withResolvers<void>();
         const jobDeleted = Promise.withResolvers<void>();
 
-        const workerRunner = createWorkerRunner({
+        await using workerRunner = createWorkerRunner({
           client,
           concurrency: 1,
           processors: createProcessors({
@@ -863,27 +862,26 @@ export const deletionNotifyGroup: ConformanceGroup<StateAdapterConformanceContex
           }),
         );
 
-        await withWorkerRunners([await workerRunner.start()], async () => {
-          await jobStarted.promise;
+        await workerRunner.start();
+        await jobStarted.promise;
 
-          const deletedChains = await withCaseTransaction(stateAdapter, async (txCtx, txHooks) =>
-            client.deleteChains({
-              ...txCtx,
-              txHooks,
-              ids: [chain.id],
-            }),
-          );
+        const deletedChains = await withCaseTransaction(stateAdapter, async (txCtx, txHooks) =>
+          client.deleteChains({
+            ...txCtx,
+            txHooks,
+            ids: [chain.id],
+          }),
+        );
 
-          assert.equal(deletedChains.length, 1);
-          assert.partialDeepStrictEqual(deletedChains[0], {
-            id: chain.id,
-            typeName: "test",
-            input: null,
-            status: "running",
-          });
-
-          await jobDeleted.promise;
+        assert.equal(deletedChains.length, 1);
+        assert.partialDeepStrictEqual(deletedChains[0], {
+          id: chain.id,
+          typeName: "test",
+          input: null,
+          status: "running",
         });
+
+        await jobDeleted.promise;
       },
     },
   ],

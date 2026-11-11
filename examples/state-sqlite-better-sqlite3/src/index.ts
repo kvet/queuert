@@ -11,7 +11,10 @@ import {
 import { createBetterSqlite3StateProvider } from "./provider.ts";
 
 // Create in-memory SQLite database
-const db = new Database(":memory:");
+await using drivers = new AsyncDisposableStack();
+const db = drivers.adopt(new Database(":memory:"), (db) => {
+  db.close();
+});
 
 // Create application schema
 db.exec(`
@@ -35,13 +38,13 @@ const jobTypes = defineJobTypes<{
 // #region adapter
 const lock = createAsyncRwLock();
 const stateProvider = createBetterSqlite3StateProvider({ db, lock });
-const stateAdapter = createSqliteStateAdapter({ stateProvider });
+await using stateAdapter = createSqliteStateAdapter({ stateProvider });
 await stateAdapter.migrateToLatest();
 // #endregion
 
 const client = createClient({ stateAdapter, jobTypes });
 
-const workerRunner = createWorkerRunner({
+await using workerRunner = createWorkerRunner({
   client,
   processors: createProcessors({
     client,
@@ -91,7 +94,7 @@ const workerRunner = createWorkerRunner({
   }),
 });
 
-const stopWorkerRunner = await workerRunner.start();
+await workerRunner.start();
 
 // Register a new user and queue welcome email atomically
 // #region create-chain
@@ -127,8 +130,3 @@ const chain = await withTxHooks(async (txHooks) => {
 // Wait for the chain to complete
 const result = await client.awaitChain(chain, { timeoutMs: 5000 });
 console.log(`Welcome email sent at: ${result.output.sentAt}`);
-
-// Cleanup
-await stopWorkerRunner();
-await stateAdapter.close();
-db.close();

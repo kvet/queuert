@@ -31,7 +31,7 @@ await runDoubleRunBenchmark<Record<string, never>>({
       createDashboard({ client }),
     );
 
-    const stopWorkerRunner = await step("After creating worker", async () => {
+    const workerRunner = await step("After creating worker", async () => {
       const workerRunner = createWorkerRunner({
         client,
         processors: createProcessors({
@@ -52,7 +52,8 @@ await runDoubleRunBenchmark<Record<string, never>>({
           },
         }),
       });
-      return workerRunner.start();
+      await workerRunner.start();
+      return workerRunner;
     });
 
     await processStep(`After processing ${jobCount} jobs`, async () => {
@@ -75,7 +76,7 @@ await runDoubleRunBenchmark<Record<string, never>>({
       await dashboard.fetch(new Request("http://localhost/api/chains"));
     });
 
-    await stopWorkerRunner();
+    await workerRunner.close();
     await stateAdapter.close();
   },
 });

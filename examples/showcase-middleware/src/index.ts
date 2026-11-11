@@ -62,13 +62,14 @@ const jobTypes = defineJobTypes<{
 }>();
 
 await using pg = await acquirePostgres("postgres:18", import.meta.url);
-const sql = postgres(pg.connectionString, { max: 10 });
+await using drivers = new AsyncDisposableStack();
+const sql = drivers.adopt(postgres(pg.connectionString, { max: 10 }), async (sql) => sql.end());
 
 const stateProvider = createPostgresJsStateProvider({ sql });
-const stateAdapter = createPgStateAdapter({ stateProvider });
+await using stateAdapter = createPgStateAdapter({ stateProvider });
 await stateAdapter.migrateToLatest();
 const notifyProvider = createPostgresJsNotifyProvider({ sql });
-const notifyAdapter = createPgNotifyAdapter({ notifyProvider });
+await using notifyAdapter = createPgNotifyAdapter({ notifyProvider });
 
 await sql`
   CREATE TABLE tenant (
@@ -174,7 +175,7 @@ const client = createClient({
   jobTypes,
 });
 
-const workerRunner = createWorkerRunner({
+await using workerRunner = createWorkerRunner({
   client,
   processors: createProcessors({
     client,
@@ -236,7 +237,7 @@ const workerRunner = createWorkerRunner({
   }),
 });
 
-const stopWorkerRunner = await workerRunner.start();
+await workerRunner.start();
 
 console.log("--- issuing an invoice for tenant acme ---");
 const chain = await withTxHooks(async (txHooks) =>
@@ -271,8 +272,3 @@ assert.deepEqual(
   ["invoice.issued", "receipt.rendered", "receipt.delivered"],
 );
 assert.deepEqual(reportedUnits, ["invoice.issued", "receipt.rendered", "receipt.delivered"]);
-
-await stopWorkerRunner();
-await notifyAdapter.close();
-await stateAdapter.close();
-await sql.end();

@@ -50,30 +50,12 @@ const Page = () => (
       </TabItem>
     </Tabs>
     <p>
-      Close the adapters, then your own clients, in the{" "}
-      <A href="/integrations/notify-adapters/#how-adapters-behave">shutdown order</A>:
+      The notify adapter and your clients are held with <code>await using</code>. A client that is
+      not disposable itself is adopted by a <code>drivers</code> <code>AsyncDisposableStack</code>.
+      Disposal runs in reverse order, so when the scope ends the notify adapter closes before your
+      clients, in the{" "}
+      <A href="/integrations/notify-adapters/#how-adapters-behave">shutdown order</A>.
     </p>
-    <Tabs syncKey="redis-driver">
-      <TabItem label="node-redis">
-        <ExampleCode example="notify-redis-redis" file="src/index.ts" region="cleanup" />
-      </TabItem>
-      <TabItem label="ioredis">
-        <ExampleCode example="notify-redis-ioredis" file="src/index.ts" region="cleanup" />
-      </TabItem>
-      <TabItem label="Bun" badge="Bun">
-        <ExampleCode example="notify-redis-bun" file="src/index.ts" region="cleanup" />
-      </TabItem>
-      <TabItem label="node-redis cluster">
-        <ExampleCode
-          example="notify-redis-cluster-node-redis"
-          file="src/index.ts"
-          region="cleanup"
-        />
-      </TabItem>
-      <TabItem label="ioredis cluster">
-        <ExampleCode example="notify-redis-cluster-ioredis" file="src/index.ts" region="cleanup" />
-      </TabItem>
-    </Tabs>
 
     <h2 id="configuration">Configuration</h2>
     <FieldList

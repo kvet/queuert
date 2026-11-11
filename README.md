@@ -84,7 +84,7 @@ const workerRunner = createWorkerRunner({
   }),
 });
 
-const stop = await workerRunner.start();
+await workerRunner.start();
 ```
 
 ## Where it fits

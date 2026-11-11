@@ -1,6 +1,5 @@
 import { type UUID, randomUUID } from "node:crypto";
 
-import { withWorkerRunners } from "@queuert/helpers";
 import { detectResourceLeaks } from "@queuert/helpers/testing";
 import { TESTCONTAINERS_RESOURCE_TYPES, acquirePostgres } from "@queuert/testcontainers";
 import { Pool, type PoolClient } from "pg";
@@ -77,7 +76,7 @@ it("infers custom ID types through the full stack", async () => {
       }
     };
 
-    const workerRunner = createWorkerRunner({
+    await using workerRunner = createWorkerRunner({
       client,
       processors: createProcessors({
         client,
@@ -114,9 +113,8 @@ it("infers custom ID types through the full stack", async () => {
     );
     expectTypeOf(chain.id).toEqualTypeOf<`job.${UUID}`>();
 
-    await withWorkerRunners([await workerRunner.start()], async () => {
-      await client.awaitChain(chain, { timeoutMs: 1000 });
-    });
+    await workerRunner.start();
+    await client.awaitChain(chain, { timeoutMs: 1000 });
   } finally {
     await pool.end();
   }

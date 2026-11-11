@@ -88,8 +88,8 @@ export const runValidationBenchmark = async ({
             },
           }),
         });
-        const stopWorkerRunner = await workerRunner.start();
-        return { client, stopWorkerRunner };
+        await workerRunner.start();
+        return { client, workerRunner };
       });
 
       await processStep(`After processing ${jobCount} jobs`, async () => {
@@ -108,7 +108,7 @@ export const runValidationBenchmark = async ({
         await completions.done;
       });
 
-      await setup.stopWorkerRunner();
+      await setup.workerRunner.close();
       await stateAdapter.close();
     },
   });

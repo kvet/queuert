@@ -1,6 +1,6 @@
 import assert from "node:assert/strict";
 
-import { sleep, withWorkerRunners } from "@queuert/helpers";
+import { sleep } from "@queuert/helpers";
 
 import { createClient } from "../../client.ts";
 import type { StateAdapterConformanceContext } from "../../conformance.state-adapter/types.ts";
@@ -26,7 +26,7 @@ export const notifyGroup: ConformanceGroup<StateAdapterConformanceContext> = {
           test: { entry: true; input: { value: number }; output: { result: number } };
         }>();
         const client = createClient({ stateAdapter, notifyAdapter, jobTypes });
-        const workerRunner = createWorkerRunner({
+        await using workerRunner = createWorkerRunner({
           client,
           concurrency: 1,
           processors: createProcessors({
@@ -45,17 +45,16 @@ export const notifyGroup: ConformanceGroup<StateAdapterConformanceContext> = {
           }),
         });
 
-        await withWorkerRunners([await workerRunner.start()], async () => {
-          const chain = await withCaseTransaction(stateAdapter, async (txCtx, txHooks) =>
-            client.createChain({ ...txCtx, txHooks, typeName: "test", input: { value: 1 } }),
-          );
+        await workerRunner.start();
+        const chain = await withCaseTransaction(stateAdapter, async (txCtx, txHooks) =>
+          client.createChain({ ...txCtx, txHooks, typeName: "test", input: { value: 1 } }),
+        );
 
-          const signal = AbortSignal.timeout(2000);
-          await client.awaitChain(chain, { timeoutMs: 2000 });
-          if (signal.aborted) {
-            throw new Error("Timed out waiting for chain completion");
-          }
-        });
+        const signal = AbortSignal.timeout(2000);
+        await client.awaitChain(chain, { timeoutMs: 2000 });
+        if (signal.aborted) {
+          throw new Error("Timed out waiting for chain completion");
+        }
       },
     },
     {
@@ -87,31 +86,30 @@ export const notifyGroup: ConformanceGroup<StateAdapterConformanceContext> = {
             }),
           });
 
-        await withWorkerRunners(
-          await Promise.all(
-            Array.from({ length: 5 }, async () => createTestWorkerRunner().start()),
-          ),
-          async () => {
-            const chains = await withCaseTransaction(stateAdapter, async (txCtx, txHooks) =>
-              client.createChains({
-                ...txCtx,
-                txHooks,
-                items: Array.from({ length: 5 }, (_, i) => ({
-                  typeName: "test",
-                  input: { value: i },
-                })),
-              }),
-            );
+        await using stack = new AsyncDisposableStack();
+        const workerRunners = Array.from({ length: 5 }, () => stack.use(createTestWorkerRunner()));
+        for (const workerRunner of workerRunners) {
+          await workerRunner.start();
+        }
 
-            const signal = AbortSignal.timeout(200);
-            await Promise.all(
-              chains.map(async (chain) => client.awaitChain(chain, { timeoutMs: 200 })),
-            );
-            if (signal.aborted) {
-              throw new Error("Timed out waiting for chain completions");
-            }
-          },
+        const chains = await withCaseTransaction(stateAdapter, async (txCtx, txHooks) =>
+          client.createChains({
+            ...txCtx,
+            txHooks,
+            items: Array.from({ length: 5 }, (_, i) => ({
+              typeName: "test",
+              input: { value: i },
+            })),
+          }),
         );
+
+        const signal = AbortSignal.timeout(200);
+        await Promise.all(
+          chains.map(async (chain) => client.awaitChain(chain, { timeoutMs: 200 })),
+        );
+        if (signal.aborted) {
+          throw new Error("Timed out waiting for chain completions");
+        }
       },
     },
     {
@@ -129,7 +127,7 @@ export const notifyGroup: ConformanceGroup<StateAdapterConformanceContext> = {
           };
         }>();
         const client = createClient({ stateAdapter, notifyAdapter, jobTypes });
-        const workerRunner1 = createWorkerRunner({
+        await using workerRunner1 = createWorkerRunner({
           client,
           concurrency: 1,
           processors: createProcessors({
@@ -147,7 +145,7 @@ export const notifyGroup: ConformanceGroup<StateAdapterConformanceContext> = {
             },
           }),
         });
-        const workerRunner2 = createWorkerRunner({
+        await using workerRunner2 = createWorkerRunner({
           client,
           concurrency: 1,
           processors: createProcessors({
@@ -166,32 +164,29 @@ export const notifyGroup: ConformanceGroup<StateAdapterConformanceContext> = {
           }),
         });
 
-        await withWorkerRunners(
-          [await workerRunner1.start(), await workerRunner2.start()],
-          async () => {
-            const chain = await withCaseTransaction(stateAdapter, async (txCtx, txHooks) => {
-              const blockerChain = await client.createChain({
-                ...txCtx,
-                txHooks,
-                typeName: "blocker",
-                input: null,
-              });
-              return client.createChain({
-                ...txCtx,
-                txHooks,
-                typeName: "main",
-                input: null,
-                blockers: [blockerChain],
-              });
-            });
+        await workerRunner1.start();
+        await workerRunner2.start();
+        const chain = await withCaseTransaction(stateAdapter, async (txCtx, txHooks) => {
+          const blockerChain = await client.createChain({
+            ...txCtx,
+            txHooks,
+            typeName: "blocker",
+            input: null,
+          });
+          return client.createChain({
+            ...txCtx,
+            txHooks,
+            typeName: "main",
+            input: null,
+            blockers: [blockerChain],
+          });
+        });
 
-            const signal = AbortSignal.timeout(100);
-            await client.awaitChain(chain, { signal, timeoutMs: 200 });
-            if (signal.aborted) {
-              throw new Error("Timed out waiting for chain completion");
-            }
-          },
-        );
+        const signal = AbortSignal.timeout(100);
+        await client.awaitChain(chain, { signal, timeoutMs: 200 });
+        if (signal.aborted) {
+          throw new Error("Timed out waiting for chain completion");
+        }
       },
     },
     {
@@ -204,7 +199,7 @@ export const notifyGroup: ConformanceGroup<StateAdapterConformanceContext> = {
           step2: { input: null; output: { finished: true } };
         }>();
         const client = createClient({ stateAdapter, notifyAdapter, jobTypes });
-        const workerRunner1 = createWorkerRunner({
+        await using workerRunner1 = createWorkerRunner({
           client,
           concurrency: 1,
           processors: createProcessors({
@@ -226,7 +221,7 @@ export const notifyGroup: ConformanceGroup<StateAdapterConformanceContext> = {
             },
           }),
         });
-        const workerRunner2 = createWorkerRunner({
+        await using workerRunner2 = createWorkerRunner({
           client,
           concurrency: 1,
           processors: createProcessors({
@@ -245,20 +240,17 @@ export const notifyGroup: ConformanceGroup<StateAdapterConformanceContext> = {
           }),
         });
 
-        await withWorkerRunners(
-          [await workerRunner1.start(), await workerRunner2.start()],
-          async () => {
-            const chain = await withCaseTransaction(stateAdapter, async (txCtx, txHooks) =>
-              client.createChain({ ...txCtx, txHooks, typeName: "step1", input: null }),
-            );
-
-            const signal = AbortSignal.timeout(100);
-            await client.awaitChain(chain, { timeoutMs: 200 });
-            if (signal.aborted) {
-              throw new Error("Timed out waiting for chain completion");
-            }
-          },
+        await workerRunner1.start();
+        await workerRunner2.start();
+        const chain = await withCaseTransaction(stateAdapter, async (txCtx, txHooks) =>
+          client.createChain({ ...txCtx, txHooks, typeName: "step1", input: null }),
         );
+
+        const signal = AbortSignal.timeout(100);
+        await client.awaitChain(chain, { timeoutMs: 200 });
+        if (signal.aborted) {
+          throw new Error("Timed out waiting for chain completion");
+        }
       },
     },
     {
@@ -274,7 +266,7 @@ export const notifyGroup: ConformanceGroup<StateAdapterConformanceContext> = {
         const jobStarted = Promise.withResolvers<void>();
         const jobCompleted = Promise.withResolvers<void>();
 
-        const workerRunner = createWorkerRunner({
+        await using workerRunner = createWorkerRunner({
           client,
           concurrency: 1,
           processors: createProcessors({
@@ -296,27 +288,26 @@ export const notifyGroup: ConformanceGroup<StateAdapterConformanceContext> = {
           }),
         });
 
-        await withWorkerRunners([await workerRunner.start()], async () => {
-          const chain = await withCaseTransaction(stateAdapter, async (txCtx, txHooks) =>
-            client.createChain({ ...txCtx, txHooks, typeName: "test", input: null }),
-          );
+        await workerRunner.start();
+        const chain = await withCaseTransaction(stateAdapter, async (txCtx, txHooks) =>
+          client.createChain({ ...txCtx, txHooks, typeName: "test", input: null }),
+        );
 
-          await jobStarted.promise;
+        await jobStarted.promise;
 
-          await withCaseTransaction(stateAdapter, async (txCtx, txHooks) =>
-            client.completeChain({
-              ...txCtx,
-              txHooks,
-              ...chain,
-              handler: async ({ job, completeJob }) =>
-                completeJob(job, async ({ complete }) =>
-                  complete({ output: { result: "from-external" } }),
-                ),
-            }),
-          );
+        await withCaseTransaction(stateAdapter, async (txCtx, txHooks) =>
+          client.completeChain({
+            ...txCtx,
+            txHooks,
+            ...chain,
+            handler: async ({ job, completeJob }) =>
+              completeJob(job, async ({ complete }) =>
+                complete({ output: { result: "from-external" } }),
+              ),
+          }),
+        );
 
-          await jobCompleted.promise;
-        });
+        await jobCompleted.promise;
       },
     },
     {
@@ -375,20 +366,22 @@ export const notifyGroup: ConformanceGroup<StateAdapterConformanceContext> = {
             }),
           });
 
-        await withWorkerRunners([await createTestWorkerRunner(zombieClient).start()], async () => {
-          const chain = await withCaseTransaction(stateAdapter, async (txCtx, txHooks) =>
-            client.createChain({ ...txCtx, txHooks, typeName: "test", input: null }),
-          );
+        await using zombieWorkerRunner = createTestWorkerRunner(zombieClient);
+        await zombieWorkerRunner.start();
+        const chain = await withCaseTransaction(stateAdapter, async (txCtx, txHooks) =>
+          client.createChain({ ...txCtx, txHooks, typeName: "test", input: null }),
+        );
 
-          await jobStarted.promise;
-          await sleep(250);
+        await jobStarted.promise;
+        await sleep(250);
 
-          await withWorkerRunners([await createTestWorkerRunner(client).start()], async () => {
-            await client.awaitChain(chain, { timeoutMs: 5000 });
-          });
+        {
+          await using workerRunner = createTestWorkerRunner(client);
+          await workerRunner.start();
+          await client.awaitChain(chain, { timeoutMs: 5000 });
+        }
 
-          await jobCompleted.promise;
-        });
+        await jobCompleted.promise;
       },
     },
     {
@@ -424,33 +417,36 @@ export const notifyGroup: ConformanceGroup<StateAdapterConformanceContext> = {
             },
           },
         });
-        const failingWorkerRunner = createWorkerRunner({ client, concurrency: 1, processors });
-        const idleWorkerRunner = createWorkerRunner({
+        await using failingWorkerRunner = createWorkerRunner({
+          client,
+          concurrency: 1,
+          processors,
+        });
+        await using idleWorkerRunner = createWorkerRunner({
           client,
           concurrency: 1,
           pollIntervalMs: 10_000,
           processors,
         });
 
-        const stopFailingWorkerRunner = await failingWorkerRunner.start();
+        await failingWorkerRunner.start();
         const chain = await withCaseTransaction(stateAdapter, async (txCtx, txHooks) =>
           client.createChain({ ...txCtx, txHooks, typeName: "test", input: null }),
         );
         await firstAttemptStarted.promise;
 
-        await withWorkerRunners([await idleWorkerRunner.start()], async () => {
-          await sleep(100);
+        await idleWorkerRunner.start();
+        await sleep(100);
 
-          const stopping = stopFailingWorkerRunner();
-          gate.resolve();
-          await stopping;
+        const stopping = failingWorkerRunner.stop();
+        gate.resolve();
+        await stopping;
 
-          const completedChain = await client.awaitChain(chain, {
-            timeoutMs: 2000,
-            pollIntervalMs: 50,
-          });
-          assert.deepEqual(completedChain.output, { result: "retried" });
+        const completedChain = await client.awaitChain(chain, {
+          timeoutMs: 2000,
+          pollIntervalMs: 50,
         });
+        assert.deepEqual(completedChain.output, { result: "retried" });
       },
     },
     {
@@ -535,27 +531,26 @@ export const notifyGroup: ConformanceGroup<StateAdapterConformanceContext> = {
             }),
           });
 
-        await withWorkerRunners(
-          [await createTestWorkerRunner().start(), await createTestWorkerRunner().start()],
+        await using workerRunner1 = createTestWorkerRunner();
+        await using workerRunner2 = createTestWorkerRunner();
+        await workerRunner1.start();
+        await workerRunner2.start();
+        await retryUntilPasses(
           async () => {
-            await retryUntilPasses(
-              async () => {
-                assert.equal(listeningCount, 2);
-              },
-              { timeoutMs: 2000 },
-            );
-            recording = true;
-            const chain = await withCaseTransaction(stateAdapter, async (txCtx, txHooks) =>
-              client.createChain({ ...txCtx, txHooks, typeName: "test", input: null }),
-            );
-            await client.awaitChain(chain, { timeoutMs: 2000 });
-            await retryUntilPasses(
-              async () => {
-                assert.equal(acquiringWorkerIds.size, 2);
-              },
-              { timeoutMs: 2000 },
-            );
+            assert.equal(listeningCount, 2);
           },
+          { timeoutMs: 2000 },
+        );
+        recording = true;
+        const chain = await withCaseTransaction(stateAdapter, async (txCtx, txHooks) =>
+          client.createChain({ ...txCtx, txHooks, typeName: "test", input: null }),
+        );
+        await client.awaitChain(chain, { timeoutMs: 2000 });
+        await retryUntilPasses(
+          async () => {
+            assert.equal(acquiringWorkerIds.size, 2);
+          },
+          { timeoutMs: 2000 },
         );
       },
     },
@@ -580,7 +575,7 @@ export const notifyGroup: ConformanceGroup<StateAdapterConformanceContext> = {
             ],
           }),
         );
-        const crashedWorkerRunner = createWorkerRunner({
+        await using crashedWorkerRunner = createWorkerRunner({
           client,
           concurrency: chains.length,
           processors: createProcessors({
@@ -597,40 +592,39 @@ export const notifyGroup: ConformanceGroup<StateAdapterConformanceContext> = {
           }),
         });
 
-        await withWorkerRunners([await crashedWorkerRunner.start()], async () => {
-          await retryUntilPasses(async () => {
-            const jobs = await client.getJobs({ ids: chains.map((chain) => chain.id) });
-            assert.deepEqual(
-              jobs.map((job) => job?.status),
-              ["running", "running"],
-            );
-          });
-          spyNotifyAdapter.calls.length = 0;
-
-          await withCaseTransaction(stateAdapter, async (txCtx, txHooks) => {
-            for (const chain of chains) {
-              await client.completeChain({
-                ...txCtx,
-                txHooks,
-                ...chain,
-                handler: async ({ job, completeJob }) =>
-                  completeJob(job, async ({ complete }) => complete({ output: null })),
-              });
-            }
-          });
-
-          const chainIds = chains.map((chain) => chain.id).sort();
+        await crashedWorkerRunner.start();
+        await retryUntilPasses(async () => {
+          const jobs = await client.getJobs({ ids: chains.map((chain) => chain.id) });
           assert.deepEqual(
-            spyNotifyAdapter.calls
-              .map((call) => ({ name: call.name, args: [...call.args].sort() }))
-              .sort((a, b) => a.name.localeCompare(b.name)),
-            [
-              { name: "notifyChainsCompleted", args: chainIds },
-              { name: "notifyJobAttemptsLost", args: chainIds },
-            ],
+            jobs.map((job) => job?.status),
+            ["running", "running"],
           );
-          assert.equal(spyNotifyAdapter.calls.length, 2);
         });
+        spyNotifyAdapter.calls.length = 0;
+
+        await withCaseTransaction(stateAdapter, async (txCtx, txHooks) => {
+          for (const chain of chains) {
+            await client.completeChain({
+              ...txCtx,
+              txHooks,
+              ...chain,
+              handler: async ({ job, completeJob }) =>
+                completeJob(job, async ({ complete }) => complete({ output: null })),
+            });
+          }
+        });
+
+        const chainIds = chains.map((chain) => chain.id).sort();
+        assert.deepEqual(
+          spyNotifyAdapter.calls
+            .map((call) => ({ name: call.name, args: [...call.args].sort() }))
+            .sort((a, b) => a.name.localeCompare(b.name)),
+          [
+            { name: "notifyChainsCompleted", args: chainIds },
+            { name: "notifyJobAttemptsLost", args: chainIds },
+          ],
+        );
+        assert.equal(spyNotifyAdapter.calls.length, 2);
       },
     },
   ],

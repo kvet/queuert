@@ -23,13 +23,16 @@ const users = pgTable("users", {
   email: text("email").notNull(),
 });
 
-const pool = new Pool({ connectionString: pg.connectionString });
+await using drivers = new AsyncDisposableStack();
+const pool = drivers.adopt(new Pool({ connectionString: pg.connectionString }), async (pool) =>
+  pool.end(),
+);
 const db = drizzle(pool, { schema: { users } });
 await db.execute(sql`
   CREATE TABLE users (id UUID PRIMARY KEY DEFAULT gen_random_uuid(), name TEXT NOT NULL, email TEXT NOT NULL);
 `);
 
-const stateAdapter = createPgStateAdapter({
+await using stateAdapter = createPgStateAdapter({
   stateProvider: createDrizzlePgStateProvider({ db }),
 });
 await stateAdapter.migrateToLatest();
@@ -66,7 +69,7 @@ const client = createClient({ stateAdapter, jobTypes });
 // #endregion
 
 // #region process
-const workerRunner = createWorkerRunner({
+await using workerRunner = createWorkerRunner({
   client,
   processors: createProcessors({
     client,
@@ -122,7 +125,7 @@ const workerRunner = createWorkerRunner({
   }),
 });
 
-const stop = await workerRunner.start();
+await workerRunner.start();
 // #endregion
 
 // #region create-chain
@@ -146,7 +149,3 @@ const chain = await withTxHooks(async (txHooks) =>
 
 const result = await client.awaitChain(chain, { timeoutMs: 10_000 });
 console.log(`Onboarding finished, synced to the CRM at ${result.output.syncedAt}`);
-
-await stop();
-await stateAdapter.close();
-await pool.end();

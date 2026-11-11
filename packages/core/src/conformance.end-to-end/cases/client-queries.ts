@@ -1,6 +1,6 @@
 import assert from "node:assert/strict";
 
-import { sleep, withWorkerRunners } from "@queuert/helpers";
+import { sleep } from "@queuert/helpers";
 
 import { createClient } from "../../client.ts";
 import type { StateAdapterConformanceContext } from "../../conformance.state-adapter/types.ts";
@@ -915,7 +915,7 @@ export const clientQueriesGroup: ConformanceGroup<StateAdapterConformanceContext
           client.createChain({ ...txCtx, txHooks, typeName: "task_b", input: null }),
         );
 
-        const workerRunner = createWorkerRunner({
+        await using workerRunner = createWorkerRunner({
           client,
           concurrency: 1,
           processors: createProcessors({
@@ -938,9 +938,9 @@ export const clientQueriesGroup: ConformanceGroup<StateAdapterConformanceContext
           }),
         });
 
-        await withWorkerRunners([await workerRunner.start()], async () => {
-          await client.awaitChain(chainA, completionOptions);
-        });
+        await workerRunner.start();
+        await client.awaitChain(chainA, completionOptions);
+        await workerRunner.close();
 
         const counts = await client.countChainsByTypeName({ typeNames: ["task_a", "task_b"] });
 
@@ -1044,7 +1044,7 @@ export const clientQueriesGroup: ConformanceGroup<StateAdapterConformanceContext
           client.createChain({ ...txCtx, txHooks, typeName: "task_b", input: null }),
         );
 
-        const workerRunner = createWorkerRunner({
+        await using workerRunner = createWorkerRunner({
           client,
           concurrency: 1,
           processors: createProcessors({
@@ -1067,9 +1067,9 @@ export const clientQueriesGroup: ConformanceGroup<StateAdapterConformanceContext
           }),
         });
 
-        await withWorkerRunners([await workerRunner.start()], async () => {
-          await client.awaitChain(toComplete, completionOptions);
-        });
+        await workerRunner.start();
+        await client.awaitChain(toComplete, completionOptions);
+        await workerRunner.close();
 
         const counts = await client.countJobsByTypeName({ typeNames: ["task_a", "task_b"] });
 
@@ -1381,7 +1381,7 @@ export const clientQueriesGroup: ConformanceGroup<StateAdapterConformanceContext
           jobTypes,
         });
 
-        const workerRunner = createWorkerRunner({
+        await using workerRunner = createWorkerRunner({
           client,
           concurrency: 1,
           processors: createProcessors({
@@ -1412,10 +1412,9 @@ export const clientQueriesGroup: ConformanceGroup<StateAdapterConformanceContext
           client.createChain({ ...txCtx, txHooks, typeName: "task_a", input: null }),
         );
 
-        await withWorkerRunners([await workerRunner.start()], async () => {
-          await client.awaitChain(chainA, completionOptions);
-          await client.awaitChain(chainB, completionOptions);
-        });
+        await workerRunner.start();
+        await client.awaitChain(chainA, completionOptions);
+        await client.awaitChain(chainB, completionOptions);
 
         const byCreatedAt = await client.listChains({
           typeName: "task_a",
@@ -1747,7 +1746,7 @@ export const clientQueriesGroup: ConformanceGroup<StateAdapterConformanceContext
           jobTypes,
         });
 
-        const workerRunner = createWorkerRunner({
+        await using workerRunner = createWorkerRunner({
           client,
           concurrency: 1,
           processors: createProcessors({
@@ -1778,10 +1777,9 @@ export const clientQueriesGroup: ConformanceGroup<StateAdapterConformanceContext
           client.createChain({ ...txCtx, txHooks, typeName: "job_a", input: null }),
         );
 
-        await withWorkerRunners([await workerRunner.start()], async () => {
-          await client.awaitChain(chainA, completionOptions);
-          await client.awaitChain(chainB, completionOptions);
-        });
+        await workerRunner.start();
+        await client.awaitChain(chainA, completionOptions);
+        await client.awaitChain(chainB, completionOptions);
 
         const byCreatedAt = await client.listJobs({
           typeName: "job_a",
@@ -1924,7 +1922,7 @@ export const clientQueriesGroup: ConformanceGroup<StateAdapterConformanceContext
           jobTypes,
         });
 
-        const workerRunner = createWorkerRunner({
+        await using workerRunner = createWorkerRunner({
           client,
           concurrency: 1,
           processors: createProcessors({
@@ -1951,9 +1949,8 @@ export const clientQueriesGroup: ConformanceGroup<StateAdapterConformanceContext
           client.createChain({ ...txCtx, txHooks, typeName: "step", input: { n: 0 } }),
         );
 
-        await withWorkerRunners([await workerRunner.start()], async () => {
-          await client.awaitChain(chain, completionOptions);
-        });
+        await workerRunner.start();
+        await client.awaitChain(chain, completionOptions);
 
         const page = await client.listChainJobs({ chainId: chain.id });
 
@@ -2000,7 +1997,7 @@ export const clientQueriesGroup: ConformanceGroup<StateAdapterConformanceContext
           jobTypes,
         });
 
-        const workerRunner = createWorkerRunner({
+        await using workerRunner = createWorkerRunner({
           client,
           concurrency: 1,
           processors: createProcessors({
@@ -2027,9 +2024,8 @@ export const clientQueriesGroup: ConformanceGroup<StateAdapterConformanceContext
           client.createChain({ ...txCtx, txHooks, typeName: "step", input: { n: 0 } }),
         );
 
-        await withWorkerRunners([await workerRunner.start()], async () => {
-          await client.awaitChain(chain, completionOptions);
-        });
+        await workerRunner.start();
+        await client.awaitChain(chain, completionOptions);
 
         const asc = await client.listChainJobs({ chainId: chain.id });
         const desc = await client.listChainJobs({
@@ -2068,7 +2064,7 @@ export const clientQueriesGroup: ConformanceGroup<StateAdapterConformanceContext
           jobTypes,
         });
 
-        const workerRunner = createWorkerRunner({
+        await using workerRunner = createWorkerRunner({
           client,
           concurrency: 1,
           processors: createProcessors({
@@ -2095,9 +2091,8 @@ export const clientQueriesGroup: ConformanceGroup<StateAdapterConformanceContext
           client.createChain({ ...txCtx, txHooks, typeName: "step", input: { n: 0 } }),
         );
 
-        await withWorkerRunners([await workerRunner.start()], async () => {
-          await client.awaitChain(chain, completionOptions);
-        });
+        await workerRunner.start();
+        await client.awaitChain(chain, completionOptions);
 
         const page1 = await client.listChainJobs({ chainId: chain.id, limit: 2 });
         assert.equal(page1.items.length, 2);
@@ -2374,7 +2369,7 @@ export const clientQueriesGroup: ConformanceGroup<StateAdapterConformanceContext
           jobTypes,
         });
 
-        const workerRunner = createWorkerRunner({
+        await using workerRunner = createWorkerRunner({
           client,
           concurrency: 1,
           processors: createProcessors({
@@ -2417,9 +2412,8 @@ export const clientQueriesGroup: ConformanceGroup<StateAdapterConformanceContext
         const blockersBefore = await client.getJobBlockers({ jobId: mainChain.id });
         assert.notEqual(blockersBefore[0].status, "completed");
 
-        await withWorkerRunners([await workerRunner.start()], async () => {
-          await client.awaitChain(mainChain, completionOptions);
-        });
+        await workerRunner.start();
+        await client.awaitChain(mainChain, completionOptions);
 
         const blockersAfter = await client.getJobBlockers({ jobId: mainChain.id });
         assert.equal(blockersAfter[0].status, "completed");
@@ -2693,7 +2687,7 @@ export const clientQueriesGroup: ConformanceGroup<StateAdapterConformanceContext
         });
         const attemptStarted = Promise.withResolvers<void>();
         const releaseAttempt = Promise.withResolvers<void>();
-        const workerRunner = createWorkerRunner({
+        await using workerRunner = createWorkerRunner({
           client,
           concurrency: 2,
           processors: createProcessors({
@@ -2722,28 +2716,27 @@ export const clientQueriesGroup: ConformanceGroup<StateAdapterConformanceContext
           client.createChain({ ...txCtx, txHooks, typeName: "send_email", input: null }),
         );
 
-        await withWorkerRunners([await workerRunner.start()], async () => {
-          await attemptStarted.promise;
-          const job = await client.getJob({ id: chain.id, typeName: "send_email" });
-          if (job?.status !== "running") {
-            throw new Error("job is not running");
-          }
+        await workerRunner.start();
+        await attemptStarted.promise;
+        const job = await client.getJob({ id: chain.id, typeName: "send_email" });
+        if (job?.status !== "running") {
+          throw new Error("job is not running");
+        }
 
-          const worker = await client.getWorker({ id: job.attemptBy });
-          assert.ok(worker);
-          const { startedAt, leaseUntil, ...rest } = worker;
-          assert.ok(startedAt instanceof Date);
-          assert.ok(leaseUntil instanceof Date);
-          assert.deepEqual(rest, {
-            id: job.attemptBy,
-            typeNames: ["send_email", "sync_crm"],
-            concurrency: 2,
-            expired: false,
-          });
-
-          releaseAttempt.resolve();
-          await client.awaitChain(chain, completionOptions);
+        const worker = await client.getWorker({ id: job.attemptBy });
+        assert.ok(worker);
+        const { startedAt, leaseUntil, ...rest } = worker;
+        assert.ok(startedAt instanceof Date);
+        assert.ok(leaseUntil instanceof Date);
+        assert.deepEqual(rest, {
+          id: job.attemptBy,
+          typeNames: ["send_email", "sync_crm"],
+          concurrency: 2,
+          expired: false,
         });
+
+        releaseAttempt.resolve();
+        await client.awaitChain(chain, completionOptions);
       },
     },
 
@@ -2763,7 +2756,7 @@ export const clientQueriesGroup: ConformanceGroup<StateAdapterConformanceContext
         });
         const attemptStarted = Promise.withResolvers<void>();
         const releaseAttempt = Promise.withResolvers<void>();
-        const workerRunner = createWorkerRunner({
+        await using workerRunner = createWorkerRunner({
           client,
           concurrency: 2,
           processors: createProcessors({
@@ -2792,13 +2785,12 @@ export const clientQueriesGroup: ConformanceGroup<StateAdapterConformanceContext
           client.createChain({ ...txCtx, txHooks, typeName: "send_email", input: null }),
         );
 
-        const job = await withWorkerRunners([await workerRunner.start()], async () => {
-          await attemptStarted.promise;
-          const runningJob = await client.getJob({ id: chain.id, typeName: "send_email" });
-          releaseAttempt.resolve();
-          await client.awaitChain(chain, completionOptions);
-          return runningJob;
-        });
+        await workerRunner.start();
+        await attemptStarted.promise;
+        const job = await client.getJob({ id: chain.id, typeName: "send_email" });
+        releaseAttempt.resolve();
+        await client.awaitChain(chain, completionOptions);
+        await workerRunner.close();
 
         if (job?.status !== "running") {
           throw new Error("job is not running");
@@ -2823,7 +2815,7 @@ export const clientQueriesGroup: ConformanceGroup<StateAdapterConformanceContext
         });
         const attemptStarted = Promise.withResolvers<void>();
         const releaseAttempt = Promise.withResolvers<void>();
-        const workerRunner = createWorkerRunner({
+        await using workerRunner = createWorkerRunner({
           client,
           concurrency: 2,
           processors: createProcessors({
@@ -2852,26 +2844,25 @@ export const clientQueriesGroup: ConformanceGroup<StateAdapterConformanceContext
           client.createChain({ ...txCtx, txHooks, typeName: "send_email", input: null }),
         );
 
-        await withWorkerRunners([await workerRunner.start()], async () => {
-          await attemptStarted.promise;
-          const job = await client.getJob({ id: chain.id, typeName: "send_email" });
-          if (job?.status !== "running") {
-            throw new Error("job is not running");
-          }
+        await workerRunner.start();
+        await attemptStarted.promise;
+        const job = await client.getJob({ id: chain.id, typeName: "send_email" });
+        if (job?.status !== "running") {
+          throw new Error("job is not running");
+        }
 
-          assert.deepEqual(
-            (
-              await client.getWorkers({
-                ids: [job.attemptBy, stateAdapter.config.generateWorkerId()],
-              })
-            ).map((found) => found?.id),
-            [job.attemptBy, undefined],
-          );
-          assert.deepEqual(await client.getWorkers({ ids: [] }), []);
+        assert.deepEqual(
+          (
+            await client.getWorkers({
+              ids: [job.attemptBy, stateAdapter.config.generateWorkerId()],
+            })
+          ).map((found) => found?.id),
+          [job.attemptBy, undefined],
+        );
+        assert.deepEqual(await client.getWorkers({ ids: [] }), []);
 
-          releaseAttempt.resolve();
-          await client.awaitChain(chain, completionOptions);
-        });
+        releaseAttempt.resolve();
+        await client.awaitChain(chain, completionOptions);
       },
     },
 
@@ -2891,7 +2882,7 @@ export const clientQueriesGroup: ConformanceGroup<StateAdapterConformanceContext
         });
         const attemptStarted = Promise.withResolvers<void>();
         const releaseAttempt = Promise.withResolvers<void>();
-        const workerRunner = createWorkerRunner({
+        await using workerRunner = createWorkerRunner({
           client,
           concurrency: 2,
           processors: createProcessors({
@@ -2920,21 +2911,20 @@ export const clientQueriesGroup: ConformanceGroup<StateAdapterConformanceContext
           client.createChain({ ...txCtx, txHooks, typeName: "send_email", input: null }),
         );
 
-        await withWorkerRunners([await workerRunner.start()], async () => {
-          await attemptStarted.promise;
-          const job = await client.getJob({ id: chain.id, typeName: "send_email" });
-          if (job?.status !== "running") {
-            throw new Error("job is not running");
-          }
+        await workerRunner.start();
+        await attemptStarted.promise;
+        const job = await client.getJob({ id: chain.id, typeName: "send_email" });
+        if (job?.status !== "running") {
+          throw new Error("job is not running");
+        }
 
-          assert.deepEqual(
-            (await client.listWorkers()).items.map((listed) => [listed.id, listed.concurrency]),
-            [[job.attemptBy, 2]],
-          );
+        assert.deepEqual(
+          (await client.listWorkers()).items.map((listed) => [listed.id, listed.concurrency]),
+          [[job.attemptBy, 2]],
+        );
 
-          releaseAttempt.resolve();
-          await client.awaitChain(chain, completionOptions);
-        });
+        releaseAttempt.resolve();
+        await client.awaitChain(chain, completionOptions);
       },
     },
 
@@ -2954,7 +2944,7 @@ export const clientQueriesGroup: ConformanceGroup<StateAdapterConformanceContext
         });
         const attemptStarted = Promise.withResolvers<void>();
         const releaseAttempt = Promise.withResolvers<void>();
-        const workerRunner = createWorkerRunner({
+        await using workerRunner = createWorkerRunner({
           client,
           concurrency: 2,
           processors: createProcessors({
@@ -2983,25 +2973,24 @@ export const clientQueriesGroup: ConformanceGroup<StateAdapterConformanceContext
           client.createChain({ ...txCtx, txHooks, typeName: "send_email", input: null }),
         );
 
-        await withWorkerRunners([await workerRunner.start()], async () => {
-          await attemptStarted.promise;
-          const job = await client.getJob({ id: chain.id, typeName: "send_email" });
-          if (job?.status !== "running") {
-            throw new Error("job is not running");
-          }
+        await workerRunner.start();
+        await attemptStarted.promise;
+        const job = await client.getJob({ id: chain.id, typeName: "send_email" });
+        if (job?.status !== "running") {
+          throw new Error("job is not running");
+        }
 
-          assert.deepEqual(
-            (await client.listWorkers({ typeName: "sync_crm" })).items.map((listed) => listed.id),
-            [job.attemptBy],
-          );
-          assert.deepEqual(await client.listWorkers({ typeName: "order" }), {
-            items: [],
-            nextCursor: null,
-          });
-
-          releaseAttempt.resolve();
-          await client.awaitChain(chain, completionOptions);
+        assert.deepEqual(
+          (await client.listWorkers({ typeName: "sync_crm" })).items.map((listed) => listed.id),
+          [job.attemptBy],
+        );
+        assert.deepEqual(await client.listWorkers({ typeName: "order" }), {
+          items: [],
+          nextCursor: null,
         });
+
+        releaseAttempt.resolve();
+        await client.awaitChain(chain, completionOptions);
       },
     },
 
@@ -3039,8 +3028,9 @@ export const clientQueriesGroup: ConformanceGroup<StateAdapterConformanceContext
             },
           },
         });
+        await using stack = new AsyncDisposableStack();
         const workerRunners = [0, 1, 2].map(() =>
-          createWorkerRunner({ client, concurrency: 1, processors }),
+          stack.use(createWorkerRunner({ client, concurrency: 1, processors })),
         );
         const chains = await withCaseTransaction(stateAdapter, async (txCtx, txHooks) =>
           client.createChains({
@@ -3050,42 +3040,32 @@ export const clientQueriesGroup: ConformanceGroup<StateAdapterConformanceContext
           }),
         );
 
-        await withWorkerRunners(
-          await Promise.all(workerRunners.map(async (workerRunner) => workerRunner.start())),
-          async () => {
-            await Promise.all(
-              attemptsStarted.map(async (attemptStarted) => attemptStarted.promise),
-            );
-            const allWorkerIds = (await client.listWorkers()).items.map((listed) => listed.id);
-            assert.equal(allWorkerIds.length, 3);
+        await Promise.all(workerRunners.map(async (workerRunner) => workerRunner.start()));
+        await Promise.all(attemptsStarted.map(async (attemptStarted) => attemptStarted.promise));
+        const allWorkerIds = (await client.listWorkers()).items.map((listed) => listed.id);
+        assert.equal(allWorkerIds.length, 3);
 
-            const firstPage = await client.listWorkers({ limit: 2 });
-            assert.deepEqual(
-              firstPage.items.map((listed) => listed.id),
-              allWorkerIds.slice(0, 2),
-            );
-            const secondPage = await client.listWorkers({
-              limit: 2,
-              cursor: firstPage.nextCursor!,
-            });
-            assert.deepEqual(
-              secondPage.items.map((listed) => listed.id),
-              allWorkerIds.slice(2),
-            );
-            assert.equal(secondPage.nextCursor, null);
-            assert.deepEqual(
-              (await client.listWorkers({ orderDirection: "desc" })).items.map(
-                (listed) => listed.id,
-              ),
-              allWorkerIds.toReversed(),
-            );
-
-            releaseAttempts.resolve();
-            await Promise.all(
-              chains.map(async (chain) => client.awaitChain(chain, completionOptions)),
-            );
-          },
+        const firstPage = await client.listWorkers({ limit: 2 });
+        assert.deepEqual(
+          firstPage.items.map((listed) => listed.id),
+          allWorkerIds.slice(0, 2),
         );
+        const secondPage = await client.listWorkers({
+          limit: 2,
+          cursor: firstPage.nextCursor!,
+        });
+        assert.deepEqual(
+          secondPage.items.map((listed) => listed.id),
+          allWorkerIds.slice(2),
+        );
+        assert.equal(secondPage.nextCursor, null);
+        assert.deepEqual(
+          (await client.listWorkers({ orderDirection: "desc" })).items.map((listed) => listed.id),
+          allWorkerIds.toReversed(),
+        );
+
+        releaseAttempts.resolve();
+        await Promise.all(chains.map(async (chain) => client.awaitChain(chain, completionOptions)));
       },
     },
 
@@ -3105,7 +3085,7 @@ export const clientQueriesGroup: ConformanceGroup<StateAdapterConformanceContext
         });
         const attemptStarted = Promise.withResolvers<void>();
         const releaseAttempt = Promise.withResolvers<void>();
-        const workerRunner = createWorkerRunner({
+        await using workerRunner = createWorkerRunner({
           client,
           concurrency: 2,
           processors: createProcessors({
@@ -3134,32 +3114,31 @@ export const clientQueriesGroup: ConformanceGroup<StateAdapterConformanceContext
           client.createChain({ ...txCtx, txHooks, typeName: "send_email", input: null }),
         );
 
-        await withWorkerRunners([await workerRunner.start()], async () => {
-          await attemptStarted.promise;
-          const job = await client.getJob({ id: chain.id, typeName: "send_email" });
-          if (job?.status !== "running") {
-            throw new Error("job is not running");
-          }
+        await workerRunner.start();
+        await attemptStarted.promise;
+        const job = await client.getJob({ id: chain.id, typeName: "send_email" });
+        if (job?.status !== "running") {
+          throw new Error("job is not running");
+        }
 
-          assert.deepEqual(await client.countWorkers(), { live: 1, expired: 0 });
-          assert.deepEqual(
-            await client.countWorkersByTypeName({ typeNames: ["sync_crm", "order", "send_email"] }),
-            [
-              { live: 1, expired: 0 },
-              { live: 0, expired: 0 },
-              { live: 1, expired: 0 },
-            ],
-          );
-          assert.deepEqual(
-            await client.countRunningJobsByWorkerId({
-              workerIds: [job.attemptBy, stateAdapter.config.generateWorkerId()],
-            }),
-            [1, 0],
-          );
+        assert.deepEqual(await client.countWorkers(), { live: 1, expired: 0 });
+        assert.deepEqual(
+          await client.countWorkersByTypeName({ typeNames: ["sync_crm", "order", "send_email"] }),
+          [
+            { live: 1, expired: 0 },
+            { live: 0, expired: 0 },
+            { live: 1, expired: 0 },
+          ],
+        );
+        assert.deepEqual(
+          await client.countRunningJobsByWorkerId({
+            workerIds: [job.attemptBy, stateAdapter.config.generateWorkerId()],
+          }),
+          [1, 0],
+        );
 
-          releaseAttempt.resolve();
-          await client.awaitChain(chain, completionOptions);
-        });
+        releaseAttempt.resolve();
+        await client.awaitChain(chain, completionOptions);
       },
     },
 
@@ -3179,7 +3158,7 @@ export const clientQueriesGroup: ConformanceGroup<StateAdapterConformanceContext
         });
         const attemptStarted = Promise.withResolvers<void>();
         const releaseAttempt = Promise.withResolvers<void>();
-        const workerRunner = createWorkerRunner({
+        await using workerRunner = createWorkerRunner({
           client,
           concurrency: 2,
           processors: createProcessors({
@@ -3208,28 +3187,27 @@ export const clientQueriesGroup: ConformanceGroup<StateAdapterConformanceContext
           client.createChain({ ...txCtx, txHooks, typeName: "send_email", input: null }),
         );
 
-        await withWorkerRunners([await workerRunner.start()], async () => {
-          await attemptStarted.promise;
-          const job = await client.getJob({ id: chain.id, typeName: "send_email" });
-          if (job?.status !== "running") {
-            throw new Error("job is not running");
-          }
+        await workerRunner.start();
+        await attemptStarted.promise;
+        const job = await client.getJob({ id: chain.id, typeName: "send_email" });
+        if (job?.status !== "running") {
+          throw new Error("job is not running");
+        }
 
-          assert.deepEqual(
-            (await client.listWorkerJobs({ workerId: job.attemptBy })).items.map((running) => [
-              running.id,
-              running.status,
-            ]),
-            [[chain.id, "running"]],
-          );
+        assert.deepEqual(
+          (await client.listWorkerJobs({ workerId: job.attemptBy })).items.map((running) => [
+            running.id,
+            running.status,
+          ]),
+          [[chain.id, "running"]],
+        );
 
-          releaseAttempt.resolve();
-          await client.awaitChain(chain, completionOptions);
+        releaseAttempt.resolve();
+        await client.awaitChain(chain, completionOptions);
 
-          assert.deepEqual(await client.listWorkerJobs({ workerId: job.attemptBy }), {
-            items: [],
-            nextCursor: null,
-          });
+        assert.deepEqual(await client.listWorkerJobs({ workerId: job.attemptBy }), {
+          items: [],
+          nextCursor: null,
         });
       },
     },
@@ -3268,7 +3246,7 @@ export const clientQueriesGroup: ConformanceGroup<StateAdapterConformanceContext
             },
           },
         });
-        const workerRunner = createWorkerRunner({ client, concurrency: 3, processors });
+        await using workerRunner = createWorkerRunner({ client, concurrency: 3, processors });
         const chains = await withCaseTransaction(stateAdapter, async (txCtx, txHooks) =>
           client.createChains({
             ...txCtx,
@@ -3277,47 +3255,44 @@ export const clientQueriesGroup: ConformanceGroup<StateAdapterConformanceContext
           }),
         );
 
-        await withWorkerRunners([await workerRunner.start()], async () => {
-          await Promise.all(attemptsStarted.map(async (attemptStarted) => attemptStarted.promise));
-          const job = await client.getJob({ id: chains[0].id, typeName: "send_email" });
-          if (job?.status !== "running") {
-            throw new Error("job is not running");
-          }
-          const allJobIds = (await client.listWorkerJobs({ workerId: job.attemptBy })).items.map(
-            (running) => running.id,
-          );
-          assert.deepEqual(
-            allJobIds.toSorted((a, b) => a.localeCompare(b)),
-            chains.map((chain) => chain.id).toSorted((a, b) => a.localeCompare(b)),
-          );
+        await workerRunner.start();
+        await Promise.all(attemptsStarted.map(async (attemptStarted) => attemptStarted.promise));
+        const job = await client.getJob({ id: chains[0].id, typeName: "send_email" });
+        if (job?.status !== "running") {
+          throw new Error("job is not running");
+        }
+        const allJobIds = (await client.listWorkerJobs({ workerId: job.attemptBy })).items.map(
+          (running) => running.id,
+        );
+        assert.deepEqual(
+          allJobIds.toSorted((a, b) => a.localeCompare(b)),
+          chains.map((chain) => chain.id).toSorted((a, b) => a.localeCompare(b)),
+        );
 
-          const firstPage = await client.listWorkerJobs({ workerId: job.attemptBy, limit: 2 });
-          assert.deepEqual(
-            firstPage.items.map((running) => running.id),
-            allJobIds.slice(0, 2),
-          );
-          const secondPage = await client.listWorkerJobs({
-            workerId: job.attemptBy,
-            limit: 2,
-            cursor: firstPage.nextCursor!,
-          });
-          assert.deepEqual(
-            secondPage.items.map((running) => running.id),
-            allJobIds.slice(2),
-          );
-          assert.equal(secondPage.nextCursor, null);
-          assert.deepEqual(
-            (
-              await client.listWorkerJobs({ workerId: job.attemptBy, orderDirection: "desc" })
-            ).items.map((running) => running.id),
-            allJobIds.toReversed(),
-          );
-
-          releaseAttempts.resolve();
-          await Promise.all(
-            chains.map(async (chain) => client.awaitChain(chain, completionOptions)),
-          );
+        const firstPage = await client.listWorkerJobs({ workerId: job.attemptBy, limit: 2 });
+        assert.deepEqual(
+          firstPage.items.map((running) => running.id),
+          allJobIds.slice(0, 2),
+        );
+        const secondPage = await client.listWorkerJobs({
+          workerId: job.attemptBy,
+          limit: 2,
+          cursor: firstPage.nextCursor!,
         });
+        assert.deepEqual(
+          secondPage.items.map((running) => running.id),
+          allJobIds.slice(2),
+        );
+        assert.equal(secondPage.nextCursor, null);
+        assert.deepEqual(
+          (
+            await client.listWorkerJobs({ workerId: job.attemptBy, orderDirection: "desc" })
+          ).items.map((running) => running.id),
+          allJobIds.toReversed(),
+        );
+
+        releaseAttempts.resolve();
+        await Promise.all(chains.map(async (chain) => client.awaitChain(chain, completionOptions)));
       },
     },
 
@@ -3345,7 +3320,7 @@ export const clientQueriesGroup: ConformanceGroup<StateAdapterConformanceContext
           jobTypes,
         });
 
-        const workerRunner = createWorkerRunner({
+        await using workerRunner = createWorkerRunner({
           client,
           concurrency: 1,
           processors: createProcessors({
@@ -3376,9 +3351,8 @@ export const clientQueriesGroup: ConformanceGroup<StateAdapterConformanceContext
           client.createChain({ ...txCtx, txHooks, typeName: "task", input: { n: 1 } }),
         );
 
-        await withWorkerRunners([await workerRunner.start()], async () => {
-          await client.awaitChain(chain, completionOptions);
-        });
+        await workerRunner.start();
+        await client.awaitChain(chain, completionOptions);
 
         const headJob = await client.getJob({ id: chain.id });
         assert.notEqual(headJob, null);
@@ -3426,7 +3400,7 @@ export const clientQueriesGroup: ConformanceGroup<StateAdapterConformanceContext
           jobTypes,
         });
 
-        const workerRunner = createWorkerRunner({
+        await using workerRunner = createWorkerRunner({
           client,
           concurrency: 1,
           processors: createProcessors({
@@ -3480,9 +3454,8 @@ export const clientQueriesGroup: ConformanceGroup<StateAdapterConformanceContext
         assert.equal(blockers.length, 1);
         assert.equal(blockers[0].id, depChain.id);
 
-        await withWorkerRunners([await workerRunner.start()], async () => {
-          await client.awaitChain(mainChain, completionOptions);
-        });
+        await workerRunner.start();
+        await client.awaitChain(mainChain, completionOptions);
 
         const completedMain = await client.getJob({ id: mainChain.id });
         assert.equal(completedMain!.status, "completed");

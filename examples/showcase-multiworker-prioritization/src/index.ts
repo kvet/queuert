@@ -65,13 +65,14 @@ const jobTypes = defineJobTypes<{
 }>();
 
 await using pg = await acquirePostgres("postgres:18", import.meta.url);
-const sql = postgres(pg.connectionString, { max: 10 });
+await using drivers = new AsyncDisposableStack();
+const sql = drivers.adopt(postgres(pg.connectionString, { max: 10 }), async (sql) => sql.end());
 
 const stateProvider = createPostgresJsStateProvider({ sql });
-const stateAdapter = createPgStateAdapter({ stateProvider });
+await using stateAdapter = createPgStateAdapter({ stateProvider });
 await stateAdapter.migrateToLatest();
 const notifyProvider = createPostgresJsNotifyProvider({ sql });
-const notifyAdapter = createPgNotifyAdapter({ notifyProvider });
+await using notifyAdapter = createPgNotifyAdapter({ notifyProvider });
 
 const client = createClient({
   stateAdapter,
@@ -86,7 +87,7 @@ const simulateWork = async (durationMs: number): Promise<void> => {
   await new Promise((resolve) => setTimeout(resolve, durationMs));
 };
 
-const urgentWorkerRunner = createWorkerRunner({
+await using urgentWorkerRunner = createWorkerRunner({
   client,
   concurrency: 3,
   processors: createProcessors({
@@ -140,7 +141,7 @@ const urgentWorkerRunner = createWorkerRunner({
   }),
 });
 
-const bulkWorkerRunner = createWorkerRunner({
+await using bulkWorkerRunner = createWorkerRunner({
   client,
   concurrency: 1,
   processors: createProcessors({
@@ -181,8 +182,8 @@ const bulkWorkerRunner = createWorkerRunner({
   }),
 });
 
-const stopUrgent = await urgentWorkerRunner.start();
-const stopBulk = await bulkWorkerRunner.start();
+await urgentWorkerRunner.start();
+await bulkWorkerRunner.start();
 
 // --- Scenario 1: urgent jobs overtake a long bulk backlog thanks to reserved capacity ---
 
@@ -289,7 +290,3 @@ assert.ok(
   archiveEntry.elapsedMs > dispatchEntry.elapsedMs,
   "archive must run after dispatch — continueWith hands the chain off through the DB",
 );
-
-await stopUrgent();
-await stopBulk();
-await sql.end();

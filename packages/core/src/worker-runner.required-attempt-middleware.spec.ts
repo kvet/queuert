@@ -43,7 +43,7 @@ describe("createWorkerRunner requiredAttemptMiddleware", () => {
     const stateAdapter = createInProcessStateAdapter();
     const client = createClient({ stateAdapter, jobTypes });
 
-    const workerRunner = createWorkerRunner({
+    await using workerRunner = createWorkerRunner({
       client,
       requiredAttemptMiddleware: [authMiddleware, traceMiddleware],
       processors: createProcessors({
@@ -63,8 +63,7 @@ describe("createWorkerRunner requiredAttemptMiddleware", () => {
       }),
     });
 
-    const stop = await workerRunner.start();
-    await stop();
+    await workerRunner.start();
   });
 
   it("allows extra middleware around the required entries", async () => {
@@ -72,7 +71,7 @@ describe("createWorkerRunner requiredAttemptMiddleware", () => {
     const stateAdapter = createInProcessStateAdapter();
     const client = createClient({ stateAdapter, jobTypes });
 
-    const workerRunner = createWorkerRunner({
+    await using workerRunner = createWorkerRunner({
       client,
       requiredAttemptMiddleware: [authMiddleware, traceMiddleware],
       processors: createProcessors({
@@ -92,8 +91,7 @@ describe("createWorkerRunner requiredAttemptMiddleware", () => {
       }),
     });
 
-    const stop = await workerRunner.start();
-    await stop();
+    await workerRunner.start();
   });
 
   it("throws when a slice is missing a required middleware instance", async () => {
@@ -253,7 +251,7 @@ describe("createWorkerRunner requiredAttemptMiddleware", () => {
     const stateAdapter = createInProcessStateAdapter();
     const client = createClient({ stateAdapter, jobTypes });
 
-    const workerRunner = createWorkerRunner({
+    await using workerRunner = createWorkerRunner({
       client,
       requiredAttemptMiddleware: [mw],
       processors: createProcessors({
@@ -273,8 +271,7 @@ describe("createWorkerRunner requiredAttemptMiddleware", () => {
       }),
     });
 
-    const stop = await workerRunner.start();
-    await stop();
+    await workerRunner.start();
   });
 
   it("still rejects a mismatched slice when required mw is typed against a StateAdapter alias", async () => {
@@ -320,7 +317,7 @@ describe("createWorkerRunner requiredAttemptMiddleware", () => {
     const stateAdapter = createInProcessStateAdapter();
     const client = createClient({ stateAdapter, jobTypes });
 
-    const workerRunner = createWorkerRunner({
+    await using workerRunner = createWorkerRunner({
       client,
       processors: createProcessors({
         client,
@@ -338,7 +335,6 @@ describe("createWorkerRunner requiredAttemptMiddleware", () => {
       }),
     });
 
-    const stop = await workerRunner.start();
-    await stop();
+    await workerRunner.start();
   });
 });

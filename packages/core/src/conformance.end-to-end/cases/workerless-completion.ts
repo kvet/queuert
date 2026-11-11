@@ -1,6 +1,6 @@
 import assert from "node:assert/strict";
 
-import { sleep, withWorkerRunners } from "@queuert/helpers";
+import { sleep } from "@queuert/helpers";
 
 import { createClient } from "../../client.ts";
 import type { StateAdapterConformanceContext } from "../../conformance.state-adapter/types.ts";
@@ -289,7 +289,7 @@ export const workerlessCompletionGroup: ConformanceGroup<StateAdapterConformance
         }>();
 
         const client = createClient({ stateAdapter, notifyAdapter, jobTypes });
-        const workerRunner = createWorkerRunner({
+        await using workerRunner = createWorkerRunner({
           client,
           concurrency: 1,
           processors: createProcessors({
@@ -341,14 +341,10 @@ export const workerlessCompletionGroup: ConformanceGroup<StateAdapterConformance
             }),
         );
 
-        await withWorkerRunners([await workerRunner.start()], async () => {
-          const succeededChain = await client.awaitChain(
-            partiallyCompletedChain,
-            completionOptions,
-          );
+        await workerRunner.start();
+        const succeededChain = await client.awaitChain(partiallyCompletedChain, completionOptions);
 
-          assert.deepEqual(succeededChain.output, { done: true });
-        });
+        assert.deepEqual(succeededChain.output, { done: true });
       },
     },
     {
@@ -474,7 +470,7 @@ export const workerlessCompletionGroup: ConformanceGroup<StateAdapterConformance
         }>();
 
         const client = createClient({ stateAdapter, notifyAdapter, jobTypes });
-        const workerRunner = createWorkerRunner({
+        await using workerRunner = createWorkerRunner({
           client,
           concurrency: 1,
           processors: createProcessors({
@@ -517,26 +513,25 @@ export const workerlessCompletionGroup: ConformanceGroup<StateAdapterConformance
           }),
         );
 
-        await withWorkerRunners([await workerRunner.start()], async () => {
-          await jobStarted.promise;
-          await sleep(10);
+        await workerRunner.start();
+        await jobStarted.promise;
+        await sleep(10);
 
-          await withCaseTransaction(stateAdapter, async (txCtx, txHooks) =>
-            client.completeChain({
-              ...txCtx,
-              txHooks,
-              ...chain,
-              handler: async ({ job, completeJob }) => {
-                await completeJob(job, async ({ complete }) =>
-                  complete({ output: { result: "from-external" } }),
-                );
-              },
-            }),
-          );
-          jobCompleted.resolve();
+        await withCaseTransaction(stateAdapter, async (txCtx, txHooks) =>
+          client.completeChain({
+            ...txCtx,
+            txHooks,
+            ...chain,
+            handler: async ({ job, completeJob }) => {
+              await completeJob(job, async ({ complete }) =>
+                complete({ output: { result: "from-external" } }),
+              );
+            },
+          }),
+        );
+        jobCompleted.resolve();
 
-          await processCompleted.promise;
-        });
+        await processCompleted.promise;
       },
     },
     {
@@ -865,7 +860,7 @@ export const workerlessCompletionConcurrentTransactionsGroup: ConformanceGroup<S
           );
 
           const secondAttempted = new AbortController();
-          const workerRunner = createWorkerRunner({
+          await using workerRunner = createWorkerRunner({
             client,
             concurrency: 1,
             processors: createProcessors({
@@ -900,7 +895,9 @@ export const workerlessCompletionConcurrentTransactionsGroup: ConformanceGroup<S
 
           try {
             await handlerEntered.promise;
-            await withWorkerRunners([await workerRunner.start()], async () => sleep(100));
+            await workerRunner.start();
+            await sleep(100);
+            await workerRunner.close();
             assert.equal(secondAttempted.signal.aborted, false);
           } finally {
             handlerGate.resolve();

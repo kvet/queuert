@@ -25,8 +25,9 @@ execSync("npx prisma db push", {
 // Dynamic import after generate to get the freshly generated client
 const { PrismaClient } = await import("../prisma/generated/prisma/client.ts");
 
+await using drivers = new AsyncDisposableStack();
 const adapter = new PrismaPg({ connectionString: pg.connectionString });
-const prisma = new PrismaClient({ adapter });
+const prisma = drivers.adopt(new PrismaClient({ adapter }), async (prisma) => prisma.$disconnect());
 
 // Define job types
 const jobTypes = defineJobTypes<{
@@ -40,7 +41,7 @@ const jobTypes = defineJobTypes<{
 // Create state provider for Prisma
 // #region adapter
 const stateProvider = createPrismaPgStateProvider({ prisma: prisma as any });
-const stateAdapter = createPgStateAdapter({
+await using stateAdapter = createPgStateAdapter({
   stateProvider,
   // Prisma v4+ removed implicit type coercion, so $queryRawUnsafe doesn't cast
   // string parameters to UUID, causing "operator does not exist: uuid = text".
@@ -53,7 +54,7 @@ await stateAdapter.migrateToLatest();
 const client = createClient({ stateAdapter, jobTypes });
 
 // Create and start worker runner
-const workerRunner = createWorkerRunner({
+await using workerRunner = createWorkerRunner({
   client,
   processors: createProcessors({
     client,
@@ -77,7 +78,7 @@ const workerRunner = createWorkerRunner({
   }),
 });
 
-const stopWorkerRunner = await workerRunner.start();
+await workerRunner.start();
 
 // Register a new user and queue welcome email atomically
 const chain = await withTxHooks(async (txHooks) =>
@@ -99,8 +100,3 @@ const chain = await withTxHooks(async (txHooks) =>
 // Wait for the chain to complete
 const result = await client.awaitChain(chain, { timeoutMs: 5000 });
 console.log(`Welcome email sent at: ${result.output.sentAt}`);
-
-// Cleanup
-await stopWorkerRunner();
-await stateAdapter.close();
-await prisma.$disconnect();

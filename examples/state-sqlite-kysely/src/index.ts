@@ -20,7 +20,7 @@ type Database = {
 };
 
 // Create Kysely database connection
-const db = new Kysely<Database>({
+await using db = new Kysely<Database>({
   dialect: new SqliteDialect({
     database: sqliteDb,
   }),
@@ -47,7 +47,7 @@ const jobTypes = defineJobTypes<{
 // Create state provider for Kysely
 // #region adapter
 const stateProvider = createKyselySqliteStateProvider({ db });
-const stateAdapter = createSqliteStateAdapter({
+await using stateAdapter = createSqliteStateAdapter({
   stateProvider,
 });
 await stateAdapter.migrateToLatest();
@@ -56,7 +56,7 @@ await stateAdapter.migrateToLatest();
 const client = createClient({ stateAdapter, jobTypes });
 
 // Create worker runner with job type processors
-const workerRunner = createWorkerRunner({
+await using workerRunner = createWorkerRunner({
   client,
   processors: createProcessors({
     client,
@@ -90,7 +90,7 @@ const workerRunner = createWorkerRunner({
   }),
 });
 
-const stopWorkerRunner = await workerRunner.start();
+await workerRunner.start();
 
 // Register a new user and queue welcome email atomically
 // #region create-chain
@@ -116,8 +116,3 @@ const chain = await withTxHooks(async (txHooks) =>
 // Wait for the chain to complete
 const result = await client.awaitChain(chain, { timeoutMs: 5000 });
 console.log(`Welcome email sent at: ${result.output.sentAt}`);
-
-// Cleanup
-await stopWorkerRunner();
-await stateAdapter.close();
-sqliteDb.close();

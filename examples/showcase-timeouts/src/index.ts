@@ -56,13 +56,14 @@ async function simulatedFetch(url: string, signal: AbortSignal, delayMs: number)
 }
 
 await using pg = await acquirePostgres("postgres:18", import.meta.url);
-const sql = postgres(pg.connectionString, { max: 10 });
+await using drivers = new AsyncDisposableStack();
+const sql = drivers.adopt(postgres(pg.connectionString, { max: 10 }), async (sql) => sql.end());
 
 const stateProvider = createPostgresJsStateProvider({ sql });
-const stateAdapter = createPgStateAdapter({ stateProvider });
+await using stateAdapter = createPgStateAdapter({ stateProvider });
 await stateAdapter.migrateToLatest();
 const notifyProvider = createPostgresJsNotifyProvider({ sql });
-const notifyAdapter = createPgNotifyAdapter({ notifyProvider });
+await using notifyAdapter = createPgNotifyAdapter({ notifyProvider });
 
 const client = createClient({
   stateAdapter,
@@ -70,7 +71,7 @@ const client = createClient({
   jobTypes,
 });
 
-const workerRunner = createWorkerRunner({
+await using workerRunner = createWorkerRunner({
   client,
   leaseConfig: { durationMs: 600, heartbeatMs: 150 },
   processors: createProcessors({
@@ -132,7 +133,7 @@ const workerRunner = createWorkerRunner({
   }),
 });
 
-const stopWorkerRunner = await workerRunner.start();
+await workerRunner.start();
 
 // Scenario 1a: Cooperative timeout - completes in time
 console.log("\n--- Scenario 1a: Cooperative Timeout (Success) ---");
@@ -188,8 +189,3 @@ const result3 = await client.awaitChain(longChain, { timeoutMs: 5000 });
 console.log(`Result: ${JSON.stringify(result3.output)}`);
 assert.ok("completed" in result3.output);
 assert.equal(result3.output.attempt, 1);
-
-await stopWorkerRunner();
-await notifyAdapter.close();
-await stateAdapter.close();
-await sql.end();

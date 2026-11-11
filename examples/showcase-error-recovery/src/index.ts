@@ -86,13 +86,14 @@ const jobTypes = defineJobTypes<{
 let externalApiShouldFail = true;
 
 await using pg = await acquirePostgres("postgres:18", import.meta.url);
-const sql = postgres(pg.connectionString, { max: 10 });
+await using drivers = new AsyncDisposableStack();
+const sql = drivers.adopt(postgres(pg.connectionString, { max: 10 }), async (sql) => sql.end());
 
 const stateProvider = createPostgresJsStateProvider({ sql });
-const stateAdapter = createPgStateAdapter({ stateProvider });
+await using stateAdapter = createPgStateAdapter({ stateProvider });
 await stateAdapter.migrateToLatest();
 const notifyProvider = createPostgresJsNotifyProvider({ sql });
-const notifyAdapter = createPgNotifyAdapter({ notifyProvider });
+await using notifyAdapter = createPgNotifyAdapter({ notifyProvider });
 
 await sql`
   CREATE TABLE IF NOT EXISTS accounts (
@@ -112,7 +113,7 @@ const client = createClient({
   jobTypes,
 });
 
-const workerRunner = createWorkerRunner({
+await using workerRunner = createWorkerRunner({
   client,
   processors: createProcessors({
     client,
@@ -234,7 +235,7 @@ const workerRunner = createWorkerRunner({
   }),
 });
 
-const stopWorkerRunner = await workerRunner.start();
+await workerRunner.start();
 
 // Scenario 1: Constraint violation
 console.log("\n--- Scenario 1: Constraint Violation ---");
@@ -357,8 +358,3 @@ const flakyChain = await withTxHooks(async (txHooks) =>
 const flakyResult = await client.awaitChain(flakyChain, { timeoutMs: 5000 });
 console.log(`Completed on attempt ${flakyResult.output.attempt}`);
 assert.equal(flakyResult.output.attempt, 3);
-
-await stopWorkerRunner();
-await notifyAdapter.close();
-await stateAdapter.close();
-await sql.end();

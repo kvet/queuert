@@ -85,13 +85,14 @@ const jobTypes = defineJobTypes<{
 }>();
 
 await using pg = await acquirePostgres("postgres:18", import.meta.url);
-const sql = postgres(pg.connectionString, { max: 10 });
+await using drivers = new AsyncDisposableStack();
+const sql = drivers.adopt(postgres(pg.connectionString, { max: 10 }), async (sql) => sql.end());
 
 const stateProvider = createPostgresJsStateProvider({ sql });
-const stateAdapter = createPgStateAdapter({ stateProvider });
+await using stateAdapter = createPgStateAdapter({ stateProvider });
 await stateAdapter.migrateToLatest();
 const notifyProvider = createPostgresJsNotifyProvider({ sql });
-const notifyAdapter = createPgNotifyAdapter({ notifyProvider });
+await using notifyAdapter = createPgNotifyAdapter({ notifyProvider });
 
 await sql`
   CREATE TABLE orders (
@@ -107,7 +108,7 @@ const client = createClient({
   jobTypes,
 });
 
-const workerRunner = createWorkerRunner({
+await using workerRunner = createWorkerRunner({
   client,
   processors: createProcessors({
     client,
@@ -252,7 +253,7 @@ const workerRunner = createWorkerRunner({
   }),
 });
 
-const stopWorkerRunner = await workerRunner.start();
+await workerRunner.start();
 
 // Scenario 1: Fan-out/Fan-in with variadic blockers
 console.log("\n--- Scenario 1: Fan-out/Fan-in ---");
@@ -368,8 +369,3 @@ const [shippedOrder] = await sql<
   { status: string }[]
 >`SELECT status FROM orders WHERE id = 'order-001'`;
 assert.equal(shippedOrder.status, "shipped");
-
-await stopWorkerRunner();
-await notifyAdapter.close();
-await stateAdapter.close();
-await sql.end();

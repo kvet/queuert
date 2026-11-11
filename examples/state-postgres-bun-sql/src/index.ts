@@ -15,7 +15,7 @@ import { createBunSqlStateProvider } from "./provider.ts";
 await using pg = await acquirePostgres("postgres:18", import.meta.url);
 
 // Create database connection and schema
-const sql = new SQL(pg.connectionString, { max: 10 });
+await using sql = new SQL(pg.connectionString, { max: 10 });
 
 await sql`
   CREATE TABLE IF NOT EXISTS users (
@@ -37,13 +37,13 @@ const jobTypes = defineJobTypes<{
 // Create providers and adapters
 // #region adapter
 const stateProvider = createBunSqlStateProvider({ sql });
-const stateAdapter = createPgStateAdapter({ stateProvider });
+await using stateAdapter = createPgStateAdapter({ stateProvider });
 await stateAdapter.migrateToLatest();
 // #endregion
 
 const client = createClient({ stateAdapter, jobTypes });
 
-const workerRunner = createWorkerRunner({
+await using workerRunner = createWorkerRunner({
   client,
   processors: createProcessors({
     client,
@@ -70,7 +70,7 @@ const workerRunner = createWorkerRunner({
   }),
 });
 
-const stopWorkerRunner = await workerRunner.start();
+await workerRunner.start();
 
 // Register a new user and queue welcome email atomically
 const chain = await withTxHooks(async (txHooks) =>
@@ -91,8 +91,3 @@ const chain = await withTxHooks(async (txHooks) =>
 // Wait for the chain to complete
 const result = await client.awaitChain(chain, { timeoutMs: 5000 });
 console.log(`Welcome email sent at: ${result.output.sentAt}`);
-
-// Cleanup
-await stopWorkerRunner();
-await stateAdapter.close();
-await sql.close();

@@ -40,13 +40,14 @@ const jobTypes = defineJobTypes<{
 const processItem = async () => new Promise<void>((resolve) => setTimeout(resolve, 50));
 
 await using pg = await acquirePostgres("postgres:18", import.meta.url);
-const sql = postgres(pg.connectionString, { max: 10 });
+await using drivers = new AsyncDisposableStack();
+const sql = drivers.adopt(postgres(pg.connectionString, { max: 10 }), async (sql) => sql.end());
 
 const stateProvider = createPostgresJsStateProvider({ sql });
-const stateAdapter = createPgStateAdapter({ stateProvider });
+await using stateAdapter = createPgStateAdapter({ stateProvider });
 await stateAdapter.migrateToLatest();
 const notifyProvider = createPostgresJsNotifyProvider({ sql });
-const notifyAdapter = createPgNotifyAdapter({ notifyProvider });
+await using notifyAdapter = createPgNotifyAdapter({ notifyProvider });
 
 const client = createClient({
   stateAdapter,
@@ -147,8 +148,8 @@ const externalTask = await withTxHooks(async (txHooks) =>
   ),
 );
 
-const workerRunner1 = createWorkerRunner({ client, processors });
-const stopWorkerRunner1 = await workerRunner1.start();
+await using workerRunner1 = createWorkerRunner({ client, processors });
+await workerRunner1.start();
 
 await externalResultStarted;
 await new Promise((r) => setTimeout(r, 100));
@@ -178,7 +179,7 @@ const externalResult = await client.awaitChain(externalTask, { timeoutMs: 5000 }
 console.log(`Result: ${JSON.stringify(externalResult.output)}`);
 assert.equal(externalResult.output.source, "external");
 
-await stopWorkerRunner1();
+await workerRunner1.close();
 
 // Scenario 2: Worker stopping
 console.log("\n--- Scenario 2: Worker Stopping ---");
@@ -195,20 +196,16 @@ const batch = await withTxHooks(async (txHooks) =>
   ),
 );
 
-const workerRunner2 = createWorkerRunner({ client, processors });
-const stopWorkerRunner2 = await workerRunner2.start();
+await using workerRunner2 = createWorkerRunner({ client, processors });
+await workerRunner2.start();
 
 await batchStarted;
 await new Promise((r) => setTimeout(r, 200));
 
 console.log(`Stopping worker...`);
-await stopWorkerRunner2();
+await workerRunner2.close();
 
 const batchResult = await client.awaitChain(batch, { timeoutMs: 5000 });
 console.log(`Result: ${JSON.stringify(batchResult.output)}`);
 assert.equal(batchResult.output.interrupted, true);
 assert.ok(batchResult.output.processed > 0 && batchResult.output.processed < 100);
-
-await notifyAdapter.close();
-await stateAdapter.close();
-await sql.end();

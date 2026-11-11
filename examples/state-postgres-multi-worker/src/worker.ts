@@ -21,13 +21,14 @@ const jobTypes = defineJobTypes<{
 const connectionString = process.env.CONNECTION_STRING!;
 const processName = process.env.PROCESS_NAME!;
 
-const sql = postgres(connectionString, { max: 5 });
+const resources = new AsyncDisposableStack();
+const sql = resources.adopt(postgres(connectionString, { max: 5 }), async (sql) => sql.end());
 
 const stateProvider = createPostgresJsStateProvider({ sql });
-const stateAdapter = createPgStateAdapter({ stateProvider });
+const stateAdapter = resources.use(createPgStateAdapter({ stateProvider }));
 
 const notifyProvider = createPostgresJsNotifyProvider({ sql });
-const notifyAdapter = createPgNotifyAdapter({ notifyProvider });
+const notifyAdapter = resources.use(createPgNotifyAdapter({ notifyProvider }));
 
 const client = createClient({ stateAdapter, notifyAdapter, jobTypes });
 
@@ -72,16 +73,14 @@ const workerRunner = createWorkerRunner({
   }),
 });
 
-const stop = await workerRunner.start();
+resources.use(workerRunner);
+await workerRunner.start();
 process.send!({ type: "ready" });
 
 process.on("message", (msg) => {
   if (msg === "stop") {
     void (async () => {
-      await stop();
-      await notifyAdapter.close();
-      await stateAdapter.close();
-      await sql.end();
+      await resources.disposeAsync();
       process.send!({ type: "stopped" });
       process.exit(0);
     })();

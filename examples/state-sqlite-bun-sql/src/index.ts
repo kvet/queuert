@@ -11,7 +11,7 @@ import {
 import { createBunSqlSqliteStateProvider } from "./provider.ts";
 
 // Create in-memory SQLite database
-const sql = new SQL("sqlite://:memory:");
+await using sql = new SQL("sqlite://:memory:");
 
 // Create application schema
 await sql`
@@ -35,13 +35,13 @@ const jobTypes = defineJobTypes<{
 // #region adapter
 const lock = createAsyncRwLock();
 const stateProvider = createBunSqlSqliteStateProvider({ sql, lock });
-const stateAdapter = createSqliteStateAdapter({ stateProvider });
+await using stateAdapter = createSqliteStateAdapter({ stateProvider });
 await stateAdapter.migrateToLatest();
 // #endregion
 
 const client = createClient({ stateAdapter, jobTypes });
 
-const workerRunner = createWorkerRunner({
+await using workerRunner = createWorkerRunner({
   client,
   processors: createProcessors({
     client,
@@ -73,7 +73,7 @@ const workerRunner = createWorkerRunner({
   }),
 });
 
-const stopWorkerRunner = await workerRunner.start();
+await workerRunner.start();
 
 // Register a new user and queue welcome email atomically
 // Bun.SQL does not queue SQLite transactions on its single connection, so take the same lock
@@ -98,8 +98,3 @@ const chain = await withTxHooks(async (txHooks) => {
 // Wait for the chain to complete
 const result = await client.awaitChain(chain, { timeoutMs: 5000 });
 console.log(`Welcome email sent at: ${result.output.sentAt}`);
-
-// Cleanup
-await stopWorkerRunner();
-await stateAdapter.close();
-await sql.close();

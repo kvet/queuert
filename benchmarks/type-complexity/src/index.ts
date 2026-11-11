@@ -242,9 +242,9 @@ const workerRunner = createWorkerRunner({
   processors: createProcessors({ client, jobTypes, ${mwPart}processors: ${processors} }),
 });
 
-const stop = await workerRunner.start();
+await workerRunner.start();
 ${clientCalls}
-await stop();
+await workerRunner.stop();
 `;
 };
 
@@ -292,9 +292,9 @@ const workerRunner = createWorkerRunner({
   processors: [${processorNames.join(", ")}],
 });
 
-const stop = await workerRunner.start();
+await workerRunner.start();
 ${clientCalls}
-await stop();
+await workerRunner.stop();
 `;
 };
 

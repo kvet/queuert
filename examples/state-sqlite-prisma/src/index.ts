@@ -16,7 +16,10 @@ import {
 import { createPrismaSqliteStateProvider } from "./provider.ts";
 
 // Create temp directory and set DATABASE_URL
-const tempDir = mkdtempSync(join(tmpdir(), "queuert-sqlite-prisma-"));
+await using drivers = new AsyncDisposableStack();
+const tempDir = drivers.adopt(mkdtempSync(join(tmpdir(), "queuert-sqlite-prisma-")), (dir) => {
+  rmSync(dir, { recursive: true, force: true });
+});
 const dbPath = join(tempDir, "test.db");
 
 // Push Prisma schema to database and generate client
@@ -29,7 +32,7 @@ execSync("npx prisma db push", {
 const { PrismaClient } = await import("../prisma/generated/prisma/client.ts");
 
 const adapter = new PrismaBetterSqlite3({ url: `file:${dbPath}` });
-const prisma = new PrismaClient({ adapter });
+const prisma = drivers.adopt(new PrismaClient({ adapter }), async (prisma) => prisma.$disconnect());
 
 // Define job types
 const jobTypes = defineJobTypes<{
@@ -44,7 +47,7 @@ const jobTypes = defineJobTypes<{
 // #region adapter
 const lock = createAsyncRwLock();
 const stateProvider = createPrismaSqliteStateProvider({ prisma: prisma as any, lock });
-const stateAdapter = createSqliteStateAdapter({
+await using stateAdapter = createSqliteStateAdapter({
   stateProvider,
 });
 await stateAdapter.migrateToLatest();
@@ -53,7 +56,7 @@ await stateAdapter.migrateToLatest();
 const client = createClient({ stateAdapter, jobTypes });
 
 // Create and start worker runner
-const workerRunner = createWorkerRunner({
+await using workerRunner = createWorkerRunner({
   client,
   processors: createProcessors({
     client,
@@ -85,7 +88,7 @@ const workerRunner = createWorkerRunner({
   }),
 });
 
-const stopWorkerRunner = await workerRunner.start();
+await workerRunner.start();
 
 // Register a new user and queue welcome email atomically
 // #region create-chain
@@ -110,9 +113,3 @@ const chain = await withTxHooks(async (txHooks) => {
 // Wait for the chain to complete
 const result = await client.awaitChain(chain, { timeoutMs: 5000 });
 console.log(`Welcome email sent at: ${result.output.sentAt}`);
-
-// Cleanup
-await stopWorkerRunner();
-await stateAdapter.close();
-await prisma.$disconnect();
-rmSync(tempDir, { recursive: true, force: true });

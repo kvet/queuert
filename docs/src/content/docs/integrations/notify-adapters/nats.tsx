@@ -27,10 +27,10 @@ const Page = () => (
     <h2 id="setup">Setup</h2>
     <ExampleCode example="notify-nats-transport-node" file="src/index.ts" region="setup" />
     <p>
-      Close the adapters, then your own clients, in the{" "}
-      <A href="/integrations/notify-adapters/#how-adapters-behave">shutdown order</A>:
+      The connection and the notify adapter are held with <code>await using</code>, so when the
+      scope ends the notify adapter closes before the connection, in the{" "}
+      <A href="/integrations/notify-adapters/#how-adapters-behave">shutdown order</A>.
     </p>
-    <ExampleCode example="notify-nats-transport-node" file="src/index.ts" region="cleanup" />
 
     <h2 id="configuration">Configuration</h2>
     <FieldList

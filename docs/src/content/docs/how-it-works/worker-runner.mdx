@@ -69,11 +69,11 @@ The worker runner stops claiming once it is stopping or its worker's lease is lo
 
 ### Starting
 
-`start()` returns without touching the database. Calling it again before the returned `stop` function resolved throws. The worker runner registers its worker in the background, in one transaction: it locks the row under its id with `getWorkers({ lock: "exclusive" })`, and calls `startWorker`, which inserts the worker row with its processors' job type names, its `concurrency` and a lease `leaseConfig.durationMs` from now. When a row under the id already exists, a live one fails the registration with `WorkerAlreadyLiveError`, and an expired one is reclaimed in the same transaction before the insert. The worker runner emits `workerStarted` once the transaction commits. The worker's lease is held from the registration on, and the jobs its registration reclaimed are announced afterwards, as in [Reclaim](#reclaim). A failed registration emits `workerError` and is retried under the same id per `recoveryBackoffConfig`.
+`start()` returns without touching the database. Calling it again before `stop()` resolved throws, and so does calling it after `close()`. The worker runner registers its worker in the background, in one transaction: it locks the row under its id with `getWorkers({ lock: "exclusive" })`, and calls `startWorker`, which inserts the worker row with its processors' job type names, its `concurrency` and a lease `leaseConfig.durationMs` from now. When a row under the id already exists, a live one fails the registration with `WorkerAlreadyLiveError`, and an expired one is reclaimed in the same transaction before the insert. The worker runner emits `workerStarted` once the transaction commits. The worker's lease is held from the registration on, and the jobs its registration reclaimed are announced afterwards, as in [Reclaim](#reclaim). A failed registration emits `workerError` and is retried under the same id per `recoveryBackoffConfig`.
 
 ### Shutdown
 
-Calling `stop()` triggers graceful shutdown:
+Calling `stop()` triggers graceful shutdown. It does nothing when the worker runner is not started, and concurrent calls wait for the same shutdown:
 
 1. Signal abort — in-flight attempts see their `signal` abort, and the main loop stops claiming
 2. Wait for the main loop to exit, then for all in-flight handlers to end (return or throw), while the lease keeps renewing
@@ -83,6 +83,8 @@ Calling `stop()` triggers graceful shutdown:
 Stopping is cooperative: the attempt is still held, so handlers that check `signal.aborted` can wrap up and still commit a `complete` (with partial output or `{ reschedule }`) instead of abandoning work.
 
 `stop()` never rejects. If deleting the row throws, the worker runner emits `workerStopped` and `workerError`, and the row expires and is reclaimed like a crashed worker's. If the row is gone or another registration took the id in the meantime, the worker runner emits `workerLeaseLost` and reports `WorkerLeaseLostError` through `workerError`, leaving the other registration's row alone.
+
+A stopped worker runner can be started again under the same `workerId`. `close()` stops it if it is started and makes every later `start()` throw. A worker runner is async disposable: `[Symbol.asyncDispose]` calls `close()`, so one held with `await using` is closed when the scope ends, before the adapters declared ahead of it. `start()` returns once processing is started, so a top-level `await using` in a long-running process closes the worker runner as soon as the module finishes, so keep the scope open until shutdown.
 
 ### Lost Lease
 

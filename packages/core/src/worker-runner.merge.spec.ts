@@ -789,21 +789,19 @@ describe("2-level merge (merge of merges)", () => {
 
 describe("createWorkerRunner with partial processor registries", () => {
   it("accepts a processor jobTypes covering a single slice of the client's job types", async () => {
-    const workerRunner = createWorkerRunner({
+    await using workerRunner = createWorkerRunner({
       client,
       processors: orderProcessors,
     });
-    const stop = await workerRunner.start();
-    await stop();
+    await workerRunner.start();
   });
 
   it("accepts a processor jobTypes covering a different single slice", async () => {
-    const workerRunner = createWorkerRunner({
+    await using workerRunner = createWorkerRunner({
       client,
       processors: notificationProcessors,
     });
-    const stop = await workerRunner.start();
-    await stop();
+    await workerRunner.start();
   });
 
   it("rejects a plain object that is not a processor jobTypes", () => {
@@ -870,11 +868,10 @@ describe("createWorkerRunner with partial processor registries", () => {
 
   it("still accepts a fully merged processor jobTypes", async () => {
     const merged = mergeProcessors([orderProcessors, notificationProcessors]);
-    const workerRunner = createWorkerRunner({
+    await using workerRunner = createWorkerRunner({
       client,
       processors: merged,
     });
-    const stop = await workerRunner.start();
-    await stop();
+    await workerRunner.start();
   });
 });

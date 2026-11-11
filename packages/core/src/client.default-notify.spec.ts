@@ -18,7 +18,7 @@ const runChain = async (
 ): Promise<"completed" | "timed out"> => {
   const stateAdapter = createInProcessStateAdapter();
   const client = createClient({ stateAdapter, jobTypes, ...options });
-  const workerRunner = createWorkerRunner({
+  await using workerRunner = createWorkerRunner({
     client,
     pollIntervalMs: 60_000,
     processors: createProcessors({
@@ -37,21 +37,17 @@ const runChain = async (
     }),
   });
 
-  const stop = await workerRunner.start();
-  try {
-    await sleep(100);
-    const chain = await withTxHooks(async (txHooks) =>
-      stateAdapter.withTransaction(async (txCtx) =>
-        client.createChain({ ...txCtx, txHooks, typeName: "send-welcome-email", input: null }),
-      ),
-    );
-    return await client
-      .awaitChain(chain, { timeoutMs: 1000, pollIntervalMs: 60_000 })
-      .then(() => "completed" as const)
-      .catch(() => "timed out" as const);
-  } finally {
-    await stop();
-  }
+  await workerRunner.start();
+  await sleep(100);
+  const chain = await withTxHooks(async (txHooks) =>
+    stateAdapter.withTransaction(async (txCtx) =>
+      client.createChain({ ...txCtx, txHooks, typeName: "send-welcome-email", input: null }),
+    ),
+  );
+  return await client
+    .awaitChain(chain, { timeoutMs: 1000, pollIntervalMs: 60_000 })
+    .then(() => "completed" as const)
+    .catch(() => "timed out" as const);
 };
 
 describe("createClient without a notify adapter", () => {

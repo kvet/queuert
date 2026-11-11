@@ -1,8 +1,6 @@
 import assert from "node:assert/strict";
 import { isDeepStrictEqual } from "node:util";
 
-import { withWorkerRunners } from "@queuert/helpers";
-
 import { createClient } from "../../client.ts";
 import type { StateAdapterConformanceContext } from "../../conformance.state-adapter/types.ts";
 import type { ConformanceGroup } from "../../conformance/runner.ts";
@@ -375,7 +373,7 @@ export const validationGroup: ConformanceGroup<StateAdapterConformanceContext> =
         await using stateAdapter: EndToEndStateAdapter = await createStateAdapter();
         await using notifyAdapter = await createCaseNotifyAdapter(createNotifyAdapter);
         const client = createClient({ stateAdapter, notifyAdapter, jobTypes: simpleJobTypes });
-        const workerRunner = createWorkerRunner({
+        await using workerRunner = createWorkerRunner({
           client,
           concurrency: 1,
           processors: createProcessors({
@@ -401,10 +399,9 @@ export const validationGroup: ConformanceGroup<StateAdapterConformanceContext> =
           }),
         );
 
-        await withWorkerRunners([await workerRunner.start()], async () => {
-          const completed = await client.awaitChain(chain, completionOptions);
-          assert.deepEqual(completed.output, { result: 84 });
-        });
+        await workerRunner.start();
+        const completed = await client.awaitChain(chain, completionOptions);
+        assert.deepEqual(completed.output, { result: 84 });
       },
     },
     {
@@ -415,7 +412,7 @@ export const validationGroup: ConformanceGroup<StateAdapterConformanceContext> =
         const validationFailed = Promise.withResolvers<unknown>();
 
         const client = createClient({ stateAdapter, notifyAdapter, jobTypes: simpleJobTypes });
-        const workerRunner = createWorkerRunner({
+        await using workerRunner = createWorkerRunner({
           client,
           concurrency: 1,
           processors: createProcessors({
@@ -448,10 +445,9 @@ export const validationGroup: ConformanceGroup<StateAdapterConformanceContext> =
           }),
         );
 
-        await withWorkerRunners([await workerRunner.start()], async () => {
-          const error = await validationFailed.promise;
-          assert.ok(error instanceof JobTypeValidationError);
-        });
+        await workerRunner.start();
+        const error = await validationFailed.promise;
+        assert.ok(error instanceof JobTypeValidationError);
       },
     },
     {
@@ -464,7 +460,7 @@ export const validationGroup: ConformanceGroup<StateAdapterConformanceContext> =
           notifyAdapter,
           jobTypes: continuationJobTypes,
         });
-        const workerRunner = createWorkerRunner({
+        await using workerRunner = createWorkerRunner({
           client,
           concurrency: 1,
           processors: createProcessors({
@@ -500,10 +496,9 @@ export const validationGroup: ConformanceGroup<StateAdapterConformanceContext> =
           }),
         );
 
-        await withWorkerRunners([await workerRunner.start()], async () => {
-          const completed = await client.awaitChain(chain, completionOptions);
-          assert.deepEqual(completed.output, { result: 42 });
-        });
+        await workerRunner.start();
+        const completed = await client.awaitChain(chain, completionOptions);
+        assert.deepEqual(completed.output, { result: 42 });
       },
     },
     {
@@ -518,7 +513,7 @@ export const validationGroup: ConformanceGroup<StateAdapterConformanceContext> =
           notifyAdapter,
           jobTypes: continuationNoFollowUpJobTypes,
         });
-        const workerRunner = createWorkerRunner({
+        await using workerRunner = createWorkerRunner({
           client,
           concurrency: 1,
           processors: createProcessors({
@@ -560,10 +555,9 @@ export const validationGroup: ConformanceGroup<StateAdapterConformanceContext> =
           }),
         );
 
-        await withWorkerRunners([await workerRunner.start()], async () => {
-          const error = await validationFailed.promise;
-          assert.ok(error instanceof JobTypeValidationError);
-        });
+        await workerRunner.start();
+        const error = await validationFailed.promise;
+        assert.ok(error instanceof JobTypeValidationError);
       },
     },
     {
@@ -642,7 +636,7 @@ export const validationGroup: ConformanceGroup<StateAdapterConformanceContext> =
           notifyAdapter,
           jobTypes: continuationJobTypes,
         });
-        const workerRunner = createWorkerRunner({
+        await using workerRunner = createWorkerRunner({
           client,
           concurrency: 1,
           processors: createProcessors({
@@ -691,10 +685,9 @@ export const validationGroup: ConformanceGroup<StateAdapterConformanceContext> =
         });
         assert.equal(partialTail.items[0].status, "pending");
 
-        await withWorkerRunners([await workerRunner.start()], async () => {
-          const completed = await client.awaitChain(partialChain, completionOptions);
-          assert.deepEqual(completed.output, { result: 42 });
-        });
+        await workerRunner.start();
+        const completed = await client.awaitChain(partialChain, completionOptions);
+        assert.deepEqual(completed.output, { result: 42 });
       },
     },
     {
@@ -804,7 +797,7 @@ export const validationGroup: ConformanceGroup<StateAdapterConformanceContext> =
         await using notifyAdapter = await createCaseNotifyAdapter(createNotifyAdapter);
         const client = createClient({ stateAdapter, notifyAdapter, jobTypes: codecJobTypes });
         const doneAt = new Date("2024-03-01T00:00:00.000Z");
-        const workerRunner = createWorkerRunner({
+        await using workerRunner = createWorkerRunner({
           client,
           concurrency: 1,
           processors: createProcessors({
@@ -834,11 +827,9 @@ export const validationGroup: ConformanceGroup<StateAdapterConformanceContext> =
             ],
           }),
         );
-        await withWorkerRunners([await workerRunner.start()], async () => {
-          await Promise.all(
-            chains.map(async (chain) => client.awaitChain(chain, completionOptions)),
-          );
-        });
+        await workerRunner.start();
+        await Promise.all(chains.map(async (chain) => client.awaitChain(chain, completionOptions)));
+        await workerRunner.close();
         await withCaseTransaction(stateAdapter, async (txCtx, txHooks) =>
           client.createChain({ ...txCtx, txHooks, typeName: "timed", input: { at: pending } }),
         );
@@ -926,7 +917,7 @@ export const validationGroup: ConformanceGroup<StateAdapterConformanceContext> =
         const client = createClient({ stateAdapter, notifyAdapter, jobTypes: codecJobTypes });
         const at = new Date("2024-01-01T00:00:00.000Z");
         const doneAt = new Date("2024-03-01T00:00:00.000Z");
-        const workerRunner = createWorkerRunner({
+        await using workerRunner = createWorkerRunner({
           client,
           concurrency: 1,
           processors: createProcessors({
@@ -949,10 +940,9 @@ export const validationGroup: ConformanceGroup<StateAdapterConformanceContext> =
           client.createChain({ ...txCtx, txHooks, typeName: "timed", input: { at } }),
         );
 
-        await withWorkerRunners([await workerRunner.start()], async () => {
-          const completed = await client.awaitChain(chain, completionOptions);
-          assert.deepEqual(completed.output, { doneAt });
-        });
+        await workerRunner.start();
+        const completed = await client.awaitChain(chain, completionOptions);
+        assert.deepEqual(completed.output, { doneAt });
         assert.partialDeepStrictEqual(await client.getJob({ id: chain.id, typeName: "timed" }), {
           input: { at },
         });

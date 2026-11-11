@@ -163,7 +163,7 @@ export const populateScenarios = async ({
   const transaction = async <T>(fn: (ctx: { txHooks: TxHooks }) => Promise<T>) =>
     withTxHooks(async (txHooks) => withTransaction(async (ctx) => fn({ ...ctx, txHooks })));
 
-  const workerRunner = createWorkerRunner({
+  await using workerRunner = createWorkerRunner({
     client,
     processors: createProcessors({
       client,
@@ -299,7 +299,7 @@ export const populateScenarios = async ({
     }),
   });
 
-  const stopWorkerRunner = await workerRunner.start();
+  await workerRunner.start();
 
   // Scenario 1: Single Job
   const greetChain = await transaction(async (ctx) =>
@@ -377,7 +377,7 @@ export const populateScenarios = async ({
     }),
   );
 
-  await stopWorkerRunner();
+  await workerRunner.close();
 
   // Scenario 8: Bulk volume — many root chains/jobs (chain-list + job-list pagination)
   await transaction(async (ctx) =>

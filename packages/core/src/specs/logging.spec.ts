@@ -1,6 +1,5 @@
 import inspector from "node:inspector";
 
-import { withWorkerRunners } from "@queuert/helpers";
 import { it as baseIt, describe, expect, onTestFinished, vi } from "vitest";
 
 import {
@@ -34,7 +33,6 @@ const it = baseIt
           stateAdapter.withTransaction(txHooks.retryBoundary(async (txCtx) => cb(txCtx, txHooks))),
         ),
   )
-  .extend("withWorkerRunners", async () => withWorkerRunners)
   .extend("log", async () => {
     const consoleLog = createConsoleLog();
     return vi.fn<Log>((...args) => {
@@ -73,7 +71,6 @@ describe("Logging", () => {
     stateAdapter,
     notifyAdapter,
     withTransaction,
-    withWorkerRunners,
     observabilityAdapter,
     log,
     expectLogs,
@@ -93,7 +90,7 @@ describe("Logging", () => {
       log,
       jobTypes,
     });
-    const workerRunner = createWorkerRunner({
+    await using workerRunner = createWorkerRunner({
       client,
       concurrency: 1,
       processors: createProcessors({
@@ -120,9 +117,9 @@ describe("Logging", () => {
       }),
     );
 
-    await withWorkerRunners([await workerRunner.start()], async () => {
-      await client.awaitChain(chain, completionOptions);
-    });
+    await workerRunner.start();
+    await client.awaitChain(chain, completionOptions);
+    await workerRunner.close();
 
     const workerArgs = {
       workerId: expect.stringMatching(/^[0-9a-f-]{36}$/) as unknown as string,
@@ -171,7 +168,6 @@ describe("Logging", () => {
     stateAdapter,
     notifyAdapter,
     withTransaction,
-    withWorkerRunners,
     observabilityAdapter,
     log,
     expectLogs,
@@ -191,7 +187,7 @@ describe("Logging", () => {
       log,
       jobTypes,
     });
-    const workerRunner = createWorkerRunner({
+    await using workerRunner = createWorkerRunner({
       client,
       concurrency: 1,
       processors: createProcessors({
@@ -226,9 +222,9 @@ describe("Logging", () => {
       }),
     );
 
-    await withWorkerRunners([await workerRunner.start()], async () => {
-      await client.awaitChain(chain, completionOptions);
-    });
+    await workerRunner.start();
+    await client.awaitChain(chain, completionOptions);
+    await workerRunner.close();
 
     expectLogs([
       { type: "chain_created", data: { typeName: "test" } },
@@ -249,7 +245,6 @@ describe("Logging", () => {
     stateAdapter,
     notifyAdapter,
     withTransaction,
-    withWorkerRunners,
     observabilityAdapter,
     log,
     expectLogs,
@@ -269,7 +264,7 @@ describe("Logging", () => {
       log,
       jobTypes,
     });
-    const workerRunner = createWorkerRunner({
+    await using workerRunner = createWorkerRunner({
       client,
       concurrency: 1,
       processors: createProcessors({
@@ -301,9 +296,9 @@ describe("Logging", () => {
       }),
     );
 
-    await withWorkerRunners([await workerRunner.start()], async () => {
-      await client.awaitChain(chain, completionOptions);
-    });
+    await workerRunner.start();
+    await client.awaitChain(chain, completionOptions);
+    await workerRunner.close();
 
     expectLogs([
       { type: "chain_created", data: { typeName: "test" } },
@@ -324,7 +319,6 @@ describe("Logging", () => {
     stateAdapter,
     notifyAdapter,
     withTransaction,
-    withWorkerRunners,
     observabilityAdapter,
     log,
     expectLogs,
@@ -352,7 +346,7 @@ describe("Logging", () => {
       log,
       jobTypes,
     });
-    const workerRunner = createWorkerRunner({
+    await using workerRunner = createWorkerRunner({
       client,
       concurrency: 1,
       processors: createProcessors({
@@ -410,9 +404,9 @@ describe("Logging", () => {
       }),
     );
 
-    await withWorkerRunners([await workerRunner.start()], async () => {
-      await client.awaitChain(chain, completionOptions);
-    });
+    await workerRunner.start();
+    await client.awaitChain(chain, completionOptions);
+    await workerRunner.close();
 
     expectLogs([
       { type: "chain_created", data: { typeName: "linear" } },
@@ -452,7 +446,6 @@ describe("Logging", () => {
     stateAdapter,
     notifyAdapter,
     withTransaction,
-    withWorkerRunners,
     observabilityAdapter,
     log,
     expectLogs,
@@ -481,7 +474,7 @@ describe("Logging", () => {
     });
     let blockerChainId: string;
 
-    const workerRunner = createWorkerRunner({
+    await using workerRunner = createWorkerRunner({
       client,
       concurrency: 1,
       processors: createProcessors({
@@ -546,9 +539,9 @@ describe("Logging", () => {
       return chain;
     });
 
-    await withWorkerRunners([await workerRunner.start()], async () => {
-      await client.awaitChain(chain, completionOptions);
-    });
+    await workerRunner.start();
+    await client.awaitChain(chain, completionOptions);
+    await workerRunner.close();
 
     expectLogs([
       {
@@ -764,7 +757,6 @@ describe("Logging", () => {
     stateAdapter,
     notifyAdapter,
     withTransaction,
-    withWorkerRunners,
     observabilityAdapter,
     log,
   }) => {
@@ -790,7 +782,7 @@ describe("Logging", () => {
     const jobStarted = Promise.withResolvers<void>();
     const handlerReleased = Promise.withResolvers<void>();
 
-    const leaseLosingWorkerRunner = createWorkerRunner({
+    await using leaseLosingWorkerRunner = createWorkerRunner({
       client: leaseLosingClient,
       leaseConfig: { durationMs: 150, heartbeatMs: 40 },
       processors: createProcessors({
@@ -809,7 +801,7 @@ describe("Logging", () => {
         },
       }),
     });
-    const reclaimingWorkerRunner = createWorkerRunner({
+    await using reclaimingWorkerRunner = createWorkerRunner({
       client,
       pollIntervalMs: 20,
       processors: createProcessors({
@@ -831,14 +823,14 @@ describe("Logging", () => {
     );
 
     let attemptStartedAt = new Date();
-    await withWorkerRunners([await leaseLosingWorkerRunner.start()], async () => {
-      await jobStarted.promise;
-      attemptStartedAt = new Date();
-      await withWorkerRunners([await reclaimingWorkerRunner.start()], async () => {
-        await client.awaitChain(chain, completionOptions);
-      });
-      handlerReleased.resolve();
-    });
+    await leaseLosingWorkerRunner.start();
+    await jobStarted.promise;
+    attemptStartedAt = new Date();
+    await reclaimingWorkerRunner.start();
+    await client.awaitChain(chain, completionOptions);
+    await reclaimingWorkerRunner.close();
+    handlerReleased.resolve();
+    await leaseLosingWorkerRunner.close();
 
     const logTypes = new Set(log.mock.calls.map((call) => call[0].type));
     expect(logTypes).toContain("job_attempt_reclaimed");
@@ -852,7 +844,6 @@ describe("Logging", () => {
   it("logs a lost worker lease", async ({
     stateAdapter,
     notifyAdapter,
-    withWorkerRunners,
     observabilityAdapter,
     log,
   }) => {
@@ -868,7 +859,7 @@ describe("Logging", () => {
       jobTypes,
     });
 
-    const workerRunner = createWorkerRunner({
+    await using workerRunner = createWorkerRunner({
       client,
       leaseConfig: { durationMs: 1000, heartbeatMs: 20 },
       processors: createProcessors({
@@ -884,23 +875,21 @@ describe("Logging", () => {
       }),
     });
 
-    await withWorkerRunners([await workerRunner.start()], async () => {
-      await expect
-        .poll(() => log)
-        .toHaveBeenCalledWith({
-          type: "worker_lease_lost",
-          level: "warn",
-          message: "Worker lost its lease",
-          data: { workerId: expect.any(String) },
-        });
-    });
+    await workerRunner.start();
+    await expect
+      .poll(() => log)
+      .toHaveBeenCalledWith({
+        type: "worker_lease_lost",
+        level: "warn",
+        message: "Worker lost its lease",
+        data: { workerId: expect.any(String) },
+      });
   });
 
   it("logs a lost attempt once after a workerless takeover", async ({
     stateAdapter,
     notifyAdapter,
     withTransaction,
-    withWorkerRunners,
     observabilityAdapter,
     log,
     expectLogs,
@@ -918,7 +907,7 @@ describe("Logging", () => {
     });
     const started = Promise.withResolvers<void>();
     const takenOver = Promise.withResolvers<void>();
-    const workerRunner = createWorkerRunner({
+    await using workerRunner = createWorkerRunner({
       client,
       concurrency: 1,
       processors: createProcessors({
@@ -945,25 +934,25 @@ describe("Logging", () => {
       client.createChain({ ...txCtx, txHooks, typeName: "test", input: null }),
     );
 
-    await withWorkerRunners([await workerRunner.start()], async () => {
-      await started.promise;
-      await withTransaction(async (txCtx, txHooks) =>
-        client.completeChain({
-          ...txCtx,
-          txHooks,
-          ...chain,
-          handler: async ({ job, completeJob }) =>
-            completeJob(job, async ({ complete }) => complete({ output: { by: "workerless" } })),
-        }),
-      );
-      takenOver.resolve();
-      await vi.waitFor(
-        () => {
-          expect(log).toHaveBeenCalledWith(expect.objectContaining({ type: "job_attempt_lost" }));
-        },
-        { timeout: 5000 },
-      );
-    });
+    await workerRunner.start();
+    await started.promise;
+    await withTransaction(async (txCtx, txHooks) =>
+      client.completeChain({
+        ...txCtx,
+        txHooks,
+        ...chain,
+        handler: async ({ job, completeJob }) =>
+          completeJob(job, async ({ complete }) => complete({ output: { by: "workerless" } })),
+      }),
+    );
+    takenOver.resolve();
+    await vi.waitFor(
+      () => {
+        expect(log).toHaveBeenCalledWith(expect.objectContaining({ type: "job_attempt_lost" }));
+      },
+      { timeout: 5000 },
+    );
+    await workerRunner.close();
 
     expectLogs([
       { type: "chain_created", data: { typeName: "test" } },
@@ -981,7 +970,6 @@ describe("Logging", () => {
     stateAdapter,
     notifyAdapter,
     withTransaction,
-    withWorkerRunners,
     observabilityAdapter,
     log,
     expectLogs,
@@ -999,7 +987,7 @@ describe("Logging", () => {
     });
     const started = Promise.withResolvers<void>();
     const deleted = Promise.withResolvers<void>();
-    const workerRunner = createWorkerRunner({
+    await using workerRunner = createWorkerRunner({
       client,
       concurrency: 1,
       processors: createProcessors({
@@ -1023,19 +1011,19 @@ describe("Logging", () => {
       client.createChain({ ...txCtx, txHooks, typeName: "test", input: null }),
     );
 
-    await withWorkerRunners([await workerRunner.start()], async () => {
-      await started.promise;
-      await withTransaction(async (txCtx, txHooks) =>
-        client.deleteChains({ ...txCtx, txHooks, ids: [chain.id] }),
-      );
-      deleted.resolve();
-      await vi.waitFor(
-        () => {
-          expect(log).toHaveBeenCalledWith(expect.objectContaining({ type: "job_attempt_lost" }));
-        },
-        { timeout: 5000 },
-      );
-    });
+    await workerRunner.start();
+    await started.promise;
+    await withTransaction(async (txCtx, txHooks) =>
+      client.deleteChains({ ...txCtx, txHooks, ids: [chain.id] }),
+    );
+    deleted.resolve();
+    await vi.waitFor(
+      () => {
+        expect(log).toHaveBeenCalledWith(expect.objectContaining({ type: "job_attempt_lost" }));
+      },
+      { timeout: 5000 },
+    );
+    await workerRunner.close();
 
     expectLogs([
       { type: "chain_created", data: { typeName: "test" } },
@@ -1052,7 +1040,6 @@ describe("Logging", () => {
     stateAdapter,
     notifyAdapter,
     withTransaction,
-    withWorkerRunners,
     observabilityAdapter,
     log,
     expectLogs,
@@ -1068,7 +1055,7 @@ describe("Logging", () => {
       log,
       jobTypes,
     });
-    const workerRunner = createWorkerRunner({
+    await using workerRunner = createWorkerRunner({
       client,
       concurrency: 1,
       processors: createProcessors({
@@ -1091,15 +1078,15 @@ describe("Logging", () => {
       client.createChain({ ...txCtx, txHooks, typeName: "test", input: null }),
     );
 
-    await withWorkerRunners([await workerRunner.start()], async () => {
-      await client.awaitChain(chain, completionOptions);
-      await vi.waitFor(
-        () => {
-          expect(log).toHaveBeenCalledWith(expect.objectContaining({ type: "job_attempt_lost" }));
-        },
-        { timeout: 5000 },
-      );
-    });
+    await workerRunner.start();
+    await client.awaitChain(chain, completionOptions);
+    await vi.waitFor(
+      () => {
+        expect(log).toHaveBeenCalledWith(expect.objectContaining({ type: "job_attempt_lost" }));
+      },
+      { timeout: 5000 },
+    );
+    await workerRunner.close();
 
     expectLogs([
       { type: "chain_created", data: { typeName: "test" } },
@@ -1115,7 +1102,6 @@ describe("Logging", () => {
     stateAdapter,
     notifyAdapter,
     withTransaction,
-    withWorkerRunners,
     observabilityAdapter,
     log,
   }) => {
@@ -1151,7 +1137,7 @@ describe("Logging", () => {
       log,
       jobTypes,
     });
-    const workerRunner = createWorkerRunner({
+    await using workerRunner = createWorkerRunner({
       client: workerClient,
       concurrency: 1,
       recoveryBackoffConfig: { initialDelayMs: 10, multiplier: 1, maxDelayMs: 10 },
@@ -1175,9 +1161,9 @@ describe("Logging", () => {
       client.createChain({ ...txCtx, txHooks, typeName: "test", input: null }),
     );
 
-    await withWorkerRunners([await workerRunner.start()], async () => {
-      await client.awaitChain(chain, completionOptions);
-    });
+    await workerRunner.start();
+    await client.awaitChain(chain, completionOptions);
+    await workerRunner.close();
 
     const logTypes = new Set(log.mock.calls.map((call) => call[0].type));
     expect(logTypes).toContain("state_adapter_error");
@@ -1188,7 +1174,6 @@ describe("Logging", () => {
     stateAdapter,
     notifyAdapter,
     withTransaction,
-    withWorkerRunners,
     observabilityAdapter,
     log,
   }) => {
@@ -1210,7 +1195,7 @@ describe("Logging", () => {
       log,
       jobTypes,
     });
-    const workerRunner = createWorkerRunner({
+    await using workerRunner = createWorkerRunner({
       client,
       concurrency: 1,
       pollIntervalMs: 100,
@@ -1233,12 +1218,12 @@ describe("Logging", () => {
       client.createChain({ ...txCtx, txHooks, typeName: "test", input: null }),
     );
 
-    await withWorkerRunners([await workerRunner.start()], async () => {
-      await client.awaitChain(chain, {
-        pollIntervalMs: 100,
-        timeoutMs: 5000,
-      });
+    await workerRunner.start();
+    await client.awaitChain(chain, {
+      pollIntervalMs: 100,
+      timeoutMs: 5000,
     });
+    await workerRunner.close();
 
     const notifyErrorLogs = log.mock.calls
       .map((call) => call[0])
@@ -1379,7 +1364,6 @@ describe("Logging rollback", () => {
     stateAdapter,
     notifyAdapter,
     withTransaction,
-    withWorkerRunners,
     observabilityAdapter,
     log,
   }) => {
@@ -1413,7 +1397,7 @@ describe("Logging rollback", () => {
       log,
       jobTypes,
     });
-    const workerRunner = createWorkerRunner({
+    await using workerRunner = createWorkerRunner({
       client: workerClient,
       concurrency: 1,
       pollIntervalMs: 100,
@@ -1436,9 +1420,9 @@ describe("Logging rollback", () => {
       client.createChain({ ...txCtx, txHooks, typeName: "test", input: null }),
     );
 
-    await withWorkerRunners([await workerRunner.start()], async () => {
-      await client.awaitChain(chain, completionOptions);
-    });
+    await workerRunner.start();
+    await client.awaitChain(chain, completionOptions);
+    await workerRunner.close();
 
     const logEntries = log.mock.calls.map((call) => call[0]);
     const attemptCompletedCount = logEntries.filter(
@@ -1456,7 +1440,6 @@ describe("Logging rollback", () => {
     stateAdapter,
     notifyAdapter,
     withTransaction,
-    withWorkerRunners,
     observabilityAdapter,
     log,
   }) => {
@@ -1491,7 +1474,7 @@ describe("Logging rollback", () => {
       log,
       jobTypes,
     });
-    const workerRunner = createWorkerRunner({
+    await using workerRunner = createWorkerRunner({
       client: workerClient,
       concurrency: 1,
       pollIntervalMs: 50,
@@ -1518,9 +1501,9 @@ describe("Logging rollback", () => {
       client.createChain({ ...txCtx, txHooks, typeName: "test", input: null }),
     );
 
-    await withWorkerRunners([await workerRunner.start()], async () => {
-      await client.awaitChain(chain, completionOptions);
-    });
+    await workerRunner.start();
+    await client.awaitChain(chain, completionOptions);
+    await workerRunner.close();
 
     const logEntries = log.mock.calls.map((call) => call[0]);
     const attemptFailedCount = logEntries.filter((e) => e.type === "job_attempt_failed").length;
@@ -1531,7 +1514,6 @@ describe("Logging rollback", () => {
     stateAdapter,
     notifyAdapter,
     withTransaction,
-    withWorkerRunners,
     observabilityAdapter,
     log,
   }) => {
@@ -1556,7 +1538,7 @@ describe("Logging rollback", () => {
     });
 
     let throwOnce = true;
-    const workerRunner = createWorkerRunner({
+    await using workerRunner = createWorkerRunner({
       client,
       concurrency: 1,
       pollIntervalMs: 100,
@@ -1594,9 +1576,9 @@ describe("Logging rollback", () => {
       client.createChain({ ...txCtx, txHooks, typeName: "linear", input: null }),
     );
 
-    await withWorkerRunners([await workerRunner.start()], async () => {
-      await client.awaitChain(chain, completionOptions);
-    });
+    await workerRunner.start();
+    await client.awaitChain(chain, completionOptions);
+    await workerRunner.close();
 
     const logEntries = log.mock.calls.map((call) => call[0]);
     const continuationCreated = logEntries.filter(
@@ -1616,7 +1598,6 @@ describe("Logging rollback", () => {
     stateAdapter,
     notifyAdapter,
     withTransaction,
-    withWorkerRunners,
     observabilityAdapter,
     log,
   }) => {
@@ -1656,7 +1637,7 @@ describe("Logging rollback", () => {
       log,
       jobTypes,
     });
-    const workerRunner = createWorkerRunner({
+    await using workerRunner = createWorkerRunner({
       client: workerClient,
       concurrency: 1,
       pollIntervalMs: 100,
@@ -1692,9 +1673,9 @@ describe("Logging rollback", () => {
       return created;
     });
 
-    await withWorkerRunners([await workerRunner.start()], async () => {
-      await client.awaitChain(chain, completionOptions);
-    });
+    await workerRunner.start();
+    await client.awaitChain(chain, completionOptions);
+    await workerRunner.close();
 
     const logEntries = log.mock.calls.map((call) => call[0]);
     const attemptCompletedCount = logEntries.filter(
@@ -1810,7 +1791,6 @@ describe("Logging rollback", () => {
     stateAdapter,
     notifyAdapter,
     withTransaction,
-    withWorkerRunners,
     observabilityAdapter,
     log,
   }) => {
@@ -1852,7 +1832,7 @@ describe("Logging rollback", () => {
       log,
       jobTypes,
     });
-    const workerRunner = createWorkerRunner({
+    await using workerRunner = createWorkerRunner({
       client: workerClient,
       concurrency: 1,
       pollIntervalMs: 100,
@@ -1885,9 +1865,9 @@ describe("Logging rollback", () => {
       client.createChain({ ...txCtx, txHooks, typeName: "linear", input: null }),
     );
 
-    await withWorkerRunners([await workerRunner.start()], async () => {
-      await client.awaitChain(chain, completionOptions);
-    });
+    await workerRunner.start();
+    await client.awaitChain(chain, completionOptions);
+    await workerRunner.close();
 
     const logEntries = log.mock.calls.map((call) => call[0]);
     const continuationCreated = logEntries.filter(

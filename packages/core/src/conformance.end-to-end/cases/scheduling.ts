@@ -1,7 +1,5 @@
 import assert from "node:assert/strict";
 
-import { withWorkerRunners } from "@queuert/helpers";
-
 import { createClient } from "../../client.ts";
 import type { StateAdapterConformanceContext } from "../../conformance.state-adapter/types.ts";
 import type { ConformanceGroup } from "../../conformance/runner.ts";
@@ -24,7 +22,7 @@ export const schedulingGroup: ConformanceGroup<StateAdapterConformanceContext> =
           test: { entry: true; input: { value: number }; output: { result: number } };
         }>();
         const client = createClient({ stateAdapter, notifyAdapter, jobTypes });
-        const workerRunner = createWorkerRunner({
+        await using workerRunner = createWorkerRunner({
           client,
           concurrency: 1,
           pollIntervalMs: 50,
@@ -52,13 +50,12 @@ export const schedulingGroup: ConformanceGroup<StateAdapterConformanceContext> =
           }),
         );
 
-        await withWorkerRunners([await workerRunner.start()], async () => {
-          await assert.rejects(client.awaitChain(chain, { timeoutMs: 200 }));
-          assert.notEqual(
-            await client.awaitChain(chain, { pollIntervalMs: 100, timeoutMs: 400 }),
-            undefined,
-          );
-        });
+        await workerRunner.start();
+        await assert.rejects(client.awaitChain(chain, { timeoutMs: 200 }));
+        assert.notEqual(
+          await client.awaitChain(chain, { pollIntervalMs: 100, timeoutMs: 400 }),
+          undefined,
+        );
       },
     },
     {
@@ -70,7 +67,7 @@ export const schedulingGroup: ConformanceGroup<StateAdapterConformanceContext> =
           test: { entry: true; input: { value: number }; output: { result: number } };
         }>();
         const client = createClient({ stateAdapter, notifyAdapter, jobTypes });
-        const workerRunner = createWorkerRunner({
+        await using workerRunner = createWorkerRunner({
           client,
           concurrency: 1,
           pollIntervalMs: 50,
@@ -98,13 +95,12 @@ export const schedulingGroup: ConformanceGroup<StateAdapterConformanceContext> =
           }),
         );
 
-        await withWorkerRunners([await workerRunner.start()], async () => {
-          await assert.rejects(client.awaitChain(chain, { timeoutMs: 200 }));
-          assert.notEqual(
-            await client.awaitChain(chain, { pollIntervalMs: 100, timeoutMs: 400 }),
-            undefined,
-          );
-        });
+        await workerRunner.start();
+        await assert.rejects(client.awaitChain(chain, { timeoutMs: 200 }));
+        assert.notEqual(
+          await client.awaitChain(chain, { pollIntervalMs: 100, timeoutMs: 400 }),
+          undefined,
+        );
       },
     },
     {
@@ -118,7 +114,7 @@ export const schedulingGroup: ConformanceGroup<StateAdapterConformanceContext> =
         }>();
         const client = createClient({ stateAdapter, notifyAdapter, jobTypes });
         const firstCompleted = Promise.withResolvers<void>();
-        const workerRunner = createWorkerRunner({
+        await using workerRunner = createWorkerRunner({
           client,
           concurrency: 1,
           pollIntervalMs: 50,
@@ -159,14 +155,13 @@ export const schedulingGroup: ConformanceGroup<StateAdapterConformanceContext> =
           client.createChain({ ...txCtx, txHooks, typeName: "first", input: { value: 1 } }),
         );
 
-        await withWorkerRunners([await workerRunner.start()], async () => {
-          await firstCompleted.promise;
-          await assert.rejects(client.awaitChain(chain, { timeoutMs: 200 }));
-          assert.notEqual(
-            await client.awaitChain(chain, { pollIntervalMs: 100, timeoutMs: 400 }),
-            undefined,
-          );
-        });
+        await workerRunner.start();
+        await firstCompleted.promise;
+        await assert.rejects(client.awaitChain(chain, { timeoutMs: 200 }));
+        assert.notEqual(
+          await client.awaitChain(chain, { pollIntervalMs: 100, timeoutMs: 400 }),
+          undefined,
+        );
       },
     },
     {
@@ -180,7 +175,7 @@ export const schedulingGroup: ConformanceGroup<StateAdapterConformanceContext> =
         }>();
         const client = createClient({ stateAdapter, notifyAdapter, jobTypes });
         const firstCompleted = Promise.withResolvers<void>();
-        const workerRunner = createWorkerRunner({
+        await using workerRunner = createWorkerRunner({
           client,
           concurrency: 1,
           pollIntervalMs: 50,
@@ -221,14 +216,13 @@ export const schedulingGroup: ConformanceGroup<StateAdapterConformanceContext> =
           client.createChain({ ...txCtx, txHooks, typeName: "first", input: { value: 1 } }),
         );
 
-        await withWorkerRunners([await workerRunner.start()], async () => {
-          await firstCompleted.promise;
-          await assert.rejects(client.awaitChain(chain, { timeoutMs: 200 }));
-          assert.notEqual(
-            await client.awaitChain(chain, { pollIntervalMs: 100, timeoutMs: 400 }),
-            undefined,
-          );
-        });
+        await workerRunner.start();
+        await firstCompleted.promise;
+        await assert.rejects(client.awaitChain(chain, { timeoutMs: 200 }));
+        assert.notEqual(
+          await client.awaitChain(chain, { pollIntervalMs: 100, timeoutMs: 400 }),
+          undefined,
+        );
       },
     },
     {
@@ -242,7 +236,7 @@ export const schedulingGroup: ConformanceGroup<StateAdapterConformanceContext> =
         const client = createClient({ stateAdapter, notifyAdapter, jobTypes });
         let attemptCount = 0;
         const firstAttemptDone = Promise.withResolvers<void>();
-        const workerRunner = createWorkerRunner({
+        await using workerRunner = createWorkerRunner({
           client,
           concurrency: 1,
           pollIntervalMs: 50,
@@ -275,15 +269,14 @@ export const schedulingGroup: ConformanceGroup<StateAdapterConformanceContext> =
           client.createChain({ ...txCtx, txHooks, typeName: "test", input: { value: 1 } }),
         );
 
-        await withWorkerRunners([await workerRunner.start()], async () => {
-          await firstAttemptDone.promise;
-          await assert.rejects(client.awaitChain(chain, { timeoutMs: 200 }));
-          assert.notEqual(
-            await client.awaitChain(chain, { pollIntervalMs: 100, timeoutMs: 400 }),
-            undefined,
-          );
-          assert.equal(attemptCount, 2);
-        });
+        await workerRunner.start();
+        await firstAttemptDone.promise;
+        await assert.rejects(client.awaitChain(chain, { timeoutMs: 200 }));
+        assert.notEqual(
+          await client.awaitChain(chain, { pollIntervalMs: 100, timeoutMs: 400 }),
+          undefined,
+        );
+        assert.equal(attemptCount, 2);
       },
     },
     {
@@ -297,7 +290,7 @@ export const schedulingGroup: ConformanceGroup<StateAdapterConformanceContext> =
         const client = createClient({ stateAdapter, notifyAdapter, jobTypes });
         let completionCount = 0;
         const allDone = Promise.withResolvers<void>();
-        const workerRunner = createWorkerRunner({
+        await using workerRunner = createWorkerRunner({
           client,
           concurrency: 1,
           pollIntervalMs: 50,
@@ -339,12 +332,11 @@ export const schedulingGroup: ConformanceGroup<StateAdapterConformanceContext> =
           }),
         );
 
-        await withWorkerRunners([await workerRunner.start()], async () => {
-          await allDone.promise;
-          const { items: chains } = await client.listChains({ typeName: "recurring", limit: 10 });
-          assert.equal(chains.length, 3);
-          assert.equal(completionCount, 3);
-        });
+        await workerRunner.start();
+        await allDone.promise;
+        const { items: chains } = await client.listChains({ typeName: "recurring", limit: 10 });
+        assert.equal(chains.length, 3);
+        assert.equal(completionCount, 3);
       },
     },
     {
@@ -358,7 +350,7 @@ export const schedulingGroup: ConformanceGroup<StateAdapterConformanceContext> =
         const client = createClient({ stateAdapter, notifyAdapter, jobTypes });
         let attemptCount = 0;
         const firstAttemptDone = Promise.withResolvers<void>();
-        const workerRunner = createWorkerRunner({
+        await using workerRunner = createWorkerRunner({
           client,
           concurrency: 1,
           pollIntervalMs: 50,
@@ -395,15 +387,14 @@ export const schedulingGroup: ConformanceGroup<StateAdapterConformanceContext> =
           client.createChain({ ...txCtx, txHooks, typeName: "test", input: { value: 1 } }),
         );
 
-        await withWorkerRunners([await workerRunner.start()], async () => {
-          await firstAttemptDone.promise;
-          await assert.rejects(client.awaitChain(chain, { timeoutMs: 200 }));
-          assert.notEqual(
-            await client.awaitChain(chain, { pollIntervalMs: 100, timeoutMs: 400 }),
-            undefined,
-          );
-          assert.equal(attemptCount, 2);
-        });
+        await workerRunner.start();
+        await firstAttemptDone.promise;
+        await assert.rejects(client.awaitChain(chain, { timeoutMs: 200 }));
+        assert.notEqual(
+          await client.awaitChain(chain, { pollIntervalMs: 100, timeoutMs: 400 }),
+          undefined,
+        );
+        assert.equal(attemptCount, 2);
       },
     },
     {
@@ -415,7 +406,7 @@ export const schedulingGroup: ConformanceGroup<StateAdapterConformanceContext> =
           test: { entry: true; input: null; output: null };
         }>();
         const client = createClient({ stateAdapter, notifyAdapter, jobTypes });
-        const workerRunner = createWorkerRunner({
+        await using workerRunner = createWorkerRunner({
           client,
           concurrency: 1,
           processors: createProcessors({
@@ -447,9 +438,8 @@ export const schedulingGroup: ConformanceGroup<StateAdapterConformanceContext> =
         assert.notEqual(headJob, undefined);
         assert.ok(headJob!.scheduledAt.getTime() - past.getTime() > 30 * 60 * 1000);
 
-        await withWorkerRunners([await workerRunner.start()], async () => {
-          await client.awaitChain(chain, { timeoutMs: 2000, pollIntervalMs: 50 });
-        });
+        await workerRunner.start();
+        await client.awaitChain(chain, { timeoutMs: 2000, pollIntervalMs: 50 });
       },
     },
     {
@@ -463,7 +453,7 @@ export const schedulingGroup: ConformanceGroup<StateAdapterConformanceContext> =
         }>();
         const client = createClient({ stateAdapter, notifyAdapter, jobTypes });
         const past = new Date(Date.now() - 60 * 60 * 1000);
-        const workerRunner = createWorkerRunner({
+        await using workerRunner = createWorkerRunner({
           client,
           concurrency: 1,
           processors: createProcessors({
@@ -494,9 +484,8 @@ export const schedulingGroup: ConformanceGroup<StateAdapterConformanceContext> =
           client.createChain({ ...txCtx, txHooks, typeName: "first", input: null }),
         );
 
-        await withWorkerRunners([await workerRunner.start()], async () => {
-          await client.awaitChain(chain, { timeoutMs: 2000, pollIntervalMs: 50 });
-        });
+        await workerRunner.start();
+        await client.awaitChain(chain, { timeoutMs: 2000, pollIntervalMs: 50 });
 
         const chainJobs = await client.listChainJobs({
           chainId: chain.id,
@@ -520,7 +509,7 @@ export const schedulingGroup: ConformanceGroup<StateAdapterConformanceContext> =
         const past = new Date(Date.now() - 60 * 60 * 1000);
         let attempts = 0;
         const firstAttemptDone = Promise.withResolvers<void>();
-        const workerRunner = createWorkerRunner({
+        await using workerRunner = createWorkerRunner({
           client,
           concurrency: 1,
           pollIntervalMs: 50,
@@ -553,10 +542,9 @@ export const schedulingGroup: ConformanceGroup<StateAdapterConformanceContext> =
           client.createChain({ ...txCtx, txHooks, typeName: "test", input: null }),
         );
 
-        await withWorkerRunners([await workerRunner.start()], async () => {
-          await firstAttemptDone.promise;
-          await client.awaitChain(chain, { timeoutMs: 2000, pollIntervalMs: 50 });
-        });
+        await workerRunner.start();
+        await firstAttemptDone.promise;
+        await client.awaitChain(chain, { timeoutMs: 2000, pollIntervalMs: 50 });
 
         assert.equal(attempts, 2);
       },

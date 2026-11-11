@@ -27,19 +27,28 @@ const jobTypes = defineJobTypes<{
   };
 }>();
 
+// #region setup
+await using drivers = new AsyncDisposableStack();
+// #hide
 // Create the state adapter
-const db = new Database(":memory:");
-const stateAdapter = createSqliteStateAdapter({
+const db = drivers.adopt(new Database(":memory:"), (db) => {
+  db.close();
+});
+await using stateAdapter = createSqliteStateAdapter({
   stateProvider: createBetterSqlite3StateProvider({ db, lock: createAsyncRwLock() }),
 });
 await stateAdapter.migrateToLatest();
+// #endhide
 
-// #region setup
 const startupNodes = rc.rootNodes.map((node) => node.url);
 
 // Create Redis Cluster connections
-const cluster = new Cluster(startupNodes);
-const subscribeCluster = new Cluster(startupNodes);
+const cluster = drivers.adopt(new Cluster(startupNodes), async (cluster) => {
+  await cluster.quit();
+});
+const subscribeCluster = drivers.adopt(new Cluster(startupNodes), async (subscribeCluster) => {
+  await subscribeCluster.quit();
+});
 // #hide
 cluster.on("error", (err: Error) => {
   console.error("Redis Cluster Error", err);
@@ -56,7 +65,7 @@ const notifyProvider = createIoredisClusterNotifyProvider({
 });
 
 // Create the notify adapter
-const notifyAdapter = createRedisNotifyAdapter({ notifyProvider });
+await using notifyAdapter = createRedisNotifyAdapter({ notifyProvider });
 // #endregion
 
 // Create client and worker runner
@@ -66,7 +75,7 @@ const client = createClient({
   jobTypes,
 });
 
-const workerRunner = createWorkerRunner({
+await using workerRunner = createWorkerRunner({
   client,
   processors: createProcessors({
     client,
@@ -97,7 +106,7 @@ const workerRunner = createWorkerRunner({
 });
 
 // Start worker runner and queue a job
-const stopWorkerRunner = await workerRunner.start();
+await workerRunner.start();
 
 console.log("Requesting sales report...");
 const chain = await withTxHooks(async (txHooks) =>
@@ -123,13 +132,4 @@ console.log("Waiting for report...");
 const result = await client.awaitChain(chain, { timeoutMs: 5000 });
 console.log(`Report ready! ID: ${result.output.reportId}, Rows: ${result.output.rowCount}`);
 
-// Cleanup
-await stopWorkerRunner();
-await stateAdapter.close();
-db.close();
-// #region cleanup
-await notifyAdapter.close();
-await cluster.quit();
-await subscribeCluster.quit();
-// #endregion
 console.log("Done!");

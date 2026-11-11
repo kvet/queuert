@@ -1,7 +1,5 @@
 import assert from "node:assert/strict";
 
-import { withWorkerRunners } from "@queuert/helpers";
-
 import { createClient } from "../../client.ts";
 import type { StateAdapterConformanceContext } from "../../conformance.state-adapter/types.ts";
 import { retryUntilPasses } from "../../conformance/retry-until-passes.ts";
@@ -686,7 +684,7 @@ export const createChainsGroup: ConformanceGroup<StateAdapterConformanceContext>
           assert.equal(job!.status, "blocked");
         }
 
-        const workerRunner = createWorkerRunner({
+        await using workerRunner = createWorkerRunner({
           client,
           concurrency: 3,
           processors: createProcessors({
@@ -715,14 +713,13 @@ export const createChainsGroup: ConformanceGroup<StateAdapterConformanceContext>
           }),
         });
 
-        await withWorkerRunners([await workerRunner.start()], async () => {
-          const results = await Promise.all(
-            chains.map(async (jc) => client.awaitChain(jc, completionOptions)),
-          );
-          for (const result of results) {
-            assert.deepEqual(result.output, { finalResult: 42 });
-          }
-        });
+        await workerRunner.start();
+        const results = await Promise.all(
+          chains.map(async (jc) => client.awaitChain(jc, completionOptions)),
+        );
+        for (const result of results) {
+          assert.deepEqual(result.output, { finalResult: 42 });
+        }
       },
     },
     {
@@ -747,7 +744,7 @@ export const createChainsGroup: ConformanceGroup<StateAdapterConformanceContext>
           }),
         );
 
-        const workerRunner = createWorkerRunner({
+        await using workerRunner = createWorkerRunner({
           client,
           concurrency: 3,
           processors: createProcessors({
@@ -764,16 +761,15 @@ export const createChainsGroup: ConformanceGroup<StateAdapterConformanceContext>
           }),
         });
 
-        await withWorkerRunners([await workerRunner.start()], async () => {
-          assert.deepEqual((await client.awaitChain(chains[0], completionOptions)).output, {
-            result: 20,
-          });
-          assert.deepEqual((await client.awaitChain(chains[1], completionOptions)).output, {
-            result: 40,
-          });
-          assert.deepEqual((await client.awaitChain(chains[2], completionOptions)).output, {
-            result: 60,
-          });
+        await workerRunner.start();
+        assert.deepEqual((await client.awaitChain(chains[0], completionOptions)).output, {
+          result: 20,
+        });
+        assert.deepEqual((await client.awaitChain(chains[1], completionOptions)).output, {
+          result: 40,
+        });
+        assert.deepEqual((await client.awaitChain(chains[2], completionOptions)).output, {
+          result: 60,
         });
       },
     },

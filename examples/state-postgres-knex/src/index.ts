@@ -15,11 +15,15 @@ import { createKnexPgStateProvider } from "./provider.ts";
 await using pg = await acquirePostgres("postgres:18", import.meta.url);
 
 // Create database connection
-const knex = knexFactory({
-  client: "pg",
-  connection: pg.connectionString,
-  pool: { min: 0, max: 10 },
-});
+await using drivers = new AsyncDisposableStack();
+const knex = drivers.adopt(
+  knexFactory({
+    client: "pg",
+    connection: pg.connectionString,
+    pool: { min: 0, max: 10 },
+  }),
+  async (knex) => knex.destroy(),
+);
 
 // Create application schema
 await knex.raw(`
@@ -42,7 +46,7 @@ const jobTypes = defineJobTypes<{
 // Create state provider for Knex
 // #region adapter
 const stateProvider = createKnexPgStateProvider({ knex });
-const stateAdapter = createPgStateAdapter({
+await using stateAdapter = createPgStateAdapter({
   stateProvider,
 });
 await stateAdapter.migrateToLatest();
@@ -51,7 +55,7 @@ await stateAdapter.migrateToLatest();
 const client = createClient({ stateAdapter, jobTypes });
 
 // Create worker runner with job type processors
-const workerRunner = createWorkerRunner({
+await using workerRunner = createWorkerRunner({
   client,
   processors: createProcessors({
     client,
@@ -80,7 +84,7 @@ const workerRunner = createWorkerRunner({
   }),
 });
 
-const stopWorkerRunner = await workerRunner.start();
+await workerRunner.start();
 
 // Register a new user and queue welcome email atomically
 const chain = await withTxHooks(async (txHooks) =>
@@ -105,8 +109,3 @@ const chain = await withTxHooks(async (txHooks) =>
 // Wait for the chain to complete
 const result = await client.awaitChain(chain, { timeoutMs: 5000 });
 console.log(`Welcome email sent at: ${result.output.sentAt}`);
-
-// Cleanup
-await stopWorkerRunner();
-await stateAdapter.close();
-await knex.destroy();

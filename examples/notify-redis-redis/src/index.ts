@@ -10,7 +10,7 @@ import {
   defineJobTypes,
   withTxHooks,
 } from "queuert";
-import { type RedisClientType, createClient as createRedisClient } from "redis";
+import { createClient as createRedisClient } from "redis";
 
 import { createNodeRedisNotifyProvider } from "./provider.ts";
 
@@ -28,16 +28,23 @@ const jobTypes = defineJobTypes<{
   };
 }>();
 
+// #region setup
+await using drivers = new AsyncDisposableStack();
+// #hide
 // Create the state adapter
-const db = new Database(":memory:");
-const stateAdapter = createSqliteStateAdapter({
+const db = drivers.adopt(new Database(":memory:"), (db) => {
+  db.close();
+});
+await using stateAdapter = createSqliteStateAdapter({
   stateProvider: createBetterSqlite3StateProvider({ db, lock: createAsyncRwLock() }),
 });
 await stateAdapter.migrateToLatest();
+// #endhide
 
-// #region setup
 // Create Redis connections
-const redis = createRedisClient({ url: redisUrl }) as RedisClientType;
+const redis = drivers.adopt(createRedisClient({ url: redisUrl }), async (redis) => {
+  await redis.quit();
+});
 // #hide
 redis.on("error", (err) => {
   console.error("Redis Client Error", err);
@@ -45,7 +52,12 @@ redis.on("error", (err) => {
 // #endhide
 await redis.connect();
 
-const redisSubscription = createRedisClient({ url: redisUrl }) as RedisClientType;
+const redisSubscription = drivers.adopt(
+  createRedisClient({ url: redisUrl }),
+  async (redisSubscription) => {
+    await redisSubscription.quit();
+  },
+);
 // #hide
 redisSubscription.on("error", (err) => {
   console.error("Redis Subscription Error", err);
@@ -60,7 +72,7 @@ const notifyProvider = createNodeRedisNotifyProvider({
 });
 
 // Create the notify adapter
-const notifyAdapter = createRedisNotifyAdapter({ notifyProvider });
+await using notifyAdapter = createRedisNotifyAdapter({ notifyProvider });
 // #endregion
 
 // Create client and worker runner
@@ -70,7 +82,7 @@ const client = createClient({
   jobTypes,
 });
 
-const workerRunner = createWorkerRunner({
+await using workerRunner = createWorkerRunner({
   client,
   processors: createProcessors({
     client,
@@ -102,7 +114,7 @@ const workerRunner = createWorkerRunner({
 });
 
 // Start worker runner and queue a job
-const stopWorkerRunner = await workerRunner.start();
+await workerRunner.start();
 
 console.log("Requesting sales report...");
 const chain = await withTxHooks(async (txHooks) =>
@@ -128,13 +140,4 @@ console.log("Waiting for report...");
 const result = await client.awaitChain(chain, { timeoutMs: 5000 });
 console.log(`Report ready! ID: ${result.output.reportId}, Rows: ${result.output.rowCount}`);
 
-// Cleanup
-await stopWorkerRunner();
-await stateAdapter.close();
-db.close();
-// #region cleanup
-await notifyAdapter.close();
-await redis.quit();
-await redisSubscription.quit();
-// #endregion
 console.log("Done!");

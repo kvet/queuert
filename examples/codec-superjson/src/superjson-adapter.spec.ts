@@ -36,7 +36,7 @@ const createStateAdapter = async () => {
 };
 
 test("stores superjson's envelope and hands the runtime form to readers", async () => {
-  const stateAdapter = await createStateAdapter();
+  await using stateAdapter = await createStateAdapter();
   const client = createClient({ stateAdapter, jobTypes: buildJobTypes() });
 
   const chain = await withTxHooks(async (txHooks) =>
@@ -59,18 +59,16 @@ test("stores superjson's envelope and hands the runtime form to readers", async 
   const job = await client.getJob({ id: chain.id, typeName: "remind" });
   expect(job?.input.sendAt).toEqual(new Date("2024-06-01T09:00:00.000Z"));
   expect(job?.input.tags).toEqual(new Set(["billing"]));
-
-  await stateAdapter.close();
 });
 
 test("round-trips a Date and a bigint through the worker and back out of a client read", async () => {
   const jobTypes = buildJobTypes();
-  const stateAdapter = await createStateAdapter();
+  await using stateAdapter = await createStateAdapter();
   const client = createClient({ stateAdapter, jobTypes });
 
   const sentAt = new Date("2024-07-04T12:00:00.000Z");
 
-  const workerRunner = createWorkerRunner({
+  await using workerRunner = createWorkerRunner({
     client,
     processors: createProcessors({
       client,
@@ -101,17 +99,14 @@ test("round-trips a Date and a bigint through the worker and back out of a clien
     ),
   );
 
-  const stop = await workerRunner.start();
+  await workerRunner.start();
   const result = await client.awaitChain(chain, { timeoutMs: 5000, pollIntervalMs: 10 });
-  await stop();
 
   expect(result.output).toEqual({ sentAt, attempts: 3n });
-
-  await stateAdapter.close();
 });
 
 test("rejects a stored value that is not a superjson envelope", async () => {
-  const stateAdapter = await createStateAdapter();
+  await using stateAdapter = await createStateAdapter();
   const writer = createClient({
     stateAdapter,
     jobTypes: defineJobTypes<{
@@ -132,8 +127,6 @@ test("rejects a stored value that is not a superjson envelope", async () => {
   );
 
   await expect(reader.getJob({ id: chain.id })).rejects.toThrow(JobTypeValidationError);
-
-  await stateAdapter.close();
 });
 
 test("carries the runtime types as the job type definitions", () => {

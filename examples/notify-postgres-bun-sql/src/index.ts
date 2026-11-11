@@ -27,21 +27,21 @@ const jobTypes = defineJobTypes<{
 }>();
 
 // Create the state adapter
-const sqlite = new SQL("sqlite://:memory:");
-const stateAdapter = createSqliteStateAdapter({
+await using sqlite = new SQL("sqlite://:memory:");
+await using stateAdapter = createSqliteStateAdapter({
   stateProvider: createBunSqlSqliteStateProvider({ sql: sqlite, lock: createAsyncRwLock() }),
 });
 await stateAdapter.migrateToLatest();
 
 // #region setup
 // Create Bun.SQL connection
-const sql = new SQL(pg.connectionString, { max: 10 });
+await using sql = new SQL(pg.connectionString, { max: 10 });
 
 // Create the notify provider using Bun.SQL
 const notifyProvider = createBunSqlNotifyProvider({ sql });
 
 // Create the notify adapter
-const notifyAdapter = createPgNotifyAdapter({ notifyProvider });
+await using notifyAdapter = createPgNotifyAdapter({ notifyProvider });
 // #endregion
 
 // Create client and worker runner
@@ -51,7 +51,7 @@ const client = createClient({
   jobTypes,
 });
 
-const workerRunner = createWorkerRunner({
+await using workerRunner = createWorkerRunner({
   client,
   processors: createProcessors({
     client,
@@ -83,7 +83,7 @@ const workerRunner = createWorkerRunner({
 });
 
 // Start worker runner and queue a job
-const stopWorkerRunner = await workerRunner.start();
+await workerRunner.start();
 
 console.log("Requesting sales report...");
 const chain = await withTxHooks(async (txHooks) =>
@@ -109,12 +109,4 @@ console.log("Waiting for report...");
 const result = await client.awaitChain(chain, { timeoutMs: 5000 });
 console.log(`Report ready! ID: ${result.output.reportId}, Rows: ${result.output.rowCount}`);
 
-// Cleanup
-await stopWorkerRunner();
-await stateAdapter.close();
-await sqlite.close();
-// #region cleanup
-await notifyAdapter.close();
-await sql.close();
-// #endregion
 console.log("Done!");

@@ -27,10 +27,11 @@ const users = pgTable("users", {
 const schema = { users };
 
 // Create database connection and schema
-const pool = new Pool({
-  connectionString: pg.connectionString,
-  max: 10,
-});
+await using drivers = new AsyncDisposableStack();
+const pool = drivers.adopt(
+  new Pool({ connectionString: pg.connectionString, max: 10 }),
+  async (pool) => pool.end(),
+);
 
 const db = drizzle(pool, { schema });
 
@@ -54,14 +55,14 @@ const jobTypes = defineJobTypes<{
 // Create state provider for Drizzle
 // #region adapter
 const stateProvider = createDrizzlePgStateProvider({ db });
-const stateAdapter = createPgStateAdapter({
+await using stateAdapter = createPgStateAdapter({
   stateProvider,
 });
 await stateAdapter.migrateToLatest();
 // #endregion
 
 const client = createClient({ stateAdapter, jobTypes });
-const workerRunner = createWorkerRunner({
+await using workerRunner = createWorkerRunner({
   client,
   processors: createProcessors({
     client,
@@ -87,7 +88,7 @@ const workerRunner = createWorkerRunner({
 });
 
 // Start worker runner
-const stopWorkerRunner = await workerRunner.start();
+await workerRunner.start();
 
 // Register a new user and queue welcome email atomically
 const chain = await withTxHooks(async (txHooks) =>
@@ -110,8 +111,3 @@ const chain = await withTxHooks(async (txHooks) =>
 // Wait for the chain to complete
 const result = await client.awaitChain(chain, { timeoutMs: 5000 });
 console.log(`Welcome email sent at: ${result.output.sentAt}`);
-
-// Cleanup
-await stopWorkerRunner();
-await stateAdapter.close();
-await db.$client.end();

@@ -143,8 +143,17 @@ const jobTypes = defineJobTypes<{
 }>();
 
 // Create adapters
-const db = new Database(":memory:");
-const stateAdapter = createSqliteStateAdapter({
+await using telemetry = new AsyncDisposableStack();
+telemetry.defer(async () => {
+  console.log("\nFlushing telemetry...");
+  await flush();
+  await shutdown();
+});
+await using drivers = new AsyncDisposableStack();
+const db = drivers.adopt(new Database(":memory:"), (db) => {
+  db.close();
+});
+await using stateAdapter = createSqliteStateAdapter({
   stateProvider: createBetterSqlite3StateProvider({ db, lock: createAsyncRwLock() }),
 });
 await stateAdapter.migrateToLatest();
@@ -158,7 +167,7 @@ const client = createClient({
 // #endregion
 
 // Create worker runner with processors
-const workerRunner = createWorkerRunner({
+await using workerRunner = createWorkerRunner({
   client,
   processors: createProcessors({
     client,
@@ -325,7 +334,7 @@ const workerRunner = createWorkerRunner({
   }),
 });
 
-const stopWorkerRunner = await workerRunner.start();
+await workerRunner.start();
 
 // Run all scenarios
 console.log("\n=== OpenTelemetry Observability Showcase ===\n");
@@ -450,14 +459,6 @@ const approvalResult = await withTxHooks(async (txHooks) =>
 if (approvalResult.status === "completed") {
   console.log("Result:", approvalResult.output);
 }
-
-// Cleanup
-await stopWorkerRunner();
-await stateAdapter.close();
-db.close();
-console.log("\nFlushing telemetry...");
-await flush();
-await shutdown();
 
 console.log("\n" + "=".repeat(45));
 console.log("All scenarios completed.");

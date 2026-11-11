@@ -63,7 +63,7 @@ const workerRunner = createWorkerRunner({
   }),
 });
 
-const stop = await workerRunner.start();
+await workerRunner.start();
 
 // The job can be completed early without a worker (e.g., via API call)
 await withTxHooks(async (txHooks) =>

@@ -1,7 +1,5 @@
 import assert from "node:assert/strict";
 
-import { withWorkerRunners } from "@queuert/helpers";
-
 import { createClient } from "../../client.ts";
 import type { StateAdapterConformanceContext } from "../../conformance.state-adapter/types.ts";
 import type { ConformanceGroup } from "../../conformance/runner.ts";
@@ -30,7 +28,7 @@ export const notifyResilienceGroup: ConformanceGroup<StateAdapterConformanceCont
           notifyAdapter: flaky.notifyAdapter,
           jobTypes,
         });
-        const workerRunner = createWorkerRunner({
+        await using workerRunner = createWorkerRunner({
           client,
           concurrency: 1,
           recoveryBackoffConfig: { initialDelayMs: 1, multiplier: 1, maxDelayMs: 1 },
@@ -50,24 +48,24 @@ export const notifyResilienceGroup: ConformanceGroup<StateAdapterConformanceCont
           }),
         });
 
-        await withWorkerRunners([await workerRunner.start()], async () => {
-          const chains = await withCaseTransaction(stateAdapter, async (txCtx, txHooks) =>
-            client.createChains({
-              ...txCtx,
-              txHooks,
-              items: Array.from({ length: 20 }, (_, i) => ({
-                typeName: "test",
-                input: { value: i },
-              })),
-            }),
-          );
+        await workerRunner.start();
+        const chains = await withCaseTransaction(stateAdapter, async (txCtx, txHooks) =>
+          client.createChains({
+            ...txCtx,
+            txHooks,
+            items: Array.from({ length: 20 }, (_, i) => ({
+              typeName: "test",
+              input: { value: i },
+            })),
+          }),
+        );
 
-          await Promise.all(
-            chains.map(async (chain) =>
-              client.awaitChain(chain, { pollIntervalMs: 100, timeoutMs: 5000 }),
-            ),
-          );
-        });
+        await Promise.all(
+          chains.map(async (chain) =>
+            client.awaitChain(chain, { pollIntervalMs: 100, timeoutMs: 5000 }),
+          ),
+        );
+        await workerRunner.close();
 
         if (flaky.counts.calls > 5) {
           assert.ok(flaky.counts.errors > 0);

@@ -91,15 +91,29 @@ type ValidateRequiredMiddleware<TProcessorsInput, TReq extends readonly AnyAttem
 /**
  * A worker runner that processes jobs in the current process. Created via {@link createWorkerRunner}.
  *
- * Call `start()` to begin processing. It returns a `stop` function — call it to gracefully shut down.
+ * Call `start()` to begin processing and `stop()` to shut down gracefully; a stopped worker runner
+ * can be started again. `close()` stops it for good, and `[Symbol.asyncDispose]` calls `close()`,
+ * so a worker runner held with `await using` is stopped when the scope ends.
  */
 export type WorkerRunner = {
   /**
-   * Begin processing jobs. Returns a `stop` function that gracefully shuts down the worker runner.
+   * Begin processing jobs in the background. Resolves once processing is started, without waiting
+   * for the worker to register.
    *
-   * @throws {Error} if the worker runner is already started and its `stop` function has not resolved.
+   * @throws {Error} if the worker runner is already started and `stop()` has not resolved.
+   * @throws {Error} if the worker runner is closed.
    */
-  start: () => Promise<() => Promise<void>>;
+  start: () => Promise<void>;
+  /**
+   * Stop processing: abort the running attempts' signals, wait for every attempt to end and remove
+   * the worker's registration. Does nothing when the worker runner is not started; concurrent calls
+   * wait for the same shutdown. Never rejects.
+   */
+  stop: () => Promise<void>;
+  /** Stop the worker runner if it is started and prevent it from starting again. Idempotent. */
+  close: () => Promise<void>;
+  /** Calls `close()`. */
+  [Symbol.asyncDispose]: () => Promise<void>;
 };
 
 /**
@@ -285,14 +299,34 @@ export const createWorkerRunner = <
   const workerId = resolveWorkerId(client[helpersSymbol].stateAdapter.config, workerIdOption);
 
   const started = createResettableLatch(
-    "createWorkerRunner: the worker runner is already started; await the stop function returned by start() before starting it again",
+    "createWorkerRunner: the worker runner is already started; await stop() before starting it again",
   );
+  const closed = createLatch("createWorkerRunner: the worker runner is closed");
+  const stopping = createResettableLatch();
+  let stopController = new AbortController();
+  let runWorkersPromise = Promise.resolve();
+  const stop = async () => {
+    if (!started.tripped) return;
+    stopController.abort();
+    if (!stopping.trip()) {
+      await runWorkersPromise;
+      return;
+    }
+    await runWorkersPromise;
+    stopping.reset();
+    started.reset();
+  };
+  const close = async () => {
+    closed.trip();
+    await stop();
+  };
   return {
-    start: async (): Promise<() => Promise<void>> => {
+    start: async () => {
+      closed.throwIfTripped();
       started.throwIfTripped();
       started.trip();
       const helpers = client[helpersSymbol];
-      const stopController = new AbortController();
+      stopController = new AbortController();
 
       const runWorkers = async () => {
         let failures = 0;
@@ -319,17 +353,12 @@ export const createWorkerRunner = <
         }
       };
 
-      const runWorkersPromise = runWorkers().catch((error: unknown) => {
+      runWorkersPromise = runWorkers().catch((error: unknown) => {
         helpers.observabilityHelper.workerError({ workerId }, error);
       });
-
-      const stopped = createLatch();
-      return async () => {
-        stopController.abort();
-        await runWorkersPromise;
-        if (!stopped.trip()) return;
-        started.reset();
-      };
     },
+    stop,
+    close,
+    [Symbol.asyncDispose]: close,
   };
 };

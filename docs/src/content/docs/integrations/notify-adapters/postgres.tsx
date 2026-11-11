@@ -50,20 +50,12 @@ const Page = () => (
       </TabItem>
     </Tabs>
     <p>
-      Close the adapters, then your own clients, in the{" "}
-      <A href="/integrations/notify-adapters/#how-adapters-behave">shutdown order</A>:
+      The notify adapter and your clients are held with <code>await using</code>. A client that is
+      not disposable itself is adopted by a <code>drivers</code> <code>AsyncDisposableStack</code>.
+      Disposal runs in reverse order, so when the scope ends the notify adapter closes before your
+      clients, in the{" "}
+      <A href="/integrations/notify-adapters/#how-adapters-behave">shutdown order</A>.
     </p>
-    <Tabs syncKey="postgres-driver">
-      <TabItem label="pg">
-        <ExampleCode example="notify-postgres-pg" file="src/index.ts" region="cleanup" />
-      </TabItem>
-      <TabItem label="postgres.js">
-        <ExampleCode example="notify-postgres-postgres-js" file="src/index.ts" region="cleanup" />
-      </TabItem>
-      <TabItem label="Bun SQL" badge="Bun">
-        <ExampleCode example="notify-postgres-bun-sql" file="src/index.ts" region="cleanup" />
-      </TabItem>
-    </Tabs>
 
     <h2 id="configuration">Configuration</h2>
     <FieldList

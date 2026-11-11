@@ -28,18 +28,23 @@ const jobTypes = defineJobTypes<{
 }>();
 
 // Create the state adapter
-const sqlite = new SQL("sqlite://:memory:");
-const stateAdapter = createSqliteStateAdapter({
+await using sqlite = new SQL("sqlite://:memory:");
+await using stateAdapter = createSqliteStateAdapter({
   stateProvider: createBunSqlSqliteStateProvider({ sql: sqlite, lock: createAsyncRwLock() }),
 });
 await stateAdapter.migrateToLatest();
 
 // #region setup
 // Create Redis connections (pub/sub needs a dedicated connection)
-const redis = new RedisClient(redisUrl);
+await using drivers = new AsyncDisposableStack();
+const redis = drivers.adopt(new RedisClient(redisUrl), (redis) => {
+  redis.close();
+});
 await redis.connect();
 
-const redisSubscription = new RedisClient(redisUrl);
+const redisSubscription = drivers.adopt(new RedisClient(redisUrl), (redisSubscription) => {
+  redisSubscription.close();
+});
 await redisSubscription.connect();
 
 // Create the notify provider using Bun Redis
@@ -49,7 +54,7 @@ const notifyProvider = createBunRedisNotifyProvider({
 });
 
 // Create the notify adapter
-const notifyAdapter = createRedisNotifyAdapter({ notifyProvider });
+await using notifyAdapter = createRedisNotifyAdapter({ notifyProvider });
 // #endregion
 
 // Create client and worker runner
@@ -59,7 +64,7 @@ const client = createClient({
   jobTypes,
 });
 
-const workerRunner = createWorkerRunner({
+await using workerRunner = createWorkerRunner({
   client,
   processors: createProcessors({
     client,
@@ -91,7 +96,7 @@ const workerRunner = createWorkerRunner({
 });
 
 // Start worker runner and queue a job
-const stopWorkerRunner = await workerRunner.start();
+await workerRunner.start();
 
 console.log("Requesting sales report...");
 const chain = await withTxHooks(async (txHooks) =>
@@ -117,13 +122,4 @@ console.log("Waiting for report...");
 const result = await client.awaitChain(chain, { timeoutMs: 5000 });
 console.log(`Report ready! ID: ${result.output.reportId}, Rows: ${result.output.rowCount}`);
 
-// Cleanup
-await stopWorkerRunner();
-await stateAdapter.close();
-await sqlite.close();
-// #region cleanup
-await notifyAdapter.close();
-redis.close();
-redisSubscription.close();
-// #endregion
 console.log("Done!");

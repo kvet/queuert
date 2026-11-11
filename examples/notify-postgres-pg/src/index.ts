@@ -27,22 +27,30 @@ const jobTypes = defineJobTypes<{
   };
 }>();
 
+// #region setup
+await using drivers = new AsyncDisposableStack();
+// #hide
 // Create the state adapter
-const db = new Database(":memory:");
-const stateAdapter = createSqliteStateAdapter({
+const db = drivers.adopt(new Database(":memory:"), (db) => {
+  db.close();
+});
+await using stateAdapter = createSqliteStateAdapter({
   stateProvider: createBetterSqlite3StateProvider({ db, lock: createAsyncRwLock() }),
 });
 await stateAdapter.migrateToLatest();
+// #endhide
 
-// #region setup
 // Create PostgreSQL connection pool
-const pool = new Pool({ connectionString: pg.connectionString, max: 10 });
+const pool = drivers.adopt(
+  new Pool({ connectionString: pg.connectionString, max: 10 }),
+  async (pool) => pool.end(),
+);
 
 // Create the notify provider using pg
 const notifyProvider = createPgPoolNotifyProvider({ pool });
 
 // Create the notify adapter
-const notifyAdapter = createPgNotifyAdapter({ notifyProvider });
+await using notifyAdapter = createPgNotifyAdapter({ notifyProvider });
 // #endregion
 
 // Create client and worker runner
@@ -52,7 +60,7 @@ const client = createClient({
   jobTypes,
 });
 
-const workerRunner = createWorkerRunner({
+await using workerRunner = createWorkerRunner({
   client,
   processors: createProcessors({
     client,
@@ -84,7 +92,7 @@ const workerRunner = createWorkerRunner({
 });
 
 // Start worker runner and queue a job
-const stopWorkerRunner = await workerRunner.start();
+await workerRunner.start();
 
 console.log("Requesting sales report...");
 const chain = await withTxHooks(async (txHooks) =>
@@ -110,12 +118,4 @@ console.log("Waiting for report...");
 const result = await client.awaitChain(chain, { timeoutMs: 5000 });
 console.log(`Report ready! ID: ${result.output.reportId}, Rows: ${result.output.rowCount}`);
 
-// Cleanup
-await stopWorkerRunner();
-await stateAdapter.close();
-db.close();
-// #region cleanup
-await notifyAdapter.close();
-await pool.end();
-// #endregion
 console.log("Done!");

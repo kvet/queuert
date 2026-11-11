@@ -1,6 +1,6 @@
 import type { UUID } from "node:crypto";
 
-import { createAsyncRwLock, withWorkerRunners } from "@queuert/helpers";
+import { createAsyncRwLock } from "@queuert/helpers";
 import Database from "better-sqlite3";
 import {
   createClient,
@@ -58,7 +58,7 @@ it("infers custom ID types through the full stack", async () => {
     }
   };
 
-  const workerRunner = createWorkerRunner({
+  await using workerRunner = createWorkerRunner({
     client,
     processors: createProcessors({
       client,
@@ -95,7 +95,6 @@ it("infers custom ID types through the full stack", async () => {
   );
   expectTypeOf(chain.id).toEqualTypeOf<`job.${UUID}`>();
 
-  await withWorkerRunners([await workerRunner.start()], async () => {
-    await client.awaitChain(chain, { timeoutMs: 1000 });
-  });
+  await workerRunner.start();
+  await client.awaitChain(chain, { timeoutMs: 1000 });
 });

@@ -54,7 +54,8 @@ const jobTypes = defineJobTypes<{
 console.log("Starting PostgreSQL container...");
 await using pg = await acquirePostgres("postgres:18", import.meta.url);
 
-const sql = postgres(pg.connectionString, { max: 10 });
+await using drivers = new AsyncDisposableStack();
+const sql = drivers.adopt(postgres(pg.connectionString, { max: 10 }), async (sql) => sql.end());
 
 await sql`
   CREATE TABLE IF NOT EXISTS orders (
@@ -65,11 +66,11 @@ await sql`
 `;
 
 const stateProvider = createPostgresJsStateProvider({ sql });
-const stateAdapter = createPgStateAdapter({ stateProvider });
+await using stateAdapter = createPgStateAdapter({ stateProvider });
 await stateAdapter.migrateToLatest();
 
 const notifyProvider = createPostgresJsNotifyProvider({ sql });
-const notifyAdapter = createPgNotifyAdapter({ notifyProvider });
+await using notifyAdapter = createPgNotifyAdapter({ notifyProvider });
 
 const client = createClient({
   stateAdapter,
@@ -190,7 +191,4 @@ const stopPromises = processes.map(
 );
 
 await Promise.all(stopPromises);
-await notifyAdapter.close();
-await stateAdapter.close();
-await sql.end();
 console.log("Done!");

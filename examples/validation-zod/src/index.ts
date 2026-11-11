@@ -77,8 +77,11 @@ const jobTypes = createZodJobTypes({
 // #endregion
 
 // #region in-process-adapters
-const db = new Database(":memory:");
-const stateAdapter = createSqliteStateAdapter({
+await using drivers = new AsyncDisposableStack();
+const db = drivers.adopt(new Database(":memory:"), (db) => {
+  db.close();
+});
+await using stateAdapter = createSqliteStateAdapter({
   stateProvider: createBetterSqlite3StateProvider({ db, lock: createAsyncRwLock() }),
 });
 await stateAdapter.migrateToLatest();
@@ -88,7 +91,7 @@ await stateAdapter.migrateToLatest();
 const client = createClient({ stateAdapter, jobTypes });
 
 // Create and start worker runner with job type processors
-const workerRunner = createWorkerRunner({
+await using workerRunner = createWorkerRunner({
   client,
   processors: createProcessors({
     client,
@@ -164,7 +167,7 @@ const workerRunner = createWorkerRunner({
   }),
 });
 
-const stopWorkerRunner = await workerRunner.start();
+await workerRunner.start();
 
 // Run a chain
 console.log("\n=== Running fetch-data chain ===");
@@ -182,8 +185,4 @@ const chain = await withTxHooks(async (txHooks) =>
 const result = await client.awaitChain(chain, { timeoutMs: 5000 });
 console.log("Chain completed:", result.output);
 
-// Cleanup
-await stopWorkerRunner();
-await stateAdapter.close();
-db.close();
 console.log("\n=== Done ===");

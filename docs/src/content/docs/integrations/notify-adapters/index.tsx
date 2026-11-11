@@ -164,7 +164,8 @@ const Page = () => (
         The second call is a no-op; after close, <code>notify*</code> and <code>listen*</code> calls
         reject, while dispose functions returned before close still work. On shutdown, stop the
         workers, close the notify adapter, close the state adapter, then close the clients and pools
-        you own.
+        you own. Holding each with <code>await using</code>, declared in the order they are created,
+        closes them in this order.
       </li>
     </ul>
     <p>

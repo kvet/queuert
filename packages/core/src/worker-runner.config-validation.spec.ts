@@ -124,27 +124,6 @@ describe("createWorkerRunner config validation", () => {
     );
   });
 
-  it("rejects a second start until the running start's stop resolves", async () => {
-    const { jobTypes, client } = setup();
-
-    const workerRunner = createWorkerRunner({
-      client,
-      processors: createProcessors({
-        client,
-        jobTypes,
-        processors: { foo: { attemptHandler: async () => undefined as never } },
-      }),
-    });
-
-    const stop = await workerRunner.start();
-    await expect(workerRunner.start()).rejects.toThrow("the worker runner is already started");
-    await stop();
-    const stopAgain = await workerRunner.start();
-    await stop();
-    await expect(workerRunner.start()).rejects.toThrow("the worker runner is already started");
-    await stopAgain();
-  });
-
   it("rejects a workerId that fails the state adapter's validateWorkerId", () => {
     const jobTypes = defineJobTypes<Defs>();
     const stateAdapter = createInProcessStateAdapter({

@@ -36,15 +36,18 @@ const jobTypes = createZodCodecJobTypes({
   },
 });
 
-const db = new Database(":memory:");
-const stateAdapter = createSqliteStateAdapter({
+await using drivers = new AsyncDisposableStack();
+const db = drivers.adopt(new Database(":memory:"), (db) => {
+  db.close();
+});
+await using stateAdapter = createSqliteStateAdapter({
   stateProvider: createBetterSqlite3StateProvider({ db, lock: createAsyncRwLock() }),
 });
 await stateAdapter.migrateToLatest();
 
 const client = createClient({ stateAdapter, jobTypes });
 
-const workerRunner = createWorkerRunner({
+await using workerRunner = createWorkerRunner({
   client,
   processors: createProcessors({
     client,
@@ -91,7 +94,7 @@ const workerRunner = createWorkerRunner({
   }),
 });
 
-const stopWorkerRunner = await workerRunner.start();
+await workerRunner.start();
 
 const runAt = new Date("2024-06-01T09:00:00.000Z");
 const chain = await withTxHooks(async (txHooks) =>
@@ -115,7 +118,4 @@ console.log(
   `Round-trip preserved the instant: ${readBack?.input.runAt.getTime() === runAt.getTime()}`,
 );
 
-await stopWorkerRunner();
-await stateAdapter.close();
-db.close();
 console.log("\n=== Done ===");

@@ -1,6 +1,6 @@
 import assert from "node:assert/strict";
 
-import { sleep, withWorkerRunners } from "@queuert/helpers";
+import { sleep } from "@queuert/helpers";
 
 import { createClient } from "../../client.ts";
 import type { StateAdapterConformanceContext } from "../../conformance.state-adapter/types.ts";
@@ -62,26 +62,29 @@ const completesChainsOverFlakyStateAdapter = async ({
     notifyAdapter,
     jobTypes,
   });
+  await using stack = new AsyncDisposableStack();
   const flakyWorkerRunners = Array.from({ length: shape.workerRunners }, () =>
-    createWorkerRunner({
-      client: flakyWorkerClient,
-      concurrency: shape.concurrency,
-      pollIntervalMs: shape.pollIntervalMs,
-      recoveryBackoffConfig: { initialDelayMs: 1, multiplier: 1, maxDelayMs: 1 },
-      processors: createProcessors({
-        client,
-        jobTypes,
-        backoffConfig: { initialDelayMs: 1, multiplier: 1, maxDelayMs: 1 },
-        processors: {
-          test: {
-            attemptHandler: async ({ job, complete }) =>
-              withCaseTransaction(flakyStateAdapter, async (txCtx, txHooks) =>
-                complete({ ...txCtx, txHooks, output: { result: job.input.value * 2 } }),
-              ),
+    stack.use(
+      createWorkerRunner({
+        client: flakyWorkerClient,
+        concurrency: shape.concurrency,
+        pollIntervalMs: shape.pollIntervalMs,
+        recoveryBackoffConfig: { initialDelayMs: 1, multiplier: 1, maxDelayMs: 1 },
+        processors: createProcessors({
+          client,
+          jobTypes,
+          backoffConfig: { initialDelayMs: 1, multiplier: 1, maxDelayMs: 1 },
+          processors: {
+            test: {
+              attemptHandler: async ({ job, complete }) =>
+                withCaseTransaction(flakyStateAdapter, async (txCtx, txHooks) =>
+                  complete({ ...txCtx, txHooks, output: { result: job.input.value * 2 } }),
+                ),
+            },
           },
-        },
+        }),
       }),
-    }),
+    ),
   );
 
   const chains = await withCaseTransaction(stateAdapter, async (txCtx, txHooks) =>
@@ -95,12 +98,11 @@ const completesChainsOverFlakyStateAdapter = async ({
     }),
   );
 
-  const stopWorkerRunners: (() => Promise<void>)[] = [];
-  for (const flakyWorkerRunner of flakyWorkerRunners) {
-    stopWorkerRunners.push(await flakyWorkerRunner.start());
+  for (const workerRunner of flakyWorkerRunners) {
+    await workerRunner.start();
   }
-  const completedChains = await withWorkerRunners(stopWorkerRunners, async () =>
-    Promise.all(chains.map(async (chain) => client.awaitChain(chain, completionOptions))),
+  const completedChains = await Promise.all(
+    chains.map(async (chain) => client.awaitChain(chain, completionOptions)),
   );
   assert.deepEqual(
     completedChains.map((chain) => chain.output),
@@ -195,7 +197,7 @@ export const stateResilienceGroup: ConformanceGroup<StateAdapterConformanceConte
           notifyAdapter,
           jobTypes,
         });
-        const workerRunner = createWorkerRunner({
+        await using workerRunner = createWorkerRunner({
           client: workerClient,
           pollIntervalMs: 100,
           recoveryBackoffConfig: { initialDelayMs: 1, multiplier: 100, maxDelayMs: 60_000 },
@@ -217,23 +219,22 @@ export const stateResilienceGroup: ConformanceGroup<StateAdapterConformanceConte
           client.createChain({ ...txCtx, txHooks, typeName: "test", input: null }),
         );
 
-        await withWorkerRunners([await workerRunner.start()], async () => {
-          const completedFirstChain = await client.awaitChain(firstChain, {
-            pollIntervalMs: 100,
-            timeoutMs: 5000,
-          });
-          assert.equal(completedFirstChain.status, "completed");
-
-          failuresLeft = 1;
-          const secondChain = await withCaseTransaction(stateAdapter, async (txCtx, txHooks) =>
-            client.createChain({ ...txCtx, txHooks, typeName: "test", input: null }),
-          );
-          const completedSecondChain = await client.awaitChain(secondChain, {
-            pollIntervalMs: 100,
-            timeoutMs: 5000,
-          });
-          assert.equal(completedSecondChain.status, "completed");
+        await workerRunner.start();
+        const completedFirstChain = await client.awaitChain(firstChain, {
+          pollIntervalMs: 100,
+          timeoutMs: 5000,
         });
+        assert.equal(completedFirstChain.status, "completed");
+
+        failuresLeft = 1;
+        const secondChain = await withCaseTransaction(stateAdapter, async (txCtx, txHooks) =>
+          client.createChain({ ...txCtx, txHooks, typeName: "test", input: null }),
+        );
+        const completedSecondChain = await client.awaitChain(secondChain, {
+          pollIntervalMs: 100,
+          timeoutMs: 5000,
+        });
+        assert.equal(completedSecondChain.status, "completed");
       },
     },
     {
@@ -259,7 +260,7 @@ export const stateResilienceGroup: ConformanceGroup<StateAdapterConformanceConte
           jobTypes,
         });
         const client = createClient({ stateAdapter, notifyAdapter, jobTypes });
-        const workerRunner = createWorkerRunner({
+        await using workerRunner = createWorkerRunner({
           client: workerClient,
           concurrency: 2,
           pollIntervalMs: 50,
@@ -296,11 +297,8 @@ export const stateResilienceGroup: ConformanceGroup<StateAdapterConformanceConte
           }),
         );
 
-        await withWorkerRunners([await workerRunner.start()], async () => {
-          await Promise.all(
-            chains.map(async (chain) => client.awaitChain(chain, completionOptions)),
-          );
-        });
+        await workerRunner.start();
+        await Promise.all(chains.map(async (chain) => client.awaitChain(chain, completionOptions)));
 
         const jobs = await client.getJobs({ ids: chains.map((chain) => chain.id) });
         assert.deepEqual(

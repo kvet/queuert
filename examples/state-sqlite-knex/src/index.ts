@@ -11,11 +11,15 @@ import {
 import { createKnexSqliteStateProvider } from "./provider.ts";
 
 // Create in-memory SQLite database
-const knex = knexFactory({
-  client: "better-sqlite3",
-  connection: { filename: ":memory:" },
-  useNullAsDefault: true,
-});
+await using drivers = new AsyncDisposableStack();
+const knex = drivers.adopt(
+  knexFactory({
+    client: "better-sqlite3",
+    connection: { filename: ":memory:" },
+    useNullAsDefault: true,
+  }),
+  async (knex) => knex.destroy(),
+);
 
 // Create application schema
 await knex.raw(`
@@ -38,7 +42,7 @@ const jobTypes = defineJobTypes<{
 // Create state provider for Knex
 // #region adapter
 const stateProvider = createKnexSqliteStateProvider({ knex });
-const stateAdapter = createSqliteStateAdapter({
+await using stateAdapter = createSqliteStateAdapter({
   stateProvider,
 });
 await stateAdapter.migrateToLatest();
@@ -47,7 +51,7 @@ await stateAdapter.migrateToLatest();
 const client = createClient({ stateAdapter, jobTypes });
 
 // Create worker runner with job type processors
-const workerRunner = createWorkerRunner({
+await using workerRunner = createWorkerRunner({
   client,
   processors: createProcessors({
     client,
@@ -78,7 +82,7 @@ const workerRunner = createWorkerRunner({
   }),
 });
 
-const stopWorkerRunner = await workerRunner.start();
+await workerRunner.start();
 
 // Register a new user and queue welcome email atomically
 // #region create-chain
@@ -105,8 +109,3 @@ const chain = await withTxHooks(async (txHooks) =>
 // Wait for the chain to complete
 const result = await client.awaitChain(chain, { timeoutMs: 5000 });
 console.log(`Welcome email sent at: ${result.output.sentAt}`);
-
-// Cleanup
-await stopWorkerRunner();
-await stateAdapter.close();
-await knex.destroy();

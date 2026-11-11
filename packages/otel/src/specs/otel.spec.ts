@@ -12,7 +12,7 @@ import {
   SimpleSpanProcessor,
   TracerProvider,
 } from "@opentelemetry/sdk-trace";
-import { sleep, withWorkerRunners } from "@queuert/helpers";
+import { sleep } from "@queuert/helpers";
 import {
   JobAlreadyCompletedError,
   type Log,
@@ -114,7 +114,6 @@ const it = baseIt
           stateAdapter.withTransaction(txHooks.retryBoundary(async (txCtx) => cb(txCtx, txHooks))),
         ),
   )
-  .extend("withWorkerRunners", async () => withWorkerRunners)
   .extend("log", async () => vi.fn<Log>())
   .extend(
     "_otelExporter",
@@ -337,7 +336,6 @@ describe("Metrics", () => {
     stateAdapter,
     notifyAdapter,
     withTransaction,
-    withWorkerRunners,
     observabilityAdapter,
     log,
     expectMetrics,
@@ -358,7 +356,7 @@ describe("Metrics", () => {
       log,
       jobTypes,
     });
-    const workerRunner = createWorkerRunner({
+    await using workerRunner = createWorkerRunner({
       client,
       concurrency: 1,
       processors: createProcessors({
@@ -385,9 +383,9 @@ describe("Metrics", () => {
       }),
     );
 
-    await withWorkerRunners([await workerRunner.start()], async () => {
-      await client.awaitChain(chain, completionOptions);
-    });
+    await workerRunner.start();
+    await client.awaitChain(chain, completionOptions);
+    await workerRunner.close();
 
     const workerIdMatcher = expect.stringMatching(/^[0-9a-f-]{36}$/);
 
@@ -413,7 +411,6 @@ describe("Metrics", () => {
     stateAdapter,
     notifyAdapter,
     withTransaction,
-    withWorkerRunners,
     observabilityAdapter,
     log,
     expectMetrics,
@@ -433,7 +430,7 @@ describe("Metrics", () => {
       log,
       jobTypes,
     });
-    const workerRunner = createWorkerRunner({
+    await using workerRunner = createWorkerRunner({
       client,
       concurrency: 1,
       processors: createProcessors({
@@ -468,9 +465,9 @@ describe("Metrics", () => {
       }),
     );
 
-    await withWorkerRunners([await workerRunner.start()], async () => {
-      await client.awaitChain(chain, completionOptions);
-    });
+    await workerRunner.start();
+    await client.awaitChain(chain, completionOptions);
+    await workerRunner.close();
 
     await expectMetrics([
       { method: "chainCreated" },
@@ -491,7 +488,6 @@ describe("Metrics", () => {
     stateAdapter,
     notifyAdapter,
     withTransaction,
-    withWorkerRunners,
     observabilityAdapter,
     log,
     expectMetrics,
@@ -511,7 +507,7 @@ describe("Metrics", () => {
       log,
       jobTypes,
     });
-    const workerRunner = createWorkerRunner({
+    await using workerRunner = createWorkerRunner({
       client,
       concurrency: 1,
       processors: createProcessors({
@@ -543,9 +539,9 @@ describe("Metrics", () => {
       }),
     );
 
-    await withWorkerRunners([await workerRunner.start()], async () => {
-      await client.awaitChain(chain, completionOptions);
-    });
+    await workerRunner.start();
+    await client.awaitChain(chain, completionOptions);
+    await workerRunner.close();
 
     await expectMetrics([
       { method: "chainCreated" },
@@ -566,7 +562,6 @@ describe("Metrics", () => {
     stateAdapter,
     notifyAdapter,
     withTransaction,
-    withWorkerRunners,
     observabilityAdapter,
     log,
     expectMetrics,
@@ -595,7 +590,7 @@ describe("Metrics", () => {
       log,
       jobTypes,
     });
-    const workerRunner = createWorkerRunner({
+    await using workerRunner = createWorkerRunner({
       client,
       concurrency: 1,
       processors: createProcessors({
@@ -651,9 +646,9 @@ describe("Metrics", () => {
       }),
     );
 
-    await withWorkerRunners([await workerRunner.start()], async () => {
-      await client.awaitChain(chain, completionOptions);
-    });
+    await workerRunner.start();
+    await client.awaitChain(chain, completionOptions);
+    await workerRunner.close();
 
     await expectMetrics([
       { method: "chainCreated", args: { typeName: "linear" } },
@@ -689,7 +684,6 @@ describe("Metrics", () => {
     stateAdapter,
     notifyAdapter,
     withTransaction,
-    withWorkerRunners,
     observabilityAdapter,
     log,
     expectMetrics,
@@ -716,7 +710,7 @@ describe("Metrics", () => {
       log,
       jobTypes,
     });
-    const workerRunner = createWorkerRunner({
+    await using workerRunner = createWorkerRunner({
       client,
       concurrency: 1,
       processors: createProcessors({
@@ -778,9 +772,9 @@ describe("Metrics", () => {
       });
     });
 
-    await withWorkerRunners([await workerRunner.start()], async () => {
-      await client.awaitChain(chain, completionOptions);
-    });
+    await workerRunner.start();
+    await client.awaitChain(chain, completionOptions);
+    await workerRunner.close();
 
     await expectMetrics([
       { method: "chainCreated", args: { typeName: "blocker" } },
@@ -862,7 +856,6 @@ describe("Metrics", () => {
     stateAdapter,
     notifyAdapter,
     withTransaction,
-    withWorkerRunners,
     observabilityAdapter,
     log,
     getMetricNames,
@@ -890,7 +883,7 @@ describe("Metrics", () => {
     const jobStarted = Promise.withResolvers<void>();
     const handlerReleased = Promise.withResolvers<void>();
 
-    const leaseLosingWorkerRunner = createWorkerRunner({
+    await using leaseLosingWorkerRunner = createWorkerRunner({
       client: leaseLosingClient,
       leaseConfig: { durationMs: 150, heartbeatMs: 40 },
       processors: createProcessors({
@@ -909,7 +902,7 @@ describe("Metrics", () => {
         },
       }),
     });
-    const reclaimingWorkerRunner = createWorkerRunner({
+    await using reclaimingWorkerRunner = createWorkerRunner({
       client,
       pollIntervalMs: 20,
       processors: createProcessors({
@@ -930,13 +923,13 @@ describe("Metrics", () => {
       client.createChain({ ...txCtx, txHooks, typeName: "test", input: null }),
     );
 
-    await withWorkerRunners([await leaseLosingWorkerRunner.start()], async () => {
-      await jobStarted.promise;
-      await withWorkerRunners([await reclaimingWorkerRunner.start()], async () => {
-        await client.awaitChain(chain, completionOptions);
-      });
-      handlerReleased.resolve();
-    });
+    await leaseLosingWorkerRunner.start();
+    await jobStarted.promise;
+    await reclaimingWorkerRunner.start();
+    await client.awaitChain(chain, completionOptions);
+    await reclaimingWorkerRunner.close();
+    handlerReleased.resolve();
+    await leaseLosingWorkerRunner.close();
 
     const metricNames = await getMetricNames();
     expect(metricNames).toContain("queuert.job.attempt.reclaimed");
@@ -947,7 +940,6 @@ describe("Metrics", () => {
   it("tracks worker lease loss metrics", async ({
     stateAdapter,
     notifyAdapter,
-    withWorkerRunners,
     observabilityAdapter,
     log,
     getMetricNames,
@@ -964,7 +956,7 @@ describe("Metrics", () => {
       jobTypes,
     });
 
-    const workerRunner = createWorkerRunner({
+    await using workerRunner = createWorkerRunner({
       client,
       leaseConfig: { durationMs: 1000, heartbeatMs: 20 },
       processors: createProcessors({
@@ -980,16 +972,14 @@ describe("Metrics", () => {
       }),
     });
 
-    await withWorkerRunners([await workerRunner.start()], async () => {
-      await expect.poll(getMetricNames).toContain("queuert.worker.lease_lost");
-    });
+    await workerRunner.start();
+    await expect.poll(getMetricNames).toContain("queuert.worker.lease_lost");
   });
 
   it("tracks a lost attempt once after a workerless takeover", async ({
     stateAdapter,
     notifyAdapter,
     withTransaction,
-    withWorkerRunners,
     observabilityAdapter,
     log,
     expectMetrics,
@@ -1008,7 +998,7 @@ describe("Metrics", () => {
     const started = Promise.withResolvers<void>();
     const takenOver = Promise.withResolvers<void>();
     const attemptEnded = Promise.withResolvers<void>();
-    const workerRunner = createWorkerRunner({
+    await using workerRunner = createWorkerRunner({
       client,
       concurrency: 1,
       processors: createProcessors({
@@ -1036,20 +1026,20 @@ describe("Metrics", () => {
       client.createChain({ ...txCtx, txHooks, typeName: "test", input: null }),
     );
 
-    await withWorkerRunners([await workerRunner.start()], async () => {
-      await started.promise;
-      await withTransaction(async (txCtx, txHooks) =>
-        client.completeChain({
-          ...txCtx,
-          txHooks,
-          ...chain,
-          handler: async ({ job, completeJob }) =>
-            completeJob(job, async ({ complete }) => complete({ output: { by: "workerless" } })),
-        }),
-      );
-      takenOver.resolve();
-      await attemptEnded.promise;
-    });
+    await workerRunner.start();
+    await started.promise;
+    await withTransaction(async (txCtx, txHooks) =>
+      client.completeChain({
+        ...txCtx,
+        txHooks,
+        ...chain,
+        handler: async ({ job, completeJob }) =>
+          completeJob(job, async ({ complete }) => complete({ output: { by: "workerless" } })),
+      }),
+    );
+    takenOver.resolve();
+    await attemptEnded.promise;
+    await workerRunner.close();
 
     await expectMetrics([
       { method: "chainCreated" },
@@ -1067,7 +1057,6 @@ describe("Metrics", () => {
     stateAdapter,
     notifyAdapter,
     withTransaction,
-    withWorkerRunners,
     observabilityAdapter,
     log,
     expectMetrics,
@@ -1085,7 +1074,7 @@ describe("Metrics", () => {
     });
     const started = Promise.withResolvers<void>();
     const deleted = Promise.withResolvers<void>();
-    const workerRunner = createWorkerRunner({
+    await using workerRunner = createWorkerRunner({
       client,
       concurrency: 1,
       processors: createProcessors({
@@ -1109,13 +1098,13 @@ describe("Metrics", () => {
       client.createChain({ ...txCtx, txHooks, typeName: "test", input: null }),
     );
 
-    await withWorkerRunners([await workerRunner.start()], async () => {
-      await started.promise;
-      await withTransaction(async (txCtx, txHooks) =>
-        client.deleteChains({ ...txCtx, txHooks, ids: [chain.id] }),
-      );
-      deleted.resolve();
-    });
+    await workerRunner.start();
+    await started.promise;
+    await withTransaction(async (txCtx, txHooks) =>
+      client.deleteChains({ ...txCtx, txHooks, ids: [chain.id] }),
+    );
+    deleted.resolve();
+    await workerRunner.close();
 
     await expectMetrics([
       { method: "chainCreated" },
@@ -1132,7 +1121,6 @@ describe("Metrics", () => {
     stateAdapter,
     notifyAdapter,
     withTransaction,
-    withWorkerRunners,
     observabilityAdapter,
     log,
     expectMetrics,
@@ -1148,7 +1136,7 @@ describe("Metrics", () => {
       log,
       jobTypes,
     });
-    const workerRunner = createWorkerRunner({
+    await using workerRunner = createWorkerRunner({
       client,
       concurrency: 1,
       processors: createProcessors({
@@ -1172,9 +1160,9 @@ describe("Metrics", () => {
       client.createChain({ ...txCtx, txHooks, typeName: "test", input: null }),
     );
 
-    await withWorkerRunners([await workerRunner.start()], async () => {
-      await client.awaitChain(chain, completionOptions);
-    });
+    await workerRunner.start();
+    await client.awaitChain(chain, completionOptions);
+    await workerRunner.close();
 
     await expectMetrics([
       { method: "chainCreated" },
@@ -1190,7 +1178,6 @@ describe("Metrics", () => {
     stateAdapter,
     notifyAdapter,
     withTransaction,
-    withWorkerRunners,
     observabilityAdapter,
     log,
     getMetricNames,
@@ -1225,7 +1212,7 @@ describe("Metrics", () => {
       log,
       jobTypes,
     });
-    const workerRunner = createWorkerRunner({
+    await using workerRunner = createWorkerRunner({
       client: workerClient,
       concurrency: 1,
       recoveryBackoffConfig: { initialDelayMs: 10, multiplier: 1, maxDelayMs: 10 },
@@ -1249,9 +1236,9 @@ describe("Metrics", () => {
       client.createChain({ ...txCtx, txHooks, typeName: "test", input: null }),
     );
 
-    await withWorkerRunners([await workerRunner.start()], async () => {
-      await client.awaitChain(chain, completionOptions);
-    });
+    await workerRunner.start();
+    await client.awaitChain(chain, completionOptions);
+    await workerRunner.close();
 
     const metricNames = await getMetricNames();
     expect(metricNames).toContain("queuert.state_adapter.error");
@@ -1262,7 +1249,6 @@ describe("Metrics", () => {
     stateAdapter,
     notifyAdapter,
     withTransaction,
-    withWorkerRunners,
     observabilityAdapter,
     log,
     getMetricNames,
@@ -1285,7 +1271,7 @@ describe("Metrics", () => {
       log,
       jobTypes,
     });
-    const workerRunner = createWorkerRunner({
+    await using workerRunner = createWorkerRunner({
       client,
       concurrency: 1,
       pollIntervalMs: 100,
@@ -1308,12 +1294,12 @@ describe("Metrics", () => {
       client.createChain({ ...txCtx, txHooks, typeName: "test", input: null }),
     );
 
-    await withWorkerRunners([await workerRunner.start()], async () => {
-      await client.awaitChain(chain, {
-        pollIntervalMs: 100,
-        timeoutMs: 5000,
-      });
+    await workerRunner.start();
+    await client.awaitChain(chain, {
+      pollIntervalMs: 100,
+      timeoutMs: 5000,
     });
+    await workerRunner.close();
 
     const metricNames = await getMetricNames();
     expect(metricNames).toContain("queuert.notify_adapter.error");
@@ -1445,7 +1431,6 @@ describe("Spans", () => {
     stateAdapter,
     notifyAdapter,
     withTransaction,
-    withWorkerRunners,
     observabilityAdapter,
     log,
     expectSpans,
@@ -1465,7 +1450,7 @@ describe("Spans", () => {
       log,
       jobTypes,
     });
-    const workerRunner = createWorkerRunner({
+    await using workerRunner = createWorkerRunner({
       client,
       concurrency: 1,
       processors: createProcessors({
@@ -1492,9 +1477,9 @@ describe("Spans", () => {
       }),
     );
 
-    await withWorkerRunners([await workerRunner.start()], async () => {
-      await client.awaitChain(chain, completionOptions);
-    });
+    await workerRunner.start();
+    await client.awaitChain(chain, completionOptions);
+    await workerRunner.close();
 
     await expectSpans([
       { name: "create chain.test", kind: "PRODUCER" },
@@ -1513,7 +1498,6 @@ describe("Spans", () => {
     stateAdapter,
     notifyAdapter,
     withTransaction,
-    withWorkerRunners,
     observabilityAdapter,
     log,
     expectSpans,
@@ -1533,7 +1517,7 @@ describe("Spans", () => {
       log,
       jobTypes,
     });
-    const workerRunner = createWorkerRunner({
+    await using workerRunner = createWorkerRunner({
       client,
       concurrency: 1,
       processors: createProcessors({
@@ -1568,9 +1552,9 @@ describe("Spans", () => {
       }),
     );
 
-    await withWorkerRunners([await workerRunner.start()], async () => {
-      await client.awaitChain(chain, completionOptions);
-    });
+    await workerRunner.start();
+    await client.awaitChain(chain, completionOptions);
+    await workerRunner.close();
 
     await expectSpans([
       { name: "create chain.test", kind: "PRODUCER" },
@@ -1602,7 +1586,6 @@ describe("Spans", () => {
     stateAdapter,
     notifyAdapter,
     withTransaction,
-    withWorkerRunners,
     observabilityAdapter,
     log,
     expectSpans,
@@ -1622,7 +1605,7 @@ describe("Spans", () => {
       log,
       jobTypes,
     });
-    const workerRunner = createWorkerRunner({
+    await using workerRunner = createWorkerRunner({
       client,
       concurrency: 1,
       processors: createProcessors({
@@ -1654,9 +1637,9 @@ describe("Spans", () => {
       }),
     );
 
-    await withWorkerRunners([await workerRunner.start()], async () => {
-      await client.awaitChain(chain, completionOptions);
-    });
+    await workerRunner.start();
+    await client.awaitChain(chain, completionOptions);
+    await workerRunner.close();
 
     await expectSpans([
       { name: "create chain.test", kind: "PRODUCER" },
@@ -1688,7 +1671,6 @@ describe("Spans", () => {
     stateAdapter,
     notifyAdapter,
     withTransaction,
-    withWorkerRunners,
     observabilityAdapter,
     log,
     expectSpans,
@@ -1716,7 +1698,7 @@ describe("Spans", () => {
       log,
       jobTypes,
     });
-    const workerRunner = createWorkerRunner({
+    await using workerRunner = createWorkerRunner({
       client,
       concurrency: 1,
       processors: createProcessors({
@@ -1772,9 +1754,9 @@ describe("Spans", () => {
       }),
     );
 
-    await withWorkerRunners([await workerRunner.start()], async () => {
-      await client.awaitChain(chain, completionOptions);
-    });
+    await workerRunner.start();
+    await client.awaitChain(chain, completionOptions);
+    await workerRunner.close();
 
     await expectSpans([
       { name: "create chain.linear", kind: "PRODUCER" },
@@ -1818,7 +1800,6 @@ describe("Spans", () => {
     stateAdapter,
     notifyAdapter,
     withTransaction,
-    withWorkerRunners,
     observabilityAdapter,
     log,
     expectSpans,
@@ -1843,7 +1824,7 @@ describe("Spans", () => {
       log,
       jobTypes,
     });
-    const workerRunner = createWorkerRunner({
+    await using workerRunner = createWorkerRunner({
       client,
       concurrency: 1,
       processors: createProcessors({
@@ -1886,9 +1867,9 @@ describe("Spans", () => {
       }),
     );
 
-    await withWorkerRunners([await workerRunner.start()], async () => {
-      await client.awaitChain(chain, completionOptions);
-    });
+    await workerRunner.start();
+    await client.awaitChain(chain, completionOptions);
+    await workerRunner.close();
 
     const { items } = await stateAdapter.listChainJobs({
       chainId: chain.id,
@@ -1912,7 +1893,6 @@ describe("Spans", () => {
     stateAdapter,
     notifyAdapter,
     withTransaction,
-    withWorkerRunners,
     observabilityAdapter,
     log,
     expectSpans,
@@ -1929,7 +1909,7 @@ describe("Spans", () => {
       log,
       jobTypes,
     });
-    const workerRunner = createWorkerRunner({
+    await using workerRunner = createWorkerRunner({
       client,
       concurrency: 1,
       processors: createProcessors({
@@ -1963,9 +1943,9 @@ describe("Spans", () => {
       client.createChain({ ...txCtx, txHooks, typeName: "first", input: null }),
     );
 
-    await withWorkerRunners([await workerRunner.start()], async () => {
-      await client.awaitChain(chain, completionOptions);
-    });
+    await workerRunner.start();
+    await client.awaitChain(chain, completionOptions);
+    await workerRunner.close();
 
     await expectSpans([
       { name: "create chain.first", kind: "PRODUCER" },
@@ -1991,7 +1971,6 @@ describe("Spans", () => {
     stateAdapter,
     notifyAdapter,
     withTransaction,
-    withWorkerRunners,
     observabilityAdapter,
     log,
     expectSpans,
@@ -2018,7 +1997,7 @@ describe("Spans", () => {
       log,
       jobTypes,
     });
-    const workerRunner = createWorkerRunner({
+    await using workerRunner = createWorkerRunner({
       client,
       concurrency: 1,
       processors: createProcessors({
@@ -2080,9 +2059,9 @@ describe("Spans", () => {
       });
     });
 
-    await withWorkerRunners([await workerRunner.start()], async () => {
-      await client.awaitChain(chain, completionOptions);
-    });
+    await workerRunner.start();
+    await client.awaitChain(chain, completionOptions);
+    await workerRunner.close();
 
     await expectSpans([
       // Blocker chain created independently (no links yet)
@@ -2124,7 +2103,6 @@ describe("Spans", () => {
     stateAdapter,
     notifyAdapter,
     withTransaction,
-    withWorkerRunners,
     observabilityAdapter,
     log,
     expectSpans,
@@ -2150,7 +2128,7 @@ describe("Spans", () => {
       log,
       jobTypes,
     });
-    const workerRunner = createWorkerRunner({
+    await using workerRunner = createWorkerRunner({
       client,
       concurrency: 1,
       processors: createProcessors({
@@ -2196,9 +2174,9 @@ describe("Spans", () => {
       }),
     );
 
-    await withWorkerRunners([await workerRunner.start()], async () => {
-      await client.awaitChain(dependencyChain, completionOptions);
-    });
+    await workerRunner.start();
+    await client.awaitChain(dependencyChain, completionOptions);
+    await workerRunner.stop();
 
     // Now create main chain with already-completed blocker
     const chain = await withTransaction(async (txCtx, txHooks) =>
@@ -2211,9 +2189,9 @@ describe("Spans", () => {
       }),
     );
 
-    await withWorkerRunners([await workerRunner.start()], async () => {
-      await client.awaitChain(chain, completionOptions);
-    });
+    await workerRunner.start();
+    await client.awaitChain(chain, completionOptions);
+    await workerRunner.close();
 
     await expectSpans([
       // Phase 1: blocker chain created and processed
@@ -2625,7 +2603,6 @@ describe("Gauges", () => {
     stateAdapter,
     notifyAdapter,
     withTransaction,
-    withWorkerRunners,
     observabilityAdapter,
     log,
     expectGauges,
@@ -2645,7 +2622,7 @@ describe("Gauges", () => {
       log,
       jobTypes,
     });
-    const workerRunner = createWorkerRunner({
+    await using workerRunner = createWorkerRunner({
       client,
       concurrency: 1,
       processors: createProcessors({
@@ -2676,22 +2653,22 @@ describe("Gauges", () => {
       jobTypeIdleChange: [],
       jobTypeProcessingChange: [],
     });
-    await withWorkerRunners([await workerRunner.start()], async () => {
-      await client.awaitChain(chain, completionOptions);
+    await workerRunner.start();
+    await client.awaitChain(chain, completionOptions);
 
-      await sleep(100);
-      await expectGauges({
-        jobTypeIdleChange: [
-          { delta: 1, typeName: "test" },
-          { delta: -1, typeName: "test" },
-          { delta: 1, typeName: "test" },
-        ],
-        jobTypeProcessingChange: [
-          { delta: 1, typeName: "test" },
-          { delta: -1, typeName: "test" },
-        ],
-      });
+    await sleep(100);
+    await expectGauges({
+      jobTypeIdleChange: [
+        { delta: 1, typeName: "test" },
+        { delta: -1, typeName: "test" },
+        { delta: 1, typeName: "test" },
+      ],
+      jobTypeProcessingChange: [
+        { delta: 1, typeName: "test" },
+        { delta: -1, typeName: "test" },
+      ],
     });
+    await workerRunner.close();
 
     await expectGauges({
       jobTypeIdleChange: [{ delta: -1, typeName: "test" }],
@@ -2703,7 +2680,6 @@ describe("Gauges", () => {
     stateAdapter,
     notifyAdapter,
     withTransaction,
-    withWorkerRunners,
     observabilityAdapter,
     log,
     expectGauges,
@@ -2722,7 +2698,7 @@ describe("Gauges", () => {
       log,
       jobTypes,
     });
-    const workerRunner = createWorkerRunner({
+    await using workerRunner = createWorkerRunner({
       client,
       concurrency: 1,
       processors: createProcessors({
@@ -2766,38 +2742,38 @@ describe("Gauges", () => {
       }),
     );
 
-    await withWorkerRunners([await workerRunner.start()], async () => {
-      await Promise.all([
-        client.awaitChain(emailChain, completionOptions),
-        client.awaitChain(smsChain, completionOptions),
-      ]);
+    await workerRunner.start();
+    await Promise.all([
+      client.awaitChain(emailChain, completionOptions),
+      client.awaitChain(smsChain, completionOptions),
+    ]);
 
-      expect(processedTypes).toContain("email");
-      expect(processedTypes).toContain("sms");
-      expect(processedTypes).toHaveLength(2);
+    expect(processedTypes).toContain("email");
+    expect(processedTypes).toContain("sms");
+    expect(processedTypes).toHaveLength(2);
 
-      await sleep(100);
-      await expectGauges({
-        jobTypeIdleChange: [
-          { delta: 1, typeName: processedTypes[0] },
-          { delta: 1, typeName: processedTypes[1] },
-          { delta: -1, typeName: processedTypes[0] },
-          { delta: -1, typeName: processedTypes[1] },
-          { delta: 1, typeName: processedTypes[0] },
-          { delta: 1, typeName: processedTypes[1] },
-          { delta: -1, typeName: processedTypes[0] },
-          { delta: -1, typeName: processedTypes[1] },
-          { delta: 1, typeName: processedTypes[0] },
-          { delta: 1, typeName: processedTypes[1] },
-        ],
-        jobTypeProcessingChange: [
-          { delta: 1, typeName: processedTypes[0] },
-          { delta: -1, typeName: processedTypes[0] },
-          { delta: 1, typeName: processedTypes[1] },
-          { delta: -1, typeName: processedTypes[1] },
-        ],
-      });
+    await sleep(100);
+    await expectGauges({
+      jobTypeIdleChange: [
+        { delta: 1, typeName: processedTypes[0] },
+        { delta: 1, typeName: processedTypes[1] },
+        { delta: -1, typeName: processedTypes[0] },
+        { delta: -1, typeName: processedTypes[1] },
+        { delta: 1, typeName: processedTypes[0] },
+        { delta: 1, typeName: processedTypes[1] },
+        { delta: -1, typeName: processedTypes[0] },
+        { delta: -1, typeName: processedTypes[1] },
+        { delta: 1, typeName: processedTypes[0] },
+        { delta: 1, typeName: processedTypes[1] },
+      ],
+      jobTypeProcessingChange: [
+        { delta: 1, typeName: processedTypes[0] },
+        { delta: -1, typeName: processedTypes[0] },
+        { delta: 1, typeName: processedTypes[1] },
+        { delta: -1, typeName: processedTypes[1] },
+      ],
     });
+    await workerRunner.close();
 
     await expectGauges({
       jobTypeIdleChange: [
@@ -2961,7 +2937,6 @@ describe("Rollback", () => {
     stateAdapter,
     notifyAdapter,
     withTransaction,
-    withWorkerRunners,
     observabilityAdapter,
     log,
     expectMetrics,
@@ -2996,7 +2971,7 @@ describe("Rollback", () => {
       log,
       jobTypes,
     });
-    const workerRunner = createWorkerRunner({
+    await using workerRunner = createWorkerRunner({
       client: workerClient,
       concurrency: 1,
       pollIntervalMs: 100,
@@ -3019,9 +2994,9 @@ describe("Rollback", () => {
       client.createChain({ ...txCtx, txHooks, typeName: "test", input: null }),
     );
 
-    await withWorkerRunners([await workerRunner.start()], async () => {
-      await client.awaitChain(chain, completionOptions);
-    });
+    await workerRunner.start();
+    await client.awaitChain(chain, completionOptions);
+    await workerRunner.close();
 
     await expectMetrics([
       { method: "chainCreated" },
@@ -3043,7 +3018,6 @@ describe("Rollback", () => {
     stateAdapter,
     notifyAdapter,
     withTransaction,
-    withWorkerRunners,
     observabilityAdapter,
     log,
     expectMetrics,
@@ -3079,7 +3053,7 @@ describe("Rollback", () => {
       log,
       jobTypes,
     });
-    const workerRunner = createWorkerRunner({
+    await using workerRunner = createWorkerRunner({
       client: workerClient,
       concurrency: 1,
       pollIntervalMs: 50,
@@ -3106,9 +3080,9 @@ describe("Rollback", () => {
       client.createChain({ ...txCtx, txHooks, typeName: "test", input: null }),
     );
 
-    await withWorkerRunners([await workerRunner.start()], async () => {
-      await client.awaitChain(chain, completionOptions);
-    });
+    await workerRunner.start();
+    await client.awaitChain(chain, completionOptions);
+    await workerRunner.close();
 
     await expectMetrics([
       { method: "chainCreated" },
@@ -3132,7 +3106,6 @@ describe("Rollback", () => {
     stateAdapter,
     notifyAdapter,
     withTransaction,
-    withWorkerRunners,
     observabilityAdapter,
     log,
     expectMetrics,
@@ -3158,7 +3131,7 @@ describe("Rollback", () => {
     });
 
     let throwOnce = true;
-    const workerRunner = createWorkerRunner({
+    await using workerRunner = createWorkerRunner({
       client,
       concurrency: 1,
       pollIntervalMs: 100,
@@ -3196,9 +3169,9 @@ describe("Rollback", () => {
       client.createChain({ ...txCtx, txHooks, typeName: "linear", input: null }),
     );
 
-    await withWorkerRunners([await workerRunner.start()], async () => {
-      await client.awaitChain(chain, completionOptions);
-    });
+    await workerRunner.start();
+    await client.awaitChain(chain, completionOptions);
+    await workerRunner.close();
 
     await expectMetrics([
       { method: "chainCreated" },
@@ -3223,7 +3196,6 @@ describe("Rollback", () => {
     stateAdapter,
     notifyAdapter,
     withTransaction,
-    withWorkerRunners,
     observabilityAdapter,
     log,
     expectMetrics,
@@ -3264,7 +3236,7 @@ describe("Rollback", () => {
       log,
       jobTypes,
     });
-    const workerRunner = createWorkerRunner({
+    await using workerRunner = createWorkerRunner({
       client: workerClient,
       concurrency: 1,
       pollIntervalMs: 100,
@@ -3300,9 +3272,9 @@ describe("Rollback", () => {
       return created;
     });
 
-    await withWorkerRunners([await workerRunner.start()], async () => {
-      await client.awaitChain(chain, completionOptions);
-    });
+    await workerRunner.start();
+    await client.awaitChain(chain, completionOptions);
+    await workerRunner.close();
 
     await expectMetrics([
       { method: "chainCreated" },
@@ -3425,7 +3397,6 @@ describe("Rollback", () => {
     stateAdapter,
     notifyAdapter,
     withTransaction,
-    withWorkerRunners,
     observabilityAdapter,
     log,
     expectMetrics,
@@ -3468,7 +3439,7 @@ describe("Rollback", () => {
       log,
       jobTypes,
     });
-    const workerRunner = createWorkerRunner({
+    await using workerRunner = createWorkerRunner({
       client: workerClient,
       concurrency: 1,
       pollIntervalMs: 100,
@@ -3501,9 +3472,9 @@ describe("Rollback", () => {
       client.createChain({ ...txCtx, txHooks, typeName: "linear", input: null }),
     );
 
-    await withWorkerRunners([await workerRunner.start()], async () => {
-      await client.awaitChain(chain, completionOptions);
-    });
+    await workerRunner.start();
+    await client.awaitChain(chain, completionOptions);
+    await workerRunner.close();
 
     await expectMetrics([
       { method: "chainCreated" },
@@ -3569,7 +3540,6 @@ describe("Rollback", () => {
     stateAdapter,
     notifyAdapter,
     withTransaction,
-    withWorkerRunners,
     observabilityAdapter,
     log,
     expectSpans,
@@ -3595,7 +3565,7 @@ describe("Rollback", () => {
     });
 
     let throwOnce = true;
-    const workerRunner = createWorkerRunner({
+    await using workerRunner = createWorkerRunner({
       client,
       concurrency: 1,
       pollIntervalMs: 100,
@@ -3633,9 +3603,9 @@ describe("Rollback", () => {
       client.createChain({ ...txCtx, txHooks, typeName: "linear", input: null }),
     );
 
-    await withWorkerRunners([await workerRunner.start()], async () => {
-      await client.awaitChain(chain, completionOptions);
-    });
+    await workerRunner.start();
+    await client.awaitChain(chain, completionOptions);
+    await workerRunner.close();
 
     // The first attempt's continueWith creates a "create job.linear_next" span
     // eagerly via startJobSpan. When the user callback throws, the transaction
@@ -3690,7 +3660,6 @@ describe("Rollback", () => {
     stateAdapter,
     notifyAdapter,
     withTransaction,
-    withWorkerRunners,
     observabilityAdapter,
     log,
     expectSpans,
@@ -3709,7 +3678,7 @@ describe("Rollback", () => {
     });
 
     let throwOnce = true;
-    const workerRunner = createWorkerRunner({
+    await using workerRunner = createWorkerRunner({
       client,
       concurrency: 1,
       pollIntervalMs: 100,
@@ -3743,9 +3712,9 @@ describe("Rollback", () => {
       client.createChain({ ...txCtx, txHooks, typeName: "test", input: null }),
     );
 
-    await withWorkerRunners([await workerRunner.start()], async () => {
-      await client.awaitChain(chain, completionOptions);
-    });
+    await workerRunner.start();
+    await client.awaitChain(chain, completionOptions);
+    await workerRunner.close();
 
     // createChain inside the handler's transaction creates chain + job spans eagerly.
     // When the transaction rolls back after complete, the hooks are discarded —

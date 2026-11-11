@@ -1,7 +1,5 @@
 import assert from "node:assert/strict";
 
-import { withWorkerRunners } from "@queuert/helpers";
-
 import { createClient } from "../../client.ts";
 import type { StateAdapterConformanceContext } from "../../conformance.state-adapter/types.ts";
 import type { ConformanceGroup } from "../../conformance/runner.ts";
@@ -136,7 +134,7 @@ export const rescheduleJobGroup: ConformanceGroup<StateAdapterConformanceContext
 
         const client = createClient({ stateAdapter, notifyAdapter, jobTypes });
 
-        const workerRunner = createWorkerRunner({
+        await using workerRunner = createWorkerRunner({
           client,
           concurrency: 1,
           processors: createProcessors({
@@ -167,15 +165,14 @@ export const rescheduleJobGroup: ConformanceGroup<StateAdapterConformanceContext
           client.rescheduleJob({ ...txCtx, txHooks, id: chain.id }),
         );
 
-        await withWorkerRunners([await workerRunner.start()], async () => {
-          const completed = await client.awaitChain(chain, {
-            timeoutMs: 5000,
-            pollIntervalMs: 100,
-          });
-
-          assert.equal(completed.status, "completed");
-          assert.deepEqual(completed.output, { result: 42 });
+        await workerRunner.start();
+        const completed = await client.awaitChain(chain, {
+          timeoutMs: 5000,
+          pollIntervalMs: 100,
         });
+
+        assert.equal(completed.status, "completed");
+        assert.deepEqual(completed.output, { result: 42 });
       },
     },
     {
@@ -217,7 +214,7 @@ export const rescheduleJobGroup: ConformanceGroup<StateAdapterConformanceContext
 
         const client = createClient({ stateAdapter, notifyAdapter, jobTypes });
 
-        const workerRunner = createWorkerRunner({
+        await using workerRunner = createWorkerRunner({
           client,
           concurrency: 1,
           processors: createProcessors({
@@ -238,9 +235,8 @@ export const rescheduleJobGroup: ConformanceGroup<StateAdapterConformanceContext
           client.createChain({ ...txCtx, txHooks, typeName: "task", input: null }),
         );
 
-        await withWorkerRunners([await workerRunner.start()], async () => {
-          await client.awaitChain(chain, { timeoutMs: 5000, pollIntervalMs: 100 });
-        });
+        await workerRunner.start();
+        await client.awaitChain(chain, { timeoutMs: 5000, pollIntervalMs: 100 });
 
         await assert.rejects(
           async () =>
@@ -552,7 +548,7 @@ export const rescheduleJobGroup: ConformanceGroup<StateAdapterConformanceContext
 
         const client = createClient({ stateAdapter, notifyAdapter, jobTypes });
 
-        const workerRunner = createWorkerRunner({
+        await using workerRunner = createWorkerRunner({
           client,
           concurrency: 1,
           processors: createProcessors({
@@ -578,9 +574,9 @@ export const rescheduleJobGroup: ConformanceGroup<StateAdapterConformanceContext
           }),
         );
 
-        await withWorkerRunners([await workerRunner.start()], async () => {
-          await client.awaitChain(completedChain, { timeoutMs: 5000, pollIntervalMs: 100 });
-        });
+        await workerRunner.start();
+        await client.awaitChain(completedChain, { timeoutMs: 5000, pollIntervalMs: 100 });
+        await workerRunner.close();
 
         const pendingChain = await withCaseTransaction(stateAdapter, async (txCtx, txHooks) =>
           client.createChain({

@@ -101,7 +101,7 @@ const workerRunner = createWorkerRunner({
   }),
 });
 
-const stop = await workerRunner.start();
+await workerRunner.start();
 ```
 
 For explicit control over retry timing, see [Rescheduling from a Handler](../scheduling/#rescheduling-from-a-handler).

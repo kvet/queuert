@@ -27,18 +27,21 @@ const jobTypes = defineJobTypes<{
 }>();
 
 // Create the state adapter
-const db = new Database(":memory:");
-const stateAdapter = createSqliteStateAdapter({
+await using drivers = new AsyncDisposableStack();
+const db = drivers.adopt(new Database(":memory:"), (db) => {
+  db.close();
+});
+await using stateAdapter = createSqliteStateAdapter({
   stateProvider: createBetterSqlite3StateProvider({ db, lock: createAsyncRwLock() }),
 });
 await stateAdapter.migrateToLatest();
 
 // #region setup
 // Create NATS connection
-const nc = await connect(connectionOptions);
+await using nc = await connect(connectionOptions);
 
 // Create the notify adapter
-const notifyAdapter = createNatsNotifyAdapter({
+await using notifyAdapter = createNatsNotifyAdapter({
   nc,
   subjectPrefix: "queuert.example",
 });
@@ -51,7 +54,7 @@ const client = createClient({
   jobTypes,
 });
 
-const workerRunner = createWorkerRunner({
+await using workerRunner = createWorkerRunner({
   client,
   processors: createProcessors({
     client,
@@ -83,7 +86,7 @@ const workerRunner = createWorkerRunner({
 });
 
 // Start worker runner and queue a job
-const stopWorkerRunner = await workerRunner.start();
+await workerRunner.start();
 
 console.log("Requesting sales report...");
 const chain = await withTxHooks(async (txHooks) =>
@@ -109,12 +112,4 @@ console.log("Waiting for report...");
 const result = await client.awaitChain(chain, { timeoutMs: 5000 });
 console.log(`Report ready! ID: ${result.output.reportId}, Rows: ${result.output.rowCount}`);
 
-// Cleanup
-await stopWorkerRunner();
-await stateAdapter.close();
-db.close();
-// #region cleanup
-await notifyAdapter.close();
-await nc.close();
-// #endregion
 console.log("Done!");

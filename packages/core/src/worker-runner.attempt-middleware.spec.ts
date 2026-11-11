@@ -55,7 +55,7 @@ describe("middleware ctx cannot shadow built-in handler keys", () => {
       },
     });
 
-    const workerRunner = createWorkerRunner({
+    await using workerRunner = createWorkerRunner({
       client,
       processors: registry,
     });
@@ -64,9 +64,9 @@ describe("middleware ctx cannot shadow built-in handler keys", () => {
         client.createChain({ ...txCtx, txHooks, typeName: "foo", input: { v: 1 } }),
       ),
     );
-    const stop = await workerRunner.start();
+    await workerRunner.start();
     await client.awaitChain(chain, { timeoutMs: 5000, pollIntervalMs: 50 });
-    await stop();
+    await workerRunner.close();
 
     expect(observedSignalIsAbortSignal).toBe(true);
     expect(observedJobHasId).toBe(true);
@@ -118,7 +118,7 @@ describe("middleware ctx flows into the handler through wrapHandler", () => {
       },
     });
 
-    const workerRunner = createWorkerRunner({
+    await using workerRunner = createWorkerRunner({
       client,
       processors: registry,
     });
@@ -127,9 +127,9 @@ describe("middleware ctx flows into the handler through wrapHandler", () => {
         client.createChain({ ...txCtx, txHooks, typeName: "foo", input: { v: 1 } }),
       ),
     );
-    const stop = await workerRunner.start();
+    await workerRunner.start();
     await client.awaitChain(chain, { timeoutMs: 5000, pollIntervalMs: 50 });
-    await stop();
+    await workerRunner.close();
 
     expect(events).toEqual([
       "outer:before",
@@ -202,7 +202,7 @@ describe("registry-level attemptMiddleware — runtime per-slice isolation", () 
       },
     });
 
-    const workerRunner = createWorkerRunner({
+    await using workerRunner = createWorkerRunner({
       client: abClient,
       processors: [aProcessors, bProcessors],
     });
@@ -217,10 +217,10 @@ describe("registry-level attemptMiddleware — runtime per-slice isolation", () 
         abClient.createChain({ ...txCtx, txHooks, typeName: "b", input: {} }),
       ),
     );
-    const stop = await workerRunner.start();
+    await workerRunner.start();
     await abClient.awaitChain(chainA, { timeoutMs: 5000, pollIntervalMs: 100 });
     await abClient.awaitChain(chainB, { timeoutMs: 5000, pollIntervalMs: 100 });
-    await stop();
+    await workerRunner.close();
 
     expect(sliceACalls).toEqual(["a"]);
     expect(sliceBCalls).toEqual(["b"]);

@@ -27,15 +27,18 @@ const jobTypes = createSuperjsonJobTypes<{
   };
 }>({ "tally-votes": true, "publish-results": true });
 
-const db = new Database(":memory:");
-const stateAdapter = createSqliteStateAdapter({
+await using drivers = new AsyncDisposableStack();
+const db = drivers.adopt(new Database(":memory:"), (db) => {
+  db.close();
+});
+await using stateAdapter = createSqliteStateAdapter({
   stateProvider: createBetterSqlite3StateProvider({ db, lock: createAsyncRwLock() }),
 });
 await stateAdapter.migrateToLatest();
 
 const client = createClient({ stateAdapter, jobTypes });
 
-const workerRunner = createWorkerRunner({
+await using workerRunner = createWorkerRunner({
   client,
   processors: createProcessors({
     client,
@@ -80,7 +83,7 @@ const workerRunner = createWorkerRunner({
   }),
 });
 
-const stopWorkerRunner = await workerRunner.start();
+await workerRunner.start();
 
 const chain = await withTxHooks(async (txHooks) =>
   stateAdapter.withTransaction(async (ctx) =>
@@ -100,7 +103,4 @@ console.log(`total is a ${typeof result.output.total}: ${result.output.total}`);
 const [stored] = await stateAdapter.getJobs({ jobIds: [chain.id] });
 console.log(`\nStored input: ${JSON.stringify(stored?.input)}`);
 
-await stopWorkerRunner();
-await stateAdapter.close();
-db.close();
 console.log("\n=== Done ===");

@@ -15,10 +15,11 @@ import { createPgPoolStateProvider } from "./provider.ts";
 await using pg = await acquirePostgres("postgres:18", import.meta.url);
 
 // Create database connection and schema
-const db = new Pool({
-  connectionString: pg.connectionString,
-  max: 10,
-});
+await using drivers = new AsyncDisposableStack();
+const db = drivers.adopt(
+  new Pool({ connectionString: pg.connectionString, max: 10 }),
+  async (pool) => pool.end(),
+);
 
 await db.query(`
   CREATE TABLE IF NOT EXISTS users (
@@ -40,7 +41,7 @@ const jobTypes = defineJobTypes<{
 // Create state provider for pg
 // #region adapter
 const stateProvider = createPgPoolStateProvider({ pool: db });
-const stateAdapter = createPgStateAdapter({
+await using stateAdapter = createPgStateAdapter({
   stateProvider,
 });
 await stateAdapter.migrateToLatest();
@@ -49,7 +50,7 @@ await stateAdapter.migrateToLatest();
 const client = createClient({ stateAdapter, jobTypes });
 
 // Create and start worker runner
-const workerRunner = createWorkerRunner({
+await using workerRunner = createWorkerRunner({
   client,
   processors: createProcessors({
     client,
@@ -91,7 +92,7 @@ const workerRunner = createWorkerRunner({
   }),
 });
 
-const stopWorkerRunner = await workerRunner.start();
+await workerRunner.start();
 
 // Register a new user and queue welcome email atomically
 const chain = await withTxHooks(async (txHooks) => {
@@ -126,8 +127,3 @@ const chain = await withTxHooks(async (txHooks) => {
 // Wait for the chain to complete
 const result = await client.awaitChain(chain, { timeoutMs: 5000 });
 console.log(`Welcome email sent at: ${result.output.sentAt}`);
-
-// Cleanup
-await stopWorkerRunner();
-await stateAdapter.close();
-await db.end();

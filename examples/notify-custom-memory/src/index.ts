@@ -20,19 +20,22 @@ const jobTypes = defineJobTypes<{
 }>();
 
 // Create the state adapter
-const db = new Database(":memory:");
-const stateAdapter = createSqliteStateAdapter({
+await using drivers = new AsyncDisposableStack();
+const db = drivers.adopt(new Database(":memory:"), (db) => {
+  db.close();
+});
+await using stateAdapter = createSqliteStateAdapter({
   stateProvider: createBetterSqlite3StateProvider({ db, lock: createAsyncRwLock() }),
 });
 await stateAdapter.migrateToLatest();
 
 // #region setup
-const notifyAdapter = createMemoryNotifyAdapter();
+await using notifyAdapter = createMemoryNotifyAdapter();
 
 const client = createClient({ stateAdapter, notifyAdapter, jobTypes });
 // #endregion
 
-const workerRunner = createWorkerRunner({
+await using workerRunner = createWorkerRunner({
   client,
   processors: createProcessors({
     client,
@@ -56,7 +59,7 @@ const workerRunner = createWorkerRunner({
   }),
 });
 
-const stopWorkerRunner = await workerRunner.start();
+await workerRunner.start();
 
 console.log("Requesting sales report...");
 const chain = await withTxHooks(async (txHooks) =>
@@ -73,9 +76,4 @@ const chain = await withTxHooks(async (txHooks) =>
 const result = await client.awaitChain(chain, { timeoutMs: 5000 });
 console.log(`Report ready! ID: ${result.output.reportId}, Rows: ${result.output.rowCount}`);
 
-// Cleanup
-await stopWorkerRunner();
-await notifyAdapter.close();
-await stateAdapter.close();
-db.close();
 console.log("Done!");
