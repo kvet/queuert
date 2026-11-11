@@ -28,6 +28,7 @@
     "test": "vitest --run"
   },
   "devDependencies": {
+    "@queuert/helpers": "workspace:*",
     "@queuert/tsconfig": "workspace:*"
   }
 }

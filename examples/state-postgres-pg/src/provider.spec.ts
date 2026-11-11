@@ -1,6 +1,9 @@
 import {
+  createPgMigratorConformanceContext,
+  type PgMigratorConformanceContext,
   createPgStateProviderConformanceContext,
   type PgStateProviderConformanceContext,
+  pgMigratorConformanceCases,
   pgStateProviderConformanceCases,
 } from "@queuert/postgres/conformance";
 import { type AcquiredPostgres, acquirePostgres } from "@queuert/testcontainers";
@@ -43,3 +46,28 @@ describe("state-postgres-pg provider conformance", () => {
   }
 });
 // #endregion
+
+describe("state-postgres-pg migrator conformance", () => {
+  let pg: AcquiredPostgres;
+  let pool: Pool;
+  let context: PgMigratorConformanceContext;
+
+  beforeAll(async () => {
+    pg = await acquirePostgres("postgres:18", import.meta.url);
+    pool = new Pool({ connectionString: pg.connectionString, idleTimeoutMillis: 0 });
+    context = createPgMigratorConformanceContext({
+      stateProvider: createPgPoolStateProvider({ pool }),
+    });
+  }, 60_000);
+
+  afterAll(async () => {
+    await pool.end();
+    await pg[Symbol.asyncDispose]();
+  });
+
+  for (const conformanceCase of pgMigratorConformanceCases) {
+    test(conformanceCase.title, async () => {
+      await conformanceCase.run(context);
+    });
+  }
+});

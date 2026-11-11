@@ -1,4 +1,6 @@
-import { createAsyncRwLock, createSqliteStateAdapter } from "@queuert/sqlite";
+import assert from "node:assert/strict";
+
+import { createAsyncRwLock, createSqliteMigrator, createSqliteStateAdapter } from "@queuert/sqlite";
 import Database from "better-sqlite3";
 import { eq, sql } from "drizzle-orm";
 import { drizzle } from "drizzle-orm/better-sqlite3";
@@ -11,6 +13,7 @@ import {
   withTxHooks,
 } from "queuert";
 
+import { createMigrations, invoices } from "./migrations.ts";
 import { createDrizzleSqliteStateProvider } from "./provider.ts";
 
 // Create in-memory SQLite database
@@ -55,6 +58,20 @@ const stateProvider = createDrizzleSqliteStateProvider({ db: sqlite, lock });
 await using stateAdapter = createSqliteStateAdapter({ stateProvider });
 await stateAdapter.migrateToLatest();
 // #endregion
+
+const migrator = createSqliteMigrator({
+  stateProvider,
+  migrations: createMigrations({ db, lock }),
+});
+const { applied } = await migrator.migrateToLatest();
+console.log(`Applied application migrations: ${applied.join(", ")}`);
+{
+  using _h = await lock.acquireRead();
+  assert.deepEqual(
+    db.select().from(invoices).orderBy(invoices.id).all(),
+    [1, 2, 3, 4, 5].map((id) => ({ id, customer: `CUSTOMER-${id}`, status: "open" })),
+  );
+}
 
 const client = createClient({ stateAdapter, jobTypes });
 

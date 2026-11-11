@@ -301,6 +301,10 @@ const Page = () => (
       workers can keep running while <code>migrateToLatest()</code> runs. A 0.16 database is
       refused: upgrade it with <code>@queuert/postgres</code> 0.17 first.
     </p>
+    <p>
+      The migrator behind <code>migrateToLatest()</code> is exported for your own tables too; see{" "}
+      <A href="/guides/application-migrations/">Application Migrations</A>.
+    </p>
     <SchemaTables dialect="postgres" />
 
     <h2>Indexes</h2>

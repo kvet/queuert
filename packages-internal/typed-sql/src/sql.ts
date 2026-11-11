@@ -80,8 +80,8 @@ export type TypedSql<
 > = TypedSqlTemplate<TParams, TColumns> & { readonly [appliedBrand]: true };
 
 export const sql = <
-  const TParams extends readonly DataType[],
-  const TColumns extends Record<string, DataType>,
+  const TParams extends readonly DataType[] = readonly [],
+  const TColumns extends Record<string, DataType> = Record<string, DataType>,
 >(
   sqlString: string,
   types?: { id?: string; params?: TParams; columns?: TColumns; readOnly?: boolean },

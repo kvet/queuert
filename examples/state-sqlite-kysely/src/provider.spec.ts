@@ -1,6 +1,8 @@
 import {
+  createSqliteMigratorConformanceContext,
   createSqliteStateProviderConformanceContext,
   type SqliteStateProviderConformanceContext,
+  sqliteMigratorConformanceCases,
   sqliteStateProviderConformanceCases,
 } from "@queuert/sqlite/conformance";
 import BetterSqlite3 from "better-sqlite3";
@@ -36,3 +38,22 @@ describe("state-sqlite-kysely provider conformance", () => {
   }
 });
 // #endregion
+
+describe("state-sqlite-kysely migrator conformance", () => {
+  const db = new Kysely<Database>({
+    dialect: new SqliteDialect({ database: new BetterSqlite3(":memory:") }),
+  });
+  const context = createSqliteMigratorConformanceContext({
+    stateProvider: createKyselySqliteStateProvider({ db }),
+  });
+
+  afterAll(async () => {
+    await db.destroy();
+  });
+
+  for (const conformanceCase of sqliteMigratorConformanceCases) {
+    test(conformanceCase.title, async () => {
+      await conformanceCase.run(context);
+    });
+  }
+});

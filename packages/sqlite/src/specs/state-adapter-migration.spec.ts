@@ -4,14 +4,19 @@ import { tmpdir } from "node:os";
 import { join } from "node:path";
 
 import { createDeploymentSpawner, startPaused, startTogether } from "@queuert/helpers/testing";
-import { type MigrationResult, createMigrator, createTemplateApplier } from "@queuert/typed-sql";
+import {
+  type MigrationResult,
+  createMigrator,
+  createTemplateApplier,
+  createTemplateExecutor,
+} from "@queuert/typed-sql";
 import Database from "better-sqlite3";
 import { it as baseIt, describe, expect } from "vitest";
 
 import {
   createMigrationStore,
+  createSchemaMigrations,
   createSqliteStateAdapter,
-  migrations,
 } from "../state-adapter/state-adapter.sqlite.ts";
 import {
   type BetterSqlite3Context,
@@ -19,10 +24,10 @@ import {
 } from "../state-provider/state-provider.better-sqlite3.ts";
 import type { SqliteStateProvider } from "../state-provider/state-provider.sqlite.ts";
 import { MARKER } from "./state-adapter-migration.process.ts";
-import { v017Migrations } from "./v0.17-migrations.spec-helper.ts";
+import { createV017Migrations } from "./v0.17-migrations.spec-helper.ts";
 
 const INSTALL = "001_initial_schema";
-const ALL = migrations.map((migration) => migration.name);
+const ALL = createSchemaMigrations(async () => {}).map((migration) => migration.name);
 const spawnDeployment = createDeploymentSpawner<MigrationResult>(
   join(import.meta.dirname, "state-adapter-migration.process.ts"),
   join(import.meta.dirname, "..", ".."),
@@ -59,16 +64,18 @@ const migrateTo017 = async (
   provider: Provider,
   { only }: { only?: string } = {},
 ): Promise<void> => {
-  await createMigrator<BetterSqlite3Context>({
-    migrations: v017Migrations.filter((migration) => only === undefined || migration.name === only),
-    store: createMigrationStore(
-      provider,
-      createTemplateApplier({
-        table_prefix: "queuert_",
-        job_id_type: "TEXT",
-        worker_id_type: "TEXT",
-      }),
+  const applyTemplate017 = createTemplateApplier({
+    table_prefix: "queuert_",
+    migration_table: "queuert_migration",
+    write_lock_table: "queuert_write_lock",
+    job_id_type: "TEXT",
+    worker_id_type: "TEXT",
+  });
+  await createMigrator({
+    migrations: createV017Migrations(createTemplateExecutor(provider, applyTemplate017)).filter(
+      (migration) => only === undefined || migration.name === only,
     ),
+    store: createMigrationStore(provider, applyTemplate017),
   }).migrateToLatest();
 };
 
@@ -129,6 +136,11 @@ const it = baseIt.extend("database", async ({}, { onCleanup }) => {
 });
 
 describe("migrateToLatest", () => {
+  it("names its migrations NNN_name, in ascending order", () => {
+    for (const name of ALL) expect(name).toMatch(/^\d{3}_[a-z][a-z0-9_]*$/);
+    expect(ALL).toEqual(ALL.toSorted());
+  });
+
   it(
     "installs the schema on an empty database",
     { timeout: 60_000 },
@@ -136,6 +148,7 @@ describe("migrateToLatest", () => {
       expect(await adapter.migrateToLatest()).toEqual({
         applied: ALL,
         skipped: [],
+        reverted: [],
         unrecognized: [],
       });
       expect(await names(provider, "SELECT name FROM sqlite_master ORDER BY name")).toEqual([
@@ -180,6 +193,7 @@ describe("migrateToLatest", () => {
     expect(await adapter.migrateToLatest()).toEqual({
       applied: [],
       skipped: ALL,
+      reverted: [],
       unrecognized: [],
     });
   });
@@ -198,6 +212,7 @@ describe("upgrading from 0.17", () => {
       expect(await adapter.migrateToLatest()).toEqual({
         applied: [],
         skipped: [INSTALL],
+        reverted: [],
         unrecognized: [],
       });
       expect(await appliedNames(provider)).toEqual([INSTALL]);
@@ -206,6 +221,7 @@ describe("upgrading from 0.17", () => {
       expect(await adapter.migrateToLatest()).toEqual({
         applied: [],
         skipped: [INSTALL],
+        reverted: [],
         unrecognized: [],
       });
     },
@@ -290,10 +306,10 @@ describe("parallel deployments", () => {
       expect(
         results.toSorted((a, b) => JSON.stringify(a).localeCompare(JSON.stringify(b))),
       ).toEqual([
-        { applied: [], skipped: ALL, unrecognized: [] },
-        { applied: [], skipped: ALL, unrecognized: [] },
-        { applied: [], skipped: ALL, unrecognized: [] },
-        { applied: ALL, skipped: [], unrecognized: [] },
+        { applied: [], skipped: ALL, reverted: [], unrecognized: [] },
+        { applied: [], skipped: ALL, reverted: [], unrecognized: [] },
+        { applied: [], skipped: ALL, reverted: [], unrecognized: [] },
+        { applied: ALL, skipped: [], reverted: [], unrecognized: [] },
       ]);
       expect(await appliedNames(provider)).toEqual(ALL);
     },
@@ -310,7 +326,7 @@ describe("parallel deployments", () => {
         await names(provider, "SELECT name FROM sqlite_master WHERE type = 'table' ORDER BY name"),
       ).toEqual(["queuert_migration", "queuert_write_lock"]);
       expect(await startTogether([spawnDeployment(path, "older")])).toEqual([
-        { applied: ALL, skipped: [], unrecognized: [] },
+        { applied: ALL, skipped: [], reverted: [], unrecognized: [] },
       ]);
       expect(await appliedNames(provider)).toEqual(ALL);
     },
@@ -328,7 +344,7 @@ describe("parallel deployments", () => {
       expect([...older.applied, ...newer.applied].toSorted()).toEqual([...ALL, MARKER]);
       expect(newer.applied).toContain(MARKER);
       expect(await startTogether([spawnDeployment(path, "older")])).toEqual([
-        { applied: [], skipped: ALL, unrecognized: [MARKER] },
+        { applied: [], skipped: ALL, reverted: [], unrecognized: [MARKER] },
       ]);
       expect(await appliedNames(provider)).toEqual([...ALL, MARKER]);
     },

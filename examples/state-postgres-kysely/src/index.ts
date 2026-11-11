@@ -1,6 +1,8 @@
-import { createPgStateAdapter } from "@queuert/postgres";
+import assert from "node:assert/strict";
+
+import { createPgMigrator, createPgStateAdapter } from "@queuert/postgres";
 import { acquirePostgres } from "@queuert/testcontainers";
-import { CompiledQuery, type Generated, Kysely, PostgresDialect } from "kysely";
+import { CompiledQuery, Kysely, PostgresDialect } from "kysely";
 import { Pool } from "pg";
 import {
   createClient,
@@ -10,15 +12,12 @@ import {
   withTxHooks,
 } from "queuert";
 
+import type { Database } from "./database.ts";
+import { createMigrations } from "./migrations.ts";
 import { createKyselyPgStateProvider } from "./provider.ts";
 
 // Start PostgreSQL using testcontainers
 await using pg = await acquirePostgres("postgres:18", import.meta.url);
-
-// Define Kysely database schema
-type Database = {
-  users: { id: Generated<number>; name: string; email: string };
-};
 
 // Create database connection and schema
 await using db = new Kysely<Database>({
@@ -57,6 +56,21 @@ await using stateAdapter = createPgStateAdapter({
 });
 await stateAdapter.migrateToLatest();
 // #endregion
+
+const migrator = createPgMigrator({ stateProvider, migrations: createMigrations({ db }) });
+const { applied } = await migrator.migrateToLatest();
+console.log(`Applied application migrations: ${applied.join(", ")}`);
+
+const openInvoices = await db
+  .selectFrom("invoices")
+  .select("customer")
+  .where("status", "=", "open")
+  .orderBy("id")
+  .execute();
+assert.deepEqual(
+  openInvoices.map((invoice) => invoice.customer),
+  ["ACME", "GLOBEX", "INITECH"],
+);
 
 const client = createClient({ stateAdapter, jobTypes });
 

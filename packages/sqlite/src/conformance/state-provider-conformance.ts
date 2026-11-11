@@ -12,21 +12,6 @@ import {
 import { createSqliteStateAdapter } from "../state-adapter/state-adapter.sqlite.ts";
 import type { SqliteStateProvider } from "../state-provider/state-provider.sqlite.ts";
 
-/** What {@link createSqliteStateProviderConformanceContext} takes. */
-export type SqliteStateProviderConformanceContextOptions = {
-  /**
-   * Creates the provider under test, over a database the suite may create tables in. Each case's
-   * adapter gets its own provider and closes it when the case ends, so closing one must not
-   * release resources the next one needs, such as the pool or the database connection.
-   */
-  createStateProvider: () => Promise<SqliteStateProvider<any>>;
-  /**
-   * Runs the callback with a context of the provider's shape that is not inside a transaction,
-   * so the suite can check `isTransaction` rejects it.
-   */
-  withNonTransactionContext: <T>(fn: (txCtx: any) => Promise<T>) => Promise<T>;
-};
-
 /**
  * The context the {@link sqliteStateProviderConformanceCases} run against. Get it from
  * {@link createSqliteStateProviderConformanceContext} and pass it to every case unchanged.
@@ -147,11 +132,25 @@ export const sqliteStateProviderConformanceGroups: ConformanceGroup<SqliteStateP
  * schema once through a provider from `createStateProvider`. Each case then builds its own adapter
  * over a new provider from it, with the tables cleared. Call it once the database is ready, such
  * as in `beforeAll`; the test file owns the database and releases it itself.
+ *
+ * @param options - Context configuration.
  */
 export const createSqliteStateProviderConformanceContext = async ({
   createStateProvider,
   withNonTransactionContext,
-}: SqliteStateProviderConformanceContextOptions): Promise<SqliteStateProviderConformanceContext> => {
+}: {
+  /**
+   * Creates the provider under test, over a database the suite may create tables in. Each case's
+   * adapter gets its own provider and closes it when the case ends, so closing one must not
+   * release resources the next one needs, such as the pool or the database connection.
+   */
+  createStateProvider: () => Promise<SqliteStateProvider<any>>;
+  /**
+   * Runs the callback with a context of the provider's shape that is not inside a transaction,
+   * so the suite can check `isTransaction` rejects it.
+   */
+  withNonTransactionContext: <T>(fn: (txCtx: any) => Promise<T>) => Promise<T>;
+}): Promise<SqliteStateProviderConformanceContext> => {
   const ddl = { params: [], paramTypes: {}, columnTypes: {}, readOnly: false };
   const executeDdl = async (sql: string): Promise<void> => {
     const stateProvider = await createStateProvider();

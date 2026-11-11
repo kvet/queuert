@@ -1,7 +1,9 @@
 import { createAsyncRwLock } from "@queuert/sqlite";
 import {
+  createSqliteMigratorConformanceContext,
   createSqliteStateProviderConformanceContext,
   type SqliteStateProviderConformanceContext,
+  sqliteMigratorConformanceCases,
   sqliteStateProviderConformanceCases,
 } from "@queuert/sqlite/conformance";
 import Database from "better-sqlite3";
@@ -33,3 +35,20 @@ describe("state-sqlite-drizzle provider conformance", () => {
   }
 });
 // #endregion
+
+describe("state-sqlite-drizzle migrator conformance", () => {
+  const db = new Database(":memory:");
+  const context = createSqliteMigratorConformanceContext({
+    stateProvider: createDrizzleSqliteStateProvider({ db, lock: createAsyncRwLock() }),
+  });
+
+  afterAll(async () => {
+    db.close();
+  });
+
+  for (const conformanceCase of sqliteMigratorConformanceCases) {
+    test(conformanceCase.title, async () => {
+      await conformanceCase.run(context);
+    });
+  }
+});

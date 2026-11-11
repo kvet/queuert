@@ -3,15 +3,15 @@ import { ExampleDetail } from "../../../components/ExampleList.tsx";
 export const meta = {
   title: "Operations",
   description:
-    "Showcases for multiple workers, prioritization, queries, chain deletion and cleanup.",
+    "Showcases for multiple workers, prioritization, queries, chain deletion, cleanup and application migrations.",
 };
 
 const Page = () => (
   <>
     <p>
       Running Queuert in production: several workers on one database, reserved capacity, and
-      inspecting and pruning what the database holds. Each example runs against PostgreSQL in
-      Docker.
+      inspecting and pruning what the database holds, and migrating your own tables. Each example
+      runs against PostgreSQL in Docker.
     </p>
     <h2 id="state-postgres-multi-worker">Multiple worker processes</h2>
     <ExampleDetail name="state-postgres-multi-worker" />
@@ -23,6 +23,8 @@ const Page = () => (
     <ExampleDetail name="showcase-chain-deletion" />
     <h2 id="showcase-cleanup">Cleanup</h2>
     <ExampleDetail name="showcase-cleanup" />
+    <h2 id="showcase-application-migrations">Application migrations</h2>
+    <ExampleDetail name="showcase-application-migrations" />
   </>
 );
 

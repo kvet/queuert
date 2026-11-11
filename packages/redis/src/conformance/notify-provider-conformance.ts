@@ -10,16 +10,6 @@ import {
 import { createRedisNotifyAdapter } from "../notify-adapter/notify-adapter.redis.ts";
 import type { RedisNotifyProvider } from "../notify-provider/notify-provider.redis.ts";
 
-/** What {@link createRedisNotifyProviderConformanceContext} takes. */
-export type RedisNotifyProviderConformanceContextOptions = {
-  /**
-   * Creates the provider under test. Each case's adapter gets its own provider and closes it when
-   * the case ends, so closing one must not release resources the next one needs, such as the
-   * client connections.
-   */
-  createNotifyProvider: () => Promise<RedisNotifyProvider>;
-};
-
 export const redisNotifyProviderConformanceGroups: ConformanceGroup<NotifyAdapterConformanceContext>[] =
   notifyAdapterBaseGroups;
 
@@ -27,10 +17,19 @@ export const redisNotifyProviderConformanceGroups: ConformanceGroup<NotifyAdapte
  * Prepares the context the {@link redisNotifyProviderConformanceCases} run against: a notify
  * adapter per case over a new provider, on channels of its own. The test file still owns the
  * provider's resources and releases them itself.
+ *
+ * @param options - Context configuration.
  */
 export const createRedisNotifyProviderConformanceContext = ({
   createNotifyProvider,
-}: RedisNotifyProviderConformanceContextOptions): NotifyAdapterConformanceContext => ({
+}: {
+  /**
+   * Creates the provider under test. Each case's adapter gets its own provider and closes it when
+   * the case ends, so closing one must not release resources the next one needs, such as the
+   * client connections.
+   */
+  createNotifyProvider: () => Promise<RedisNotifyProvider>;
+}): NotifyAdapterConformanceContext => ({
   // A channel prefix per adapter keeps one case's notifications away from the next.
   createNotifyAdapter: async () =>
     createRedisNotifyAdapter({

@@ -1,6 +1,9 @@
 import {
+  createPgMigratorConformanceContext,
+  type PgMigratorConformanceContext,
   createPgStateProviderConformanceContext,
   type PgStateProviderConformanceContext,
+  pgMigratorConformanceCases,
   pgStateProviderConformanceCases,
 } from "@queuert/postgres/conformance";
 import { acquirePostgres, type AcquiredPostgres } from "@queuert/testcontainers";
@@ -40,3 +43,32 @@ describe("state-postgres-knex provider conformance", () => {
   }
 });
 // #endregion
+
+describe("state-postgres-knex migrator conformance", () => {
+  let pg: AcquiredPostgres;
+  let knex: Knex;
+  let context: PgMigratorConformanceContext;
+
+  beforeAll(async () => {
+    pg = await acquirePostgres("postgres:18", import.meta.url);
+    knex = knexFactory({
+      client: "pg",
+      connection: pg.connectionString,
+      pool: { min: 0, max: 10 },
+    });
+    context = createPgMigratorConformanceContext({
+      stateProvider: createKnexPgStateProvider({ knex }),
+    });
+  }, 60_000);
+
+  afterAll(async () => {
+    await knex.destroy();
+    await pg[Symbol.asyncDispose]();
+  });
+
+  for (const conformanceCase of pgMigratorConformanceCases) {
+    test(conformanceCase.title, async () => {
+      await conformanceCase.run(context);
+    });
+  }
+});

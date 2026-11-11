@@ -2,8 +2,10 @@ import { afterAll, beforeAll, describe, test } from "bun:test";
 
 import { createAsyncRwLock } from "@queuert/sqlite";
 import {
+  createSqliteMigratorConformanceContext,
   createSqliteStateProviderConformanceContext,
   type SqliteStateProviderConformanceContext,
+  sqliteMigratorConformanceCases,
   sqliteStateProviderConformanceCases,
 } from "@queuert/sqlite/conformance";
 import { SQL } from "bun";
@@ -34,3 +36,20 @@ describe("state-sqlite-bun-sql provider conformance", () => {
   }
 });
 // #endregion
+
+describe("state-sqlite-bun-sql migrator conformance", () => {
+  const sql = new SQL("sqlite://:memory:");
+  const context = createSqliteMigratorConformanceContext({
+    stateProvider: createBunSqlSqliteStateProvider({ sql, lock: createAsyncRwLock() }),
+  });
+
+  afterAll(async () => {
+    await sql.close();
+  });
+
+  for (const conformanceCase of sqliteMigratorConformanceCases) {
+    test(conformanceCase.title, async () => {
+      await conformanceCase.run(context);
+    });
+  }
+});

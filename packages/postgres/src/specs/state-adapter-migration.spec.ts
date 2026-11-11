@@ -3,14 +3,19 @@ import { join } from "node:path";
 
 import { createDeploymentSpawner, startPaused, startTogether } from "@queuert/helpers/testing";
 import { acquirePostgres } from "@queuert/testcontainers";
-import { type MigrationResult, createMigrator, createTemplateApplier } from "@queuert/typed-sql";
+import {
+  type MigrationResult,
+  createMigrator,
+  createTemplateApplier,
+  createTemplateExecutor,
+} from "@queuert/typed-sql";
 import { Client, Pool } from "pg";
-import { it as baseIt, describe, expect } from "vitest";
+import { it as baseIt, describe, expect, vi } from "vitest";
 
 import {
   createMigrationStore,
   createPgStateAdapter,
-  migrations,
+  createSchemaMigrations,
 } from "../state-adapter/state-adapter.pg.ts";
 import {
   type PgPoolContext,
@@ -18,10 +23,10 @@ import {
 } from "../state-provider/state-provider.pg-pool.ts";
 import type { PgStateProvider } from "../state-provider/state-provider.pg.ts";
 import { LEASE_TTL_MS, MARKER } from "./state-adapter-migration.process.ts";
-import { v017Migrations } from "./v0.17-migrations.spec-helper.ts";
+import { createV017Migrations } from "./v0.17-migrations.spec-helper.ts";
 
 const INSTALL = "001_initial_schema";
-const ALL = migrations.map((migration) => migration.name);
+const ALL = createSchemaMigrations(async () => {}).map((migration) => migration.name);
 const spawnDeployment = createDeploymentSpawner<MigrationResult>(
   join(import.meta.dirname, "state-adapter-migration.process.ts"),
   join(import.meta.dirname, "..", ".."),
@@ -97,17 +102,17 @@ const migrateTo017 = async (
   provider: Provider,
   { only }: { only?: string } = {},
 ): Promise<void> => {
-  await createMigrator<PgPoolContext>({
-    migrations: v017Migrations.filter((migration) => only === undefined || migration.name === only),
-    store: createMigrationStore(
-      provider,
-      createTemplateApplier({
-        schema: "public",
-        table_prefix: "queuert_",
-        job_id_type: "uuid",
-        worker_id_type: "uuid",
-      }),
+  const applyTemplate017 = createTemplateApplier({
+    schema: "public",
+    table_prefix: "queuert_",
+    job_id_type: "uuid",
+    worker_id_type: "uuid",
+  });
+  await createMigrator({
+    migrations: createV017Migrations(createTemplateExecutor(provider, applyTemplate017)).filter(
+      (migration) => only === undefined || migration.name === only,
     ),
+    store: createMigrationStore(provider, applyTemplate017),
   }).migrateToLatest();
 };
 
@@ -174,6 +179,11 @@ const schemaShape = async (provider: Provider, schema: string): Promise<unknown>
 };
 
 describe("migrateToLatest", () => {
+  it("names its migrations NNN_name, in ascending order", () => {
+    for (const name of ALL) expect(name).toMatch(/^\d{3}_[a-z][a-z0-9_]*$/);
+    expect(ALL).toEqual(ALL.toSorted());
+  });
+
   it(
     "installs the schema on an empty database",
     { timeout: 120_000 },
@@ -181,6 +191,7 @@ describe("migrateToLatest", () => {
       expect(await adapter.migrateToLatest()).toEqual({
         applied: [INSTALL],
         skipped: [],
+        reverted: [],
         unrecognized: [],
       });
       expect(await relations(provider)).toEqual({
@@ -237,6 +248,7 @@ describe("migrateToLatest", () => {
     expect(await adapter.migrateToLatest()).toEqual({
       applied: [],
       skipped: ALL,
+      reverted: [],
       unrecognized: [],
     });
   });
@@ -254,6 +266,7 @@ describe("upgrading from 0.17", () => {
       expect(await adapter.migrateToLatest()).toEqual({
         applied: [],
         skipped: [INSTALL],
+        reverted: [],
         unrecognized: [],
       });
       expect(await appliedNames(provider)).toEqual([INSTALL]);
@@ -262,6 +275,7 @@ describe("upgrading from 0.17", () => {
       expect(await adapter.migrateToLatest()).toEqual({
         applied: [],
         skipped: [INSTALL],
+        reverted: [],
         unrecognized: [],
       });
     },
@@ -313,6 +327,7 @@ describe("upgrading from 0.17", () => {
         expect(await adapter.migrateToLatest()).toEqual({
           applied: [],
           skipped: [INSTALL],
+          reverted: [],
           unrecognized: [],
         });
 
@@ -365,11 +380,11 @@ describe("parallel deployments", () => {
       expect(
         results.toSorted((a, b) => JSON.stringify(a).localeCompare(JSON.stringify(b))),
       ).toEqual([
-        { applied: [], skipped: ALL, unrecognized: [] },
-        { applied: [], skipped: ALL, unrecognized: [] },
-        { applied: [], skipped: ALL, unrecognized: [] },
-        { applied: [], skipped: ALL, unrecognized: [] },
-        { applied: ALL, skipped: [], unrecognized: [] },
+        { applied: [], skipped: ALL, reverted: [], unrecognized: [] },
+        { applied: [], skipped: ALL, reverted: [], unrecognized: [] },
+        { applied: [], skipped: ALL, reverted: [], unrecognized: [] },
+        { applied: [], skipped: ALL, reverted: [], unrecognized: [] },
+        { applied: ALL, skipped: [], reverted: [], unrecognized: [] },
       ]);
       expect(await appliedNames(provider)).toEqual(ALL);
       expect(await lockRows(provider)).toEqual([]);
@@ -391,8 +406,18 @@ describe("parallel deployments", () => {
       expect(waiter.finished()).toBe(false);
 
       holder.go();
-      expect(await holder.result()).toEqual({ applied: ALL, skipped: [], unrecognized: [] });
-      expect(await waiter.result()).toEqual({ applied: [], skipped: ALL, unrecognized: [] });
+      expect(await holder.result()).toEqual({
+        applied: ALL,
+        skipped: [],
+        reverted: [],
+        unrecognized: [],
+      });
+      expect(await waiter.result()).toEqual({
+        applied: [],
+        skipped: ALL,
+        reverted: [],
+        unrecognized: [],
+      });
       expect(await lockRows(provider)).toEqual([]);
     },
   );
@@ -411,7 +436,7 @@ describe("parallel deployments", () => {
 
       const startedAt = performance.now();
       expect(await startTogether([spawnDeployment(connectionString, "older")])).toEqual([
-        { applied: ALL, skipped: [], unrecognized: [] },
+        { applied: ALL, skipped: [], reverted: [], unrecognized: [] },
       ]);
       expect(performance.now() - startedAt).toBeGreaterThan(LEASE_TTL_MS / 2);
       expect(await lockRows(provider)).toEqual([]);
@@ -429,7 +454,7 @@ describe("parallel deployments", () => {
       await sleep(LEASE_TTL_MS + 500);
 
       expect(await startTogether([spawnDeployment(connectionString, "older")])).toEqual([
-        { applied: ALL, skipped: [], unrecognized: [] },
+        { applied: ALL, skipped: [], reverted: [], unrecognized: [] },
       ]);
 
       frozen.thaw();
@@ -450,12 +475,18 @@ describe("parallel deployments", () => {
         spawnDeployment(connectionString, "newer", "inside-migration"),
       );
       frozen.freeze();
+      const [{ locked_by: frozenOwner }] = await lockRows(provider);
       await sleep(LEASE_TTL_MS + 500);
 
       const takingOver = spawnDeployment(connectionString, "older");
       await takingOver.waitFor("ready");
       takingOver.go();
-      await sleep(500);
+      await vi.waitFor(
+        async () => {
+          expect((await lockRows(provider))[0]?.locked_by).not.toBe(frozenOwner);
+        },
+        { timeout: 30_000, interval: 50 },
+      );
       expect(takingOver.finished()).toBe(false);
 
       frozen.thaw();
@@ -466,6 +497,7 @@ describe("parallel deployments", () => {
       expect(await takingOver.result()).toEqual({
         applied: ALL.slice(1),
         skipped: ALL.slice(0, 1),
+        reverted: [],
         unrecognized: [],
       });
       expect(await appliedNames(provider)).toEqual(ALL);
@@ -485,7 +517,7 @@ describe("parallel deployments", () => {
       expect([...older.applied, ...newer.applied].toSorted()).toEqual([...ALL, MARKER]);
       expect(newer.applied).toContain(MARKER);
       expect(await startTogether([spawnDeployment(connectionString, "older")])).toEqual([
-        { applied: [], skipped: ALL, unrecognized: [MARKER] },
+        { applied: [], skipped: ALL, reverted: [], unrecognized: [MARKER] },
       ]);
       expect(await appliedNames(provider)).toEqual([...ALL, MARKER]);
     },

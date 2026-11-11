@@ -140,12 +140,18 @@ Adapter packages use their domain-specific prefixes (not "Queuert"):
 | `@queuert/postgres`  | -                                | `PgStateProviderError`     |
 | `@queuert/postgres`  | -                                | `PgNotifyProvider`         |
 | `@queuert/postgres`  | -                                | `MigrationResult`          |
+| `@queuert/postgres`  | `createPgMigrator`               | `Migrator`                 |
+| `@queuert/postgres`  | -                                | `Migration`                |
+| `@queuert/postgres`  | -                                | `MigrationScript`          |
 | `@queuert/sqlite`    | `createSqliteStateAdapter`       | `SqliteStateAdapter`       |
 | `@queuert/sqlite`    | -                                | `SqliteStateProvider`      |
 | `@queuert/sqlite`    | -                                | `SqliteStateProviderError` |
 | `@queuert/sqlite`    | `createAsyncRwLock`              | `AsyncRwLock`              |
 | `@queuert/sqlite`    | -                                | `LockHandle`               |
 | `@queuert/sqlite`    | -                                | `MigrationResult`          |
+| `@queuert/sqlite`    | `createSqliteMigrator`           | `Migrator`                 |
+| `@queuert/sqlite`    | -                                | `Migration`                |
+| `@queuert/sqlite`    | -                                | `MigrationScript`          |
 | `@queuert/redis`     | `createRedisNotifyAdapter`       | `RedisNotifyProvider`      |
 | `@queuert/nats`      | `createNatsNotifyAdapter`        | -                          |
 | `@queuert/otel`      | `createOtelObservabilityAdapter` | -                          |
@@ -282,7 +288,7 @@ state-sqlite-bun-sql        # Bun.SQL
 state-custom-memory         # custom StateAdapter over in-memory maps
 ```
 
-Each driver example implements a state provider (`PgStateProvider` or `SqliteStateProvider`) with `withTransaction`, `isTransaction` and `executeSql` methods specific to that client library. The custom example implements `StateAdapter` itself and validates it in `src/state-adapter.spec.ts` by registering one test per case of `stateAdapterConformanceCases` from `queuert/conformance`.
+Each driver example implements a state provider (`PgStateProvider` or `SqliteStateProvider`) with `withTransaction`, `isTransaction` and `executeSql` methods specific to that client library. It also runs a few application migrations (`src/migrations.ts`) with `createPgMigrator` or `createSqliteMigrator`, and `src/provider.spec.ts` runs the migrator conformance cases alongside the provider cases. The custom example implements `StateAdapter` itself and validates it in `src/state-adapter.spec.ts` by registering one test per case of `stateAdapterConformanceCases` from `queuert/conformance`.
 
 ### Notify Examples
 

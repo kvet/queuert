@@ -1,9 +1,24 @@
-import { type Migration, sql } from "@queuert/typed-sql";
+import { type Migration, type TypedSqlTemplate, sql } from "@queuert/typed-sql";
 
-export const v017Migrations: Migration[] = [
+const transactional = <TTxContext>(
+  name: string,
+  statements: TypedSqlTemplate<readonly []>[],
+  execute: (txCtx: TTxContext, statement: TypedSqlTemplate<readonly []>) => Promise<void>,
+): Migration<TTxContext> => ({
+  name,
+  up: async (txCtx) => {
+    for (const statement of statements) {
+      await execute(txCtx, statement);
+    }
+  },
+  down: async () => {
+    throw new Error(`${name} cannot be reverted.`);
+  },
+});
+
+const v017Statements: { name: string; statements: TypedSqlTemplate<readonly []>[] }[] = [
   {
     name: "001_initial_schema",
-    type: "transactional",
     statements: [
       sql(/* sql */ `
 CREATE TABLE IF NOT EXISTS {{schema}}.{{table_prefix}}job (
@@ -103,7 +118,6 @@ ON {{schema}}.{{table_prefix}}job_blocker (blocked_by_chain_id)`),
   },
   {
     name: "002_worker_liveness",
-    type: "transactional",
     statements: [
       sql(/* sql */ `SET LOCAL lock_timeout = '5000ms'`),
       sql(/* sql */ `
@@ -145,3 +159,8 @@ WHERE status = 'running'`),
     ],
   },
 ];
+
+export const createV017Migrations = <TTxContext>(
+  execute: (txCtx: TTxContext, statement: TypedSqlTemplate<readonly []>) => Promise<void>,
+): Migration<TTxContext>[] =>
+  v017Statements.map(({ name, statements }) => transactional(name, statements, execute));

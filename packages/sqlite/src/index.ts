@@ -7,4 +7,11 @@ export {
   type SqliteStateProvider,
   type SqliteStateProviderError,
 } from "./state-provider/state-provider.sqlite.ts";
-export { type MigrationResult, type RuntimeType } from "@queuert/typed-sql";
+export { createSqliteMigrator } from "./migration-store/migration-store.sqlite.ts";
+export {
+  type Migration,
+  type MigrationResult,
+  type MigrationScript,
+  type Migrator,
+  type RuntimeType,
+} from "@queuert/typed-sql";

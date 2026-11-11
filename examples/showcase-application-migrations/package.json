@@ -1,0 +1,19 @@
+{
+  "name": "example-showcase-application-migrations",
+  "version": "0.0.1",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "start": "node src/index.ts",
+    "typecheck": "tsc --noEmit"
+  },
+  "dependencies": {
+    "@queuert/postgres": "workspace:*",
+    "example-state-postgres-postgres-js": "workspace:*",
+    "postgres": "3.4.9"
+  },
+  "devDependencies": {
+    "@queuert/testcontainers": "workspace:*",
+    "@queuert/tsconfig": "workspace:*"
+  }
+}

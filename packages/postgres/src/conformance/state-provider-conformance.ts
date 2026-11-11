@@ -14,21 +14,6 @@ import {
 import { createPgStateAdapter } from "../state-adapter/state-adapter.pg.ts";
 import type { PgStateProvider } from "../state-provider/state-provider.pg.ts";
 
-/** What {@link createPgStateProviderConformanceContext} takes. */
-export type PgStateProviderConformanceContextOptions = {
-  /**
-   * Creates the provider under test, over a database the suite may create tables in. Each case's
-   * adapter gets its own provider and closes it when the case ends, so closing one must not
-   * release resources the next one needs, such as the pool or the database connection.
-   */
-  createStateProvider: () => Promise<PgStateProvider<any>>;
-  /**
-   * Runs the callback with a context of the provider's shape that is not inside a transaction
-   * (e.g. a pool client with no `BEGIN`), so the suite can check `isTransaction` rejects it.
-   */
-  withNonTransactionContext: <T>(fn: (txCtx: any) => Promise<T>) => Promise<T>;
-};
-
 /**
  * The context the {@link pgStateProviderConformanceCases} run against. Get it from
  * {@link createPgStateProviderConformanceContext} and pass it to every case unchanged.
@@ -153,11 +138,25 @@ export const pgStateProviderConformanceGroups: ConformanceGroup<PgStateProviderC
  * schema once through a provider from `createStateProvider`. Each case then builds its own adapter
  * over a new provider from it, with the tables cleared. Call it once the database is ready, such
  * as in `beforeAll`; the test file owns the database and releases it itself.
+ *
+ * @param options - Context configuration.
  */
 export const createPgStateProviderConformanceContext = async ({
   createStateProvider,
   withNonTransactionContext,
-}: PgStateProviderConformanceContextOptions): Promise<PgStateProviderConformanceContext> => {
+}: {
+  /**
+   * Creates the provider under test, over a database the suite may create tables in. Each case's
+   * adapter gets its own provider and closes it when the case ends, so closing one must not
+   * release resources the next one needs, such as the pool or the database connection.
+   */
+  createStateProvider: () => Promise<PgStateProvider<any>>;
+  /**
+   * Runs the callback with a context of the provider's shape that is not inside a transaction
+   * (e.g. a pool client with no `BEGIN`), so the suite can check `isTransaction` rejects it.
+   */
+  withNonTransactionContext: <T>(fn: (txCtx: any) => Promise<T>) => Promise<T>;
+}): Promise<PgStateProviderConformanceContext> => {
   const ddl = { params: [], paramTypes: {}, columnTypes: {}, readOnly: false };
   const executeDdl = async (sql: string): Promise<void> => {
     const stateProvider = await createStateProvider();

@@ -1,4 +1,6 @@
-import { createAsyncRwLock, createSqliteStateAdapter } from "@queuert/sqlite";
+import assert from "node:assert/strict";
+
+import { createAsyncRwLock, createSqliteMigrator, createSqliteStateAdapter } from "@queuert/sqlite";
 import { SQL } from "bun";
 import {
   createClient,
@@ -8,6 +10,7 @@ import {
   withTxHooks,
 } from "queuert";
 
+import { createMigrations } from "./migrations.ts";
 import { createBunSqlSqliteStateProvider } from "./provider.ts";
 
 // Create in-memory SQLite database
@@ -38,6 +41,22 @@ const stateProvider = createBunSqlSqliteStateProvider({ sql, lock });
 await using stateAdapter = createSqliteStateAdapter({ stateProvider });
 await stateAdapter.migrateToLatest();
 // #endregion
+
+// Run the application's own migrations through the same provider
+const migrator = createSqliteMigrator({
+  stateProvider,
+  migrations: createMigrations({ sql, lock }),
+});
+const { applied } = await migrator.migrateToLatest();
+console.log(`Applied application migrations: ${applied.join(", ")}`);
+{
+  using _h = await lock.acquireRead();
+  const invoices = await sql`SELECT id, customer, status FROM invoices ORDER BY id`;
+  assert.deepEqual(
+    [...invoices],
+    [1, 2, 3, 4, 5].map((id) => ({ id, customer: `CUSTOMER-${id}`, status: "open" })),
+  );
+}
 
 const client = createClient({ stateAdapter, jobTypes });
 

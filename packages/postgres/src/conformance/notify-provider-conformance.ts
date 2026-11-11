@@ -10,16 +10,6 @@ import {
 import { createPgNotifyAdapter } from "../notify-adapter/notify-adapter.pg.ts";
 import type { PgNotifyProvider } from "../notify-provider/notify-provider.pg.ts";
 
-/** What {@link createPgNotifyProviderConformanceContext} takes. */
-export type PgNotifyProviderConformanceContextOptions = {
-  /**
-   * Creates the provider under test. Each case's adapter gets its own provider and closes it when
-   * the case ends, so closing one must not release resources the next one needs, such as the
-   * client connections.
-   */
-  createNotifyProvider: () => Promise<PgNotifyProvider>;
-};
-
 export const pgNotifyProviderConformanceGroups: ConformanceGroup<NotifyAdapterConformanceContext>[] =
   notifyAdapterBaseGroups;
 
@@ -27,10 +17,19 @@ export const pgNotifyProviderConformanceGroups: ConformanceGroup<NotifyAdapterCo
  * Prepares the context the {@link pgNotifyProviderConformanceCases} run against: each case gets its
  * own notify adapter over a new provider, on channels of its own. The test file still owns the
  * provider's resources and releases them itself.
+ *
+ * @param options - Context configuration.
  */
 export const createPgNotifyProviderConformanceContext = ({
   createNotifyProvider,
-}: PgNotifyProviderConformanceContextOptions): NotifyAdapterConformanceContext => ({
+}: {
+  /**
+   * Creates the provider under test. Each case's adapter gets its own provider and closes it when
+   * the case ends, so closing one must not release resources the next one needs, such as the
+   * client connections.
+   */
+  createNotifyProvider: () => Promise<PgNotifyProvider>;
+}): NotifyAdapterConformanceContext => ({
   // A channel prefix per adapter keeps one case's notifications away from the next.
   createNotifyAdapter: async () =>
     createPgNotifyAdapter({

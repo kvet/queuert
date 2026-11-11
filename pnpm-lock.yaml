@@ -1059,6 +1059,25 @@ importers:
         specifier: workspace:*
         version: link:../../packages-internal/tsconfig
 
+  examples/showcase-application-migrations:
+    dependencies:
+      '@queuert/postgres':
+        specifier: workspace:*
+        version: link:../../packages/postgres
+      example-state-postgres-postgres-js:
+        specifier: workspace:*
+        version: link:../state-postgres-postgres-js
+      postgres:
+        specifier: 3.4.9
+        version: 3.4.9
+    devDependencies:
+      '@queuert/testcontainers':
+        specifier: workspace:*
+        version: link:../../packages-internal/testcontainers
+      '@queuert/tsconfig':
+        specifier: workspace:*
+        version: link:../../packages-internal/tsconfig
+
   examples/showcase-blockers:
     dependencies:
       '@queuert/postgres':
@@ -1967,6 +1986,9 @@ importers:
 
   packages-internal/typed-sql:
     devDependencies:
+      '@queuert/helpers':
+        specifier: workspace:*
+        version: link:../helpers
       '@queuert/tsconfig':
         specifier: workspace:*
         version: link:../tsconfig

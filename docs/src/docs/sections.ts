@@ -99,6 +99,7 @@ export const siteSections: SiteSection[] = [
           "guides/prioritization",
           "guides/middleware",
           "guides/runtime-validation",
+          "guides/application-migrations",
         ],
       },
       {

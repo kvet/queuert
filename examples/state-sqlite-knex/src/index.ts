@@ -1,4 +1,6 @@
-import { createSqliteStateAdapter } from "@queuert/sqlite";
+import assert from "node:assert/strict";
+
+import { createSqliteMigrator, createSqliteStateAdapter } from "@queuert/sqlite";
 import knexFactory from "knex";
 import {
   createClient,
@@ -8,6 +10,7 @@ import {
   withTxHooks,
 } from "queuert";
 
+import { type Invoice, createMigrations } from "./migrations.ts";
 import { createKnexSqliteStateProvider } from "./provider.ts";
 
 // Create in-memory SQLite database
@@ -47,6 +50,17 @@ await using stateAdapter = createSqliteStateAdapter({
 });
 await stateAdapter.migrateToLatest();
 // #endregion
+
+const migrator = createSqliteMigrator({
+  stateProvider,
+  migrations: createMigrations({ db: knex }),
+});
+const { applied } = await migrator.migrateToLatest();
+console.log(`Applied application migrations: ${applied.join(", ")}`);
+assert.deepEqual(
+  await knex<Invoice>("invoices").select().orderBy("id"),
+  [1, 2, 3, 4, 5].map((id) => ({ id, customer: `CUSTOMER-${id}`, status: "open" })),
+);
 
 const client = createClient({ stateAdapter, jobTypes });
 

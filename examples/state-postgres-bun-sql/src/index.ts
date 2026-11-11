@@ -1,4 +1,4 @@
-import { createPgStateAdapter } from "@queuert/postgres";
+import { createPgMigrator, createPgStateAdapter } from "@queuert/postgres";
 import { acquirePostgres } from "@queuert/testcontainers";
 import { SQL } from "bun";
 import {
@@ -9,6 +9,7 @@ import {
   withTxHooks,
 } from "queuert";
 
+import { createMigrations } from "./migrations.ts";
 import { createBunSqlStateProvider } from "./provider.ts";
 
 // Start PostgreSQL using testcontainers
@@ -40,6 +41,14 @@ const stateProvider = createBunSqlStateProvider({ sql });
 await using stateAdapter = createPgStateAdapter({ stateProvider });
 await stateAdapter.migrateToLatest();
 // #endregion
+
+const { applied } = await createPgMigrator({
+  stateProvider,
+  migrations: createMigrations({ sql }),
+}).migrateToLatest();
+console.log(`Applied app migrations: ${applied.join(", ")}`);
+const invoices = await sql`SELECT number, customer, status FROM invoices ORDER BY id`;
+console.log("Invoices:", invoices);
 
 const client = createClient({ stateAdapter, jobTypes });
 

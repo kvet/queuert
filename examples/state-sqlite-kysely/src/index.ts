@@ -1,4 +1,6 @@
-import { createSqliteStateAdapter } from "@queuert/sqlite";
+import assert from "node:assert/strict";
+
+import { createSqliteMigrator, createSqliteStateAdapter } from "@queuert/sqlite";
 import BetterSqlite3 from "better-sqlite3";
 import { type Generated, Kysely, SqliteDialect, sql } from "kysely";
 import {
@@ -9,6 +11,7 @@ import {
   withTxHooks,
 } from "queuert";
 
+import { type InvoicesTable, createMigrations } from "./migrations.ts";
 import { createKyselySqliteStateProvider } from "./provider.ts";
 
 // Create in-memory SQLite database
@@ -17,6 +20,7 @@ const sqliteDb = new BetterSqlite3(":memory:");
 // Define Kysely database schema
 type Database = {
   users: { id: Generated<number>; name: string; email: string };
+  invoices: InvoicesTable;
 };
 
 // Create Kysely database connection
@@ -52,6 +56,17 @@ await using stateAdapter = createSqliteStateAdapter({
 });
 await stateAdapter.migrateToLatest();
 // #endregion
+
+const migrator = createSqliteMigrator({
+  stateProvider,
+  migrations: createMigrations({ db }),
+});
+const { applied } = await migrator.migrateToLatest();
+console.log(`Applied application migrations: ${applied.join(", ")}`);
+assert.deepEqual(
+  await db.selectFrom("invoices").selectAll().orderBy("id").execute(),
+  [1, 2, 3, 4, 5].map((id) => ({ id, customer: `CUSTOMER-${id}`, status: "open" })),
+);
 
 const client = createClient({ stateAdapter, jobTypes });
 

@@ -3,5 +3,9 @@ export {
   createSqliteStateProviderConformanceContext,
   type SqliteStateProviderConformanceContext,
   sqliteStateProviderConformanceCases,
-  type SqliteStateProviderConformanceContextOptions,
 } from "./conformance/state-provider-conformance.ts";
+export {
+  createSqliteMigratorConformanceContext,
+  type SqliteMigratorConformanceContext,
+  sqliteMigratorConformanceCases,
+} from "./conformance/migrator-conformance.ts";

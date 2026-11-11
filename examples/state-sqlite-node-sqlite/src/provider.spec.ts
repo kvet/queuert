@@ -3,8 +3,10 @@ import { after, before, describe, test } from "node:test";
 
 import { createAsyncRwLock } from "@queuert/sqlite";
 import {
+  createSqliteMigratorConformanceContext,
   createSqliteStateProviderConformanceContext,
   type SqliteStateProviderConformanceContext,
+  sqliteMigratorConformanceCases,
   sqliteStateProviderConformanceCases,
 } from "@queuert/sqlite/conformance";
 
@@ -34,3 +36,20 @@ void describe("state-sqlite-node-sqlite provider conformance", () => {
   }
 });
 // #endregion
+
+void describe("state-sqlite-node-sqlite migrator conformance", () => {
+  const db = new DatabaseSync(":memory:");
+  const context = createSqliteMigratorConformanceContext({
+    stateProvider: createNodeSqliteStateProvider({ db, lock: createAsyncRwLock() }),
+  });
+
+  after(() => {
+    db.close();
+  });
+
+  for (const conformanceCase of sqliteMigratorConformanceCases) {
+    void test(conformanceCase.title, async () => {
+      await conformanceCase.run(context);
+    });
+  }
+});

@@ -1,31 +1,43 @@
 import { runDeploymentProcess } from "@queuert/helpers/testing";
-import { type Migration, createMigrator, createTemplateApplier, sql } from "@queuert/typed-sql";
+import {
+  type Migration,
+  createMigrator,
+  createTemplateApplier,
+  createTemplateExecutor,
+} from "@queuert/typed-sql";
 import { Pool } from "pg";
 
-import { createMigrationStore, migrations } from "../state-adapter/state-adapter.pg.ts";
-import { createPgPoolProvider } from "../state-provider/state-provider.pg-pool.ts";
+import { createMigrationStore, createSchemaMigrations } from "../state-adapter/state-adapter.pg.ts";
+import {
+  type PgPoolContext,
+  createPgPoolProvider,
+} from "../state-provider/state-provider.pg-pool.ts";
 
 export const MARKER = "999_deployment_marker";
 
-const newerMigration: Migration = {
+const newerMigration: Migration<PgPoolContext> = {
   name: MARKER,
-  type: "transactional",
-  statements: [sql("CREATE TABLE deployment_marker (id integer)")],
+  up: async (txCtx) => {
+    await txCtx.poolClient.query("CREATE TABLE deployment_marker (id integer)");
+  },
+  down: async (txCtx) => {
+    await txCtx.poolClient.query("DROP TABLE deployment_marker");
+  },
 };
 
 export const LEASE_TTL_MS = 2_000;
 
 if (process.argv[1] === import.meta.filename) {
   const pool = new Pool({ connectionString: process.argv[2] });
-  const store = createMigrationStore(
-    createPgPoolProvider({ pool }),
-    createTemplateApplier({
-      schema: "public",
-      table_prefix: "queuert_",
-      job_id_type: "text",
-      worker_id_type: "text",
-    }),
-  );
+  const provider = createPgPoolProvider({ pool });
+  const applyTemplate = createTemplateApplier({
+    schema: "public",
+    table_prefix: "queuert_",
+    job_id_type: "text",
+    worker_id_type: "text",
+  });
+  const store = createMigrationStore(provider, applyTemplate);
+  const migrations = createSchemaMigrations(createTemplateExecutor(provider, applyTemplate));
   await runDeploymentProcess({
     migrate: async ({ version, pause }) => {
       const recordMigration = store.recordMigration;

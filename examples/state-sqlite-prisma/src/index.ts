@@ -1,10 +1,11 @@
+import assert from "node:assert/strict";
 import { execSync } from "node:child_process";
 import { mkdtempSync, rmSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 
 import { PrismaBetterSqlite3 } from "@prisma/adapter-better-sqlite3";
-import { createAsyncRwLock, createSqliteStateAdapter } from "@queuert/sqlite";
+import { createAsyncRwLock, createSqliteMigrator, createSqliteStateAdapter } from "@queuert/sqlite";
 import {
   createClient,
   createWorkerRunner,
@@ -13,6 +14,7 @@ import {
   withTxHooks,
 } from "queuert";
 
+import { createMigrations } from "./migrations.ts";
 import { createPrismaSqliteStateProvider } from "./provider.ts";
 
 // Create temp directory and set DATABASE_URL
@@ -52,6 +54,20 @@ await using stateAdapter = createSqliteStateAdapter({
 });
 await stateAdapter.migrateToLatest();
 // #endregion
+
+const migrator = createSqliteMigrator({
+  stateProvider,
+  migrations: createMigrations({ db: prisma, lock }),
+});
+const { applied } = await migrator.migrateToLatest();
+console.log(`Applied application migrations: ${applied.join(", ")}`);
+{
+  using _h = await lock.acquireRead();
+  assert.deepEqual(
+    await prisma.$queryRaw`SELECT id, customer, status FROM invoices ORDER BY id`,
+    [1, 2, 3, 4, 5].map((id) => ({ id, customer: `CUSTOMER-${id}`, status: "open" })),
+  );
+}
 
 const client = createClient({ stateAdapter, jobTypes });
 

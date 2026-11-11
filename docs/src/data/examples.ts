@@ -108,6 +108,7 @@ const validationAdapters = {
 const logging = { title: "Logging", href: "/integrations/logging/" };
 
 const providerFiles = ["src/provider.ts", "src/index.ts"];
+const stateProviderFiles = [...providerFiles, "src/migrations.ts"];
 
 export const examples: Example[] = [
   {
@@ -119,7 +120,7 @@ export const examples: Example[] = [
       "PostgreSQL state storage via @queuert/postgres with the pg (node-postgres) driver — job creation and completion inside application transactions.",
     runtime: "Node.js",
     services: ["PostgreSQL"],
-    files: providerFiles,
+    files: stateProviderFiles,
     guide: statePostgres,
   },
   {
@@ -131,7 +132,7 @@ export const examples: Example[] = [
       "PostgreSQL state storage via @queuert/postgres with postgres.js — job creation and completion inside application transactions.",
     runtime: "Node.js",
     services: ["PostgreSQL"],
-    files: providerFiles,
+    files: stateProviderFiles,
     guide: statePostgres,
   },
   {
@@ -143,7 +144,7 @@ export const examples: Example[] = [
       "PostgreSQL state storage via @queuert/postgres with Drizzle ORM — job creation and completion inside application transactions.",
     runtime: "Node.js",
     services: ["PostgreSQL"],
-    files: providerFiles,
+    files: [...stateProviderFiles, "src/schema.ts"],
     guide: statePostgres,
   },
   {
@@ -155,7 +156,7 @@ export const examples: Example[] = [
       "PostgreSQL state storage via @queuert/postgres with Kysely — job creation and completion inside application transactions.",
     runtime: "Node.js",
     services: ["PostgreSQL"],
-    files: providerFiles,
+    files: [...stateProviderFiles, "src/database.ts"],
     guide: statePostgres,
   },
   {
@@ -167,7 +168,7 @@ export const examples: Example[] = [
       "PostgreSQL state storage via @queuert/postgres with Prisma ORM — job creation and completion inside application transactions.",
     runtime: "Node.js",
     services: ["PostgreSQL"],
-    files: ["src/provider.ts", "src/index.ts", "prisma/schema.prisma"],
+    files: ["src/provider.ts", "src/index.ts", "src/migrations.ts", "prisma/schema.prisma"],
     guide: statePostgres,
   },
   {
@@ -179,7 +180,7 @@ export const examples: Example[] = [
       "PostgreSQL state storage via @queuert/postgres with Knex — job creation and completion inside application transactions.",
     runtime: "Node.js",
     services: ["PostgreSQL"],
-    files: providerFiles,
+    files: stateProviderFiles,
     guide: statePostgres,
   },
   {
@@ -191,7 +192,7 @@ export const examples: Example[] = [
       "PostgreSQL state storage via @queuert/postgres using Bun's built-in SQL client — job creation and completion inside application transactions, no external PostgreSQL dependencies.",
     runtime: "Bun",
     services: ["PostgreSQL"],
-    files: providerFiles,
+    files: stateProviderFiles,
     guide: statePostgres,
   },
   {
@@ -215,7 +216,7 @@ export const examples: Example[] = [
       "SQLite state storage via @queuert/sqlite with the better-sqlite3 driver — job creation and completion inside application transactions, with createAsyncRwLock() for write serialization: the handler holds the same lock around the transaction it passes to complete.",
     runtime: "Node.js",
     services: [],
-    files: providerFiles,
+    files: stateProviderFiles,
     guide: stateSqlite,
   },
   {
@@ -227,7 +228,7 @@ export const examples: Example[] = [
       "SQLite state storage via @queuert/sqlite using Node's built-in node:sqlite module — no external SQLite dependencies. The handler holds the provider's createAsyncRwLock() write lock around the transaction it passes to complete.",
     runtime: "Node.js",
     services: [],
-    files: providerFiles,
+    files: stateProviderFiles,
     guide: stateSqlite,
   },
   {
@@ -239,7 +240,7 @@ export const examples: Example[] = [
       "SQLite state storage via @queuert/sqlite with Drizzle ORM — job creation and completion inside application transactions, with createAsyncRwLock() for write serialization: the handler holds the same lock around the transaction it passes to complete.",
     runtime: "Node.js",
     services: [],
-    files: providerFiles,
+    files: stateProviderFiles,
     guide: stateSqlite,
   },
   {
@@ -251,7 +252,7 @@ export const examples: Example[] = [
       "SQLite state storage via @queuert/sqlite with Kysely — job creation and completion inside application transactions. Kysely's better-sqlite3 dialect uses a size-1 connection pool that already serializes writers, so no external lock is needed, for client calls or for the transaction a handler passes to complete.",
     runtime: "Node.js",
     services: [],
-    files: providerFiles,
+    files: stateProviderFiles,
     guide: stateSqlite,
   },
   {
@@ -263,7 +264,7 @@ export const examples: Example[] = [
       "SQLite state storage via @queuert/sqlite with Prisma ORM — job creation and completion inside application transactions, with createAsyncRwLock() for write serialization: the handler holds the same lock around the transaction it passes to complete.",
     runtime: "Node.js",
     services: [],
-    files: ["src/provider.ts", "src/index.ts", "prisma/schema.prisma"],
+    files: ["src/provider.ts", "src/index.ts", "src/migrations.ts", "prisma/schema.prisma"],
     guide: stateSqlite,
   },
   {
@@ -275,7 +276,7 @@ export const examples: Example[] = [
       "SQLite state storage via @queuert/sqlite with Knex — job creation and completion inside application transactions. Knex's better-sqlite3 dialect uses a size-1 connection pool that already serializes writers, so no external lock is needed, for client calls or for the transaction a handler passes to complete.",
     runtime: "Node.js",
     services: [],
-    files: providerFiles,
+    files: stateProviderFiles,
     guide: stateSqlite,
   },
   {
@@ -287,7 +288,7 @@ export const examples: Example[] = [
       "SQLite state storage via @queuert/sqlite using Bun's built-in bun:sqlite module — no external SQLite dependencies. The handler holds the provider's createAsyncRwLock() write lock around the transaction it passes to complete.",
     runtime: "Bun",
     services: [],
-    files: providerFiles,
+    files: stateProviderFiles,
     guide: stateSqlite,
   },
   {
@@ -299,7 +300,7 @@ export const examples: Example[] = [
       "SQLite state storage via @queuert/sqlite using Bun's built-in SQL client in its sqlite:// mode — no external SQLite dependencies. The handler holds the provider's createAsyncRwLock() write lock around the transaction it passes to complete.",
     runtime: "Bun",
     services: [],
-    files: providerFiles,
+    files: stateProviderFiles,
     guide: stateSqlite,
   },
   {
@@ -676,6 +677,24 @@ export const examples: Example[] = [
     services: ["PostgreSQL"],
     files: ["src/index.ts"],
     guide: { title: "Cleanup", href: "/guides/cleanup/" },
+  },
+  {
+    name: "showcase-application-migrations",
+    category: "patterns",
+    page: "operations",
+    label: "createPgMigrator",
+    description:
+      "Running your application's own migrations with the experimental migrator from @queuert/postgres.",
+    runtime: "Node.js",
+    services: ["PostgreSQL"],
+    files: ["src/index.ts"],
+    scenarios: [
+      "Transactional and non-transactional migrations, including a batched backfill",
+      "Several processes migrating at once",
+      "An after hook that logs every run",
+      "Reverting with migrateTo, down to a named migration and then with migrateTo(null)",
+    ],
+    guide: { title: "Application Migrations", href: "/guides/application-migrations/" },
   },
   {
     name: "log-console",

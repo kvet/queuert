@@ -1,6 +1,8 @@
 import {
+  createSqliteMigratorConformanceContext,
   createSqliteStateProviderConformanceContext,
   type SqliteStateProviderConformanceContext,
+  sqliteMigratorConformanceCases,
   sqliteStateProviderConformanceCases,
 } from "@queuert/sqlite/conformance";
 import knexFactory from "knex";
@@ -35,3 +37,24 @@ describe("state-sqlite-knex provider conformance", () => {
   }
 });
 // #endregion
+
+describe("state-sqlite-knex migrator conformance", () => {
+  const knex = knexFactory({
+    client: "better-sqlite3",
+    connection: { filename: ":memory:" },
+    useNullAsDefault: true,
+  });
+  const context = createSqliteMigratorConformanceContext({
+    stateProvider: createKnexSqliteStateProvider({ knex }),
+  });
+
+  afterAll(async () => {
+    await knex.destroy();
+  });
+
+  for (const conformanceCase of sqliteMigratorConformanceCases) {
+    test(conformanceCase.title, async () => {
+      await conformanceCase.run(context);
+    });
+  }
+});

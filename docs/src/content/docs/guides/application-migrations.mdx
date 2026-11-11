@@ -1,0 +1,164 @@
+---
+title: Application Migrations
+description: Run your application's own schema migrations with the migrator from @queuert/postgres and @queuert/sqlite.
+sidebar:
+  order: 21
+---
+
+:::caution[Experimental]
+The migrator API (`createPgMigrator`, `createSqliteMigrator`, `Migration` and `Migrator`) is experimental: it may change in a minor release.
+:::
+
+## Overview
+
+`@queuert/postgres` and `@queuert/sqlite` export the migrator they run Queuert's own schema with, so your application can run its migrations the same way. It is built for migrating on boot from many processes at once: one process migrates while the others wait, then find nothing left to do. Migrations run in the order of their list, can be reverted, and are functions that use your own query builder.
+
+## Create a Migrator
+
+The migrator runs through the same state provider you pass to the state adapter:
+
+```ts
+import { createPgMigrator } from "@queuert/postgres";
+
+const migrator = createPgMigrator({ stateProvider, migrations });
+
+await migrator.migrateToLatest();
+```
+
+It creates its tables on the first run, if they are missing: `migration` for the history and `migration_lock` for the lease, in the `public` schema. `schema` (created if missing), `migrationTableName` and `lockTableName` rename them. With SQLite, `createSqliteMigrator` takes the same options without `schema`.
+
+## Define Migrations
+
+Every migration has a unique `name`, an `up` and a `down`. `Migration` takes the provider's transaction context type:
+
+```ts
+import type { Migration } from "@queuert/postgres";
+
+const migrations: Migration<TxContext>[] = [
+  {
+    name: "create_invoices",
+    up: async ({ txSql }) => {
+      await txSql`CREATE TABLE invoices (id integer PRIMARY KEY, customer text NOT NULL, status text)`;
+    },
+    down: async ({ txSql }) => {
+      await txSql`DROP TABLE invoices`;
+    },
+  },
+  {
+    name: "invoices_customer_idx",
+    type: "non-transactional",
+    up: async () => {
+      await sql`CREATE INDEX CONCURRENTLY IF NOT EXISTS invoices_customer_idx ON invoices (customer)`;
+    },
+    down: async () => {
+      await sql`DROP INDEX CONCURRENTLY IF EXISTS invoices_customer_idx`;
+    },
+  },
+  {
+    name: "backfill_invoice_status",
+    type: "non-transactional",
+    up: async ({ assertLockHeld }) => {
+      let updated: number;
+      do {
+        assertLockHeld();
+        updated = (
+          await sql`UPDATE invoices SET status = 'open' WHERE id IN (SELECT id FROM invoices WHERE status IS NULL LIMIT ${1000})`
+        ).count;
+      } while (updated > 0);
+    },
+    down: async () => {
+      await sql`UPDATE invoices SET status = NULL`;
+    },
+  },
+];
+```
+
+A migration is `transactional` unless it sets `type`. Its `up` and `down` receive the transaction context and run inside one transaction together with the history record, so your query builder works on the migration's connection.
+
+A `non-transactional` migration's `up` and `down` run outside a transaction with their own database access, as `CREATE INDEX CONCURRENTLY` or a backfill in batches needs. The record is written after the function resolves, so it must be safe to run again. Call `assertLockHeld()` between steps of long work: it throws once the lease is lost, so the migration stops before another process starts migrating.
+
+:::caution
+Inside a `transactional` migration, run queries only through the `txCtx` that `up` and `down` receive. A query through your outer client waits for a connection the migration holds when the pool has one connection (Knex and Kysely over SQLite), and the SQLite providers hold their write lock for the whole transaction, so taking that lock again never returns. Prisma's interactive transactions time out after 5 seconds by default; raise `transactionOptions.timeout` on the client for long transactional migrations.
+:::
+
+When a migration fails, the migrator rejects with `Migration "<name>" failed: <message>` (or `Reverting migration "<name>" failed: …`), with the original error as `cause`.
+
+## Order
+
+Migrations run in the order of the list, and names only need to be unique. Append new migrations at the end: two branches that each add one then meet as a merge conflict on the list. A run refuses to start when a migration that has not run is listed before one that has, which catches a migration inserted into a history that is already deployed.
+
+`migrateToLatest` reports applied migrations the code doesn't know in `unrecognized` and keeps going, so an older release still boots against a database a newer release migrated.
+
+## Several Processes
+
+Every run first claims a lease row in the lock table. One process migrates and extends the lease while it works; the others poll until it is released and then skip what it applied. A process that dies leaves the lease to expire, and the next process takes over. `lock` sets the timing, with `heartbeatIntervalMs` below a third of `ttlMs`; it defaults to the lower of 15 seconds and a quarter of `ttlMs`:
+
+```ts
+createPgMigrator({
+  stateProvider,
+  migrations,
+  lock: { ttlMs: 60_000, heartbeatIntervalMs: 15_000, pollIntervalMs: 1_000 },
+});
+```
+
+With SQLite, claiming and extending the lease write to the database, so they wait for SQLite's write lock while another process runs a migration transaction. Set the driver's busy timeout longer than your longest migration transaction; otherwise a waiting process fails with `SQLITE_BUSY` instead of waiting its turn.
+
+## Revert
+
+`migrateTo(name)` brings the database to the named migration. It applies the pending migrations up to it, or reverts the applied migrations after it with their `down`, last first. `migrateTo(null)` reverts every applied migration:
+
+```ts
+const result = await migrator.migrateTo("create_invoices");
+result.reverted; // ["backfill_invoice_status", "invoices_customer_idx"]
+```
+
+Before reverting anything, it refuses if the database has applied migrations the code doesn't know. A migration that cannot be reverted throws from its `down`: the revert stops there, and that migration stays recorded. A `transactional` revert removes the record in the same transaction as its `down`; a `non-transactional` one removes it after its `down`, which must then be safe to run again.
+
+## Before and After
+
+`before` and `after` run under the lease: `before` on every run, after the migrator has created its tables and before the history is read, and `after` once the migrations have run, unless one failed. They record nothing, and take the same `{ assertLockHeld }` argument as a `non-transactional` migration:
+
+```ts
+createPgMigrator({
+  stateProvider,
+  migrations,
+  after: async ({ assertLockHeld }) => {
+    assertLockHeld();
+    await refreshInvoiceTotalsView();
+  },
+});
+```
+
+## An Existing History Table
+
+To take over from another migration tool, copy the names it recorded into the migrator's history in `before`, which runs after the migrator has created its tables and before it reads the history. For Kysely's `kysely_migration` table:
+
+```ts
+const migrator = createPgMigrator({
+  stateProvider,
+  migrations,
+  before: async () => {
+    await pool.query(
+      "INSERT INTO migration (name) SELECT name FROM kysely_migration ON CONFLICT (name) DO NOTHING",
+    );
+  },
+});
+```
+
+The copied migrations count as applied when their names match, and the copy is a no-op on later runs. Keep the previous tool's migrator from running once the migrator has taken over: the two don't share a lock.
+
+## Testing a Provider
+
+`@queuert/postgres/conformance` exports `pgMigratorConformanceCases` and `createPgMigratorConformanceContext`, and `@queuert/sqlite/conformance` the SQLite equivalents. They run the migrator over your state provider: history, transactional and non-transactional migrations, reverts and the lease. Register one test per case with any test runner:
+
+```ts
+const context = createPgMigratorConformanceContext({ stateProvider });
+
+for (const conformanceCase of pgMigratorConformanceCases) {
+  test(conformanceCase.title, async () => {
+    await conformanceCase.run(context);
+  });
+}
+```
+
+See [examples/showcase-application-migrations](https://github.com/kvet/queuert/tree/main/examples/showcase-application-migrations) for a complete working example demonstrating both migration types, several processes migrating at once, and reverting with `migrateTo`. Every state example also runs a few migrations of its own through its driver or ORM.

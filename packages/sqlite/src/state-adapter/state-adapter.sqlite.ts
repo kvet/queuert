@@ -10,6 +10,7 @@ import {
   type MigrationStore,
   type TemplateApplier,
   type TypedSql,
+  type TypedSqlTemplate,
   createMigrator,
   createTemplateApplier,
   createTemplateCache,
@@ -17,6 +18,8 @@ import {
   extractParamTypes,
   sql,
   t,
+  createTemplateExecutor,
+  validateSqlIdentifier,
 } from "@queuert/typed-sql";
 import {
   type BaseTxContext,
@@ -40,6 +43,10 @@ import {
   resolveStateAdapterConfig,
 } from "queuert/internal";
 
+import {
+  createSqliteMigrationStore,
+  takeWriteLockStatement,
+} from "../migration-store/migration-store.sqlite.ts";
 import type { SqliteStateProvider } from "../state-provider/state-provider.sqlite.ts";
 import { createLegacyUpgrade } from "./legacy-upgrade.sqlite.ts";
 
@@ -188,12 +195,14 @@ const SCHEMA_VERSION = 1;
 
 const FENCE_GUARD = "NOT EXISTS (SELECT 1 FROM {{fence_table}} WHERE 1 = 0)";
 
-export const migrations: Migration[] = [
+export const createSchemaMigrations = <TTxContext>(
+  execute: (txCtx: TTxContext, statement: TypedSqlTemplate<readonly []>) => Promise<void>,
+): Migration<TTxContext>[] => [
   {
     name: "001_initial_schema",
-    type: "transactional",
-    statements: [
-      sql(/* sql */ `
+    up: async (txCtx) => {
+      for (const statement of [
+        sql(/* sql */ `
 CREATE TABLE {{table_prefix}}job (
   created_at                    TEXT NOT NULL DEFAULT (datetime('now', 'subsec')),
   scheduled_at                  TEXT NOT NULL DEFAULT (datetime('now', 'subsec')),
@@ -224,50 +233,50 @@ CREATE TABLE {{table_prefix}}job (
   output                        TEXT,
   attempt_token                 TEXT
 )`),
-      sql(/* sql */ `
+        sql(/* sql */ `
 CREATE UNIQUE INDEX {{table_prefix}}chain_index_idx
 ON {{table_prefix}}job (chain_id, chain_index)
 WHERE chain_index > 0`),
-      sql(/* sql */ `
+        sql(/* sql */ `
 CREATE INDEX {{table_prefix}}chain_deduplication_idx
 ON {{table_prefix}}job (chain_deduplication_key, created_at DESC)
 WHERE chain_deduplication_key IS NOT NULL AND chain_index = 0`),
-      sql(/* sql */ `
+        sql(/* sql */ `
 CREATE INDEX {{table_prefix}}job_idx
 ON {{table_prefix}}job (type_name, created_at)`),
-      sql(/* sql */ `
+        sql(/* sql */ `
 CREATE INDEX {{table_prefix}}job_pending_idx
 ON {{table_prefix}}job (type_name, scheduled_at)
 WHERE status = 'pending'`),
-      sql(/* sql */ `
+        sql(/* sql */ `
 CREATE INDEX {{table_prefix}}job_blocked_idx
 ON {{table_prefix}}job (type_name, scheduled_at)
 WHERE status = 'blocked'`),
-      sql(/* sql */ `
+        sql(/* sql */ `
 CREATE INDEX {{table_prefix}}job_running_idx
 ON {{table_prefix}}job (type_name, attempt_at)
 WHERE status = 'running'`),
-      sql(/* sql */ `
+        sql(/* sql */ `
 CREATE INDEX {{table_prefix}}job_completed_idx
 ON {{table_prefix}}job (type_name, completed_at)
 WHERE status = 'completed'`),
-      sql(/* sql */ `
+        sql(/* sql */ `
 CREATE INDEX {{table_prefix}}job_attempt_by_idx
 ON {{table_prefix}}job (attempt_by, attempt_at)
 WHERE status = 'running'`),
-      sql(/* sql */ `
+        sql(/* sql */ `
 CREATE INDEX {{table_prefix}}chain_idx
 ON {{table_prefix}}job (type_name, created_at)
 WHERE chain_index = 0`),
-      sql(/* sql */ `
+        sql(/* sql */ `
 CREATE INDEX {{table_prefix}}chain_running_idx
 ON {{table_prefix}}job (type_name, created_at)
 WHERE chain_index = 0 AND chain_status = 'running'`),
-      sql(/* sql */ `
+        sql(/* sql */ `
 CREATE INDEX {{table_prefix}}chain_completed_idx
 ON {{table_prefix}}job (type_name, chain_completed_at)
 WHERE chain_index = 0 AND chain_status = 'completed'`),
-      sql(/* sql */ `
+        sql(/* sql */ `
 CREATE TABLE {{table_prefix}}job_blocker (
   job_id                        {{job_id_type}} NOT NULL,
   blocked_by_chain_id           {{job_id_type}} NOT NULL,
@@ -275,10 +284,10 @@ CREATE TABLE {{table_prefix}}job_blocker (
   trace_context                 TEXT,
   PRIMARY KEY (job_id, blocked_by_chain_id, "index")
 )`),
-      sql(/* sql */ `
+        sql(/* sql */ `
 CREATE INDEX {{table_prefix}}job_blocker_chain_idx
 ON {{table_prefix}}job_blocker (blocked_by_chain_id)`),
-      sql(/* sql */ `
+        sql(/* sql */ `
 CREATE TABLE {{table_prefix}}worker (
   started_at                    TEXT NOT NULL DEFAULT (datetime('now', 'subsec')),
   lease_until                   TEXT NOT NULL,
@@ -287,129 +296,32 @@ CREATE TABLE {{table_prefix}}worker (
   id                            {{worker_id_type}} PRIMARY KEY,
   type_names                    TEXT NOT NULL
 )`),
-      sql(/* sql */ `
+        sql(/* sql */ `
 CREATE INDEX {{table_prefix}}worker_idx
 ON {{table_prefix}}worker (started_at)`),
-      sql(/* sql */ `
+        sql(/* sql */ `
 CREATE TABLE {{table_prefix}}schema_fence_v1 (id INTEGER PRIMARY KEY)`),
-    ],
+      ]) {
+        await execute(txCtx, statement);
+      }
+    },
+    down: async () => {
+      throw new Error("The Queuert schema cannot be reverted.");
+    },
   },
 ];
-
-const takeWriteLockStatement = sql(
-  /* sql */ `UPDATE {{table_prefix}}write_lock SET id = id WHERE 0`,
-  { id: "takeWriteLock", params: [], columns: {} },
-);
 
 /** @internal */
 export const createMigrationStore = <TTxContext extends BaseTxContext>(
   stateProvider: SqliteStateProvider<TTxContext>,
   applyTemplate: TemplateApplier,
-): MigrationStore<TTxContext> => {
-  const exec = async <
-    TParams extends readonly DataType[],
-    TColumns extends Record<string, DataType>,
-  >({
-    txCtx,
-    sql: typedSql,
-    params,
-  }: {
-    txCtx?: TTxContext;
-    sql: TypedSql<TParams, TColumns>;
-  } & (TParams extends readonly []
-    ? { params?: undefined }
-    : { params: [...InferParams<TParams>] })): Promise<InferColumns<TColumns>[]> =>
-    stateProvider.executeSql({
-      txCtx,
-      id: typedSql.id,
-      sql: typedSql.sql,
-      params: params ?? [],
-      paramTypes: extractParamTypes(typedSql.params),
-      columnTypes: extractColumnTypes(typedSql.columns),
-      readOnly: typedSql.readOnly,
-    }) as Promise<InferColumns<TColumns>[]>;
-
-  const createMigrationTableSql = applyTemplate(
-    sql(
-      `
-CREATE TABLE IF NOT EXISTS {{table_prefix}}migration (
-            name TEXT PRIMARY KEY,
-            applied_at TEXT NOT NULL DEFAULT (datetime('now', 'subsec'))
-)`,
-      { id: "createMigrationTable", params: [], columns: {} },
-    ),
-  );
-  const createWriteLockTableSql = applyTemplate(
-    sql(`CREATE TABLE IF NOT EXISTS {{table_prefix}}write_lock (id INTEGER PRIMARY KEY)`, {
-      id: "createWriteLockTable",
-      params: [],
-      columns: {},
-    }),
-  );
-  const takeWriteLockSql = applyTemplate(takeWriteLockStatement);
-  const getAppliedMigrationsSql = applyTemplate(
-    sql(/* sql */ `SELECT name FROM {{table_prefix}}migration ORDER BY name`, {
-      id: "getAppliedMigrations",
-      params: [],
-      columns: { name: t.string() },
-      readOnly: true,
-    }),
-  );
-  const recordMigrationSql = applyTemplate(
-    sql(
-      /* sql */ `INSERT INTO {{table_prefix}}migration (name) VALUES (?) ON CONFLICT (name) DO NOTHING`,
-      {
-        id: "recordMigration",
-        params: [t.string()],
-        columns: {},
-      },
-    ),
-  );
-
-  return {
-    initialize: async () => {
-      await exec({ sql: createMigrationTableSql });
-      await exec({ sql: createWriteLockTableSql });
-    },
-    runInTransaction: async (fn) =>
-      stateProvider.withTransaction(async (txCtx) => {
-        await exec({ txCtx, sql: takeWriteLockSql });
-        return fn(txCtx);
-      }),
-    getAppliedMigrationNames: async (txCtx) => {
-      const applied = await exec({ txCtx, sql: getAppliedMigrationsSql });
-      return applied.map((m) => m.name);
-    },
-    executeMigrationStatement: async (txCtx, statement) => {
-      await exec({ txCtx, sql: applyTemplate(statement) as TypedSql<readonly []> });
-    },
-    executeBatchMigrationStatement: async (txCtx, statement) => {
-      const applied = applyTemplate(statement);
-      const wrapped = applyTemplate(
-        sql(/* sql */ `${applied.sql} RETURNING 1 AS affected`, {
-          id: applied.id != null ? `batch:${applied.id}` : undefined,
-          params: [],
-          columns: { affected: t.number() },
-        }),
-      );
-      const rows = await exec({ txCtx, sql: wrapped });
-      return rows.length;
-    },
-    recordMigration: async (txCtx, name) => {
-      await exec({ txCtx, sql: recordMigrationSql, params: [name] });
-    },
-  };
-};
-
-const SQL_IDENTIFIER_PATTERN = /^[a-zA-Z_][a-zA-Z0-9_]*$/;
-
-const validateSqlIdentifier = (value: string, name: string): void => {
-  if (!SQL_IDENTIFIER_PATTERN.test(value)) {
-    throw new Error(
-      `Invalid ${name}: "${value}". Must match /^[a-zA-Z_][a-zA-Z0-9_]*$/ to prevent SQL injection.`,
-    );
-  }
-};
+): MigrationStore<TTxContext> =>
+  createSqliteMigrationStore({
+    stateProvider,
+    migrationTable: applyTemplate(sql("{{migration_table}}")).sql,
+    writeLockTable: applyTemplate(sql("{{write_lock_table}}")).sql,
+    lease: false,
+  });
 
 const isoToSqlite = (iso: string): string => iso.replace("T", " ").replace("Z", "");
 
@@ -661,6 +573,8 @@ export const createSqliteStateAdapter = <
       job_id_type: jobIdType,
       worker_id_type: workerIdType,
       fence_table: fenceTable,
+      migration_table: `${tablePrefix}migration`,
+      write_lock_table: `${tablePrefix}write_lock`,
     },
     {
       job_columns: jobColumnsSelect,
@@ -2615,8 +2529,8 @@ ORDER BY w.key
 
     migrateToLatest: async () => {
       const store = createMigrationStore(stateProvider, applyTemplate);
-      return createMigrator<TTxContext>({
-        migrations,
+      return createMigrator({
+        migrations: createSchemaMigrations(createTemplateExecutor(stateProvider, applyTemplate)),
         store,
         before: createLegacyUpgrade(stateProvider, store, applyTemplate),
       }).migrateToLatest();

@@ -1,8 +1,9 @@
-import { createPgStateAdapter } from "@queuert/postgres";
+import assert from "node:assert/strict";
+
+import { createPgMigrator, createPgStateAdapter } from "@queuert/postgres";
 import { acquirePostgres } from "@queuert/testcontainers";
 import { eq, sql } from "drizzle-orm";
 import { drizzle } from "drizzle-orm/node-postgres";
-import { pgTable, serial, text } from "drizzle-orm/pg-core";
 import { Pool } from "pg";
 import {
   createClient,
@@ -12,19 +13,13 @@ import {
   withTxHooks,
 } from "queuert";
 
+import { createMigrations } from "./migrations.ts";
 import { createDrizzlePgStateProvider } from "./provider.ts";
+import * as schema from "./schema.ts";
+import { invoices, users } from "./schema.ts";
 
 // Start PostgreSQL using testcontainers
 await using pg = await acquirePostgres("postgres:18", import.meta.url);
-
-// Define Drizzle schema
-const users = pgTable("users", {
-  id: serial("id").primaryKey(),
-  name: text("name").notNull(),
-  email: text("email").notNull(),
-});
-
-const schema = { users };
 
 // Create database connection and schema
 await using drivers = new AsyncDisposableStack();
@@ -60,6 +55,20 @@ await using stateAdapter = createPgStateAdapter({
 });
 await stateAdapter.migrateToLatest();
 // #endregion
+
+const migrator = createPgMigrator({ stateProvider, migrations: createMigrations({ db }) });
+const { applied } = await migrator.migrateToLatest();
+console.log(`Applied application migrations: ${applied.join(", ")}`);
+
+const openInvoices = await db
+  .select()
+  .from(invoices)
+  .where(eq(invoices.status, "open"))
+  .orderBy(invoices.id);
+assert.deepEqual(
+  openInvoices.map((invoice) => invoice.customer),
+  ["ACME", "GLOBEX", "INITECH"],
+);
 
 const client = createClient({ stateAdapter, jobTypes });
 await using workerRunner = createWorkerRunner({

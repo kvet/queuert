@@ -1,4 +1,6 @@
-import { createPgStateAdapter } from "@queuert/postgres";
+import assert from "node:assert/strict";
+
+import { createPgMigrator, createPgStateAdapter } from "@queuert/postgres";
 import { acquirePostgres } from "@queuert/testcontainers";
 import knexFactory from "knex";
 import {
@@ -9,6 +11,7 @@ import {
   withTxHooks,
 } from "queuert";
 
+import { type Invoice, createMigrations } from "./migrations.ts";
 import { createKnexPgStateProvider } from "./provider.ts";
 
 // Start PostgreSQL using testcontainers
@@ -51,6 +54,16 @@ await using stateAdapter = createPgStateAdapter({
 });
 await stateAdapter.migrateToLatest();
 // #endregion
+
+const migrator = createPgMigrator({ stateProvider, migrations: createMigrations({ db: knex }) });
+const { applied } = await migrator.migrateToLatest();
+console.log(`Applied application migrations: ${applied.join(", ")}`);
+
+const openInvoices = await knex<Invoice>("invoices").where({ status: "open" }).orderBy("id");
+assert.deepEqual(
+  openInvoices.map((invoice) => invoice.customer),
+  ["ACME", "GLOBEX", "INITECH"],
+);
 
 const client = createClient({ stateAdapter, jobTypes });
 

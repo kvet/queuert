@@ -1,7 +1,8 @@
+import assert from "node:assert/strict";
 import { execSync } from "node:child_process";
 
 import { PrismaPg } from "@prisma/adapter-pg";
-import { createPgStateAdapter } from "@queuert/postgres";
+import { createPgMigrator, createPgStateAdapter } from "@queuert/postgres";
 import { acquirePostgres } from "@queuert/testcontainers";
 import {
   createClient,
@@ -11,6 +12,7 @@ import {
   withTxHooks,
 } from "queuert";
 
+import { createMigrations } from "./migrations.ts";
 import { createPrismaPgStateProvider } from "./provider.ts";
 
 // Start PostgreSQL using testcontainers
@@ -50,6 +52,18 @@ await using stateAdapter = createPgStateAdapter({
 });
 await stateAdapter.migrateToLatest();
 // #endregion
+
+const migrator = createPgMigrator({ stateProvider, migrations: createMigrations({ db: prisma }) });
+const { applied } = await migrator.migrateToLatest();
+console.log(`Applied application migrations: ${applied.join(", ")}`);
+
+const openInvoices = await prisma.$queryRaw<{ customer: string }[]>`
+  SELECT customer FROM invoices WHERE status = ${"open"} ORDER BY id
+`;
+assert.deepEqual(
+  openInvoices.map((invoice) => invoice.customer),
+  ["ACME", "GLOBEX", "INITECH"],
+);
 
 const client = createClient({ stateAdapter, jobTypes });
 
